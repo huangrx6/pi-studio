@@ -1,0 +1,54 @@
+{
+  "name": "pi-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pi desktop workspace",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k \"pnpm run web\" \"wait-on tcp:5180 && cross-env PI_STUDIO_DEV=1 node scripts/launch.mjs\"",
+    "web": "vite --host 127.0.0.1 --port 5180",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "start": "node scripts/launch.mjs",
+    "dist": "pnpm run build && electron-builder --mac"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "1.4.0",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "45.0.0",
+    "electron-builder": "^25.1.8",
+    "playwright-core": "1.61.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.0",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "dev.pi.studio",
+    "productName": "Pi Studio",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**",
+      "web-dist/**",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    }
+  }
+}
