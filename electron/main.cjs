@@ -10,7 +10,7 @@ async function loadPi() {
 const DEV = process.env.PI_STUDIO_DEV === '1';
 const SESSION_ROOT = path.join(os.homedir(), '.pi', 'agent', 'sessions');
 const DEFAULT_CWD = process.env.PI_WORKSPACE ?? process.cwd();
-const MODEL_REF = process.env.PI_MODEL_REF ?? 'minimax-cn/MiniMax-M3.1-Flash';
+let MODEL_REF = process.env.PI_MODEL_REF ?? 'minimax-cn/MiniMax-M3.1-Flash';
 
 const drafts = new Map();
 const diskSessions = new Map();
@@ -167,6 +167,38 @@ function resolveInWorkspace(root, requested) {
   return canonical;
 }
 
+function configPath() {
+  return path.join(app.getPath('userData'), 'config.json');
+}
+
+function loadConfig() {
+  try {
+    const value = JSON.parse(fs.readFileSync(configPath(), 'utf8'));
+    if (typeof value.modelRef === 'string' && value.modelRef.includes('/')) MODEL_REF = value.modelRef;
+  } catch { /* first launch */ }
+}
+
+function saveConfig() {
+  try {
+    fs.mkdirSync(path.dirname(configPath()), { recursive: true });
+    fs.writeFileSync(configPath(), JSON.stringify({ modelRef: MODEL_REF }, null, 2));
+  } catch { /* configuration is best effort */ }
+}
+
+async function availableModels() {
+  const rt = await runtime();
+  let providers = new Set();
+  try {
+    const auth = JSON.parse(fs.readFileSync(path.join(pi.getAgentDir(), 'auth.json'), 'utf8'));
+    providers = new Set(Object.keys(auth));
+  } catch { /* show the full catalog if auth is unreadable */ }
+  const models = rt.getModels()
+    .filter((item) => providers.size === 0 || providers.has(item.provider))
+    .map((item) => ({ id: `${item.provider}/${item.id}`, provider: item.provider, model: item.id, name: item.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return { models: models.slice(0, 300), current: MODEL_REF };
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440,
@@ -188,6 +220,7 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   await loadPi();
+  loadConfig();
   ipcMain.handle('pi:state', async () => ({ workspaces: await listWorkspaces(), model: await modelInfo(), cwd: DEFAULT_CWD }));
   ipcMain.handle('pi:session-create', async (_event, cwd) => {
     const manager = pi.SessionManager.create(cwd || DEFAULT_CWD);
@@ -249,6 +282,14 @@ app.whenReady().then(async () => {
     } finally {
       unsubscribe();
     }
+  });
+  ipcMain.handle('pi:models', async () => availableModels());
+  ipcMain.handle('pi:set-model', async (_event, modelRef) => {
+    if (typeof modelRef !== 'string' || !modelRef.includes('/')) throw new Error('模型格式无效');
+    MODEL_REF = modelRef;
+    saveConfig();
+    agentSessions.clear();
+    return modelInfo();
   });
   createWindow();
 });

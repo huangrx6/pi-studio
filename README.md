@@ -23,6 +23,9 @@ pnpm dev
 
 ## Current MVP
 
+- Packaged macOS `.app` at `release/mac-arm64/Pi Studio.app` (unsigned)
+- Model picker backed by the local Pi catalog; selection persists in app data
+
 - Desktop Electron window
 - Pi session and workspace discovery from `~/.pi/agent/sessions`
 - New session + streaming Pi chat

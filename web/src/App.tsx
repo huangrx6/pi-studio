@@ -34,6 +34,10 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
+  const [modelsOpen, setModelsOpen] = useState(false);
+  const [models, setModels] = useState<Array<{ id: string; name: string }>>([]);
+  const [modelQuery, setModelQuery] = useState('');
+  const [modelRef, setModelRef] = useState('');
   const [treePath, setTreePath] = useState('');
   const [entries, setEntries] = useState<Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }>>([]);
   const [file, setFile] = useState<{ path: string; size: number; binary: boolean; text: string } | null>(null);
@@ -53,6 +57,21 @@ export function App() {
     });
     setWorkspace((current) => current || next.workspaces[0]?.cwd || next.cwd);
   }, []);
+
+  async function openModels() {
+    const result = await window.piApi.models();
+    setModels(result.models);
+    setModelRef(result.current);
+    setModelQuery('');
+    setModelsOpen((value) => !value);
+  }
+
+  async function selectModel(next: string) {
+    const result = await window.piApi.setModel(next);
+    setModel(result.label);
+    setModelRef(next);
+    setModelsOpen(false);
+  }
 
   useEffect(() => { void loadState(); }, [loadState]);
 
@@ -307,12 +326,26 @@ export function App() {
                 <button className="workspace-chip" onClick={chooseFile}><Folder size={14} />{activeWorkspace?.name || '选择工作区'}<ChevronDown size={12} /></button>
               </div>
               <div className="composer-right">
-                <span className="model-label">{model}</span>
+                <button className="model-label" onClick={() => void openModels()}>{model}<ChevronDown size={11} /></button>
                 <button className="send-button" disabled={busy || !prompt.trim()} onClick={() => void send()}><ArrowUp size={16} /></button>
               </div>
             </div>
           </div>
         </div>
+        {modelsOpen && (
+          <div className="model-popover" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="model-popover__head">选择模型<span>{models.length} 个</span></div>
+            <input autoFocus className="model-search" value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} placeholder="搜索模型" />
+            <div className="model-list">
+              {models.filter((item) => item.name.toLowerCase().includes(modelQuery.toLowerCase())).map((item) => (
+                <button key={item.id} className={`model-row ${item.id === modelRef ? 'is-active' : ''}`} onClick={() => void selectModel(item.id)}>
+                  <span>{item.name}</span>
+                  <small>{item.id.split('/')[0]}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
 
       {filesOpen && (

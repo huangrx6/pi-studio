@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('piApi', {
   files: (cwd, path) => ipcRenderer.invoke('pi:files', { cwd, path }),
   file: (cwd, path) => ipcRenderer.invoke('pi:file', { cwd, path }),
   chooseWorkspace: () => ipcRenderer.invoke('pi:choose-workspace'),
+  models: () => ipcRenderer.invoke('pi:models'),
+  setModel: (modelRef) => ipcRenderer.invoke('pi:set-model', modelRef),
   onPrompt: (listener) => {
     const handler = (_event, payload) => listener(payload);
     ipcRenderer.on('pi:prompt-event', handler);

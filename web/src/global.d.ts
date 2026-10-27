@@ -36,6 +36,8 @@ declare global {
       files(cwd: string, path: string): Promise<{ path: string; entries: Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }> }>;
       file(cwd: string, path: string): Promise<{ path: string; size: number; binary: boolean; text: string }>;
       chooseWorkspace(): Promise<string | undefined>;
+      models(): Promise<{ models: Array<{ id: string; provider: string; model: string; name: string }>; current: string }>;
+      setModel(modelRef: string): Promise<{ modelRef: string; label: string }>;
       onPrompt(listener: (payload: { requestId: string; type: 'delta' | 'tool' | 'done' | 'error'; text?: string; name?: string; status?: string; message?: string }) => void): () => void;
     };
   }
