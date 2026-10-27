@@ -402,3 +402,6 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 
 .settings-form-grid > .settings-field { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; color: var(--muted); font-size: var(--text-sm); }
 .settings-form-grid > .settings-field > span { color: var(--muted); font-size: var(--text-sm); }
+
+.row-edit { width: 28px; height: 28px; color: var(--faint); }
+.row-edit:hover { color: var(--text); background: var(--surface-soft); }

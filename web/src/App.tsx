@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUp, Check, ChevronDown, ChevronLeft, Clock3, Code2, Cpu, FileCode2, FileText, Folder, FolderOpen, Info,
-  Layers3, LoaderCircle, MessageSquare, PanelLeft, PanelRight, Pencil, Plug, Plus, Search, Settings, Sparkles, SquarePen, Trash2, X,
+  Layers3, LoaderCircle, MessageSquare, PanelLeft, PanelRight, Pencil, Plug, Search, Settings, Sparkles, SquarePen, Trash2, X,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
 import { Select } from './components/Select';
@@ -649,7 +649,7 @@ export function App() {
             />
             <div className="composer-bar">
               <div className="composer-left">
-                <button className="workspace-chip" onClick={chooseFile} title={workspace || '选择工作区'}><Folder /><span>{activeWorkspace?.name || '选择工作区'}</span><ChevronDown /></button>
+                <button className="workspace-chip" onClick={chooseFile} title={workspace || '选择工作区'}><span>{activeWorkspace?.name || '选择工作区'}</span><ChevronDown /></button>
               </div>
               <div className="composer-right">
                 <div className="model-control" ref={modelControlRef}>
@@ -695,7 +695,7 @@ export function App() {
                   </div> : <div className="settings-empty">在下方添加来源，再选择要启用的模型。</div>}
                 </section>
                 <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>模型来源 <span className="count-badge">{settingsData.providers.length}</span></h2><p>管理服务地址、认证信息和可用模型。</p></div><button className="settings-add-button" aria-label="添加模型来源" onClick={() => void openEditor('provider')}><Plus />添加</button></div>
+                  <div className="settings-card-head"><div><h2>模型来源 <span className="count-badge">{settingsData.providers.length}</span></h2><p>管理服务地址、认证信息和可用模型。</p></div><button className="settings-add-button" aria-label="添加模型来源" onClick={() => void openEditor('provider')}>添加</button></div>
                   <div className="provider-cards">
                     {settingsData.providers.map((provider) => {
                       const list = providerModels[provider.id] ?? [];
@@ -705,7 +705,7 @@ export function App() {
                           <div className="provider-avatar">{provider.name.slice(0, 1)}</div>
                           <div className="provider-main"><strong>{provider.name}</strong><span>{provider.id} · {provider.models} 个模型</span></div>
                           <span className="provider-mode">{provider.mode === 'oauth' ? 'OAuth' : provider.mode === 'env' ? '环境变量' : 'API Key'}</span>
-                          <div className="row-actions"><button className="settings-outline row-action" aria-label={`编辑 ${provider.name}`} onClick={() => void openEditor('provider', provider.id)}><Pencil />编辑</button><button className="settings-outline row-action" onClick={() => void loadProviderModels(provider.id)} aria-expanded={expandedProvider === provider.id}>{expandedProvider === provider.id ? '收起模型' : '管理模型'}<ChevronDown className={expandedProvider === provider.id ? 'rotate-up' : ''} /></button></div>
+                          <div className="row-actions"><button className="icon-button row-edit" aria-label={`编辑 ${provider.name}`} title="编辑" onClick={() => void openEditor('provider', provider.id)}><Pencil /></button><button className="settings-outline row-action" onClick={() => void loadProviderModels(provider.id)} aria-expanded={expandedProvider === provider.id}>{expandedProvider === provider.id ? '收起模型' : '管理模型'}</button></div>
                         </div>
                         {provider.mode === 'env' && <div className={`provider-env-hint ${provider.envAvailable ? 'is-set' : ''}`}>{provider.envAvailable ? '环境变量已设置' : '环境变量未设置'} · <code>{provider.envName}</code></div>}
                         {expandedProvider === provider.id && <div className="provider-model-panel">
@@ -721,19 +721,19 @@ export function App() {
                   </div>
                 </section>
                 <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>自定义模型 <span className="count-badge">{settingsData.customModels?.length || 0}</span></h2><p>手动添加模型，或调整名称、上下文与能力。</p></div><button className="settings-add-button" aria-label="添加自定义模型" onClick={() => void openEditor('model')}><Plus />添加</button></div>
-                  <div className="custom-model-list">{settingsData.customModels?.map((item) => <div className="custom-model-row" key={`${item.providerId}/${item.modelId}`}><div className="provider-main"><strong>{item.name}</strong><span>{item.providerId}/{item.modelId}</span></div><div className="model-capabilities">{item.contextWindow && <span>{Math.round(item.contextWindow / 1000)}K</span>}{item.supportsImages && <span>图片</span>}{item.reasoning && <span>推理</span>}</div><button className="settings-outline row-action" aria-label={`编辑模型 ${item.name}`} onClick={() => void openEditor('model', `${item.providerId}/${item.modelId}`)}><Pencil />编辑</button><button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`删除模型 ${item.name}`} title="删除" onClick={() => void deleteCustomModel(item.providerId, item.modelId, item.name)}><Trash2 /></button></div>)}</div>
+                  <div className="settings-card-head"><div><h2>自定义模型 <span className="count-badge">{settingsData.customModels?.length || 0}</span></h2><p>手动添加模型，或调整名称、上下文与能力。</p></div><button className="settings-add-button" aria-label="添加自定义模型" onClick={() => void openEditor('model')}>添加</button></div>
+                  <div className="custom-model-list">{settingsData.customModels?.map((item) => <div className="custom-model-row" key={`${item.providerId}/${item.modelId}`}><div className="provider-main"><strong>{item.name}</strong><span>{item.providerId}/{item.modelId}</span></div><div className="model-capabilities">{item.contextWindow && <span>{Math.round(item.contextWindow / 1000)}K</span>}{item.supportsImages && <span>图片</span>}{item.reasoning && <span>推理</span>}</div><button className="icon-button row-edit" aria-label={`编辑模型 ${item.name}`} title="编辑" onClick={() => void openEditor('model', `${item.providerId}/${item.modelId}`)}><Pencil /></button><button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`删除模型 ${item.name}`} title="删除" onClick={() => void deleteCustomModel(item.providerId, item.modelId, item.name)}><Trash2 /></button></div>)}</div>
                   {!settingsData.customModels?.length && <div className="settings-empty">还没有自定义模型。</div>}
                 </section>
               </div>
             )}
             {settingsData && settingsTab === 'mcp' && (
               <section className="settings-card">
-                <div className="settings-card-head"><div><h2>MCP 服务器 <span className="count-badge">{settingsData.mcp.length}</span></h2><p>管理外部工具与数据连接。</p></div><button className="settings-add-button" aria-label="添加 MCP 服务器" onClick={() => void openEditor('mcp')}><Plus />添加</button></div>
+                <div className="settings-card-head"><div><h2>MCP 服务器 <span className="count-badge">{settingsData.mcp.length}</span></h2><p>管理外部工具与数据连接。</p></div><button className="settings-add-button" aria-label="添加 MCP 服务器" onClick={() => void openEditor('mcp')}>添加</button></div>
                 <div className="mcp-settings-list">
                   {settingsData.mcp.map((server) => <div className="mcp-settings-row" key={server.name}>
                     <div className="provider-main"><strong>{server.name}</strong>{server.description && <p>{server.description}</p>}<span title={server.target}>{server.transport} · {server.target}</span></div>
-                    <div className="row-actions"><button className="settings-outline row-action" aria-label={`编辑 ${server.name}`} onClick={() => void openEditor('mcp', server.name)}><Pencil />编辑</button><span className={`resource-status ${server.enabled ? 'is-on' : ''}`}>{server.enabled ? '已启用' : '已停用'}</span><button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`删除 MCP ${server.name}`} title="删除" onClick={() => void deleteMcp(server.name)}><Trash2 /></button><button className={`switch ${server.enabled ? 'is-on' : ''}`} role="switch" aria-checked={server.enabled} disabled={settingsBusy} onClick={() => void toggleMcp(server.name, !server.enabled)} aria-label={`${server.name} ${server.enabled ? '禁用' : '启用'}`}><span /></button></div>
+                    <div className="row-actions"><button className="icon-button row-edit" aria-label={`编辑 ${server.name}`} title="编辑" onClick={() => void openEditor('mcp', server.name)}><Pencil /></button><span className={`resource-status ${server.enabled ? 'is-on' : ''}`}>{server.enabled ? '已启用' : '已停用'}</span><button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`删除 MCP ${server.name}`} title="删除" onClick={() => void deleteMcp(server.name)}><Trash2 /></button><button className={`switch ${server.enabled ? 'is-on' : ''}`} role="switch" aria-checked={server.enabled} disabled={settingsBusy} onClick={() => void toggleMcp(server.name, !server.enabled)} aria-label={`${server.name} ${server.enabled ? '禁用' : '启用'}`}><span /></button></div>
                   </div>)}
                   {settingsData.mcp.length === 0 && <div className="settings-empty">还没有 MCP 服务器。</div>}
                 </div>
@@ -742,7 +742,7 @@ export function App() {
             )}
             {settingsData && settingsTab === 'skills' && (
               <section className="settings-card">
-                <div className="settings-card-head"><div><h2>技能 <span className="count-badge">{settingsData.skills.length}</span></h2><p>为 Pi 添加可复用的工作方法。</p></div><button className="settings-add-button" aria-label="添加技能" onClick={() => void openEditor('skill')}><Plus />添加</button></div>
+                <div className="settings-card-head"><div><h2>技能 <span className="count-badge">{settingsData.skills.length}</span></h2><p>为 Pi 添加可复用的工作方法。</p></div><button className="settings-add-button" aria-label="添加技能" onClick={() => void openEditor('skill')}>添加</button></div>
                 {(['user', 'project', 'temporary'] as const).map((scope) => {
                   const items = settingsData.skills.filter((skill) => skill.scope === scope);
                   const label = scope === 'user' ? '全局' : scope === 'project' ? '项目' : '其他';
@@ -754,11 +754,11 @@ export function App() {
             {settingsData && settingsTab === 'extensions' && (
               <div className="settings-sections">
                 <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>扩展包 <span className="count-badge">{settingsData.packages.length}</span></h2><p>从 npm 或 Git 仓库安装扩展。</p></div><button className="settings-add-button" aria-label="安装扩展包" onClick={() => void openEditor('package')}><Plus />添加</button></div>
-                  <div className="package-list">{settingsData.packages.map((pkg) => <div className="package-row" key={pkg.source}><Plug /><div className="provider-main"><strong>{pkg.name}</strong><span>{pkg.source}</span></div><button className="settings-mini-button" disabled={settingsBusy} onClick={() => void removePackage(pkg.source)}>移除</button></div>)}{settingsData.packages.length === 0 && <div className="settings-empty">还没有安装扩展包。</div>}</div>
+                  <div className="settings-card-head"><div><h2>扩展包 <span className="count-badge">{settingsData.packages.length}</span></h2><p>从 npm 或 Git 仓库安装扩展。</p></div><button className="settings-add-button" aria-label="安装扩展包" onClick={() => void openEditor('package')}>添加</button></div>
+                  <div className="package-list">{settingsData.packages.map((pkg) => <div className="package-row" key={pkg.source}><Plug /><div className="provider-main"><strong>{pkg.name}</strong><span>{pkg.source}</span></div><button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`移除扩展包 ${pkg.name}`} title="移除" onClick={() => void removePackage(pkg.source)}><Trash2 /></button></div>)}{settingsData.packages.length === 0 && <div className="settings-empty">还没有安装扩展包。</div>}</div>
                 </section>
                 <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>本地扩展</h2><p>从本机导入扩展文件或目录。</p></div><button className="settings-add-button" aria-label="添加本地扩展" onClick={() => void openEditor('extension')}><Plus />添加</button></div>
+                  <div className="settings-card-head"><div><h2>本地扩展</h2><p>从本机导入扩展文件或目录。</p></div><button className="settings-add-button" aria-label="添加本地扩展" onClick={() => void openEditor('extension')}>添加</button></div>
                   {(['user', 'project'] as const).map((scope) => {
                     const items = settingsData.extensions.filter((item) => item.scope === scope);
                     return <div className="skill-group" key={scope}><div className="skill-group-title">{scope === 'user' ? '全局' : '项目'}<span>{items.length}</span></div>{items.map((item) => <div className="skill-settings-row" key={item.path}><Plug /><div><strong>{item.name}</strong><p>{item.kind === 'directory' ? '扩展目录' : '扩展文件'}</p><span>{item.path}</span></div><button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`删除扩展 ${item.name}`} title="删除" onClick={() => void deleteExtension(item.path, item.name)}><Trash2 /></button></div>)}{items.length === 0 && <div className="settings-empty settings-empty--small">暂无{scope === 'user' ? '全局' : '项目'}扩展</div>}</div>;
