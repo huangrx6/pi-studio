@@ -32,10 +32,27 @@ pnpm dev
 - Pi JSONL history restored on restart
 - Right-hand workspace file tree and text preview
 
+## Pi data sharing
+
+Pi Studio deliberately shares the local Pi agent directory:
+
+```text
+~/.pi/agent/sessions
+~/.pi/agent/auth.json
+~/.pi/agent/models.json
+~/.pi/agent/mcp.json
+~/.pi/agent/skills
+~/.pi/agent/extensions
+```
+
+Sessions, keys, MCP, skills and extensions are visible in the desktop app and in
+the local `pi` CLI. Changes made in Settings are written back to those Pi files.
+
 ## Not yet
 
-- Full model picker/login UI
-- Settings, plugins/MCP/skills management
+- OAuth login UI (API keys are editable in Settings)
+- Plugin/automation pages and trace view
+- Skill enable/disable and extension enable/disable
 - Line-numbered/Shiki syntax highlighting in the file preview
 - Signed/notarized packaging
 

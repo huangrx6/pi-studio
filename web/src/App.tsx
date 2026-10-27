@@ -11,8 +11,10 @@ type SettingsSnapshot = {
   providers: Array<{ id: string; name: string; mode: string; models: number }>;
   mcp: Array<{ name: string; transport: string; enabled: boolean; target: string; description: string }>;
   skills: Array<{ name: string; description: string; path: string; scope: string }>;
+  extensions: Array<{ name: string; scope: string; path: string; kind: string }>;
   authPath: string;
   mcpPath: string;
+  modelsPath: string;
   model: { modelRef: string; label: string };
 };
 
@@ -47,11 +49,13 @@ export function App() {
   const [modelQuery, setModelQuery] = useState('');
   const [modelRef, setModelRef] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<'models' | 'mcp' | 'skills' | 'about'>('models');
+  const [settingsTab, setSettingsTab] = useState<'models' | 'mcp' | 'skills' | 'extensions' | 'about'>('models');
   const [settingsData, setSettingsData] = useState<SettingsSnapshot | null>(null);
   const [keyDrafts, setKeyDrafts] = useState<Record<string, string>>({});
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsBusy, setSettingsBusy] = useState(false);
+  const [providerDraft, setProviderDraft] = useState({ providerId: '', baseUrl: '', api: 'openai-completions', modelId: '', modelName: '', apiKey: '' });
+  const [mcpDraft, setMcpDraft] = useState({ name: '', transport: 'stdio', command: '', args: '', url: '', description: '' });
   const [treePath, setTreePath] = useState('');
   const [entries, setEntries] = useState<Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }>>([]);
   const [file, setFile] = useState<{ path: string; size: number; binary: boolean; text: string } | null>(null);
@@ -76,7 +80,7 @@ export function App() {
     setSettingsOpen(true);
     setSettingsError(null);
     try {
-      const [snapshot, modelResult] = await Promise.all([window.piApi.settings(), window.piApi.models()]);
+      const [snapshot, modelResult] = await Promise.all([window.piApi.settings(workspace), window.piApi.models()]);
       setSettingsData(snapshot);
       setModels(modelResult.models);
       setModelRef(modelResult.current);
@@ -98,6 +102,52 @@ export function App() {
       await loadState();
     } catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
     finally { setSettingsBusy(false); }
+  }
+
+  async function saveProvider() {
+    setSettingsBusy(true);
+    setSettingsError(null);
+    try {
+      const result = await window.piApi.addProvider(providerDraft);
+      setSettingsData(result.settings);
+      setModels(result.models.models);
+      setModelRef(result.models.current);
+      setProviderDraft({ providerId: '', baseUrl: '', api: 'openai-completions', modelId: '', modelName: '', apiKey: '' });
+      await loadState();
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSettingsBusy(false);
+    }
+  }
+
+  async function saveMcp() {
+    setSettingsBusy(true);
+    setSettingsError(null);
+    try {
+      const next = await window.piApi.addMcp(mcpDraft);
+      setSettingsData(next);
+      setMcpDraft({ name: '', transport: 'stdio', command: '', args: '', url: '', description: '' });
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSettingsBusy(false);
+    }
+  }
+
+  async function importResource(kind: 'skill' | 'extension', scope: 'user' | 'project') {
+    setSettingsBusy(true);
+    setSettingsError(null);
+    try {
+      const next = kind === 'skill'
+        ? await window.piApi.addSkill({ scope, cwd: workspace })
+        : await window.piApi.addExtension({ scope, cwd: workspace });
+      if (next) setSettingsData(next);
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSettingsBusy(false);
+    }
   }
 
   async function toggleMcp(name: string, enabled: boolean) {
@@ -123,6 +173,15 @@ export function App() {
   }
 
   useEffect(() => { void loadState(); }, [loadState]);
+
+  useEffect(() => window.piApi.onOpenSettings(() => { void openSettings(); }), [workspace]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onKey = (event: KeyboardEvent): void => { if (event.key === 'Escape') setSettingsOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [settingsOpen]);
 
   useEffect(() => window.piApi.onPrompt((event) => {
     if (event.requestId !== requestRef.current) return;
@@ -320,6 +379,7 @@ export function App() {
             <div className="chat-meta"><span className="state-dot" />{session ? 'Pi Agent' : '准备就绪'}<span>·</span><span className="branch">main</span></div>
           </div>
           <div className="chat-actions">
+            <button className="icon-button" onClick={() => void openSettings()} aria-label="设置"><Settings size={16} /></button>
             <button className={`icon-button ${filesOpen ? 'is-active' : ''}`} onClick={() => setFilesOpen((value) => !value)} aria-label="文件查看器"><PanelRight size={16} /></button>
             <button className="icon-button"><MoreHorizontal size={16} /></button>
           </div>
@@ -400,18 +460,19 @@ export function App() {
       {settingsOpen && (
         <div className="settings-overlay">
           <aside className="settings-nav">
-            <div className="settings-nav-head"><span>设置</span><button className="icon-button" onClick={() => setSettingsOpen(false)}><X size={16} /></button></div>
+            <div className="settings-nav-head"><span>设置</span><button className="icon-button" aria-label="关闭设置" onClick={() => setSettingsOpen(false)}><X size={16} /></button></div>
             <div className="settings-search"><Search size={14} /><span>搜索设置</span></div>
             <button className={`settings-nav-row ${settingsTab === 'models' ? 'is-active' : ''}`} onClick={() => setSettingsTab('models')}><Cpu size={15} />模型与账号</button>
             <button className={`settings-nav-row ${settingsTab === 'mcp' ? 'is-active' : ''}`} onClick={() => setSettingsTab('mcp')}><Plug size={15} />MCP 服务器</button>
             <button className={`settings-nav-row ${settingsTab === 'skills' ? 'is-active' : ''}`} onClick={() => setSettingsTab('skills')}><FileCode2 size={15} />技能</button>
+            <button className={`settings-nav-row ${settingsTab === 'extensions' ? 'is-active' : ''}`} onClick={() => setSettingsTab('extensions')}><Plug size={15} />扩展</button>
             <button className={`settings-nav-row ${settingsTab === 'about' ? 'is-active' : ''}`} onClick={() => setSettingsTab('about')}><Info size={15} />关于</button>
             <div className="settings-nav-foot">Pi Studio · Pi SDK</div>
           </aside>
           <section className="settings-content">
             <header className="settings-title">
-              <h1>{settingsTab === 'models' ? '模型与账号' : settingsTab === 'mcp' ? 'MCP 服务器' : settingsTab === 'skills' ? '技能' : '关于'}</h1>
-              <p>{settingsTab === 'models' ? '配置 Pi 的模型来源和凭据。' : settingsTab === 'mcp' ? '管理 Pi 的 MCP 服务器配置。' : settingsTab === 'skills' ? 'Pi 会从本机技能目录加载这些技能。' : 'Pi Studio 运行在 Pi Agent SDK 上。'}</p>
+              <h1>{settingsTab === 'models' ? '模型与账号' : settingsTab === 'mcp' ? 'MCP 服务器' : settingsTab === 'skills' ? '技能' : settingsTab === 'extensions' ? '扩展' : '关于'}</h1>
+              <p>{settingsTab === 'models' ? '配置 Pi 的模型来源和凭据。' : settingsTab === 'mcp' ? '管理 Pi 的 MCP 服务器配置。' : settingsTab === 'skills' ? 'Pi 会从本机技能目录加载这些技能。' : settingsTab === 'extensions' ? '扩展运行在 Pi 进程内，仅加载可信代码。' : 'Pi Studio 运行在 Pi Agent SDK 上。'}</p>
             </header>
             {settingsError && <div className="settings-error">{settingsError}</div>}
             {settingsData && settingsTab === 'models' && (
@@ -428,6 +489,18 @@ export function App() {
                 </section>
                 <section className="settings-card">
                   <div className="settings-card-head"><div><h2>来源与凭据</h2><p>只显示 Pi 已配置的来源。Key 保存在 Pi 的 auth.json，不会写入项目。</p></div></div>
+                  <details className="settings-add">
+                    <summary>添加自定义来源</summary>
+                    <div className="settings-form-grid">
+                      <label>来源 ID<input value={providerDraft.providerId} onChange={(event) => setProviderDraft({ ...providerDraft, providerId: event.target.value })} placeholder="my-provider" /></label>
+                      <label>Base URL<input value={providerDraft.baseUrl} onChange={(event) => setProviderDraft({ ...providerDraft, baseUrl: event.target.value })} placeholder="https://api.example.com/v1" /></label>
+                      <label>API<select value={providerDraft.api} onChange={(event) => setProviderDraft({ ...providerDraft, api: event.target.value })}><option value="openai-completions">OpenAI Completions</option><option value="openai-responses">OpenAI Responses</option><option value="anthropic-messages">Anthropic Messages</option><option value="google-generative-ai">Google Generative AI</option></select></label>
+                      <label>模型 ID<input value={providerDraft.modelId} onChange={(event) => setProviderDraft({ ...providerDraft, modelId: event.target.value })} placeholder="model-id" /></label>
+                      <label>显示名称<input value={providerDraft.modelName} onChange={(event) => setProviderDraft({ ...providerDraft, modelName: event.target.value })} placeholder="My Model" /></label>
+                      <label>API Key<input type="password" value={providerDraft.apiKey} onChange={(event) => setProviderDraft({ ...providerDraft, apiKey: event.target.value })} placeholder="sk-..." /></label>
+                    </div>
+                    <button className="settings-save settings-form-submit" disabled={settingsBusy} onClick={() => void saveProvider()}>保存到 Pi models.json</button>
+                  </details>
                   <div className="provider-list">
                     {settingsData.providers.map((provider) => (
                       <div className="provider-row" key={provider.id}>
@@ -445,6 +518,16 @@ export function App() {
             {settingsData && settingsTab === 'mcp' && (
               <section className="settings-card">
                 <div className="settings-card-head"><div><h2>已配置的 MCP</h2><p>来自 {settingsData.mcpPath}。保存后新会话生效。</p></div></div>
+                <details className="settings-add">
+                  <summary>添加 MCP 服务器</summary>
+                  <div className="settings-form-grid">
+                    <label>名称<input value={mcpDraft.name} onChange={(event) => setMcpDraft({ ...mcpDraft, name: event.target.value })} placeholder="filesystem" /></label>
+                    <label>传输<select value={mcpDraft.transport} onChange={(event) => setMcpDraft({ ...mcpDraft, transport: event.target.value })}><option value="stdio">stdio</option><option value="http">Streamable HTTP</option></select></label>
+                    {mcpDraft.transport === 'stdio' ? <><label>命令<input value={mcpDraft.command} onChange={(event) => setMcpDraft({ ...mcpDraft, command: event.target.value })} placeholder="npx" /></label><label>参数<input value={mcpDraft.args} onChange={(event) => setMcpDraft({ ...mcpDraft, args: event.target.value })} placeholder="-y @modelcontextprotocol/server-filesystem ." /></label></> : <label>URL<input value={mcpDraft.url} onChange={(event) => setMcpDraft({ ...mcpDraft, url: event.target.value })} placeholder="https://example.com/mcp" /></label>}
+                    <label>描述<input value={mcpDraft.description} onChange={(event) => setMcpDraft({ ...mcpDraft, description: event.target.value })} placeholder="可选" /></label>
+                  </div>
+                  <button className="settings-save settings-form-submit" disabled={settingsBusy} onClick={() => void saveMcp()}>保存到 Pi mcp.json</button>
+                </details>
                 <div className="mcp-settings-list">
                   {settingsData.mcp.map((server) => (
                     <div className="mcp-settings-row" key={server.name}>
@@ -465,6 +548,15 @@ export function App() {
                   ))}
                   {settingsData.skills.length === 0 && <div className="settings-empty">还没有发现技能。</div>}
                 </div>
+              </section>
+            )}
+            {settingsData && settingsTab === 'extensions' && (
+              <section className="settings-card">
+                <div className="settings-card-head"><div><h2>Pi 扩展</h2><p>扩展运行在 Pi 进程内，拥有宿主权限。只加载你信任的扩展。</p></div><div className="settings-add-actions"><button className="settings-save" disabled={settingsBusy} onClick={() => void importResource('extension', 'user')}>添加全局扩展</button><button className="settings-outline" disabled={settingsBusy} onClick={() => void importResource('extension', 'project')}>添加项目扩展</button></div></div>
+                {(['user', 'project'] as const).map((scope) => {
+                  const items = settingsData.extensions.filter((item) => item.scope === scope);
+                  return <div className="skill-group" key={scope}><div className="skill-group-title">{scope === 'user' ? '全局' : '项目'}</div>{items.map((item) => <div className="skill-settings-row" key={item.path}><Plug size={16} /><div><strong>{item.name}</strong><p>{item.kind === 'directory' ? '扩展目录' : '扩展文件'}</p><span>{item.path}</span></div></div>)}{items.length === 0 && <div className="settings-empty settings-empty--small">暂无{scope === 'user' ? '全局' : '项目'}扩展</div>}</div>;
+                })}
               </section>
             )}
             {settingsData && settingsTab === 'about' && (

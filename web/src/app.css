@@ -239,3 +239,20 @@ button:disabled { cursor: default; opacity: .45; }
 .about-list > div:first-child { border-top: 0; }
 .about-list dt { color: var(--faint); }
 .about-list dd { margin: 0; color: var(--muted); overflow-wrap: anywhere; text-align: right; }
+
+.settings-add { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: #fafbfc; }
+.settings-add summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+.settings-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin: 12px 0; }
+.settings-form-grid label { display: flex; flex-direction: column; gap: 4px; color: var(--faint); font-size: 10.5px; }
+.settings-form-grid input, .settings-form-grid select { height: 30px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; outline: 0; color: var(--text); font: 11.5px var(--font); background: #fff; }
+.settings-form-submit { margin-top: 2px; }
+.settings-add-actions { display: flex; gap: 6px; }
+.settings-outline { height: 30px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-size: 11.5px; }
+.settings-outline:hover { border-color: var(--border-strong); color: var(--text); }
+.skill-group { padding-top: 8px; }
+.skill-group + .skill-group { margin-top: 10px; border-top: 1px solid var(--border); }
+.skill-group-title { color: var(--faint); font-size: 10.5px; padding: 0 0 4px; }
+.settings-empty--small { padding: 10px 0 4px; }
+@media (max-width: 900px) { .settings-form-grid { grid-template-columns: 1fr; } }
+
+.settings-empty { text-align: left; letter-spacing: normal; }

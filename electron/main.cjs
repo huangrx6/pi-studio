@@ -1,9 +1,10 @@
-const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 
 let pi;
+let mainWindow;
 async function loadPi() {
   pi = await import('@earendil-works/pi-coding-agent');
 }
@@ -215,7 +216,7 @@ function readMcp() {
   } catch { return { mcpServers: {} }; }
 }
 
-async function settingsSnapshot() {
+async function settingsSnapshot(cwd = DEFAULT_CWD) {
   const rt = await runtime();
   const auth = readAuth();
   const allModels = rt.getModels();
@@ -237,10 +238,55 @@ async function settingsSnapshot() {
   }));
   let skills = [];
   try {
-    const result = pi.loadSkills({ cwd: DEFAULT_CWD, agentDir: pi.getAgentDir(), skillPaths: [], includeDefaults: true });
+    const result = pi.loadSkills({ cwd, agentDir: pi.getAgentDir(), skillPaths: [], includeDefaults: true });
     skills = result.skills.map((skill) => ({ name: skill.name, description: skill.description, path: skill.filePath, scope: skill.sourceInfo?.scope || 'user' }));
   } catch { /* skill discovery is optional */ }
-  return { providers, mcp: servers, skills, authPath: authFile(), mcpPath: path.join(pi.getAgentDir(), 'mcp.json'), model: await modelInfo() };
+  return { providers, mcp: servers, skills, extensions: listExtensions(cwd), authPath: authFile(), mcpPath: path.join(pi.getAgentDir(), 'mcp.json'), modelsPath: modelsFile(), model: await modelInfo() };
+}
+
+function modelsFile() {
+  return path.join(pi.getAgentDir(), 'models.json');
+}
+
+function readJson(file, fallback) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
+  catch { return fallback; }
+}
+
+function providerExtensionRoots(cwd) {
+  return [
+    { scope: 'user', root: path.join(pi.getAgentDir(), 'extensions') },
+    { scope: 'project', root: path.join(cwd, '.pi', 'extensions') },
+  ];
+}
+
+function listExtensions(cwd) {
+  const items = [];
+  for (const { scope, root } of providerExtensionRoots(cwd)) {
+    let entries = [];
+    try { entries = fs.readdirSync(root, { withFileTypes: true }); } catch { continue; }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+      const target = path.join(root, entry.name);
+      const isDirectory = entry.isDirectory();
+      const entryFile = isDirectory
+        ? ['index.ts', 'index.js'].map((name) => path.join(target, name)).find((value) => fs.existsSync(value))
+        : target;
+      if (!entryFile) continue;
+      items.push({ name: entry.name, scope, path: target, kind: isDirectory ? 'directory' : 'file' });
+    }
+  }
+  return items;
+}
+
+function makeMenu() {
+  const template = [
+    ...(process.platform === 'darwin' ? [{ label: 'Pi Studio', submenu: [{ role: 'about' }, { type: 'separator' }, { label: '设置…', accelerator: 'CmdOrCtrl+,', click: () => mainWindow?.webContents.send('pi:open-settings') }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] }] : []),
+    { label: '编辑', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
+    { label: '视图', submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
+    { label: '窗口', submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'front' }] },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 function createWindow() {
@@ -258,6 +304,7 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
+  mainWindow = win;
   if (DEV) void win.loadURL('http://127.0.0.1:5180');
   else void win.loadFile(path.join(__dirname, '..', 'web-dist', 'index.html'));
 }
@@ -327,8 +374,36 @@ app.whenReady().then(async () => {
       unsubscribe();
     }
   });
+  ipcMain.handle('pi:add-skill', async (_event, { scope, cwd }) => {
+    const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] });
+    if (result.canceled || !result.filePaths[0]) return undefined;
+    const source = result.filePaths[0];
+    if (!fs.existsSync(path.join(source, 'SKILL.md'))) throw new Error('所选目录缺少 SKILL.md');
+    const base = scope === 'project' ? path.join(cwd || DEFAULT_CWD, '.pi', 'skills') : path.join(pi.getAgentDir(), 'skills');
+    const target = path.join(base, path.basename(source));
+    if (fs.existsSync(target)) throw new Error('同名技能已存在');
+    fs.mkdirSync(base, { recursive: true });
+    fs.cpSync(source, target, { recursive: true });
+    return settingsSnapshot(cwd || DEFAULT_CWD);
+  });
+  ipcMain.handle('pi:add-extension', async (_event, { scope, cwd }) => {
+    const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory', 'openFile'], filters: [{ name: 'Pi Extension', extensions: ['ts', 'js', 'mjs'] }] });
+    if (result.canceled || !result.filePaths[0]) return undefined;
+    const source = result.filePaths[0];
+    const stat = fs.statSync(source);
+    const base = scope === 'project' ? path.join(cwd || DEFAULT_CWD, '.pi', 'extensions') : path.join(pi.getAgentDir(), 'extensions');
+    const target = path.join(base, path.basename(source));
+    if (fs.existsSync(target)) throw new Error('同名扩展已存在');
+    fs.mkdirSync(base, { recursive: true });
+    if (stat.isDirectory()) {
+      if (!['index.ts', 'index.js'].some((name) => fs.existsSync(path.join(source, name)))) throw new Error('扩展目录缺少 index.ts 或 index.js');
+      fs.cpSync(source, target, { recursive: true });
+    } else fs.copyFileSync(source, path.join(base, path.basename(source)));
+    return settingsSnapshot(cwd || DEFAULT_CWD);
+  });
+
   ipcMain.handle('pi:models', async () => availableModels());
-  ipcMain.handle('pi:settings', async () => settingsSnapshot());
+  ipcMain.handle('pi:settings', async (_event, cwd) => settingsSnapshot(typeof cwd === 'string' ? cwd : DEFAULT_CWD));
   ipcMain.handle('pi:set-key', async (_event, { providerId, apiKey }) => {
     if (typeof providerId !== 'string' || typeof apiKey !== 'string' || apiKey.trim().length === 0) throw new Error('请输入 API Key');
     const auth = readAuth();
@@ -338,6 +413,52 @@ app.whenReady().then(async () => {
     runtimePromise = undefined;
     agentSessions.clear();
     return settingsSnapshot();
+  });
+  ipcMain.handle('pi:add-provider', async (_event, input) => {
+    const providerId = typeof input.providerId === 'string' ? input.providerId.trim() : '';
+    const baseUrl = typeof input.baseUrl === 'string' ? input.baseUrl.trim() : '';
+    const api = typeof input.api === 'string' ? input.api : 'openai-completions';
+    const modelId = typeof input.modelId === 'string' ? input.modelId.trim() : '';
+    const modelName = typeof input.modelName === 'string' && input.modelName.trim() ? input.modelName.trim() : modelId;
+    const apiKey = typeof input.apiKey === 'string' ? input.apiKey.trim() : '';
+    if (!/^[a-z0-9][a-z0-9._-]{1,63}$/.test(providerId) || !/^https?:\/\//.test(baseUrl) || !modelId) throw new Error('来源参数不完整');
+    const models = readJson(modelsFile(), { providers: {} });
+    models.providers = models.providers && typeof models.providers === 'object' ? models.providers : {};
+    const existing = models.providers[providerId] && typeof models.providers[providerId] === 'object' ? models.providers[providerId] : {};
+    const list = Array.isArray(existing.models) ? existing.models : [];
+    models.providers[providerId] = {
+      ...existing,
+      baseUrl,
+      api,
+      models: [...list.filter((item) => item?.id !== modelId), { id: modelId, name: modelName }],
+    };
+    fs.mkdirSync(path.dirname(modelsFile()), { recursive: true });
+    fs.writeFileSync(modelsFile(), JSON.stringify(models, null, 2));
+    if (apiKey) {
+      const auth = readAuth();
+      auth[providerId] = { type: 'api_key', key: apiKey };
+      fs.writeFileSync(authFile(), JSON.stringify(auth, null, 2), { mode: 0o600 });
+    }
+    runtimePromise = undefined;
+    agentSessions.clear();
+    return { settings: await settingsSnapshot(DEFAULT_CWD), models: await availableModels() };
+  });
+  ipcMain.handle('pi:add-mcp', async (_event, input) => {
+    const name = typeof input.name === 'string' ? input.name.trim() : '';
+    if (!name) throw new Error('请输入名称');
+    const config = readMcp();
+    if (config.mcpServers[name]) throw new Error('同名 MCP 已存在');
+    if (input.transport === 'stdio') {
+      const command = typeof input.command === 'string' ? input.command.trim() : '';
+      if (!command) throw new Error('请输入命令');
+      config.mcpServers[name] = { command, ...(input.args ? { args: String(input.args).split(/\s+/).filter(Boolean) } : {}), ...(input.description ? { description: String(input.description) } : {}) };
+    } else {
+      const url = typeof input.url === 'string' ? input.url.trim() : '';
+      if (!/^https?:\/\//.test(url)) throw new Error('请输入 HTTP URL');
+      config.mcpServers[name] = { type: 'http', url, ...(input.description ? { description: String(input.description) } : {}) };
+    }
+    fs.writeFileSync(path.join(pi.getAgentDir(), 'mcp.json'), JSON.stringify(config, null, 2));
+    return settingsSnapshot(DEFAULT_CWD);
   });
   ipcMain.handle('pi:set-mcp-enabled', async (_event, { name, enabled }) => {
     if (typeof name !== 'string' || typeof enabled !== 'boolean') throw new Error('参数无效');
@@ -354,6 +475,7 @@ app.whenReady().then(async () => {
     agentSessions.clear();
     return modelInfo();
   });
+  makeMenu();
   createWindow();
 });
 

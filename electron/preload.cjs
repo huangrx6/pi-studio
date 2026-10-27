@@ -9,9 +9,18 @@ contextBridge.exposeInMainWorld('piApi', {
   file: (cwd, path) => ipcRenderer.invoke('pi:file', { cwd, path }),
   chooseWorkspace: () => ipcRenderer.invoke('pi:choose-workspace'),
   models: () => ipcRenderer.invoke('pi:models'),
-  settings: () => ipcRenderer.invoke('pi:settings'),
+  settings: (cwd) => ipcRenderer.invoke('pi:settings', cwd),
   setKey: (payload) => ipcRenderer.invoke('pi:set-key', payload),
   setMcpEnabled: (payload) => ipcRenderer.invoke('pi:set-mcp-enabled', payload),
+  addProvider: (payload) => ipcRenderer.invoke('pi:add-provider', payload),
+  addMcp: (payload) => ipcRenderer.invoke('pi:add-mcp', payload),
+  addSkill: (payload) => ipcRenderer.invoke('pi:add-skill', payload),
+  addExtension: (payload) => ipcRenderer.invoke('pi:add-extension', payload),
+  onOpenSettings: (listener) => {
+    const handler = () => listener();
+    ipcRenderer.on('pi:open-settings', handler);
+    return () => ipcRenderer.removeListener('pi:open-settings', handler);
+  },
   setModel: (modelRef) => ipcRenderer.invoke('pi:set-model', modelRef),
   onPrompt: (listener) => {
     const handler = (_event, payload) => listener(payload);
