@@ -26,6 +26,20 @@ interface PiDetail {
   messages: PiMessage[];
 }
 
+interface SettingsSnapshot {
+  providers: Array<{ id: string; name: string; mode: string; models: number }>;
+  mcp: Array<{ name: string; transport: string; enabled: boolean; target: string; description: string }>;
+  skills: Array<{ name: string; description: string; path: string; scope: string }>;
+  extensions: Array<{ name: string; scope: string; path: string; kind: string; source?: string }>;
+  packages: Array<{ source: string; name: string }>;
+  extensionData: string[];
+  enabledModels: string[];
+  authPath: string;
+  mcpPath: string;
+  modelsPath: string;
+  model: { modelRef: string; label: string };
+}
+
 declare global {
   interface Window {
     piApi: {
@@ -36,8 +50,13 @@ declare global {
       files(cwd: string, path: string): Promise<{ path: string; entries: Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }> }>;
       file(cwd: string, path: string): Promise<{ path: string; size: number; binary: boolean; text: string }>;
       chooseWorkspace(): Promise<string | undefined>;
-      models(): Promise<{ models: Array<{ id: string; provider: string; model: string; name: string }>; current: string }>;
-      settings(cwd?: string): Promise<{ providers: Array<{ id: string; name: string; mode: string; models: number }>; mcp: Array<{ name: string; transport: string; enabled: boolean; target: string; description: string }>; skills: Array<{ name: string; description: string; path: string; scope: string }>; extensions: Array<{ name: string; scope: string; path: string; kind: string }>; authPath: string; mcpPath: string; modelsPath: string; model: { modelRef: string; label: string } }>;
+      models(): Promise<{ models: Array<{ id: string; provider: string; model: string; name: string }>; enabled: string[]; current: string }>;
+      providerModels(providerId: string): Promise<{ models: Array<{ id: string; model: string; name: string; enabled: boolean; contextWindow?: number; maxTokens?: number; supportsImages?: boolean }> }>;
+      setEnabledModels(models: string[]): Promise<any>;
+      addCustomModel(payload: { providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages?: boolean; reasoning?: boolean }): Promise<any>;
+      addPackage(source: string): Promise<any>;
+      removePackage(source: string): Promise<any>;
+      settings(cwd?: string): Promise<SettingsSnapshot>;
       setKey(payload: { providerId: string; apiKey: string }): Promise<any>;
       setMcpEnabled(payload: { name: string; enabled: boolean }): Promise<any>;
       addProvider(payload: { providerId: string; baseUrl: string; api: string; modelId: string; modelName: string; apiKey?: string }): Promise<any>;

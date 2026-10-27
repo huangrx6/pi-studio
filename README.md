@@ -32,6 +32,19 @@ pnpm dev
 - Pi JSONL history restored on restart
 - Right-hand workspace file tree and text preview
 
+## Settings and Pi resources
+
+- Providers: edit API keys, add OpenAI/Anthropic/Google-compatible providers to
+  `models.json`, and add custom model metadata (context window, max output,
+  image input, reasoning).
+- Models: enable a subset per provider. The composer picker shows enabled
+  models first, and `enabledModels` is shared with the local Pi settings.
+- Skills: reads `~/.pi/agent/skills`, `.agents/skills`, `.agents`, and the
+  current project's `.pi/skills`; groups global and project skills.
+- Extensions: lists `settings.json` packages and `extensions-data`, and can
+  install/remove npm/git package sources through Pi's package manager.
+- MCP: reads/writes `mcp.json`; can add stdio/HTTP servers and toggle them.
+
 ## Pi data sharing
 
 Pi Studio deliberately shares the local Pi agent directory:

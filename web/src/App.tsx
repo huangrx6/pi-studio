@@ -11,7 +11,10 @@ type SettingsSnapshot = {
   providers: Array<{ id: string; name: string; mode: string; models: number }>;
   mcp: Array<{ name: string; transport: string; enabled: boolean; target: string; description: string }>;
   skills: Array<{ name: string; description: string; path: string; scope: string }>;
-  extensions: Array<{ name: string; scope: string; path: string; kind: string }>;
+  extensions: Array<{ name: string; scope: string; path: string; kind: string; source?: string }>;
+  packages: Array<{ source: string; name: string }>;
+  extensionData: string[];
+  enabledModels: string[];
   authPath: string;
   mcpPath: string;
   modelsPath: string;
@@ -48,6 +51,11 @@ export function App() {
   const [models, setModels] = useState<Array<{ id: string; name: string }>>([]);
   const [modelQuery, setModelQuery] = useState('');
   const [modelRef, setModelRef] = useState('');
+  const [enabledModels, setEnabledModels] = useState<string[]>([]);
+  const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
+  const [providerModels, setProviderModels] = useState<Record<string, Array<{ id: string; model: string; name: string; enabled: boolean; contextWindow?: number; maxTokens?: number; supportsImages?: boolean }>>>({});
+  const [customModel, setCustomModel] = useState({ providerId: '', modelId: '', name: '', contextWindow: '', maxTokens: '', supportsImages: false, reasoning: false });
+  const [packageDraft, setPackageDraft] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'models' | 'mcp' | 'skills' | 'extensions' | 'about'>('models');
   const [settingsData, setSettingsData] = useState<SettingsSnapshot | null>(null);
@@ -83,6 +91,7 @@ export function App() {
       const [snapshot, modelResult] = await Promise.all([window.piApi.settings(workspace), window.piApi.models()]);
       setSettingsData(snapshot);
       setModels(modelResult.models);
+      setEnabledModels(modelResult.enabled ?? []);
       setModelRef(modelResult.current);
       setModel(snapshot.model.label);
     } catch (error) {
@@ -101,6 +110,63 @@ export function App() {
       setKeyDrafts((current) => ({ ...current, [providerId]: '' }));
       await loadState();
     } catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
+    finally { setSettingsBusy(false); }
+  }
+
+  async function loadProviderModels(providerId: string) {
+    if (expandedProvider === providerId) { setExpandedProvider(null); return; }
+    setExpandedProvider(providerId);
+    if (!providerModels[providerId]) {
+      const result = await window.piApi.providerModels(providerId);
+      setProviderModels((current) => ({ ...current, [providerId]: result.models }));
+    }
+  }
+
+  async function setEnabled(next: string[]) {
+    setSettingsBusy(true); setSettingsError(null);
+    try {
+      const snapshot = await window.piApi.setEnabledModels(next);
+      setSettingsData(snapshot);
+      setEnabledModels(snapshot.enabledModels);
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : String(error));
+    } finally { setSettingsBusy(false); }
+  }
+
+  async function saveCustomModel() {
+    setSettingsBusy(true); setSettingsError(null);
+    try {
+      const snapshot = await window.piApi.addCustomModel({
+        providerId: customModel.providerId,
+        modelId: customModel.modelId,
+        name: customModel.name || customModel.modelId,
+        contextWindow: Number(customModel.contextWindow) || undefined,
+        maxTokens: Number(customModel.maxTokens) || undefined,
+        supportsImages: customModel.supportsImages,
+        reasoning: customModel.reasoning,
+      });
+      setSettingsData(snapshot);
+      setCustomModel({ providerId: '', modelId: '', name: '', contextWindow: '', maxTokens: '', supportsImages: false, reasoning: false });
+      await loadState();
+    } catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
+    finally { setSettingsBusy(false); }
+  }
+
+  async function addPackage() {
+    if (!packageDraft.trim()) return;
+    setSettingsBusy(true); setSettingsError(null);
+    try {
+      const snapshot = await window.piApi.addPackage(packageDraft.trim());
+      setSettingsData(snapshot);
+      setPackageDraft('');
+    } catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
+    finally { setSettingsBusy(false); }
+  }
+
+  async function removePackage(source: string) {
+    setSettingsBusy(true); setSettingsError(null);
+    try { setSettingsData(await window.piApi.removePackage(source)); }
+    catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
     finally { setSettingsBusy(false); }
   }
 
@@ -160,6 +226,7 @@ export function App() {
   async function openModels() {
     const result = await window.piApi.models();
     setModels(result.models);
+    setEnabledModels(result.enabled ?? []);
     setModelRef(result.current);
     setModelQuery('');
     setModelsOpen((value) => !value);
@@ -446,7 +513,7 @@ export function App() {
             <div className="model-popover__head">选择模型<span>{models.length} 个</span></div>
             <input autoFocus className="model-search" value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} placeholder="搜索模型" />
             <div className="model-list">
-              {models.filter((item) => item.name.toLowerCase().includes(modelQuery.toLowerCase())).map((item) => (
+              {(enabledModels.length > 0 ? models.filter((item) => enabledModels.includes(item.id) || item.id === modelRef) : models).filter((item) => item.name.toLowerCase().includes(modelQuery.toLowerCase())).map((item) => (
                 <button key={item.id} className={`model-row ${item.id === modelRef ? 'is-active' : ''}`} onClick={() => void selectModel(item.id)}>
                   <span>{item.name}</span>
                   <small>{item.id.split('/')[0]}</small>
@@ -478,17 +545,23 @@ export function App() {
             {settingsData && settingsTab === 'models' && (
               <div className="settings-sections">
                 <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>当前模型</h2><p>选择下一个新会话使用的 Pi 模型。</p></div><span className="settings-model-current">{settingsData.model.label}</span></div>
-                  <div className="settings-model-list">
-                    {models.slice(0, 120).map((item) => (
-                      <button key={item.id} className={`settings-model-row ${item.id === modelRef ? 'is-active' : ''}`} onClick={() => void selectModel(item.id).then(async () => { const next = await window.piApi.settings(); setSettingsData(next); })}>
-                        <span>{item.name}</span><small>{item.id.split('/')[0]}</small>{item.id === modelRef && <Check size={14} />}
-                      </button>
-                    ))}
-                  </div>
+                  <div className="settings-card-head"><div><h2>当前模型</h2><p>对话顶部模型选择器只显示这里启用的模型。</p></div><span className="settings-model-current">{settingsData.model.label}</span></div>
+                  {enabledModels.length > 0 ? (
+                    <div className="enabled-model-list">
+                      {enabledModels.map((id) => {
+                        const found = models.find((item) => item.id === id);
+                        return <div className={`enabled-model-row ${id === modelRef ? 'is-active' : ''}`} key={id}>
+                          <button className="enabled-model-main" onClick={() => void selectModel(id).then(async () => setSettingsData(await window.piApi.settings(workspace)))}>
+                            <span>{found?.name ?? id}</span><small>{id}</small>{id === modelRef && <Check size={14} />}
+                          </button>
+                          <button className="settings-mini-button" onClick={() => void setEnabled(enabledModels.filter((item) => item !== id))}>移除</button>
+                        </div>;
+                      })}
+                    </div>
+                  ) : <div className="settings-empty">还没有启用模型。先在下面认证来源，再选择要使用的模型。</div>}
                 </section>
                 <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>来源与凭据</h2><p>只显示 Pi 已配置的来源。Key 保存在 Pi 的 auth.json，不会写入项目。</p></div></div>
+                  <div className="settings-card-head"><div><h2>来源与认证</h2><p>API Key 保存在 Pi 的 auth.json；这里只显示 Pi 已配置的来源。</p></div></div>
                   <details className="settings-add">
                     <summary>添加自定义来源</summary>
                     <div className="settings-form-grid">
@@ -501,17 +574,54 @@ export function App() {
                     </div>
                     <button className="settings-save settings-form-submit" disabled={settingsBusy} onClick={() => void saveProvider()}>保存到 Pi models.json</button>
                   </details>
-                  <div className="provider-list">
-                    {settingsData.providers.map((provider) => (
-                      <div className="provider-row" key={provider.id}>
-                        <div className="provider-main"><strong>{provider.name}</strong><span>{provider.id} · {provider.models} 个模型</span></div>
-                        <span className="provider-mode">{provider.mode === 'oauth' ? 'OAuth' : provider.mode === 'env' ? '环境变量' : 'API Key'}</span>
-                        <input type="password" value={keyDrafts[provider.id] ?? ''} onChange={(event) => setKeyDrafts((current) => ({ ...current, [provider.id]: event.target.value }))} placeholder="输入新的 API Key" />
-                        <button className="settings-save" disabled={settingsBusy || !keyDrafts[provider.id]?.trim()} onClick={() => void saveProviderKey(provider.id)}>保存</button>
-                      </div>
-                    ))}
+                  <div className="provider-cards">
+                    {settingsData.providers.map((provider) => {
+                      const list = providerModels[provider.id] ?? [];
+                      const filtered = list.filter((item) => item.name.toLowerCase().includes(modelQuery.toLowerCase()) || item.id.toLowerCase().includes(modelQuery.toLowerCase()));
+                      return <div className="provider-card" key={provider.id}>
+                        <div className="provider-card-head">
+                          <div className="provider-avatar">{provider.name.slice(0, 1)}</div>
+                          <div className="provider-main"><strong>{provider.name}</strong><span>{provider.id} · {provider.models} 个模型</span></div>
+                          <span className="provider-mode">{provider.mode === 'oauth' ? 'OAuth' : provider.mode === 'env' ? '环境变量' : 'API Key'}</span>
+                          <button className="settings-outline" onClick={() => void loadProviderModels(provider.id)}>{expandedProvider === provider.id ? '收起' : '管理模型'}</button>
+                        </div>
+                        <div className="provider-key-row">
+                          <input type="password" value={keyDrafts[provider.id] ?? ''} onChange={(event) => setKeyDrafts((current) => ({ ...current, [provider.id]: event.target.value }))} placeholder="更新 API Key" />
+                          <button className="settings-save" disabled={settingsBusy || !keyDrafts[provider.id]?.trim()} onClick={() => void saveProviderKey(provider.id)}>保存 Key</button>
+                        </div>
+                        {expandedProvider === provider.id && (
+                          <div className="provider-model-panel">
+                            <div className="provider-model-tools"><input className="model-search" value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} placeholder="搜索这个来源的模型" /><span>{list.filter((item) => item.enabled).length}/{list.length} 已启用</span></div>
+                            <div className="provider-model-list">
+                              {filtered.slice(0, 150).map((item) => <label className="provider-model-row" key={item.id}>
+                                <input type="checkbox" checked={enabledModels.includes(item.id)} onChange={(event) => void setEnabled(event.target.checked ? [...enabledModels, item.id] : enabledModels.filter((id) => id !== item.id))} />
+                                <span>{item.name}</span>
+                                {item.supportsImages && <em>图片</em>}
+                                {item.contextWindow && <small>{Math.round(item.contextWindow / 1000)}K</small>}
+                              </label>)}
+                              {filtered.length === 0 && <div className="settings-empty">这个来源没有可发现的模型。</div>}
+                            </div>
+                          </div>
+                        )}
+                      </div>;
+                    })}
                     {settingsData.providers.length === 0 && <div className="settings-empty">还没有可配置的 Pi 来源。</div>}
                   </div>
+                </section>
+                <section className="settings-card">
+                  <div className="settings-card-head"><div><h2>自定义模型</h2><p>目录里没有的模型，可以手动补到这个来源。</p></div></div>
+                  <details className="settings-add">
+                    <summary>添加模型参数</summary>
+                    <div className="settings-form-grid">
+                      <label>来源<select value={customModel.providerId} onChange={(event) => setCustomModel({ ...customModel, providerId: event.target.value })}><option value="">选择来源</option>{settingsData.providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.name} ({provider.id})</option>)}</select></label>
+                      <label>模型 ID<input value={customModel.modelId} onChange={(event) => setCustomModel({ ...customModel, modelId: event.target.value })} placeholder="model-id" /></label>
+                      <label>显示名称<input value={customModel.name} onChange={(event) => setCustomModel({ ...customModel, name: event.target.value })} placeholder="可选" /></label>
+                      <label>上下文长度<input type="number" value={customModel.contextWindow} onChange={(event) => setCustomModel({ ...customModel, contextWindow: event.target.value })} placeholder="例如 128000" /></label>
+                      <label>最大输出<input type="number" value={customModel.maxTokens} onChange={(event) => setCustomModel({ ...customModel, maxTokens: event.target.value })} placeholder="例如 16384" /></label>
+                      <div className="settings-checkboxes"><label><input type="checkbox" checked={customModel.supportsImages} onChange={(event) => setCustomModel({ ...customModel, supportsImages: event.target.checked })} />支持图片</label><label><input type="checkbox" checked={customModel.reasoning} onChange={(event) => setCustomModel({ ...customModel, reasoning: event.target.checked })} />推理模型</label></div>
+                    </div>
+                    <button className="settings-save settings-form-submit" disabled={settingsBusy} onClick={() => void saveCustomModel()}>保存到 models.json</button>
+                  </details>
                 </section>
               </div>
             )}
@@ -541,23 +651,33 @@ export function App() {
             )}
             {settingsData && settingsTab === 'skills' && (
               <section className="settings-card">
-                <div className="settings-card-head"><div><h2>已加载技能</h2><p>从 Pi 的技能目录发现；技能修改后需要新会话。</p></div></div>
-                <div className="skill-settings-list">
-                  {settingsData.skills.map((skill) => (
-                    <div className="skill-settings-row" key={skill.path}><FileCode2 size={16} /><div><strong>{skill.name}</strong><p>{skill.description}</p><span>{skill.scope} · {skill.path}</span></div></div>
-                  ))}
-                  {settingsData.skills.length === 0 && <div className="settings-empty">还没有发现技能。</div>}
-                </div>
+                <div className="settings-card-head"><div><h2>已加载技能</h2><p>技能来自 Pi agent 目录、项目目录和全局 .agents/skills。修改后需要新会话。</p></div><div className="settings-add-actions"><button className="settings-save" disabled={settingsBusy} onClick={() => void importResource('skill', 'user')}>添加全局技能</button><button className="settings-outline" disabled={settingsBusy} onClick={() => void importResource('skill', 'project')}>添加项目技能</button></div></div>
+                {(['user', 'project', 'temporary'] as const).map((scope) => {
+                  const items = settingsData.skills.filter((skill) => skill.scope === scope);
+                  const label = scope === 'user' ? '全局' : scope === 'project' ? '项目' : '其他';
+                  return <div className="skill-group" key={scope}><div className="skill-group-title">{label} <span>{items.length}</span></div>{items.map((skill) => <div className="skill-settings-row" key={skill.path}><FileCode2 size={16} /><div><strong>{skill.name}</strong><p>{skill.description}</p><span>{skill.path}</span></div></div>)}{items.length === 0 && <div className="settings-empty settings-empty--small">暂无{label}技能</div>}</div>;
+                })}
               </section>
             )}
             {settingsData && settingsTab === 'extensions' && (
-              <section className="settings-card">
-                <div className="settings-card-head"><div><h2>Pi 扩展</h2><p>扩展运行在 Pi 进程内，拥有宿主权限。只加载你信任的扩展。</p></div><div className="settings-add-actions"><button className="settings-save" disabled={settingsBusy} onClick={() => void importResource('extension', 'user')}>添加全局扩展</button><button className="settings-outline" disabled={settingsBusy} onClick={() => void importResource('extension', 'project')}>添加项目扩展</button></div></div>
-                {(['user', 'project'] as const).map((scope) => {
-                  const items = settingsData.extensions.filter((item) => item.scope === scope);
-                  return <div className="skill-group" key={scope}><div className="skill-group-title">{scope === 'user' ? '全局' : '项目'}</div>{items.map((item) => <div className="skill-settings-row" key={item.path}><Plug size={16} /><div><strong>{item.name}</strong><p>{item.kind === 'directory' ? '扩展目录' : '扩展文件'}</p><span>{item.path}</span></div></div>)}{items.length === 0 && <div className="settings-empty settings-empty--small">暂无{scope === 'user' ? '全局' : '项目'}扩展</div>}</div>;
-                })}
-              </section>
+              <div className="settings-sections">
+                <section className="settings-card">
+                  <div className="settings-card-head"><div><h2>Pi 扩展包</h2><p>来自 ~/.pi/agent/settings.json 的 packages。扩展拥有宿主权限，只安装可信来源。</p></div></div>
+                  <div className="package-add-row"><input value={packageDraft} onChange={(event) => setPackageDraft(event.target.value)} placeholder="npm:pi-tools 或 git:github.com/user/pi-plugin" /><button className="settings-save" disabled={settingsBusy || !packageDraft.trim()} onClick={() => void addPackage()}>安装</button></div>
+                  <div className="package-list">
+                    {settingsData.packages.map((pkg) => <div className="package-row" key={pkg.source}><Plug size={15} /><div className="provider-main"><strong>{pkg.name}</strong><span>{pkg.source}</span></div><button className="settings-mini-button" disabled={settingsBusy} onClick={() => void removePackage(pkg.source)}>移除</button></div>)}
+                    {settingsData.packages.length === 0 && <div className="settings-empty">还没有配置 Pi 扩展包。</div>}
+                  </div>
+                </section>
+                <section className="settings-card">
+                  <div className="settings-card-head"><div><h2>本地扩展目录</h2><p>直接放在 Pi 扩展目录中的文件或文件夹。</p></div><div className="settings-add-actions"><button className="settings-save" disabled={settingsBusy} onClick={() => void importResource('extension', 'user')}>添加全局扩展</button><button className="settings-outline" disabled={settingsBusy} onClick={() => void importResource('extension', 'project')}>添加项目扩展</button></div></div>
+                  {(['user', 'project'] as const).map((scope) => {
+                    const items = settingsData.extensions.filter((item) => item.scope === scope);
+                    return <div className="skill-group" key={scope}><div className="skill-group-title">{scope === 'user' ? '全局' : '项目'} <span>{items.length}</span></div>{items.map((item) => <div className="skill-settings-row" key={item.path}><Plug size={16} /><div><strong>{item.name}</strong><p>{item.kind === 'directory' ? '扩展目录' : '扩展文件'}</p><span>{item.path}</span></div></div>)}{items.length === 0 && <div className="settings-empty settings-empty--small">暂无{scope === 'user' ? '全局' : '项目'}扩展</div>}</div>;
+                  })}
+                </section>
+                {settingsData.extensionData.length > 0 && <section className="settings-card"><div className="settings-card-head"><div><h2>扩展运行数据</h2><p>~/.pi/agent/extensions-data 中已出现的扩展。</p></div></div><div className="package-list">{settingsData.extensionData.map((name) => <div className="package-row" key={name}><Plug size={15} /><div className="provider-main"><strong>{name}</strong><span>extensions-data</span></div></div>)}</div></section>}
+              </div>
             )}
             {settingsData && settingsTab === 'about' && (
               <section className="settings-card">

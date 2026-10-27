@@ -197,7 +197,12 @@ async function availableModels() {
     .filter((item) => providers.size === 0 || providers.has(item.provider))
     .map((item) => ({ id: `${item.provider}/${item.id}`, provider: item.provider, model: item.id, name: item.name }))
     .sort((a, b) => a.name.localeCompare(b.name));
-  return { models: models.slice(0, 300), current: MODEL_REF };
+  let enabled = [];
+  try {
+    const config = JSON.parse(fs.readFileSync(path.join(pi.getAgentDir(), 'settings.json'), 'utf8'));
+    enabled = Array.isArray(config.enabledModels) ? config.enabledModels : [];
+  } catch { /* no saved selection */ }
+  return { models: models.slice(0, 300), enabled, current: MODEL_REF };
 }
 
 function authFile() {
@@ -238,10 +243,43 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
   }));
   let skills = [];
   try {
-    const result = pi.loadSkills({ cwd, agentDir: pi.getAgentDir(), skillPaths: [], includeDefaults: true });
-    skills = result.skills.map((skill) => ({ name: skill.name, description: skill.description, path: skill.filePath, scope: skill.sourceInfo?.scope || 'user' }));
+    const agentSkills = path.join(os.homedir(), '.agents', 'skills');
+    const result = pi.loadSkills({
+      cwd,
+      agentDir: pi.getAgentDir(),
+      skillPaths: [agentSkills, path.join(os.homedir(), '.agents')],
+      includeDefaults: true,
+    });
+    skills = result.skills.map((skill) => {
+      const file = skill.filePath;
+      const scope = file.startsWith(path.join(os.homedir(), '.agents')) || file.startsWith(path.join(pi.getAgentDir(), 'skills'))
+        ? 'user'
+        : file.startsWith(path.join(cwd, '.pi')) ? 'project' : 'temporary';
+      return { name: skill.name, description: skill.description, path: file, scope };
+    });
   } catch { /* skill discovery is optional */ }
-  return { providers, mcp: servers, skills, extensions: listExtensions(cwd), authPath: authFile(), mcpPath: path.join(pi.getAgentDir(), 'mcp.json'), modelsPath: modelsFile(), model: await modelInfo() };
+  const settings = readJson(path.join(pi.getAgentDir(), 'settings.json'), {});
+  const configuredPackages = Array.isArray(settings.packages) ? settings.packages : [];
+  const extensions = listExtensions(cwd);
+  let extensionData = [];
+  try {
+    extensionData = fs.readdirSync(path.join(pi.getAgentDir(), 'extensions-data'), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+      .map((entry) => entry.name);
+  } catch { /* none */ }
+  return {
+    providers,
+    mcp: servers,
+    skills,
+    extensions: extensions.map((item) => ({ ...item, source: 'directory' })),
+    packages: configuredPackages.map((source) => ({ source, name: source.replace(/^(npm:|git:)/, '') })),
+    extensionData,
+    enabledModels: Array.isArray(settings.enabledModels) ? settings.enabledModels : [],
+    authPath: authFile(),
+    mcpPath: path.join(pi.getAgentDir(), 'mcp.json'),
+    modelsPath: modelsFile(),
+    model: await modelInfo(),
+  };
 }
 
 function modelsFile() {
@@ -458,6 +496,73 @@ app.whenReady().then(async () => {
       config.mcpServers[name] = { type: 'http', url, ...(input.description ? { description: String(input.description) } : {}) };
     }
     fs.writeFileSync(path.join(pi.getAgentDir(), 'mcp.json'), JSON.stringify(config, null, 2));
+    return settingsSnapshot(DEFAULT_CWD);
+  });
+  ipcMain.handle('pi:provider-models', async (_event, providerId) => {
+    const rt = await runtime();
+    const settings = readJson(path.join(pi.getAgentDir(), 'settings.json'), {});
+    const enabled = new Set(Array.isArray(settings.enabledModels) ? settings.enabledModels : []);
+    return {
+      models: rt.getModels().filter((model) => model.provider === providerId).map((model) => ({
+        id: `${model.provider}/${model.id}`,
+        model: model.id,
+        name: model.name,
+        enabled: enabled.has(`${model.provider}/${model.id}`),
+        contextWindow: model.contextWindow,
+        maxTokens: model.maxTokens,
+        supportsImages: Array.isArray(model.input) && model.input.includes('image'),
+      })),
+    };
+  });
+  ipcMain.handle('pi:set-enabled-models', async (_event, models) => {
+    if (!Array.isArray(models)) throw new Error('模型列表无效');
+    const settingsPath = path.join(pi.getAgentDir(), 'settings.json');
+    const settings = readJson(settingsPath, {});
+    settings.enabledModels = models.filter((item) => typeof item === 'string');
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+    return settingsSnapshot(DEFAULT_CWD);
+  });
+  ipcMain.handle('pi:add-custom-model', async (_event, input) => {
+    const providerId = String(input.providerId || '').trim();
+    const modelId = String(input.modelId || '').trim();
+    if (!providerId || !modelId) throw new Error('来源和模型 ID 必填');
+    const models = readJson(modelsFile(), { providers: {} });
+    models.providers = models.providers && typeof models.providers === 'object' ? models.providers : {};
+    const provider = models.providers[providerId];
+    if (!provider) throw new Error('请先添加这个来源');
+    const list = Array.isArray(provider.models) ? provider.models : [];
+    const model = {
+      id: modelId,
+      name: String(input.name || modelId),
+      ...(Number(input.contextWindow) > 0 ? { contextWindow: Number(input.contextWindow) } : {}),
+      ...(Number(input.maxTokens) > 0 ? { maxTokens: Number(input.maxTokens) } : {}),
+      input: ['text', ...(input.supportsImages ? ['image'] : [])],
+      ...(input.reasoning ? { reasoning: true } : {}),
+    };
+    provider.models = [...list.filter((item) => item?.id !== modelId), model];
+    fs.writeFileSync(modelsFile(), JSON.stringify(models, null, 2));
+    runtimePromise = undefined;
+    agentSessions.clear();
+    return settingsSnapshot(DEFAULT_CWD);
+  });
+  ipcMain.handle('pi:add-package', async (_event, source) => {
+    if (typeof source !== 'string' || !source.trim()) throw new Error('请输入包来源');
+    const manager = new pi.DefaultPackageManager({
+      cwd: DEFAULT_CWD,
+      agentDir: pi.getAgentDir(),
+      settingsManager: pi.SettingsManager.create(DEFAULT_CWD, pi.getAgentDir()),
+    });
+    await manager.installAndPersist(source.trim());
+    return settingsSnapshot(DEFAULT_CWD);
+  });
+  ipcMain.handle('pi:remove-package', async (_event, source) => {
+    if (typeof source !== 'string') throw new Error('来源无效');
+    const manager = new pi.DefaultPackageManager({
+      cwd: DEFAULT_CWD,
+      agentDir: pi.getAgentDir(),
+      settingsManager: pi.SettingsManager.create(DEFAULT_CWD, pi.getAgentDir()),
+    });
+    await manager.removeAndPersist(source);
     return settingsSnapshot(DEFAULT_CWD);
   });
   ipcMain.handle('pi:set-mcp-enabled', async (_event, { name, enabled }) => {
