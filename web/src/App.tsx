@@ -4,6 +4,7 @@ import {
   Layers3, LoaderCircle, MessageSquare, PanelLeft, PanelRight, Pencil, Plug, Plus, Search, Settings, Sparkles, SquarePen, Trash2, X,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
+import { Select } from './components/Select';
 import { SettingsDialog } from './components/SettingsDialog';
 
 const settingsPages = [
@@ -13,6 +14,13 @@ const settingsPages = [
   { id: 'extensions', label: '扩展', icon: Layers3, description: '管理扩展包与本地扩展，自定义你的工作方式。' },
   { id: 'about', label: '关于', icon: Info, description: '一个专注、轻巧的 AI 开发工作台。' },
 ] as const;
+
+const apiTypeOptions = [
+  { value: 'openai-completions', label: 'OpenAI Completions' },
+  { value: 'openai-responses', label: 'OpenAI Responses' },
+  { value: 'anthropic-messages', label: 'Anthropic Messages' },
+  { value: 'google-generative-ai', label: 'Google Generative AI' },
+];
 
 function BrandMark({ className = '' }: { className?: string }) {
   return <img className={`brand-mark ${className}`} src={appIcon} alt="" draggable={false} />;
@@ -773,13 +781,13 @@ export function App() {
             busy={settingsBusy} loading={editorLoading} error={editorError} onClose={closeEditor} onSubmit={submitEditor}>
             {editor.kind === 'provider' && <div className="settings-form-grid">
               <label>来源 ID<input autoFocus={!editor.editId} required disabled={Boolean(editor.editId)} value={providerDraft.providerId} onChange={(event) => setProviderDraft({ ...providerDraft, providerId: event.target.value })} placeholder="my-provider" /></label>
-              <label>API 类型<select value={providerDraft.api} onChange={(event) => setProviderDraft({ ...providerDraft, api: event.target.value })}>{!['openai-completions', 'openai-responses', 'anthropic-messages', 'google-generative-ai'].includes(providerDraft.api) && <option value={providerDraft.api}>{providerDraft.api}</option>}<option value="openai-completions">OpenAI Completions</option><option value="openai-responses">OpenAI Responses</option><option value="anthropic-messages">Anthropic Messages</option><option value="google-generative-ai">Google Generative AI</option></select></label>
+              <div className="settings-field"><span>API 类型</span><Select label="API 类型" value={providerDraft.api} onChange={(value) => setProviderDraft({ ...providerDraft, api: value })} options={[...apiTypeOptions, ...(apiTypeOptions.some((option) => option.value === providerDraft.api) ? [] : [{ value: providerDraft.api, label: providerDraft.api }])]} /></div>
               <label className="field-wide">服务地址<input autoFocus={Boolean(editor.editId)} required type="url" value={providerDraft.baseUrl} onChange={(event) => setProviderDraft({ ...providerDraft, baseUrl: event.target.value })} placeholder="https://api.example.com/v1" /></label>
               <label className="field-wide">API Key<input aria-label="API Key" aria-describedby="provider-key-help" type="password" autoComplete="new-password" value={providerDraft.apiKey} onChange={(event) => setProviderDraft({ ...providerDraft, apiKey: event.target.value })} placeholder={editor.editId ? '已保存的凭据不显示，留空保持原值' : 'API Key 或 $ENV_VAR'} /><small id="provider-key-help">支持环境变量引用，例如 $MINIMAX_CN_API_KEY。</small></label>
               {!editor.editId && <><label>首个模型 ID<input required value={providerDraft.modelId} onChange={(event) => setProviderDraft({ ...providerDraft, modelId: event.target.value })} placeholder="model-id" /></label><label>显示名称<input value={providerDraft.modelName} onChange={(event) => setProviderDraft({ ...providerDraft, modelName: event.target.value })} placeholder="可选，默认使用模型 ID" /></label></>}
             </div>}
             {editor.kind === 'model' && <div className="settings-form-grid">
-              <label>模型来源<select autoFocus={!editor.editId} required disabled={Boolean(editor.editId)} value={customModel.providerId} onChange={(event) => setCustomModel({ ...customModel, providerId: event.target.value })}><option value="">选择来源</option>{settingsData?.providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.name}</option>)}</select></label>
+              <div className="settings-field"><span>模型来源</span><Select label="模型来源" autoFocus={!editor.editId} disabled={Boolean(editor.editId)} value={customModel.providerId} onChange={(value) => setCustomModel({ ...customModel, providerId: value })} options={[{ value: '', label: '选择来源' }, ...(settingsData?.providers ?? []).map((provider) => ({ value: provider.id, label: provider.name }))]} /></div>
               <label>模型 ID<input required disabled={Boolean(editor.editId)} value={customModel.modelId} onChange={(event) => setCustomModel({ ...customModel, modelId: event.target.value })} placeholder="model-id" /></label>
               <label className="field-wide">显示名称<input autoFocus={Boolean(editor.editId)} value={customModel.name} onChange={(event) => setCustomModel({ ...customModel, name: event.target.value })} placeholder="可选，默认使用模型 ID" /></label>
               <label>上下文长度<input type="number" min="1" step="1" value={customModel.contextWindow} onChange={(event) => setCustomModel({ ...customModel, contextWindow: event.target.value })} placeholder="默认值" /></label>
@@ -788,7 +796,7 @@ export function App() {
             </div>}
             {editor.kind === 'mcp' && <div className="settings-form-grid">
               <label>名称<input autoFocus required value={mcpDraft.name} onChange={(event) => setMcpDraft({ ...mcpDraft, name: event.target.value })} placeholder="例如 filesystem" /></label>
-              <label>传输方式<select value={mcpDraft.transport} onChange={(event) => setMcpDraft({ ...mcpDraft, transport: event.target.value })}><option value="stdio">本地进程 · stdio</option><option value="http">Streamable HTTP</option></select></label>
+              <div className="settings-field"><span>传输方式</span><Select label="传输方式" value={mcpDraft.transport} onChange={(value) => setMcpDraft({ ...mcpDraft, transport: value })} options={[{ value: 'stdio', label: '本地进程 · stdio' }, { value: 'http', label: 'Streamable HTTP' }]} /></div>
               <label className="field-wide">描述<input value={mcpDraft.description} onChange={(event) => setMcpDraft({ ...mcpDraft, description: event.target.value })} placeholder="简要说明用途，可选" /></label>
               {mcpDraft.transport === 'stdio' ? <><label className="field-wide">启动命令<input required value={mcpDraft.command} onChange={(event) => setMcpDraft({ ...mcpDraft, command: event.target.value })} placeholder="npx" /></label><label className="field-wide">启动参数<textarea aria-label="启动参数" aria-describedby="mcp-args-help" value={mcpDraft.args} onChange={(event) => setMcpDraft({ ...mcpDraft, args: event.target.value })} rows={4} placeholder={'-y\n@modelcontextprotocol/server-filesystem\n/path/to/workspace'} /><small id="mcp-args-help">每行一个参数，路径中的空格会保留。</small></label></> : <label className="field-wide">服务器地址<input required type="url" value={mcpDraft.url} onChange={(event) => setMcpDraft({ ...mcpDraft, url: event.target.value })} placeholder="https://example.com/mcp" /></label>}
               <label className="field-wide">环境变量<textarea aria-label="环境变量" value={mcpDraft.env} onChange={(event) => setMcpDraft({ ...mcpDraft, env: event.target.value })} rows={3} placeholder={'TOKEN=...\nBASE_URL=https://...'} /><small>每行一个 KEY=value，留空表示不设置。</small></label>
