@@ -1,13 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowUp, Check, ChevronDown, ChevronLeft, Cpu, FileCode2, FileText, Folder, FolderOpen, Info, MoreHorizontal,
-  PanelRight, Paperclip, Plug, Search, Settings, SlidersHorizontal, SquarePen, X,
+  ArrowUp, Check, ChevronDown, ChevronLeft, Clock3, Code2, Cpu, FileCode2, FileText, Folder, FolderOpen, Info,
+  Layers3, LoaderCircle, MessageSquare, PanelLeft, PanelRight, Pencil, Plug, Plus, Search, Settings, Sparkles, SquarePen, Trash2, X,
 } from 'lucide-react';
+import appIcon from '../../assets/icon.png';
+import { SettingsDialog } from './components/SettingsDialog';
+
+const settingsPages = [
+  { id: 'models', label: '模型与账号', icon: Cpu, description: '连接模型来源，选择适合当前工作的模型。' },
+  { id: 'mcp', label: 'MCP 服务器', icon: Plug, description: '连接外部工具，让 Pi 更好地理解你的工作环境。' },
+  { id: 'skills', label: '技能', icon: FileCode2, description: '管理可复用的工作方法，为 Pi 扩展专业能力。' },
+  { id: 'extensions', label: '扩展', icon: Layers3, description: '管理扩展包与本地扩展，自定义你的工作方式。' },
+  { id: 'about', label: '关于', icon: Info, description: '一个专注、轻巧的 AI 开发工作台。' },
+] as const;
+
+function BrandMark({ className = '' }: { className?: string }) {
+  return <img className={`brand-mark ${className}`} src={appIcon} alt="" draggable={false} />;
+}
 
 type PiSessionSummary = { id: string; cwd: string; title: string; updatedAt: number; messageCount: number };
 type PiWorkspace = { cwd: string; name: string; sessions: PiSessionSummary[] };
 type PiMessage = { role: 'user' | 'assistant'; text: string; streaming?: boolean };
+type CustomModelConfig = { providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean };
+type SettingsEditor = { kind: 'provider' | 'model' | 'mcp' | 'package' | 'skill' | 'extension'; editId?: string };
 type SettingsSnapshot = {
+  customModels: CustomModelConfig[];
   providers: Array<{ id: string; name: string; mode: string; envName?: string; envAvailable?: boolean; models: number }>;
   mcp: Array<{ name: string; transport: string; enabled: boolean; target: string; description: string }>;
   skills: Array<{ name: string; description: string; path: string; scope: string }>;
@@ -47,6 +64,9 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [workspaceSearchOpen, setWorkspaceSearchOpen] = useState(false);
+  const [workspaceQuery, setWorkspaceQuery] = useState('');
   const [modelsOpen, setModelsOpen] = useState(false);
   const [models, setModels] = useState<Array<{ id: string; name: string }>>([]);
   const [modelQuery, setModelQuery] = useState('');
@@ -59,18 +79,25 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'models' | 'mcp' | 'skills' | 'extensions' | 'about'>('models');
   const [settingsData, setSettingsData] = useState<SettingsSnapshot | null>(null);
-  const [keyDrafts, setKeyDrafts] = useState<Record<string, string>>({});
+  const [editor, setEditor] = useState<SettingsEditor | null>(null);
+  const [editorError, setEditorError] = useState<string | null>(null);
+  const [editorLoading, setEditorLoading] = useState(false);
+  const [resourceScope, setResourceScope] = useState<'user' | 'project'>('user');
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [providerDraft, setProviderDraft] = useState({ providerId: '', baseUrl: '', api: 'openai-completions', modelId: '', modelName: '', apiKey: '' });
-  const [mcpDraft, setMcpDraft] = useState({ name: '', transport: 'stdio', command: '', args: '', url: '', description: '' });
+  const [mcpDraft, setMcpDraft] = useState({ name: '', transport: 'stdio', command: '', args: '', url: '', description: '', env: '' });
   const [treePath, setTreePath] = useState('');
   const [entries, setEntries] = useState<Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }>>([]);
   const [file, setFile] = useState<{ path: string; size: number; binary: boolean; text: string } | null>(null);
   const [fileBusy, setFileBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const modelControlRef = useRef<HTMLDivElement>(null);
+  const settingsContentRef = useRef<HTMLElement>(null);
+  const settingsReturnFocusRef = useRef<HTMLElement | null>(null);
   const requestRef = useRef<string | null>(null);
+  const editorRequestRef = useRef(0);
 
   const loadState = useCallback(async () => {
     const next = await window.piApi.state();
@@ -84,7 +111,10 @@ export function App() {
     setWorkspace((current) => current || next.workspaces[0]?.cwd || next.cwd);
   }, []);
 
-  async function openSettings() {
+  async function openSettings(tab?: typeof settingsTab) {
+    if (!settingsOpen) settingsReturnFocusRef.current = document.activeElement as HTMLElement;
+    if (tab) setSettingsTab(tab);
+    setModelsOpen(false);
     setSettingsOpen(true);
     setSettingsError(null);
     try {
@@ -99,26 +129,50 @@ export function App() {
     }
   }
 
-  async function saveProviderKey(providerId: string) {
-    const apiKey = keyDrafts[providerId]?.trim();
-    if (!apiKey) return;
-    setSettingsBusy(true); setSettingsError(null);
+  function closeEditor() {
+    if (settingsBusy) return;
+    editorRequestRef.current += 1;
+    setEditor(null);
+    setEditorError(null);
+  }
+
+  async function openEditor(kind: SettingsEditor['kind'], editId?: string) {
+    const request = ++editorRequestRef.current;
+    setEditor({ kind, editId });
+    setEditorError(null);
+    setEditorLoading(Boolean(editId && (kind === 'provider' || kind === 'mcp')));
+    setResourceScope('user');
+    setPackageDraft('');
+    setProviderDraft({ providerId: '', baseUrl: '', api: 'openai-completions', modelId: '', modelName: '', apiKey: '' });
+    setMcpDraft({ name: '', transport: 'stdio', command: '', args: '', url: '', description: '', env: '' });
+    setCustomModel({ providerId: '', modelId: '', name: '', contextWindow: '', maxTokens: '', supportsImages: false, reasoning: false });
     try {
-      const snapshot = await window.piApi.setKey({ providerId, apiKey });
-      setSettingsData(snapshot);
-      setModel(snapshot.model.label);
-      setKeyDrafts((current) => ({ ...current, [providerId]: '' }));
-      await loadState();
-    } catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
-    finally { setSettingsBusy(false); }
+      if (kind === 'provider' && editId) {
+        const config = await window.piApi.providerConfig(editId);
+        if (request === editorRequestRef.current) setProviderDraft({ ...config, modelId: '', modelName: '', apiKey: '' });
+      }
+      if (kind === 'mcp' && editId) {
+        const config = await window.piApi.mcpConfig(editId);
+        if (request === editorRequestRef.current) setMcpDraft({ ...config, args: config.args.join('\n') });
+      }
+      if (kind === 'model' && editId) {
+        const config = settingsData?.customModels.find((item) => `${item.providerId}/${item.modelId}` === editId);
+        if (config) setCustomModel({ ...config, contextWindow: config.contextWindow?.toString() || '', maxTokens: config.maxTokens?.toString() || '' });
+      }
+    } catch (error) {
+      if (request === editorRequestRef.current) setEditorError(error instanceof Error ? error.message : String(error));
+    } finally { if (request === editorRequestRef.current) setEditorLoading(false); }
   }
 
   async function loadProviderModels(providerId: string) {
     if (expandedProvider === providerId) { setExpandedProvider(null); return; }
     setExpandedProvider(providerId);
+    setModelQuery('');
     if (!providerModels[providerId]) {
-      const result = await window.piApi.providerModels(providerId);
-      setProviderModels((current) => ({ ...current, [providerId]: result.models }));
+      try {
+        const result = await window.piApi.providerModels(providerId);
+        setProviderModels((current) => ({ ...current, [providerId]: result.models }));
+      } catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
     }
   }
 
@@ -134,9 +188,10 @@ export function App() {
   }
 
   async function saveCustomModel() {
-    setSettingsBusy(true); setSettingsError(null);
+    setSettingsBusy(true); setEditorError(null);
     try {
       const snapshot = await window.piApi.addCustomModel({
+        editing: Boolean(editor?.editId),
         providerId: customModel.providerId,
         modelId: customModel.modelId,
         name: customModel.name || customModel.modelId,
@@ -147,19 +202,24 @@ export function App() {
       });
       setSettingsData(snapshot);
       setCustomModel({ providerId: '', modelId: '', name: '', contextWindow: '', maxTokens: '', supportsImages: false, reasoning: false });
+      setProviderModels({});
+      const catalog = await window.piApi.models();
+      setModels(catalog.models);
+      setEditor(null);
       await loadState();
-    } catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
+    } catch (error) { setEditorError(error instanceof Error ? error.message : String(error)); }
     finally { setSettingsBusy(false); }
   }
 
   async function addPackage() {
     if (!packageDraft.trim()) return;
-    setSettingsBusy(true); setSettingsError(null);
+    setSettingsBusy(true); setEditorError(null);
     try {
       const snapshot = await window.piApi.addPackage(packageDraft.trim());
       setSettingsData(snapshot);
       setPackageDraft('');
-    } catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
+      setEditor(null);
+    } catch (error) { setEditorError(error instanceof Error ? error.message : String(error)); }
     finally { setSettingsBusy(false); }
   }
 
@@ -170,18 +230,55 @@ export function App() {
     finally { setSettingsBusy(false); }
   }
 
+  async function deleteMcp(name: string) {
+    if (!window.confirm(`删除 MCP 服务器「${name}」？`)) return;
+    setSettingsBusy(true); setSettingsError(null);
+    try { setSettingsData(await window.piApi.removeMcp(name)); }
+    catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
+    finally { setSettingsBusy(false); }
+  }
+
+  async function deleteSkill(skillPath: string, name: string) {
+    if (!window.confirm(`删除技能「${name}」？这会删除技能目录。`)) return;
+    setSettingsBusy(true); setSettingsError(null);
+    try { setSettingsData(await window.piApi.removeSkill(skillPath)); }
+    catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
+    finally { setSettingsBusy(false); }
+  }
+
+  async function deleteExtension(extensionPath: string, name: string) {
+    if (!window.confirm(`删除扩展「${name}」？`)) return;
+    setSettingsBusy(true); setSettingsError(null);
+    try { setSettingsData(await window.piApi.removeExtension(extensionPath)); }
+    catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
+    finally { setSettingsBusy(false); }
+  }
+
+  async function deleteCustomModel(providerId: string, modelId: string, name: string) {
+    if (!window.confirm(`删除自定义模型「${name}」？`)) return;
+    setSettingsBusy(true); setSettingsError(null);
+    try {
+      setSettingsData(await window.piApi.removeCustomModel({ providerId, modelId }));
+      setProviderModels({});
+      setModels((await window.piApi.models()).models);
+    } catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
+    finally { setSettingsBusy(false); }
+  }
+
   async function saveProvider() {
     setSettingsBusy(true);
-    setSettingsError(null);
+    setEditorError(null);
     try {
-      const result = await window.piApi.addProvider(providerDraft);
+      const result = await window.piApi.addProvider({ ...providerDraft, editing: Boolean(editor?.editId) });
       setSettingsData(result.settings);
       setModels(result.models.models);
       setModelRef(result.models.current);
       setProviderDraft({ providerId: '', baseUrl: '', api: 'openai-completions', modelId: '', modelName: '', apiKey: '' });
+      setProviderModels({});
+      setEditor(null);
       await loadState();
     } catch (error) {
-      setSettingsError(error instanceof Error ? error.message : String(error));
+      setEditorError(error instanceof Error ? error.message : String(error));
     } finally {
       setSettingsBusy(false);
     }
@@ -189,13 +286,14 @@ export function App() {
 
   async function saveMcp() {
     setSettingsBusy(true);
-    setSettingsError(null);
+    setEditorError(null);
     try {
-      const next = await window.piApi.addMcp(mcpDraft);
+      const next = await window.piApi.addMcp({ ...mcpDraft, args: mcpDraft.args.split('\n').map((arg) => arg.trim()).filter(Boolean), env: mcpDraft.env, originalName: editor?.editId });
       setSettingsData(next);
-      setMcpDraft({ name: '', transport: 'stdio', command: '', args: '', url: '', description: '' });
+      setEditor(null);
+      setMcpDraft({ name: '', transport: 'stdio', command: '', args: '', url: '', description: '', env: '' });
     } catch (error) {
-      setSettingsError(error instanceof Error ? error.message : String(error));
+      setEditorError(error instanceof Error ? error.message : String(error));
     } finally {
       setSettingsBusy(false);
     }
@@ -203,14 +301,14 @@ export function App() {
 
   async function importResource(kind: 'skill' | 'extension', scope: 'user' | 'project') {
     setSettingsBusy(true);
-    setSettingsError(null);
+    setEditorError(null);
     try {
       const next = kind === 'skill'
         ? await window.piApi.addSkill({ scope, cwd: workspace })
         : await window.piApi.addExtension({ scope, cwd: workspace });
-      if (next) setSettingsData(next);
+      if (next) { setSettingsData(next); setEditor(null); }
     } catch (error) {
-      setSettingsError(error instanceof Error ? error.message : String(error));
+      setEditorError(error instanceof Error ? error.message : String(error));
     } finally {
       setSettingsBusy(false);
     }
@@ -239,15 +337,39 @@ export function App() {
     setModelsOpen(false);
   }
 
-  useEffect(() => { void loadState(); }, [loadState]);
+  useEffect(() => { void loadState().catch((error) => setError(error instanceof Error ? error.message : String(error))); }, [loadState]);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) { textarea.style.height = 'auto'; textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`; }
+  }, [prompt]);
+
+  useEffect(() => {
+    if (!modelsOpen) return;
+    const onPointer = (event: PointerEvent) => {
+      if (!modelControlRef.current?.contains(event.target as Node)) setModelsOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setModelsOpen(false); modelControlRef.current?.querySelector('button')?.focus(); }
+    };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('pointerdown', onPointer); document.removeEventListener('keydown', onKey); };
+  }, [modelsOpen]);
 
   useEffect(() => window.piApi.onOpenSettings(() => { void openSettings(); }), [workspace]);
 
   useEffect(() => {
-    if (!settingsOpen) return;
+    if (!settingsOpen || editor) return;
     const onKey = (event: KeyboardEvent): void => { if (event.key === 'Escape') setSettingsOpen(false); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+  }, [settingsOpen, editor]);
+
+  useEffect(() => { settingsContentRef.current?.scrollTo({ top: 0 }); }, [settingsTab, settingsOpen]);
+
+  useEffect(() => {
+    if (!settingsOpen) settingsReturnFocusRef.current?.focus();
   }, [settingsOpen]);
 
   useEffect(() => window.piApi.onPrompt((event) => {
@@ -287,6 +409,9 @@ export function App() {
     () => workspaces.find((item) => item.cwd === workspace),
     [workspaces, workspace],
   );
+  const visibleWorkspaces = workspaces.filter((item) => `${item.name} ${item.cwd} ${item.sessions.map((s) => s.title).join(' ')}`.toLowerCase().includes(workspaceQuery.toLowerCase()));
+  const visibleModels = (enabledModels.length > 0 ? models.filter((item) => enabledModels.includes(item.id) || item.id === modelRef) : models)
+    .filter((item) => `${item.name} ${item.id}`.toLowerCase().includes(modelQuery.toLowerCase()));
 
   async function startSession(cwd = workspace) {
     if (!cwd) return;
@@ -370,38 +495,48 @@ export function App() {
     });
   }
 
+  function submitEditor() {
+    if (!editor) return;
+    if (editor.kind === 'provider') void saveProvider();
+    else if (editor.kind === 'model') void saveCustomModel();
+    else if (editor.kind === 'mcp') void saveMcp();
+    else if (editor.kind === 'package') void addPackage();
+    else void importResource(editor.kind, resourceScope);
+  }
+
   return (
-    <div className="app">
+    <div className={`app ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}>
       <aside className="sidebar">
         <div className="sidebar-drag" />
         <div className="brand">
-          <span className="pi-mark">π</span>
+          <BrandMark />
           <span className="brand-name">Pi Studio</span>
-          <button className="icon-button collapse"><PanelRight size={15} /></button>
+          <button className="icon-button collapse" aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'} title={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'} onClick={() => setSidebarCollapsed((value) => !value)}><PanelLeft /></button>
         </div>
-        <button className="new-chat" onClick={() => void startSession()}><SquarePen size={15} /><span>新会话</span></button>
+        <button className="new-chat" title="新会话" onClick={() => void startSession()}><SquarePen /><span>新会话</span></button>
         <nav className="nav">
-          <button className="nav-row is-active"><span className="nav-glyph">◌</span>对话</button>
-          <button className="nav-row"><span className="nav-glyph">◇</span>插件</button>
-          <button className="nav-row"><span className="nav-glyph">◷</span>自动化任务</button>
-          <button className="nav-row"><span className="nav-glyph">⌘</span>更多</button>
+          <button className="nav-row is-active" title="对话" aria-current="page"><MessageSquare /><span>对话</span></button>
+          <button className="nav-row" title="扩展" onClick={() => void openSettings('extensions')}><Layers3 /><span>扩展</span></button>
+          <button className="nav-row" disabled title="自动化任务即将推出"><Clock3 /><span>自动化任务</span><small>即将推出</small></button>
         </nav>
         <div className="workspace-head">
           <span>工作区</span>
           <div>
-            <button className="icon-button"><Search size={14} /></button>
-            <button className="icon-button"><SlidersHorizontal size={14} /></button>
-            <button className="icon-button" onClick={chooseFile}><FolderOpen size={14} /></button>
+            <button className={`icon-button ${workspaceSearchOpen ? 'is-active' : ''}`} aria-label="搜索工作区" title="搜索工作区" onClick={() => { setWorkspaceSearchOpen((value) => !value); setWorkspaceQuery(''); }}><Search /></button>
+            <button className="icon-button" onClick={chooseFile} aria-label="打开工作区" title="打开工作区"><FolderOpen /></button>
           </div>
         </div>
+        {workspaceSearchOpen && <div className="workspace-search"><Search /><input autoFocus aria-label="搜索工作区或会话" placeholder="搜索工作区或会话…" value={workspaceQuery} onChange={(event) => setWorkspaceQuery(event.target.value)} /></div>}
         <div className="workspace-list">
-          {workspaces.map((item) => {
+          {visibleWorkspaces.map((item) => {
             const isOpen = expanded.has(item.cwd);
             const isActive = workspace === item.cwd;
             return (
               <div className="workspace" key={item.cwd}>
                 <button
                   className={`workspace-row ${isActive ? 'is-active' : ''}`}
+                  title={item.cwd}
+                  aria-expanded={isOpen}
                   onClick={() => {
                     setWorkspace(item.cwd);
                     setExpanded((current) => {
@@ -421,6 +556,7 @@ export function App() {
                       <button
                         key={sessionItem.id}
                         className={`session-row ${session?.id === sessionItem.id ? 'is-active' : ''}`}
+                        title={sessionItem.title}
                         onClick={() => void openSession(sessionItem)}
                       >
                         <span className="session-title">{sessionItem.title}</span>
@@ -433,9 +569,10 @@ export function App() {
               </div>
             );
           })}
+          {visibleWorkspaces.length === 0 && <div className="sidebar-empty"><FolderOpen /><span>{workspaceQuery ? '没有匹配的工作区或会话' : '打开一个文件夹，开始工作'}</span>{!workspaceQuery && <button className="settings-outline" onClick={chooseFile}>打开工作区</button>}</div>}
         </div>
         <div className="sidebar-bottom">
-          <button className="bottom-row" onClick={() => void openSettings()}><Settings size={16} /><span>设置</span><span className="status"><i />Pi SDK 本地</span></button>
+          <button className="bottom-row" title="设置" onClick={() => void openSettings()}><Settings /><span>设置</span><span className="status"><i />本地运行</span></button>
         </div>
       </aside>
 
@@ -443,26 +580,31 @@ export function App() {
         <header className="chat-header">
           <div className="chat-heading">
             <h1>{session?.title || 'Pi Studio'}</h1>
-            <div className="chat-meta"><span className="state-dot" />{session ? 'Pi Agent' : '准备就绪'}<span>·</span><span className="branch">main</span></div>
+            <div className="chat-meta"><span className={`state-dot ${busy ? 'is-busy' : ''}`} />{busy ? '正在处理' : '准备就绪'}{activeWorkspace && <><span>·</span><span className="workspace-name">{activeWorkspace.name}</span></>}</div>
           </div>
           <div className="chat-actions">
             <button className="icon-button" onClick={() => void openSettings()} aria-label="设置"><Settings size={16} /></button>
             <button className={`icon-button ${filesOpen ? 'is-active' : ''}`} onClick={() => setFilesOpen((value) => !value)} aria-label="文件查看器"><PanelRight size={16} /></button>
-            <button className="icon-button"><MoreHorizontal size={16} /></button>
           </div>
         </header>
         <div className="chat-tabs">
           <button className="tab is-active">对话</button>
-          <button className="tab">轨迹</button>
+          <button className="tab" disabled title="执行轨迹即将推出">轨迹</button>
+          <span className="chat-tabs-note">{messages.length > 0 ? `${messages.length} 条消息` : '从一个想法开始'}</span>
         </div>
 
         <div className="chat-scroll" ref={scrollRef}>
           <div className="chat-column">
-            {!session && messages.length === 0 ? (
+            {messages.length === 0 ? (
               <div className="hero">
-                <span className="hero-mark">π</span>
+                <BrandMark className="hero-mark" />
+                <span className="hero-eyebrow">你的开发搭档</span>
                 <h1>今天想让 Pi 做什么？</h1>
-                <span className="preview-badge">预览版</span>
+                <p>从理解代码到实现想法，一起把工作向前推进。</p>
+                <div className="suggestions">
+                  {[{ icon: Code2, title: '理解项目', detail: '梳理结构与核心逻辑', prompt: '帮我梳理这个项目的目录结构、技术栈和核心逻辑。' }, { icon: Sparkles, title: '实现想法', detail: '把一个想法变成代码', prompt: '我想在这个项目中实现一个新功能：' }, { icon: FileCode2, title: '改进代码', detail: '发现可以优化的细节', prompt: '帮我检查这个项目中可以改进的代码，并说明原因。' }].map((item) => <button className="suggestion" key={item.title} onClick={() => { setPrompt(item.prompt); textareaRef.current?.focus(); }}><item.icon /><strong>{item.title}</strong><span>{item.detail}</span></button>)}
+                </div>
+                {!workspace && <button className="settings-outline" onClick={chooseFile}><FolderOpen />选择工作区</button>}
               </div>
             ) : (
               <div className="messages">
@@ -478,9 +620,9 @@ export function App() {
                 {busy && !messages.some((message) => message.role === 'assistant' && message.text) && (
                   <div className="thinking"><span /><span /><span />正在思考</div>
                 )}
-                {error && <div className="error-card"><strong>执行失败</strong><p>{error}</p></div>}
               </div>
             )}
+            {error && <div className="error-card" role="alert"><strong>暂时无法完成操作</strong><p>{error}</p></div>}
           </div>
         </div>
 
@@ -491,241 +633,212 @@ export function App() {
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); }
+                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); }
               }}
-              placeholder="描述你想要构建的内容，/ 调用指令，@ 文件或对话"
+              aria-label="发送给 Pi 的消息"
+              placeholder="描述你的想法，或交给 Pi 一个任务…"
               rows={2}
             />
             <div className="composer-bar">
               <div className="composer-left">
-                <button className="icon-button"><Paperclip size={17} /></button>
-                <button className="workspace-chip" onClick={chooseFile}><Folder size={14} />{activeWorkspace?.name || '选择工作区'}<ChevronDown size={12} /></button>
+                <button className="workspace-chip" onClick={chooseFile} title={workspace || '选择工作区'}><Folder /><span>{activeWorkspace?.name || '选择工作区'}</span><ChevronDown /></button>
               </div>
               <div className="composer-right">
-                <button className="model-label" onClick={() => void openModels()}>{model}<ChevronDown size={11} /></button>
-                <button className="send-button" disabled={busy || !prompt.trim()} onClick={() => void send()}><ArrowUp size={16} /></button>
+                <div className="model-control" ref={modelControlRef}>
+                  <button className={`model-label ${modelsOpen ? 'is-active' : ''}`} aria-label="选择模型" aria-expanded={modelsOpen} onClick={() => void openModels()}><span>{model || '选择模型'}</span><ChevronDown /></button>
+                  {modelsOpen && (
+                    <div className="model-popover" role="dialog" aria-label="选择模型">
+                      <div className="model-popover__head"><strong>选择模型</strong><span>{visibleModels.length} 个</span></div>
+                      <div className="search-field"><Search /><input autoFocus className="model-search" aria-label="搜索模型" value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} placeholder="搜索名称或来源…" /></div>
+                      <div className="model-list">
+                        {visibleModels.map((item) => <button key={item.id} className={`model-row ${item.id === modelRef ? 'is-active' : ''}`} onClick={() => void selectModel(item.id)}><div><span>{item.name}</span><small>{item.id.split('/')[0]}</small></div>{item.id === modelRef && <Check />}</button>)}
+                        {visibleModels.length === 0 && <div className="settings-empty">没有匹配的模型</div>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <button className="send-button" disabled={busy || !prompt.trim()} onClick={() => void send()} aria-label={busy ? '正在生成回复' : '发送消息'} title="发送消息"><ArrowUp /></button>
               </div>
             </div>
           </div>
+          <div className="composer-hint"><span>Pi Studio <span className="preview-badge">预览版</span></span><span><kbd>↵</kbd> 发送 <span className="hint-divider">·</span> <kbd>⇧ ↵</kbd> 换行</span></div>
         </div>
-        {modelsOpen && (
-          <div className="model-popover" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="model-popover__head">选择模型<span>{models.length} 个</span></div>
-            <input autoFocus className="model-search" value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} placeholder="搜索模型" />
-            <div className="model-list">
-              {(enabledModels.length > 0 ? models.filter((item) => enabledModels.includes(item.id) || item.id === modelRef) : models).filter((item) => item.name.toLowerCase().includes(modelQuery.toLowerCase())).map((item) => (
-                <button key={item.id} className={`model-row ${item.id === modelRef ? 'is-active' : ''}`} onClick={() => void selectModel(item.id)}>
-                  <span>{item.name}</span>
-                  <small>{item.id.split('/')[0]}</small>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </main>
 
       {settingsOpen && (
-        <div className="settings-overlay">
+        <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="设置">
           <aside className="settings-nav">
-            <div className="settings-nav-head"><span>设置</span><button className="icon-button" aria-label="关闭设置" onClick={() => setSettingsOpen(false)}><X size={16} /></button></div>
-            <div className="settings-search"><Search size={14} /><span>搜索设置</span></div>
-            <button className={`settings-nav-row ${settingsTab === 'models' ? 'is-active' : ''}`} onClick={() => setSettingsTab('models')}><Cpu size={15} />模型与账号</button>
-            <button className={`settings-nav-row ${settingsTab === 'mcp' ? 'is-active' : ''}`} onClick={() => setSettingsTab('mcp')}><Plug size={15} />MCP 服务器</button>
-            <button className={`settings-nav-row ${settingsTab === 'skills' ? 'is-active' : ''}`} onClick={() => setSettingsTab('skills')}><FileCode2 size={15} />技能</button>
-            <button className={`settings-nav-row ${settingsTab === 'extensions' ? 'is-active' : ''}`} onClick={() => setSettingsTab('extensions')}><Plug size={15} />扩展</button>
-            <button className={`settings-nav-row ${settingsTab === 'about' ? 'is-active' : ''}`} onClick={() => setSettingsTab('about')}><Info size={15} />关于</button>
-            <div className="settings-nav-foot">Pi Studio · Pi SDK</div>
+            <div className="settings-nav-head"><span>设置</span><button autoFocus className="icon-button" aria-label="关闭设置" title="返回对话 · Esc" onClick={() => setSettingsOpen(false)}><X /></button></div>
+            {settingsPages.map((page) => <button key={page.id} className={`settings-nav-row ${settingsTab === page.id ? 'is-active' : ''}`} aria-current={settingsTab === page.id ? 'page' : undefined} onClick={() => { setSettingsTab(page.id); setModelQuery(''); }}><page.icon />{page.label}</button>)}
+            <button className="settings-nav-foot" onClick={() => setSettingsOpen(false)}><ChevronLeft /><span>返回工作台</span><kbd>Esc</kbd></button>
           </aside>
-          <section className="settings-content">
-            <header className="settings-title">
-              <h1>{settingsTab === 'models' ? '模型与账号' : settingsTab === 'mcp' ? 'MCP 服务器' : settingsTab === 'skills' ? '技能' : settingsTab === 'extensions' ? '扩展' : '关于'}</h1>
-              <p>{settingsTab === 'models' ? '配置 Pi 的模型来源和凭据。' : settingsTab === 'mcp' ? '管理 Pi 的 MCP 服务器配置。' : settingsTab === 'skills' ? 'Pi 会从本机技能目录加载这些技能。' : settingsTab === 'extensions' ? '扩展运行在 Pi 进程内，仅加载可信代码。' : 'Pi Studio 运行在 Pi Agent SDK 上。'}</p>
-            </header>
-            {settingsError && <div className="settings-error">{settingsError}</div>}
+          <section className="settings-content" ref={settingsContentRef}>
+            {settingsError && <div className="settings-error" role="alert">{settingsError}</div>}
+            {!settingsData && !settingsError && <div className="settings-loading" role="status"><LoaderCircle className="spin" />正在加载设置…</div>}
             {settingsData && settingsTab === 'models' && (
               <div className="settings-sections">
                 <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>当前模型</h2><p>对话顶部模型选择器只显示这里启用的模型。</p></div><span className="settings-model-current">{settingsData.model.label}</span></div>
-                  {enabledModels.length > 0 ? (
-                    <div className="enabled-model-list">
-                      {enabledModels.map((id) => {
-                        const found = models.find((item) => item.id === id);
-                        return <div className={`enabled-model-row ${id === modelRef ? 'is-active' : ''}`} key={id}>
-                          <button className="enabled-model-main" onClick={() => void selectModel(id).then(async () => setSettingsData(await window.piApi.settings(workspace)))}>
-                            <span>{found?.name ?? id}</span><small>{id}</small>{id === modelRef && <Check size={14} />}
-                          </button>
-                          <button className="settings-mini-button" onClick={() => void setEnabled(enabledModels.filter((item) => item !== id))}>移除</button>
-                        </div>;
-                      })}
-                    </div>
-                  ) : <div className="settings-empty">还没有启用模型。先在下面认证来源，再选择要使用的模型。</div>}
+                  <div className="settings-card-head"><div><h2>已启用模型 <span className="count-badge">{enabledModels.length}</span></h2><p>点击模型切换当前对话使用的模型。</p></div></div>
+                  {enabledModels.length > 0 ? <div className="enabled-model-list">
+                    {enabledModels.map((id) => <div className={`enabled-model-row ${id === modelRef ? 'is-active' : ''}`} key={id}>
+                      <button className="enabled-model-main" onClick={() => void selectModel(id).then(async () => setSettingsData(await window.piApi.settings(workspace)))}><span>{models.find((item) => item.id === id)?.name ?? id}</span><small>{id}</small>{id === modelRef && <Check />}</button>
+                      <button className="settings-mini-button" disabled={settingsBusy} onClick={() => void setEnabled(enabledModels.filter((item) => item !== id))}>移除</button>
+                    </div>)}
+                  </div> : <div className="settings-empty">在下方添加来源，再选择要启用的模型。</div>}
                 </section>
                 <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>来源与认证</h2><p>API Key 保存在 Pi 的 auth.json；也可以填 $ENV_VAR 形式的引用，不保存明文。</p></div></div>
-                  <details className="settings-add">
-                    <summary>添加自定义来源</summary>
-                    <div className="settings-form-grid">
-                      <label>来源 ID<input value={providerDraft.providerId} onChange={(event) => setProviderDraft({ ...providerDraft, providerId: event.target.value })} placeholder="my-provider" /></label>
-                      <label>Base URL<input value={providerDraft.baseUrl} onChange={(event) => setProviderDraft({ ...providerDraft, baseUrl: event.target.value })} placeholder="https://api.example.com/v1" /></label>
-                      <label>API<select value={providerDraft.api} onChange={(event) => setProviderDraft({ ...providerDraft, api: event.target.value })}><option value="openai-completions">OpenAI Completions</option><option value="openai-responses">OpenAI Responses</option><option value="anthropic-messages">Anthropic Messages</option><option value="google-generative-ai">Google Generative AI</option></select></label>
-                      <label>模型 ID<input value={providerDraft.modelId} onChange={(event) => setProviderDraft({ ...providerDraft, modelId: event.target.value })} placeholder="model-id" /></label>
-                      <label>显示名称<input value={providerDraft.modelName} onChange={(event) => setProviderDraft({ ...providerDraft, modelName: event.target.value })} placeholder="My Model" /></label>
-                      <label>API Key<input type="password" value={providerDraft.apiKey} onChange={(event) => setProviderDraft({ ...providerDraft, apiKey: event.target.value })} placeholder="sk-... 或 $ENV_VAR" /></label>
-                    </div>
-                    <button className="settings-save settings-form-submit" disabled={settingsBusy} onClick={() => void saveProvider()}>保存到 Pi models.json</button>
-                  </details>
+                  <div className="settings-card-head"><div><h2>模型来源 <span className="count-badge">{settingsData.providers.length}</span></h2><p>管理服务地址、认证信息和可用模型。</p></div><button className="settings-add-button" aria-label="添加模型来源" onClick={() => void openEditor('provider')}><Plus />添加</button></div>
                   <div className="provider-cards">
                     {settingsData.providers.map((provider) => {
                       const list = providerModels[provider.id] ?? [];
-                      const filtered = list.filter((item) => item.name.toLowerCase().includes(modelQuery.toLowerCase()) || item.id.toLowerCase().includes(modelQuery.toLowerCase()));
+                      const filtered = list.filter((item) => `${item.name} ${item.id}`.toLowerCase().includes(modelQuery.toLowerCase()));
                       return <div className="provider-card" key={provider.id}>
                         <div className="provider-card-head">
                           <div className="provider-avatar">{provider.name.slice(0, 1)}</div>
                           <div className="provider-main"><strong>{provider.name}</strong><span>{provider.id} · {provider.models} 个模型</span></div>
                           <span className="provider-mode">{provider.mode === 'oauth' ? 'OAuth' : provider.mode === 'env' ? '环境变量' : 'API Key'}</span>
-                          <button className="settings-outline" onClick={() => void loadProviderModels(provider.id)}>{expandedProvider === provider.id ? '收起' : '管理模型'}</button>
-                        </div>
-                        <div className="provider-key-row">
-                          <input type={keyDrafts[provider.id]?.trim().startsWith('$') ? 'text' : 'password'} value={keyDrafts[provider.id] ?? ''} onChange={(event) => setKeyDrafts((current) => ({ ...current, [provider.id]: event.target.value }))} placeholder="输入 API Key 或环境变量引用，如 $MINIMAX_CN_API_KEY" />
-                          <button className="settings-save" disabled={settingsBusy || !keyDrafts[provider.id]?.trim()} onClick={() => void saveProviderKey(provider.id)}>保存</button>
+                          <div className="row-actions"><button className="settings-outline row-action" aria-label={`编辑 ${provider.name}`} onClick={() => void openEditor('provider', provider.id)}><Pencil />编辑</button><button className="settings-outline row-action" onClick={() => void loadProviderModels(provider.id)} aria-expanded={expandedProvider === provider.id}>{expandedProvider === provider.id ? '收起模型' : '管理模型'}<ChevronDown className={expandedProvider === provider.id ? 'rotate-up' : ''} /></button></div>
                         </div>
                         {provider.mode === 'env' && <div className={`provider-env-hint ${provider.envAvailable ? 'is-set' : ''}`}>{provider.envAvailable ? '环境变量已设置' : '环境变量未设置'} · <code>{provider.envName}</code></div>}
-                        {expandedProvider === provider.id && (
-                          <div className="provider-model-panel">
-                            <div className="provider-model-tools"><input className="model-search" value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} placeholder="搜索这个来源的模型" /><span>{list.filter((item) => item.enabled).length}/{list.length} 已启用</span></div>
-                            <div className="provider-model-list">
-                              {filtered.slice(0, 150).map((item) => <label className="provider-model-row" key={item.id}>
-                                <input type="checkbox" checked={enabledModels.includes(item.id)} onChange={(event) => void setEnabled(event.target.checked ? [...enabledModels, item.id] : enabledModels.filter((id) => id !== item.id))} />
-                                <span>{item.name}</span>
-                                {item.supportsImages && <em>图片</em>}
-                                {item.contextWindow && <small>{Math.round(item.contextWindow / 1000)}K</small>}
-                              </label>)}
-                              {filtered.length === 0 && <div className="settings-empty">这个来源没有可发现的模型。</div>}
-                            </div>
+                        {expandedProvider === provider.id && <div className="provider-model-panel">
+                          <div className="provider-model-tools"><input className="model-search" aria-label={`搜索 ${provider.name} 的模型`} value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} placeholder="搜索名称或模型 ID…" /><span>{list.filter((item) => enabledModels.includes(item.id)).length}/{list.length} 已启用</span></div>
+                          <div className="provider-model-list">
+                            {filtered.slice(0, 150).map((item) => <label className="provider-model-row" key={item.id}><input type="checkbox" disabled={settingsBusy} checked={enabledModels.includes(item.id)} onChange={(event) => void setEnabled(event.target.checked ? [...enabledModels, item.id] : enabledModels.filter((id) => id !== item.id))} /><span>{item.name}</span>{item.supportsImages && <em>图片</em>}{item.contextWindow && <small>{Math.round(item.contextWindow / 1000)}K</small>}</label>)}
+                            {filtered.length === 0 && <div className="settings-empty">{providerModels[provider.id] ? '没有匹配的模型' : '正在加载模型…'}</div>}
                           </div>
-                        )}
+                        </div>}
                       </div>;
                     })}
-                    {settingsData.providers.length === 0 && <div className="settings-empty">还没有可配置的 Pi 来源。</div>}
+                    {settingsData.providers.length === 0 && <div className="settings-empty">还没有模型来源，添加一个开始使用。</div>}
                   </div>
                 </section>
                 <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>自定义模型</h2><p>目录里没有的模型，可以手动补到这个来源。</p></div></div>
-                  <details className="settings-add">
-                    <summary>添加模型参数</summary>
-                    <div className="settings-form-grid">
-                      <label>来源<select value={customModel.providerId} onChange={(event) => setCustomModel({ ...customModel, providerId: event.target.value })}><option value="">选择来源</option>{settingsData.providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.name} ({provider.id})</option>)}</select></label>
-                      <label>模型 ID<input value={customModel.modelId} onChange={(event) => setCustomModel({ ...customModel, modelId: event.target.value })} placeholder="model-id" /></label>
-                      <label>显示名称<input value={customModel.name} onChange={(event) => setCustomModel({ ...customModel, name: event.target.value })} placeholder="可选" /></label>
-                      <label>上下文长度<input type="number" value={customModel.contextWindow} onChange={(event) => setCustomModel({ ...customModel, contextWindow: event.target.value })} placeholder="例如 128000" /></label>
-                      <label>最大输出<input type="number" value={customModel.maxTokens} onChange={(event) => setCustomModel({ ...customModel, maxTokens: event.target.value })} placeholder="例如 16384" /></label>
-                      <div className="settings-checkboxes"><label><input type="checkbox" checked={customModel.supportsImages} onChange={(event) => setCustomModel({ ...customModel, supportsImages: event.target.checked })} />支持图片</label><label><input type="checkbox" checked={customModel.reasoning} onChange={(event) => setCustomModel({ ...customModel, reasoning: event.target.checked })} />推理模型</label></div>
-                    </div>
-                    <button className="settings-save settings-form-submit" disabled={settingsBusy} onClick={() => void saveCustomModel()}>保存到 models.json</button>
-                  </details>
+                  <div className="settings-card-head"><div><h2>自定义模型 <span className="count-badge">{settingsData.customModels?.length || 0}</span></h2><p>手动添加模型，或调整名称、上下文与能力。</p></div><button className="settings-add-button" aria-label="添加自定义模型" onClick={() => void openEditor('model')}><Plus />添加</button></div>
+                  <div className="custom-model-list">{settingsData.customModels?.map((item) => <div className="custom-model-row" key={`${item.providerId}/${item.modelId}`}><div className="provider-main"><strong>{item.name}</strong><span>{item.providerId}/{item.modelId}</span></div><div className="model-capabilities">{item.contextWindow && <span>{Math.round(item.contextWindow / 1000)}K</span>}{item.supportsImages && <span>图片</span>}{item.reasoning && <span>推理</span>}</div><button className="settings-outline row-action" aria-label={`编辑模型 ${item.name}`} onClick={() => void openEditor('model', `${item.providerId}/${item.modelId}`)}><Pencil />编辑</button><button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`删除模型 ${item.name}`} title="删除" onClick={() => void deleteCustomModel(item.providerId, item.modelId, item.name)}><Trash2 /></button></div>)}</div>
+                  {!settingsData.customModels?.length && <div className="settings-empty">还没有自定义模型。</div>}
                 </section>
               </div>
             )}
             {settingsData && settingsTab === 'mcp' && (
               <section className="settings-card">
-                <div className="settings-card-head"><div><h2>已配置的 MCP</h2><p>来自 {settingsData.mcpPath}。保存后新会话生效。</p></div></div>
-                <details className="settings-add">
-                  <summary>添加 MCP 服务器</summary>
-                  <div className="settings-form-grid">
-                    <label>名称<input value={mcpDraft.name} onChange={(event) => setMcpDraft({ ...mcpDraft, name: event.target.value })} placeholder="filesystem" /></label>
-                    <label>传输<select value={mcpDraft.transport} onChange={(event) => setMcpDraft({ ...mcpDraft, transport: event.target.value })}><option value="stdio">stdio</option><option value="http">Streamable HTTP</option></select></label>
-                    {mcpDraft.transport === 'stdio' ? <><label>命令<input value={mcpDraft.command} onChange={(event) => setMcpDraft({ ...mcpDraft, command: event.target.value })} placeholder="npx" /></label><label>参数<input value={mcpDraft.args} onChange={(event) => setMcpDraft({ ...mcpDraft, args: event.target.value })} placeholder="-y @modelcontextprotocol/server-filesystem ." /></label></> : <label>URL<input value={mcpDraft.url} onChange={(event) => setMcpDraft({ ...mcpDraft, url: event.target.value })} placeholder="https://example.com/mcp" /></label>}
-                    <label>描述<input value={mcpDraft.description} onChange={(event) => setMcpDraft({ ...mcpDraft, description: event.target.value })} placeholder="可选" /></label>
-                  </div>
-                  <button className="settings-save settings-form-submit" disabled={settingsBusy} onClick={() => void saveMcp()}>保存到 Pi mcp.json</button>
-                </details>
+                <div className="settings-card-head"><div><h2>MCP 服务器 <span className="count-badge">{settingsData.mcp.length}</span></h2><p>管理外部工具与数据连接。</p></div><button className="settings-add-button" aria-label="添加 MCP 服务器" onClick={() => void openEditor('mcp')}><Plus />添加</button></div>
                 <div className="mcp-settings-list">
-                  {settingsData.mcp.map((server) => (
-                    <div className="mcp-settings-row" key={server.name}>
-                      <div className="provider-main"><strong>{server.name}</strong><span>{server.transport} · {server.target}</span></div>
-                      <button className={`switch ${server.enabled ? 'is-on' : ''}`} disabled={settingsBusy} onClick={() => void toggleMcp(server.name, !server.enabled)} aria-label={`${server.name} ${server.enabled ? '禁用' : '启用'}`}><span /></button>
-                    </div>
-                  ))}
+                  {settingsData.mcp.map((server) => <div className="mcp-settings-row" key={server.name}>
+                    <div className="provider-main"><strong>{server.name}</strong>{server.description && <p>{server.description}</p>}<span title={server.target}>{server.transport} · {server.target}</span></div>
+                    <div className="row-actions"><button className="settings-outline row-action" aria-label={`编辑 ${server.name}`} onClick={() => void openEditor('mcp', server.name)}><Pencil />编辑</button><span className={`resource-status ${server.enabled ? 'is-on' : ''}`}>{server.enabled ? '已启用' : '已停用'}</span><button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`删除 MCP ${server.name}`} title="删除" onClick={() => void deleteMcp(server.name)}><Trash2 /></button><button className={`switch ${server.enabled ? 'is-on' : ''}`} role="switch" aria-checked={server.enabled} disabled={settingsBusy} onClick={() => void toggleMcp(server.name, !server.enabled)} aria-label={`${server.name} ${server.enabled ? '禁用' : '启用'}`}><span /></button></div>
+                  </div>)}
                   {settingsData.mcp.length === 0 && <div className="settings-empty">还没有 MCP 服务器。</div>}
                 </div>
+                <p className="settings-footnote">更改会在新会话中生效。</p>
               </section>
             )}
             {settingsData && settingsTab === 'skills' && (
               <section className="settings-card">
-                <div className="settings-card-head"><div><h2>已加载技能</h2><p>技能来自 Pi agent 目录、项目目录和全局 .agents/skills。修改后需要新会话。</p></div><div className="settings-add-actions"><button className="settings-save" disabled={settingsBusy} onClick={() => void importResource('skill', 'user')}>添加全局技能</button><button className="settings-outline" disabled={settingsBusy} onClick={() => void importResource('skill', 'project')}>添加项目技能</button></div></div>
+                <div className="settings-card-head"><div><h2>技能 <span className="count-badge">{settingsData.skills.length}</span></h2><p>为 Pi 添加可复用的工作方法。</p></div><button className="settings-add-button" aria-label="添加技能" onClick={() => void openEditor('skill')}><Plus />添加</button></div>
                 {(['user', 'project', 'temporary'] as const).map((scope) => {
                   const items = settingsData.skills.filter((skill) => skill.scope === scope);
                   const label = scope === 'user' ? '全局' : scope === 'project' ? '项目' : '其他';
-                  return <div className="skill-group" key={scope}><div className="skill-group-title">{label} <span>{items.length}</span></div>{items.map((skill) => <div className="skill-settings-row" key={skill.path}><FileCode2 size={16} /><div><strong>{skill.name}</strong><p>{skill.description}</p><span>{skill.path}</span></div></div>)}{items.length === 0 && <div className="settings-empty settings-empty--small">暂无{label}技能</div>}</div>;
+                  return <div className="skill-group" key={scope}><div className="skill-group-title">{label}<span>{items.length}</span></div>{items.map((skill) => <div className="skill-settings-row" key={skill.path}><FileCode2 /><div><strong>{skill.name}</strong><p>{skill.description}</p><span>{skill.path}</span></div><button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`删除技能 ${skill.name}`} title="删除" onClick={() => void deleteSkill(skill.path, skill.name)}><Trash2 /></button></div>)}{items.length === 0 && <div className="settings-empty settings-empty--small">暂无{label}技能</div>}</div>;
                 })}
+                <p className="settings-footnote">添加或修改技能后，在新会话中使用。</p>
               </section>
             )}
             {settingsData && settingsTab === 'extensions' && (
               <div className="settings-sections">
                 <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>Pi 扩展包</h2><p>来自 ~/.pi/agent/settings.json 的 packages。扩展拥有宿主权限，只安装可信来源。</p></div></div>
-                  <div className="package-add-row"><input value={packageDraft} onChange={(event) => setPackageDraft(event.target.value)} placeholder="npm:pi-tools 或 git:github.com/user/pi-plugin" /><button className="settings-save" disabled={settingsBusy || !packageDraft.trim()} onClick={() => void addPackage()}>安装</button></div>
-                  <div className="package-list">
-                    {settingsData.packages.map((pkg) => <div className="package-row" key={pkg.source}><Plug size={15} /><div className="provider-main"><strong>{pkg.name}</strong><span>{pkg.source}</span></div><button className="settings-mini-button" disabled={settingsBusy} onClick={() => void removePackage(pkg.source)}>移除</button></div>)}
-                    {settingsData.packages.length === 0 && <div className="settings-empty">还没有配置 Pi 扩展包。</div>}
-                  </div>
+                  <div className="settings-card-head"><div><h2>扩展包 <span className="count-badge">{settingsData.packages.length}</span></h2><p>从 npm 或 Git 仓库安装扩展。</p></div><button className="settings-add-button" aria-label="安装扩展包" onClick={() => void openEditor('package')}><Plus />添加</button></div>
+                  <div className="package-list">{settingsData.packages.map((pkg) => <div className="package-row" key={pkg.source}><Plug /><div className="provider-main"><strong>{pkg.name}</strong><span>{pkg.source}</span></div><button className="settings-mini-button" disabled={settingsBusy} onClick={() => void removePackage(pkg.source)}>移除</button></div>)}{settingsData.packages.length === 0 && <div className="settings-empty">还没有安装扩展包。</div>}</div>
                 </section>
                 <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>本地扩展目录</h2><p>直接放在 Pi 扩展目录中的文件或文件夹。</p></div><div className="settings-add-actions"><button className="settings-save" disabled={settingsBusy} onClick={() => void importResource('extension', 'user')}>添加全局扩展</button><button className="settings-outline" disabled={settingsBusy} onClick={() => void importResource('extension', 'project')}>添加项目扩展</button></div></div>
+                  <div className="settings-card-head"><div><h2>本地扩展</h2><p>从本机导入扩展文件或目录。</p></div><button className="settings-add-button" aria-label="添加本地扩展" onClick={() => void openEditor('extension')}><Plus />添加</button></div>
                   {(['user', 'project'] as const).map((scope) => {
                     const items = settingsData.extensions.filter((item) => item.scope === scope);
-                    return <div className="skill-group" key={scope}><div className="skill-group-title">{scope === 'user' ? '全局' : '项目'} <span>{items.length}</span></div>{items.map((item) => <div className="skill-settings-row" key={item.path}><Plug size={16} /><div><strong>{item.name}</strong><p>{item.kind === 'directory' ? '扩展目录' : '扩展文件'}</p><span>{item.path}</span></div></div>)}{items.length === 0 && <div className="settings-empty settings-empty--small">暂无{scope === 'user' ? '全局' : '项目'}扩展</div>}</div>;
+                    return <div className="skill-group" key={scope}><div className="skill-group-title">{scope === 'user' ? '全局' : '项目'}<span>{items.length}</span></div>{items.map((item) => <div className="skill-settings-row" key={item.path}><Plug /><div><strong>{item.name}</strong><p>{item.kind === 'directory' ? '扩展目录' : '扩展文件'}</p><span>{item.path}</span></div><button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`删除扩展 ${item.name}`} title="删除" onClick={() => void deleteExtension(item.path, item.name)}><Trash2 /></button></div>)}{items.length === 0 && <div className="settings-empty settings-empty--small">暂无{scope === 'user' ? '全局' : '项目'}扩展</div>}</div>;
                   })}
                 </section>
-                {settingsData.extensionData.length > 0 && <section className="settings-card"><div className="settings-card-head"><div><h2>扩展运行数据</h2><p>~/.pi/agent/extensions-data 中已出现的扩展。</p></div></div><div className="package-list">{settingsData.extensionData.map((name) => <div className="package-row" key={name}><Plug size={15} /><div className="provider-main"><strong>{name}</strong><span>extensions-data</span></div></div>)}</div></section>}
+                {settingsData.extensionData.length > 0 && <section className="settings-card"><div className="settings-card-head"><div><h2>扩展运行数据</h2></div></div><div className="package-list">{settingsData.extensionData.map((name) => <div className="package-row" key={name}><Plug /><div className="provider-main"><strong>{name}</strong></div></div>)}</div></section>}
               </div>
             )}
             {settingsData && settingsTab === 'about' && (
-              <section className="settings-card">
-                <div className="settings-card-head"><div><h2>Pi Studio</h2><p>基于 Pi Agent SDK 的桌面工作台。</p></div></div>
-                <dl className="about-list"><div><dt>内核</dt><dd>@earendil-works/pi-coding-agent</dd></div><div><dt>凭据文件</dt><dd>{settingsData.authPath}</dd></div><div><dt>MCP 配置</dt><dd>{settingsData.mcpPath}</dd></div></dl>
+              <section className="settings-card about-card">
+                <div className="about-brand"><BrandMark /><div><h2>Pi Studio</h2><p>让想法，在这里成为现实。</p></div><span className="preview-badge">预览版</span></div>
+                <dl className="about-list"><div><dt>内核</dt><dd>@earendil-works/pi-coding-agent</dd></div><div><dt>凭据文件</dt><dd>{settingsData.authPath}</dd></div><div><dt>MCP 配置</dt><dd>{settingsData.mcpPath}</dd></div><div><dt>模型配置</dt><dd>{settingsData.modelsPath}</dd></div></dl>
               </section>
             )}
           </section>
+          {editor && <SettingsDialog
+            title={editor.kind === 'provider' ? editor.editId ? '编辑模型来源' : '添加模型来源' : editor.kind === 'model' ? editor.editId ? '编辑自定义模型' : '添加自定义模型' : editor.kind === 'mcp' ? editor.editId ? '编辑 MCP 服务器' : '添加 MCP 服务器' : editor.kind === 'package' ? '安装扩展包' : editor.kind === 'skill' ? '添加技能' : '添加本地扩展'}
+            description={editor.kind === 'mcp' ? '配置工具连接，保存后在新会话中生效。' : editor.kind === 'provider' ? '设置连接方式与认证信息。' : editor.kind === 'model' ? '配置模型的名称与能力。' : editor.kind === 'package' ? '请输入可信的扩展包地址。' : '选择生效范围，再从本机导入。'}
+            action={editor.kind === 'skill' ? '选择文件夹并添加' : editor.kind === 'extension' ? '选择文件并添加' : editor.kind === 'package' ? '安装' : editor.editId ? '保存更改' : '添加'}
+            busy={settingsBusy} loading={editorLoading} error={editorError} onClose={closeEditor} onSubmit={submitEditor}>
+            {editor.kind === 'provider' && <div className="settings-form-grid">
+              <label>来源 ID<input autoFocus={!editor.editId} required disabled={Boolean(editor.editId)} value={providerDraft.providerId} onChange={(event) => setProviderDraft({ ...providerDraft, providerId: event.target.value })} placeholder="my-provider" /></label>
+              <label>API 类型<select value={providerDraft.api} onChange={(event) => setProviderDraft({ ...providerDraft, api: event.target.value })}>{!['openai-completions', 'openai-responses', 'anthropic-messages', 'google-generative-ai'].includes(providerDraft.api) && <option value={providerDraft.api}>{providerDraft.api}</option>}<option value="openai-completions">OpenAI Completions</option><option value="openai-responses">OpenAI Responses</option><option value="anthropic-messages">Anthropic Messages</option><option value="google-generative-ai">Google Generative AI</option></select></label>
+              <label className="field-wide">服务地址<input autoFocus={Boolean(editor.editId)} required type="url" value={providerDraft.baseUrl} onChange={(event) => setProviderDraft({ ...providerDraft, baseUrl: event.target.value })} placeholder="https://api.example.com/v1" /></label>
+              <label className="field-wide">API Key<input aria-label="API Key" aria-describedby="provider-key-help" type="password" autoComplete="new-password" value={providerDraft.apiKey} onChange={(event) => setProviderDraft({ ...providerDraft, apiKey: event.target.value })} placeholder={editor.editId ? '已保存的凭据不显示，留空保持原值' : 'API Key 或 $ENV_VAR'} /><small id="provider-key-help">支持环境变量引用，例如 $MINIMAX_CN_API_KEY。</small></label>
+              {!editor.editId && <><label>首个模型 ID<input required value={providerDraft.modelId} onChange={(event) => setProviderDraft({ ...providerDraft, modelId: event.target.value })} placeholder="model-id" /></label><label>显示名称<input value={providerDraft.modelName} onChange={(event) => setProviderDraft({ ...providerDraft, modelName: event.target.value })} placeholder="可选，默认使用模型 ID" /></label></>}
+            </div>}
+            {editor.kind === 'model' && <div className="settings-form-grid">
+              <label>模型来源<select autoFocus={!editor.editId} required disabled={Boolean(editor.editId)} value={customModel.providerId} onChange={(event) => setCustomModel({ ...customModel, providerId: event.target.value })}><option value="">选择来源</option>{settingsData?.providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.name}</option>)}</select></label>
+              <label>模型 ID<input required disabled={Boolean(editor.editId)} value={customModel.modelId} onChange={(event) => setCustomModel({ ...customModel, modelId: event.target.value })} placeholder="model-id" /></label>
+              <label className="field-wide">显示名称<input autoFocus={Boolean(editor.editId)} value={customModel.name} onChange={(event) => setCustomModel({ ...customModel, name: event.target.value })} placeholder="可选，默认使用模型 ID" /></label>
+              <label>上下文长度<input type="number" min="1" step="1" value={customModel.contextWindow} onChange={(event) => setCustomModel({ ...customModel, contextWindow: event.target.value })} placeholder="默认值" /></label>
+              <label>最大输出<input type="number" min="1" step="1" value={customModel.maxTokens} onChange={(event) => setCustomModel({ ...customModel, maxTokens: event.target.value })} placeholder="默认值" /></label>
+              <div className="settings-checkboxes field-wide"><label><input type="checkbox" checked={customModel.supportsImages} onChange={(event) => setCustomModel({ ...customModel, supportsImages: event.target.checked })} />支持图片</label><label><input type="checkbox" checked={customModel.reasoning} onChange={(event) => setCustomModel({ ...customModel, reasoning: event.target.checked })} />推理模型</label></div>
+            </div>}
+            {editor.kind === 'mcp' && <div className="settings-form-grid">
+              <label>名称<input autoFocus required value={mcpDraft.name} onChange={(event) => setMcpDraft({ ...mcpDraft, name: event.target.value })} placeholder="例如 filesystem" /></label>
+              <label>传输方式<select value={mcpDraft.transport} onChange={(event) => setMcpDraft({ ...mcpDraft, transport: event.target.value })}><option value="stdio">本地进程 · stdio</option><option value="http">Streamable HTTP</option></select></label>
+              <label className="field-wide">描述<input value={mcpDraft.description} onChange={(event) => setMcpDraft({ ...mcpDraft, description: event.target.value })} placeholder="简要说明用途，可选" /></label>
+              {mcpDraft.transport === 'stdio' ? <><label className="field-wide">启动命令<input required value={mcpDraft.command} onChange={(event) => setMcpDraft({ ...mcpDraft, command: event.target.value })} placeholder="npx" /></label><label className="field-wide">启动参数<textarea aria-label="启动参数" aria-describedby="mcp-args-help" value={mcpDraft.args} onChange={(event) => setMcpDraft({ ...mcpDraft, args: event.target.value })} rows={4} placeholder={'-y\n@modelcontextprotocol/server-filesystem\n/path/to/workspace'} /><small id="mcp-args-help">每行一个参数，路径中的空格会保留。</small></label></> : <label className="field-wide">服务器地址<input required type="url" value={mcpDraft.url} onChange={(event) => setMcpDraft({ ...mcpDraft, url: event.target.value })} placeholder="https://example.com/mcp" /></label>}
+              <label className="field-wide">环境变量<textarea aria-label="环境变量" value={mcpDraft.env} onChange={(event) => setMcpDraft({ ...mcpDraft, env: event.target.value })} rows={3} placeholder={'TOKEN=...\nBASE_URL=https://...'} /><small>每行一个 KEY=value，留空表示不设置。</small></label>
+            </div>}
+            {editor.kind === 'package' && <div className="settings-form-grid"><label className="field-wide">扩展包地址<input aria-label="扩展包地址" autoFocus required value={packageDraft} onChange={(event) => setPackageDraft(event.target.value)} placeholder="npm:pi-tools 或 git:github.com/user/pi-plugin" /><small>扩展拥有本机访问权限，请确认来源可信。</small></label></div>}
+            {(editor.kind === 'skill' || editor.kind === 'extension') && <div className="resource-import"><span className="field-label">生效范围</span><div className="scope-options"><label className={resourceScope === 'user' ? 'is-selected' : ''}><input type="radio" name="scope" checked={resourceScope === 'user'} onChange={() => setResourceScope('user')} /><div><strong>全局</strong><span>在所有工作区中使用</span></div></label><label className={resourceScope === 'project' ? 'is-selected' : ''}><input type="radio" name="scope" disabled={!workspace} checked={resourceScope === 'project'} onChange={() => setResourceScope('project')} /><div><strong>当前项目</strong><span>{activeWorkspace?.name || '请先选择工作区'}</span></div></label></div><p className="import-note">{editor.kind === 'skill' ? '请选择包含 SKILL.md 的技能文件夹。' : '请选择扩展文件，或包含 index.ts / index.js 的文件夹。'}</p></div>}
+          </SettingsDialog>}
         </div>
       )}
 
       {filesOpen && (
+        <>
+        <button className="file-panel-backdrop" aria-label="关闭文件抽屉" tabIndex={-1} onClick={() => setFilesOpen(false)} />
         <aside className="file-panel">
           <div className="file-panel-head">
-            <div><strong>文件</strong><span>{workspace}</span></div>
-            <button className="icon-button" onClick={() => setFilesOpen(false)}><X size={15} /></button>
+            <div><strong>工作区文件</strong><span title={workspace}>{activeWorkspace?.name || workspace}</span></div>
+            <button className="icon-button" aria-label="关闭文件查看器" title="关闭文件查看器" onClick={() => setFilesOpen(false)}><X /></button>
           </div>
           {!file ? (
             <>
               <div className="file-toolbar">
-                <button className="icon-button" disabled={!treePath} onClick={() => void loadTree(treePath.split('/').slice(0, -1).join('/'))}><ChevronLeft size={15} /></button>
+                <button className="icon-button" aria-label="返回上级目录" title="返回上级目录" disabled={!treePath} onClick={() => void loadTree(treePath.split('/').slice(0, -1).join('/'))}><ChevronLeft /></button>
                 <span className="path-label">{treePath ? `/${treePath}` : '/'}</span>
+                <small>{entries.length} 项</small>
               </div>
               <div className="file-tree">
-                {entries.map((entry) => (
-                  <button key={entry.path} className="file-row" onClick={() => entry.type === 'directory' ? void loadTree(entry.path) : void openFile(entry.path)}>
+                {!fileBusy && entries.map((entry) => (
+                  <button key={entry.path} className={`file-row ${entry.type === 'directory' ? 'is-directory' : ''}`} title={entry.name} onClick={() => entry.type === 'directory' ? void loadTree(entry.path) : void openFile(entry.path)}>
                     {entry.type === 'directory' ? <Folder size={15} /> : <FileText size={15} />}
                     <span>{entry.name}</span>
                     {entry.type === 'file' && <small>{filesize(entry.size)}</small>}
                     {entry.type === 'directory' && <ChevronDown size={13} className="chevron-left" />}
                   </button>
                 ))}
-                {entries.length === 0 && <div className="file-empty">这个目录是空的</div>}
+                {!fileBusy && entries.length === 0 && <div className="file-empty"><FolderOpen /><strong>这个目录还是空的</strong><span>添加文件后，它们会出现在这里。</span></div>}
               </div>
             </>
           ) : (
             <>
               <div className="file-toolbar">
-                <button className="icon-button" onClick={() => setFile(null)}><ChevronLeft size={15} /></button>
+                <button className="icon-button" aria-label="返回文件列表" title="返回文件列表" onClick={() => setFile(null)}><ChevronLeft /></button>
                 <span className="path-label">{file.path}</span>
                 <small>{filesize(file.size)}</small>
               </div>
-              {file.binary ? <div className="file-empty">二进制文件不可预览</div> : <pre className="file-code">{file.text}</pre>}
+              {file.binary ? <div className="file-empty"><FileText /><strong>暂不支持预览此文件</strong><span>可以在其他应用中查看二进制文件。</span></div> : <pre className="file-code"><code>{file.text.split('\n').map((line, index) => <span className="code-line" key={index}><span className="line-number" aria-hidden="true">{index + 1}</span><span>{line || ' '}</span></span>)}</code></pre>}
             </>
           )}
-          {fileBusy && <div className="file-loading">读取中…</div>}
+          {fileBusy && <div className="file-loading" role="status"><LoaderCircle className="spin" />正在读取文件…</div>}
         </aside>
+        </>
       )}
     </div>
   );

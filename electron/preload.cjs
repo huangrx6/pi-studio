@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('piApi', {
   chooseWorkspace: () => ipcRenderer.invoke('pi:choose-workspace'),
   models: () => ipcRenderer.invoke('pi:models'),
   providerModels: (providerId) => ipcRenderer.invoke('pi:provider-models', providerId),
+  providerConfig: (providerId) => ipcRenderer.invoke('pi:provider-config', providerId),
+  mcpConfig: (name) => ipcRenderer.invoke('pi:mcp-config', name),
   setEnabledModels: (models) => ipcRenderer.invoke('pi:set-enabled-models', models),
   addCustomModel: (payload) => ipcRenderer.invoke('pi:add-custom-model', payload),
   addPackage: (source) => ipcRenderer.invoke('pi:add-package', source),
@@ -21,6 +23,10 @@ contextBridge.exposeInMainWorld('piApi', {
   addMcp: (payload) => ipcRenderer.invoke('pi:add-mcp', payload),
   addSkill: (payload) => ipcRenderer.invoke('pi:add-skill', payload),
   addExtension: (payload) => ipcRenderer.invoke('pi:add-extension', payload),
+  removeMcp: (name) => ipcRenderer.invoke('pi:remove-mcp', name),
+  removeSkill: (path) => ipcRenderer.invoke('pi:remove-skill', path),
+  removeExtension: (path) => ipcRenderer.invoke('pi:remove-extension', path),
+  removeCustomModel: (payload) => ipcRenderer.invoke('pi:remove-custom-model', payload),
   onOpenSettings: (listener) => {
     const handler = () => listener();
     ipcRenderer.on('pi:open-settings', handler);

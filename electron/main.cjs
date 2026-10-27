@@ -2,6 +2,7 @@ const { app, BrowserWindow, dialog, ipcMain, Menu } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
+const { readConfig, writeConfig, updateMcp, updateProvider, updateCustomModel } = require('./settings-config.cjs');
 
 let pi;
 let mainWindow;
@@ -230,8 +231,9 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
   const rt = await runtime();
   const auth = readAuth();
   const allModels = rt.getModels();
+  const configuredModels = readJson(modelsFile(), { providers: {} });
   const providers = rt.getProviders()
-    .filter((provider) => auth[provider.id] !== undefined)
+    .filter((provider) => auth[provider.id] !== undefined || Object.hasOwn(configuredModels.providers || {}, provider.id))
     .map((provider) => ({
       id: provider.id,
       name: provider.name,
@@ -276,6 +278,10 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
   } catch { /* none */ }
   return {
     providers,
+    customModels: Object.entries(configuredModels.providers || {}).flatMap(([providerId, provider]) => (provider.models || []).map((model) => ({
+      providerId, modelId: model.id, name: model.name || model.id, contextWindow: model.contextWindow,
+      maxTokens: model.maxTokens, supportsImages: model.input?.includes('image') ?? false, reasoning: model.reasoning ?? false,
+    }))),
     mcp: servers,
     skills,
     extensions: extensions.map((item) => ({ ...item, source: 'directory' })),
@@ -423,6 +429,47 @@ app.whenReady().then(async () => {
       unsubscribe();
     }
   });
+  ipcMain.handle('pi:remove-custom-model', async (_event, { providerId, modelId }) => {
+    const config = readConfig(modelsFile(), { providers: {} });
+    const provider = config.providers?.[providerId];
+    if (!provider || !Array.isArray(provider.models)) throw new Error('模型不存在');
+    provider.models = provider.models.filter((model) => model.id !== modelId);
+    writeConfig(modelsFile(), config);
+    const settingsPath = path.join(pi.getAgentDir(), 'settings.json');
+    const settings = readConfig(settingsPath, {});
+    settings.enabledModels = (settings.enabledModels || []).filter((id) => id !== `${providerId}/${modelId}`);
+    writeConfig(settingsPath, settings);
+    runtimePromise = undefined;
+    agentSessions.clear();
+    return settingsSnapshot(DEFAULT_CWD);
+  });
+  ipcMain.handle('pi:remove-mcp', async (_event, name) => {
+    const file = path.join(pi.getAgentDir(), 'mcp.json');
+    const config = readConfig(file, { mcpServers: {} });
+    if (!Object.hasOwn(config.mcpServers || {}, name)) throw new Error('MCP 不存在');
+    delete config.mcpServers[name];
+    writeConfig(file, config);
+    return settingsSnapshot(DEFAULT_CWD);
+  });
+  ipcMain.handle('pi:remove-skill', async (_event, skillPath) => {
+    const target = path.resolve(String(skillPath || ''));
+    const roots = [path.join(pi.getAgentDir(), 'skills'), path.join(os.homedir(), '.agents'), path.join(DEFAULT_CWD, '.pi', 'skills')];
+    if (path.basename(target) !== 'SKILL.md') throw new Error('技能路径无效');
+    const parent = path.dirname(target);
+    const allowed = roots.some((root) => parent === root || parent.startsWith(root + path.sep)) || parent.includes(`${path.sep}.pi${path.sep}skills${path.sep}`);
+    if (!allowed) throw new Error('不能删除这个位置的技能');
+    if (!fs.existsSync(parent)) throw new Error('技能不存在');
+    fs.rmSync(parent, { recursive: true, force: true });
+    return settingsSnapshot(DEFAULT_CWD);
+  });
+  ipcMain.handle('pi:remove-extension', async (_event, extensionPath) => {
+    const target = path.resolve(String(extensionPath || ''));
+    const roots = [path.join(pi.getAgentDir(), 'extensions'), path.join(DEFAULT_CWD, '.pi', 'extensions')];
+    if (!roots.some((root) => target === root || target.startsWith(root + path.sep)) && !target.includes(`${path.sep}.pi${path.sep}extensions${path.sep}`)) throw new Error('不能删除这个位置的扩展');
+    if (!fs.existsSync(target)) throw new Error('扩展不存在');
+    fs.rmSync(target, { recursive: true, force: true });
+    return settingsSnapshot(DEFAULT_CWD);
+  });
   ipcMain.handle('pi:add-skill', async (_event, { scope, cwd }) => {
     const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] });
     if (result.canceled || !result.filePaths[0]) return undefined;
@@ -465,51 +512,34 @@ app.whenReady().then(async () => {
     agentSessions.clear();
     return settingsSnapshot();
   });
+  ipcMain.handle('pi:provider-config', async (_event, providerId) => {
+    const rt = await runtime();
+    const providers = readConfig(modelsFile(), { providers: {} }).providers || {};
+    const defaults = rt.getModels().find((model) => model.provider === providerId);
+    if (!Object.hasOwn(providers, providerId) && !defaults) throw new Error('模型来源不存在');
+    const config = providers[providerId] || {};
+    return { providerId, baseUrl: config.baseUrl || defaults?.baseUrl || '', api: config.api || defaults?.api || 'openai-completions' };
+  });
+  ipcMain.handle('pi:mcp-config', async (_event, name) => {
+    const config = readConfig(path.join(pi.getAgentDir(), 'mcp.json'), { mcpServers: {} });
+    if (!Object.hasOwn(config.mcpServers || {}, name)) throw new Error('MCP 不存在');
+    const server = config.mcpServers[name];
+    return { name, transport: server.command ? 'stdio' : 'http', command: server.command || '', args: server.args || [], url: server.url || '', description: server.description || '', env: Object.entries(server.env || {}).map(([key, value]) => `${key}=${value}`).join('\n') };
+  });
   ipcMain.handle('pi:add-provider', async (_event, input) => {
-    const providerId = typeof input.providerId === 'string' ? input.providerId.trim() : '';
-    const baseUrl = typeof input.baseUrl === 'string' ? input.baseUrl.trim() : '';
-    const api = typeof input.api === 'string' ? input.api : 'openai-completions';
-    const modelId = typeof input.modelId === 'string' ? input.modelId.trim() : '';
-    const modelName = typeof input.modelName === 'string' && input.modelName.trim() ? input.modelName.trim() : modelId;
     const apiKey = typeof input.apiKey === 'string' ? input.apiKey.trim() : '';
-    if (!/^[a-z0-9][a-z0-9._-]{1,63}$/.test(providerId) || !/^https?:\/\//.test(baseUrl) || !modelId) throw new Error('来源参数不完整');
     if (apiKey.startsWith('$') && !envNameOf(apiKey)) throw new Error('环境变量格式应为 $NAME 或 ${NAME}');
-    const models = readJson(modelsFile(), { providers: {} });
-    models.providers = models.providers && typeof models.providers === 'object' ? models.providers : {};
-    const existing = models.providers[providerId] && typeof models.providers[providerId] === 'object' ? models.providers[providerId] : {};
-    const list = Array.isArray(existing.models) ? existing.models : [];
-    models.providers[providerId] = {
-      ...existing,
-      baseUrl,
-      api,
-      models: [...list.filter((item) => item?.id !== modelId), { id: modelId, name: modelName }],
-    };
-    fs.mkdirSync(path.dirname(modelsFile()), { recursive: true });
-    fs.writeFileSync(modelsFile(), JSON.stringify(models, null, 2));
-    if (apiKey) {
-      const auth = readAuth();
-      auth[providerId] = { type: 'api_key', key: apiKey };
-      fs.writeFileSync(authFile(), JSON.stringify(auth, null, 2), { mode: 0o600 });
-    }
+    const auth = readConfig(authFile(), {});
+    const models = updateProvider(readConfig(modelsFile(), { providers: {} }), input, Object.keys(auth));
+    writeConfig(modelsFile(), models);
+    if (apiKey) writeConfig(authFile(), { ...auth, [input.providerId.trim()]: { type: 'api_key', key: apiKey } }, 0o600);
     runtimePromise = undefined;
     agentSessions.clear();
     return { settings: await settingsSnapshot(DEFAULT_CWD), models: await availableModels() };
   });
   ipcMain.handle('pi:add-mcp', async (_event, input) => {
-    const name = typeof input.name === 'string' ? input.name.trim() : '';
-    if (!name) throw new Error('请输入名称');
-    const config = readMcp();
-    if (config.mcpServers[name]) throw new Error('同名 MCP 已存在');
-    if (input.transport === 'stdio') {
-      const command = typeof input.command === 'string' ? input.command.trim() : '';
-      if (!command) throw new Error('请输入命令');
-      config.mcpServers[name] = { command, ...(input.args ? { args: String(input.args).split(/\s+/).filter(Boolean) } : {}), ...(input.description ? { description: String(input.description) } : {}) };
-    } else {
-      const url = typeof input.url === 'string' ? input.url.trim() : '';
-      if (!/^https?:\/\//.test(url)) throw new Error('请输入 HTTP URL');
-      config.mcpServers[name] = { type: 'http', url, ...(input.description ? { description: String(input.description) } : {}) };
-    }
-    fs.writeFileSync(path.join(pi.getAgentDir(), 'mcp.json'), JSON.stringify(config, null, 2));
+    const file = path.join(pi.getAgentDir(), 'mcp.json');
+    writeConfig(file, updateMcp(readConfig(file, { mcpServers: {} }), input));
     return settingsSnapshot(DEFAULT_CWD);
   });
   ipcMain.handle('pi:provider-models', async (_event, providerId) => {
@@ -537,24 +567,9 @@ app.whenReady().then(async () => {
     return settingsSnapshot(DEFAULT_CWD);
   });
   ipcMain.handle('pi:add-custom-model', async (_event, input) => {
-    const providerId = String(input.providerId || '').trim();
-    const modelId = String(input.modelId || '').trim();
-    if (!providerId || !modelId) throw new Error('来源和模型 ID 必填');
-    const models = readJson(modelsFile(), { providers: {} });
-    models.providers = models.providers && typeof models.providers === 'object' ? models.providers : {};
-    const provider = models.providers[providerId];
-    if (!provider) throw new Error('请先添加这个来源');
-    const list = Array.isArray(provider.models) ? provider.models : [];
-    const model = {
-      id: modelId,
-      name: String(input.name || modelId),
-      ...(Number(input.contextWindow) > 0 ? { contextWindow: Number(input.contextWindow) } : {}),
-      ...(Number(input.maxTokens) > 0 ? { maxTokens: Number(input.maxTokens) } : {}),
-      input: ['text', ...(input.supportsImages ? ['image'] : [])],
-      ...(input.reasoning ? { reasoning: true } : {}),
-    };
-    provider.models = [...list.filter((item) => item?.id !== modelId), model];
-    fs.writeFileSync(modelsFile(), JSON.stringify(models, null, 2));
+    const rt = await runtime();
+    const config = readConfig(modelsFile(), { providers: {} });
+    writeConfig(modelsFile(), updateCustomModel(config, input, rt.getProviders().map((provider) => provider.id)));
     runtimePromise = undefined;
     agentSessions.clear();
     return settingsSnapshot(DEFAULT_CWD);

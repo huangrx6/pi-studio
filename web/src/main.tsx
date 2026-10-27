@@ -4,6 +4,7 @@ import { App } from './App';
 import './styles/dsh-base.css';
 import './styles/dsh-tokens.css';
 import './styles/dsh-scrollbar.css';
+import './styles/tokens.css';
 import './app.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
