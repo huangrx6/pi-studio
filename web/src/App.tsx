@@ -8,7 +8,7 @@ type PiSessionSummary = { id: string; cwd: string; title: string; updatedAt: num
 type PiWorkspace = { cwd: string; name: string; sessions: PiSessionSummary[] };
 type PiMessage = { role: 'user' | 'assistant'; text: string; streaming?: boolean };
 type SettingsSnapshot = {
-  providers: Array<{ id: string; name: string; mode: string; models: number }>;
+  providers: Array<{ id: string; name: string; mode: string; envName?: string; envAvailable?: boolean; models: number }>;
   mcp: Array<{ name: string; transport: string; enabled: boolean; target: string; description: string }>;
   skills: Array<{ name: string; description: string; path: string; scope: string }>;
   extensions: Array<{ name: string; scope: string; path: string; kind: string; source?: string }>;
@@ -561,7 +561,7 @@ export function App() {
                   ) : <div className="settings-empty">还没有启用模型。先在下面认证来源，再选择要使用的模型。</div>}
                 </section>
                 <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>来源与认证</h2><p>API Key 保存在 Pi 的 auth.json；这里只显示 Pi 已配置的来源。</p></div></div>
+                  <div className="settings-card-head"><div><h2>来源与认证</h2><p>API Key 保存在 Pi 的 auth.json；也可以填 $ENV_VAR 形式的引用，不保存明文。</p></div></div>
                   <details className="settings-add">
                     <summary>添加自定义来源</summary>
                     <div className="settings-form-grid">
@@ -570,7 +570,7 @@ export function App() {
                       <label>API<select value={providerDraft.api} onChange={(event) => setProviderDraft({ ...providerDraft, api: event.target.value })}><option value="openai-completions">OpenAI Completions</option><option value="openai-responses">OpenAI Responses</option><option value="anthropic-messages">Anthropic Messages</option><option value="google-generative-ai">Google Generative AI</option></select></label>
                       <label>模型 ID<input value={providerDraft.modelId} onChange={(event) => setProviderDraft({ ...providerDraft, modelId: event.target.value })} placeholder="model-id" /></label>
                       <label>显示名称<input value={providerDraft.modelName} onChange={(event) => setProviderDraft({ ...providerDraft, modelName: event.target.value })} placeholder="My Model" /></label>
-                      <label>API Key<input type="password" value={providerDraft.apiKey} onChange={(event) => setProviderDraft({ ...providerDraft, apiKey: event.target.value })} placeholder="sk-..." /></label>
+                      <label>API Key<input type="password" value={providerDraft.apiKey} onChange={(event) => setProviderDraft({ ...providerDraft, apiKey: event.target.value })} placeholder="sk-... 或 $ENV_VAR" /></label>
                     </div>
                     <button className="settings-save settings-form-submit" disabled={settingsBusy} onClick={() => void saveProvider()}>保存到 Pi models.json</button>
                   </details>
@@ -586,9 +586,10 @@ export function App() {
                           <button className="settings-outline" onClick={() => void loadProviderModels(provider.id)}>{expandedProvider === provider.id ? '收起' : '管理模型'}</button>
                         </div>
                         <div className="provider-key-row">
-                          <input type="password" value={keyDrafts[provider.id] ?? ''} onChange={(event) => setKeyDrafts((current) => ({ ...current, [provider.id]: event.target.value }))} placeholder="更新 API Key" />
-                          <button className="settings-save" disabled={settingsBusy || !keyDrafts[provider.id]?.trim()} onClick={() => void saveProviderKey(provider.id)}>保存 Key</button>
+                          <input type={keyDrafts[provider.id]?.trim().startsWith('$') ? 'text' : 'password'} value={keyDrafts[provider.id] ?? ''} onChange={(event) => setKeyDrafts((current) => ({ ...current, [provider.id]: event.target.value }))} placeholder="输入 API Key 或环境变量引用，如 $MINIMAX_CN_API_KEY" />
+                          <button className="settings-save" disabled={settingsBusy || !keyDrafts[provider.id]?.trim()} onClick={() => void saveProviderKey(provider.id)}>保存</button>
                         </div>
+                        {provider.mode === 'env' && <div className={`provider-env-hint ${provider.envAvailable ? 'is-set' : ''}`}>{provider.envAvailable ? '环境变量已设置' : '环境变量未设置'} · <code>{provider.envName}</code></div>}
                         {expandedProvider === provider.id && (
                           <div className="provider-model-panel">
                             <div className="provider-model-tools"><input className="model-search" value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} placeholder="搜索这个来源的模型" /><span>{list.filter((item) => item.enabled).length}/{list.length} 已启用</span></div>

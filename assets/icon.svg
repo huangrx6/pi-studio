@@ -16,7 +16,7 @@
   </defs>
   <rect x="44" y="44" width="936" height="936" rx="216" fill="url(#tile)"/>
   <rect x="45" y="45" width="934" height="934" rx="215" fill="none" stroke="#FFFFFF" stroke-opacity=".13" stroke-width="2"/>
-  <path d="M277 375H747" fill="none" stroke="url(#bar)" stroke-width="84" stroke-linecap="round"/>
   <path d="M404 399L374 667" fill="none" stroke="url(#leg)" stroke-width="91" stroke-linecap="round"/>
   <path d="M636 399L612 635C609 666 627 683 658 681" fill="none" stroke="url(#leg)" stroke-width="91" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M277 375H747" fill="none" stroke="url(#bar)" stroke-width="84" stroke-linecap="round"/>
 </svg>

@@ -39,11 +39,13 @@
       "output": "release"
     },
     "files": [
+      "assets/**",
       "electron/**",
       "web-dist/**",
       "package.json"
     ],
     "mac": {
+      "icon": "assets/icon.icns",
       "category": "public.app-category.developer-tools",
       "target": [
         "dmg",

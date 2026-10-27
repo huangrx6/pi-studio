@@ -208,6 +208,11 @@ async function availableModels() {
 function authFile() {
   return path.join(pi.getAgentDir(), 'auth.json');
 }
+function envNameOf(value) {
+  if (typeof value !== 'string') return undefined;
+  const match = /^\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))$/.exec(value.trim());
+  return match ? (match[1] ?? match[2]) : undefined;
+}
 
 function readAuth() {
   try { return JSON.parse(fs.readFileSync(authFile(), 'utf8')); }
@@ -231,6 +236,8 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
       id: provider.id,
       name: provider.name,
       mode: auth[provider.id]?.type === 'oauth' ? 'oauth' : auth[provider.id]?.key?.startsWith('$') ? 'env' : 'key',
+      envName: envNameOf(auth[provider.id]?.key),
+      envAvailable: envNameOf(auth[provider.id]?.key) ? process.env[envNameOf(auth[provider.id]?.key)] !== undefined : false,
       models: allModels.filter((model) => model.provider === provider.id).length,
     }));
   const mcp = readMcp();
@@ -336,6 +343,7 @@ function createWindow() {
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 18 },
     backgroundColor: '#f7f8fa',
+    icon: path.join(__dirname, '..', 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -348,6 +356,9 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  if (process.platform === 'darwin') {
+    app.dock.setIcon(path.join(__dirname, '..', 'assets', 'icon.png'));
+  }
   await loadPi();
   loadConfig();
   ipcMain.handle('pi:state', async () => ({ workspaces: await listWorkspaces(), model: await modelInfo(), cwd: DEFAULT_CWD }));
@@ -443,9 +454,11 @@ app.whenReady().then(async () => {
   ipcMain.handle('pi:models', async () => availableModels());
   ipcMain.handle('pi:settings', async (_event, cwd) => settingsSnapshot(typeof cwd === 'string' ? cwd : DEFAULT_CWD));
   ipcMain.handle('pi:set-key', async (_event, { providerId, apiKey }) => {
-    if (typeof providerId !== 'string' || typeof apiKey !== 'string' || apiKey.trim().length === 0) throw new Error('请输入 API Key');
+    if (typeof providerId !== 'string' || typeof apiKey !== 'string' || apiKey.trim().length === 0) throw new Error('请输入 API Key 或环境变量引用');
+    const value = apiKey.trim();
+    if (value.startsWith('$') && !envNameOf(value)) throw new Error('环境变量格式应为 $NAME 或 ${NAME}');
     const auth = readAuth();
-    auth[providerId] = { type: 'api_key', key: apiKey.trim() };
+    auth[providerId] = { type: 'api_key', key: value };
     fs.mkdirSync(path.dirname(authFile()), { recursive: true });
     fs.writeFileSync(authFile(), JSON.stringify(auth, null, 2), { mode: 0o600 });
     runtimePromise = undefined;
@@ -460,6 +473,7 @@ app.whenReady().then(async () => {
     const modelName = typeof input.modelName === 'string' && input.modelName.trim() ? input.modelName.trim() : modelId;
     const apiKey = typeof input.apiKey === 'string' ? input.apiKey.trim() : '';
     if (!/^[a-z0-9][a-z0-9._-]{1,63}$/.test(providerId) || !/^https?:\/\//.test(baseUrl) || !modelId) throw new Error('来源参数不完整');
+    if (apiKey.startsWith('$') && !envNameOf(apiKey)) throw new Error('环境变量格式应为 $NAME 或 ${NAME}');
     const models = readJson(modelsFile(), { providers: {} });
     models.providers = models.providers && typeof models.providers === 'object' ? models.providers : {};
     const existing = models.providers[providerId] && typeof models.providers[providerId] === 'object' ? models.providers[providerId] : {};

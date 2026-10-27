@@ -297,3 +297,7 @@ button:disabled { cursor: default; opacity: .45; }
 .package-row:first-child { border-top: 0; }
 .package-row > svg { color: var(--faint); flex: none; }
 .skill-group-title span { float: right; color: var(--faint); }
+
+.provider-env-hint { margin: 5px 0 0 35px; color: var(--faint); font-size: 10px; }
+.provider-env-hint.is-set { color: #16803c; }
+.provider-env-hint code { font-family: var(--mono); font-size: 9.5px; }

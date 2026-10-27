@@ -1,12 +1,12 @@
 """Render the Pi Studio macOS icon from the vector design in assets/icon.svg.
 
-The shapes and colors below mirror icon.svg. Pillow is used because macOS
-iconutil requires a PNG iconset rather than an SVG.
+The shapes and colors below mirror icon.svg. Pillow renders PNGs for the
+standard macOS ICNS sizes.
 """
 
+from io import BytesIO
 from pathlib import Path
-import subprocess
-import tempfile
+import struct
 
 from PIL import Image, ImageDraw
 
@@ -79,15 +79,15 @@ canvas.paste(bar_color, (0, 0), line_mask([(277, 375), (747, 375)], 84))
 icon = canvas.resize((1024, 1024), Image.Resampling.LANCZOS)
 icon.save(ASSETS / "icon.png")
 
-with tempfile.TemporaryDirectory() as temporary:
-    iconset = Path(temporary) / "Pi Studio.iconset"
-    iconset.mkdir()
-    for size in (16, 32, 128, 256, 512):
-        small = icon.resize((size, size), Image.Resampling.LANCZOS)
-        small.save(iconset / f"icon_{size}x{size}.png")
-        small.resize((size * 2, size * 2), Image.Resampling.LANCZOS).save(
-            iconset / f"icon_{size}x{size}@2x.png"
-        )
-    subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(ASSETS / "icon.icns")], check=True)
+chunks = []
+for size, kind in ((16, b"icp4"), (32, b"icp5"), (64, b"icp6"),
+                   (128, b"ic07"), (256, b"ic08"), (512, b"ic09"),
+                   (1024, b"ic10")):
+    output = BytesIO()
+    icon.resize((size, size), Image.Resampling.LANCZOS).save(output, format="PNG")
+    data = output.getvalue()
+    chunks.append(kind + struct.pack(">I", len(data) + 8) + data)
+body = b"".join(chunks)
+(ASSETS / "icon.icns").write_bytes(b"icns" + struct.pack(">I", len(body) + 8) + body)
 
 print(ASSETS / "icon.icns")
