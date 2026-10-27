@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowUp, ChevronDown, ChevronLeft, FileText, Folder, FolderOpen, MoreHorizontal,
-  PanelRight, Paperclip, Search, Settings, SlidersHorizontal, SquarePen, X,
+  ArrowUp, Check, ChevronDown, ChevronLeft, Cpu, FileCode2, FileText, Folder, FolderOpen, Info, MoreHorizontal,
+  PanelRight, Paperclip, Plug, Search, Settings, SlidersHorizontal, SquarePen, X,
 } from 'lucide-react';
 
 type PiSessionSummary = { id: string; cwd: string; title: string; updatedAt: number; messageCount: number };
 type PiWorkspace = { cwd: string; name: string; sessions: PiSessionSummary[] };
 type PiMessage = { role: 'user' | 'assistant'; text: string; streaming?: boolean };
+type SettingsSnapshot = {
+  providers: Array<{ id: string; name: string; mode: string; models: number }>;
+  mcp: Array<{ name: string; transport: string; enabled: boolean; target: string; description: string }>;
+  skills: Array<{ name: string; description: string; path: string; scope: string }>;
+  authPath: string;
+  mcpPath: string;
+  model: { modelRef: string; label: string };
+};
 
 function filesize(size: number): string {
   if (!size) return '';
@@ -38,6 +46,12 @@ export function App() {
   const [models, setModels] = useState<Array<{ id: string; name: string }>>([]);
   const [modelQuery, setModelQuery] = useState('');
   const [modelRef, setModelRef] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'models' | 'mcp' | 'skills' | 'about'>('models');
+  const [settingsData, setSettingsData] = useState<SettingsSnapshot | null>(null);
+  const [keyDrafts, setKeyDrafts] = useState<Record<string, string>>({});
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [settingsBusy, setSettingsBusy] = useState(false);
   const [treePath, setTreePath] = useState('');
   const [entries, setEntries] = useState<Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }>>([]);
   const [file, setFile] = useState<{ path: string; size: number; binary: boolean; text: string } | null>(null);
@@ -57,6 +71,41 @@ export function App() {
     });
     setWorkspace((current) => current || next.workspaces[0]?.cwd || next.cwd);
   }, []);
+
+  async function openSettings() {
+    setSettingsOpen(true);
+    setSettingsError(null);
+    try {
+      const [snapshot, modelResult] = await Promise.all([window.piApi.settings(), window.piApi.models()]);
+      setSettingsData(snapshot);
+      setModels(modelResult.models);
+      setModelRef(modelResult.current);
+      setModel(snapshot.model.label);
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function saveProviderKey(providerId: string) {
+    const apiKey = keyDrafts[providerId]?.trim();
+    if (!apiKey) return;
+    setSettingsBusy(true); setSettingsError(null);
+    try {
+      const snapshot = await window.piApi.setKey({ providerId, apiKey });
+      setSettingsData(snapshot);
+      setModel(snapshot.model.label);
+      setKeyDrafts((current) => ({ ...current, [providerId]: '' }));
+      await loadState();
+    } catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
+    finally { setSettingsBusy(false); }
+  }
+
+  async function toggleMcp(name: string, enabled: boolean) {
+    setSettingsBusy(true); setSettingsError(null);
+    try { setSettingsData(await window.piApi.setMcpEnabled({ name, enabled })); }
+    catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
+    finally { setSettingsBusy(false); }
+  }
 
   async function openModels() {
     const result = await window.piApi.models();
@@ -260,7 +309,7 @@ export function App() {
           })}
         </div>
         <div className="sidebar-bottom">
-          <button className="bottom-row"><Settings size={16} /><span>设置</span><span className="status"><i />Pi SDK 本地</span></button>
+          <button className="bottom-row" onClick={() => void openSettings()}><Settings size={16} /><span>设置</span><span className="status"><i />Pi SDK 本地</span></button>
         </div>
       </aside>
 
@@ -347,6 +396,86 @@ export function App() {
           </div>
         )}
       </main>
+
+      {settingsOpen && (
+        <div className="settings-overlay">
+          <aside className="settings-nav">
+            <div className="settings-nav-head"><span>设置</span><button className="icon-button" onClick={() => setSettingsOpen(false)}><X size={16} /></button></div>
+            <div className="settings-search"><Search size={14} /><span>搜索设置</span></div>
+            <button className={`settings-nav-row ${settingsTab === 'models' ? 'is-active' : ''}`} onClick={() => setSettingsTab('models')}><Cpu size={15} />模型与账号</button>
+            <button className={`settings-nav-row ${settingsTab === 'mcp' ? 'is-active' : ''}`} onClick={() => setSettingsTab('mcp')}><Plug size={15} />MCP 服务器</button>
+            <button className={`settings-nav-row ${settingsTab === 'skills' ? 'is-active' : ''}`} onClick={() => setSettingsTab('skills')}><FileCode2 size={15} />技能</button>
+            <button className={`settings-nav-row ${settingsTab === 'about' ? 'is-active' : ''}`} onClick={() => setSettingsTab('about')}><Info size={15} />关于</button>
+            <div className="settings-nav-foot">Pi Studio · Pi SDK</div>
+          </aside>
+          <section className="settings-content">
+            <header className="settings-title">
+              <h1>{settingsTab === 'models' ? '模型与账号' : settingsTab === 'mcp' ? 'MCP 服务器' : settingsTab === 'skills' ? '技能' : '关于'}</h1>
+              <p>{settingsTab === 'models' ? '配置 Pi 的模型来源和凭据。' : settingsTab === 'mcp' ? '管理 Pi 的 MCP 服务器配置。' : settingsTab === 'skills' ? 'Pi 会从本机技能目录加载这些技能。' : 'Pi Studio 运行在 Pi Agent SDK 上。'}</p>
+            </header>
+            {settingsError && <div className="settings-error">{settingsError}</div>}
+            {settingsData && settingsTab === 'models' && (
+              <div className="settings-sections">
+                <section className="settings-card">
+                  <div className="settings-card-head"><div><h2>当前模型</h2><p>选择下一个新会话使用的 Pi 模型。</p></div><span className="settings-model-current">{settingsData.model.label}</span></div>
+                  <div className="settings-model-list">
+                    {models.slice(0, 120).map((item) => (
+                      <button key={item.id} className={`settings-model-row ${item.id === modelRef ? 'is-active' : ''}`} onClick={() => void selectModel(item.id).then(async () => { const next = await window.piApi.settings(); setSettingsData(next); })}>
+                        <span>{item.name}</span><small>{item.id.split('/')[0]}</small>{item.id === modelRef && <Check size={14} />}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+                <section className="settings-card">
+                  <div className="settings-card-head"><div><h2>来源与凭据</h2><p>只显示 Pi 已配置的来源。Key 保存在 Pi 的 auth.json，不会写入项目。</p></div></div>
+                  <div className="provider-list">
+                    {settingsData.providers.map((provider) => (
+                      <div className="provider-row" key={provider.id}>
+                        <div className="provider-main"><strong>{provider.name}</strong><span>{provider.id} · {provider.models} 个模型</span></div>
+                        <span className="provider-mode">{provider.mode === 'oauth' ? 'OAuth' : provider.mode === 'env' ? '环境变量' : 'API Key'}</span>
+                        <input type="password" value={keyDrafts[provider.id] ?? ''} onChange={(event) => setKeyDrafts((current) => ({ ...current, [provider.id]: event.target.value }))} placeholder="输入新的 API Key" />
+                        <button className="settings-save" disabled={settingsBusy || !keyDrafts[provider.id]?.trim()} onClick={() => void saveProviderKey(provider.id)}>保存</button>
+                      </div>
+                    ))}
+                    {settingsData.providers.length === 0 && <div className="settings-empty">还没有可配置的 Pi 来源。</div>}
+                  </div>
+                </section>
+              </div>
+            )}
+            {settingsData && settingsTab === 'mcp' && (
+              <section className="settings-card">
+                <div className="settings-card-head"><div><h2>已配置的 MCP</h2><p>来自 {settingsData.mcpPath}。保存后新会话生效。</p></div></div>
+                <div className="mcp-settings-list">
+                  {settingsData.mcp.map((server) => (
+                    <div className="mcp-settings-row" key={server.name}>
+                      <div className="provider-main"><strong>{server.name}</strong><span>{server.transport} · {server.target}</span></div>
+                      <button className={`switch ${server.enabled ? 'is-on' : ''}`} disabled={settingsBusy} onClick={() => void toggleMcp(server.name, !server.enabled)} aria-label={`${server.name} ${server.enabled ? '禁用' : '启用'}`}><span /></button>
+                    </div>
+                  ))}
+                  {settingsData.mcp.length === 0 && <div className="settings-empty">还没有 MCP 服务器。</div>}
+                </div>
+              </section>
+            )}
+            {settingsData && settingsTab === 'skills' && (
+              <section className="settings-card">
+                <div className="settings-card-head"><div><h2>已加载技能</h2><p>从 Pi 的技能目录发现；技能修改后需要新会话。</p></div></div>
+                <div className="skill-settings-list">
+                  {settingsData.skills.map((skill) => (
+                    <div className="skill-settings-row" key={skill.path}><FileCode2 size={16} /><div><strong>{skill.name}</strong><p>{skill.description}</p><span>{skill.scope} · {skill.path}</span></div></div>
+                  ))}
+                  {settingsData.skills.length === 0 && <div className="settings-empty">还没有发现技能。</div>}
+                </div>
+              </section>
+            )}
+            {settingsData && settingsTab === 'about' && (
+              <section className="settings-card">
+                <div className="settings-card-head"><div><h2>Pi Studio</h2><p>基于 Pi Agent SDK 的桌面工作台。</p></div></div>
+                <dl className="about-list"><div><dt>内核</dt><dd>@earendil-works/pi-coding-agent</dd></div><div><dt>凭据文件</dt><dd>{settingsData.authPath}</dd></div><div><dt>MCP 配置</dt><dd>{settingsData.mcpPath}</dd></div></dl>
+              </section>
+            )}
+          </section>
+        </div>
+      )}
 
       {filesOpen && (
         <aside className="file-panel">

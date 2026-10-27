@@ -37,6 +37,9 @@ declare global {
       file(cwd: string, path: string): Promise<{ path: string; size: number; binary: boolean; text: string }>;
       chooseWorkspace(): Promise<string | undefined>;
       models(): Promise<{ models: Array<{ id: string; provider: string; model: string; name: string }>; current: string }>;
+      settings(): Promise<{ providers: Array<{ id: string; name: string; mode: string; models: number }>; mcp: Array<{ name: string; transport: string; enabled: boolean; target: string; description: string }>; skills: Array<{ name: string; description: string; path: string; scope: string }>; authPath: string; mcpPath: string; model: { modelRef: string; label: string } }>;
+      setKey(payload: { providerId: string; apiKey: string }): Promise<any>;
+      setMcpEnabled(payload: { name: string; enabled: boolean }): Promise<any>;
       setModel(modelRef: string): Promise<{ modelRef: string; label: string }>;
       onPrompt(listener: (payload: { requestId: string; type: 'delta' | 'tool' | 'done' | 'error'; text?: string; name?: string; status?: string; message?: string }) => void): () => void;
     };

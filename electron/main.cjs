@@ -199,6 +199,50 @@ async function availableModels() {
   return { models: models.slice(0, 300), current: MODEL_REF };
 }
 
+function authFile() {
+  return path.join(pi.getAgentDir(), 'auth.json');
+}
+
+function readAuth() {
+  try { return JSON.parse(fs.readFileSync(authFile(), 'utf8')); }
+  catch { return {}; }
+}
+
+function readMcp() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(pi.getAgentDir(), 'mcp.json'), 'utf8'));
+    return parsed && typeof parsed.mcpServers === 'object' ? parsed : { mcpServers: {} };
+  } catch { return { mcpServers: {} }; }
+}
+
+async function settingsSnapshot() {
+  const rt = await runtime();
+  const auth = readAuth();
+  const allModels = rt.getModels();
+  const providers = rt.getProviders()
+    .filter((provider) => auth[provider.id] !== undefined)
+    .map((provider) => ({
+      id: provider.id,
+      name: provider.name,
+      mode: auth[provider.id]?.type === 'oauth' ? 'oauth' : auth[provider.id]?.key?.startsWith('$') ? 'env' : 'key',
+      models: allModels.filter((model) => model.provider === provider.id).length,
+    }));
+  const mcp = readMcp();
+  const servers = Object.entries(mcp.mcpServers).map(([name, value]) => ({
+    name,
+    transport: value.type === 'stdio' || value.command ? 'stdio' : 'http',
+    enabled: value.enabled !== false,
+    target: value.command ? [value.command, ...(value.args || [])].join(' ') : value.url || '',
+    description: value.description || '',
+  }));
+  let skills = [];
+  try {
+    const result = pi.loadSkills({ cwd: DEFAULT_CWD, agentDir: pi.getAgentDir(), skillPaths: [], includeDefaults: true });
+    skills = result.skills.map((skill) => ({ name: skill.name, description: skill.description, path: skill.filePath, scope: skill.sourceInfo?.scope || 'user' }));
+  } catch { /* skill discovery is optional */ }
+  return { providers, mcp: servers, skills, authPath: authFile(), mcpPath: path.join(pi.getAgentDir(), 'mcp.json'), model: await modelInfo() };
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440,
@@ -284,6 +328,25 @@ app.whenReady().then(async () => {
     }
   });
   ipcMain.handle('pi:models', async () => availableModels());
+  ipcMain.handle('pi:settings', async () => settingsSnapshot());
+  ipcMain.handle('pi:set-key', async (_event, { providerId, apiKey }) => {
+    if (typeof providerId !== 'string' || typeof apiKey !== 'string' || apiKey.trim().length === 0) throw new Error('请输入 API Key');
+    const auth = readAuth();
+    auth[providerId] = { type: 'api_key', key: apiKey.trim() };
+    fs.mkdirSync(path.dirname(authFile()), { recursive: true });
+    fs.writeFileSync(authFile(), JSON.stringify(auth, null, 2), { mode: 0o600 });
+    runtimePromise = undefined;
+    agentSessions.clear();
+    return settingsSnapshot();
+  });
+  ipcMain.handle('pi:set-mcp-enabled', async (_event, { name, enabled }) => {
+    if (typeof name !== 'string' || typeof enabled !== 'boolean') throw new Error('参数无效');
+    const config = readMcp();
+    if (!config.mcpServers[name]) throw new Error('MCP 不存在');
+    config.mcpServers[name].enabled = enabled;
+    fs.writeFileSync(path.join(pi.getAgentDir(), 'mcp.json'), JSON.stringify(config, null, 2));
+    return settingsSnapshot();
+  });
   ipcMain.handle('pi:set-model', async (_event, modelRef) => {
     if (typeof modelRef !== 'string' || !modelRef.includes('/')) throw new Error('模型格式无效');
     MODEL_REF = modelRef;
