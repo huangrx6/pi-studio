@@ -545,3 +545,31 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 
 /* All settings pages share one content column. */
 .settings-sections, .settings-card { width: 100%; }
+
+/* Selected models sit on the same full-width rhythm as the source rows below. */
+.model-card-grid { display: flex; flex-direction: column; gap: var(--space-2); }
+.model-card { display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: 86px; padding: 14px var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: none; transform: none; transition: border-color var(--transition), background var(--transition); }
+.model-card:hover { border-color: var(--border-strong); background: #fcfdff; box-shadow: none; transform: none; }
+.model-card.is-active { border-color: var(--accent-border); background: #fbfcff; box-shadow: inset 2px 0 0 var(--accent); }
+.model-card-avatar { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-soft); color: #596b89; font-size: var(--text-base); font-weight: 600; }
+.model-card-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 0; text-align: left; background: transparent; }
+.model-card-heading { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-width: 0; }
+.model-card-heading strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-base); font-weight: 550; }
+.model-card-current { flex: none; padding: 1px 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 9.5px; font-weight: 400; }
+.model-card .model-card-id { display: block; max-width: 100%; margin: 0; color: var(--faint); font: 10px var(--mono); }
+.model-card .model-card-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; padding: 0; }
+.model-card .model-card-meta > span { padding: 1px 5px; border-radius: 4px; background: var(--surface-soft); color: var(--muted); font-size: 9.5px; }
+.model-card-remove { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: var(--radius-sm); color: var(--faint); opacity: .55; }
+.model-card:hover .model-card-remove, .model-card.is-active .model-card-remove, .model-card-remove:focus-visible { opacity: 1; }
+.model-card-remove:hover { background: var(--error-soft); color: var(--error); }
+.model-card-remove svg { width: 14px; height: 14px; }
+
+.settings-nav-bottom { margin-top: auto; padding-top: var(--space-3); border-top: 1px solid var(--border); }
+.settings-nav-head { margin-top: 0; }
+.model-card-grid { gap: var(--space-3); }
+.model-card { min-height: 88px; }
+.model-card-main { gap: 2px; }
+.model-card .model-card-meta { flex: none; margin: 0; padding: 0; justify-content: flex-end; max-width: 42%; }
+.model-card-remove { opacity: 0; }
+.model-card:hover .model-card-remove, .model-card.is-active .model-card-remove, .model-card-remove:focus-visible { opacity: .8; }
+@media (max-width: 900px) { .model-card .model-card-meta { display: none; } }

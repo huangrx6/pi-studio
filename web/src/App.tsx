@@ -883,9 +883,9 @@ export function App() {
       {settingsOpen && (
         <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="设置">
           <aside className="settings-nav">
-            <button autoFocus className="settings-back-button" onClick={() => setSettingsOpen(false)}><ChevronLeft /><span>返回对话</span><kbd>Esc</kbd></button>
             <div className="settings-nav-head"><span>设置</span></div>
             {settingsPages.map((page) => <button key={page.id} className={`settings-nav-row ${settingsTab === page.id ? 'is-active' : ''}`} aria-current={settingsTab === page.id ? 'page' : undefined} onClick={() => { setSettingsTab(page.id); setModelQuery(''); }}><page.icon />{page.label}</button>)}
+            <div className="settings-nav-bottom"><button className="settings-back-button" onClick={() => setSettingsOpen(false)}><ChevronLeft /><span>返回对话</span><kbd>Esc</kbd></button></div>
           </aside>
           <section className="settings-content" ref={settingsContentRef}>
             {settingsError && <div className="settings-error" role="alert">{settingsError}</div>}
@@ -900,16 +900,16 @@ export function App() {
                       const active = id === modelRef;
                       const provider = item?.providerName || item?.provider || id.split('/')[0];
                       return <article className={`model-card ${active ? 'is-active' : ''}`} key={id}>
+                        <span className="model-card-avatar">{provider.slice(0, 1)}</span>
                         <button className="model-card-main" aria-current={active ? 'true' : undefined} onClick={() => void selectModel(id).then(async () => setSettingsData(await window.piApi.settings(workspace)))}>
-                          <div className="model-card-top"><span className="model-card-avatar">{provider.slice(0, 1)}</span><span className="model-card-provider">{provider}</span>{active && <span className="model-card-current">当前</span>}</div>
-                          <strong className="model-card-name">{item?.name ?? id}</strong>
+                          <span className="model-card-heading"><strong>{item?.name ?? id}</strong>{active && <span className="model-card-current">当前</span>}</span>
                           <span className="model-card-id">{id}</span>
-                          <div className="model-card-meta">
-                            {item?.contextWindow && <span>{Math.round(item.contextWindow / 1000)}K 上下文</span>}
-                            {item?.supportsImages && <span>图片</span>}
-                            {item?.reasoning && <span>推理</span>}
-                          </div>
                         </button>
+                        <span className="model-card-meta">
+                          {item?.contextWindow && <span>{Math.round(item.contextWindow / 1000)}K 上下文</span>}
+                          {item?.supportsImages && <span>图片</span>}
+                          {item?.reasoning && <span>推理</span>}
+                        </span>
                         <button className="model-card-remove" disabled={settingsBusy} aria-label={`移除模型 ${item?.name ?? id}`} title="移除" onClick={() => void setEnabled(enabledModels.filter((entry) => entry !== id))}><X /></button>
                       </article>;
                     })}
