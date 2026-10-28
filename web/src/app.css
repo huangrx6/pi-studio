@@ -1211,3 +1211,10 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 .attachment-main strong { overflow: hidden; color: #4b5b72; font: 10.5px var(--mono); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .attachment-main > span { color: #98a4b4; font-size: 9.5px; }
 .attachment-kind { flex: none; padding: 2px 4px; border-radius: 4px; background: #eef3fb; color: #788bab; font: 8px var(--mono); letter-spacing: .06em; }
+
+/* Outline: no rail line, tighter cluster, subtler tick lengths. */
+.outline-track::before { display: none; }
+.outline-track { gap: 6px; }
+.outline-line { width: 10px; }
+.outline-tick:hover .outline-line { width: 14px; }
+.outline-tick.is-active .outline-line { width: 18px; }
