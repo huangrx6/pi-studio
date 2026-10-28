@@ -749,3 +749,23 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 .panel-tab-close { position: relative; z-index: 2; }
 .panel-tab.is-dragging { opacity: .38; }
 .panel-tab.tab-drop-before::after { content: ''; position: absolute; z-index: 4; top: 5px; bottom: 5px; left: -2px; width: 2px; border-radius: 2px; background: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+
+/* Flatten the tab rail: one row, one active pill, no nested chrome. */
+.panel-tabbar { height: 44px; margin: 0; padding: 0 10px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: var(--surface); }
+.file-panel.is-fullscreen .panel-tabbar { margin-left: 0; padding-left: 92px; }
+.panel-tabs { gap: 2px; }
+.panel-tab { flex: 0 0 140px; width: 140px; min-width: 140px; max-width: 140px; height: 30px; padding: 0 7px; gap: 7px; border-radius: 7px; color: var(--muted); background: transparent; box-shadow: none; }
+.panel-tab:hover { background: var(--surface-soft); color: var(--text); }
+.panel-tab.is-active { background: #f1f2f4; color: var(--text); box-shadow: none; }
+.panel-tab + .panel-tab::before { display: none; }
+.panel-tab-icon { width: 16px; height: 16px; border-radius: 0; background: transparent; color: var(--faint); }
+.panel-tab-icon svg { width: 14px; height: 14px; }
+.panel-tab-icon.is-file { color: #7057c8; background: transparent; }
+.panel-tab-icon.is-files { color: #a1742e; background: transparent; }
+.panel-tab-icon.is-start { color: var(--faint); background: transparent; }
+.panel-tab.is-active .panel-tab-icon.is-start { color: var(--muted); }
+.panel-tab-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-tab-close { margin-left: 0; }
+.panel-tab-add { width: 28px; height: 28px; background: transparent; border-radius: 6px; }
+.panel-tab-add:hover { background: var(--surface-soft); }
+.panel-tools { gap: 0; }
