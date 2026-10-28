@@ -2156,9 +2156,6 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .confirm-accept:disabled { opacity: .45; cursor: not-allowed; }
 
 /* 通用扩展 surface：widget、状态、custom 浮层与输入对话框。 */
-.extension-statusbar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-.extension-status-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 7px; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--muted); font-size: 10px; }
-.extension-status-chip > span { color: var(--faint); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
 .extension-widgets { margin-bottom: 8px; }
 .extension-widgets.is-belowEditor { margin-top: 8px; margin-bottom: 0; }
 .extension-widget { max-height: 240px; overflow: auto; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); font: 11px/1.6 var(--mono); }
@@ -2189,3 +2186,40 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .compaction-banner { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; padding: 7px 10px; border: 1px solid var(--accent-border); border-radius: var(--radius-control); background: var(--accent-soft); color: var(--accent); font-size: var(--text-sm); }
 .compaction-banner svg { width: 13px; height: 13px; flex: none; }
 .assistant-interrupted { margin-top: 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-soft); color: var(--faint); font-size: 11px; }
+
+/* 统一状态栏：footer 紧凑指标 + 状态 chip；顺序与显隐可管理。 */
+.status-dock { position: relative; display: flex; flex-direction: column; margin-bottom: 8px; }
+.status-dock-items { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.status-chip { display: inline-flex; align-items: center; gap: 3px; max-width: 300px; padding: 2px 6px 2px 8px; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--muted); font-size: 10px; line-height: 1.7; }
+.status-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-chip-chevron { width: 10px; height: 10px; flex: none; color: var(--faint); }
+.status-chip.is-footer { color: var(--text); }
+.status-chip:hover, .status-chip.is-open { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent); }
+.status-dock-manage { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border-radius: var(--radius-tag); color: var(--faint); }
+.status-dock-manage:hover, .status-dock-manage.is-open { background: var(--surface-hover); color: var(--text); }
+.status-dock-manage svg { width: 13px; height: 13px; }
+.status-dock-popover { position: absolute; z-index: 50; bottom: calc(100% + 6px); left: 0; display: flex; flex-direction: column; width: min(440px, 100%); max-height: min(60vh, 420px); overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); box-shadow: var(--shadow-popover); }
+.status-dock-popover.is-manage { bottom: calc(100% + 6px); }
+.status-dock-popover.is-manage { left: auto; right: 0; width: min(480px, 100%); }
+.status-dock-popover-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.status-dock-popover-head strong { font-size: 11px; font-weight: 600; }
+.status-dock-close { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border-radius: 5px; color: var(--faint); }
+.status-dock-close:hover { background: var(--surface-hover); color: var(--text); }
+.status-dock-close svg { width: 11px; height: 11px; }
+.status-dock-detail { flex: 1; min-height: 0; max-height: 220px; margin: 0; padding: 10px 12px; overflow: auto; color: var(--text); font: 11px/1.7 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.status-dock-actions { display: flex; flex-wrap: wrap; gap: 3px; padding: 7px 9px; border-top: 1px solid var(--border); }
+.status-dock-actions button { display: inline-flex; align-items: center; gap: 3px; padding: 3px 6px; border-radius: 5px; color: var(--muted); font-size: 10px; }
+.status-dock-actions button:hover { background: var(--surface-hover); color: var(--text); }
+.status-dock-actions svg { width: 11px; height: 11px; }
+.status-dock-hint { margin: 0; padding: 8px 10px 0; color: var(--faint); font-size: 10px; }
+.status-manage-list { flex: 1; min-height: 0; max-height: 260px; overflow: auto; padding: 6px; }
+.status-manage-row { display: flex; align-items: center; gap: 6px; padding: 3px 5px; border-radius: 5px; }
+.status-manage-row:hover { background: var(--surface-soft); }
+.status-manage-row.is-hidden { opacity: .55; }
+.status-manage-check { display: grid; place-items: center; width: 16px; height: 16px; flex: none; padding: 0; border: 1px solid var(--border-strong); border-radius: 4px; color: var(--accent); }
+.status-manage-check.is-on { border-color: var(--accent); background: var(--accent-soft); }
+.status-manage-check svg { width: 10px; height: 10px; }
+.status-manage-label { flex: 1; min-width: 0; overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.status-manage-move { display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border-radius: 4px; color: var(--faint); }
+.status-manage-move:hover { background: var(--surface-hover); color: var(--text); }
+.status-manage-move svg { width: 11px; height: 11px; }

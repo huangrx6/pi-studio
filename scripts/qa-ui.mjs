@@ -488,33 +488,23 @@ try {
   await page.locator('.session-row').first().click();
   await capture('04-conversation');
 
-  // 扩展底栏：内容与浮层来自扩展；UI 只负责对齐宽度、回传坐标。
-  const footerTextNode = page.locator('.extension-footer-text');
-  await footerTextNode.waitFor();
-  const footerBox = await page.locator('.extension-footer').boundingBox();
-  const composerBox = await page.locator('.composer').boundingBox();
-  assert.ok(Math.abs(footerBox.x - composerBox.x) <= 1, `footer x ${footerBox.x} != composer x ${composerBox.x}`);
-  assert.ok(Math.abs(footerBox.width - composerBox.width) <= 1, `footer width ${footerBox.width} != composer width ${composerBox.width}`);
-  await footerTextNode.click();
-  await page.locator('.extension-footer-popover').waitFor();
-  const popoverBox = await page.locator('.extension-footer-popover').boundingBox();
-  assert.ok(popoverBox.y + popoverBox.height <= footerBox.y + 1, 'footer panel must open above the footer');
-  // 终端外框应被替换成原生标题栏，而不是把 ╭──╮ 直接画在桌面端。
-  // 浮层标题由通用 PopoverSurface 渲染，类名是 .popover-title。
-  await page.locator('.extension-footer-popover .popover-title').getByText('运行状态', { exact: true }).waitFor();
-  // 带标题与关闭按钮的浮层会被重排成原生卡片（.popover-details），其余才走终端网格。
-  const panel = page.locator('.extension-footer-popover .popover-details, .extension-footer-popover-grid').first();
-  await panel.waitFor();
-  const panelText = await panel.innerText();
-  assert.ok(!/[╭╮╰╯│─]/.test(panelText), `terminal frame leaked into panel: ${panelText}`);
-  await capture('04b-extension-footer');
-  await page.getByRole('button', { name: '关闭扩展详情' }).click();
-  await page.locator('.extension-footer-popover').waitFor({ state: 'detached' });
-  // 再验证一次 Esc 关闭（扩展自己的状态机也要同步收起）。
-  await footerTextNode.click();
-  await page.locator('.extension-footer-popover').waitFor();
-  await page.keyboard.press('Escape');
-  await page.locator('.extension-footer-popover').waitFor({ state: 'detached' });
+  // 统一状态栏：setFooter 收敛成一个紧凑指标 chip，点击展开完整详情。
+  const footerChip = page.locator('.status-chip.is-footer');
+  await footerChip.waitFor();
+  assert.match(await footerChip.innerText(), /状态 就绪/);
+  await footerChip.click();
+  await page.locator('.status-dock-popover').waitFor();
+  assert.match(await page.locator('.status-dock-detail').innerText(), /额度 76%/);
+  await capture('04b-status-dock');
+  await page.locator('.status-dock-close').first().click();
+  await page.locator('.status-dock-popover').waitFor({ state: 'detached' });
+  // 状态栏管理：顺序与显隐。
+  await page.locator('.status-dock-manage').click();
+  await page.locator('.status-manage-list').waitFor();
+  assert.ok(await page.locator('.status-manage-row').count() > 0);
+  await capture('04c-status-manage');
+  await page.locator('.status-dock-close').first().click();
+  await page.locator('.status-dock-popover').waitFor({ state: 'detached' });
 
   // 打开文件查看器，读取根目录列表，再点开 package.json 预览代码。
   await page.getByRole('button', { name: '打开右侧面板', exact: true }).click();

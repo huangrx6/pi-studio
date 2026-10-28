@@ -72,31 +72,6 @@ function pointOf(event: React.MouseEvent | React.WheelEvent, offset?: { row: num
   };
 }
 
-/** 输入框上方的扩展状态条（setStatus）。 */
-export function ExtensionStatusBar({ sessionId }: { sessionId: string }) {
-  const [statuses, setStatuses] = useState<Array<[string, string]>>([]);
-  useEffect(() => {
-    let disposed = false;
-    void window.piApi.extensionState(sessionId).then((state) => {
-      if (!disposed && state?.statuses) setStatuses(state.statuses);
-    }).catch(() => { /* 扩展未绑定 */ });
-    const off = window.piApi.onExtensionStatus?.((event) => {
-      if (event.sessionId !== sessionId) return;
-      setStatuses((current) => {
-        const next = new Map(current);
-        if (!event.text) next.delete(event.key);
-        else next.set(event.key, event.text);
-        return [...next];
-      });
-    }) ?? (() => {});
-    return () => { disposed = true; off(); };
-  }, [sessionId]);
-  if (statuses.length === 0) return null;
-  return <div className="extension-statusbar" aria-label="扩展状态">
-    {statuses.map(([key, text]) => <span className="extension-status-chip" key={key} title={key}>{text || key}</span>)}
-  </div>;
-}
-
 /** setWidget：按 placement 放在输入框上方或下方。 */
 export function ExtensionWidgets({ sessionId, placement }: { sessionId: string; placement: 'aboveEditor' | 'belowEditor' }) {
   const [widgets, setWidgets] = useState<Widget[]>([]);

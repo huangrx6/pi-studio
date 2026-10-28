@@ -18,10 +18,10 @@ Pi Studio 不按扩展名写界面。扩展只使用 Pi 标准的 `ctx.ui` API�
 | `ctx.ui` 原语 | Pi Studio 槽位 | 状态 |
 |---|---|---|
 | `notify` | 右上角 toast | 已实现 |
-| `setStatus` | 输入框上方状态条 | 已实现 |
+| `setStatus` | 统一状态栏 chip（可排序 / 显隐） | 已实现 |
 | `setWidget(aboveEditor)` | 输入框上方 | 已实现（字符串 / Component） |
 | `setWidget(belowEditor)` | 输入框下方 | 已实现（字符串 / Component） |
-| `setFooter` | 输入框底部 footer | 已实现 |
+| `setFooter` | 统一状态栏的紧凑运行指标（点击展开完整明细） | 已实现 |
 | `custom({ overlay: true })` | 应用内浮层 | 已实现（键盘 / 鼠标 / done） |
 | `custom({ overlay: false })` | 右侧面板 | 已实现 |
 | `select` | 统一选择对话框 | 已实现 |
@@ -34,6 +34,15 @@ Pi Studio 不按扩展名写界面。扩展只使用 Pi 标准的 `ctx.ui` API�
 | `pasteToEditor` / `setEditorText` / `getEditorText` | 输入框 | 已实现 |
 | `setEditorComponent` / `addAutocompleteProvider` | 输入框替换 | 待实现（复杂原语） |
 | `theme` 相关 | 应用主题映射 | 部分实现 |
+
+## 统一状态栏
+
+`setStatus` 与 `setFooter` 不再各占一行，而是合并到输入框上方的 Status Dock：
+
+- footer 只显示第一段（轮次 / 步数 / 速率），点击展开 token、缓存、上下文等完整指标；
+- 状态 chip 默认按 key 稳定排序，点击查看完整文本；
+- 右侧「管理」可调整顺序、显示 / 隐藏，配置保存在本机 `localStorage`；
+- 重复的状态不会再单独占一行（footer 明细只在弹层中出现）。
 
 ## 已知限制
 

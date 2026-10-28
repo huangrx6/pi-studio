@@ -20,8 +20,8 @@ import {
   AppWindow, Columns2, Compass, Eye, Globe2, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, Pencil, Plus, Plug, RotateCw, Search, Settings, ShieldCheck, SquarePen, Sun, Terminal, Trash2, X,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
-import { ExtensionFooter } from './components/ExtensionFooter';
-import { ExtensionCustomOverlay, ExtensionDialogHost, ExtensionHeader, ExtensionSelectDialog, ExtensionStatusBar, ExtensionWidgets } from './components/ExtensionSurfaces';
+import { ExtensionCustomOverlay, ExtensionDialogHost, ExtensionHeader, ExtensionSelectDialog, ExtensionWidgets } from './components/ExtensionSurfaces';
+import { StatusDock } from './components/StatusDock';
 import { Select } from './components/Select';
 import { FullPermissionDialog, ToolConfirmDialog, type ConfirmRequest } from './components/ConfirmDialog';
 import { DiffView } from './components/DiffView';
@@ -2194,7 +2194,7 @@ export function App() {
             </div>}
             {session?.id && compaction.active && <div className="compaction-banner" role="status"><LoaderCircle className="spin" /><span>上下文正在压缩，完成后会自动继续…</span></div>}
             {session?.id && busy && extensionWorking.visible && extensionWorking.message && <div className="extension-working" role="status"><LoaderCircle className="spin" /><span>{extensionWorking.message}</span></div>}
-            {session?.id && <ExtensionStatusBar sessionId={session.id} />}
+            {session?.id && <StatusDock sessionId={session.id} />}
             {session?.id && <ExtensionWidgets sessionId={session.id} placement="aboveEditor" />}
             <div
               className="composer"
@@ -2277,8 +2277,6 @@ export function App() {
             </div>
             {session?.id && <ExtensionWidgets sessionId={session.id} placement="belowEditor" />}
           </div>
-          {/* 底栏内容与浮层由扩展决定；App 只提供位置、宽度和输入坐标。 */}
-          {session?.id && <ExtensionFooter key={session.id} sessionId={session.id} />}
           {session?.id && <ExtensionCustomOverlay sessionId={session.id} />}
           {session?.id && <ExtensionDialogHost sessionId={session.id} />}
           {session?.id && <ExtensionSelectDialog sessionId={session.id} />}
