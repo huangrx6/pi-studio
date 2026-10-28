@@ -14,6 +14,7 @@ const { dialog } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { getWindow, agentDir } = require('../core/state.cjs');
+const { requestConfirmation } = require('./confirmations.cjs');
 const { stripAnsi } = require('../core/serialize.cjs');
 const { createFooterHost } = require('./footer-host.cjs');
 
@@ -67,24 +68,18 @@ function createExtensionUI(sessionId) {
   const ui = {
     select: choose,
     async confirm(title, message) {
-      if (!getWindow()) return false;
-      const result = await dialog.showMessageBox(getWindow(), {
-        type: 'question',
-        title: 'Pi Studio',
-        message: stripAnsi(title),
-        detail: stripAnsi(message),
-        buttons: ['取消', '确认'],
-        defaultId: 1,
-        cancelId: 0,
-        noLink: true,
-      });
-      return result.response === 1;
+      // 交给渲染进程显示统一样式的风险确认卡片；窗口关闭或超时按拒绝处理。
+      return requestConfirmation({ sessionId, title: stripAnsi(title), message: stripAnsi(message) });
     },
     async input() {
       return undefined;
     },
     notify(message, type = 'info') {
-      send('pi:extension-notify', { message: stripAnsi(message), type });
+      const text = stripAnsi(message);
+      // The mode selector already shows the applied mode. Keep failures and
+      // unrelated extension notifications, including those during streaming.
+      if (type === 'info' && /^权限模式\s*·\s*(请求批准|帮我批准|完全(?:访问)?权限)$/.test(text.trim())) return;
+      send('pi:extension-notify', { message: text, type });
     },
     onTerminalInput() {
       return () => {};

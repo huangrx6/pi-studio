@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('piApi', {
   setTheme: (theme) => ipcRenderer.invoke('pi:set-theme', theme),
   modeGet: () => ipcRenderer.invoke('pi:mode-get'),
   modeSet: (payload) => ipcRenderer.invoke('pi:mode-set', payload),
+  confirmResponse: (payload) => ipcRenderer.send('pi:confirm-response', payload),
   state: (cwd) => ipcRenderer.invoke('pi:state', cwd),
   createSession: (cwd) => ipcRenderer.invoke('pi:session-create', cwd),
   session: (id) => ipcRenderer.invoke('pi:session', id),
@@ -53,6 +54,7 @@ contextBridge.exposeInMainWorld('piApi', {
   removeExtension: (path) => ipcRenderer.invoke('pi:remove-extension', path),
   removeCustomModel: (payload) => ipcRenderer.invoke('pi:remove-custom-model', payload),
   // ---- 主进程 → 渲染进程 的事件订阅（返回取消订阅函数）----
+  onConfirmRequest: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:confirm-request', handler); return () => ipcRenderer.removeListener('pi:confirm-request', handler); },
   onOpenSettings: (listener) => {
     const handler = () => listener();
     ipcRenderer.on('pi:open-settings', handler);

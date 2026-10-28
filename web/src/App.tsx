@@ -22,6 +22,7 @@ import {
 import appIcon from '../../assets/icon.png';
 import { ExtensionFooter } from './components/ExtensionFooter';
 import { Select } from './components/Select';
+import { FullPermissionDialog, ToolConfirmDialog, type ConfirmRequest } from './components/ConfirmDialog';
 import { splitComposerText } from './references';
 import type { ChatMessage, ComposerAttachment, ComposerCommand, ComposerCommandSource, ComposerFile, TodoDetails } from './chat-types';
 import { AttachmentIcon } from './components/AttachmentIcon';
@@ -253,6 +254,9 @@ export function App() {
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [extensionToast, setExtensionToast] = useState<{ message: string; type: 'info' | 'warning' | 'error' } | null>(null);
   const [permission, setPermission] = useState<{ available: boolean; mode: PermissionMode }>({ available: false, mode: 'smart' });
+  const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
+  const [fullPermissionOpen, setFullPermissionOpen] = useState(false);
+  const [fullPermissionAck, setFullPermissionAck] = useState(false);
   const [todoPanelOpen, setTodoPanelOpen] = useState(false);
   const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([]);
   const queuedDrainRef = useRef(false);
@@ -711,6 +715,9 @@ export function App() {
       .catch(() => { /* 扩展未安装或尚未初始化 */ });
   }, []);
 
+  // 扩展请求工具确认时，渲染进程负责显示统一样式的弹窗。
+  useEffect(() => window.piApi.onConfirmRequest((request) => setConfirmRequest(request)), []);
+
   useEffect(() => window.piApi.onOpenSettings(() => { void openSettings(); }), [workspace]);
 
   useEffect(() => {
@@ -1059,8 +1066,8 @@ export function App() {
     setPreferences((current) => ({ ...current, [key]: value }));
   }
 
-  /** 切换权限模式：先乐观更新，失败时回滚并提示。 */
-  async function changePermission(mode: PermissionMode) {
+  /** 真正应用权限模式：先乐观更新，失败时回滚并提示。 */
+  async function applyPermission(mode: PermissionMode) {
     const previous = permission;
     setPermission((current) => ({ ...current, mode }));
     try {
@@ -1069,6 +1076,16 @@ export function App() {
       setPermission(previous);
       setError(errorText(error));
     }
+  }
+
+  /** 切换权限模式：选择「完全权限」时先要求确认风险。 */
+  async function changePermission(mode: PermissionMode) {
+    if (mode === 'full' && permission.mode !== 'full') {
+      setFullPermissionAck(false);
+      setFullPermissionOpen(true);
+      return;
+    }
+    await applyPermission(mode);
   }
 
   function removeComposerAttachment(id: string) {
@@ -2335,6 +2352,22 @@ export function App() {
           </SettingsDialog>}
         </div>
       )}
+
+      {/* 工具权限确认与完全权限风险确认 */}
+      {confirmRequest && <ToolConfirmDialog
+        request={confirmRequest}
+        onRespond={(accepted) => {
+          const id = confirmRequest.id;
+          setConfirmRequest(null);
+          window.piApi.confirmResponse({ id, accepted });
+        }}
+      />}
+      {fullPermissionOpen && <FullPermissionDialog
+        acknowledged={fullPermissionAck}
+        onAcknowledgedChange={setFullPermissionAck}
+        onCancel={() => setFullPermissionOpen(false)}
+        onConfirm={() => { setFullPermissionOpen(false); void applyPermission('full'); }}
+      />}
 
       {/* MCP 详情弹窗 */}
       {mcpDetail && (

@@ -196,6 +196,8 @@
 /* Shared roles derive from the active palette in both modes. */
 :root {
   --transparent: transparent;
+  --image-dismiss-bg: #ffffff;
+  --image-dismiss-fg: #202020;
   --primary: var(--color-primary);
   --brand: var(--text);
   --on-brand: var(--bg);

@@ -96,6 +96,10 @@ declare global {
       modeGet(): Promise<{ available: boolean; mode: 'ask' | 'smart' | 'full' }>;
       /** 切换批准方式；有会话时立即下发 /mode，没有会话时等会话建立后补发。 */
       modeSet(payload: { mode: 'ask' | 'smart' | 'full'; sessionId?: string }): Promise<{ mode: string; applied?: boolean; reason?: string }>;
+      /** 扩展请求确认工具操作时触发；需要调用 confirmResponse 回传结果。 */
+      onConfirmRequest(listener: (payload: { id: string; sessionId?: string; title: string; message: string }) => void): () => void;
+      /** 回传确认结果；超时或窗口关闭视为拒绝。 */
+      confirmResponse(payload: { id: string; accepted: boolean }): void;
       /** 读取侧边栏工作区/会话列表、当前模型与工作目录。 */
       state(cwd?: string): Promise<{ workspaces: PiWorkspace[]; model: ModelSelection; cwd: string }>;
       /** 在指定工作区新建会话。 */

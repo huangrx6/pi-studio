@@ -17,6 +17,7 @@ const { registerAttachmentsIpc } = require('./attachments.cjs');
 const { registerModelsIpc } = require('./models.cjs');
 const { registerSettingsIpc } = require('./settings.cjs');
 const { registerModeIpc } = require('./mode.cjs');
+const { registerConfirmIpc } = require('./confirm.cjs');
 
 function registerIpc() {
   registerSystemIpc();
@@ -26,6 +27,7 @@ function registerIpc() {
   registerModelsIpc();
   registerSettingsIpc();
   registerModeIpc();
+  registerConfirmIpc();
 }
 
 module.exports = { registerIpc };

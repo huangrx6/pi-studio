@@ -1416,7 +1416,7 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .activity-node.tone-search { color: var(--icon); background: var(--surface-soft); box-shadow: 0 0 0 1px var(--border); }
 .activity-node.tone-edit { color: var(--icon); background: var(--surface-soft); box-shadow: 0 0 0 1px var(--border); }
 .activity-content { min-width: 0; padding-top: 1px; }
-.activity-tool { margin: 1px 0 4px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); transition: border-color var(--transition), background var(--transition); }
+.activity-tool { margin: 1px 0 4px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); transition: border-color var(--transition), background var(--transition); }
 .activity-tool:hover { border-color: var(--border-hover); background: var(--surface-hover); }
 .activity-tool summary { display: flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 9px; list-style: none; cursor: pointer; }
 .activity-tool summary::-webkit-details-marker { display: none; }
@@ -1520,12 +1520,14 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .composer-attachments::-webkit-scrollbar { height: 0; }
 .composer-attachment { position: relative; flex: none; display: flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); }
 .composer-attachment.is-image { width: 64px; height: 64px; padding: 3px; }
-.composer-attachment.is-image img { width: 100%; height: 100%; border-radius: var(--radius-tag); object-fit: cover; }
+.composer-attachment.is-image img { width: 100%; height: 100%; border-radius: var(--radius-tag); object-fit: cover; transition: filter var(--transition); }
+.composer-attachment.is-image:hover img,
+.composer-attachment.is-image:focus-within img { filter: brightness(.8) saturate(.75); }
 .composer-attachment.is-file { max-width: 245px; min-height: 40px; padding: 5px 7px; }
 .composer-attachment > span:not(.attachment-icon) { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .composer-attachment > span strong { overflow: hidden; color: var(--muted); font: 10px var(--mono); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .composer-attachment > span small { color: var(--faint); font-size: 9px; }
-.composer-attachment > button { position: absolute; top: -5px; right: -5px; display: grid; place-items: center; width: 17px; height: 17px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--faint); box-shadow: var(--shadow-composer); }
+.composer-attachment > button { position: absolute; top: -5px; right: -5px; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; line-height: 1; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--faint); box-shadow: var(--shadow-thumb); }
 
 /* 引用徽章：输入框引用条与用户消息共用同一套外观。 */
 .ref-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; min-width: 0; padding: 1px 6px 1px 7px; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--muted); font-size: var(--text-xs); line-height: 1.7; vertical-align: baseline; }
@@ -1538,7 +1540,7 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .ref-skill-body > summary { padding: 5px 10px; color: var(--muted); font-size: var(--text-xs); cursor: pointer; }
 .ref-skill-body > pre { max-height: 240px; margin: 0; padding: 0 10px 10px; overflow: auto; color: var(--muted); font: var(--text-xs)/1.6 var(--mono); white-space: pre-wrap; }
 .composer-attachment > button:hover { color: var(--error); border-color: var(--border-hover); background: var(--surface-hover); }
-.composer-attachment > button svg { width: 10px; height: 10px; }
+.composer-attachment > button svg { display: block; width: 12px; height: 12px; }
 .composer-attach-button { display: grid; place-items: center; width: 30px; height: var(--control-sm); flex: none; border-radius: var(--radius-control); color: var(--muted); }
 .composer-attach-button:hover:not(:disabled) { background: var(--surface-soft); color: var(--text); }
 .composer-attach-button svg { width: 16px; height: 16px; }
@@ -1707,7 +1709,7 @@ error-card 也在这里被统一成同一套视觉。 */
 .activity-tool:hover { background: var(--surface); border-color: var(--border-strong); }
 .activity-drawer > summary:hover { background: var(--surface-soft); }
 .activity-tool-body { background: var(--surface); }
-.activity-tool-code { border: 1px solid var(--border); background: var(--surface-soft); }
+.activity-tool-code { border: 0; background: var(--surface-soft); }
 
 /* The note row already renders its own activity node in the gutter. */
 /* note 行的活动节点已经由 gutter 自己绘制，这里去掉额外的伪元素圆点，防止
@@ -1828,6 +1830,9 @@ body { background: var(--bg); color: var(--text); }
 .attachment-kind, .attachment-kind.is-code, .attachment-kind.is-archive, .attachment-kind.is-sheet, .attachment-kind.is-doc { color: var(--muted); background: var(--surface-soft); }
 .attachment-card, .composer-attachment { background: var(--surface); border-color: var(--border); }
 .composer-attachment > button { background: var(--surface); border-color: var(--border); color: var(--muted); }
+.composer-attachment.is-image > button { background: var(--image-dismiss-bg); color: var(--image-dismiss-fg); border: 2px solid var(--surface); }
+.composer-attachment.is-image > button:hover { color: var(--image-dismiss-fg); background: var(--image-dismiss-bg); }
+.composer-attachment > button:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
 .assistant-error, .error-card, .settings-error { border-color: var(--error-border); background: var(--error-soft); box-shadow: none; }
 .assistant-error::before, .error-card::before { background: var(--error); }
 .assistant-error-mark { color: var(--error); background: var(--surface); box-shadow: 0 0 0 1px var(--error-border); }
@@ -2078,3 +2083,37 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 
 .run-history .activity-tool-status, .run-current .activity-tool-status { margin-left: auto; }
 @media (max-width: 600px) { .run-history > summary { gap: 8px; } .run-history-count { font-size: 10px; } .run-current-hint { font-size: 10px; } }
+
+/* 确认弹窗：工具风险确认与完全权限确认共用。 */
+.confirm-overlay { position: fixed; inset: 0; z-index: 320; display: grid; place-items: center; padding: 24px; background: var(--scrim); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.confirm-card { width: min(540px, 100%); max-height: 86vh; overflow: auto; padding: 20px; border: 1px solid var(--border-strong); border-radius: var(--radius-panel); background: var(--overlay-surface); box-shadow: var(--shadow-dialog); outline: none; }
+.confirm-head { display: flex; align-items: flex-start; gap: 12px; }
+.confirm-icon { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: 50%; background: var(--surface-soft); color: var(--muted); }
+.confirm-icon svg { width: 17px; height: 17px; }
+.confirm-icon.is-command, .confirm-icon.is-file, .confirm-icon.is-network { background: var(--accent-soft); color: var(--accent); }
+.confirm-icon.is-danger { background: var(--error-soft); color: var(--error); }
+.confirm-heading { min-width: 0; flex: 1; }
+.confirm-eyebrow { display: block; margin-bottom: 4px; color: var(--faint); font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; }
+.confirm-heading h2 { margin: 0; font-size: 17px; font-weight: 550; letter-spacing: -.01em; }
+.confirm-close { display: grid; place-items: center; width: 26px; height: 26px; flex: none; border: 0; border-radius: 7px; background: none; color: var(--faint); }
+.confirm-close:hover { background: var(--surface-hover); color: var(--text); }
+.confirm-close svg { width: 14px; height: 14px; }
+.confirm-body { margin-top: 16px; }
+.confirm-text { margin: 0; color: var(--muted); font-size: var(--text-md); line-height: 1.75; }
+.confirm-command { margin: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--code-bg); color: var(--text); font: 11.5px/1.75 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.confirm-token.is-command { color: var(--syntax-keyword); font-weight: 600; }
+.confirm-token.is-flag { color: var(--syntax-function); }
+.confirm-token.is-path { color: var(--syntax-string); }
+.confirm-token.is-arg { color: var(--text); }
+.confirm-target { display: flex; align-items: flex-start; gap: 8px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-soft); }
+.confirm-tool { flex: none; padding: 1px 7px; border-radius: var(--radius-tag); background: var(--accent-soft); color: var(--accent); font: 10px var(--mono); text-transform: lowercase; }
+.confirm-target code { min-width: 0; color: var(--text); font: 11.5px/1.7 var(--mono); overflow-wrap: anywhere; }
+.confirm-check { display: flex; align-items: center; gap: 9px; margin-top: 16px; color: var(--text); font-size: var(--text-sm); cursor: pointer; }
+.confirm-check input { width: 16px; height: 16px; accent-color: var(--accent); }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 20px; }
+.confirm-cancel, .confirm-accept { min-width: 84px; height: 36px; padding: 0 16px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--text); font-size: var(--text-sm); }
+.confirm-cancel:hover { background: var(--surface-hover); }
+.confirm-accept { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+.confirm-accept:hover:not(:disabled) { border-color: var(--accent-hover); background: var(--accent-hover); }
+.confirm-accept.is-danger { border-color: var(--error); background: var(--error); color: var(--bg); }
+.confirm-accept:disabled { opacity: .45; cursor: not-allowed; }
