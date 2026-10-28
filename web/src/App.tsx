@@ -760,6 +760,7 @@ export function App() {
 
       <main className={`main ${isNewConversation ? 'is-new-conversation' : ''}`}>
         <header className="chat-header">
+          {sidebarCollapsed && <button className="icon-button sidebar-expand" aria-label="展开侧边栏" title="展开侧边栏" onClick={() => setSidebarCollapsed(false)}><PanelLeft /></button>}
           {!isNewConversation && <div className="chat-heading">
             <h1>{session?.title || 'Pi Studio'}</h1>
             <div className="chat-meta"><span className={`state-dot ${busy ? 'is-busy' : ''}`} />{busy ? '正在处理' : '准备就绪'}{activeWorkspace && <><span>·</span><span className="workspace-name">{activeWorkspace.name}</span></>}</div>

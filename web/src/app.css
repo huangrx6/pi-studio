@@ -464,3 +464,8 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .new-conversation-intro h2 { margin: 0; color: var(--text); font-family: var(--display-font); font-size: clamp(30px, 3.2vw, 44px); font-weight: 500; letter-spacing: -.045em; line-height: 1.24; }
 .new-conversation-intro h2 em { font-style: normal; color: #536a91; font-weight: 500; }
 .new-conversation-intro p { margin: 10px 0 0; color: var(--faint); font-size: var(--text-sm); letter-spacing: .02em; }
+
+/* Collapsed means hidden: no leftover 72px rail. */
+.is-sidebar-collapsed .sidebar { display: none; }
+.is-sidebar-collapsed .chat-header { padding-left: 92px; }
+.sidebar-expand { width: 28px; height: 28px; margin-right: 2px; }
