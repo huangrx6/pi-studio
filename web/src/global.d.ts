@@ -29,7 +29,7 @@ interface PiDetail {
 
 interface SettingsSnapshot {
   customModels: Array<{ providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean }>;
-  providers: Array<{ id: string; name: string; mode: string; authConfigured?: boolean; envName?: string; envAvailable?: boolean; models: number }>;
+  providers: Array<{ id: string; name: string; mode: string; authConfigured?: boolean; envName?: string; envAvailable?: boolean; icon?: string; models: number }>;
   mcp: Array<{ name: string; transport: string; enabled: boolean; target: string; description: string }>;
   skills: Array<{ name: string; description: string; path: string; scope: string }>;
   extensions: Array<{ name: string; scope: string; path: string; kind: string; source?: string }>;
@@ -54,7 +54,7 @@ declare global {
       chooseWorkspace(): Promise<string | undefined>;
       models(cwd?: string): Promise<ModelCatalog>;
       providerModels(providerId: string): Promise<{ models: Array<{ id: string; model: string; name: string; enabled: boolean; contextWindow?: number; maxTokens?: number; supportsImages?: boolean }> }>;
-      providerConfig(providerId: string): Promise<{ providerId: string; baseUrl: string; api: string }>;
+      providerConfig(providerId: string): Promise<{ providerId: string; baseUrl: string; api: string; icon: string }>;
       mcpConfig(name: string): Promise<{ name: string; transport: string; command: string; args: string[]; url: string; description: string; env: string }>;
       setEnabledModels(models: string[]): Promise<any>;
       addCustomModel(payload: { providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages?: boolean; reasoning?: boolean; editing?: boolean }): Promise<SettingsSnapshot>;

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
 import { Select } from './components/Select';
+import { ProviderIcon } from './components/ProviderIcon';
 import { SettingsDialog } from './components/SettingsDialog';
 import { ModelPicker } from './components/ModelPicker';
 import type { ModelOption, ModelSelection, ThinkingLevel } from './model-types';
@@ -35,7 +36,7 @@ type CustomModelConfig = { providerId: string; modelId: string; name: string; co
 type SettingsEditor = { kind: 'provider' | 'model' | 'mcp' | 'package' | 'skill' | 'extension'; editId?: string };
 type SettingsSnapshot = {
   customModels: CustomModelConfig[];
-  providers: Array<{ id: string; name: string; mode: string; authConfigured?: boolean; envName?: string; envAvailable?: boolean; models: number }>;
+  providers: Array<{ id: string; name: string; mode: string; authConfigured?: boolean; envName?: string; envAvailable?: boolean; icon?: string; models: number }>;
   mcp: Array<{ name: string; transport: string; enabled: boolean; target: string; description: string }>;
   skills: Array<{ name: string; description: string; path: string; scope: string }>;
   extensions: Array<{ name: string; scope: string; path: string; kind: string; source?: string }>;
@@ -136,7 +137,7 @@ export function App() {
   const [resourceScope, setResourceScope] = useState<'user' | 'project'>('user');
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsBusy, setSettingsBusy] = useState(false);
-  const [providerDraft, setProviderDraft] = useState({ providerId: '', baseUrl: '', api: 'openai-completions', modelId: '', modelName: '', apiKey: '' });
+  const [providerDraft, setProviderDraft] = useState({ providerId: '', baseUrl: '', api: 'openai-completions', modelId: '', modelName: '', apiKey: '', icon: '' });
   const [mcpDraft, setMcpDraft] = useState({ name: '', transport: 'stdio', command: '', args: '', url: '', description: '', env: '' });
   const [treePath, setTreePath] = useState('');
   const [entries, setEntries] = useState<Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }>>([]);
@@ -227,7 +228,7 @@ export function App() {
     setResourceScope('user');
     setPackageDraft('');
     originalMcpArgsRef.current = null;
-    setProviderDraft({ providerId: '', baseUrl: '', api: 'openai-completions', modelId: '', modelName: '', apiKey: '' });
+    setProviderDraft({ providerId: '', baseUrl: '', api: 'openai-completions', modelId: '', modelName: '', apiKey: '', icon: '' });
     setMcpDraft({ name: '', transport: 'stdio', command: '', args: '', url: '', description: '', env: '' });
     setCustomModel({ providerId: '', modelId: '', name: '', contextWindow: '', maxTokens: '', supportsImages: false, reasoning: false });
     try {
@@ -360,7 +361,7 @@ export function App() {
       setSettingsData(result.settings);
       setModels(result.models.models);
       setModelRef(result.models.current);
-      setProviderDraft({ providerId: '', baseUrl: '', api: 'openai-completions', modelId: '', modelName: '', apiKey: '' });
+      setProviderDraft({ providerId: '', baseUrl: '', api: 'openai-completions', modelId: '', modelName: '', apiKey: '', icon: '' });
       setProviderModels({});
       setEditor(null);
       await loadState();
@@ -751,11 +752,11 @@ export function App() {
   }
 
   const enabledModelGroups = useMemo(() => {
-    const groups = new Map<string, { name: string; ids: string[] }>();
+    const groups = new Map<string, { name: string; provider: string; ids: string[] }>();
     for (const id of enabledModels) {
       const item = models.find((entry) => entry.id === id);
       const name = item?.providerName || item?.provider || id.split('/')[0];
-      const group = groups.get(name) ?? { name, ids: [] };
+      const group = groups.get(name) ?? { name, provider: item?.provider || id.split('/')[0], ids: [] };
       group.ids.push(id);
       groups.set(name, group);
     }
@@ -767,7 +768,7 @@ export function App() {
     const provider = item?.providerName || item?.provider || id.split('/')[0];
     return <article className="model-card" key={id}>
       <div className="model-card-main">
-        <span className="model-card-top"><span className="model-card-avatar">{provider.slice(0, 1)}</span><span className="model-card-provider">{provider}</span></span>
+        <span className="model-card-top"><ProviderIcon className="model-card-avatar" provider={item?.provider || provider} name={provider} icon={settingsData?.providers.find((entry) => entry.id === item?.provider)?.icon} size={22} /><span className="model-card-provider">{provider}</span></span>
         <strong className="model-card-name">{item?.name ?? id}</strong>
         <span className="model-card-id">{id}</span>
         <span className="model-card-meta">
@@ -1066,7 +1067,7 @@ export function App() {
                   <div className="settings-card-head"><div><h2>已启用模型 <span className="count-badge">{enabledModels.length}</span></h2><p>这里管理所有会话可用的模型；具体使用哪个模型，在对话输入框中选择。</p></div></div>
                   {enabledModels.length > 0 ? <>
                     <div className="model-view-bar"><span>查看方式</span><div className="model-view-toggle" role="group" aria-label="模型查看方式"><button className={modelView === 'all' ? 'is-active' : ''} onClick={() => setModelView('all')}>全部</button><button className={modelView === 'provider' ? 'is-active' : ''} onClick={() => setModelView('provider')}>按来源</button></div></div>
-                    {modelView === 'all' ? <div className="model-card-grid">{enabledModels.map(renderModelCard)}</div> : <div className="model-groups">{enabledModelGroups.map((group) => <section className="model-group" key={group.name}><div className="model-group-head"><span className="model-card-avatar">{group.name.slice(0, 1)}</span><strong>{group.name}</strong><span>{group.ids.length}</span></div><div className="model-card-grid">{group.ids.map(renderModelCard)}</div></section>)}</div>}
+                    {modelView === 'all' ? <div className="model-card-grid">{enabledModels.map(renderModelCard)}</div> : <div className="model-groups">{enabledModelGroups.map((group) => <section className="model-group" key={group.name}><div className="model-group-head"><ProviderIcon className="model-card-avatar" provider={group.provider} name={group.name} icon={settingsData?.providers.find((entry) => entry.id === group.provider)?.icon} size={22} /><strong>{group.name}</strong><span>{group.ids.length}</span></div><div className="model-card-grid">{group.ids.map(renderModelCard)}</div></section>)}</div>}
                   </> : <div className="settings-empty">在下方添加来源，再选择要启用的模型。</div>}
                 </section>
                 <section className="settings-card">
@@ -1077,7 +1078,7 @@ export function App() {
                       const filtered = list.filter((item) => `${item.name} ${item.id}`.toLowerCase().includes(modelQuery.toLowerCase()));
                       return <div className="provider-card" key={provider.id}>
                         <div className="provider-card-head">
-                          <div className="provider-avatar">{provider.name.slice(0, 1)}</div>
+                          <ProviderIcon className="provider-avatar" provider={provider.id} name={provider.name} icon={provider.icon} size={36} />
                           <div className="provider-main"><strong>{provider.name}</strong><span>{provider.id} · {provider.models} 个模型</span></div>
                           <span className={`provider-mode ${provider.authConfigured === false ? 'is-missing' : ''}`}>{provider.authConfigured === false ? '未配置凭据' : provider.mode === 'oauth' ? 'OAuth' : provider.mode === 'env' ? '环境变量' : 'API Key'}</span>
                           <div className="row-actions"><button className="icon-button row-edit" aria-label={`编辑 ${provider.name}`} title="编辑" onClick={() => void openEditor('provider', provider.id)}><Pencil /></button><button className="settings-outline row-action" onClick={() => void loadProviderModels(provider.id)} aria-expanded={expandedProvider === provider.id}>{expandedProvider === provider.id ? '收起模型' : '管理模型'}</button></div>
@@ -1160,6 +1161,7 @@ export function App() {
               <div className="settings-field"><span>API 类型</span><Select label="API 类型" value={providerDraft.api} onChange={(value) => setProviderDraft({ ...providerDraft, api: value })} options={[...apiTypeOptions, ...(apiTypeOptions.some((option) => option.value === providerDraft.api) ? [] : [{ value: providerDraft.api, label: providerDraft.api }])]} /></div>
               <label className="field-wide">服务地址<input autoFocus={Boolean(editor.editId)} required type="url" value={providerDraft.baseUrl} onChange={(event) => setProviderDraft({ ...providerDraft, baseUrl: event.target.value })} placeholder="https://api.example.com/v1" /></label>
               <label className="field-wide">API Key<input aria-label="API Key" aria-describedby="provider-key-help" type="password" autoComplete="new-password" value={providerDraft.apiKey} onChange={(event) => setProviderDraft({ ...providerDraft, apiKey: event.target.value })} placeholder={editor.editId ? '已保存的凭据不显示，留空保持原值' : 'API Key 或 $ENV_VAR'} /><small id="provider-key-help">支持环境变量引用，例如 $MINIMAX_CN_API_KEY。</small></label>
+              <label className="field-wide">图标 URL<input value={providerDraft.icon} onChange={(event) => setProviderDraft({ ...providerDraft, icon: event.target.value })} placeholder="可选，https://... 或 data:image/..." /><small>用于替换默认的品牌图标，留空使用内置图标。</small></label>
               {!editor.editId && <><label>首个模型 ID<input required value={providerDraft.modelId} onChange={(event) => setProviderDraft({ ...providerDraft, modelId: event.target.value })} placeholder="model-id" /></label><label>显示名称<input value={providerDraft.modelName} onChange={(event) => setProviderDraft({ ...providerDraft, modelName: event.target.value })} placeholder="可选，默认使用模型 ID" /></label></>}
             </div>}
             {editor.kind === 'model' && <div className="settings-form-grid">

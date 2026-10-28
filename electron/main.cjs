@@ -251,6 +251,7 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
       name: provider.name,
       authConfigured: auth[provider.id] !== undefined || rt.hasConfiguredAuth(provider.id),
       mode: auth[provider.id]?.type === 'oauth' ? 'oauth' : auth[provider.id]?.key?.startsWith('$') ? 'env' : 'key',
+      icon: configuredModels.providers?.[provider.id]?.icon || '',
       envName: envNameOf(auth[provider.id]?.key),
       envAvailable: envNameOf(auth[provider.id]?.key) ? process.env[envNameOf(auth[provider.id]?.key)] !== undefined : false,
       models: allModels.filter((model) => model.provider === provider.id).length,
@@ -530,7 +531,7 @@ app.whenReady().then(async () => {
     const defaults = rt.getModels().find((model) => model.provider === providerId);
     if (!Object.hasOwn(providers, providerId) && !defaults) throw new Error('模型来源不存在');
     const config = providers[providerId] || {};
-    return { providerId, baseUrl: config.baseUrl || defaults?.baseUrl || '', api: config.api || defaults?.api || 'openai-completions' };
+    return { providerId, baseUrl: config.baseUrl || defaults?.baseUrl || '', api: config.api || defaults?.api || 'openai-completions', icon: config.icon || '' };
   });
   ipcMain.handle('pi:mcp-config', async (_event, name) => {
     const config = readConfig(path.join(pi.getAgentDir(), 'mcp.json'), { mcpServers: {} });

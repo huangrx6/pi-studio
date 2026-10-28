@@ -74,6 +74,10 @@ function updateProvider(config, input, knownProviders = []) {
   // A newly supplied key is stored in auth.json by the caller. Remove the
   // old models.json override so it cannot take precedence over that key.
   if (typeof input.apiKey === 'string' && input.apiKey.trim()) delete provider.apiKey;
+  if (typeof input.icon === 'string') {
+    const icon = input.icon.trim();
+    if (icon) provider.icon = icon; else delete provider.icon;
+  }
   if (!input.editing) {
     const modelId = String(input.modelId || '').trim();
     if (!modelId) throw new Error('请填写首个模型的 ID');

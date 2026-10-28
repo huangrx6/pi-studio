@@ -670,3 +670,16 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .panel-tool small { color: var(--faint); font-size: var(--text-xs); }
 .panel-tool-arrow { width: 13px; height: 13px; margin-left: auto; color: var(--faint); transform: rotate(-90deg); }
 @media (max-width: 900px) { .file-panel.is-split:not(.is-fullscreen) { width: 100%; } .panel-body.is-split { grid-template-columns: minmax(160px, .85fr) minmax(0, 1.15fr); } }
+
+/* Provider marks: native brand glyphs when available, neutral fallback otherwise. */
+.provider-icon { display: inline-grid; place-items: center; flex: none; overflow: hidden; border: 1px solid transparent; border-radius: 6px; background: var(--surface-soft); color: #66758c; }
+.provider-icon > svg { width: 58%; height: 58%; fill: currentColor; }
+.provider-icon > img { width: 100%; height: 100%; object-fit: cover; }
+.provider-icon-letter { font-size: 10px; font-weight: 700; line-height: 1; }
+.provider-icon.is-blue { color: #315eae; background: #eaf1ff; border-color: #dce8fd; }
+.provider-icon.is-warm { color: #a35d26; background: #fff0e3; border-color: #f8e2cd; }
+.provider-icon.is-green { color: #2f6f63; background: #e8f6f2; border-color: #d8eee8; }
+.provider-icon.is-clay { color: #995b45; background: #fbede8; border-color: #f4ddd5; }
+.provider-icon.is-violet { color: #5f4b91; background: #f1edfa; border-color: #e8e0f6; }
+.provider-icon.is-sky { color: #3d6e9e; background: #eaf4fb; border-color: #dcecf7; }
+.provider-icon.is-neutral { color: #66758c; background: var(--surface-soft); border-color: var(--border); }
