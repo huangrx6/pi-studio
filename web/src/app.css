@@ -485,9 +485,17 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .sidebar-top-toggle { position: absolute; top: 10px; right: 12px; z-index: 5; width: 28px; height: 28px; }
 .chat-actions { margin-left: auto; }
 
-/* Global scrollbar policy: scrolling remains available, the bar itself never occupies space. */
-* { scrollbar-width: none; -ms-overflow-style: none; scrollbar-gutter: auto; }
-*::-webkit-scrollbar { display: none; width: 0; height: 0; }
+/* Global scrollbar policy: no vertical bar; a slim, quiet horizontal bar. */
+* { scrollbar-width: auto; -ms-overflow-style: auto; scrollbar-gutter: auto; }
+body *::-webkit-scrollbar { width: 0; height: 10px; background: transparent; }
+body *::-webkit-scrollbar:vertical { display: none; width: 0; }
+body *::-webkit-scrollbar:horizontal { display: block; height: 10px; }
+body *::-webkit-scrollbar-track { background: transparent; }
+body *::-webkit-scrollbar-track:horizontal { background: #f4f6f9; border-radius: 999px; }
+body *::-webkit-scrollbar-thumb { min-width: 44px; border: 2px solid transparent; border-radius: 999px; background: #d2d9e3; background-clip: padding-box; }
+body *::-webkit-scrollbar-thumb:hover { background: #b9c4d2; background-clip: padding-box; }
+body *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+body *::-webkit-scrollbar-corner { background: transparent; }
 
 /* Quiet sidebar skeleton while Pi session directories are being indexed. */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
