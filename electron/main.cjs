@@ -267,20 +267,23 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
   }));
   let skills = [];
   try {
-    const agentSkills = path.join(os.homedir(), '.agents', 'skills');
+    const globalSkillPaths = [
+      path.join(pi.getAgentDir(), 'skills'),
+      path.join(os.homedir(), '.agents', 'skills'),
+      path.join(os.homedir(), '.agent', 'skills'),
+    ];
     const result = pi.loadSkills({
       cwd,
       agentDir: pi.getAgentDir(),
-      skillPaths: [agentSkills, path.join(os.homedir(), '.agents')],
-      includeDefaults: true,
+      skillPaths: globalSkillPaths,
+      includeDefaults: false,
     });
-    skills = result.skills.map((skill) => {
-      const file = skill.filePath;
-      const scope = file.startsWith(path.join(os.homedir(), '.agents')) || file.startsWith(path.join(pi.getAgentDir(), 'skills'))
-        ? 'user'
-        : file.startsWith(path.join(cwd, '.pi')) ? 'project' : 'temporary';
-      return { name: skill.name, description: skill.description, path: file, scope };
-    });
+    skills = result.skills.map((skill) => ({
+      name: skill.name,
+      description: skill.description,
+      path: skill.filePath,
+      scope: 'user',
+    }));
   } catch { /* skill discovery is optional */ }
   const configuredPackages = Array.isArray(settings.packages) ? settings.packages : [];
   const extensions = listExtensions(cwd);

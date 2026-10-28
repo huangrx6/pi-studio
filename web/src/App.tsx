@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowUp, Check, ChevronDown, ChevronLeft, ChevronsDown, ChevronsUp, Clock3, Cpu, FileCode2, FileText, Folder, FolderOpen, Info,
+  ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Clock3, Cpu, FileCode2, FileText, Folder, FolderOpen, Info,
   AppWindow, Columns2, Compass, Eye, Globe2, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelLeft, PanelRight, Pencil, Plus, Plug, RotateCw, Search, Settings, SquarePen, Terminal, Trash2, X,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
 import { Select } from './components/Select';
+import { DetailDialog } from './components/DetailDialog';
 import { ProviderIcon } from './components/ProviderIcon';
 import { SettingsDialog } from './components/SettingsDialog';
 import { ModelPicker } from './components/ModelPicker';
@@ -48,6 +49,10 @@ type SettingsSnapshot = {
   modelsPath: string;
   model: { modelRef: string; label: string };
 };
+
+type SkillInfo = SettingsSnapshot['skills'][number];
+type McpInfo = SettingsSnapshot['mcp'][number];
+type SkillDetailState = SkillInfo & { baseDir: string };
 
 function filesize(size: number): string {
   if (!size) return '';
@@ -154,6 +159,13 @@ export function App() {
   const [fileBusy, setFileBusy] = useState(false);
   const [fileMenuOpen, setFileMenuOpen] = useState(false);
   const [fileApps, setFileApps] = useState<Array<{ name: string; path: string; icon?: string }>>([]);
+  const [skillDetail, setSkillDetail] = useState<SkillDetailState | null>(null);
+  const [skillEntries, setSkillEntries] = useState<Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }>>([]);
+  const [skillTreePath, setSkillTreePath] = useState('');
+  const [skillFile, setSkillFile] = useState<PanelFile | null>(null);
+  const [skillBusy, setSkillBusy] = useState(false);
+  const [skillDetailError, setSkillDetailError] = useState<string | null>(null);
+  const [mcpDetail, setMcpDetail] = useState<McpInfo | null>(null);
   const fileActionsRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -820,6 +832,61 @@ export function App() {
     return <FileText />;
   }
 
+  async function loadSkillTree(baseDir: string, nextPath: string) {
+    setSkillBusy(true);
+    setSkillDetailError(null);
+    try {
+      const result = await window.piApi.files(baseDir, nextPath);
+      setSkillTreePath(result.path);
+      setSkillEntries(result.entries);
+    } catch (error) { setSkillDetailError(error instanceof Error ? error.message : String(error)); }
+    finally { setSkillBusy(false); }
+  }
+
+  function openSkillDetail(skill: SkillInfo) {
+    const baseDir = skill.path.slice(0, skill.path.lastIndexOf('/')) || '/';
+    setSkillDetail({ ...skill, baseDir });
+    setSkillFile(null);
+    setSkillTreePath('');
+    setSkillEntries([]);
+    void loadSkillTree(baseDir, '');
+  }
+
+  async function openSkillFile(target: string) {
+    if (!skillDetail) return;
+    setSkillBusy(true);
+    setSkillDetailError(null);
+    try { setSkillFile(await window.piApi.file(skillDetail.baseDir, target)); }
+    catch (error) { setSkillDetailError(error instanceof Error ? error.message : String(error)); }
+    finally { setSkillBusy(false); }
+  }
+
+  async function removeSkillFromDetail() {
+    if (!skillDetail) return;
+    if (!window.confirm(`删除技能「${skillDetail.name}」？这会删除技能目录。`)) return;
+    setSettingsBusy(true);
+    setSkillDetailError(null);
+    try {
+      setSettingsData(await window.piApi.removeSkill(skillDetail.path));
+      closeSkillDetail();
+    } catch (error) { setSkillDetailError(error instanceof Error ? error.message : String(error)); }
+    finally { setSettingsBusy(false); }
+  }
+
+  function closeSkillDetail() {
+    setSkillDetail(null);
+    setSkillFile(null);
+    setSkillEntries([]);
+    setSkillDetailError(null);
+  }
+
+  useEffect(() => {
+    if (!skillDetail && !mcpDetail) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { setSkillDetail(null); setMcpDetail(null); } };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [skillDetail, mcpDetail]);
+
   async function showFileActions() {
     if (!file || !workspace) return;
     if (fileMenuOpen) { setFileMenuOpen(false); return; }
@@ -1172,11 +1239,13 @@ export function App() {
             {settingsData && settingsTab === 'mcp' && (
               <section className="settings-card">
                 <div className="settings-card-head"><div><h2>MCP 服务器 <span className="count-badge">{settingsData.mcp.length}</span></h2><p>管理外部工具与数据连接。</p></div><button className="settings-add-button" aria-label="添加 MCP 服务器" onClick={() => void openEditor('mcp')}>添加</button></div>
-                <div className="mcp-settings-list">
-                  {settingsData.mcp.map((server) => <div className="mcp-settings-row" key={server.name}>
-                    <div className="provider-main"><strong>{server.name}</strong>{server.description && <p>{server.description}</p>}<span title={server.target}>{server.transport} · {server.target}</span></div>
-                    <div className="row-actions"><button className="icon-button row-edit" aria-label={`编辑 ${server.name}`} title="编辑" onClick={() => void openEditor('mcp', server.name)}><Pencil /></button><span className={`resource-status ${server.enabled ? 'is-on' : ''}`}>{server.enabled ? '已启用' : '已停用'}</span><button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`删除 MCP ${server.name}`} title="删除" onClick={() => void deleteMcp(server.name)}><Trash2 /></button><button className={`switch ${server.enabled ? 'is-on' : ''}`} role="switch" aria-checked={server.enabled} disabled={settingsBusy} onClick={() => void toggleMcp(server.name, !server.enabled)} aria-label={`${server.name} ${server.enabled ? '禁用' : '启用'}`}><span /></button></div>
-                  </div>)}
+                <div className="mcp-card-grid">
+                  {settingsData.mcp.map((server) => <article className={`mcp-card ${server.enabled ? 'is-on' : ''}`} key={server.name}>
+                    <div className="mcp-card-head"><span className="mcp-card-icon"><Plug /></span><div className="provider-main"><strong>{server.name}</strong><span>{server.transport === 'stdio' ? '本地进程' : 'HTTP 服务'}</span></div><button className={`switch ${server.enabled ? 'is-on' : ''}`} role="switch" aria-checked={server.enabled} disabled={settingsBusy} onClick={() => void toggleMcp(server.name, !server.enabled)} aria-label={`${server.name} ${server.enabled ? '禁用' : '启用'}`}><span /></button></div>
+                    <p className="mcp-card-description">{server.description || '没有填写描述'}</p>
+                    <code className="mcp-card-target" title={server.target}>{server.target}</code>
+                    <div className="mcp-card-footer"><span className={`resource-status ${server.enabled ? 'is-on' : ''}`}>{server.enabled ? '已启用' : '已停用'}</span><button className="settings-text-button" onClick={() => setMcpDetail(server)}>查看详情</button><button className="icon-button row-edit" aria-label={`编辑 ${server.name}`} title="编辑" onClick={() => void openEditor('mcp', server.name)}><Pencil /></button><button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`删除 MCP ${server.name}`} title="删除" onClick={() => void deleteMcp(server.name)}><Trash2 /></button></div>
+                  </article>)}
                   {settingsData.mcp.length === 0 && <div className="settings-empty">还没有 MCP 服务器。</div>}
                 </div>
                 <p className="settings-footnote">更改会在新会话中生效。</p>
@@ -1184,13 +1253,18 @@ export function App() {
             )}
             {settingsData && settingsTab === 'skills' && (
               <section className="settings-card">
-                <div className="settings-card-head"><div><h2>技能 <span className="count-badge">{settingsData.skills.length}</span></h2><p>为 Pi 添加可复用的工作方法。</p></div><button className="settings-add-button" aria-label="添加技能" onClick={() => void openEditor('skill')}>添加</button></div>
-                {(['user', 'project', 'temporary'] as const).map((scope) => {
-                  const items = settingsData.skills.filter((skill) => skill.scope === scope);
-                  const label = scope === 'user' ? '全局' : scope === 'project' ? '项目' : '其他';
-                  return <div className="skill-group" key={scope}><div className="skill-group-title">{label}<span>{items.length}</span></div>{items.map((skill) => <div className="skill-settings-row" key={skill.path}><FileCode2 /><div><strong>{skill.name}</strong><p>{skill.description}</p><span>{skill.path}</span></div><button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`删除技能 ${skill.name}`} title="删除" onClick={() => void deleteSkill(skill.path, skill.name)}><Trash2 /></button></div>)}{items.length === 0 && <div className="settings-empty settings-empty--small">暂无{label}技能</div>}</div>;
-                })}
-                <p className="settings-footnote">添加或修改技能后，在新会话中使用。</p>
+                <div className="settings-card-head"><div><h2>全局技能 <span className="count-badge">{settingsData.skills.length}</span></h2><p>只展示 ~/.agents/skills 和 Pi agent skills，不读取项目目录。</p></div><button className="settings-add-button" aria-label="添加全局技能" onClick={() => void openEditor('skill')}>添加</button></div>
+                <div className="skill-card-grid">
+                  {settingsData.skills.map((skill) => <article className="skill-card" key={skill.path}>
+                    <button className="skill-card-main" onClick={() => openSkillDetail(skill)}>
+                      <span className="skill-card-icon"><FileCode2 /></span>
+                      <span className="skill-card-body"><strong>{skill.name}</strong><span>{skill.description}</span><small>{skill.path}</small></span>
+                      <ChevronRight />
+                    </button>
+                  </article>)}
+                  {settingsData.skills.length === 0 && <div className="settings-empty">还没有全局技能。</div>}
+                </div>
+                <p className="settings-footnote">技能修改后在新会话中使用。</p>
               </section>
             )}
             {settingsData && settingsTab === 'extensions' && (
@@ -1245,9 +1319,43 @@ export function App() {
               <label className="field-wide">环境变量<textarea aria-label="环境变量" value={mcpDraft.env} onChange={(event) => setMcpDraft({ ...mcpDraft, env: event.target.value })} rows={3} placeholder={'TOKEN=...\nBASE_URL=https://...'} /><small>每行一个 KEY=value，留空表示不设置。</small></label>
             </div>}
             {editor.kind === 'package' && <div className="settings-form-grid"><label className="field-wide">扩展包地址<input aria-label="扩展包地址" autoFocus required value={packageDraft} onChange={(event) => setPackageDraft(event.target.value)} placeholder="npm:pi-tools 或 git:github.com/user/pi-plugin" /><small>扩展拥有本机访问权限，请确认来源可信。</small></label></div>}
-            {(editor.kind === 'skill' || editor.kind === 'extension') && <div className="resource-import"><span className="field-label">生效范围</span><div className="scope-options"><label className={resourceScope === 'user' ? 'is-selected' : ''}><input type="radio" name="scope" checked={resourceScope === 'user'} onChange={() => setResourceScope('user')} /><div><strong>全局</strong><span>在所有工作区中使用</span></div></label><label className={resourceScope === 'project' ? 'is-selected' : ''}><input type="radio" name="scope" disabled={!workspace} checked={resourceScope === 'project'} onChange={() => setResourceScope('project')} /><div><strong>当前项目</strong><span>{activeWorkspace?.name || '请先选择工作区'}</span></div></label></div><p className="import-note">{editor.kind === 'skill' ? '请选择包含 SKILL.md 的技能文件夹。' : '请选择扩展文件，或包含 index.ts / index.js 的文件夹。'}</p></div>}
+            {(editor.kind === 'skill' || editor.kind === 'extension') && <div className="resource-import"><span className="field-label">生效范围</span><div className="scope-options"><label className={resourceScope === 'user' ? 'is-selected' : ''}><input type="radio" name="scope" checked={resourceScope === 'user'} onChange={() => setResourceScope('user')} /><div><strong>全局</strong><span>在所有工作区中使用</span></div></label>{editor.kind === 'extension' && <label className={resourceScope === 'project' ? 'is-selected' : ''}><input type="radio" name="scope" disabled={!workspace} checked={resourceScope === 'project'} onChange={() => setResourceScope('project')} /><div><strong>当前项目</strong><span>{activeWorkspace?.name || '请先选择工作区'}</span></div></label>}</div><p className="import-note">{editor.kind === 'skill' ? '请选择包含 SKILL.md 的技能文件夹。' : '请选择扩展文件，或包含 index.ts / index.js 的文件夹。'}</p></div>}
           </SettingsDialog>}
         </div>
+      )}
+
+      {mcpDetail && (
+        <DetailDialog className="detail-dialog--small" onClose={() => setMcpDetail(null)}>
+            <header className="detail-header"><div className="detail-heading"><span className="detail-icon"><Plug /></span><div><h2>{mcpDetail.name}</h2><p>{mcpDetail.transport === 'stdio' ? '本地进程 · stdio' : 'HTTP 服务'}</p></div></div><button className="icon-button" aria-label="关闭详情" onClick={() => setMcpDetail(null)}><X /></button></header>
+            <div className="detail-body">
+              <dl className="detail-list">
+                <div><dt>状态</dt><dd>{mcpDetail.enabled ? '已启用' : '已停用'}</dd></div>
+                <div><dt>传输</dt><dd>{mcpDetail.transport}</dd></div>
+                <div><dt>目标</dt><dd><code>{mcpDetail.target}</code></dd></div>
+                <div><dt>描述</dt><dd>{mcpDetail.description || '没有填写描述'}</dd></div>
+              </dl>
+            </div>
+            <footer className="detail-footer"><button className="settings-text-button is-danger" onClick={() => { const name = mcpDetail.name; setMcpDetail(null); void deleteMcp(name); }}>删除</button><span /><button className="settings-outline" onClick={() => setMcpDetail(null)}>关闭</button><button className="settings-outline" onClick={() => { const name = mcpDetail.name; setMcpDetail(null); void openEditor('mcp', name); }}><Pencil />编辑</button></footer>
+        </DetailDialog>
+      )}
+
+      {skillDetail && (
+        <DetailDialog className="skill-detail-dialog" onClose={closeSkillDetail}>
+            <header className="detail-header"><div className="detail-heading"><span className="detail-icon is-skill"><FileCode2 /></span><div><h2>{skillDetail.name}</h2><p>{skillDetail.description}</p></div></div><button className="icon-button" aria-label="关闭技能详情" onClick={closeSkillDetail}><X /></button></header>
+            <div className="skill-detail-path"><code>{skillDetail.path}</code></div>
+            {skillDetailError && <div className="detail-error">{skillDetailError}</div>}
+            <div className="skill-detail-body">
+              <aside className="skill-file-tree">
+                <div className="skill-tree-toolbar"><button className="icon-button" aria-label="返回上级目录" disabled={!skillTreePath} onClick={() => void loadSkillTree(skillDetail.baseDir, skillTreePath.split('/').slice(0, -1).join('/'))}><ChevronLeft /></button><span>{skillTreePath ? `/${skillTreePath}` : '/'}</span><button className="icon-button" aria-label="刷新技能文件" onClick={() => void loadSkillTree(skillDetail.baseDir, skillTreePath)}><RotateCw /></button></div>
+                <div className="skill-tree-list">{skillEntries.map((entry) => <button key={entry.path} className={`file-row ${entry.type === 'directory' ? 'is-directory' : ''}`} onClick={() => entry.type === 'directory' ? void loadSkillTree(skillDetail.baseDir, entry.path) : void openSkillFile(entry.path)}>{entry.type === 'directory' ? <Folder /> : <FileText />}<span>{entry.name}</span>{entry.type === 'file' && <small>{filesize(entry.size)}</small>}{entry.type === 'directory' && <ChevronRight />}</button>)}</div>
+              </aside>
+              <section className="skill-file-preview">
+                {skillFile ? <><div className="file-toolbar"><span className="path-label">{skillFile.path}</span><small>{filesize(skillFile.size)}</small></div>{skillFile.binary ? <div className="panel-empty"><FileText /><strong>无法预览此文件</strong></div> : <pre className="detail-code">{skillFile.text}</pre>}</> : <div className="panel-empty"><FileCode2 /><strong>选择一个文件</strong><span>查看技能目录下的 SKILL.md 和配套文件。</span></div>}
+                {skillBusy && <div className="detail-loading"><LoaderCircle className="spin" />正在读取…</div>}
+              </section>
+            </div>
+            <footer className="detail-footer"><button className="settings-text-button is-danger" disabled={settingsBusy} onClick={() => void removeSkillFromDetail()}>删除技能</button><span /><button className="settings-outline" onClick={closeSkillDetail}>关闭</button></footer>
+        </DetailDialog>
       )}
 
       {filesOpen && (
@@ -1314,3 +1422,4 @@ export function App() {
     </div>
   );
 }
+
