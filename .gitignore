@@ -23,6 +23,9 @@ Thumbs.db
 
 # Local QA scratch output (not part of the docs)
 screenshots/ui-refinement/
+screenshots/chat-review/
+screenshots/popovers/
+screenshots/streaming-trace/
 
 # Local-only symlink so docs/index.html previews offline; Pages CI copies the real dir
 docs/screenshots
