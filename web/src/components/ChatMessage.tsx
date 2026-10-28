@@ -93,7 +93,7 @@ function activityColor(entry: ActivityEntry): string {
   return 'is-note';
 }
 
-export function AssistantTurnView({ messages, toolResults, busy }: { messages: ChatMessage[]; toolResults: Map<string, ChatMessage>; busy: boolean }) {
+export function AssistantTurnView({ messages, toolResults, busy, id }: { messages: ChatMessage[]; toolResults: Map<string, ChatMessage>; busy: boolean; id?: string }) {
   const live = busy && messages.some((message) => message.streaming);
   const [activityOpen, setActivityOpen] = useState(live);
   useEffect(() => { if (live) setActivityOpen(true); }, [live]);
@@ -112,7 +112,7 @@ export function AssistantTurnView({ messages, toolResults, busy }: { messages: C
   const thinkingCount = messages.reduce((total, message) => total + message.content.filter((block) => block.type === 'thinking').length, 0);
   const latest = messages[messages.length - 1];
   const error = messages.find((message) => message.errorMessage)?.errorMessage;
-  return <div className={`assistant-turn ${live ? 'is-live' : ''}`}>
+  return <div id={id} className={`assistant-turn ${live ? 'is-live' : ''}`}>
     <div className="assistant-turn-rail"><span className="assistant-orb">π</span></div>
     <div className="assistant-turn-main">
       <div className="assistant-turn-head">
@@ -158,8 +158,8 @@ export function AssistantTurnView({ messages, toolResults, busy }: { messages: C
   </div>;
 }
 
-export function ChatMessageView({ message }: { message: ChatMessage }) {
+export function ChatMessageView({ message, id }: { message: ChatMessage; id?: string }) {
   if (message.role !== 'user') return null;
   const text = message.content.filter((block) => block.type === 'text').map((block) => block.type === 'text' ? block.text : '').join('\n');
-  return <div className="message user"><div className="user-bubble">{text}<MessageImages blocks={message.content} /></div></div>;
+  return <div id={id} className="message user"><div className="user-bubble">{text}<MessageImages blocks={message.content} /></div></div>;
 }

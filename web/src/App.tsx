@@ -117,6 +117,8 @@ export function App() {
   const [workspaces, setWorkspaces] = useState<PiWorkspace[]>([]);
   const [stateLoading, setStateLoading] = useState(true);
   const [sessionLoading, setSessionLoading] = useState(false);
+  const [outlineActive, setOutlineActive] = useState(0);
+  const [outlineHover, setOutlineHover] = useState<number | null>(null);
   const [workspace, setWorkspace] = useState('');
   const [modelSelection, setModelSelection] = useState<ModelSelection>({ modelRef: '', label: '', thinkingLevel: 'default', thinkingLevels: ['default'], effectiveThinkingLevel: 'off', defaultThinkingLevel: 'off' });
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(readStored<string[]>(UI_KEYS.expanded, [])));
@@ -569,6 +571,11 @@ export function App() {
   }, [messages, busy]);
 
   useEffect(() => {
+    const frame = requestAnimationFrame(syncOutlineActive);
+    return () => cancelAnimationFrame(frame);
+  }, [messages.length, session?.id, filesOpen]);
+
+  useEffect(() => {
     if (filesOpen && workspace) void loadTree('');
   }, [filesOpen, workspace]);
 
@@ -817,6 +824,28 @@ export function App() {
     return () => document.removeEventListener('pointerdown', onPointer);
   }, [composerMenu]);
 
+  function syncOutlineActive() {
+    const container = scrollRef.current;
+    if (!container) return;
+    const top = container.getBoundingClientRect().top + 14;
+    let next = 0;
+    for (let index = 0; index < outlineItems.length; index += 1) {
+      const node = document.getElementById(outlineItems[index].id);
+      if (node && node.getBoundingClientRect().top <= top) next = index;
+    }
+    setOutlineActive((current) => current === next ? current : next);
+  }
+
+  function jumpToOutline(index: number) {
+    const item = outlineItems[index];
+    const container = scrollRef.current;
+    const node = item ? document.getElementById(item.id) : null;
+    if (!item || !container || !node) return;
+    const delta = node.getBoundingClientRect().top - container.getBoundingClientRect().top;
+    container.scrollTo({ top: container.scrollTop + delta - 12, behavior: 'smooth' });
+    setOutlineActive(index);
+  }
+
   async function send() {
     const text = prompt.trim();
     if (!text || busy) return;
@@ -1020,6 +1049,12 @@ export function App() {
     if (last?.kind === 'assistant') last.messages.push(message);
     else transcriptTurns.push({ kind: 'assistant', messages: [message] });
   }
+  const outlineItems = transcriptTurns.flatMap((turn, index) => {
+    if (turn.kind !== 'user') return [];
+    const text = turn.message.content.filter((block) => block.type === 'text').map((block) => block.type === 'text' ? block.text : '').join(' ').replace(/\s+/g, ' ').trim();
+    if (!text) return [];
+    return [{ id: `chat-turn-${index}`, text, timestamp: turn.message.timestamp }];
+  });
   const composerCommandOptions = composerMenu?.kind === 'slash'
     ? composerCommands.filter((command) => `${command.name} ${command.description}`.toLowerCase().includes(composerMenu.query.toLowerCase()))
     : [];
@@ -1339,13 +1374,13 @@ export function App() {
           <span className="chat-tabs-note">{messages.filter((message) => message.role !== 'toolResult').length > 0 ? `${messages.filter((message) => message.role !== 'toolResult').length} 条消息` : '从一个想法开始'}</span>
         </div>}
 
-        {!isNewConversation && <div className="chat-scroll" ref={scrollRef}>
+        {!isNewConversation && <div className="chat-scroll" ref={scrollRef} onScroll={syncOutlineActive}>
           <div className="chat-column">
             {messages.length > 0 && (
               <div className="messages">
                 {transcriptTurns.map((turn, index) => turn.kind === 'user'
-                  ? <ChatMessageView key={turn.message.timestamp ?? `user-${index}`} message={turn.message} />
-                  : <AssistantTurnView key={turn.messages[0]?.timestamp ?? `assistant-${index}`} messages={turn.messages} toolResults={toolResultMap} busy={busy} />)}
+                  ? <ChatMessageView key={turn.message.timestamp ?? `user-${index}`} id={`chat-turn-${index}`} message={turn.message} />
+                  : <AssistantTurnView key={turn.messages[0]?.timestamp ?? `assistant-${index}`} id={`chat-turn-${index}`} messages={turn.messages} toolResults={toolResultMap} busy={busy} />)}
                 {busy && !messages.some((message) => message.role === 'assistant' && message.streaming) && (
                   <div className="thinking"><span /><span /><span />正在思考</div>
                 )}
@@ -1355,6 +1390,26 @@ export function App() {
           </div>
         </div>}
 
+        {!settingsOpen && !filesOpen && !isNewConversation && outlineItems.length > 1 && (
+          <nav className="conversation-outline" aria-label="对话大纲" onMouseLeave={() => setOutlineHover(null)}>
+            <div className="outline-track">
+              {outlineItems.map((item, index) => <button
+                type="button"
+                key={item.id}
+                className={`outline-tick ${index === outlineActive ? 'is-active' : ''}`}
+                aria-label={`跳转到第 ${index + 1} 条提问`}
+                title={item.text.slice(0, 100)}
+                onMouseEnter={() => setOutlineHover(index)}
+                onFocus={() => setOutlineHover(index)}
+                onClick={() => jumpToOutline(index)}
+              ><span className="outline-line" /></button>)}
+            </div>
+            {outlineHover !== null && outlineItems[outlineHover] && <div className="outline-preview" style={{ top: `${Math.min(86, Math.max(12, (outlineHover / Math.max(1, outlineItems.length - 1)) * 100))}%` }}>
+              <div className="outline-preview-role">你 · {outlineItems[outlineHover].timestamp ? new Date(outlineItems[outlineHover].timestamp as number).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}<span>{outlineHover + 1} / {outlineItems.length}</span></div>
+              <p>{outlineItems[outlineHover].text}</p>
+            </div>}
+          </nav>
+        )}
         <div className="composer-dock">
           {isNewConversation && <div className="new-conversation-intro">
             <span className="new-conversation-context" title={workspace}>{activeWorkspace?.name || (workspace ? workspace.split('/').pop() : 'Pi Studio')}</span>
