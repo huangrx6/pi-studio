@@ -1091,3 +1091,7 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 .chat-loading-line { position: absolute; z-index: 12; top: 0; left: 0; right: 0; height: 2px; opacity: 0; transform: scaleX(.2); transform-origin: left; background: linear-gradient(90deg, transparent, var(--accent), #c7a46a, transparent); transition: opacity .15s ease; pointer-events: none; }
 .chat-loading-line.is-visible { opacity: 1; animation: chat-loading 1.2s ease-in-out infinite; }
 @keyframes chat-loading { 0% { transform: translateX(-45%) scaleX(.35); } 50% { transform: translateX(0) scaleX(.7); } 100% { transform: translateX(45%) scaleX(.35); } }
+
+/* Put the sidebar toggle, conversation header and header action on one optical line. */
+.sidebar-top-toggle { top: 21px; }
+.chat-actions { margin-right: -8px; }
