@@ -151,6 +151,7 @@ export function App() {
   const [panelTabs, setPanelTabs] = useState<PanelTab[]>([{ id: 'start', kind: 'start', title: '开始' }]);
   const [activePanelTabId, setActivePanelTabId] = useState('start');
   const [tabDropTarget, setTabDropTarget] = useState<string | null>(null);
+  const panelTabsRef = useRef<HTMLDivElement>(null);
   const tabDragRef = useRef<string | null>(null);
   const [panelFullscreen, setPanelFullscreen] = useState(false);
   const [panelEntered, setPanelEntered] = useState(false);
@@ -540,6 +541,32 @@ export function App() {
   useEffect(() => {
     if (filesOpen && workspace) void loadTree('');
   }, [filesOpen, workspace]);
+
+  useEffect(() => {
+    const root = panelTabsRef.current;
+    if (!root) return;
+    const active = root.querySelector<HTMLElement>('.panel-tab.is-active');
+    if (!active) return;
+    const rootRect = root.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+    const left = activeRect.left - rootRect.left + root.scrollLeft;
+    const right = left + activeRect.width;
+    if (left < root.scrollLeft) root.scrollTo({ left, behavior: 'smooth' });
+    else if (right > root.scrollLeft + root.clientWidth) root.scrollTo({ left: right - root.clientWidth, behavior: 'smooth' });
+  }, [activePanelTabId, panelTabs.length, filesOpen, panelSplit]);
+
+  useEffect(() => {
+    const root = panelTabsRef.current;
+    if (!root) return;
+    const onWheel = (event: WheelEvent) => {
+      if (root.scrollWidth <= root.clientWidth) return;
+      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+      event.preventDefault();
+      root.scrollLeft += event.deltaY;
+    };
+    root.addEventListener('wheel', onWheel, { passive: false });
+    return () => root.removeEventListener('wheel', onWheel);
+  }, [filesOpen, panelTabs.length]);
 
   const activeWorkspace = useMemo(
     () => workspaces.find((item) => item.cwd === workspace),
@@ -1364,7 +1391,7 @@ export function App() {
         <aside className={`file-panel ${panelEntered ? 'is-open' : ''} ${panelFullscreen ? 'is-fullscreen' : ''} ${panelSplit ? 'is-split' : ''}`}>
           <div className="file-panel-inner">
           <div className="panel-tabbar">
-            <div className="panel-tabs" role="tablist" aria-label="右侧面板标签">
+            <div className="panel-tabs" ref={panelTabsRef} role="tablist" aria-label="右侧面板标签">
               {panelTabs.map((tab) => <div
                 key={tab.id}
                 role="tab"

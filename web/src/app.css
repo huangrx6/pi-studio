@@ -840,3 +840,8 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 .detail-dialog::backdrop { background: rgb(20 28 42 / 28%); backdrop-filter: blur(2px); }
 
 .detail-overlay { z-index: 200; }
+
+/* Tabs flow horizontally by wheel; no rail divider, just breathing room. */
+.panel-tabbar { border-bottom: 0; padding-bottom: 0; }
+.panel-body .file-toolbar { border-top: 0; }
+.panel-tabs { overscroll-behavior-x: contain; }
