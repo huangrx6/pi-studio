@@ -1270,3 +1270,11 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 .error-card p { margin: 7px 0 0; color: #9a6b61; font: 11px/1.65 var(--mono); overflow-wrap: anywhere; }
 
 .composer-option-icon.is-directory { color: #a1742e; background: #fbf3e5; }
+
+/* Native adaptation of Pi's extension footer + status cells. */
+.extension-status-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; width: 100%; max-width: var(--content); margin: 6px auto 0; color: #8d98a8; }
+.extension-footer-line { flex: 1 1 100%; min-width: 0; overflow: hidden; color: #8995a5; font: 10px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.extension-status-chip { max-width: 300px; overflow: hidden; padding: 2px 6px; border: 1px solid #e9edf3; border-radius: 4px; background: #f8fafc; color: #8793a3; font: 9px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.extension-toast { position: fixed; z-index: 210; left: 50%; bottom: 138px; max-width: min(520px, 86vw); padding: 9px 13px; transform: translateX(-50%); border: 1px solid #e1e7ef; border-radius: 8px; background: rgb(255 255 255 / 97%); box-shadow: 0 10px 30px rgb(28 39 58 / 13%); color: #5f6c7d; font-size: 11px; line-height: 1.55; }
+.extension-toast.is-warning { border-color: #eee1c8; background: #fffcf5; color: #8b713b; }
+.extension-toast.is-error { border-color: #eeddd8; background: #fffaf8; color: #9b5a4e; }

@@ -43,6 +43,10 @@ contextBridge.exposeInMainWorld('piApi', {
   },
   setModel: (modelRef, cwd) => ipcRenderer.invoke('pi:set-model', modelRef, cwd),
   setThinkingLevel: (payload) => ipcRenderer.invoke('pi:set-thinking-level', payload),
+  extensionState: (sessionId) => ipcRenderer.invoke('pi:extension-state', sessionId),
+  onExtensionStatus: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:extension-status', handler); return () => ipcRenderer.removeListener('pi:extension-status', handler); },
+  onExtensionFooter: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:extension-footer', handler); return () => ipcRenderer.removeListener('pi:extension-footer', handler); },
+  onExtensionNotify: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:extension-notify', handler); return () => ipcRenderer.removeListener('pi:extension-notify', handler); },
   onPrompt: (listener) => {
     const handler = (_event, payload) => listener(payload);
     ipcRenderer.on('pi:prompt-event', handler);

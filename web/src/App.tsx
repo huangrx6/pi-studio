@@ -129,6 +129,9 @@ export function App() {
   const [stateLoading, setStateLoading] = useState(true);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
+  const [extensionStatuses, setExtensionStatuses] = useState<Record<string, string>>({});
+  const [extensionFooter, setExtensionFooter] = useState('');
+  const [extensionToast, setExtensionToast] = useState<{ message: string; type: 'info' | 'warning' | 'error' } | null>(null);
   const [outlineActive, setOutlineActive] = useState(0);
   const [outlineHover, setOutlineHover] = useState<number | null>(null);
   const [workspace, setWorkspace] = useState('');
@@ -543,6 +546,48 @@ export function App() {
   useEffect(() => {
     if (!settingsOpen) settingsReturnFocusRef.current?.focus();
   }, [settingsOpen]);
+
+  useEffect(() => {
+    setExtensionStatuses({});
+    setExtensionFooter('');
+  }, [session?.id]);
+
+  useEffect(() => {
+    if (!session?.id) return;
+    let cancelled = false;
+    void window.piApi.extensionState(session.id).then((state) => {
+      if (cancelled) return;
+      setExtensionStatuses(Object.fromEntries(state.statuses));
+      setExtensionFooter(state.footer);
+    }).catch(() => { /* no extension state yet */ });
+    return () => { cancelled = true; };
+  }, [session?.id]);
+
+  useEffect(() => {
+    const offStatus = window.piApi.onExtensionStatus((event) => {
+      if (!session?.id || event.sessionId !== session.id) return;
+      setExtensionStatuses((current) => {
+        const next = { ...current };
+        if (!event.text) delete next[event.key]; else next[event.key] = event.text;
+        return next;
+      });
+    });
+    const offFooter = window.piApi.onExtensionFooter((event) => {
+      if (!session?.id || event.sessionId !== session.id) return;
+      setExtensionFooter(event.text);
+    });
+    const offNotify = window.piApi.onExtensionNotify((event) => {
+      if (!session?.id || event.sessionId !== session.id) return;
+      setExtensionToast({ message: event.message, type: event.type });
+    });
+    return () => { offStatus(); offFooter(); offNotify(); };
+  }, [session?.id]);
+
+  useEffect(() => {
+    if (!extensionToast) return;
+    const timer = window.setTimeout(() => setExtensionToast(null), 4200);
+    return () => window.clearTimeout(timer);
+  }, [extensionToast]);
 
   useEffect(() => window.piApi.onPrompt((event) => {
     if (event.requestId !== requestRef.current) return;
@@ -1600,6 +1645,11 @@ export function App() {
             </div>
             </div>
           </div>
+          {(extensionFooter || Object.keys(extensionStatuses).length > 0) && <div className="extension-status-bar" aria-label="扩展状态">
+            {extensionFooter && <div className="extension-footer-line" title={extensionFooter}>{extensionFooter}</div>}
+            {Object.entries(extensionStatuses).slice(0, 8).map(([key, text]) => <span className="extension-status-chip" key={key} title={key}>{text}</span>)}
+          </div>}
+          {extensionToast && <div className={`extension-toast is-${extensionToast.type}`} role="status">{extensionToast.message}</div>}
           <div className="composer-hint"><span>Pi Studio <span className="preview-badge">预览版</span></span><span className="composer-shortcuts"><kbd>/</kbd> 命令 <span className="hint-divider">·</span> <kbd>@</kbd> 文件</span><span><kbd>↵</kbd> 发送 <span className="hint-divider">·</span> <kbd>⇧ ↵</kbd> 换行</span></div>
           {isNewConversation && error && <div className="new-conversation-error error-card" role="alert"><strong>暂时无法完成操作</strong><p>{error}</p></div>}
         </div>

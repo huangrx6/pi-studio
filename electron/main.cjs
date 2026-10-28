@@ -22,6 +22,7 @@ const drafts = new Map();
 const diskSessions = new Map();
 const agentSessions = new Map();
 const detailCache = new Map();
+const extensionUIStates = new Map();
 let sessionsIndexedAt = 0;
 let sessionsIndexPromise;
 let runtimePromise;
@@ -46,6 +47,98 @@ function textOf(content) {
     .filter((block) => block && typeof block === 'object' && block.type === 'text' && typeof block.text === 'string')
     .map((block) => block.text)
     .join('');
+}
+
+function stripAnsi(value) {
+  return String(value ?? '').replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '');
+}
+
+function createExtensionUI(sessionId) {
+  const statuses = new Map();
+  const state = { statuses, footer: '', render: undefined };
+  extensionUIStates.set(sessionId, state);
+  let footerComponent;
+  const send = (channel, payload) => mainWindow?.webContents.send(channel, { sessionId, ...payload });
+  const renderFooter = () => {
+    if (!footerComponent) { state.footer = ''; send('pi:extension-footer', { text: '' }); return; }
+    try {
+      const line = stripAnsi(footerComponent.render(120)?.[0] || '');
+      state.footer = line;
+      send('pi:extension-footer', { text: line });
+    } catch { state.footer = ''; send('pi:extension-footer', { text: '' }); }
+  };
+  const stubTui = {
+    mode: 'regular',
+    terminal: { columns: 120, rows: 40 },
+    requestRender: renderFooter,
+    showOverlay: undefined,
+    addInputListener: undefined,
+  };
+  const theme = { fg: (_color, text) => text, bold: (text) => text, appearance: 'dark' };
+  const footerData = {
+    getExtensionStatuses: () => new Map(statuses),
+    onBranchChange: () => () => {},
+  };
+  const choose = async (title, options) => {
+    if (!mainWindow) return undefined;
+    const buttons = [...options.map(String), '取消'];
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: 'question', title: 'Pi Studio', message: stripAnsi(title), buttons,
+      defaultId: 0, cancelId: buttons.length - 1, noLink: true,
+    });
+    return result.response === buttons.length - 1 ? undefined : options[result.response];
+  };
+  const ui = {
+    select: choose,
+    async confirm(title, message) {
+      if (!mainWindow) return false;
+      const result = await dialog.showMessageBox(mainWindow, {
+        type: 'question', title: 'Pi Studio', message: stripAnsi(title), detail: stripAnsi(message),
+        buttons: ['取消', '确认'], defaultId: 1, cancelId: 0, noLink: true,
+      });
+      return result.response === 1;
+    },
+    async input() { return undefined; },
+    notify(message, type = 'info') { send('pi:extension-notify', { message: stripAnsi(message), type }); },
+    onTerminalInput() { return () => {}; },
+    setStatus(key, text) {
+      if (text === undefined || text === null || text === '') statuses.delete(key);
+      else statuses.set(key, stripAnsi(text));
+      send('pi:extension-status', { key, text: text === undefined || text === null ? '' : stripAnsi(text) });
+      renderFooter();
+    },
+    setWorkingMessage() {},
+    setWorkingVisible() {},
+    setWorkingIndicator() {},
+    setHiddenThinkingLabel() {},
+    setWidget() {},
+    setFooter(factory) {
+      try { footerComponent?.dispose?.(); } catch { /* old component */ }
+      footerComponent = undefined;
+      if (typeof factory === 'function') {
+        try { footerComponent = factory(stubTui, theme, footerData); }
+        catch (error) { send('pi:extension-notify', { message: `Footer 渲染失败：${error instanceof Error ? error.message : String(error)}`, type: 'warning' }); }
+      }
+      renderFooter();
+    },
+    setHeader() {},
+    setTitle() {},
+    async custom() { return undefined; },
+    pasteToEditor() {},
+    setEditorText() {},
+    getEditorText() { return ''; },
+    async editor() { return undefined; },
+    addAutocompleteProvider() {},
+    setEditorComponent() {},
+    getEditorComponent() { return undefined; },
+    theme,
+    getAllThemes() { return []; },
+    getTheme() { return undefined; },
+    setTheme() { return { success: false }; },
+    getToolsExpanded() { return false; },
+    setToolsExpanded() {},
+  };
+  return ui;
 }
 
 function walkJsonl(root) {
@@ -382,6 +475,9 @@ async function ensureAgent(id, manager, cwd) {
     sessionManager: manager,
     tools: ['read', 'grep', 'find', 'ls'],
   });
+  try {
+    await session.bindExtensions({ uiContext: createExtensionUI(id), mode: 'tui' });
+  } catch { /* extensions still work without a UI bridge */ }
   agentSessions.set(id, session);
   return session;
 }
@@ -683,6 +779,10 @@ app.whenReady().then(async () => {
     return { id, cwd: cwd || DEFAULT_CWD, title: '新会话', messages: [] };
   });
   ipcMain.handle('pi:session', async (_event, id) => detail(id));
+  ipcMain.handle('pi:extension-state', async (_event, sessionId) => {
+    const state = extensionUIStates.get(sessionId);
+    return state ? { statuses: [...state.statuses], footer: state.footer } : { statuses: [], footer: '' };
+  });
   ipcMain.handle('pi:composer-resources', async (_event, payload) => composerResources(payload || {}));
   ipcMain.handle('pi:search-files', async (_event, { cwd, query }) => searchWorkspaceFiles(cwd, query));
   ipcMain.handle('pi:pick-attachments', async (_event, payload) => pickAttachments(payload || {}));

@@ -79,6 +79,10 @@ declare global {
       onOpenSettings(listener: () => void): () => void;
       setModel(modelRef: string, cwd?: string): Promise<ModelSelection>;
       setThinkingLevel(payload: { modelRef: string; level: ThinkingLevel; cwd?: string }): Promise<ModelSelection>;
+      extensionState(sessionId: string): Promise<{ statuses: Array<[string, string]>; footer: string }>;
+      onExtensionStatus(listener: (payload: { sessionId: string; key: string; text: string }) => void): () => void;
+      onExtensionFooter(listener: (payload: { sessionId: string; text: string }) => void): () => void;
+      onExtensionNotify(listener: (payload: { sessionId: string; message: string; type: 'info' | 'warning' | 'error' }) => void): () => void;
       onPrompt(listener: (payload: { requestId: string; type: 'message_start' | 'message_update' | 'message_end' | 'retry-start' | 'retry-end' | 'done' | 'error'; message?: ChatMessage; error?: string; attempt?: number; maxAttempts?: number; delayMs?: number; success?: boolean; finalError?: string; errorMessage?: string }) => void): () => void;
     };
   }
