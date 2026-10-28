@@ -25,6 +25,8 @@ type CustomPanel = {
   title?: string;
   close?: { row: number; col: number } | null;
   offset?: { row: number; col: number } | null;
+  width?: number | string;
+  maxHeight?: number | string;
 };
 
 type DialogRequest = {
@@ -202,7 +204,12 @@ export function ExtensionCustomOverlay({ sessionId }: { sessionId: string }) {
   }, [panel?.id, sessionId]);
 
   if (!panel || panel.lines.length === 0) return null;
-  const card = <section className={`extension-custom-card ${panel.overlay ? '' : 'is-side'}`} role="dialog" aria-modal={panel.overlay} aria-label={panel.title || '扩展界面'}>
+  // overlayOptions 的列宽 / 最大高度；位置和锚点仍由桌面端决定。
+  const sizeStyle = {
+    ...(panel.width !== undefined ? { width: typeof panel.width === 'number' ? `min(${Math.max(320, panel.width * CELL + 40)}px, 92vw)` : panel.width } : {}),
+    ...(panel.maxHeight !== undefined ? { maxHeight: typeof panel.maxHeight === 'number' ? `${panel.maxHeight * LINE}px` : panel.maxHeight } : {}),
+  };
+  const card = <section className={`extension-custom-card ${panel.overlay ? '' : 'is-side'}`} style={sizeStyle} role="dialog" aria-modal={panel.overlay} aria-label={panel.title || '扩展界面'}>
       <header className="extension-custom-head">
         <strong>{panel.title || '扩展界面'}</strong>
         <button type="button" className="extension-custom-close" aria-label="关闭扩展界面" onClick={() => {

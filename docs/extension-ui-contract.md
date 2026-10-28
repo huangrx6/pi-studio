@@ -40,6 +40,7 @@ Pi Studio 不按扩展名写界面。扩展只使用 Pi 标准的 `ctx.ui` API�
 - custom 组件的 `keybindings.matches()` 覆盖 Pi TUI 常用动作（`tui.select.*`、`tui.input.*`、部分 `tui.editor.*`）；扩展自定义键位暂不生效。
 - `setEditorComponent`、`addAutocompleteProvider` 尚未接入桌面端。
 - `setWorkingIndicator` 目前只处理显隐，不支持自定义动画帧。
+- `custom` 的 `overlayOptions` 支持 `width` / `maxHeight`；`anchor`、`offset`、`margin` 仍由桌面端布局决定。
 
 ## 写扩展时的检查清单
 

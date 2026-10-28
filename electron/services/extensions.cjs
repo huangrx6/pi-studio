@@ -252,14 +252,18 @@ function createExtensionUI(sessionId) {
         const id = randomUUID();
         let done = false;
         state.customHost?.dispose?.();
+        // 扩展可以指定终端列宽 / 最大高度；桌面端据此换算像素，位置仍由宿主决定。
+        const overlayOptions = (typeof options.overlayOptions === 'function' ? options.overlayOptions() : options.overlayOptions) || {};
+        const width = typeof overlayOptions.width === 'number' || typeof overlayOptions.width === 'string' ? overlayOptions.width : undefined;
+        const maxHeight = typeof overlayOptions.maxHeight === 'number' || typeof overlayOptions.maxHeight === 'string' ? overlayOptions.maxHeight : undefined;
         const host = createSurfaceHost((snapshot) => {
           if (done) return;
           const panel = snapshot.raw.length > 0 ? normalizePanel(snapshot.raw) : null;
-          state.custom = panel ? { id, ...panel, overlay: Boolean(options.overlay), interactive: snapshot.interactive } : null;
+          state.custom = panel ? { id, ...panel, overlay: Boolean(options.overlay), width, maxHeight, interactive: snapshot.interactive } : null;
           publishCustom();
         });
         state.customHost = host;
-        state.custom = { id, lines: [], interactive: false, overlay: Boolean(options.overlay) };
+        state.custom = { id, lines: [], overlay: Boolean(options.overlay), width, maxHeight, interactive: false };
         publishCustom();
         const finish = (result) => {
           if (done) return;

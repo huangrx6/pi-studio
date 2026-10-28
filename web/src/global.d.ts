@@ -31,6 +31,8 @@ interface ExtensionCustomPanel {
   title?: string;
   close?: { row: number; col: number } | null;
   offset?: { row: number; col: number } | null;
+  width?: number | string;
+  maxHeight?: number | string;
   contentWidth?: number;
 }
 
