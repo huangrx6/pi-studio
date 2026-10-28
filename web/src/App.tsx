@@ -883,9 +883,9 @@ export function App() {
       {settingsOpen && (
         <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="设置">
           <aside className="settings-nav">
-            <div className="settings-nav-head"><span>设置</span><button autoFocus className="icon-button" aria-label="关闭设置" title="返回对话 · Esc" onClick={() => setSettingsOpen(false)}><X /></button></div>
+            <button autoFocus className="settings-back-button" onClick={() => setSettingsOpen(false)}><ChevronLeft /><span>返回对话</span><kbd>Esc</kbd></button>
+            <div className="settings-nav-head"><span>设置</span></div>
             {settingsPages.map((page) => <button key={page.id} className={`settings-nav-row ${settingsTab === page.id ? 'is-active' : ''}`} aria-current={settingsTab === page.id ? 'page' : undefined} onClick={() => { setSettingsTab(page.id); setModelQuery(''); }}><page.icon />{page.label}</button>)}
-            <button className="settings-nav-foot" onClick={() => setSettingsOpen(false)}><ChevronLeft /><span>返回工作台</span><kbd>Esc</kbd></button>
           </aside>
           <section className="settings-content" ref={settingsContentRef}>
             {settingsError && <div className="settings-error" role="alert">{settingsError}</div>}
