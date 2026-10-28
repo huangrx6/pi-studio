@@ -1,4 +1,5 @@
 export {};
+import type { ModelCatalog, ModelSelection, ThinkingLevel } from './model-types';
 
 interface PiSessionSummary {
   id: string;
@@ -38,20 +39,20 @@ interface SettingsSnapshot {
   authPath: string;
   mcpPath: string;
   modelsPath: string;
-  model: { modelRef: string; label: string };
+  model: ModelSelection;
 }
 
 declare global {
   interface Window {
     piApi: {
-      state(): Promise<{ workspaces: PiWorkspace[]; model: { modelRef: string; label: string }; cwd: string }>;
+      state(cwd?: string): Promise<{ workspaces: PiWorkspace[]; model: ModelSelection; cwd: string }>;
       createSession(cwd: string): Promise<PiDetail>;
       session(id: string): Promise<PiDetail | undefined>;
       prompt(payload: { sessionId: string; text: string; requestId: string }): Promise<void>;
       files(cwd: string, path: string): Promise<{ path: string; entries: Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }> }>;
       file(cwd: string, path: string): Promise<{ path: string; size: number; binary: boolean; text: string }>;
       chooseWorkspace(): Promise<string | undefined>;
-      models(): Promise<{ models: Array<{ id: string; provider: string; model: string; name: string }>; enabled: string[]; current: string }>;
+      models(cwd?: string): Promise<ModelCatalog>;
       providerModels(providerId: string): Promise<{ models: Array<{ id: string; model: string; name: string; enabled: boolean; contextWindow?: number; maxTokens?: number; supportsImages?: boolean }> }>;
       providerConfig(providerId: string): Promise<{ providerId: string; baseUrl: string; api: string }>;
       mcpConfig(name: string): Promise<{ name: string; transport: string; command: string; args: string[]; url: string; description: string; env: string }>;
@@ -71,7 +72,8 @@ declare global {
       addSkill(payload: { scope: string; cwd?: string }): Promise<any>;
       addExtension(payload: { scope: string; cwd?: string }): Promise<any>;
       onOpenSettings(listener: () => void): () => void;
-      setModel(modelRef: string): Promise<{ modelRef: string; label: string }>;
+      setModel(modelRef: string, cwd?: string): Promise<ModelSelection>;
+      setThinkingLevel(payload: { modelRef: string; level: ThinkingLevel; cwd?: string }): Promise<ModelSelection>;
       onPrompt(listener: (payload: { requestId: string; type: 'delta' | 'tool' | 'done' | 'error'; text?: string; name?: string; status?: string; message?: string }) => void): () => void;
     };
   }

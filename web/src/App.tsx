@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowUp, Check, ChevronDown, ChevronLeft, Clock3, Cpu, FileCode2, FileText, Folder, FolderOpen, Info,
+  ArrowUp, Check, ChevronDown, ChevronLeft, ChevronsDown, ChevronsUp, Clock3, Cpu, FileCode2, FileText, Folder, FolderOpen, Info,
   Layers3, LoaderCircle, MessageSquare, PanelLeft, PanelRight, Pencil, Plug, Search, Settings, SquarePen, Trash2, X,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
 import { Select } from './components/Select';
 import { SettingsDialog } from './components/SettingsDialog';
+import { ModelPicker } from './components/ModelPicker';
+import type { ModelSelection, ThinkingLevel } from './model-types';
 
 const settingsPages = [
   { id: 'models', label: '模型与账号', icon: Cpu, description: '连接模型来源，选择适合当前工作的模型。' },
@@ -61,12 +63,35 @@ function relativeTime(ms: number): string {
   return `${Math.floor(diff / 86_400_000)} 天`;
 }
 
+const UI_KEYS = {
+  expanded: 'pi-studio:expanded-workspaces',
+  workspaceOrder: 'pi-studio:workspace-order',
+  sessionOrder: 'pi-studio:session-order',
+  activeSession: 'pi-studio:active-session',
+} as const;
+
+function readStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) as T : fallback;
+  } catch { return fallback; }
+}
+
+function writeStored(key: string, value: unknown): void {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
+}
+
+type DragItem = { kind: 'workspace' | 'session'; cwd: string; sessionId?: string };
+
 export function App() {
   const [workspaces, setWorkspaces] = useState<PiWorkspace[]>([]);
   const [stateLoading, setStateLoading] = useState(true);
   const [workspace, setWorkspace] = useState('');
-  const [model, setModel] = useState('');
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [modelSelection, setModelSelection] = useState<ModelSelection>({ modelRef: '', label: '', thinkingLevel: 'default', thinkingLevels: ['default'], effectiveThinkingLevel: 'off', defaultThinkingLevel: 'off' });
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(readStored<string[]>(UI_KEYS.expanded, [])));
+  const [workspaceOrder, setWorkspaceOrder] = useState<string[]>(() => readStored<string[]>(UI_KEYS.workspaceOrder, []));
+  const [sessionOrder, setSessionOrder] = useState<Record<string, string[]>>(() => readStored<Record<string, string[]>>(UI_KEYS.sessionOrder, {}));
+  const [dropHint, setDropHint] = useState<string | null>(null);
   const [session, setSession] = useState<{ id: string; cwd: string; title: string } | null>(null);
   const [messages, setMessages] = useState<PiMessage[]>([]);
   const [prompt, setPrompt] = useState('');
@@ -76,7 +101,6 @@ export function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [workspaceSearchOpen, setWorkspaceSearchOpen] = useState(false);
   const [workspaceQuery, setWorkspaceQuery] = useState('');
-  const [modelsOpen, setModelsOpen] = useState(false);
   const [models, setModels] = useState<Array<{ id: string; name: string }>>([]);
   const [modelQuery, setModelQuery] = useState('');
   const [modelRef, setModelRef] = useState('');
@@ -102,43 +126,63 @@ export function App() {
   const [fileBusy, setFileBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const modelControlRef = useRef<HTMLDivElement>(null);
   const settingsContentRef = useRef<HTMLElement>(null);
   const settingsReturnFocusRef = useRef<HTMLElement | null>(null);
   const requestRef = useRef<string | null>(null);
   const editorRequestRef = useRef(0);
   const originalMcpArgsRef = useRef<string[] | null>(null);
+  const workspaceOrderRef = useRef(workspaceOrder);
+  const sessionOrderRef = useRef(sessionOrder);
+  const dragRef = useRef<DragItem | null>(null);
+  const restoredRef = useRef(false);
 
   const loadState = useCallback(async () => {
     setStateLoading(true);
     try {
-      const next = await window.piApi.state();
-      setWorkspaces(next.workspaces);
-      setModel(next.model.label);
-      setExpanded((current) => {
-        const ids = new Set(current);
-        for (const item of next.workspaces) ids.add(item.cwd);
-        return ids;
+      const next = await window.piApi.state(workspace);
+      const savedWorkspaceOrder = workspaceOrderRef.current;
+      const savedSessionOrder = sessionOrderRef.current;
+      const byCwd = new Map(next.workspaces.map((item) => [item.cwd, item]));
+      const ordered = [
+        ...savedWorkspaceOrder.flatMap((cwd) => byCwd.has(cwd) ? [byCwd.get(cwd)!] : []),
+        ...next.workspaces.filter((item) => !savedWorkspaceOrder.includes(item.cwd)),
+      ];
+      const nextSessionOrder: Record<string, string[]> = {};
+      const orderedSessions = ordered.map((item) => {
+        const byId = new Map(item.sessions.map((entry) => [entry.id, entry]));
+        const saved = savedSessionOrder[item.cwd] ?? [];
+        const sessions = [
+          ...saved.flatMap((id) => byId.has(id) ? [byId.get(id)!] : []),
+          ...item.sessions.filter((entry) => !saved.includes(entry.id)),
+        ];
+        nextSessionOrder[item.cwd] = sessions.map((entry) => entry.id);
+        return { ...item, sessions };
       });
-      setWorkspace((current) => current || next.workspaces[0]?.cwd || next.cwd);
+      workspaceOrderRef.current = ordered.map((item) => item.cwd);
+      sessionOrderRef.current = nextSessionOrder;
+      setWorkspaceOrder(ordered.map((item) => item.cwd));
+      setSessionOrder(nextSessionOrder);
+      setWorkspaces(orderedSessions);
+      setModelRef(next.model.modelRef);
+      setModelSelection(next.model);
+      setWorkspace((current) => current || orderedSessions[0]?.cwd || next.cwd);
     } finally {
       setStateLoading(false);
     }
-  }, []);
+  }, [workspace]);
 
   async function openSettings(tab?: typeof settingsTab) {
     if (!settingsOpen) settingsReturnFocusRef.current = document.activeElement as HTMLElement;
     if (tab) setSettingsTab(tab);
-    setModelsOpen(false);
     setSettingsOpen(true);
     setSettingsError(null);
     try {
-      const [snapshot, modelResult] = await Promise.all([window.piApi.settings(workspace), window.piApi.models()]);
+      const [snapshot, modelResult] = await Promise.all([window.piApi.settings(workspace), window.piApi.models(workspace)]);
       setSettingsData(snapshot);
       setModels(modelResult.models);
       setEnabledModels(modelResult.enabled ?? []);
       setModelRef(modelResult.current);
-      setModel(snapshot.model.label);
+      setModelSelection(modelResult.selection);
     } catch (error) {
       setSettingsError(error instanceof Error ? error.message : String(error));
     }
@@ -222,7 +266,7 @@ export function App() {
       setSettingsData(snapshot);
       setCustomModel({ providerId: '', modelId: '', name: '', contextWindow: '', maxTokens: '', supportsImages: false, reasoning: false });
       setProviderModels({});
-      const catalog = await window.piApi.models();
+      const catalog = await window.piApi.models(workspace);
       setModels(catalog.models);
       setEditor(null);
       await loadState();
@@ -279,7 +323,7 @@ export function App() {
     try {
       setSettingsData(await window.piApi.removeCustomModel({ providerId, modelId }));
       setProviderModels({});
-      setModels((await window.piApi.models()).models);
+      setModels((await window.piApi.models(workspace)).models);
     } catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
     finally { setSettingsBusy(false); }
   }
@@ -342,41 +386,68 @@ export function App() {
     finally { setSettingsBusy(false); }
   }
 
-  async function openModels() {
-    const result = await window.piApi.models();
+  async function loadModelCatalog() {
+    const result = await window.piApi.models(workspace);
     setModels(result.models);
     setEnabledModels(result.enabled ?? []);
     setModelRef(result.current);
-    setModelQuery('');
-    setModelsOpen((value) => !value);
+    setModelSelection(result.selection);
+    return result;
   }
 
   async function selectModel(next: string) {
-    const result = await window.piApi.setModel(next);
-    setModel(result.label);
+    const result = await window.piApi.setModel(next, workspace);
     setModelRef(next);
-    setModelsOpen(false);
+    setModelSelection(result);
+  }
+
+  async function selectThinking(level: ThinkingLevel) {
+    const result = await window.piApi.setThinkingLevel({ modelRef: modelSelection.modelRef, level, cwd: workspace });
+    setModelSelection(result);
   }
 
   useEffect(() => { void loadState().catch((error) => setError(error instanceof Error ? error.message : String(error))); }, [loadState]);
 
   useEffect(() => {
+    workspaceOrderRef.current = workspaceOrder;
+    writeStored(UI_KEYS.workspaceOrder, workspaceOrder);
+  }, [workspaceOrder]);
+
+  useEffect(() => {
+    sessionOrderRef.current = sessionOrder;
+    writeStored(UI_KEYS.sessionOrder, sessionOrder);
+  }, [sessionOrder]);
+
+  useEffect(() => {
+    writeStored(UI_KEYS.expanded, [...expanded]);
+  }, [expanded]);
+
+  useEffect(() => {
+    if (!restoredRef.current) return;
+    writeStored(UI_KEYS.activeSession, session ? { id: session.id, cwd: session.cwd } : null);
+  }, [session]);
+
+  useEffect(() => {
+    if (stateLoading || restoredRef.current || workspaces.length === 0) return;
+    restoredRef.current = true;
+    const saved = readStored<{ id: string; cwd: string } | null>(UI_KEYS.activeSession, null);
+    if (!saved?.id) return;
+    const summary = workspaces.flatMap((item) => item.sessions).find((item) => item.id === saved.id);
+    if (!summary) return;
+    setWorkspace(summary.cwd);
+    setExpanded((current) => {
+      if (current.has(summary.cwd)) return current;
+      const next = new Set(current);
+      next.add(summary.cwd);
+      return next;
+    });
+    void openSession(summary);
+  }, [stateLoading, workspaces]);
+
+  useEffect(() => {
     const textarea = textareaRef.current;
     if (textarea) { textarea.style.height = 'auto'; textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`; }
   }, [prompt]);
-
-  useEffect(() => {
-    if (!modelsOpen) return;
-    const onPointer = (event: PointerEvent) => {
-      if (!modelControlRef.current?.contains(event.target as Node)) setModelsOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { setModelsOpen(false); modelControlRef.current?.querySelector('button')?.focus(); }
-    };
-    document.addEventListener('pointerdown', onPointer);
-    document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('pointerdown', onPointer); document.removeEventListener('keydown', onKey); };
-  }, [modelsOpen]);
 
   useEffect(() => window.piApi.onOpenSettings(() => { void openSettings(); }), [workspace]);
 
@@ -431,8 +502,48 @@ export function App() {
     [workspaces, workspace],
   );
   const visibleWorkspaces = workspaces.filter((item) => `${item.name} ${item.cwd} ${item.sessions.map((s) => s.title).join(' ')}`.toLowerCase().includes(workspaceQuery.toLowerCase()));
-  const visibleModels = (enabledModels.length > 0 ? models.filter((item) => enabledModels.includes(item.id) || item.id === modelRef) : models)
-    .filter((item) => `${item.name} ${item.id}`.toLowerCase().includes(modelQuery.toLowerCase()));
+  const isNewConversation = messages.length === 0 && !busy;
+  const allExpanded = workspaces.length > 0 && workspaces.every((item) => expanded.has(item.cwd));
+
+  function toggleAllExpanded() {
+    setExpanded(allExpanded ? new Set() : new Set(workspaces.map((item) => item.cwd)));
+  }
+
+  function expandWorkspace(cwd: string) {
+    setExpanded((current) => {
+      if (current.has(cwd)) return current;
+      const next = new Set(current);
+      next.add(cwd);
+      return next;
+    });
+  }
+
+  function reorderWorkspaces(source: string, target: string) {
+    if (source === target) return;
+    const order = workspaces.map((item) => item.cwd);
+    const from = order.indexOf(source);
+    const to = order.indexOf(target);
+    if (from < 0 || to < 0) return;
+    order.splice(to, 0, ...order.splice(from, 1));
+    setWorkspaceOrder(order);
+    setWorkspaces((current) => order.flatMap((cwd) => current.find((item) => item.cwd === cwd) ?? []));
+  }
+
+  function reorderSessions(cwd: string, source: string, target: string) {
+    if (source === target) return;
+    const workspace = workspaces.find((item) => item.cwd === cwd);
+    if (!workspace) return;
+    const order = workspace.sessions.map((item) => item.id);
+    const from = order.indexOf(source);
+    const to = order.indexOf(target);
+    if (from < 0 || to < 0) return;
+    order.splice(to, 0, ...order.splice(from, 1));
+    setSessionOrder((current) => ({ ...current, [cwd]: order }));
+    setWorkspaces((current) => current.map((item) => item.cwd === cwd
+      ? { ...item, sessions: order.flatMap((id) => item.sessions.find((entry) => entry.id === id) ?? []) }
+      : item));
+  }
+
 
   async function startSession(cwd = workspace) {
     if (!cwd) return;
@@ -442,6 +553,7 @@ export function App() {
     setError(null);
     setPrompt('');
     setWorkspace(cwd);
+    expandWorkspace(cwd);
     setBusy(false);
     requestAnimationFrame(() => textareaRef.current?.focus());
   }
@@ -452,6 +564,7 @@ export function App() {
     setSession({ id: detail.id, cwd: detail.cwd, title: detail.title });
     setMessages(detail.messages.map((message) => ({ ...message })));
     setWorkspace(detail.cwd);
+    expandWorkspace(detail.cwd);
     setError(null);
     setBusy(false);
   }
@@ -532,7 +645,6 @@ export function App() {
         <div className="brand">
           <BrandMark />
           <span className="brand-name">Pi Studio</span>
-          <button className="icon-button collapse" aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'} title={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'} onClick={() => setSidebarCollapsed((value) => !value)}><PanelLeft /></button>
         </div>
         <button className="new-chat" title="新会话" onClick={() => void startSession()}><SquarePen /><span>新会话</span></button>
         <nav className="nav">
@@ -543,6 +655,7 @@ export function App() {
         <div className="workspace-head">
           <span>工作区</span>
           <div>
+            <button className="icon-button" disabled={workspaces.length === 0} aria-label={allExpanded ? '收起所有工作区' : '展开所有工作区'} title={allExpanded ? '收起所有工作区' : '展开所有工作区'} onClick={toggleAllExpanded}>{allExpanded ? <ChevronsUp /> : <ChevronsDown />}</button>
             <button className={`icon-button ${workspaceSearchOpen ? 'is-active' : ''}`} aria-label="搜索工作区" title="搜索工作区" onClick={() => { setWorkspaceSearchOpen((value) => !value); setWorkspaceQuery(''); }}><Search /></button>
             <button className="icon-button" onClick={chooseFile} aria-label="打开工作区" title="打开工作区"><FolderOpen /></button>
           </div>
@@ -556,9 +669,31 @@ export function App() {
             return (
               <div className="workspace" key={item.cwd}>
                 <button
-                  className={`workspace-row ${isActive ? 'is-active' : ''}`}
+                  className={`workspace-row ${isActive ? 'is-active' : ''} ${dropHint === `w:${item.cwd}` ? 'drop-before' : ''}`}
                   title={item.cwd}
                   aria-expanded={isOpen}
+                  draggable
+                  onDragStart={(event) => {
+                    dragRef.current = { kind: 'workspace', cwd: item.cwd };
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/plain', item.cwd);
+                  }}
+                  onDragOver={(event) => {
+                    const drag = dragRef.current;
+                    if (drag?.kind !== 'workspace' || drag.cwd === item.cwd) return;
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                    setDropHint(`w:${item.cwd}`);
+                  }}
+                  onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropHint(null); }}
+                  onDrop={(event) => {
+                    const drag = dragRef.current;
+                    event.preventDefault();
+                    if (drag?.kind === 'workspace') reorderWorkspaces(drag.cwd, item.cwd);
+                    dragRef.current = null;
+                    setDropHint(null);
+                  }}
+                  onDragEnd={() => { dragRef.current = null; setDropHint(null); }}
                   onClick={() => {
                     setWorkspace(item.cwd);
                     setExpanded((current) => {
@@ -577,8 +712,32 @@ export function App() {
                     {item.sessions.map((sessionItem) => (
                       <button
                         key={sessionItem.id}
-                        className={`session-row ${session?.id === sessionItem.id ? 'is-active' : ''}`}
+                        className={`session-row ${session?.id === sessionItem.id ? 'is-active' : ''} ${dropHint === `s:${item.cwd}:${sessionItem.id}` ? 'drop-before' : ''}`}
                         title={sessionItem.title}
+                        draggable
+                        onDragStart={(event) => {
+                          dragRef.current = { kind: 'session', cwd: item.cwd, sessionId: sessionItem.id };
+                          event.dataTransfer.effectAllowed = 'move';
+                          event.dataTransfer.setData('text/plain', sessionItem.id);
+                        }}
+                        onDragOver={(event) => {
+                          const drag = dragRef.current;
+                          if (drag?.kind !== 'session' || drag.cwd !== item.cwd || drag.sessionId === sessionItem.id) return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          event.dataTransfer.dropEffect = 'move';
+                          setDropHint(`s:${item.cwd}:${sessionItem.id}`);
+                        }}
+                        onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropHint(null); }}
+                        onDrop={(event) => {
+                          const drag = dragRef.current;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          if (drag?.kind === 'session' && drag.cwd === item.cwd && drag.sessionId) reorderSessions(item.cwd, drag.sessionId, sessionItem.id);
+                          dragRef.current = null;
+                          setDropHint(null);
+                        }}
+                        onDragEnd={() => { dragRef.current = null; setDropHint(null); }}
                         onClick={() => void openSession(sessionItem)}
                       >
                         <span className="session-title">{sessionItem.title}</span>
@@ -598,24 +757,25 @@ export function App() {
         </div>
       </aside>
 
-      <main className="main">
-        <header className="chat-header">
-          <div className="chat-heading">
+      <main className={`main ${isNewConversation ? 'is-new-conversation' : ''}`}>
+        <header className={`chat-header ${isNewConversation ? 'is-empty-header' : ''}`}>
+          <button className="icon-button sidebar-toggle" aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'} title={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'} onClick={() => setSidebarCollapsed((value) => !value)}><PanelLeft /></button>
+          {!isNewConversation && <div className="chat-heading">
             <h1>{session?.title || 'Pi Studio'}</h1>
             <div className="chat-meta"><span className={`state-dot ${busy ? 'is-busy' : ''}`} />{busy ? '正在处理' : '准备就绪'}{activeWorkspace && <><span>·</span><span className="workspace-name">{activeWorkspace.name}</span></>}</div>
-          </div>
+          </div>}
           <div className="chat-actions">
             <button className="icon-button" onClick={() => void openSettings()} aria-label="设置"><Settings size={16} /></button>
             <button className={`icon-button ${filesOpen ? 'is-active' : ''}`} onClick={() => setFilesOpen((value) => !value)} aria-label="文件查看器"><PanelRight size={16} /></button>
           </div>
         </header>
-        <div className="chat-tabs">
+        {!isNewConversation && <div className="chat-tabs">
           <button className="tab is-active">对话</button>
           <button className="tab" disabled title="执行轨迹即将推出">轨迹</button>
           <span className="chat-tabs-note">{messages.length > 0 ? `${messages.length} 条消息` : '从一个想法开始'}</span>
-        </div>
+        </div>}
 
-        <div className="chat-scroll" ref={scrollRef}>
+        {!isNewConversation && <div className="chat-scroll" ref={scrollRef}>
           <div className="chat-column">
             {messages.length > 0 && (
               <div className="messages">
@@ -635,9 +795,10 @@ export function App() {
             )}
             {error && <div className="error-card" role="alert"><strong>暂时无法完成操作</strong><p>{error}</p></div>}
           </div>
-        </div>
+        </div>}
 
         <div className="composer-dock">
+          {isNewConversation && <div className="new-conversation-intro"><span className="new-conversation-context" title={workspace}>{activeWorkspace?.name || (workspace ? workspace.split('/').pop() : 'Pi Studio')}</span><h2>今天想做些什么？</h2><p>从一个问题，或一件想完成的事开始。</p></div>}
           <div className="composer">
             <textarea
               ref={textareaRef}
@@ -651,28 +812,14 @@ export function App() {
               rows={2}
             />
             <div className="composer-bar">
-              <div className="composer-left">
-                <button className="workspace-chip" onClick={chooseFile} title={workspace || '选择工作区'}><span>{activeWorkspace?.name || '选择工作区'}</span><ChevronDown /></button>
-              </div>
               <div className="composer-right">
-                <div className="model-control" ref={modelControlRef}>
-                  <button className={`model-label ${modelsOpen ? 'is-active' : ''}`} aria-label="选择模型" aria-expanded={modelsOpen} onClick={() => void openModels()}><span>{model || '选择模型'}</span><ChevronDown /></button>
-                  {modelsOpen && (
-                    <div className="model-popover" role="dialog" aria-label="选择模型">
-                      <div className="model-popover__head"><strong>选择模型</strong><span>{visibleModels.length} 个</span></div>
-                      <div className="search-field"><Search /><input autoFocus className="model-search" aria-label="搜索模型" value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} placeholder="搜索名称或来源…" /></div>
-                      <div className="model-list">
-                        {visibleModels.map((item) => <button key={item.id} className={`model-row ${item.id === modelRef ? 'is-active' : ''}`} onClick={() => void selectModel(item.id)}><div><span>{item.name}</span><small>{item.id.split('/')[0]}</small></div>{item.id === modelRef && <Check />}</button>)}
-                        {visibleModels.length === 0 && <div className="settings-empty">没有匹配的模型</div>}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <ModelPicker selection={modelSelection} disabled={busy || stateLoading} hidden={settingsOpen} loadCatalog={loadModelCatalog} onSelectModel={selectModel} onSelectThinking={selectThinking} onManage={() => void openSettings('models')} />
                 <button className="send-button" disabled={busy || !prompt.trim()} onClick={() => void send()} aria-label={busy ? '正在生成回复' : '发送消息'} title="发送消息"><ArrowUp /></button>
               </div>
             </div>
           </div>
           <div className="composer-hint"><span>Pi Studio <span className="preview-badge">预览版</span></span><span><kbd>↵</kbd> 发送 <span className="hint-divider">·</span> <kbd>⇧ ↵</kbd> 换行</span></div>
+          {isNewConversation && error && <div className="new-conversation-error error-card" role="alert"><strong>暂时无法完成操作</strong><p>{error}</p></div>}
         </div>
       </main>
 

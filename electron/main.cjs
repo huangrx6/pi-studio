@@ -5,14 +5,17 @@ const os = require('node:os');
 const { readConfig, writeConfig, updateMcp, updateProvider, updateCustomModel, visibleProviderIds } = require('./settings-config.cjs');
 
 let pi;
+let modelOptions;
 let mainWindow;
 async function loadPi() {
   pi = await import('@earendil-works/pi-coding-agent');
+  modelOptions = await import('./model-options.mjs');
 }
 const DEV = process.env.PI_STUDIO_DEV === '1';
 const SESSION_ROOT = path.join(os.homedir(), '.pi', 'agent', 'sessions');
 const DEFAULT_CWD = process.env.PI_WORKSPACE ?? process.cwd();
 let MODEL_REF = process.env.PI_MODEL_REF ?? 'minimax-cn/MiniMax-M3.1-Flash';
+let thinkingPreferences = {};
 
 const drafts = new Map();
 const diskSessions = new Map();
@@ -113,12 +116,20 @@ async function listWorkspaces() {
   })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-async function modelInfo() {
+async function modelInfo(cwd = DEFAULT_CWD) {
   const rt = await runtime();
   const [provider, ...parts] = MODEL_REF.split('/');
   const found = provider && parts.length > 0 ? rt.getModel(provider, parts.join('/')) : undefined;
   const selected = found || rt.getModels()[0];
-  return { modelRef: found ? MODEL_REF : `${selected?.provider}/${selected?.id}`, label: selected?.name || MODEL_REF };
+  return { modelRef: found ? MODEL_REF : `${selected?.provider}/${selected?.id}`, label: selected?.name || MODEL_REF, ...reasoningFor(selected, cwd) };
+}
+
+function reasoningFor(model, cwd = DEFAULT_CWD) {
+  const settings = pi.SettingsManager.create(cwd);
+  return modelOptions.reasoningOptions(model, thinkingPreferences[`${model?.provider}/${model?.id}`], {
+    defaultThinkingLevel: settings.getDefaultThinkingLevel(),
+    modelThinkingLevels: settings.getAllModelThinkingLevels(),
+  });
 }
 
 async function findManager(id) {
@@ -144,7 +155,11 @@ async function detail(id) {
 }
 
 async function ensureAgent(id, manager, cwd) {
-  if (agentSessions.has(id)) return agentSessions.get(id);
+  if (agentSessions.has(id)) {
+    const session = agentSessions.get(id);
+    session.setThinkingLevel(reasoningFor(session.model, cwd).effectiveThinkingLevel);
+    return session;
+  }
   const rt = await runtime();
   const [provider, ...parts] = MODEL_REF.split('/');
   const model = provider && parts.length > 0 ? rt.getModel(provider, parts.join('/')) : undefined;
@@ -152,7 +167,7 @@ async function ensureAgent(id, manager, cwd) {
   const { session } = await pi.createAgentSession({
     cwd,
     model,
-    thinkingLevel: 'medium',
+    thinkingLevel: reasoningFor(model, cwd).effectiveThinkingLevel,
     modelRuntime: rt,
     sessionManager: manager,
     tools: ['read', 'grep', 'find', 'ls'],
@@ -177,28 +192,27 @@ function loadConfig() {
   try {
     const value = JSON.parse(fs.readFileSync(configPath(), 'utf8'));
     if (typeof value.modelRef === 'string' && value.modelRef.includes('/')) MODEL_REF = value.modelRef;
+    if (value.thinkingLevels && typeof value.thinkingLevels === 'object' && !Array.isArray(value.thinkingLevels)) thinkingPreferences = value.thinkingLevels;
   } catch { /* first launch */ }
 }
 
-function saveConfig() {
-  try {
-    fs.mkdirSync(path.dirname(configPath()), { recursive: true });
-    fs.writeFileSync(configPath(), JSON.stringify({ modelRef: MODEL_REF }, null, 2));
-  } catch { /* configuration is best effort */ }
+function saveConfig(modelRef = MODEL_REF, thinkingLevels = thinkingPreferences) {
+  writeConfig(configPath(), { ...readConfig(configPath(), {}), modelRef, thinkingLevels });
 }
 
-async function availableModels() {
+async function availableModels(cwd = DEFAULT_CWD) {
   const rt = await runtime();
   const auth = readAuth();
   const config = readJson(path.join(pi.getAgentDir(), 'settings.json'), {});
   const enabled = Array.isArray(config.enabledModels) ? config.enabledModels : [];
   const configured = readJson(modelsFile(), { providers: {} }).providers || {};
   const visible = visibleProviderIds(auth, configured, enabled, MODEL_REF, rt.getProviders().filter((provider) => rt.hasConfiguredAuth(provider.id)).map((provider) => provider.id));
+  const providerNames = new Map(rt.getProviders().map((provider) => [provider.id, provider.name]));
   const models = rt.getModels()
     .filter((item) => visible.has(item.provider))
-    .map((item) => ({ id: `${item.provider}/${item.id}`, provider: item.provider, model: item.id, name: item.name }))
+    .map((item) => ({ id: `${item.provider}/${item.id}`, provider: item.provider, providerName: providerNames.get(item.provider) || item.provider, model: item.id, name: item.name }))
     .sort((a, b) => a.name.localeCompare(b.name));
-  return { models, enabled, current: MODEL_REF };
+  return { models, enabled, current: MODEL_REF, selection: await modelInfo(cwd) };
 }
 
 function authFile() {
@@ -289,7 +303,7 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
     authPath: authFile(),
     mcpPath: path.join(pi.getAgentDir(), 'mcp.json'),
     modelsPath: modelsFile(),
-    model: await modelInfo(),
+    model: await modelInfo(cwd),
   };
 }
 
@@ -365,7 +379,7 @@ app.whenReady().then(async () => {
   }
   await loadPi();
   loadConfig();
-  ipcMain.handle('pi:state', async () => ({ workspaces: await listWorkspaces(), model: await modelInfo(), cwd: DEFAULT_CWD }));
+  ipcMain.handle('pi:state', async (_event, cwd) => ({ workspaces: await listWorkspaces(), model: await modelInfo(cwd || DEFAULT_CWD), cwd: DEFAULT_CWD }));
   ipcMain.handle('pi:session-create', async (_event, cwd) => {
     const manager = pi.SessionManager.create(cwd || DEFAULT_CWD);
     const id = manager.getSessionId();
@@ -496,7 +510,7 @@ app.whenReady().then(async () => {
     return settingsSnapshot(cwd || DEFAULT_CWD);
   });
 
-  ipcMain.handle('pi:models', async () => availableModels());
+  ipcMain.handle('pi:models', async (_event, cwd) => availableModels(cwd || DEFAULT_CWD));
   ipcMain.handle('pi:settings', async (_event, cwd) => settingsSnapshot(typeof cwd === 'string' ? cwd : DEFAULT_CWD));
   ipcMain.handle('pi:set-key', async (_event, { providerId, apiKey }) => {
     if (typeof providerId !== 'string' || typeof apiKey !== 'string' || apiKey.trim().length === 0) throw new Error('请输入 API Key 或环境变量引用');
@@ -601,12 +615,25 @@ app.whenReady().then(async () => {
     fs.writeFileSync(path.join(pi.getAgentDir(), 'mcp.json'), JSON.stringify(config, null, 2));
     return settingsSnapshot();
   });
-  ipcMain.handle('pi:set-model', async (_event, modelRef) => {
+  ipcMain.handle('pi:set-model', async (_event, modelRef, cwd) => {
     if (typeof modelRef !== 'string' || !modelRef.includes('/')) throw new Error('模型格式无效');
+    const [provider, ...parts] = modelRef.split('/');
+    if (!(await runtime()).getModel(provider, parts.join('/'))) throw new Error('模型已不存在，请刷新后重试');
+    saveConfig(modelRef);
     MODEL_REF = modelRef;
-    saveConfig();
     agentSessions.clear();
-    return modelInfo();
+    return modelInfo(cwd || DEFAULT_CWD);
+  });
+  ipcMain.handle('pi:set-thinking-level', async (_event, { modelRef, level, cwd }) => {
+    if (modelRef !== MODEL_REF) throw new Error('当前模型已改变，请重新选择推理等级');
+    const [provider, ...parts] = MODEL_REF.split('/');
+    const model = (await runtime()).getModel(provider, parts.join('/'));
+    if (!model) throw new Error('当前模型不存在');
+    modelOptions.validateThinkingLevel(model, level);
+    const preferences = { ...thinkingPreferences, [MODEL_REF]: level };
+    saveConfig(MODEL_REF, preferences);
+    thinkingPreferences = preferences;
+    return modelInfo(cwd || DEFAULT_CWD);
   });
   makeMenu();
   createWindow();

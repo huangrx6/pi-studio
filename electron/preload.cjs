@@ -1,14 +1,14 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('piApi', {
-  state: () => ipcRenderer.invoke('pi:state'),
+  state: (cwd) => ipcRenderer.invoke('pi:state', cwd),
   createSession: (cwd) => ipcRenderer.invoke('pi:session-create', cwd),
   session: (id) => ipcRenderer.invoke('pi:session', id),
   prompt: (payload) => ipcRenderer.invoke('pi:prompt', payload),
   files: (cwd, path) => ipcRenderer.invoke('pi:files', { cwd, path }),
   file: (cwd, path) => ipcRenderer.invoke('pi:file', { cwd, path }),
   chooseWorkspace: () => ipcRenderer.invoke('pi:choose-workspace'),
-  models: () => ipcRenderer.invoke('pi:models'),
+  models: (cwd) => ipcRenderer.invoke('pi:models', cwd),
   providerModels: (providerId) => ipcRenderer.invoke('pi:provider-models', providerId),
   providerConfig: (providerId) => ipcRenderer.invoke('pi:provider-config', providerId),
   mcpConfig: (name) => ipcRenderer.invoke('pi:mcp-config', name),
@@ -32,7 +32,8 @@ contextBridge.exposeInMainWorld('piApi', {
     ipcRenderer.on('pi:open-settings', handler);
     return () => ipcRenderer.removeListener('pi:open-settings', handler);
   },
-  setModel: (modelRef) => ipcRenderer.invoke('pi:set-model', modelRef),
+  setModel: (modelRef, cwd) => ipcRenderer.invoke('pi:set-model', modelRef, cwd),
+  setThinkingLevel: (payload) => ipcRenderer.invoke('pi:set-thinking-level', payload),
   onPrompt: (listener) => {
     const handler = (_event, payload) => listener(payload);
     ipcRenderer.on('pi:prompt-event', handler);
