@@ -11,6 +11,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('piApi', {
   setTheme: (theme) => ipcRenderer.invoke('pi:set-theme', theme),
+  modeGet: () => ipcRenderer.invoke('pi:mode-get'),
+  modeSet: (payload) => ipcRenderer.invoke('pi:mode-set', payload),
   state: (cwd) => ipcRenderer.invoke('pi:state', cwd),
   createSession: (cwd) => ipcRenderer.invoke('pi:session-create', cwd),
   session: (id) => ipcRenderer.invoke('pi:session', id),

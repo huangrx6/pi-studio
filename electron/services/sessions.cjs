@@ -31,6 +31,7 @@ const { reasoningFor } = require('./models.cjs');
 const { createExtensionUI } = require('./extensions.cjs');
 const { updateSidebar } = require('../sidebar-state.cjs');
 const { envNameOf } = require('../credential-env.cjs');
+const { consumePendingMode } = require('./mode.cjs');
 
 /** 内存中的草稿会话：id → { manager, cwd }。 */
 const drafts = new Map();
@@ -265,12 +266,24 @@ async function createAgent(id, manager, cwd) {
     thinkingLevel: reasoningFor(model, cwd).effectiveThinkingLevel,
     modelRuntime: runtime,
     sessionManager: manager,
-    tools: ['read', 'grep', 'find', 'ls'],
+    // 完整编码工具集：写入/编辑需要 write/edit，执行命令需要 bash。
+    // 权限由 pi-mode-switcher 在 tool_call 阶段拦截询问，不靠裁剪工具实现。
+    tools: ['read', 'write', 'edit', 'bash', 'grep', 'find', 'ls'],
   });
   try {
     await session.bindExtensions({ uiContext: createExtensionUI(id), mode: 'tui' });
   } catch {
     /* 扩展 UI 绑定失败不影响会话本身 */
+  }
+  // 用户在「新建对话」阶段切换过权限模式：会话建好后补发一次 /mode，
+  // 让 pi-mode-switcher 内存里的模式与配置文件保持一致。
+  const pendingMode = consumePendingMode();
+  if (pendingMode) {
+    try {
+      await session.prompt(`/mode ${pendingMode}`);
+    } catch {
+      /* 扩展未安装或未提供 /mode 命令时忽略 */
+    }
   }
   agentSessions.set(id, session);
   return session;
