@@ -32,10 +32,12 @@
   --space-6: 24px;
   --space-8: 32px;
   --space-10: 40px;
-  --radius-sm: 6px;
+  --radius-tag: 4px;
+  --radius-sm: var(--radius-tag);
   --radius-control: 8px;
   --radius-card: 12px;
   --radius-panel: 16px;
+  --radius-round: 999px;
   --control-sm: 32px;
   --control: 36px;
   --row-height: 40px;

@@ -4,6 +4,7 @@ export type StepCollapse = 'after-answer' | 'keep-open' | 'manual';
 export type LinkPreference = 'external' | 'window';
 export type BusyPreference = 'queue' | 'steer';
 export type PerformancePreference = 'simple' | 'detailed';
+export type RadiusStyle = 'square' | 'compact' | 'standard' | 'soft';
 
 export type Preferences = {
   theme: ThemePreference;
@@ -14,6 +15,7 @@ export type Preferences = {
   linkOpen: LinkPreference;
   busySend: BusyPreference;
   performance: PerformancePreference;
+  radiusStyle: RadiusStyle;
 };
 
 const STORAGE_KEY = 'pi-studio:preferences';
@@ -26,6 +28,14 @@ export const DEFAULT_PREFERENCES: Preferences = {
   linkOpen: 'external',
   busySend: 'queue',
   performance: 'detailed',
+  radiusStyle: 'standard',
+};
+
+export const RADIUS_PRESETS: Record<RadiusStyle, { tag: number; control: number; card: number; panel: number; round: number }> = {
+  square: { tag: 0, control: 0, card: 0, panel: 0, round: 0 },
+  compact: { tag: 3, control: 6, card: 9, panel: 12, round: 999 },
+  standard: { tag: 4, control: 8, card: 12, panel: 16, round: 999 },
+  soft: { tag: 6, control: 10, card: 16, panel: 22, round: 999 },
 };
 
 let activePreferences = DEFAULT_PREFERENCES;

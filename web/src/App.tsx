@@ -15,7 +15,7 @@ import { ProviderIcon } from './components/ProviderIcon';
 import { SettingsDialog } from './components/SettingsDialog';
 import { ModelPicker } from './components/ModelPicker';
 import type { ModelOption, ModelSelection, ThinkingLevel } from './model-types';
-import { DEFAULT_PREFERENCES, loadPreferences, resolveTheme, savePreferences, setActivePreferences, type Preferences } from './preferences';
+import { DEFAULT_PREFERENCES, RADIUS_PRESETS, loadPreferences, resolveTheme, savePreferences, setActivePreferences, type Preferences } from './preferences';
 
 const settingsPages = [
   { id: 'general', label: '通用', icon: Settings, description: '外观、工作步骤、链接与输入行为。' },
@@ -261,6 +261,12 @@ export function App() {
     const root = document.documentElement;
     root.dataset.theme = resolveTheme(preferences.theme);
     root.style.setProperty('--chat-font-size', `${preferences.fontSize}px`);
+    const radii = RADIUS_PRESETS[preferences.radiusStyle] || RADIUS_PRESETS.standard;
+    root.style.setProperty('--radius-tag', `${radii.tag}px`);
+    root.style.setProperty('--radius-control', `${radii.control}px`);
+    root.style.setProperty('--radius-card', `${radii.card}px`);
+    root.style.setProperty('--radius-panel', `${radii.panel}px`);
+    root.style.setProperty('--radius-round', `${radii.round}px`);
     if (preferences.theme !== 'system') return;
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const onChange = () => { root.dataset.theme = media.matches ? 'dark' : 'light'; };
@@ -1843,6 +1849,7 @@ export function App() {
                 </section>
                 <section className="settings-card">
                   <div className="settings-profile-list">
+                    <div className="settings-profile-row"><div><strong>圆角风格</strong><p>统一小元素、控件、卡片和大面板的圆角尺度。</p></div><div className="radius-control"><span className="radius-preview" aria-hidden="true"><i /><i /><i /><i /></span><Select label="圆角风格" value={preferences.radiusStyle} onChange={(value) => updatePreference('radiusStyle', value as Preferences['radiusStyle'])} options={[{ value: 'square', label: '直角' }, { value: 'compact', label: '紧凑' }, { value: 'standard', label: '标准' }, { value: 'soft', label: '圆润' }]} /></div></div>
                     <div className="settings-profile-row"><div><strong>字号大小</strong><p>仅影响对话内容的字号。</p></div><div className="settings-inline-control"><Select label="字号大小" value={String(preferences.fontSize)} onChange={(value) => updatePreference('fontSize', Number(value))} options={[12, 13, 14, 15, 16, 17].map((size) => ({ value: String(size), label: String(size) }))} /><span className="settings-unit">px</span></div></div>
                     <div className="settings-profile-row"><div><strong>工作步骤展示</strong><p>选择希望看到多少工具调用细节。</p></div><Select label="工作步骤展示" value={preferences.stepDisplay} onChange={(value) => updatePreference('stepDisplay', value as Preferences['stepDisplay'])} options={[{ value: 'compact', label: '精简' }, { value: 'standard', label: '标准' }, { value: 'detailed', label: '详细' }]} /></div>
                     <div className="settings-profile-row"><div><strong>工作步骤收起时机</strong><p>选择何时自动收起工作步骤。</p></div><Select label="工作步骤收起时机" value={preferences.stepCollapse} onChange={(value) => updatePreference('stepCollapse', value as Preferences['stepCollapse'])} options={[{ value: 'after-answer', label: '回答结束后' }, { value: 'keep-open', label: '保持展开' }, { value: 'manual', label: '手动控制' }]} /></div>
