@@ -1214,8 +1214,8 @@ export function App() {
                 onClick={() => activatePanelTab(tab)}
                 onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activatePanelTab(tab); } }}
               >
-                {panelTabIcon(tab)}
-                <span>{tab.title}</span>
+                <span className={`panel-tab-icon is-${tab.kind}`}>{panelTabIcon(tab)}</span>
+                <span className="panel-tab-label">{tab.title}</span>
                 <button className="panel-tab-close" aria-label={`关闭 ${tab.title}`} onClick={(event) => { event.stopPropagation(); closePanelTab(tab.id); }}><X /></button>
               </div>)}
               <button className="panel-tab-add" title="打开工作区文件" aria-label="打开工作区文件" onClick={openFilesTab}><Plus /></button>
