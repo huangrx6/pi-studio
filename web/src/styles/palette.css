@@ -219,6 +219,7 @@
   --live-ring: 0 0 0 3px var(--focus-halo);
   --shadow-card: 0 1px 4px var(--shadow-color);
   --shadow-composer: 0 4px 20px var(--shadow-color);
+  --shadow-float: 0 6px 24px var(--shadow-color), 0 2px 6px var(--shadow-color);
   --shadow-popover: 0 14px 42px var(--shadow-deep), 0 2px 8px var(--shadow-color);
   --shadow-dialog: 0 24px 80px var(--shadow-deep);
   --shadow-drawer: -12px 0 40px var(--shadow-color);

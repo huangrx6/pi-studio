@@ -13,6 +13,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
+import { PopoverSurface } from './PopoverSurface';
 
 /** 一个选项；description 作为次要说明展示在标签下方，也参与视觉分组。 */
 export type SelectOption = { value: string; label: string; description?: string; disabled?: boolean };
@@ -78,12 +79,14 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!rect) return;
       const roomBelow = window.innerHeight - rect.bottom - 10;
-      const estimatedHeight = Math.min(260, Math.max(80, options.length * 34 + 8));
+      const hasDescriptions = options.some(option => option.description);
+      const width = Math.min(window.innerWidth - 16, Math.max(rect.width, hasDescriptions ? 288 : 160));
+      const estimatedHeight = Math.min(320, Math.max(80, options.length * (hasDescriptions ? 60 : 36) + 12));
       const showAbove = roomBelow < estimatedHeight && rect.top > roomBelow;
       setPlacement({
-        // 只夹取左边界，保证宽菜单不会越过视口右侧；不处理左侧负值属于既有行为。
-        left: Math.min(rect.left, window.innerWidth - rect.width - 8),
-        width: rect.width,
+        // 菜单宽度独立于紧凑的触发按钮，长说明不再挤成竖排。
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+        width,
         ...(showAbove ? { bottom: window.innerHeight - rect.top + 5 } : { top: rect.bottom + 5 }),
       });
     };
@@ -94,7 +97,7 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
     };
-  }, [open, options.length]);
+  }, [open, options]);
 
   // 点击菜单与触发按钮之外的地方关闭；用 pointerdown 能覆盖鼠标、触控与手写笔。
   useEffect(() => {
@@ -181,7 +184,7 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
       </button>
       {/* placement 为 null 时先不渲染，避免菜单在拿到坐标前闪在左上角。 */}
       {open && placement && createPortal(
-        <div
+        <PopoverSurface
           ref={menuRef}
           id={listId}
           className={`pi-select-menu ${menuClassName}`}
@@ -209,7 +212,7 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
               {option.value === value && <Check />}
             </button>
           ))}
-        </div>,
+        </PopoverSurface>,
         portalTarget,
       )}
     </div>

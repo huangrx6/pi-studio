@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { PopoverSurface } from './PopoverSurface';
 
 export type FooterCell = { text: string; width: number; tone?: string; bold?: boolean };
 type FooterPanel = {
@@ -50,6 +50,20 @@ function Rows({ panel, cell, line }: { panel: FooterPanel; cell: number; line: n
     : <div className="extension-terminal-row" key={index}>
       {row.map((item, column) => <span key={column} className={cellClass(item)} style={{ width: item.width * cell }}>{item.text}</span>)}
     </div>)}</>;
+}
+
+/** Terminal card padding is presentation, not content. Reflow recognized cards
+ * into native rows while leaving arbitrary interactive terminal overlays intact. */
+function DetailRows({ panel }: { panel: FooterPanel }) {
+  return <div className="popover-details">{panel.lines.map((row, index) => {
+    const text = row.map(cell => cell.text).join('').trim();
+    if (!text) return null;
+    if (panel.rowTypes?.[index] === 'rule') return <div className="popover-divider" key={index} />;
+    const parts = text.split(/\s{2,}/u);
+    return parts.length > 1
+      ? <div className="popover-detail-row" key={index}><span>{parts[0]}</span><span className="popover-detail-value">{parts.slice(1).join(' ')}</span></div>
+      : <p className="popover-detail-note" key={index}>{text}</p>;
+  })}</div>;
 }
 
 /**
@@ -182,7 +196,8 @@ export function ExtensionFooter({ sessionId }: { sessionId: string }) {
 
   const overlay = view?.overlay;
   const gridWidth = overlay ? Math.min(layout.width, Math.max(1, (overlay.contentWidth || overlay.width) * layout.cell)) : 0;
-  const cardWidth = overlay ? Math.min(layout.width, Math.max(220, gridWidth + PANEL_PADDING)) : 0;
+  const nativeCard = Boolean(overlay?.title && overlay.close);
+  const cardWidth = overlay ? Math.min(layout.width, nativeCard ? 360 : Math.max(220, gridWidth + PANEL_PADDING)) : 0;
   const overlayLeft = overlay ? Math.max(0, Math.min(overlay.col * layout.cell - PANEL_PADDING / 2, layout.width - cardWidth)) : 0;
 
   return <div className="extension-footer" ref={root}>
@@ -208,29 +223,21 @@ export function ExtensionFooter({ sessionId }: { sessionId: string }) {
         }}
       ><Rows panel={view} cell={layout.cell} line={layout.line} /></div>
       : fallback ? <div className="extension-footer-text">{fallback}</div> : null}
-    {overlay && <div className="extension-footer-popover" role="dialog" aria-label={overlay.title || '扩展详情'} style={{ left: overlayLeft, width: cardWidth }}>
-      {(overlay.title || overlay.close) && <header className="extension-footer-popover-head">
-        <span>{overlay.title || '扩展详情'}</span>
-        <button
-          type="button"
-          className="extension-footer-popover-close"
-          aria-label="关闭扩展详情"
-          onClick={() => {
-            // 优先点击扩展自己的关闭按钮，保持它的状态机同步；没有命中区域时退回 Esc。
-            if (overlay.close) act({ type: 'click', target: 'overlay', x: overlay.close.col, y: overlay.close.row });
-            else act({ type: 'close' });
-          }}
-        ><X size={14} /></button>
-      </header>}
-      <div className="extension-footer-popover-body">
-        <div
+    {overlay && <PopoverSurface className="extension-footer-popover" role="dialog" aria-label={overlay.title || '扩展详情'} style={{ left: overlayLeft, width: cardWidth, maxHeight: 'min(480px, 65vh)' }}
+      heading={overlay.title || (overlay.close ? '扩展详情' : undefined)}
+      closeLabel="关闭扩展详情"
+      onClose={() => {
+        if (overlay.close) act({ type: 'click', target: 'overlay', x: overlay.close.col, y: overlay.close.row });
+        else act({ type: 'close' });
+      }}>
+      <div className="extension-footer-popover-body" onWheel={event => { event.stopPropagation(); act({ type: 'wheel', target: 'overlay', delta: event.deltaY }); }}>
+        {nativeCard ? <DetailRows panel={overlay} /> : <div
           className="extension-footer-popover-grid"
           style={{ width: gridWidth }}
-          onClick={(event) => mouse(event, 'overlay')}
-          onWheel={(event) => { event.stopPropagation(); mouse(event, 'overlay'); }}
-        ><Rows panel={overlay} cell={layout.cell} line={layout.line} /></div>
+          onClick={event => mouse(event, 'overlay')}
+        ><Rows panel={overlay} cell={layout.cell} line={layout.line} /></div>}
       </div>
-    </div>}
+    </PopoverSurface>}
     {error && <span className="extension-footer-error" role="status">{error}</span>}
   </div>;
 }
