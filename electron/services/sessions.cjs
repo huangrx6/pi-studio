@@ -71,6 +71,8 @@ async function indexSessions(force = false) {
     const next = new Map();
     for (const info of infos) {
       next.set(info.id, { id: info.id, path: info.path, cwd: info.cwd,
+        // Pi 原生 session_info 名称优先；它是 CLI 与桌面端共享的标题源。
+        nativeName: info.name || '',
         // 首条消息可能是展开后的 <skill> 块，标题要剥掉它只留真实问题。
         title: info.name ? sessionTitle(info.name, info.firstMessage) : temporaryTitle(info.firstMessage),
         updatedAt: info.modified.getTime(), messageCount: info.messageCount });
@@ -130,7 +132,7 @@ async function listWorkspaces() {
   for (const draft of drafts.values()) {
     const list = byCwd.get(draft.cwd) || [];
     if (!list.some((item) => item.id === draft.manager.getSessionId())) {
-      list.push({ id: draft.manager.getSessionId(), path: '', cwd: draft.cwd, title: draft.title || '新会话', updatedAt: draft.updatedAt || Date.now(), messageCount: draft.title ? 1 : 0 });
+      list.push({ id: draft.manager.getSessionId(), path: '', cwd: draft.cwd, nativeName: draft.manager.getSessionName() || '', title: draft.title || '新会话', updatedAt: draft.updatedAt || Date.now(), messageCount: draft.title ? 1 : 0 });
     }
     byCwd.set(draft.cwd, list);
   }
@@ -145,7 +147,8 @@ async function listWorkspaces() {
       sessions: sessions
         .map((item) => {
           const meta = config.sessionMetadata?.[item.id] || {};
-          return { ...item, title: meta.name || meta.autoTitle || item.title, pinned: Boolean(meta.pinned), archived: Boolean(meta.archived) };
+          // 原生名（CLI 也可改）优先；没有时再用桌面端遗留的 metadata 名称。
+          return { ...item, title: item.nativeName || meta.name || meta.autoTitle || item.title, pinned: Boolean(meta.pinned), archived: Boolean(meta.archived) };
         })
         .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt),
     }))
@@ -189,7 +192,7 @@ async function detail(id) {
             .map((entry) => serializeMessage(entry.message))
             .filter(Boolean),
         );
-        const data = { id, cwd: info.cwd, title: info.title, messages, model: await sessionModelInfo(manager, info.cwd), turnDiffs: readTurnDiffs(id) };
+        const data = { id, cwd: info.cwd, title: info.title, nativeName: info.nativeName || manager.getSessionName?.() || '', messages, model: await sessionModelInfo(manager, info.cwd), turnDiffs: readTurnDiffs(id) };
         detailCache.set(id, { mtimeMs: stat.mtimeMs, size: stat.size, data });
         return data;
       } catch {
@@ -207,7 +210,7 @@ async function detail(id) {
       .map((entry) => serializeMessage(entry.message))
       .filter(Boolean),
   );
-  return { id, cwd: found.cwd, title: drafts.get(id)?.title || diskSessions.get(id)?.title || '新会话', messages, model: await sessionModelInfo(found.manager, found.cwd), turnDiffs: readTurnDiffs(id) };
+  return { id, cwd: found.cwd, title: drafts.get(id)?.title || diskSessions.get(id)?.title || '新会话', nativeName: found.manager.getSessionName?.() || '', messages, model: await sessionModelInfo(found.manager, found.cwd), turnDiffs: readTurnDiffs(id) };
 }
 
 /**

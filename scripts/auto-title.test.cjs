@@ -56,3 +56,15 @@ test('fallback and generated titles have bounded readable lengths, preserving ma
   assert.equal([...temporaryTitle('很长的首次消息'.repeat(20))].length, 24);
   assert.equal(temporaryTitle('<skill name="demo">hidden</skill>\n修复构建失败'), '修复构建失败');
 });
+
+test('questions can be named before the answer exists', async () => {
+  const f = fixture();
+  let payload;
+  await f.generate({ ...input, reply: '', complete: async (_model, context) => {
+    payload = JSON.parse(context.messages[0].content);
+    return answer('提前命名会话');
+  } });
+  assert.equal(payload.answer, undefined);
+  assert.ok(payload.question.includes('轨迹'));
+  assert.equal(f.metadata.chat.autoTitle, '提前命名会话');
+});

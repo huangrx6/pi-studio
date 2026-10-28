@@ -32,6 +32,20 @@ const { attachmentContext } = require('../services/attachments.cjs');
 const { extensionState, extensionAction, extensionDialogResult, extensionSelectResult, updateEditorText, footerAction } = require('../services/extensions.cjs');
 const { createAutoTitleGenerator } = require('../services/auto-title.cjs');
 const { beginTurn, endTurn, saveTurnDiff } = require('../services/turn-diff.cjs');
+/** 把 Pi Studio 的名称写回 Pi 的 session_info，保证 CLI / resume 看到同一个名字。 */
+async function syncNativeName(id, name) {
+  const text = typeof name === 'string' ? name.trim() : '';
+  if (!text) return;
+  try {
+    const found = await findManager(id);
+    if (!found) return;
+    if (found.manager.getSessionName() === text) return;
+    found.manager.appendSessionInfo(text);
+  } catch {
+    /* 原生名称同步失败不影响桌面端标题 */
+  }
+}
+
 const autoTitles = createAutoTitleGenerator({
   readMetadata: id => readConfig(configPath(), {}).sessionMetadata?.[id] || {},
   updateMetadata: (id, patch) => {
@@ -41,6 +55,8 @@ const autoTitles = createAutoTitleGenerator({
     } });
   },
   notify: id => {
+    const meta = readConfig(configPath(), {}).sessionMetadata?.[id];
+    if (meta?.autoTitle) void syncNativeName(id, meta.autoTitle);
     invalidateIndex(); forgetDetail(id);
     const win = getWindow();
     if (win && !win.isDestroyed()) win.webContents.send('pi:sessions-changed');
@@ -179,16 +195,6 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
     send({ type: 'done' });
     // diff 在 done 之后异步计算，不阻塞流式收尾。
     void finishTurnDiff();
-    if (firstTurn) {
-      const answer = [...session.messages].reverse().find(message => message.role === 'assistant');
-      if (answer && !answer.errorMessage && !['error', 'aborted', 'length', 'toolUse'].includes(answer.stopReason)) {
-        const reply = answer.content.filter(block => block.type === 'text').map(block => block.text).join('\n');
-        void autoTitles.generate({ id: sessionId, firstMessage: text, reply, model: session.model,
-          complete: (model, context, options) => session.modelRuntime.completeSimple(model, context, options),
-          hasExplicitName: () => Boolean(found.manager.getSessionName()),
-        }).catch(() => {});
-      }
-    }
   }
 
   function cleanupRun() {
@@ -253,6 +259,17 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
     const imageBlocks = Array.isArray(images)
       ? images.filter((image) => image && image.type === 'image' && typeof image.data === 'string' && typeof image.mimeType === 'string').slice(0, 8)
       : [];
+    // 标题与主回合并行生成：不等回答结束，失败也不影响发送。
+    if (firstTurn) {
+      void autoTitles.generate({
+        id: sessionId,
+        firstMessage: text,
+        reply: '',
+        model: session.model,
+        complete: (model, context, options) => session.modelRuntime.completeSimple(model, context, options),
+        hasExplicitName: () => Boolean(found.manager.getSessionName()),
+      }).catch(() => {});
+    }
     await session.prompt(text, imageBlocks.length > 0 ? { images: imageBlocks } : undefined);
     flushUpdate();
     const lastAssistant = [...session.messages].reverse().find((message) => message.role === 'assistant');
@@ -291,6 +308,7 @@ async function sidebarAction(input) {
     throw new Error('工作区不存在');
   }
   writeConfig(configPath(), updateSidebar(readConfig(configPath(), {}), input));
+  if (input.kind === 'session' && input.action === 'rename') await syncNativeName(input.id, input.name);
   return { ok: true };
 }
 
@@ -302,7 +320,8 @@ function registerSessionsIpc() {
   ipcMain.handle('pi:session', async (_event, id) => {
     const result = await detail(id);
     const meta = readConfig(configPath(), {}).sessionMetadata?.[id];
-    const name = meta?.name || meta?.autoTitle;
+    // Pi 原生名优先（CLI 重命名也能同步）；没有时用桌面端 metadata 兼容旧数据。
+    const name = result?.nativeName || meta?.name || meta?.autoTitle;
     return result && { ...result, title: name || result.title };
   });
 
