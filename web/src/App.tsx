@@ -697,7 +697,24 @@ export function App() {
         </div>
         {workspaceSearchOpen && <div className="workspace-search"><Search /><input autoFocus aria-label="搜索工作区或会话" placeholder="搜索工作区或会话…" value={workspaceQuery} onChange={(event) => setWorkspaceQuery(event.target.value)} /></div>}
         <div className="workspace-list">
-          {stateLoading && workspaces.length === 0 && <div className="sidebar-empty"><LoaderCircle className="spin" /><span>正在加载工作区…</span></div>}
+          {stateLoading && workspaces.length === 0 && (
+            <div className="workspace-skeleton" role="status" aria-live="polite" aria-label="正在加载工作区">
+              <span className="sr-only">正在加载工作区…</span>
+              {[0, 1, 2].map((group) => (
+                <div className="skeleton-group" key={group} style={{ animationDelay: `${group * 90}ms` }}>
+                  <div className="skeleton-workspace-head">
+                    <span className="skeleton-icon" />
+                    <span className="skeleton-line" style={{ width: `${[46, 60, 38][group]}%` }} />
+                    <span className="skeleton-chevron" />
+                  </div>
+                  <div className="skeleton-sessions">
+                    <span className="skeleton-session-line" style={{ width: `${[74, 58][group % 2]}%` }} />
+                    <span className="skeleton-session-line" style={{ width: `${[53, 67][group % 2]}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           {!(stateLoading && workspaces.length === 0) && visibleWorkspaces.map((item) => {
             const isOpen = expanded.has(item.cwd);
             const isActive = workspace === item.cwd;
