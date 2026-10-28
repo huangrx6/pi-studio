@@ -1188,3 +1188,16 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 .outline-track { position: relative; }
 .outline-track::before { content: ''; position: absolute; z-index: 0; top: 17px; bottom: 17px; right: 3px; width: 1px; background: linear-gradient(180deg, transparent, #e1e6ee 12%, #e1e6ee 88%, transparent); }
 .outline-tick { position: relative; z-index: 1; }
+
+/* Keep the outline as one compact cluster instead of stretching over the whole rail. */
+.conversation-outline { top: 112px; bottom: 104px; }
+.outline-track { justify-content: center; gap: 8px; padding: 0; }
+.outline-item { position: relative; z-index: 1; display: flex; align-items: center; justify-content: flex-end; width: 100%; min-height: 8px; }
+.outline-item.is-hovered { z-index: 4; }
+.outline-tick { width: 30px; height: 8px; min-height: 8px; }
+.outline-line { width: 12px; height: 2px; }
+.outline-tick:hover .outline-line { width: 17px; }
+.outline-tick.is-active .outline-line { width: 22px; }
+.outline-preview { top: 50%; right: 31px; transform: translateY(-50%); }
+.outline-track::before { top: 4px; bottom: 4px; opacity: .6; }
+@media (max-height: 700px) { .outline-track { gap: 5px; } }

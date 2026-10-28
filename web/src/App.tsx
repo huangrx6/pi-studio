@@ -1393,21 +1393,21 @@ export function App() {
         {!settingsOpen && !filesOpen && !isNewConversation && outlineItems.length > 1 && (
           <nav className="conversation-outline" aria-label="对话大纲" onMouseLeave={() => setOutlineHover(null)}>
             <div className="outline-track">
-              {outlineItems.map((item, index) => <button
-                type="button"
-                key={item.id}
-                className={`outline-tick ${index === outlineActive ? 'is-active' : ''}`}
-                aria-label={`跳转到第 ${index + 1} 条提问`}
-                title={item.text.slice(0, 100)}
-                onMouseEnter={() => setOutlineHover(index)}
-                onFocus={() => setOutlineHover(index)}
-                onClick={() => jumpToOutline(index)}
-              ><span className="outline-line" /></button>)}
+              {outlineItems.map((item, index) => <div className={`outline-item ${outlineHover === index ? 'is-hovered' : ''}`} key={item.id} onMouseEnter={() => setOutlineHover(index)}>
+                <button
+                  type="button"
+                  className={`outline-tick ${index === outlineActive ? 'is-active' : ''}`}
+                  aria-label={`跳转到第 ${index + 1} 条提问`}
+                  title={item.text.slice(0, 100)}
+                  onFocus={() => setOutlineHover(index)}
+                  onClick={() => jumpToOutline(index)}
+                ><span className="outline-line" /></button>
+                {outlineHover === index && <div className="outline-preview">
+                  <div className="outline-preview-role">你 · {item.timestamp ? new Date(item.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}<span>{index + 1} / {outlineItems.length}</span></div>
+                  <p>{item.text}</p>
+                </div>}
+              </div>)}
             </div>
-            {outlineHover !== null && outlineItems[outlineHover] && <div className="outline-preview" style={{ top: `${Math.min(86, Math.max(12, (outlineHover / Math.max(1, outlineItems.length - 1)) * 100))}%` }}>
-              <div className="outline-preview-role">你 · {outlineItems[outlineHover].timestamp ? new Date(outlineItems[outlineHover].timestamp as number).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}<span>{outlineHover + 1} / {outlineItems.length}</span></div>
-              <p>{outlineItems[outlineHover].text}</p>
-            </div>}
           </nav>
         )}
         <div className="composer-dock">
