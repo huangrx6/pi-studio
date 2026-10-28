@@ -6,7 +6,7 @@ import {
 import appIcon from '../../assets/icon.png';
 import { Select } from './components/Select';
 import type { ChatMessage, ComposerCommand, ComposerCommandSource, ComposerFile } from './chat-types';
-import { ChatMessageView } from './components/ChatMessage';
+import { AssistantTurnView, ChatMessageView } from './components/ChatMessage';
 import { DetailDialog } from './components/DetailDialog';
 import { ProviderIcon } from './components/ProviderIcon';
 import { SettingsDialog } from './components/SettingsDialog';
@@ -995,6 +995,14 @@ export function App() {
   }
 
   const toolResultMap = new Map(messages.filter((message) => message.role === 'toolResult' && message.toolCallId).map((message) => [message.toolCallId as string, message]));
+  const transcriptTurns: Array<{ kind: 'user'; message: ChatMessage } | { kind: 'assistant'; messages: ChatMessage[] }> = [];
+  for (const message of messages) {
+    if (message.role === 'toolResult') continue;
+    if (message.role === 'user') { transcriptTurns.push({ kind: 'user', message }); continue; }
+    const last = transcriptTurns[transcriptTurns.length - 1];
+    if (last?.kind === 'assistant') last.messages.push(message);
+    else transcriptTurns.push({ kind: 'assistant', messages: [message] });
+  }
   const composerCommandOptions = composerMenu?.kind === 'slash'
     ? composerCommands.filter((command) => `${command.name} ${command.description}`.toLowerCase().includes(composerMenu.query.toLowerCase()))
     : [];
@@ -1315,14 +1323,9 @@ export function App() {
           <div className="chat-column">
             {messages.length > 0 && (
               <div className="messages">
-                {messages.filter((message) => message.role !== 'toolResult').map((message, index) => (
-                  <ChatMessageView
-                    key={message.timestamp ?? `${message.role}-${index}`}
-                    message={message}
-                    toolResults={toolResultMap}
-                    busy={busy}
-                  />
-                ))}
+                {transcriptTurns.map((turn, index) => turn.kind === 'user'
+                  ? <ChatMessageView key={turn.message.timestamp ?? `user-${index}`} message={turn.message} />
+                  : <AssistantTurnView key={turn.messages[0]?.timestamp ?? `assistant-${index}`} messages={turn.messages} toolResults={toolResultMap} busy={busy} />)}
                 {busy && !messages.some((message) => message.role === 'assistant' && message.streaming) && (
                   <div className="thinking"><span /><span /><span />正在思考</div>
                 )}
