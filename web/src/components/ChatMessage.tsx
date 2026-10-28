@@ -100,8 +100,9 @@ function activityColor(entry: ActivityEntry): string {
   return 'is-note';
 }
 
-export function AssistantTurnView({ messages, toolResults, busy, id }: { messages: ChatMessage[]; toolResults: Map<string, ChatMessage>; busy: boolean; id?: string }) {
-  const live = busy && messages.some((message) => message.streaming);
+export function AssistantTurnView({ messages, toolResults, busy, id, retry }: { messages: ChatMessage[]; toolResults: Map<string, ChatMessage>; busy: boolean; id?: string; retry?: { attempt: number; maxAttempts: number; errorMessage?: string } }) {
+  const live = Boolean(retry) || (busy && messages.some((message) => message.streaming));
+  const failed = !live && messages.some((message) => message.errorMessage);
   const [activityOpen, setActivityOpen] = useState(live);
   useEffect(() => { if (live) setActivityOpen(true); }, [live]);
   const flat: FlatBlock[] = messages.flatMap((message, messageIndex) => message.content.map((block, blockIndex) => ({ block, key: `${messageIndex}-${blockIndex}` })));
@@ -119,12 +120,12 @@ export function AssistantTurnView({ messages, toolResults, busy, id }: { message
   const thinkingCount = messages.reduce((total, message) => total + message.content.filter((block) => block.type === 'thinking').length, 0);
   const latest = messages[messages.length - 1];
   const error = messages.find((message) => message.errorMessage)?.errorMessage;
-  return <div id={id} className={`assistant-turn ${live ? 'is-live' : ''}`}>
+  return <div id={id} className={`assistant-turn ${live ? 'is-live' : ''} ${retry ? 'is-retrying' : ''} ${failed ? 'has-error' : ''}`}>
     <div className="assistant-turn-rail"><span className="assistant-orb">π</span></div>
     <div className="assistant-turn-main">
       <div className="assistant-turn-head">
         <span className="assistant-turn-name">Pi</span>
-        <span className="assistant-turn-status">{live ? '正在处理' : '已完成'}</span>
+        <span className="assistant-turn-status" title={retry?.errorMessage}>{retry ? `重试中 ${retry.attempt}/${retry.maxAttempts}` : failed ? '失败' : live ? '正在处理' : '已完成'}</span>
         <span className="assistant-turn-meta">
           {messages.length > 1 && <span><span className="turn-dot" />{messages.length} 步</span>}
           {toolCount > 0 && <span className="turn-metric-tools"><Wrench />{toolCount}</span>}
@@ -159,7 +160,7 @@ export function AssistantTurnView({ messages, toolResults, busy, id }: { message
             : null)}
         {live && <span className="caret" />}
       </div>}
-      {!live && responseBlocks.length === 0 && error && <div className="message-error">{error}</div>}
+      {!live && error && <div className="message-error">{error}</div>}
       {live && responseBlocks.length === 0 && <span className="caret" />}
     </div>
   </div>;

@@ -1245,3 +1245,9 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 .attachment-kind.is-archive { background: #fbf4e7; color: #a17c38; }
 .attachment-kind.is-sheet { background: #edf7f2; color: #4b8b6f; }
 .attachment-kind.is-doc { background: #fbf1e8; color: #9c6a40; }
+
+/* Retry status must never look like a completed run. */
+.assistant-turn.is-retrying .assistant-turn-status { color: #a17a37; }
+.assistant-turn.is-retrying .assistant-turn-status::before { background: #c49b52; }
+.assistant-turn.has-error .assistant-turn-status { color: var(--error); }
+.assistant-turn.has-error .assistant-turn-status::before { background: var(--error); }

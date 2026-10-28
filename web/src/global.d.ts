@@ -79,7 +79,7 @@ declare global {
       onOpenSettings(listener: () => void): () => void;
       setModel(modelRef: string, cwd?: string): Promise<ModelSelection>;
       setThinkingLevel(payload: { modelRef: string; level: ThinkingLevel; cwd?: string }): Promise<ModelSelection>;
-      onPrompt(listener: (payload: { requestId: string; type: 'message_start' | 'message_update' | 'message_end' | 'done' | 'error'; message?: ChatMessage; error?: string }) => void): () => void;
+      onPrompt(listener: (payload: { requestId: string; type: 'message_start' | 'message_update' | 'message_end' | 'retry-start' | 'retry-end' | 'done' | 'error'; message?: ChatMessage; error?: string; attempt?: number; maxAttempts?: number; delayMs?: number; success?: boolean; finalError?: string; errorMessage?: string }) => void): () => void;
     };
   }
 }

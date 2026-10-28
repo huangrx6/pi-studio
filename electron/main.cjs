@@ -316,6 +316,17 @@ function serializeMessage(message) {
   return result;
 }
 
+function visibleSessionMessages(messages) {
+  return messages.filter((message, index) => {
+    if (message.role !== 'assistant' || message.stopReason !== 'error' || !message.errorMessage) return true;
+    let nextUser = messages.length;
+    for (let cursor = index + 1; cursor < messages.length; cursor += 1) {
+      if (messages[cursor].role === 'user') { nextUser = cursor; break; }
+    }
+    return !messages.slice(index + 1, nextUser).some((next) => next.role === 'assistant' && next.stopReason !== 'error');
+  });
+}
+
 async function detail(id) {
   const draft = drafts.get(id);
   if (!draft) {
@@ -327,10 +338,10 @@ async function detail(id) {
         const cached = detailCache.get(id);
         if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.data;
         const manager = pi.SessionManager.open(info.path, undefined, info.cwd);
-        const messages = manager.getEntries()
+        const messages = visibleSessionMessages(manager.getEntries()
           .filter((entry) => entry.type === 'message')
           .map((entry) => serializeMessage(entry.message))
-          .filter(Boolean);
+          .filter(Boolean));
         const data = { id, cwd: info.cwd, title: info.title, messages };
         detailCache.set(id, { mtimeMs: stat.mtimeMs, size: stat.size, data });
         return data;
@@ -339,10 +350,10 @@ async function detail(id) {
   }
   const found = await findManager(id);
   if (!found) return undefined;
-  const messages = found.manager.getEntries()
+  const messages = visibleSessionMessages(found.manager.getEntries()
     .filter((entry) => entry.type === 'message')
     .map((entry) => serializeMessage(entry.message))
-    .filter(Boolean);
+    .filter(Boolean));
   return { id, cwd: found.cwd, title: diskSessions.get(id)?.title || '新会话', messages };
 }
 
@@ -857,6 +868,12 @@ async function fileReferenceContext(cwd, mentions) {
       if (piEvent.type === 'message_start' || piEvent.type === 'message_update' || piEvent.type === 'message_end') {
         const message = serializeMessage(piEvent.message);
         if (message) send({ type: piEvent.type, message });
+      }
+      if (piEvent.type === 'auto_retry_start') {
+        send({ type: 'retry-start', attempt: piEvent.attempt, maxAttempts: piEvent.maxAttempts, delayMs: piEvent.delayMs, errorMessage: piEvent.errorMessage });
+      }
+      if (piEvent.type === 'auto_retry_end') {
+        send({ type: 'retry-end', success: piEvent.success, attempt: piEvent.attempt, finalError: piEvent.finalError });
       }
     });
     try {

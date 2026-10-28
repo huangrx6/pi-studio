@@ -128,6 +128,7 @@ export function App() {
   const [workspaces, setWorkspaces] = useState<PiWorkspace[]>([]);
   const [stateLoading, setStateLoading] = useState(true);
   const [sessionLoading, setSessionLoading] = useState(false);
+  const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [outlineActive, setOutlineActive] = useState(0);
   const [outlineHover, setOutlineHover] = useState<number | null>(null);
   const [workspace, setWorkspace] = useState('');
@@ -564,13 +565,19 @@ export function App() {
         return copy;
       });
     }
+    if (event.type === 'retry-start') {
+      setRetryInfo({ attempt: event.attempt ?? 1, maxAttempts: event.maxAttempts ?? 1, errorMessage: event.errorMessage });
+    }
+    if (event.type === 'retry-end' && event.success) setRetryInfo(null);
     if (event.type === 'done') {
+      setRetryInfo(null);
       setMessages((current) => current.map((message) => ({ ...message, streaming: false })));
       setBusy(false);
       setError(null);
       void loadState();
     }
     if (event.type === 'error') {
+      setRetryInfo(null);
       setError(event.error || '执行失败，请重试');
       setMessages((current) => current.map((message) => ({ ...message, streaming: false })));
       setBusy(false);
@@ -916,6 +923,7 @@ export function App() {
     }
     setBusy(true);
     setError(null);
+    setRetryInfo(null);
     const files = composerAttachments.filter((attachment) => attachment.kind === 'file');
     const images = composerAttachments.filter((attachment) => attachment.kind === 'image');
     let displayText = text;
@@ -1137,6 +1145,7 @@ export function App() {
     if (last?.kind === 'assistant') last.messages.push(message);
     else transcriptTurns.push({ kind: 'assistant', messages: [message] });
   }
+  const lastAssistantTurnIndex = transcriptTurns.reduce((last, turn, index) => turn.kind === 'assistant' ? index : last, -1);
   const outlineItems = transcriptTurns.flatMap((turn, index) => {
     if (turn.kind !== 'user') return [];
     const text = turn.message.content.filter((block) => block.type === 'text').map((block) => block.type === 'text' ? block.text : '').join(' ').replace(/\s+/g, ' ').trim();
@@ -1468,13 +1477,13 @@ export function App() {
               <div className="messages">
                 {transcriptTurns.map((turn, index) => turn.kind === 'user'
                   ? <ChatMessageView key={turn.message.timestamp ?? `user-${index}`} id={`chat-turn-${index}`} message={turn.message} />
-                  : <AssistantTurnView key={turn.messages[0]?.timestamp ?? `assistant-${index}`} id={`chat-turn-${index}`} messages={turn.messages} toolResults={toolResultMap} busy={busy} />)}
-                {busy && !messages.some((message) => message.role === 'assistant' && message.streaming) && (
+                  : <AssistantTurnView key={turn.messages[0]?.timestamp ?? `assistant-${index}`} id={`chat-turn-${index}`} messages={turn.messages} toolResults={toolResultMap} busy={busy} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} />)}
+                {busy && !retryInfo && !messages.some((message) => message.role === 'assistant' && message.streaming) && (
                   <div className="thinking"><span /><span /><span />正在思考</div>
                 )}
               </div>
             )}
-            {error && <div className="error-card" role="alert"><strong>暂时无法完成操作</strong><p>{error}</p></div>}
+            {error && !messages.some((message) => message.role === 'assistant' && message.errorMessage) && <div className="error-card" role="alert"><strong>暂时无法完成操作</strong><p>{error}</p></div>}
           </div>
         </div>}
 
