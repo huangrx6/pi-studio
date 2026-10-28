@@ -9,6 +9,12 @@ function MessageImages({ blocks }: { blocks: ContentBlock[] }) {
   return <div className="message-images">{images.map((block, index) => block.type === 'image' && <img key={index} src={`data:${block.mimeType};base64,${block.data}`} alt="" />)}</div>;
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
+
 function toolSummary(call: ToolCallBlock): string {
   const args = call.arguments ?? {};
   const values = [args.command, args.path, args.file_path, args.query, args.pattern, args.url, args.name, args.description];
@@ -161,5 +167,13 @@ export function AssistantTurnView({ messages, toolResults, busy, id }: { message
 export function ChatMessageView({ message, id }: { message: ChatMessage; id?: string }) {
   if (message.role !== 'user') return null;
   const text = message.content.filter((block) => block.type === 'text').map((block) => block.type === 'text' ? block.text : '').join('\n');
-  return <div id={id} className="message user"><div className="user-bubble">{text}<MessageImages blocks={message.content} /></div></div>;
+  return <div id={id} className="message user"><div className="user-bubble">
+    {text && <div className="user-text">{text}</div>}
+    {message.attachments?.map((attachment) => <div className="attachment-card" key={attachment.path} title={attachment.path}>
+      <span className="attachment-icon"><FileText /></span>
+      <span className="attachment-main"><strong>{attachment.name}</strong><span>{formatBytes(attachment.bytes)} · {attachment.lines.toLocaleString('zh-CN')} 行</span></span>
+      <span className="attachment-kind">TXT</span>
+    </div>)}
+    <MessageImages blocks={message.content} />
+  </div></div>;
 }

@@ -4,6 +4,8 @@ export type ThinkingBlock = { type: 'thinking'; thinking: string; redacted?: boo
 export type ToolCallBlock = { type: 'toolCall'; id: string; name: string; arguments: Record<string, unknown>; namespace?: string };
 export type ContentBlock = TextBlock | ImageBlock | ThinkingBlock | ToolCallBlock;
 
+export type ChatAttachment = { name: string; path: string; bytes: number; lines: number };
+
 export type ChatMessage = {
   role: 'user' | 'assistant' | 'toolResult';
   content: ContentBlock[];
@@ -19,6 +21,7 @@ export type ChatMessage = {
   toolName?: string;
   isError?: boolean;
   durationMs?: number;
+  attachments?: ChatAttachment[];
 };
 
 export type ComposerCommandSource = 'builtin' | 'extension' | 'prompt' | 'skill';

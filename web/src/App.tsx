@@ -70,6 +70,16 @@ function relativeTime(ms: number): string {
   return `${Math.floor(diff / 86_400_000)} 天`;
 }
 
+const LONG_MESSAGE_CHARS = 12_000;
+const LONG_MESSAGE_BYTES = 24_000;
+const LONG_MESSAGE_LINES = 240;
+
+function isLongMessage(text: string): boolean {
+  if (text.length > LONG_MESSAGE_CHARS) return true;
+  if (text.split('\n').length > LONG_MESSAGE_LINES) return true;
+  return new TextEncoder().encode(text).length > LONG_MESSAGE_BYTES;
+}
+
 const UI_KEYS = {
   expanded: 'pi-studio:expanded-workspaces',
   workspaceOrder: 'pi-studio:workspace-order',
@@ -869,12 +879,23 @@ export function App() {
     setPrompt('');
     setBusy(true);
     setError(null);
-    setMessages((existing) => [...existing, { role: 'user', content: [{ type: 'text', text }], timestamp: Date.now() }]);
+    let outgoingText = text;
+    let displayText = text;
+    let attachment: { name: string; path: string; bytes: number; lines: number } | undefined;
+    if (isLongMessage(text)) {
+      try {
+        const saved = await window.piApi.saveAttachment({ sessionId: current.id, text });
+        outgoingText = saved.promptText;
+        displayText = saved.notice;
+        attachment = { name: saved.name, path: saved.path, bytes: saved.bytes, lines: saved.lines };
+      } catch { /* fall back to inline text */ }
+    }
+    setMessages((existing) => [...existing, { role: 'user', content: [{ type: 'text', text: displayText }], timestamp: Date.now(), ...(attachment ? { attachments: [attachment] } : {}) }]);
     const requestId = crypto.randomUUID();
     const mentions = [...text.matchAll(/(?:^|\s)@([^\s]+)/g)].map((match) => match[1]);
     requestRef.current = requestId;
     try {
-      await window.piApi.prompt({ sessionId: current.id, text, requestId, mentions });
+      await window.piApi.prompt({ sessionId: current.id, text: outgoingText, requestId, mentions, attachments: attachment ? [attachment.path] : [] });
       const saved = await window.piApi.session(current.id);
       if (saved) {
         setSession({ id: saved.id, cwd: saved.cwd, title: saved.title });

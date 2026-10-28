@@ -227,6 +227,41 @@ async function searchWorkspaceFiles(cwd, query) {
   return { files: ranked.slice(0, 40) };
 }
 
+const ATTACHMENT_MARKER = /\[\[pi-studio-attachment:([A-Za-z0-9+/=]+)\]\]/;
+function attachmentRoot() { return path.join(pi.getAgentDir(), 'attachments'); }
+
+function parseAttachmentMarker(text) {
+  const match = ATTACHMENT_MARKER.exec(text);
+  if (!match) return { text, attachments: [] };
+  try {
+    const info = JSON.parse(Buffer.from(match[1], 'base64').toString('utf8'));
+    if (!info || typeof info.path !== 'string' || typeof info.name !== 'string') return { text, attachments: [] };
+    return { text: text.replace(match[0], '').trim(), attachments: [{ name: String(info.name), path: info.path, bytes: Number(info.bytes) || 0, lines: Number(info.lines) || 0 }] };
+  } catch { return { text, attachments: [] }; }
+}
+
+async function attachmentContext(paths) {
+  const blocks = [];
+  let budget = 240_000;
+  for (const target of [...new Set(Array.isArray(paths) ? paths : [])].slice(0, 6)) {
+    if (typeof target !== 'string') continue;
+    try {
+      const canonical = fs.realpathSync(target);
+      const root = attachmentRoot();
+      if (canonical !== root && !canonical.startsWith(root + path.sep)) continue;
+      const stat = fs.statSync(canonical);
+      if (!stat.isFile() || stat.size > budget) continue;
+      const content = fs.readFileSync(canonical, 'utf8');
+      if (content.includes('\0')) continue;
+      const clipped = content.length > budget ? content.slice(0, budget) : content;
+      budget -= clipped.length;
+      blocks.push({ type: 'text', text: `<attachment path="${canonical}">\n${clipped}\n</attachment>` });
+      if (budget <= 0) break;
+    } catch { /* ignore missing attachment */ }
+  }
+  return blocks;
+}
+
 function serializeContent(content) {
   if (typeof content === 'string') return [{ type: 'text', text: content }];
   if (!Array.isArray(content)) return [];
@@ -244,6 +279,15 @@ function serializeContent(content) {
 function serializeMessage(message) {
   if (!message || !['user', 'assistant', 'toolResult'].includes(message.role)) return null;
   const result = { role: message.role, content: serializeContent(message.content), timestamp: message.timestamp };
+  if (message.role === 'user') {
+    const joined = result.content.filter((block) => block.type === 'text').map((block) => block.text).join('\n');
+    const parsed = parseAttachmentMarker(joined);
+    if (parsed.attachments.length > 0) {
+      const nonText = result.content.filter((block) => block.type !== 'text');
+      result.content = [...(parsed.text ? [{ type: 'text', text: parsed.text }] : []), ...nonText];
+      result.attachments = parsed.attachments;
+    }
+  }
   if (message.role === 'assistant') {
     result.stopReason = message.stopReason;
     result.errorMessage = message.errorMessage;
@@ -612,6 +656,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('pi:session', async (_event, id) => detail(id));
   ipcMain.handle('pi:composer-resources', async (_event, payload) => composerResources(payload || {}));
   ipcMain.handle('pi:search-files', async (_event, { cwd, query }) => searchWorkspaceFiles(cwd, query));
+  ipcMain.handle('pi:save-attachment', async (_event, payload) => saveAttachment(payload || {}));
   ipcMain.handle('pi:file-actions', async (_event, { cwd, path: requested }) => {
     const target = workspaceFile(cwd, requested);
     if (!fs.existsSync(target)) throw new Error('文件不存在');
@@ -668,6 +713,24 @@ app.whenReady().then(async () => {
     const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
     return result.canceled ? undefined : result.filePaths[0];
   });
+async function saveAttachment({ sessionId, text }) {
+  if (typeof text !== 'string' || text.length === 0) throw new Error('没有可保存的内容');
+  const safeSession = String(sessionId || 'local').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 80) || 'local';
+  const dir = path.join(attachmentRoot(), safeSession);
+  fs.mkdirSync(dir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const name = `long-message-${stamp}.txt`;
+  const target = path.join(dir, name);
+  fs.writeFileSync(target, text, 'utf8');
+  const bytes = Buffer.byteLength(text, 'utf8');
+  const lines = text.split('\n').length;
+  const info = { name, path: target, bytes, lines };
+  const marker = `[[pi-studio-attachment:${Buffer.from(JSON.stringify(info)).toString('base64')}]]`;
+  const preview = text.replace(/\s+/g, ' ').trim().slice(0, 140);
+  const notice = `${preview}${text.length > 140 ? '…' : ''}\n\n原始内容已保存为附件。`;
+  return { ...info, promptText: `${notice}\n\n${marker}`, notice };
+}
+
 async function fileReferenceContext(cwd, mentions) {
   const blocks = [];
   let budget = 240_000;
@@ -698,16 +761,17 @@ async function fileReferenceContext(cwd, mentions) {
   return blocks;
 }
 
-  ipcMain.handle('pi:prompt', async (event, { sessionId, text, requestId, mentions }) => {
+  ipcMain.handle('pi:prompt', async (event, { sessionId, text, requestId, mentions, attachments }) => {
     const found = await findManager(sessionId);
     if (!found) throw new Error('会话不存在');
     const session = await ensureAgent(sessionId, found.manager, found.cwd);
     const referenceBlocks = await fileReferenceContext(found.cwd, mentions);
-    if (referenceBlocks.length > 0) {
+    const attachedBlocks = await attachmentContext(attachments);
+    if (referenceBlocks.length > 0 || attachedBlocks.length > 0) {
       try {
         await session.sendCustomMessage({
           customType: 'pi-studio:file-reference',
-          content: [{ type: 'text', text: 'The user explicitly referenced the following workspace files. Treat them as primary context for this request.' }, ...referenceBlocks],
+          content: [{ type: 'text', text: 'The user referenced the following workspace files or attachments. Treat them as primary context for this request.' }, ...referenceBlocks, ...attachedBlocks],
           display: false,
         }, { triggerTurn: false });
       } catch { /* file context is best-effort */ }

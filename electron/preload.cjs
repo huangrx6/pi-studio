@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('piApi', {
   openExternal: (url) => ipcRenderer.invoke('pi:open-external', url),
   composerResources: (payload) => ipcRenderer.invoke('pi:composer-resources', payload),
   searchFiles: (payload) => ipcRenderer.invoke('pi:search-files', payload),
+  saveAttachment: (payload) => ipcRenderer.invoke('pi:save-attachment', payload),
   chooseWorkspace: () => ipcRenderer.invoke('pi:choose-workspace'),
   models: (cwd) => ipcRenderer.invoke('pi:models', cwd),
   providerModels: (providerId) => ipcRenderer.invoke('pi:provider-models', providerId),

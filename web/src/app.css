@@ -1201,3 +1201,13 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 .outline-preview { top: 50%; right: 31px; transform: translateY(-50%); }
 .outline-track::before { top: 4px; bottom: 4px; opacity: .6; }
 @media (max-height: 700px) { .outline-track { gap: 5px; } }
+
+/* Long user input becomes a compact file attachment in the bubble. */
+.user-text { white-space: pre-wrap; }
+.attachment-card { display: flex; align-items: center; gap: 9px; min-width: 240px; max-width: 100%; margin-top: 9px; padding: 8px 10px; border: 1px solid #dfe7f3; border-radius: 8px; background: rgb(255 255 255 / 62%); text-align: left; }
+.attachment-icon { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 7px; color: #5475b4; background: #eaf1fc; }
+.attachment-icon svg { width: 15px; height: 15px; }
+.attachment-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.attachment-main strong { overflow: hidden; color: #4b5b72; font: 10.5px var(--mono); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-main > span { color: #98a4b4; font-size: 9.5px; }
+.attachment-kind { flex: none; padding: 2px 4px; border-radius: 4px; background: #eef3fb; color: #788bab; font: 8px var(--mono); letter-spacing: .06em; }
