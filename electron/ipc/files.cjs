@@ -12,6 +12,7 @@ const {
   searchWorkspaceFiles,
   listDirectory,
   readFileText,
+  readAbsoluteFile,
 } = require('../services/workspace.cjs');
 const { applicationsForFile, applicationIcon, openWithApp } = require('../services/mac-apps.cjs');
 
@@ -21,6 +22,8 @@ function registerFilesIpc() {
 
   // 单个文件内容（二进制 / 超大文件只返回元信息）
   ipcMain.handle('pi:file', async (_event, { cwd, path: requested }) => readFileText(cwd, requested));
+  // 文件变更卡片可能指向工作区之外（bash / 脚本输出），只读预览走绝对路径。
+  ipcMain.handle('pi:file-absolute', async (_event, requested) => readAbsoluteFile(requested));
 
   // 「打开方式」候选应用 + 图标
   ipcMain.handle('pi:file-actions', async (_event, { cwd, path: requested }) => {

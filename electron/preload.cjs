@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('piApi', {
   prompt: (payload) => ipcRenderer.invoke('pi:prompt', payload),
   files: (cwd, path) => ipcRenderer.invoke('pi:files', { cwd, path }),
   file: (cwd, path) => ipcRenderer.invoke('pi:file', { cwd, path }),
+  fileAbsolute: (path) => ipcRenderer.invoke('pi:file-absolute', path),
   fileActions: (payload) => ipcRenderer.invoke('pi:file-actions', payload),
   openWith: (payload) => ipcRenderer.invoke('pi:open-with', payload),
   revealFile: (payload) => ipcRenderer.invoke('pi:reveal-file', payload),

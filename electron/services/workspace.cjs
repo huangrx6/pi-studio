@@ -109,14 +109,27 @@ function listDirectory(cwd, requested) {
  * 读取文本文件。
  * 超过 1MB 或检测到 NUL 字节时按二进制处理，只返回元信息。
  */
-function readFileText(cwd, requested) {
-  const target = resolveInWorkspace(cwd, requested);
+function readFilePath(displayPath, target) {
   const stat = fs.statSync(target);
   if (!stat.isFile()) throw new Error('不是文件');
-  if (stat.size > 1_000_000) return { path: requested, size: stat.size, binary: true, text: '' };
+  if (stat.size > 1_000_000) return { path: displayPath, size: stat.size, binary: true, text: '' };
   const buffer = fs.readFileSync(target);
   const binary = buffer.includes(0);
-  return { path: requested, size: stat.size, binary, text: binary ? '' : buffer.toString('utf8') };
+  return { path: displayPath, size: stat.size, binary, text: binary ? '' : buffer.toString('utf8') };
+}
+
+function readFileText(cwd, requested) {
+  return readFilePath(requested, resolveInWorkspace(cwd, requested));
+}
+
+/**
+ * 只读打开工作区之外的绝对路径。
+ * 用于文件变更卡片：bash / 脚本写到其它目录的文件也能在右栏预览。
+ */
+function readAbsoluteFile(requested) {
+  if (typeof requested !== 'string' || !path.isAbsolute(requested)) throw new Error('需要绝对路径');
+  const target = fs.realpathSync(requested);
+  return readFilePath(requested, target);
 }
 
 /**
@@ -211,6 +224,7 @@ module.exports = {
   searchWorkspaceFiles,
   listDirectory,
   readFileText,
+  readAbsoluteFile,
   directoryReferenceText,
   fileReferenceContext,
 };

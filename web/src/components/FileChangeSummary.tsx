@@ -71,10 +71,11 @@ function mergeFiles(git: TurnDiff | undefined, toolFiles: FileChange[]): Display
   return [...merged.values()];
 }
 
-export function FileChangeSummary({ files, gitDiff, onOpenDiff }: {
+export function FileChangeSummary({ files, gitDiff, onOpenDiff, onOpenFile }: {
   files: FileChange[];
   gitDiff?: TurnDiff;
   onOpenDiff?: (file: TurnDiffFile) => void;
+  onOpenFile?: (path: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const display = mergeFiles(gitDiff, files);
@@ -96,7 +97,10 @@ export function FileChangeSummary({ files, gitDiff, onOpenDiff }: {
     </header>
 
     <div className="file-change-list">{visible.map((file) => {
-      const openable = Boolean(file.patch && onOpenDiff);
+      // 有补丁先看 diff；没有补丁但路径可读时，直接打开右侧文件预览。
+      const canDiff = Boolean(file.patch && onOpenDiff);
+      const canView = Boolean(onOpenFile && file.path.startsWith('/'));
+      const openable = canDiff || canView;
       return <button
         type="button"
         className={`file-change-item ${openable ? 'is-openable' : ''}`}
@@ -105,6 +109,7 @@ export function FileChangeSummary({ files, gitDiff, onOpenDiff }: {
         disabled={!openable}
         onClick={() => {
           if (!openable) return;
+          if (!canDiff) { onOpenFile?.(file.path); return; }
           onOpenDiff?.({
             path: file.path,
             label: file.label,
@@ -133,7 +138,7 @@ export function FileChangeSummary({ files, gitDiff, onOpenDiff }: {
     </button>}
 
     <p className="file-change-note">{gitDiff
-      ? '基于本轮 Git 工作树快照，包含命令与脚本产生的改动。'
-      : '仅汇总工具确认的写入；非 Git 仓库无法统计命令产生的文件。'}{!complete && hasCounts ? ' 部分文件未提供差异，未计入行数。' : ''}</p>
+      ? '基于本轮 Git 工作树快照；有补丁的文件点击查看 diff，其余文件点击预览。'
+      : '仅汇总工具确认的写入；点击文件可在右栏预览，非 Git 仓库无法统计命令产生的文件。'}{!complete && hasCounts ? ' 部分文件未提供差异，未计入行数。' : ''}</p>
   </section>;
 }

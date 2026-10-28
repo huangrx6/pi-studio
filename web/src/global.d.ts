@@ -162,6 +162,8 @@ declare global {
       files(cwd: string, path: string): Promise<{ path: string; entries: Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }> }>;
       /** 读取单个文件文本；binary 为 true 时 text 不可直接展示。 */
       file(cwd: string, path: string): Promise<{ path: string; size: number; binary: boolean; text: string }>;
+      /** 只读打开工作区外的绝对路径（文件变更卡片）。 */
+      fileAbsolute(path: string): Promise<{ path: string; size: number; binary: boolean; text: string }>;
       /** 查询系统里可用来打开该文件的应用。 */
       fileActions(payload: { cwd: string; path: string }): Promise<{ apps: Array<{ name: string; path: string; icon?: string }> }>;
       /** 用指定应用（或系统默认应用）打开文件。 */

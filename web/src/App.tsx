@@ -1628,10 +1628,11 @@ export function App() {
 
   /** 读取文件并按路径缓存，重复打开时直接命中缓存。 */
   async function loadFileToTab(target: string) {
-    if (!workspace) return;
+    const root = workspace || session?.cwd;
+    if (!root) return;
     setFileBusy(true);
     try {
-      const content = await window.piApi.file(workspace, target);
+      const content = target.startsWith('/') ? await window.piApi.fileAbsolute(target) : await window.piApi.file(root, target);
       setOpenFiles((current) => ({ ...current, [target]: content }));
       setFile(content);
     } catch (error) {
@@ -1660,6 +1661,8 @@ export function App() {
     const cached = openFiles[target];
     if (cached) setFile(cached);
     else await loadFileToTab(target);
+    if (filesOpen) setPanelEntered(true);
+    else openPanel();
   }
 
   /** 关闭标签；关闭最后一个标签时整个面板一起收起。 */
@@ -2144,7 +2147,7 @@ export function App() {
                   ? <ChatMessageView key={turn.message.timestamp ?? `user-${index}`} id={`chat-turn-${index}`} message={turn.message} />
                   : <AssistantTurnView key={turn.messages[0]?.timestamp ?? `assistant-${index}`} id={`chat-turn-${index}`} messages={turn.messages} toolResults={toolResultMap} cwd={session?.cwd} busy={busy && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView}
                     gitDiff={index === lastAssistantTurnIndex ? liveDiff ?? (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined) : (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined)}
-                    onOpenDiff={openDiffTab} />)}
+                    onOpenDiff={openDiffTab} onOpenFile={(path) => void openFile(path)} />)}
                 {busy && extensionWorking.visible && !retryInfo && transcriptTurns.at(-1)?.kind !== 'assistant' && (
                   <div className="thinking"><span /><span /><span />正在思考</div>
                 )}

@@ -245,7 +245,7 @@ function MessageActions({ text, time, label, align = 'start' }: { text: string; 
   </div>;
 }
 
-export function AssistantTurnView({ messages, toolResults, busy, id, retry, stepDisplay = 'standard', stepCollapse = 'after-answer', showCodeView = false, cwd, gitDiff, onOpenDiff }: {
+export function AssistantTurnView({ messages, toolResults, busy, id, retry, stepDisplay = 'standard', stepCollapse = 'after-answer', showCodeView = false, cwd, gitDiff, onOpenDiff, onOpenFile }: {
   messages: ChatMessage[];
   toolResults: Map<string, ChatMessage>;
   busy: boolean;
@@ -258,6 +258,7 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
   /** 本轮 Git 快照；比工具参数更完整，包含 bash/脚本产生的改动。 */
   gitDiff?: TurnDiff;
   onOpenDiff?: (file: TurnDiffFile) => void;
+  onOpenFile?: (path: string) => void;
 }) {
   const live = Boolean(retry) || busy;
   // 只看本轮最后一条助手消息：压缩/重试产生的中间失败不应盖住后面的成功输出。
@@ -358,7 +359,7 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
       {!live && error && (interrupted
         ? <div className="assistant-interrupted" role="status">本轮已中断</div>
         : <AssistantError message={error} />)}
-      {(codeFiles.length > 0 || (turnDiff?.files.length ?? 0) > 0) && <FileChangeSummary files={codeFiles} gitDiff={turnDiff} onOpenDiff={onOpenDiff} />}
+      {(codeFiles.length > 0 || (turnDiff?.files.length ?? 0) > 0) && <FileChangeSummary files={codeFiles} gitDiff={turnDiff} onOpenDiff={onOpenDiff} onOpenFile={onOpenFile} />}
       {/* 回答结束后，悬浮显示复制与完成时间。 */}
       {!live && <MessageActions text={answerText} time={latest?.timestamp} label="复制回答" />}
     </div>
