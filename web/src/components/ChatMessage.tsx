@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Brain, ChevronDown, CircleCheck, CircleX, FileText, LoaderCircle, Pencil, Search, Terminal, Wrench } from 'lucide-react';
+import { Activity, Brain, ChevronDown, CircleCheck, CircleX, FileText, LoaderCircle, Pencil, Search, Terminal, Wrench } from 'lucide-react';
 import type { ChatMessage, ContentBlock, ToolCallBlock } from '../chat-types';
 import { Markdown } from './Markdown';
 
@@ -13,8 +13,8 @@ function toolSummary(call: ToolCallBlock): string {
   const args = call.arguments ?? {};
   const values = [args.command, args.path, args.file_path, args.query, args.pattern, args.url, args.name, args.description];
   for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value.replace(/\s+/g, ' ').slice(0, 100);
-    if (Array.isArray(value) && value.length > 0) return value.map(String).join(' ').replace(/\s+/g, ' ').slice(0, 100);
+    if (typeof value === 'string' && value.trim()) return value.replace(/\s+/g, ' ').slice(0, 105);
+    if (Array.isArray(value) && value.length > 0) return value.map(String).join(' ').replace(/\s+/g, ' ').slice(0, 105);
   }
   return '';
 }
@@ -35,49 +35,62 @@ function toolTone(name: string): string {
   return 'tone-tool';
 }
 
-function ToolCall({ call, result, busy }: { call: ToolCallBlock; result?: ChatMessage; busy: boolean }) {
+function formatTime(timestamp?: number): string {
+  if (!timestamp) return '';
+  return new Date(timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+}
+
+type ToolEntry = { kind: 'tool'; call: ToolCallBlock };
+type ThinkingEntry = { kind: 'thinking'; block: Extract<ContentBlock, { type: 'thinking' }> };
+type TextEntry = { kind: 'text'; text: string };
+type ActivityEntry = ToolEntry | ThinkingEntry | TextEntry;
+type FlatBlock = { block: ContentBlock; key: string };
+
+function ActivityTool({ call, result, busy }: { call: ToolCallBlock; result?: ChatMessage; busy: boolean }) {
   const failed = Boolean(result?.isError);
   const done = Boolean(result);
   const summary = toolSummary(call);
-  return <details className={`tool-call ${failed ? 'is-error' : ''} ${done ? 'is-done' : 'is-running'}`}>
+  return <details className={`activity-tool ${failed ? 'is-error' : ''} ${done ? 'is-done' : 'is-running'}`}>
     <summary>
-      <span className={`tool-call-icon ${toolTone(call.name)}`}><ToolIcon name={call.name} /></span>
-      <span className="tool-call-name">{call.name}</span>
-      {summary && <span className="tool-call-summary">{summary}</span>}
-      <span className="tool-call-status">{failed ? <><CircleX />失败</> : done ? <><CircleCheck />完成</> : <><LoaderCircle className={busy ? 'spin' : ''} />运行中</>}</span>
-      <ChevronDown className="tool-call-chevron" />
+      <span className="activity-tool-name">{call.name}</span>
+      {summary && <span className="activity-tool-summary">{summary}</span>}
+      <span className="activity-tool-status">{failed ? <><CircleX />失败</> : done ? <><CircleCheck />完成</> : <><LoaderCircle className={busy ? 'spin' : ''} />运行中</>}</span>
+      <ChevronDown className="activity-tool-chevron" />
     </summary>
-    <div className="tool-call-body">
-      <div className="tool-call-label">参数</div>
-      <pre className="tool-call-args">{JSON.stringify(call.arguments, null, 2)}</pre>
+    <div className="activity-tool-body">
+      <div className="activity-tool-label">参数</div>
+      <pre className="activity-tool-code">{JSON.stringify(call.arguments, null, 2)}</pre>
       {result && <>
-        <div className="tool-call-label">结果</div>
-        <pre className={`tool-call-output ${failed ? 'is-error' : ''}`}>{result.content.filter((block) => block.type === 'text').map((block) => block.type === 'text' ? block.text : '').join('\n')}</pre>
+        <div className="activity-tool-label">结果</div>
+        <pre className={`activity-tool-code ${failed ? 'is-error' : ''}`}>{result.content.filter((block) => block.type === 'text').map((block) => block.type === 'text' ? block.text : '').join('\n')}</pre>
         <MessageImages blocks={result.content} />
       </>}
     </div>
   </details>;
 }
 
-function Thinking({ block }: { block: Extract<ContentBlock, { type: 'thinking' }> }) {
-  const preview = block.redacted ? '已隐藏' : block.thinking.replace(/\s+/g, ' ').trim().slice(0, 72);
-  return <details className="thinking-block">
+function ActivityThinking({ block }: { block: Extract<ContentBlock, { type: 'thinking' }> }) {
+  const preview = block.redacted ? '思考内容已隐藏' : block.thinking.replace(/\s+/g, ' ').trim().slice(0, 110);
+  return <details className="activity-thinking">
     <summary>
-      <span className="thinking-symbol"><Brain /></span>
-      <span className="thinking-title">{block.redacted ? '思考已隐藏' : '思考过程'}</span>
-      {preview && <span className="thinking-preview">{preview}</span>}
-      <ChevronDown className="thinking-chevron" />
+      <span className="activity-thinking-label">思考</span>
+      {preview && <span className="activity-thinking-preview">{preview}</span>}
+      <ChevronDown className="activity-thinking-chevron" />
     </summary>
-    {!block.redacted && block.thinking && <div className="thinking-content"><Markdown>{block.thinking}</Markdown></div>}
+    {!block.redacted && block.thinking && <div className="activity-thinking-body"><Markdown>{block.thinking}</Markdown></div>}
   </details>;
 }
 
-type FlatBlock = { block: ContentBlock; key: string };
-type ActivityEntry = { kind: 'thinking'; block: Extract<ContentBlock, { type: 'thinking' }> } | { kind: 'tool'; call: ToolCallBlock } | { kind: 'text'; text: string };
+function ActivityNode({ entry }: { entry: ActivityEntry }) {
+  if (entry.kind === 'thinking') return <span className="activity-node is-thinking"><Brain /></span>;
+  if (entry.kind === 'tool') return <span className={`activity-node is-tool ${toolTone(entry.call.name)}`}><ToolIcon name={entry.call.name} /></span>;
+  return <span className="activity-node is-note" />;
+}
 
-function formatTime(timestamp?: number): string {
-  if (!timestamp) return '';
-  return new Date(timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+function activityColor(entry: ActivityEntry): string {
+  if (entry.kind === 'thinking') return 'is-thinking';
+  if (entry.kind === 'tool') return toolTone(entry.call.name);
+  return 'is-note';
 }
 
 export function AssistantTurnView({ messages, toolResults, busy }: { messages: ChatMessage[]; toolResults: Map<string, ChatMessage>; busy: boolean }) {
@@ -114,21 +127,24 @@ export function AssistantTurnView({ messages, toolResults, busy }: { messages: C
       </div>
       {activity.length > 0 && <details className="activity-drawer" open={activityOpen} onToggle={(event) => setActivityOpen(event.currentTarget.open)}>
         <summary>
-          <span className="activity-symbol"><Wrench /></span>
-          <span>执行轨迹</span>
-          <span className="activity-summary">{toolCount} 次工具 · {thinkingCount} 次思考</span>
+          <span className="activity-symbol"><Activity /></span>
+          <span className="activity-title">执行轨迹</span>
+          <span className="activity-pulse" aria-hidden="true">{activity.slice(0, 24).map((entry, index) => <i key={index} className={activityColor(entry)} />)}</span>
+          <span className="activity-summary">{toolCount} 工具 · {thinkingCount} 思考</span>
           <ChevronDown className="activity-chevron" />
         </summary>
         {activityOpen && <div className="activity-log">
-          {activity.map((entry, index) => entry.kind === 'tool'
-            ? <ToolCall key={`tool-${entry.call.id}-${index}`} call={entry.call} result={toolResults.get(entry.call.id)} busy={busy} />
-            : entry.kind === 'thinking'
-              ? <Thinking key={`thinking-${index}`} block={entry.block} />
-              : <div className="activity-note" key={`note-${index}`}><Markdown>{entry.text}</Markdown></div>)}
+          {activity.map((entry, index) => <div className={`activity-line is-${entry.kind}`} key={`${entry.kind}-${index}`} style={{ animationDelay: `${Math.min(index, 14) * 24}ms` }}>
+            <div className="activity-gutter"><ActivityNode entry={entry} /></div>
+            <div className="activity-content">
+              {entry.kind === 'tool' && <ActivityTool call={entry.call} result={toolResults.get(entry.call.id)} busy={busy} />}
+              {entry.kind === 'thinking' && <ActivityThinking block={entry.block} />}
+              {entry.kind === 'text' && <div className="activity-note"><Markdown>{entry.text}</Markdown></div>}
+            </div>
+          </div>)}
         </div>}
       </details>}
       {responseBlocks.length > 0 && <div className="assistant-response">
-        {lastActivity >= 0 && <div className="response-kicker">回复</div>}
         {responseBlocks.map((entry) => entry.block.type === 'text' && entry.block.text
           ? <Markdown key={entry.key}>{entry.block.text}</Markdown>
           : entry.block.type === 'image'
