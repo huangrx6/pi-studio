@@ -186,6 +186,15 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .composer textarea { display: block; width: 100%; min-height: 76px; max-height: 200px; resize: none; padding: var(--space-4) var(--space-4) var(--space-2); border: 0; border-radius: var(--radius-panel); outline: 0; background: var(--transparent); font-size: var(--text-md); line-height: 1.7; }
 .composer-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2) var(--space-3) var(--space-3); }
 .composer-left, .composer-right { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+
+/* 输入框左侧的权限模式：贴齐附件按钮，保持低存在感；只在扩展可用时渲染。 */
+.composer-mode { display: flex; align-items: center; gap: 2px; min-width: 0; color: var(--muted); }
+.composer-mode > svg { width: 14px; height: 14px; flex: none; color: var(--faint); }
+.composer-mode .pi-select { width: auto; }
+.composer-mode .pi-select-trigger { width: auto; height: 28px; padding: 0 4px; border: 0; background: none; color: var(--muted); font-size: var(--text-sm); gap: 2px; }
+.composer-mode .pi-select-trigger:hover:not(:disabled) { background: var(--surface-soft); }
+.composer-mode .pi-select-trigger.is-open { border-color: var(--transparent); box-shadow: none; }
+.composer-mode .pi-select-chevron { width: 12px; height: 12px; }
 .composer-right { margin-left: auto; }
 .workspace-chip, .model-label { display: flex; align-items: center; gap: var(--space-2); height: var(--control-sm); padding: 0 var(--space-2); border-radius: var(--radius-control); color: var(--muted); font-size: var(--text-sm); min-width: 0; }
 .workspace-chip { max-width: 220px; }

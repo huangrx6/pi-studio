@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Clock3, Command, Cpu, FileCode2, FileText, Folder, FolderOpen, Info, Sparkles,
-  AppWindow, Columns2, Compass, Eye, Globe2, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, Pencil, Plus, Plug, RotateCw, Search, Settings, SquarePen, Sun, Terminal, Trash2, X,
+  AppWindow, Columns2, Compass, Eye, Globe2, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, Pencil, Plus, Plug, RotateCw, Search, Settings, ShieldCheck, SquarePen, Sun, Terminal, Trash2, X,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
 import { ExtensionFooter } from './components/ExtensionFooter';
@@ -53,6 +53,14 @@ const apiTypeOptions = [
   { value: 'anthropic-messages', label: 'Anthropic Messages' },
   { value: 'google-generative-ai', label: 'Google Generative AI' },
 ];
+
+// 输入框左侧的权限模式；实际拦截由 pi-mode-switcher 扩展在 tool_call 阶段执行。
+const permissionOptions = [
+  { value: 'ask', label: '请求批准', description: '编辑文件或联网前询问' },
+  { value: 'smart', label: '帮我批准', description: '仅对风险操作请求批准' },
+  { value: 'full', label: '完全权限', description: '不再询问，直接执行' },
+];
+type PermissionMode = 'ask' | 'smart' | 'full';
 
 function BrandMark({ className = '' }: { className?: string }) {
   return <img className={`brand-mark ${className}`} src={appIcon} alt="" draggable={false} />;
@@ -243,6 +251,7 @@ export function App() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [extensionToast, setExtensionToast] = useState<{ message: string; type: 'info' | 'warning' | 'error' } | null>(null);
+  const [permission, setPermission] = useState<{ available: boolean; mode: PermissionMode }>({ available: false, mode: 'smart' });
   const [todoPanelOpen, setTodoPanelOpen] = useState(false);
   const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([]);
   const queuedDrainRef = useRef(false);
@@ -687,6 +696,13 @@ export function App() {
     if (textarea) { textarea.style.height = 'auto'; textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`; }
   }, [prompt]);
 
+  // 读取扩展当前的批准方式；扩展未安装时 available=false，界面不显示入口。
+  useEffect(() => {
+    void window.piApi.modeGet()
+      .then((state) => setPermission({ available: state.available, mode: state.mode }))
+      .catch(() => { /* 扩展未安装或尚未初始化 */ });
+  }, []);
+
   useEffect(() => window.piApi.onOpenSettings(() => { void openSettings(); }), [workspace]);
 
   useEffect(() => {
@@ -1033,6 +1049,18 @@ export function App() {
 
   function updatePreference<K extends keyof Preferences>(key: K, value: Preferences[K]) {
     setPreferences((current) => ({ ...current, [key]: value }));
+  }
+
+  /** 切换权限模式：先乐观更新，失败时回滚并提示。 */
+  async function changePermission(mode: PermissionMode) {
+    const previous = permission;
+    setPermission((current) => ({ ...current, mode }));
+    try {
+      await window.piApi.modeSet({ mode, sessionId: session?.id });
+    } catch (error) {
+      setPermission(previous);
+      setError(errorText(error));
+    }
   }
 
   function removeComposerAttachment(id: string) {
@@ -2078,6 +2106,18 @@ export function App() {
             <div className="composer-bar">
               <div className="composer-left">
                 <button type="button" className="composer-attach-button" disabled={busy} onClick={() => void pickComposerAttachments()} aria-label="添加图片或文件" title="添加图片或文件"><Plus /></button>
+                {permission.available && (
+                  <span className="composer-mode" title="工具权限模式（由 pi-mode-switcher 扩展执行）">
+                    <ShieldCheck aria-hidden="true" />
+                    <Select
+                      label="权限模式"
+                      className="composer-mode-select"
+                      value={permission.mode}
+                      options={permissionOptions}
+                      onChange={(value) => void changePermission(value as PermissionMode)}
+                    />
+                  </span>
+                )}
               </div>
               <div className="composer-right">
                 <ModelPicker selection={modelSelection} disabled={busy || stateLoading} hidden={settingsOpen} loadCatalog={loadModelCatalog} onSelectModel={selectModel} onSelectThinking={selectThinking} onManage={() => void openSettings('models')} />

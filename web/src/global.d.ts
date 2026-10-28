@@ -92,6 +92,10 @@ declare global {
       // ---- 主题、状态与会话 ----
       /** 切换原生窗口主题，并持久化到主进程配置。 */
       setTheme(theme: 'light' | 'dark' | 'system'): Promise<void>;
+      /** 读取 pi-mode-switcher 的批准方式；available=false 时不显示入口。 */
+      modeGet(): Promise<{ available: boolean; mode: 'ask' | 'smart' | 'full' }>;
+      /** 切换批准方式；有会话时立即下发 /mode，没有会话时等会话建立后补发。 */
+      modeSet(payload: { mode: 'ask' | 'smart' | 'full'; sessionId?: string }): Promise<{ mode: string; applied?: boolean; reason?: string }>;
       /** 读取侧边栏工作区/会话列表、当前模型与工作目录。 */
       state(cwd?: string): Promise<{ workspaces: PiWorkspace[]; model: ModelSelection; cwd: string }>;
       /** 在指定工作区新建会话。 */
