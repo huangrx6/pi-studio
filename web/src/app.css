@@ -1251,3 +1251,20 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 .assistant-turn.is-retrying .assistant-turn-status::before { background: #c49b52; }
 .assistant-turn.has-error .assistant-turn-status { color: var(--error); }
 .assistant-turn.has-error .assistant-turn-status::before { background: var(--error); }
+
+/* A calm, editorial failure receipt instead of a flat pink banner. */
+.assistant-error { position: relative; margin: 12px 0 4px; padding: 15px 17px 13px 20px; overflow: hidden; border: 1px solid #eeddd8; border-radius: 10px; background: linear-gradient(135deg, #fffdfc 0%, #fff9f6 100%); box-shadow: 0 5px 20px rgb(126 61 45 / 4%); }
+.assistant-error::before { content: ''; position: absolute; left: 0; top: 13px; bottom: 13px; width: 2px; border-radius: 0 2px 2px 0; background: linear-gradient(180deg, #d17868, #e0b09f); }
+.assistant-error-head { display: flex; align-items: center; gap: 9px; }
+.assistant-error-mark { display: grid; place-items: center; width: 30px; height: 30px; flex: none; border-radius: 8px; color: #a9574a; background: #fbece8; box-shadow: 0 0 0 1px #f2dcd6 inset; }
+.assistant-error-mark svg { width: 16px; height: 16px; }
+.assistant-error-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.assistant-error-kicker { color: #be8f84; font: 8px var(--mono); letter-spacing: .13em; }
+.assistant-error-copy strong { color: #6d4139; font-family: var(--font-display); font-size: 13px; font-weight: 600; letter-spacing: .01em; }
+.assistant-error-code { flex: none; padding: 3px 7px; border: 1px solid #efdcd6; border-radius: 5px; background: rgb(255 255 255 / 70%); color: #b36c5d; font: 10px var(--mono); }
+.assistant-error-message { max-height: 170px; margin: 10px 0 0; padding: 9px 11px; overflow: auto; border: 1px solid #f2e5e0; border-radius: 7px; background: rgb(255 255 255 / 62%); color: #8a5a50; font: 11px/1.65 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.assistant-error-foot { margin-top: 8px; color: #b3948c; font-size: 10px; line-height: 1.5; }
+.error-card { position: relative; margin-top: var(--space-4); padding: 14px 16px 14px 19px; overflow: hidden; border: 1px solid #eeddd8; border-radius: 10px; background: linear-gradient(135deg, #fffdfc, #fff9f6); color: #7f5148; box-shadow: 0 4px 16px rgb(126 61 45 / 4%); }
+.error-card::before { content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 2px; border-radius: 0 2px 2px 0; background: linear-gradient(180deg, #d17868, #e0b09f); }
+.error-card strong { display: block; color: #6d4139; font-family: var(--font-display); font-size: 13px; font-weight: 600; }
+.error-card p { margin: 7px 0 0; color: #9a6b61; font: 11px/1.65 var(--mono); overflow-wrap: anywhere; }

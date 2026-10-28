@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Activity, Brain, ChevronDown, CircleCheck, CircleX, FileText, LoaderCircle, Pencil, Search, Terminal, Wrench } from 'lucide-react';
+import { Activity, Brain, ChevronDown, CircleAlert, CircleCheck, CircleX, FileText, LoaderCircle, Pencil, Search, Terminal, Wrench } from 'lucide-react';
 import type { ChatMessage, ContentBlock, ToolCallBlock } from '../chat-types';
 import { AttachmentIcon, attachmentVisual } from './AttachmentIcon';
 import { Markdown } from './Markdown';
@@ -100,6 +100,27 @@ function activityColor(entry: ActivityEntry): string {
   return 'is-note';
 }
 
+function AssistantError({ message }: { message: string }) {
+  const code = message.match(/(?:^|\s)([45]\d{2})(?:\s|$)/)?.[1];
+  const hint = code?.startsWith('5')
+    ? '模型服务暂时不可用，可以稍后重新发送。'
+    : code?.startsWith('4')
+      ? '请求没有被模型服务接受，请检查模型、凭据或参数后重试。'
+      : '可以重新发送；如果持续出现，请检查网络和模型服务状态。';
+  return <div className="assistant-error">
+    <div className="assistant-error-head">
+      <span className="assistant-error-mark"><CircleAlert /></span>
+      <div className="assistant-error-copy">
+        <span className="assistant-error-kicker">REQUEST FAILED</span>
+        <strong>模型请求没有完成</strong>
+      </div>
+      {code && <code className="assistant-error-code">{code}</code>}
+    </div>
+    <pre className="assistant-error-message">{message}</pre>
+    <div className="assistant-error-foot">{hint}</div>
+  </div>;
+}
+
 export function AssistantTurnView({ messages, toolResults, busy, id, retry }: { messages: ChatMessage[]; toolResults: Map<string, ChatMessage>; busy: boolean; id?: string; retry?: { attempt: number; maxAttempts: number; errorMessage?: string } }) {
   const live = Boolean(retry) || (busy && messages.some((message) => message.streaming));
   const failed = !live && messages.some((message) => message.errorMessage);
@@ -160,7 +181,7 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry }: { 
             : null)}
         {live && <span className="caret" />}
       </div>}
-      {!live && error && <div className="message-error">{error}</div>}
+      {!live && error && <AssistantError message={error} />}
       {live && responseBlocks.length === 0 && <span className="caret" />}
     </div>
   </div>;

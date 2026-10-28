@@ -713,6 +713,7 @@ export function App() {
     setWorkspace(cwd);
     expandWorkspace(cwd);
     setBusy(false);
+    setRetryInfo(null);
     requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
@@ -734,6 +735,7 @@ export function App() {
       expandWorkspace(detail.cwd);
       setError(null);
       setBusy(false);
+      setRetryInfo(null);
     } catch (error) {
       if (load === sessionLoadRef.current) setError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -979,6 +981,7 @@ export function App() {
       setBusy(false);
       await loadState();
     } catch (error) {
+      setRetryInfo(null);
       setError(error instanceof Error ? error.message : String(error));
       setBusy(false);
     }
