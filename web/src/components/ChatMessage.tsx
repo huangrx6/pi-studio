@@ -19,11 +19,13 @@
  * 图片以 data URI 内联渲染，不再额外请求主进程。
  */
 import { useEffect, useState } from 'react';
-import { Activity, Brain, ChevronDown, CircleAlert, CircleCheck, CircleX, FileText, LoaderCircle, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
+import { ChevronDown, CircleAlert, CircleCheck, CircleX, FileText, LoaderCircle, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
 import type { ChatMessage, ContentBlock, ToolCallBlock } from '../chat-types';
 import type { StepCollapse, StepDisplay } from '../preferences';
 import { AttachmentIcon, attachmentVisual } from './AttachmentIcon';
 import { Markdown } from './Markdown';
+import { collectFileChanges } from '../file-changes';
+import { FileChangeSummary } from './FileChangeSummary';
 import { splitMessageText, type Reference } from '../references';
 
 /** 拼出消息里的全部文本块（用换行分隔）；用户正文和工具结果共用这一逻辑。 */
@@ -76,15 +78,6 @@ function ToolIcon({ name }: { name: string }) {
   return <Wrench />;
 }
 
-/** 工具名对应的色调 class；和 ToolIcon 共用同一套分类，便于轨迹节点与图标配色一致。 */
-function toolTone(name: string): string {
-  if (name === 'bash' || name === 'powershell') return 'tone-shell';
-  if (name === 'read') return 'tone-read';
-  if (name === 'grep' || name === 'find' || name === 'ls') return 'tone-search';
-  if (name === 'edit' || name === 'write') return 'tone-edit';
-  return 'tone-tool';
-}
-
 /** 毫秒时间戳格式化为 24 小时制 HH:mm；无时间戳时返回空串。 */
 function formatTime(timestamp?: number): string {
   if (!timestamp) return '';
@@ -98,7 +91,7 @@ type ThinkingEntry = { kind: 'thinking'; block: Extract<ContentBlock, { type: 't
 /** 执行轨迹里夹在工具之间的说明文本（模型的过渡叙述）。 */
 type TextEntry = { kind: 'text'; text: string };
 /** 轨迹条目联合类型。 */
-type ActivityEntry = ToolEntry | ThinkingEntry | TextEntry;
+type ActivityEntry = (ToolEntry | ThinkingEntry | TextEntry) & { key: string };
 /** 拍平后的内容块；key 由「消息序号-块序号」组成，流式追加时保持稳定。 */
 type FlatBlock = { block: ContentBlock; key: string };
 
@@ -119,11 +112,12 @@ function ActivityTool({ call, result, busy }: { call: ToolCallBlock; result?: Ch
   const failed = Boolean(result?.isError);
   const done = Boolean(result);
   const summary = toolSummary(call);
-  return <details className={`activity-tool ${failed ? 'is-error' : ''} ${done ? 'is-done' : 'is-running'}`}>
+  return <details className={`activity-tool ${failed ? 'is-error' : ''} ${done ? 'is-done' : busy ? 'is-running' : 'is-incomplete'}`}>
     <summary>
+      <span className="activity-tool-icon"><ToolIcon name={call.name} /></span>
       <span className="activity-tool-name">{call.name}</span>
       {summary && <span className="activity-tool-summary">{summary}</span>}
-      <span className="activity-tool-status">{failed ? <><CircleX />失败</> : done ? <><CircleCheck />完成</> : <><LoaderCircle className={busy ? 'spin' : ''} />运行中</>}</span>
+      <span className="activity-tool-status">{failed ? <><CircleX />失败</> : done ? <><CircleCheck />完成</> : busy ? <><LoaderCircle className="spin" />执行中</> : <><CircleAlert />未完成</>}</span>
       <ChevronDown className="activity-tool-chevron" />
     </summary>
     <div className="activity-tool-body">
@@ -153,23 +147,6 @@ function ActivityThinking({ block }: { block: Extract<ContentBlock, { type: 'thi
     </summary>
     {!block.redacted && block.thinking && <div className="activity-thinking-body"><Markdown>{block.thinking}</Markdown></div>}
   </details>;
-}
-
-/**
- * 轨迹左侧时间线节点：思考用大脑图标，工具按类型着色，普通文本用小圆点。
- * 只做视觉标识，不承载交互。
- */
-function ActivityNode({ entry }: { entry: ActivityEntry }) {
-  if (entry.kind === 'thinking') return <span className="activity-node is-thinking"><Brain /></span>;
-  if (entry.kind === 'tool') return <span className={`activity-node is-tool ${toolTone(entry.call.name)}`}><ToolIcon name={entry.call.name} /></span>;
-  return <span className="activity-node is-note" />;
-}
-
-/** 轨迹摘要顶部的脉冲条颜色：与节点保持同一套分类。 */
-function activityColor(entry: ActivityEntry): string {
-  if (entry.kind === 'thinking') return 'is-thinking';
-  if (entry.kind === 'tool') return toolTone(entry.call.name);
-  return 'is-note';
 }
 
 /**
@@ -212,26 +189,23 @@ function AssistantError({ message }: { message: string }) {
  * @param retry 自动重试信息；存在时即使没有 streaming 也视为运行中
  * @param stepDisplay 轨迹展示密度（compact / standard / detailed）
  * @param stepCollapse 回答结束后的收起策略
- * @param showCodeView 是否展示从工具参数里提取的代码文件清单
+ * @param showCodeView 是否在本轮结束后展示成功修改的文件摘要
  *
- * live 兼看两种“还在进行”信号：正在自动重试，或会话忙且本轮有 streaming
- * 消息。failed 只在非 live 时成立，避免把可恢复的重试中间态显示成最终失败。
+ * live 由 App 传入的本轮运行状态决定，工具调用间隙也保持运行中。failed 只在非 live 时成立，避免把可恢复的重试中间态显示成最终失败。
  */
-export function AssistantTurnView({ messages, toolResults, busy, id, retry, stepDisplay = 'standard', stepCollapse = 'after-answer', showCodeView = false }: { messages: ChatMessage[]; toolResults: Map<string, ChatMessage>; busy: boolean; id?: string; retry?: { attempt: number; maxAttempts: number; errorMessage?: string }; stepDisplay?: StepDisplay; stepCollapse?: StepCollapse; showCodeView?: boolean }) {
-  const live = Boolean(retry) || (busy && messages.some((message) => message.streaming));
+export function AssistantTurnView({ messages, toolResults, busy, id, retry, stepDisplay = 'standard', stepCollapse = 'after-answer', showCodeView = false, cwd }: { messages: ChatMessage[]; toolResults: Map<string, ChatMessage>; busy: boolean; id?: string; retry?: { attempt: number; maxAttempts: number; errorMessage?: string }; stepDisplay?: StepDisplay; stepCollapse?: StepCollapse; showCodeView?: boolean; cwd?: string }) {
+  const live = Boolean(retry) || busy;
   const failed = !live && messages.some((message) => message.errorMessage);
   // 初始值只在挂载时取一次；之后由下面的 effect 和用户手动 toggle 接管。
-  const [activityOpen, setActivityOpen] = useState(stepDisplay === 'detailed' || live);
+  const [activityOpen, setActivityOpen] = useState(stepDisplay === 'detailed');
   // 自动展开/收起策略：
   // - detailed 始终展开、compact 始终收起（用户仍可手动点开）；
-  // - standard 在运行中展开（manual 模式除外），回答结束后按 stepCollapse 决定。
+  // - standard 的历史默认折叠；当前输出独立展示，不受折叠偏好影响。
   // 把 live 放进依赖，“开始运行 / 结束运行”就是自动切换的触发点。
   useEffect(() => {
     if (stepDisplay === 'detailed') { setActivityOpen(true); return; }
     if (stepDisplay === 'compact') { setActivityOpen(false); return; }
-    if (live) {
-      if (stepCollapse !== 'manual') setActivityOpen(true);
-    } else if (stepCollapse === 'after-answer') {
+    if (!live && stepCollapse === 'after-answer') {
       setActivityOpen(false);
     }
   }, [live, stepCollapse, stepDisplay]);
@@ -246,61 +220,56 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
   const responseBlocks = lastActivity >= 0 ? flat.slice(lastActivity + 1) : flat;
   // 轨迹条目只保留思考、工具调用和非空文本；空文本块（流式占位）直接丢弃。
   const activity: ActivityEntry[] = activityBlocks.flatMap((entry): ActivityEntry[] => {
-    if (entry.block.type === 'thinking') return [{ kind: 'thinking', block: entry.block }];
-    if (entry.block.type === 'toolCall') return [{ kind: 'tool', call: entry.block }];
-    if (entry.block.type === 'text' && entry.block.text.trim()) return [{ kind: 'text', text: entry.block.text }];
+    if (entry.block.type === 'thinking') return [{ kind: 'thinking', block: entry.block, key: entry.key }];
+    if (entry.block.type === 'toolCall') return [{ kind: 'tool', call: entry.block, key: entry.key }];
+    if (entry.block.type === 'text' && entry.block.text.trim()) return [{ kind: 'text', text: entry.block.text, key: entry.key }];
     return [];
   });
   // 顶部指标按整轮原始消息统计，不依赖上面的分区结果，避免统计口径随轨迹过滤变化。
   const toolCount = messages.reduce((total, message) => total + message.content.filter((block) => block.type === 'toolCall').length, 0);
   const thinkingCount = messages.reduce((total, message) => total + message.content.filter((block) => block.type === 'thinking').length, 0);
   const latest = messages[messages.length - 1];
-  // 代码工作视图：从工具参数里取 path / file_path 去重，最多展示 6 个文件。
-  const codeFiles = [...new Set(messages.flatMap((message) => message.content.flatMap((block) => {
-    if (block.type !== 'toolCall') return [];
-    const args = block.arguments || {};
-    const target = args.path || args.file_path;
-    return typeof target === 'string' ? [target] : [];
-  })))].slice(0, 6);
+  const lastBlock = flat.filter(entry => entry.block.type !== 'text' || entry.block.text.trim()).at(-1);
+  const currentEntries = live ? activity.filter(entry =>
+    entry.kind === 'tool' ? !toolResults.has(entry.call.id)
+      : entry.kind === 'thinking' ? entry.key === lastBlock?.key
+        : entry.key.startsWith(`${messages.length - 1}-`)
+  ) : [];
+  const currentKeys = new Set(currentEntries.map(entry => entry.key));
+  const history = activity.filter(entry => !currentKeys.has(entry.key));
+  const phase = retry ? `正在重试 ${retry.attempt}/${retry.maxAttempts}`
+    : currentEntries.some(entry => entry.kind === 'tool') ? '正在执行'
+      : lastBlock?.block.type === 'thinking' ? '正在思考'
+        : latest?.streaming && lastBlock?.block.type === 'text' ? '正在回复' : '正在继续处理';
+
+  const codeFiles = showCodeView && !live ? collectFileChanges(messages, toolResults, cwd) : [];
   const error = messages.find((message) => message.errorMessage)?.errorMessage;
   return <div id={id} className={`assistant-turn ${live ? 'is-live' : ''} ${retry ? 'is-retrying' : ''} ${failed ? 'has-error' : ''} is-steps-${stepDisplay}`}>
     <div className="assistant-turn-rail"><span className="assistant-orb">π</span></div>
     <div className="assistant-turn-main">
-      {/* 头部：状态（重试/失败/处理中/已完成）、步数、工具与思考计数、最后时间。 */}
+      {/* 头部状态只在整轮结束后变为已完成，工具之间的等待仍是运行中。 */}
       <div className="assistant-turn-head">
         <span className="assistant-turn-name">Pi</span>
-        <span className="assistant-turn-status" title={retry?.errorMessage}>{retry ? `重试中 ${retry.attempt}/${retry.maxAttempts}` : failed ? '失败' : live ? '正在处理' : '已完成'}</span>
-        <span className="assistant-turn-meta">
-          {messages.length > 1 && <span><span className="turn-dot" />{messages.length} 步</span>}
-          {toolCount > 0 && <span className="turn-metric-tools"><Wrench />{toolCount}</span>}
-          {thinkingCount > 0 && <span className="turn-metric-thinking"><Brain />{thinkingCount}</span>}
-        </span>
+        <span className="assistant-turn-status" title={retry?.errorMessage}>{retry ? `重试中 ${retry.attempt}/${retry.maxAttempts}` : failed ? '失败' : live ? phase : '已完成'}</span>
         {latest?.timestamp && <time>{formatTime(latest.timestamp)}</time>}
       </div>
-      {/* 执行轨迹抽屉：open 受状态控制，onToggle 把用户手动操作写回本地状态；
-          收起时不渲染日志内容，避免大量 Markdown 解析开销。 */}
-      {activity.length > 0 && <details className="activity-drawer" open={activityOpen} onToggle={(event) => setActivityOpen(event.currentTarget.open)}>
-        <summary>
-          <span className="activity-symbol"><Activity /></span>
-          <span className="activity-title">执行轨迹</span>
-          <span className="activity-pulse" aria-hidden="true">{activity.slice(0, 24).map((entry, index) => <i key={index} className={activityColor(entry)} />)}</span>
-          <span className="activity-summary">{toolCount} 工具 · {thinkingCount} 思考</span>
-          <ChevronDown className="activity-chevron" />
-        </summary>
-        {activityOpen && <div className="activity-log">
-          {/* 逐条淡入：延迟按 24ms 递增并封顶 14 条，长轨迹不必等太久。 */}
-          {activity.map((entry, index) => <div className={`activity-line is-${entry.kind}`} key={`${entry.kind}-${index}`} style={{ animationDelay: `${Math.min(index, 14) * 24}ms` }}>
-            <div className="activity-gutter"><ActivityNode entry={entry} /></div>
-            <div className="activity-content">
-              {entry.kind === 'tool' && <ActivityTool call={entry.call} result={toolResults.get(entry.call.id)} busy={busy} />}
-              {entry.kind === 'thinking' && <ActivityThinking block={entry.block} />}
-              {entry.kind === 'text' && <div className="activity-note"><Markdown>{entry.text}</Markdown></div>}
-            </div>
-          </div>)}
-        </div>}
+      {/* Historical records may collapse; current output never lives inside them. */}
+      {history.length > 0 && <details className="run-history" open={activityOpen} onToggle={event => setActivityOpen(event.currentTarget.open)}>
+        <summary><span className="run-history-title">执行记录</span><span className="run-history-count">{toolCount} 次工具调用 · {thinkingCount} 次思考</span><ChevronDown /></summary>
+        {activityOpen && <div className="run-history-list">{history.map(entry => <div className={`run-history-row is-${entry.kind}`} key={entry.key}>
+          {entry.kind === 'tool' && <ActivityTool call={entry.call} result={toolResults.get(entry.call.id)} busy={false} />}
+          {entry.kind === 'thinking' && <ActivityThinking block={entry.block} />}
+          {entry.kind === 'text' && <div className="run-history-note"><Markdown>{entry.text}</Markdown></div>}
+        </div>)}</div>}
       </details>}
-      {/* 代码工作视图：开关来自设置（showCodeView），只展示去重后的前 6 个文件。 */}
-      {showCodeView && codeFiles.length > 0 && <div className="code-work-view"><span className="code-work-label">代码工作视图</span>{codeFiles.map((file) => <code key={file}>{file}</code>)}</div>}
+      {live && <section className="run-current" aria-label="当前输出" aria-busy="true">
+        <div className="run-current-heading" role="status"><LoaderCircle className="spin" /><span>{phase}</span><span className="run-current-hint">本轮尚未结束</span></div>
+        {currentEntries.map(entry => <div className="run-current-content" key={entry.key}>
+          {entry.kind === 'thinking' && (entry.block.redacted ? <p className="run-current-redacted">模型正在思考，未提供思考正文。</p> : entry.block.thinking ? <Markdown>{entry.block.thinking}</Markdown> : null)}
+          {entry.kind === 'text' && <Markdown>{entry.text}</Markdown>}
+          {entry.kind === 'tool' && <ActivityTool call={entry.call} result={toolResults.get(entry.call.id)} busy />}
+        </div>)}
+      </section>}
       {/* 最终回复区：只渲染文本与图片；live 时在末尾显示流式光标。 */}
       {responseBlocks.length > 0 && <div className="assistant-response">
         {responseBlocks.map((entry) => entry.block.type === 'text' && entry.block.text
@@ -312,8 +281,7 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
       </div>}
       {/* 失败卡片只在非 live 时出现，避免自动重试过程中闪错误。 */}
       {!live && error && <AssistantError message={error} />}
-      {/* live 但还没有任何回复块（刚发起）时，单独显示光标。 */}
-      {live && responseBlocks.length === 0 && <span className="caret" />}
+      {codeFiles.length > 0 && <FileChangeSummary files={codeFiles} />}
     </div>
   </div>;
 }

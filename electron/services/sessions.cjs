@@ -33,6 +33,7 @@ const { updateSidebar } = require('../sidebar-state.cjs');
 const { envNameOf } = require('../credential-env.cjs');
 const { consumePendingMode } = require('./mode.cjs');
 const { sessionTitle } = require('./session-title.cjs');
+const { temporaryTitle } = require('./auto-title.cjs');
 
 /** 内存中的草稿会话：id → { manager, cwd }。 */
 const drafts = new Map();
@@ -70,7 +71,7 @@ async function indexSessions(force = false) {
     for (const info of infos) {
       next.set(info.id, { id: info.id, path: info.path, cwd: info.cwd,
         // 首条消息可能是展开后的 <skill> 块，标题要剥掉它只留真实问题。
-        title: sessionTitle(info.name, info.firstMessage),
+        title: info.name ? sessionTitle(info.name, info.firstMessage) : temporaryTitle(info.firstMessage),
         updatedAt: info.modified.getTime(), messageCount: info.messageCount });
     }
     diskSessions.clear();
@@ -102,7 +103,7 @@ function dropDraft(id) {
 function updateSessionSummary(id, text) {
   const draft = drafts.get(id);
   if (draft) {
-    if (text && !draft.title) draft.title = text.split('\n')[0].trim().slice(0, 80);
+    if (text && !draft.title) draft.title = temporaryTitle(text);
     draft.updatedAt = Date.now();
   }
   invalidateIndex();
@@ -143,7 +144,7 @@ async function listWorkspaces() {
       sessions: sessions
         .map((item) => {
           const meta = config.sessionMetadata?.[item.id] || {};
-          return { ...item, title: meta.name || item.title, pinned: Boolean(meta.pinned), archived: Boolean(meta.archived) };
+          return { ...item, title: meta.name || meta.autoTitle || item.title, pinned: Boolean(meta.pinned), archived: Boolean(meta.archived) };
         })
         .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt),
     }))
@@ -306,7 +307,7 @@ async function forkSession(id) {
   const fork = pi.SessionManager.forkFrom(source, found.cwd);
   const forkId = fork.getSessionId();
   const config = readConfig(configPath(), {});
-  const title = config.sessionMetadata?.[id]?.name || diskSessions.get(id)?.title || '新会话';
+  const title = config.sessionMetadata?.[id]?.name || config.sessionMetadata?.[id]?.autoTitle || diskSessions.get(id)?.title || '新会话';
   const name = `${title.slice(0, 75)} · 分叉`;
   fork.appendSessionInfo(name);
   writeConfig(configPath(), updateSidebar(config, { kind: 'session', id: forkId, action: 'rename', name }));

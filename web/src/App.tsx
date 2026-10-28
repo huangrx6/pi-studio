@@ -406,6 +406,11 @@ export function App() {
       setWorkspaceOrder(ordered.map((item) => item.cwd));
       setSessionOrder(nextSessionOrder);
       setWorkspaces(orderedSessions);
+      setSession(current => {
+        if (!current) return current;
+        const title = orderedSessions.flatMap(item => item.sessions).find(item => item.id === current.id)?.title;
+        return title && title !== current.title ? { ...current, title } : current;
+      });
       setModelSelection(next.model);
     } finally {
       setStateLoading(false);
@@ -2002,8 +2007,8 @@ export function App() {
               <div className="messages">
                 {transcriptTurns.map((turn, index) => turn.kind === 'user'
                   ? <ChatMessageView key={turn.message.timestamp ?? `user-${index}`} id={`chat-turn-${index}`} message={turn.message} />
-                  : <AssistantTurnView key={turn.messages[0]?.timestamp ?? `assistant-${index}`} id={`chat-turn-${index}`} messages={turn.messages} toolResults={toolResultMap} busy={busy} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView} />)}
-                {busy && !retryInfo && !messages.some((message) => message.role === 'assistant' && message.streaming) && (
+                  : <AssistantTurnView key={turn.messages[0]?.timestamp ?? `assistant-${index}`} id={`chat-turn-${index}`} messages={turn.messages} toolResults={toolResultMap} cwd={session?.cwd} busy={busy && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView} />)}
+                {busy && !retryInfo && transcriptTurns.at(-1)?.kind !== 'assistant' && (
                   <div className="thinking"><span /><span /><span />正在思考</div>
                 )}
               </div>
@@ -2188,7 +2193,7 @@ export function App() {
                     <div className="settings-profile-row"><div><strong>字号大小</strong><p>仅影响对话内容的字号。</p></div><div className="settings-inline-control"><Select label="字号大小" value={String(preferences.fontSize)} onChange={(value) => updatePreference('fontSize', Number(value))} options={[12, 13, 14, 15, 16, 17].map((size) => ({ value: String(size), label: String(size) }))} /><span className="settings-unit">px</span></div></div>
                     <div className="settings-profile-row"><div><strong>工作步骤展示</strong><p>选择希望看到多少工具调用细节。</p></div><Select label="工作步骤展示" value={preferences.stepDisplay} onChange={(value) => updatePreference('stepDisplay', value as Preferences['stepDisplay'])} options={[{ value: 'compact', label: '精简' }, { value: 'standard', label: '标准' }, { value: 'detailed', label: '详细' }]} /></div>
                     <div className="settings-profile-row"><div><strong>工作步骤收起时机</strong><p>选择何时自动收起工作步骤。</p></div><Select label="工作步骤收起时机" value={preferences.stepCollapse} onChange={(value) => updatePreference('stepCollapse', value as Preferences['stepCollapse'])} options={[{ value: 'after-answer', label: '回答结束后' }, { value: 'keep-open', label: '保持展开' }, { value: 'manual', label: '手动控制' }]} /></div>
-                    <div className="settings-profile-row"><div><strong>显示代码工作视图</strong><p>开启后，在回复前显示本轮访问和修改的文件摘要。</p></div><button className={`switch ${preferences.showCodeView ? 'is-on' : ''}`} role="switch" aria-checked={preferences.showCodeView} onClick={() => updatePreference('showCodeView', !preferences.showCodeView)}><span /></button></div>
+                    <div className="settings-profile-row"><div><strong>显示代码工作视图</strong><p>本轮回答结束后，显示工具确认的文件修改与可用差异。</p></div><button className={`switch ${preferences.showCodeView ? 'is-on' : ''}`} role="switch" aria-checked={preferences.showCodeView} onClick={() => updatePreference('showCodeView', !preferences.showCodeView)}><span /></button></div>
                     <div className="settings-profile-row"><div><strong>快捷键</strong><p>查看当前可用的键盘操作。</p></div><button className="settings-outline" onClick={() => setShortcutsOpen(true)}><Keyboard />编辑快捷键</button></div>
                     <div className="settings-profile-row"><div><strong>网页链接默认打开方式</strong><p>对话中网页链接的打开位置。</p></div><Select label="网页链接默认打开方式" value={preferences.linkOpen} onChange={(value) => updatePreference('linkOpen', value as Preferences['linkOpen'])} options={[{ value: 'external', label: '系统浏览器' }, { value: 'window', label: '应用内窗口' }]} /></div>
                     <div className="settings-profile-row"><div><strong>繁忙时的发送行为</strong><p>智能体运行时 Enter 键和发送按钮的行为。</p></div><Select label="繁忙时的发送行为" value={preferences.busySend} onChange={(value) => updatePreference('busySend', value as Preferences['busySend'])} options={[{ value: 'queue', label: '排队发送' }, { value: 'steer', label: '引导当前任务' }]} /></div>

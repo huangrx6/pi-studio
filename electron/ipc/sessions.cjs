@@ -8,6 +8,7 @@ const {
   configPath,
   readConfig,
   writeConfig,
+  getWindow,
 } = require('../core/state.cjs');
 const { serializeMessage } = require('../core/serialize.cjs');
 const { updateSidebar } = require('../sidebar-state.cjs');
@@ -28,6 +29,22 @@ const {
 const { fileReferenceContext } = require('../services/workspace.cjs');
 const { attachmentContext } = require('../services/attachments.cjs');
 const { extensionState, footerAction } = require('../services/extensions.cjs');
+const { createAutoTitleGenerator } = require('../services/auto-title.cjs');
+const autoTitles = createAutoTitleGenerator({
+  readMetadata: id => readConfig(configPath(), {}).sessionMetadata?.[id] || {},
+  updateMetadata: (id, patch) => {
+    const config = readConfig(configPath(), {});
+    writeConfig(configPath(), { ...config, sessionMetadata: {
+      ...config.sessionMetadata, [id]: { ...config.sessionMetadata?.[id], ...patch },
+    } });
+  },
+  notify: id => {
+    invalidateIndex(); forgetDetail(id);
+    const win = getWindow();
+    if (win && !win.isDestroyed()) win.webContents.send('pi:sessions-changed');
+  },
+});
+
 
 /**
  * 发送消息。
@@ -41,6 +58,7 @@ const { extensionState, footerAction } = require('../services/extensions.cjs');
 async function prompt(event, { sessionId, text, requestId, mentions, attachments, images }) {
   const found = await findManager(sessionId);
   if (!found) throw new Error('会话不存在');
+  const firstTurn = !found.manager.getEntries().some(entry => entry.type === 'message' && entry.message.role === 'user');
   updateSessionSummary(sessionId, text);
   const session = await ensureAgent(sessionId, found.manager, found.cwd);
 
@@ -123,6 +141,17 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
     await indexSessions(true);
     dropDraft(sessionId);
     send({ type: 'done' });
+    // Schedule after the answer: never block streaming, or run tools to name a chat.
+    if (firstTurn) {
+      const answer = [...session.messages].reverse().find(message => message.role === 'assistant');
+      if (answer && !answer.errorMessage && !['error', 'aborted', 'length', 'toolUse'].includes(answer.stopReason)) {
+        const reply = answer.content.filter(block => block.type === 'text').map(block => block.text).join('\n');
+        void autoTitles.generate({ id: sessionId, firstMessage: text, reply, model: session.model,
+          complete: (model, context, options) => session.modelRuntime.completeSimple(model, context, options),
+          hasExplicitName: () => Boolean(found.manager.getSessionName()),
+        }).catch(() => {});
+      }
+    }
   } catch (error) {
     flushUpdate();
     send({ type: 'error', error: error instanceof Error ? error.message : String(error) });
@@ -156,7 +185,8 @@ function registerSessionsIpc() {
   // 读取会话详情（标题优先用用户重命名后的）
   ipcMain.handle('pi:session', async (_event, id) => {
     const result = await detail(id);
-    const name = readConfig(configPath(), {}).sessionMetadata?.[id]?.name;
+    const meta = readConfig(configPath(), {}).sessionMetadata?.[id];
+    const name = meta?.name || meta?.autoTitle;
     return result && { ...result, title: name || result.title };
   });
 
