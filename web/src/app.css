@@ -1047,3 +1047,39 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 .tool-call.is-running .tool-call-status svg { animation: rotate 1s linear infinite; }
 @keyframes orb-breathe { 0%, 100% { opacity: .2; transform: scale(.96); } 50% { opacity: .8; transform: scale(1.06); } }
 @media (prefers-reduced-motion: reduce) { .assistant-turn.is-live .assistant-orb::after { animation: none; } }
+
+/* Run log + warm reply sheet: activity is a compact aside, the answer is the artifact. */
+.activity-drawer { margin: 4px 0 12px; }
+.activity-drawer > summary { display: inline-flex; align-items: center; gap: 6px; min-height: 27px; padding: 3px 8px; border: 1px solid #e7eaf0; border-radius: 7px; background: linear-gradient(90deg, #f9fafc, #fcfcfd); color: var(--muted); font-size: 10px; cursor: pointer; list-style: none; transition: border-color var(--transition), background var(--transition); }
+.activity-drawer > summary::-webkit-details-marker { display: none; }
+.activity-drawer > summary:hover { border-color: #d8dfeb; background: #f6f8fb; }
+.activity-symbol { display: grid; place-items: center; width: 17px; height: 17px; border-radius: 5px; color: #7b8da7; background: #eef2f8; }
+.activity-symbol svg { width: 10px; height: 10px; }
+.activity-summary { color: #aeb7c4; font-size: 9.5px; }
+.activity-chevron { width: 12px; height: 12px; margin-left: 2px; color: #aeb7c4; transition: transform var(--transition); }
+.activity-drawer[open] > summary { border-color: #e3e7ee; border-radius: 7px 7px 0 0; background: #fbfcfd; }
+.activity-drawer[open] .activity-chevron { transform: rotate(180deg); }
+.activity-log { position: relative; margin: 0; padding: 5px 0 3px 15px; border: 1px solid #e7eaf0; border-top: 0; border-radius: 0 0 7px 7px; background: #fcfcfd; }
+.activity-log::before { content: ''; position: absolute; left: 7px; top: 12px; bottom: 12px; width: 1px; background: linear-gradient(180deg, #dfe5ee, #eef1f5); }
+.activity-log > * { position: relative; }
+.activity-log .thinking-block { margin: 5px 7px 7px; }
+.activity-log .thinking-block summary { background: #fff; }
+.activity-log .tool-call { margin: 0 7px; border: 0; border-top: 1px solid #eef0f4; border-radius: 0; background: transparent; box-shadow: none; }
+.activity-log .tool-call:first-of-type { border-top: 0; }
+.activity-log .tool-call summary { min-height: 34px; padding: 0 3px; }
+.activity-log .tool-call summary:hover { background: #f6f8fb; }
+.activity-log .tool-call-body { border-top-color: #eef0f4; }
+.activity-note { padding: 4px 7px 6px; color: var(--muted); font-size: var(--text-sm); }
+.activity-note::before { content: ''; position: absolute; left: -10px; top: 13px; width: 4px; height: 4px; border-radius: 50%; background: #c3cbd7; }
+.activity-note .markdown { color: var(--muted); font-size: var(--text-sm); line-height: 1.75; }
+.activity-note .markdown p { margin-bottom: 5px; }
+.assistant-response { position: relative; margin: 10px 0 0; padding: 15px 18px 17px 20px; border: 1px solid #eee8dc; border-radius: 10px; background: linear-gradient(180deg, #fffefb 0%, #fffdf8 100%); box-shadow: 0 5px 22px rgb(112 88 42 / 4%); }
+.assistant-response::before { content: ''; position: absolute; left: -1px; top: 15px; bottom: 15px; width: 2px; border-radius: 0 2px 2px 0; background: linear-gradient(180deg, #5977bd, #c89a5c); }
+.assistant-response .markdown { font-size: 14px; line-height: 1.95; }
+.assistant-response .markdown h1, .assistant-response .markdown h2 { color: #202938; }
+.assistant-response .markdown h2 { margin-top: 24px; }
+.assistant-response .markdown pre { border-color: #e9e2d5; background: #fbf8f1; }
+.assistant-response .markdown code { background: #f4efe5; }
+.response-kicker { display: flex; align-items: center; gap: 6px; margin-bottom: 9px; color: #a58e6d; font: 9px var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+.response-kicker::before { content: ''; width: 13px; height: 1px; background: #c9a66d; }
+@media (max-width: 700px) { .assistant-response { padding: 13px 14px; } }

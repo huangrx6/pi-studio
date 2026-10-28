@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Brain, ChevronDown, CircleCheck, CircleX, FileText, LoaderCircle, Pencil, Search, Terminal, Wrench } from 'lucide-react';
 import type { ChatMessage, ContentBlock, ToolCallBlock } from '../chat-types';
 import { Markdown } from './Markdown';
@@ -58,13 +59,6 @@ function ToolCall({ call, result, busy }: { call: ToolCallBlock; result?: ChatMe
   </details>;
 }
 
-function ToolCluster({ calls, toolResults, busy }: { calls: ToolCallBlock[]; toolResults: Map<string, ChatMessage>; busy: boolean }) {
-  return <div className={`tool-cluster ${calls.length === 1 ? 'is-single' : ''}`}>
-    {calls.length > 1 && <div className="tool-cluster-head"><span className="tool-cluster-symbol"><Wrench /></span><span>执行轨迹</span><span className="tool-cluster-count">{calls.length}</span><span className="tool-cluster-line" /></div>}
-    <div className="tool-cluster-body">{calls.map((call) => <ToolCall key={call.id} call={call} result={toolResults.get(call.id)} busy={busy} />)}</div>
-  </div>;
-}
-
 function Thinking({ block }: { block: Extract<ContentBlock, { type: 'thinking' }> }) {
   const preview = block.redacted ? '已隐藏' : block.thinking.replace(/\s+/g, ' ').trim().slice(0, 72);
   return <details className="thinking-block">
@@ -78,31 +72,8 @@ function Thinking({ block }: { block: Extract<ContentBlock, { type: 'thinking' }
   </details>;
 }
 
-function AssistantStep({ message, toolResults, busy }: { message: ChatMessage; toolResults: Map<string, ChatMessage>; busy: boolean }) {
-  const nodes = [];
-  for (let index = 0; index < message.content.length; index += 1) {
-    const block = message.content[index];
-    if (block.type === 'toolCall') {
-      const calls = [block];
-      while (index + 1 < message.content.length && message.content[index + 1].type === 'toolCall') {
-        index += 1;
-        calls.push(message.content[index] as ToolCallBlock);
-      }
-      nodes.push(<ToolCluster key={`tools-${block.id || index}`} calls={calls} toolResults={toolResults} busy={busy} />);
-    } else if (block.type === 'thinking') {
-      nodes.push(<Thinking block={block} key={`thinking-${index}`} />);
-    } else if (block.type === 'text' && block.text) {
-      nodes.push(<Markdown key={`text-${index}`}>{block.text}</Markdown>);
-    } else if (block.type === 'image') {
-      nodes.push(<img className="message-image" key={`image-${index}`} src={`data:${block.mimeType};base64,${block.data}`} alt="" />);
-    }
-  }
-  return <div className="assistant-step">
-    {nodes}
-    {message.streaming && <span className="caret" />}
-    {message.errorMessage && <div className="message-error">{message.errorMessage}</div>}
-  </div>;
-}
+type FlatBlock = { block: ContentBlock; key: string };
+type ActivityEntry = { kind: 'thinking'; block: Extract<ContentBlock, { type: 'thinking' }> } | { kind: 'tool'; call: ToolCallBlock } | { kind: 'text'; text: string };
 
 function formatTime(timestamp?: number): string {
   if (!timestamp) return '';
@@ -110,10 +81,24 @@ function formatTime(timestamp?: number): string {
 }
 
 export function AssistantTurnView({ messages, toolResults, busy }: { messages: ChatMessage[]; toolResults: Map<string, ChatMessage>; busy: boolean }) {
+  const live = busy && messages.some((message) => message.streaming);
+  const [activityOpen, setActivityOpen] = useState(live);
+  useEffect(() => { if (live) setActivityOpen(true); }, [live]);
+  const flat: FlatBlock[] = messages.flatMap((message, messageIndex) => message.content.map((block, blockIndex) => ({ block, key: `${messageIndex}-${blockIndex}` })));
+  let lastActivity = -1;
+  flat.forEach((entry, index) => { if (entry.block.type === 'thinking' || entry.block.type === 'toolCall') lastActivity = index; });
+  const activityBlocks = lastActivity >= 0 ? flat.slice(0, lastActivity + 1) : [];
+  const responseBlocks = lastActivity >= 0 ? flat.slice(lastActivity + 1) : flat;
+  const activity: ActivityEntry[] = activityBlocks.flatMap((entry): ActivityEntry[] => {
+    if (entry.block.type === 'thinking') return [{ kind: 'thinking', block: entry.block }];
+    if (entry.block.type === 'toolCall') return [{ kind: 'tool', call: entry.block }];
+    if (entry.block.type === 'text' && entry.block.text.trim()) return [{ kind: 'text', text: entry.block.text }];
+    return [];
+  });
   const toolCount = messages.reduce((total, message) => total + message.content.filter((block) => block.type === 'toolCall').length, 0);
   const thinkingCount = messages.reduce((total, message) => total + message.content.filter((block) => block.type === 'thinking').length, 0);
-  const live = busy && messages.some((message) => message.streaming);
   const latest = messages[messages.length - 1];
+  const error = messages.find((message) => message.errorMessage)?.errorMessage;
   return <div className={`assistant-turn ${live ? 'is-live' : ''}`}>
     <div className="assistant-turn-rail"><span className="assistant-orb">π</span></div>
     <div className="assistant-turn-main">
@@ -127,7 +112,32 @@ export function AssistantTurnView({ messages, toolResults, busy }: { messages: C
         </span>
         {latest?.timestamp && <time>{formatTime(latest.timestamp)}</time>}
       </div>
-      {messages.map((message, index) => <AssistantStep key={message.timestamp ?? index} message={message} toolResults={toolResults} busy={busy} />)}
+      {activity.length > 0 && <details className="activity-drawer" open={activityOpen} onToggle={(event) => setActivityOpen(event.currentTarget.open)}>
+        <summary>
+          <span className="activity-symbol"><Wrench /></span>
+          <span>执行轨迹</span>
+          <span className="activity-summary">{toolCount} 次工具 · {thinkingCount} 次思考</span>
+          <ChevronDown className="activity-chevron" />
+        </summary>
+        {activityOpen && <div className="activity-log">
+          {activity.map((entry, index) => entry.kind === 'tool'
+            ? <ToolCall key={`tool-${entry.call.id}-${index}`} call={entry.call} result={toolResults.get(entry.call.id)} busy={busy} />
+            : entry.kind === 'thinking'
+              ? <Thinking key={`thinking-${index}`} block={entry.block} />
+              : <div className="activity-note" key={`note-${index}`}><Markdown>{entry.text}</Markdown></div>)}
+        </div>}
+      </details>}
+      {responseBlocks.length > 0 && <div className="assistant-response">
+        {lastActivity >= 0 && <div className="response-kicker">回复</div>}
+        {responseBlocks.map((entry) => entry.block.type === 'text' && entry.block.text
+          ? <Markdown key={entry.key}>{entry.block.text}</Markdown>
+          : entry.block.type === 'image'
+            ? <img className="message-image" key={entry.key} src={`data:${entry.block.mimeType};base64,${entry.block.data}`} alt="" />
+            : null)}
+        {live && <span className="caret" />}
+      </div>}
+      {!live && responseBlocks.length === 0 && error && <div className="message-error">{error}</div>}
+      {live && responseBlocks.length === 0 && <span className="caret" />}
     </div>
   </div>;
 }
