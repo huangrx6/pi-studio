@@ -798,7 +798,11 @@ export function App() {
         </div>}
 
         <div className="composer-dock">
-          {isNewConversation && <div className="new-conversation-intro"><span className="new-conversation-context" title={workspace}>{activeWorkspace?.name || (workspace ? workspace.split('/').pop() : 'Pi Studio')}</span><h2>今天想做些什么？</h2><p>从一个问题，或一件想完成的事开始。</p></div>}
+          {isNewConversation && <div className="new-conversation-intro">
+            <span className="new-conversation-context" title={workspace}>{activeWorkspace?.name || (workspace ? workspace.split('/').pop() : 'Pi Studio')}</span>
+            <h2>今天，<em>想做点什么？</em></h2>
+            <p>从一个念头开始。</p>
+          </div>}
           <div className="composer">
             <textarea
               ref={textareaRef}

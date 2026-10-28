@@ -51,5 +51,6 @@
   --focus-ring: 0 0 0 3px rgb(77 110 184 / 12%);
   --transition: 160ms ease;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --display-font: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "Times New Roman", serif;
   --mono: "SF Mono", "JetBrains Mono", "Fira Code", Consolas, monospace;
 }
