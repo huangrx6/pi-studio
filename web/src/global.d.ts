@@ -239,7 +239,7 @@ declare global {
       /** 把 footer 的尺寸 / 点击 / 滚轮输入交给扩展，返回更新后的快照。 */
       footerAction(payload: FooterAction): Promise<FooterView | undefined>;
       /** 通用扩展 surface 输入：footer / widget / custom 共用。 */
-      extensionAction(payload: { sessionId: string; surface: 'footer' | 'widget' | 'custom'; type: 'resize' | 'click' | 'wheel' | 'key' | 'close'; target?: string; key?: string; columns?: number; rows?: number; appearance?: string; x?: number; y?: number; delta?: number }): Promise<unknown>;
+      extensionAction(payload: { sessionId: string; surface: 'footer' | 'widget' | 'custom'; type: 'resize' | 'click' | 'wheel' | 'key' | 'close'; target?: string; key?: string; ctrl?: boolean; columns?: number; rows?: number; appearance?: string; x?: number; y?: number; delta?: number }): Promise<unknown>;
       /** 回传 input()/editor() 的结果。 */
       extensionDialogResult(payload: { id: string; value: string | undefined }): Promise<boolean>;
       /** 回传扩展 select 的选择结果。 */

@@ -2183,3 +2183,5 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .extension-select-desc { color: var(--muted); font-size: var(--text-sm); line-height: 1.55; }
 .extension-working { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; color: var(--muted); font-size: var(--text-sm); }
 .extension-working svg { width: 13px; height: 13px; flex: none; color: var(--accent); }
+.extension-custom-side { position: fixed; top: 0; right: 0; bottom: 0; z-index: 320; display: flex; width: min(460px, 92vw); padding: 14px; border-left: 1px solid var(--border); background: var(--bg); box-shadow: var(--shadow-drawer); }
+.extension-custom-side .extension-custom-card { width: 100%; max-height: 100%; }

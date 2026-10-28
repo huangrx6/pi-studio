@@ -46,6 +46,50 @@ function extensionDialogResult(id, value) {
   return true;
 }
 
+
+/** 桌面端输入序列 → Pi TUI 的键名。 */
+const KEY_IDS = {
+  '\r': 'enter', '\n': 'enter', '\x1b': 'escape', '\t': 'tab', '\x7f': 'backspace', '\x03': 'ctrl+c', '\x0a': 'ctrl+j',
+  '\x1b[A': 'up', '\x1b[B': 'down', '\x1b[C': 'right', '\x1b[D': 'left',
+  '\x1b[5~': 'pageUp', '\x1b[6~': 'pageDown', '\x1b[H': 'home', '\x1b[F': 'end',
+};
+
+/** Pi TUI 常用动作的默认键位；custom 组件依赖 matches() 做语义判断。 */
+const DEFAULT_KEYS = {
+  'tui.select.up': ['up'],
+  'tui.select.down': ['down'],
+  'tui.select.pageUp': ['pageUp'],
+  'tui.select.pageDown': ['pageDown'],
+  'tui.select.confirm': ['enter'],
+  'tui.select.cancel': ['escape', 'ctrl+c'],
+  'tui.input.tab': ['tab'],
+  'tui.input.submit': ['enter'],
+  'tui.input.newLine': ['shift+enter', 'ctrl+j'],
+  'tui.editor.cursorLineStart': ['home', 'ctrl+a'],
+  'tui.editor.cursorLineEnd': ['end', 'ctrl+e'],
+  'tui.editor.deleteCharBackward': ['backspace'],
+};
+
+/**
+ * 给 custom 组件的最小 KeybindingsManager 兼容层。
+ * 只覆盖 Pi TUI 的常用键位；扩展自定义键位不会生效，但不会阻断基础交互。
+ */
+function createKeybindings() {
+  const idFor = (data) => {
+    if (KEY_IDS[data]) return KEY_IDS[data];
+    if (data.length === 1 && data.charCodeAt(0) >= 1 && data.charCodeAt(0) <= 26) {
+      return `ctrl+${String.fromCharCode(data.charCodeAt(0) + 96)}`;
+    }
+    return data;
+  };
+  return {
+    matches(data, action) { return (DEFAULT_KEYS[action] || []).includes(idFor(String(data || ''))); },
+    getKeys(action) { return [...(DEFAULT_KEYS[action] || [])]; },
+    get(action) { return DEFAULT_KEYS[action] || []; },
+    getDefinition(action) { return { defaultKeys: DEFAULT_KEYS[action] || [] }; },
+  };
+}
+
 /**
  * 为一个会话创建 uiContext。
  * Pi 的 bindExtensions 会把它交给扩展使用。
@@ -215,7 +259,7 @@ function createExtensionUI(sessionId) {
           resolve(result);
         };
         try {
-          const component = factory(host.tui, host.theme, { matches: () => false, get: () => undefined, getKeys: () => [] }, finish);
+          const component = factory(host.tui, host.theme, createKeybindings(), finish);
           Promise.resolve(component).then((value) => { if (!done) host.set(() => value); }).catch(() => finish(undefined));
         } catch { finish(undefined); }
       });

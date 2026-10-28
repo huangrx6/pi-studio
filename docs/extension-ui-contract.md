@@ -23,17 +23,23 @@ Pi Studio 不按扩展名写界面。扩展只使用 Pi 标准的 `ctx.ui` API�
 | `setWidget(belowEditor)` | 输入框下方 | 已实现（字符串 / Component） |
 | `setFooter` | 输入框底部 footer | 已实现 |
 | `custom({ overlay: true })` | 应用内浮层 | 已实现（键盘 / 鼠标 / done） |
-| `custom({ overlay: false })` | 应用内浮层 | 已实现（暂与 overlay 同为浮层） |
+| `custom({ overlay: false })` | 右侧面板 | 已实现 |
 | `select` | 统一选择对话框 | 已实现 |
 | `confirm` | 风险确认卡片 | 已实现 |
 | `input` / `editor` | 统一输入对话框 | 已实现 |
-| `onTerminalInput` | 当前聚焦扩展浮层的键盘 | 已实现（仅 custom 焦点） |
+| `onTerminalInput` | 当前聚焦扩展浮层 / 面板的键盘 | 已实现（仅 custom 焦点） |
 | `setTitle` | 窗口标题 | 已实现 |
 | `setWorkingMessage/Visible/Indicator` | 输入框上方工作状态 | 已实现（Indicator 仅支持显隐） |
 | `setHeader` | 对话头部 | 待实现 |
 | `pasteToEditor` / `setEditorText` / `getEditorText` | 输入框 | 已实现 |
 | `setEditorComponent` / `addAutocompleteProvider` | 输入框替换 | 待实现（复杂原语） |
 | `theme` 相关 | 应用主题映射 | 部分实现 |
+
+## 已知限制
+
+- custom 组件的 `keybindings.matches()` 覆盖 Pi TUI 常用动作（`tui.select.*`、`tui.input.*`、部分 `tui.editor.*`）；扩展自定义键位暂不生效。
+- `setHeader`、`setEditorComponent`、`addAutocompleteProvider` 尚未接入桌面端。
+- `setWorkingIndicator` 目前只处理显隐，不支持自定义动画帧。
 
 ## 写扩展时的检查清单
 

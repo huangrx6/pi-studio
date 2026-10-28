@@ -170,12 +170,12 @@ export function ExtensionCustomOverlay({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     if (!panel) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.metaKey || event.altKey) return;
       const key = event.key;
       if (key === 'Shift' || key === 'Control' || key === 'Alt' || key === 'Meta') return;
       event.preventDefault();
       event.stopPropagation();
-      void window.piApi.extensionAction?.({ sessionId, surface: 'custom', type: 'key', key });
+      void window.piApi.extensionAction?.({ sessionId, surface: 'custom', type: 'key', key, ctrl: event.ctrlKey });
     };
     document.addEventListener('keydown', onKey, true);
     bodyRef.current?.focus();
@@ -202,8 +202,7 @@ export function ExtensionCustomOverlay({ sessionId }: { sessionId: string }) {
   }, [panel?.id, sessionId]);
 
   if (!panel || panel.lines.length === 0) return null;
-  return <div className="extension-custom-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) void window.piApi.extensionAction?.({ sessionId, surface: 'custom', type: 'close' }); }}>
-    <section className="extension-custom-card" role="dialog" aria-modal="true" aria-label={panel.title || '扩展界面'}>
+  const card = <section className={`extension-custom-card ${panel.overlay ? '' : 'is-side'}`} role="dialog" aria-modal={panel.overlay} aria-label={panel.title || '扩展界面'}>
       <header className="extension-custom-head">
         <strong>{panel.title || '扩展界面'}</strong>
         <button type="button" className="extension-custom-close" aria-label="关闭扩展界面" onClick={() => {
@@ -226,8 +225,11 @@ export function ExtensionCustomOverlay({ sessionId }: { sessionId: string }) {
           }}
         />
       </div>
-    </section>
-  </div>;
+    </section>;
+  // overlay: true 用模态浮层；overlay: false 放到右侧面板，不遮挡对话。
+  return panel.overlay
+    ? <div className="extension-custom-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) void window.piApi.extensionAction?.({ sessionId, surface: 'custom', type: 'close' }); }}>{card}</div>
+    : <aside className="extension-custom-side">{card}</aside>;
 }
 
 /** input()/editor()：统一输入对话框。 */
