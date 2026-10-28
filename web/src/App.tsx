@@ -676,10 +676,10 @@ export function App() {
     <div className={`app ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}>
       <aside className="sidebar">
         <div className="sidebar-drag" />
+        <button className="icon-button sidebar-top-toggle" aria-label="收起侧边栏" title="收起侧边栏" onClick={() => setSidebarCollapsed(true)}><PanelLeft /></button>
         <div className="brand">
           <BrandMark />
           <span className="brand-name">Pi Studio</span>
-          <button className="icon-button collapse" aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'} title={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'} onClick={() => setSidebarCollapsed((value) => !value)}><PanelLeft /></button>
         </div>
         <button className="new-chat" title="新会话" onClick={() => void startSession()}><SquarePen /><span>新会话</span></button>
         <nav className="nav">
@@ -802,7 +802,6 @@ export function App() {
             <div className="chat-meta"><span className={`state-dot ${busy ? 'is-busy' : ''}`} />{busy ? '正在处理' : '准备就绪'}{activeWorkspace && <><span>·</span><span className="workspace-name">{activeWorkspace.name}</span></>}</div>
           </div>}
           <div className="chat-actions">
-            <button className="icon-button" onClick={() => void openSettings()} aria-label="设置"><Settings size={16} /></button>
             <button className={`icon-button ${filesOpen ? 'is-active' : ''}`} onClick={() => setFilesOpen((value) => !value)} aria-label="文件查看器"><PanelRight size={16} /></button>
           </div>
         </header>
