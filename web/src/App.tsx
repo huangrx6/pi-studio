@@ -823,7 +823,7 @@ export function App() {
     if (menu.kind === 'file') {
       const file = composerFileOptions[index];
       if (!file) return;
-      const inserted = `@${file.path} `;
+      const inserted = `@${file.path}${file.type === 'directory' ? '/' : ''} `;
       const next = `${prompt.slice(0, menu.start)}${inserted}${prompt.slice(caret)}`;
       const nextCaret = menu.start + inserted.length;
       setPrompt(next);
@@ -1517,8 +1517,8 @@ export function App() {
             <p>从一个念头开始。</p>
           </div>}
           <div className="composer-wrap" ref={composerWrapRef}>
-            {composerMenu && <div className="composer-picker" role="listbox" aria-label={composerMenu.kind === 'slash' ? '命令与技能' : '工作区文件'}>
-              <div className="composer-picker-head"><span>{composerMenu.kind === 'slash' ? '命令与技能' : '引用工作区文件'}</span><span>{composerMenuLoading ? '正在加载…' : composerMenu.kind === 'slash' ? '输入以筛选' : '↑↓ 选择文件'}</span></div>
+            {composerMenu && <div className="composer-picker" role="listbox" aria-label={composerMenu.kind === 'slash' ? '命令与技能' : '工作区文件与目录'}>
+              <div className="composer-picker-head"><span>{composerMenu.kind === 'slash' ? '命令与技能' : '引用工作区文件或目录'}</span><span>{composerMenuLoading ? '正在加载…' : composerMenu.kind === 'slash' ? '输入以筛选' : '↑↓ 选择文件或目录'}</span></div>
               <div className="composer-picker-scroll">
                 {composerMenu.kind === 'slash' && ([
                   { source: 'builtin', label: '命令' },
@@ -1541,13 +1541,13 @@ export function App() {
                   </div>;
                 })}
                 {composerMenu.kind === 'file' && <div className="composer-picker-group">
-                  <div className="composer-picker-label">工作区文件<span>{composerFileOptions.length}</span></div>
-                  {composerFileOptions.map((file, index) => <button type="button" role="option" aria-selected={index === composerMenuIndex} key={file.path} className={`composer-option ${index === composerMenuIndex ? 'is-active' : ''}`} onMouseEnter={() => setComposerMenuIndex(index)} onMouseDown={(event) => { event.preventDefault(); selectComposerOption(index); }}>
-                    <span className="composer-option-icon is-file"><FileText /></span>
-                    <span className="composer-option-main"><strong>{file.name}</strong><span>{file.path}</span></span>
+                  <div className="composer-picker-label">工作区文件与目录<span>{composerFileOptions.length}</span></div>
+                  {composerFileOptions.map((file, index) => <button type="button" role="option" aria-selected={index === composerMenuIndex} key={`${file.type}:${file.path}`} className={`composer-option ${index === composerMenuIndex ? 'is-active' : ''}`} onMouseEnter={() => setComposerMenuIndex(index)} onMouseDown={(event) => { event.preventDefault(); selectComposerOption(index); }}>
+                    <span className={`composer-option-icon ${file.type === 'directory' ? 'is-directory' : 'is-file'}`}>{file.type === 'directory' ? <Folder /> : <FileText />}</span>
+                    <span className="composer-option-main"><strong>{file.name}{file.type === 'directory' ? '/' : ''}</strong><span>{file.path}{file.type === 'directory' ? '/' : ''}</span></span>
                   </button>)}
                 </div>}
-                {!composerMenuLoading && composerOptionsCount === 0 && <div className="composer-picker-empty">{composerMenu.kind === 'slash' ? '没有匹配的命令' : workspace ? '没有匹配的文件' : '请先选择一个工作区'}</div>}
+                {!composerMenuLoading && composerOptionsCount === 0 && <div className="composer-picker-empty">{composerMenu.kind === 'slash' ? '没有匹配的命令' : workspace ? '没有匹配的文件或目录' : '请先选择一个工作区'}</div>}
               </div>
               <div className="composer-picker-foot"><span>↑↓ 选择</span><span>↵ 确认</span><span>Esc 关闭</span></div>
             </div>}

@@ -1268,3 +1268,5 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 .error-card::before { content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 2px; border-radius: 0 2px 2px 0; background: linear-gradient(180deg, #d17868, #e0b09f); }
 .error-card strong { display: block; color: #6d4139; font-family: var(--font-display); font-size: 13px; font-weight: 600; }
 .error-card p { margin: 7px 0 0; color: #9a6b61; font: 11px/1.65 var(--mono); overflow-wrap: anywhere; }
+
+.composer-option-icon.is-directory { color: #a1742e; background: #fbf3e5; }

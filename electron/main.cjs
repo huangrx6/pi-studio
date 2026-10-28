@@ -210,10 +210,14 @@ async function searchWorkspaceFiles(cwd, query) {
       if (scanned >= 4000) break;
       const rel = current.rel ? `${current.rel}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
-        if (!SEARCH_IGNORED_DIRS.has(entry.name)) queue.push({ dir: path.join(current.dir, entry.name), rel });
+        if (!SEARCH_IGNORED_DIRS.has(entry.name)) {
+          scanned += 1;
+          files.push({ name: entry.name, path: rel, type: 'directory' });
+          queue.push({ dir: path.join(current.dir, entry.name), rel });
+        }
       } else if (entry.isFile()) {
         scanned += 1;
-        files.push({ name: entry.name, path: rel });
+        files.push({ name: entry.name, path: rel, type: 'file' });
       }
     }
   }
@@ -223,7 +227,7 @@ async function searchWorkspaceFiles(cwd, query) {
     const lowerPath = file.path.toLowerCase();
     const rank = !needle ? 2 : lowerName.startsWith(needle) ? 0 : lowerName.includes(needle) ? 1 : lowerPath.includes(needle) ? 2 : -1;
     return { ...file, rank };
-  }).filter((file) => file.rank >= 0).sort((a, b) => a.rank - b.rank || a.path.length - b.path.length || a.path.localeCompare(b.path));
+  }).filter((file) => file.rank >= 0).sort((a, b) => a.rank - b.rank || (a.type === b.type ? 0 : a.type === 'directory' ? -1 : 1) || a.path.length - b.path.length || a.path.localeCompare(b.path));
   return { files: ranked.slice(0, 40) };
 }
 
@@ -818,6 +822,33 @@ async function saveAttachment({ sessionId, text }) {
   return { ...info, promptText: `${notice}\n\n${marker}`, notice };
 }
 
+function directoryReferenceText(cwd, target) {
+  const root = path.relative(cwd, target).split(path.sep).join('/');
+  const lines = [];
+  const queue = [{ dir: target, rel: root }];
+  let count = 0;
+  while (queue.length > 0 && count < 240) {
+    const current = queue.shift();
+    let entries = [];
+    try { entries = fs.readdirSync(current.dir, { withFileTypes: true }); } catch { continue; }
+    for (const entry of entries) {
+      if (count >= 240) break;
+      if (entry.isDirectory() && SEARCH_IGNORED_DIRS.has(entry.name)) continue;
+      const rel = `${current.rel}/${entry.name}`;
+      if (entry.isDirectory()) {
+        lines.push(`${rel}/`);
+        queue.push({ dir: path.join(current.dir, entry.name), rel });
+      } else if (entry.isFile()) {
+        let size = 0;
+        try { size = fs.statSync(path.join(current.dir, entry.name)).size; } catch { /* ignore */ }
+        lines.push(`${rel} (${size} bytes)`);
+        count += 1;
+      }
+    }
+  }
+  return `<directory path="${root}">\n${lines.join('\n')}\n</directory>\nThis is a directory listing. Use read/ls/grep tools to inspect files as needed.`;
+}
+
 async function fileReferenceContext(cwd, mentions) {
   const blocks = [];
   let budget = 240_000;
@@ -827,6 +858,13 @@ async function fileReferenceContext(cwd, mentions) {
     try {
       const target = resolveInWorkspace(cwd, requested);
       const stat = fs.statSync(target);
+      if (stat.isDirectory()) {
+        const listing = directoryReferenceText(cwd, target);
+        if (listing.length > budget) continue;
+        blocks.push({ type: 'text', text: listing });
+        budget -= listing.length;
+        continue;
+      }
       if (!stat.isFile()) continue;
       const relative = path.relative(cwd, target).split(path.sep).join('/');
       const mime = imageMimes[path.extname(target).toLowerCase()];
