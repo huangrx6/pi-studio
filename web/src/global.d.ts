@@ -1,5 +1,5 @@
 export {};
-import type { ChatAttachment, ChatMessage, ComposerCommand, ComposerFile } from './chat-types';
+import type { ChatAttachment, ChatMessage, ComposerAttachment, ComposerCommand, ComposerFile, UploadedAttachment } from './chat-types';
 import type { ModelCatalog, ModelSelection, ThinkingLevel } from './model-types';
 
 interface PiSessionSummary {
@@ -44,7 +44,7 @@ declare global {
       state(cwd?: string): Promise<{ workspaces: PiWorkspace[]; model: ModelSelection; cwd: string }>;
       createSession(cwd: string): Promise<PiDetail>;
       session(id: string): Promise<PiDetail | undefined>;
-      prompt(payload: { sessionId: string; text: string; requestId: string; mentions?: string[]; attachments?: string[] }): Promise<void>;
+      prompt(payload: { sessionId: string; text: string; requestId: string; mentions?: string[]; attachments?: string[]; images?: Array<{ type: 'image'; data: string; mimeType: string }> }): Promise<void>;
       files(cwd: string, path: string): Promise<{ path: string; entries: Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }> }>;
       file(cwd: string, path: string): Promise<{ path: string; size: number; binary: boolean; text: string }>;
       fileActions(payload: { cwd: string; path: string }): Promise<{ apps: Array<{ name: string; path: string; icon?: string }> }>;
@@ -54,6 +54,8 @@ declare global {
       composerResources(payload: { sessionId?: string; cwd?: string }): Promise<{ commands: ComposerCommand[] }>;
       searchFiles(payload: { cwd: string; query: string }): Promise<{ files: ComposerFile[] }>;
       saveAttachment(payload: { sessionId: string; text: string }): Promise<ChatAttachment & { notice: string; promptText: string }>;
+      pickAttachments(payload: { sessionId?: string }): Promise<{ attachments: ComposerAttachment[] }>;
+      saveUpload(payload: { sessionId?: string; name: string; mime: string; data: string }): Promise<UploadedAttachment>;
       chooseWorkspace(): Promise<string | undefined>;
       models(cwd?: string): Promise<ModelCatalog>;
       providerModels(providerId: string): Promise<{ models: Array<{ id: string; model: string; name: string; enabled: boolean; contextWindow?: number; maxTokens?: number; supportsImages?: boolean }> }>;

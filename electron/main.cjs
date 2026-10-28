@@ -227,17 +227,28 @@ async function searchWorkspaceFiles(cwd, query) {
   return { files: ranked.slice(0, 40) };
 }
 
-const ATTACHMENT_MARKER = /\[\[pi-studio-attachment:([A-Za-z0-9+/=]+)\]\]/;
+const ATTACHMENT_MARKER_PATTERN = /\[\[pi-studio-attachment:([A-Za-z0-9+/=]+)\]\]/g;
 function attachmentRoot() { return path.join(pi.getAgentDir(), 'attachments'); }
 
-function parseAttachmentMarker(text) {
-  const match = ATTACHMENT_MARKER.exec(text);
-  if (!match) return { text, attachments: [] };
-  try {
-    const info = JSON.parse(Buffer.from(match[1], 'base64').toString('utf8'));
-    if (!info || typeof info.path !== 'string' || typeof info.name !== 'string') return { text, attachments: [] };
-    return { text: text.replace(match[0], '').trim(), attachments: [{ name: String(info.name), path: info.path, bytes: Number(info.bytes) || 0, lines: Number(info.lines) || 0 }] };
-  } catch { return { text, attachments: [] }; }
+function parseAttachmentMarkers(text) {
+  const attachments = [];
+  let clean = text;
+  for (const match of text.matchAll(ATTACHMENT_MARKER_PATTERN)) {
+    try {
+      const info = JSON.parse(Buffer.from(match[1], 'base64').toString('utf8'));
+      if (!info || typeof info.path !== 'string' || typeof info.name !== 'string') continue;
+      attachments.push({
+        name: String(info.name),
+        path: info.path,
+        bytes: Number(info.bytes) || 0,
+        lines: Number(info.lines) || 0,
+        kind: info.kind === 'file' ? 'file' : 'text',
+        mime: typeof info.mime === 'string' ? info.mime : undefined,
+      });
+      clean = clean.replace(match[0], '');
+    } catch { /* ignore malformed marker */ }
+  }
+  return { text: clean.trim(), attachments };
 }
 
 async function attachmentContext(paths) {
@@ -281,7 +292,7 @@ function serializeMessage(message) {
   const result = { role: message.role, content: serializeContent(message.content), timestamp: message.timestamp };
   if (message.role === 'user') {
     const joined = result.content.filter((block) => block.type === 'text').map((block) => block.text).join('\n');
-    const parsed = parseAttachmentMarker(joined);
+    const parsed = parseAttachmentMarkers(joined);
     if (parsed.attachments.length > 0) {
       const nonText = result.content.filter((block) => block.type !== 'text');
       result.content = [...(parsed.text ? [{ type: 'text', text: parsed.text }] : []), ...nonText];
@@ -656,6 +667,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('pi:session', async (_event, id) => detail(id));
   ipcMain.handle('pi:composer-resources', async (_event, payload) => composerResources(payload || {}));
   ipcMain.handle('pi:search-files', async (_event, { cwd, query }) => searchWorkspaceFiles(cwd, query));
+  ipcMain.handle('pi:pick-attachments', async (_event, payload) => pickAttachments(payload || {}));
+  ipcMain.handle('pi:save-upload', async (_event, payload) => saveUpload(payload || {}));
   ipcMain.handle('pi:save-attachment', async (_event, payload) => saveAttachment(payload || {}));
   ipcMain.handle('pi:file-actions', async (_event, { cwd, path: requested }) => {
     const target = workspaceFile(cwd, requested);
@@ -713,19 +726,82 @@ app.whenReady().then(async () => {
     const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
     return result.canceled ? undefined : result.filePaths[0];
   });
-async function saveAttachment({ sessionId, text }) {
-  if (typeof text !== 'string' || text.length === 0) throw new Error('没有可保存的内容');
-  const safeSession = String(sessionId || 'local').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 80) || 'local';
+const ATTACHMENT_MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.pdf': 'application/pdf', '.txt': 'text/plain', '.md': 'text/markdown', '.json': 'application/json', '.csv': 'text/csv', '.zip': 'application/zip', '.doc': 'application/msword', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.xls': 'application/vnd.ms-excel', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation' };
+
+function attachmentMime(name, fallback) {
+  return ATTACHMENT_MIME[path.extname(name).toLowerCase()] || fallback || 'application/octet-stream';
+}
+
+function safeAttachmentName(name) {
+  return path.basename(String(name || 'attachment')).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 120) || 'attachment';
+}
+
+function makeAttachmentMarker(info) {
+  return `[[pi-studio-attachment:${Buffer.from(JSON.stringify(info)).toString('base64')}]]`;
+}
+
+function writeAttachment(sessionId, name, buffer) {
+  const safeSession = String(sessionId || 'draft').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 80) || 'draft';
   const dir = path.join(attachmentRoot(), safeSession);
   fs.mkdirSync(dir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const name = `long-message-${stamp}.txt`;
-  const target = path.join(dir, name);
-  fs.writeFileSync(target, text, 'utf8');
-  const bytes = Buffer.byteLength(text, 'utf8');
-  const lines = text.split('\n').length;
-  const info = { name, path: target, bytes, lines };
-  const marker = `[[pi-studio-attachment:${Buffer.from(JSON.stringify(info)).toString('base64')}]]`;
+  const target = path.join(dir, `${stamp}-${safeAttachmentName(name)}`);
+  fs.writeFileSync(target, buffer);
+  return target;
+}
+
+function attachmentInfo(name, target, buffer, kind, mime) {
+  const textLike = !buffer.includes(0);
+  return {
+    name,
+    path: target,
+    bytes: buffer.length,
+    lines: textLike ? buffer.toString('utf8').split('\n').length : 0,
+    kind,
+    mime: attachmentMime(name, mime),
+  };
+}
+
+async function pickAttachments({ sessionId }) {
+  const result = await dialog.showOpenDialog(mainWindow, { properties: ['openFile', 'multiSelections'] });
+  if (result.canceled) return { attachments: [] };
+  const attachments = [];
+  for (const selected of result.filePaths.slice(0, 8)) {
+    try {
+      const stat = fs.statSync(selected);
+      if (!stat.isFile() || stat.size > 20_000_000) continue;
+      const name = path.basename(selected);
+      const mime = attachmentMime(name, '');
+      if (mime.startsWith('image/')) {
+        attachments.push({ id: crypto.randomUUID(), kind: 'image', name, mime, bytes: stat.size, data: fs.readFileSync(selected).toString('base64') });
+      } else {
+        const buffer = fs.readFileSync(selected);
+        const target = writeAttachment(sessionId, name, buffer);
+        const info = attachmentInfo(name, target, buffer, 'file', mime);
+        attachments.push({ id: crypto.randomUUID(), ...info, marker: makeAttachmentMarker(info) });
+      }
+    } catch { /* skip unreadable file */ }
+  }
+  return { attachments };
+}
+
+async function saveUpload({ sessionId, name, mime, data }) {
+  if (typeof data !== 'string' || !data) throw new Error('没有可保存的文件');
+  const buffer = Buffer.from(data, 'base64');
+  if (buffer.length === 0 || buffer.length > 20_000_000) throw new Error('文件大小无效');
+  const safeName = safeAttachmentName(name);
+  const target = writeAttachment(sessionId, safeName, buffer);
+  const info = attachmentInfo(safeName, target, buffer, 'file', mime);
+  return { ...info, marker: makeAttachmentMarker(info) };
+}
+
+async function saveAttachment({ sessionId, text }) {
+  if (typeof text !== 'string' || text.length === 0) throw new Error('没有可保存的内容');
+  const name = `long-message-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+  const target = writeAttachment(sessionId, name, Buffer.from(text, 'utf8'));
+  const buffer = Buffer.from(text, 'utf8');
+  const info = { name, path: target, bytes: buffer.length, lines: text.split('\n').length, kind: 'text', mime: 'text/plain' };
+  const marker = makeAttachmentMarker(info);
   const preview = text.replace(/\s+/g, ' ').trim().slice(0, 140);
   const notice = `${preview}${text.length > 140 ? '…' : ''}\n\n原始内容已保存为附件。`;
   return { ...info, promptText: `${notice}\n\n${marker}`, notice };
@@ -761,7 +837,7 @@ async function fileReferenceContext(cwd, mentions) {
   return blocks;
 }
 
-  ipcMain.handle('pi:prompt', async (event, { sessionId, text, requestId, mentions, attachments }) => {
+  ipcMain.handle('pi:prompt', async (event, { sessionId, text, requestId, mentions, attachments, images }) => {
     const found = await findManager(sessionId);
     if (!found) throw new Error('会话不存在');
     const session = await ensureAgent(sessionId, found.manager, found.cwd);
@@ -784,7 +860,8 @@ async function fileReferenceContext(cwd, mentions) {
       }
     });
     try {
-      await session.prompt(text);
+      const imageBlocks = Array.isArray(images) ? images.filter((image) => image && image.type === 'image' && typeof image.data === 'string' && typeof image.mimeType === 'string').slice(0, 8) : [];
+      await session.prompt(text, imageBlocks.length > 0 ? { images: imageBlocks } : undefined);
       sessionsIndexedAt = 0;
       detailCache.delete(sessionId);
       send({ type: 'done' });

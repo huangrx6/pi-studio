@@ -5,7 +5,8 @@ import {
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
 import { Select } from './components/Select';
-import type { ChatMessage, ComposerCommand, ComposerCommandSource, ComposerFile } from './chat-types';
+import type { ChatMessage, ComposerAttachment, ComposerCommand, ComposerCommandSource, ComposerFile } from './chat-types';
+import { AttachmentIcon } from './components/AttachmentIcon';
 import { AssistantTurnView, ChatMessageView } from './components/ChatMessage';
 import { DetailDialog } from './components/DetailDialog';
 import { ProviderIcon } from './components/ProviderIcon';
@@ -140,6 +141,7 @@ export function App() {
   const [session, setSession] = useState<{ id: string; cwd: string; title: string } | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [prompt, setPrompt] = useState('');
+  const [composerAttachments, setComposerAttachments] = useState<ComposerAttachment[]>([]);
   const [composerMenu, setComposerMenu] = useState<ComposerMenuState | null>(null);
   const [composerCommands, setComposerCommands] = useState<ComposerCommand[]>([]);
   const [composerFiles, setComposerFiles] = useState<ComposerFile[]>([]);
@@ -732,6 +734,42 @@ export function App() {
     }
   }
 
+  function readFileBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function addComposerFiles(files: File[]) {
+    for (const file of files) {
+      if (file.size > 20_000_000) { setError(`文件「${file.name}」超过 20MB`); continue; }
+      try {
+        if (file.type.startsWith('image/')) {
+          const data = await readFileBase64(file);
+          setComposerAttachments((current) => [...current, { id: crypto.randomUUID(), kind: 'image', name: file.name || 'image.png', mime: file.type || 'image/png', bytes: file.size, data }]);
+        } else {
+          const data = await readFileBase64(file);
+          const saved = await window.piApi.saveUpload({ sessionId: session?.id, name: file.name || 'attachment', mime: file.type, data });
+          setComposerAttachments((current) => [...current, { ...saved, id: crypto.randomUUID() }]);
+        }
+      } catch (error) { setError(error instanceof Error ? error.message : String(error)); }
+    }
+  }
+
+  async function pickComposerAttachments() {
+    try {
+      const result = await window.piApi.pickAttachments({ sessionId: session?.id });
+      setComposerAttachments((current) => [...current, ...result.attachments]);
+    } catch (error) { setError(error instanceof Error ? error.message : String(error)); }
+  }
+
+  function removeComposerAttachment(id: string) {
+    setComposerAttachments((current) => current.filter((attachment) => attachment.id !== id));
+  }
+
   function updateComposerMenu(value: string, caret: number) {
     const before = value.slice(0, caret);
     const slash = before.match(/^\/([^\s]*)$/);
@@ -858,8 +896,8 @@ export function App() {
 
   async function send() {
     const text = prompt.trim();
-    if (!text || busy) return;
-    if (text.startsWith('/')) {
+    if ((!text && composerAttachments.length === 0) || busy) return;
+    if (composerAttachments.length === 0 && text.startsWith('/')) {
       const builtin = text.match(/^\/(new|settings|model|thinking|copy)(?:\s|$)/);
       if (builtin && await executeBuiltinCommand(builtin[1])) {
         setPrompt('');
@@ -876,26 +914,55 @@ export function App() {
       setSession(current);
       setMessages([]);
     }
-    setPrompt('');
     setBusy(true);
     setError(null);
-    let outgoingText = text;
+    const files = composerAttachments.filter((attachment) => attachment.kind === 'file');
+    const images = composerAttachments.filter((attachment) => attachment.kind === 'image');
     let displayText = text;
-    let attachment: { name: string; path: string; bytes: number; lines: number } | undefined;
-    if (isLongMessage(text)) {
+    let outgoingText = text;
+    let longAttachment: ChatMessage['attachments'] = [];
+    if (text && isLongMessage(text)) {
       try {
         const saved = await window.piApi.saveAttachment({ sessionId: current.id, text });
         outgoingText = saved.promptText;
         displayText = saved.notice;
-        attachment = { name: saved.name, path: saved.path, bytes: saved.bytes, lines: saved.lines };
+        longAttachment = [{ name: saved.name, path: saved.path, bytes: saved.bytes, lines: saved.lines, kind: 'text', mime: 'text/plain' }];
       } catch { /* fall back to inline text */ }
     }
-    setMessages((existing) => [...existing, { role: 'user', content: [{ type: 'text', text: displayText }], timestamp: Date.now(), ...(attachment ? { attachments: [attachment] } : {}) }]);
+    const fileAttachments = files.map((file) => ({ name: file.name, path: file.path as string, bytes: file.bytes, lines: file.lines || 0, kind: 'file' as const, mime: file.mime }));
+    const markers = files.map((file) => file.marker).filter(Boolean) as string[];
+    if (markers.length > 0) outgoingText = [outgoingText, ...markers].filter(Boolean).join('\n\n');
+    if (!displayText) {
+      displayText = files.length > 0 ? '请查看附件。' : images.length > 0 ? '请查看图片。' : '';
+      if (!text) outgoingText = [displayText, ...markers].filter(Boolean).join('\n\n');
+    }
+    const content: ChatMessage['content'] = [];
+    if (displayText) content.push({ type: 'text', text: displayText });
+    for (const image of images) {
+      if (image.data) content.push({ type: 'image', data: image.data, mimeType: image.mime });
+    }
+    const persistentAttachments = [...(longAttachment ?? []), ...fileAttachments];
+    setPrompt('');
+    setComposerAttachments([]);
+    setMessages((existing) => [...existing, {
+      role: 'user',
+      content,
+      timestamp: Date.now(),
+      ...(persistentAttachments.length > 0 ? { attachments: persistentAttachments } : {}),
+    }]);
     const requestId = crypto.randomUUID();
     const mentions = [...text.matchAll(/(?:^|\s)@([^\s]+)/g)].map((match) => match[1]);
+    const imagePayload = images.filter((image) => image.data).map((image) => ({ type: 'image' as const, data: image.data as string, mimeType: image.mime }));
     requestRef.current = requestId;
     try {
-      await window.piApi.prompt({ sessionId: current.id, text: outgoingText, requestId, mentions, attachments: attachment ? [attachment.path] : [] });
+      await window.piApi.prompt({
+        sessionId: current.id,
+        text: outgoingText,
+        requestId,
+        mentions,
+        attachments: [...(longAttachment ?? []), ...fileAttachments].map((attachment) => attachment.path),
+        images: imagePayload,
+      });
       const saved = await window.piApi.session(current.id);
       if (saved) {
         setSession({ id: saved.id, cwd: saved.cwd, title: saved.title });
@@ -1472,12 +1539,29 @@ export function App() {
               </div>
               <div className="composer-picker-foot"><span>↑↓ 选择</span><span>↵ 确认</span><span>Esc 关闭</span></div>
             </div>}
-            <div className="composer">
+            <div
+              className="composer"
+              onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }}
+              onDrop={(event) => { const dropped = Array.from(event.dataTransfer.files); if (dropped.length > 0) { event.preventDefault(); void addComposerFiles(dropped); } }}
+            >
+            {composerAttachments.length > 0 && <div className="composer-attachments">
+              {composerAttachments.map((attachment) => attachment.kind === 'image'
+                ? <div className="composer-attachment is-image" key={attachment.id} title={attachment.name}>
+                  <img src={`data:${attachment.mime};base64,${attachment.data}`} alt="" />
+                  <button type="button" aria-label={`移除 ${attachment.name}`} onClick={() => removeComposerAttachment(attachment.id)}><X /></button>
+                </div>
+                : <div className="composer-attachment is-file" key={attachment.id} title={attachment.path}>
+                  <AttachmentIcon name={attachment.name} mime={attachment.mime} />
+                  <span><strong>{attachment.name}</strong><small>{filesize(attachment.bytes)}{attachment.lines ? ` · ${attachment.lines.toLocaleString('zh-CN')} 行` : ''}</small></span>
+                  <button type="button" aria-label={`移除 ${attachment.name}`} onClick={() => removeComposerAttachment(attachment.id)}><X /></button>
+                </div>)}
+            </div>}
             <textarea
               ref={textareaRef}
               value={prompt}
               onChange={(event) => { const value = event.target.value; setPrompt(value); updateComposerMenu(value, event.target.selectionStart ?? value.length); }}
               onClick={(event) => updateComposerMenu(prompt, event.currentTarget.selectionStart ?? prompt.length)}
+              onPaste={(event) => { const files = Array.from(event.clipboardData.files); if (files.length > 0) { event.preventDefault(); void addComposerFiles(files); } }}
               onKeyDown={(event) => {
                 if (composerMenu && composerOptionsCount > 0) {
                   if (event.key === 'ArrowDown') { event.preventDefault(); setComposerMenuIndex((index) => (index + 1) % composerOptionsCount); return; }
@@ -1493,9 +1577,12 @@ export function App() {
               rows={2}
             />
             <div className="composer-bar">
+              <div className="composer-left">
+                <button type="button" className="composer-attach-button" disabled={busy} onClick={() => void pickComposerAttachments()} aria-label="添加图片或文件" title="添加图片或文件"><Plus /></button>
+              </div>
               <div className="composer-right">
                 <ModelPicker selection={modelSelection} disabled={busy || stateLoading} hidden={settingsOpen} loadCatalog={loadModelCatalog} onSelectModel={selectModel} onSelectThinking={selectThinking} onManage={() => void openSettings('models')} />
-                <button className="send-button" disabled={busy || !prompt.trim()} onClick={() => void send()} aria-label={busy ? '正在生成回复' : '发送消息'} title="发送消息"><ArrowUp /></button>
+                <button className="send-button" disabled={busy || (!prompt.trim() && composerAttachments.length === 0)} onClick={() => void send()} aria-label={busy ? '正在生成回复' : '发送消息'} title="发送消息"><ArrowUp /></button>
               </div>
             </div>
             </div>

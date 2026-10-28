@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Activity, Brain, ChevronDown, CircleCheck, CircleX, FileText, LoaderCircle, Pencil, Search, Terminal, Wrench } from 'lucide-react';
 import type { ChatMessage, ContentBlock, ToolCallBlock } from '../chat-types';
+import { AttachmentIcon, attachmentVisual } from './AttachmentIcon';
 import { Markdown } from './Markdown';
 
 function MessageImages({ blocks }: { blocks: ContentBlock[] }) {
@@ -169,11 +170,14 @@ export function ChatMessageView({ message, id }: { message: ChatMessage; id?: st
   const text = message.content.filter((block) => block.type === 'text').map((block) => block.type === 'text' ? block.text : '').join('\n');
   return <div id={id} className="message user"><div className="user-bubble">
     {text && <div className="user-text">{text}</div>}
-    {message.attachments?.map((attachment) => <div className="attachment-card" key={attachment.path} title={attachment.path}>
-      <span className="attachment-icon"><FileText /></span>
-      <span className="attachment-main"><strong>{attachment.name}</strong><span>{formatBytes(attachment.bytes)} · {attachment.lines.toLocaleString('zh-CN')} 行</span></span>
-      <span className="attachment-kind">TXT</span>
-    </div>)}
+    {message.attachments?.map((attachment) => {
+      const visual = attachmentVisual(attachment.name, attachment.mime);
+      return <div className="attachment-card" key={attachment.path} title={attachment.path}>
+        <AttachmentIcon name={attachment.name} mime={attachment.mime} />
+        <span className="attachment-main"><strong>{attachment.name}</strong><span>{formatBytes(attachment.bytes)}{attachment.lines ? ` · ${attachment.lines.toLocaleString('zh-CN')} 行` : ''}</span></span>
+        <span className={`attachment-kind ${visual.tone}`}>{visual.label.toUpperCase()}</span>
+      </div>;
+    })}
     <MessageImages blocks={message.content} />
   </div></div>;
 }

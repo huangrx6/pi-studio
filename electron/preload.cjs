@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('piApi', {
   composerResources: (payload) => ipcRenderer.invoke('pi:composer-resources', payload),
   searchFiles: (payload) => ipcRenderer.invoke('pi:search-files', payload),
   saveAttachment: (payload) => ipcRenderer.invoke('pi:save-attachment', payload),
+  pickAttachments: (payload) => ipcRenderer.invoke('pi:pick-attachments', payload),
+  saveUpload: (payload) => ipcRenderer.invoke('pi:save-upload', payload),
   chooseWorkspace: () => ipcRenderer.invoke('pi:choose-workspace'),
   models: (cwd) => ipcRenderer.invoke('pi:models', cwd),
   providerModels: (providerId) => ipcRenderer.invoke('pi:provider-models', providerId),
