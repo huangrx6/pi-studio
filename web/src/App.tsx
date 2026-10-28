@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
 import { ExtensionFooter } from './components/ExtensionFooter';
-import { ExtensionCustomOverlay, ExtensionDialogHost, ExtensionSelectDialog, ExtensionStatusBar, ExtensionWidgets } from './components/ExtensionSurfaces';
+import { ExtensionCustomOverlay, ExtensionDialogHost, ExtensionHeader, ExtensionSelectDialog, ExtensionStatusBar, ExtensionWidgets } from './components/ExtensionSurfaces';
 import { Select } from './components/Select';
 import { FullPermissionDialog, ToolConfirmDialog, type ConfirmRequest } from './components/ConfirmDialog';
 import { DiffView } from './components/DiffView';
@@ -2091,6 +2091,7 @@ export function App() {
           <div className="chat-column">
             {messages.length > 0 && (
               <div className="messages">
+                {session?.id && <ExtensionHeader sessionId={session.id} />}
                 {transcriptTurns.map((turn, index) => turn.kind === 'user'
                   ? <ChatMessageView key={turn.message.timestamp ?? `user-${index}`} id={`chat-turn-${index}`} message={turn.message} />
                   : <AssistantTurnView key={turn.messages[0]?.timestamp ?? `assistant-${index}`} id={`chat-turn-${index}`} messages={turn.messages} toolResults={toolResultMap} cwd={session?.cwd} busy={busy && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView}

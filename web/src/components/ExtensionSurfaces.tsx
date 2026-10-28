@@ -336,3 +336,28 @@ export function ExtensionSelectDialog({ sessionId }: { sessionId: string }) {
     </section>
   </div>;
 }
+
+/** setHeader：通用头部，放在对话内容上方。 */
+export function ExtensionHeader({ sessionId }: { sessionId: string }) {
+  const [header, setHeader] = useState<{ lines: FooterCell[][]; interactive: boolean } | null>(null);
+  useEffect(() => {
+    let disposed = false;
+    void window.piApi.extensionState(sessionId).then((state) => {
+      if (!disposed && state?.header) setHeader(state.header);
+    }).catch(() => { /* 扩展未绑定 */ });
+    const off = window.piApi.onExtensionHeader?.((event) => {
+      if (event.sessionId === sessionId) setHeader(event.header);
+    }) ?? (() => {});
+    return () => { disposed = true; off(); };
+  }, [sessionId]);
+  if (!header || header.lines.length === 0) return null;
+  return <div className="extension-header">
+    <SurfaceRows
+      lines={header.lines}
+      onPointer={(event) => {
+        const point = pointOf(event);
+        void window.piApi.extensionAction?.({ sessionId, surface: 'header', type: 'deltaY' in event ? 'wheel' : 'click', ...point, ...('deltaY' in event ? { delta: event.deltaY } : {}) });
+      }}
+    />
+  </div>;
+}

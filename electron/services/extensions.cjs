@@ -96,7 +96,7 @@ function createKeybindings() {
  */
 function createExtensionUI(sessionId) {
   const statuses = new Map();
-  const state = { statuses, footer: '', widgets: new Map(), custom: null, customHost: null, terminalInputs: new Set(), working: { message: '', visible: true }, editorText: '' };
+  const state = { statuses, footer: '', widgets: new Map(), custom: null, customHost: null, header: null, headerHost: null, terminalInputs: new Set(), working: { message: '', visible: true }, editorText: '' };
   extensionUIStates.set(sessionId, state);
 
   const send = (channel, payload) => getWindow()?.webContents.send(channel, { sessionId, ...payload });
@@ -110,6 +110,7 @@ function createExtensionUI(sessionId) {
   });
   const publishCustom = () => send('pi:extension-custom', { custom: state.custom });
   const publishWorking = () => send('pi:extension-working', { working: state.working });
+  const publishHeader = () => send('pi:extension-header', { header: state.header });
   /** 让渲染层弹一个输入框 / 多行编辑器，并把结果回传给扩展。 */
   const requestDialog = (kind, title, extra = {}) => new Promise((resolve) => {
     const id = randomUUID();
@@ -224,7 +225,20 @@ function createExtensionUI(sessionId) {
         send('pi:extension-notify', { message: `Footer 渲染失败：${error.message}`, type: 'warning' });
       }
     },
-    setHeader() {},
+    setHeader(factory) {
+      state.headerHost?.dispose?.();
+      state.headerHost = null;
+      state.header = null;
+      if (typeof factory === 'function') {
+        const host = createSurfaceHost((snapshot) => {
+          state.header = snapshot.raw.length > 0 ? { lines: snapshot.lines, interactive: snapshot.interactive } : null;
+          publishHeader();
+        });
+        state.headerHost = host;
+        host.set(factory);
+      }
+      publishHeader();
+    },
     setTitle(title) {
       if (title) getWindow()?.setTitle(stripAnsi(title));
     },
@@ -303,13 +317,14 @@ function createExtensionUI(sessionId) {
 /** IPC 用：读取某个会话的扩展状态。 */
 function extensionState(sessionId) {
   const state = extensionUIStates.get(sessionId);
-  if (!state) return { statuses: [], footer: '', widgets: [], custom: null, working: { message: '', visible: true } };
+  if (!state) return { statuses: [], footer: '', widgets: [], custom: null, header: null, working: { message: '', visible: true } };
   return {
     statuses: [...state.statuses],
     footer: state.footer,
     view: state.host.view,
     widgets: [...state.widgets.values()].map(({ key, placement, lines }) => ({ key, placement, lines })),
     custom: state.custom,
+    header: state.header,
     working: state.working,
   };
 }
@@ -325,6 +340,9 @@ function extensionAction(sessionId, input = {}) {
     const widget = state.widgets.get(input.key);
     if (widget?.host) return widget.host.action(input);
     return { lines: widget?.lines || [], raw: [], interactive: false };
+  }
+  if (input.surface === 'header') {
+    return state.headerHost?.action(input) ?? { lines: state.header?.lines || [] };
   }
   if (input.surface === 'custom') {
     // onTerminalInput 是全局输入监听，custom 浮层获得焦点时优先转给它。
