@@ -18,8 +18,8 @@
  * IPC：本组件不直接调用 IPC，消息来自 App 的 piApi.session / onPrompt 事件；
  * 图片以 data URI 内联渲染，不再额外请求主进程。
  */
-import { useEffect, useState } from 'react';
-import { ChevronDown, CircleAlert, CircleCheck, CircleX, FileText, LoaderCircle, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Check, ChevronDown, CircleAlert, CircleCheck, CircleX, Copy, FileText, LoaderCircle, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
 import type { ChatMessage, ContentBlock, ToolCallBlock } from '../chat-types';
 import type { StepCollapse, StepDisplay } from '../preferences';
 import { AttachmentIcon, attachmentVisual } from './AttachmentIcon';
@@ -193,6 +193,58 @@ function AssistantError({ message }: { message: string }) {
  *
  * live 由 App 传入的本轮运行状态决定，工具调用间隙也保持运行中。failed 只在非 live 时成立，避免把可恢复的重试中间态显示成最终失败。
  */
+/** 写入剪贴板；Clipboard API 不可用时退回 execCommand。 */
+async function writeClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const area = document.createElement('textarea');
+      area.value = text;
+      area.style.position = 'fixed';
+      area.style.opacity = '0';
+      document.body.appendChild(area);
+      area.select();
+      const ok = document.execCommand('copy');
+      area.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
+/** 复制按钮：点击后短暂切换成对勾，避免额外弹提示。 */
+function CopyButton({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<number | undefined>(undefined);
+  useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
+  async function copy() {
+    if (!text.trim()) return;
+    if (!(await writeClipboard(text))) return;
+    setCopied(true);
+    if (timer.current) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setCopied(false), 1600);
+  }
+  return <button
+    type="button"
+    className={`message-action ${copied ? 'is-copied' : ''}`}
+    aria-label={copied ? '已复制' : label}
+    title={copied ? '已复制' : label}
+    onClick={() => void copy()}
+  >{copied ? <Check /> : <Copy />}</button>;
+}
+
+/** 消息下方的悬浮操作行：复制与时间；没有内容时整行隐藏。 */
+function MessageActions({ text, time, label, align = 'start' }: { text: string; time?: number; label: string; align?: 'start' | 'end' }) {
+  if (!text.trim() && !time) return null;
+  return <div className={`message-actions is-${align}`}>
+    {text.trim() && <CopyButton text={text} label={label} />}
+    {time ? <time className="message-action-time">{formatTime(time)}</time> : null}
+  </div>;
+}
+
 export function AssistantTurnView({ messages, toolResults, busy, id, retry, stepDisplay = 'standard', stepCollapse = 'after-answer', showCodeView = false, cwd }: { messages: ChatMessage[]; toolResults: Map<string, ChatMessage>; busy: boolean; id?: string; retry?: { attempt: number; maxAttempts: number; errorMessage?: string }; stepDisplay?: StepDisplay; stepCollapse?: StepCollapse; showCodeView?: boolean; cwd?: string }) {
   const live = Boolean(retry) || busy;
   const failed = !live && messages.some((message) => message.errorMessage);
@@ -244,6 +296,12 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
 
   const codeFiles = showCodeView && !live ? collectFileChanges(messages, toolResults, cwd) : [];
   const error = messages.find((message) => message.errorMessage)?.errorMessage;
+  // 复制只包含最终回复的文本块，不包含思考与工具调用。
+  const answerText = responseBlocks
+    .filter((entry) => entry.block.type === 'text')
+    .map((entry) => entry.block.type === 'text' ? entry.block.text : '')
+    .join('\n\n')
+    .trim();
   return <div id={id} className={`assistant-turn ${live ? 'is-live' : ''} ${retry ? 'is-retrying' : ''} ${failed ? 'has-error' : ''} is-steps-${stepDisplay}`}>
     <div className="assistant-turn-rail"><span className="assistant-orb">π</span></div>
     <div className="assistant-turn-main">
@@ -282,6 +340,8 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
       {/* 失败卡片只在非 live 时出现，避免自动重试过程中闪错误。 */}
       {!live && error && <AssistantError message={error} />}
       {codeFiles.length > 0 && <FileChangeSummary files={codeFiles} />}
+      {/* 回答结束后，悬浮显示复制与完成时间。 */}
+      {!live && <MessageActions text={answerText} time={latest?.timestamp} label="复制回答" />}
     </div>
   </div>;
 }
@@ -332,6 +392,15 @@ export function ChatMessageView({ message, id }: { message: ChatMessage; id?: st
   // 兜底：同一组件被误用于其他角色时不渲染，避免出现空气泡。
   if (message.role !== 'user') return null;
   const text = textBlocks(message.content);
+  // 历史里技能命令已被展开成 <skill> 块；复制时还原成用户实际输入的命令形式。
+  const copyText = splitMessageText(text)
+    .map((segment) => segment.kind === 'text'
+      ? segment.text
+      : segment.reference.kind === 'skill'
+        ? `/skill:${segment.reference.label}`
+        : segment.reference.token)
+    .join('')
+    .trim();
   return <div id={id} className="message user"><div className="user-bubble">
     {text && <UserText text={text} />}
     {/* 附件卡片展示名称、体积/行数与类型角标；title 给出去向的绝对路径。 */}
@@ -344,5 +413,8 @@ export function ChatMessageView({ message, id }: { message: ChatMessage; id?: st
       </div>;
     })}
     <MessageImages blocks={message.content} />
-  </div></div>;
+  </div>
+  {/* 用户消息同样在悬浮时显示复制与发送时间。 */}
+  <MessageActions text={copyText} time={message.timestamp} label="复制消息" align="end" />
+  </div>;
 }

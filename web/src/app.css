@@ -159,6 +159,17 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .messages { display: flex; flex-direction: column; gap: var(--space-8); padding: var(--space-2) 0; }
 .message { display: flex; flex-direction: column; }
 .message.user { align-items: flex-end; }
+
+/* 消息悬浮操作：复制与时间，只在悬浮或键盘聚焦时出现。 */
+.message-actions { display: flex; align-items: center; gap: 2px; min-height: 24px; margin-top: 2px; opacity: 0; transition: opacity var(--transition); }
+.message-actions.is-end { justify-content: flex-end; }
+.assistant-turn:hover .message-actions, .assistant-turn:focus-within .message-actions,
+.message.user:hover .message-actions, .message.user:focus-within .message-actions { opacity: 1; }
+.message-action { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border-radius: 6px; color: var(--faint); }
+.message-action:hover { background: var(--surface-hover); color: var(--text); }
+.message-action.is-copied { color: var(--success); }
+.message-action svg { width: 13px; height: 13px; }
+.message-action-time { padding: 0 4px; color: var(--faint); font-size: 10px; font-variant-numeric: tabular-nums; }
 .user-bubble { max-width: 85%; padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-panel) var(--radius-panel) var(--radius-tag) var(--radius-panel); background: var(--surface-soft); font-size: var(--text-md); line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
 .assistant-text { max-width: 100%; font-size: var(--text-md); line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
 .caret { display: inline-block; width: 2px; height: 16px; margin-left: 3px; vertical-align: -2px; background: var(--accent); animation: blink 1s steps(2) infinite; }
