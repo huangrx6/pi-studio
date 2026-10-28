@@ -861,3 +861,8 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 /* Align the skill tree path bar and the file path bar. */
 .skill-tree-toolbar { height: 38px; min-height: 38px; padding: 0 10px; background: var(--surface); border-bottom: 1px solid var(--border); }
 .skill-file-preview > .file-toolbar { height: 38px; min-height: 38px; padding: 0 12px; border-top: 0; border-bottom: 1px solid var(--border); background: var(--surface); }
+
+/* Give the conversation header the same breathing room as the sidebar toggle line. */
+.chat-header { height: 60px; padding: 16px var(--space-6) 6px; justify-content: flex-start; }
+.is-new-conversation .chat-header { height: 60px; padding: 16px var(--space-6) 6px; }
+.chat-actions { margin-left: auto; align-self: center; }
