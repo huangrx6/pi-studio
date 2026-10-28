@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Clock3, Command, Cpu, FileCode2, FileText, Folder, FolderOpen, Info, Sparkles,
-  AppWindow, Columns2, Compass, Eye, Globe2, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, Pencil, Plus, Plug, RotateCw, Search, Settings, SquarePen, Sun, Terminal, Trash2, X,
+  Activity, AppWindow, Columns2, Compass, Eye, Globe2, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, Pencil, Plus, Plug, RotateCw, Search, Settings, SquarePen, Sun, Terminal, Trash2, X,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
 import { Select } from './components/Select';
@@ -118,6 +118,19 @@ function ComposerSourceIcon({ source }: { source: ComposerCommandSource }) {
   return <Command />;
 }
 
+function extensionStatusLabel(key: string): string {
+  const labels: Record<string, string> = {
+    'pi-quota-status': '额度',
+    'pi-throughput': '性能',
+    'pi-mode-switcher': '运行模式',
+    'pi-policy-engine': '策略',
+    'pi-skill-inject': '技能注入',
+    'context:qos': '上下文',
+    'pi-footer-composer': '底栏',
+  };
+  return labels[key] || key.replace(/^pi-/, '').replace(/-status$/, '').replace(/[-_]/g, ' ');
+}
+
 function contextTone(tokens?: number): string {
   if (!tokens) return 'is-small';
   if (tokens >= 1_000_000) return 'is-million';
@@ -136,6 +149,7 @@ export function App() {
   const [extensionStatuses, setExtensionStatuses] = useState<Record<string, string>>({});
   const [extensionFooter, setExtensionFooter] = useState('');
   const [extensionToast, setExtensionToast] = useState<{ message: string; type: 'info' | 'warning' | 'error' } | null>(null);
+  const [statusPanelOpen, setStatusPanelOpen] = useState(false);
   const [outlineActive, setOutlineActive] = useState(0);
   const [outlineHover, setOutlineHover] = useState<number | null>(null);
   const [workspace, setWorkspace] = useState('');
@@ -1227,6 +1241,7 @@ export function App() {
     });
   }
 
+  const extensionStatusLine = extensionFooter || Object.values(extensionStatuses).filter(Boolean).slice(0, 3).join(' · ');
   const toolResultMap = new Map(messages.filter((message) => message.role === 'toolResult' && message.toolCallId).map((message) => [message.toolCallId as string, message]));
   const transcriptTurns: Array<{ kind: 'user'; message: ChatMessage } | { kind: 'assistant'; messages: ChatMessage[] }> = [];
   for (const message of messages) {
@@ -1687,10 +1702,7 @@ export function App() {
             </div>
             </div>
           </div>
-          {(extensionFooter || Object.keys(extensionStatuses).length > 0) && <div className="extension-status-bar" aria-label="扩展状态">
-            {extensionFooter && <div className="extension-footer-line" title={extensionFooter}>{extensionFooter}</div>}
-            {preferences.performance === 'detailed' && Object.entries(extensionStatuses).slice(0, 8).map(([key, text]) => <span className="extension-status-chip" key={key} title={key}>{text}</span>)}
-          </div>}
+          {extensionStatusLine && <button type="button" className="extension-footer-line" onClick={() => setStatusPanelOpen(true)} title="查看运行状态" aria-haspopup="dialog"><Activity /><span>{extensionStatusLine}</span><ChevronRight /></button>}
           {extensionToast && <div className={`extension-toast is-${extensionToast.type}`} role="status">{extensionToast.message}</div>}
           {isNewConversation && error && <div className="new-conversation-error error-card" role="alert"><strong>暂时无法完成操作</strong><p>{error}</p></div>}
         </div>
@@ -1896,6 +1908,15 @@ export function App() {
             <footer className="detail-footer"><button className="settings-text-button is-danger" disabled={settingsBusy} onClick={() => void removeSkillFromDetail()}>删除技能</button><span /><button className="settings-outline" onClick={closeSkillDetail}>关闭</button></footer>
         </DetailDialog>
       )}
+
+      {statusPanelOpen && <DetailDialog className="status-panel-dialog" onClose={() => setStatusPanelOpen(false)}>
+        <header className="detail-header"><div className="detail-heading"><span className="detail-icon"><Activity /></span><div><h2>运行状态</h2><p>来自 Pi 扩展的实时状态与性能信息。</p></div></div><button className="icon-button" aria-label="关闭运行状态" onClick={() => setStatusPanelOpen(false)}><X /></button></header>
+        <div className="status-panel-body">
+          {extensionFooter && <section><h3>会话摘要</h3><pre>{extensionFooter}</pre></section>}
+          <section><h3>扩展状态</h3>{preferences.performance === 'detailed' && (Object.keys(extensionStatuses).length > 0 ? <dl className="status-panel-list">{Object.entries(extensionStatuses).map(([key, text]) => <div key={key}><dt>{extensionStatusLabel(key)}</dt><dd>{text}</dd></div>)}</dl> : <p className="status-panel-empty">当前没有扩展状态。</p>)}</section>
+        </div>
+        <footer className="detail-footer"><button className="settings-outline" onClick={() => { setStatusPanelOpen(false); void window.piApi.runExtensionCommand({ sessionId: session?.id || '', command: '/footer' }).catch((error) => setError(error instanceof Error ? error.message : String(error))); }} disabled={!session?.id}>打开 /footer 菜单</button><span /><button className="settings-outline" onClick={() => setStatusPanelOpen(false)}>关闭</button></footer>
+      </DetailDialog>}
 
       {shortcutsOpen && <DetailDialog className="shortcuts-dialog" onClose={() => setShortcutsOpen(false)}>
         <header className="detail-header"><div className="detail-heading"><span className="detail-icon"><Keyboard /></span><div><h2>快捷键</h2><p>Pi Studio 桌面端当前可用的键盘操作。</p></div></div><button className="icon-button" aria-label="关闭快捷键" onClick={() => setShortcutsOpen(false)}><X /></button></header>

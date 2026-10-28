@@ -56,6 +56,7 @@ declare global {
       searchFiles(payload: { cwd: string; query: string }): Promise<{ files: ComposerFile[] }>;
       saveAttachment(payload: { sessionId: string; text: string }): Promise<ChatAttachment & { notice: string; promptText: string }>;
       queuePrompt(payload: { sessionId: string; text: string; behavior: 'queue' | 'steer'; mentions?: string[]; attachments?: string[]; images?: Array<{ type: 'image'; data: string; mimeType: string }> }): Promise<{ disposition: string }>;
+      runExtensionCommand(payload: { sessionId: string; command: string }): Promise<{ ok: boolean }>;
       pickAttachments(payload: { sessionId?: string }): Promise<{ attachments: ComposerAttachment[] }>;
       saveUpload(payload: { sessionId?: string; name: string; mime: string; data: string }): Promise<UploadedAttachment>;
       chooseWorkspace(): Promise<string | undefined>;

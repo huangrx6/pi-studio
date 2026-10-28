@@ -1045,6 +1045,13 @@ async function fileReferenceContext(cwd, mentions) {
       unsubscribe();
     }
   });
+  ipcMain.handle('pi:run-extension-command', async (_event, { sessionId, command }) => {
+    const found = await findManager(sessionId);
+    if (!found) throw new Error('会话不存在');
+    const session = await ensureAgent(sessionId, found.manager, found.cwd);
+    await session.prompt(String(command));
+    return { ok: true };
+  });
   ipcMain.handle('pi:queue-prompt', async (_event, { sessionId, text, behavior, mentions, attachments, images }) => {
     const found = await findManager(sessionId);
     if (!found) throw new Error('会话不存在');

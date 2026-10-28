@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('piApi', {
   searchFiles: (payload) => ipcRenderer.invoke('pi:search-files', payload),
   saveAttachment: (payload) => ipcRenderer.invoke('pi:save-attachment', payload),
   queuePrompt: (payload) => ipcRenderer.invoke('pi:queue-prompt', payload),
+  runExtensionCommand: (payload) => ipcRenderer.invoke('pi:run-extension-command', payload),
   pickAttachments: (payload) => ipcRenderer.invoke('pi:pick-attachments', payload),
   saveUpload: (payload) => ipcRenderer.invoke('pi:save-upload', payload),
   chooseWorkspace: () => ipcRenderer.invoke('pi:choose-workspace'),

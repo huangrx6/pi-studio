@@ -1388,3 +1388,23 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 :root[data-theme="dark"] .skill-source-head h3 { color: var(--faint); }
 :root[data-theme="dark"] .settings-empty { background: #151a20; }
 :root[data-theme="dark"] .chat-loading-line { background: linear-gradient(90deg, transparent, #7d9ad6, #c7a46a, transparent); }
+
+/* Extension footer is a single clickable line. Details live in the panel. */
+.extension-status-bar { display: none; }
+.extension-footer-line { display: flex; align-items: center; gap: 6px; width: 100%; max-width: var(--content); min-height: 24px; margin: 5px auto 0; padding: 1px 4px; overflow: hidden; border: 0; background: transparent; color: #8d98a8; font: 10px var(--mono); text-align: left; }
+.extension-footer-line:hover { background: var(--surface-soft); color: var(--muted); border-radius: 4px; }
+.extension-footer-line > svg:first-child { width: 11px; height: 11px; flex: none; color: #8da2c0; }
+.extension-footer-line > svg:last-child { width: 11px; height: 11px; flex: none; margin-left: auto; opacity: .55; }
+.extension-footer-line > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-panel-dialog { width: min(650px, 92vw); }
+.status-panel-body { padding: 4px 20px 14px; overflow: auto; }
+.status-panel-body section { padding: 14px 0; border-top: 1px solid var(--border); }
+.status-panel-body section:first-child { border-top: 0; }
+.status-panel-body h3 { margin: 0 0 8px; color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.status-panel-body pre { margin: 0; padding: 10px 11px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-soft); color: var(--muted); font: 10.5px/1.7 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.status-panel-list { margin: 0; }
+.status-panel-list > div { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 12px; padding: 7px 0; border-top: 1px solid var(--border); font-size: 11px; }
+.status-panel-list > div:first-child { border-top: 0; }
+.status-panel-list dt { color: var(--faint); }
+.status-panel-list dd { margin: 0; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.status-panel-empty { margin: 0; color: var(--faint); font-size: 11px; }
