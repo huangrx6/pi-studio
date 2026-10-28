@@ -1095,3 +1095,7 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 /* Put the sidebar toggle, conversation header and header action on one optical line. */
 .sidebar-top-toggle { top: 21px; }
 .chat-actions { margin-right: -8px; }
+
+/* Optical top line: match the first title line and the native window controls. */
+.sidebar-top-toggle { top: 10px; }
+.chat-actions { position: relative; top: -11px; }
