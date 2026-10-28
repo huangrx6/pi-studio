@@ -255,6 +255,7 @@ export function App() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [extensionToast, setExtensionToast] = useState<{ message: string; type: 'info' | 'warning' | 'error' } | null>(null);
+  const [extensionWorking, setExtensionWorking] = useState<{ message: string; visible: boolean }>({ message: '', visible: true });
   const [permission, setPermission] = useState<{ available: boolean; mode: PermissionMode }>({ available: false, mode: 'smart' });
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const [fullPermissionOpen, setFullPermissionOpen] = useState(false);
@@ -748,6 +749,55 @@ export function App() {
   useEffect(() => window.piApi.onExtensionNotify(event => {
     if (event.sessionId === session?.id) setExtensionToast({ message: event.message, type: event.type });
   }), [session?.id]);
+
+  // 扩展的工作状态：setWorkingMessage / setWorkingVisible。
+  useEffect(() => {
+    if (!session?.id) { setExtensionWorking({ message: '', visible: true }); return; }
+    let disposed = false;
+    void window.piApi.extensionState(session.id).then((state) => {
+      if (!disposed && state?.working) setExtensionWorking(state.working);
+    }).catch(() => { /* 扩展未绑定 */ });
+    const off = window.piApi.onExtensionWorking?.((event) => {
+      if (event.sessionId === session.id) setExtensionWorking(event.working);
+    }) ?? (() => {});
+    return () => { disposed = true; off(); };
+  }, [session?.id]);
+
+  // 把输入框文本同步给主进程，扩展的 getEditorText() 才能读到当前内容。
+  useEffect(() => {
+    if (!session?.id) return;
+    const timer = window.setTimeout(() => window.piApi.editorTextChanged?.({ sessionId: session.id, text: prompt }), 80);
+    return () => window.clearTimeout(timer);
+  }, [prompt, session?.id]);
+
+  // 扩展替换 / 插入输入框文本。
+  useEffect(() => {
+    if (!session?.id) return;
+    const applySet = (event: { sessionId: string; text: string }) => {
+      if (event.sessionId !== session.id) return;
+      setPrompt(event.text);
+      requestAnimationFrame(() => {
+        const node = textareaRef.current;
+        node?.focus();
+        node?.setSelectionRange(event.text.length, event.text.length);
+      });
+    };
+    const applyPaste = (event: { sessionId: string; text: string }) => {
+      if (event.sessionId !== session.id) return;
+      const node = textareaRef.current;
+      const value = node?.value ?? '';
+      const start = node?.selectionStart ?? value.length;
+      const end = node?.selectionEnd ?? value.length;
+      setPrompt((current) => current.slice(0, start) + event.text + current.slice(end));
+      requestAnimationFrame(() => {
+        node?.focus();
+        node?.setSelectionRange(start + event.text.length, start + event.text.length);
+      });
+    };
+    const offSet = window.piApi.onExtensionEditorSet?.(applySet) ?? (() => {});
+    const offPaste = window.piApi.onExtensionEditorPaste?.(applyPaste) ?? (() => {});
+    return () => { offSet(); offPaste(); };
+  }, [session?.id]);
 
   useEffect(() => {
     if (!extensionToast) return;
@@ -2046,7 +2096,7 @@ export function App() {
                   : <AssistantTurnView key={turn.messages[0]?.timestamp ?? `assistant-${index}`} id={`chat-turn-${index}`} messages={turn.messages} toolResults={toolResultMap} cwd={session?.cwd} busy={busy && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView}
                     gitDiff={index === lastAssistantTurnIndex ? liveDiff ?? (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined) : (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined)}
                     onOpenDiff={openDiffTab} />)}
-                {busy && !retryInfo && transcriptTurns.at(-1)?.kind !== 'assistant' && (
+                {busy && extensionWorking.visible && !retryInfo && transcriptTurns.at(-1)?.kind !== 'assistant' && (
                   <div className="thinking"><span /><span /><span />正在思考</div>
                 )}
               </div>
@@ -2119,6 +2169,7 @@ export function App() {
               </div>
               <div className="composer-picker-foot"><span>↑↓ 选择</span><span>↵ 确认</span><span>Esc 关闭</span></div>
             </div>}
+            {session?.id && busy && extensionWorking.visible && extensionWorking.message && <div className="extension-working" role="status"><LoaderCircle className="spin" /><span>{extensionWorking.message}</span></div>}
             {session?.id && <ExtensionStatusBar sessionId={session.id} />}
             {session?.id && <ExtensionWidgets sessionId={session.id} placement="aboveEditor" />}
             <div

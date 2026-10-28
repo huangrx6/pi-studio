@@ -2181,3 +2181,5 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .extension-select-option.is-active, .extension-select-option:hover { border-color: var(--accent-border); background: var(--accent-soft); }
 .extension-select-main { color: var(--text); font-size: var(--text-md); }
 .extension-select-desc { color: var(--muted); font-size: var(--text-sm); line-height: 1.55; }
+.extension-working { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; color: var(--muted); font-size: var(--text-sm); }
+.extension-working svg { width: 13px; height: 13px; flex: none; color: var(--accent); }

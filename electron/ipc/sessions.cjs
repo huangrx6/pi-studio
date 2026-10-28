@@ -28,7 +28,7 @@ const {
 } = require('../services/sessions.cjs');
 const { fileReferenceContext } = require('../services/workspace.cjs');
 const { attachmentContext } = require('../services/attachments.cjs');
-const { extensionState, extensionAction, extensionDialogResult, extensionSelectResult, footerAction } = require('../services/extensions.cjs');
+const { extensionState, extensionAction, extensionDialogResult, extensionSelectResult, updateEditorText, footerAction } = require('../services/extensions.cjs');
 const { createAutoTitleGenerator } = require('../services/auto-title.cjs');
 const { beginTurn, endTurn, saveTurnDiff } = require('../services/turn-diff.cjs');
 const autoTitles = createAutoTitleGenerator({
@@ -284,6 +284,8 @@ function registerSessionsIpc() {
   ipcMain.handle('pi:extension-action', (_event, { sessionId, ...input }) => extensionAction(sessionId, input));
   ipcMain.handle('pi:extension-dialog-result', (_event, { id, value }) => extensionDialogResult(id, value));
   ipcMain.handle('pi:extension-select-result', (_event, { id, value }) => extensionSelectResult(id, value));
+  // 渲染层把输入框当前文本同步给主进程，扩展 getEditorText() 才能同步读取。
+  ipcMain.on('pi:editor-text', (_event, { sessionId, text }) => updateEditorText(sessionId, text));
 
   // 输入框斜杠命令与技能列表
   ipcMain.handle('pi:composer-resources', async (_event, payload) => composerResources(payload || {}));

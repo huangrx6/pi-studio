@@ -52,7 +52,7 @@ function extensionDialogResult(id, value) {
  */
 function createExtensionUI(sessionId) {
   const statuses = new Map();
-  const state = { statuses, footer: '', widgets: new Map(), custom: null, customHost: null, terminalInputs: new Set() };
+  const state = { statuses, footer: '', widgets: new Map(), custom: null, customHost: null, terminalInputs: new Set(), working: { message: '', visible: true }, editorText: '' };
   extensionUIStates.set(sessionId, state);
 
   const send = (channel, payload) => getWindow()?.webContents.send(channel, { sessionId, ...payload });
@@ -65,6 +65,7 @@ function createExtensionUI(sessionId) {
     widgets: [...state.widgets.values()].map(({ key, placement, lines }) => ({ key, placement, lines })),
   });
   const publishCustom = () => send('pi:extension-custom', { custom: state.custom });
+  const publishWorking = () => send('pi:extension-working', { working: state.working });
   /** 让渲染层弹一个输入框 / 多行编辑器，并把结果回传给扩展。 */
   const requestDialog = (kind, title, extra = {}) => new Promise((resolve) => {
     const id = randomUUID();
@@ -134,9 +135,19 @@ function createExtensionUI(sessionId) {
       // 只有真的挂了自定义 footer 时才重新渲染；否则状态更新不需要惊动扩展。
       if (state.host.active) renderFooter();
     },
-    setWorkingMessage() {},
-    setWorkingVisible() {},
-    setWorkingIndicator() {},
+    setWorkingMessage(message) {
+      state.working.message = message ? stripAnsi(message) : '';
+      publishWorking();
+    },
+    setWorkingVisible(visible) {
+      state.working.visible = visible !== false;
+      publishWorking();
+    },
+    setWorkingIndicator(options) {
+      // 桌面端用自己的加载指示器；这里只记录扩展是否要求隐藏。
+      state.working.visible = options?.frames ? options.frames.length > 0 : state.working.visible;
+      publishWorking();
+    },
     setHiddenThinkingLabel() {},
     setWidget(key, content, options) {
       const placement = options?.placement === 'belowEditor' ? 'belowEditor' : 'aboveEditor';
@@ -209,10 +220,15 @@ function createExtensionUI(sessionId) {
         } catch { finish(undefined); }
       });
     },
-    pasteToEditor() {},
-    setEditorText() {},
+    pasteToEditor(text) {
+      send('pi:extension-editor-paste', { text: stripAnsi(String(text ?? '')) });
+    },
+    setEditorText(text) {
+      state.editorText = stripAnsi(String(text ?? ''));
+      send('pi:extension-editor-set', { text: state.editorText });
+    },
     getEditorText() {
-      return '';
+      return state.editorText;
     },
     async editor(title, prefill) {
       return requestDialog('editor', title, { prefill: stripAnsi(prefill || '') });
@@ -243,13 +259,14 @@ function createExtensionUI(sessionId) {
 /** IPC 用：读取某个会话的扩展状态。 */
 function extensionState(sessionId) {
   const state = extensionUIStates.get(sessionId);
-  if (!state) return { statuses: [], footer: '', widgets: [], custom: null };
+  if (!state) return { statuses: [], footer: '', widgets: [], custom: null, working: { message: '', visible: true } };
   return {
     statuses: [...state.statuses],
     footer: state.footer,
     view: state.host.view,
     widgets: [...state.widgets.values()].map(({ key, placement, lines }) => ({ key, placement, lines })),
     custom: state.custom,
+    working: state.working,
   };
 }
 
@@ -315,4 +332,9 @@ function footerAction(sessionId, input) {
   if (input?.type === 'resize' && sessionId) footerResizes.set(sessionId, input);
   return extensionAction(sessionId, { ...input, surface: 'footer' });
 }
-module.exports = { createExtensionUI, extensionState, extensionAction, extensionDialogResult, extensionSelectResult, footerAction, listExtensions };
+function updateEditorText(sessionId, text) {
+  const state = extensionUIStates.get(sessionId);
+  if (state) state.editorText = String(text ?? '');
+}
+
+module.exports = { createExtensionUI, extensionState, extensionAction, extensionDialogResult, extensionSelectResult, updateEditorText, footerAction, listExtensions };

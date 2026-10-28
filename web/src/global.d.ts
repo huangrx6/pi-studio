@@ -235,7 +235,7 @@ declare global {
       /** 应用菜单「设置…」被点击。 */
       onOpenSettings(listener: () => void): () => void;
       /** 读取扩展状态栏与页脚快照（含扩展自己的浮层）。 */
-      extensionState(sessionId: string): Promise<{ statuses: Array<[string, string]>; footer: string; view?: FooterView; widgets?: ExtensionWidget[]; custom?: ExtensionCustomPanel | null }>;
+      extensionState(sessionId: string): Promise<{ statuses: Array<[string, string]>; footer: string; view?: FooterView; widgets?: ExtensionWidget[]; custom?: ExtensionCustomPanel | null; working?: { message: string; visible: boolean } }>;
       /** 把 footer 的尺寸 / 点击 / 滚轮输入交给扩展，返回更新后的快照。 */
       footerAction(payload: FooterAction): Promise<FooterView | undefined>;
       /** 通用扩展 surface 输入：footer / widget / custom 共用。 */
@@ -244,6 +244,8 @@ declare global {
       extensionDialogResult(payload: { id: string; value: string | undefined }): Promise<boolean>;
       /** 回传扩展 select 的选择结果。 */
       extensionSelectResult(payload: { id: string; value: string | undefined }): Promise<boolean>;
+      /** 把输入框当前文本同步给主进程，供扩展 getEditorText() 读取。 */
+      editorTextChanged(payload: { sessionId: string; text: string }): void;
       /** 会话索引变化（草稿、标题或排序更新）时刷新侧边栏。 */
       onSessionsChanged(listener: () => void): () => void;
       /** 扩展状态项更新。 */
@@ -260,6 +262,12 @@ declare global {
       onExtensionSelect(listener: (payload: { sessionId: string; id: string; title: string; options: string[] }) => void): () => void;
       /** select 被超时 / AbortSignal 取消。 */
       onExtensionSelectClose(listener: (payload: { sessionId: string; id: string }) => void): () => void;
+      /** 扩展工作状态（setWorkingMessage / setWorkingVisible）。 */
+      onExtensionWorking(listener: (payload: { sessionId: string; working: { message: string; visible: boolean } }) => void): () => void;
+      /** 扩展要求替换输入框文本。 */
+      onExtensionEditorSet(listener: (payload: { sessionId: string; text: string }) => void): () => void;
+      /** 扩展要求把文本插入输入框。 */
+      onExtensionEditorPaste(listener: (payload: { sessionId: string; text: string }) => void): () => void;
       /** 扩展弹出通知（toast）。 */
       onExtensionNotify(listener: (payload: { sessionId: string; message: string; type: 'info' | 'warning' | 'error' }) => void): () => void;
       /**

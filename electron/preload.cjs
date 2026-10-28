@@ -66,6 +66,7 @@ contextBridge.exposeInMainWorld('piApi', {
   extensionAction: (payload) => ipcRenderer.invoke('pi:extension-action', payload),
   extensionDialogResult: (payload) => ipcRenderer.invoke('pi:extension-dialog-result', payload),
   extensionSelectResult: (payload) => ipcRenderer.invoke('pi:extension-select-result', payload),
+  editorTextChanged: (payload) => ipcRenderer.send('pi:editor-text', payload),
   onSessionsChanged: (listener) => { const handler = () => listener(); ipcRenderer.on('pi:sessions-changed', handler); return () => ipcRenderer.removeListener('pi:sessions-changed', handler); },
   extensionState: (sessionId) => ipcRenderer.invoke('pi:extension-state', sessionId),
   onExtensionStatus: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:extension-status', handler); return () => ipcRenderer.removeListener('pi:extension-status', handler); },
@@ -75,6 +76,9 @@ contextBridge.exposeInMainWorld('piApi', {
   onExtensionDialog: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:extension-dialog', handler); return () => ipcRenderer.removeListener('pi:extension-dialog', handler); },
   onExtensionSelect: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:extension-select', handler); return () => ipcRenderer.removeListener('pi:extension-select', handler); },
   onExtensionSelectClose: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:extension-select-close', handler); return () => ipcRenderer.removeListener('pi:extension-select-close', handler); },
+  onExtensionWorking: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:extension-working', handler); return () => ipcRenderer.removeListener('pi:extension-working', handler); },
+  onExtensionEditorSet: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:extension-editor-set', handler); return () => ipcRenderer.removeListener('pi:extension-editor-set', handler); },
+  onExtensionEditorPaste: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:extension-editor-paste', handler); return () => ipcRenderer.removeListener('pi:extension-editor-paste', handler); },
   onExtensionNotify: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:extension-notify', handler); return () => ipcRenderer.removeListener('pi:extension-notify', handler); },
   onPrompt: (listener) => {
     const handler = (_event, payload) => listener(payload);

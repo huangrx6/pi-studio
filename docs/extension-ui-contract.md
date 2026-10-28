@@ -29,9 +29,9 @@ Pi Studio 不按扩展名写界面。扩展只使用 Pi 标准的 `ctx.ui` API�
 | `input` / `editor` | 统一输入对话框 | 已实现 |
 | `onTerminalInput` | 当前聚焦扩展浮层的键盘 | 已实现（仅 custom 焦点） |
 | `setTitle` | 窗口标题 | 已实现 |
-| `setWorkingMessage/Visible/Indicator` | 流式状态行 | 待实现 |
+| `setWorkingMessage/Visible/Indicator` | 输入框上方工作状态 | 已实现（Indicator 仅支持显隐） |
 | `setHeader` | 对话头部 | 待实现 |
-| `pasteToEditor` / `setEditorText` / `getEditorText` | 输入框 | 待实现 |
+| `pasteToEditor` / `setEditorText` / `getEditorText` | 输入框 | 已实现 |
 | `setEditorComponent` / `addAutocompleteProvider` | 输入框替换 | 待实现（复杂原语） |
 | `theme` 相关 | 应用主题映射 | 部分实现 |
 
