@@ -1,4 +1,5 @@
 export {};
+import type { ChatMessage } from './chat-types';
 import type { ModelCatalog, ModelSelection, ThinkingLevel } from './model-types';
 
 interface PiSessionSummary {
@@ -15,16 +16,11 @@ interface PiWorkspace {
   sessions: PiSessionSummary[];
 }
 
-interface PiMessage {
-  role: 'user' | 'assistant';
-  text: string;
-}
-
 interface PiDetail {
   id: string;
   cwd: string;
   title: string;
-  messages: PiMessage[];
+  messages: ChatMessage[];
 }
 
 interface SettingsSnapshot {
@@ -54,6 +50,7 @@ declare global {
       fileActions(payload: { cwd: string; path: string }): Promise<{ apps: Array<{ name: string; path: string; icon?: string }> }>;
       openWith(payload: { cwd: string; path: string; appPath?: string }): Promise<{ ok: boolean }>;
       revealFile(payload: { cwd: string; path: string }): Promise<{ ok: boolean }>;
+      openExternal(url: string): Promise<{ ok: boolean }>;
       chooseWorkspace(): Promise<string | undefined>;
       models(cwd?: string): Promise<ModelCatalog>;
       providerModels(providerId: string): Promise<{ models: Array<{ id: string; model: string; name: string; enabled: boolean; contextWindow?: number; maxTokens?: number; supportsImages?: boolean }> }>;
@@ -77,7 +74,7 @@ declare global {
       onOpenSettings(listener: () => void): () => void;
       setModel(modelRef: string, cwd?: string): Promise<ModelSelection>;
       setThinkingLevel(payload: { modelRef: string; level: ThinkingLevel; cwd?: string }): Promise<ModelSelection>;
-      onPrompt(listener: (payload: { requestId: string; type: 'delta' | 'tool' | 'done' | 'error'; text?: string; name?: string; status?: string; message?: string }) => void): () => void;
+      onPrompt(listener: (payload: { requestId: string; type: 'message_start' | 'message_update' | 'message_end' | 'done' | 'error'; message?: ChatMessage; error?: string }) => void): () => void;
     };
   }
 }

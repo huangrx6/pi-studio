@@ -143,15 +143,47 @@ async function findManager(id) {
   catch { return undefined; }
 }
 
+function serializeContent(content) {
+  if (typeof content === 'string') return [{ type: 'text', text: content }];
+  if (!Array.isArray(content)) return [];
+  const blocks = [];
+  for (const block of content) {
+    if (!block || typeof block !== 'object') continue;
+    if (block.type === 'text' && typeof block.text === 'string') blocks.push({ type: 'text', text: block.text });
+    else if (block.type === 'image' && typeof block.data === 'string') blocks.push({ type: 'image', data: block.data, mimeType: block.mimeType || 'image/png' });
+    else if (block.type === 'thinking') blocks.push({ type: 'thinking', thinking: typeof block.thinking === 'string' ? block.thinking : '', ...(block.redacted ? { redacted: true } : {}) });
+    else if (block.type === 'toolCall') blocks.push({ type: 'toolCall', id: block.id, name: block.name, arguments: block.arguments && typeof block.arguments === 'object' ? block.arguments : {}, ...(block.namespace ? { namespace: block.namespace } : {}) });
+  }
+  return blocks;
+}
+
+function serializeMessage(message) {
+  if (!message || !['user', 'assistant', 'toolResult'].includes(message.role)) return null;
+  const result = { role: message.role, content: serializeContent(message.content), timestamp: message.timestamp };
+  if (message.role === 'assistant') {
+    result.stopReason = message.stopReason;
+    result.errorMessage = message.errorMessage;
+    result.model = message.responseModel || message.model;
+    result.provider = message.provider;
+    result.usage = message.usage;
+    result.thinkingLevel = message.thinkingLevel;
+  }
+  if (message.role === 'toolResult') {
+    result.toolCallId = message.toolCallId;
+    result.toolName = message.toolName;
+    result.isError = Boolean(message.isError);
+    if (message.durationMs !== undefined) result.durationMs = message.durationMs;
+  }
+  return result;
+}
+
 async function detail(id) {
   const found = await findManager(id);
   if (!found) return undefined;
   const messages = found.manager.getEntries()
     .filter((entry) => entry.type === 'message')
-    .map((entry) => entry.message)
-    .filter((message) => message.role === 'user' || message.role === 'assistant')
-    .map((message) => ({ role: message.role, text: textOf(message.content) }))
-    .filter((message) => message.text.length > 0);
+    .map((entry) => serializeMessage(entry.message))
+    .filter(Boolean);
   return { id, cwd: found.cwd, title: diskSessions.get(id)?.title || '新会话', messages };
 }
 
@@ -493,6 +525,10 @@ app.whenReady().then(async () => {
     await openWithApp(target, typeof appPath === 'string' ? appPath : undefined);
     return { ok: true };
   });
+  ipcMain.handle('pi:open-external', async (_event, url) => {
+    if (typeof url === 'string' && /^https?:\/\//i.test(url)) await shell.openExternal(url);
+    return { ok: true };
+  });
   ipcMain.handle('pi:reveal-file', async (_event, { cwd, path: requested }) => {
     shell.showItemInFolder(workspaceFile(cwd, requested));
     return { ok: true };
@@ -530,22 +566,19 @@ app.whenReady().then(async () => {
     const found = await findManager(sessionId);
     if (!found) throw new Error('会话不存在');
     const session = await ensureAgent(sessionId, found.manager, found.cwd);
-    let collected = '';
     const send = (payload) => event.sender.send('pi:prompt-event', { requestId, ...payload });
     const unsubscribe = session.subscribe((piEvent) => {
-      if (piEvent.type === 'message_update' && piEvent.assistantMessageEvent.type === 'text_delta') {
-        collected += piEvent.assistantMessageEvent.delta;
-        send({ type: 'delta', text: piEvent.assistantMessageEvent.delta });
+      if (piEvent.type === 'message_start' || piEvent.type === 'message_update' || piEvent.type === 'message_end') {
+        const message = serializeMessage(piEvent.message);
+        if (message) send({ type: piEvent.type, message });
       }
-      if (piEvent.type === 'tool_execution_start') send({ type: 'tool', name: piEvent.toolName, status: 'running' });
-      if (piEvent.type === 'tool_execution_end') send({ type: 'tool', name: piEvent.toolName, status: 'done' });
     });
     try {
       await session.prompt(text);
-      send({ type: 'done', text: collected });
+      send({ type: 'done' });
       drafts.delete(sessionId);
     } catch (error) {
-      send({ type: 'error', message: error instanceof Error ? error.message : String(error) });
+      send({ type: 'error', error: error instanceof Error ? error.message : String(error) });
       throw error;
     } finally {
       unsubscribe();

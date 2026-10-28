@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
 import { Select } from './components/Select';
+import type { ChatMessage } from './chat-types';
+import { ChatMessageView } from './components/ChatMessage';
 import { DetailDialog } from './components/DetailDialog';
 import { ProviderIcon } from './components/ProviderIcon';
 import { SettingsDialog } from './components/SettingsDialog';
@@ -32,7 +34,6 @@ function BrandMark({ className = '' }: { className?: string }) {
 
 type PiSessionSummary = { id: string; cwd: string; title: string; updatedAt: number; messageCount: number };
 type PiWorkspace = { cwd: string; name: string; sessions: PiSessionSummary[] };
-type PiMessage = { role: 'user' | 'assistant'; text: string; streaming?: boolean };
 type CustomModelConfig = { providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean };
 type SettingsEditor = { kind: 'provider' | 'model' | 'mcp' | 'package' | 'skill' | 'extension'; editId?: string };
 type SettingsSnapshot = {
@@ -116,7 +117,7 @@ export function App() {
   const [draggingItem, setDraggingItem] = useState<DragItem | null>(null);
   const [justDropped, setJustDropped] = useState<string | null>(null);
   const [session, setSession] = useState<{ id: string; cwd: string; title: string } | null>(null);
-  const [messages, setMessages] = useState<PiMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -511,12 +512,22 @@ export function App() {
 
   useEffect(() => window.piApi.onPrompt((event) => {
     if (event.requestId !== requestRef.current) return;
-    if (event.type === 'delta') {
+    if (event.message && (event.type === 'message_start' || event.type === 'message_update' || event.type === 'message_end')) {
+      const incoming = event.message;
+      if (incoming.role === 'user') return;
       setMessages((current) => {
         const copy = [...current];
-        const last = copy[copy.length - 1];
-        if (last?.role === 'assistant') copy[copy.length - 1] = { ...last, text: last.text + (event.text ?? '') };
-        else copy.push({ role: 'assistant', text: event.text ?? '' });
+        if (incoming.role === 'assistant' && event.type === 'message_start') {
+          for (let index = 0; index < copy.length; index += 1) if (copy[index].streaming) copy[index] = { ...copy[index], streaming: false };
+        }
+        const streaming = incoming.role === 'assistant' && event.type !== 'message_end';
+        const next = { ...incoming, ...(streaming ? { streaming: true } : { streaming: false }) };
+        let index = copy.findIndex((message) => message.role === incoming.role && message.timestamp === incoming.timestamp);
+        if (index < 0 && incoming.role === 'assistant' && event.type !== 'message_start') {
+          index = copy.findIndex((message) => message.role === 'assistant' && message.streaming);
+        }
+        if (index >= 0) copy[index] = next;
+        else copy.push(next);
         return copy;
       });
     }
@@ -527,7 +538,7 @@ export function App() {
       void loadState();
     }
     if (event.type === 'error') {
-      setError(event.message ?? '执行失败');
+      setError(event.error || '执行失败，请重试');
       setMessages((current) => current.map((message) => ({ ...message, streaming: false })));
       setBusy(false);
     }
@@ -685,13 +696,17 @@ export function App() {
     setPrompt('');
     setBusy(true);
     setError(null);
-    setMessages((existing) => [...existing, { role: 'user', text }, { role: 'assistant', text: '', streaming: true }]);
+    setMessages((existing) => [...existing, { role: 'user', content: [{ type: 'text', text }], timestamp: Date.now() }]);
     const requestId = crypto.randomUUID();
     requestRef.current = requestId;
     try {
       await window.piApi.prompt({ sessionId: current.id, text, requestId });
       const saved = await window.piApi.session(current.id);
-      if (saved) setSession({ id: saved.id, cwd: saved.cwd, title: saved.title });
+      if (saved) {
+        setSession({ id: saved.id, cwd: saved.cwd, title: saved.title });
+        setMessages(saved.messages.map((message) => ({ ...message })));
+      }
+      setBusy(false);
       await loadState();
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
@@ -851,6 +866,7 @@ export function App() {
     });
   }
 
+  const toolResultMap = new Map(messages.filter((message) => message.role === 'toolResult' && message.toolCallId).map((message) => [message.toolCallId as string, message]));
   const globalSkillGroups = [
     { key: 'agents', label: '~/.agents/skills', items: (settingsData?.skills ?? []).filter((skill) => !skill.path.includes('/.pi/agent/skills/')) },
     { key: 'pi', label: '~/.pi/agent/skills', items: (settingsData?.skills ?? []).filter((skill) => skill.path.includes('/.pi/agent/skills/')) },
@@ -1159,23 +1175,22 @@ export function App() {
         {!isNewConversation && <div className="chat-tabs">
           <button className="tab is-active">对话</button>
           <button className="tab" disabled title="执行轨迹即将推出">轨迹</button>
-          <span className="chat-tabs-note">{messages.length > 0 ? `${messages.length} 条消息` : '从一个想法开始'}</span>
+          <span className="chat-tabs-note">{messages.filter((message) => message.role !== 'toolResult').length > 0 ? `${messages.filter((message) => message.role !== 'toolResult').length} 条消息` : '从一个想法开始'}</span>
         </div>}
 
         {!isNewConversation && <div className="chat-scroll" ref={scrollRef}>
           <div className="chat-column">
             {messages.length > 0 && (
               <div className="messages">
-                {messages.map((message, index) => (
-                  <div className={`message ${message.role}`} key={`${message.role}-${index}`}>
-                    {message.role === 'user' ? (
-                      <div className="user-bubble">{message.text}</div>
-                    ) : (
-                      <div className="assistant-text">{message.text}<span className={message.streaming ? 'caret' : 'caret hidden'} /></div>
-                    )}
-                  </div>
+                {messages.filter((message) => message.role !== 'toolResult').map((message, index) => (
+                  <ChatMessageView
+                    key={message.timestamp ?? `${message.role}-${index}`}
+                    message={message}
+                    toolResults={toolResultMap}
+                    busy={busy}
+                  />
                 ))}
-                {busy && !messages.some((message) => message.role === 'assistant' && message.text) && (
+                {busy && !messages.some((message) => message.role === 'assistant' && message.streaming) && (
                   <div className="thinking"><span /><span /><span />正在思考</div>
                 )}
               </div>

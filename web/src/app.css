@@ -866,3 +866,70 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 .chat-header { height: 60px; padding: 16px var(--space-6) 6px; justify-content: flex-start; }
 .is-new-conversation .chat-header { height: 60px; padding: 16px var(--space-6) 6px; }
 .chat-actions { margin-left: auto; align-self: center; }
+
+/* Rich Pi transcript: Markdown, thinking, tool calls and tool results. */
+.message.assistant { align-items: stretch; }
+.assistant-content { max-width: 100%; min-width: 0; font-size: var(--text-md); line-height: 1.85; overflow-wrap: anywhere; }
+.assistant-content > .markdown + .markdown { margin-top: 10px; }
+.markdown { color: var(--text); font-size: var(--text-md); line-height: 1.85; overflow-wrap: anywhere; }
+.markdown > :first-child { margin-top: 0; }
+.markdown > :last-child { margin-bottom: 0; }
+.markdown p { margin: 0 0 12px; }
+.markdown h1, .markdown h2, .markdown h3, .markdown h4 { margin: 22px 0 10px; line-height: 1.4; letter-spacing: -.25px; }
+.markdown h1 { font-size: 22px; }
+.markdown h2 { font-size: 18px; }
+.markdown h3 { font-size: 15px; }
+.markdown h4 { font-size: 13.5px; }
+.markdown ul, .markdown ol { margin: 0 0 12px; padding-left: 22px; }
+.markdown li { margin: 3px 0; }
+.markdown li > p { margin-bottom: 5px; }
+.markdown blockquote { margin: 12px 0; padding: 2px 0 2px 14px; border-left: 2px solid var(--border-strong); color: var(--muted); }
+.markdown hr { margin: 20px 0; border: 0; border-top: 1px solid var(--border); }
+.markdown a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.markdown strong { font-weight: 650; }
+.markdown code { padding: 2px 5px; border-radius: 4px; background: var(--surface-soft); font: .88em var(--mono); }
+.markdown pre { margin: 12px 0; padding: 13px 14px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: #f8f9fb; font: 11.5px/1.65 var(--mono); }
+.markdown pre code { padding: 0; border: 0; background: transparent; font: inherit; }
+.markdown table { display: block; width: max-content; max-width: 100%; margin: 14px 0; overflow: auto; border-collapse: collapse; font-size: var(--text-sm); }
+.markdown th, .markdown td { padding: 7px 10px; border: 1px solid var(--border); text-align: left; }
+.markdown th { background: var(--surface-soft); font-weight: 600; }
+.markdown img { max-width: 100%; border-radius: 8px; }
+.markdown input[type="checkbox"] { margin-right: 5px; }
+.markdown .hljs-keyword, .markdown .hljs-selector-tag, .markdown .hljs-built_in { color: #7456b8; }
+.markdown .hljs-string, .markdown .hljs-attr, .markdown .hljs-template-variable { color: #2f7d62; }
+.markdown .hljs-number, .markdown .hljs-literal { color: #b0602e; }
+.markdown .hljs-comment, .markdown .hljs-quote { color: #98a2b2; font-style: italic; }
+.markdown .hljs-title, .markdown .hljs-name, .markdown .hljs-function { color: #3f67a9; }
+.markdown .hljs-variable, .markdown .hljs-params { color: #8a4f6d; }
+.message-images { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.message-images img, .message-image { max-width: min(420px, 100%); max-height: 420px; border-radius: 8px; object-fit: contain; }
+.message-error { margin-top: 12px; padding: 9px 11px; border: 1px solid #f4d6d2; border-radius: 7px; background: var(--error-soft); color: var(--error); font-size: var(--text-sm); }
+.thinking-block { margin: 8px 0 10px; border-left: 2px solid #d9dce5; color: var(--muted); }
+.thinking-block summary { display: flex; align-items: center; gap: 7px; padding: 7px 10px; list-style: none; color: var(--muted); font-size: var(--text-sm); cursor: pointer; }
+.thinking-block summary::-webkit-details-marker, .tool-call summary::-webkit-details-marker { display: none; }
+.thinking-block summary > svg:first-child { width: 14px; height: 14px; color: var(--faint); }
+.thinking-block summary > svg:last-child { width: 13px; height: 13px; margin-left: auto; color: var(--faint); transition: transform var(--transition); }
+.thinking-block[open] summary > svg:last-child { transform: rotate(180deg); }
+.thinking-content { padding: 2px 12px 8px; color: var(--muted); font-size: var(--text-sm); }
+.thinking-content .markdown { color: var(--muted); font-size: var(--text-sm); line-height: 1.75; }
+.tool-call { margin: 9px 0; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: #fbfcfd; }
+.tool-call.is-running { border-color: #dbe4f6; }
+.tool-call.is-error { border-color: #f0d7d3; background: #fffcfa; }
+.tool-call summary { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 10px; list-style: none; cursor: pointer; }
+.tool-call summary:hover { background: var(--surface-soft); }
+.tool-call-icon { display: grid; place-items: center; width: 22px; height: 22px; flex: none; border-radius: 5px; color: #627d9f; background: #eef3f9; }
+.tool-call-icon svg { width: 13px; height: 13px; }
+.tool-call.is-error .tool-call-icon { color: var(--error); background: var(--error-soft); }
+.tool-call-name { flex: none; color: var(--text); font: 11px var(--mono); font-weight: 600; }
+.tool-call-summary { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--faint); font: 10.5px var(--mono); }
+.tool-call-status { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--faint); font-size: 10px; }
+.tool-call-status svg { width: 11px; height: 11px; }
+.tool-call.is-error .tool-call-status { color: var(--error); }
+.tool-call.is-done .tool-call-status { color: var(--success); }
+.tool-call-chevron { width: 13px; height: 13px; flex: none; color: var(--faint); transition: transform var(--transition); }
+.tool-call[open] .tool-call-chevron { transform: rotate(180deg); }
+.tool-call-body { padding: 0 10px 10px; border-top: 1px solid var(--border); }
+.tool-call-label { margin: 9px 0 5px; color: var(--faint); font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; }
+.tool-call-args, .tool-call-output { max-height: 270px; margin: 0; padding: 9px 10px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--muted); font: 10.5px/1.65 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.tool-call-output.is-error { border-color: #f0d7d3; color: var(--error); }
+.spin { animation: rotate 1s linear infinite; }

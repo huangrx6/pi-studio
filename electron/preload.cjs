@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('piApi', {
   fileActions: (payload) => ipcRenderer.invoke('pi:file-actions', payload),
   openWith: (payload) => ipcRenderer.invoke('pi:open-with', payload),
   revealFile: (payload) => ipcRenderer.invoke('pi:reveal-file', payload),
+  openExternal: (url) => ipcRenderer.invoke('pi:open-external', url),
   chooseWorkspace: () => ipcRenderer.invoke('pi:choose-workspace'),
   models: (cwd) => ipcRenderer.invoke('pi:models', cwd),
   providerModels: (providerId) => ipcRenderer.invoke('pi:provider-models', providerId),
