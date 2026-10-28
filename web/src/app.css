@@ -698,3 +698,13 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 .panel-tab.is-active { background: var(--surface-soft); box-shadow: none; }
 .panel-start { padding-top: 24px; }
 .file-code { background: var(--surface); }
+
+/* Slide the workbench in and out from the right edge. */
+.file-panel { width: 0; opacity: 0; overflow: hidden; transform: translateX(18px); transition: width .28s cubic-bezier(.22,.8,.2,1), opacity .2s ease, transform .28s cubic-bezier(.22,.8,.2,1); }
+.file-panel.is-open { width: var(--panel-w); opacity: 1; transform: translateX(0); }
+.file-panel.is-open.is-split:not(.is-fullscreen) { width: min(760px, 64vw); }
+.file-panel.is-open.is-fullscreen { width: 100%; }
+.file-panel-inner { display: flex; flex-direction: column; width: var(--panel-w); min-width: var(--panel-w); height: 100%; }
+.file-panel.is-split:not(.is-fullscreen) .file-panel-inner { width: min(760px, 64vw); min-width: min(760px, 64vw); }
+.file-panel.is-fullscreen .file-panel-inner { width: 100%; min-width: 100%; }
+@media (max-width: 1100px) { .file-panel { position: absolute; top: 0; right: 0; bottom: 0; } }

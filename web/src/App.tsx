@@ -146,6 +146,8 @@ export function App() {
   const [panelTabs, setPanelTabs] = useState<PanelTab[]>([{ id: 'start', kind: 'start', title: '开始' }]);
   const [activePanelTabId, setActivePanelTabId] = useState('start');
   const [panelFullscreen, setPanelFullscreen] = useState(false);
+  const [panelEntered, setPanelEntered] = useState(false);
+  const panelCloseTimerRef = useRef<number | null>(null);
   const [panelSplit, setPanelSplit] = useState(false);
   const [fileBusy, setFileBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -666,16 +668,28 @@ export function App() {
   }
 
   function openPanel() {
-    setFilesOpen(true);
+    if (panelCloseTimerRef.current !== null) {
+      window.clearTimeout(panelCloseTimerRef.current);
+      panelCloseTimerRef.current = null;
+    }
     if (panelTabs.length === 0) {
       setPanelTabs([{ id: 'start', kind: 'start', title: '开始' }]);
       setActivePanelTabId('start');
     }
+    setPanelEntered(false);
+    setFilesOpen(true);
+    requestAnimationFrame(() => requestAnimationFrame(() => setPanelEntered(true)));
   }
 
   function closePanel() {
-    setFilesOpen(false);
-    setPanelFullscreen(false);
+    if (!filesOpen) return;
+    setPanelEntered(false);
+    if (panelCloseTimerRef.current !== null) window.clearTimeout(panelCloseTimerRef.current);
+    panelCloseTimerRef.current = window.setTimeout(() => {
+      setFilesOpen(false);
+      setPanelFullscreen(false);
+      panelCloseTimerRef.current = null;
+    }, 280);
   }
 
   function openFilesTab() {
@@ -989,7 +1003,7 @@ export function App() {
             <div className="chat-meta"><span className={`state-dot ${busy ? 'is-busy' : ''}`} />{busy ? '正在处理' : '准备就绪'}{activeWorkspace && <><span>·</span><span className="workspace-name">{activeWorkspace.name}</span></>}</div>
           </div>}
           <div className="chat-actions">
-            <button className={`icon-button ${filesOpen ? 'is-active' : ''}`} onClick={() => filesOpen ? closePanel() : openPanel()} aria-label="文件查看器"><PanelRight size={16} /></button>
+            {!filesOpen && <button className="icon-button" onClick={openPanel} aria-label="打开右侧面板" title="打开右侧面板"><PanelRight size={16} /></button>}
           </div>
         </header>
         {!isNewConversation && <div className="chat-tabs">
@@ -1187,7 +1201,8 @@ export function App() {
       {filesOpen && (
         <>
         {!panelFullscreen && <button className="file-panel-backdrop" aria-label="关闭右侧面板" tabIndex={-1} onClick={closePanel} />}
-        <aside className={`file-panel ${panelFullscreen ? 'is-fullscreen' : ''} ${panelSplit ? 'is-split' : ''}`}>
+        <aside className={`file-panel ${panelEntered ? 'is-open' : ''} ${panelFullscreen ? 'is-fullscreen' : ''} ${panelSplit ? 'is-split' : ''}`}>
+          <div className="file-panel-inner">
           <div className="panel-tabbar">
             <div className="panel-tabs" role="tablist" aria-label="右侧面板标签">
               {panelTabs.map((tab) => <div
@@ -1208,7 +1223,7 @@ export function App() {
             <div className="panel-tools">
               <button className={`icon-button ${panelSplit ? 'is-active' : ''}`} aria-label={panelSplit ? '退出分栏' : '分栏'} title={panelSplit ? '退出分栏' : '分栏'} onClick={() => setPanelSplit((value) => !value)}><Columns2 /></button>
               <button className="icon-button" aria-label={panelFullscreen ? '退出全屏' : '全屏'} title={panelFullscreen ? '退出全屏' : '应用内全屏'} onClick={() => setPanelFullscreen((value) => !value)}>{panelFullscreen ? <Minimize2 /> : <Maximize2 />}</button>
-              <button className="icon-button" aria-label="关闭右侧面板" title="关闭" onClick={closePanel}><X /></button>
+              <button className="icon-button" aria-label="收起右侧面板" title="收起右侧面板" onClick={closePanel}><PanelRight /></button>
             </div>
           </div>
           <div className={`panel-body ${panelSplit ? 'is-split' : ''}`}>
@@ -1216,6 +1231,7 @@ export function App() {
               <div className="panel-split-tree">{renderFileTree()}</div>
               <div className="panel-split-main">{activePanelTab?.kind === 'files' ? <div className="panel-empty"><FolderOpen /><strong>从左侧选择文件</strong><span>文件会在右侧以标签页打开。</span></div> : renderPanelContent()}</div>
             </> : renderPanelContent()}
+          </div>
           </div>
         </aside>
         </>
