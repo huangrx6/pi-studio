@@ -67,7 +67,7 @@ declare global {
       settings(cwd?: string): Promise<SettingsSnapshot>;
       setKey(payload: { providerId: string; apiKey: string }): Promise<any>;
       setMcpEnabled(payload: { name: string; enabled: boolean }): Promise<any>;
-      addProvider(payload: { providerId: string; baseUrl: string; api: string; modelId: string; modelName: string; apiKey?: string; editing?: boolean }): Promise<{ settings: SettingsSnapshot; models: { models: Array<{ id: string; name: string }>; current: string; enabled: string[] } }>;
+      addProvider(payload: { providerId: string; baseUrl: string; api: string; modelId: string; modelName: string; apiKey?: string; editing?: boolean }): Promise<{ settings: SettingsSnapshot; models: ModelCatalog }>;
       addMcp(payload: { name: string; transport: string; command?: string; args: string[]; url?: string; description?: string; env?: string; originalName?: string }): Promise<SettingsSnapshot>;
       addSkill(payload: { scope: string; cwd?: string }): Promise<any>;
       addExtension(payload: { scope: string; cwd?: string }): Promise<any>;

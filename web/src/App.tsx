@@ -7,7 +7,7 @@ import appIcon from '../../assets/icon.png';
 import { Select } from './components/Select';
 import { SettingsDialog } from './components/SettingsDialog';
 import { ModelPicker } from './components/ModelPicker';
-import type { ModelSelection, ThinkingLevel } from './model-types';
+import type { ModelOption, ModelSelection, ThinkingLevel } from './model-types';
 
 const settingsPages = [
   { id: 'models', label: '模型与账号', icon: Cpu, description: '连接模型来源，选择适合当前工作的模型。' },
@@ -103,7 +103,7 @@ export function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [workspaceSearchOpen, setWorkspaceSearchOpen] = useState(false);
   const [workspaceQuery, setWorkspaceQuery] = useState('');
-  const [models, setModels] = useState<Array<{ id: string; name: string }>>([]);
+  const [models, setModels] = useState<ModelOption[]>([]);
   const [modelQuery, setModelQuery] = useState('');
   const [modelRef, setModelRef] = useState('');
   const [enabledModels, setEnabledModels] = useState<string[]>([]);
@@ -894,11 +894,25 @@ export function App() {
               <div className="settings-sections">
                 <section className="settings-card">
                   <div className="settings-card-head"><div><h2>已启用模型 <span className="count-badge">{enabledModels.length}</span></h2><p>点击模型切换当前对话使用的模型。</p></div></div>
-                  {enabledModels.length > 0 ? <div className="enabled-model-list">
-                    {enabledModels.map((id) => <div className={`enabled-model-row ${id === modelRef ? 'is-active' : ''}`} key={id}>
-                      <button className="enabled-model-main" onClick={() => void selectModel(id).then(async () => setSettingsData(await window.piApi.settings(workspace)))}><span>{models.find((item) => item.id === id)?.name ?? id}</span><small>{id}</small>{id === modelRef && <Check />}</button>
-                      <button className="settings-mini-button" disabled={settingsBusy} onClick={() => void setEnabled(enabledModels.filter((item) => item !== id))}>移除</button>
-                    </div>)}
+                  {enabledModels.length > 0 ? <div className="model-card-grid">
+                    {enabledModels.map((id) => {
+                      const item = models.find((entry) => entry.id === id);
+                      const active = id === modelRef;
+                      const provider = item?.providerName || item?.provider || id.split('/')[0];
+                      return <article className={`model-card ${active ? 'is-active' : ''}`} key={id}>
+                        <button className="model-card-main" aria-current={active ? 'true' : undefined} onClick={() => void selectModel(id).then(async () => setSettingsData(await window.piApi.settings(workspace)))}>
+                          <div className="model-card-top"><span className="model-card-avatar">{provider.slice(0, 1)}</span><span className="model-card-provider">{provider}</span>{active && <span className="model-card-current">当前</span>}</div>
+                          <strong className="model-card-name">{item?.name ?? id}</strong>
+                          <span className="model-card-id">{id}</span>
+                          <div className="model-card-meta">
+                            {item?.contextWindow && <span>{Math.round(item.contextWindow / 1000)}K 上下文</span>}
+                            {item?.supportsImages && <span>图片</span>}
+                            {item?.reasoning && <span>推理</span>}
+                          </div>
+                        </button>
+                        <button className="model-card-remove" disabled={settingsBusy} aria-label={`移除模型 ${item?.name ?? id}`} title="移除" onClick={() => void setEnabled(enabledModels.filter((entry) => entry !== id))}><X /></button>
+                      </article>;
+                    })}
                   </div> : <div className="settings-empty">在下方添加来源，再选择要启用的模型。</div>}
                 </section>
                 <section className="settings-card">

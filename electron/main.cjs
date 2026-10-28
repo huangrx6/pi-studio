@@ -210,7 +210,7 @@ async function availableModels(cwd = DEFAULT_CWD) {
   const providerNames = new Map(rt.getProviders().map((provider) => [provider.id, provider.name]));
   const models = rt.getModels()
     .filter((item) => visible.has(item.provider))
-    .map((item) => ({ id: `${item.provider}/${item.id}`, provider: item.provider, providerName: providerNames.get(item.provider) || item.provider, model: item.id, name: item.name }))
+    .map((item) => ({ id: `${item.provider}/${item.id}`, provider: item.provider, providerName: providerNames.get(item.provider) || item.provider, model: item.id, name: item.name, contextWindow: item.contextWindow, maxTokens: item.maxTokens, supportsImages: Array.isArray(item.input) && item.input.includes('image'), reasoning: Boolean(item.reasoning) }))
     .sort((a, b) => a.name.localeCompare(b.name));
   return { models, enabled, current: MODEL_REF, selection: await modelInfo(cwd) };
 }
