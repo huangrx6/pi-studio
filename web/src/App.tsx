@@ -645,6 +645,7 @@ export function App() {
         <div className="brand">
           <BrandMark />
           <span className="brand-name">Pi Studio</span>
+          <button className="icon-button collapse" aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'} title={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'} onClick={() => setSidebarCollapsed((value) => !value)}><PanelLeft /></button>
         </div>
         <button className="new-chat" title="新会话" onClick={() => void startSession()}><SquarePen /><span>新会话</span></button>
         <nav className="nav">
@@ -758,8 +759,7 @@ export function App() {
       </aside>
 
       <main className={`main ${isNewConversation ? 'is-new-conversation' : ''}`}>
-        <header className={`chat-header ${isNewConversation ? 'is-empty-header' : ''}`}>
-          <button className="icon-button sidebar-toggle" aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'} title={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'} onClick={() => setSidebarCollapsed((value) => !value)}><PanelLeft /></button>
+        <header className="chat-header">
           {!isNewConversation && <div className="chat-heading">
             <h1>{session?.title || 'Pi Studio'}</h1>
             <div className="chat-meta"><span className={`state-dot ${busy ? 'is-busy' : ''}`} />{busy ? '正在处理' : '准备就绪'}{activeWorkspace && <><span>·</span><span className="workspace-name">{activeWorkspace.name}</span></>}</div>

@@ -437,7 +437,7 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .row-edit:hover { color: var(--text); background: var(--surface-soft); }
 
 /* DSH-like compact conversation header: sidebar toggle lives in the main header. */
-.chat-header { height: var(--header-height); align-items: center; padding: 24px var(--space-6) 8px; }
+.chat-header { height: var(--header-height); align-items: center; padding: 6px var(--space-6) 4px; }
 .sidebar-toggle { width: 28px; height: 28px; flex: none; }
 .chat-heading { flex: 1; }
 .chat-heading h1 { font-size: var(--text-base); font-weight: 600; }
@@ -445,13 +445,14 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .chat-tabs { height: var(--toolbar-height); }
 .is-empty-header .sidebar-toggle { margin-right: 2px; }
 .is-empty-header .chat-actions { margin-left: auto; }
-.is-new-conversation .chat-header { height: 56px; padding-top: 20px; padding-bottom: 4px; }
+.is-new-conversation .chat-header { height: 48px; padding-top: 6px; padding-bottom: 4px; }
 .is-new-conversation .chat-heading { display: none; }
 .is-new-conversation .composer-dock { padding-top: 10px; }
 .is-new-conversation .new-conversation-intro { margin-bottom: 20px; }
-.is-sidebar-collapsed .brand { height: 44px; justify-content: center; padding: 0; }
 
 /* Sidebar ordering and expansion */
 .workspace-row[draggable="true"], .session-row[draggable="true"] { cursor: grab; }
 .workspace-row[draggable="true"]:active, .session-row[draggable="true"]:active { cursor: grabbing; }
 .workspace-row.drop-before, .session-row.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+
+.file-panel-head { height: var(--header-height); align-items: center; padding: 6px var(--space-4) 4px; }
