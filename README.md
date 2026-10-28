@@ -2,7 +2,7 @@
 
 **Pi 编程助手的原生 macOS 桌面工作台。** 会话、密钥、模型、技能、扩展与 MCP，都与本地 `pi` CLI 共用同一份数据。
 
-[![CI](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml) [![release](https://img.shields.io/badge/release-v0.0.3-111111?style=flat-square)](https://github.com/huangrx6/pi-studio/releases/latest) [![license](https://img.shields.io/badge/license-MIT-111111?style=flat-square)](LICENSE)
+[![CI](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml) [![release](https://img.shields.io/badge/release-v0.0.4-111111?style=flat-square)](https://github.com/huangrx6/pi-studio/releases/latest) [![license](https://img.shields.io/badge/license-MIT-111111?style=flat-square)](LICENSE)
 
 [下载 macOS 版](https://github.com/huangrx6/pi-studio/releases/latest) · [文档主页](https://huangrx6.github.io/pi-studio/) · [问题反馈](https://github.com/huangrx6/pi-studio/issues)
 
