@@ -224,7 +224,11 @@ function mergeStreamMessage(current: ChatMessage[], incoming: ChatMessage, type:
   }
   const streaming = incoming.role === 'assistant' && type !== 'message_end';
   const next = { ...incoming, ...(streaming ? { streaming: true } : { streaming: false }) };
-  let index = copy.findIndex((message) => message.role === incoming.role && message.timestamp === incoming.timestamp);
+  // 并行工具结果会共享同一个时间戳；toolResult 必须按 toolCallId 合并，
+  // 否则后一个结果会覆盖前一个，另一条工具调用永远停在「执行中」。
+  let index = copy.findIndex((message) => incoming.role === 'toolResult' && incoming.toolCallId
+    ? message.role === 'toolResult' && message.toolCallId === incoming.toolCallId
+    : message.role === incoming.role && message.timestamp === incoming.timestamp);
   if (index < 0 && incoming.role === 'assistant' && type !== 'message_start') {
     index = copy.findIndex((message) => message.role === 'assistant' && message.streaming);
   }
