@@ -25,7 +25,7 @@
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "start": "node scripts/launch.mjs",
     "test": "node --test scripts/*.test.cjs scripts/*.test.mjs",
-    "dist": "pnpm run build && electron-builder --mac --arm64 --x64"
+    "dist": "pnpm run build && electron-builder --mac --arm64 --x64 --publish never"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "1.4.0",
