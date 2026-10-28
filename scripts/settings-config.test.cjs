@@ -3,7 +3,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { readConfig, writeConfig, updateMcp, updateProvider, updateCustomModel } = require('../electron/settings-config.cjs');
+const { readConfig, writeConfig, updateMcp, updateProvider, updateCustomModel, visibleProviderIds } = require('../electron/settings-config.cjs');
+
+test('enabled Go models stay visible even if only a Zen credential is stored', () => {
+  const visible = visibleProviderIds({ opencode: { type: 'api_key' } }, {}, ['opencode-go/deepseek-v4.1-flash'], 'minimax-cn/flash', ['environment-provider']);
+  assert.deepEqual([...visible].sort(), ['environment-provider', 'minimax-cn', 'opencode', 'opencode-go']);
+});
 
 test('editing MCP preserves credentials, disabled state, and unrelated servers', () => {
   const config = { version: 1, mcpServers: { files: { command: 'node', args: ['old.js'], env: { TOKEN: '$TOKEN' }, enabled: false, timeout: 5000 }, docs: { url: 'https://example.test' } } };
@@ -45,6 +50,13 @@ test('provider editing can override an authenticated built-in provider without r
   const result = updateProvider({ providers: {} }, { providerId: 'deepseek', editing: true, baseUrl: 'https://gateway.test/v1', api: 'openai-completions' }, ['deepseek']);
   assert.equal(result.providers.deepseek.models, undefined);
   assert.throws(() => updateProvider(result, { providerId: 'deepseek', baseUrl: 'https://gateway.test', api: 'openai-completions', modelId: 'chat' }), /已存在/);
+});
+
+test('leaving a key blank preserves its override; replacing it removes the stale override', () => {
+  const config = { providers: { custom: { apiKey: '$OLD_KEY', models: [{ id: 'chat' }] } } };
+  const input = { providerId: 'custom', editing: true, baseUrl: 'https://example.test/v1', api: 'openai-completions' };
+  assert.equal(updateProvider(config, input).providers.custom.apiKey, '$OLD_KEY');
+  assert.equal(updateProvider(config, { ...input, apiKey: '$NEW_KEY' }).providers.custom.apiKey, undefined);
 });
 
 test('custom model editing keeps advanced fields and supports disabling image and reasoning capabilities', () => {

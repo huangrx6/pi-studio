@@ -28,7 +28,7 @@ interface PiDetail {
 
 interface SettingsSnapshot {
   customModels: Array<{ providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean }>;
-  providers: Array<{ id: string; name: string; mode: string; envName?: string; envAvailable?: boolean; models: number }>;
+  providers: Array<{ id: string; name: string; mode: string; authConfigured?: boolean; envName?: string; envAvailable?: boolean; models: number }>;
   mcp: Array<{ name: string; transport: string; enabled: boolean; target: string; description: string }>;
   skills: Array<{ name: string; description: string; path: string; scope: string }>;
   extensions: Array<{ name: string; scope: string; path: string; kind: string; source?: string }>;

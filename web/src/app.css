@@ -231,6 +231,8 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .provider-main span { color: var(--faint); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .provider-main p { margin: 0; color: var(--muted); font-size: var(--text-sm); }
 .provider-mode { padding: 2px var(--space-2); border-radius: var(--radius-sm); background: var(--surface-soft); color: var(--muted); font-size: var(--text-xs); white-space: nowrap; }
+.provider-mode.is-missing { background: #fff5e8; color: #946019; }
+.provider-auth-hint { margin: var(--space-2) 0 0 48px; color: #8b641e; font-size: var(--text-sm); }
 .provider-env-hint { margin: var(--space-2) 0 0 48px; color: var(--faint); font-size: var(--text-xs); overflow-wrap: anywhere; }
 .provider-env-hint.is-set { color: var(--success); }
 .provider-env-hint code { font: inherit; font-family: var(--mono); }

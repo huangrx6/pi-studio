@@ -71,6 +71,9 @@ function updateProvider(config, input, knownProviders = []) {
   if (input.editing && !exists) throw new Error('这个来源已不存在，请刷新后重试');
   if (!input.editing && exists) throw new Error('来源已存在，请使用编辑入口修改');
   const provider = { ...(providers[id] || {}), baseUrl, api };
+  // A newly supplied key is stored in auth.json by the caller. Remove the
+  // old models.json override so it cannot take precedence over that key.
+  if (typeof input.apiKey === 'string' && input.apiKey.trim()) delete provider.apiKey;
   if (!input.editing) {
     const modelId = String(input.modelId || '').trim();
     if (!modelId) throw new Error('请填写首个模型的 ID');
@@ -104,4 +107,11 @@ function updateCustomModel(config, input, knownProviders = []) {
   return { ...config, providers: { ...providers, [providerId]: { ...provider, models: updated } } };
 }
 
-module.exports = { readConfig, writeConfig, updateMcp, updateProvider, updateCustomModel };
+function visibleProviderIds(auth, configuredProviders, enabledModels, currentModel, authenticatedProviders = []) {
+  return new Set([
+    ...Object.keys(auth), ...Object.keys(configuredProviders), ...authenticatedProviders,
+    ...[...enabledModels, currentModel].filter((id) => typeof id === 'string' && id.includes('/')).map((id) => id.split('/')[0]),
+  ]);
+}
+
+module.exports = { readConfig, writeConfig, updateMcp, updateProvider, updateCustomModel, visibleProviderIds };

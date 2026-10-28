@@ -2,7 +2,7 @@ const { app, BrowserWindow, dialog, ipcMain, Menu } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
-const { readConfig, writeConfig, updateMcp, updateProvider, updateCustomModel } = require('./settings-config.cjs');
+const { readConfig, writeConfig, updateMcp, updateProvider, updateCustomModel, visibleProviderIds } = require('./settings-config.cjs');
 
 let pi;
 let mainWindow;
@@ -189,21 +189,16 @@ function saveConfig() {
 
 async function availableModels() {
   const rt = await runtime();
-  let providers = new Set();
-  try {
-    const auth = JSON.parse(fs.readFileSync(path.join(pi.getAgentDir(), 'auth.json'), 'utf8'));
-    providers = new Set(Object.keys(auth));
-  } catch { /* show the full catalog if auth is unreadable */ }
+  const auth = readAuth();
+  const config = readJson(path.join(pi.getAgentDir(), 'settings.json'), {});
+  const enabled = Array.isArray(config.enabledModels) ? config.enabledModels : [];
+  const configured = readJson(modelsFile(), { providers: {} }).providers || {};
+  const visible = visibleProviderIds(auth, configured, enabled, MODEL_REF, rt.getProviders().filter((provider) => rt.hasConfiguredAuth(provider.id)).map((provider) => provider.id));
   const models = rt.getModels()
-    .filter((item) => providers.size === 0 || providers.has(item.provider))
+    .filter((item) => visible.has(item.provider))
     .map((item) => ({ id: `${item.provider}/${item.id}`, provider: item.provider, model: item.id, name: item.name }))
     .sort((a, b) => a.name.localeCompare(b.name));
-  let enabled = [];
-  try {
-    const config = JSON.parse(fs.readFileSync(path.join(pi.getAgentDir(), 'settings.json'), 'utf8'));
-    enabled = Array.isArray(config.enabledModels) ? config.enabledModels : [];
-  } catch { /* no saved selection */ }
-  return { models: models.slice(0, 300), enabled, current: MODEL_REF };
+  return { models, enabled, current: MODEL_REF };
 }
 
 function authFile() {
@@ -232,11 +227,15 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
   const auth = readAuth();
   const allModels = rt.getModels();
   const configuredModels = readJson(modelsFile(), { providers: {} });
+  const settings = readJson(path.join(pi.getAgentDir(), 'settings.json'), {});
+  const enabledModels = Array.isArray(settings.enabledModels) ? settings.enabledModels : [];
+  const visible = visibleProviderIds(auth, configuredModels.providers || {}, enabledModels, MODEL_REF, rt.getProviders().filter((provider) => rt.hasConfiguredAuth(provider.id)).map((provider) => provider.id));
   const providers = rt.getProviders()
-    .filter((provider) => auth[provider.id] !== undefined || Object.hasOwn(configuredModels.providers || {}, provider.id))
+    .filter((provider) => visible.has(provider.id))
     .map((provider) => ({
       id: provider.id,
       name: provider.name,
+      authConfigured: auth[provider.id] !== undefined || rt.hasConfiguredAuth(provider.id),
       mode: auth[provider.id]?.type === 'oauth' ? 'oauth' : auth[provider.id]?.key?.startsWith('$') ? 'env' : 'key',
       envName: envNameOf(auth[provider.id]?.key),
       envAvailable: envNameOf(auth[provider.id]?.key) ? process.env[envNameOf(auth[provider.id]?.key)] !== undefined : false,
@@ -267,7 +266,6 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
       return { name: skill.name, description: skill.description, path: file, scope };
     });
   } catch { /* skill discovery is optional */ }
-  const settings = readJson(path.join(pi.getAgentDir(), 'settings.json'), {});
   const configuredPackages = Array.isArray(settings.packages) ? settings.packages : [];
   const extensions = listExtensions(cwd);
   let extensionData = [];
@@ -527,10 +525,11 @@ app.whenReady().then(async () => {
     return { name, transport: server.command ? 'stdio' : 'http', command: server.command || '', args: server.args || [], url: server.url || '', description: server.description || '', env: Object.entries(server.env || {}).map(([key, value]) => `${key}=${value}`).join('\n') };
   });
   ipcMain.handle('pi:add-provider', async (_event, input) => {
+    const rt = await runtime();
     const apiKey = typeof input.apiKey === 'string' ? input.apiKey.trim() : '';
     if (apiKey.startsWith('$') && !envNameOf(apiKey)) throw new Error('环境变量格式应为 $NAME 或 ${NAME}');
     const auth = readConfig(authFile(), {});
-    const models = updateProvider(readConfig(modelsFile(), { providers: {} }), input, Object.keys(auth));
+    const models = updateProvider(readConfig(modelsFile(), { providers: {} }), input, input.editing ? rt.getProviders().map((provider) => provider.id) : Object.keys(auth));
     writeConfig(modelsFile(), models);
     if (apiKey) writeConfig(authFile(), { ...auth, [input.providerId.trim()]: { type: 'api_key', key: apiKey } }, 0o600);
     runtimePromise = undefined;
