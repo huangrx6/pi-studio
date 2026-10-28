@@ -700,11 +700,10 @@ export function App() {
 
   function renderModelCard(id: string) {
     const item = models.find((entry) => entry.id === id);
-    const active = id === modelRef;
     const provider = item?.providerName || item?.provider || id.split('/')[0];
-    return <article className={`model-card ${active ? 'is-active' : ''}`} key={id}>
-      <button className="model-card-main" aria-current={active ? 'true' : undefined} onClick={() => void selectModel(id).then(async () => setSettingsData(await window.piApi.settings(workspace)))}>
-        <span className="model-card-top"><span className="model-card-avatar">{provider.slice(0, 1)}</span><span className="model-card-provider">{provider}</span>{active && <span className="model-card-current">当前</span>}</span>
+    return <article className="model-card" key={id}>
+      <div className="model-card-main">
+        <span className="model-card-top"><span className="model-card-avatar">{provider.slice(0, 1)}</span><span className="model-card-provider">{provider}</span></span>
         <strong className="model-card-name">{item?.name ?? id}</strong>
         <span className="model-card-id">{id}</span>
         <span className="model-card-meta">
@@ -712,7 +711,7 @@ export function App() {
           {item?.supportsImages && <span className="model-tag is-image">图片</span>}
           {item?.reasoning && <span className="model-tag is-reasoning">推理</span>}
         </span>
-      </button>
+      </div>
       <button className="model-card-remove" disabled={settingsBusy} aria-label={`移除模型 ${item?.name ?? id}`} title="移除" onClick={() => void setEnabled(enabledModels.filter((entry) => entry !== id))}><X /></button>
     </article>;
   }
@@ -938,7 +937,7 @@ export function App() {
             {settingsData && settingsTab === 'models' && (
               <div className="settings-sections">
                 <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>已启用模型 <span className="count-badge">{enabledModels.length}</span></h2><p>点击模型切换当前对话使用的模型。</p></div></div>
+                  <div className="settings-card-head"><div><h2>已启用模型 <span className="count-badge">{enabledModels.length}</span></h2><p>这里管理所有会话可用的模型；具体使用哪个模型，在对话输入框中选择。</p></div></div>
                   {enabledModels.length > 0 ? <>
                     <div className="model-view-bar"><span>查看方式</span><div className="model-view-toggle" role="group" aria-label="模型查看方式"><button className={modelView === 'all' ? 'is-active' : ''} onClick={() => setModelView('all')}>全部</button><button className={modelView === 'provider' ? 'is-active' : ''} onClick={() => setModelView('provider')}>按来源</button></div></div>
                     {modelView === 'all' ? <div className="model-card-grid">{enabledModels.map(renderModelCard)}</div> : <div className="model-groups">{enabledModelGroups.map((group) => <section className="model-group" key={group.name}><div className="model-group-head"><span className="model-card-avatar">{group.name.slice(0, 1)}</span><strong>{group.name}</strong><span>{group.ids.length}</span></div><div className="model-card-grid">{group.ids.map(renderModelCard)}</div></section>)}</div>}

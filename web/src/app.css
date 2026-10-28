@@ -614,3 +614,8 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .settings-back-button:hover { border: 0; background: var(--surface-hover); color: var(--text); }
 .settings-back-button svg { width: 16px; height: 16px; }
 .settings-back-button kbd { margin-left: auto; color: var(--faint); font-size: var(--text-xs); }
+
+/* Settings only manages availability; model switching belongs to the conversation picker. */
+.model-card { cursor: default; }
+.model-card:hover { transform: none; box-shadow: none; }
+.model-card-main { cursor: default; }
