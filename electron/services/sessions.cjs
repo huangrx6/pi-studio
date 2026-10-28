@@ -13,7 +13,6 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const {
-  SESSION_ROOT,
   DEFAULT_CWD,
   piModule,
   getRuntime,
@@ -35,6 +34,8 @@ const { envNameOf } = require('../credential-env.cjs');
 
 /** 内存中的草稿会话：id → { manager, cwd }。 */
 const drafts = new Map();
+/** 正在创建的 AgentSession：同一会话的并发请求共享同一次创建。 */
+const agentPromises = new Map();
 /** 磁盘会话索引：id → { id, path, cwd, title, updatedAt, messageCount }。 */
 const diskSessions = new Map();
 /** 会话详情缓存：id → { mtimeMs, size, data }，用文件修改时间判断是否需要重读。 */
@@ -42,77 +43,36 @@ const detailCache = new Map();
 
 let sessionsIndexedAt = 0;
 let sessionsIndexPromise;
-
-/** 递归收集目录下所有 .jsonl 文件。 */
-function walkJsonl(root) {
-  const files = [];
-  const visit = (dir) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const target = path.join(dir, entry.name);
-      if (entry.isDirectory()) visit(target);
-      else if (entry.isFile() && target.endsWith('.jsonl')) files.push(target);
-    }
-  };
-  try {
-    visit(root);
-  } catch {
-    /* 没有会话目录 */
-  }
-  return files;
-}
-
-/** 读会话文件第一行，拿到 id 与 cwd。 */
-function readHeader(file) {
-  try {
-    const first = fs.readFileSync(file, 'utf8').split('\n', 1)[0];
-    if (!first) return undefined;
-    const value = JSON.parse(first);
-    return typeof value.id === 'string' && typeof value.cwd === 'string' ? { id: value.id, cwd: value.cwd } : undefined;
-  } catch {
-    return undefined;
-  }
-}
+let indexRevision = 0;
 
 /**
  * 建立 / 刷新磁盘会话索引。
  * force=true 时忽略 10 秒节流（例如刚分叉完）。
  */
 async function indexSessions(force = false) {
+  // force 刷新会重建 revision，让正在进行的旧扫描不再标记「已索引」。
+  if (force) invalidateIndex();
   if (!force && sessionsIndexedAt > 0 && Date.now() - sessionsIndexedAt < 10_000) return;
-  if (sessionsIndexPromise) return sessionsIndexPromise;
+  // 强制刷新时，进行中的扫描可能开始于新会话文件落盘之前；等它结束再重扫一次。
+  while (sessionsIndexPromise) {
+    await sessionsIndexPromise.catch(() => {});
+    if (!force && sessionsIndexedAt > 0 && Date.now() - sessionsIndexedAt < 10_000) return;
+    if (sessionsIndexPromise) return sessionsIndexPromise;
+  }
+  const revision = indexRevision;
   sessionsIndexPromise = (async () => {
     const pi = piModule();
-    // 先从会话文件里收集出现过的 cwd，再逐个 cwd 让 Pi 列会话
-    const cwds = new Set();
-    for (const file of walkJsonl(SESSION_ROOT)) {
-      const header = readHeader(file);
-      if (header) cwds.add(header.cwd);
-    }
-    if (cwds.size === 0) cwds.add(DEFAULT_CWD);
-
+    // Let the SDK discover its own agent directory, including linked session folders.
+    const infos = await pi.SessionManager.listAll();
     const next = new Map();
-    for (const cwd of cwds) {
-      let infos = [];
-      try {
-        infos = await pi.SessionManager.list(cwd);
-      } catch {
-        /* 跳过读不了的目录 */
-      }
-      for (const info of infos) {
-        const title = (info.name || info.firstMessage.split('\n')[0] || '新会话').trim().slice(0, 80);
-        next.set(info.id, {
-          id: info.id,
-          path: info.path,
-          cwd: info.cwd || cwd,
-          title,
-          updatedAt: info.modified.getTime(),
-          messageCount: info.messageCount,
-        });
-      }
+    for (const info of infos) {
+      next.set(info.id, { id: info.id, path: info.path, cwd: info.cwd,
+        title: (info.name || info.firstMessage?.split('\n')[0] || '新会话').trim().slice(0, 80),
+        updatedAt: info.modified.getTime(), messageCount: info.messageCount });
     }
     diskSessions.clear();
     for (const [id, session] of next) diskSessions.set(id, session);
-    sessionsIndexedAt = Date.now();
+    sessionsIndexedAt = revision === indexRevision ? Date.now() : 0;
   })().finally(() => {
     sessionsIndexPromise = undefined;
   });
@@ -121,6 +81,7 @@ async function indexSessions(force = false) {
 
 /** 让索引失效，下次访问时重新扫描磁盘。 */
 function invalidateIndex() {
+  indexRevision += 1;
   sessionsIndexedAt = 0;
 }
 
@@ -131,7 +92,18 @@ function forgetDetail(id) {
 
 /** 移除草稿会话（发送成功后它已经变成磁盘会话）。 */
 function dropDraft(id) {
-  drafts.delete(id);
+  // Keep a manager reachable until a completed disk scan has discovered its file.
+  if (diskSessions.has(id)) drafts.delete(id);
+}
+
+function updateSessionSummary(id, text) {
+  const draft = drafts.get(id);
+  if (draft) {
+    if (text && !draft.title) draft.title = text.split('\n')[0].trim().slice(0, 80);
+    draft.updatedAt = Date.now();
+  }
+  invalidateIndex();
+  forgetDetail(id);
 }
 
 /**
@@ -153,7 +125,7 @@ async function listWorkspaces() {
   for (const draft of drafts.values()) {
     const list = byCwd.get(draft.cwd) || [];
     if (!list.some((item) => item.id === draft.manager.getSessionId())) {
-      list.push({ id: draft.manager.getSessionId(), path: '', cwd: draft.cwd, title: '新会话', updatedAt: Date.now(), messageCount: 0 });
+      list.push({ id: draft.manager.getSessionId(), path: '', cwd: draft.cwd, title: draft.title || '新会话', updatedAt: draft.updatedAt || Date.now(), messageCount: draft.title ? 1 : 0 });
     }
     byCwd.set(draft.cwd, list);
   }
@@ -230,7 +202,7 @@ async function detail(id) {
       .map((entry) => serializeMessage(entry.message))
       .filter(Boolean),
   );
-  return { id, cwd: found.cwd, title: diskSessions.get(id)?.title || '新会话', messages };
+  return { id, cwd: found.cwd, title: drafts.get(id)?.title || diskSessions.get(id)?.title || '新会话', messages };
 }
 
 /**
@@ -250,9 +222,25 @@ function createDraft(cwd) {
 
 /**
  * 为会话准备 AgentSession（真正能发消息的运行时对象）。
- * 同一个会话只会创建一次，之后复用缓存。
+ * 同一个会话只会创建一次，之后复用缓存；打开会话和发送消息可能同时请求，
+ * 因此创建过程本身也要去重，否则扩展会被绑定两次。
  */
 async function ensureAgent(id, manager, cwd) {
+  if (agentSessions.has(id)) {
+    const session = agentSessions.get(id);
+    // 用户可能刚改了推理强度，复用前同步一下
+    session.setThinkingLevel(reasoningFor(session.model, cwd).effectiveThinkingLevel);
+    return session;
+  }
+  const pending = agentPromises.get(id);
+  if (pending) return pending;
+  const created = createAgent(id, manager, cwd).finally(() => agentPromises.delete(id));
+  agentPromises.set(id, created);
+  return created;
+}
+
+// 真正的创建流程：只在 ensureAgent 去重后执行一次。
+async function createAgent(id, manager, cwd) {
   const pi = piModule();
   const runtime = await getRuntime();
   const modelRef = getModelRef();
@@ -265,13 +253,6 @@ async function ensureAgent(id, manager, cwd) {
   const envName = envNameOf(reference);
   if (envName && !(providerConfig?.apiKey === undefined && stored?.env?.[envName]) && !process.env[envName]) {
     throw new Error(`无法读取环境变量 ${envName}。请在设置中重新保存该来源的 API Key，或直接填写密钥值。`);
-  }
-
-  if (agentSessions.has(id)) {
-    const session = agentSessions.get(id);
-    // 用户可能刚改了推理强度，复用前同步一下
-    session.setThinkingLevel(reasoningFor(session.model, cwd).effectiveThinkingLevel);
-    return session;
   }
 
   const [provider, ...parts] = modelRef.split('/');
@@ -404,4 +385,5 @@ module.exports = {
   composerResources,
   forgetDetail,
   dropDraft,
+  updateSessionSummary,
 };

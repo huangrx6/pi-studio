@@ -159,11 +159,47 @@ await page.addInitScript(() => {
   // 本次会话里发出的消息；模拟主进程落盘，让 session() 返回包含新消息的历史。
   const sentPrompts = [];
 
+  // 2.5 扩展底栏：模拟主进程把扩展的终端组件快照推给渲染层。
+  // 文本分段的命中、浮层内容和宽度都由扩展决定，UI 只负责显示与回传坐标。
+  // 浮层这里是主进程 normalizePanel 之后的形态：标题、分隔线类型、裁掉外框的偏移。
+  const footerCells = (text, tone) => [...text].map((char) => ({ text: char, width: char.codePointAt(0) > 0x2e80 ? 2 : 1, ...(tone ? { tone } : {}) }));
+  const footerText = '状态 就绪 · 额度 76% · 上下文 42% · 速度 32 tok/s';
+  let footerPanel = false;
+  const footerSnapshot = () => ({
+    statuses: [],
+    footer: footerText,
+    view: {
+      lines: [footerCells(footerText, 'muted')],
+      interactive: true,
+      overlay: footerPanel ? {
+        lines: [
+          [...footerCells('  模型    ', 'muted'), ...footerCells('DeepSeek V4.1 Flash', 'text')],
+          [...footerCells('  上下文  ', 'muted'), ...footerCells('42%', 'text'), ...footerCells(' · ', 'faint'), ...footerCells('额度 76%', 'accent')],
+          [...footerCells('  速度    ', 'muted'), ...footerCells('32 tok/s', 'text')],
+        ],
+        rowTypes: ['text', 'text', 'text'],
+        title: '运行状态',
+        close: { row: 1, col: 40 },
+        offset: { row: 3, col: 1 },
+        contentWidth: 40,
+        col: 1,
+        row: 6,
+        width: 42,
+      } : null,
+    },
+  });
+
   // 2.5 暴露给渲染进程的 PiAPI 子集（只实现 UI 会调用的方法）
   const api = {
     // 初始状态：工作区列表、当前目录与当前模型。
     state: async () => ({ workspaces, cwd, model }),
-    createSession: async () => ({ id: 'new', cwd, title: '新会话', messages: [] }),
+    createSession: async () => {
+      // 草稿会话也要立刻出现在侧边栏：主进程的 drafts 会在 state 里返回它。
+      if (!workspaces[0].sessions.some((item) => item.id === 'new')) {
+        workspaces[0].sessions.unshift({ id: 'new', cwd, title: '新会话', updatedAt: Date.now(), messageCount: 0 });
+      }
+      return { id: 'new', cwd, title: '新会话', messages: [] };
+    },
     // 固定一段用户 + 助手消息，供会话页与 markdown 渲染使用。
     // 注意消息格式必须与主进程 serializeMessage 的输出一致：content 是内容块数组。
     session: async (id) => ({
@@ -289,6 +325,15 @@ await page.addInitScript(() => {
       binary: false,
       text: '{\n  "name": "pi-studio",\n  "description": "A thoughtfully designed developer workspace",\n  "version": "0.1.0"\n}',
     }),
+    // 扩展状态快照与底栏交互。
+    extensionState: async () => footerSnapshot(),
+    onExtensionFooter: () => () => {},
+    footerAction: async (payload) => {
+      if (payload.type === 'click' && payload.target === 'footer') footerPanel = true;
+      if (payload.type === 'click' && payload.target === 'overlay') footerPanel = false;
+      if (payload.type === 'close') footerPanel = false;
+      return footerSnapshot().view;
+    },
     onOpenSettings: () => () => {},
     // 订阅流式事件，保存回调供 prompt() 使用。
     onPrompt: (callback) => {
@@ -298,6 +343,9 @@ await page.addInitScript(() => {
     // 第一轮回复：同步推送 delta + done，足够触发“从新对话进入问答”的 UI 切换。
     prompt: async ({ requestId, text }) => {
       sentPrompts.push(text);
+      // 标题与消息计数同步到 state 的 fixture 里，供发送后刷新侧边栏。
+      const draft = workspaces[0].sessions.find((item) => item.id === 'new');
+      if (draft) { draft.title = text.split('\n')[0].slice(0, 40); draft.messageCount = 1; draft.updatedAt = Date.now(); }
       listener({ type: 'delta', requestId, text: '已收到，开始处理。' });
       listener({ type: 'done', requestId });
     },
@@ -439,6 +487,30 @@ try {
   await page.locator('.workspace-row').first().click();
   await page.locator('.session-row').first().click();
   await capture('04-conversation');
+
+  // 扩展底栏：内容与浮层来自扩展；UI 只负责对齐宽度、回传坐标。
+  const footerTextNode = page.locator('.extension-footer-text');
+  await footerTextNode.waitFor();
+  const footerBox = await page.locator('.extension-footer').boundingBox();
+  const composerBox = await page.locator('.composer').boundingBox();
+  assert.ok(Math.abs(footerBox.x - composerBox.x) <= 1, `footer x ${footerBox.x} != composer x ${composerBox.x}`);
+  assert.ok(Math.abs(footerBox.width - composerBox.width) <= 1, `footer width ${footerBox.width} != composer width ${composerBox.width}`);
+  await footerTextNode.click();
+  await page.locator('.extension-footer-popover').waitFor();
+  const popoverBox = await page.locator('.extension-footer-popover').boundingBox();
+  assert.ok(popoverBox.y + popoverBox.height <= footerBox.y + 1, 'footer panel must open above the footer');
+  // 终端外框应被替换成原生标题栏，而不是把 ╭──╮ 直接画在桌面端。
+  await page.locator('.extension-footer-popover-head').getByText('运行状态', { exact: true }).waitFor();
+  const panelText = await page.locator('.extension-footer-popover-grid').innerText();
+  assert.ok(!/[╭╮╰╯│─]/.test(panelText), `terminal frame leaked into panel: ${panelText}`);
+  await capture('04b-extension-footer');
+  await page.getByRole('button', { name: '关闭扩展详情' }).click();
+  await page.locator('.extension-footer-popover').waitFor({ state: 'detached' });
+  // 再验证一次 Esc 关闭（扩展自己的状态机也要同步收起）。
+  await footerTextNode.click();
+  await page.locator('.extension-footer-popover').waitFor();
+  await page.keyboard.press('Escape');
+  await page.locator('.extension-footer-popover').waitFor({ state: 'detached' });
 
   // 打开文件查看器，读取根目录列表，再点开 package.json 预览代码。
   await page.getByRole('button', { name: '打开右侧面板', exact: true }).click();
@@ -645,7 +717,9 @@ try {
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   await page.locator('.chat-tabs').waitFor();
   assert.equal(await page.locator('.new-conversation-intro, .workspace-chip').count(), 0);
-  await page.getByText('验证从新对话进入问答', { exact: true }).waitFor();
+  await page.locator('.chat-scroll').getByText('验证从新对话进入问答', { exact: true }).waitFor();
+  // 新会话发完第一条消息后必须出现在侧边栏，否则用户离开就找不到入口。
+  await page.locator('.session-row', { hasText: '验证从新对话进入问答' }).waitFor();
   await capture('29-first-message');
 
   // 点击“新会话”应回到欢迎页，且不残留会话标签。

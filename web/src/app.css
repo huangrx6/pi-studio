@@ -1199,14 +1199,15 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .messages { gap: 30px; }
 .message.user { align-items: flex-end; }
 .user-bubble { border-color: var(--border); border-radius: var(--radius-card) var(--radius-card) var(--radius-tag) var(--radius-card); background: var(--surface-soft); box-shadow: var(--shadow-card); }
-.assistant-turn { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; align-items: start; animation: assistant-turn-in .32s cubic-bezier(.22,.8,.2,1) both; }
-.assistant-turn-rail { position: relative; display: flex; justify-content: center; }
-.assistant-turn-rail::after { content: ''; position: absolute; top: 34px; bottom: -30px; width: 1px; background: var(--border); }
-.assistant-turn:last-child .assistant-turn-rail::after { display: none; }
+/* 助手回合：头像放在左上角，正文与输入框同宽（不再为轨道让出 44px 缩进），
+   footer 与 composer 共用同一个内容宽度。 */
+.assistant-turn { position: relative; display: block; animation: assistant-turn-in .32s cubic-bezier(.22,.8,.2,1) both; }
+.assistant-turn-rail { position: absolute; top: 0; left: 0; z-index: 1; display: flex; justify-content: center; }
+.assistant-turn-rail::after { display: none; }
+.assistant-turn-head { display: flex; align-items: center; gap: 8px; min-height: 32px; margin-bottom: 7px; padding-left: 44px; }
+.assistant-turn-main { min-width: 0; padding-top: 1px; }
 .assistant-orb { display: grid; place-items: center; width: 29px; height: 29px; border-radius: var(--radius-control); background: var(--surface-soft); color: var(--on-brand); font: 17px/1 var(--font-display); box-shadow: 0 0 0 1px var(--border); transform: rotate(-2deg); }
 .assistant-turn.is-live .assistant-orb { background: var(--surface-soft); box-shadow: var(--shadow-card); }
-.assistant-turn-main { min-width: 0; padding-top: 1px; }
-.assistant-turn-head { display: flex; align-items: center; gap: 8px; min-height: 24px; margin-bottom: 7px; }
 .assistant-turn-name { color: var(--text); font-family: var(--font-display); font-size: 13px; font-weight: 600; letter-spacing: .01em; }
 .assistant-turn-status { display: inline-flex; align-items: center; gap: 5px; color: var(--faint); font-size: 10px; }
 .assistant-turn.is-live .assistant-turn-status { color: var(--accent); }
@@ -1555,13 +1556,8 @@ error-card 也在这里被统一成同一套视觉。 */
 .composer-option-icon.is-directory { color: var(--icon); background: var(--surface-soft); }
 
 /* Native adaptation of Pi's extension footer + status cells. */
-/* 把 Pi 扩展的 footer 与状态单元格适配成原生样式：footer 是一行可点击文本，
-状态 chip 限宽 300px 并省略；toast 固定在底部居中，z-index 210，高于大多数
-浮层但低于侧栏操作菜单。 */
+/* toast 固定在底部居中，z-index 210，高于大多数浮层但低于侧栏操作菜单。 */
 
-.extension-status-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; width: 100%; max-width: var(--content); margin: 6px auto 0; color: var(--faint); }
-.extension-footer-line { flex: 1 1 100%; min-width: 0; overflow: hidden; color: var(--faint); font: 10px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
-.extension-status-chip { max-width: 300px; overflow: hidden; padding: 2px 6px; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface); color: var(--faint); font: 9px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .extension-toast { position: fixed; z-index: 210; left: 50%; bottom: 138px; max-width: min(520px, 86vw); padding: 9px 13px; transform: translateX(-50%); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); box-shadow: var(--shadow-popover); color: var(--muted); font-size: 11px; line-height: 1.55; }
 .extension-toast.is-warning { border-color: var(--warning-border); background: var(--warning-soft); color: var(--warning); }
 .extension-toast.is-error { border-color: var(--error-border); background: var(--error-soft); color: var(--error); }
@@ -1600,28 +1596,7 @@ error-card 也在这里被统一成同一套视觉。 */
 .is-steps-compact .activity-pulse, .is-steps-compact .activity-summary, .is-steps-compact .activity-tool-summary { display: none; }
 .messages .markdown, .messages .user-bubble { font-size: var(--chat-font-size, 14px); }
 
-/* Extension footer is a single clickable line. Details live in the panel. */
-/* 扩展状态在最终版只保留一条可点击的 footer 行，详细状态放进状态面板对话框；
-状态栏容器直接 display:none。状态面板复用详情对话框的宽度上限，正文分区滚动。 */
-
-.extension-status-bar { display: none; }
-.extension-footer-line { display: flex; align-items: center; gap: 6px; width: 100%; max-width: var(--content); min-height: 24px; margin: 5px auto 0; padding: 1px 4px; overflow: hidden; border: 0; background: var(--transparent); color: var(--faint); font: 10px var(--mono); text-align: left; }
-.extension-footer-line:hover { background: var(--surface-soft); color: var(--muted); border-radius: var(--radius-tag); }
-.extension-footer-line > svg:first-child { width: 11px; height: 11px; flex: none; color: var(--icon); }
-.extension-footer-line > svg:last-child { width: 11px; height: 11px; flex: none; margin-left: auto; opacity: .55; }
-.extension-footer-line > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.status-panel-dialog { width: min(650px, 92vw); }
-.status-panel-body { padding: 4px 20px 14px; overflow: auto; }
-.status-panel-body section { padding: 14px 0; border-top: 1px solid var(--border); }
-.status-panel-body section:first-child { border-top: 0; }
-.status-panel-body h3 { margin: 0 0 8px; color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
-.status-panel-body pre { margin: 0; padding: 10px 11px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--muted); font: 10.5px/1.7 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
-.status-panel-list { margin: 0; }
-.status-panel-list > div { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 12px; padding: 7px 0; border-top: 1px solid var(--border); font-size: 11px; }
-.status-panel-list > div:first-child { border-top: 0; }
-.status-panel-list dt { color: var(--faint); }
-.status-panel-list dd { margin: 0; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
-.status-panel-empty { margin: 0; color: var(--faint); font-size: 11px; }
+/* Extension footer is owned by the extension: it renders its own line and panel. */
 
 /* pi-todo plan dock: a quiet, pinned execution plan, not a chat log. */
 /* pi-todo 计划坞：停在 composer 上方（普通文档流，不遮挡消息），头部显示当前
@@ -1748,7 +1723,7 @@ body { background: var(--bg); color: var(--text); }
 }
 .file-panel, .file-code, .line-number, .panel-tabbar,
 .model-popover, .composer-picker, .detail-dialog, .settings-dialog,
-.pi-select-menu, .file-actions-menu, .status-panel-dialog { background: var(--surface); }
+.pi-select-menu, .file-actions-menu { background: var(--surface); }
 .settings-empty, .provider-model-panel, .model-menu-row:hover, .model-option:hover,
 .pi-select-option:hover, .pi-select-option:focus-visible { background: var(--surface-soft); }
 .new-chat { background: var(--surface); border-color: var(--border); box-shadow: none; }
@@ -1834,9 +1809,6 @@ body { background: var(--bg); color: var(--text); }
 .outline-preview { border-color: var(--border); background: var(--surface); }
 .outline-preview::after { border-color: var(--border); background: var(--surface); }
 .outline-preview-role::before { background: var(--accent); }
-.extension-footer-line { color: var(--muted); }
-.extension-footer-line:hover { background: var(--surface-soft); color: var(--link); }
-.extension-footer-line > svg:first-child { color: var(--link); }
 .extension-toast.is-warning { border-color: var(--warning-border); background: var(--warning-soft); color: var(--warning); }
 .provider-mode.is-missing { background: var(--warning-soft); color: var(--warning); }
 ::selection { background: var(--selection); color: var(--selection-text); }
@@ -1852,7 +1824,6 @@ body { background: var(--bg); color: var(--text); }
 .queued-actions button:hover { color: var(--accent); background: var(--accent-soft); }
 .queued-item { border-color: var(--border); background: var(--surface); }
 .queued-send-all:hover { color: var(--accent-hover); }
-.status-panel-body pre { background: var(--surface-soft); border-color: var(--border); }
 .skill-card-icon, .mcp-card-icon, .detail-icon, .provider-avatar, .resource-icon { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-border); }
 .provider-icon, .model-card-avatar { color: var(--muted); background: var(--surface-soft); border-color: var(--border); }
 body { --dsh-scrollbar-thumb: var(--scrollbar); --dsh-scrollbar-thumb-hover: var(--scrollbar-hover); }
@@ -1908,7 +1879,6 @@ accent 或 accent-soft；同时把 note 节点、思考块边框、连接线改�
 .activity-drawer > summary:hover { background: var(--surface-soft); border-color: var(--border-strong); }
 .activity-node.is-note { border-color: var(--surface); background: var(--muted); box-shadow: 0 0 0 1px var(--border); }
 .thinking-block { border-left-color: var(--border); }
-.assistant-turn-rail::after { background: var(--border); }
 .file-row.is-directory > svg:first-child, .panel-tool-icon.is-folder { color: var(--accent); }
 .new-conversation-intro h2 em { color: var(--text); }
 .suggestion:hover { border-color: var(--accent-border); background: var(--surface-soft); }
@@ -1942,3 +1912,38 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .sidebar-archive-toggle { width: 100%; padding: 8px 12px; text-align: left; color: var(--muted); font-size: var(--text-sm); }
 .sidebar-archive-toggle:hover { color: var(--text); background: var(--surface-hover); }
 @media (hover: none) { .sidebar-row-actions { opacity: 1; visibility: visible; } .workspace-row-shell > .workspace-row { padding-right: 62px; } .session-row-shell > .session-row { padding-right: 88px; } .sidebar-row-shell .session-time, .sidebar-row-shell .chevron { display: none; } }
+
+/* Footer 的内容、分段和浮层全部由扩展决定；这里只负责把它放进 composer
+   的内容宽度里，并提供字符单元与浮层所需的定位上下文。 */
+.extension-footer { position: relative; width: 100%; max-width: var(--content); margin-inline: auto; min-height: 0; color: var(--muted); font: 12px/22px var(--mono); }
+.extension-footer:has(.extension-footer-text) { margin-top: 8px; }
+.extension-footer-text { width: 100%; overflow: hidden; white-space: pre; }
+.extension-footer-text[role="button"] { cursor: pointer; border-radius: var(--radius-tag); }
+.extension-footer-text[role="button"]:hover { color: var(--text); }
+.extension-footer-text[role="button"]:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; }
+.extension-terminal-row { white-space: pre; }
+.extension-terminal-row > span { display: inline-block; text-align: center; vertical-align: top; }
+/* 扩展的语义色映射到应用主题，而不是把终端 ANSI 直接带进界面。 */
+.extension-terminal-row .tone-text { color: var(--text); }
+.extension-terminal-row .tone-muted { color: var(--muted); }
+.extension-terminal-row .tone-faint, .extension-terminal-row .tone-dim { color: var(--faint); }
+.extension-terminal-row .tone-accent { color: var(--accent); }
+.extension-terminal-row .tone-error { color: var(--error); }
+.extension-terminal-row .tone-warning { color: var(--warning); }
+.extension-terminal-row .tone-success { color: var(--success); }
+.extension-terminal-row .tone-info { color: var(--info); }
+.extension-terminal-row .tone-link { color: var(--accent); }
+.extension-terminal-row .is-bold { font-weight: 600; }
+.extension-footer-popover { position: absolute; bottom: calc(100% + 10px); z-index: 60; max-width: 100%; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); color: var(--text); box-shadow: var(--shadow-popover); overflow: hidden; transform-origin: 50% 100%; animation: extension-popover-in .18s cubic-bezier(.22,.8,.2,1); }
+.extension-footer-popover-head { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 8px 4px 14px; border-bottom: 1px solid var(--border); background: var(--surface-soft); }
+.extension-footer-popover-head > span { flex: 1; min-width: 0; overflow: hidden; color: var(--text); font-family: var(--font-display); font-size: 12.5px; font-weight: 600; letter-spacing: .01em; text-overflow: ellipsis; white-space: nowrap; }
+.extension-footer-popover-close { display: grid; place-items: center; width: 26px; height: 26px; flex: none; border: 0; border-radius: 8px; background: none; color: var(--faint); }
+.extension-footer-popover-close:hover { background: var(--surface-hover); color: var(--text); }
+.extension-footer-popover-close:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 1px; }
+.extension-footer-popover-body { padding: 6px 10px 10px; }
+.extension-footer-popover-grid { color: var(--muted); font: 12px/22px var(--mono); }
+.extension-terminal-rule { display: flex; align-items: center; }
+.extension-terminal-rule > span { width: 100%; height: 1px; background: var(--border); }
+@keyframes extension-popover-in { from { opacity: 0; transform: translateY(5px) scale(.985); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .extension-footer-popover { animation: none; } }
+.extension-footer-error { display: block; margin-top: 4px; color: var(--error); font-size: var(--text-xs); }

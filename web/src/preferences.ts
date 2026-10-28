@@ -20,8 +20,6 @@ export type StepCollapse = 'after-answer' | 'keep-open' | 'manual';
 export type LinkPreference = 'external' | 'window';
 /** 智能体繁忙时按 Enter / 点发送的行为：排队或插话引导。 */
 export type BusyPreference = 'queue' | 'steer';
-/** 状态栏用量信息的详细程度。 */
-export type PerformancePreference = 'simple' | 'detailed';
 /** 全局圆角风格，映射到 RADIUS_PRESETS。 */
 export type RadiusStyle = 'square' | 'compact' | 'standard' | 'soft';
 
@@ -41,8 +39,6 @@ export type Preferences = {
   linkOpen: LinkPreference;
   /** 繁忙时的发送行为。 */
   busySend: BusyPreference;
-  /** 状态栏用量展示详细程度。 */
-  performance: PerformancePreference;
   /** 圆角风格。 */
   radiusStyle: RadiusStyle;
 };
@@ -59,7 +55,6 @@ export const DEFAULT_PREFERENCES: Preferences = {
   showCodeView: false,
   linkOpen: 'external',
   busySend: 'queue',
-  performance: 'detailed',
   radiusStyle: 'standard',
 };
 

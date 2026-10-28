@@ -17,9 +17,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Clock3, Command, Cpu, FileCode2, FileText, Folder, FolderOpen, Info, Sparkles,
-  Activity, AppWindow, Columns2, Compass, Eye, Globe2, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, Pencil, Plus, Plug, RotateCw, Search, Settings, SquarePen, Sun, Terminal, Trash2, X,
+  AppWindow, Columns2, Compass, Eye, Globe2, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, Pencil, Plus, Plug, RotateCw, Search, Settings, SquarePen, Sun, Terminal, Trash2, X,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
+import { ExtensionFooter } from './components/ExtensionFooter';
 import { Select } from './components/Select';
 import type { ChatMessage, ComposerAttachment, ComposerCommand, ComposerCommandSource, ComposerFile, TodoDetails } from './chat-types';
 import { AttachmentIcon } from './components/AttachmentIcon';
@@ -186,23 +187,6 @@ function ComposerSourceIcon({ source }: { source: ComposerCommandSource }) {
   return <Command />;
 }
 
-/**
- * 扩展状态的显示名。
- * 已知扩展给中文名，其余从 key 推一个可读文本（如 pi-lens-lsp → lens lsp）。
- */
-function extensionStatusLabel(key: string): string {
-  const labels: Record<string, string> = {
-    'pi-quota-status': '额度',
-    'pi-throughput': '性能',
-    'pi-mode-switcher': '运行模式',
-    'pi-policy-engine': '策略',
-    'pi-skill-inject': '技能注入',
-    'context:qos': '上下文',
-    'pi-footer-composer': '底栏',
-  };
-  return labels[key] || key.replace(/^pi-/, '').replace(/-status$/, '').replace(/[-_]/g, ' ');
-}
-
 /** 按上下文窗口大小切换颜色档位，用于模型卡片上的 token 标签。 */
 function contextTone(tokens?: number): string {
   if (!tokens) return 'is-small';
@@ -210,6 +194,31 @@ function contextTone(tokens?: number): string {
   if (tokens >= 200_000) return 'is-large';
   if (tokens >= 100_000) return 'is-medium';
   return 'is-small';
+}
+
+type StreamMessageType = 'message_start' | 'message_update' | 'message_end';
+
+/**
+ * 把一条流式消息合并进列表。
+ * 同角色 + 同 timestamp 视为同一条消息；message_start 会先结束上一段
+ * 仍在流式的助手消息，避免多个气泡同时出现。
+ */
+function mergeStreamMessage(current: ChatMessage[], incoming: ChatMessage, type: StreamMessageType): ChatMessage[] {
+  const copy = [...current];
+  if (incoming.role === 'assistant' && type === 'message_start') {
+    for (let index = 0; index < copy.length; index += 1) {
+      if (copy[index].streaming) copy[index] = { ...copy[index], streaming: false };
+    }
+  }
+  const streaming = incoming.role === 'assistant' && type !== 'message_end';
+  const next = { ...incoming, ...(streaming ? { streaming: true } : { streaming: false }) };
+  let index = copy.findIndex((message) => message.role === incoming.role && message.timestamp === incoming.timestamp);
+  if (index < 0 && incoming.role === 'assistant' && type !== 'message_start') {
+    index = copy.findIndex((message) => message.role === 'assistant' && message.streaming);
+  }
+  if (index >= 0) copy[index] = next;
+  else copy.push(next);
+  return copy;
 }
 
 /**
@@ -233,10 +242,7 @@ export function App() {
   const [preferences, setPreferences] = useState<Preferences>(() => loadPreferences());
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
-  const [extensionStatuses, setExtensionStatuses] = useState<Record<string, string>>({});
-  const [extensionFooter, setExtensionFooter] = useState('');
   const [extensionToast, setExtensionToast] = useState<{ message: string; type: 'info' | 'warning' | 'error' } | null>(null);
-  const [statusPanelOpen, setStatusPanelOpen] = useState(false);
   const [todoPanelOpen, setTodoPanelOpen] = useState(false);
   const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([]);
   const queuedDrainRef = useRef(false);
@@ -314,6 +320,8 @@ export function App() {
   const [mcpDetail, setMcpDetail] = useState<McpInfo | null>(null);
   const fileActionsRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const outlineSyncRef = useRef(0);
+  const followBottomRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const settingsContentRef = useRef<HTMLElement>(null);
   const settingsReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -697,41 +705,15 @@ export function App() {
   // ---------- 扩展状态 ----------
 
   useEffect(() => {
-    // 会话切换：先清空上一条会话的扩展状态、计划与排队消息，再读取当前会话的扩展快照。
-    // 先清空是必要的——否则从有扩展的会话切到新会话时，底栏状态会残留。
-    setExtensionStatuses({});
-    setExtensionFooter('');
+    followBottomRef.current = true;
     setTodoPanelOpen(false);
     setQueuedPrompts([]);
-    if (!session?.id) return;
-    let cancelled = false;
-    void window.piApi.extensionState(session.id).then((state) => {
-      if (cancelled) return;
-      setExtensionStatuses(Object.fromEntries(state.statuses));
-      setExtensionFooter(state.footer);
-    }).catch(() => { /* no extension state yet */ });
-    return () => { cancelled = true; };
   }, [session?.id]);
 
-  useEffect(() => {
-    const offStatus = window.piApi.onExtensionStatus((event) => {
-      if (!session?.id || event.sessionId !== session.id) return;
-      setExtensionStatuses((current) => {
-        const next = { ...current };
-        if (!event.text) delete next[event.key]; else next[event.key] = event.text;
-        return next;
-      });
-    });
-    const offFooter = window.piApi.onExtensionFooter((event) => {
-      if (!session?.id || event.sessionId !== session.id) return;
-      setExtensionFooter(event.text);
-    });
-    const offNotify = window.piApi.onExtensionNotify((event) => {
-      if (!session?.id || event.sessionId !== session.id) return;
-      setExtensionToast({ message: event.message, type: event.type });
-    });
-    return () => { offStatus(); offFooter(); offNotify(); };
-  }, [session?.id]);
+  useEffect(() => window.piApi.onSessionsChanged?.(() => { void loadState(); }), [loadState]);
+  useEffect(() => window.piApi.onExtensionNotify(event => {
+    if (event.sessionId === session?.id) setExtensionToast({ message: event.message, type: event.type });
+  }), [session?.id]);
 
   useEffect(() => {
     if (!extensionToast) return;
@@ -743,52 +725,70 @@ export function App() {
 
   // 主进程把 Pi 的流式事件转发到这里：按 requestId 过滤，只处理当前请求。
   // 同一条消息会以 message_start / message_update / message_end 多次到达，
-  // 因此按 timestamp 就地更新，而不是每次追加。
-  useEffect(() => window.piApi.onPrompt((event) => {
-    if (event.requestId !== requestRef.current) return;
-    if (event.message && (event.type === 'message_start' || event.type === 'message_update' || event.type === 'message_end')) {
-      const incoming = event.message;
-      if (incoming.role === 'user') return;
-      // 流式消息会重复到达：同一个 timestamp 视为同一条，就地替换。
-      setMessages((current) => {
-        const copy = [...current];
-        if (incoming.role === 'assistant' && event.type === 'message_start') {
-          for (let index = 0; index < copy.length; index += 1) if (copy[index].streaming) copy[index] = { ...copy[index], streaming: false };
-        }
-        const streaming = incoming.role === 'assistant' && event.type !== 'message_end';
-        const next = { ...incoming, ...(streaming ? { streaming: true } : { streaming: false }) };
-        let index = copy.findIndex((message) => message.role === incoming.role && message.timestamp === incoming.timestamp);
-        if (index < 0 && incoming.role === 'assistant' && event.type !== 'message_start') {
-          index = copy.findIndex((message) => message.role === 'assistant' && message.streaming);
-        }
-        if (index >= 0) copy[index] = next;
-        else copy.push(next);
-        return copy;
-      });
-    }
-    if (event.type === 'retry-start') {
-      setRetryInfo({ attempt: event.attempt ?? 1, maxAttempts: event.maxAttempts ?? 1, errorMessage: event.errorMessage });
-    }
-    if (event.type === 'retry-end' && event.success) setRetryInfo(null);
-    if (event.type === 'done') {
-      setRetryInfo(null);
-      setMessages((current) => current.map((message) => ({ ...message, streaming: false })));
-      setBusy(false);
-      setError(null);
-      void loadState();
-    }
-    if (event.type === 'error') {
-      setRetryInfo(null);
-      setError(event.error || '执行失败，请重试');
-      setMessages((current) => current.map((message) => ({ ...message, streaming: false })));
-      setBusy(false);
-    }
-  }), [loadState]);
+  // 因此按 timestamp 就地更新，而不是每次追加。token 可能一帧内到达多次，
+  // 这里先入队再按帧合并，避免每个 token 都触发一次完整的 Markdown 重渲染。
+  useEffect(() => {
+    let batch: Array<{ message: ChatMessage; type: StreamMessageType }> = [];
+    let frame = 0;
+    const flush = () => {
+      frame = 0;
+      if (batch.length === 0) return;
+      const pending = batch;
+      batch = [];
+      setMessages((current) => pending.reduce((list, item) => mergeStreamMessage(list, item.message, item.type), current));
+    };
+    const flushNow = () => {
+      if (frame) cancelAnimationFrame(frame);
+      flush();
+    };
+    const schedule = (message: ChatMessage, type: StreamMessageType) => {
+      batch.push({ message, type });
+      if (!frame) frame = requestAnimationFrame(flush);
+    };
+    const unsubscribe = window.piApi.onPrompt((event) => {
+      if (event.requestId !== requestRef.current) return;
+      if (event.message && (event.type === 'message_start' || event.type === 'message_update' || event.type === 'message_end')) {
+        const incoming = event.message;
+        if (incoming.role === 'user') return;
+        schedule(incoming, event.type);
+        // 结束帧要立刻落地，否则下一轮的流式消息可能找不到要接续的气泡。
+        if (event.type === 'message_end') flushNow();
+      }
+      if (event.type === 'retry-start') {
+        setRetryInfo({ attempt: event.attempt ?? 1, maxAttempts: event.maxAttempts ?? 1, errorMessage: event.errorMessage });
+      }
+      if (event.type === 'retry-end' && event.success) setRetryInfo(null);
+      if (event.type === 'done') {
+        flushNow();
+        setRetryInfo(null);
+        setMessages((current) => current.map((message) => ({ ...message, streaming: false })));
+        setBusy(false);
+        setError(null);
+        void loadState();
+      }
+      if (event.type === 'error') {
+        flushNow();
+        setRetryInfo(null);
+        setError(event.error || '执行失败，请重试');
+        setMessages((current) => current.map((message) => ({ ...message, streaming: false })));
+        setBusy(false);
+      }
+    });
+    return () => {
+      unsubscribe();
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [loadState]);
 
   useEffect(() => {
     const node = scrollRef.current;
-    if (node) node.scrollTop = node.scrollHeight;
+    // 用户向上阅读时不再跟随；停留在底部时在提交后、绘制前直接贴底，
+    // 比每帧再排一次 rAF 更少抖动。
+    if (!node || !followBottomRef.current) return;
+    node.scrollTop = node.scrollHeight;
   }, [messages, busy]);
+
+  useEffect(() => () => { if (outlineSyncRef.current) cancelAnimationFrame(outlineSyncRef.current); }, []);
 
   useEffect(() => {
     const frame = requestAnimationFrame(syncOutlineActive);
@@ -972,7 +972,13 @@ export function App() {
     setSessionLoading(true);
     try {
       const detail = await window.piApi.session(item.id);
-      if (!detail || load !== sessionLoadRef.current) return;
+      if (load !== sessionLoadRef.current) return;
+      if (!detail) {
+        // 侧边栏里的旧条目可能已经被删除或移动；刷新列表，避免用户停在一个空入口。
+        setError('这个会话已经不存在，列表已刷新。');
+        void loadState().catch(() => { /* 列表刷新失败时保留错误提示 */ });
+        return;
+      }
       setSession({ id: detail.id, cwd: detail.cwd, title: detail.title });
       setMessages(detail.messages.map((message) => ({ ...message })));
       setWorkspace(detail.cwd);
@@ -981,7 +987,10 @@ export function App() {
       setBusy(false);
       setRetryInfo(null);
     } catch (error) {
-      if (load === sessionLoadRef.current) setError(errorText(error));
+      if (load === sessionLoadRef.current) {
+        setError(errorText(error));
+        void loadState().catch(() => { /* 列表刷新失败时保留错误提示 */ });
+      }
     } finally {
       if (load === sessionLoadRef.current) setSessionLoading(false);
     }
@@ -1152,6 +1161,27 @@ export function App() {
     setOutlineActive((current) => current === next ? current : next);
   }
 
+  /**
+   * 滚动时的大纲同步每帧最多跑一次。
+   * 流式输出会持续触发滚动，逐次测量所有节点会强制同步重排，
+   * 在长会话里正是滚动不丝滑的主要来源。
+   */
+  function scheduleOutlineSync() {
+    if (outlineSyncRef.current) return;
+    outlineSyncRef.current = requestAnimationFrame(() => {
+      outlineSyncRef.current = 0;
+      syncOutlineActive();
+    });
+  }
+
+  /** 记录用户是否仍然停在底部；向上滚动后不再被流式输出拉回。 */
+  function handleTranscriptScroll(event: React.UIEvent<HTMLDivElement>) {
+    const node = event.currentTarget;
+    // 只有真正回到最底部才恢复跟随，避免在底部附近轻微上滑就被抢回。
+    followBottomRef.current = node.scrollHeight - node.clientHeight - node.scrollTop < 2;
+    scheduleOutlineSync();
+  }
+
   function jumpToOutline(index: number) {
     const item = outlineItems[index];
     const container = scrollRef.current;
@@ -1209,6 +1239,7 @@ export function App() {
    *  - prompt：正常发送，先乐观插入用户消息，结束后用主进程返回的历史校准
    */
   async function dispatchSubmission(submission: PreparedSubmission, mode: 'prompt' | 'steer') {
+    followBottomRef.current = true;
     // 先乐观插入用户消息，避免等待 IPC 时输入区看起来没反应。
     setMessages((existing) => [...existing, {
       role: 'user',
@@ -1246,6 +1277,8 @@ export function App() {
         attachments: submission.attachmentPaths,
         images: submission.imagePayload,
       });
+      // 侧边栏刷新与读取历史互不依赖；刷新失败不能让一次成功的回复显示成错误。
+      void loadState().catch(() => {});
       if (requestRef.current !== requestId) return;
       const saved = await window.piApi.session(submission.sessionId);
       if (requestRef.current !== requestId) return;
@@ -1254,7 +1287,7 @@ export function App() {
         setMessages(saved.messages.map((message) => ({ ...message })));
       }
       setBusy(false);
-      await loadState();
+      void loadState().catch(() => {});
     } catch (error) {
       if (requestRef.current !== requestId) return;
       setRetryInfo(null);
@@ -1300,6 +1333,8 @@ export function App() {
       current = { id: created.id, cwd: created.cwd, title: created.title };
       setSession(current);
       setMessages([]);
+      // 草稿会话也要马上出现在侧边栏，否则用户发完第一条消息后找不到入口。
+      void loadState().catch(() => { /* 侧边栏刷新失败不阻塞发送 */ });
     }
     const queuedAttachments = composerAttachments;
     const prepared = await prepareSubmission(text, queuedAttachments, current.id);
@@ -1543,7 +1578,6 @@ export function App() {
 
   // ---------- 会话派生数据 ----------
 
-  const extensionStatusLine = extensionFooter || Object.values(extensionStatuses).filter(Boolean).slice(0, 3).join(' · ');
   /** 取最后一条 todo 工具结果的计划详情，供底部计划面板使用。 */
   const todoDetails = useMemo<TodoDetails | undefined>(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -1914,7 +1948,14 @@ export function App() {
           <span className="chat-tabs-note">{messages.filter((message) => message.role !== 'toolResult').length > 0 ? `${messages.filter((message) => message.role !== 'toolResult').length} 条消息` : '从一个想法开始'}</span>
         </div>}
 
-        {!isNewConversation && <div className="chat-scroll" ref={scrollRef} onScroll={syncOutlineActive}>
+        {!isNewConversation && <div
+          className="chat-scroll"
+          ref={scrollRef}
+          onWheel={event => { if (event.deltaY < 0) followBottomRef.current = false; }}
+          onTouchMove={() => { followBottomRef.current = false; }}
+          onKeyDown={event => { if (event.key === 'PageUp' || event.key === 'ArrowUp' || event.key === 'Home') followBottomRef.current = false; }}
+          onScroll={handleTranscriptScroll}
+        >
           <div className="chat-column">
             {messages.length > 0 && (
               <div className="messages">
@@ -2045,7 +2086,8 @@ export function App() {
             </div>
             </div>
           </div>
-          {extensionStatusLine && <button type="button" className="extension-footer-line" onClick={() => setStatusPanelOpen(true)} title="查看运行状态" aria-haspopup="dialog"><Activity /><span>{extensionStatusLine}</span><ChevronRight /></button>}
+          {/* 底栏内容与浮层由扩展决定；App 只提供位置、宽度和输入坐标。 */}
+          {session?.id && <ExtensionFooter key={session.id} sessionId={session.id} />}
           {extensionToast && <div className={`extension-toast is-${extensionToast.type}`} role="status">{extensionToast.message}</div>}
           {isNewConversation && error && <div className="new-conversation-error error-card" role="alert"><strong>暂时无法完成操作</strong><p>{error}</p></div>}
         </div>
@@ -2080,7 +2122,6 @@ export function App() {
                     <div className="settings-profile-row"><div><strong>快捷键</strong><p>查看当前可用的键盘操作。</p></div><button className="settings-outline" onClick={() => setShortcutsOpen(true)}><Keyboard />编辑快捷键</button></div>
                     <div className="settings-profile-row"><div><strong>网页链接默认打开方式</strong><p>对话中网页链接的打开位置。</p></div><Select label="网页链接默认打开方式" value={preferences.linkOpen} onChange={(value) => updatePreference('linkOpen', value as Preferences['linkOpen'])} options={[{ value: 'external', label: '系统浏览器' }, { value: 'window', label: '应用内窗口' }]} /></div>
                     <div className="settings-profile-row"><div><strong>繁忙时的发送行为</strong><p>智能体运行时 Enter 键和发送按钮的行为。</p></div><Select label="繁忙时的发送行为" value={preferences.busySend} onChange={(value) => updatePreference('busySend', value as Preferences['busySend'])} options={[{ value: 'queue', label: '排队发送' }, { value: 'steer', label: '引导当前任务' }]} /></div>
-                    <div className="settings-profile-row"><div><strong>性能与用量</strong><p>选择状态栏信息的展示详细程度。</p></div><Select label="性能与用量" value={preferences.performance} onChange={(value) => updatePreference('performance', value as Preferences['performance'])} options={[{ value: 'simple', label: '简洁' }, { value: 'detailed', label: '详细' }]} /></div>
                   </div>
                 </section>
               </div>
@@ -2255,16 +2296,6 @@ export function App() {
             <footer className="detail-footer"><button className="settings-text-button is-danger" disabled={settingsBusy} onClick={() => void removeSkillFromDetail()}>删除技能</button><span /><button className="settings-outline" onClick={closeSkillDetail}>关闭</button></footer>
         </DetailDialog>
       )}
-
-      {/* 扩展运行状态 */}
-      {statusPanelOpen && <DetailDialog className="status-panel-dialog" onClose={() => setStatusPanelOpen(false)}>
-        <header className="detail-header"><div className="detail-heading"><span className="detail-icon"><Activity /></span><div><h2>运行状态</h2><p>来自 Pi 扩展的实时状态与性能信息。</p></div></div><button className="icon-button" aria-label="关闭运行状态" onClick={() => setStatusPanelOpen(false)}><X /></button></header>
-        <div className="status-panel-body">
-          {extensionFooter && <section><h3>会话摘要</h3><pre>{extensionFooter}</pre></section>}
-          <section><h3>扩展状态</h3>{preferences.performance === 'detailed' && (Object.keys(extensionStatuses).length > 0 ? <dl className="status-panel-list">{Object.entries(extensionStatuses).map(([key, text]) => <div key={key}><dt>{extensionStatusLabel(key)}</dt><dd>{text}</dd></div>)}</dl> : <p className="status-panel-empty">当前没有扩展状态。</p>)}</section>
-        </div>
-        <footer className="detail-footer"><button className="settings-outline" onClick={() => { setStatusPanelOpen(false); void window.piApi.runExtensionCommand({ sessionId: session?.id || '', command: '/footer' }).catch((error) => setError(errorText(error))); }} disabled={!session?.id}>打开 /footer 菜单</button><span /><button className="settings-outline" onClick={() => setStatusPanelOpen(false)}>关闭</button></footer>
-      </DetailDialog>}
 
       {/* 快捷键说明 */}
       {shortcutsOpen && <DetailDialog className="shortcuts-dialog" onClose={() => setShortcutsOpen(false)}>

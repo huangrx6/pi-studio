@@ -10,6 +10,7 @@
  */
 
 export {};
+import type { FooterView, FooterAction } from './components/ExtensionFooter';
 import type { ChatAttachment, ChatMessage, ComposerAttachment, ComposerCommand, ComposerFile, UploadedAttachment } from './chat-types';
 import type { ModelCatalog, ModelSelection, ThinkingLevel } from './model-types';
 
@@ -194,12 +195,16 @@ declare global {
       // ---- 事件订阅（返回取消订阅函数） ----
       /** 应用菜单「设置…」被点击。 */
       onOpenSettings(listener: () => void): () => void;
-      /** 读取扩展状态栏与页脚文本。 */
-      extensionState(sessionId: string): Promise<{ statuses: Array<[string, string]>; footer: string }>;
+      /** 读取扩展状态栏与页脚快照（含扩展自己的浮层）。 */
+      extensionState(sessionId: string): Promise<{ statuses: Array<[string, string]>; footer: string; view?: FooterView }>;
+      /** 把 footer 的尺寸 / 点击 / 滚轮输入交给扩展，返回更新后的快照。 */
+      footerAction(payload: FooterAction): Promise<FooterView | undefined>;
+      /** 会话索引变化（草稿、标题或排序更新）时刷新侧边栏。 */
+      onSessionsChanged(listener: () => void): () => void;
       /** 扩展状态项更新。 */
       onExtensionStatus(listener: (payload: { sessionId: string; key: string; text: string }) => void): () => void;
       /** 扩展页脚文本更新。 */
-      onExtensionFooter(listener: (payload: { sessionId: string; text: string }) => void): () => void;
+      onExtensionFooter(listener: (payload: { sessionId: string; text: string; view?: FooterView }) => void): () => void;
       /** 扩展弹出通知（toast）。 */
       onExtensionNotify(listener: (payload: { sessionId: string; message: string; type: 'info' | 'warning' | 'error' }) => void): () => void;
       /**

@@ -22,10 +22,12 @@ const {
   invalidateIndex,
   forgetDetail,
   dropDraft,
+  updateSessionSummary,
+  indexSessions,
 } = require('../services/sessions.cjs');
 const { fileReferenceContext } = require('../services/workspace.cjs');
 const { attachmentContext } = require('../services/attachments.cjs');
-const { extensionState } = require('../services/extensions.cjs');
+const { extensionState, footerAction } = require('../services/extensions.cjs');
 
 /**
  * 发送消息。
@@ -39,6 +41,7 @@ const { extensionState } = require('../services/extensions.cjs');
 async function prompt(event, { sessionId, text, requestId, mentions, attachments, images }) {
   const found = await findManager(sessionId);
   if (!found) throw new Error('会话不存在');
+  updateSessionSummary(sessionId, text);
   const session = await ensureAgent(sessionId, found.manager, found.cwd);
 
   // 文件 / 附件上下文：作为一条不展示的自定义消息注入，不触发新回合
@@ -64,11 +67,42 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
   }
 
   // 流式事件 → 渲染进程
+  const changed = () => event.sender.send('pi:sessions-changed');
+  changed();
   const send = (payload) => event.sender.send('pi:prompt-event', { requestId, ...payload });
+  // message_update 携带的是完整消息而不是增量，可以合并到下一帧再发：
+  // 高速模型每秒会产生大量 token，逐个 IPC 只会把主进程和渲染层都拖慢。
+  // 用 timestamp 分组，避免打断同时流式的助手消息与工具结果。
+  const pendingUpdates = new Map();
+  let updateTimer;
+  const flushUpdate = () => {
+    if (updateTimer) { clearTimeout(updateTimer); updateTimer = undefined; }
+    if (pendingUpdates.size === 0) return;
+    const batch = [...pendingUpdates.values()];
+    pendingUpdates.clear();
+    for (const message of batch) send({ type: 'message_update', message });
+  };
   const unsubscribe = session.subscribe((piEvent) => {
-    if (piEvent.type === 'message_start' || piEvent.type === 'message_update' || piEvent.type === 'message_end') {
+    if (piEvent.type === 'message_update') {
+      if (piEvent.message.role === 'user') return;
+      const message = serializeMessage(piEvent.message);
+      if (!message) return;
+      pendingUpdates.set(`${message.role}:${message.timestamp}`, message);
+      if (!updateTimer) updateTimer = setTimeout(flushUpdate, 16);
+      return;
+    }
+    if (piEvent.type === 'message_start' || piEvent.type === 'message_end') {
+      // 开始 / 结束帧必须立即到达；先把上一帧积压的最新内容发出去。
+      flushUpdate();
       const message = serializeMessage(piEvent.message);
       if (message) send({ type: piEvent.type, message });
+      if (piEvent.type === 'message_end') {
+        // 只有用户消息会影响草稿标题与侧边栏排序；助手 / 工具消息沿用文件 mtime。
+        if (piEvent.message.role === 'user') {
+          updateSessionSummary(sessionId, text);
+          changed();
+        }
+      }
     }
     if (piEvent.type === 'auto_retry_start') {
       send({ type: 'retry-start', attempt: piEvent.attempt, maxAttempts: piEvent.maxAttempts, delayMs: piEvent.delayMs, errorMessage: piEvent.errorMessage });
@@ -83,15 +117,22 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
       ? images.filter((image) => image && image.type === 'image' && typeof image.data === 'string' && typeof image.mimeType === 'string').slice(0, 8)
       : [];
     await session.prompt(text, imageBlocks.length > 0 ? { images: imageBlocks } : undefined);
+    flushUpdate();
     invalidateIndex();
     forgetDetail(sessionId);
-    send({ type: 'done' });
+    await indexSessions(true);
     dropDraft(sessionId);
+    send({ type: 'done' });
   } catch (error) {
+    flushUpdate();
     send({ type: 'error', error: error instanceof Error ? error.message : String(error) });
     throw error;
   } finally {
+    flushUpdate();
+    invalidateIndex();
+    forgetDetail(sessionId);
     unsubscribe();
+    changed();
   }
 }
 
@@ -170,8 +211,21 @@ function registerSessionsIpc() {
     return { ok: true };
   });
 
-  // 扩展状态（设置页 / 会话底部）
-  ipcMain.handle('pi:extension-state', async (_event, sessionId) => extensionState(sessionId));
+  // 扩展状态（会话底部）：打开历史会话时也要先绑定扩展，footer 才有内容可渲染。
+  // 绑定失败（例如模型密钥缺失）不应挡住会话阅读，退回空状态即可。
+  ipcMain.handle('pi:extension-state', async (_event, sessionId) => {
+    if (sessionId) {
+      try {
+        const found = await findManager(sessionId);
+        if (found) await ensureAgent(sessionId, found.manager, found.cwd);
+      } catch {
+        /* 扩展不可用不影响会话本身 */
+      }
+    }
+    return extensionState(sessionId);
+  });
+
+  ipcMain.handle('pi:footer-action', (_event, { sessionId, ...input }) => footerAction(sessionId, input));
 
   // 输入框斜杠命令与技能列表
   ipcMain.handle('pi:composer-resources', async (_event, payload) => composerResources(payload || {}));
