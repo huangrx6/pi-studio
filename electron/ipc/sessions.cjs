@@ -26,6 +26,7 @@ const {
   updateSessionSummary,
   indexSessions,
 } = require('../services/sessions.cjs');
+const { setSessionModel, setSessionThinking } = require('../services/sessions.cjs');
 const { fileReferenceContext } = require('../services/workspace.cjs');
 const { attachmentContext } = require('../services/attachments.cjs');
 const { extensionState, extensionAction, extensionDialogResult, extensionSelectResult, updateEditorText, footerAction } = require('../services/extensions.cjs');
@@ -310,6 +311,10 @@ function registerSessionsIpc() {
 
   // 发送消息（流式）
   ipcMain.handle('pi:prompt', async (event, payload) => prompt(event, payload));
+
+  // 会话级模型 / 推理等级：只改当前会话，不写全局默认、不影响其它会话。
+  ipcMain.handle('pi:set-session-model', (_event, { sessionId, modelRef }) => setSessionModel(sessionId, modelRef));
+  ipcMain.handle('pi:set-session-thinking', (_event, { sessionId, level }) => setSessionThinking(sessionId, level));
 
   // 运行中排队：steer 立即插话，followUp 当前回合结束后执行
   ipcMain.handle('pi:queue-prompt', async (_event, { sessionId, text, behavior, mentions, attachments, images }) => {

@@ -276,7 +276,9 @@ export function App() {
   const [draggingItem, setDraggingItem] = useState<DragItem | null>(null);
   const [justDropped, setJustDropped] = useState<string | null>(null);
   const [session, setSession] = useState<{ id: string; cwd: string; title: string; turnDiffs?: TurnDiff[] } | null>(null);
+  const sessionRef = useRef(session);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  useEffect(() => { sessionRef.current = session; }, [session]);
   const [prompt, setPrompt] = useState('');
   const [composerAttachments, setComposerAttachments] = useState<ComposerAttachment[]>([]);
   const [composerMenu, setComposerMenu] = useState<ComposerMenuState | null>(null);
@@ -420,7 +422,8 @@ export function App() {
         const title = orderedSessions.flatMap(item => item.sessions).find(item => item.id === current.id)?.title;
         return title && title !== current.title ? { ...current, title } : current;
       });
-      setModelSelection(next.model);
+      // 有打开中的会话时，不让全局默认模型覆盖该会话自己的选择。
+      if (!sessionRef.current) setModelSelection(next.model);
     } finally {
       setStateLoading(false);
     }
@@ -442,7 +445,7 @@ export function App() {
       setSettingsData(snapshot);
       setModels(modelResult.models);
       setEnabledModels(modelResult.enabled ?? []);
-      setModelSelection(modelResult.selection);
+      if (!sessionRef.current) setModelSelection(modelResult.selection);
     } catch (error) {
       setSettingsError(errorText(error));
     }
@@ -654,17 +657,39 @@ export function App() {
     const result = await window.piApi.models(workspace);
     setModels(result.models);
     setEnabledModels(result.enabled ?? []);
-    setModelSelection(result.selection);
     return result;
   }
 
   async function selectModel(next: string) {
+    // 有消息的会话只切换自己的模型；新会话才更新全局默认。
+    if (session && messages.length > 0) {
+      const result = await window.piApi.setSessionModel({ sessionId: session.id, modelRef: next });
+      setModelSelection(result);
+      return;
+    }
     const result = await window.piApi.setModel(next, workspace);
     setModelSelection(result);
+    if (session) {
+      try {
+        const applied = await window.piApi.setSessionModel({ sessionId: session.id, modelRef: next });
+        if (applied) setModelSelection(applied);
+      } catch { /* 草稿会话可能还没有 agent，首个 prompt 会用新默认模型 */ }
+    }
   }
 
   async function selectThinking(level: ThinkingLevel) {
-    const result = await window.piApi.setThinkingLevel({ modelRef: modelSelection.modelRef, level, cwd: workspace });
+    if (session && messages.length > 0) {
+      const result = await window.piApi.setSessionThinking({ sessionId: session.id, level });
+      setModelSelection(result);
+      return;
+    }
+    let result = await window.piApi.setThinkingLevel({ modelRef: modelSelection.modelRef, level, cwd: workspace });
+    if (session) {
+      try {
+        const applied = await window.piApi.setSessionThinking({ sessionId: session.id, level });
+        if (applied) result = applied;
+      } catch { /* 草稿会话还没有 agent */ }
+    }
     setModelSelection(result);
   }
 
@@ -1081,6 +1106,7 @@ export function App() {
         return;
       }
       setSession({ id: detail.id, cwd: detail.cwd, title: detail.title, turnDiffs: detail.turnDiffs });
+      if (detail.model) setModelSelection(detail.model);
       setMessages(detail.messages.map((message) => ({ ...message })));
       setWorkspace(detail.cwd);
       expandWorkspace(detail.cwd);
@@ -2194,7 +2220,6 @@ export function App() {
             </div>}
             {session?.id && compaction.active && <div className="compaction-banner" role="status"><LoaderCircle className="spin" /><span>上下文正在压缩，完成后会自动继续…</span></div>}
             {session?.id && busy && extensionWorking.visible && extensionWorking.message && <div className="extension-working" role="status"><LoaderCircle className="spin" /><span>{extensionWorking.message}</span></div>}
-            {session?.id && <StatusDock sessionId={session.id} />}
             {session?.id && <ExtensionWidgets sessionId={session.id} placement="aboveEditor" />}
             <div
               className="composer"
@@ -2277,6 +2302,7 @@ export function App() {
             </div>
             {session?.id && <ExtensionWidgets sessionId={session.id} placement="belowEditor" />}
           </div>
+          {session?.id && <StatusDock sessionId={session.id} />}
           {session?.id && <ExtensionCustomOverlay sessionId={session.id} />}
           {session?.id && <ExtensionDialogHost sessionId={session.id} />}
           {session?.id && <ExtensionSelectDialog sessionId={session.id} />}

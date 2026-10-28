@@ -83,6 +83,8 @@ interface PiDetail {
   title: string;
   /** 完整消息历史（含 toolResult）。 */
   messages: ChatMessage[];
+  /** 该会话自己的模型与推理等级（会话级，不跟随全局）。 */
+  model?: ModelSelection;
   /** 已持久化的每轮 Git 变更（按轮次结束时间配对）。 */
   turnDiffs?: TurnDiff[];
 }
@@ -196,6 +198,10 @@ declare global {
       providerConfig(providerId: string): Promise<{ providerId: string; baseUrl: string; api: string; icon: string }>;
       /** 切换模型，返回新的选择快照。 */
       setModel(modelRef: string, cwd?: string): Promise<ModelSelection>;
+      /** 只切换当前会话的模型（不写全局默认）。 */
+      setSessionModel(payload: { sessionId: string; modelRef: string }): Promise<ModelSelection>;
+      /** 只调整当前会话的推理等级。 */
+      setSessionThinking(payload: { sessionId: string; level: ThinkingLevel }): Promise<ModelSelection>;
       /** 切换推理等级，返回新的选择快照。 */
       setThinkingLevel(payload: { modelRef: string; level: ThinkingLevel; cwd?: string }): Promise<ModelSelection>;
       /** 设置启用的模型 id 列表。 */

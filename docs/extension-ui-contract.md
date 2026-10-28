@@ -37,12 +37,19 @@ Pi Studio 不按扩展名写界面。扩展只使用 Pi 标准的 `ctx.ui` API�
 
 ## 统一状态栏
 
-`setStatus` 与 `setFooter` 不再各占一行，而是合并到输入框上方的 Status Dock：
+`setStatus` 与 `setFooter` 不再各占一行，而是合并到输入框下方的 Status Dock：
 
 - footer 只显示第一段（轮次 / 步数 / 速率），点击展开 token、缓存、上下文等完整指标；
 - 状态 chip 默认按 key 稳定排序，点击查看完整文本；
 - 右侧「管理」可调整顺序、显示 / 隐藏，配置保存在本机 `localStorage`；
 - 重复的状态不会再单独占一行（footer 明细只在弹层中出现）。
+
+### 指标来源
+
+- `20 轮 218 步 · 130 tok/s` 来自 `pi-footer-composer` 的 `setFooter`；
+- `llm: 40m43s · tools: 28m12s · ttft … · e2e …` 来自 `pi-throughput` 的 `setStatus`。
+
+两者语义相近但来源不同，不是同一条数据；可以在「管理」里隐藏其中任意一个。
 
 ## 已知限制
 

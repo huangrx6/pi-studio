@@ -38,7 +38,7 @@ async function setModel(modelRef, cwd) {
   if (!(await getRuntime()).getModel(provider, parts.join('/'))) throw new Error('模型已不存在，请刷新后重试');
   saveConfig(modelRef);
   setModelRef(modelRef);
-  invalidateModelRuntime();
+  // 只切换「新会话的默认模型」；已有会话各自持有自己的模型，不需要重建运行时。
   return modelInfo(cwd || DEFAULT_CWD);
 }
 

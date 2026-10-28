@@ -87,7 +87,8 @@ export function ExtensionWidgets({ sessionId, placement }: { sessionId: string; 
     }) ?? (() => {});
     return () => { disposed = true; off(); };
   }, [sessionId]);
-  const visible = widgets.filter((widget) => widget.placement === placement);
+  // 扩展可能先占位再填充；空 widget 不渲染，避免输入框下方出现空白卡片。
+  const visible = widgets.filter((widget) => widget.placement === placement && widget.lines.some((row) => row.some((cell) => cell.text.trim())));
 
   // 组件型 widget 需要按实际宽度重排；字符串 widget 的 resize 会被宿主忽略。
   useEffect(() => {

@@ -28,11 +28,21 @@ async function modelInfo(cwd = DEFAULT_CWD) {
   const modelRef = getModelRef();
   const [provider, ...parts] = modelRef.split('/');
   const found = provider && parts.length > 0 ? runtime.getModel(provider, parts.join('/')) : undefined;
-  const selected = found || runtime.getModels()[0];
+  return modelInfoFor(found || runtime.getModels()[0], cwd, undefined, found ? modelRef : undefined);
+}
+
+/**
+ * 把某个模型组装成前端需要的选择快照。
+ * thinkingLevelOverride 用于会话自己的推理等级（不跟随全局默认）。
+ */
+function modelInfoFor(model, cwd = DEFAULT_CWD, thinkingLevelOverride, modelRefOverride) {
+  if (!model) return { modelRef: modelRefOverride || getModelRef(), label: modelRefOverride || '未选择模型', thinkingLevel: 'off', thinkingLevels: ['off'], effectiveThinkingLevel: 'off', defaultThinkingLevel: 'off' };
+  const info = reasoningFor(model, cwd);
   return {
-    modelRef: found ? modelRef : `${selected?.provider}/${selected?.id}`,
-    label: selected?.name || modelRef,
-    ...reasoningFor(selected, cwd),
+    modelRef: modelRefOverride || `${model.provider}/${model.id}`,
+    label: model.name || `${model.provider}/${model.id}`,
+    ...info,
+    ...(thinkingLevelOverride ? { thinkingLevel: thinkingLevelOverride, effectiveThinkingLevel: thinkingLevelOverride } : {}),
   };
 }
 
@@ -83,4 +93,4 @@ async function availableModels(cwd = DEFAULT_CWD) {
   return { models, enabled, current: getModelRef(), selection: await modelInfo(cwd) };
 }
 
-module.exports = { modelInfo, reasoningFor, availableModels };
+module.exports = { modelInfo, modelInfoFor, reasoningFor, availableModels };

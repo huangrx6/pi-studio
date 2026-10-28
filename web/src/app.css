@@ -2188,7 +2188,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .assistant-interrupted { margin-top: 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-soft); color: var(--faint); font-size: 11px; }
 
 /* 统一状态栏：footer 紧凑指标 + 状态 chip；顺序与显隐可管理。 */
-.status-dock { position: relative; display: flex; flex-direction: column; margin-bottom: 8px; }
+.status-dock { position: relative; display: flex; flex-direction: column; width: 100%; max-width: var(--content); margin: 8px auto 0; }
 .status-dock-items { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .status-chip { display: inline-flex; align-items: center; gap: 3px; max-width: 300px; padding: 2px 6px 2px 8px; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--muted); font-size: 10px; line-height: 1.7; }
 .status-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2223,3 +2223,9 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .status-manage-move { display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border-radius: 4px; color: var(--faint); }
 .status-manage-move:hover { background: var(--surface-hover); color: var(--text); }
 .status-manage-move svg { width: 11px; height: 11px; }
+.status-dock-heading { display: flex; flex-direction: column; gap: 2px; }
+.status-dock-eyebrow { color: var(--faint); font-size: 8px; letter-spacing: .12em; }
+.status-dock-popover-head { background: var(--surface-soft); }
+.status-dock-detail { padding: 12px 14px; }
+.status-detail-line { padding: 4px 0; color: var(--text); font: 11.5px/1.6 var(--mono); }
+.status-detail-line + .status-detail-line { border-top: 1px solid var(--border); }

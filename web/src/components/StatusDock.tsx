@@ -153,10 +153,13 @@ export function StatusDock({ sessionId }: { sessionId: string }) {
 
     {details && <div className="status-dock-popover">
       <div className="status-dock-popover-head">
-        <strong>{details.kind === 'footer' ? '运行指标' : '状态详情'}</strong>
+        <div className="status-dock-heading">
+          <span className="status-dock-eyebrow">{details.kind === 'footer' ? 'RUN METRICS' : 'STATUS'}</span>
+          <strong>{details.kind === 'footer' ? '运行指标' : '状态详情'}</strong>
+        </div>
         <button type="button" className="status-dock-close" aria-label="关闭状态详情" onClick={() => setDetailsKey(null)}><X /></button>
       </div>
-      <pre className="status-dock-detail">{details.detail}</pre>
+      <div className="status-dock-detail">{details.detail.split('\n').map((line, index) => <div className="status-detail-line" key={index}>{line}</div>)}</div>
       <div className="status-dock-actions">
         <button type="button" onClick={() => reorder(details.key, -1)} aria-label="向前移动"><ChevronLeft /><span>前移</span></button>
         <button type="button" onClick={() => reorder(details.key, 1)} aria-label="向后移动"><ChevronRight /><span>后移</span></button>
@@ -167,7 +170,10 @@ export function StatusDock({ sessionId }: { sessionId: string }) {
 
     {manageOpen && <div className="status-dock-popover is-manage">
       <div className="status-dock-popover-head">
-        <strong>状态栏管理</strong>
+        <div className="status-dock-heading">
+          <span className="status-dock-eyebrow">STATUS BAR</span>
+          <strong>状态栏管理</strong>
+        </div>
         <button type="button" className="status-dock-close" aria-label="关闭状态栏管理" onClick={() => setManageOpen(false)}><X /></button>
       </div>
       <p className="status-dock-hint">调整显示顺序与显隐；设置会保存在本机。</p>

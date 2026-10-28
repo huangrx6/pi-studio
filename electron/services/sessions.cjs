@@ -27,7 +27,7 @@ const {
   agentSessions,
 } = require('../core/state.cjs');
 const { serializeMessage, visibleSessionMessages } = require('../core/serialize.cjs');
-const { reasoningFor } = require('./models.cjs');
+const { reasoningFor, modelInfoFor } = require('./models.cjs');
 const { createExtensionUI } = require('./extensions.cjs');
 const { updateSidebar } = require('../sidebar-state.cjs');
 const { envNameOf } = require('../credential-env.cjs');
@@ -189,7 +189,7 @@ async function detail(id) {
             .map((entry) => serializeMessage(entry.message))
             .filter(Boolean),
         );
-        const data = { id, cwd: info.cwd, title: info.title, messages, turnDiffs: readTurnDiffs(id) };
+        const data = { id, cwd: info.cwd, title: info.title, messages, model: await sessionModelInfo(manager, info.cwd), turnDiffs: readTurnDiffs(id) };
         detailCache.set(id, { mtimeMs: stat.mtimeMs, size: stat.size, data });
         return data;
       } catch {
@@ -207,7 +207,7 @@ async function detail(id) {
       .map((entry) => serializeMessage(entry.message))
       .filter(Boolean),
   );
-  return { id, cwd: found.cwd, title: drafts.get(id)?.title || diskSessions.get(id)?.title || '新会话', messages, turnDiffs: readTurnDiffs(id) };
+  return { id, cwd: found.cwd, title: drafts.get(id)?.title || diskSessions.get(id)?.title || '新会话', messages, model: await sessionModelInfo(found.manager, found.cwd), turnDiffs: readTurnDiffs(id) };
 }
 
 /**
@@ -226,16 +226,42 @@ function createDraft(cwd) {
 }
 
 /**
+ * 读取一个会话自己的模型与推理等级。
+ * Pi 会把 model_change / thinking_level_change 写进 transcript；没有记录时用全局默认。
+ */
+async function sessionModelInfo(manager, cwd) {
+  const runtime = await getRuntime();
+  const entries = manager.getEntries();
+  const change = [...entries].reverse().find((entry) => entry.type === 'model_change');
+  const stored = change ? runtime.getModel(change.provider, change.modelId) : undefined;
+  let model = stored;
+  if (!model) {
+    const [provider, ...parts] = getModelRef().split('/');
+    model = provider && parts.length > 0 ? runtime.getModel(provider, parts.join('/')) : undefined;
+  }
+  if (!model) model = runtime.getModels()[0];
+  const thinking = [...entries].reverse().find((entry) => entry.type === 'thinking_level_change')?.thinkingLevel;
+  return modelInfoFor(model, cwd, thinking);
+}
+
+/** 会话创建时从 transcript 恢复模型与推理等级，不跟随其它会话的切换。 */
+function storedSessionModel(manager, runtime) {
+  const entries = manager.getEntries();
+  const change = [...entries].reverse().find((entry) => entry.type === 'model_change');
+  const model = change ? runtime.getModel(change.provider, change.modelId) : undefined;
+  const thinking = [...entries].reverse().find((entry) => entry.type === 'thinking_level_change')?.thinkingLevel;
+  return { model, thinking };
+}
+
+/**
  * 为会话准备 AgentSession（真正能发消息的运行时对象）。
  * 同一个会话只会创建一次，之后复用缓存；打开会话和发送消息可能同时请求，
  * 因此创建过程本身也要去重，否则扩展会被绑定两次。
  */
 async function ensureAgent(id, manager, cwd) {
   if (agentSessions.has(id)) {
-    const session = agentSessions.get(id);
-    // 用户可能刚改了推理强度，复用前同步一下
-    session.setThinkingLevel(reasoningFor(session.model, cwd).effectiveThinkingLevel);
-    return session;
+    // 复用会话时不要用全局偏好覆盖它自己的模型 / 推理等级。
+    return agentSessions.get(id);
   }
   const pending = agentPromises.get(id);
   if (pending) return pending;
@@ -248,10 +274,15 @@ async function ensureAgent(id, manager, cwd) {
 async function createAgent(id, manager, cwd) {
   const pi = piModule();
   const runtime = await getRuntime();
-  const modelRef = getModelRef();
+  const storedModel = storedSessionModel(manager, runtime);
+  const [globalProvider, ...globalParts] = getModelRef().split('/');
+  const globalModel = globalProvider && globalParts.length > 0 ? runtime.getModel(globalProvider, globalParts.join('/')) : undefined;
+  const model = storedModel.model || globalModel || runtime.getModels()[0];
+  if (!model) throw new Error('没有可用的 Pi 模型，请先在设置中配置模型');
+  const modelRef = `${model.provider}/${model.id}`;
 
   // 先确认密钥可用，否则给出比 Pi 原始报错更明确的提示
-  const providerId = agentSessions.get(id)?.model?.provider || modelRef.split('/')[0];
+  const providerId = model.provider;
   const stored = readAuth()[providerId];
   const providerConfig = readConfig(modelsFile(), { providers: {} }).providers?.[providerId];
   const reference = providerConfig?.apiKey ?? (stored?.type === 'api_key' ? stored.key : undefined);
@@ -260,14 +291,10 @@ async function createAgent(id, manager, cwd) {
     throw new Error(`无法读取环境变量 ${envName}。请在设置中重新保存该来源的 API Key，或直接填写密钥值。`);
   }
 
-  const [provider, ...parts] = modelRef.split('/');
-  const model = provider && parts.length > 0 ? runtime.getModel(provider, parts.join('/')) : undefined;
-  if (!model) throw new Error(`Pi 模型 ${modelRef} 不在本机目录中`);
-
   const { session } = await pi.createAgentSession({
     cwd,
     model,
-    thinkingLevel: reasoningFor(model, cwd).effectiveThinkingLevel,
+    thinkingLevel: storedModel.thinking || reasoningFor(model, cwd).effectiveThinkingLevel,
     modelRuntime: runtime,
     sessionManager: manager,
     // 完整编码工具集：写入/编辑需要 write/edit，执行命令需要 bash。
@@ -388,6 +415,36 @@ async function composerResources({ sessionId, cwd }) {
   return { commands };
 }
 
+
+/** 会话级模型切换：只写当前会话的 transcript，不碰全局默认。 */
+async function setSessionModel(id, modelRef) {
+  if (typeof id !== 'string' || typeof modelRef !== 'string' || !modelRef.includes('/')) throw new Error('模型参数无效');
+  const found = await findManager(id);
+  if (!found) throw new Error('会话不存在');
+  const runtime = await getRuntime();
+  const [provider, ...parts] = modelRef.split('/');
+  const model = provider && parts.length > 0 ? runtime.getModel(provider, parts.join('/')) : undefined;
+  if (!model) throw new Error('模型已不存在，请刷新后重试');
+  const session = await ensureAgent(id, found.manager, found.cwd);
+  if (session.isStreaming) throw new Error('回复进行中，暂时不能切换模型。');
+  if (session.isCompacting) throw new Error('正在压缩上下文，完成后才能切换模型。');
+  await session.setModel(model);
+  forgetDetail(id);
+  // 用运行中的 session 读结果：findManager 可能拿到的是另一个 manager 实例。
+  return modelInfoFor(session.model, found.cwd, session.thinkingLevel);
+}
+
+/** 会话级推理等级：不跟随全局默认。 */
+async function setSessionThinking(id, level) {
+  if (typeof id !== 'string' || typeof level !== 'string') throw new Error('推理等级参数无效');
+  const found = await findManager(id);
+  if (!found) throw new Error('会话不存在');
+  const session = await ensureAgent(id, found.manager, found.cwd);
+  session.setThinkingLevel(level);
+  forgetDetail(id);
+  return modelInfoFor(session.model, found.cwd, session.thinkingLevel);
+}
+
 module.exports = {
   drafts,
   diskSessions,
@@ -398,6 +455,8 @@ module.exports = {
   detail,
   createDraft,
   ensureAgent,
+  setSessionModel,
+  setSessionThinking,
   forkSession,
   composerResources,
   forgetDetail,

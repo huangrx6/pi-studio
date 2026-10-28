@@ -61,6 +61,8 @@ contextBridge.exposeInMainWorld('piApi', {
     return () => ipcRenderer.removeListener('pi:open-settings', handler);
   },
   setModel: (modelRef, cwd) => ipcRenderer.invoke('pi:set-model', modelRef, cwd),
+  setSessionModel: (payload) => ipcRenderer.invoke('pi:set-session-model', payload),
+  setSessionThinking: (payload) => ipcRenderer.invoke('pi:set-session-thinking', payload),
   setThinkingLevel: (payload) => ipcRenderer.invoke('pi:set-thinking-level', payload),
   footerAction: (payload) => ipcRenderer.invoke('pi:footer-action', payload),
   extensionAction: (payload) => ipcRenderer.invoke('pi:extension-action', payload),
