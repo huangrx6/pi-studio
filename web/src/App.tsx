@@ -116,6 +116,7 @@ function contextTone(tokens?: number): string {
 export function App() {
   const [workspaces, setWorkspaces] = useState<PiWorkspace[]>([]);
   const [stateLoading, setStateLoading] = useState(true);
+  const [sessionLoading, setSessionLoading] = useState(false);
   const [workspace, setWorkspace] = useState('');
   const [modelSelection, setModelSelection] = useState<ModelSelection>({ modelRef: '', label: '', thinkingLevel: 'default', thinkingLevels: ['default'], effectiveThinkingLevel: 'off', defaultThinkingLevel: 'off' });
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(readStored<string[]>(UI_KEYS.expanded, [])));
@@ -190,6 +191,8 @@ export function App() {
   const settingsContentRef = useRef<HTMLElement>(null);
   const settingsReturnFocusRef = useRef<HTMLElement | null>(null);
   const requestRef = useRef<string | null>(null);
+  const sessionLoadRef = useRef(0);
+  const prefetchedSessionsRef = useRef<Set<string>>(new Set());
   const editorRequestRef = useRef(0);
   const originalMcpArgsRef = useRef<string[] | null>(null);
   const workspaceOrderRef = useRef(workspaceOrder);
@@ -687,15 +690,29 @@ export function App() {
     requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
+  function prefetchSession(id: string) {
+    if (prefetchedSessionsRef.current.has(id)) return;
+    prefetchedSessionsRef.current.add(id);
+    void window.piApi.session(id).catch(() => { /* prefetch is best effort */ });
+  }
+
   async function openSession(item: PiSessionSummary) {
-    const detail = await window.piApi.session(item.id);
-    if (!detail) return;
-    setSession({ id: detail.id, cwd: detail.cwd, title: detail.title });
-    setMessages(detail.messages.map((message) => ({ ...message })));
-    setWorkspace(detail.cwd);
-    expandWorkspace(detail.cwd);
-    setError(null);
-    setBusy(false);
+    const load = ++sessionLoadRef.current;
+    setSessionLoading(true);
+    try {
+      const detail = await window.piApi.session(item.id);
+      if (!detail || load !== sessionLoadRef.current) return;
+      setSession({ id: detail.id, cwd: detail.cwd, title: detail.title });
+      setMessages(detail.messages.map((message) => ({ ...message })));
+      setWorkspace(detail.cwd);
+      expandWorkspace(detail.cwd);
+      setError(null);
+      setBusy(false);
+    } catch (error) {
+      if (load === sessionLoadRef.current) setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (load === sessionLoadRef.current) setSessionLoading(false);
+    }
   }
 
   function updateComposerMenu(value: string, caret: number) {
@@ -1284,6 +1301,8 @@ export function App() {
                         }}
                         onDragEnd={clearDragState}
                         onClick={() => void openSession(sessionItem)}
+                        onMouseEnter={() => prefetchSession(sessionItem.id)}
+                        onFocus={() => prefetchSession(sessionItem.id)}
                       >
                         <span className="session-title">{sessionItem.title}</span>
                         <span className="session-time">{relativeTime(sessionItem.updatedAt)}</span>
@@ -1302,7 +1321,8 @@ export function App() {
         </div>
       </aside>
 
-      <main className={`main ${isNewConversation ? 'is-new-conversation' : ''}`}>
+      <main className={`main ${isNewConversation ? 'is-new-conversation' : ''}`} aria-busy={sessionLoading}>
+        <div className={`chat-loading-line ${sessionLoading ? 'is-visible' : ''}`} />
         <header className="chat-header">
           {sidebarCollapsed && <button className="icon-button sidebar-expand" aria-label="展开侧边栏" title="展开侧边栏" onClick={() => setSidebarCollapsed(false)}><PanelLeft /></button>}
           {!isNewConversation && <div className="chat-heading">

@@ -21,6 +21,9 @@ let thinkingPreferences = {};
 const drafts = new Map();
 const diskSessions = new Map();
 const agentSessions = new Map();
+const detailCache = new Map();
+let sessionsIndexedAt = 0;
+let sessionsIndexPromise;
 let runtimePromise;
 
 function runtime() {
@@ -69,29 +72,37 @@ function readHeader(file) {
   } catch { return undefined; }
 }
 
-async function indexSessions() {
-  const cwds = new Set();
-  for (const file of walkJsonl(SESSION_ROOT)) {
-    const header = readHeader(file);
-    if (header) cwds.add(header.cwd);
-  }
-  if (cwds.size === 0) cwds.add(DEFAULT_CWD);
-  diskSessions.clear();
-  for (const cwd of cwds) {
-    let infos = [];
-    try { infos = await pi.SessionManager.list(cwd); } catch { /* skip unreadable */ }
-    for (const info of infos) {
-      const title = (info.name || info.firstMessage.split('\n')[0] || '新会话').trim().slice(0, 80);
-      diskSessions.set(info.id, {
-        id: info.id,
-        path: info.path,
-        cwd: info.cwd || cwd,
-        title,
-        updatedAt: info.modified.getTime(),
-        messageCount: info.messageCount,
-      });
+async function indexSessions(force = false) {
+  if (!force && sessionsIndexedAt > 0 && Date.now() - sessionsIndexedAt < 10_000) return;
+  if (sessionsIndexPromise) return sessionsIndexPromise;
+  sessionsIndexPromise = (async () => {
+    const cwds = new Set();
+    for (const file of walkJsonl(SESSION_ROOT)) {
+      const header = readHeader(file);
+      if (header) cwds.add(header.cwd);
     }
-  }
+    if (cwds.size === 0) cwds.add(DEFAULT_CWD);
+    const next = new Map();
+    for (const cwd of cwds) {
+      let infos = [];
+      try { infos = await pi.SessionManager.list(cwd); } catch { /* skip unreadable */ }
+      for (const info of infos) {
+        const title = (info.name || info.firstMessage.split('\n')[0] || '新会话').trim().slice(0, 80);
+        next.set(info.id, {
+          id: info.id,
+          path: info.path,
+          cwd: info.cwd || cwd,
+          title,
+          updatedAt: info.modified.getTime(),
+          messageCount: info.messageCount,
+        });
+      }
+    }
+    diskSessions.clear();
+    for (const [id, session] of next) diskSessions.set(id, session);
+    sessionsIndexedAt = Date.now();
+  })().finally(() => { sessionsIndexPromise = undefined; });
+  return sessionsIndexPromise;
 }
 
 async function listWorkspaces() {
@@ -136,7 +147,7 @@ function reasoningFor(model, cwd = DEFAULT_CWD) {
 async function findManager(id) {
   const draft = drafts.get(id);
   if (draft) return { manager: draft.manager, cwd: draft.cwd };
-  await indexSessions();
+  if (!diskSessions.has(id)) await indexSessions();
   const session = diskSessions.get(id);
   if (!session) return undefined;
   try { return { manager: pi.SessionManager.open(session.path, undefined, session.cwd), cwd: session.cwd }; }
@@ -251,6 +262,26 @@ function serializeMessage(message) {
 }
 
 async function detail(id) {
+  const draft = drafts.get(id);
+  if (!draft) {
+    if (!diskSessions.has(id)) await indexSessions();
+    const info = diskSessions.get(id);
+    if (info) {
+      try {
+        const stat = fs.statSync(info.path);
+        const cached = detailCache.get(id);
+        if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.data;
+        const manager = pi.SessionManager.open(info.path, undefined, info.cwd);
+        const messages = manager.getEntries()
+          .filter((entry) => entry.type === 'message')
+          .map((entry) => serializeMessage(entry.message))
+          .filter(Boolean);
+        const data = { id, cwd: info.cwd, title: info.title, messages };
+        detailCache.set(id, { mtimeMs: stat.mtimeMs, size: stat.size, data });
+        return data;
+      } catch { /* fall through to manager lookup */ }
+    }
+  }
   const found = await findManager(id);
   if (!found) return undefined;
   const messages = found.manager.getEntries()
@@ -690,6 +721,8 @@ async function fileReferenceContext(cwd, mentions) {
     });
     try {
       await session.prompt(text);
+      sessionsIndexedAt = 0;
+      detailCache.delete(sessionId);
       send({ type: 'done' });
       drafts.delete(sessionId);
     } catch (error) {

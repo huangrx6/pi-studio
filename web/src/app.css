@@ -1083,3 +1083,11 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 .response-kicker { display: flex; align-items: center; gap: 6px; margin-bottom: 9px; color: #a58e6d; font: 9px var(--mono); letter-spacing: .14em; text-transform: uppercase; }
 .response-kicker::before { content: ''; width: 13px; height: 1px; background: #c9a66d; }
 @media (max-width: 700px) { .assistant-response { padding: 13px 14px; } }
+
+/* Sidebar rows are clickable, but keep the quiet arrow cursor; hand only while dragging. */
+.workspace-row, .session-row, .workspace-row[draggable="true"], .session-row[draggable="true"] { cursor: default; }
+.workspace-row[draggable="true"]:active, .session-row[draggable="true"]:active { cursor: grabbing; }
+/* Thin, non-blocking progress line while a session is opening. */
+.chat-loading-line { position: absolute; z-index: 12; top: 0; left: 0; right: 0; height: 2px; opacity: 0; transform: scaleX(.2); transform-origin: left; background: linear-gradient(90deg, transparent, var(--accent), #c7a46a, transparent); transition: opacity .15s ease; pointer-events: none; }
+.chat-loading-line.is-visible { opacity: 1; animation: chat-loading 1.2s ease-in-out infinite; }
+@keyframes chat-loading { 0% { transform: translateX(-45%) scaleX(.35); } 50% { transform: translateX(0) scaleX(.7); } 100% { transform: translateX(45%) scaleX(.35); } }
