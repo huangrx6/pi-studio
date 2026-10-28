@@ -1,9 +1,20 @@
+/**
+ * 预加载脚本：把主进程能力以 `window.piApi` 暴露给渲染进程。
+ *
+ * 只暴露白名单方法（不做通用 invoke 转发），渲染进程无法访问任意通道。
+ * 通道名需要与 electron/ipc/*.cjs 中注册的保持一致。
+ *
+ * 分组：主题与状态 / 会话 / 文件 / 附件 / 模型 / 设置 / 事件订阅。
+ */
+
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('piApi', {
+  setTheme: (theme) => ipcRenderer.invoke('pi:set-theme', theme),
   state: (cwd) => ipcRenderer.invoke('pi:state', cwd),
   createSession: (cwd) => ipcRenderer.invoke('pi:session-create', cwd),
   session: (id) => ipcRenderer.invoke('pi:session', id),
+  sidebarAction: (payload) => ipcRenderer.invoke('pi:sidebar-action', payload),
   prompt: (payload) => ipcRenderer.invoke('pi:prompt', payload),
   files: (cwd, path) => ipcRenderer.invoke('pi:files', { cwd, path }),
   file: (cwd, path) => ipcRenderer.invoke('pi:file', { cwd, path }),
@@ -39,6 +50,7 @@ contextBridge.exposeInMainWorld('piApi', {
   removeSkill: (path) => ipcRenderer.invoke('pi:remove-skill', path),
   removeExtension: (path) => ipcRenderer.invoke('pi:remove-extension', path),
   removeCustomModel: (payload) => ipcRenderer.invoke('pi:remove-custom-model', payload),
+  // ---- 主进程 → 渲染进程 的事件订阅（返回取消订阅函数）----
   onOpenSettings: (listener) => {
     const handler = () => listener();
     ipcRenderer.on('pi:open-settings', handler);

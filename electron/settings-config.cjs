@@ -1,6 +1,14 @@
+/**
+ * Pi 配置文件的读写与校验。
+ *
+ * 纯函数 + 文件 IO，不依赖 Electron，方便单测（见 scripts/settings-config.test.cjs）。
+ * 所有写入都是「先写临时文件再 rename」的原子操作，避免配置写一半损坏。
+ */
+
 const fs = require('node:fs');
 const path = require('node:path');
 
+/** 读 JSON 配置；文件不存在返回 fallback，格式损坏则抛错提示。 */
 function readConfig(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
   catch (error) {
@@ -9,6 +17,7 @@ function readConfig(file, fallback) {
   }
 }
 
+/** 原子写 JSON：临时文件 + rename，保留原文件权限。 */
 function writeConfig(file, value, mode) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const temporary = `${file}.${process.pid}.tmp`;
@@ -19,11 +28,13 @@ function writeConfig(file, value, mode) {
   } finally { if (fs.existsSync(temporary)) fs.unlinkSync(temporary); }
 }
 
+/** 校验是否为合法的 http(s) 地址。 */
 function httpUrl(value) {
   try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && Boolean(url.hostname); }
   catch { return false; }
 }
 
+/** 新增 / 编辑 MCP 服务器（校验名称、传输方式与环境变量格式）。 */
 function updateMcp(config, input) {
   const name = String(input.name || '').trim();
   const originalName = input.originalName;
@@ -60,6 +71,7 @@ function updateMcp(config, input) {
   return { ...config, mcpServers: { ...next, [name]: server } };
 }
 
+/** 新增 / 编辑模型提供方（密钥写入 auth.json，models.json 不保留明文）。 */
 function updateProvider(config, input, knownProviders = []) {
   const id = String(input.providerId || '').trim();
   const baseUrl = String(input.baseUrl || '').trim();
@@ -86,6 +98,7 @@ function updateProvider(config, input, knownProviders = []) {
   return { ...config, providers: { ...providers, [id]: provider } };
 }
 
+/** 新增 / 编辑自定义模型（上下文窗口、最大输出、图像输入、推理标记）。 */
 function updateCustomModel(config, input, knownProviders = []) {
   const providerId = String(input.providerId || '').trim();
   const id = String(input.modelId || '').trim();
@@ -111,6 +124,7 @@ function updateCustomModel(config, input, knownProviders = []) {
   return { ...config, providers: { ...providers, [providerId]: { ...provider, models: updated } } };
 }
 
+/** 计算设置页应展示哪些提供方：有密钥、已启用、或当前模型所属。 */
 function visibleProviderIds(auth, configuredProviders, enabledModels, currentModel, authenticatedProviders = []) {
   return new Set([
     ...Object.keys(auth), ...Object.keys(configuredProviders), ...authenticatedProviders,
