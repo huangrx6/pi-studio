@@ -607,3 +607,10 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .model-group-head strong { color: var(--text); font-weight: 550; }
 .model-group-head > span:last-child { display: inline-grid; place-items: center; min-width: 20px; height: 18px; padding: 0 5px; border: 1px solid var(--border); border-radius: 5px; color: var(--faint); font-size: 9.5px; }
 @media (max-width: 760px) { .model-card-grid { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); } }
+
+/* The settings footer matches the quiet bottom nav row of the workspace. */
+.settings-nav-bottom { margin-top: auto; padding: var(--space-2) 0 0; border-top: 1px solid var(--border); }
+.settings-back-button { width: 100%; height: var(--row-height); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control); background: transparent; box-shadow: none; color: var(--muted); font-size: var(--text-base); font-weight: 400; }
+.settings-back-button:hover { border: 0; background: var(--surface-hover); color: var(--text); }
+.settings-back-button svg { width: 16px; height: 16px; }
+.settings-back-button kbd { margin-left: auto; color: var(--faint); font-size: var(--text-xs); }
