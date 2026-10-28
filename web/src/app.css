@@ -1596,3 +1596,6 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 .activity-tool-code { border: 1px solid var(--border); background: var(--surface-soft); }
 :root[data-theme="dark"] .activity-tool:hover { background: var(--surface); border-color: var(--border-strong); }
 :root[data-theme="dark"] .activity-tool-code { background: #10100f; border-color: var(--border); }
+
+/* The note row already renders its own activity node in the gutter. */
+.activity-note::before { content: none; display: none; }
