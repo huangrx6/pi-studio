@@ -1521,3 +1521,45 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 :root[data-theme="dark"] .thinking-block summary, :root[data-theme="dark"] .activity-tool { background: var(--surface); border-color: var(--border); }
 :root[data-theme="dark"] .activity-drawer > summary { background: var(--surface-soft); border-color: var(--border); }
 :root[data-theme="dark"] .file-code, :root[data-theme="dark"] .line-number { background: var(--surface); }
+
+/* pi-todo plan dock: a quiet, pinned execution plan, not a chat log. */
+.todo-dock { width: 100%; max-width: var(--content); margin: 0 auto 8px; overflow: hidden; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); box-shadow: 0 2px 8px rgb(20 20 18 / 3%); }
+.todo-dock-head { width: 100%; min-height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 11px; color: var(--muted); text-align: left; }
+.todo-dock-head:hover { background: var(--surface-soft); }
+.todo-dock-title { display: inline-flex; align-items: center; gap: 6px; flex: none; color: var(--text); font-size: 10.5px; font-weight: 600; letter-spacing: .02em; }
+.todo-dock-title svg { width: 13px; height: 13px; }
+.todo-dock-current { flex: 1; min-width: 0; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.todo-dock.is-live .todo-dock-title svg { animation: todo-breathe 2.4s ease-in-out infinite; }
+.todo-dock-meter { width: 64px; height: 2px; flex: none; overflow: hidden; border-radius: 2px; background: var(--border); }
+.todo-dock-meter i { display: block; height: 100%; border-radius: inherit; background: var(--text); transition: width 260ms ease; }
+.todo-dock-count { flex: none; min-width: 30px; color: var(--faint); font: 9.5px var(--mono); text-align: right; }
+.todo-dock-count span { margin: 0 1px; color: var(--border-strong); }
+.todo-dock-head > svg { width: 13px; height: 13px; flex: none; color: var(--faint); }
+.todo-dock-body { border-top: 1px solid var(--border); background: var(--surface-soft); }
+.todo-dock-scroll { max-height: 268px; overflow: auto; padding: 4px 0 8px; }
+.todo-group { padding: 7px 12px 2px; }
+.todo-group-head { display: flex; align-items: center; gap: 6px; min-height: 22px; color: var(--faint); font: 9px var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+.todo-group-head svg { width: 11px; height: 11px; }
+.todo-group-head b { margin-left: auto; color: var(--faint); font-weight: 400; }
+.todo-row { display: flex; align-items: center; gap: 8px; min-height: 28px; margin: 1px -6px; padding: 2px 6px; border-radius: 5px; color: var(--muted); font-size: 11px; }
+.todo-row.is-active { background: var(--surface); color: var(--text); box-shadow: 0 0 0 1px var(--border); }
+.todo-row.is-blocked { opacity: .7; }
+.todo-row-icon { display: grid; place-items: center; width: 13px; height: 13px; flex: none; color: var(--faint); }
+.todo-row-icon svg { width: 12px; height: 12px; }
+.todo-row.is-active .todo-row-icon { color: var(--text); }
+.todo-row.is-complete .todo-row-icon { color: var(--text); }
+.todo-row.is-closed .todo-row-icon { color: var(--faint); }
+.todo-row-id { flex: none; min-width: 24px; color: var(--faint); font: 9px var(--mono); }
+.todo-row-subject { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todo-row.is-complete .todo-row-subject { color: var(--faint); text-decoration: line-through; text-decoration-color: var(--border-strong); }
+.todo-row.is-closed .todo-row-subject { color: var(--faint); }
+.todo-row-note { flex: none; color: var(--faint); font: 8.5px var(--mono); }
+.todo-dock-archived { display: flex; align-items: center; gap: 6px; padding: 8px 12px 4px; color: var(--faint); font: 9px var(--mono); }
+.todo-dock-archived svg { width: 11px; height: 11px; }
+.todo-dock-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 108px; padding: 18px; color: var(--faint); text-align: center; }
+.todo-dock-empty svg { width: 18px; height: 18px; margin-bottom: 3px; opacity: .6; }
+.todo-dock-empty strong { color: var(--muted); font-size: 11px; font-weight: 500; }
+.todo-dock-empty span { font-size: 10px; }
+@keyframes todo-breathe { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+:root[data-theme="dark"] .todo-dock { box-shadow: none; }
+:root[data-theme="dark"] .todo-row.is-active { background: var(--surface); }

@@ -6,6 +6,8 @@ export type ContentBlock = TextBlock | ImageBlock | ThinkingBlock | ToolCallBloc
 
 export type ChatAttachment = { name: string; path: string; bytes: number; lines: number; kind?: 'text' | 'file'; mime?: string };
 export type ComposerAttachment = { id: string; kind: 'image' | 'file'; name: string; mime: string; bytes: number; data?: string; path?: string; lines?: number; marker?: string };
+export type TodoTask = { id: number; subject: string; description?: string; activeForm?: string; status: 'pending' | 'in_progress' | 'completed' | 'deleted'; blockedBy?: number[]; archivedAt?: number; closedAt?: number; closedReason?: string; createdAt?: number; updatedAt?: number };
+export type TodoDetails = { schemaVersion?: number; tasks: TodoTask[]; nextId: number };
 export type UploadedAttachment = { name: string; path: string; bytes: number; lines: number; kind: 'file'; mime: string; marker: string };
 
 export type ChatMessage = {
@@ -24,6 +26,7 @@ export type ChatMessage = {
   isError?: boolean;
   durationMs?: number;
   attachments?: ChatAttachment[];
+  details?: unknown;
 };
 
 export type ComposerCommandSource = 'builtin' | 'extension' | 'prompt' | 'skill';

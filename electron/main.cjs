@@ -412,6 +412,7 @@ function serializeMessage(message) {
     result.toolName = message.toolName;
     result.isError = Boolean(message.isError);
     if (message.durationMs !== undefined) result.durationMs = message.durationMs;
+    if (message.toolName === 'todo' && message.details) result.details = message.details;
   }
   return result;
 }

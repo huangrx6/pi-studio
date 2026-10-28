@@ -5,9 +5,10 @@ import {
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
 import { Select } from './components/Select';
-import type { ChatMessage, ComposerAttachment, ComposerCommand, ComposerCommandSource, ComposerFile } from './chat-types';
+import type { ChatMessage, ComposerAttachment, ComposerCommand, ComposerCommandSource, ComposerFile, TodoDetails } from './chat-types';
 import { AttachmentIcon } from './components/AttachmentIcon';
 import { AssistantTurnView, ChatMessageView } from './components/ChatMessage';
+import { TodoDock } from './components/TodoDock';
 import { DetailDialog } from './components/DetailDialog';
 import { ProviderIcon } from './components/ProviderIcon';
 import { SettingsDialog } from './components/SettingsDialog';
@@ -150,6 +151,7 @@ export function App() {
   const [extensionFooter, setExtensionFooter] = useState('');
   const [extensionToast, setExtensionToast] = useState<{ message: string; type: 'info' | 'warning' | 'error' } | null>(null);
   const [statusPanelOpen, setStatusPanelOpen] = useState(false);
+  const [todoPanelOpen, setTodoPanelOpen] = useState(false);
   const [outlineActive, setOutlineActive] = useState(0);
   const [outlineHover, setOutlineHover] = useState<number | null>(null);
   const [workspace, setWorkspace] = useState('');
@@ -581,6 +583,7 @@ export function App() {
   useEffect(() => {
     setExtensionStatuses({});
     setExtensionFooter('');
+    setTodoPanelOpen(false);
   }, [session?.id]);
 
   useEffect(() => {
@@ -1019,6 +1022,12 @@ export function App() {
   async function send() {
     const text = prompt.trim();
     if ((!text && composerAttachments.length === 0)) return;
+    if (!busy && composerAttachments.length === 0 && text === '/todos') {
+      setTodoPanelOpen(true);
+      setPrompt('');
+      setComposerMenu(null);
+      return;
+    }
     if (!busy && composerAttachments.length === 0 && text.startsWith('/')) {
       const builtin = text.match(/^\/(new|settings|model|thinking|copy|mcp)(?:\s|$)/);
       if (builtin && await executeBuiltinCommand(builtin[1])) {
@@ -1242,6 +1251,14 @@ export function App() {
   }
 
   const extensionStatusLine = extensionFooter || Object.values(extensionStatuses).filter(Boolean).slice(0, 3).join(' · ');
+  const todoDetails = useMemo<TodoDetails | undefined>(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      const details = message.role === 'toolResult' && message.toolName === 'todo' ? message.details : undefined;
+      if (details && typeof details === 'object' && Array.isArray((details as TodoDetails).tasks)) return details as TodoDetails;
+    }
+    return undefined;
+  }, [messages]);
   const toolResultMap = new Map(messages.filter((message) => message.role === 'toolResult' && message.toolCallId).map((message) => [message.toolCallId as string, message]));
   const transcriptTurns: Array<{ kind: 'user'; message: ChatMessage } | { kind: 'assistant'; messages: ChatMessage[] }> = [];
   for (const message of messages) {
@@ -1614,6 +1631,7 @@ export function App() {
           </nav>
         )}
         <div className="composer-dock">
+          {(todoDetails || todoPanelOpen) && <TodoDock details={todoDetails} open={todoPanelOpen} onToggle={() => setTodoPanelOpen((value) => !value)} />}
           {isNewConversation && <div className="new-conversation-intro">
             <span className="new-conversation-context" title={workspace}>{activeWorkspace?.name || (workspace ? workspace.split('/').pop() : 'Pi Studio')}</span>
             <h2>今天，<em>想做点什么？</em></h2>
