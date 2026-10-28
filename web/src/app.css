@@ -1563,3 +1563,28 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 @keyframes todo-breathe { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
 :root[data-theme="dark"] .todo-dock { box-shadow: none; }
 :root[data-theme="dark"] .todo-row.is-active { background: var(--surface); }
+
+/* Local outgoing queue: visible, editable, and reorderable before it reaches Pi. */
+.queued-panel { width: 100%; max-width: var(--content); margin: 0 auto 8px; }
+.queued-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 24px; padding: 0 3px 4px; color: var(--faint); font-size: 9.5px; }
+.queued-panel-title { display: inline-flex; align-items: center; gap: 5px; font: 9.5px var(--mono); letter-spacing: .02em; }
+.queued-panel-title svg { width: 11px; height: 11px; }
+.queued-panel-title b { margin-left: 2px; color: var(--muted); font-weight: 500; }
+.queued-send-all { color: var(--faint); font-size: 9.5px; }
+.queued-send-all:hover { color: var(--text); }
+.queued-list { display: flex; flex-direction: column; gap: 5px; max-height: 184px; overflow: auto; }
+.queued-item { display: flex; align-items: center; gap: 7px; min-height: 38px; padding: 5px 8px 5px 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: 0 1px 3px rgb(20 20 18 / 3%); }
+.queued-item.is-dragging { opacity: .45; }
+.queued-grip { display: grid; place-items: center; width: 17px; height: 26px; flex: none; color: var(--faint); cursor: grab; }
+.queued-grip:active { cursor: grabbing; }
+.queued-grip svg { width: 12px; height: 12px; }
+.queued-copy { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+.queued-text { overflow: hidden; color: var(--muted); font-size: 11px; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
+.queued-meta { color: var(--faint); font: 8.5px var(--mono); }
+.queued-actions { display: flex; align-items: center; gap: 1px; flex: none; }
+.queued-actions button { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 4px; color: var(--faint); }
+.queued-actions button:hover { background: var(--surface-hover); color: var(--text); }
+.queued-actions button:first-child:hover { color: var(--text); }
+.queued-actions svg { width: 12px; height: 12px; }
+.composer textarea.has-queued::placeholder { color: var(--muted); }
+:root[data-theme="dark"] .queued-item { box-shadow: none; }

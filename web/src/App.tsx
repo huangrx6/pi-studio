@@ -9,6 +9,7 @@ import type { ChatMessage, ComposerAttachment, ComposerCommand, ComposerCommandS
 import { AttachmentIcon } from './components/AttachmentIcon';
 import { AssistantTurnView, ChatMessageView } from './components/ChatMessage';
 import { TodoDock } from './components/TodoDock';
+import { QueuedMessages, type QueuedPreview } from './components/QueuedMessages';
 import { DetailDialog } from './components/DetailDialog';
 import { ProviderIcon } from './components/ProviderIcon';
 import { SettingsDialog } from './components/SettingsDialog';
@@ -37,6 +38,18 @@ function BrandMark({ className = '' }: { className?: string }) {
 }
 
 type PiSessionSummary = { id: string; cwd: string; title: string; updatedAt: number; messageCount: number };
+type ImagePayload = { type: 'image'; data: string; mimeType: string };
+type PreparedSubmission = {
+  sessionId: string;
+  displayText: string;
+  outgoingText: string;
+  content: ChatMessage['content'];
+  persistentAttachments: NonNullable<ChatMessage['attachments']>;
+  imagePayload: ImagePayload[];
+  mentions: string[];
+  attachmentPaths: string[];
+};
+type QueuedPrompt = { id: string; order: number; text: string; attachments: ComposerAttachment[]; submission: PreparedSubmission };
 type PiWorkspace = { cwd: string; name: string; sessions: PiSessionSummary[] };
 type CustomModelConfig = { providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean };
 type SettingsEditor = { kind: 'provider' | 'model' | 'mcp' | 'package' | 'skill' | 'extension'; editId?: string };
@@ -152,6 +165,9 @@ export function App() {
   const [extensionToast, setExtensionToast] = useState<{ message: string; type: 'info' | 'warning' | 'error' } | null>(null);
   const [statusPanelOpen, setStatusPanelOpen] = useState(false);
   const [todoPanelOpen, setTodoPanelOpen] = useState(false);
+  const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([]);
+  const queuedDrainRef = useRef(false);
+  const queuedOrderRef = useRef(0);
   const [outlineActive, setOutlineActive] = useState(0);
   const [outlineHover, setOutlineHover] = useState<number | null>(null);
   const [workspace, setWorkspace] = useState('');
@@ -584,6 +600,7 @@ export function App() {
     setExtensionStatuses({});
     setExtensionFooter('');
     setTodoPanelOpen(false);
+    setQueuedPrompts([]);
   }, [session?.id]);
 
   useEffect(() => {
@@ -987,7 +1004,7 @@ export function App() {
     setOutlineActive(index);
   }
 
-  async function prepareSubmission(text: string, attachments: ComposerAttachment[], sessionId: string) {
+  async function prepareSubmission(text: string, attachments: ComposerAttachment[], sessionId: string): Promise<PreparedSubmission> {
     const files = attachments.filter((attachment) => attachment.kind === 'file');
     const images = attachments.filter((attachment) => attachment.kind === 'image');
     let displayText = text;
@@ -1016,7 +1033,58 @@ export function App() {
     const persistentAttachments = [...(longAttachments ?? []), ...fileAttachments];
     const imagePayload = images.filter((image) => image.data).map((image) => ({ type: 'image' as const, data: image.data as string, mimeType: image.mime }));
     const mentions = [...text.matchAll(/(?:^|\s)@([^\s]+)/g)].map((match) => match[1]);
-    return { displayText, outgoingText, content, persistentAttachments, imagePayload, mentions, attachmentPaths: persistentAttachments.map((attachment) => attachment.path) };
+    return { sessionId, displayText, outgoingText, content, persistentAttachments, imagePayload, mentions, attachmentPaths: persistentAttachments.map((attachment) => attachment.path) };
+  }
+
+  async function dispatchSubmission(submission: PreparedSubmission, mode: 'prompt' | 'steer') {
+    setMessages((existing) => [...existing, {
+      role: 'user',
+      content: submission.content,
+      timestamp: Date.now(),
+      ...(submission.persistentAttachments.length > 0 ? { attachments: submission.persistentAttachments } : {}),
+    }]);
+    if (mode === 'steer') {
+      try {
+        await window.piApi.queuePrompt({
+          sessionId: submission.sessionId,
+          text: submission.outgoingText,
+          behavior: 'steer',
+          mentions: submission.mentions,
+          attachments: submission.attachmentPaths,
+          images: submission.imagePayload,
+        });
+        setExtensionToast({ message: '已插话发送给当前任务。', type: 'info' });
+      } catch (error) {
+        setError(error instanceof Error ? error.message : String(error));
+      }
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setRetryInfo(null);
+    const requestId = crypto.randomUUID();
+    requestRef.current = requestId;
+    try {
+      await window.piApi.prompt({
+        sessionId: submission.sessionId,
+        text: submission.outgoingText,
+        requestId,
+        mentions: submission.mentions,
+        attachments: submission.attachmentPaths,
+        images: submission.imagePayload,
+      });
+      const saved = await window.piApi.session(submission.sessionId);
+      if (saved) {
+        setSession({ id: saved.id, cwd: saved.cwd, title: saved.title });
+        setMessages(saved.messages.map((message) => ({ ...message })));
+      }
+      setBusy(false);
+      await loadState();
+    } catch (error) {
+      setRetryInfo(null);
+      setError(error instanceof Error ? error.message : String(error));
+      setBusy(false);
+    }
   }
 
   async function send() {
@@ -1045,58 +1113,78 @@ export function App() {
       setSession(current);
       setMessages([]);
     }
-    const prepared = await prepareSubmission(text, composerAttachments, current.id);
+    const queuedAttachments = composerAttachments;
+    const prepared = await prepareSubmission(text, queuedAttachments, current.id);
     setPrompt('');
     setComposerAttachments([]);
-    setMessages((existing) => [...existing, {
-      role: 'user',
-      content: prepared.content,
-      timestamp: Date.now(),
-      ...(prepared.persistentAttachments.length > 0 ? { attachments: prepared.persistentAttachments } : {}),
-    }]);
     if (busy) {
-      try {
-        await window.piApi.queuePrompt({
-          sessionId: current.id,
-          text: prepared.outgoingText,
-          behavior: preferences.busySend,
-          mentions: prepared.mentions,
-          attachments: prepared.attachmentPaths,
-          images: prepared.imagePayload,
-        });
-        setExtensionToast({ message: preferences.busySend === 'queue' ? '已加入发送队列，本轮结束后处理。' : '已作为引导发送给当前任务。', type: 'info' });
-      } catch (error) {
-        setError(error instanceof Error ? error.message : String(error));
+      if (preferences.busySend === 'steer') {
+        await dispatchSubmission(prepared, 'steer');
+      } else {
+        const order = ++queuedOrderRef.current;
+        setQueuedPrompts((items) => [...items, { id: crypto.randomUUID(), order, text, attachments: queuedAttachments, submission: prepared }].sort((a, b) => a.order - b.order));
+        setExtensionToast({ message: '已加入排队消息，本轮结束后按顺序发送。', type: 'info' });
       }
       return;
     }
-    setBusy(true);
-    setError(null);
-    setRetryInfo(null);
-    const requestId = crypto.randomUUID();
-    requestRef.current = requestId;
-    try {
-      await window.piApi.prompt({
-        sessionId: current.id,
-        text: prepared.outgoingText,
-        requestId,
-        mentions: prepared.mentions,
-        attachments: prepared.attachmentPaths,
-        images: prepared.imagePayload,
-      });
-      const saved = await window.piApi.session(current.id);
-      if (saved) {
-        setSession({ id: saved.id, cwd: saved.cwd, title: saved.title });
-        setMessages(saved.messages.map((message) => ({ ...message })));
-      }
-      setBusy(false);
-      await loadState();
-    } catch (error) {
-      setRetryInfo(null);
-      setError(error instanceof Error ? error.message : String(error));
-      setBusy(false);
-    }
+    await dispatchSubmission(prepared, 'prompt');
   }
+
+  async function sendQueuedNow(id: string) {
+    if (!busy) return;
+    const item = queuedPrompts.find((candidate) => candidate.id === id);
+    if (!item) return;
+    setQueuedPrompts((items) => items.filter((candidate) => candidate.id !== id));
+    await dispatchSubmission(item.submission, 'steer');
+  }
+
+  async function sendAllQueued() {
+    if (!busy || queuedPrompts.length === 0) return;
+    const items = [...queuedPrompts];
+    setQueuedPrompts([]);
+    queuedDrainRef.current = true;
+    for (const item of items) await dispatchSubmission(item.submission, 'steer');
+    queuedDrainRef.current = false;
+    setExtensionToast({ message: `已插话发送 ${items.length} 条排队消息。`, type: 'info' });
+  }
+
+  function editQueued(id: string) {
+    const item = queuedPrompts.find((candidate) => candidate.id === id);
+    if (!item) return;
+    setQueuedPrompts((items) => items.filter((candidate) => candidate.id !== id));
+    setPrompt(item.text);
+    setComposerAttachments(item.attachments);
+    window.requestAnimationFrame(() => textareaRef.current?.focus());
+  }
+
+  function deleteQueued(id: string) {
+    setQueuedPrompts((items) => items.filter((candidate) => candidate.id !== id));
+  }
+
+  function reorderQueued(fromId: string, toId: string) {
+    setQueuedPrompts((items) => {
+      const from = items.findIndex((item) => item.id === fromId);
+      const to = items.findIndex((item) => item.id === toId);
+      if (from < 0 || to < 0 || from === to) return items;
+      const next = [...items];
+      const [moved] = next.splice(from, 1);
+      next.splice(from < to ? to - 1 : to, 0, moved);
+      queuedOrderRef.current = Math.max(queuedOrderRef.current, next.length);
+      return next.map((item, index) => ({ ...item, order: index + 1 }));
+    });
+  }
+
+  useEffect(() => {
+    if (busy || queuedPrompts.length === 0 || queuedDrainRef.current) return;
+    const next = queuedPrompts[0];
+    setQueuedPrompts((items) => items.filter((item) => item.id !== next.id));
+    queuedDrainRef.current = true;
+    void dispatchSubmission(next.submission, 'prompt').finally(() => {
+      queuedDrainRef.current = false;
+      setQueuedPrompts((items) => items.length > 0 ? [...items] : items);
+    });
+  }, [busy, queuedPrompts]);
+
 
   async function loadTree(nextPath: string) {
     if (!workspace) return;
@@ -1259,6 +1347,12 @@ export function App() {
     }
     return undefined;
   }, [messages]);
+  const queuedPreviews: QueuedPreview[] = queuedPrompts.map((item) => ({
+    id: item.id,
+    text: item.text.trim() || (item.attachments.some((attachment) => attachment.kind === 'image') ? '图片消息' : '附件消息'),
+    images: item.attachments.filter((attachment) => attachment.kind === 'image').length,
+    files: item.attachments.filter((attachment) => attachment.kind === 'file').length,
+  }));
   const toolResultMap = new Map(messages.filter((message) => message.role === 'toolResult' && message.toolCallId).map((message) => [message.toolCallId as string, message]));
   const transcriptTurns: Array<{ kind: 'user'; message: ChatMessage } | { kind: 'assistant'; messages: ChatMessage[] }> = [];
   for (const message of messages) {
@@ -1632,6 +1726,7 @@ export function App() {
         )}
         <div className="composer-dock">
           {(todoDetails || todoPanelOpen) && <TodoDock details={todoDetails} open={todoPanelOpen} onToggle={() => setTodoPanelOpen((value) => !value)} />}
+          {queuedPrompts.length > 0 && <QueuedMessages items={queuedPreviews} onEdit={editQueued} onDelete={deleteQueued} onSendNow={(id) => void sendQueuedNow(id)} onSendAll={() => void sendAllQueued()} onReorder={reorderQueued} />}
           {isNewConversation && <div className="new-conversation-intro">
             <span className="new-conversation-context" title={workspace}>{activeWorkspace?.name || (workspace ? workspace.split('/').pop() : 'Pi Studio')}</span>
             <h2>今天，<em>想做点什么？</em></h2>
@@ -1696,6 +1791,7 @@ export function App() {
               onClick={(event) => updateComposerMenu(prompt, event.currentTarget.selectionStart ?? prompt.length)}
               onPaste={(event) => { const files = Array.from(event.clipboardData.files); if (files.length > 0) { event.preventDefault(); void addComposerFiles(files); } }}
               onKeyDown={(event) => {
+                if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && queuedPrompts.length > 0) { event.preventDefault(); void sendAllQueued(); return; }
                 if (composerMenu && composerOptionsCount > 0) {
                   if (event.key === 'ArrowDown') { event.preventDefault(); setComposerMenuIndex((index) => (index + 1) % composerOptionsCount); return; }
                   if (event.key === 'ArrowUp') { event.preventDefault(); setComposerMenuIndex((index) => (index - 1 + composerOptionsCount) % composerOptionsCount); return; }
@@ -1705,8 +1801,9 @@ export function App() {
                 if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); }
               }}
               aria-label="发送给 Pi 的消息"
+              className={queuedPrompts.length > 0 ? 'has-queued' : undefined}
               aria-expanded={Boolean(composerMenu)}
-              placeholder="描述你的想法，或输入 / 命令、@ 文件…"
+              placeholder={queuedPrompts.length > 0 ? 'Cmd/Ctrl+Enter 插话发送全部排队消息' : '描述你的想法，或输入 / 命令、@ 文件…'}
               rows={2}
             />
             <div className="composer-bar">
