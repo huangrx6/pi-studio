@@ -6,7 +6,7 @@
 const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const fs = require('node:fs');
 const { configPath, readConfig, writeConfig } = require('../core/state.cjs');
-const { updateSidebar } = require('../settings-config.cjs');
+const { updateSidebar } = require('../sidebar-state.cjs');
 const {
   workspaceFile,
   searchWorkspaceFiles,

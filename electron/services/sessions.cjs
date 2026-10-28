@@ -30,7 +30,7 @@ const {
 const { serializeMessage, visibleSessionMessages } = require('../core/serialize.cjs');
 const { reasoningFor } = require('./models.cjs');
 const { createExtensionUI } = require('./extensions.cjs');
-const { updateSidebar } = require('../settings-config.cjs');
+const { updateSidebar } = require('../sidebar-state.cjs');
 const { envNameOf } = require('../credential-env.cjs');
 
 /** 内存中的草稿会话：id → { manager, cwd }。 */
@@ -158,7 +158,6 @@ async function listWorkspaces() {
     byCwd.set(draft.cwd, list);
   }
 
-  if (byCwd.size === 0) byCwd.set(DEFAULT_CWD, []);
   for (const cwd of Object.keys(config.workspaceMetadata || {})) if (!byCwd.has(cwd)) byCwd.set(cwd, []);
 
   return [...byCwd.entries()]

@@ -10,7 +10,7 @@ const {
   writeConfig,
 } = require('../core/state.cjs');
 const { serializeMessage } = require('../core/serialize.cjs');
-const { updateSidebar } = require('../settings-config.cjs');
+const { updateSidebar } = require('../sidebar-state.cjs');
 const {
   detail,
   createDraft,
