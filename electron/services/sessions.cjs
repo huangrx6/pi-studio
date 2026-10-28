@@ -32,6 +32,7 @@ const { createExtensionUI } = require('./extensions.cjs');
 const { updateSidebar } = require('../sidebar-state.cjs');
 const { envNameOf } = require('../credential-env.cjs');
 const { consumePendingMode } = require('./mode.cjs');
+const { sessionTitle } = require('./session-title.cjs');
 
 /** 内存中的草稿会话：id → { manager, cwd }。 */
 const drafts = new Map();
@@ -68,7 +69,8 @@ async function indexSessions(force = false) {
     const next = new Map();
     for (const info of infos) {
       next.set(info.id, { id: info.id, path: info.path, cwd: info.cwd,
-        title: (info.name || info.firstMessage?.split('\n')[0] || '新会话').trim().slice(0, 80),
+        // 首条消息可能是展开后的 <skill> 块，标题要剥掉它只留真实问题。
+        title: sessionTitle(info.name, info.firstMessage),
         updatedAt: info.modified.getTime(), messageCount: info.messageCount });
     }
     diskSessions.clear();
