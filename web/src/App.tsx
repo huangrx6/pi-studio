@@ -14,6 +14,8 @@ import { DetailDialog } from './components/DetailDialog';
 import { ProviderIcon } from './components/ProviderIcon';
 import { SettingsDialog } from './components/SettingsDialog';
 import { ModelPicker } from './components/ModelPicker';
+import { WorkspacePicker } from './components/WorkspacePicker';
+import { SidebarActions, type SidebarAction } from './components/SidebarActions';
 import type { ModelOption, ModelSelection, ThinkingLevel } from './model-types';
 import { DEFAULT_PREFERENCES, RADIUS_PRESETS, loadPreferences, resolveTheme, savePreferences, setActivePreferences, type Preferences } from './preferences';
 
@@ -37,7 +39,7 @@ function BrandMark({ className = '' }: { className?: string }) {
   return <img className={`brand-mark ${className}`} src={appIcon} alt="" draggable={false} />;
 }
 
-type PiSessionSummary = { id: string; cwd: string; title: string; updatedAt: number; messageCount: number };
+type PiSessionSummary = { pinned?: boolean; archived?: boolean; id: string; cwd: string; title: string; updatedAt: number; messageCount: number };
 type ImagePayload = { type: 'image'; data: string; mimeType: string };
 type PreparedSubmission = {
   sessionId: string;
@@ -196,6 +198,7 @@ export function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [workspaceSearchOpen, setWorkspaceSearchOpen] = useState(false);
   const [workspaceQuery, setWorkspaceQuery] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [modelQuery, setModelQuery] = useState('');
   const [modelView, setModelView] = useState<'all' | 'provider'>('all');
@@ -260,6 +263,7 @@ export function App() {
     setActivePreferences(preferences);
     const root = document.documentElement;
     root.dataset.theme = resolveTheme(preferences.theme);
+    void window.piApi.setTheme(preferences.theme).catch(() => { /* Renderer palette remains available. */ });
     root.style.setProperty('--chat-font-size', `${preferences.fontSize}px`);
     const radii = RADIUS_PRESETS[preferences.radiusStyle] || RADIUS_PRESETS.standard;
     root.style.setProperty('--radius-tag', `${radii.tag}px`);
@@ -292,7 +296,7 @@ export function App() {
         const sessions = [
           ...saved.flatMap((id) => byId.has(id) ? [byId.get(id)!] : []),
           ...item.sessions.filter((entry) => !saved.includes(entry.id)),
-        ];
+        ].sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)));
         nextSessionOrder[item.cwd] = sessions.map((entry) => entry.id);
         return { ...item, sessions };
       });
@@ -303,7 +307,6 @@ export function App() {
       setWorkspaces(orderedSessions);
       setModelRef(next.model.modelRef);
       setModelSelection(next.model);
-      setWorkspace((current) => current || orderedSessions[0]?.cwd || next.cwd);
     } finally {
       setStateLoading(false);
     }
@@ -570,7 +573,7 @@ export function App() {
     restoredRef.current = true;
     const saved = readStored<{ id: string; cwd: string } | null>(UI_KEYS.activeSession, null);
     if (!saved?.id) return;
-    const summary = workspaces.flatMap((item) => item.sessions).find((item) => item.id === saved.id);
+    const summary = workspaces.flatMap((item) => item.sessions).find((item) => item.id === saved.id && !item.archived);
     if (!summary) return;
     setWorkspace(summary.cwd);
     setExpanded((current) => {
@@ -805,18 +808,32 @@ export function App() {
   }
 
 
-  async function startSession(cwd = workspace) {
-    if (!cwd) return;
-    const created = await window.piApi.createSession(cwd);
-    setSession({ id: created.id, cwd: created.cwd, title: created.title });
+  async function startSession(cwd = session?.cwd || workspace) {
+    ++sessionLoadRef.current;
+    requestRef.current = '';
+    setSessionLoading(false);
+    setSession(null);
     setMessages([]);
     setError(null);
     setPrompt('');
     setWorkspace(cwd);
-    expandWorkspace(cwd);
+    if (cwd) expandWorkspace(cwd);
+    setComposerAttachments([]);
+    setComposerMenu(null);
+    setQueuedPrompts([]);
     setBusy(false);
     setRetryInfo(null);
     requestAnimationFrame(() => textareaRef.current?.focus());
+  }
+
+  function selectDraftWorkspace(cwd: string) {
+    ++sessionLoadRef.current;
+    setSessionLoading(false);
+    setSession(null);
+    setWorkspace(cwd);
+    setComposerMenu(null);
+    setError(null);
+    if (cwd) expandWorkspace(cwd);
   }
 
   function prefetchSession(id: string) {
@@ -825,7 +842,17 @@ export function App() {
     void window.piApi.session(id).catch(() => { /* prefetch is best effort */ });
   }
 
+  async function sidebarAction(kind: 'workspace' | 'session', id: string, action: SidebarAction, name?: string) {
+    const result = await window.piApi.sidebarAction({ kind, id, action, name });
+    if (kind === 'workspace' && action === 'remove' && workspace === id) await startSession('');
+    if (kind === 'session' && action === 'archive' && session?.id === id) await startSession(session.cwd);
+    if (kind === 'session' && action === 'rename' && session?.id === id) setSession(current => current ? { ...current, title: name!.trim() } : current);
+    await loadState();
+    if (action === 'fork' && result.id && result.cwd) await openSession({ id: result.id, cwd: result.cwd, title: result.title || '分叉会话', updatedAt: Date.now(), messageCount: 0 });
+  }
+
   async function openSession(item: PiSessionSummary) {
+    requestRef.current = '';
     const load = ++sessionLoadRef.current;
     setSessionLoading(true);
     try {
@@ -907,8 +934,7 @@ export function App() {
 
   async function executeBuiltinCommand(name: string): Promise<boolean> {
     if (name === 'new') {
-      if (!workspace) return false;
-      await startSession(workspace);
+      await startSession();
       return true;
     }
     if (name === 'settings') { await openSettings(); return true; }
@@ -1079,7 +1105,9 @@ export function App() {
         attachments: submission.attachmentPaths,
         images: submission.imagePayload,
       });
+      if (requestRef.current !== requestId) return;
       const saved = await window.piApi.session(submission.sessionId);
+      if (requestRef.current !== requestId) return;
       if (saved) {
         setSession({ id: saved.id, cwd: saved.cwd, title: saved.title });
         setMessages(saved.messages.map((message) => ({ ...message })));
@@ -1087,6 +1115,7 @@ export function App() {
       setBusy(false);
       await loadState();
     } catch (error) {
+      if (requestRef.current !== requestId) return;
       setRetryInfo(null);
       setError(error instanceof Error ? error.message : String(error));
       setBusy(false);
@@ -1111,10 +1140,17 @@ export function App() {
       }
     }
     setComposerMenu(null);
+    if (!workspace) {
+      setError('请先选择一个工作区，再发送消息。');
+      return;
+    }
     let current = session;
     if (!current) {
-      if (!workspace) await loadState();
-      const created = await window.piApi.createSession(workspace);
+      const draftGeneration = sessionLoadRef.current;
+      let created;
+      try { created = await window.piApi.createSession(workspace); }
+      catch (error) { setError(error instanceof Error ? error.message : String(error)); return; }
+      if (sessionLoadRef.current !== draftGeneration) return;
       current = { id: created.id, cwd: created.cwd, title: created.title };
       setSession(current);
       setMessages([]);
@@ -1285,12 +1321,11 @@ export function App() {
   function chooseFile() {
     void window.piApi.chooseWorkspace().then((selected) => {
       if (selected) {
-        setWorkspace(selected);
-        setSession(null);
-        setMessages([]);
+        if (isNewConversation) selectDraftWorkspace(selected);
+        else void startSession(selected);
         void loadState();
       }
-    });
+    }).catch(error => setError(error instanceof Error ? error.message : String(error)));
   }
 
   function submitEditor() {
@@ -1583,6 +1618,7 @@ export function App() {
             const isActive = workspace === item.cwd;
             return (
               <div className="workspace" key={item.cwd}>
+                <div className="sidebar-row-shell workspace-row-shell">
                 <button
                   className={`workspace-row ${isActive ? 'is-active' : ''} ${dropHint === `w:${item.cwd}` ? 'drop-before' : ''} ${draggingItem?.kind === 'workspace' && draggingItem.cwd === item.cwd ? 'is-dragging' : ''} ${justDropped === `w:${item.cwd}` ? 'just-dropped' : ''}`}
                   title={item.cwd}
@@ -1611,10 +1647,10 @@ export function App() {
                   }}
                   onDragEnd={clearDragState}
                   onClick={() => {
-                    setWorkspace(item.cwd);
+                    if (isNewConversation) selectDraftWorkspace(item.cwd);
                     setExpanded((current) => {
                       const next = new Set(current);
-                      if (next.has(item.cwd)) next.delete(item.cwd); else next.add(item.cwd);
+                      if (isOpen) next.delete(item.cwd); else next.add(item.cwd);
                       return next;
                     });
                   }}
@@ -1623,9 +1659,12 @@ export function App() {
                   <span>{item.name}</span>
                   <ChevronDown size={13} className={isOpen ? 'chevron open' : 'chevron'} />
                 </button>
+                <SidebarActions kind="workspace" id={item.cwd} name={item.name} onNew={() => void startSession(item.cwd)} onAction={(action, name) => sidebarAction('workspace', item.cwd, action, name)} />
+                </div>
                 {isOpen && (
                   <div className="sessions">
-                    {item.sessions.map((sessionItem) => (
+                    {item.sessions.filter(entry => Boolean(entry.archived) === showArchived).map((sessionItem) => (
+                      <div className={`sidebar-row-shell session-row-shell ${sessionItem.pinned ? 'is-pinned' : ''}`} key={sessionItem.id}>
                       <button
                         key={sessionItem.id}
                         className={`session-row ${session?.id === sessionItem.id ? 'is-active' : ''} ${dropHint === `s:${item.cwd}:${sessionItem.id}` ? 'drop-before' : ''} ${draggingItem?.kind === 'session' && draggingItem.sessionId === sessionItem.id ? 'is-dragging' : ''} ${justDropped === `s:${item.cwd}:${sessionItem.id}` ? 'just-dropped' : ''}`}
@@ -1660,10 +1699,13 @@ export function App() {
                         onFocus={() => prefetchSession(sessionItem.id)}
                       >
                         <span className="session-title">{sessionItem.title}</span>
+                        {sessionItem.pinned && <span className="session-pin-mark" title="已置顶">置顶</span>}
                         <span className="session-time">{relativeTime(sessionItem.updatedAt)}</span>
                       </button>
+                      <SidebarActions kind="session" id={sessionItem.id} name={sessionItem.title} pinned={sessionItem.pinned} archived={sessionItem.archived} onAction={(action, name) => sidebarAction('session', sessionItem.id, action, name)} />
+                      </div>
                     ))}
-                    {item.sessions.length === 0 && <button className="session-row empty" onClick={() => void startSession(item.cwd)}>新会话</button>}
+                    {!showArchived && item.sessions.every(entry => entry.archived) && <button className="session-row empty" onClick={() => void startSession(item.cwd)}>新会话</button>}
                   </div>
                 )}
               </div>
@@ -1672,6 +1714,7 @@ export function App() {
           {!stateLoading && visibleWorkspaces.length === 0 && <div className="sidebar-empty"><FolderOpen /><span>{workspaceQuery ? '没有匹配的工作区或会话' : '打开一个文件夹，开始工作'}</span>{!workspaceQuery && <button className="settings-outline" onClick={chooseFile}>打开工作区</button>}</div>}
         </div>
         <div className="sidebar-bottom">
+          {(showArchived || workspaces.some(item => item.sessions.some(entry => entry.archived))) && <button className="sidebar-archive-toggle" onClick={() => setShowArchived(current => !current)}>{showArchived ? '返回未归档会话' : '查看归档会话'}</button>}
           <button className="bottom-row" title="设置" onClick={() => void openSettings()}><Settings /><span>设置</span><span className="status"><i />本地运行</span></button>
         </div>
       </aside>
@@ -1706,7 +1749,7 @@ export function App() {
                 )}
               </div>
             )}
-            {error && !messages.some((message) => message.role === 'assistant' && message.errorMessage) && <div className="error-card" role="alert"><strong>暂时无法完成操作</strong><p>{error}</p></div>}
+            {error && <div className="error-card" role="alert"><strong>暂时无法完成操作</strong><p>{error}</p></div>}
           </div>
         </div>}
 
@@ -1734,9 +1777,9 @@ export function App() {
           {(todoDetails || todoPanelOpen) && <TodoDock details={todoDetails} open={todoPanelOpen} onToggle={() => setTodoPanelOpen((value) => !value)} />}
           {queuedPrompts.length > 0 && <QueuedMessages items={queuedPreviews} onEdit={editQueued} onDelete={deleteQueued} onSendNow={(id) => void sendQueuedNow(id)} onSendAll={() => void sendAllQueued()} onReorder={reorderQueued} />}
           {isNewConversation && <div className="new-conversation-intro">
-            <span className="new-conversation-context" title={workspace}>{activeWorkspace?.name || (workspace ? workspace.split('/').pop() : 'Pi Studio')}</span>
             <h2>今天，<em>想做点什么？</em></h2>
-            <p>从一个念头开始。</p>
+            <p id="workspace-selection-hint" role="status">{workspace ? '从一个念头开始，在这个工作区里继续。' : '先选择一个工作区，再开始对话。'}</p>
+            <WorkspacePicker value={workspace} workspaces={workspaces} onChange={selectDraftWorkspace} onBrowse={chooseFile} />
           </div>}
           <div className="composer-wrap" ref={composerWrapRef}>
             {composerMenu && <div className="composer-picker" role="listbox" aria-label={composerMenu.kind === 'slash' ? '命令与技能' : '工作区文件与目录'}>
@@ -1807,6 +1850,7 @@ export function App() {
                 if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); }
               }}
               aria-label="发送给 Pi 的消息"
+              aria-describedby={isNewConversation ? 'workspace-selection-hint' : undefined}
               className={queuedPrompts.length > 0 ? 'has-queued' : undefined}
               aria-expanded={Boolean(composerMenu)}
               placeholder={queuedPrompts.length > 0 ? 'Cmd/Ctrl+Enter 插话发送全部排队消息' : '描述你的想法，或输入 / 命令、@ 文件…'}
@@ -1818,7 +1862,7 @@ export function App() {
               </div>
               <div className="composer-right">
                 <ModelPicker selection={modelSelection} disabled={busy || stateLoading} hidden={settingsOpen} loadCatalog={loadModelCatalog} onSelectModel={selectModel} onSelectThinking={selectThinking} onManage={() => void openSettings('models')} />
-                <button className="send-button" disabled={!prompt.trim() && composerAttachments.length === 0} onClick={() => void send()} aria-label={busy ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'} title={busy ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'}><ArrowUp /></button>
+                <button className="send-button" disabled={!workspace || (!prompt.trim() && composerAttachments.length === 0)} onClick={() => void send()} aria-label={busy ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'} title={!workspace ? '请先选择工作区' : busy ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'}><ArrowUp /></button>
               </div>
             </div>
             </div>
@@ -1972,7 +2016,7 @@ export function App() {
               <label>来源 ID<input autoFocus={!editor.editId} required disabled={Boolean(editor.editId)} value={providerDraft.providerId} onChange={(event) => setProviderDraft({ ...providerDraft, providerId: event.target.value })} placeholder="my-provider" /></label>
               <div className="settings-field"><span>API 类型</span><Select label="API 类型" value={providerDraft.api} onChange={(value) => setProviderDraft({ ...providerDraft, api: value })} options={[...apiTypeOptions, ...(apiTypeOptions.some((option) => option.value === providerDraft.api) ? [] : [{ value: providerDraft.api, label: providerDraft.api }])]} /></div>
               <label className="field-wide">服务地址<input autoFocus={Boolean(editor.editId)} required type="url" value={providerDraft.baseUrl} onChange={(event) => setProviderDraft({ ...providerDraft, baseUrl: event.target.value })} placeholder="https://api.example.com/v1" /></label>
-              <label className="field-wide">API Key<input aria-label="API Key" aria-describedby="provider-key-help" type="password" autoComplete="new-password" value={providerDraft.apiKey} onChange={(event) => setProviderDraft({ ...providerDraft, apiKey: event.target.value })} placeholder={editor.editId ? '已保存的凭据不显示，留空保持原值' : 'API Key 或 $ENV_VAR'} /><small id="provider-key-help">支持环境变量引用，例如 $MINIMAX_CN_API_KEY。</small></label>
+              <label className="field-wide">API Key<input aria-label="API Key" aria-describedby="provider-key-help" type="password" autoComplete="new-password" value={providerDraft.apiKey} onChange={(event) => setProviderDraft({ ...providerDraft, apiKey: event.target.value })} placeholder={editor.editId ? '已保存的凭据不显示，留空保持原值' : '密钥值或 $ENV_VAR'} /><small id="provider-key-help">填写密钥值，或环境变量名（如 ZAI_CODING_CN_API_KEY、$ZAI_CODING_CN_API_KEY）。macOS 会读取 shell 中 export 的变量；保存时检查是否可读取。</small></label>
               <label className="field-wide">图标 URL<input value={providerDraft.icon} onChange={(event) => setProviderDraft({ ...providerDraft, icon: event.target.value })} placeholder="可选，https://... 或 data:image/..." /><small>用于替换默认的品牌图标，留空使用内置图标。</small></label>
               {!editor.editId && <><label>首个模型 ID<input required value={providerDraft.modelId} onChange={(event) => setProviderDraft({ ...providerDraft, modelId: event.target.value })} placeholder="model-id" /></label><label>显示名称<input value={providerDraft.modelName} onChange={(event) => setProviderDraft({ ...providerDraft, modelName: event.target.value })} placeholder="可选，默认使用模型 ID" /></label></>}
             </div>}

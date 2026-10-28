@@ -81,7 +81,7 @@ function ActivityThinking({ block }: { block: Extract<ContentBlock, { type: 'thi
   const preview = block.redacted ? '思考内容已隐藏' : block.thinking.replace(/\s+/g, ' ').trim().slice(0, 110);
   return <details className="activity-thinking">
     <summary>
-      <span className="activity-thinking-label">思考</span>
+      <span className="activity-thinking-label">思考过程</span>
       {preview && <span className="activity-thinking-preview">{preview}</span>}
       <ChevronDown className="activity-thinking-chevron" />
     </summary>
@@ -102,8 +102,10 @@ function activityColor(entry: ActivityEntry): string {
 }
 
 function AssistantError({ message }: { message: string }) {
-  const code = message.match(/(?:^|\s)([45]\d{2})(?:\s|$)/)?.[1];
-  const hint = code?.startsWith('5')
+  const code = message.match(/(?:^|\s)([45]\d{2})(?=\s|:|$)/)?.[1];
+  const hint = code === '401' || code === '403'
+    ? '认证未通过，请检查此来源的密钥、环境变量和服务地址是否匹配。'
+    : code?.startsWith('5')
     ? '模型服务暂时不可用，可以稍后重新发送。'
     : code?.startsWith('4')
       ? '请求没有被模型服务接受，请检查模型、凭据或参数后重试。'

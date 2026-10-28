@@ -13,12 +13,13 @@ type SelectProps = {
   disabled?: boolean;
   autoFocus?: boolean;
   className?: string;
+  menuClassName?: string;
 };
 
 type Placement = { left: number; top?: number; bottom?: number; width: number };
 
 /** Shared dropdown used by every form. Native selects render differently per OS. */
-export function Select({ value, options, onChange, label, placeholder = '请选择', disabled = false, autoFocus = false, className = '' }: SelectProps) {
+export function Select({ value, options, onChange, label, placeholder = '请选择', disabled = false, autoFocus = false, className = '', menuClassName = '' }: SelectProps) {
   const [open, setOpen] = useState(false);
   const [placement, setPlacement] = useState<Placement | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -124,7 +125,7 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
         <div
           ref={menuRef}
           id={listId}
-          className="pi-select-menu"
+          className={`pi-select-menu ${menuClassName}`}
           role="listbox"
           aria-label={label}
           style={{ left: placement.left, width: placement.width, top: placement.top, bottom: placement.bottom }}

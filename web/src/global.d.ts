@@ -8,6 +8,8 @@ interface PiSessionSummary {
   title: string;
   updatedAt: number;
   messageCount: number;
+  pinned?: boolean;
+  archived?: boolean;
 }
 
 interface PiWorkspace {
@@ -41,9 +43,11 @@ interface SettingsSnapshot {
 declare global {
   interface Window {
     piApi: {
+      setTheme(theme: 'light' | 'dark' | 'system'): Promise<void>;
       state(cwd?: string): Promise<{ workspaces: PiWorkspace[]; model: ModelSelection; cwd: string }>;
       createSession(cwd: string): Promise<PiDetail>;
       session(id: string): Promise<PiDetail | undefined>;
+      sidebarAction(payload: { kind: 'workspace' | 'session'; id: string; action: 'rename' | 'remove' | 'pin' | 'archive' | 'fork'; name?: string }): Promise<{ id?: string; cwd?: string; title?: string }>;
       prompt(payload: { sessionId: string; text: string; requestId: string; mentions?: string[]; attachments?: string[]; images?: Array<{ type: 'image'; data: string; mimeType: string }> }): Promise<void>;
       files(cwd: string, path: string): Promise<{ path: string; entries: Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }> }>;
       file(cwd: string, path: string): Promise<{ path: string; size: number; binary: boolean; text: string }>;

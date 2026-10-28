@@ -1,21 +1,7 @@
-/* Scrollbar skin: the sole consumer of the four --dsw-alias-scrollbar-*
- * tokens. Without it every scrolling region renders the UA scrollbar, which
- * ignores the theme — a light native bar over the dark palette.
- *
- * The rules sit on `body`, not `html`: design-platform.css declares the
- * --dsw-alias-* tokens on `body` (and the dark overrides on
- * `body[data-ds-dark-theme]`), and custom properties only inherit downward,
- * so an `html` rule resolves them to the guaranteed-invalid value and
- * `scrollbar-color` falls back to `auto`.
- *
- * Surfaces pick their elevation by rebinding --dsh-scrollbar-thumb{,-hover}:
- * the l1 pair here is the base-surface default, and an elevated surface
- * (menu, popover, dialog) rebinds to the l2 pair on its own container. A
- * scroll container may also rebind the three geometry variables below. */
-
+/* Scrollbar geometry is shared; all colors come from palette.css. */
 body {
-  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l1);
-  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l1);
+  --dsh-scrollbar-thumb: var(--scrollbar);
+  --dsh-scrollbar-thumb-hover: var(--scrollbar-hover);
   --dsh-scrollbar-thumb-border: 0px;
   --dsh-scrollbar-track-margin: 0px;
   /* The WebKit bar's layout width, mirrored by the ::-webkit-scrollbar rule
@@ -56,7 +42,7 @@ body {
   body,
   body * {
     scrollbar-width: thin;
-    scrollbar-color: var(--dsh-scrollbar-thumb) transparent;
+    scrollbar-color: var(--dsh-scrollbar-thumb) var(--transparent);
   }
 }
 
@@ -73,11 +59,11 @@ body {
    under it; only the thumb carries a token colour. */
 ::-webkit-scrollbar-track {
   margin-block: var(--dsh-scrollbar-track-margin);
-  background: transparent;
+  background: var(--transparent);
 }
 
 ::-webkit-scrollbar-thumb {
-  border: var(--dsh-scrollbar-thumb-border) solid transparent;
+  border: var(--dsh-scrollbar-thumb-border) solid var(--transparent);
   border-radius: 999px;
   corner-shape: round;
   background: var(--dsh-scrollbar-thumb);
@@ -93,5 +79,5 @@ body {
 /* Both scrollbars meeting in a corner: no separate token, so the corner
    matches the transparent track rather than the UA's opaque default. */
 ::-webkit-scrollbar-corner {
-  background: transparent;
+  background: var(--transparent);
 }
