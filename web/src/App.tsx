@@ -145,6 +145,8 @@ export function App() {
   const [openFiles, setOpenFiles] = useState<Record<string, PanelFile>>({});
   const [panelTabs, setPanelTabs] = useState<PanelTab[]>([{ id: 'start', kind: 'start', title: '开始' }]);
   const [activePanelTabId, setActivePanelTabId] = useState('start');
+  const [tabDropTarget, setTabDropTarget] = useState<string | null>(null);
+  const tabDragRef = useRef<string | null>(null);
   const [panelFullscreen, setPanelFullscreen] = useState(false);
   const [panelEntered, setPanelEntered] = useState(false);
   const panelCloseTimerRef = useRef<number | null>(null);
@@ -548,7 +550,7 @@ export function App() {
     });
   }
 
-  function makeDragPreview(event: React.DragEvent, label: string, kind: '工作区' | '会话') {
+  function makeDragPreview(event: React.DragEvent, label: string, kind: '工作区' | '会话' | '标签') {
     dragPreviewRef.current?.remove();
     const ghost = document.createElement('div');
     ghost.className = 'drag-preview';
@@ -796,6 +798,18 @@ export function App() {
       </div>
       <button className="model-card-remove" disabled={settingsBusy} aria-label={`移除模型 ${item?.name ?? id}`} title="移除" onClick={() => void setEnabled(enabledModels.filter((entry) => entry !== id))}><X /></button>
     </article>;
+  }
+
+  function reorderPanelTabs(sourceId: string, targetId: string) {
+    if (sourceId === targetId) return;
+    setPanelTabs((current) => {
+      const order = [...current];
+      const from = order.findIndex((tab) => tab.id === sourceId);
+      const to = order.findIndex((tab) => tab.id === targetId);
+      if (from < 0 || to < 0) return current;
+      order.splice(to, 0, ...order.splice(from, 1));
+      return order;
+    });
   }
 
   const activePanelTab = panelTabs.find((tab) => tab.id === activePanelTabId) ?? panelTabs[0];
@@ -1248,13 +1262,36 @@ export function App() {
                 role="tab"
                 tabIndex={activePanelTabId === tab.id ? 0 : -1}
                 aria-selected={activePanelTabId === tab.id}
-                className={`panel-tab ${activePanelTabId === tab.id ? 'is-active' : ''}`}
+                className={`panel-tab ${activePanelTabId === tab.id ? 'is-active' : ''} ${tabDragRef.current === tab.id ? 'is-dragging' : ''} ${tabDropTarget === tab.id ? 'tab-drop-before' : ''}`}
+                draggable
                 onClick={() => activatePanelTab(tab)}
                 onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activatePanelTab(tab); } }}
+                onDragStart={(event) => {
+                  tabDragRef.current = tab.id;
+                  event.dataTransfer.effectAllowed = 'move';
+                  event.dataTransfer.setData('text/plain', tab.id);
+                  makeDragPreview(event, tab.title, '标签');
+                }}
+                onDragOver={(event) => {
+                  if (!tabDragRef.current || tabDragRef.current === tab.id) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'move';
+                  setTabDropTarget(tab.id);
+                }}
+                onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setTabDropTarget(null); }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (tabDragRef.current) reorderPanelTabs(tabDragRef.current, tab.id);
+                  tabDragRef.current = null;
+                  setTabDropTarget(null);
+                  dragPreviewRef.current?.remove();
+                  dragPreviewRef.current = null;
+                }}
+                onDragEnd={() => { tabDragRef.current = null; setTabDropTarget(null); dragPreviewRef.current?.remove(); dragPreviewRef.current = null; }}
               >
                 <span className={`panel-tab-icon is-${tab.kind}`}>{panelTabIcon(tab)}</span>
                 <span className="panel-tab-label">{tab.title}</span>
-                <button className="panel-tab-close" aria-label={`关闭 ${tab.title}`} onClick={(event) => { event.stopPropagation(); closePanelTab(tab.id); }}><X /></button>
+                <button className="panel-tab-close" draggable={false} aria-label={`关闭 ${tab.title}`} onDragStart={(event) => event.preventDefault()} onClick={(event) => { event.stopPropagation(); closePanelTab(tab.id); }}><X /></button>
               </div>)}
               <button className="panel-tab-add" title="打开工作区文件" aria-label="打开工作区文件" onClick={openFilesTab}><Plus /></button>
             </div>
