@@ -613,6 +613,9 @@ export function App() {
   }, [session?.id]);
 
   useEffect(() => {
+    // 切换会话时先清空，避免上一条会话的扩展状态残留到新会话
+    setExtensionStatuses({});
+    setExtensionFooter('');
     if (!session?.id) return;
     let cancelled = false;
     void window.piApi.extensionState(session.id).then((state) => {
@@ -1711,7 +1714,13 @@ export function App() {
               </div>
             );
           })}
-          {!stateLoading && visibleWorkspaces.length === 0 && <div className="sidebar-empty"><FolderOpen /><span>{workspaceQuery ? '没有匹配的工作区或会话' : '打开一个文件夹，开始工作'}</span>{!workspaceQuery && <button className="settings-outline" onClick={chooseFile}>打开工作区</button>}</div>}
+          {!stateLoading && visibleWorkspaces.length === 0 && (
+            <div className="sidebar-empty">
+              <span className="sidebar-empty-icon"><FolderOpen /></span>
+              <strong>{workspaceQuery ? '没有匹配的结果' : '还没有工作区'}</strong>
+              <span>{workspaceQuery ? '换个关键词，或清空搜索' : '用上方的文件夹按钮打开一个目录'}</span>
+            </div>
+          )}
         </div>
         <div className="sidebar-bottom">
           {(showArchived || workspaces.some(item => item.sessions.some(entry => entry.archived))) && <button className="sidebar-archive-toggle" onClick={() => setShowArchived(current => !current)}>{showArchived ? '返回未归档会话' : '查看归档会话'}</button>}
