@@ -22,6 +22,7 @@ import {
 import appIcon from '../../assets/icon.png';
 import { ExtensionFooter } from './components/ExtensionFooter';
 import { Select } from './components/Select';
+import { splitComposerText } from './references';
 import type { ChatMessage, ComposerAttachment, ComposerCommand, ComposerCommandSource, ComposerFile, TodoDetails } from './chat-types';
 import { AttachmentIcon } from './components/AttachmentIcon';
 import { AssistantTurnView, ChatMessageView } from './components/ChatMessage';
@@ -332,6 +333,8 @@ export function App() {
   const outlineSyncRef = useRef(0);
   const followBottomRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composerHighlightRef = useRef<HTMLDivElement>(null);
+  const [composing, setComposing] = useState(false);
   const settingsContentRef = useRef<HTMLElement>(null);
   const settingsReturnFocusRef = useRef<HTMLElement | null>(null);
   const requestRef = useRef<string | null>(null);
@@ -1076,9 +1079,10 @@ export function App() {
    */
   function updateComposerMenu(value: string, caret: number) {
     const before = value.slice(0, caret);
-    const slash = before.match(/^\/([^\s]*)$/);
+    const slash = before.match(/(?:^|\s)\/([^\s]*)$/);
     if (slash) {
-      const next = { kind: 'slash' as const, query: slash[1], start: 0, end: caret };
+      const start = caret - slash[1].length - 1;
+      const next = { kind: 'slash' as const, query: slash[1], start, end: caret };
       setComposerMenu((current) => current?.kind === next.kind && current.query === next.query && current.start === next.start && current.end === next.end ? current : next);
       setComposerMenuIndex(0);
       return;
@@ -1169,6 +1173,12 @@ export function App() {
   }, [composerMenu?.kind, composerMenu?.query, workspace]);
 
   useEffect(() => { setComposerMenuIndex(0); }, [composerMenu?.kind, composerMenu?.query, composerCommands, composerFiles]);
+
+  // 键盘上下移动时把当前项滚进可视区，避免长列表里选中项在视野外。
+  useEffect(() => {
+    if (!composerMenu) return;
+    composerWrapRef.current?.querySelector<HTMLElement>('.composer-option.is-active')?.scrollIntoView({ block: 'nearest' });
+  }, [composerMenu, composerMenuIndex]);
 
   useEffect(() => {
     if (!composerMenu) return;
@@ -1644,6 +1654,9 @@ export function App() {
     : [];
   const composerFileOptions = composerMenu?.kind === 'file' ? composerFiles : [];
   const composerOptionsCount = composerMenu?.kind === 'slash' ? composerCommandOptions.length : composerFileOptions.length;
+  // 输入框内联高亮：只影响显示，真实文本仍是 textarea 的值。
+  const composerCommandNames = useMemo(() => new Set(composerCommands.map((command) => command.name)), [composerCommands]);
+  const composerSegments = useMemo(() => splitComposerText(prompt, composerCommandNames), [prompt, composerCommandNames]);
   const globalSkillGroups = [
     { key: 'agents', label: '~/.agents/skills', items: (settingsData?.skills ?? []).filter((skill) => !skill.path.includes('/.pi/agent/skills/')) },
     { key: 'pi', label: '~/.pi/agent/skills', items: (settingsData?.skills ?? []).filter((skill) => skill.path.includes('/.pi/agent/skills/')) },
@@ -2080,7 +2093,14 @@ export function App() {
                   <button type="button" aria-label={`移除 ${attachment.name}`} onClick={() => removeComposerAttachment(attachment.id)}><X /></button>
                 </div>)}
             </div>}
-            <textarea
+            <div className={`composer-input ${composing ? 'is-composing' : ''}`}>
+              <div className="composer-highlight" ref={composerHighlightRef} aria-hidden="true">
+                {composerSegments.map((segment, index) => segment.kind === 'text'
+                  ? <span key={index}>{segment.text}</span>
+                  : <span key={index} className={`composer-token is-${segment.tokenKind}`}>{segment.text}</span>)}
+                {prompt.endsWith('\n') && <span>{'\u200b'}</span>}
+              </div>
+              <textarea
               ref={textareaRef}
               value={prompt}
               onChange={(event) => { const value = event.target.value; setPrompt(value); updateComposerMenu(value, event.target.selectionStart ?? value.length); }}
@@ -2098,11 +2118,21 @@ export function App() {
               }}
               aria-label="发送给 Pi 的消息"
               aria-describedby={isNewConversation ? 'workspace-selection-hint' : undefined}
-              className={queuedPrompts.length > 0 ? 'has-queued' : undefined}
+              className={`${queuedPrompts.length > 0 ? 'has-queued' : ''} ${composing ? 'is-composing' : ''}`.trim() || undefined}
               aria-expanded={Boolean(composerMenu)}
               placeholder={queuedPrompts.length > 0 ? 'Cmd/Ctrl+Enter 插话发送全部排队消息' : '描述你的想法，或输入 / 命令、@ 文件…'}
               rows={2}
+              onScroll={(event) => {
+                // 高亮层与 textarea 同步滚动，保证长文本换行时不错位。
+                if (composerHighlightRef.current) {
+                  composerHighlightRef.current.scrollTop = event.currentTarget.scrollTop;
+                  composerHighlightRef.current.scrollLeft = event.currentTarget.scrollLeft;
+                }
+              }}
+              onCompositionStart={() => setComposing(true)}
+              onCompositionEnd={() => setComposing(false)}
             />
+            </div>
             <div className="composer-bar">
               <div className="composer-left">
                 <button type="button" className="composer-attach-button" disabled={busy} onClick={() => void pickComposerAttachments()} aria-label="添加图片或文件" title="添加图片或文件"><Plus /></button>

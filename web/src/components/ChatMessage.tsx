@@ -19,11 +19,12 @@
  * 图片以 data URI 内联渲染，不再额外请求主进程。
  */
 import { useEffect, useState } from 'react';
-import { Activity, Brain, ChevronDown, CircleAlert, CircleCheck, CircleX, FileText, LoaderCircle, Pencil, Search, Terminal, Wrench } from 'lucide-react';
+import { Activity, Brain, ChevronDown, CircleAlert, CircleCheck, CircleX, FileText, LoaderCircle, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
 import type { ChatMessage, ContentBlock, ToolCallBlock } from '../chat-types';
 import type { StepCollapse, StepDisplay } from '../preferences';
 import { AttachmentIcon, attachmentVisual } from './AttachmentIcon';
 import { Markdown } from './Markdown';
+import { splitMessageText, type Reference } from '../references';
 
 /** 拼出消息里的全部文本块（用换行分隔）；用户正文和工具结果共用这一逻辑。 */
 function textBlocks(blocks: ContentBlock[]): string {
@@ -318,6 +319,39 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
 }
 
 /**
+ * 一枚引用徽章：技能显示上下文菜单图标，文件显示文档图标。
+ * 技能块还会把展开后的正文收进可折叠详情，避免一屏都是 SKILL.md。
+ */
+function ReferenceChip({ reference }: { reference: Reference }) {
+  if (reference.kind === 'skill') {
+    return <>
+      <span className="ref-chip is-skill" title={reference.location || '技能'}>
+        <Sparkles aria-hidden="true" />
+        {reference.label}
+      </span>
+      {reference.body && <details className="ref-skill-body">
+        <summary>技能内容</summary>
+        <pre>{reference.body}</pre>
+      </details>}
+    </>;
+  }
+  return <span className="ref-chip is-file" title={reference.location}>
+    <FileText aria-hidden="true" />
+    {reference.label}
+  </span>;
+}
+
+/** 用户正文：普通文本原样输出，技能/文件引用替换成徽章（不改变消息本身）。 */
+function UserText({ text }: { text: string }) {
+  const segments = splitMessageText(text);
+  return <div className="user-text">
+    {segments.map((segment, index) => segment.kind === 'text'
+      ? <span key={index}>{segment.text}</span>
+      : <ReferenceChip key={index} reference={segment.reference} />)}
+  </div>;
+}
+
+/**
  * 单条用户消息气泡。
  *
  * 正文取文本块；附件来自主进程落盘后的 ChatAttachment（展示体积与行数），
@@ -331,7 +365,7 @@ export function ChatMessageView({ message, id }: { message: ChatMessage; id?: st
   if (message.role !== 'user') return null;
   const text = textBlocks(message.content);
   return <div id={id} className="message user"><div className="user-bubble">
-    {text && <div className="user-text">{text}</div>}
+    {text && <UserText text={text} />}
     {/* 附件卡片展示名称、体积/行数与类型角标；title 给出去向的绝对路径。 */}
     {message.attachments?.map((attachment) => {
       const visual = attachmentVisual(attachment.name, attachment.mime);

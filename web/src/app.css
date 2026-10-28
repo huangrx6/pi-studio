@@ -184,6 +184,16 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .composer { max-width: var(--content); margin: 0 auto; border: 1px solid var(--border-strong); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-composer); transition: border-color var(--transition), box-shadow var(--transition); }
 .composer:focus-within { border-color: var(--focus-color); box-shadow: var(--focus-ring), var(--shadow-composer); }
 .composer textarea { display: block; width: 100%; min-height: 76px; max-height: 200px; resize: none; padding: var(--space-4) var(--space-4) var(--space-2); border: 0; border-radius: var(--radius-panel); outline: 0; background: var(--transparent); font-size: var(--text-md); line-height: 1.7; }
+
+/* 输入框内联高亮：textarea 负责编辑，底层 div 负责显示彩色 token（DSH 同款观感）。 */
+.composer-input { position: relative; }
+.composer-highlight { position: absolute; inset: 0; z-index: 0; overflow: hidden; padding: var(--space-4) var(--space-4) var(--space-2); color: var(--text); font-size: var(--text-md); line-height: 1.7; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; pointer-events: none; }
+.composer textarea { position: relative; z-index: 1; color: var(--transparent); -webkit-text-fill-color: var(--transparent); caret-color: var(--text); }
+.composer textarea::placeholder { color: var(--faint); -webkit-text-fill-color: var(--faint); }
+.composer-input.is-composing .composer-highlight { visibility: hidden; }
+.composer-input.is-composing textarea { color: var(--text); -webkit-text-fill-color: currentColor; }
+.composer-token { color: var(--accent); }
+.composer-token.is-file { color: var(--link); }
 .composer-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2) var(--space-3) var(--space-3); }
 .composer-left, .composer-right { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
 
@@ -1516,6 +1526,17 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .composer-attachment > span strong { overflow: hidden; color: var(--muted); font: 10px var(--mono); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .composer-attachment > span small { color: var(--faint); font-size: 9px; }
 .composer-attachment > button { position: absolute; top: -5px; right: -5px; display: grid; place-items: center; width: 17px; height: 17px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--faint); box-shadow: var(--shadow-composer); }
+
+/* 引用徽章：输入框引用条与用户消息共用同一套外观。 */
+.ref-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; min-width: 0; padding: 1px 6px 1px 7px; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--muted); font-size: var(--text-xs); line-height: 1.7; vertical-align: baseline; }
+.ref-chip > svg { width: 12px; height: 12px; flex: none; color: var(--faint); }
+.ref-chip > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ref-chip.is-skill { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent); }
+.ref-chip.is-skill > svg { color: var(--accent); }
+.user-text .ref-chip { margin: 0 2px; }
+.ref-skill-body { margin: 6px 0 0; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-soft); }
+.ref-skill-body > summary { padding: 5px 10px; color: var(--muted); font-size: var(--text-xs); cursor: pointer; }
+.ref-skill-body > pre { max-height: 240px; margin: 0; padding: 0 10px 10px; overflow: auto; color: var(--muted); font: var(--text-xs)/1.6 var(--mono); white-space: pre-wrap; }
 .composer-attachment > button:hover { color: var(--error); border-color: var(--border-hover); background: var(--surface-hover); }
 .composer-attachment > button svg { width: 10px; height: 10px; }
 .composer-attach-button { display: grid; place-items: center; width: 30px; height: var(--control-sm); flex: none; border-radius: var(--radius-control); color: var(--muted); }
@@ -1677,7 +1698,7 @@ error-card 也在这里被统一成同一套视觉。 */
 .queued-actions button:hover { background: var(--surface-hover); color: var(--text); }
 .queued-actions button:first-child:hover { color: var(--text); }
 .queued-actions svg { width: 12px; height: 12px; }
-.composer textarea.has-queued::placeholder { color: var(--muted); }
+.composer textarea.has-queued::placeholder { color: var(--muted); -webkit-text-fill-color: var(--muted); }
 
 /* Do not flood expanded tool cards on hover; keep each parameter/result surface legible. */
 /* 展开后的工具卡不再整体变色：hover 只加深边框和表面，参数与结果区域保持
