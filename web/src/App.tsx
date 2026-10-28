@@ -806,6 +806,7 @@ export function App() {
       return true;
     }
     if (name === 'settings') { await openSettings(); return true; }
+    if (name === 'mcp') { await openSettings('mcp'); return true; }
     if (name === 'model' || name === 'thinking') { await openSettings('models'); return true; }
     if (name === 'copy') {
       const last = [...messages].reverse().find((message) => message.role === 'assistant');
@@ -907,7 +908,7 @@ export function App() {
     const text = prompt.trim();
     if ((!text && composerAttachments.length === 0) || busy) return;
     if (composerAttachments.length === 0 && text.startsWith('/')) {
-      const builtin = text.match(/^\/(new|settings|model|thinking|copy)(?:\s|$)/);
+      const builtin = text.match(/^\/(new|settings|model|thinking|copy|mcp)(?:\s|$)/);
       if (builtin && await executeBuiltinCommand(builtin[1])) {
         setPrompt('');
         setComposerMenu(null);
@@ -1522,9 +1523,9 @@ export function App() {
               <div className="composer-picker-scroll">
                 {composerMenu.kind === 'slash' && ([
                   { source: 'builtin', label: '命令' },
-                  { source: 'extension', label: '扩展命令' },
-                  { source: 'prompt', label: '提示模板' },
                   { source: 'skill', label: '技能' },
+                  { source: 'prompt', label: '提示模板' },
+                  { source: 'extension', label: '扩展命令' },
                 ] as const).map((group) => {
                   const items = composerCommandOptions.filter((command) => command.source === group.source);
                   if (items.length === 0) return null;

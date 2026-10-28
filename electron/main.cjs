@@ -159,11 +159,14 @@ const BUILTIN_COMPOSER_COMMANDS = [
   { name: 'model', description: '打开模型与账号设置', source: 'builtin' },
   { name: 'thinking', description: '调整模型的思考强度', source: 'builtin' },
   { name: 'settings', description: '打开设置', source: 'builtin' },
+  { name: 'mcp', description: '管理 MCP 服务器与连接', source: 'builtin' },
   { name: 'copy', description: '复制最后一条助理回复', source: 'builtin' },
 ];
 
 async function composerResources({ sessionId, cwd }) {
-  const commands = [...BUILTIN_COMPOSER_COMMANDS];
+  const commands = BUILTIN_COMPOSER_COMMANDS.map((command) => command.name === 'mcp'
+    ? { ...command, description: (() => { try { const configured = readConfig(path.join(pi.getAgentDir(), 'mcp.json'), { mcpServers: {} }); return `管理 MCP 服务器与连接（${Object.keys(configured.mcpServers || {}).length} 个）`; } catch { return '管理 MCP 服务器与连接'; } })() }
+    : command);
   let session;
   if (sessionId) {
     try {
