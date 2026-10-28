@@ -1588,3 +1588,11 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 .queued-actions svg { width: 12px; height: 12px; }
 .composer textarea.has-queued::placeholder { color: var(--muted); }
 :root[data-theme="dark"] .queued-item { box-shadow: none; }
+
+/* Do not flood expanded tool cards on hover; keep each parameter/result surface legible. */
+.activity-tool:hover { background: var(--surface); border-color: var(--border-strong); }
+.activity-drawer > summary:hover { background: var(--surface-soft); }
+.activity-tool-body { background: var(--surface); }
+.activity-tool-code { border: 1px solid var(--border); background: var(--surface-soft); }
+:root[data-theme="dark"] .activity-tool:hover { background: var(--surface); border-color: var(--border-strong); }
+:root[data-theme="dark"] .activity-tool-code { background: #10100f; border-color: var(--border); }
