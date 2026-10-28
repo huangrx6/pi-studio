@@ -830,11 +830,11 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .panel-tab.is-active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-card); }
 .panel-tab > svg { width: 14px; height: 14px; flex: none; color: var(--faint); }
 .panel-tab > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.panel-tab-close { display: grid; place-items: center; width: 18px; height: 18px; flex: none; border-radius: var(--radius-tag); color: var(--faint); opacity: 0; }
+.panel-tab-close { display: grid; place-items: center; width: 18px; height: 18px; flex: none; padding: 0; border-radius: var(--radius-tag); color: var(--faint); opacity: 0; }
 .panel-tab:hover .panel-tab-close, .panel-tab.is-active .panel-tab-close, .panel-tab-close:focus-visible { opacity: 1; }
 .panel-tab-close:hover { background: var(--surface-active); color: var(--text); }
 .panel-tab-close svg { width: 12px; height: 12px; }
-.panel-tab-add { display: grid; place-items: center; width: 26px; height: 26px; flex: none; border-radius: var(--radius-tag); color: var(--faint); }
+.panel-tab-add { display: grid; place-items: center; width: 26px; height: 26px; flex: none; padding: 0; border-radius: var(--radius-tag); color: var(--faint); }
 .panel-tab-add:hover { background: var(--surface-hover); color: var(--text); }
 .panel-tab-add svg { width: 14px; height: 14px; }
 .panel-tools { display: flex; gap: 2px; flex: none; }
@@ -2095,7 +2095,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .confirm-heading { min-width: 0; flex: 1; }
 .confirm-eyebrow { display: block; margin-bottom: 4px; color: var(--faint); font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; }
 .confirm-heading h2 { margin: 0; font-size: 17px; font-weight: 550; letter-spacing: -.01em; }
-.confirm-close { display: grid; place-items: center; width: 26px; height: 26px; flex: none; border: 0; border-radius: 7px; background: none; color: var(--faint); }
+.confirm-close { display: grid; place-items: center; width: 26px; height: 26px; flex: none; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--faint); }
 .confirm-close:hover { background: var(--surface-hover); color: var(--text); }
 .confirm-close svg { width: 14px; height: 14px; }
 .confirm-body { margin-top: 16px; }
