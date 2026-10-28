@@ -260,7 +260,11 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
   onOpenDiff?: (file: TurnDiffFile) => void;
 }) {
   const live = Boolean(retry) || busy;
-  const failed = !live && messages.some((message) => message.errorMessage);
+  // 只看本轮最后一条助手消息：压缩/重试产生的中间失败不应盖住后面的成功输出。
+  const lastMessage = messages[messages.length - 1];
+  const error = !live ? lastMessage?.errorMessage : undefined;
+  const interrupted = Boolean(error && /aborted/i.test(error));
+  const failed = Boolean(error) && !interrupted;
   // 初始值只在挂载时取一次；之后由下面的 effect 和用户手动 toggle 接管。
   const [activityOpen, setActivityOpen] = useState(stepDisplay === 'detailed');
   // 自动展开/收起策略：
@@ -309,7 +313,6 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
 
   const codeFiles = showCodeView && !live ? collectFileChanges(messages, toolResults, cwd) : [];
   const turnDiff = showCodeView && !live ? gitDiff : undefined;
-  const error = messages.find((message) => message.errorMessage)?.errorMessage;
   // 复制只包含最终回复的文本块，不包含思考与工具调用。
   const answerText = responseBlocks
     .filter((entry) => entry.block.type === 'text')
@@ -322,7 +325,7 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
       {/* 头部状态只在整轮结束后变为已完成，工具之间的等待仍是运行中。 */}
       <div className="assistant-turn-head">
         <span className="assistant-turn-name">Pi</span>
-        <span className="assistant-turn-status" title={retry?.errorMessage}>{retry ? `重试中 ${retry.attempt}/${retry.maxAttempts}` : failed ? '失败' : live ? phase : '已完成'}</span>
+        <span className="assistant-turn-status" title={retry?.errorMessage}>{retry ? `重试中 ${retry.attempt}/${retry.maxAttempts}` : interrupted ? '已中断' : failed ? '失败' : live ? phase : '已完成'}</span>
         {latest?.timestamp && <time>{formatTime(latest.timestamp)}</time>}
       </div>
       {/* Historical records may collapse; current output never lives inside them. */}
@@ -352,7 +355,9 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
         {live && <span className="caret" />}
       </div>}
       {/* 失败卡片只在非 live 时出现，避免自动重试过程中闪错误。 */}
-      {!live && error && <AssistantError message={error} />}
+      {!live && error && (interrupted
+        ? <div className="assistant-interrupted" role="status">本轮已中断</div>
+        : <AssistantError message={error} />)}
       {(codeFiles.length > 0 || (turnDiff?.files.length ?? 0) > 0) && <FileChangeSummary files={codeFiles} gitDiff={turnDiff} onOpenDiff={onOpenDiff} />}
       {/* 回答结束后，悬浮显示复制与完成时间。 */}
       {!live && <MessageActions text={answerText} time={latest?.timestamp} label="复制回答" />}

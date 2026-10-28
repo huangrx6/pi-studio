@@ -2186,3 +2186,6 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .extension-custom-side { position: fixed; top: 0; right: 0; bottom: 0; z-index: 320; display: flex; width: min(460px, 92vw); padding: 14px; border-left: 1px solid var(--border); background: var(--bg); box-shadow: var(--shadow-drawer); }
 .extension-custom-side .extension-custom-card { width: 100%; max-height: 100%; }
 .extension-header { margin: 0 0 18px; padding: 10px 12px; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface-soft); font: 11px/1.6 var(--mono); }
+.compaction-banner { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; padding: 7px 10px; border: 1px solid var(--accent-border); border-radius: var(--radius-control); background: var(--accent-soft); color: var(--accent); font-size: var(--text-sm); }
+.compaction-banner svg { width: 13px; height: 13px; flex: none; }
+.assistant-interrupted { margin-top: 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-soft); color: var(--faint); font-size: 11px; }

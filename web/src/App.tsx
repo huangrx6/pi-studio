@@ -256,6 +256,7 @@ export function App() {
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [extensionToast, setExtensionToast] = useState<{ message: string; type: 'info' | 'warning' | 'error' } | null>(null);
   const [extensionWorking, setExtensionWorking] = useState<{ message: string; visible: boolean }>({ message: '', visible: true });
+  const [compaction, setCompaction] = useState<{ active: boolean; reason?: string }>({ active: false });
   const [permission, setPermission] = useState<{ available: boolean; mode: PermissionMode }>({ available: false, mode: 'smart' });
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const [fullPermissionOpen, setFullPermissionOpen] = useState(false);
@@ -743,6 +744,7 @@ export function App() {
     followBottomRef.current = true;
     setTodoPanelOpen(false);
     setQueuedPrompts([]);
+    setCompaction({ active: false });
   }, [session?.id]);
 
   useEffect(() => window.piApi.onSessionsChanged?.(() => { void loadState(); }), [loadState]);
@@ -838,6 +840,15 @@ export function App() {
         // 结束帧要立刻落地，否则下一轮的流式消息可能找不到要接续的气泡。
         if (event.type === 'message_end') flushNow();
       }
+      if (event.type === 'compaction-start' || event.type === 'compaction-interrupted') {
+        setCompaction({ active: true, reason: event.reason });
+        setBusy(true);
+        setError(null);
+      }
+      if (event.type === 'compaction-end') {
+        // 压缩结束并不代表恢复回合结束；保持 busy，等待自动继续的流式输出。
+        setCompaction((current) => current.active ? current : { active: true, reason: event.reason });
+      }
       if (event.type === 'turn-diff' && event.diff) {
         setLiveDiff(event.diff);
         setSession((current) => current ? { ...current, turnDiffs: [...(current.turnDiffs ?? []).filter((diff) => diff.at !== event.diff!.at), event.diff!] } : current);
@@ -852,6 +863,7 @@ export function App() {
         setMessages((current) => current.map((message) => ({ ...message, streaming: false })));
         setBusy(false);
         setError(null);
+        setCompaction({ active: false });
         void loadState();
       }
       if (event.type === 'error') {
@@ -860,6 +872,7 @@ export function App() {
         setError(event.error || '执行失败，请重试');
         setMessages((current) => current.map((message) => ({ ...message, streaming: false })));
         setBusy(false);
+        setCompaction({ active: false });
       }
     });
     return () => {
@@ -1356,6 +1369,10 @@ export function App() {
    *  - prompt：正常发送，先乐观插入用户消息，结束后用主进程返回的历史校准
    */
   async function dispatchSubmission(submission: PreparedSubmission, mode: 'prompt' | 'steer') {
+    if (compaction.active) {
+      setExtensionToast({ message: '上下文正在压缩，完成后会自动继续。', type: 'info' });
+      return;
+    }
     followBottomRef.current = true;
     // 先乐观插入用户消息，避免等待 IPC 时输入区看起来没反应。
     setMessages((existing) => [...existing, {
@@ -1384,6 +1401,7 @@ export function App() {
     setError(null);
     setRetryInfo(null);
     setLiveDiff(null);
+    setCompaction({ active: false });
     const requestId = crypto.randomUUID();
     requestRef.current = requestId;
     try {
@@ -1422,6 +1440,10 @@ export function App() {
   async function send() {
     const text = prompt.trim();
     if ((!text && composerAttachments.length === 0)) return;
+    if (compaction.active) {
+      setExtensionToast({ message: '上下文正在压缩，完成后会自动继续。', type: 'info' });
+      return;
+    }
     if (!busy && composerAttachments.length === 0 && text === '/todos') {
       setTodoPanelOpen(true);
       setPrompt('');
@@ -2170,6 +2192,7 @@ export function App() {
               </div>
               <div className="composer-picker-foot"><span>↑↓ 选择</span><span>↵ 确认</span><span>Esc 关闭</span></div>
             </div>}
+            {session?.id && compaction.active && <div className="compaction-banner" role="status"><LoaderCircle className="spin" /><span>上下文正在压缩，完成后会自动继续…</span></div>}
             {session?.id && busy && extensionWorking.visible && extensionWorking.message && <div className="extension-working" role="status"><LoaderCircle className="spin" /><span>{extensionWorking.message}</span></div>}
             {session?.id && <ExtensionStatusBar sessionId={session.id} />}
             {session?.id && <ExtensionWidgets sessionId={session.id} placement="aboveEditor" />}
@@ -2217,7 +2240,7 @@ export function App() {
               aria-describedby={isNewConversation ? 'workspace-selection-hint' : undefined}
               className={`${queuedPrompts.length > 0 ? 'has-queued' : ''} ${composing ? 'is-composing' : ''}`.trim() || undefined}
               aria-expanded={Boolean(composerMenu)}
-              placeholder={queuedPrompts.length > 0 ? 'Cmd/Ctrl+Enter 插话发送全部排队消息' : '描述你的想法，或输入 / 命令、@ 文件…'}
+              placeholder={compaction.active ? '正在压缩上下文，完成后自动继续…' : queuedPrompts.length > 0 ? 'Cmd/Ctrl+Enter 插话发送全部排队消息' : '描述你的想法，或输入 / 命令、@ 文件…'}
               rows={2}
               onScroll={(event) => {
                 // 高亮层与 textarea 同步滚动，保证长文本换行时不错位。
@@ -2248,7 +2271,7 @@ export function App() {
               </div>
               <div className="composer-right">
                 <ModelPicker selection={modelSelection} disabled={busy || stateLoading} hidden={settingsOpen} loadCatalog={loadModelCatalog} onSelectModel={selectModel} onSelectThinking={selectThinking} onManage={() => void openSettings('models')} />
-                <button className="send-button" disabled={!workspace || (!prompt.trim() && composerAttachments.length === 0)} onClick={() => void send()} aria-label={busy ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'} title={!workspace ? '请先选择工作区' : busy ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'}><ArrowUp /></button>
+                <button className="send-button" disabled={!workspace || (!prompt.trim() && composerAttachments.length === 0) || compaction.active} onClick={() => void send()} aria-label={compaction.active ? '正在压缩上下文' : busy ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'} title={!workspace ? '请先选择工作区' : compaction.active ? '正在压缩上下文，完成后自动继续' : busy ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'}><ArrowUp /></button>
               </div>
             </div>
             </div>

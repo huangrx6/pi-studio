@@ -278,7 +278,7 @@ declare global {
        * 一轮请求的流式事件。type 覆盖消息开始/增量/结束、自动重试开始与结束、
        * 整体完成与失败；渲染进程按 requestId 过滤出本次请求的事件。
        */
-      onPrompt(listener: (payload: { requestId: string; type: 'message_start' | 'message_update' | 'message_end' | 'retry-start' | 'retry-end' | 'turn-diff' | 'done' | 'error'; message?: ChatMessage; error?: string; attempt?: number; maxAttempts?: number; delayMs?: number; success?: boolean; finalError?: string; errorMessage?: string; diff?: TurnDiff; at?: number }) => void): () => void;
+      onPrompt(listener: (payload: { requestId: string; type: 'message_start' | 'message_update' | 'message_end' | 'retry-start' | 'retry-end' | 'compaction-start' | 'compaction-end' | 'compaction-interrupted' | 'turn-diff' | 'done' | 'error'; message?: ChatMessage; error?: string; attempt?: number; maxAttempts?: number; delayMs?: number; success?: boolean; finalError?: string; errorMessage?: string; diff?: TurnDiff; at?: number; reason?: 'manual' | 'threshold' | 'overflow'; aborted?: boolean }) => void): () => void;
 
       // ---- 扩展命令 ----
       /** 运行扩展提供的命令。 */

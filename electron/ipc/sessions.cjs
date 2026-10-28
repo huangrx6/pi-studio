@@ -101,6 +101,12 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
     pendingUpdates.clear();
     for (const message of batch) send({ type: 'message_update', message });
   };
+  let compactionSeen = false;
+  let recovering = false;
+  let recoveryTimer;
+  let recoveryPromise;
+  let resolveRecovery;
+  let cleaned = false;
   const unsubscribe = session.subscribe((piEvent) => {
     if (piEvent.type === 'message_update') {
       if (piEvent.message.role === 'user') return;
@@ -122,6 +128,14 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
           changed();
         }
       }
+    }
+    if (piEvent.type === 'compaction_start') {
+      compactionSeen = true;
+      send({ type: 'compaction-start', reason: piEvent.reason });
+    }
+    if (piEvent.type === 'compaction_end') {
+      send({ type: 'compaction-end', reason: piEvent.reason, aborted: piEvent.aborted, errorMessage: piEvent.errorMessage });
+      if (recovering) watchRecovery();
     }
     if (piEvent.type === 'auto_retry_start') {
       send({ type: 'retry-start', attempt: piEvent.attempt, maxAttempts: piEvent.maxAttempts, delayMs: piEvent.delayMs, errorMessage: piEvent.errorMessage });
@@ -151,11 +165,11 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
     }
   };
 
-  try {
-    const imageBlocks = Array.isArray(images)
-      ? images.filter((image) => image && image.type === 'image' && typeof image.data === 'string' && typeof image.mimeType === 'string').slice(0, 8)
-      : [];
-    await session.prompt(text, imageBlocks.length > 0 ? { images: imageBlocks } : undefined);
+  /** 收尾：索引、持久化、通知前端。正常回合与压缩恢复共用。 */
+  let doneSent = false;
+  async function completeRun() {
+    if (doneSent) return;
+    doneSent = true;
     flushUpdate();
     invalidateIndex();
     forgetDetail(sessionId);
@@ -164,7 +178,6 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
     send({ type: 'done' });
     // diff 在 done 之后异步计算，不阻塞流式收尾。
     void finishTurnDiff();
-    // Schedule after the answer: never block streaming, or run tools to name a chat.
     if (firstTurn) {
       const answer = [...session.messages].reverse().find(message => message.role === 'assistant');
       if (answer && !answer.errorMessage && !['error', 'aborted', 'length', 'toolUse'].includes(answer.stopReason)) {
@@ -175,18 +188,96 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
         }).catch(() => {});
       }
     }
-  } catch (error) {
-    flushUpdate();
-    void finishTurnDiff();
-    send({ type: 'error', error: error instanceof Error ? error.message : String(error) });
-    throw error;
-  } finally {
-    flushUpdate();
+  }
+
+  function cleanupRun() {
+    if (cleaned) return;
+    cleaned = true;
+    if (recoveryTimer) { clearInterval(recoveryTimer); recoveryTimer = undefined; }
     invalidateIndex();
     forgetDetail(sessionId);
     unsubscribe();
     changed();
   }
+
+  /**
+   * 压缩恢复观察器。
+   *
+   * 自动压缩会中止当前请求，再由扩展注入一条隐藏的「继续」消息启动新回合。
+   * 这里在压缩结束后等待新回合开始并结束，然后才发送 done；期间保持订阅，
+   * 继续把恢复回合的流式输出转发给前端。
+   */
+  function watchRecovery() {
+    if (recoveryTimer) return;
+    const started = Date.now();
+    let sawStreaming = session.isStreaming;
+    let idleSince = null;
+    recoveryTimer = setInterval(() => {
+      const elapsed = Date.now() - started;
+      if (elapsed > 5 * 60 * 1000) {
+        clearInterval(recoveryTimer);
+        recoveryTimer = undefined;
+        void completeRun().catch(() => {}).finally(() => { recovering = false; cleanupRun(); resolveRecovery?.(); });
+        return;
+      }
+      if (session.isCompacting) { idleSince = null; if (session.isStreaming) sawStreaming = true; return; }
+      if (session.isStreaming) { sawStreaming = true; idleSince = null; return; }
+      // 压缩完成与自动继续之间会有一段空闲；从「真正空闲」开始计时，
+      // 不能在压缩本身耗时较长时提前收尾。
+      if (sawStreaming || (idleSince !== null && Date.now() - idleSince > 5000)) {
+        clearInterval(recoveryTimer);
+        recoveryTimer = undefined;
+        void completeRun().catch(() => { /* 收尾失败仍要解除订阅 */ }).finally(() => {
+          recovering = false;
+          cleanupRun();
+        });
+        return;
+      }
+      if (idleSince === null) idleSince = Date.now();
+    }, 250);
+  }
+
+  function beginRecovery() {
+    if (!recoveryPromise) {
+      recoveryPromise = new Promise((resolve) => { resolveRecovery = resolve; });
+    }
+    if (recovering) return recoveryPromise;
+    recovering = true;
+    send({ type: 'compaction-interrupted' });
+    watchRecovery();
+    return recoveryPromise;
+  }
+
+  try {
+    const imageBlocks = Array.isArray(images)
+      ? images.filter((image) => image && image.type === 'image' && typeof image.data === 'string' && typeof image.mimeType === 'string').slice(0, 8)
+      : [];
+    await session.prompt(text, imageBlocks.length > 0 ? { images: imageBlocks } : undefined);
+    flushUpdate();
+    const lastAssistant = [...session.messages].reverse().find((message) => message.role === 'assistant');
+    const aborted = Boolean(lastAssistant && (lastAssistant.stopReason === 'aborted' || /aborted/i.test(lastAssistant.errorMessage || '')));
+    // 压缩中止了本回合：不要立刻 done，保持订阅等待扩展自动继续。
+    if (aborted && (compactionSeen || session.isCompacting)) {
+      await beginRecovery();
+      return;
+    }
+    await completeRun();
+  } catch (error) {
+    flushUpdate();
+    const message = error instanceof Error ? error.message : String(error);
+    // 压缩期间提交的 prompt 会被 Pi 拒绝；同样进入恢复流程，不显示原始英文错误。
+    if (compactionSeen || session.isCompacting || /compaction/i.test(message)) {
+      await beginRecovery();
+      return;
+    }
+    void finishTurnDiff();
+    send({ type: 'error', error: message });
+    throw error;
+  } finally {
+    flushUpdate();
+    if (!recovering) cleanupRun();
+  }
+
 }
 
 /** 侧边栏操作：分叉、重命名、置顶、归档、恢复工作区。 */
