@@ -2,7 +2,7 @@
 
 **Pi 编程助手的原生 macOS 桌面工作台。** 会话、密钥、模型、技能、扩展与 MCP，都与本地 `pi` CLI 共用同一份数据。
 
-[![CI](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml) [![release](https://img.shields.io/badge/release-v0.1.3-111111?style=flat-square)](https://github.com/huangrx6/pi-studio/releases/latest) [![license](https://img.shields.io/badge/license-MIT-111111?style=flat-square)](LICENSE)
+[![CI](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml) [![release](https://img.shields.io/badge/release-v0.1.4-111111?style=flat-square)](https://github.com/huangrx6/pi-studio/releases/latest) [![license](https://img.shields.io/badge/license-MIT-111111?style=flat-square)](LICENSE)
 
 [下载 macOS 版](https://github.com/huangrx6/pi-studio/releases/latest) · [文档主页](https://huangrx6.github.io/pi-studio/) · [问题反馈](https://github.com/huangrx6/pi-studio/issues)
 
@@ -52,7 +52,7 @@ xattr -cr "/Applications/Pi Studio.app"
 
 ### 会话
 
-流式对话、思维链展开、工具轨迹；会话以 JSONL 保存，重启后完整恢复。可编辑的消息队列、pi-todo 计划面板、会话归档与分叉。
+流式对话、思维链展开、工具轨迹；会话以 JSONL 保存，重启后完整恢复。可编辑的消息队列、pi-todo 计划面板、会话归档与分叉。技能与文件引用在输入框内联高亮，历史消息里以徽章展示。
 
 ### 工作区
 
