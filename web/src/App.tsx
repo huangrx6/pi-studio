@@ -63,6 +63,7 @@ function relativeTime(ms: number): string {
 
 export function App() {
   const [workspaces, setWorkspaces] = useState<PiWorkspace[]>([]);
+  const [stateLoading, setStateLoading] = useState(true);
   const [workspace, setWorkspace] = useState('');
   const [model, setModel] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -109,15 +110,20 @@ export function App() {
   const originalMcpArgsRef = useRef<string[] | null>(null);
 
   const loadState = useCallback(async () => {
-    const next = await window.piApi.state();
-    setWorkspaces(next.workspaces);
-    setModel(next.model.label);
-    setExpanded((current) => {
-      const ids = new Set(current);
-      for (const item of next.workspaces) ids.add(item.cwd);
-      return ids;
-    });
-    setWorkspace((current) => current || next.workspaces[0]?.cwd || next.cwd);
+    setStateLoading(true);
+    try {
+      const next = await window.piApi.state();
+      setWorkspaces(next.workspaces);
+      setModel(next.model.label);
+      setExpanded((current) => {
+        const ids = new Set(current);
+        for (const item of next.workspaces) ids.add(item.cwd);
+        return ids;
+      });
+      setWorkspace((current) => current || next.workspaces[0]?.cwd || next.cwd);
+    } finally {
+      setStateLoading(false);
+    }
   }, []);
 
   async function openSettings(tab?: typeof settingsTab) {
@@ -543,7 +549,8 @@ export function App() {
         </div>
         {workspaceSearchOpen && <div className="workspace-search"><Search /><input autoFocus aria-label="搜索工作区或会话" placeholder="搜索工作区或会话…" value={workspaceQuery} onChange={(event) => setWorkspaceQuery(event.target.value)} /></div>}
         <div className="workspace-list">
-          {visibleWorkspaces.map((item) => {
+          {stateLoading && workspaces.length === 0 && <div className="sidebar-empty"><LoaderCircle className="spin" /><span>正在加载工作区…</span></div>}
+          {!(stateLoading && workspaces.length === 0) && visibleWorkspaces.map((item) => {
             const isOpen = expanded.has(item.cwd);
             const isActive = workspace === item.cwd;
             return (
@@ -584,7 +591,7 @@ export function App() {
               </div>
             );
           })}
-          {visibleWorkspaces.length === 0 && <div className="sidebar-empty"><FolderOpen /><span>{workspaceQuery ? '没有匹配的工作区或会话' : '打开一个文件夹，开始工作'}</span>{!workspaceQuery && <button className="settings-outline" onClick={chooseFile}>打开工作区</button>}</div>}
+          {!stateLoading && visibleWorkspaces.length === 0 && <div className="sidebar-empty"><FolderOpen /><span>{workspaceQuery ? '没有匹配的工作区或会话' : '打开一个文件夹，开始工作'}</span>{!workspaceQuery && <button className="settings-outline" onClick={chooseFile}>打开工作区</button>}</div>}
         </div>
         <div className="sidebar-bottom">
           <button className="bottom-row" title="设置" onClick={() => void openSettings()}><Settings /><span>设置</span><span className="status"><i />本地运行</span></button>
