@@ -154,7 +154,7 @@ export function StatusDock({ sessionId }: { sessionId: string }) {
     {details && <div className="status-dock-popover">
       <div className="status-dock-popover-head">
         <div className="status-dock-heading">
-          <span className="status-dock-eyebrow">{details.kind === 'footer' ? 'RUN METRICS' : 'STATUS'}</span>
+          <span className="status-dock-eyebrow">{details.kind === 'footer' ? 'PI-FOOTER-COMPOSER · 终端 footer' : details.key.replace(/^status:/, '')}</span>
           <strong>{details.kind === 'footer' ? '运行指标' : '状态详情'}</strong>
         </div>
         <button type="button" className="status-dock-close" aria-label="关闭状态详情" onClick={() => setDetailsKey(null)}><X /></button>
