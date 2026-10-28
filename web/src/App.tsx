@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Clock3, Cpu, FileCode2, FileText, Folder, FolderOpen, Info,
+  ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Clock3, Command, Cpu, FileCode2, FileText, Folder, FolderOpen, Info, Sparkles,
   AppWindow, Columns2, Compass, Eye, Globe2, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelLeft, PanelRight, Pencil, Plus, Plug, RotateCw, Search, Settings, SquarePen, Terminal, Trash2, X,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
 import { Select } from './components/Select';
-import type { ChatMessage } from './chat-types';
+import type { ChatMessage, ComposerCommand, ComposerCommandSource, ComposerFile } from './chat-types';
 import { ChatMessageView } from './components/ChatMessage';
 import { DetailDialog } from './components/DetailDialog';
 import { ProviderIcon } from './components/ProviderIcon';
@@ -91,10 +91,18 @@ function writeStored(key: string, value: unknown): void {
 type DragItem = { kind: 'workspace' | 'session'; cwd: string; sessionId?: string };
 type PanelFile = { path: string; size: number; binary: boolean; text: string };
 type PanelTab = { id: string; kind: 'start' | 'files' | 'file'; title: string; path?: string };
+type ComposerMenuState = { kind: 'slash' | 'file'; query: string; start: number; end: number };
 
 function contextLabel(tokens: number): string {
   if (tokens >= 1_000_000) return `${Math.round(tokens / 100_000) / 10}M`;
   return `${Math.round(tokens / 1000)}K`;
+}
+
+function ComposerSourceIcon({ source }: { source: ComposerCommandSource }) {
+  if (source === 'skill') return <Sparkles />;
+  if (source === 'prompt') return <FileText />;
+  if (source === 'extension') return <Plug />;
+  return <Command />;
 }
 
 function contextTone(tokens?: number): string {
@@ -119,6 +127,14 @@ export function App() {
   const [session, setSession] = useState<{ id: string; cwd: string; title: string } | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [prompt, setPrompt] = useState('');
+  const [composerMenu, setComposerMenu] = useState<ComposerMenuState | null>(null);
+  const [composerCommands, setComposerCommands] = useState<ComposerCommand[]>([]);
+  const [composerFiles, setComposerFiles] = useState<ComposerFile[]>([]);
+  const [composerMenuIndex, setComposerMenuIndex] = useState(0);
+  const [composerMenuLoading, setComposerMenuLoading] = useState(false);
+  const composerWrapRef = useRef<HTMLDivElement>(null);
+  const composerResourcesRequestRef = useRef(0);
+  const composerFileRequestRef = useRef(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
@@ -682,9 +698,120 @@ export function App() {
     setBusy(false);
   }
 
+  function updateComposerMenu(value: string, caret: number) {
+    const before = value.slice(0, caret);
+    const slash = before.match(/^\/([^\s]*)$/);
+    if (slash) {
+      const next = { kind: 'slash' as const, query: slash[1], start: 0, end: caret };
+      setComposerMenu((current) => current?.kind === next.kind && current.query === next.query && current.start === next.start && current.end === next.end ? current : next);
+      setComposerMenuIndex(0);
+      return;
+    }
+    const at = before.match(/(?:^|\s)@([^\s]*)$/);
+    if (at) {
+      const start = caret - at[1].length - 1;
+      const next = { kind: 'file' as const, query: at[1], start, end: caret };
+      setComposerMenu((current) => current?.kind === next.kind && current.query === next.query && current.start === next.start && current.end === next.end ? current : next);
+      setComposerMenuIndex(0);
+      return;
+    }
+    setComposerMenu(null);
+  }
+
+  async function executeBuiltinCommand(name: string): Promise<boolean> {
+    if (name === 'new') {
+      if (!workspace) return false;
+      await startSession(workspace);
+      return true;
+    }
+    if (name === 'settings') { await openSettings(); return true; }
+    if (name === 'model' || name === 'thinking') { await openSettings('models'); return true; }
+    if (name === 'copy') {
+      const last = [...messages].reverse().find((message) => message.role === 'assistant');
+      const text = last?.content.filter((block) => block.type === 'text').map((block) => block.type === 'text' ? block.text : '').join('\n') ?? '';
+      if (text) await navigator.clipboard.writeText(text);
+      return true;
+    }
+    return false;
+  }
+
+  function selectComposerOption(index: number) {
+    const menu = composerMenu;
+    if (!menu) return;
+    const caret = menu.end;
+    if (menu.kind === 'file') {
+      const file = composerFileOptions[index];
+      if (!file) return;
+      const inserted = `@${file.path} `;
+      const next = `${prompt.slice(0, menu.start)}${inserted}${prompt.slice(caret)}`;
+      const nextCaret = menu.start + inserted.length;
+      setPrompt(next);
+      setComposerMenu(null);
+      requestAnimationFrame(() => { textareaRef.current?.focus(); textareaRef.current?.setSelectionRange(nextCaret, nextCaret); });
+      return;
+    }
+    const command = composerCommandOptions[index];
+    if (!command) return;
+    if (command.source === 'builtin') {
+      setComposerMenu(null);
+      setPrompt('');
+      setComposerMenuIndex(0);
+      void executeBuiltinCommand(command.name);
+      return;
+    }
+    const inserted = `/${command.name} `;
+    const next = `${prompt.slice(0, menu.start)}${inserted}${prompt.slice(caret)}`;
+    const nextCaret = menu.start + inserted.length;
+    setPrompt(next);
+    setComposerMenu(null);
+    requestAnimationFrame(() => { textareaRef.current?.focus(); textareaRef.current?.setSelectionRange(nextCaret, nextCaret); });
+  }
+
+  useEffect(() => {
+    if (composerMenu?.kind !== 'slash') return;
+    const request = ++composerResourcesRequestRef.current;
+    setComposerMenuLoading(true);
+    window.piApi.composerResources({ sessionId: session?.id, cwd: workspace })
+      .then((result) => { if (request === composerResourcesRequestRef.current) setComposerCommands(result.commands); })
+      .catch(() => { if (request === composerResourcesRequestRef.current) setComposerCommands([]); })
+      .finally(() => { if (request === composerResourcesRequestRef.current) setComposerMenuLoading(false); });
+  }, [composerMenu?.kind, session?.id, workspace]);
+
+  useEffect(() => {
+    if (composerMenu?.kind !== 'file') return;
+    if (!workspace) { setComposerFiles([]); setComposerMenuLoading(false); return; }
+    const request = ++composerFileRequestRef.current;
+    setComposerMenuLoading(true);
+    const timer = window.setTimeout(() => {
+      window.piApi.searchFiles({ cwd: workspace, query: composerMenu.query })
+        .then((result) => { if (request === composerFileRequestRef.current) setComposerFiles(result.files); })
+        .catch(() => { if (request === composerFileRequestRef.current) setComposerFiles([]); })
+        .finally(() => { if (request === composerFileRequestRef.current) setComposerMenuLoading(false); });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [composerMenu?.kind, composerMenu?.query, workspace]);
+
+  useEffect(() => { setComposerMenuIndex(0); }, [composerMenu?.kind, composerMenu?.query, composerCommands, composerFiles]);
+
+  useEffect(() => {
+    if (!composerMenu) return;
+    const onPointer = (event: PointerEvent) => { if (!composerWrapRef.current?.contains(event.target as Node)) setComposerMenu(null); };
+    document.addEventListener('pointerdown', onPointer);
+    return () => document.removeEventListener('pointerdown', onPointer);
+  }, [composerMenu]);
+
   async function send() {
     const text = prompt.trim();
     if (!text || busy) return;
+    if (text.startsWith('/')) {
+      const builtin = text.match(/^\/(new|settings|model|thinking|copy)(?:\s|$)/);
+      if (builtin && await executeBuiltinCommand(builtin[1])) {
+        setPrompt('');
+        setComposerMenu(null);
+        return;
+      }
+    }
+    setComposerMenu(null);
     let current = session;
     if (!current) {
       if (!workspace) await loadState();
@@ -698,9 +825,10 @@ export function App() {
     setError(null);
     setMessages((existing) => [...existing, { role: 'user', content: [{ type: 'text', text }], timestamp: Date.now() }]);
     const requestId = crypto.randomUUID();
+    const mentions = [...text.matchAll(/(?:^|\s)@([^\s]+)/g)].map((match) => match[1]);
     requestRef.current = requestId;
     try {
-      await window.piApi.prompt({ sessionId: current.id, text, requestId });
+      await window.piApi.prompt({ sessionId: current.id, text, requestId, mentions });
       const saved = await window.piApi.session(current.id);
       if (saved) {
         setSession({ id: saved.id, cwd: saved.cwd, title: saved.title });
@@ -867,6 +995,11 @@ export function App() {
   }
 
   const toolResultMap = new Map(messages.filter((message) => message.role === 'toolResult' && message.toolCallId).map((message) => [message.toolCallId as string, message]));
+  const composerCommandOptions = composerMenu?.kind === 'slash'
+    ? composerCommands.filter((command) => `${command.name} ${command.description}`.toLowerCase().includes(composerMenu.query.toLowerCase()))
+    : [];
+  const composerFileOptions = composerMenu?.kind === 'file' ? composerFiles : [];
+  const composerOptionsCount = composerMenu?.kind === 'slash' ? composerCommandOptions.length : composerFileOptions.length;
   const globalSkillGroups = [
     { key: 'agents', label: '~/.agents/skills', items: (settingsData?.skills ?? []).filter((skill) => !skill.path.includes('/.pi/agent/skills/')) },
     { key: 'pi', label: '~/.pi/agent/skills', items: (settingsData?.skills ?? []).filter((skill) => skill.path.includes('/.pi/agent/skills/')) },
@@ -1205,16 +1338,59 @@ export function App() {
             <h2>今天，<em>想做点什么？</em></h2>
             <p>从一个念头开始。</p>
           </div>}
-          <div className="composer">
+          <div className="composer-wrap" ref={composerWrapRef}>
+            {composerMenu && <div className="composer-picker" role="listbox" aria-label={composerMenu.kind === 'slash' ? '命令与技能' : '工作区文件'}>
+              <div className="composer-picker-head"><span>{composerMenu.kind === 'slash' ? '命令与技能' : '引用工作区文件'}</span><span>{composerMenuLoading ? '正在加载…' : composerMenu.kind === 'slash' ? '输入以筛选' : '↑↓ 选择文件'}</span></div>
+              <div className="composer-picker-scroll">
+                {composerMenu.kind === 'slash' && ([
+                  { source: 'builtin', label: '命令' },
+                  { source: 'extension', label: '扩展命令' },
+                  { source: 'prompt', label: '提示模板' },
+                  { source: 'skill', label: '技能' },
+                ] as const).map((group) => {
+                  const items = composerCommandOptions.filter((command) => command.source === group.source);
+                  if (items.length === 0) return null;
+                  return <div className="composer-picker-group" key={group.source}>
+                    <div className="composer-picker-label">{group.label}<span>{items.length}</span></div>
+                    {items.map((command) => {
+                      const index = composerCommandOptions.indexOf(command);
+                      return <button type="button" role="option" aria-selected={index === composerMenuIndex} key={`${command.source}:${command.name}`} className={`composer-option ${index === composerMenuIndex ? 'is-active' : ''}`} onMouseEnter={() => setComposerMenuIndex(index)} onMouseDown={(event) => { event.preventDefault(); selectComposerOption(index); }}>
+                        <span className={`composer-option-icon is-${command.source}`}><ComposerSourceIcon source={command.source} /></span>
+                        <span className="composer-option-main"><strong>/{command.name}</strong><span>{command.description || '没有描述'}</span></span>
+                        {command.argumentHint && <code>{command.argumentHint}</code>}
+                      </button>;
+                    })}
+                  </div>;
+                })}
+                {composerMenu.kind === 'file' && <div className="composer-picker-group">
+                  <div className="composer-picker-label">工作区文件<span>{composerFileOptions.length}</span></div>
+                  {composerFileOptions.map((file, index) => <button type="button" role="option" aria-selected={index === composerMenuIndex} key={file.path} className={`composer-option ${index === composerMenuIndex ? 'is-active' : ''}`} onMouseEnter={() => setComposerMenuIndex(index)} onMouseDown={(event) => { event.preventDefault(); selectComposerOption(index); }}>
+                    <span className="composer-option-icon is-file"><FileText /></span>
+                    <span className="composer-option-main"><strong>{file.name}</strong><span>{file.path}</span></span>
+                  </button>)}
+                </div>}
+                {!composerMenuLoading && composerOptionsCount === 0 && <div className="composer-picker-empty">{composerMenu.kind === 'slash' ? '没有匹配的命令' : workspace ? '没有匹配的文件' : '请先选择一个工作区'}</div>}
+              </div>
+              <div className="composer-picker-foot"><span>↑↓ 选择</span><span>↵ 确认</span><span>Esc 关闭</span></div>
+            </div>}
+            <div className="composer">
             <textarea
               ref={textareaRef}
               value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
+              onChange={(event) => { const value = event.target.value; setPrompt(value); updateComposerMenu(value, event.target.selectionStart ?? value.length); }}
+              onClick={(event) => updateComposerMenu(prompt, event.currentTarget.selectionStart ?? prompt.length)}
               onKeyDown={(event) => {
+                if (composerMenu && composerOptionsCount > 0) {
+                  if (event.key === 'ArrowDown') { event.preventDefault(); setComposerMenuIndex((index) => (index + 1) % composerOptionsCount); return; }
+                  if (event.key === 'ArrowUp') { event.preventDefault(); setComposerMenuIndex((index) => (index - 1 + composerOptionsCount) % composerOptionsCount); return; }
+                  if ((event.key === 'Enter' || event.key === 'Tab') && !event.nativeEvent.isComposing) { event.preventDefault(); selectComposerOption(composerMenuIndex); return; }
+                  if (event.key === 'Escape') { event.preventDefault(); setComposerMenu(null); return; }
+                }
                 if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); }
               }}
               aria-label="发送给 Pi 的消息"
-              placeholder="描述你的想法，或交给 Pi 一个任务…"
+              aria-expanded={Boolean(composerMenu)}
+              placeholder="描述你的想法，或输入 / 命令、@ 文件…"
               rows={2}
             />
             <div className="composer-bar">
@@ -1223,8 +1399,9 @@ export function App() {
                 <button className="send-button" disabled={busy || !prompt.trim()} onClick={() => void send()} aria-label={busy ? '正在生成回复' : '发送消息'} title="发送消息"><ArrowUp /></button>
               </div>
             </div>
+            </div>
           </div>
-          <div className="composer-hint"><span>Pi Studio <span className="preview-badge">预览版</span></span><span><kbd>↵</kbd> 发送 <span className="hint-divider">·</span> <kbd>⇧ ↵</kbd> 换行</span></div>
+          <div className="composer-hint"><span>Pi Studio <span className="preview-badge">预览版</span></span><span className="composer-shortcuts"><kbd>/</kbd> 命令 <span className="hint-divider">·</span> <kbd>@</kbd> 文件</span><span><kbd>↵</kbd> 发送 <span className="hint-divider">·</span> <kbd>⇧ ↵</kbd> 换行</span></div>
           {isNewConversation && error && <div className="new-conversation-error error-card" role="alert"><strong>暂时无法完成操作</strong><p>{error}</p></div>}
         </div>
       </main>

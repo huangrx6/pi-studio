@@ -143,6 +143,79 @@ async function findManager(id) {
   catch { return undefined; }
 }
 
+const BUILTIN_COMPOSER_COMMANDS = [
+  { name: 'new', description: '开始一个新会话', source: 'builtin' },
+  { name: 'model', description: '打开模型与账号设置', source: 'builtin' },
+  { name: 'thinking', description: '调整模型的思考强度', source: 'builtin' },
+  { name: 'settings', description: '打开设置', source: 'builtin' },
+  { name: 'copy', description: '复制最后一条助理回复', source: 'builtin' },
+];
+
+async function composerResources({ sessionId, cwd }) {
+  const commands = [...BUILTIN_COMPOSER_COMMANDS];
+  let session;
+  if (sessionId) {
+    try {
+      const found = await findManager(sessionId);
+      if (found) session = await ensureAgent(sessionId, found.manager, found.cwd);
+    } catch { /* fall back to global discovery */ }
+  }
+  if (session) {
+    for (const command of session.extensionRunner.getRegisteredCommands()) {
+      commands.push({ name: command.invocationName, description: command.description || '', source: 'extension' });
+    }
+    for (const template of session.promptTemplates) {
+      commands.push({ name: template.name, description: template.description, source: 'prompt', argumentHint: template.argumentHint });
+    }
+    for (const skill of session.resourceLoader.getSkills().skills) {
+      commands.push({ name: `skill:${skill.name}`, description: skill.description, source: 'skill' });
+    }
+  } else if (cwd) {
+    try {
+      const loaded = pi.loadSkills({
+        cwd,
+        agentDir: pi.getAgentDir(),
+        skillPaths: [path.join(pi.getAgentDir(), 'skills'), path.join(os.homedir(), '.agents', 'skills')],
+        includeDefaults: false,
+      });
+      for (const skill of loaded.skills) commands.push({ name: `skill:${skill.name}`, description: skill.description, source: 'skill' });
+    } catch { /* no global skills available */ }
+  }
+  return { commands };
+}
+
+const SEARCH_IGNORED_DIRS = new Set(['.git', 'node_modules', '.pnpm-store', 'dist', 'build', '.next', 'coverage', '.turbo', '.cache', 'target', 'vendor', '.venv', 'venv', 'release', '.DS_Store']);
+async function searchWorkspaceFiles(cwd, query) {
+  const root = path.resolve(cwd);
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return { files: [] };
+  const files = [];
+  const queue = [{ dir: root, rel: '' }];
+  let scanned = 0;
+  while (queue.length > 0 && scanned < 4000) {
+    const current = queue.shift();
+    let entries = [];
+    try { entries = await fs.promises.readdir(current.dir, { withFileTypes: true }); } catch { continue; }
+    for (const entry of entries) {
+      if (scanned >= 4000) break;
+      const rel = current.rel ? `${current.rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        if (!SEARCH_IGNORED_DIRS.has(entry.name)) queue.push({ dir: path.join(current.dir, entry.name), rel });
+      } else if (entry.isFile()) {
+        scanned += 1;
+        files.push({ name: entry.name, path: rel });
+      }
+    }
+  }
+  const needle = String(query || '').toLowerCase();
+  const ranked = files.map((file) => {
+    const lowerName = file.name.toLowerCase();
+    const lowerPath = file.path.toLowerCase();
+    const rank = !needle ? 2 : lowerName.startsWith(needle) ? 0 : lowerName.includes(needle) ? 1 : lowerPath.includes(needle) ? 2 : -1;
+    return { ...file, rank };
+  }).filter((file) => file.rank >= 0).sort((a, b) => a.rank - b.rank || a.path.length - b.path.length || a.path.localeCompare(b.path));
+  return { files: ranked.slice(0, 40) };
+}
+
 function serializeContent(content) {
   if (typeof content === 'string') return [{ type: 'text', text: content }];
   if (!Array.isArray(content)) return [];
@@ -506,6 +579,8 @@ app.whenReady().then(async () => {
     return { id, cwd: cwd || DEFAULT_CWD, title: '新会话', messages: [] };
   });
   ipcMain.handle('pi:session', async (_event, id) => detail(id));
+  ipcMain.handle('pi:composer-resources', async (_event, payload) => composerResources(payload || {}));
+  ipcMain.handle('pi:search-files', async (_event, { cwd, query }) => searchWorkspaceFiles(cwd, query));
   ipcMain.handle('pi:file-actions', async (_event, { cwd, path: requested }) => {
     const target = workspaceFile(cwd, requested);
     if (!fs.existsSync(target)) throw new Error('文件不存在');
@@ -562,10 +637,50 @@ app.whenReady().then(async () => {
     const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
     return result.canceled ? undefined : result.filePaths[0];
   });
-  ipcMain.handle('pi:prompt', async (event, { sessionId, text, requestId }) => {
+async function fileReferenceContext(cwd, mentions) {
+  const blocks = [];
+  let budget = 240_000;
+  const imageMimes = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
+  for (const requested of [...new Set(Array.isArray(mentions) ? mentions : [])].slice(0, 12)) {
+    if (typeof requested !== 'string' || !requested.trim()) continue;
+    try {
+      const target = resolveInWorkspace(cwd, requested);
+      const stat = fs.statSync(target);
+      if (!stat.isFile()) continue;
+      const relative = path.relative(cwd, target).split(path.sep).join('/');
+      const mime = imageMimes[path.extname(target).toLowerCase()];
+      if (mime) {
+        if (stat.size > 8_000_000) continue;
+        blocks.push({ type: 'image', mimeType: mime, data: fs.readFileSync(target).toString('base64') });
+        continue;
+      }
+      if (stat.size > budget) continue;
+      const buffer = fs.readFileSync(target);
+      if (buffer.includes(0)) continue;
+      const content = buffer.toString('utf8');
+      const clipped = content.length > budget ? content.slice(0, budget) : content;
+      budget -= clipped.length;
+      blocks.push({ type: 'text', text: `<file path="${relative}">\n${clipped}\n</file>` });
+      if (budget <= 0) break;
+    } catch { /* ignore missing or out-of-workspace paths */ }
+  }
+  return blocks;
+}
+
+  ipcMain.handle('pi:prompt', async (event, { sessionId, text, requestId, mentions }) => {
     const found = await findManager(sessionId);
     if (!found) throw new Error('会话不存在');
     const session = await ensureAgent(sessionId, found.manager, found.cwd);
+    const referenceBlocks = await fileReferenceContext(found.cwd, mentions);
+    if (referenceBlocks.length > 0) {
+      try {
+        await session.sendCustomMessage({
+          customType: 'pi-studio:file-reference',
+          content: [{ type: 'text', text: 'The user explicitly referenced the following workspace files. Treat them as primary context for this request.' }, ...referenceBlocks],
+          display: false,
+        }, { triggerTurn: false });
+      } catch { /* file context is best-effort */ }
+    }
     const send = (payload) => event.sender.send('pi:prompt-event', { requestId, ...payload });
     const unsubscribe = session.subscribe((piEvent) => {
       if (piEvent.type === 'message_start' || piEvent.type === 'message_update' || piEvent.type === 'message_end') {

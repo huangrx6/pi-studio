@@ -20,3 +20,7 @@ export type ChatMessage = {
   isError?: boolean;
   durationMs?: number;
 };
+
+export type ComposerCommandSource = 'builtin' | 'extension' | 'prompt' | 'skill';
+export type ComposerCommand = { name: string; description: string; source: ComposerCommandSource; argumentHint?: string };
+export type ComposerFile = { name: string; path: string };

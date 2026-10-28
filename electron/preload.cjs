@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('piApi', {
   openWith: (payload) => ipcRenderer.invoke('pi:open-with', payload),
   revealFile: (payload) => ipcRenderer.invoke('pi:reveal-file', payload),
   openExternal: (url) => ipcRenderer.invoke('pi:open-external', url),
+  composerResources: (payload) => ipcRenderer.invoke('pi:composer-resources', payload),
+  searchFiles: (payload) => ipcRenderer.invoke('pi:search-files', payload),
   chooseWorkspace: () => ipcRenderer.invoke('pi:choose-workspace'),
   models: (cwd) => ipcRenderer.invoke('pi:models', cwd),
   providerModels: (providerId) => ipcRenderer.invoke('pi:provider-models', providerId),
