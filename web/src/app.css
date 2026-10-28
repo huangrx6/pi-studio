@@ -857,3 +857,7 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 .skill-source-head { display: flex; align-items: center; gap: 7px; margin: 0 0 9px; }
 .skill-source-head h3 { margin: 0; color: var(--muted); font: 10.5px var(--mono); font-weight: 500; letter-spacing: .01em; }
 .skill-source-group .skill-card-grid { margin: 0; }
+
+/* Align the skill tree path bar and the file path bar. */
+.skill-tree-toolbar { height: 38px; min-height: 38px; padding: 0 10px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.skill-file-preview > .file-toolbar { height: 38px; min-height: 38px; padding: 0 12px; border-top: 0; border-bottom: 1px solid var(--border); background: var(--surface); }
