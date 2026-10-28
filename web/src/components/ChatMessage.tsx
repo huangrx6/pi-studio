@@ -20,7 +20,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, CircleAlert, CircleCheck, CircleX, Copy, FileText, LoaderCircle, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
-import type { ChatMessage, ContentBlock, ToolCallBlock } from '../chat-types';
+import type { ChatMessage, ContentBlock, ToolCallBlock, TurnDiff, TurnDiffFile } from '../chat-types';
 import type { StepCollapse, StepDisplay } from '../preferences';
 import { AttachmentIcon, attachmentVisual } from './AttachmentIcon';
 import { Markdown } from './Markdown';
@@ -245,7 +245,20 @@ function MessageActions({ text, time, label, align = 'start' }: { text: string; 
   </div>;
 }
 
-export function AssistantTurnView({ messages, toolResults, busy, id, retry, stepDisplay = 'standard', stepCollapse = 'after-answer', showCodeView = false, cwd }: { messages: ChatMessage[]; toolResults: Map<string, ChatMessage>; busy: boolean; id?: string; retry?: { attempt: number; maxAttempts: number; errorMessage?: string }; stepDisplay?: StepDisplay; stepCollapse?: StepCollapse; showCodeView?: boolean; cwd?: string }) {
+export function AssistantTurnView({ messages, toolResults, busy, id, retry, stepDisplay = 'standard', stepCollapse = 'after-answer', showCodeView = false, cwd, gitDiff, onOpenDiff }: {
+  messages: ChatMessage[];
+  toolResults: Map<string, ChatMessage>;
+  busy: boolean;
+  id?: string;
+  retry?: { attempt: number; maxAttempts: number; errorMessage?: string };
+  stepDisplay?: StepDisplay;
+  stepCollapse?: StepCollapse;
+  showCodeView?: boolean;
+  cwd?: string;
+  /** 本轮 Git 快照；比工具参数更完整，包含 bash/脚本产生的改动。 */
+  gitDiff?: TurnDiff;
+  onOpenDiff?: (file: TurnDiffFile) => void;
+}) {
   const live = Boolean(retry) || busy;
   const failed = !live && messages.some((message) => message.errorMessage);
   // 初始值只在挂载时取一次；之后由下面的 effect 和用户手动 toggle 接管。
@@ -295,6 +308,7 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
         : latest?.streaming && lastBlock?.block.type === 'text' ? '正在回复' : '正在继续处理';
 
   const codeFiles = showCodeView && !live ? collectFileChanges(messages, toolResults, cwd) : [];
+  const turnDiff = showCodeView && !live ? gitDiff : undefined;
   const error = messages.find((message) => message.errorMessage)?.errorMessage;
   // 复制只包含最终回复的文本块，不包含思考与工具调用。
   const answerText = responseBlocks
@@ -339,7 +353,7 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
       </div>}
       {/* 失败卡片只在非 live 时出现，避免自动重试过程中闪错误。 */}
       {!live && error && <AssistantError message={error} />}
-      {codeFiles.length > 0 && <FileChangeSummary files={codeFiles} />}
+      {(codeFiles.length > 0 || (turnDiff?.files.length ?? 0) > 0) && <FileChangeSummary files={codeFiles} gitDiff={turnDiff} onOpenDiff={onOpenDiff} />}
       {/* 回答结束后，悬浮显示复制与完成时间。 */}
       {!live && <MessageActions text={answerText} time={latest?.timestamp} label="复制回答" />}
     </div>

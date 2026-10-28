@@ -185,3 +185,32 @@ export type ComposerFile = {
   /** 文件或目录，用于决定图标与插入方式。 */
   type: 'file' | 'directory';
 };
+
+/** 一轮对话中单个文件的 Git 变更；patch 为统一 diff 文本。 */
+export type TurnDiffFile = {
+  /** 文件绝对路径。 */
+  path: string;
+  /** 相对会话工作区的展示路径。 */
+  label: string;
+  status: 'added' | 'modified' | 'deleted';
+  added: number;
+  removed: number;
+  binary?: boolean;
+  /** 补丁是否因体积被截断。 */
+  truncated?: boolean;
+  /** 统一 diff 文本；二进制或读取失败时为空。 */
+  patch?: string;
+  /** false 表示无法准确统计行数（二进制）。 */
+  completeCounts?: boolean;
+};
+
+/** 一轮对话结束后的 Git 变更汇总。 */
+export type TurnDiff = {
+  /** 该轮最后一条助手消息的时间戳，用于和回合配对。 */
+  at: number;
+  files: TurnDiffFile[];
+  totalAdded: number;
+  totalRemoved: number;
+  /** 文件数是否被上限截断。 */
+  truncated?: boolean;
+};

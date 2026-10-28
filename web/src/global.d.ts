@@ -11,7 +11,7 @@
 
 export {};
 import type { FooterView, FooterAction } from './components/ExtensionFooter';
-import type { ChatAttachment, ChatMessage, ComposerAttachment, ComposerCommand, ComposerFile, UploadedAttachment } from './chat-types';
+import type { ChatAttachment, ChatMessage, ComposerAttachment, ComposerCommand, ComposerFile, TurnDiff, UploadedAttachment } from './chat-types';
 import type { ModelCatalog, ModelSelection, ThinkingLevel } from './model-types';
 
 /** 侧边栏里的会话摘要（不含消息正文）。 */
@@ -52,6 +52,8 @@ interface PiDetail {
   title: string;
   /** 完整消息历史（含 toolResult）。 */
   messages: ChatMessage[];
+  /** 已持久化的每轮 Git 变更（按轮次结束时间配对）。 */
+  turnDiffs?: TurnDiff[];
 }
 
 /** 设置面板一次性读取的快照，覆盖模型、来源、MCP、技能、扩展等配置。 */
@@ -219,7 +221,7 @@ declare global {
        * 一轮请求的流式事件。type 覆盖消息开始/增量/结束、自动重试开始与结束、
        * 整体完成与失败；渲染进程按 requestId 过滤出本次请求的事件。
        */
-      onPrompt(listener: (payload: { requestId: string; type: 'message_start' | 'message_update' | 'message_end' | 'retry-start' | 'retry-end' | 'done' | 'error'; message?: ChatMessage; error?: string; attempt?: number; maxAttempts?: number; delayMs?: number; success?: boolean; finalError?: string; errorMessage?: string }) => void): () => void;
+      onPrompt(listener: (payload: { requestId: string; type: 'message_start' | 'message_update' | 'message_end' | 'retry-start' | 'retry-end' | 'turn-diff' | 'done' | 'error'; message?: ChatMessage; error?: string; attempt?: number; maxAttempts?: number; delayMs?: number; success?: boolean; finalError?: string; errorMessage?: string; diff?: TurnDiff; at?: number }) => void): () => void;
 
       // ---- 扩展命令 ----
       /** 运行扩展提供的命令。 */

@@ -33,6 +33,7 @@ const { updateSidebar } = require('../sidebar-state.cjs');
 const { envNameOf } = require('../credential-env.cjs');
 const { consumePendingMode } = require('./mode.cjs');
 const { sessionTitle } = require('./session-title.cjs');
+const { readTurnDiffs } = require('./turn-diff.cjs');
 const { temporaryTitle } = require('./auto-title.cjs');
 
 /** 内存中的草稿会话：id → { manager, cwd }。 */
@@ -188,7 +189,7 @@ async function detail(id) {
             .map((entry) => serializeMessage(entry.message))
             .filter(Boolean),
         );
-        const data = { id, cwd: info.cwd, title: info.title, messages };
+        const data = { id, cwd: info.cwd, title: info.title, messages, turnDiffs: readTurnDiffs(id) };
         detailCache.set(id, { mtimeMs: stat.mtimeMs, size: stat.size, data });
         return data;
       } catch {
@@ -206,7 +207,7 @@ async function detail(id) {
       .map((entry) => serializeMessage(entry.message))
       .filter(Boolean),
   );
-  return { id, cwd: found.cwd, title: drafts.get(id)?.title || diskSessions.get(id)?.title || '新会话', messages };
+  return { id, cwd: found.cwd, title: drafts.get(id)?.title || diskSessions.get(id)?.title || '新会话', messages, turnDiffs: readTurnDiffs(id) };
 }
 
 /**

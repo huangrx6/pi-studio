@@ -30,6 +30,7 @@ const { fileReferenceContext } = require('../services/workspace.cjs');
 const { attachmentContext } = require('../services/attachments.cjs');
 const { extensionState, footerAction } = require('../services/extensions.cjs');
 const { createAutoTitleGenerator } = require('../services/auto-title.cjs');
+const { beginTurn, endTurn, saveTurnDiff } = require('../services/turn-diff.cjs');
 const autoTitles = createAutoTitleGenerator({
   readMetadata: id => readConfig(configPath(), {}).sessionMetadata?.[id] || {},
   updateMetadata: (id, patch) => {
@@ -130,6 +131,26 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
     }
   });
 
+  // 回合开始前记录 Git 工作树快照；非 Git 仓库返回 null，前端回退到工具统计。
+  const diffToken = await beginTurn(found.cwd, requestId).catch(() => null);
+  let diffFinished = false;
+  const finishTurnDiff = async () => {
+    if (diffFinished || !diffToken) return;
+    diffFinished = true;
+    try {
+      const diff = await endTurn(diffToken);
+      if (!diff || diff.files.length === 0) return;
+      const at = [...session.messages].reverse().find((message) => message.role === 'assistant')?.timestamp || Date.now();
+      const payload = { at, ...diff };
+      try { saveTurnDiff(sessionId, payload); } catch { /* 存储失败仍把本轮结果推给界面 */ }
+      forgetDetail(sessionId);
+      send({ type: 'turn-diff', at, diff: payload });
+      changed();
+    } catch {
+      /* 统计失败不影响会话本身 */
+    }
+  };
+
   try {
     const imageBlocks = Array.isArray(images)
       ? images.filter((image) => image && image.type === 'image' && typeof image.data === 'string' && typeof image.mimeType === 'string').slice(0, 8)
@@ -141,6 +162,8 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
     await indexSessions(true);
     dropDraft(sessionId);
     send({ type: 'done' });
+    // diff 在 done 之后异步计算，不阻塞流式收尾。
+    void finishTurnDiff();
     // Schedule after the answer: never block streaming, or run tools to name a chat.
     if (firstTurn) {
       const answer = [...session.messages].reverse().find(message => message.role === 'assistant');
@@ -154,6 +177,7 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
     }
   } catch (error) {
     flushUpdate();
+    void finishTurnDiff();
     send({ type: 'error', error: error instanceof Error ? error.message : String(error) });
     throw error;
   } finally {

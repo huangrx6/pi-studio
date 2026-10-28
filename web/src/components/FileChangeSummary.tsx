@@ -1,24 +1,139 @@
+/**
+ * 一轮对话的文件变更汇总。
+ *
+ * 数据有两个来源：
+ *  - Git 快照（主进程在回合前后用临时 index 对比工作树）：完整覆盖 bash、
+ *    脚本、删除/新增等改动，并带统一 diff；
+ *  - 工具参数（write/edit）：用于非 Git 仓库，或 Git 仓库之外的临时文件。
+ *
+ * 两者按绝对路径合并，Git 优先。点击有补丁的文件会在右栏打开 diff 标签页。
+ */
+
 import { useState } from 'react';
-import { ChevronDown, FileDiff, FileText } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileDiff, FileText } from 'lucide-react';
+import type { TurnDiff, TurnDiffFile } from '../chat-types';
 import type { FileChange } from '../file-changes';
 
-export function FileChangeSummary({ files }: { files: FileChange[] }) {
+type DisplayFile = {
+  path: string;
+  label: string;
+  added: number;
+  removed: number;
+  complete: boolean;
+  status: 'added' | 'modified' | 'deleted' | 'written';
+  patch?: string;
+  binary?: boolean;
+  truncated?: boolean;
+};
+
+function counts(added: number, removed: number) {
+  return <span className="file-change-counts" aria-label={`增加 ${added} 行，删除 ${removed} 行`}><span>+{added}</span><span>−{removed}</span></span>;
+}
+
+function statusLabel(file: DisplayFile) {
+  if (file.status === 'added') return '新增';
+  if (file.status === 'deleted') return '删除';
+  if (file.status === 'written') return '已写入';
+  return '';
+}
+
+/** 把 Git 文件与工具文件合并；同一路径以 Git 数据为准。 */
+function mergeFiles(git: TurnDiff | undefined, toolFiles: FileChange[]): DisplayFile[] {
+  const merged = new Map<string, DisplayFile>();
+  for (const file of git?.files ?? []) {
+    merged.set(file.path, {
+      path: file.path,
+      label: file.label,
+      added: file.added,
+      removed: file.removed,
+      complete: file.completeCounts !== false,
+      status: file.status,
+      patch: file.patch,
+      binary: file.binary,
+      truncated: file.truncated,
+    });
+  }
+  const labels = new Set([...merged.values()].map((file) => file.label));
+  for (const file of toolFiles) {
+    // Git 路径与工具路径可能因符号链接写法不同，标签相同也视为同一文件。
+    if (merged.has(file.path) || labels.has(file.label)) continue;
+    const patch = file.operations.map((operation) => operation.diff).filter(Boolean).join('\n');
+    merged.set(file.path, {
+      path: file.path,
+      label: file.label,
+      added: file.added,
+      removed: file.removed,
+      complete: file.completeCounts,
+      status: 'written',
+      patch: patch || undefined,
+    });
+  }
+  return [...merged.values()];
+}
+
+export function FileChangeSummary({ files, gitDiff, onOpenDiff }: {
+  files: FileChange[];
+  gitDiff?: TurnDiff;
+  onOpenDiff?: (file: TurnDiffFile) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
-  const [review, setReview] = useState(false);
-  const complete = files.every(file => file.completeCounts);
-  const added = files.reduce((sum, file) => sum + file.added, 0);
-  const removed = files.reduce((sum, file) => sum + file.removed, 0);
-  const counts = (add: number, remove: number) => <span className="file-change-counts" aria-label={`增加 ${add} 行，删除 ${remove} 行`}><span>+{add}</span><span>−{remove}</span></span>;
+  const display = mergeFiles(gitDiff, files);
+  if (display.length === 0) return null;
+  const complete = display.every((file) => file.complete);
+  const hasCounts = display.some((file) => file.complete);
+  const added = display.reduce((sum, file) => sum + file.added, 0);
+  const removed = display.reduce((sum, file) => sum + file.removed, 0);
+  const visible = expanded ? display : display.slice(0, 4);
+
   return <section className="file-change-summary" aria-label="本轮文件变更">
-    <header><FileDiff aria-hidden="true" /><div><strong>已修改 {files.length} 个文件</strong>{complete && counts(added, removed)}</div><button onClick={() => { setReview(!review); setExpanded(true); }}>{review ? '收起变更' : '查看变更'}</button></header>
-    <div className="file-change-list">{(expanded ? files : files.slice(0, 3)).map(file => <details className="file-change-item" key={file.path} open={review || undefined}>
-      <summary><FileText aria-hidden="true" /><span title={file.path}>{file.label}</span>{file.completeCounts ? counts(file.added, file.removed) : <small>已写入</small>}<ChevronDown /></summary>
-      <div className="file-change-diffs">{file.operations.map((operation, index) => <div key={operation.id}>
-        <div className="file-change-caption">{file.operations.length > 1 ? `第 ${index + 1} 次修改 · ` : ''}{operation.diff ? '工具返回的变更' : operation.content !== undefined ? '写入内容 · 未提供修改前快照' : '工具未提供差异详情'}</div>
-        {operation.diff ? <pre>{operation.diff.split('\n').map((line, row) => <span className={line.startsWith('+') && !line.startsWith('+++') ? 'is-added' : line.startsWith('-') && !line.startsWith('---') ? 'is-removed' : undefined} key={row}>{line}{'\n'}</span>)}</pre> : operation.content !== undefined ? <pre>{operation.content}</pre> : null}
-      </div>)}</div>
-    </details>)}</div>
-    {files.length > 3 && <button className="file-change-more" onClick={() => { setExpanded(!expanded); setReview(false); }}>{expanded ? '收起文件列表' : `再显示 ${files.length - 3} 个文件`}<ChevronDown /></button>}
-    <p className="file-change-footnote">仅汇总工具确认的修改{complete ? '，行数按各次操作累计' : '；未提供差异的文件不统计行数'}。</p>
+    <header>
+      <span className="file-change-icon"><FileDiff aria-hidden="true" /></span>
+      <div>
+        <strong>已编辑 {display.length} 个文件</strong>
+        {hasCounts && counts(added, removed)}
+      </div>
+      <button type="button" onClick={() => setExpanded((value) => !value)}>{expanded ? '收起变更' : '查看变更'}</button>
+    </header>
+
+    <div className="file-change-list">{visible.map((file) => {
+      const openable = Boolean(file.patch && onOpenDiff);
+      return <button
+        type="button"
+        className={`file-change-item ${openable ? 'is-openable' : ''}`}
+        key={file.path}
+        title={file.path}
+        disabled={!openable}
+        onClick={() => {
+          if (!openable) return;
+          onOpenDiff?.({
+            path: file.path,
+            label: file.label,
+            status: file.status === 'written' ? 'modified' : file.status,
+            added: file.added,
+            removed: file.removed,
+            binary: file.binary,
+            truncated: file.truncated,
+            patch: file.patch,
+            completeCounts: file.complete,
+          });
+        }}
+      >
+        <FileText aria-hidden="true" />
+        <span className="file-change-path">{file.label}</span>
+        {file.complete
+          ? counts(file.added, file.removed)
+          : <small>{statusLabel(file) || '已写入'}</small>}
+        {openable && <ChevronRight className="file-change-open" aria-hidden="true" />}
+      </button>;
+    })}</div>
+
+    {display.length > 4 && <button type="button" className="file-change-more" onClick={() => setExpanded((value) => !value)}>
+      {expanded ? '收起' : `全部 ${display.length} 个文件`}
+      <ChevronDown aria-hidden="true" />
+    </button>}
+
+    <p className="file-change-note">{gitDiff
+      ? '基于本轮 Git 工作树快照，包含命令与脚本产生的改动。'
+      : '仅汇总工具确认的写入；非 Git 仓库无法统计命令产生的文件。'}{!complete && hasCounts ? ' 部分文件未提供差异，未计入行数。' : ''}</p>
   </section>;
 }

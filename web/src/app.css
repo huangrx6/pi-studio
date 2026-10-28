@@ -2028,7 +2028,8 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .assistant-turn-meta > span { background: none; padding-inline: 2px; }
 .file-change-summary { margin-top: 22px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); font: 13px/1.5 var(--font); }
 .file-change-summary > header { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--surface-soft); }
-.file-change-summary > header > svg { width: 20px; height: 20px; color: var(--muted); }
+.file-change-icon { display: grid; place-items: center; width: 30px; height: 30px; flex: none; border-radius: var(--radius-control); background: var(--accent-soft); color: var(--accent); }
+.file-change-icon svg { width: 18px; height: 18px; }
 .file-change-summary > header > div { flex: 1; display: flex; flex-direction: column; gap: 3px; }
 .file-change-summary strong { font-size: 13px; font-weight: 600; }
 .file-change-summary > header button { padding: 5px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); font-size: 12px; }
@@ -2036,22 +2037,47 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .file-change-counts { display: inline-flex; gap: 8px; font-variant-numeric: tabular-nums; font-size: 12px; }
 .file-change-counts > :first-child { color: var(--success); }
 .file-change-counts > :last-child { color: var(--error); }
-.file-change-item > summary { display: flex; align-items: center; gap: 10px; padding: 10px 16px; cursor: pointer; list-style: none; }
-.file-change-item > summary::-webkit-details-marker { display: none; }
-.file-change-item > summary:hover { background: var(--surface-soft); }
-.file-change-item > summary > svg { width: 14px; height: 14px; color: var(--faint); }
-.file-change-item > summary > span:not(.file-change-counts) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-change-item > summary > small { color: var(--faint); font-size: 11px; }
-.file-change-item[open] > summary > svg:last-child { transform: rotate(180deg); }
-.file-change-diffs { border-top: 1px solid var(--border); padding: 10px 16px; }
-.file-change-caption, .file-change-footnote { color: var(--faint); font-size: 11px; }
-.file-change-diffs pre { max-height: 320px; overflow: auto; margin: 8px 0 12px; font: 12px/1.7 var(--mono); tab-size: 2; }
-.file-change-diffs .is-added { color: var(--success); }
-.file-change-diffs .is-removed { color: var(--error); }
+.file-change-list { display: flex; flex-direction: column; }
+.file-change-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 16px; border-top: 1px solid var(--border); color: var(--text); font-size: 12px; text-align: left; }
+.file-change-item:first-child { border-top: 0; }
+.file-change-item > svg { width: 14px; height: 14px; flex: none; color: var(--faint); }
+.file-change-item > span.file-change-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px var(--mono); }
+.file-change-item > small { flex: none; color: var(--faint); font-size: 11px; }
+.file-change-item.is-openable:hover { background: var(--surface-soft); }
+.file-change-item:disabled { cursor: default; opacity: 1; }
+.file-change-open { width: 13px !important; height: 13px !important; color: var(--faint); }
+.file-change-item.is-openable:hover .file-change-open { color: var(--accent); }
 .file-change-more { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; text-align: left; }
 .file-change-more:hover { background: var(--surface-soft); }
 .file-change-more svg { width: 14px; height: 14px; }
-.file-change-footnote { margin: 0; padding: 8px 16px 12px; }
+.file-change-note { margin: 0; padding: 8px 16px 12px; border-top: 1px solid var(--border); color: var(--faint); font-size: 11px; }
+
+/* 右栏 diff 视图：统一 diff，双行号，新增/删除语义色。 */
+.diff-view { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--surface); }
+.diff-view-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.diff-view-icon { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: var(--radius-control); background: var(--accent-soft); color: var(--accent); }
+.diff-view-icon svg { width: 16px; height: 16px; }
+.diff-view-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.diff-view-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px var(--mono); }
+.diff-view-title span { color: var(--faint); font-size: 10px; }
+.diff-view-counts { display: flex; gap: 8px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.diff-view-counts span:first-child { color: var(--success); }
+.diff-view-counts span:last-child { color: var(--error); }
+.diff-view-body { flex: 1; min-height: 0; overflow: auto; font: 11.5px/1.65 var(--mono); }
+.diff-row { display: grid; grid-template-columns: 38px 38px minmax(0, 1fr); }
+.diff-row.is-add { background: var(--success-soft); }
+.diff-row.is-del { background: var(--error-soft); }
+.diff-row.is-hunk { background: var(--surface-soft); color: var(--accent); }
+.diff-row.is-meta { color: var(--faint); }
+.diff-gutter { padding: 0 6px; text-align: right; color: var(--faint); font-variant-numeric: tabular-nums; user-select: none; border-right: 1px solid var(--border); }
+.diff-code { padding: 0 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff-row.is-add .diff-code { color: var(--success); }
+.diff-row.is-del .diff-code { color: var(--error); }
+.diff-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--faint); }
+.diff-empty svg { width: 24px; height: 24px; }
+.diff-empty strong { color: var(--muted); font-size: 13px; }
+.diff-empty span { font-size: 12px; }
+.diff-note { margin: 0; padding: 8px 16px; border-top: 1px solid var(--border); color: var(--faint); font-size: 11px; }
 
 /* Execution records and current output are separate, so collapsing history
    can never hide ongoing thinking, commentary or tool progress. */

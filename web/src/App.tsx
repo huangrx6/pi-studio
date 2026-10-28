@@ -16,15 +16,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Clock3, Command, Cpu, FileCode2, FileText, Folder, FolderOpen, Info, Sparkles,
+  ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Clock3, Command, Cpu, FileCode2, FileDiff, FileText, Folder, FolderOpen, Info, Sparkles,
   AppWindow, Columns2, Compass, Eye, Globe2, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, Pencil, Plus, Plug, RotateCw, Search, Settings, ShieldCheck, SquarePen, Sun, Terminal, Trash2, X,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
 import { ExtensionFooter } from './components/ExtensionFooter';
 import { Select } from './components/Select';
 import { FullPermissionDialog, ToolConfirmDialog, type ConfirmRequest } from './components/ConfirmDialog';
+import { DiffView } from './components/DiffView';
 import { splitComposerText } from './references';
-import type { ChatMessage, ComposerAttachment, ComposerCommand, ComposerCommandSource, ComposerFile, TodoDetails } from './chat-types';
+import type { ChatMessage, ComposerAttachment, ComposerCommand, ComposerCommandSource, ComposerFile, TodoDetails, TurnDiff, TurnDiffFile } from './chat-types';
 import { AttachmentIcon } from './components/AttachmentIcon';
 import { AssistantTurnView, ChatMessageView } from './components/ChatMessage';
 import { TodoDock } from './components/TodoDock';
@@ -180,7 +181,7 @@ function writeStored(key: string, value: unknown): void {
 // ---------- 视图辅助类型 ----------
 type DragItem = { kind: 'workspace' | 'session'; cwd: string; sessionId?: string };
 type PanelFile = { path: string; size: number; binary: boolean; text: string };
-type PanelTab = { id: string; kind: 'start' | 'files' | 'file'; title: string; path?: string };
+type PanelTab = { id: string; kind: 'start' | 'files' | 'file' | 'diff'; title: string; path?: string; diff?: TurnDiffFile };
 type ComposerMenuState = { kind: 'slash' | 'file'; query: string; start: number; end: number };
 
 /** 上下文窗口的短标签（128K / 1M），避免卡片被长数字撑开。 */
@@ -271,7 +272,7 @@ export function App() {
   const [dropHint, setDropHint] = useState<string | null>(null);
   const [draggingItem, setDraggingItem] = useState<DragItem | null>(null);
   const [justDropped, setJustDropped] = useState<string | null>(null);
-  const [session, setSession] = useState<{ id: string; cwd: string; title: string } | null>(null);
+  const [session, setSession] = useState<{ id: string; cwd: string; title: string; turnDiffs?: TurnDiff[] } | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [prompt, setPrompt] = useState('');
   const [composerAttachments, setComposerAttachments] = useState<ComposerAttachment[]>([]);
@@ -314,6 +315,7 @@ export function App() {
   const [file, setFile] = useState<PanelFile | null>(null);
   const [openFiles, setOpenFiles] = useState<Record<string, PanelFile>>({});
   const [panelTabs, setPanelTabs] = useState<PanelTab[]>([{ id: 'start', kind: 'start', title: '开始' }]);
+  const [liveDiff, setLiveDiff] = useState<TurnDiff | null>(null);
   const [activePanelTabId, setActivePanelTabId] = useState('start');
   const [tabDropTarget, setTabDropTarget] = useState<string | null>(null);
   const panelTabsRef = useRef<HTMLDivElement>(null);
@@ -785,6 +787,10 @@ export function App() {
         // 结束帧要立刻落地，否则下一轮的流式消息可能找不到要接续的气泡。
         if (event.type === 'message_end') flushNow();
       }
+      if (event.type === 'turn-diff' && event.diff) {
+        setLiveDiff(event.diff);
+        setSession((current) => current ? { ...current, turnDiffs: [...(current.turnDiffs ?? []).filter((diff) => diff.at !== event.diff!.at), event.diff!] } : current);
+      }
       if (event.type === 'retry-start') {
         setRetryInfo({ attempt: event.attempt ?? 1, maxAttempts: event.maxAttempts ?? 1, errorMessage: event.errorMessage });
       }
@@ -1010,7 +1016,7 @@ export function App() {
         void loadState().catch(() => { /* 列表刷新失败时保留错误提示 */ });
         return;
       }
-      setSession({ id: detail.id, cwd: detail.cwd, title: detail.title });
+      setSession({ id: detail.id, cwd: detail.cwd, title: detail.title, turnDiffs: detail.turnDiffs });
       setMessages(detail.messages.map((message) => ({ ...message })));
       setWorkspace(detail.cwd);
       expandWorkspace(detail.cwd);
@@ -1326,6 +1332,7 @@ export function App() {
     setBusy(true);
     setError(null);
     setRetryInfo(null);
+    setLiveDiff(null);
     const requestId = crypto.randomUUID();
     requestRef.current = requestId;
     try {
@@ -1688,7 +1695,17 @@ export function App() {
   function panelTabIcon(tab: PanelTab) {
     if (tab.kind === 'start') return <Compass />;
     if (tab.kind === 'files') return <Folder />;
+    if (tab.kind === 'diff') return <FileDiff />;
     return <FileText />;
+  }
+
+  /** 打开文件 diff 标签页；已存在时直接激活。 */
+  function openDiffTab(file: TurnDiffFile) {
+    const id = `diff:${file.path}`;
+    setPanelTabs((current) => current.some((tab) => tab.id === id) ? current : [...current, { id, kind: 'diff', title: file.label.split('/').pop() || file.label, path: file.path, diff: file }]);
+    setActivePanelTabId(id);
+    if (filesOpen) setPanelEntered(true);
+    else openPanel();
   }
 
   async function loadSkillTree(baseDir: string, nextPath: string) {
@@ -1831,6 +1848,7 @@ export function App() {
     if (!activePanelTab) return null;
     if (activePanelTab.kind === 'start') return renderPanelStart();
     if (activePanelTab.kind === 'files') return renderFileTree();
+    if (activePanelTab.kind === 'diff' && activePanelTab.diff) return <DiffView file={activePanelTab.diff} />;
     return renderFilePreview();
   }
 
@@ -2024,7 +2042,9 @@ export function App() {
               <div className="messages">
                 {transcriptTurns.map((turn, index) => turn.kind === 'user'
                   ? <ChatMessageView key={turn.message.timestamp ?? `user-${index}`} id={`chat-turn-${index}`} message={turn.message} />
-                  : <AssistantTurnView key={turn.messages[0]?.timestamp ?? `assistant-${index}`} id={`chat-turn-${index}`} messages={turn.messages} toolResults={toolResultMap} cwd={session?.cwd} busy={busy && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView} />)}
+                  : <AssistantTurnView key={turn.messages[0]?.timestamp ?? `assistant-${index}`} id={`chat-turn-${index}`} messages={turn.messages} toolResults={toolResultMap} cwd={session?.cwd} busy={busy && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView}
+                    gitDiff={index === lastAssistantTurnIndex ? liveDiff ?? (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined) : (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined)}
+                    onOpenDiff={openDiffTab} />)}
                 {busy && !retryInfo && transcriptTurns.at(-1)?.kind !== 'assistant' && (
                   <div className="thinking"><span /><span /><span />正在思考</div>
                 )}
