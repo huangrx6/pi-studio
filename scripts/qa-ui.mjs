@@ -500,8 +500,12 @@ try {
   const popoverBox = await page.locator('.extension-footer-popover').boundingBox();
   assert.ok(popoverBox.y + popoverBox.height <= footerBox.y + 1, 'footer panel must open above the footer');
   // 终端外框应被替换成原生标题栏，而不是把 ╭──╮ 直接画在桌面端。
-  await page.locator('.extension-footer-popover-head').getByText('运行状态', { exact: true }).waitFor();
-  const panelText = await page.locator('.extension-footer-popover-grid').innerText();
+  // 浮层标题由通用 PopoverSurface 渲染，类名是 .popover-title。
+  await page.locator('.extension-footer-popover .popover-title').getByText('运行状态', { exact: true }).waitFor();
+  // 带标题与关闭按钮的浮层会被重排成原生卡片（.popover-details），其余才走终端网格。
+  const panel = page.locator('.extension-footer-popover .popover-details, .extension-footer-popover-grid').first();
+  await panel.waitFor();
+  const panelText = await panel.innerText();
   assert.ok(!/[╭╮╰╯│─]/.test(panelText), `terminal frame leaked into panel: ${panelText}`);
   await capture('04b-extension-footer');
   await page.getByRole('button', { name: '关闭扩展详情' }).click();
