@@ -1,4 +1,5 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell } = require('electron');
+const { execFile, execFileSync } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -353,6 +354,89 @@ function makeMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+function applications() {
+  const roots = ['/Applications', '/System/Applications', '/System/Applications/Utilities', path.join(os.homedir(), 'Applications')];
+  const apps = new Map();
+  for (const root of roots) {
+    let entries = [];
+    try { entries = fs.readdirSync(root, { withFileTypes: true }); } catch { continue; }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !entry.name.endsWith('.app')) continue;
+      const appPath = path.join(root, entry.name);
+      const name = entry.name.slice(0, -4);
+      if (!apps.has(name)) apps.set(name, { name, path: appPath });
+    }
+  }
+  return [...apps.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function applicationsForFile(target) {
+  return new Promise((resolve) => {
+    const script = `ObjC.import('AppKit');
+function run(argv) {
+  const url = $.NSURL.fileURLWithPath(argv[0]);
+  const apps = $.NSWorkspace.sharedWorkspace.URLsForApplicationsToOpenURL(url);
+  return ObjC.unwrap(apps).map((item) => { const appPath = ObjC.unwrap(item.path); const displayName = ObjC.unwrap($.NSFileManager.defaultManager.displayNameAtPath(appPath)); return appPath + '\\t' + displayName; }).join('\\n');
+}`;
+    execFile('/usr/bin/osascript', ['-l', 'JavaScript', '-e', script, target], { timeout: 6000 }, (error, stdout) => {
+      if (error || !stdout) { resolve(applications()); return; }
+      const seen = new Set();
+      const apps = [];
+      for (const raw of String(stdout).split('\n')) {
+        const [appPath, displayName] = raw.trim().split('\t');
+        if (!appPath || !appPath.endsWith('.app')) continue;
+        const name = (displayName || path.basename(appPath, '.app')).replace(/\.app$/, '');
+        const key = name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        apps.push({ name, path: appPath });
+      }
+      resolve(apps.length > 0 ? apps : applications());
+    });
+  });
+}
+
+const appIconCache = new Map();
+function applicationIcon(appPath) {
+  if (appIconCache.has(appPath)) return appIconCache.get(appPath);
+  try {
+    const resources = path.join(appPath, 'Contents', 'Resources');
+    const files = fs.readdirSync(resources).filter((file) => file.endsWith('.icns'));
+    const preferred = ['AppIcon.icns', 'app.icns', 'icon.icns'];
+    const file = preferred.map((name) => files.find((entry) => entry === name)).find(Boolean) ?? files[0];
+    if (!file) return undefined;
+    const png = path.join(os.tmpdir(), `pi-app-icon-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.png`);
+    execFileSync('/usr/bin/sips', ['-s', 'format', 'png', '-z', '32', '32', path.join(resources, file), '--out', png], { stdio: 'ignore' });
+    const data = `data:image/png;base64,${fs.readFileSync(png).toString('base64')}`;
+    try { fs.unlinkSync(png); } catch { /* temp cleanup */ }
+    appIconCache.set(appPath, data);
+    return data;
+  } catch {
+    try {
+      const image = nativeImage.createFromPath(appPath);
+      if (!image.isEmpty()) {
+        const data = image.resize({ width: 32, height: 32 }).toDataURL();
+        appIconCache.set(appPath, data);
+        return data;
+      }
+    } catch { /* no icon */ }
+    appIconCache.set(appPath, undefined);
+    return undefined;
+  }
+}
+
+function workspaceFile(cwd, requested) {
+  return resolveInWorkspace(cwd, requested);
+}
+
+function openWithApp(target, appPath) {
+  if (!appPath) return shell.openPath(target).then((error) => { if (error) throw new Error(error); });
+  if (!appPath.endsWith('.app') || !fs.existsSync(appPath)) throw new Error('应用程序不存在');
+  return new Promise((resolve, reject) => {
+    execFile('open', ['-a', appPath, target], (error) => error ? reject(error) : resolve());
+  });
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440,
@@ -388,6 +472,29 @@ app.whenReady().then(async () => {
     return { id, cwd: cwd || DEFAULT_CWD, title: '新会话', messages: [] };
   });
   ipcMain.handle('pi:session', async (_event, id) => detail(id));
+  ipcMain.handle('pi:file-actions', async (_event, { cwd, path: requested }) => {
+    const target = workspaceFile(cwd, requested);
+    if (!fs.existsSync(target)) throw new Error('文件不存在');
+    const apps = await applicationsForFile(target);
+    const withIcons = await Promise.all(apps.slice(0, 24).map(async (entry) => {
+      try {
+        const icon = applicationIcon(entry.path);
+        if (icon) return { ...entry, icon };
+        const image = await app.getFileIcon(entry.path, { size: 'normal' });
+        return { ...entry, icon: image.toDataURL() };
+      } catch { return entry; }
+    }));
+    return { apps: withIcons };
+  });
+  ipcMain.handle('pi:open-with', async (_event, { cwd, path: requested, appPath }) => {
+    const target = workspaceFile(cwd, requested);
+    await openWithApp(target, typeof appPath === 'string' ? appPath : undefined);
+    return { ok: true };
+  });
+  ipcMain.handle('pi:reveal-file', async (_event, { cwd, path: requested }) => {
+    shell.showItemInFolder(workspaceFile(cwd, requested));
+    return { ok: true };
+  });
   ipcMain.handle('pi:files', async (_event, { cwd, path: requested }) => {
     const root = resolveInWorkspace(cwd, requested || '.');
     const entries = fs.readdirSync(root, { withFileTypes: true })

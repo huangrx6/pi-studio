@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUp, Check, ChevronDown, ChevronLeft, ChevronsDown, ChevronsUp, Clock3, Cpu, FileCode2, FileText, Folder, FolderOpen, Info,
-  Columns2, Compass, Globe2, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageSquare, Minimize2, PanelLeft, PanelRight, Pencil, Plus, Plug, RotateCw, Search, Settings, SquarePen, Terminal, Trash2, X,
+  AppWindow, Columns2, Compass, Eye, Globe2, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelLeft, PanelRight, Pencil, Plus, Plug, RotateCw, Search, Settings, SquarePen, Terminal, Trash2, X,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
 import { Select } from './components/Select';
@@ -150,6 +150,9 @@ export function App() {
   const panelCloseTimerRef = useRef<number | null>(null);
   const [panelSplit, setPanelSplit] = useState(false);
   const [fileBusy, setFileBusy] = useState(false);
+  const [fileMenuOpen, setFileMenuOpen] = useState(false);
+  const [fileApps, setFileApps] = useState<Array<{ name: string; path: string; icon?: string }>>([]);
+  const fileActionsRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const settingsContentRef = useRef<HTMLElement>(null);
@@ -803,6 +806,30 @@ export function App() {
     return <FileText />;
   }
 
+  async function showFileActions() {
+    if (!file || !workspace) return;
+    if (fileMenuOpen) { setFileMenuOpen(false); return; }
+    setFileMenuOpen(true);
+    try {
+      const result = await window.piApi.fileActions({ cwd: workspace, path: file.path });
+      setFileApps(result.apps);
+    } catch (error) { setError(error instanceof Error ? error.message : String(error)); }
+  }
+
+  async function openFileWith(appPath?: string) {
+    if (!file || !workspace) return;
+    setFileMenuOpen(false);
+    try { await window.piApi.openWith({ cwd: workspace, path: file.path, appPath }); }
+    catch (error) { setError(error instanceof Error ? error.message : String(error)); }
+  }
+
+  async function revealCurrentFile() {
+    if (!file || !workspace) return;
+    setFileMenuOpen(false);
+    try { await window.piApi.revealFile({ cwd: workspace, path: file.path }); }
+    catch (error) { setError(error instanceof Error ? error.message : String(error)); }
+  }
+
   function renderFileTree() {
     return <div className="panel-file-browser">
       <div className="file-toolbar">
@@ -832,6 +859,17 @@ export function App() {
       <div className="file-toolbar">
         <span className="path-label" title={file.path}>{file.path}</span>
         <small>{filesize(file.size)}</small>
+        <div className="file-actions" ref={fileActionsRef}>
+          <button className="icon-button" aria-label="文件操作" title="文件操作" aria-expanded={fileMenuOpen} onClick={() => void showFileActions()}><MoreHorizontal /></button>
+          {fileMenuOpen && <div className="file-actions-menu" role="menu">
+            <div className="file-actions-label">打开方式</div>
+            <button className="file-action" role="menuitem" onClick={() => void openFileWith()}><Eye /><span>预览（默认）</span></button>
+            <div className="file-actions-sep" />
+            {fileApps.map((app) => <button className="file-action" role="menuitem" key={app.path} onClick={() => void openFileWith(app.path)}>{app.icon ? <img src={app.icon} alt="" /> : <AppWindow />}<span>{app.name}</span></button>)}
+            <div className="file-actions-sep" />
+            <button className="file-action" role="menuitem" onClick={() => void revealCurrentFile()}><FolderOpen /><span>显示文件位置</span></button>
+          </div>}
+        </div>
       </div>
       {file.binary ? <div className="file-empty"><FileText /><strong>暂不支持预览此文件</strong><span>可以在其他应用中查看二进制文件。</span></div> : <pre className="file-code"><code>{file.text.split('\n').map((line, index) => <span className="code-line" key={index}><span className="line-number" aria-hidden="true">{index + 1}</span><span>{line || ' '}</span></span>)}</code></pre>}
       {fileBusy && <div className="file-loading" role="status"><LoaderCircle className="spin" />正在读取文件…</div>}

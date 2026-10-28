@@ -51,6 +51,9 @@ declare global {
       prompt(payload: { sessionId: string; text: string; requestId: string }): Promise<void>;
       files(cwd: string, path: string): Promise<{ path: string; entries: Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }> }>;
       file(cwd: string, path: string): Promise<{ path: string; size: number; binary: boolean; text: string }>;
+      fileActions(payload: { cwd: string; path: string }): Promise<{ apps: Array<{ name: string; path: string; icon?: string }> }>;
+      openWith(payload: { cwd: string; path: string; appPath?: string }): Promise<{ ok: boolean }>;
+      revealFile(payload: { cwd: string; path: string }): Promise<{ ok: boolean }>;
       chooseWorkspace(): Promise<string | undefined>;
       models(cwd?: string): Promise<ModelCatalog>;
       providerModels(providerId: string): Promise<{ models: Array<{ id: string; model: string; name: string; enabled: boolean; contextWindow?: number; maxTokens?: number; supportsImages?: boolean }> }>;
