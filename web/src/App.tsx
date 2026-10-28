@@ -826,7 +826,6 @@ export function App() {
 
   function renderPanelStart() {
     return <div className="panel-start">
-      <div className="panel-start-mark"><Compass /></div>
       <div className="panel-start-tools">
         <button className="panel-tool" onClick={openFilesTab}><span className="panel-tool-icon is-folder"><Folder /></span><span><strong>工作区文件</strong><small>浏览当前工作区里的文件</small></span><ChevronDown className="panel-tool-arrow" /></button>
         <button className="panel-tool" disabled><span className="panel-tool-icon"><Terminal /></span><span><strong>新建终端</strong><small>即将推出</small></span></button>

@@ -683,3 +683,10 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .provider-icon.is-violet { color: #5f4b91; background: #f1edfa; border-color: #e8e0f6; }
 .provider-icon.is-sky { color: #3d6e9e; background: #eaf4fb; border-color: #dcecf7; }
 .provider-icon.is-neutral { color: #66758c; background: var(--surface-soft); border-color: var(--border); }
+
+/* Right panel is a plain white work surface, matching the conversation area. */
+.file-panel, .panel-tabbar, .panel-start, .panel-file-browser, .panel-file-preview { background: var(--surface); }
+.panel-tabbar { background: var(--surface); }
+.panel-tab.is-active { background: var(--surface-soft); box-shadow: none; }
+.panel-start { padding-top: 24px; }
+.file-code { background: var(--surface); }
