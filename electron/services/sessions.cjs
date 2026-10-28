@@ -44,6 +44,21 @@ const agentPromises = new Map();
 const diskSessions = new Map();
 /** 会话详情缓存：id → { mtimeMs, size, data }，用文件修改时间判断是否需要重读。 */
 const detailCache = new Map();
+/** 会话详情缓存上限：只缓存小会话，避免大会话在主进程里长期保留一整份副本。 */
+const MAX_DETAIL_CACHE = 3;
+const MAX_CACHED_FILE_BYTES = 4 * 1024 * 1024;
+/** 默认只读取最近这么多条消息；大会话向上翻页，避免一次序列化 15MB JSONL。 */
+const DEFAULT_HISTORY_LIMIT = 120;
+
+/** 取最近 limit 条消息，并从最近的用户消息边界开始，避免从半轮开始渲染。 */
+function messageWindow(entries, limit) {
+  const total = entries.length;
+  if (!Number.isInteger(limit) || limit <= 0 || total <= limit) return { entries, hasMore: false };
+  let window = entries.slice(-limit);
+  const firstUser = window.findIndex((entry) => entry.message?.role === 'user');
+  if (firstUser > 0) window = window.slice(firstUser);
+  return { entries: window, hasMore: window.length < total };
+}
 
 let sessionsIndexedAt = 0;
 let sessionsIndexPromise;
@@ -84,6 +99,25 @@ async function indexSessions(force = false) {
     sessionsIndexPromise = undefined;
   });
   return sessionsIndexPromise;
+}
+
+
+/**
+ * 用户切换会话时释放其它空闲 AgentSession。
+ *
+ * AgentSession 会同时持有 messages、toolResult、图片和扩展运行时，
+ * 长时间打开多个大会话会让主进程常驻数百 MB。流式 / 压缩中的会话不释放。
+ */
+let focusedSessionId = null;
+function releaseInactiveSessions(activeId) {
+  focusedSessionId = activeId;
+  for (const [id, session] of agentSessions) {
+    if (id === activeId) continue;
+    if (session.isStreaming || session.isCompacting) continue;
+    try { session.dispose(); } catch { /* 会话已失效 */ }
+    agentSessions.delete(id);
+  }
+  for (const id of [...detailCache.keys()]) if (id !== activeId) detailCache.delete(id);
 }
 
 /** 让索引失效，下次访问时重新扫描磁盘。 */
@@ -173,7 +207,7 @@ async function findManager(id) {
  * 读取会话详情（消息列表）。
  * 磁盘会话带 mtime + size 缓存，文件没变就不重复解析 JSONL。
  */
-async function detail(id) {
+async function detail(id, limit = DEFAULT_HISTORY_LIMIT) {
   const draft = drafts.get(id);
   if (!draft) {
     if (!diskSessions.has(id)) await indexSessions();
@@ -185,15 +219,16 @@ async function detail(id) {
         if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.data;
 
         const manager = piModule().SessionManager.open(info.path, undefined, info.cwd);
+        const window = messageWindow(manager.getEntries().filter((entry) => entry.type === 'message'), limit);
         const messages = visibleSessionMessages(
-          manager
-            .getEntries()
-            .filter((entry) => entry.type === 'message')
-            .map((entry) => serializeMessage(entry.message))
-            .filter(Boolean),
+          window.entries.map((entry) => serializeMessage(entry.message)).filter(Boolean),
         );
-        const data = { id, cwd: info.cwd, title: info.title, nativeName: info.nativeName || manager.getSessionName?.() || '', messages, model: await sessionModelInfo(manager, info.cwd), turnDiffs: readTurnDiffs(id) };
-        detailCache.set(id, { mtimeMs: stat.mtimeMs, size: stat.size, data });
+        const data = { id, cwd: info.cwd, title: info.title, nativeName: info.nativeName || manager.getSessionName?.() || '', messages, hasMore: window.hasMore, model: await sessionModelInfo(manager, info.cwd), turnDiffs: readTurnDiffs(id) };
+        // 只缓存完整且较小的会话；大会话/分页窗口不在主进程保留第二份副本。
+        if (!window.hasMore && stat.size <= MAX_CACHED_FILE_BYTES) {
+          if (detailCache.size >= MAX_DETAIL_CACHE) detailCache.delete(detailCache.keys().next().value);
+          detailCache.set(id, { mtimeMs: stat.mtimeMs, size: stat.size, data });
+        }
         return data;
       } catch {
         /* 文件读不了就退回用 manager 读 */
@@ -203,14 +238,11 @@ async function detail(id) {
 
   const found = await findManager(id);
   if (!found) return undefined;
+  const window = messageWindow(found.manager.getEntries().filter((entry) => entry.type === 'message'), limit);
   const messages = visibleSessionMessages(
-    found.manager
-      .getEntries()
-      .filter((entry) => entry.type === 'message')
-      .map((entry) => serializeMessage(entry.message))
-      .filter(Boolean),
+    window.entries.map((entry) => serializeMessage(entry.message)).filter(Boolean),
   );
-  return { id, cwd: found.cwd, title: drafts.get(id)?.title || diskSessions.get(id)?.title || '新会话', nativeName: found.manager.getSessionName?.() || '', messages, model: await sessionModelInfo(found.manager, found.cwd), turnDiffs: readTurnDiffs(id) };
+  return { id, cwd: found.cwd, title: drafts.get(id)?.title || diskSessions.get(id)?.title || '新会话', nativeName: found.manager.getSessionName?.() || '', messages, hasMore: window.hasMore, model: await sessionModelInfo(found.manager, found.cwd), turnDiffs: readTurnDiffs(id) };
 }
 
 /**
@@ -449,6 +481,7 @@ async function setSessionThinking(id, level) {
 }
 
 module.exports = {
+  releaseInactiveSessions,
   drafts,
   diskSessions,
   indexSessions,

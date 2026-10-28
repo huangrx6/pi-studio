@@ -42,7 +42,7 @@ function textBlocks(blocks: ContentBlock[]): string {
 function MessageImages({ blocks }: { blocks: ContentBlock[] }) {
   const images = blocks.filter((block) => block.type === 'image');
   if (images.length === 0) return null;
-  return <div className="message-images">{images.map((block, index) => block.type === 'image' && <img key={index} src={`data:${block.mimeType};base64,${block.data}`} alt="" />)}</div>;
+  return <div className="message-images">{images.map((block, index) => block.type === 'image' && <img key={index} src={`data:${block.mimeType};base64,${block.data}`} alt="" loading="lazy" decoding="async" />)}</div>;
 }
 
 /** 字节数转可读体积；附件卡片用，保留一位小数。 */
@@ -351,7 +351,7 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
         {responseBlocks.map((entry) => entry.block.type === 'text' && entry.block.text
           ? <Markdown key={entry.key}>{entry.block.text}</Markdown>
           : entry.block.type === 'image'
-            ? <img className="message-image" key={entry.key} src={`data:${entry.block.mimeType};base64,${entry.block.data}`} alt="" />
+            ? <img className="message-image" key={entry.key} src={`data:${entry.block.mimeType};base64,${entry.block.data}`} alt="" loading="lazy" decoding="async" />
             : null)}
         {live && <span className="caret" />}
       </div>}

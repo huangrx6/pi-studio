@@ -87,6 +87,8 @@ interface PiDetail {
   model?: ModelSelection;
   /** 已持久化的每轮 Git 变更（按轮次结束时间配对）。 */
   turnDiffs?: TurnDiff[];
+  /** 是否还有更早的历史消息未加载。 */
+  hasMore?: boolean;
 }
 
 /** 设置面板一次性读取的快照，覆盖模型、来源、MCP、技能、扩展等配置。 */
@@ -140,7 +142,7 @@ declare global {
       /** 在指定工作区新建会话。 */
       createSession(cwd: string): Promise<PiDetail>;
       /** 读取会话详情；会话不存在时返回 undefined。 */
-      session(id: string): Promise<PiDetail | undefined>;
+      session(id: string, limit?: number): Promise<PiDetail | undefined>;
       /**
        * 侧边栏操作：重命名、移除、置顶、归档、分叉。
        * 成功返回可能是新建会话的信息（fork 时用）。
@@ -256,6 +258,8 @@ declare global {
       extensionSelectResult(payload: { id: string; value: string | undefined }): Promise<boolean>;
       /** 把输入框当前文本同步给主进程，供扩展 getEditorText() 读取。 */
       editorTextChanged(payload: { sessionId: string; text: string }): void;
+      /** 通知主进程当前聚焦的会话，释放其它空闲 AgentSession 的内存。 */
+      sessionFocus(sessionId: string | null): void;
       /** 会话索引变化（草稿、标题或排序更新）时刷新侧边栏。 */
       onSessionsChanged(listener: () => void): () => void;
       /** 扩展状态项更新。 */

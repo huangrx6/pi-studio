@@ -14,7 +14,7 @@
  * 渲染进程本身不直接访问 Node / 文件系统。
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Clock3, Command, Cpu, FileCode2, FileDiff, FileText, Folder, FolderOpen, Info, Sparkles,
   AppWindow, Columns2, Compass, Eye, Globe2, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, Pencil, Plus, Plug, RotateCw, Search, Settings, ShieldCheck, SquarePen, Sun, Terminal, Trash2, X,
@@ -255,6 +255,8 @@ export function App() {
   const [workspaces, setWorkspaces] = useState<PiWorkspace[]>([]);
   const [stateLoading, setStateLoading] = useState(true);
   const [sessionLoading, setSessionLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const historyAnchorRef = useRef<number | null>(null);
   const [preferences, setPreferences] = useState<Preferences>(() => loadPreferences());
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
@@ -279,10 +281,14 @@ export function App() {
   const [dropHint, setDropHint] = useState<string | null>(null);
   const [draggingItem, setDraggingItem] = useState<DragItem | null>(null);
   const [justDropped, setJustDropped] = useState<string | null>(null);
-  const [session, setSession] = useState<{ id: string; cwd: string; title: string; turnDiffs?: TurnDiff[] } | null>(null);
+  const [session, setSession] = useState<{ id: string; cwd: string; title: string; turnDiffs?: TurnDiff[]; hasMore?: boolean } | null>(null);
   const sessionRef = useRef(session);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  useEffect(() => { sessionRef.current = session; }, [session]);
+  useEffect(() => {
+    sessionRef.current = session;
+    // 切走后主进程可以释放旧会话的 AgentSession；流式中的会自己跳过。
+    window.piApi.sessionFocus?.(session?.id ?? null);
+  }, [session]);
   const [prompt, setPrompt] = useState('');
   const [composerAttachments, setComposerAttachments] = useState<ComposerAttachment[]>([]);
   const [composerMenu, setComposerMenu] = useState<ComposerMenuState | null>(null);
@@ -1038,6 +1044,32 @@ export function App() {
   }
 
 
+  /** 向前加载更早的历史；保持当前滚动位置不跳。 */
+  async function loadOlderHistory() {
+    if (!session || historyLoading) return;
+    const node = scrollRef.current;
+    historyAnchorRef.current = node ? node.scrollHeight - node.scrollTop : null;
+    setHistoryLoading(true);
+    try {
+      const detail = await window.piApi.session(session.id, messages.length + 120);
+      if (!detail) return;
+      setMessages(detail.messages.map((message) => ({ ...message })));
+      setSession((current) => current ? { ...current, hasMore: detail.hasMore } : current);
+    } catch (error) {
+      setError(errorText(error));
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  useLayoutEffect(() => {
+    const anchor = historyAnchorRef.current;
+    if (anchor === null) return;
+    const node = scrollRef.current;
+    if (node) node.scrollTop = node.scrollHeight - anchor;
+    historyAnchorRef.current = null;
+  }, [messages]);
+
   // ---------- 会话生命周期 ----------
 
   /**
@@ -1101,7 +1133,7 @@ export function App() {
     const load = ++sessionLoadRef.current;
     setSessionLoading(true);
     try {
-      const detail = await window.piApi.session(item.id);
+      const detail = await window.piApi.session(item.id, 120);
       if (load !== sessionLoadRef.current) return;
       if (!detail) {
         // 侧边栏里的旧条目可能已经被删除或移动；刷新列表，避免用户停在一个空入口。
@@ -1109,9 +1141,10 @@ export function App() {
         void loadState().catch(() => { /* 列表刷新失败时保留错误提示 */ });
         return;
       }
-      setSession({ id: detail.id, cwd: detail.cwd, title: detail.title, turnDiffs: detail.turnDiffs });
+      setSession({ id: detail.id, cwd: detail.cwd, title: detail.title, turnDiffs: detail.turnDiffs, hasMore: detail.hasMore });
       if (detail.model) setModelSelection(detail.model);
       setMessages(detail.messages.map((message) => ({ ...message })));
+      setHistoryLoading(false);
       setWorkspace(detail.cwd);
       expandWorkspace(detail.cwd);
       setError(null);
@@ -1446,10 +1479,10 @@ export function App() {
       // 侧边栏刷新与读取历史互不依赖；刷新失败不能让一次成功的回复显示成错误。
       void loadState().catch(() => {});
       if (requestRef.current !== requestId) return;
-      const saved = await window.piApi.session(submission.sessionId);
+      const saved = await window.piApi.session(submission.sessionId, Math.max(120, messages.length + 10));
       if (requestRef.current !== requestId) return;
       if (saved) {
-        setSession({ id: saved.id, cwd: saved.cwd, title: saved.title });
+        setSession({ id: saved.id, cwd: saved.cwd, title: saved.title, turnDiffs: saved.turnDiffs, hasMore: saved.hasMore });
         setMessages(saved.messages.map((message) => ({ ...message })));
       }
       setBusy(false);
@@ -1637,7 +1670,13 @@ export function App() {
     setFileBusy(true);
     try {
       const content = target.startsWith('/') ? await window.piApi.fileAbsolute(target) : await window.piApi.file(root, target);
-      setOpenFiles((current) => ({ ...current, [target]: content }));
+      setOpenFiles((current) => {
+        // 只保留最近打开的几个文件，避免长时间浏览把每个预览都留在内存里。
+        const next = { ...current, [target]: content };
+        const keys = Object.keys(next);
+        if (keys.length > 8) delete next[keys[0]];
+        return next;
+      });
       setFile(content);
     } catch (error) {
       setError(errorText(error));
@@ -2146,6 +2185,7 @@ export function App() {
           <div className="chat-column">
             {messages.length > 0 && (
               <div className="messages">
+                {session?.hasMore && <button type="button" className="load-older" disabled={historyLoading} onClick={() => void loadOlderHistory()}>{historyLoading ? '正在加载…' : '加载更早消息'}</button>}
                 {session?.id && <ExtensionHeader sessionId={session.id} />}
                 {transcriptTurns.map((turn, index) => turn.kind === 'user'
                   ? <ChatMessageView key={turn.message.timestamp ?? `user-${index}`} id={`chat-turn-${index}`} message={turn.message} />

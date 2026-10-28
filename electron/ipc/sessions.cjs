@@ -25,6 +25,7 @@ const {
   dropDraft,
   updateSessionSummary,
   indexSessions,
+  releaseInactiveSessions,
 } = require('../services/sessions.cjs');
 const { setSessionModel, setSessionThinking } = require('../services/sessions.cjs');
 const { fileReferenceContext } = require('../services/workspace.cjs');
@@ -317,8 +318,8 @@ function registerSessionsIpc() {
   ipcMain.handle('pi:session-create', async (_event, cwd) => createDraft(cwd));
 
   // 读取会话详情（标题优先用用户重命名后的）
-  ipcMain.handle('pi:session', async (_event, id) => {
-    const result = await detail(id);
+  ipcMain.handle('pi:session', async (_event, id, limit) => {
+    const result = await detail(id, Number.isInteger(limit) ? limit : undefined);
     const meta = readConfig(configPath(), {}).sessionMetadata?.[id];
     // Pi 原生名优先（CLI 重命名也能同步）；没有时用桌面端 metadata 兼容旧数据。
     const name = result?.nativeName || meta?.name || meta?.autoTitle;
@@ -330,6 +331,9 @@ function registerSessionsIpc() {
 
   // 发送消息（流式）
   ipcMain.handle('pi:prompt', async (event, payload) => prompt(event, payload));
+
+  // 切换会话时释放其它空闲 AgentSession，避免主进程长期保留多份大会话。
+  ipcMain.on('pi:session-focus', (_event, sessionId) => releaseInactiveSessions(typeof sessionId === 'string' ? sessionId : null));
 
   // 会话级模型 / 推理等级：只改当前会话，不写全局默认、不影响其它会话。
   ipcMain.handle('pi:set-session-model', (_event, { sessionId, modelRef }) => setSessionModel(sessionId, modelRef));
@@ -380,19 +384,10 @@ function registerSessionsIpc() {
     return { ok: true };
   });
 
-  // 扩展状态（会话底部）：打开历史会话时也要先绑定扩展，footer 才有内容可渲染。
-  // 绑定失败（例如模型密钥缺失）不应挡住会话阅读，退回空状态即可。
-  ipcMain.handle('pi:extension-state', async (_event, sessionId) => {
-    if (sessionId) {
-      try {
-        const found = await findManager(sessionId);
-        if (found) await ensureAgent(sessionId, found.manager, found.cwd);
-      } catch {
-        /* 扩展不可用不影响会话本身 */
-      }
-    }
-    return extensionState(sessionId);
-  });
+  // 扩展状态：只读已有 AgentSession，不在「打开历史」时创建它。
+  // 大会话的 AgentSession 会持有完整消息/图片，历史浏览不应为状态栏付这份内存。
+  // 真正发送消息或执行扩展命令时再 ensureAgent，session_start 会推送状态。
+  ipcMain.handle('pi:extension-state', async (_event, sessionId) => extensionState(sessionId));
 
   ipcMain.handle('pi:footer-action', (_event, { sessionId, ...input }) => footerAction(sessionId, input));
   // 通用扩展 surface：widget / custom / footer 共用同一个输入入口。

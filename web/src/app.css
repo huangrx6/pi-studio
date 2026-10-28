@@ -2229,3 +2229,8 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .status-dock-detail { padding: 12px 14px; }
 .status-detail-line { padding: 4px 0; color: var(--text); font: 11.5px/1.6 var(--mono); }
 .status-detail-line + .status-detail-line { border-top: 1px solid var(--border); }
+
+/* 长会话只渲染视口附近的回合，减少布局与图片解码开销。 */
+.messages > .message.user, .messages > .assistant-turn { content-visibility: auto; contain-intrinsic-size: auto 320px; }
+.load-older { align-self: center; margin: 2px auto 14px; padding: 5px 12px; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--muted); font-size: 11px; }
+.load-older:hover:not(:disabled) { border-color: var(--accent-border); color: var(--accent); }
