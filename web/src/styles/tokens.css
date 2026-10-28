@@ -1,5 +1,19 @@
+/* 尺寸、圆角、字号与动效令牌（不含颜色）。
+ *
+ * 这一层只定义可复用的数值：间距、圆角、控件与行高、字体字号、布局宽度、
+ * 过渡时长和字体族。颜色不在这里，统一在 palette.css。
+ *
+ * 使用约定：app.css 的结构规则优先消费这里的令牌；布局宽度会在响应式断点内
+ * 被覆盖（例如侧栏与右栏），字号以 --text-base 为正文基准。改值会影响整个
+ * 工作台，新增尺寸优先复用现有档位，不要临时写魔法数字。
+ */
+
 /* Shared dimensions and surfaces for the whole desktop workspace. */
 :root {
+  /* 间距：以 4px 为基础，1–6 依次为 4/8/12/16/20/24，8/10 为 32/40；数字是档位名
+  而不是像素数。布局内边距、卡片间距和表单行距都从这里取。
+   */
+
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -8,15 +22,30 @@
   --space-6: 24px;
   --space-8: 32px;
   --space-10: 40px;
+  /* 圆角：四档递进——tag 4 用于标签和小徽章，control 8 用于按钮和输入框，card 12
+  用于卡片，panel 16 用于面板、对话框和大浮层；round 999 用于胶囊和开关。50%
+  正圆留给头像，不占用这四档。sm 只是 tag 的别名。
+   */
+
   --radius-tag: 4px;
   --radius-sm: var(--radius-tag);
   --radius-control: 8px;
   --radius-card: 12px;
   --radius-panel: 16px;
   --radius-round: 999px;
+  /* 控件与布局高度：sm 32 用于图标按钮和小控件，control 36 是标准输入高度，
+  row 40 是列表行，header/toolbar 分别 48/36。侧栏和右栏宽度、正文列宽、设置
+  内容列宽也在这里；响应式断点会覆盖侧栏和右栏宽度。
+   */
+
   --control-sm: 32px;
   --control: 36px;
   --row-height: 40px;
+  /* 字号：xs 11、sm 12、base 13、md 14、lg 16、title 24。base 是全局正文基准，
+  md 用于对话正文和输入框，title 目前只作为保留档位；对话字号可由用户偏好在
+  运行时覆盖，不写在这里。
+   */
+
   --text-xs: 11px;
   --text-sm: 12px;
   --text-base: 13px;
@@ -29,6 +58,12 @@
   --settings-content: 1040px;
   --header-height: 48px;
   --toolbar-height: 36px;
+  /* 动效与字体：transition 统一 160ms ease，交互快慢一致；减少动效偏好下 app.css
+  会全局关闭 transition 与 animation。font 是系统无衬线栈，display-font 用于欢迎
+  标题和助手身份的衬线展示，mono 用于代码、路径和快捷键；font-display 是
+  display-font 的别名，保留给旧规则。
+   */
+
   --transition: 160ms ease;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --display-font: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "Times New Roman", serif;

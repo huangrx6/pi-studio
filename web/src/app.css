@@ -1,3 +1,26 @@
+/* ==========================================================================
+ * Pi Studio Web 工作台主样式表
+ *
+ * 职责：定义 Electron 窗口内整个 Web UI 的结构与外观，包括应用外壳、侧边栏、
+ * 对话头与消息流、输入区与模型选择器、右侧文件面板、设置页、各类对话框、
+ * 浮层以及响应式断点。对应组件主要集中在 App.tsx 与 components/ 目录。
+ *
+ * 组织方式：
+ *   1. 顶部是全局 reset、表单控件、按钮与图标的基础规则；
+ *   2. 中段按功能区块排列（Sidebar / Conversation / Composer / File panel /
+ *      Settings / Model picker / Dialogs 等），每个区块先写结构尺寸，再写交互态；
+ *   3. 文件后半段是多轮迭代追加的覆写层，同一选择器会重复出现，靠源代码顺序
+ *      与特异性覆盖前文；看到重复规则时应以最后生效的为准。本文件的注释会标出
+ *      这类覆写关系，阅读时不要按出现顺序误判最终值。
+ *
+ * 令牌来源：颜色全部来自 styles/palette.css 的语义令牌；间距、圆角、字号、
+ * 控件高度与布局宽度来自 styles/tokens.css。本文件不写颜色字面量，也不直接
+ * 定义主题色；滚动条基础策略另见 styles/dsh-scrollbar.css。
+ *
+ * 约束：本文件是纯样式层，不参与业务状态；新增注释时不得改变声明顺序、
+ * 选择器或优先级，否则会改变层叠结果。
+ * ========================================================================== */
+
 * { box-sizing: border-box; }
 html, body, #root { width: 100%; height: 100%; margin: 0; }
 body { font: var(--text-base)/1.6 var(--font); color: var(--text); background: var(--bg); -webkit-font-smoothing: antialiased; overflow: hidden; --dsh-scrollbar-thumb: var(--scrollbar); --dsh-scrollbar-thumb-hover: var(--scrollbar-hover); --dsh-scrollbar-width: 6px; }
@@ -21,6 +44,11 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 @keyframes rotate { to { transform: rotate(360deg); } }
 
 /* Shell and shared controls */
+/* 应用外壳是全窗口 flex 容器：高度锁定 100dvh 并隐藏自身溢出，纵向滚动
+必须交给内部区块（chat-scroll、settings-content 等）各自承担，外层永不滚动。
+isolation 建立独立层叠上下文，配合下面的 :has 规则在设置全屏时隐藏其余兄弟
+节点。按钮、输入框和图标尺寸统一走共享控件令牌，保证各面板手感一致。 */
+
 .app { display: flex; height: 100dvh; overflow: hidden; isolation: isolate; }
 .app:has(.settings-overlay) > :not(.settings-overlay) { visibility: hidden; }
 .icon-button { display: inline-grid; place-items: center; width: var(--control-sm); height: var(--control-sm); flex: none; padding: 0; border-radius: var(--radius-control); color: var(--icon); }
@@ -40,6 +68,12 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .state-dot.is-busy { background: var(--accent); animation: pulse 1.5s ease-in-out infinite; }
 
 /* Sidebar */
+/* 侧栏宽度由 --sidebar-w 决定，默认 256，1200/760 断点降到 232/196；它是
+flex:none 的纵向列，唯一滚动容器是 workspace-list（flex:1 + min-height:0 +
+overflow:auto），底部账号行因此始终贴底。折叠态后来被改成完全隐藏，早先的
+72px 图标轨道规则已经失效，不要据此推断布局。顶栏是可拖拽窗口区域，按钮
+通过全局 no-drag 规则恢复点击；顶栏开关与拖拽落点线分别用 5/3 的层级压在内容上。 */
+
 .sidebar, .settings-nav { width: var(--sidebar-w); flex: none; min-height: 0; display: flex; flex-direction: column; padding: var(--space-10) var(--space-3) var(--space-3); background: var(--sidebar-bg); border-right: 1px solid var(--border); }
 .sidebar { position: relative; transition: width var(--transition); }
 .sidebar-drag { position: absolute; top: 0; left: 0; width: 100%; height: 36px; -webkit-app-region: drag; }
@@ -92,6 +126,11 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .is-sidebar-collapsed .sidebar-bottom { margin-top: auto; }
 
 /* Conversation */
+/* main 是纵向 flex 列：header 与 tabs 固定高度（flex:none），chat-scroll 独占
+剩余空间并成为唯一的消息滚动容器（flex:1 + min-height:0 + overflow-y:auto），
+composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不会被输入框遮住。
+右侧会话大纲绝对定位于 main 的滚动视口之外，z-index 9；窄于 1100px 时整体隐藏。 */
+
 .main { flex: 1; min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column; background: var(--surface); }
 .chat-header, .file-panel-head { height: var(--header-height); flex: none; display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-4); padding: 36px var(--space-6) var(--space-3); -webkit-app-region: drag; }
 .chat-heading { min-width: 0; }
@@ -135,6 +174,12 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .error-card p { margin: var(--space-1) 0 0; white-space: pre-wrap; }
 
 /* Composer stays in layout so messages are never hidden underneath it. */
+/* 输入区 dock 固定在当前列底部，z-index 10，不覆盖消息；composer 自身限宽
+--content 并居中，textarea 有 76–200px 的高度区间和内部滚动，避免长文本把
+主列撑开。模型弹层与命令/文件选择器都锚定在 composer 上方（bottom 为
+100% 加偏移），z-index 40；空间不足时通过 is-below 翻到下方。附件条横向滚动
+但隐藏滚动条，关闭按钮绝对定位在缩略图右上角。 */
+
 .composer-dock { flex: none; padding: var(--space-3) var(--space-8) var(--space-4); background: var(--bg); z-index: 10; }
 .composer { max-width: var(--content); margin: 0 auto; border: 1px solid var(--border-strong); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-composer); transition: border-color var(--transition), box-shadow var(--transition); }
 .composer:focus-within { border-color: var(--focus-color); box-shadow: var(--focus-ring), var(--shadow-composer); }
@@ -157,6 +202,10 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .composer-hint { max-width: var(--content); margin: var(--space-2) auto 0; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); color: var(--faint); font-size: var(--text-xs); }
 .composer-hint > span { display: flex; align-items: center; gap: var(--space-2); }
 .hint-divider { color: var(--faint); }
+/* 模型选择弹层：锚定在输入区模型按钮上方，z-index 40，宽度 340px 并限制在
+视口内；空间不足时 is-below 翻到触发器下方。头部搜索栏固定，model-list 独立
+滚动并使用 scrollbar-gutter 预留滚动条宽度，避免列表在过滤时左右抖动。 */
+
 .model-control { position: relative; min-width: 0; }
 .model-popover { position: absolute; right: 0; bottom: calc(100% + 10px); z-index: 40; width: 340px; max-width: calc(100vw - 110px); display: flex; flex-direction: column; padding: 6px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-popover); overflow: hidden; }
 .model-popover.is-below { bottom: auto; top: calc(100% + 10px); }
@@ -186,6 +235,11 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .model-picker-error { color: var(--error); overflow-wrap: anywhere; }
 
 /* Empty conversations center the same composer; messages move it to the bottom. */
+/* 空会话复用同一个 composer，只是通过 margin-block:auto 把它推到主列中部，
+并用更大的下内边距制造落地感；发送首条消息后该状态类移除，消息流接管滚动。
+is-new-conversation 下隐藏标题、压缩 header；空会话通常没有可滚动内容，所以
+这种居中是布局行为而不是滚动定位。 */
+
 .is-new-conversation .chat-header { align-items: center; }
 .is-new-conversation .chat-heading h1 { color: var(--faint); font-weight: 500; }
 .is-new-conversation .composer-dock { margin-block: auto; padding-top: 24px; padding-bottom: clamp(40px, 12vh, 120px); }
@@ -195,6 +249,11 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .new-conversation-error { max-width: var(--content); margin: 16px auto 0; }
 
 /* File browser and preview */
+/* 右栏宽度由 --panel-w 决定（默认 430，1200 断点 320），面板本身是纵向 flex；
+file-tree 与 file-code 分别承担目录和代码的滚动，文件头与工具栏固定不滚。
+代码行号列使用 sticky 定位贴在左侧，需要不透明背景才能遮住横向滚过的代码。
+≤1100px 时面板改为绝对定位抽屉并出现遮罩，层级为 20/19。 */
+
 .file-panel-backdrop { display: none; }
 .file-panel { position: relative; width: var(--panel-w); flex: none; min-height: 0; display: flex; flex-direction: column; background: var(--surface); border-left: 1px solid var(--border); }
 .file-panel-head { padding-inline: var(--space-4); }
@@ -221,6 +280,11 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .file-loading { position: absolute; inset: 128px 0 0; display: flex; align-items: center; justify-content: center; gap: var(--space-2); background: var(--overlay-surface); color: var(--loading); font-size: var(--text-sm); }
 
 /* Settings: every page uses the same title, card, row and field sizes. */
+/* 设置是全窗口覆盖层：position:fixed 加 z-index 60，背景铺满，app 的其他直接
+子节点用 :has 选择器设为不可见。左导航定宽、右 settings-content 是唯一纵向
+滚动容器；页面内容统一限宽 --settings-content 并居中。所有设置页复用同一套
+卡片、行高和字段栅格，改动时优先复用这些共享类而不是另起尺寸。 */
+
 .settings-overlay { position: fixed; inset: 0; z-index: 60; display: flex; background: var(--bg); }
 .settings-nav { gap: var(--space-1); -webkit-app-region: drag; }
 .settings-nav-head { height: 44px; display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-1); flex: none; font-size: var(--text-lg); font-weight: 600; }
@@ -318,6 +382,10 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .custom-model-row:first-child { border-top: 0; }
 .model-capabilities { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-1); }
 .model-capabilities > span { padding: 2px 6px; border-radius: var(--radius-sm); background: var(--surface-soft); font-size: var(--text-xs); color: var(--muted); }
+/* 设置对话框：原生 dialog 加自定义外观，宽 560px、最大高度受视口约束；内部
+表单同样限高，header 与 footer 固定，dialog-body 独立滚动。遮罩和模糊交给
+::backdrop，层级由原生 top layer 决定，不依赖 z-index。 */
+
 .settings-dialog { width: min(560px, calc(100vw - 48px)); max-width: none; max-height: min(720px, calc(100dvh - 64px)); padding: 0; margin: auto; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); color: var(--text); box-shadow: var(--shadow-dialog); overflow: hidden; }
 .settings-dialog::backdrop { background: var(--scrim); backdrop-filter: blur(3px); }
 .settings-dialog > form { display: flex; flex-direction: column; max-height: min(718px, calc(100dvh - 66px)); }
@@ -348,6 +416,12 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .import-note { margin: var(--space-4) 0 0; color: var(--muted); font-size: var(--text-sm); }
 
 @media (max-width: 1200px) {
+/* 响应式按桌面窗口宽度分档，顺序为 1200 → 1100 → 900 → 760，另有 740/700 的
+高度档；同一选择器可能在不同档位再次出现，后写的档位在同时命中时覆盖前档。
+1100 把文件面板从占位列变成右侧抽屉（带遮罩），900 收缩模型网格与分栏，
+760 收窄侧栏与间距；≤740 高度压缩欢迎区，≤700 高度收紧会话大纲。不要交换
+这些媒体查询块的位置，否则覆盖结果会变。 */
+
   :root { --sidebar-w: 232px; --panel-w: 320px; }
   .chat-scroll, .composer-dock { padding-inline: var(--space-6); }
   .settings-content { padding-inline: var(--space-6); }
@@ -389,6 +463,11 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 }
 
 /* Quiet controls: blue is reserved for state and small accents. */
+/* 从这里开始进入第二次外观覆写层：同一批选择器在前面已有基础规则，这里通过
+后置声明改掉按钮、发送键、设置项和对话框按钮的观感。英文标题沿用历史措辞，
+不代表当前主题色；实际颜色仍全部来自 palette.css。文件后段的组件主题映射
+还会再覆盖一次，因此排查最终样式时要以文件末尾为准。 */
+
 .settings-nav-head { height: 40px; }
 .settings-content { padding: 28px var(--space-8) var(--space-8); }
 .settings-save { border-color: var(--border-strong); background: var(--surface); color: var(--text); font-weight: 500; }
@@ -416,6 +495,11 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .dialog-footer .settings-save:hover:not(:disabled) { border-color: var(--border-hover); background: var(--surface-soft); color: var(--text); }
 
 /* One shared dropdown control. Native <select> is intentionally never rendered. */
+/* 下拉控件是自绘的，原生 select 只作为状态容器而不直接展示；触发器高度固定
+走 --control，菜单用 position:fixed 加 z-index 200，避免被设置卡片或对话框的
+overflow 裁剪，定位由脚本计算。选项支持描述行和禁用态，选中态只改文字色，
+不改变背景层级。 */
+
 .pi-select { position: relative; min-width: 0; width: 100%; }
 .pi-select-trigger { width: 100%; height: var(--control); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0 var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--text); font-size: var(--text-base); text-align: left; }
 .pi-select-trigger:hover:not(:disabled) { border-color: var(--border-hover); }
@@ -442,6 +526,10 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .row-edit:hover { color: var(--text); background: var(--surface-soft); }
 
 /* DSH-like compact conversation header: sidebar toggle lives in the main header. */
+/* 这一层把对话头统一为 48px 并调整对齐方式，同时统一文件面板头的内边距；
+侧栏开关放在主 header 左侧，标题 flex:1 吃掉中间空间，右侧操作靠 margin-left
+auto 贴边。header 是窗口拖拽区，内部按钮依赖全局 no-drag 保持可点。 */
+
 .chat-header { height: var(--header-height); align-items: center; padding: 6px var(--space-6) 4px; }
 .sidebar-toggle { width: 28px; height: 28px; flex: none; }
 .chat-heading { flex: 1; }
@@ -456,6 +544,11 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .is-new-conversation .new-conversation-intro { margin-bottom: 20px; }
 
 /* Sidebar ordering and expansion */
+/* 拖拽排序相关的视觉全部是临时态：draggable 行用 grab/grabbing 光标，拖动中的
+行降到 0.3 透明度，drop-before 用 z-index 3 的 2px 横线标记插入点。
+drag-preview 固定在视口外并用 pointer-events:none，避免跟随光标时拦截事件；
+just-dropped 只有一次短动画，不改变最终布局。 */
+
 .workspace-row[draggable="true"], .session-row[draggable="true"] { cursor: grab; }
 .workspace-row[draggable="true"]:active, .session-row[draggable="true"]:active { cursor: grabbing; }
 .workspace-row, .session-row { position: relative; transition: background var(--transition), opacity var(--transition), color var(--transition); }
@@ -473,12 +566,20 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .file-panel-head { height: var(--header-height); align-items: center; padding: 6px var(--space-4) 4px; }
 
 /* Editorial welcome above the composer: one short line, one display line. */
+/* 欢迎区是编辑器风格的排版层：短眉题、衬线大标题和一行说明，宽度与 composer
+对齐。标题使用 clamp 随视口缩放，窄屏时字号收敛；这里只做视觉，不参与工作区
+选择逻辑。 */
+
 .new-conversation-intro { max-width: var(--content); margin: 0 auto 20px; padding-left: 2px; text-align: left; }
 .new-conversation-intro h2 { margin: 0; color: var(--text); font-family: var(--display-font); font-size: clamp(30px, 3.2vw, 44px); font-weight: 500; letter-spacing: -.045em; line-height: 1.24; }
 .new-conversation-intro h2 em { font-style: normal; color: var(--muted); font-weight: 500; }
 .new-conversation-intro p { margin: 10px 0 0; color: var(--faint); font-size: var(--text-sm); letter-spacing: .02em; }
 
 /* Workspace is a draft choice; it becomes fixed when the first message is sent. */
+/* 工作区选择只存在于草稿态，发送首条消息后工作区就固定下来；这行是 composer
+上方的轻量选择器，复用 pi-select 但去掉触发器边框，由外层容器画焦点环。
+清空按钮和菜单宽度都做了视口上限，避免窄窗口下溢出。 */
+
 .workspace-choice-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
 .workspace-choice-label { color: var(--faint); font-size: var(--text-sm); }
 .workspace-choice { display: flex; align-items: center; gap: 6px; width: 270px; max-width: 100%; min-height: var(--control); padding: 0 8px 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); }
@@ -498,16 +599,30 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 .workspace-choice-menu .pi-select-option:last-child { border-top: 1px solid var(--divider); margin-top: 4px; border-radius: 0 0 var(--radius-tag) var(--radius-tag); }
 
 /* Collapsed means hidden: no leftover 72px rail. */
+/* 折叠不再保留窄轨道：sidebar 直接 display:none，主 header 左侧留 92px 给
+macOS 窗口控制按钮。早前 72px 轨道的规则仍在文件里但已被这条覆盖，属于历史
+残留；侧栏展开按钮在这个状态下接管入口。 */
+
 .is-sidebar-collapsed .sidebar { display: none; }
 .is-sidebar-collapsed .chat-header { padding-left: 92px; }
 .sidebar-expand { width: 28px; height: 28px; margin-right: 2px; }
 
 /* Sidebar toggle sits on the native window-control line; header actions stay right. */
+/* 侧栏开关绝对定位在侧栏右上角，与原生窗口控制线对齐，z-index 5 保证在品牌区
+和拖拽区之上；对话 header 的操作组始终靠右。后续还有两处 top 微调，最终值由
+最后一次同选择器声明决定。 */
+
 .sidebar { position: relative; }
 .sidebar-top-toggle { position: absolute; top: 10px; right: 12px; z-index: 5; width: 28px; height: 28px; }
 .chat-actions { margin-left: auto; }
 
 /* Global scrollbar policy: no vertical bar; a slim, quiet horizontal bar. */
+/* 这里是工作台自己的滚动条覆盖策略，优先于 styles/dsh-scrollbar.css 的通用
+策略：所有元素纵向滚动条宽度归零（内容仍可滚动，只是不显示轨道），横向保留
+10px 细条，轨道用表面令牌、滑块用滚动条令牌并留 44px 最小长度。面板标签栏和
+附件条另外单独隐藏滚动条。因为选择器带 body 前缀，特异性高于通用伪元素规则，
+调整时注意不要误伤面板内部的独立滚动。 */
+
 * { scrollbar-width: auto; -ms-overflow-style: auto; scrollbar-gutter: auto; }
 body *::-webkit-scrollbar { width: 0; height: 10px; background: var(--transparent); }
 body *::-webkit-scrollbar:vertical { display: none; width: 0; }
@@ -520,6 +635,10 @@ body *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
 body *::-webkit-scrollbar-corner { background: var(--transparent); }
 
 /* Quiet sidebar skeleton while Pi session directories are being indexed. */
+/* 索引会话目录时的占位骨架：只用渐变扫光和错峰延迟营造加载感，不改变侧栏的
+实际尺寸；骨架行高与真实工作区/会话行接近，避免加载完成时跳动。sr-only 提供
+只给读屏器的文本，视觉上完全移出布局。 */
+
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .workspace-skeleton { padding: var(--space-2) var(--space-3) var(--space-4); }
 .skeleton-group { animation: skeleton-in .42s ease both; }
@@ -547,6 +666,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 @keyframes skeleton-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
 
 /* Settings back action lives at the top, before the section title. */
+/* 设置页顶部返回按钮最初做成描边按钮，后来在底部设置页脚区块被改成与侧栏
+底栏一致的透明整行样式；两处同名规则以靠后的为准。返回键提示放在右侧，
+宽度铺满导航列。 */
+
 .settings-back-button { display: flex; align-items: center; gap: var(--space-2); width: 100%; height: 34px; padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--muted); text-align: left; font-size: var(--text-sm); box-shadow: var(--shadow-card); }
 .settings-back-button:hover { border-color: var(--border-strong); color: var(--text); background: var(--surface-soft); }
 .settings-back-button svg { width: 14px; height: 14px; }
@@ -554,6 +677,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .settings-nav-head { margin-top: var(--space-4); }
 
 /* Selected models read as objects, not a settings list. */
+/* 已启用模型先尝试卡片式展示，随后被改成通栏列表，最后在“已启用模型”区块
+又改回自适应网格；网格、头像尺寸、hover 位移和删除按钮透明度都被后续规则
+覆盖。这里保留的是迭代过程，读最终效果请跳到后面的覆写块。 */
+
 .model-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .model-card { position: relative; display: flex; min-height: 132px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface-soft); transition: border-color var(--transition), background var(--transition), box-shadow var(--transition), transform var(--transition); }
 .model-card:hover { border-color: var(--border-strong); background: var(--surface-hover); box-shadow: var(--shadow-card); transform: translateY(-1px); }
@@ -574,9 +701,14 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 @media (max-width: 900px) { .model-card-grid { grid-template-columns: 1fr; } }
 
 /* All settings pages share one content column. */
+/* 所有设置页共用同一条内容列，卡片宽度只受 --settings-content 约束。 */
+
 .settings-sections, .settings-card { width: 100%; }
 
 /* Selected models sit on the same full-width rhythm as the source rows below. */
+/* 第二次调整模型卡片：从双列卡片改成整行条目，与下方来源行共用 86–88px 的
+高度节奏；删除按钮默认隐藏、hover 或聚焦时出现，触屏不依赖 hover。 */
+
 .model-card-grid { display: flex; flex-direction: column; gap: var(--space-2); }
 .model-card { display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: 86px; padding: 14px var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: none; transform: none; transition: border-color var(--transition), background var(--transition); }
 .model-card:hover { border-color: var(--border-strong); background: var(--surface-hover); box-shadow: none; transform: none; }
@@ -605,6 +737,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 @media (max-width: 900px) { .model-card .model-card-meta { display: none; } }
 
 /* Enabled models: responsive cards, grouped by provider when requested. */
+/* 这是模型卡片当前生效的最终形态：auto-fill 网格、最小 240px 列宽、纵向卡片，
+900/760 断点继续压缩列数。标签色被统一成中性表面色，只用文字权重区分模型
+能力，不再使用装饰性色相。 */
+
 .model-view-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); color: var(--faint); font-size: var(--text-xs); }
 .model-view-toggle { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--radius-tag); background: var(--surface-soft); }
 .model-view-toggle button { height: 26px; padding: 0 9px; border-radius: var(--radius-tag); color: var(--faint); font-size: var(--text-xs); }
@@ -639,6 +775,9 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 @media (max-width: 760px) { .model-card-grid { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); } }
 
 /* The settings footer matches the quiet bottom nav row of the workspace. */
+/* 设置底栏与工作区侧栏底栏保持同一节奏：透明整行、40px 行高、hover 才出现
+背景。这组规则覆盖了前面的描边返回按钮，是最终外观。 */
+
 .settings-nav-bottom { margin-top: auto; padding: var(--space-2) 0 0; border-top: 1px solid var(--border); }
 .settings-back-button { width: 100%; height: var(--row-height); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--transparent); box-shadow: none; color: var(--muted); font-size: var(--text-base); font-weight: 400; }
 .settings-back-button:hover { border: 0; background: var(--surface-hover); color: var(--text); }
@@ -646,11 +785,18 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .settings-back-button kbd { margin-left: auto; color: var(--faint); font-size: var(--text-xs); }
 
 /* Settings only manages availability; model switching belongs to the conversation picker. */
+/* 设置页只负责启用/禁用模型，不提供切换当前模型的能力；因此卡片禁用 hover
+位移和阴影，主区域光标保持默认，真正的模型切换在对话输入区的选择器里。 */
+
 .model-card { cursor: default; }
 .model-card:hover { transform: none; box-shadow: none; }
 .model-card-main { cursor: default; }
 
 /* Right panel: persistent tabs, app-local fullscreen and split browsing. */
+/* 右栏是可停靠、可全屏、可分栏的工作台：全屏时 app 隐藏侧栏和主对话区，
+面板自身铺满；分栏时左侧文件树加右侧预览，宽度上限 760 或 64vw。所有滚动都
+下沉到 file-tree/file-code，标签栏与工具栏固定。 */
+
 .app.is-panel-fullscreen .sidebar,
 .app.is-panel-fullscreen .main { display: none; }
 .file-panel { width: var(--panel-w); padding: 0; background: var(--surface); border-left: 1px solid var(--border); }
@@ -702,6 +848,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 @media (max-width: 900px) { .file-panel.is-split:not(.is-fullscreen) { width: 100%; } .panel-body.is-split { grid-template-columns: minmax(160px, .85fr) minmax(0, 1.15fr); } }
 
 /* Provider marks: native brand glyphs when available, neutral fallback otherwise. */
+/* 供应商标记优先使用品牌图形，缺失时回退到首字母；尺寸由组件传入的
+--provider-icon-size 控制，这里只负责居中、裁切和边框。各 is-* 色相类最终被
+统一成中性图标色，避免第三方品牌色干扰界面。 */
+
 .provider-icon { display: inline-grid; place-items: center; flex: none; overflow: hidden; border: 1px solid var(--transparent); border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--icon); }
 .provider-icon > svg { width: 58%; height: 58%; fill: currentColor; }
 .provider-icon > img { width: 100%; height: 100%; object-fit: cover; }
@@ -715,6 +865,9 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .provider-icon.is-neutral { color: var(--icon); background: var(--surface-soft); border-color: var(--border); }
 
 /* Right panel is a plain white work surface, matching the conversation area. */
+/* 这一层把右栏所有表面统一成与对话区相同的 surface 层级，并去掉早期标签栏
+的嵌套底色和阴影；active 标签改用柔和表面，不再额外描边。 */
+
 .file-panel, .panel-tabbar, .panel-start, .panel-file-browser, .panel-file-preview { background: var(--surface); }
 .panel-tabbar { background: var(--surface); }
 .panel-tab.is-active { background: var(--surface-soft); box-shadow: none; }
@@ -722,6 +875,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .file-code { background: var(--surface); }
 
 /* Slide the workbench in and out from the right edge. */
+/* 右栏开关用宽度、位移和透明度做抽屉动画：关闭时宽度为 0 并向右偏移，打开时
+恢复 --panel-w；file-panel-inner 固定 min-width，保证动画期间内容不被挤压重排，
+只是被外层裁切。≤1100px 时改为绝对定位抽屉。 */
+
 .file-panel { width: 0; opacity: 0; overflow: hidden; transform: translateX(18px); transition: width .28s cubic-bezier(.22,.8,.2,1), opacity .2s ease, transform .28s cubic-bezier(.22,.8,.2,1); }
 .file-panel.is-open { width: var(--panel-w); opacity: 1; transform: translateX(0); }
 .file-panel.is-open.is-split:not(.is-fullscreen) { width: min(760px, 64vw); }
@@ -732,6 +889,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 @media (max-width: 1100px) { .file-panel { position: absolute; top: 0; right: 0; bottom: 0; } }
 
 /* DSH-like tab strip: inset rounded rail, quiet tabs, colored file marks. */
+/* 标签栏做成内嵌圆角轨道：这是中间版本，随后扁平化区块会取消外边距、圆角和
+底色，只保留底部分隔线。标签分隔线用伪元素实现，active 标签会同时隐藏左右
+相邻分隔线，避免出现双线。 */
+
 .panel-tabbar { height: 46px; margin: 8px 10px 0; padding: 0 6px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-soft); }
 .file-panel.is-fullscreen .panel-tabbar { margin-left: 92px; }
 .panel-tabs { gap: 1px; scrollbar-width: none; }
@@ -752,6 +913,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .panel-tools { gap: 1px; }
 
 /* File actions: open with an installed app or reveal in Finder. */
+/* 文件工具栏右侧的打开方式与在 Finder 中显示菜单，绝对定位在按钮下方，
+z-index 40，宽度和最大高度都受限并可内部滚动；每个操作行用 18px 图标加
+省略号文本，分隔线不参与点击。 */
+
 .file-toolbar { position: relative; }
 .file-actions { position: relative; flex: none; }
 .file-actions-menu { position: absolute; top: calc(100% + 5px); right: 0; z-index: 40; width: 238px; max-height: 330px; overflow-y: auto; padding: 5px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-popover); }
@@ -766,6 +931,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .panel-tab { flex: none; }
 
 /* Tabs keep a stable width and can be dragged into a new order. */
+/* 为拖拽排序准备：标签固定 150px 宽、不可伸缩，拖动中的标签降到 0.38 透明度，
+落点用 2px 竖线（z-index 4）表示插入位置。这里只覆盖标签尺寸，后续扁平化
+区块会把宽度改成 140 并去掉分隔线。 */
+
 .panel-tab { flex: 0 0 150px; width: 150px; min-width: 150px; max-width: 150px; }
 .panel-tab-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel-tab-close { position: relative; z-index: 2; }
@@ -773,6 +942,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .panel-tab.tab-drop-before::after { content: ''; position: absolute; z-index: 4; top: 5px; bottom: 5px; left: -2px; width: 2px; border-radius: var(--radius-tag); background: var(--accent); box-shadow: var(--shadow-card); }
 
 /* Flatten the tab rail: one row, one active pill, no nested chrome. */
+/* 标签栏最终形态：44px 高、通栏、无外边距和圆角，只保留一条底部分隔线；
+active 标签使用柔和强调色底而非卡片阴影，图标底色全部去掉。固定 140px 宽让
+标签顺序在拖拽时保持稳定。 */
+
 .panel-tabbar { height: 44px; margin: 0; padding: 0 10px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: var(--surface); }
 .file-panel.is-fullscreen .panel-tabbar { margin-left: 0; padding-left: 92px; }
 .panel-tabs { gap: 2px; }
@@ -793,6 +966,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .panel-tools { gap: 0; }
 
 /* Resource cards for MCP and global skills. */
+/* MCP 与全局技能共用的资源卡片：双列网格，卡片有最小高度和 hover 抬升；描述用
+-webkit-line-clamp 截断，目标地址用等宽字体单行省略。≤900px 改为单列，卡片内
+开关靠 margin-left:auto 贴右。 */
+
 .mcp-card-grid, .skill-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .mcp-card, .skill-card { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition); }
 .mcp-card:hover, .skill-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-card); transform: translateY(-1px); }
@@ -821,6 +998,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .settings-text-button.is-danger:hover { background: var(--error-soft); }
 
 /* Read-only detail dialogs. */
+/* 只读详情对话框用 fixed 覆盖层加自有卡片，不复用原生 dialog 的默认样式；
+层级 90，后面又被提到 200 以压过设置层。技能详情是特例：固定高度、左右两栏
+（文件树 290px 加预览），只有两栏内部各自滚动。 */
+
 .detail-overlay { position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center; padding: var(--space-6); background: var(--surface); backdrop-filter: blur(2px); }
 .detail-dialog { display: flex; flex-direction: column; width: min(600px, 92vw); max-height: min(720px, 88vh); overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-dialog); }
 .detail-dialog--small { width: min(520px, 92vw); }
@@ -864,32 +1045,52 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .detail-overlay { z-index: 200; }
 
 /* Tabs flow horizontally by wheel; no rail divider, just breathing room. */
+/* 标签栏支持滚轮横向滚动：去掉底部分隔线，让 tabs 自己把 overscroll 限制在
+容器内，避免滚动传给页面。文件工具栏的顶部边框也在这里去掉。 */
+
 .panel-tabbar { border-bottom: 0; padding-bottom: 0; }
 .panel-body .file-toolbar { border-top: 0; }
 .panel-tabs { overscroll-behavior-x: contain; }
 
 /* Match the sidebar toggle's icon scale and loosen the right-side tool spacing. */
+/* 统一面板工具按钮与侧栏开关的图标尺寸为 16px，并把工具组间距放宽到 8px；
+这些细调只影响观感，不改变点击区域。 */
+
 .sidebar-top-toggle svg { width: 16px; height: 16px; }
 .panel-tools { gap: 8px; }
 .panel-tools .icon-button { width: 28px; height: 28px; }
 .panel-tools .icon-button svg { width: 16px; height: 16px; }
 
 /* Group global skills by their source directory. */
+/* 全局技能按来源目录分组：组间距 24px，小标题用等宽字体的弱化色，与设置页
+其他分组标题区分。 */
+
 .skill-group-sections { display: flex; flex-direction: column; gap: 24px; }
 .skill-source-head { display: flex; align-items: center; gap: 7px; margin: 0 0 9px; }
 .skill-source-head h3 { margin: 0; color: var(--muted); font: 10.5px var(--mono); font-weight: 500; letter-spacing: .01em; }
 .skill-source-group .skill-card-grid { margin: 0; }
 
 /* Align the skill tree path bar and the file path bar. */
+/* 把技能文件树工具栏和文件预览工具栏都固定为 38px 高、同样的左右内边距和
+底部分隔线，切换文件时视觉基线不跳。 */
+
 .skill-tree-toolbar { height: 38px; min-height: 38px; padding: 0 10px; background: var(--surface); border-bottom: 1px solid var(--border); }
 .skill-file-preview > .file-toolbar { height: 38px; min-height: 38px; padding: 0 12px; border-top: 0; border-bottom: 1px solid var(--border); background: var(--surface); }
 
 /* Give the conversation header the same breathing room as the sidebar toggle line. */
+/* 第三次调整对话头：高度 60px、上内边距 16px，让标题与侧栏开关、macOS 窗口
+控制按钮处在同一视觉线上；操作组垂直居中，空会话也沿用同一高度。 */
+
 .chat-header { height: 60px; padding: 16px var(--space-6) 6px; justify-content: flex-start; }
 .is-new-conversation .chat-header { height: 60px; padding: 16px var(--space-6) 6px; }
 .chat-actions { margin-left: auto; align-self: center; }
 
 /* Rich Pi transcript: Markdown, thinking, tool calls and tool results. */
+/* Pi 对话内容的排版层：Markdown 正文、标题、列表、引用、代码块、表格、图片
+以及语法高亮类。代码块自带横向滚动，表格用 display:block 包裹以实现横向
+滚动，行内代码和长串都允许换行。高亮颜色只映射到 palette.css 的 syntax-*
+语义令牌。 */
+
 .message.assistant { align-items: stretch; }
 .assistant-content { max-width: 100%; min-width: 0; font-size: var(--text-md); line-height: 1.85; overflow-wrap: anywhere; }
 .assistant-content > .markdown + .markdown { margin-top: 10px; }
@@ -959,6 +1160,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .settings-save:disabled .spin { color: var(--disabled-text); }
 
 /* Composer command and file picker. */
+/* 输入框内的命令/文件选择器：锚定 composer 上方，z-index 40，最大高度 370px，
+头部与底部提示固定、中间列表滚动。选项同时支持 hover 与键盘 is-active，两者
+共用同一底色；分组标题和计数徽标用更小的字号。 */
+
 .composer-wrap { position: relative; width: 100%; max-width: var(--content); margin: 0 auto; }
 .composer-wrap > .composer { max-width: none; }
 .composer-picker { position: absolute; z-index: 40; left: 0; right: 0; bottom: calc(100% + 8px); display: flex; flex-direction: column; max-height: 370px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); box-shadow: var(--shadow-popover); }
@@ -987,6 +1192,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .composer-shortcuts kbd { min-width: auto; }
 
 /* Editorial assistant turns: a quiet identity rail, clustered work, and clean prose. */
+/* 助手回合改成身份轨道加内容的两列网格：左侧 32px 轨道画头像和连接线，右侧
+放状态、步骤和正文。最后一个回合隐藏连接线；live 状态用脉冲点提示。正文
+Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
+
 .messages { gap: 30px; }
 .message.user { align-items: flex-end; }
 .user-bubble { border-color: var(--border); border-radius: var(--radius-card) var(--radius-card) var(--radius-tag) var(--radius-card); background: var(--surface-soft); box-shadow: var(--shadow-card); }
@@ -1055,6 +1264,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 @media (prefers-reduced-motion: reduce) { .assistant-turn { animation: none; } .assistant-turn.is-live .assistant-turn-status::before { animation: none; } }
 
 /* A small run summary gives each assistant turn a distinct, alive signature. */
+/* 给每个助手回合加轻量的运行摘要：live 时头像外圈呼吸、状态点变强调色，结束
+后状态点恢复成功色；meta 徽标展示工具/思考计数。这些动画都在减少动效偏好下
+关闭。 */
+
 .assistant-turn-orb-glow { display: none; }
 .assistant-orb { position: relative; box-shadow: 0 0 0 1px var(--border); }
 .assistant-turn.is-live .assistant-orb::after { content: ''; position: absolute; inset: -5px; border: 1px solid var(--border-strong); border-radius: var(--radius-card); animation: orb-breathe 2s ease-in-out infinite; }
@@ -1073,6 +1286,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 @media (prefers-reduced-motion: reduce) { .assistant-turn.is-live .assistant-orb::after { animation: none; } }
 
 /* Run log + warm reply sheet: activity is a compact aside, the answer is the artifact. */
+/* 运行日志与回复分层：活动是可折叠的紧凑侧记，回复是主要产出。早期版本给
+回复加了卡片边框，后面的 raw prose 区块会把卡片完全去掉，只保留正文。日志
+容器负责内部滚动和超长文本换行。 */
+
 .activity-drawer { margin: 4px 0 12px; }
 .activity-drawer > summary { display: inline-flex; align-items: center; gap: 6px; min-height: 27px; padding: 3px 8px; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--muted); font-size: 10px; cursor: pointer; list-style: none; transition: border-color var(--transition), background var(--transition); }
 .activity-drawer > summary::-webkit-details-marker { display: none; }
@@ -1109,6 +1326,9 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 @media (max-width: 700px) { .assistant-response { padding: 13px 14px; } }
 
 /* Sidebar rows are clickable, but keep the quiet arrow cursor; hand only while dragging. */
+/* 侧栏行可点击但不显示手型光标，只有真正开始拖拽时才切到 grabbing；这条覆盖
+了前面 draggable 行的 grab 光标。 */
+
 .workspace-row, .session-row, .workspace-row[draggable="true"], .session-row[draggable="true"] { cursor: default; }
 .workspace-row[draggable="true"]:active, .session-row[draggable="true"]:active { cursor: grabbing; }
 /* Thin, non-blocking progress line while a session is opening. */
@@ -1117,14 +1337,23 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 @keyframes chat-loading { 0% { transform: translateX(-45%) scaleX(.35); } 50% { transform: translateX(0) scaleX(.7); } 100% { transform: translateX(45%) scaleX(.35); } }
 
 /* Put the sidebar toggle, conversation header and header action on one optical line. */
+/* 把侧栏开关、对话头标题和右侧操作对齐到同一条光学基线，操作组用负外边距
+抵消图标内边距；下面还会再微调一次 top 值。 */
+
 .sidebar-top-toggle { top: 21px; }
 .chat-actions { margin-right: -8px; }
 
 /* Optical top line: match the first title line and the native window controls. */
+/* 第二次光学对齐：开关回到 top 10，操作组相对上移 11px，以匹配原生窗口控制
+按钮与标题首行。两处微调以本段为准。 */
+
 .sidebar-top-toggle { top: 10px; }
 .chat-actions { position: relative; top: -11px; }
 
 /* The reply is raw prose. No card, no tint, no decorative frame. */
+/* 最终回复形态：无卡片、无底色、无装饰边框，只保留与正文一致的字号和行高；
+代码块回到表面色背景。前面的回复卡片规则已被本条覆盖。 */
+
 .assistant-response { margin: 10px 0 0; padding: 0; border: 0; border-radius: 0; background: var(--transparent); box-shadow: none; }
 .assistant-response::before { display: none; }
 .assistant-response .markdown { font-size: var(--text-md); line-height: 1.9; }
@@ -1132,6 +1361,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .assistant-response .markdown code { background: var(--surface-soft); }
 
 /* Open execution canvas: dot grid, vertical thread, colored nodes, soft log rows. */
+/* 执行画布版活动日志：点阵底、纵向连线、带边框节点和逐行入场动画。节点按
+工具类型着色，部分类型保留强调色；note 节点是小圆点。每个节点左侧的 gutter
+画连接线，最后一行不画。内容区各自限高滚动。 */
+
 .activity-drawer { margin: 5px 0 13px; }
 .activity-drawer > summary { gap: 7px; min-height: 28px; padding: 3px 9px 3px 6px; border-color: var(--border); border-radius: var(--radius-control); background: var(--surface); }
 .activity-drawer > summary:hover { border-color: var(--border-hover); background: var(--surface-hover); }
@@ -1197,6 +1430,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 @media (prefers-reduced-motion: reduce) { .activity-line { animation: none; } }
 
 /* Floating conversation outline: hover reveals a message preview, click jumps. */
+/* 会话大纲浮在消息区右侧：absolute 定位在 main 内、z-index 9，hover 显示四行
+消息预览并可点击跳转。宽度只有 34px，不参与消息列布局；≤1100px 整体隐藏，
+避免和文件抽屉抢空间。 */
+
 .conversation-outline { position: absolute; z-index: 9; top: 112px; right: 10px; bottom: 104px; width: 34px; }
 .outline-track { display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; width: 100%; height: 100%; padding: 12px 0; }
 .outline-tick { display: flex; align-items: center; justify-content: flex-end; width: 30px; min-height: 8px; padding: 0; border-radius: var(--radius-tag); }
@@ -1216,6 +1453,9 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .outline-tick { position: relative; z-index: 1; }
 
 /* Keep the outline as one compact cluster instead of stretching over the whole rail. */
+/* 把大纲从铺满整条轨道改为居中的紧凑刻度组：刻度间距 8px、激活刻度更长，
+连接线改成渐变并且只占轨道中段；高度不足 700px 时进一步收紧间距。 */
+
 .conversation-outline { top: 112px; bottom: 104px; }
 .outline-track { justify-content: center; gap: 8px; padding: 0; }
 .outline-item { position: relative; z-index: 1; display: flex; align-items: center; justify-content: flex-end; width: 100%; min-height: 8px; }
@@ -1229,6 +1469,9 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 @media (max-height: 700px) { .outline-track { gap: 5px; } }
 
 /* Long user input becomes a compact file attachment in the bubble. */
+/* 用户消息里的长文本与附件展示：文本保留换行，附件卡显示图标、文件名、大小
+和类型徽标。附件卡最小宽度 240px，长文件名省略，不撑破气泡。 */
+
 .user-text { white-space: pre-wrap; }
 .attachment-card { display: flex; align-items: center; gap: 9px; min-width: 240px; max-width: 100%; margin-top: 9px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); text-align: left; }
 .attachment-icon { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: var(--radius-tag); color: var(--icon); background: var(--surface-soft); }
@@ -1239,6 +1482,9 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .attachment-kind { flex: none; padding: 2px 4px; border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--faint); font: 8px var(--mono); letter-spacing: .06em; }
 
 /* Outline: no rail line, tighter cluster, subtler tick lengths. */
+/* 去掉大纲的竖线轨道，进一步缩小刻度长度和间距，让右侧只剩一组短横线；
+这是大纲的最终视觉。 */
+
 .outline-track::before { display: none; }
 .outline-track { gap: 6px; }
 .outline-line { width: 10px; }
@@ -1246,6 +1492,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .outline-tick.is-active .outline-line { width: 18px; }
 
 /* Composer image/file attachments. */
+/* composer 附件区：缩略图 64px 方形、文件卡最大 245px，横向滚动但隐藏滚动条；
+删除按钮浮在右上角，用绝对定位和小尺寸避免遮挡预览。图片用 object-fit:cover，
+文件信息两行省略。 */
+
 .composer-attachments { display: flex; gap: 7px; overflow-x: auto; padding: 11px 12px 0; }
 .composer-attachments::-webkit-scrollbar { height: 0; }
 .composer-attachment { position: relative; flex: none; display: flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); }
@@ -1273,12 +1523,19 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .attachment-kind.is-doc { background: var(--surface-soft); color: var(--muted); }
 
 /* Retry status must never look like a completed run. */
+/* 重试中与失败态必须和正常完成态区分：重试状态点和文字使用警告色，失败态
+使用错误色；颜色之外还保留文案差异，避免只靠颜色传达状态。 */
+
 .assistant-turn.is-retrying .assistant-turn-status { color: var(--warning); }
 .assistant-turn.is-retrying .assistant-turn-status::before { background: var(--warning); }
 .assistant-turn.has-error .assistant-turn-status { color: var(--error); }
 .assistant-turn.has-error .assistant-turn-status::before { background: var(--error); }
 
 /* A calm, editorial failure receipt instead of a flat pink banner. */
+/* 错误回执采用编辑式卡片：左侧 2px 色条、图标、kicker、错误码和可滚动的
+原始信息。错误信息限高 170px 并内部滚动，长 URL 或堆栈不会撑破对话框。旧版
+error-card 也在这里被统一成同一套视觉。 */
+
 .assistant-error { position: relative; margin: 12px 0 4px; padding: 15px 17px 13px 20px; overflow: hidden; border: 1px solid var(--error-border); border-radius: var(--radius-control); background: var(--error-soft); box-shadow: var(--shadow-card); }
 .assistant-error::before { content: ''; position: absolute; left: 0; top: 13px; bottom: 13px; width: 2px; border-radius: 0 var(--radius-tag) var(--radius-tag) 0; background: var(--error); }
 .assistant-error-head { display: flex; align-items: center; gap: 9px; }
@@ -1298,6 +1555,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .composer-option-icon.is-directory { color: var(--icon); background: var(--surface-soft); }
 
 /* Native adaptation of Pi's extension footer + status cells. */
+/* 把 Pi 扩展的 footer 与状态单元格适配成原生样式：footer 是一行可点击文本，
+状态 chip 限宽 300px 并省略；toast 固定在底部居中，z-index 210，高于大多数
+浮层但低于侧栏操作菜单。 */
+
 .extension-status-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; width: 100%; max-width: var(--content); margin: 6px auto 0; color: var(--faint); }
 .extension-footer-line { flex: 1 1 100%; min-width: 0; overflow: hidden; color: var(--faint); font: 10px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .extension-status-chip { max-width: 300px; overflow: hidden; padding: 2px 6px; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface); color: var(--faint); font: 9px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
@@ -1306,6 +1567,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .extension-toast.is-error { border-color: var(--error-border); background: var(--error-soft); color: var(--error); }
 
 /* General settings. */
+/* 通用设置页：主题三选一、字号/圆角等偏好行、快捷键表、代码工作视图。偏好行
+统一 74px 最小高度和顶部分隔线，控件固定宽度列，窄屏时选择器缩到 150px。
+圆角预览用四个不同圆角的小方块直观展示令牌层级。 */
+
 .general-settings { gap: 16px; }
 .theme-choice-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .theme-choice { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 92px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--muted); font-size: 12px; }
@@ -1336,6 +1601,9 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .messages .markdown, .messages .user-bubble { font-size: var(--chat-font-size, 14px); }
 
 /* Extension footer is a single clickable line. Details live in the panel. */
+/* 扩展状态在最终版只保留一条可点击的 footer 行，详细状态放进状态面板对话框；
+状态栏容器直接 display:none。状态面板复用详情对话框的宽度上限，正文分区滚动。 */
+
 .extension-status-bar { display: none; }
 .extension-footer-line { display: flex; align-items: center; gap: 6px; width: 100%; max-width: var(--content); min-height: 24px; margin: 5px auto 0; padding: 1px 4px; overflow: hidden; border: 0; background: var(--transparent); color: var(--faint); font: 10px var(--mono); text-align: left; }
 .extension-footer-line:hover { background: var(--surface-soft); color: var(--muted); border-radius: var(--radius-tag); }
@@ -1356,6 +1624,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .status-panel-empty { margin: 0; color: var(--faint); font-size: 11px; }
 
 /* pi-todo plan dock: a quiet, pinned execution plan, not a chat log. */
+/* pi-todo 计划坞：停在 composer 上方（普通文档流，不遮挡消息），头部显示当前
+任务和进度条，主体限高 268px 内部滚动；live 时标题图标呼吸。分组、状态图标和
+删除线只表达任务状态，不参与交互布局。 */
+
 .todo-dock { width: 100%; max-width: var(--content); margin: 0 auto 8px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); box-shadow: var(--shadow-card); }
 .todo-dock-head { width: 100%; min-height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 11px; color: var(--muted); text-align: left; }
 .todo-dock-head:hover { background: var(--surface-soft); }
@@ -1396,6 +1668,10 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 @keyframes todo-breathe { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
 
 /* Local outgoing queue: visible, editable, and reorderable before it reaches Pi. */
+/* 本地待发队列：消息在真正发给 Pi 之前可见、可编辑、可拖拽排序；列表限高
+184px 并滚动。队列为空时整个面板不渲染（由组件控制），这里只负责有内容时的
+卡片和操作按钮。 */
+
 .queued-panel { width: 100%; max-width: var(--content); margin: 0 auto 8px; }
 .queued-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 24px; padding: 0 3px 4px; color: var(--faint); font-size: 9.5px; }
 .queued-panel-title { display: inline-flex; align-items: center; gap: 5px; font: 9.5px var(--mono); letter-spacing: .02em; }
@@ -1420,19 +1696,31 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .composer textarea.has-queued::placeholder { color: var(--muted); }
 
 /* Do not flood expanded tool cards on hover; keep each parameter/result surface legible. */
+/* 展开后的工具卡不再整体变色：hover 只加深边框和表面，参数与结果区域保持
+独立可读的代码块背景，避免整卡高亮淹没内容。 */
+
 .activity-tool:hover { background: var(--surface); border-color: var(--border-strong); }
 .activity-drawer > summary:hover { background: var(--surface-soft); }
 .activity-tool-body { background: var(--surface); }
 .activity-tool-code { border: 1px solid var(--border); background: var(--surface-soft); }
 
 /* The note row already renders its own activity node in the gutter. */
+/* note 行的活动节点已经由 gutter 自己绘制，这里去掉额外的伪元素圆点，防止
+同一条日志出现两个节点。 */
+
 .activity-note::before { content: none; display: none; }
 
 /* Four radius tiers: tag, control, card, panel; 50% stays reserved for circles. */
+/* 统一圆角层级：详情、设置、模型浮层和 composer 都使用 panel 级圆角，圆形
+头像仍用 50%，不占用这四个层级。改动圆角令牌会影响所有组件。 */
+
 .detail-dialog { border-radius: var(--radius-panel); }
 .settings-dialog, .model-popover, .composer { border-radius: var(--radius-panel); }
 
 /* Radius preference preview and control. */
+/* 圆角偏好预览：四个小方块依次展示 tag/control/card/panel 四档，右侧选择器固定
+148px，≤900px 时隐藏预览只留选择器。 */
+
 .radius-control { display: flex; align-items: center; gap: 12px; flex: none; }
 .radius-preview { display: inline-flex; align-items: center; gap: 3px; }
 .radius-preview i { display: block; width: 13px; height: 13px; border: 1px solid var(--border-strong); background: var(--surface-soft); }
@@ -1445,6 +1733,11 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 
 
 /* Component theme map. Every color here comes from palette.css. */
+/* 组件主题映射：文件最后统一把所有组件的背景、边框、文字、按钮、语法高亮
+重新指向 palette.css 的语义令牌。这里选择器重复多、位置靠后，是颜色相关最终
+生效的一层；不要在前面改单个组件的颜色而忘了这里还有覆盖。所有值必须继续
+引用令牌，不能写颜色字面量。 */
+
 body { background: var(--bg); color: var(--text); }
 .main { background: var(--bg); }
 .sidebar, .settings-nav { background: var(--sidebar-bg); }
@@ -1565,11 +1858,17 @@ body { background: var(--bg); color: var(--text); }
 body { --dsh-scrollbar-thumb: var(--scrollbar); --dsh-scrollbar-thumb-hover: var(--scrollbar-hover); }
 
 /* Stable select widths inside the General rows. */
+/* 通用设置里选择器需要稳定宽度：偏好行 180px、内联控件 84px，窄屏降到 150px，
+避免文字长短导致整行抖动。 */
+
 .settings-profile-row > .pi-select { width: 180px; flex: 0 0 180px; }
 .settings-inline-control .pi-select { width: 84px; flex: none; }
 @media (max-width: 900px) { .settings-profile-row > .pi-select { width: 150px; flex-basis: 150px; } }
 
 /* Neutralize optional decorative hues; only accent, warning and error remain. */
+/* 收掉装饰性色相：文件/命令/工具图标、供应商图标、模型标签、回合元信息全部
+回到中性图标色和柔和表面，只保留 accent、warning、error 三类语义色。 */
+
 .panel-tab-icon, .panel-tab-icon.is-file, .panel-tab-icon.is-files,
 .composer-option-icon, .composer-option-icon.is-builtin, .composer-option-icon.is-skill,
 .composer-option-icon.is-prompt, .composer-option-icon.is-extension,
@@ -1601,6 +1900,9 @@ body { --dsh-scrollbar-thumb: var(--scrollbar); --dsh-scrollbar-thumb-hover: var
 .provider-mode.is-missing, .extension-toast.is-warning { color: var(--warning); background: var(--warning-soft); border-color: var(--warning-border); }
 
 /* Remaining accent-bearing surfaces are derived from the same page palette. */
+/* 最后一轮强调色落点：活动符号、目录图标、建议卡 hover、设置描边按钮等使用
+accent 或 accent-soft；同时把 note 节点、思考块边框、连接线改回中性边框色。 */
+
 .activity-symbol { color: var(--accent); background: var(--accent-soft); }
 .activity-drawer > summary { background: var(--surface); border-color: var(--border); }
 .activity-drawer > summary:hover { background: var(--surface-soft); border-color: var(--border-strong); }
@@ -1614,6 +1916,11 @@ body { --dsh-scrollbar-thumb: var(--scrollbar); --dsh-scrollbar-thumb-hover: var
 .settings-outline:hover:not(:disabled) { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent); }
 
 /* Row controls sit beside the row button, so actions never open or drag it. */
+/* 侧栏行内操作（重命名/删除/置顶）与行按钮并排：操作层绝对定位在行右侧，
+默认隐藏，hover 或 focus-within 才显示；显示时给行文字留出 62/88px 的右内边距，
+避免操作按钮压住标题。菜单用 fixed 加 z-index 250，错误提示 300。触屏没有
+hover，媒体查询里让操作常显并隐藏时间/箭头。 */
+
 .sidebar-row-shell { position: relative; min-width: 0; }
 .sidebar-row-actions { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 5px; padding: 0; background: var(--transparent); opacity: 0; visibility: hidden; }
 .sidebar-row-shell:hover > .sidebar-row-actions, .sidebar-row-shell:focus-within > .sidebar-row-actions, .sidebar-row-actions.is-open { opacity: 1; visibility: visible; }

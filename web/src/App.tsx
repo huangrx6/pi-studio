@@ -1,6 +1,22 @@
+/**
+ * Pi Studio 渲染进程的主界面。
+ *
+ * 这个文件负责整个窗口的「数据 + 交互 + 布局」，按下面的顺序组织：
+ *  1. 常量与纯函数：设置页定义、API 协议、格式化与本地存储工具
+ *  2. 类型：会话摘要、提交内容、排队消息、设置快照
+ *  3. App 组件
+ *     - 状态：工作区/会话、输入与附件、模型、设置页、右侧文件面板
+ *     - 数据加载：loadState / openSession / 设置快照
+ *     - 交互：发送与排队、拖拽排序、斜杠命令与 @ 文件、附件
+ *     - 渲染：侧边栏、对话区、输入区、设置覆盖层、右侧工作台
+ *
+ * 所有系统能力都通过 window.piApi 调用主进程（见 electron/preload.cjs），
+ * 渲染进程本身不直接访问 Node / 文件系统。
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Clock3, Command, Cpu, FileCode2, FileText, Folder, FolderOpen, Info, Sparkles,
+  ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Clock3, Command, Cpu, FileCode2, FileText, Folder, FolderOpen, Info, Sparkles,
   Activity, AppWindow, Columns2, Compass, Eye, Globe2, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, Pencil, Plus, Plug, RotateCw, Search, Settings, SquarePen, Sun, Terminal, Trash2, X,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
@@ -17,8 +33,9 @@ import { ModelPicker } from './components/ModelPicker';
 import { WorkspacePicker } from './components/WorkspacePicker';
 import { SidebarActions, type SidebarAction } from './components/SidebarActions';
 import type { ModelOption, ModelSelection, ThinkingLevel } from './model-types';
-import { DEFAULT_PREFERENCES, RADIUS_PRESETS, loadPreferences, resolveTheme, savePreferences, setActivePreferences, type Preferences } from './preferences';
+import { RADIUS_PRESETS, loadPreferences, resolveTheme, savePreferences, setActivePreferences, type Preferences } from './preferences';
 
+// 设置页导航：顺序、图标与描述同时用于设置侧栏和页面标题。
 const settingsPages = [
   { id: 'general', label: '通用', icon: Settings, description: '外观、工作步骤、链接与输入行为。' },
   { id: 'models', label: '模型与账号', icon: Cpu, description: '连接模型来源，选择适合当前工作的模型。' },
@@ -28,6 +45,7 @@ const settingsPages = [
   { id: 'about', label: '关于', icon: Info, description: '一个专注、轻巧的 AI 开发工作台。' },
 ] as const;
 
+// 新增模型来源时可选的上游 API 协议。
 const apiTypeOptions = [
   { value: 'openai-completions', label: 'OpenAI Completions' },
   { value: 'openai-responses', label: 'OpenAI Responses' },
@@ -39,8 +57,17 @@ function BrandMark({ className = '' }: { className?: string }) {
   return <img className={`brand-mark ${className}`} src={appIcon} alt="" draggable={false} />;
 }
 
+// ---------- 类型定义 ----------
+
+/** 侧边栏里的会话条目（来自主进程的会话索引）。 */
 type PiSessionSummary = { pinned?: boolean; archived?: boolean; id: string; cwd: string; title: string; updatedAt: number; messageCount: number };
 type ImagePayload = { type: 'image'; data: string; mimeType: string };
+/**
+ * 发送前的完整提交内容：
+ *  - displayText：给界面看（长消息已替换成摘要）
+ *  - outgoingText：真正发给模型（包含附件标记）
+ *  - mentions / attachmentPaths：交给主进程读取文件上下文
+ */
 type PreparedSubmission = {
   sessionId: string;
   displayText: string;
@@ -51,9 +78,11 @@ type PreparedSubmission = {
   mentions: string[];
   attachmentPaths: string[];
 };
+/** 排队中的消息：保留原始文本与附件，便于撤回后继续编辑。 */
 type QueuedPrompt = { id: string; order: number; text: string; attachments: ComposerAttachment[]; submission: PreparedSubmission };
 type PiWorkspace = { cwd: string; name: string; sessions: PiSessionSummary[] };
 type CustomModelConfig = { providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean };
+/** 设置页当前打开的编辑弹窗；editId 为空表示新建。 */
 type SettingsEditor = { kind: 'provider' | 'model' | 'mcp' | 'package' | 'skill' | 'extension'; editId?: string };
 type SettingsSnapshot = {
   customModels: CustomModelConfig[];
@@ -74,6 +103,7 @@ type SkillInfo = SettingsSnapshot['skills'][number];
 type McpInfo = SettingsSnapshot['mcp'][number];
 type SkillDetailState = SkillInfo & { baseDir: string };
 
+/** 文件大小的紧凑展示，用于文件列表与附件卡片。 */
 function filesize(size: number): string {
   if (!size) return '';
   if (size < 1024) return `${size} B`;
@@ -81,6 +111,20 @@ function filesize(size: number): string {
   return `${Math.round(size / (1024 * 1024) * 10) / 10} MB`;
 }
 
+/** 把未知异常转成可展示的一行文本（IPC 抛出的错误不一定是 Error 实例）。 */
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** 取出消息内容里的纯文本块；separator 用于区分「按行拼接」和「按空格拼接」。 */
+function textOfBlocks(content: ChatMessage['content'], separator = '\n'): string {
+  return content
+    .filter((block): block is Extract<ChatMessage['content'][number], { type: 'text' }> => block.type === 'text')
+    .map((block) => block.text)
+    .join(separator);
+}
+
+/** 会话列表使用的相对时间：刚刚 / N 分钟 / N 小时 / N 天。 */
 function relativeTime(ms: number): string {
   const diff = Date.now() - ms;
   if (diff < 60_000) return '刚刚';
@@ -89,16 +133,19 @@ function relativeTime(ms: number): string {
   return `${Math.floor(diff / 86_400_000)} 天`;
 }
 
+// 超过任一阈值的长文本会自动转成附件，避免模型侧上下文被单条消息占满。
 const LONG_MESSAGE_CHARS = 12_000;
 const LONG_MESSAGE_BYTES = 24_000;
 const LONG_MESSAGE_LINES = 240;
 
+/** 判断一条消息是否应该落盘为附件。 */
 function isLongMessage(text: string): boolean {
   if (text.length > LONG_MESSAGE_CHARS) return true;
   if (text.split('\n').length > LONG_MESSAGE_LINES) return true;
   return new TextEncoder().encode(text).length > LONG_MESSAGE_BYTES;
 }
 
+/** 侧边栏展开状态、手动排序与上次打开的会话都存在 localStorage。 */
 const UI_KEYS = {
   expanded: 'pi-studio:expanded-workspaces',
   workspaceOrder: 'pi-studio:workspace-order',
@@ -106,6 +153,7 @@ const UI_KEYS = {
   activeSession: 'pi-studio:active-session',
 } as const;
 
+/** 读本地存储；解析失败时退回默认值。 */
 function readStored<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -113,20 +161,24 @@ function readStored<T>(key: string, fallback: T): T {
   } catch { return fallback; }
 }
 
+/** 写本地存储；隐私模式下写入失败则静默忽略。 */
 function writeStored(key: string, value: unknown): void {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
 }
 
+// ---------- 视图辅助类型 ----------
 type DragItem = { kind: 'workspace' | 'session'; cwd: string; sessionId?: string };
 type PanelFile = { path: string; size: number; binary: boolean; text: string };
 type PanelTab = { id: string; kind: 'start' | 'files' | 'file'; title: string; path?: string };
 type ComposerMenuState = { kind: 'slash' | 'file'; query: string; start: number; end: number };
 
+/** 上下文窗口的短标签（128K / 1M），避免卡片被长数字撑开。 */
 function contextLabel(tokens: number): string {
   if (tokens >= 1_000_000) return `${Math.round(tokens / 100_000) / 10}M`;
   return `${Math.round(tokens / 1000)}K`;
 }
 
+/** 输入框命令列表里，用图标区分命令来源。 */
 function ComposerSourceIcon({ source }: { source: ComposerCommandSource }) {
   if (source === 'skill') return <Sparkles />;
   if (source === 'prompt') return <FileText />;
@@ -134,6 +186,10 @@ function ComposerSourceIcon({ source }: { source: ComposerCommandSource }) {
   return <Command />;
 }
 
+/**
+ * 扩展状态的显示名。
+ * 已知扩展给中文名，其余从 key 推一个可读文本（如 pi-lens-lsp → lens lsp）。
+ */
 function extensionStatusLabel(key: string): string {
   const labels: Record<string, string> = {
     'pi-quota-status': '额度',
@@ -147,6 +203,7 @@ function extensionStatusLabel(key: string): string {
   return labels[key] || key.replace(/^pi-/, '').replace(/-status$/, '').replace(/[-_]/g, ' ');
 }
 
+/** 按上下文窗口大小切换颜色档位，用于模型卡片上的 token 标签。 */
 function contextTone(tokens?: number): string {
   if (!tokens) return 'is-small';
   if (tokens >= 1_000_000) return 'is-million';
@@ -154,6 +211,20 @@ function contextTone(tokens?: number): string {
   if (tokens >= 100_000) return 'is-medium';
   return 'is-small';
 }
+
+/**
+ * 应用根组件。
+ *
+ * 状态大致分五组：
+ *  - 工作区 / 会话：workspaces、workspace、session、messages、expanded、排序
+ *  - 输入区：prompt、附件、斜杠命令菜单、排队消息
+ *  - 模型：modelSelection、models、设置页的模型草稿
+ *  - 设置：settingsOpen / settingsTab / settingsData / editor
+ *  - 右侧工作台：面板标签、文件树、文件预览、打开方式菜单
+ *
+ * 状态之间通过「主进程快照 + 本地乐观更新」保持同步：
+ * 发送消息或修改设置后，再调用 loadState() 拉一次最新数据。
+ */
 
 export function App() {
   const [workspaces, setWorkspaces] = useState<PiWorkspace[]>([]);
@@ -202,7 +273,6 @@ export function App() {
   const [models, setModels] = useState<ModelOption[]>([]);
   const [modelQuery, setModelQuery] = useState('');
   const [modelView, setModelView] = useState<'all' | 'provider'>('all');
-  const [modelRef, setModelRef] = useState('');
   const [enabledModels, setEnabledModels] = useState<string[]>([]);
   const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
   const [providerModels, setProviderModels] = useState<Record<string, Array<{ id: string; model: string; name: string; enabled: boolean; contextWindow?: number; maxTokens?: number; supportsImages?: boolean }>>>({});
@@ -258,6 +328,9 @@ export function App() {
   const dragPreviewRef = useRef<HTMLDivElement | null>(null);
   const restoredRef = useRef(false);
 
+  // ---------- 偏好与主题 ----------
+
+  // 偏好变化时同步到 localStorage、CSS 变量和原生窗口主题。
   useEffect(() => {
     savePreferences(preferences);
     setActivePreferences(preferences);
@@ -278,12 +351,20 @@ export function App() {
     return () => media.removeEventListener('change', onChange);
   }, [preferences]);
 
+  // ---------- 初始化与工作区数据 ----------
+
+  /**
+   * 拉取工作区与会话列表，并合并本地保存的手动排序。
+   * 置顶会话始终排在前面，其余按主进程给出的 updatedAt 排序。
+   */
   const loadState = useCallback(async () => {
     setStateLoading(true);
     try {
       const next = await window.piApi.state(workspace);
       const savedWorkspaceOrder = workspaceOrderRef.current;
       const savedSessionOrder = sessionOrderRef.current;
+      // 主进程给出的顺序是「最近活跃优先」，这里用本地保存的顺序覆盖它，
+      // 再把新出现的工作区 / 会话追加到后面。
       const byCwd = new Map(next.workspaces.map((item) => [item.cwd, item]));
       const ordered = [
         ...savedWorkspaceOrder.flatMap((cwd) => byCwd.has(cwd) ? [byCwd.get(cwd)!] : []),
@@ -305,13 +386,18 @@ export function App() {
       setWorkspaceOrder(ordered.map((item) => item.cwd));
       setSessionOrder(nextSessionOrder);
       setWorkspaces(orderedSessions);
-      setModelRef(next.model.modelRef);
       setModelSelection(next.model);
     } finally {
       setStateLoading(false);
     }
   }, [workspace]);
 
+  // ---------- 设置页：数据与编辑弹窗 ----------
+
+  /**
+   * 打开设置页并刷新快照。
+   * 设置页与对话共用同一个窗口，所以关闭后把焦点还给触发元素。
+   */
   async function openSettings(tab?: typeof settingsTab) {
     if (!settingsOpen) settingsReturnFocusRef.current = document.activeElement as HTMLElement;
     if (tab) setSettingsTab(tab);
@@ -322,10 +408,9 @@ export function App() {
       setSettingsData(snapshot);
       setModels(modelResult.models);
       setEnabledModels(modelResult.enabled ?? []);
-      setModelRef(modelResult.current);
       setModelSelection(modelResult.selection);
     } catch (error) {
-      setSettingsError(error instanceof Error ? error.message : String(error));
+      setSettingsError(errorText(error));
     }
   }
 
@@ -336,6 +421,10 @@ export function App() {
     setEditorError(null);
   }
 
+  /**
+   * 打开某个资源的编辑弹窗。
+   * 用 request id 防竞态：用户在加载完成前关掉弹窗，旧请求的结果会被丢弃。
+   */
   async function openEditor(kind: SettingsEditor['kind'], editId?: string) {
     const request = ++editorRequestRef.current;
     setEditor({ kind, editId });
@@ -364,10 +453,11 @@ export function App() {
         if (config) setCustomModel({ ...config, contextWindow: config.contextWindow?.toString() || '', maxTokens: config.maxTokens?.toString() || '' });
       }
     } catch (error) {
-      if (request === editorRequestRef.current) setEditorError(error instanceof Error ? error.message : String(error));
+      if (request === editorRequestRef.current) setEditorError(errorText(error));
     } finally { if (request === editorRequestRef.current) setEditorLoading(false); }
   }
 
+  /** 展开某个来源下的模型列表；同一来源只请求一次。 */
   async function loadProviderModels(providerId: string) {
     if (expandedProvider === providerId) { setExpandedProvider(null); return; }
     setExpandedProvider(providerId);
@@ -376,7 +466,7 @@ export function App() {
       try {
         const result = await window.piApi.providerModels(providerId);
         setProviderModels((current) => ({ ...current, [providerId]: result.models }));
-      } catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
+      } catch (error) { setSettingsError(errorText(error)); }
     }
   }
 
@@ -387,10 +477,11 @@ export function App() {
       setSettingsData(snapshot);
       setEnabledModels(snapshot.enabledModels);
     } catch (error) {
-      setSettingsError(error instanceof Error ? error.message : String(error));
+      setSettingsError(errorText(error));
     } finally { setSettingsBusy(false); }
   }
 
+  /** 保存自定义模型，并刷新设置快照与模型目录。 */
   async function saveCustomModel() {
     setSettingsBusy(true); setEditorError(null);
     try {
@@ -411,7 +502,7 @@ export function App() {
       setModels(catalog.models);
       setEditor(null);
       await loadState();
-    } catch (error) { setEditorError(error instanceof Error ? error.message : String(error)); }
+    } catch (error) { setEditorError(errorText(error)); }
     finally { setSettingsBusy(false); }
   }
 
@@ -423,14 +514,14 @@ export function App() {
       setSettingsData(snapshot);
       setPackageDraft('');
       setEditor(null);
-    } catch (error) { setEditorError(error instanceof Error ? error.message : String(error)); }
+    } catch (error) { setEditorError(errorText(error)); }
     finally { setSettingsBusy(false); }
   }
 
   async function removePackage(source: string) {
     setSettingsBusy(true); setSettingsError(null);
     try { setSettingsData(await window.piApi.removePackage(source)); }
-    catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
+    catch (error) { setSettingsError(errorText(error)); }
     finally { setSettingsBusy(false); }
   }
 
@@ -438,15 +529,7 @@ export function App() {
     if (!window.confirm(`删除 MCP 服务器「${name}」？`)) return;
     setSettingsBusy(true); setSettingsError(null);
     try { setSettingsData(await window.piApi.removeMcp(name)); }
-    catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
-    finally { setSettingsBusy(false); }
-  }
-
-  async function deleteSkill(skillPath: string, name: string) {
-    if (!window.confirm(`删除技能「${name}」？这会删除技能目录。`)) return;
-    setSettingsBusy(true); setSettingsError(null);
-    try { setSettingsData(await window.piApi.removeSkill(skillPath)); }
-    catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
+    catch (error) { setSettingsError(errorText(error)); }
     finally { setSettingsBusy(false); }
   }
 
@@ -454,7 +537,7 @@ export function App() {
     if (!window.confirm(`删除扩展「${name}」？`)) return;
     setSettingsBusy(true); setSettingsError(null);
     try { setSettingsData(await window.piApi.removeExtension(extensionPath)); }
-    catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
+    catch (error) { setSettingsError(errorText(error)); }
     finally { setSettingsBusy(false); }
   }
 
@@ -465,10 +548,11 @@ export function App() {
       setSettingsData(await window.piApi.removeCustomModel({ providerId, modelId }));
       setProviderModels({});
       setModels((await window.piApi.models(workspace)).models);
-    } catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
+    } catch (error) { setSettingsError(errorText(error)); }
     finally { setSettingsBusy(false); }
   }
 
+  /** 保存模型来源（新建或编辑），完成后重建模型目录。 */
   async function saveProvider() {
     setSettingsBusy(true);
     setEditorError(null);
@@ -476,18 +560,21 @@ export function App() {
       const result = await window.piApi.addProvider({ ...providerDraft, editing: Boolean(editor?.editId) });
       setSettingsData(result.settings);
       setModels(result.models.models);
-      setModelRef(result.models.current);
       setProviderDraft({ providerId: '', baseUrl: '', api: 'openai-completions', modelId: '', modelName: '', apiKey: '', icon: '' });
       setProviderModels({});
       setEditor(null);
       await loadState();
     } catch (error) {
-      setEditorError(error instanceof Error ? error.message : String(error));
+      setEditorError(errorText(error));
     } finally {
       setSettingsBusy(false);
     }
   }
 
+  /**
+   * 保存 MCP 服务器。
+   * 编辑时如果参数文本没有改动就沿用原始数组，参数里的空格不会被重新切分。
+   */
   async function saveMcp() {
     setSettingsBusy(true);
     setEditorError(null);
@@ -499,12 +586,13 @@ export function App() {
       setEditor(null);
       setMcpDraft({ name: '', transport: 'stdio', command: '', args: '', url: '', description: '', env: '' });
     } catch (error) {
-      setEditorError(error instanceof Error ? error.message : String(error));
+      setEditorError(errorText(error));
     } finally {
       setSettingsBusy(false);
     }
   }
 
+  /** 从本机导入技能或扩展；取消选择时返回 undefined，不关闭弹窗。 */
   async function importResource(kind: 'skill' | 'extension', scope: 'user' | 'project') {
     setSettingsBusy(true);
     setEditorError(null);
@@ -514,7 +602,7 @@ export function App() {
         : await window.piApi.addExtension({ scope, cwd: workspace });
       if (next) { setSettingsData(next); setEditor(null); }
     } catch (error) {
-      setEditorError(error instanceof Error ? error.message : String(error));
+      setEditorError(errorText(error));
     } finally {
       setSettingsBusy(false);
     }
@@ -523,22 +611,21 @@ export function App() {
   async function toggleMcp(name: string, enabled: boolean) {
     setSettingsBusy(true); setSettingsError(null);
     try { setSettingsData(await window.piApi.setMcpEnabled({ name, enabled })); }
-    catch (error) { setSettingsError(error instanceof Error ? error.message : String(error)); }
+    catch (error) { setSettingsError(errorText(error)); }
     finally { setSettingsBusy(false); }
   }
 
+  /** 供模型选择器使用：拉取目录并同步到本地状态。 */
   async function loadModelCatalog() {
     const result = await window.piApi.models(workspace);
     setModels(result.models);
     setEnabledModels(result.enabled ?? []);
-    setModelRef(result.current);
     setModelSelection(result.selection);
     return result;
   }
 
   async function selectModel(next: string) {
     const result = await window.piApi.setModel(next, workspace);
-    setModelRef(next);
     setModelSelection(result);
   }
 
@@ -547,7 +634,9 @@ export function App() {
     setModelSelection(result);
   }
 
-  useEffect(() => { void loadState().catch((error) => setError(error instanceof Error ? error.message : String(error))); }, [loadState]);
+  // ---------- 本地持久化与启动恢复 ----------
+
+  useEffect(() => { void loadState().catch((error) => setError(errorText(error))); }, [loadState]);
 
   useEffect(() => {
     workspaceOrderRef.current = workspaceOrder;
@@ -605,17 +694,15 @@ export function App() {
     if (!settingsOpen) settingsReturnFocusRef.current?.focus();
   }, [settingsOpen]);
 
+  // ---------- 扩展状态 ----------
+
   useEffect(() => {
+    // 会话切换：先清空上一条会话的扩展状态、计划与排队消息，再读取当前会话的扩展快照。
+    // 先清空是必要的——否则从有扩展的会话切到新会话时，底栏状态会残留。
     setExtensionStatuses({});
     setExtensionFooter('');
     setTodoPanelOpen(false);
     setQueuedPrompts([]);
-  }, [session?.id]);
-
-  useEffect(() => {
-    // 切换会话时先清空，避免上一条会话的扩展状态残留到新会话
-    setExtensionStatuses({});
-    setExtensionFooter('');
     if (!session?.id) return;
     let cancelled = false;
     void window.piApi.extensionState(session.id).then((state) => {
@@ -652,11 +739,17 @@ export function App() {
     return () => window.clearTimeout(timer);
   }, [extensionToast]);
 
+  // ---------- 流式消息 ----------
+
+  // 主进程把 Pi 的流式事件转发到这里：按 requestId 过滤，只处理当前请求。
+  // 同一条消息会以 message_start / message_update / message_end 多次到达，
+  // 因此按 timestamp 就地更新，而不是每次追加。
   useEffect(() => window.piApi.onPrompt((event) => {
     if (event.requestId !== requestRef.current) return;
     if (event.message && (event.type === 'message_start' || event.type === 'message_update' || event.type === 'message_end')) {
       const incoming = event.message;
       if (incoming.role === 'user') return;
+      // 流式消息会重复到达：同一个 timestamp 视为同一条，就地替换。
       setMessages((current) => {
         const copy = [...current];
         if (incoming.role === 'assistant' && event.type === 'message_start') {
@@ -732,6 +825,8 @@ export function App() {
     return () => root.removeEventListener('wheel', onWheel);
   }, [filesOpen, panelTabs.length]);
 
+  // ---------- 派生数据 ----------
+
   const activeWorkspace = useMemo(
     () => workspaces.find((item) => item.cwd === workspace),
     [workspaces, workspace],
@@ -739,6 +834,8 @@ export function App() {
   const visibleWorkspaces = workspaces.filter((item) => `${item.name} ${item.cwd} ${item.sessions.map((s) => s.title).join(' ')}`.toLowerCase().includes(workspaceQuery.toLowerCase()));
   const isNewConversation = messages.length === 0 && !busy;
   const allExpanded = workspaces.length > 0 && workspaces.every((item) => expanded.has(item.cwd));
+
+  // ---------- 侧边栏：展开、排序与拖拽 ----------
 
   function toggleAllExpanded() {
     setExpanded(allExpanded ? new Set() : new Set(workspaces.map((item) => item.cwd)));
@@ -811,6 +908,12 @@ export function App() {
   }
 
 
+  // ---------- 会话生命周期 ----------
+
+  /**
+   * 开始一个新会话（草稿态）。
+   * 会话真正落盘发生在第一次发送消息时，所以这里只清空本地状态并选中工作区。
+   */
   async function startSession(cwd = session?.cwd || workspace) {
     ++sessionLoadRef.current;
     requestRef.current = '';
@@ -839,12 +942,17 @@ export function App() {
     if (cwd) expandWorkspace(cwd);
   }
 
+  /** 悬停时预取会话详情，点击时通常已经命中主进程缓存。 */
   function prefetchSession(id: string) {
     if (prefetchedSessionsRef.current.has(id)) return;
     prefetchedSessionsRef.current.add(id);
     void window.piApi.session(id).catch(() => { /* prefetch is best effort */ });
   }
 
+  /**
+   * 侧边栏操作（重命名 / 置顶 / 归档 / 分叉 / 删除工作区）。
+   * 操作完成后统一刷新列表；分叉会额外打开新会话。
+   */
   async function sidebarAction(kind: 'workspace' | 'session', id: string, action: SidebarAction, name?: string) {
     const result = await window.piApi.sidebarAction({ kind, id, action, name });
     if (kind === 'workspace' && action === 'remove' && workspace === id) await startSession('');
@@ -854,6 +962,10 @@ export function App() {
     if (action === 'fork' && result.id && result.cwd) await openSession({ id: result.id, cwd: result.cwd, title: result.title || '分叉会话', updatedAt: Date.now(), messageCount: 0 });
   }
 
+  /**
+   * 打开历史会话。
+   * 用递增的 sessionLoadRef 丢弃过期结果，避免快速切换时串会话。
+   */
   async function openSession(item: PiSessionSummary) {
     requestRef.current = '';
     const load = ++sessionLoadRef.current;
@@ -869,12 +981,15 @@ export function App() {
       setBusy(false);
       setRetryInfo(null);
     } catch (error) {
-      if (load === sessionLoadRef.current) setError(error instanceof Error ? error.message : String(error));
+      if (load === sessionLoadRef.current) setError(errorText(error));
     } finally {
       if (load === sessionLoadRef.current) setSessionLoading(false);
     }
   }
 
+  // ---------- 附件 ----------
+
+  /** 读取浏览器 File 的 base64 内容（去掉 data URL 前缀）。 */
   function readFileBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -896,7 +1011,7 @@ export function App() {
           const saved = await window.piApi.saveUpload({ sessionId: session?.id, name: file.name || 'attachment', mime: file.type, data });
           setComposerAttachments((current) => [...current, { ...saved, id: crypto.randomUUID() }]);
         }
-      } catch (error) { setError(error instanceof Error ? error.message : String(error)); }
+      } catch (error) { setError(errorText(error)); }
     }
   }
 
@@ -904,7 +1019,7 @@ export function App() {
     try {
       const result = await window.piApi.pickAttachments({ sessionId: session?.id });
       setComposerAttachments((current) => [...current, ...result.attachments]);
-    } catch (error) { setError(error instanceof Error ? error.message : String(error)); }
+    } catch (error) { setError(errorText(error)); }
   }
 
   function updatePreference<K extends keyof Preferences>(key: K, value: Preferences[K]) {
@@ -915,6 +1030,13 @@ export function App() {
     setComposerAttachments((current) => current.filter((attachment) => attachment.id !== id));
   }
 
+  // ---------- 输入建议（/ 命令与 @ 文件） ----------
+
+  /**
+   * 根据光标位置判断是否弹出建议菜单：
+   *  - 行首的 `/` → 命令与技能
+   *  - 空白后的 `@` → 工作区文件或目录
+   */
   function updateComposerMenu(value: string, caret: number) {
     const before = value.slice(0, caret);
     const slash = before.match(/^\/([^\s]*)$/);
@@ -935,6 +1057,7 @@ export function App() {
     setComposerMenu(null);
   }
 
+  /** 执行内置斜杠命令；不是内置命令时返回 false，交给普通消息处理。 */
   async function executeBuiltinCommand(name: string): Promise<boolean> {
     if (name === 'new') {
       await startSession();
@@ -945,7 +1068,7 @@ export function App() {
     if (name === 'model' || name === 'thinking') { await openSettings('models'); return true; }
     if (name === 'copy') {
       const last = [...messages].reverse().find((message) => message.role === 'assistant');
-      const text = last?.content.filter((block) => block.type === 'text').map((block) => block.type === 'text' ? block.text : '').join('\n') ?? '';
+      const text = last ? textOfBlocks(last.content) : '';
       if (text) await navigator.clipboard.writeText(text);
       return true;
     }
@@ -1039,12 +1162,21 @@ export function App() {
     setOutlineActive(index);
   }
 
+  // ---------- 发送与排队 ----------
+
+  /**
+   * 组装一次提交：
+   *  - 超长文本落盘为附件（界面显示摘要，模型收到标记）
+   *  - 附件文件与图片分别转成标记 / 图片块
+   *  - 从文本里解析 @ 引用，交给主进程读取文件内容
+   */
   async function prepareSubmission(text: string, attachments: ComposerAttachment[], sessionId: string): Promise<PreparedSubmission> {
     const files = attachments.filter((attachment) => attachment.kind === 'file');
     const images = attachments.filter((attachment) => attachment.kind === 'image');
     let displayText = text;
     let outgoingText = text;
     let longAttachments: ChatMessage['attachments'] = [];
+    // 超长文本：落盘为附件，界面只展示摘要，模型收到的是附件标记。
     if (text && isLongMessage(text)) {
       try {
         const saved = await window.piApi.saveAttachment({ sessionId, text });
@@ -1071,7 +1203,13 @@ export function App() {
     return { sessionId, displayText, outgoingText, content, persistentAttachments, imagePayload, mentions, attachmentPaths: persistentAttachments.map((attachment) => attachment.path) };
   }
 
+  /**
+   * 真正发出消息。
+   *  - steer：插话到正在运行的任务，不进入排队
+   *  - prompt：正常发送，先乐观插入用户消息，结束后用主进程返回的历史校准
+   */
   async function dispatchSubmission(submission: PreparedSubmission, mode: 'prompt' | 'steer') {
+    // 先乐观插入用户消息，避免等待 IPC 时输入区看起来没反应。
     setMessages((existing) => [...existing, {
       role: 'user',
       content: submission.content,
@@ -1090,7 +1228,7 @@ export function App() {
         });
         setExtensionToast({ message: '已插话发送给当前任务。', type: 'info' });
       } catch (error) {
-        setError(error instanceof Error ? error.message : String(error));
+        setError(errorText(error));
       }
       return;
     }
@@ -1120,11 +1258,16 @@ export function App() {
     } catch (error) {
       if (requestRef.current !== requestId) return;
       setRetryInfo(null);
-      setError(error instanceof Error ? error.message : String(error));
+      setError(errorText(error));
       setBusy(false);
     }
   }
 
+  /**
+   * 输入框的发送入口。
+   * 依次处理内置命令、懒创建会话、长消息/附件预处理，
+   * 最后根据是否正在运行决定「直接发送 / 插话 / 排队」。
+   */
   async function send() {
     const text = prompt.trim();
     if ((!text && composerAttachments.length === 0)) return;
@@ -1152,7 +1295,7 @@ export function App() {
       const draftGeneration = sessionLoadRef.current;
       let created;
       try { created = await window.piApi.createSession(workspace); }
-      catch (error) { setError(error instanceof Error ? error.message : String(error)); return; }
+      catch (error) { setError(errorText(error)); return; }
       if (sessionLoadRef.current !== draftGeneration) return;
       current = { id: created.id, cwd: created.cwd, title: created.title };
       setSession(current);
@@ -1219,6 +1362,7 @@ export function App() {
     });
   }
 
+  // 空闲时自动把队首消息发出去；queuedDrainRef 防止同一轮重复触发。
   useEffect(() => {
     if (busy || queuedPrompts.length === 0 || queuedDrainRef.current) return;
     const next = queuedPrompts[0];
@@ -1231,6 +1375,9 @@ export function App() {
   }, [busy, queuedPrompts]);
 
 
+  // ---------- 右侧文件面板 ----------
+
+  /** 加载目录内容；路径为空表示工作区根目录。 */
   async function loadTree(nextPath: string) {
     if (!workspace) return;
     setFileBusy(true);
@@ -1239,10 +1386,11 @@ export function App() {
       setTreePath(result.path);
       setEntries(result.entries);
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error));
+      setError(errorText(error));
     } finally { setFileBusy(false); }
   }
 
+  /** 打开右侧面板，并用两帧 rAF 触发滑入动画。 */
   function openPanel() {
     if (panelCloseTimerRef.current !== null) {
       window.clearTimeout(panelCloseTimerRef.current);
@@ -1257,6 +1405,7 @@ export function App() {
     requestAnimationFrame(() => requestAnimationFrame(() => setPanelEntered(true)));
   }
 
+  /** 关闭面板：先播放退场动画，再真正卸载并复位全屏状态。 */
   function closePanel() {
     if (!filesOpen) return;
     setPanelEntered(false);
@@ -1276,6 +1425,7 @@ export function App() {
     setFile(null);
   }
 
+  /** 读取文件并按路径缓存，重复打开时直接命中缓存。 */
   async function loadFileToTab(target: string) {
     if (!workspace) return;
     setFileBusy(true);
@@ -1284,10 +1434,11 @@ export function App() {
       setOpenFiles((current) => ({ ...current, [target]: content }));
       setFile(content);
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error));
+      setError(errorText(error));
     } finally { setFileBusy(false); }
   }
 
+  /** 切换标签：文件标签按需加载，其它标签清空预览。 */
   function activatePanelTab(tab: PanelTab) {
     setActivePanelTabId(tab.id);
     if (tab.kind === 'file' && tab.path) {
@@ -1299,6 +1450,7 @@ export function App() {
     }
   }
 
+  /** 从文件树打开文件：不存在则新建标签，已存在则复用。 */
   async function openFile(target: string) {
     const id = `file:${target}`;
     const title = target.split('/').pop() || target;
@@ -1309,6 +1461,7 @@ export function App() {
     else await loadFileToTab(target);
   }
 
+  /** 关闭标签；关闭最后一个标签时整个面板一起收起。 */
   function closePanelTab(id: string) {
     const index = panelTabs.findIndex((tab) => tab.id === id);
     if (index < 0) return;
@@ -1321,6 +1474,7 @@ export function App() {
     }
   }
 
+  /** 选择工作区文件夹；新对话里只切换草稿工作区，已有对话则直接开始新会话。 */
   function chooseFile() {
     void window.piApi.chooseWorkspace().then((selected) => {
       if (selected) {
@@ -1328,9 +1482,10 @@ export function App() {
         else void startSession(selected);
         void loadState();
       }
-    }).catch(error => setError(error instanceof Error ? error.message : String(error)));
+    }).catch(error => setError(errorText(error)));
   }
 
+  /** 设置编辑弹窗的提交路由。 */
   function submitEditor() {
     if (!editor) return;
     if (editor.kind === 'provider') void saveProvider();
@@ -1340,6 +1495,9 @@ export function App() {
     else void importResource(editor.kind, resourceScope);
   }
 
+  // ---------- 设置页派生数据 ----------
+
+  /** 按来源对已启用模型分组，用于「按来源」视图。 */
   const enabledModelGroups = useMemo(() => {
     const groups = new Map<string, { name: string; provider: string; ids: string[] }>();
     for (const id of enabledModels) {
@@ -1352,6 +1510,7 @@ export function App() {
     return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [enabledModels, models]);
 
+  /** 渲染一张已启用模型卡片（设置页「模型与账号」）。 */
   function renderModelCard(id: string) {
     const item = models.find((entry) => entry.id === id);
     const provider = item?.providerName || item?.provider || id.split('/')[0];
@@ -1382,7 +1541,10 @@ export function App() {
     });
   }
 
+  // ---------- 会话派生数据 ----------
+
   const extensionStatusLine = extensionFooter || Object.values(extensionStatuses).filter(Boolean).slice(0, 3).join(' · ');
+  /** 取最后一条 todo 工具结果的计划详情，供底部计划面板使用。 */
   const todoDetails = useMemo<TodoDetails | undefined>(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const message = messages[index];
@@ -1398,6 +1560,7 @@ export function App() {
     files: item.attachments.filter((attachment) => attachment.kind === 'file').length,
   }));
   const toolResultMap = new Map(messages.filter((message) => message.role === 'toolResult' && message.toolCallId).map((message) => [message.toolCallId as string, message]));
+  /** 把消息序列折叠成「用户提问 + 助手多步回复」的轮次，工具结果挂到对应轮次。 */
   const transcriptTurns: Array<{ kind: 'user'; message: ChatMessage } | { kind: 'assistant'; messages: ChatMessage[] }> = [];
   for (const message of messages) {
     if (message.role === 'toolResult') continue;
@@ -1407,9 +1570,10 @@ export function App() {
     else transcriptTurns.push({ kind: 'assistant', messages: [message] });
   }
   const lastAssistantTurnIndex = transcriptTurns.reduce((last, turn, index) => turn.kind === 'assistant' ? index : last, -1);
+  /** 对话大纲：每条用户提问生成一个跳转锚点。 */
   const outlineItems = transcriptTurns.flatMap((turn, index) => {
     if (turn.kind !== 'user') return [];
-    const text = turn.message.content.filter((block) => block.type === 'text').map((block) => block.type === 'text' ? block.text : '').join(' ').replace(/\s+/g, ' ').trim();
+    const text = textOfBlocks(turn.message.content, ' ').replace(/\s+/g, ' ').trim();
     if (!text) return [];
     return [{ id: `chat-turn-${index}`, text, timestamp: turn.message.timestamp }];
   });
@@ -1437,7 +1601,7 @@ export function App() {
       const result = await window.piApi.files(baseDir, nextPath);
       setSkillTreePath(result.path);
       setSkillEntries(result.entries);
-    } catch (error) { setSkillDetailError(error instanceof Error ? error.message : String(error)); }
+    } catch (error) { setSkillDetailError(errorText(error)); }
     finally { setSkillBusy(false); }
   }
 
@@ -1455,7 +1619,7 @@ export function App() {
     setSkillBusy(true);
     setSkillDetailError(null);
     try { setSkillFile(await window.piApi.file(skillDetail.baseDir, target)); }
-    catch (error) { setSkillDetailError(error instanceof Error ? error.message : String(error)); }
+    catch (error) { setSkillDetailError(errorText(error)); }
     finally { setSkillBusy(false); }
   }
 
@@ -1467,7 +1631,7 @@ export function App() {
     try {
       setSettingsData(await window.piApi.removeSkill(skillDetail.path));
       closeSkillDetail();
-    } catch (error) { setSkillDetailError(error instanceof Error ? error.message : String(error)); }
+    } catch (error) { setSkillDetailError(errorText(error)); }
     finally { setSettingsBusy(false); }
   }
 
@@ -1492,21 +1656,21 @@ export function App() {
     try {
       const result = await window.piApi.fileActions({ cwd: workspace, path: file.path });
       setFileApps(result.apps);
-    } catch (error) { setError(error instanceof Error ? error.message : String(error)); }
+    } catch (error) { setError(errorText(error)); }
   }
 
   async function openFileWith(appPath?: string) {
     if (!file || !workspace) return;
     setFileMenuOpen(false);
     try { await window.piApi.openWith({ cwd: workspace, path: file.path, appPath }); }
-    catch (error) { setError(error instanceof Error ? error.message : String(error)); }
+    catch (error) { setError(errorText(error)); }
   }
 
   async function revealCurrentFile() {
     if (!file || !workspace) return;
     setFileMenuOpen(false);
     try { await window.piApi.revealFile({ cwd: workspace, path: file.path }); }
-    catch (error) { setError(error instanceof Error ? error.message : String(error)); }
+    catch (error) { setError(errorText(error)); }
   }
 
   function renderFileTree() {
@@ -1573,8 +1737,11 @@ export function App() {
     return renderFilePreview();
   }
 
+  // ---------- 界面：左侧栏 / 对话 / 设置 / 右侧面板 ----------
+
   return (
     <div className={`app ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${filesOpen && panelFullscreen ? 'is-panel-fullscreen' : ''}`}>
+      {/* 左侧：品牌、导航、工作区列表与设置入口 */}
       <aside className="sidebar">
         <div className="sidebar-drag" />
         <button className="icon-button sidebar-top-toggle" aria-label="收起侧边栏" title="收起侧边栏" onClick={() => setSidebarCollapsed(true)}><PanelLeft /></button>
@@ -1728,6 +1895,7 @@ export function App() {
         </div>
       </aside>
 
+      {/* 中间：对话区与输入区 */}
       <main className={`main ${isNewConversation ? 'is-new-conversation' : ''}`} aria-busy={sessionLoading}>
         <div className={`chat-loading-line ${sessionLoading ? 'is-visible' : ''}`} />
         <header className="chat-header">
@@ -1782,6 +1950,7 @@ export function App() {
             </div>
           </nav>
         )}
+        {/* 输入区：计划、排队消息、附件与命令菜单 */}
         <div className="composer-dock">
           {(todoDetails || todoPanelOpen) && <TodoDock details={todoDetails} open={todoPanelOpen} onToggle={() => setTodoPanelOpen((value) => !value)} />}
           {queuedPrompts.length > 0 && <QueuedMessages items={queuedPreviews} onEdit={editQueued} onDelete={deleteQueued} onSendNow={(id) => void sendQueuedNow(id)} onSendAll={() => void sendAllQueued()} onReorder={reorderQueued} />}
@@ -1882,6 +2051,7 @@ export function App() {
         </div>
       </main>
 
+      {/* 设置覆盖层 */}
       {settingsOpen && (
         <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="设置">
           <aside className="settings-nav">
@@ -2050,6 +2220,7 @@ export function App() {
         </div>
       )}
 
+      {/* MCP 详情弹窗 */}
       {mcpDetail && (
         <DetailDialog className="detail-dialog--small" onClose={() => setMcpDetail(null)}>
             <header className="detail-header"><div className="detail-heading"><span className="detail-icon"><Plug /></span><div><h2>{mcpDetail.name}</h2><p>{mcpDetail.transport === 'stdio' ? '本地进程 · stdio' : 'HTTP 服务'}</p></div></div><button className="icon-button" aria-label="关闭详情" onClick={() => setMcpDetail(null)}><X /></button></header>
@@ -2065,6 +2236,7 @@ export function App() {
         </DetailDialog>
       )}
 
+      {/* 技能详情弹窗：左侧文件树 + 右侧预览 */}
       {skillDetail && (
         <DetailDialog className="skill-detail-dialog" onClose={closeSkillDetail}>
             <header className="detail-header"><div className="detail-heading"><span className="detail-icon is-skill"><FileCode2 /></span><div><h2>{skillDetail.name}</h2><p>{skillDetail.description}</p></div></div><button className="icon-button" aria-label="关闭技能详情" onClick={closeSkillDetail}><X /></button></header>
@@ -2084,15 +2256,17 @@ export function App() {
         </DetailDialog>
       )}
 
+      {/* 扩展运行状态 */}
       {statusPanelOpen && <DetailDialog className="status-panel-dialog" onClose={() => setStatusPanelOpen(false)}>
         <header className="detail-header"><div className="detail-heading"><span className="detail-icon"><Activity /></span><div><h2>运行状态</h2><p>来自 Pi 扩展的实时状态与性能信息。</p></div></div><button className="icon-button" aria-label="关闭运行状态" onClick={() => setStatusPanelOpen(false)}><X /></button></header>
         <div className="status-panel-body">
           {extensionFooter && <section><h3>会话摘要</h3><pre>{extensionFooter}</pre></section>}
           <section><h3>扩展状态</h3>{preferences.performance === 'detailed' && (Object.keys(extensionStatuses).length > 0 ? <dl className="status-panel-list">{Object.entries(extensionStatuses).map(([key, text]) => <div key={key}><dt>{extensionStatusLabel(key)}</dt><dd>{text}</dd></div>)}</dl> : <p className="status-panel-empty">当前没有扩展状态。</p>)}</section>
         </div>
-        <footer className="detail-footer"><button className="settings-outline" onClick={() => { setStatusPanelOpen(false); void window.piApi.runExtensionCommand({ sessionId: session?.id || '', command: '/footer' }).catch((error) => setError(error instanceof Error ? error.message : String(error))); }} disabled={!session?.id}>打开 /footer 菜单</button><span /><button className="settings-outline" onClick={() => setStatusPanelOpen(false)}>关闭</button></footer>
+        <footer className="detail-footer"><button className="settings-outline" onClick={() => { setStatusPanelOpen(false); void window.piApi.runExtensionCommand({ sessionId: session?.id || '', command: '/footer' }).catch((error) => setError(errorText(error))); }} disabled={!session?.id}>打开 /footer 菜单</button><span /><button className="settings-outline" onClick={() => setStatusPanelOpen(false)}>关闭</button></footer>
       </DetailDialog>}
 
+      {/* 快捷键说明 */}
       {shortcutsOpen && <DetailDialog className="shortcuts-dialog" onClose={() => setShortcutsOpen(false)}>
         <header className="detail-header"><div className="detail-heading"><span className="detail-icon"><Keyboard /></span><div><h2>快捷键</h2><p>Pi Studio 桌面端当前可用的键盘操作。</p></div></div><button className="icon-button" aria-label="关闭快捷键" onClick={() => setShortcutsOpen(false)}><X /></button></header>
         <div className="shortcut-list">
@@ -2101,6 +2275,7 @@ export function App() {
         <footer className="detail-footer"><span /><button className="settings-outline" onClick={() => setShortcutsOpen(false)}>关闭</button></footer>
       </DetailDialog>}
 
+      {/* 右侧工作台：标签、文件树与预览 */}
       {filesOpen && (
         <>
         {!panelFullscreen && <button className="file-panel-backdrop" aria-label="关闭右侧面板" tabIndex={-1} onClick={closePanel} />}

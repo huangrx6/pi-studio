@@ -1,14 +1,43 @@
+/* Pi Studio 的唯一颜色来源。
+ *
+ * 组织方式：先定义两组原始品牌色（亮色 :root 与暗色 :root[data-theme="dark"]），
+ * 再在同一层定义页面、文字、边框、语义状态、浮层与语法高亮等语义令牌；文件
+ * 末尾的共享角色块把组件真正消费的别名（图标、链接、代码、消息、阴影、渐变等）
+ * 映射到当前主题的语义令牌。组件只使用语义令牌，不写局部颜色。
+ *
+ * 主题通过根节点的 data-theme 切换；暗色块只覆盖需要随主题变化的颜色，未覆盖
+ * 的共享角色会自动继承当前生效的值。亮暗两套都要满足文字对比度，页面背景保持
+ * 中性，强调色只用于小面积强调。
+ *
+ * 维护规则：变量名和值被主题测试直接读取，修改前先跑测试；本文件之外不允许
+ * 出现颜色字面量，本文件的注释也不要写具体颜色写法，避免被静态检查误判。
+ */
+
 /* The single source of color for Pi Studio.
  * Page backgrounds stay neutral. Lime is an accent, never a page wash.
  * Components consume semantic tokens; do not introduce local color literals.
  */
+/* 亮色主题块：先声明 color-scheme 让表单控件和滚动条使用亮色外观，再定义原始
+品牌锚点与语义令牌。主题色大多是不透明值，浮层与阴影才使用带透明度的值；
+测试只对不透明配对计算对比度。
+ */
+
 :root {
   color-scheme: light;
+  /* 品牌原始色组：主强调、浅色表面、高光、深色墨色与深强调色。它们只是调色板
+  锚点，下面的语义令牌按需引用；不要跳过语义层直接在组件里使用。
+   */
+
   --color-primary: #a3e635;
   --color-surface: #f5faee;
   --color-highlight: #ffffff;
   --color-dark: #1b2112;
   --color-accent: #436814;
+
+  /* 页面与表面层级：页面背景、卡片表面、侧栏背景保持中性；surface-soft/hover/
+  active 表示交互递进，selected-bg 用于选中行。层级从低到高靠明度差而不是阴影
+  来区分。
+   */
 
   --bg: #ffffff;
   --surface: #ffffff;
@@ -17,14 +46,27 @@
   --surface-hover: #eeeeee;
   --surface-active: #e3e3e3;
   --selected-bg: #f0f0f0;
+  /* 文字层级：正文、次要说明、弱提示、禁用文字。muted 用于卡片说明，faint 用于
+  时间戳和占位符，disabled 只用于不可用控件；对比度由测试按配对校验。
+   */
+
   --text: #202020;
   --muted: #565656;
   --faint: #6b6b6b;
   --disabled-text: #929292;
+  /* 边框与分隔线：border 是默认描边，border-strong 用于输入框和可交互控件，
+  divider 只做弱分隔，border-hover 表示可交互元素悬停时的加深。
+   */
+
   --border: #e5e5e5;
   --border-strong: #d2d2d2;
   --divider: #ededed;
   --border-hover: #a3a3a3;
+
+  /* 强调色与按钮：accent 用于链接、选中图标和焦点，accent-soft 是低饱和背景，
+  accent-border 用于选中描边；button-bg/hover 与 on-button 组成主按钮的前景背景
+  配对；focus-color 与 focus-halo 组成焦点环，selection 定义文本选区。
+   */
 
   --accent: var(--color-accent);
   --accent-hover: #344f10;
@@ -42,6 +84,10 @@
   --selection: #dfefc8;
   --selection-text: #202020;
 
+  /* 语义状态：success/error/warning/info 各有前景、柔和背景、边框三件套。文字用
+  前景色，块背景用 soft，描边用 border；不要跨组混用，也不要只靠颜色传达状态。
+   */
+
   --success: #267044;
   --success-soft: #eef7f0;
   --success-border: #bddac5;
@@ -54,17 +100,31 @@
   --info: #46617c;
   --info-soft: #f0f4f8;
   --info-border: #cad7e3;
+  /* 浮层与阴影：scrim 是对话框背后的遮罩，overlay-surface 是覆盖在内容上的半透明
+  表面，scrollbar 两级用于滑块常态与悬停，shadow-color/deep 是两级阴影强度。
+  半透明值只在这里定义。
+   */
+
   --scrim: rgb(0 0 0 / 24%);
   --overlay-surface: rgb(255 255 255 / 97%);
   --scrollbar: #c9c9c9;
   --scrollbar-hover: #969696;
   --shadow-color: rgb(0 0 0 / 5%);
   --shadow-deep: rgb(0 0 0 / 16%);
+  /* 语法高亮：关键字、字符串、数字、函数四类前景色，注释色由共享角色映射到弱
+  文字色。只用于 Markdown 代码块的 hljs 类，不用于普通正文。
+   */
+
   --syntax-keyword: #634b85;
   --syntax-string: #3e662c;
   --syntax-number: #82551e;
   --syntax-function: #365a7d;
 }
+
+/* 暗色主题：重定义页面、表面、文字、边框、语义状态、浮层与语法高亮。品牌
+强调色在暗色下提高明度，语义前景色改为浅色以保证在深表面上的对比；surface
+系列保持中性灰阶，不加入色相。
+ */
 
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -126,6 +186,12 @@
   --syntax-number: #dfbd88;
   --syntax-function: #a3c3df;
 }
+
+/* 共享角色：在主题切换之后统一派生，组件消费这些别名而不是原始色值。涵盖
+品牌、图标、链接、思考态、代码与消息表面、骨架屏、焦点环、阴影和渐变。
+其中链接下划线由链接色与透明占位混合得到，属于颜色计算，只允许在本文件出现。
+这些声明放在两个主题块之后，因此始终跟随当前 data-theme 生效。
+ */
 
 /* Shared roles derive from the active palette in both modes. */
 :root {

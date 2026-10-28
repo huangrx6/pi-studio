@@ -1,4 +1,25 @@
+/* Pi Studio 的通用滚动条底座。
+ *
+ * 策略：滚动条几何（宽度、轨道内边距、滑块边框）由本文件统一，颜色全部来自
+ * palette.css 的 scrollbar 语义令牌，组件不单独写颜色。目标是在亮色/暗色、
+ * 不同滚动容器上都保持细、安静、不抢内容的观感。
+ *
+ * 两条路径互斥：支持 ::-webkit-scrollbar 的引擎走伪元素路径，可实现 hover
+ * 变色；不支持该伪元素的引擎走 scrollbar-color 路径，只能给一个滑块颜色，由
+ * 引擎派生 hover。两条路径不能同时声明，否则标准属性会让 WebKit 系浏览器
+ * 丢弃全部伪元素规则，hover 令牌随之失效。
+ *
+ * 加载顺序：main.tsx 先引入本文件，再引入 tokens、palette 和 app.css；app.css
+ * 的全局滚动条策略会把工作台统一成纵向隐藏、横向 10px，并覆盖 body 上的宽度
+ * 变量。排查最终滚动条时以 app.css 的覆盖为准，本文件是基础层。
+ */
+
 /* Scrollbar geometry is shared; all colors come from palette.css. */
+/* 基础变量：滑块常态与悬停色、滑块边框宽度、轨道上下留白、WebKit 滚动条宽度。
+颜色是语义令牌的间接引用；工作台场景下 app.css 会把宽度改为 6px，因此这里的
+5px 是通用默认值。需要紧贴滚动条对齐的布局读取宽度变量，而不是写死数字。
+ */
+
 body {
   --dsh-scrollbar-thumb: var(--scrollbar);
   --dsh-scrollbar-thumb-hover: var(--scrollbar-hover);
@@ -28,6 +49,12 @@ body {
    `selector()` function makes the condition invalid, which evaluates false
    and selects the pseudo-element path — the correct side for the pre-16.4
    Safari that is the realistic case. */
+/* 标准滚动条路径的开关：只有当引擎不实现 WebKit 伪元素时才生效。Chromium 和
+Safari 一旦看到非 auto 的 scrollbar-width 或 scrollbar-color，就会忽略该元素上
+所有 WebKit 滚动条伪元素规则（包括 hover），所以不能无条件同时声明。对不
+支持 selector() 的旧引擎，条件无效会走伪元素路径，这正好覆盖旧版 Safari。
+ */
+
 @supports not selector(::-webkit-scrollbar) {
   /* Declared on every element rather than inherited from `body`. Inheriting
      would pass down the COLOUR already substituted at `body`, so a descendant
@@ -39,6 +66,11 @@ body {
 
      No hover counterpart exists on this path: `scrollbar-color` states one
      thumb colour and the engine derives its own hover treatment. */
+  /* 在 body 及所有后代上逐元素声明，而不是依赖继承：继承会把 body 处已经替换好
+  的颜色传下去，后代再改滑块变量也不会生效。scrollbar-width 本身不继承，也必须
+  逐元素写。此路径没有 hover 伪元素，悬停效果由引擎自行处理。
+   */
+
   body,
   body * {
     scrollbar-width: thin;
@@ -50,6 +82,10 @@ body {
    drops the rules as unknown selectors, so the gate would only restate what
    selector matching already does. Not inherited either, hence the unscoped
    selectors. */
+/* WebKit 伪元素路径不需要围栏：不识别该伪元素的引擎会直接丢弃这些选择器。
+伪元素同样不继承，因此使用不带作用域的选择器，让每个滚动容器都命中。
+ */
+
 ::-webkit-scrollbar {
   width: var(--dsh-scrollbar-width);
   height: var(--dsh-scrollbar-width);
@@ -57,10 +93,17 @@ body {
 
 /* Track stays transparent so the thumb reads against whatever surface scrolls
    under it; only the thumb carries a token colour. */
+/* 轨道始终保持透明，滑块才会贴着下方的表面读取对比；只有滑块承载颜色令牌。
+ */
+
 ::-webkit-scrollbar-track {
   margin-block: var(--dsh-scrollbar-track-margin);
   background: var(--transparent);
 }
+
+/* 滑块用 content-box 加透明边框预留视觉粗细的调整空间，圆角做成胶囊；滑块
+最小长度由浏览器决定，颜色取自滑块令牌。
+ */
 
 ::-webkit-scrollbar-thumb {
   border: var(--dsh-scrollbar-thumb-border) solid var(--transparent);
@@ -70,6 +113,9 @@ body {
   background-clip: content-box;
 }
 
+/* 仅在支持 hover 的设备上加深滑块，触屏不会出现粘滞的悬停态。
+ */
+
 @media (hover: hover) {
   ::-webkit-scrollbar-thumb:hover {
     background-color: var(--dsh-scrollbar-thumb-hover);
@@ -78,6 +124,10 @@ body {
 
 /* Both scrollbars meeting in a corner: no separate token, so the corner
    matches the transparent track rather than the UA's opaque default. */
+/* 两个滚动条交汇的角落没有独立令牌，保持透明以延续轨道，避免出现系统默认的
+不透明方块。
+ */
+
 ::-webkit-scrollbar-corner {
   background: var(--transparent);
 }
