@@ -2,6 +2,7 @@ import { memo } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
+import { getActivePreferences } from '../preferences';
 
 const components: Components = {
   a({ href, children, node: _node, ...props }) {
@@ -9,7 +10,7 @@ const components: Components = {
       if (!href || href.startsWith('#')) return;
       if (/^https?:\/\//i.test(href)) {
         event.preventDefault();
-        void window.piApi.openExternal(href);
+        void window.piApi.openLink(href, getActivePreferences().linkOpen);
       }
     }}>{children}</a>;
   },

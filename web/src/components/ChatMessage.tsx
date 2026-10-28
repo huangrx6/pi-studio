@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Activity, Brain, ChevronDown, CircleAlert, CircleCheck, CircleX, FileText, LoaderCircle, Pencil, Search, Terminal, Wrench } from 'lucide-react';
 import type { ChatMessage, ContentBlock, ToolCallBlock } from '../chat-types';
+import type { StepCollapse, StepDisplay } from '../preferences';
 import { AttachmentIcon, attachmentVisual } from './AttachmentIcon';
 import { Markdown } from './Markdown';
 
@@ -121,11 +122,19 @@ function AssistantError({ message }: { message: string }) {
   </div>;
 }
 
-export function AssistantTurnView({ messages, toolResults, busy, id, retry }: { messages: ChatMessage[]; toolResults: Map<string, ChatMessage>; busy: boolean; id?: string; retry?: { attempt: number; maxAttempts: number; errorMessage?: string } }) {
+export function AssistantTurnView({ messages, toolResults, busy, id, retry, stepDisplay = 'standard', stepCollapse = 'after-answer', showCodeView = false }: { messages: ChatMessage[]; toolResults: Map<string, ChatMessage>; busy: boolean; id?: string; retry?: { attempt: number; maxAttempts: number; errorMessage?: string }; stepDisplay?: StepDisplay; stepCollapse?: StepCollapse; showCodeView?: boolean }) {
   const live = Boolean(retry) || (busy && messages.some((message) => message.streaming));
   const failed = !live && messages.some((message) => message.errorMessage);
-  const [activityOpen, setActivityOpen] = useState(live);
-  useEffect(() => { if (live) setActivityOpen(true); }, [live]);
+  const [activityOpen, setActivityOpen] = useState(stepDisplay === 'detailed' || live);
+  useEffect(() => {
+    if (stepDisplay === 'detailed') { setActivityOpen(true); return; }
+    if (stepDisplay === 'compact') { setActivityOpen(false); return; }
+    if (live) {
+      if (stepCollapse !== 'manual') setActivityOpen(true);
+    } else if (stepCollapse === 'after-answer') {
+      setActivityOpen(false);
+    }
+  }, [live, stepCollapse, stepDisplay]);
   const flat: FlatBlock[] = messages.flatMap((message, messageIndex) => message.content.map((block, blockIndex) => ({ block, key: `${messageIndex}-${blockIndex}` })));
   let lastActivity = -1;
   flat.forEach((entry, index) => { if (entry.block.type === 'thinking' || entry.block.type === 'toolCall') lastActivity = index; });
@@ -140,8 +149,14 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry }: { 
   const toolCount = messages.reduce((total, message) => total + message.content.filter((block) => block.type === 'toolCall').length, 0);
   const thinkingCount = messages.reduce((total, message) => total + message.content.filter((block) => block.type === 'thinking').length, 0);
   const latest = messages[messages.length - 1];
+  const codeFiles = [...new Set(messages.flatMap((message) => message.content.flatMap((block) => {
+    if (block.type !== 'toolCall') return [];
+    const args = block.arguments || {};
+    const target = args.path || args.file_path;
+    return typeof target === 'string' ? [target] : [];
+  })))].slice(0, 6);
   const error = messages.find((message) => message.errorMessage)?.errorMessage;
-  return <div id={id} className={`assistant-turn ${live ? 'is-live' : ''} ${retry ? 'is-retrying' : ''} ${failed ? 'has-error' : ''}`}>
+  return <div id={id} className={`assistant-turn ${live ? 'is-live' : ''} ${retry ? 'is-retrying' : ''} ${failed ? 'has-error' : ''} is-steps-${stepDisplay}`}>
     <div className="assistant-turn-rail"><span className="assistant-orb">π</span></div>
     <div className="assistant-turn-main">
       <div className="assistant-turn-head">
@@ -173,6 +188,7 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry }: { 
           </div>)}
         </div>}
       </details>}
+      {showCodeView && codeFiles.length > 0 && <div className="code-work-view"><span className="code-work-label">代码工作视图</span>{codeFiles.map((file) => <code key={file}>{file}</code>)}</div>}
       {responseBlocks.length > 0 && <div className="assistant-response">
         {responseBlocks.map((entry) => entry.block.type === 'text' && entry.block.text
           ? <Markdown key={entry.key}>{entry.block.text}</Markdown>

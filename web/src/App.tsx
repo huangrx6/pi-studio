@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Clock3, Command, Cpu, FileCode2, FileText, Folder, FolderOpen, Info, Sparkles,
-  AppWindow, Columns2, Compass, Eye, Globe2, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelLeft, PanelRight, Pencil, Plus, Plug, RotateCw, Search, Settings, SquarePen, Terminal, Trash2, X,
+  AppWindow, Columns2, Compass, Eye, Globe2, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, Pencil, Plus, Plug, RotateCw, Search, Settings, SquarePen, Sun, Terminal, Trash2, X,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
 import { Select } from './components/Select';
@@ -13,8 +13,10 @@ import { ProviderIcon } from './components/ProviderIcon';
 import { SettingsDialog } from './components/SettingsDialog';
 import { ModelPicker } from './components/ModelPicker';
 import type { ModelOption, ModelSelection, ThinkingLevel } from './model-types';
+import { DEFAULT_PREFERENCES, loadPreferences, resolveTheme, savePreferences, setActivePreferences, type Preferences } from './preferences';
 
 const settingsPages = [
+  { id: 'general', label: '通用', icon: Settings, description: '外观、工作步骤、链接与输入行为。' },
   { id: 'models', label: '模型与账号', icon: Cpu, description: '连接模型来源，选择适合当前工作的模型。' },
   { id: 'mcp', label: 'MCP 服务器', icon: Plug, description: '连接外部工具，让 Pi 更好地理解你的工作环境。' },
   { id: 'skills', label: '技能', icon: FileCode2, description: '管理可复用的工作方法，为 Pi 扩展专业能力。' },
@@ -128,6 +130,8 @@ export function App() {
   const [workspaces, setWorkspaces] = useState<PiWorkspace[]>([]);
   const [stateLoading, setStateLoading] = useState(true);
   const [sessionLoading, setSessionLoading] = useState(false);
+  const [preferences, setPreferences] = useState<Preferences>(() => loadPreferences());
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [extensionStatuses, setExtensionStatuses] = useState<Record<string, string>>({});
   const [extensionFooter, setExtensionFooter] = useState('');
@@ -170,7 +174,7 @@ export function App() {
   const [customModel, setCustomModel] = useState({ providerId: '', modelId: '', name: '', contextWindow: '', maxTokens: '', supportsImages: false, reasoning: false });
   const [packageDraft, setPackageDraft] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<'models' | 'mcp' | 'skills' | 'extensions' | 'about'>('models');
+  const [settingsTab, setSettingsTab] = useState<'general' | 'models' | 'mcp' | 'skills' | 'extensions' | 'about'>('general');
   const [settingsData, setSettingsData] = useState<SettingsSnapshot | null>(null);
   const [editor, setEditor] = useState<SettingsEditor | null>(null);
   const [editorError, setEditorError] = useState<string | null>(null);
@@ -218,6 +222,19 @@ export function App() {
   const dragRef = useRef<DragItem | null>(null);
   const dragPreviewRef = useRef<HTMLDivElement | null>(null);
   const restoredRef = useRef(false);
+
+  useEffect(() => {
+    savePreferences(preferences);
+    setActivePreferences(preferences);
+    const root = document.documentElement;
+    root.dataset.theme = resolveTheme(preferences.theme);
+    root.style.setProperty('--chat-font-size', `${preferences.fontSize}px`);
+    if (preferences.theme !== 'system') return;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => { root.dataset.theme = media.matches ? 'dark' : 'light'; };
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, [preferences]);
 
   const loadState = useCallback(async () => {
     setStateLoading(true);
@@ -820,6 +837,10 @@ export function App() {
     } catch (error) { setError(error instanceof Error ? error.message : String(error)); }
   }
 
+  function updatePreference<K extends keyof Preferences>(key: K, value: Preferences[K]) {
+    setPreferences((current) => ({ ...current, [key]: value }));
+  }
+
   function removeComposerAttachment(id: string) {
     setComposerAttachments((current) => current.filter((attachment) => attachment.id !== id));
   }
@@ -949,10 +970,42 @@ export function App() {
     setOutlineActive(index);
   }
 
+  async function prepareSubmission(text: string, attachments: ComposerAttachment[], sessionId: string) {
+    const files = attachments.filter((attachment) => attachment.kind === 'file');
+    const images = attachments.filter((attachment) => attachment.kind === 'image');
+    let displayText = text;
+    let outgoingText = text;
+    let longAttachments: ChatMessage['attachments'] = [];
+    if (text && isLongMessage(text)) {
+      try {
+        const saved = await window.piApi.saveAttachment({ sessionId, text });
+        outgoingText = saved.promptText;
+        displayText = saved.notice;
+        longAttachments = [{ name: saved.name, path: saved.path, bytes: saved.bytes, lines: saved.lines, kind: 'text', mime: 'text/plain' }];
+      } catch { /* fall back to inline text */ }
+    }
+    const fileAttachments = files.map((file) => ({ name: file.name, path: file.path as string, bytes: file.bytes, lines: file.lines || 0, kind: 'file' as const, mime: file.mime }));
+    const markers = files.map((file) => file.marker).filter(Boolean) as string[];
+    if (markers.length > 0) outgoingText = [outgoingText, ...markers].filter(Boolean).join('\n\n');
+    if (!displayText) {
+      displayText = files.length > 0 ? '请查看附件。' : images.length > 0 ? '请查看图片。' : '';
+      if (!text) outgoingText = [displayText, ...markers].filter(Boolean).join('\n\n');
+    }
+    const content: ChatMessage['content'] = [];
+    if (displayText) content.push({ type: 'text', text: displayText });
+    for (const image of images) {
+      if (image.data) content.push({ type: 'image', data: image.data, mimeType: image.mime });
+    }
+    const persistentAttachments = [...(longAttachments ?? []), ...fileAttachments];
+    const imagePayload = images.filter((image) => image.data).map((image) => ({ type: 'image' as const, data: image.data as string, mimeType: image.mime }));
+    const mentions = [...text.matchAll(/(?:^|\s)@([^\s]+)/g)].map((match) => match[1]);
+    return { displayText, outgoingText, content, persistentAttachments, imagePayload, mentions, attachmentPaths: persistentAttachments.map((attachment) => attachment.path) };
+  }
+
   async function send() {
     const text = prompt.trim();
-    if ((!text && composerAttachments.length === 0) || busy) return;
-    if (composerAttachments.length === 0 && text.startsWith('/')) {
+    if ((!text && composerAttachments.length === 0)) return;
+    if (!busy && composerAttachments.length === 0 && text.startsWith('/')) {
       const builtin = text.match(/^\/(new|settings|model|thinking|copy|mcp)(?:\s|$)/);
       if (builtin && await executeBuiltinCommand(builtin[1])) {
         setPrompt('');
@@ -969,55 +1022,44 @@ export function App() {
       setSession(current);
       setMessages([]);
     }
-    setBusy(true);
-    setError(null);
-    setRetryInfo(null);
-    const files = composerAttachments.filter((attachment) => attachment.kind === 'file');
-    const images = composerAttachments.filter((attachment) => attachment.kind === 'image');
-    let displayText = text;
-    let outgoingText = text;
-    let longAttachment: ChatMessage['attachments'] = [];
-    if (text && isLongMessage(text)) {
-      try {
-        const saved = await window.piApi.saveAttachment({ sessionId: current.id, text });
-        outgoingText = saved.promptText;
-        displayText = saved.notice;
-        longAttachment = [{ name: saved.name, path: saved.path, bytes: saved.bytes, lines: saved.lines, kind: 'text', mime: 'text/plain' }];
-      } catch { /* fall back to inline text */ }
-    }
-    const fileAttachments = files.map((file) => ({ name: file.name, path: file.path as string, bytes: file.bytes, lines: file.lines || 0, kind: 'file' as const, mime: file.mime }));
-    const markers = files.map((file) => file.marker).filter(Boolean) as string[];
-    if (markers.length > 0) outgoingText = [outgoingText, ...markers].filter(Boolean).join('\n\n');
-    if (!displayText) {
-      displayText = files.length > 0 ? '请查看附件。' : images.length > 0 ? '请查看图片。' : '';
-      if (!text) outgoingText = [displayText, ...markers].filter(Boolean).join('\n\n');
-    }
-    const content: ChatMessage['content'] = [];
-    if (displayText) content.push({ type: 'text', text: displayText });
-    for (const image of images) {
-      if (image.data) content.push({ type: 'image', data: image.data, mimeType: image.mime });
-    }
-    const persistentAttachments = [...(longAttachment ?? []), ...fileAttachments];
+    const prepared = await prepareSubmission(text, composerAttachments, current.id);
     setPrompt('');
     setComposerAttachments([]);
     setMessages((existing) => [...existing, {
       role: 'user',
-      content,
+      content: prepared.content,
       timestamp: Date.now(),
-      ...(persistentAttachments.length > 0 ? { attachments: persistentAttachments } : {}),
+      ...(prepared.persistentAttachments.length > 0 ? { attachments: prepared.persistentAttachments } : {}),
     }]);
+    if (busy) {
+      try {
+        await window.piApi.queuePrompt({
+          sessionId: current.id,
+          text: prepared.outgoingText,
+          behavior: preferences.busySend,
+          mentions: prepared.mentions,
+          attachments: prepared.attachmentPaths,
+          images: prepared.imagePayload,
+        });
+        setExtensionToast({ message: preferences.busySend === 'queue' ? '已加入发送队列，本轮结束后处理。' : '已作为引导发送给当前任务。', type: 'info' });
+      } catch (error) {
+        setError(error instanceof Error ? error.message : String(error));
+      }
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setRetryInfo(null);
     const requestId = crypto.randomUUID();
-    const mentions = [...text.matchAll(/(?:^|\s)@([^\s]+)/g)].map((match) => match[1]);
-    const imagePayload = images.filter((image) => image.data).map((image) => ({ type: 'image' as const, data: image.data as string, mimeType: image.mime }));
     requestRef.current = requestId;
     try {
       await window.piApi.prompt({
         sessionId: current.id,
-        text: outgoingText,
+        text: prepared.outgoingText,
         requestId,
-        mentions,
-        attachments: [...(longAttachment ?? []), ...fileAttachments].map((attachment) => attachment.path),
-        images: imagePayload,
+        mentions: prepared.mentions,
+        attachments: prepared.attachmentPaths,
+        images: prepared.imagePayload,
       });
       const saved = await window.piApi.session(current.id);
       if (saved) {
@@ -1526,7 +1568,7 @@ export function App() {
               <div className="messages">
                 {transcriptTurns.map((turn, index) => turn.kind === 'user'
                   ? <ChatMessageView key={turn.message.timestamp ?? `user-${index}`} id={`chat-turn-${index}`} message={turn.message} />
-                  : <AssistantTurnView key={turn.messages[0]?.timestamp ?? `assistant-${index}`} id={`chat-turn-${index}`} messages={turn.messages} toolResults={toolResultMap} busy={busy} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} />)}
+                  : <AssistantTurnView key={turn.messages[0]?.timestamp ?? `assistant-${index}`} id={`chat-turn-${index}`} messages={turn.messages} toolResults={toolResultMap} busy={busy} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView} />)}
                 {busy && !retryInfo && !messages.some((message) => message.role === 'assistant' && message.streaming) && (
                   <div className="thinking"><span /><span /><span />正在思考</div>
                 )}
@@ -1640,17 +1682,16 @@ export function App() {
               </div>
               <div className="composer-right">
                 <ModelPicker selection={modelSelection} disabled={busy || stateLoading} hidden={settingsOpen} loadCatalog={loadModelCatalog} onSelectModel={selectModel} onSelectThinking={selectThinking} onManage={() => void openSettings('models')} />
-                <button className="send-button" disabled={busy || (!prompt.trim() && composerAttachments.length === 0)} onClick={() => void send()} aria-label={busy ? '正在生成回复' : '发送消息'} title="发送消息"><ArrowUp /></button>
+                <button className="send-button" disabled={!prompt.trim() && composerAttachments.length === 0} onClick={() => void send()} aria-label={busy ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'} title={busy ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'}><ArrowUp /></button>
               </div>
             </div>
             </div>
           </div>
           {(extensionFooter || Object.keys(extensionStatuses).length > 0) && <div className="extension-status-bar" aria-label="扩展状态">
             {extensionFooter && <div className="extension-footer-line" title={extensionFooter}>{extensionFooter}</div>}
-            {Object.entries(extensionStatuses).slice(0, 8).map(([key, text]) => <span className="extension-status-chip" key={key} title={key}>{text}</span>)}
+            {preferences.performance === 'detailed' && Object.entries(extensionStatuses).slice(0, 8).map(([key, text]) => <span className="extension-status-chip" key={key} title={key}>{text}</span>)}
           </div>}
           {extensionToast && <div className={`extension-toast is-${extensionToast.type}`} role="status">{extensionToast.message}</div>}
-          <div className="composer-hint"><span>Pi Studio <span className="preview-badge">预览版</span></span><span className="composer-shortcuts"><kbd>/</kbd> 命令 <span className="hint-divider">·</span> <kbd>@</kbd> 文件</span><span><kbd>↵</kbd> 发送 <span className="hint-divider">·</span> <kbd>⇧ ↵</kbd> 换行</span></div>
           {isNewConversation && error && <div className="new-conversation-error error-card" role="alert"><strong>暂时无法完成操作</strong><p>{error}</p></div>}
         </div>
       </main>
@@ -1664,7 +1705,29 @@ export function App() {
           </aside>
           <section className="settings-content" ref={settingsContentRef}>
             {settingsError && <div className="settings-error" role="alert">{settingsError}</div>}
-            {!settingsData && !settingsError && <div className="settings-loading" role="status"><LoaderCircle className="spin" />正在加载设置…</div>}
+            {!settingsData && !settingsError && settingsTab !== 'general' && <div className="settings-loading" role="status"><LoaderCircle className="spin" />正在加载设置…</div>}
+            {settingsTab === 'general' && (
+              <div className="settings-sections general-settings">
+                <section className="settings-card">
+                  <div className="settings-card-head"><div><h2>外观</h2><p>选择 Pi Studio 的界面明暗；跟随系统会随 macOS 自动切换。</p></div></div>
+                  <div className="theme-choice-row">
+                    {([{ value: 'light', label: '浅色', icon: Sun }, { value: 'dark', label: '深色', icon: Moon }, { value: 'system', label: '跟随系统', icon: Monitor }] as const).map((item) => <button key={item.value} className={`theme-choice ${preferences.theme === item.value ? 'is-active' : ''}`} onClick={() => updatePreference('theme', item.value)}><item.icon /><span>{item.label}</span></button>)}
+                  </div>
+                </section>
+                <section className="settings-card">
+                  <div className="settings-profile-list">
+                    <div className="settings-profile-row"><div><strong>字号大小</strong><p>仅影响对话内容的字号。</p></div><div className="settings-inline-control"><Select label="字号大小" value={String(preferences.fontSize)} onChange={(value) => updatePreference('fontSize', Number(value))} options={[12, 13, 14, 15, 16, 17].map((size) => ({ value: String(size), label: String(size) }))} /><span className="settings-unit">px</span></div></div>
+                    <div className="settings-profile-row"><div><strong>工作步骤展示</strong><p>选择希望看到多少工具调用细节。</p></div><Select label="工作步骤展示" value={preferences.stepDisplay} onChange={(value) => updatePreference('stepDisplay', value as Preferences['stepDisplay'])} options={[{ value: 'compact', label: '精简' }, { value: 'standard', label: '标准' }, { value: 'detailed', label: '详细' }]} /></div>
+                    <div className="settings-profile-row"><div><strong>工作步骤收起时机</strong><p>选择何时自动收起工作步骤。</p></div><Select label="工作步骤收起时机" value={preferences.stepCollapse} onChange={(value) => updatePreference('stepCollapse', value as Preferences['stepCollapse'])} options={[{ value: 'after-answer', label: '回答结束后' }, { value: 'keep-open', label: '保持展开' }, { value: 'manual', label: '手动控制' }]} /></div>
+                    <div className="settings-profile-row"><div><strong>显示代码工作视图</strong><p>开启后，在回复前显示本轮访问和修改的文件摘要。</p></div><button className={`switch ${preferences.showCodeView ? 'is-on' : ''}`} role="switch" aria-checked={preferences.showCodeView} onClick={() => updatePreference('showCodeView', !preferences.showCodeView)}><span /></button></div>
+                    <div className="settings-profile-row"><div><strong>快捷键</strong><p>查看当前可用的键盘操作。</p></div><button className="settings-outline" onClick={() => setShortcutsOpen(true)}><Keyboard />编辑快捷键</button></div>
+                    <div className="settings-profile-row"><div><strong>网页链接默认打开方式</strong><p>对话中网页链接的打开位置。</p></div><Select label="网页链接默认打开方式" value={preferences.linkOpen} onChange={(value) => updatePreference('linkOpen', value as Preferences['linkOpen'])} options={[{ value: 'external', label: '系统浏览器' }, { value: 'window', label: '应用内窗口' }]} /></div>
+                    <div className="settings-profile-row"><div><strong>繁忙时的发送行为</strong><p>智能体运行时 Enter 键和发送按钮的行为。</p></div><Select label="繁忙时的发送行为" value={preferences.busySend} onChange={(value) => updatePreference('busySend', value as Preferences['busySend'])} options={[{ value: 'queue', label: '排队发送' }, { value: 'steer', label: '引导当前任务' }]} /></div>
+                    <div className="settings-profile-row"><div><strong>性能与用量</strong><p>选择状态栏信息的展示详细程度。</p></div><Select label="性能与用量" value={preferences.performance} onChange={(value) => updatePreference('performance', value as Preferences['performance'])} options={[{ value: 'simple', label: '简洁' }, { value: 'detailed', label: '详细' }]} /></div>
+                  </div>
+                </section>
+              </div>
+            )}
             {settingsData && settingsTab === 'models' && (
               <div className="settings-sections">
                 <section className="settings-card">
@@ -1833,6 +1896,14 @@ export function App() {
             <footer className="detail-footer"><button className="settings-text-button is-danger" disabled={settingsBusy} onClick={() => void removeSkillFromDetail()}>删除技能</button><span /><button className="settings-outline" onClick={closeSkillDetail}>关闭</button></footer>
         </DetailDialog>
       )}
+
+      {shortcutsOpen && <DetailDialog className="shortcuts-dialog" onClose={() => setShortcutsOpen(false)}>
+        <header className="detail-header"><div className="detail-heading"><span className="detail-icon"><Keyboard /></span><div><h2>快捷键</h2><p>Pi Studio 桌面端当前可用的键盘操作。</p></div></div><button className="icon-button" aria-label="关闭快捷键" onClick={() => setShortcutsOpen(false)}><X /></button></header>
+        <div className="shortcut-list">
+          {[['发送消息', 'Enter'], ['换行', 'Shift + Enter'], ['打开命令与技能', '/'], ['引用工作区文件', '@'], ['关闭浮层', 'Esc'], ['打开设置', 'Cmd + ,']].map(([label, key]) => <div className="shortcut-row" key={label}><span>{label}</span><kbd>{key}</kbd></div>)}
+        </div>
+        <footer className="detail-footer"><span /><button className="settings-outline" onClick={() => setShortcutsOpen(false)}>关闭</button></footer>
+      </DetailDialog>}
 
       {filesOpen && (
         <>

@@ -807,6 +807,20 @@ app.whenReady().then(async () => {
     await openWithApp(target, typeof appPath === 'string' ? appPath : undefined);
     return { ok: true };
   });
+  ipcMain.handle('pi:open-link', async (_event, { url, mode }) => {
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) throw new Error('链接无效');
+    if (mode === 'window') {
+      const child = new BrowserWindow({
+        width: 1080, height: 760, titleBarStyle: 'hiddenInset',
+        webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+      });
+      child.webContents.setWindowOpenHandler(({ url: next }) => { if (/^https?:\/\//i.test(next)) void shell.openExternal(next); return { action: 'deny' }; });
+      await child.loadURL(url);
+    } else {
+      await shell.openExternal(url);
+    }
+    return { ok: true };
+  });
   ipcMain.handle('pi:open-external', async (_event, url) => {
     if (typeof url === 'string' && /^https?:\/\//i.test(url)) await shell.openExternal(url);
     return { ok: true };
@@ -1030,6 +1044,27 @@ async function fileReferenceContext(cwd, mentions) {
     } finally {
       unsubscribe();
     }
+  });
+  ipcMain.handle('pi:queue-prompt', async (_event, { sessionId, text, behavior, mentions, attachments, images }) => {
+    const found = await findManager(sessionId);
+    if (!found) throw new Error('会话不存在');
+    const session = await ensureAgent(sessionId, found.manager, found.cwd);
+    const referenceBlocks = await fileReferenceContext(found.cwd, mentions);
+    const attachedBlocks = await attachmentContext(attachments);
+    if (referenceBlocks.length > 0 || attachedBlocks.length > 0) {
+      try {
+        await session.sendCustomMessage({
+          customType: 'pi-studio:file-reference',
+          content: [{ type: 'text', text: 'The user referenced the following workspace files or attachments. Treat them as primary context for this request.' }, ...referenceBlocks, ...attachedBlocks],
+          display: false,
+        }, { triggerTurn: false });
+      } catch { /* best effort */ }
+    }
+    const imageBlocks = Array.isArray(images) ? images.filter((image) => image && image.type === 'image' && typeof image.data === 'string' && typeof image.mimeType === 'string').slice(0, 8) : [];
+    const queued = behavior === 'steer'
+      ? await session.steer(text, imageBlocks.length > 0 ? imageBlocks : undefined, { source: 'interactive' })
+      : await session.followUp(text, imageBlocks.length > 0 ? imageBlocks : undefined, { source: 'interactive' });
+    return { disposition: queued };
   });
   ipcMain.handle('pi:remove-custom-model', async (_event, { providerId, modelId }) => {
     const config = readConfig(modelsFile(), { providers: {} });
