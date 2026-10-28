@@ -28,7 +28,7 @@ const {
 } = require('../services/sessions.cjs');
 const { fileReferenceContext } = require('../services/workspace.cjs');
 const { attachmentContext } = require('../services/attachments.cjs');
-const { extensionState, footerAction } = require('../services/extensions.cjs');
+const { extensionState, extensionAction, extensionDialogResult, extensionSelectResult, footerAction } = require('../services/extensions.cjs');
 const { createAutoTitleGenerator } = require('../services/auto-title.cjs');
 const { beginTurn, endTurn, saveTurnDiff } = require('../services/turn-diff.cjs');
 const autoTitles = createAutoTitleGenerator({
@@ -280,6 +280,10 @@ function registerSessionsIpc() {
   });
 
   ipcMain.handle('pi:footer-action', (_event, { sessionId, ...input }) => footerAction(sessionId, input));
+  // 通用扩展 surface：widget / custom / footer 共用同一个输入入口。
+  ipcMain.handle('pi:extension-action', (_event, { sessionId, ...input }) => extensionAction(sessionId, input));
+  ipcMain.handle('pi:extension-dialog-result', (_event, { id, value }) => extensionDialogResult(id, value));
+  ipcMain.handle('pi:extension-select-result', (_event, { id, value }) => extensionSelectResult(id, value));
 
   // 输入框斜杠命令与技能列表
   ipcMain.handle('pi:composer-resources', async (_event, payload) => composerResources(payload || {}));

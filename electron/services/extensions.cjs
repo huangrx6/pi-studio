@@ -10,18 +10,41 @@
  * footer 的鼠标、键盘与 overlay 通过通用终端组件宿主桥接到桌面浮层。
  */
 
-const { dialog } = require('electron');
+const { randomUUID } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { getWindow, agentDir } = require('../core/state.cjs');
 const { requestConfirmation } = require('./confirmations.cjs');
 const { stripAnsi } = require('../core/serialize.cjs');
-const { createFooterHost } = require('./footer-host.cjs');
+const { createFooterHost, cells, normalizePanel } = require('./footer-host.cjs');
+const { createSurfaceHost } = require('./extension-surface.cjs');
 
 /** 每个会话的扩展 UI 状态：statuses（状态栏条目）与 footer（底部一行）。 */
 const extensionUIStates = new Map();
 /** renderer 在扩展绑定完成前发来的尺寸信息，绑定后补发一次。 */
 const footerResizes = new Map();
+/** 渲染层返回的输入框 / 编辑器结果：id → resolve。 */
+const pendingDialogs = new Map();
+/** 渲染层返回的扩展选择器结果：id → resolve。 */
+const pendingSelects = new Map();
+
+/** IPC：接收选择器结果。 */
+function extensionSelectResult(id, value) {
+  const resolve = pendingSelects.get(id);
+  if (!resolve) return false;
+  pendingSelects.delete(id);
+  resolve(value);
+  return true;
+}
+
+/** IPC：接收渲染层的输入框结果，唤醒扩展的 input()/editor()。 */
+function extensionDialogResult(id, value) {
+  const resolve = pendingDialogs.get(id);
+  if (!resolve) return false;
+  pendingDialogs.delete(id);
+  resolve(value);
+  return true;
+}
 
 /**
  * 为一个会话创建 uiContext。
@@ -29,7 +52,7 @@ const footerResizes = new Map();
  */
 function createExtensionUI(sessionId) {
   const statuses = new Map();
-  const state = { statuses, footer: '' };
+  const state = { statuses, footer: '', widgets: new Map(), custom: null, customHost: null, terminalInputs: new Set() };
   extensionUIStates.set(sessionId, state);
 
   const send = (channel, payload) => getWindow()?.webContents.send(channel, { sessionId, ...payload });
@@ -38,6 +61,16 @@ function createExtensionUI(sessionId) {
     send('pi:extension-footer', payload);
   });
   state.host = host;
+  const publishWidgets = () => send('pi:extension-widgets', {
+    widgets: [...state.widgets.values()].map(({ key, placement, lines }) => ({ key, placement, lines })),
+  });
+  const publishCustom = () => send('pi:extension-custom', { custom: state.custom });
+  /** 让渲染层弹一个输入框 / 多行编辑器，并把结果回传给扩展。 */
+  const requestDialog = (kind, title, extra = {}) => new Promise((resolve) => {
+    const id = randomUUID();
+    pendingDialogs.set(id, resolve);
+    send('pi:extension-dialog', { id, kind, title: stripAnsi(title), ...extra });
+  });
   // 打开会话时 renderer 会先按实际宽度发 resize；那一刻扩展可能还没绑定，
   // 这里补发一次，避免 footer 一直按默认 120 列渲染。
   const pendingResize = footerResizes.get(sessionId);
@@ -49,20 +82,28 @@ function createExtensionUI(sessionId) {
     onBranchChange: () => () => {},
   };
 
-  /** 用原生选择框实现扩展的 select。 */
-  const choose = async (title, options) => {
-    if (!getWindow()) return undefined;
-    const buttons = [...options.map(String), '取消'];
-    const result = await dialog.showMessageBox(getWindow(), {
-      type: 'question',
-      title: 'Pi Studio',
-      message: stripAnsi(title),
-      buttons,
-      defaultId: 0,
-      cancelId: buttons.length - 1,
-      noLink: true,
+  /** 扩展选择器统一用应用内对话框；options 只做展示，不做业务解析。 */
+  const choose = (title, options, opts = {}) => {
+    if (!getWindow()) return Promise.resolve(undefined);
+    return new Promise((resolve) => {
+      const id = randomUUID();
+      pendingSelects.set(id, resolve);
+      send('pi:extension-select', { id, title: stripAnsi(title), options: options.map((option) => stripAnsi(String(option))) });
+      if (opts?.timeout) {
+        setTimeout(() => {
+          if (!pendingSelects.has(id)) return;
+          pendingSelects.delete(id);
+          send('pi:extension-select-close', { id });
+          resolve(undefined);
+        }, opts.timeout);
+      }
+      opts?.signal?.addEventListener?.('abort', () => {
+        if (!pendingSelects.has(id)) return;
+        pendingSelects.delete(id);
+        send('pi:extension-select-close', { id });
+        resolve(undefined);
+      }, { once: true });
     });
-    return result.response === buttons.length - 1 ? undefined : options[result.response];
   };
 
   const ui = {
@@ -71,8 +112,8 @@ function createExtensionUI(sessionId) {
       // 交给渲染进程显示统一样式的风险确认卡片；窗口关闭或超时按拒绝处理。
       return requestConfirmation({ sessionId, title: stripAnsi(title), message: stripAnsi(message) });
     },
-    async input() {
-      return undefined;
+    async input(title, placeholder) {
+      return requestDialog('input', title, { placeholder: stripAnsi(placeholder || '') });
     },
     notify(message, type = 'info') {
       const text = stripAnsi(message);
@@ -81,8 +122,10 @@ function createExtensionUI(sessionId) {
       if (type === 'info' && /^权限模式\s*·\s*(请求批准|帮我批准|完全(?:访问)?权限)$/.test(text.trim())) return;
       send('pi:extension-notify', { message: text, type });
     },
-    onTerminalInput() {
-      return () => {};
+    onTerminalInput(handler) {
+      if (typeof handler !== 'function') return () => {};
+      state.terminalInputs.add(handler);
+      return () => state.terminalInputs.delete(handler);
     },
     setStatus(key, text) {
       if (text === undefined || text === null || text === '') statuses.delete(key);
@@ -95,7 +138,30 @@ function createExtensionUI(sessionId) {
     setWorkingVisible() {},
     setWorkingIndicator() {},
     setHiddenThinkingLabel() {},
-    setWidget() {},
+    setWidget(key, content, options) {
+      const placement = options?.placement === 'belowEditor' ? 'belowEditor' : 'aboveEditor';
+      const previous = state.widgets.get(key);
+      previous?.host?.dispose?.();
+      if (content === undefined || content === null) {
+        state.widgets.delete(key);
+        publishWidgets();
+        return;
+      }
+      if (typeof content === 'function') {
+        const entry = { key, placement, lines: [] };
+        entry.host = createSurfaceHost((snapshot) => {
+          entry.lines = snapshot.lines;
+          publishWidgets();
+        });
+        state.widgets.set(key, entry);
+        entry.host.set(content);
+        publishWidgets();
+        return;
+      }
+      const lines = Array.isArray(content) ? content : [String(content)];
+      state.widgets.set(key, { key, placement, lines: lines.map((line) => cells(String(line))) });
+      publishWidgets();
+    },
     setFooter(factory) {
       try { host.set(factory, footerData); }
       catch (error) {
@@ -104,17 +170,52 @@ function createExtensionUI(sessionId) {
       }
     },
     setHeader() {},
-    setTitle() {},
-    async custom() {
-      return undefined;
+    setTitle(title) {
+      if (title) getWindow()?.setTitle(stripAnsi(title));
+    },
+    /**
+     * custom 组件是终端与桌面共用的那套 pi-tui Component：
+     * 这里把它渲染成通用浮层，键盘 / 鼠标事件原样回传；done() 的结果 resolve。
+     */
+    async custom(factory, options = {}) {
+      if (typeof factory !== 'function' || !getWindow()) return undefined;
+      return new Promise((resolve) => {
+        const id = randomUUID();
+        let done = false;
+        state.customHost?.dispose?.();
+        const host = createSurfaceHost((snapshot) => {
+          if (done) return;
+          const panel = snapshot.raw.length > 0 ? normalizePanel(snapshot.raw) : null;
+          state.custom = panel ? { id, ...panel, overlay: Boolean(options.overlay), interactive: snapshot.interactive } : null;
+          publishCustom();
+        });
+        state.customHost = host;
+        state.custom = { id, lines: [], interactive: false, overlay: Boolean(options.overlay) };
+        publishCustom();
+        const finish = (result) => {
+          if (done) return;
+          done = true;
+          if (state.customHost === host) {
+            state.customHost = null;
+            state.custom = null;
+            publishCustom();
+          }
+          host.dispose();
+          resolve(result);
+        };
+        try {
+          const component = factory(host.tui, host.theme, { matches: () => false, get: () => undefined, getKeys: () => [] }, finish);
+          Promise.resolve(component).then((value) => { if (!done) host.set(() => value); }).catch(() => finish(undefined));
+        } catch { finish(undefined); }
+      });
     },
     pasteToEditor() {},
     setEditorText() {},
     getEditorText() {
       return '';
     },
-    async editor() {
-      return undefined;
+    async editor(title, prefill) {
+      return requestDialog('editor', title, { prefill: stripAnsi(prefill || '') });
     },
     addAutocompleteProvider() {},
     setEditorComponent() {},
@@ -142,7 +243,37 @@ function createExtensionUI(sessionId) {
 /** IPC 用：读取某个会话的扩展状态。 */
 function extensionState(sessionId) {
   const state = extensionUIStates.get(sessionId);
-  return state ? { statuses: [...state.statuses], footer: state.footer, view: state.host.view } : { statuses: [], footer: '' };
+  if (!state) return { statuses: [], footer: '', widgets: [], custom: null };
+  return {
+    statuses: [...state.statuses],
+    footer: state.footer,
+    view: state.host.view,
+    widgets: [...state.widgets.values()].map(({ key, placement, lines }) => ({ key, placement, lines })),
+    custom: state.custom,
+  };
+}
+
+/**
+ * 所有扩展 surface 的统一输入入口。
+ * surface: footer | widget | custom；payload 与终端组件坐标一致。
+ */
+function extensionAction(sessionId, input = {}) {
+  const state = extensionUIStates.get(sessionId);
+  if (!state) return { lines: [] };
+  if (input.surface === 'widget') {
+    const widget = state.widgets.get(input.key);
+    if (widget?.host) return widget.host.action(input);
+    return { lines: widget?.lines || [], raw: [], interactive: false };
+  }
+  if (input.surface === 'custom') {
+    // onTerminalInput 是全局输入监听，custom 浮层获得焦点时优先转给它。
+    if (input.type === 'key' && state.terminalInputs.size > 0) {
+      const data = input.sequence || input.key;
+      for (const handler of state.terminalInputs) if (handler(data)?.consume) return { lines: [] };
+    }
+    return state.customHost?.action(input) ?? { lines: [] };
+  }
+  return state.host.action(input);
 }
 
 /** 扩展可能出现的两个位置：用户级与项目级。 */
@@ -182,6 +313,6 @@ function listExtensions(cwd) {
 
 function footerAction(sessionId, input) {
   if (input?.type === 'resize' && sessionId) footerResizes.set(sessionId, input);
-  return extensionUIStates.get(sessionId)?.host.action(input);
+  return extensionAction(sessionId, { ...input, surface: 'footer' });
 }
-module.exports = { createExtensionUI, extensionState, footerAction, listExtensions };
+module.exports = { createExtensionUI, extensionState, extensionAction, extensionDialogResult, extensionSelectResult, footerAction, listExtensions };

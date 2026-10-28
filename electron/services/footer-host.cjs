@@ -162,14 +162,8 @@ function normalizePanel(rawLines) {
   };
 }
 
-function createFooterHost(publish) {
-  let footer;
-  let overlay;
-  let rendering = false;
-  const listeners = new Set();
-  const terminal = { columns: 120, rows: 36 };
-  // 扩展只关心语义颜色：这里把颜色名编成 SGR，cells 再解析成 tone，
-  // 渲染层最后映射到应用主题，ANSI 不会出现在界面上。
+/** 一套最小 pi-tui 主题：把语义色编码成 SGR，渲染层再映射回应用主题。 */
+function createTheme() {
   const identity = (text) => text;
   const FOREGROUND = {
     // 37 只是「正文」的语义标记，真正的颜色由 CSS token 决定；
@@ -177,7 +171,7 @@ function createFooterHost(publish) {
     text: 37, muted: 90, faint: 2, dim: 2, accent: 35, brand: 35,
     error: 31, danger: 31, warning: 33, success: 32, info: 36, link: 34,
   };
-  const theme = {
+  return {
     fg: (color, text) => `\x1b[${FOREGROUND[color] ?? 39}m${text}\x1b[39m`,
     bold: (text) => `\x1b[1m${text}\x1b[22m`,
     dim: (text) => `\x1b[2m${text}\x1b[22m`,
@@ -188,6 +182,17 @@ function createFooterHost(publish) {
     style: identity,
     appearance: 'light',
   };
+}
+
+function createFooterHost(publish) {
+  let footer;
+  let overlay;
+  let rendering = false;
+  const listeners = new Set();
+  const terminal = { columns: 120, rows: 36 };
+  // 扩展只关心语义颜色：这里把颜色名编成 SGR，cells 再解析成 tone，
+  // 渲染层最后映射到应用主题，ANSI 不会出现在界面上。
+  const theme = createTheme();
   let snapshot = { lines: [], overlay: null, interactive: false };
 
   /** 读取扩展当前的 footer 与浮层，生成给渲染层的快照。 */
@@ -295,4 +300,4 @@ function createFooterHost(publish) {
   };
 }
 
-module.exports = { createFooterHost, cells, cellWidth, normalizePanel };
+module.exports = { createFooterHost, createTheme, cells, cellWidth, normalizePanel };

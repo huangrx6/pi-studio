@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
 import { ExtensionFooter } from './components/ExtensionFooter';
+import { ExtensionCustomOverlay, ExtensionDialogHost, ExtensionSelectDialog, ExtensionStatusBar, ExtensionWidgets } from './components/ExtensionSurfaces';
 import { Select } from './components/Select';
 import { FullPermissionDialog, ToolConfirmDialog, type ConfirmRequest } from './components/ConfirmDialog';
 import { DiffView } from './components/DiffView';
@@ -2118,6 +2119,8 @@ export function App() {
               </div>
               <div className="composer-picker-foot"><span>↑↓ 选择</span><span>↵ 确认</span><span>Esc 关闭</span></div>
             </div>}
+            {session?.id && <ExtensionStatusBar sessionId={session.id} />}
+            {session?.id && <ExtensionWidgets sessionId={session.id} placement="aboveEditor" />}
             <div
               className="composer"
               onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }}
@@ -2197,9 +2200,13 @@ export function App() {
               </div>
             </div>
             </div>
+            {session?.id && <ExtensionWidgets sessionId={session.id} placement="belowEditor" />}
           </div>
           {/* 底栏内容与浮层由扩展决定；App 只提供位置、宽度和输入坐标。 */}
           {session?.id && <ExtensionFooter key={session.id} sessionId={session.id} />}
+          {session?.id && <ExtensionCustomOverlay sessionId={session.id} />}
+          {session?.id && <ExtensionDialogHost sessionId={session.id} />}
+          {session?.id && <ExtensionSelectDialog sessionId={session.id} />}
           {extensionToast && <div className={`extension-toast is-${extensionToast.type}`} role="status">{extensionToast.message}</div>}
           {isNewConversation && error && <div className="new-conversation-error error-card" role="alert"><strong>暂时无法完成操作</strong><p>{error}</p></div>}
         </div>

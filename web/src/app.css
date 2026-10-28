@@ -2154,3 +2154,30 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .confirm-accept:hover:not(:disabled) { border-color: var(--accent-hover); background: var(--accent-hover); }
 .confirm-accept.is-danger { border-color: var(--error); background: var(--error); color: var(--bg); }
 .confirm-accept:disabled { opacity: .45; cursor: not-allowed; }
+
+/* 通用扩展 surface：widget、状态、custom 浮层与输入对话框。 */
+.extension-statusbar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.extension-status-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 7px; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--muted); font-size: 10px; }
+.extension-status-chip > span { color: var(--faint); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
+.extension-widgets { margin-bottom: 8px; }
+.extension-widgets.is-belowEditor { margin-top: 8px; margin-bottom: 0; }
+.extension-widget { max-height: 240px; overflow: auto; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); font: 11px/1.6 var(--mono); }
+.extension-surface-rows { white-space: pre; }
+.extension-custom-overlay { position: fixed; inset: 0; z-index: 330; display: grid; place-items: center; padding: 24px; background: var(--scrim); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.extension-custom-card { display: flex; flex-direction: column; width: min(760px, 92vw); max-height: 86vh; overflow: hidden; border: 1px solid var(--border-strong); border-radius: var(--radius-panel); background: var(--overlay-surface); box-shadow: var(--shadow-dialog); }
+.extension-custom-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.extension-custom-head strong { font-size: 12px; font-weight: 600; }
+.extension-custom-close { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--faint); }
+.extension-custom-close:hover { background: var(--surface-hover); color: var(--text); }
+.extension-custom-close svg { width: 13px; height: 13px; }
+.extension-custom-body { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px; outline: none; font: 11.5px/1.65 var(--mono); }
+.extension-dialog { width: min(480px, 92vw); }
+.extension-dialog-input { width: 100%; height: 36px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); font-size: var(--text-md); outline: none; }
+.extension-dialog-input:focus, .extension-dialog-textarea:focus { border-color: var(--focus-color); box-shadow: var(--focus-ring); }
+.extension-dialog-textarea { width: 100%; min-height: 160px; padding: 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); font: var(--text-sm)/1.7 var(--mono); resize: vertical; outline: none; }
+.extension-select { width: min(520px, 92vw); }
+.extension-select-list { display: flex; flex-direction: column; gap: 2px; max-height: 52vh; overflow: auto; margin-top: 12px; }
+.extension-select-option { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 9px 11px; border: 1px solid var(--transparent); border-radius: var(--radius-control); text-align: left; }
+.extension-select-option.is-active, .extension-select-option:hover { border-color: var(--accent-border); background: var(--accent-soft); }
+.extension-select-main { color: var(--text); font-size: var(--text-md); }
+.extension-select-desc { color: var(--muted); font-size: var(--text-sm); line-height: 1.55; }

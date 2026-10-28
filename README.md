@@ -66,6 +66,8 @@ xattr -cr "/Applications/Pi Studio.app"
 
 技能按全局 / 项目分组展示；扩展支持 npm 与 git 包源的安装、卸载；MCP 支持 stdio 与 HTTP 服务器的添加、启停与编辑。
 
+扩展 UI 遵循 Pi 原生 `ctx.ui` 契约：状态、widget、浮层、选择器与输入框都由桌面端通用渲染，同一份扩展代码可在 `pi` 终端与 Pi Studio 中运行。详见 [扩展 UI 契约](docs/extension-ui-contract.md)。
+
 ### 桌面体验
 
 亮暗双主题（可跟随系统）、统一的圆角与字号层级、自定义滚动条；输入框左侧可切换工具权限模式（请求批准 / 帮我批准 / 完全权限，配合 pi-mode-switcher 扩展）。

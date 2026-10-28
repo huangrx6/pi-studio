@@ -10,9 +10,38 @@
  */
 
 export {};
-import type { FooterView, FooterAction } from './components/ExtensionFooter';
+import type { FooterView, FooterAction, FooterCell } from './components/ExtensionFooter';
 import type { ChatAttachment, ChatMessage, ComposerAttachment, ComposerCommand, ComposerFile, TurnDiff, UploadedAttachment } from './chat-types';
 import type { ModelCatalog, ModelSelection, ThinkingLevel } from './model-types';
+
+/** 扩展 widget：字符串数组或 pi-tui 组件统一渲染成字符单元。 */
+interface ExtensionWidget {
+  key: string;
+  placement: 'aboveEditor' | 'belowEditor';
+  lines: FooterCell[][];
+}
+
+/** 扩展 custom() 浮层：终端卡片被整理成原生面板。 */
+interface ExtensionCustomPanel {
+  id: string;
+  overlay: boolean;
+  interactive: boolean;
+  lines: FooterCell[][];
+  rowTypes?: Array<'text' | 'rule'>;
+  title?: string;
+  close?: { row: number; col: number } | null;
+  offset?: { row: number; col: number } | null;
+  contentWidth?: number;
+}
+
+/** 扩展 input()/editor() 请求。 */
+interface ExtensionDialogRequest {
+  id: string;
+  kind: 'input' | 'editor';
+  title: string;
+  placeholder?: string;
+  prefill?: string;
+}
 
 /** 侧边栏里的会话摘要（不含消息正文）。 */
 interface PiSessionSummary {
@@ -206,15 +235,31 @@ declare global {
       /** 应用菜单「设置…」被点击。 */
       onOpenSettings(listener: () => void): () => void;
       /** 读取扩展状态栏与页脚快照（含扩展自己的浮层）。 */
-      extensionState(sessionId: string): Promise<{ statuses: Array<[string, string]>; footer: string; view?: FooterView }>;
+      extensionState(sessionId: string): Promise<{ statuses: Array<[string, string]>; footer: string; view?: FooterView; widgets?: ExtensionWidget[]; custom?: ExtensionCustomPanel | null }>;
       /** 把 footer 的尺寸 / 点击 / 滚轮输入交给扩展，返回更新后的快照。 */
       footerAction(payload: FooterAction): Promise<FooterView | undefined>;
+      /** 通用扩展 surface 输入：footer / widget / custom 共用。 */
+      extensionAction(payload: { sessionId: string; surface: 'footer' | 'widget' | 'custom'; type: 'resize' | 'click' | 'wheel' | 'key' | 'close'; target?: string; key?: string; columns?: number; rows?: number; appearance?: string; x?: number; y?: number; delta?: number }): Promise<unknown>;
+      /** 回传 input()/editor() 的结果。 */
+      extensionDialogResult(payload: { id: string; value: string | undefined }): Promise<boolean>;
+      /** 回传扩展 select 的选择结果。 */
+      extensionSelectResult(payload: { id: string; value: string | undefined }): Promise<boolean>;
       /** 会话索引变化（草稿、标题或排序更新）时刷新侧边栏。 */
       onSessionsChanged(listener: () => void): () => void;
       /** 扩展状态项更新。 */
       onExtensionStatus(listener: (payload: { sessionId: string; key: string; text: string }) => void): () => void;
       /** 扩展页脚文本更新。 */
       onExtensionFooter(listener: (payload: { sessionId: string; text: string; view?: FooterView }) => void): () => void;
+      /** 扩展 widget 更新。 */
+      onExtensionWidgets(listener: (payload: { sessionId: string; widgets: ExtensionWidget[] }) => void): () => void;
+      /** 扩展 custom() 浮层更新；custom 为 null 表示关闭。 */
+      onExtensionCustom(listener: (payload: { sessionId: string; custom: ExtensionCustomPanel | null }) => void): () => void;
+      /** 扩展请求输入框 / 多行编辑器。 */
+      onExtensionDialog(listener: (payload: { sessionId: string } & ExtensionDialogRequest) => void): () => void;
+      /** 扩展 select 请求。 */
+      onExtensionSelect(listener: (payload: { sessionId: string; id: string; title: string; options: string[] }) => void): () => void;
+      /** select 被超时 / AbortSignal 取消。 */
+      onExtensionSelectClose(listener: (payload: { sessionId: string; id: string }) => void): () => void;
       /** 扩展弹出通知（toast）。 */
       onExtensionNotify(listener: (payload: { sessionId: string; message: string; type: 'info' | 'warning' | 'error' }) => void): () => void;
       /**

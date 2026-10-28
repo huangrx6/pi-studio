@@ -63,10 +63,18 @@ contextBridge.exposeInMainWorld('piApi', {
   setModel: (modelRef, cwd) => ipcRenderer.invoke('pi:set-model', modelRef, cwd),
   setThinkingLevel: (payload) => ipcRenderer.invoke('pi:set-thinking-level', payload),
   footerAction: (payload) => ipcRenderer.invoke('pi:footer-action', payload),
+  extensionAction: (payload) => ipcRenderer.invoke('pi:extension-action', payload),
+  extensionDialogResult: (payload) => ipcRenderer.invoke('pi:extension-dialog-result', payload),
+  extensionSelectResult: (payload) => ipcRenderer.invoke('pi:extension-select-result', payload),
   onSessionsChanged: (listener) => { const handler = () => listener(); ipcRenderer.on('pi:sessions-changed', handler); return () => ipcRenderer.removeListener('pi:sessions-changed', handler); },
   extensionState: (sessionId) => ipcRenderer.invoke('pi:extension-state', sessionId),
   onExtensionStatus: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:extension-status', handler); return () => ipcRenderer.removeListener('pi:extension-status', handler); },
   onExtensionFooter: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:extension-footer', handler); return () => ipcRenderer.removeListener('pi:extension-footer', handler); },
+  onExtensionWidgets: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:extension-widgets', handler); return () => ipcRenderer.removeListener('pi:extension-widgets', handler); },
+  onExtensionCustom: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:extension-custom', handler); return () => ipcRenderer.removeListener('pi:extension-custom', handler); },
+  onExtensionDialog: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:extension-dialog', handler); return () => ipcRenderer.removeListener('pi:extension-dialog', handler); },
+  onExtensionSelect: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:extension-select', handler); return () => ipcRenderer.removeListener('pi:extension-select', handler); },
+  onExtensionSelectClose: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:extension-select-close', handler); return () => ipcRenderer.removeListener('pi:extension-select-close', handler); },
   onExtensionNotify: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:extension-notify', handler); return () => ipcRenderer.removeListener('pi:extension-notify', handler); },
   onPrompt: (listener) => {
     const handler = (_event, payload) => listener(payload);
