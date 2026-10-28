@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUp, Check, ChevronDown, ChevronLeft, ChevronsDown, ChevronsUp, Clock3, Cpu, FileCode2, FileText, Folder, FolderOpen, Info,
-  Layers3, LoaderCircle, MessageSquare, PanelLeft, PanelRight, Pencil, Plug, Search, Settings, SquarePen, Trash2, X,
+  Columns2, Compass, Globe2, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageSquare, Minimize2, PanelLeft, PanelRight, Pencil, Plus, Plug, RotateCw, Search, Settings, SquarePen, Terminal, Trash2, X,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
 import { Select } from './components/Select';
@@ -82,6 +82,8 @@ function writeStored(key: string, value: unknown): void {
 }
 
 type DragItem = { kind: 'workspace' | 'session'; cwd: string; sessionId?: string };
+type PanelFile = { path: string; size: number; binary: boolean; text: string };
+type PanelTab = { id: string; kind: 'start' | 'files' | 'file'; title: string; path?: string };
 
 function contextLabel(tokens: number): string {
   if (tokens >= 1_000_000) return `${Math.round(tokens / 100_000) / 10}M`;
@@ -138,7 +140,12 @@ export function App() {
   const [mcpDraft, setMcpDraft] = useState({ name: '', transport: 'stdio', command: '', args: '', url: '', description: '', env: '' });
   const [treePath, setTreePath] = useState('');
   const [entries, setEntries] = useState<Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }>>([]);
-  const [file, setFile] = useState<{ path: string; size: number; binary: boolean; text: string } | null>(null);
+  const [file, setFile] = useState<PanelFile | null>(null);
+  const [openFiles, setOpenFiles] = useState<Record<string, PanelFile>>({});
+  const [panelTabs, setPanelTabs] = useState<PanelTab[]>([{ id: 'start', kind: 'start', title: '开始' }]);
+  const [activePanelTabId, setActivePanelTabId] = useState('start');
+  const [panelFullscreen, setPanelFullscreen] = useState(false);
+  const [panelSplit, setPanelSplit] = useState(false);
   const [fileBusy, setFileBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -652,18 +659,75 @@ export function App() {
       const result = await window.piApi.files(workspace, nextPath);
       setTreePath(result.path);
       setEntries(result.entries);
-      setFile(null);
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
     } finally { setFileBusy(false); }
   }
 
-  async function openFile(target: string) {
+  function openPanel() {
+    setFilesOpen(true);
+    if (panelTabs.length === 0) {
+      setPanelTabs([{ id: 'start', kind: 'start', title: '开始' }]);
+      setActivePanelTabId('start');
+    }
+  }
+
+  function closePanel() {
+    setFilesOpen(false);
+    setPanelFullscreen(false);
+  }
+
+  function openFilesTab() {
+    if (!panelTabs.some((tab) => tab.kind === 'files')) {
+      setPanelTabs((current) => [...current, { id: 'files', kind: 'files', title: '文件' }]);
+    }
+    setActivePanelTabId('files');
+    setFile(null);
+  }
+
+  async function loadFileToTab(target: string) {
     if (!workspace) return;
     setFileBusy(true);
-    try { setFile(await window.piApi.file(workspace, target)); }
-    catch (error) { setError(error instanceof Error ? error.message : String(error)); }
-    finally { setFileBusy(false); }
+    try {
+      const content = await window.piApi.file(workspace, target);
+      setOpenFiles((current) => ({ ...current, [target]: content }));
+      setFile(content);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally { setFileBusy(false); }
+  }
+
+  function activatePanelTab(tab: PanelTab) {
+    setActivePanelTabId(tab.id);
+    if (tab.kind === 'file' && tab.path) {
+      const cached = openFiles[tab.path];
+      setFile(cached ?? null);
+      if (!cached) void loadFileToTab(tab.path);
+    } else {
+      setFile(null);
+    }
+  }
+
+  async function openFile(target: string) {
+    const id = `file:${target}`;
+    const title = target.split('/').pop() || target;
+    setPanelTabs((current) => current.some((tab) => tab.id === id) ? current : [...current, { id, kind: 'file', title, path: target }]);
+    setActivePanelTabId(id);
+    const cached = openFiles[target];
+    if (cached) setFile(cached);
+    else await loadFileToTab(target);
+  }
+
+  function closePanelTab(id: string) {
+    const index = panelTabs.findIndex((tab) => tab.id === id);
+    if (index < 0) return;
+    const next = panelTabs.filter((tab) => tab.id !== id);
+    setPanelTabs(next);
+    if (next.length === 0) { closePanel(); return; }
+    if (activePanelTabId === id) {
+      const target = next[Math.min(index, next.length - 1)];
+      activatePanelTab(target);
+    }
   }
 
   function chooseFile() {
@@ -716,8 +780,70 @@ export function App() {
     </article>;
   }
 
+  const activePanelTab = panelTabs.find((tab) => tab.id === activePanelTabId) ?? panelTabs[0];
+
+  function panelTabIcon(tab: PanelTab) {
+    if (tab.kind === 'start') return <Compass />;
+    if (tab.kind === 'files') return <Folder />;
+    return <FileText />;
+  }
+
+  function renderFileTree() {
+    return <div className="panel-file-browser">
+      <div className="file-toolbar">
+        <button className="icon-button" aria-label="返回上级目录" title="返回上级目录" disabled={!treePath} onClick={() => void loadTree(treePath.split('/').slice(0, -1).join('/'))}><ChevronLeft /></button>
+        <span className="path-label">{treePath ? `/${treePath}` : '/'}</span>
+        <button className="icon-button" aria-label="刷新文件列表" title="刷新" onClick={() => void loadTree(treePath)}><RotateCw /></button>
+        <small>{entries.length} 项</small>
+      </div>
+      <div className="file-tree">
+        {!fileBusy && entries.map((entry) => (
+          <button key={entry.path} className={`file-row ${entry.type === 'directory' ? 'is-directory' : ''}`} title={entry.name} onClick={() => entry.type === 'directory' ? void loadTree(entry.path) : void openFile(entry.path)}>
+            {entry.type === 'directory' ? <Folder size={15} /> : <FileText size={15} />}
+            <span>{entry.name}</span>
+            {entry.type === 'file' && <small>{filesize(entry.size)}</small>}
+            {entry.type === 'directory' && <ChevronDown size={13} className="chevron-left" />}
+          </button>
+        ))}
+        {!fileBusy && entries.length === 0 && <div className="file-empty"><FolderOpen /><strong>这个目录还是空的</strong><span>添加文件后，它们会出现在这里。</span></div>}
+      </div>
+      {fileBusy && <div className="file-loading" role="status"><LoaderCircle className="spin" />正在读取文件…</div>}
+    </div>;
+  }
+
+  function renderFilePreview() {
+    if (!file) return <div className="panel-empty"><FileText /><strong>选择一个文件</strong><span>从左侧文件树打开文件，会在这里以标签页显示。</span></div>;
+    return <div className="panel-file-preview">
+      <div className="file-toolbar">
+        <span className="path-label" title={file.path}>{file.path}</span>
+        <small>{filesize(file.size)}</small>
+      </div>
+      {file.binary ? <div className="file-empty"><FileText /><strong>暂不支持预览此文件</strong><span>可以在其他应用中查看二进制文件。</span></div> : <pre className="file-code"><code>{file.text.split('\n').map((line, index) => <span className="code-line" key={index}><span className="line-number" aria-hidden="true">{index + 1}</span><span>{line || ' '}</span></span>)}</code></pre>}
+      {fileBusy && <div className="file-loading" role="status"><LoaderCircle className="spin" />正在读取文件…</div>}
+    </div>;
+  }
+
+  function renderPanelStart() {
+    return <div className="panel-start">
+      <div className="panel-start-mark"><Compass /></div>
+      <div className="panel-start-tools">
+        <button className="panel-tool" onClick={openFilesTab}><span className="panel-tool-icon is-folder"><Folder /></span><span><strong>工作区文件</strong><small>浏览当前工作区里的文件</small></span><ChevronDown className="panel-tool-arrow" /></button>
+        <button className="panel-tool" disabled><span className="panel-tool-icon"><Terminal /></span><span><strong>新建终端</strong><small>即将推出</small></span></button>
+        <button className="panel-tool" disabled><span className="panel-tool-icon"><Globe2 /></span><span><strong>浏览器</strong><small>即将推出</small></span></button>
+        <button className="panel-tool" disabled><span className="panel-tool-icon"><LayoutGrid /></span><span><strong>更多工具</strong><small>即将推出</small></span></button>
+      </div>
+    </div>;
+  }
+
+  function renderPanelContent() {
+    if (!activePanelTab) return null;
+    if (activePanelTab.kind === 'start') return renderPanelStart();
+    if (activePanelTab.kind === 'files') return renderFileTree();
+    return renderFilePreview();
+  }
+
   return (
-    <div className={`app ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}>
+    <div className={`app ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${filesOpen && panelFullscreen ? 'is-panel-fullscreen' : ''}`}>
       <aside className="sidebar">
         <div className="sidebar-drag" />
         <button className="icon-button sidebar-top-toggle" aria-label="收起侧边栏" title="收起侧边栏" onClick={() => setSidebarCollapsed(true)}><PanelLeft /></button>
@@ -863,7 +989,7 @@ export function App() {
             <div className="chat-meta"><span className={`state-dot ${busy ? 'is-busy' : ''}`} />{busy ? '正在处理' : '准备就绪'}{activeWorkspace && <><span>·</span><span className="workspace-name">{activeWorkspace.name}</span></>}</div>
           </div>}
           <div className="chat-actions">
-            <button className={`icon-button ${filesOpen ? 'is-active' : ''}`} onClick={() => setFilesOpen((value) => !value)} aria-label="文件查看器"><PanelRight size={16} /></button>
+            <button className={`icon-button ${filesOpen ? 'is-active' : ''}`} onClick={() => filesOpen ? closePanel() : openPanel()} aria-label="文件查看器"><PanelRight size={16} /></button>
           </div>
         </header>
         {!isNewConversation && <div className="chat-tabs">
@@ -1059,42 +1185,37 @@ export function App() {
 
       {filesOpen && (
         <>
-        <button className="file-panel-backdrop" aria-label="关闭文件抽屉" tabIndex={-1} onClick={() => setFilesOpen(false)} />
-        <aside className="file-panel">
-          <div className="file-panel-head">
-            <div><strong>工作区文件</strong><span title={workspace}>{activeWorkspace?.name || workspace}</span></div>
-            <button className="icon-button" aria-label="关闭文件查看器" title="关闭文件查看器" onClick={() => setFilesOpen(false)}><X /></button>
+        {!panelFullscreen && <button className="file-panel-backdrop" aria-label="关闭右侧面板" tabIndex={-1} onClick={closePanel} />}
+        <aside className={`file-panel ${panelFullscreen ? 'is-fullscreen' : ''} ${panelSplit ? 'is-split' : ''}`}>
+          <div className="panel-tabbar">
+            <div className="panel-tabs" role="tablist" aria-label="右侧面板标签">
+              {panelTabs.map((tab) => <div
+                key={tab.id}
+                role="tab"
+                tabIndex={activePanelTabId === tab.id ? 0 : -1}
+                aria-selected={activePanelTabId === tab.id}
+                className={`panel-tab ${activePanelTabId === tab.id ? 'is-active' : ''}`}
+                onClick={() => activatePanelTab(tab)}
+                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activatePanelTab(tab); } }}
+              >
+                {panelTabIcon(tab)}
+                <span>{tab.title}</span>
+                <button className="panel-tab-close" aria-label={`关闭 ${tab.title}`} onClick={(event) => { event.stopPropagation(); closePanelTab(tab.id); }}><X /></button>
+              </div>)}
+              <button className="panel-tab-add" title="打开工作区文件" aria-label="打开工作区文件" onClick={openFilesTab}><Plus /></button>
+            </div>
+            <div className="panel-tools">
+              <button className={`icon-button ${panelSplit ? 'is-active' : ''}`} aria-label={panelSplit ? '退出分栏' : '分栏'} title={panelSplit ? '退出分栏' : '分栏'} onClick={() => setPanelSplit((value) => !value)}><Columns2 /></button>
+              <button className="icon-button" aria-label={panelFullscreen ? '退出全屏' : '全屏'} title={panelFullscreen ? '退出全屏' : '应用内全屏'} onClick={() => setPanelFullscreen((value) => !value)}>{panelFullscreen ? <Minimize2 /> : <Maximize2 />}</button>
+              <button className="icon-button" aria-label="关闭右侧面板" title="关闭" onClick={closePanel}><X /></button>
+            </div>
           </div>
-          {!file ? (
-            <>
-              <div className="file-toolbar">
-                <button className="icon-button" aria-label="返回上级目录" title="返回上级目录" disabled={!treePath} onClick={() => void loadTree(treePath.split('/').slice(0, -1).join('/'))}><ChevronLeft /></button>
-                <span className="path-label">{treePath ? `/${treePath}` : '/'}</span>
-                <small>{entries.length} 项</small>
-              </div>
-              <div className="file-tree">
-                {!fileBusy && entries.map((entry) => (
-                  <button key={entry.path} className={`file-row ${entry.type === 'directory' ? 'is-directory' : ''}`} title={entry.name} onClick={() => entry.type === 'directory' ? void loadTree(entry.path) : void openFile(entry.path)}>
-                    {entry.type === 'directory' ? <Folder size={15} /> : <FileText size={15} />}
-                    <span>{entry.name}</span>
-                    {entry.type === 'file' && <small>{filesize(entry.size)}</small>}
-                    {entry.type === 'directory' && <ChevronDown size={13} className="chevron-left" />}
-                  </button>
-                ))}
-                {!fileBusy && entries.length === 0 && <div className="file-empty"><FolderOpen /><strong>这个目录还是空的</strong><span>添加文件后，它们会出现在这里。</span></div>}
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="file-toolbar">
-                <button className="icon-button" aria-label="返回文件列表" title="返回文件列表" onClick={() => setFile(null)}><ChevronLeft /></button>
-                <span className="path-label">{file.path}</span>
-                <small>{filesize(file.size)}</small>
-              </div>
-              {file.binary ? <div className="file-empty"><FileText /><strong>暂不支持预览此文件</strong><span>可以在其他应用中查看二进制文件。</span></div> : <pre className="file-code"><code>{file.text.split('\n').map((line, index) => <span className="code-line" key={index}><span className="line-number" aria-hidden="true">{index + 1}</span><span>{line || ' '}</span></span>)}</code></pre>}
-            </>
-          )}
-          {fileBusy && <div className="file-loading" role="status"><LoaderCircle className="spin" />正在读取文件…</div>}
+          <div className={`panel-body ${panelSplit ? 'is-split' : ''}`}>
+            {panelSplit ? <>
+              <div className="panel-split-tree">{renderFileTree()}</div>
+              <div className="panel-split-main">{activePanelTab?.kind === 'files' ? <div className="panel-empty"><FolderOpen /><strong>从左侧选择文件</strong><span>文件会在右侧以标签页打开。</span></div> : renderPanelContent()}</div>
+            </> : renderPanelContent()}
+          </div>
         </aside>
         </>
       )}
