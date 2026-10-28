@@ -845,3 +845,9 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 .panel-tabbar { border-bottom: 0; padding-bottom: 0; }
 .panel-body .file-toolbar { border-top: 0; }
 .panel-tabs { overscroll-behavior-x: contain; }
+
+/* Match the sidebar toggle's icon scale and loosen the right-side tool spacing. */
+.sidebar-top-toggle svg { width: 16px; height: 16px; }
+.panel-tools { gap: 8px; }
+.panel-tools .icon-button { width: 28px; height: 28px; }
+.panel-tools .icon-button svg { width: 16px; height: 16px; }
