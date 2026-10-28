@@ -92,6 +92,8 @@ export function App() {
   const [workspaceOrder, setWorkspaceOrder] = useState<string[]>(() => readStored<string[]>(UI_KEYS.workspaceOrder, []));
   const [sessionOrder, setSessionOrder] = useState<Record<string, string[]>>(() => readStored<Record<string, string[]>>(UI_KEYS.sessionOrder, {}));
   const [dropHint, setDropHint] = useState<string | null>(null);
+  const [draggingItem, setDraggingItem] = useState<DragItem | null>(null);
+  const [justDropped, setJustDropped] = useState<string | null>(null);
   const [session, setSession] = useState<{ id: string; cwd: string; title: string } | null>(null);
   const [messages, setMessages] = useState<PiMessage[]>([]);
   const [prompt, setPrompt] = useState('');
@@ -134,6 +136,7 @@ export function App() {
   const workspaceOrderRef = useRef(workspaceOrder);
   const sessionOrderRef = useRef(sessionOrder);
   const dragRef = useRef<DragItem | null>(null);
+  const dragPreviewRef = useRef<HTMLDivElement | null>(null);
   const restoredRef = useRef(false);
 
   const loadState = useCallback(async () => {
@@ -518,6 +521,35 @@ export function App() {
     });
   }
 
+  function makeDragPreview(event: React.DragEvent, label: string, kind: '工作区' | '会话') {
+    dragPreviewRef.current?.remove();
+    const ghost = document.createElement('div');
+    ghost.className = 'drag-preview';
+    const tag = document.createElement('span');
+    tag.className = 'drag-preview-kind';
+    tag.textContent = kind;
+    const text = document.createElement('span');
+    text.className = 'drag-preview-label';
+    text.textContent = label;
+    ghost.append(tag, text);
+    document.body.appendChild(ghost);
+    dragPreviewRef.current = ghost;
+    event.dataTransfer.setDragImage(ghost, 14, 18);
+  }
+
+  function clearDragState() {
+    dragRef.current = null;
+    setDraggingItem(null);
+    setDropHint(null);
+    dragPreviewRef.current?.remove();
+    dragPreviewRef.current = null;
+  }
+
+  function markDropped(id: string) {
+    setJustDropped(id);
+    window.setTimeout(() => setJustDropped((current) => current === id ? null : current), 240);
+  }
+
   function reorderWorkspaces(source: string, target: string) {
     if (source === target) return;
     const order = workspaces.map((item) => item.cwd);
@@ -527,6 +559,7 @@ export function App() {
     order.splice(to, 0, ...order.splice(from, 1));
     setWorkspaceOrder(order);
     setWorkspaces((current) => order.flatMap((cwd) => current.find((item) => item.cwd === cwd) ?? []));
+    markDropped(`w:${target}`);
   }
 
   function reorderSessions(cwd: string, source: string, target: string) {
@@ -539,6 +572,7 @@ export function App() {
     if (from < 0 || to < 0) return;
     order.splice(to, 0, ...order.splice(from, 1));
     setSessionOrder((current) => ({ ...current, [cwd]: order }));
+    markDropped(`s:${cwd}:${target}`);
     setWorkspaces((current) => current.map((item) => item.cwd === cwd
       ? { ...item, sessions: order.flatMap((id) => item.sessions.find((entry) => entry.id === id) ?? []) }
       : item));
@@ -670,12 +704,14 @@ export function App() {
             return (
               <div className="workspace" key={item.cwd}>
                 <button
-                  className={`workspace-row ${isActive ? 'is-active' : ''} ${dropHint === `w:${item.cwd}` ? 'drop-before' : ''}`}
+                  className={`workspace-row ${isActive ? 'is-active' : ''} ${dropHint === `w:${item.cwd}` ? 'drop-before' : ''} ${draggingItem?.kind === 'workspace' && draggingItem.cwd === item.cwd ? 'is-dragging' : ''} ${justDropped === `w:${item.cwd}` ? 'just-dropped' : ''}`}
                   title={item.cwd}
                   aria-expanded={isOpen}
                   draggable
                   onDragStart={(event) => {
                     dragRef.current = { kind: 'workspace', cwd: item.cwd };
+                    setDraggingItem(dragRef.current);
+                    makeDragPreview(event, item.name, '工作区');
                     event.dataTransfer.effectAllowed = 'move';
                     event.dataTransfer.setData('text/plain', item.cwd);
                   }}
@@ -691,10 +727,9 @@ export function App() {
                     const drag = dragRef.current;
                     event.preventDefault();
                     if (drag?.kind === 'workspace') reorderWorkspaces(drag.cwd, item.cwd);
-                    dragRef.current = null;
-                    setDropHint(null);
+                    clearDragState();
                   }}
-                  onDragEnd={() => { dragRef.current = null; setDropHint(null); }}
+                  onDragEnd={clearDragState}
                   onClick={() => {
                     setWorkspace(item.cwd);
                     setExpanded((current) => {
@@ -713,11 +748,13 @@ export function App() {
                     {item.sessions.map((sessionItem) => (
                       <button
                         key={sessionItem.id}
-                        className={`session-row ${session?.id === sessionItem.id ? 'is-active' : ''} ${dropHint === `s:${item.cwd}:${sessionItem.id}` ? 'drop-before' : ''}`}
+                        className={`session-row ${session?.id === sessionItem.id ? 'is-active' : ''} ${dropHint === `s:${item.cwd}:${sessionItem.id}` ? 'drop-before' : ''} ${draggingItem?.kind === 'session' && draggingItem.sessionId === sessionItem.id ? 'is-dragging' : ''} ${justDropped === `s:${item.cwd}:${sessionItem.id}` ? 'just-dropped' : ''}`}
                         title={sessionItem.title}
                         draggable
                         onDragStart={(event) => {
                           dragRef.current = { kind: 'session', cwd: item.cwd, sessionId: sessionItem.id };
+                          setDraggingItem(dragRef.current);
+                          makeDragPreview(event, sessionItem.title, '会话');
                           event.dataTransfer.effectAllowed = 'move';
                           event.dataTransfer.setData('text/plain', sessionItem.id);
                         }}
@@ -735,10 +772,9 @@ export function App() {
                           event.preventDefault();
                           event.stopPropagation();
                           if (drag?.kind === 'session' && drag.cwd === item.cwd && drag.sessionId) reorderSessions(item.cwd, drag.sessionId, sessionItem.id);
-                          dragRef.current = null;
-                          setDropHint(null);
+                          clearDragState();
                         }}
-                        onDragEnd={() => { dragRef.current = null; setDropHint(null); }}
+                        onDragEnd={clearDragState}
                         onClick={() => void openSession(sessionItem)}
                       >
                         <span className="session-title">{sessionItem.title}</span>
