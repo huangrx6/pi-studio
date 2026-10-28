@@ -270,7 +270,6 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
     const globalSkillPaths = [
       path.join(pi.getAgentDir(), 'skills'),
       path.join(os.homedir(), '.agents', 'skills'),
-      path.join(os.homedir(), '.agent', 'skills'),
     ];
     const result = pi.loadSkills({
       cwd,

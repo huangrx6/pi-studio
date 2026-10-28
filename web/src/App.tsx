@@ -851,6 +851,10 @@ export function App() {
     });
   }
 
+  const globalSkillGroups = [
+    { key: 'agents', label: '~/.agents/skills', items: (settingsData?.skills ?? []).filter((skill) => !skill.path.includes('/.pi/agent/skills/')) },
+    { key: 'pi', label: '~/.pi/agent/skills', items: (settingsData?.skills ?? []).filter((skill) => skill.path.includes('/.pi/agent/skills/')) },
+  ];
   const activePanelTab = panelTabs.find((tab) => tab.id === activePanelTabId) ?? panelTabs[0];
 
   function panelTabIcon(tab: PanelTab) {
@@ -1281,15 +1285,19 @@ export function App() {
             {settingsData && settingsTab === 'skills' && (
               <section className="settings-card">
                 <div className="settings-card-head"><div><h2>全局技能 <span className="count-badge">{settingsData.skills.length}</span></h2><p>只展示 ~/.agents/skills 和 Pi agent skills，不读取项目目录。</p></div><button className="settings-add-button" aria-label="添加全局技能" onClick={() => void openEditor('skill')}>添加</button></div>
-                <div className="skill-card-grid">
-                  {settingsData.skills.map((skill) => <article className="skill-card" key={skill.path}>
-                    <button className="skill-card-main" onClick={() => openSkillDetail(skill)}>
-                      <span className="skill-card-icon"><FileCode2 /></span>
-                      <span className="skill-card-body"><strong>{skill.name}</strong><span>{skill.description}</span><small>{skill.path}</small></span>
-                      <ChevronRight />
-                    </button>
-                  </article>)}
-                  {settingsData.skills.length === 0 && <div className="settings-empty">还没有全局技能。</div>}
+                <div className="skill-group-sections">
+                  {globalSkillGroups.map((group) => <section className="skill-source-group" key={group.key}>
+                    <div className="skill-source-head"><h3>{group.label}</h3><span className="count-badge">{group.items.length}</span></div>
+                    {group.items.length > 0 ? <div className="skill-card-grid">
+                      {group.items.map((skill) => <article className="skill-card" key={skill.path}>
+                        <button className="skill-card-main" onClick={() => openSkillDetail(skill)}>
+                          <span className="skill-card-icon"><FileCode2 /></span>
+                          <span className="skill-card-body"><strong>{skill.name}</strong><span>{skill.description}</span><small>{skill.path}</small></span>
+                          <ChevronRight />
+                        </button>
+                      </article>)}
+                    </div> : <div className="settings-empty settings-empty--small">这个目录下还没有技能。</div>}
+                  </section>)}
                 </div>
                 <p className="settings-footnote">技能修改后在新会话中使用。</p>
               </section>

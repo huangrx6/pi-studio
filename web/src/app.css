@@ -851,3 +851,9 @@ body *::-webkit-scrollbar-corner { background: transparent; }
 .panel-tools { gap: 8px; }
 .panel-tools .icon-button { width: 28px; height: 28px; }
 .panel-tools .icon-button svg { width: 16px; height: 16px; }
+
+/* Group global skills by their source directory. */
+.skill-group-sections { display: flex; flex-direction: column; gap: 24px; }
+.skill-source-head { display: flex; align-items: center; gap: 7px; margin: 0 0 9px; }
+.skill-source-head h3 { margin: 0; color: var(--muted); font: 10.5px var(--mono); font-weight: 500; letter-spacing: .01em; }
+.skill-source-group .skill-card-grid { margin: 0; }
