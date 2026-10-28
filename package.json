@@ -3,14 +3,29 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Pi desktop workspace",
+  "description": "Pi Studio — a native macOS desktop workspace for the Pi coding agent.",
+  "author": "huangrx6",
+  "license": "MIT",
+  "homepage": "https://huangrx6.github.io/pi-studio/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/huangrx6/pi-studio.git"
+  },
+  "bugs": {
+    "url": "https://github.com/huangrx6/pi-studio/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.28.5",
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "concurrently -k \"pnpm run web\" \"wait-on tcp:5180 && cross-env PI_STUDIO_DEV=1 node scripts/launch.mjs\"",
     "web": "vite --host 127.0.0.1 --port 5180",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "start": "node scripts/launch.mjs",
-    "dist": "pnpm run build && electron-builder --mac"
+    "test": "node --test scripts/*.test.cjs scripts/*.test.mjs",
+    "dist": "pnpm run build && electron-builder --mac --arm64 --x64"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "1.4.0",
@@ -47,14 +62,16 @@
       "assets/**",
       "electron/**",
       "web-dist/**",
+      "web/src/styles/palette.css",
       "package.json"
     ],
     "mac": {
       "icon": "assets/icon.icns",
       "category": "public.app-category.developer-tools",
+      "identity": null,
+      "artifactName": "Pi-Studio-${version}-${arch}.${ext}",
       "target": [
-        "dmg",
-        "zip"
+        "dmg"
       ]
     }
   }

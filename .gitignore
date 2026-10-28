@@ -1,8 +1,28 @@
+# Dependencies
 node_modules/
+
+# Build output
 web-dist/
 release/
-.DS_Store
-*.log
-release/
+dist/
 
+# Package manager
+.pnpm-store/
+
+# Logs & caches
+*.log
+.vite/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Local QA scratch output (not part of the docs)
 screenshots/ui-refinement/
+
+# Local-only symlink so docs/index.html previews offline; Pages CI copies the real dir
+docs/screenshots
+
+# Env files may contain API keys — never commit
+.env
+.env.*

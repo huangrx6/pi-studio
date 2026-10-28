@@ -1,0 +1,46 @@
+name: Bug 报告
+description: 使用中遇到的问题、崩溃或界面异常
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。提交前请先搜索是否已有同类 issue。
+  - type: textarea
+    id: what
+    attributes:
+      label: 问题描述
+      description: 发生了什么？期望是什么？
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开 Pi Studio
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Pi Studio 版本
+      description: 见「设置 → 关于」或 DMG 文件名
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS 版本与芯片
+      placeholder: macOS 15.1 · Apple M2
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志或截图
+      description: 可粘贴终端输出、错误信息或截图链接
+    validations:
+      required: false

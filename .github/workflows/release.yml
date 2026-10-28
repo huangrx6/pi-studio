@@ -1,0 +1,75 @@
+name: Release
+
+# Builds the macOS app and publishes a GitHub Release.
+# - Push a tag like `v0.1.0` → build + attach .dmg files to that release.
+# - Manual dispatch → build + create a draft release (tag name required).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.0)"
+        required: true
+      draft:
+        description: "Create as draft release"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    name: Build macOS (arm64 + x64)
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Check tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version=$(node -p "require('./package.json').version")
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Tag v$tag does not match package.json version $version"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build & package (dmg for arm64 and x64)
+        run: pnpm run dist
+
+      - name: Collect installers
+        run: |
+          mkdir -p artifacts
+          cp release/*.dmg artifacts/ || true
+          ls -lh artifacts/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pi-studio-macos
+          path: artifacts/*.dmg
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          draft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || false }}
+          generate_release_notes: true
+          files: artifacts/*.dmg

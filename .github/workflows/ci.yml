@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: Typecheck · Build · Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # CI only type-checks/builds the web bundle and runs unit tests;
+      # skip downloading the Electron binary to speed things up.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck & build web bundle
+        run: pnpm run build
+
+      - name: Run unit tests
+        run: pnpm test
+
+      - name: Upload web bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web-dist/
+          retention-days: 7

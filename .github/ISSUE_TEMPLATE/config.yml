@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 使用文档
+    url: https://huangrx6.github.io/pi-studio/
+    about: 安装、配置与截图说明

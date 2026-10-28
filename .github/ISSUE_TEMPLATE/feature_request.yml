@@ -1,0 +1,29 @@
+name: 功能建议
+description: 希望 Pi Studio 支持的能力或改进
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        在动手之前，先在 issue 里讨论一下方向会更高效。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决的问题
+      description: 当前的使用场景里，哪一步不顺手？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你希望的方案
+      description: 可以是交互设想、界面草图或参考产品
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 考虑过的替代方案
+    validations:
+      required: false
