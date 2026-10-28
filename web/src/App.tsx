@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowUp, Check, ChevronDown, ChevronLeft, Clock3, Code2, Cpu, FileCode2, FileText, Folder, FolderOpen, Info,
-  Layers3, LoaderCircle, MessageSquare, PanelLeft, PanelRight, Pencil, Plug, Search, Settings, Sparkles, SquarePen, Trash2, X,
+  ArrowUp, Check, ChevronDown, ChevronLeft, Clock3, Cpu, FileCode2, FileText, Folder, FolderOpen, Info,
+  Layers3, LoaderCircle, MessageSquare, PanelLeft, PanelRight, Pencil, Plug, Search, Settings, SquarePen, Trash2, X,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
 import { Select } from './components/Select';
@@ -33,7 +33,7 @@ type CustomModelConfig = { providerId: string; modelId: string; name: string; co
 type SettingsEditor = { kind: 'provider' | 'model' | 'mcp' | 'package' | 'skill' | 'extension'; editId?: string };
 type SettingsSnapshot = {
   customModels: CustomModelConfig[];
-  providers: Array<{ id: string; name: string; mode: string; envName?: string; envAvailable?: boolean; models: number }>;
+  providers: Array<{ id: string; name: string; mode: string; authConfigured?: boolean; envName?: string; envAvailable?: boolean; models: number }>;
   mcp: Array<{ name: string; transport: string; enabled: boolean; target: string; description: string }>;
   skills: Array<{ name: string; description: string; path: string; scope: string }>;
   extensions: Array<{ name: string; scope: string; path: string; kind: string; source?: string }>;
@@ -106,6 +106,7 @@ export function App() {
   const settingsReturnFocusRef = useRef<HTMLElement | null>(null);
   const requestRef = useRef<string | null>(null);
   const editorRequestRef = useRef(0);
+  const originalMcpArgsRef = useRef<string[] | null>(null);
 
   const loadState = useCallback(async () => {
     const next = await window.piApi.state();
@@ -151,6 +152,7 @@ export function App() {
     setEditorLoading(Boolean(editId && (kind === 'provider' || kind === 'mcp')));
     setResourceScope('user');
     setPackageDraft('');
+    originalMcpArgsRef.current = null;
     setProviderDraft({ providerId: '', baseUrl: '', api: 'openai-completions', modelId: '', modelName: '', apiKey: '' });
     setMcpDraft({ name: '', transport: 'stdio', command: '', args: '', url: '', description: '', env: '' });
     setCustomModel({ providerId: '', modelId: '', name: '', contextWindow: '', maxTokens: '', supportsImages: false, reasoning: false });
@@ -161,10 +163,13 @@ export function App() {
       }
       if (kind === 'mcp' && editId) {
         const config = await window.piApi.mcpConfig(editId);
-        if (request === editorRequestRef.current) setMcpDraft({ ...config, args: config.args.join('\n') });
+        if (request === editorRequestRef.current) {
+          originalMcpArgsRef.current = config.args;
+          setMcpDraft({ ...config, args: config.args.join('\n') });
+        }
       }
       if (kind === 'model' && editId) {
-        const config = settingsData?.customModels.find((item) => `${item.providerId}/${item.modelId}` === editId);
+        const config = settingsData?.customModels?.find((item) => `${item.providerId}/${item.modelId}` === editId);
         if (config) setCustomModel({ ...config, contextWindow: config.contextWindow?.toString() || '', maxTokens: config.maxTokens?.toString() || '' });
       }
     } catch (error) {
@@ -296,7 +301,9 @@ export function App() {
     setSettingsBusy(true);
     setEditorError(null);
     try {
-      const next = await window.piApi.addMcp({ ...mcpDraft, args: mcpDraft.args.split('\n').map((arg) => arg.trim()).filter(Boolean), env: mcpDraft.env, originalName: editor?.editId });
+      const originalArgs = originalMcpArgsRef.current;
+      const args = originalArgs && mcpDraft.args === originalArgs.join('\n') ? originalArgs : mcpDraft.args.split('\n').filter((arg) => arg.length > 0);
+      const next = await window.piApi.addMcp({ ...mcpDraft, args, env: mcpDraft.env, originalName: editor?.editId });
       setSettingsData(next);
       setEditor(null);
       setMcpDraft({ name: '', transport: 'stdio', command: '', args: '', url: '', description: '', env: '' });
@@ -603,18 +610,7 @@ export function App() {
 
         <div className="chat-scroll" ref={scrollRef}>
           <div className="chat-column">
-            {messages.length === 0 ? (
-              <div className="hero">
-                <BrandMark className="hero-mark" />
-                <span className="hero-eyebrow">你的开发搭档</span>
-                <h1>今天想让 Pi 做什么？</h1>
-                <p>从理解代码到实现想法，一起把工作向前推进。</p>
-                <div className="suggestions">
-                  {[{ icon: Code2, title: '理解项目', detail: '梳理结构与核心逻辑', prompt: '帮我梳理这个项目的目录结构、技术栈和核心逻辑。' }, { icon: Sparkles, title: '实现想法', detail: '把一个想法变成代码', prompt: '我想在这个项目中实现一个新功能：' }, { icon: FileCode2, title: '改进代码', detail: '发现可以优化的细节', prompt: '帮我检查这个项目中可以改进的代码，并说明原因。' }].map((item) => <button className="suggestion" key={item.title} onClick={() => { setPrompt(item.prompt); textareaRef.current?.focus(); }}><item.icon /><strong>{item.title}</strong><span>{item.detail}</span></button>)}
-                </div>
-                {!workspace && <button className="settings-outline" onClick={chooseFile}><FolderOpen />选择工作区</button>}
-              </div>
-            ) : (
+            {messages.length > 0 && (
               <div className="messages">
                 {messages.map((message, index) => (
                   <div className={`message ${message.role}`} key={`${message.role}-${index}`}>
@@ -704,9 +700,10 @@ export function App() {
                         <div className="provider-card-head">
                           <div className="provider-avatar">{provider.name.slice(0, 1)}</div>
                           <div className="provider-main"><strong>{provider.name}</strong><span>{provider.id} · {provider.models} 个模型</span></div>
-                          <span className="provider-mode">{provider.mode === 'oauth' ? 'OAuth' : provider.mode === 'env' ? '环境变量' : 'API Key'}</span>
+                          <span className={`provider-mode ${provider.authConfigured === false ? 'is-missing' : ''}`}>{provider.authConfigured === false ? '未配置凭据' : provider.mode === 'oauth' ? 'OAuth' : provider.mode === 'env' ? '环境变量' : 'API Key'}</span>
                           <div className="row-actions"><button className="icon-button row-edit" aria-label={`编辑 ${provider.name}`} title="编辑" onClick={() => void openEditor('provider', provider.id)}><Pencil /></button><button className="settings-outline row-action" onClick={() => void loadProviderModels(provider.id)} aria-expanded={expandedProvider === provider.id}>{expandedProvider === provider.id ? '收起模型' : '管理模型'}</button></div>
                         </div>
+                        {provider.authConfigured === false && <p className="provider-auth-hint">已启用此来源的模型，但尚未配置凭据。点击“编辑”完成连接。</p>}
                         {provider.mode === 'env' && <div className={`provider-env-hint ${provider.envAvailable ? 'is-set' : ''}`}>{provider.envAvailable ? '环境变量已设置' : '环境变量未设置'} · <code>{provider.envName}</code></div>}
                         {expandedProvider === provider.id && <div className="provider-model-panel">
                           <div className="provider-model-tools"><input className="model-search" aria-label={`搜索 ${provider.name} 的模型`} value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} placeholder="搜索名称或模型 ID…" /><span>{list.filter((item) => enabledModels.includes(item.id)).length}/{list.length} 已启用</span></div>
@@ -778,7 +775,7 @@ export function App() {
             title={editor.kind === 'provider' ? editor.editId ? '编辑模型来源' : '添加模型来源' : editor.kind === 'model' ? editor.editId ? '编辑自定义模型' : '添加自定义模型' : editor.kind === 'mcp' ? editor.editId ? '编辑 MCP 服务器' : '添加 MCP 服务器' : editor.kind === 'package' ? '安装扩展包' : editor.kind === 'skill' ? '添加技能' : '添加本地扩展'}
             description={editor.kind === 'mcp' ? '配置工具连接，保存后在新会话中生效。' : editor.kind === 'provider' ? '设置连接方式与认证信息。' : editor.kind === 'model' ? '配置模型的名称与能力。' : editor.kind === 'package' ? '请输入可信的扩展包地址。' : '选择生效范围，再从本机导入。'}
             action={editor.kind === 'skill' ? '选择文件夹并添加' : editor.kind === 'extension' ? '选择文件并添加' : editor.kind === 'package' ? '安装' : editor.editId ? '保存更改' : '添加'}
-            busy={settingsBusy} loading={editorLoading} error={editorError} onClose={closeEditor} onSubmit={submitEditor}>
+            busy={settingsBusy} loading={editorLoading} unavailable={Boolean(editor.editId && (editor.kind === 'provider' ? !providerDraft.providerId : editor.kind === 'mcp' ? !originalMcpArgsRef.current : editor.kind === 'model' ? !customModel.modelId : false))} error={editorError} onClose={closeEditor} onSubmit={submitEditor}>
             {editor.kind === 'provider' && <div className="settings-form-grid">
               <label>来源 ID<input autoFocus={!editor.editId} required disabled={Boolean(editor.editId)} value={providerDraft.providerId} onChange={(event) => setProviderDraft({ ...providerDraft, providerId: event.target.value })} placeholder="my-provider" /></label>
               <div className="settings-field"><span>API 类型</span><Select label="API 类型" value={providerDraft.api} onChange={(value) => setProviderDraft({ ...providerDraft, api: value })} options={[...apiTypeOptions, ...(apiTypeOptions.some((option) => option.value === providerDraft.api) ? [] : [{ value: providerDraft.api, label: providerDraft.api }])]} /></div>
