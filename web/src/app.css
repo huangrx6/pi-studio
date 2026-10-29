@@ -2673,9 +2673,9 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .activity-tool.is-error .activity-tool-status { color: var(--error); background: var(--error-soft); }
 .activity-tool-chevron { width: 12px; height: 12px; flex: none; color: var(--faint); transition: transform var(--transition); }
 .activity-tool[open] .activity-tool-chevron { transform: rotate(180deg); }
-.activity-tool-body { padding: 0 9px 9px; border-top: 1px solid var(--border); }
-.activity-tool-label { margin: 8px 0 4px; color: var(--faint); font-size: 8.5px; letter-spacing: .08em; text-transform: uppercase; }
-.activity-tool-code { max-height: 270px; margin: 0; padding: 8px 9px; overflow: auto; border-radius: var(--radius-tag); background: var(--surface); color: var(--muted); font: 10.5px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.activity-tool-body { padding: 0 12px 12px; border-top: 1px solid var(--border); }
+.activity-tool-label { margin: 11px 0 6px; color: var(--faint); font-size: 8.5px; letter-spacing: .08em; text-transform: uppercase; }
+.activity-tool-code { max-height: 270px; margin: 0; padding: 10px 12px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--muted); font: 10.5px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .activity-tool-code.is-error { color: var(--error); background: var(--error-soft); }
 .activity-thinking { padding: 2px 0 3px; }
 .activity-thinking summary { display: flex; align-items: center; gap: 7px; min-height: 22px; list-style: none; cursor: pointer; }
@@ -2976,8 +2976,8 @@ error-card 也在这里被统一成同一套视觉。 */
 
 .activity-tool:hover { background: var(--surface); border-color: var(--border-strong); }
 .activity-drawer > summary:hover { background: var(--surface-soft); }
-.activity-tool-body { background: var(--surface); }
-.activity-tool-code { border: 0; background: var(--surface-soft); }
+.activity-tool-body { background: var(--transparent); }
+.activity-tool-code { border: 1px solid var(--border); background: var(--surface-soft); }
 
 /* The note row already renders its own activity node in the gutter. */
 /* note 行的活动节点已经由 gutter 自己绘制，这里去掉额外的伪元素圆点，防止
@@ -3327,9 +3327,12 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .run-history[open] > summary > svg { transform: rotate(180deg); }
 .run-history-list { padding: 2px 14px 8px; border-top: 1px solid var(--border); }
 .run-history-row + .run-history-row { border-top: 1px solid var(--border); }
-.run-history .activity-tool, .run-current .activity-tool { margin: 0; border: 0; border-radius: 0; background: none; }
-.run-history .activity-tool:hover, .run-current .activity-tool:hover { background: none; }
+.run-history .activity-tool:not([open]), .run-current .activity-tool:not([open]) { margin: 0; border: 0; border-radius: 0; background: none; }
+.run-history .activity-tool:not([open]):hover, .run-current .activity-tool:not([open]):hover { background: none; }
+.run-history .activity-tool[open], .run-current .activity-tool[open] { margin: 6px 0 10px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); }
+.run-history .activity-tool[open]:hover, .run-current .activity-tool[open]:hover { border-color: var(--border-hover); background: var(--surface); }
 .run-history .activity-tool > summary, .run-current .activity-tool > summary { min-height: 38px; padding: 4px 0; gap: 10px; }
+.run-history .activity-tool[open] > summary, .run-current .activity-tool[open] > summary { padding-inline: 12px; }
 .activity-tool-icon { display: flex; color: var(--faint); }
 .activity-tool-icon > svg { width: 14px; height: 14px; stroke-width: 1.5; }
 .run-history .activity-tool-name, .run-current .activity-tool-name { font: 500 12px/1.5 var(--font); }
@@ -4451,7 +4454,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   .about-resource-card,
   .about-system-card,
   .file-change-summary,
-  .activity-tool,
+  .activity-tool[open],
   .activity-drawer > summary,
   .thinking-block summary,
   .todo-dock,
@@ -4477,6 +4480,12 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   border-color: var(--background-border);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+}
+
+.app.has-custom-background .activity-tool[open] .activity-tool-body { background: var(--transparent); }
+.app.has-custom-background .activity-tool[open] .activity-tool-code:not(.is-error) {
+  border-color: var(--background-border);
+  background: var(--background-soft-surface);
 }
 
 /* Full work panes need a quieter but more legible glass layer than inset cards. */
@@ -4608,7 +4617,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   .pi-select-trigger,
   .panel-tab,
   .composer-attachment.is-openable,
-  .activity-tool,
+  .activity-tool[open],
   .activity-drawer > summary,
   .file-action,
   .confirm-cancel,
@@ -4653,7 +4662,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   .pi-select-trigger,
   .panel-tab,
   .composer-attachment.is-openable,
-  .activity-tool,
+  .activity-tool[open],
   .activity-drawer > summary,
   .file-action,
   .confirm-cancel,
@@ -4662,6 +4671,16 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   .popover-close
 ):active:not(:disabled) {
   background: var(--background-active-surface);
+}
+
+.app.has-custom-background :is(.run-history, .run-current) .activity-tool:not([open]) > summary:hover {
+  border-radius: var(--radius-control);
+  background: var(--background-hover-surface);
+}
+
+.app.has-custom-background .activity-tool[open]:hover {
+  border-color: var(--background-border-strong);
+  background: var(--background-card-surface);
 }
 
 .app.has-custom-background :is(

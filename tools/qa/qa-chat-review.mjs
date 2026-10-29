@@ -6,7 +6,7 @@ const output = new URL('../../.qa/screenshots/chat-review/', import.meta.url).pa
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
 try {
-  const page = await browser.newPage({ viewport: { width: 1100, height: 760 } });
+  const page = await browser.newPage({ viewport: { width: 1100, height: 760 }, deviceScaleFactor: 2 });
   page.setDefaultTimeout(8000); page.setDefaultNavigationTimeout(10000);
   const errors = []; page.on('pageerror', error => { errors.push(error.message); console.log(error.message); });
   await page.route('**/popover-preview', route => route.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><meta charset="UTF-8"></head><body style="overflow:auto;height:auto"><div id="fixture"></div><script type="module">
@@ -68,6 +68,41 @@ try {
   const icon = await page.locator('.run-history .activity-tool').first().evaluate(node => ({border:getComputedStyle(node).borderWidth,shadow:getComputedStyle(node).boxShadow}));
   assert.equal(icon.border, '0px'); assert.equal(icon.shadow, 'none');
   await page.screenshot({path:output+'light.png',fullPage:true,animations:'disabled'});
+  await page.evaluate(() => {
+    const fixture = document.getElementById('fixture');
+    fixture.classList.add('app','has-custom-background');
+    fixture.style.cssText = 'display:block;height:auto;overflow:visible';
+  });
+  const firstTool = page.locator('.run-history .activity-tool').first();
+  await firstTool.locator('summary').click();
+  const openTool = await firstTool.evaluate(node => {
+    const body = node.querySelector('.activity-tool-body');
+    const code = node.querySelector('.activity-tool-code');
+    const toolStyle = getComputedStyle(node);
+    const bodyStyle = getComputedStyle(body);
+    const codeStyle = getComputedStyle(code);
+    return {
+      open: node.open,
+      border: parseFloat(toolStyle.borderTopWidth),
+      radius: parseFloat(toolStyle.borderTopLeftRadius),
+      bodyBackground: bodyStyle.backgroundColor,
+      codePadding: parseFloat(codeStyle.paddingLeft),
+      codeRadius: parseFloat(codeStyle.borderTopLeftRadius),
+      codeBorder: parseFloat(codeStyle.borderTopWidth),
+    };
+  });
+  assert.equal(openTool.open, true);
+  assert.ok(openTool.border >= 1, 'expanded tool keeps its card border over custom backgrounds');
+  assert.ok(openTool.radius >= 8, 'expanded tool keeps its shared corner radius');
+  assert.equal(openTool.bodyBackground, 'rgba(0, 0, 0, 0)', 'tool body does not add an opaque rectangular layer');
+  assert.ok(openTool.codePadding >= 12, 'expanded tool parameters have breathing room');
+  assert.ok(openTool.codeRadius >= 8, 'parameter surface follows the shared corner radius');
+  assert.ok(openTool.codeBorder >= 1, 'parameter surface has a readable inset border');
+  await page.screenshot({path:output+'custom-background-tool-open.png',fullPage:true,animations:'disabled'});
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await page.screenshot({path:output+'custom-background-tool-open-dark.png',fullPage:true,animations:'disabled'});
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  await firstTool.locator('summary').click();
   await page.getByRole('button',{name:'全部 5 个文件'}).click();
   assert.equal(await page.locator('.file-change-item').count(),5);
   await page.getByRole('button',{name:'查看变更',exact:true}).click();
@@ -76,5 +111,5 @@ try {
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await page.screenshot({path:output+'dark-review.png',fullPage:true,animations:'disabled'});
   assert.deepEqual(errors, []);
-  console.log('PASS: completed-round placement, successful mutations only, file expansion, diff review, unified fonts and lightweight timeline.');
+  console.log('PASS: completed-round placement, successful mutations only, file expansion, diff review, unified fonts, lightweight timeline and expanded custom-background tool card.');
 } finally { await browser.close(); }
