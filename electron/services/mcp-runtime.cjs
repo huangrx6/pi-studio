@@ -133,7 +133,6 @@ function withTimeout(promise, message, timeoutMs) {
   let timer;
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => reject(new Error(message)), timeoutMs);
-    timer.unref?.();
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }

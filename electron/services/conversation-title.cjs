@@ -53,7 +53,6 @@ async function generateConversationTitle({
       controller.abort();
       reject(new Error('Title request timed out'));
     }, timeoutMs);
-    timer.unref?.();
   });
   try {
     const result = await Promise.race([
