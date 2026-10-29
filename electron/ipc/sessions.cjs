@@ -36,6 +36,11 @@ const { extensionState, extensionAction, extensionDialogResult, extensionSelectR
 const { createAutoTitleGenerator } = require('../services/auto-title.cjs');
 const { beginTurn, endTurn, saveTurnDiff } = require('../services/turn-diff.cjs');
 const { watchCompactionRecovery } = require('../services/compaction-recovery.cjs');
+const {
+  captureSubagentEvent,
+  sessionSubagents,
+  subagentTranscript,
+} = require('../services/subagent-runtime.cjs');
 const activeRequests = new Map();
 
 /** 把 Pi Studio 的名称写回 Pi 的 session_info，保证 CLI / resume 看到同一个名字。 */
@@ -167,6 +172,13 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
     if (piEvent.type === 'auto_retry_end') {
       send({ type: 'retry-end', success: piEvent.success, attempt: piEvent.attempt, finalError: piEvent.finalError });
     }
+    const subagents = captureSubagentEvent(
+      sessionId,
+      found.cwd,
+      session.sessionFile || found.manager.getSessionFile?.(),
+      piEvent,
+    );
+    if (subagents) send({ type: 'subagent-update', children: subagents });
   });
 
   // 回合开始前记录 Git 工作树快照；非 Git 仓库返回 null，前端回退到工具统计。
@@ -338,6 +350,21 @@ function registerSessionsIpc() {
 
   // 完整提问大纲：内容区仍分页，右侧导航可以独立覆盖整个会话。
   ipcMain.handle('pi:session-outline', async (_event, id) => outline(id));
+
+  // 子 Agent 总览：合并 transcript 中的已完成记录和当前内存中的实时快照。
+  ipcMain.handle('pi:session-subagents', async (_event, id) => {
+    const found = await findManager(id);
+    if (!found) return [];
+    return sessionSubagents(id, found.cwd, found.manager);
+  });
+
+  // 子 Agent transcript 只读；真实路径由主进程从受信任的父 session 派生并校验。
+  ipcMain.handle('pi:subagent-transcript', async (_event, { sessionId, childKey, limit } = {}) => {
+    if (typeof sessionId !== 'string' || typeof childKey !== 'string') throw new Error('子 Agent 参数无效');
+    const found = await findManager(sessionId);
+    if (!found) throw new Error('会话不存在');
+    return subagentTranscript(sessionId, childKey, found.cwd, found.manager, limit);
+  });
 
   // 侧边栏动作
   ipcMain.handle('pi:sidebar-action', async (_event, input) => sidebarAction(input));

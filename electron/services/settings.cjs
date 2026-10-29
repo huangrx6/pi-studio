@@ -22,8 +22,9 @@ const {
   mcpFile,
   settingsFile,
   agentDir,
+  configPath,
 } = require('../core/state.cjs');
-const { visibleProviderIds } = require('../settings-config.cjs');
+const { readAgentToolSelection, visibleProviderIds } = require('../settings-config.cjs');
 const { envNameOf } = require('../credential-env.cjs');
 const { modelInfo } = require('./models.cjs');
 const { listExtensions } = require('./extensions.cjs');
@@ -34,6 +35,7 @@ const { listExtensions } = require('./extensions.cjs');
  *  - customModels   models.json 里的自定义模型
  *  - mcp / skills / extensions / packages / extensionData  各类资源清单
  *  - enabledModels  settings.json 中启用的模型
+ *  - agentTools     Pi Studio 本地 config.json 中的 Agent 工具白名单
  *  - 各配置文件的绝对路径（前端「打开目录」用）
  *  - model          当前模型信息
  */
@@ -45,6 +47,7 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
   const configuredModels = readJson(modelsFile(), { providers: {} });
   const settings = readJson(settingsFile(), {});
   const enabledModels = Array.isArray(settings.enabledModels) ? settings.enabledModels : [];
+  const agentTools = readAgentToolSelection(readJson(configPath(), {}));
   const visible = visibleProviderIds(
     auth,
     configuredModels.providers || {},
@@ -135,6 +138,8 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
     packages: configuredPackages.map((source) => ({ source, name: source.replace(/^(npm:|git:)/, '') })),
     extensionData,
     enabledModels,
+    agentTools,
+    agentToolsPath: configPath(),
     authPath: authFile(),
     mcpPath: mcpFile(),
     modelsPath: modelsFile(),

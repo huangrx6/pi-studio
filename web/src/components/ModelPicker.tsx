@@ -21,6 +21,14 @@ import { thinkingLabels, type ModelCatalog, type ModelOption, type ModelSelectio
 /** 浮层当前显示的视图。 */
 type View = 'main' | 'models' | 'thinking';
 
+/** App 通过斜杠命令请求选择器直接打开某个子视图。 */
+export type ModelPickerRequest = {
+  /** 单调递增；相同请求不会重复打开。 */
+  id: number;
+  /** 要直接进入的视图。 */
+  view: Exclude<View, 'main'>;
+};
+
 /**
  * 模型选择器。
  *
@@ -31,8 +39,10 @@ type View = 'main' | 'models' | 'thinking';
  * @param onSelectModel 应用模型，返回 Promise 以便展示保存中/失败
  * @param onSelectThinking 应用推理等级
  * @param onManage 跳转到设置里的模型管理页
+ * @param request 斜杠命令发起的外部打开请求
+ * @param onRequestHandled 请求已被组件接收后通知 App 清空
  */
-export function ModelPicker({ selection, disabled, hidden, loadCatalog, onSelectModel, onSelectThinking, onManage }: {
+export function ModelPicker({ selection, disabled, hidden, loadCatalog, onSelectModel, onSelectThinking, onManage, request = null, onRequestHandled }: {
   selection: ModelSelection;
   disabled: boolean;
   hidden: boolean;
@@ -40,6 +50,8 @@ export function ModelPicker({ selection, disabled, hidden, loadCatalog, onSelect
   onSelectModel: (id: string) => Promise<void>;
   onSelectThinking: (level: ThinkingLevel) => Promise<void>;
   onManage: () => void;
+  request?: ModelPickerRequest | null;
+  onRequestHandled?: () => void;
 }) {
   /** 浮层是否打开。 */
   const [open, setOpen] = useState(false);
@@ -65,6 +77,8 @@ export function ModelPicker({ selection, disabled, hidden, loadCatalog, onSelect
    * 才允许写状态，从而丢弃“打开又关闭后旧目录才返回”这类过期结果。
    */
   const requestRef = useRef(0);
+  /** 斜杠命令请求只处理一次；App 清理状态前可能还有一帧重渲染。 */
+  const handledRequestRef = useRef(0);
   const panelId = useId();
   const supportsThinking = selection.thinkingLevels.length > 1;
 
@@ -80,12 +94,11 @@ export function ModelPicker({ selection, disabled, hidden, loadCatalog, onSelect
   }
 
   /**
-   * 切换浮层：已打开则关闭；否则重置视图/搜索/错误并异步加载目录。
+   * 从指定视图打开并异步加载目录。
    * 先记下本次请求序号，await 后只有仍是最新请求才写入 catalog / loading / error。
    */
-  async function show() {
-    if (open) { close(); return; }
-    setOpen(true); setView('main'); setQuery(''); setError(null); setLoading(true);
+  async function openAt(nextView: View) {
+    setOpen(true); setView(nextView); setQuery(''); setError(null); setLoading(true);
     const request = ++requestRef.current;
     try {
       const next = await loadCatalog();
@@ -93,6 +106,12 @@ export function ModelPicker({ selection, disabled, hidden, loadCatalog, onSelect
     } catch (error) {
       if (request === requestRef.current) setError(error instanceof Error ? error.message : String(error));
     } finally { if (request === requestRef.current) setLoading(false); }
+  }
+
+  /** 点击底部模型胶囊：已打开则关闭，否则从主视图打开。 */
+  async function show() {
+    if (open) { close(); return; }
+    await openAt('main');
   }
 
   /**
@@ -110,6 +129,16 @@ export function ModelPicker({ selection, disabled, hidden, loadCatalog, onSelect
 
   // 外部弹窗打开或控件被禁用时强制收起，并作废仍在飞行中的目录请求。
   useEffect(() => { if (hidden || disabled) { setOpen(false); requestRef.current += 1; } }, [hidden, disabled]);
+  // `/model`、`/thinking` 与菜单点击共用这个入口，避免命令再跳去设置页。
+  useEffect(() => {
+    if (!request || handledRequestRef.current === request.id) return;
+    handledRequestRef.current = request.id;
+    if (disabled || hidden) {
+      onRequestHandled?.();
+      return;
+    }
+    void openAt(request.view).finally(() => onRequestHandled?.());
+  }, [request?.id, disabled, hidden]);
   // 卸载时同样作废请求，避免对已卸载组件 setState。
   useEffect(() => () => { requestRef.current += 1; }, []);
   // 点击浮层与触发按钮之外关闭；不抢焦点（false），尊重用户的新点击目标。

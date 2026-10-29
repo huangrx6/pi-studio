@@ -17,7 +17,8 @@
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Clock3, Command, Cpu, FileCode2, FileDiff, FileText, Folder, FolderOpen, Info, Sparkles,
-  AppWindow, Columns2, Compass, Eye, Globe2, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageCirclePlus, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, PanelRightOpen, Pencil, Plus, Plug, RotateCw, Search, Settings, ShieldCheck, SquarePen, Sun, Terminal, Trash2, X,
+  AppWindow, Bot, Columns2, Compass, Eye, Globe2, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageCirclePlus, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, PanelRightOpen, Pencil, Plus, Plug, RotateCw, Search, Settings, ShieldCheck, SquarePen, Sun, Terminal, Trash2, X,
+  Wrench,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
 import { ExtensionCustomOverlay, ExtensionDialogHost, ExtensionHeader, ExtensionSelectDialog, ExtensionWidgets } from './components/ExtensionSurfaces';
@@ -38,18 +39,26 @@ import { QueuedMessages, type QueuedPreview } from './components/QueuedMessages'
 import { DetailDialog } from './components/DetailDialog';
 import { ProviderIcon } from './components/ProviderIcon';
 import { SettingsDialog } from './components/SettingsDialog';
-import { ModelPicker } from './components/ModelPicker';
+import { AgentToolsSettings } from './components/AgentToolsSettings';
+import { SubagentSettings } from './components/SubagentSettings';
+import { SubagentOverview, SubagentTranscriptView } from './components/SubagentViews';
+import type { AgentToolSelection } from './agent-tool-types';
+import type { SubagentChild, SubagentTranscript } from './subagent-types';
+import { ModelPicker, type ModelPickerRequest } from './components/ModelPicker';
 import { WorkspacePicker } from './components/WorkspacePicker';
 import { SidebarActions, type SidebarAction } from './components/SidebarActions';
-import type { ModelOption, ModelSelection, ThinkingLevel } from './model-types';
+import { thinkingLabels, type ModelOption, type ModelSelection, type ThinkingLevel } from './model-types';
 import { RADIUS_PRESETS, loadPreferences, resolveTheme, savePreferences, setActivePreferences, type Preferences } from './preferences';
 import { pasteExceedsBudget, isLongMessage } from './composer-budget.mjs';
 import { HISTORY_PAGE_SIZE, resolveHistoryScroll } from './history-scroll.mjs';
 import { sampleOutlineIndices } from './outline-samples.mjs';
+import { normalizeThinkingLevelArgument, parseStudioCommand } from './composer-command-routes.mjs';
 
 // 设置页导航：顺序、图标与描述同时用于设置侧栏和页面标题。
 const settingsPages = [
   { id: 'general', label: '通用', icon: Settings, description: '外观、工作步骤、链接与输入行为。' },
+  { id: 'tools', label: 'Agent 工具', icon: Wrench, description: '控制模型可以调用哪些工具，并查看它们来自哪里。' },
+  { id: 'subagents', label: '子 Agent', icon: Bot, description: '配置子 Agent 的模型、思考强度与角色覆盖。' },
   { id: 'models', label: '模型与账号', icon: Cpu, description: '连接模型来源，选择适合当前工作的模型。' },
   { id: 'mcp', label: 'MCP 服务器', icon: Plug, description: '连接外部工具，让 Pi 更好地理解你的工作环境。' },
   { id: 'skills', label: '技能', icon: FileCode2, description: '管理可复用的工作方法，为 Pi 扩展专业能力。' },
@@ -115,6 +124,8 @@ type SettingsSnapshot = {
   packages: Array<{ source: string; name: string }>;
   extensionData: string[];
   enabledModels: string[];
+  agentTools: AgentToolSelection;
+  agentToolsPath: string;
   authPath: string;
   mcpPath: string;
   modelsPath: string;
@@ -207,6 +218,7 @@ type DragItem = { kind: 'workspace' | 'session'; cwd: string; sessionId?: string
 type PanelFile = { path: string; size: number; binary: boolean; text: string };
 type PanelTab = { id: string; kind: 'start' | 'files' | 'file' | 'diff' | 'changes' | 'temporary'; title: string; path?: string; diff?: TurnDiffFile; review?: { sessionId: string; initial: TurnDiff; turns: TurnDiff[]; focusPath?: string } };
 type ComposerMenuState = { kind: 'slash' | 'file'; query: string; start: number; end: number };
+type AgentView = { kind: 'conversation' } | { kind: 'agents' } | { kind: 'child'; child: SubagentChild };
 
 /** 上下文窗口的短标签（128K / 1M），避免卡片被长数字撑开。 */
 function contextLabel(tokens: number): string {
@@ -260,6 +272,32 @@ function mergeStreamMessage(current: ChatMessage[], incoming: ChatMessage, type:
   return copy;
 }
 
+const SUBAGENT_FINAL_STATUSES = new Set<SubagentChild['status']>(['completed', 'failed', 'stopped', 'paused']);
+
+/** 实时事件只更新字段，不能用迟到的 running 覆盖已经落地的终态。 */
+function mergeSubagentChild(current: SubagentChild, incoming: SubagentChild): SubagentChild {
+  const fields = Object.fromEntries(
+    Object.entries(incoming).filter(([, value]) => value !== undefined && value !== null && value !== ''),
+  ) as Partial<SubagentChild>;
+  const next: SubagentChild = {
+    ...current,
+    ...fields,
+    status: SUBAGENT_FINAL_STATUSES.has(current.status) ? current.status : incoming.status,
+  };
+  if (current.hasTranscript && !incoming.hasTranscript) next.hasTranscript = true;
+  return next;
+}
+
+function mergeSubagentChildren(current: SubagentChild[], incoming: SubagentChild[]): SubagentChild[] {
+  if (incoming.length === 0) return current;
+  const merged = new Map(current.map((child) => [child.key, child]));
+  for (const child of incoming) {
+    const previous = merged.get(child.key);
+    merged.set(child.key, previous ? mergeSubagentChild(previous, child) : child);
+  }
+  return [...merged.values()].slice(-100);
+}
+
 /**
  * 应用根组件。
  *
@@ -306,6 +344,7 @@ export function App() {
   const pendingOutlineJumpRef = useRef<{ sessionId: string; sourceIndex: number; index: number } | null>(null);
   const [workspace, setWorkspace] = useState('');
   const [modelSelection, setModelSelection] = useState<ModelSelection>({ modelRef: '', label: '', thinkingLevel: 'default', thinkingLevels: ['default'], effectiveThinkingLevel: 'off', defaultThinkingLevel: 'off' });
+  const [modelPickerRequest, setModelPickerRequest] = useState<ModelPickerRequest | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(readStored<string[]>(UI_KEYS.expanded, [])));
   const [workspaceOrder, setWorkspaceOrder] = useState<string[]>(() => readStored<string[]>(UI_KEYS.workspaceOrder, []));
   const [sessionOrder, setSessionOrder] = useState<Record<string, string[]>>(() => readStored<Record<string, string[]>>(UI_KEYS.sessionOrder, {}));
@@ -315,6 +354,13 @@ export function App() {
   const [session, setSession] = useState<{ id: string; cwd: string; title: string; turnDiffs?: TurnDiff[]; hasMore?: boolean; messageStart?: number; totalMessages?: number } | null>(null);
   const sessionRef = useRef(session);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [agentView, setAgentView] = useState<AgentView>({ kind: 'conversation' });
+  const [subagentChildren, setSubagentChildren] = useState<SubagentChild[]>([]);
+  const [subagentTranscript, setSubagentTranscript] = useState<SubagentTranscript | null>(null);
+  const [subagentLoading, setSubagentLoading] = useState(false);
+  const [subagentError, setSubagentError] = useState<string | null>(null);
+  const subagentRequestRef = useRef(0);
+  const mainScrollPositionRef = useRef(0);
   useEffect(() => {
     sessionRef.current = session;
     // 切走后主进程可以释放旧会话的 AgentSession；流式中的会自己跳过。
@@ -327,6 +373,12 @@ export function App() {
     historyAnchorRef.current = null;
     historyArmedRef.current = true;
     setHistoryLoading(false);
+    ++subagentRequestRef.current;
+    setAgentView({ kind: 'conversation' });
+    setSubagentChildren([]);
+    setSubagentTranscript(null);
+    setSubagentError(null);
+    setSubagentLoading(false);
   }, [session?.id]);
   const [prompt, setPrompt] = useState('');
   const [composerAttachments, setComposerAttachments] = useState<ComposerAttachment[]>([]);
@@ -354,7 +406,7 @@ export function App() {
   const [customModel, setCustomModel] = useState({ providerId: '', modelId: '', name: '', contextWindow: '', maxTokens: '', supportsImages: false, reasoning: false });
   const [packageDraft, setPackageDraft] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<'general' | 'models' | 'mcp' | 'skills' | 'extensions' | 'about'>('general');
+  const [settingsTab, setSettingsTab] = useState<'general' | 'tools' | 'subagents' | 'models' | 'mcp' | 'skills' | 'extensions' | 'about'>('general');
   const [settingsData, setSettingsData] = useState<SettingsSnapshot | null>(null);
   const [editor, setEditor] = useState<SettingsEditor | null>(null);
   const [editorError, setEditorError] = useState<string | null>(null);
@@ -407,6 +459,7 @@ export function App() {
   const settingsContentRef = useRef<HTMLElement>(null);
   const settingsReturnFocusRef = useRef<HTMLElement | null>(null);
   const requestRef = useRef<string | null>(null);
+  const modelPickerRequestRef = useRef(0);
   const sessionLoadRef = useRef(0);
   const prefetchedSessionsRef = useRef<Set<string>>(new Set());
   const editorRequestRef = useRef(0);
@@ -719,35 +772,24 @@ export function App() {
   }
 
   async function selectModel(next: string) {
-    // 有消息的会话只切换自己的模型；新会话才更新全局默认。
-    if (session && messages.length > 0) {
+    // 只要当前正在一条会话中，就只切换该会话的模型；新对话才更新默认值。
+    if (session) {
       const result = await window.piApi.setSessionModel({ sessionId: session.id, modelRef: next });
       setModelSelection(result);
       return;
     }
     const result = await window.piApi.setModel(next, workspace);
     setModelSelection(result);
-    if (session) {
-      try {
-        const applied = await window.piApi.setSessionModel({ sessionId: session.id, modelRef: next });
-        if (applied) setModelSelection(applied);
-      } catch { /* 草稿会话可能还没有 agent，首个 prompt 会用新默认模型 */ }
-    }
   }
 
   async function selectThinking(level: ThinkingLevel) {
-    if (session && messages.length > 0) {
+    // `/thinking` 和底部选择器都遵守同一范围：当前会话只写会话 transcript。
+    if (session) {
       const result = await window.piApi.setSessionThinking({ sessionId: session.id, level });
       setModelSelection(result);
       return;
     }
-    let result = await window.piApi.setThinkingLevel({ modelRef: modelSelection.modelRef, level, cwd: workspace });
-    if (session) {
-      try {
-        const applied = await window.piApi.setSessionThinking({ sessionId: session.id, level });
-        if (applied) result = applied;
-      } catch { /* 草稿会话还没有 agent */ }
-    }
+    const result = await window.piApi.setThinkingLevel({ modelRef: modelSelection.modelRef, level, cwd: workspace });
     setModelSelection(result);
   }
 
@@ -938,6 +980,19 @@ export function App() {
         setLiveDiff(event.diff);
         setSession((current) => current ? { ...current, turnDiffs: [...(current.turnDiffs ?? []).filter((diff) => diff.at !== event.diff!.at), event.diff!] } : current);
       }
+      if (event.type === 'subagent-update' && event.children) {
+        setSubagentChildren((current) => mergeSubagentChildren(current, event.children || []));
+        setAgentView((current) => {
+          if (current.kind !== 'child') return current;
+          const latest = event.children?.find((child) => child.key === current.child.key);
+          return latest ? { kind: 'child', child: mergeSubagentChild(current.child, latest) } : current;
+        });
+        setSubagentTranscript((current) => {
+          if (!current) return current;
+          const latest = event.children?.find((child) => child.key === current.child.key);
+          return latest ? { ...current, child: mergeSubagentChild(current.child, latest) } : current;
+        });
+      }
       if (event.type === 'retry-start') {
         setRetryInfo({ attempt: event.attempt ?? 1, maxAttempts: event.maxAttempts ?? 1, errorMessage: event.errorMessage });
       }
@@ -957,6 +1012,9 @@ export function App() {
             setOutlineTotalMessages(outline.totalMessages);
             setOutlineActive((current) => Math.min(current, Math.max(0, outline.items.length - 1)));
           });
+          void window.piApi.sessionSubagents(session.id).then((children) => {
+            if (sessionRef.current?.id === session.id) setSubagentChildren(children);
+          }).catch(() => { /* A completed parent turn remains usable if fleet refresh fails. */ });
         }
       }
       if (event.type === 'error') {
@@ -997,9 +1055,9 @@ export function App() {
     const node = scrollRef.current;
     // 用户向上阅读时不再跟随；停留在底部时在提交后、绘制前直接贴底，
     // 比每帧再排一次 rAF 更少抖动。
-    if (!node || !followBottomRef.current) return;
+    if (!node || agentView.kind !== 'conversation' || !followBottomRef.current) return;
     node.scrollTop = node.scrollHeight;
-  }, [messages, busy]);
+  }, [messages, busy, agentView.kind]);
 
   useEffect(() => () => { if (outlineSyncRef.current) cancelAnimationFrame(outlineSyncRef.current); }, []);
 
@@ -1201,10 +1259,16 @@ export function App() {
   async function startSession(cwd = session?.cwd || workspace) {
     ++sessionLoadRef.current;
     ++outlineRequestRef.current;
+    ++subagentRequestRef.current;
     requestRef.current = '';
     setSessionLoading(false);
     setSession(null);
     setMessages([]);
+    setAgentView({ kind: 'conversation' });
+    setSubagentChildren([]);
+    setSubagentTranscript(null);
+    setSubagentError(null);
+    setSubagentLoading(false);
     setOutlineItems([]);
     setOutlineTotalMessages(0);
     setOutlineActive(0);
@@ -1216,6 +1280,7 @@ export function App() {
     if (cwd) expandWorkspace(cwd);
     setComposerAttachments([]);
     setComposerMenu(null);
+    setModelPickerRequest(null);
     setQueuedPrompts([]);
     setBusy(false);
     setRetryInfo(null);
@@ -1225,8 +1290,14 @@ export function App() {
   function selectDraftWorkspace(cwd: string) {
     ++sessionLoadRef.current;
     ++outlineRequestRef.current;
+    ++subagentRequestRef.current;
     setSessionLoading(false);
     setSession(null);
+    setAgentView({ kind: 'conversation' });
+    setSubagentChildren([]);
+    setSubagentTranscript(null);
+    setSubagentError(null);
+    setSubagentLoading(false);
     setOutlineItems([]);
     setOutlineTotalMessages(0);
     setOutlineActive(0);
@@ -1234,6 +1305,7 @@ export function App() {
     pendingOutlineJumpRef.current = null;
     setWorkspace(cwd);
     setComposerMenu(null);
+    setModelPickerRequest(null);
     setError(null);
     if (cwd) expandWorkspace(cwd);
   }
@@ -1292,9 +1364,10 @@ export function App() {
     pendingOutlineJumpRef.current = null;
     setSessionLoading(true);
     try {
-      const [detail, outline] = await Promise.all([
+      const [detail, outline, children] = await Promise.all([
         window.piApi.session(item.id, HISTORY_PAGE_SIZE),
         window.piApi.sessionOutline(item.id).catch(() => undefined),
+        window.piApi.sessionSubagents(item.id).catch(() => [] as SubagentChild[]),
       ]);
       if (load !== sessionLoadRef.current) return;
       if (!detail) {
@@ -1314,12 +1387,18 @@ export function App() {
       });
       if (detail.model) setModelSelection(detail.model);
       setMessages(detail.messages.map((message) => ({ ...message })));
+      setSubagentChildren(children);
+      setSubagentTranscript(null);
+      setSubagentError(null);
+      setSubagentLoading(false);
+      setAgentView({ kind: 'conversation' });
       if (outlineRequest === outlineRequestRef.current) {
         applyOutline(outline ? { items: outline.items, totalMessages: outline.totalMessages } : undefined, detail.messages, detail.messageStart);
       }
       setHistoryLoading(false);
       setWorkspace(detail.cwd);
       expandWorkspace(detail.cwd);
+      setModelPickerRequest(null);
       setError(null);
       requestRef.current = detail.requestId || '';
       setBusy(Boolean(detail.running));
@@ -1334,6 +1413,90 @@ export function App() {
       if (load === sessionLoadRef.current) setSessionLoading(false);
     }
   }
+
+  function rememberMainScrollPosition() {
+    if (agentView.kind === 'conversation') {
+      mainScrollPositionRef.current = scrollRef.current?.scrollTop ?? mainScrollPositionRef.current;
+    }
+  }
+
+  function returnToMainAgent() {
+    if (agentView.kind === 'conversation') return;
+    setAgentView({ kind: 'conversation' });
+    requestAnimationFrame(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = mainScrollPositionRef.current;
+    });
+  }
+
+  function openAgentOverview() {
+    if (!session?.id || subagentChildren.length === 0) return;
+    rememberMainScrollPosition();
+    setAgentView({ kind: 'agents' });
+  }
+
+  function openAgentTranscript(child: SubagentChild) {
+    if (!session?.id || !child.hasTranscript) {
+      setSubagentError('这个子 Agent 没有可安全读取的本地会话。');
+      return;
+    }
+    rememberMainScrollPosition();
+    const request = ++subagentRequestRef.current;
+    const sessionId = session.id;
+    setAgentView({ kind: 'child', child });
+    setSubagentTranscript(null);
+    setSubagentError(null);
+    setSubagentLoading(true);
+    void window.piApi.subagentTranscript({ sessionId, childKey: child.key })
+      .then((transcript) => {
+        if (request !== subagentRequestRef.current || sessionRef.current?.id !== sessionId) return;
+        setSubagentTranscript((current) => current
+          ? { ...transcript, child: mergeSubagentChild(current.child, transcript.child) }
+          : transcript);
+        setAgentView((current) => current.kind === 'child'
+          ? { kind: 'child', child: mergeSubagentChild(current.child, transcript.child) }
+          : current);
+      })
+      .catch((cause) => {
+        if (request === subagentRequestRef.current && sessionRef.current?.id === sessionId) {
+          setSubagentError(errorText(cause));
+        }
+      })
+      .finally(() => {
+        if (request === subagentRequestRef.current && sessionRef.current?.id === sessionId) setSubagentLoading(false);
+      });
+  }
+
+  useEffect(() => {
+    if (agentView.kind !== 'child' || !session?.id || subagentLoading) return;
+    if (!['pending', 'running', 'paused'].includes(agentView.child.status)) return;
+    let disposed = false;
+    let fetching = false;
+    const sessionId = session.id;
+    const childKey = agentView.child.key;
+    const timer = window.setInterval(() => {
+      if (fetching) return;
+      fetching = true;
+      void window.piApi.subagentTranscript({ sessionId, childKey })
+        .then((transcript) => {
+          if (disposed || sessionRef.current?.id !== sessionId) return;
+          setSubagentTranscript((current) => current
+            ? { ...transcript, child: mergeSubagentChild(current.child, transcript.child) }
+            : transcript);
+          setSubagentError(null);
+          setAgentView((current) => current.kind === 'child' && current.child.key === childKey
+            ? { kind: 'child', child: transcript.child }
+            : current);
+        })
+        .catch((cause) => {
+          if (!disposed) setSubagentError(errorText(cause));
+        })
+        .finally(() => { fetching = false; });
+    }, 900);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [agentView.kind, agentView.kind === 'child' ? agentView.child.key : '', agentView.kind === 'child' ? agentView.child.status : '', session?.id, subagentLoading]);
 
   // ---------- 附件 ----------
 
@@ -1428,19 +1591,81 @@ export function App() {
     setComposerMenu(null);
   }
 
-  /** 执行内置斜杠命令；不是内置命令时返回 false，交给普通消息处理。 */
-  async function executeBuiltinCommand(name: string): Promise<boolean> {
-    if (name === 'new') {
+  /** 请求输入框底部的模型选择器直接打开某个原生子视图。 */
+  function requestModelPicker(view: ModelPickerRequest['view']) {
+    modelPickerRequestRef.current += 1;
+    setModelPickerRequest({ id: modelPickerRequestRef.current, view });
+  }
+
+  /**
+   * 执行 Studio 原生斜杠命令；不是原生命令时返回 false，交给 Pi。
+   *
+   * 扩展命令、Prompt 与 Skill 不进入这个路由表，因此始终保留原命令名、
+   * 参数和当前会话上下文，由 Pi 自己解析。
+   */
+  async function executeBuiltinCommand(input: string): Promise<boolean> {
+    const command = parseStudioCommand(input);
+    if (!command) return false;
+
+    if (command.route === 'session.new') {
+      if (busy) {
+        setExtensionToast({ message: '当前回复还在进行中，结束后再开始新对话。', type: 'info' });
+        return true;
+      }
       await startSession();
       return true;
     }
-    if (name === 'settings') { await openSettings(); return true; }
-    if (name === 'mcp') { await openSettings('mcp'); return true; }
-    if (name === 'model' || name === 'thinking') { await openSettings('models'); return true; }
-    if (name === 'copy') {
+    if (command.route === 'settings.open') { await openSettings(); return true; }
+    if (command.route === 'settings.mcp') { await openSettings('mcp'); return true; }
+    if (command.route === 'model.picker') {
+      if (busy || stateLoading || sessionLoading) {
+        setExtensionToast({ message: '请等待当前会话加载或回复完成后再切换模型。', type: 'info' });
+        return true;
+      }
+      if (command.argument) {
+        try { await selectModel(command.argument); }
+        catch (error) { setExtensionToast({ message: errorText(error), type: 'error' }); }
+      } else {
+        requestModelPicker('models');
+      }
+      return true;
+    }
+    if (command.route === 'thinking.picker') {
+      if (!session) {
+        setExtensionToast({ message: '先进入一条对话，再调整这个会话的思考强度。', type: 'info' });
+        return true;
+      }
+      if (busy || stateLoading || sessionLoading) {
+        setExtensionToast({ message: '请等待当前回复完成后再调整思考强度。', type: 'info' });
+        return true;
+      }
+      if (!command.argument) {
+        requestModelPicker('thinking');
+        return true;
+      }
+      const normalized = normalizeThinkingLevelArgument(command.argument);
+      const level = normalized as ThinkingLevel | null;
+      if (!level || !modelSelection.thinkingLevels.includes(level)) {
+        const available = modelSelection.thinkingLevels.map((item) => thinkingLabels[item]).join('、');
+        setExtensionToast({ message: `当前模型可用等级：${available || 'Default'}`, type: 'warning' });
+        return true;
+      }
+      try {
+        await selectThinking(level);
+        setExtensionToast({ message: `当前会话的思考强度已切换为 ${thinkingLabels[level]}。`, type: 'info' });
+      } catch (error) {
+        setExtensionToast({ message: errorText(error), type: 'error' });
+      }
+      return true;
+    }
+    if (command.route === 'assistant.copy') {
       const last = [...messages].reverse().find((message) => message.role === 'assistant');
       const text = last ? textOfBlocks(last.content) : '';
-      if (text) await navigator.clipboard.writeText(text);
+      if (text) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        setExtensionToast({ message: '当前会话还没有可复制的助理回复。', type: 'info' });
+      }
       return true;
     }
     return false;
@@ -1467,7 +1692,7 @@ export function App() {
       setComposerMenu(null);
       setPrompt('');
       setComposerMenuIndex(0);
-      void executeBuiltinCommand(command.name);
+      void executeBuiltinCommand(`/${command.name}`);
       return;
     }
     const inserted = `/${command.name} `;
@@ -1769,9 +1994,8 @@ export function App() {
       setComposerMenu(null);
       return;
     }
-    if (!busy && composerAttachments.length === 0 && text.startsWith('/')) {
-      const builtin = text.match(/^\/(new|settings|model|thinking|copy|mcp)(?:\s|$)/);
-      if (builtin && await executeBuiltinCommand(builtin[1])) {
+    if (composerAttachments.length === 0 && text.startsWith('/')) {
+      if (await executeBuiltinCommand(text)) {
         setPrompt('');
         setComposerMenu(null);
         return;
@@ -2454,21 +2678,33 @@ export function App() {
         <header className="chat-header">
           {sidebarCollapsed && <button className="icon-button sidebar-expand" aria-label="展开侧边栏" title="展开侧边栏" onClick={() => setSidebarCollapsed(false)}><PanelLeft /></button>}
           {!isNewConversation && <div className="chat-heading">
-            <h1>{session?.title || 'Pi Studio'}</h1>
+            <h1>{agentView.kind === 'child' ? `${agentView.child.agent} · 子 Agent` : (session?.title || 'Pi Studio')}</h1>
           </div>}
           <div className="chat-actions">
             {!filesOpen && <button className="icon-button" onClick={openPanel} aria-label="打开右侧面板" title="打开右侧面板"><PanelRight size={16} /></button>}
           </div>
         </header>
         {!isNewConversation && <div className="chat-tabs">
-          <button className="tab is-active">对话</button>
-          <button className="tab" disabled title="执行轨迹即将推出">轨迹</button>
-          <span className="chat-tabs-note">{messages.filter((message) => message.role !== 'toolResult').length > 0 ? `${messages.filter((message) => message.role !== 'toolResult').length} 条消息` : '从一个想法开始'}</span>
+          <button type="button" className={`tab ${agentView.kind === 'conversation' ? 'is-active' : ''}`} onClick={returnToMainAgent}>对话</button>
+          {subagentChildren.length > 0 && <button type="button" className={`tab agent-tab ${agentView.kind !== 'conversation' ? 'is-active' : ''}`} onClick={openAgentOverview}>
+            <Bot />
+            <span>子 Agent</span>
+            <span className="agent-tab-count">{subagentChildren.length}</span>
+            {subagentChildren.some((child) => child.status === 'running' || child.status === 'pending') && <i aria-label="有子 Agent 正在运行" />}
+          </button>}
+          <span className="chat-tabs-note">
+            {subagentChildren.length > 0
+              ? `${subagentChildren.filter((child) => child.status === 'running' || child.status === 'pending').length} 运行中 · ${subagentChildren.length} 个子 Agent`
+              : messages.filter((message) => message.role !== 'toolResult').length > 0
+                ? `${messages.filter((message) => message.role !== 'toolResult').length} 条消息`
+                : '从一个想法开始'}
+          </span>
         </div>}
 
         {isNewConversation && <div className="chat-tabs is-placeholder" aria-hidden="true" />}
         {!isNewConversation && <div
-          className="chat-scroll"
+          className={`chat-scroll ${agentView.kind !== 'conversation' ? 'is-agent-hidden' : ''}`}
+          aria-hidden={agentView.kind !== 'conversation'}
           ref={scrollRef}
           onWheel={event => {
             historyUserScrollRef.current = true;
@@ -2506,7 +2742,7 @@ export function App() {
           </div>
         </div>}
 
-        {!settingsOpen && !filesOpen && !isNewConversation && outlineItems.length > 1 && (
+        {!settingsOpen && !filesOpen && !isNewConversation && agentView.kind === 'conversation' && outlineItems.length > 1 && (
           <nav className="conversation-outline" aria-label="对话大纲" onMouseLeave={() => setOutlineHover(null)}>
             <div className="outline-track">
               {outlineSamples.map((index) => {
@@ -2529,8 +2765,26 @@ export function App() {
             </div>
           </nav>
         )}
+        {agentView.kind === 'agents' && <SubagentOverview
+          children={subagentChildren}
+          selection={modelSelection}
+          onOpenChild={openAgentTranscript}
+          onReturnMain={returnToMainAgent}
+        />}
+        {agentView.kind === 'child' && <SubagentTranscriptView
+          child={agentView.child}
+          transcript={subagentTranscript}
+          loading={subagentLoading}
+          error={subagentError}
+          stepDisplay={preferences.stepDisplay}
+          stepCollapse={preferences.stepCollapse}
+          showCodeView={preferences.showCodeView}
+          onBackMain={returnToMainAgent}
+          onOverview={openAgentOverview}
+          onOpenFile={(path) => void openFile(path)}
+        />}
         {/* 输入区：计划、排队消息、附件与命令菜单 */}
-        <div className="composer-dock">
+        <div className="composer-dock" hidden={agentView.kind !== 'conversation'}>
           {(todoDetails || todoPanelOpen) && <TodoDock details={todoDetails} open={todoPanelOpen} onToggle={() => setTodoPanelOpen((value) => !value)} />}
           {queuedPrompts.length > 0 && <QueuedMessages items={queuedPreviews} onEdit={editQueued} onDelete={deleteQueued} onSendNow={(id) => void sendQueuedNow(id)} onSendAll={() => void sendAllQueued()} onReorder={reorderQueued} />}
           {isNewConversation && <div className="new-conversation-intro">
@@ -2677,7 +2931,7 @@ export function App() {
                 )}
               </div>
               <div className="composer-right">
-                <ModelPicker selection={modelSelection} disabled={busy || stateLoading} hidden={settingsOpen} loadCatalog={loadModelCatalog} onSelectModel={selectModel} onSelectThinking={selectThinking} onManage={() => void openSettings('models')} />
+                <ModelPicker selection={modelSelection} disabled={busy || stateLoading || sessionLoading} hidden={settingsOpen} loadCatalog={loadModelCatalog} onSelectModel={selectModel} onSelectThinking={selectThinking} onManage={() => void openSettings('models')} request={modelPickerRequest} onRequestHandled={() => setModelPickerRequest(null)} />
                 <button className="send-button" disabled={!workspace || (!prompt.trim() && composerAttachments.length === 0) || compaction.active} onClick={() => void send()} aria-label={compaction.active ? '正在压缩上下文' : busy ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'} title={!workspace ? '请先选择工作区' : compaction.active ? '正在压缩上下文，完成后自动继续' : busy ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'}><ArrowUp /></button>
               </div>
             </div>
@@ -2726,6 +2980,19 @@ export function App() {
                 </section>
               </div>
             )}
+            {settingsData && settingsTab === 'tools' && (
+              <AgentToolsSettings
+                cwd={workspace}
+                initialSelection={settingsData.agentTools}
+                configPath={settingsData.agentToolsPath}
+                onSaved={(snapshot) => setSettingsData((current) => current ? { ...current, agentTools: snapshot.agentTools } : current)}
+              />
+            )}
+            {settingsTab === 'subagents' && <SubagentSettings
+              cwd={workspace}
+              enabledAgentTools={settingsData?.agentTools.enabled}
+              onOpenAgentTools={() => setSettingsTab('tools')}
+            />}
             {settingsData && settingsTab === 'models' && (
               <div className="settings-sections">
                 <section className="settings-card">

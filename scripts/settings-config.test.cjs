@@ -18,13 +18,53 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const {
+  DEFAULT_AGENT_TOOLS,
   readConfig,
   writeConfig,
+  readAgentToolSelection,
+  updateAgentTools,
   updateMcp,
   updateProvider,
   updateCustomModel,
   visibleProviderIds,
 } = require('../electron/settings-config.cjs');
+
+test('Agent tool selections default safely and preserve their extension sources', () => {
+  assert.deepEqual(readAgentToolSelection({}), { enabled: [...DEFAULT_AGENT_TOOLS], sources: {} });
+  assert.deepEqual(
+    readAgentToolSelection({ agentTools: ['read', 'subagent', 'subagent', 'bad name'] }),
+    { enabled: ['read', 'subagent'], sources: {} },
+  );
+  const source = {
+    source: 'npm:pi-subagents',
+    label: 'pi-subagents',
+    scope: 'user',
+    path: '/tmp/index.js',
+    baseDir: '/tmp',
+  };
+  assert.deepEqual(
+    readAgentToolSelection({ agentTools: { enabled: ['subagent'], sources: { subagent: source, unknown: source } } }),
+    { enabled: ['subagent'], sources: { subagent: source } },
+  );
+});
+
+test('Agent tool updates stay atomic, reversible, and reject invalid SDK options', () => {
+  const config = {
+    theme: 'dark',
+    agentTools: {
+      enabled: ['read', 'subagent'],
+      sources: {
+        subagent: { source: 'npm:pi-subagents', label: 'pi-subagents', scope: 'user', path: '', baseDir: '' },
+      },
+    },
+  };
+  const disabled = updateAgentTools(config, { enabled: [] });
+  assert.deepEqual(disabled.agentTools, { enabled: [], sources: {} });
+  assert.equal(disabled.theme, 'dark');
+  assert.deepEqual(config.agentTools.enabled, ['read', 'subagent']);
+  assert.throws(() => updateAgentTools(config, ['read', '+bash']), /名称无效/);
+  assert.throws(() => updateAgentTools(config, ['read', '__proto__']), /名称无效/);
+});
 
 // 设置页展示哪些来源，由四部分合并而成：auth.json 里存过凭据的来源、
 // models.json 里配置过的来源、运行时已认证的内置来源，以及 enabledModels /

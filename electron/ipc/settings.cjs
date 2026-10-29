@@ -19,10 +19,43 @@ const {
 } = require('../core/state.cjs');
 const { updateMcp } = require('../settings-config.cjs');
 const { settingsSnapshot } = require('../services/settings.cjs');
+const {
+  agentToolCatalog,
+  invalidateAgentToolCatalog,
+  saveInstalledToolSelection,
+} = require('../services/agent-tools.cjs');
+const {
+  saveSubagentSettings,
+  subagentSettings,
+} = require('../services/subagent-settings.cjs');
 
 function registerSettingsIpc() {
   // 设置页全量快照
   ipcMain.handle('pi:settings', async (_event, cwd) => settingsSnapshot(typeof cwd === 'string' ? cwd : DEFAULT_CWD));
+
+  // 当前工作区实际可加载的工具目录（只创建内存会话，不发送 prompt）
+  ipcMain.handle('pi:agent-tool-catalog', async (_event, { cwd, refresh } = {}) => (
+    agentToolCatalog(typeof cwd === 'string' ? cwd : DEFAULT_CWD, Boolean(refresh))
+  ));
+
+  // 持久化 Agent 工具白名单；来源快照随配置一起保留，扩展暂时卸载后可解释失效项。
+  ipcMain.handle('pi:set-agent-tools', async (_event, { tools, cwd } = {}) => {
+    saveInstalledToolSelection(tools);
+    return settingsSnapshot(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
+  });
+
+  // pi-subagents 的模型与 thinking 配置直接同步到 Pi 自己的 settings.json。
+  ipcMain.handle('pi:subagent-settings', async (_event, cwd) => (
+    subagentSettings(typeof cwd === 'string' ? cwd : DEFAULT_CWD)
+  ));
+
+  ipcMain.handle('pi:save-subagent-settings', async (_event, { cwd, scope, settings } = {}) => (
+    saveSubagentSettings(
+      typeof cwd === 'string' ? cwd : DEFAULT_CWD,
+      scope,
+      settings,
+    )
+  ));
 
   // 单个 MCP 的编辑数据
   ipcMain.handle('pi:mcp-config', async (_event, name) => {
@@ -117,6 +150,7 @@ function registerSettingsIpc() {
     } else {
       fs.copyFileSync(source, path.join(base, path.basename(source)));
     }
+    invalidateAgentToolCatalog();
     return settingsSnapshot(cwd || DEFAULT_CWD);
   });
 
@@ -130,6 +164,7 @@ function registerSettingsIpc() {
     if (!allowed) throw new Error('不能删除这个位置的扩展');
     if (!fs.existsSync(target)) throw new Error('扩展不存在');
     fs.rmSync(target, { recursive: true, force: true });
+    invalidateAgentToolCatalog();
     return settingsSnapshot(DEFAULT_CWD);
   });
 
@@ -143,6 +178,7 @@ function registerSettingsIpc() {
       settingsManager: pi.SettingsManager.create(DEFAULT_CWD, pi.getAgentDir()),
     });
     await manager.installAndPersist(source.trim());
+    invalidateAgentToolCatalog();
     return settingsSnapshot(DEFAULT_CWD);
   });
 
@@ -156,6 +192,7 @@ function registerSettingsIpc() {
       settingsManager: pi.SettingsManager.create(DEFAULT_CWD, pi.getAgentDir()),
     });
     await manager.removeAndPersist(source);
+    invalidateAgentToolCatalog();
     return settingsSnapshot(DEFAULT_CWD);
   });
 }

@@ -13,6 +13,8 @@ export {};
 import type { FooterView, FooterAction, FooterCell } from './components/ExtensionFooter';
 import type { ChatAttachment, ChatMessage, ComposerAttachment, ComposerCommand, ComposerFile, TurnDiff, UploadedAttachment } from './chat-types';
 import type { ModelCatalog, ModelSelection, ThinkingLevel } from './model-types';
+import type { AgentToolCatalog, AgentToolSelection } from './agent-tool-types';
+import type { SubagentChild, SubagentConfig, SubagentSettingsSnapshot, SubagentTranscript } from './subagent-types';
 
 /** 扩展 widget：字符串数组或 pi-tui 组件统一渲染成字符单元。 */
 interface ExtensionWidget {
@@ -132,6 +134,10 @@ interface SettingsSnapshot {
   extensionData: string[];
   /** 当前启用的模型 id。 */
   enabledModels: string[];
+  /** Pi Studio 的 Agent 工具白名单。 */
+  agentTools: AgentToolSelection;
+  /** Agent 工具白名单所在的本地配置文件。 */
+  agentToolsPath: string;
   /** 认证文件路径（只读展示）。 */
   authPath: string;
   /** MCP 配置文件路径。 */
@@ -168,6 +174,10 @@ declare global {
       session(id: string, limit?: number): Promise<PiDetail | undefined>;
       /** 读取完整提问大纲；不受消息分页窗口限制。 */
       sessionOutline(id: string): Promise<PiSessionOutline | undefined>;
+      /** 读取当前会话的子 Agent 总览，包含已完成记录与实时快照。 */
+      sessionSubagents(id: string): Promise<SubagentChild[]>;
+      /** 读取一个受信任子 Agent session 的只读 transcript。 */
+      subagentTranscript(payload: { sessionId: string; childKey: string; limit?: number }): Promise<SubagentTranscript>;
       /**
        * 侧边栏操作：重命名、移除、置顶、归档、分叉。
        * 成功返回可能是新建会话的信息（fork 时用）。
@@ -249,6 +259,14 @@ declare global {
       // ---- 设置：MCP / 技能 / 扩展 / 包 ----
       /** 读取完整设置快照。 */
       settings(cwd?: string): Promise<SettingsSnapshot>;
+      /** 扫描当前工作区可用的核心、扩展包与本地扩展工具。 */
+      agentToolCatalog(payload?: { cwd?: string; refresh?: boolean }): Promise<AgentToolCatalog>;
+      /** 保存 Agent 工具白名单与来源快照。 */
+      setAgentTools(payload: { tools: AgentToolSelection; cwd?: string }): Promise<SettingsSnapshot>;
+      /** 读取 pi-subagents 的角色目录与全局 / 项目配置。 */
+      subagentSettings(cwd?: string): Promise<SubagentSettingsSnapshot>;
+      /** 保存一个范围的模型与 thinking 配置。 */
+      saveSubagentSettings(payload: { cwd: string; scope: 'user' | 'project'; settings: SubagentConfig }): Promise<SubagentSettingsSnapshot>;
       /** 保存某来源的 API Key。 */
       setKey(payload: { providerId: string; apiKey: string }): Promise<any>;
       /** 保存来源配置（baseUrl、API 类型、首个模型、可选 API Key）。 */
@@ -321,7 +339,7 @@ declare global {
        * 一轮请求的流式事件。type 覆盖消息开始/增量/结束、自动重试开始与结束、
        * 整体完成与失败；渲染进程按 requestId 过滤出本次请求的事件。
        */
-      onPrompt(listener: (payload: { requestId: string; type: 'message_start' | 'message_update' | 'message_end' | 'retry-start' | 'retry-end' | 'run-attached' | 'compaction-start' | 'compaction-end' | 'compaction-interrupted' | 'turn-diff' | 'done' | 'error'; message?: ChatMessage; error?: string; attempt?: number; maxAttempts?: number; delayMs?: number; success?: boolean; finalError?: string; errorMessage?: string; diff?: TurnDiff; at?: number; reason?: 'manual' | 'threshold' | 'overflow'; aborted?: boolean; compacting?: boolean }) => void): () => void;
+      onPrompt(listener: (payload: { requestId: string; type: 'message_start' | 'message_update' | 'message_end' | 'retry-start' | 'retry-end' | 'run-attached' | 'compaction-start' | 'compaction-end' | 'compaction-interrupted' | 'turn-diff' | 'subagent-update' | 'done' | 'error'; message?: ChatMessage; children?: SubagentChild[]; error?: string; attempt?: number; maxAttempts?: number; delayMs?: number; success?: boolean; finalError?: string; errorMessage?: string; diff?: TurnDiff; at?: number; reason?: 'manual' | 'threshold' | 'overflow'; aborted?: boolean; compacting?: boolean }) => void): () => void;
 
       // ---- 扩展命令 ----
       /** 运行扩展提供的命令。 */

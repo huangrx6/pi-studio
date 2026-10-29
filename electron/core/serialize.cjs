@@ -49,6 +49,37 @@ function serializeContent(content) {
 }
 
 /**
+ * Tool results can carry large extension-owned objects. Subagent transcripts and
+ * filesystem session paths stay in the main process; the renderer receives only
+ * the compact metadata it needs to render an inline subagent result.
+ */
+function serializeSubagentDetails(details) {
+  if (!details || typeof details !== 'object') return undefined;
+  const results = Array.isArray(details.results)
+    ? details.results.slice(0, 100).map((result) => ({
+      index: result?.index,
+      runId: result?.runId,
+      agent: result?.agent,
+      task: typeof result?.task === 'string' ? result.task.slice(0, 2_000) : '',
+      context: result?.context,
+      model: result?.model || result?.requestedModel,
+      thinking: result?.thinking,
+      usage: result?.usage,
+      exitCode: result?.exitCode,
+      error: typeof result?.error === 'string' ? result.error.slice(0, 2_000) : undefined,
+      finalOutput: typeof result?.finalOutput === 'string' ? result.finalOutput.slice(0, 4_000) : undefined,
+    }))
+    : [];
+  return {
+    runId: details.runId,
+    toolCallId: details.toolCallId,
+    background: Boolean(details.background),
+    context: details.context,
+    results,
+  };
+}
+
+/**
  * 序列化一条消息。
  * 返回 null 表示这条消息不需要展示（例如未知角色）。
  */
@@ -81,8 +112,11 @@ function serializeMessage(message) {
     result.toolName = message.toolName;
     result.isError = Boolean(message.isError);
     if (message.durationMs !== undefined) result.durationMs = message.durationMs;
-    // todo 工具需要把计划详情透传给前端
+    // todo 需要完整计划；subagent 只透传不含 session 路径的紧凑摘要。
     if (message.toolName === 'todo' && message.details) result.details = message.details;
+    if ((message.toolName === 'subagent' || message.toolName === 'subagents') && message.details) {
+      result.details = serializeSubagentDetails(message.details);
+    }
   }
 
   return result;
@@ -108,4 +142,4 @@ function visibleSessionMessages(messages) {
   });
 }
 
-module.exports = { stripAnsi, serializeContent, serializeMessage, visibleSessionMessages };
+module.exports = { stripAnsi, serializeContent, serializeMessage, serializeSubagentDetails, visibleSessionMessages };

@@ -8,6 +8,91 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+/** 新会话默认放行的编码工具；与 Pi Studio 原有行为保持一致。 */
+const DEFAULT_AGENT_TOOLS = Object.freeze(['read', 'write', 'edit', 'bash', 'grep', 'find', 'ls']);
+const MAX_AGENT_TOOLS = 256;
+
+/** 工具名支持普通 SDK 名称、MCP 命名空间和 `*`；拒绝工具修饰符以免改变 SDK 语义。 */
+function isValidAgentToolName(value) {
+  return typeof value === 'string'
+    && value.length > 0
+    && value.length <= 120
+    && !value.startsWith('+')
+    && !value.startsWith('-')
+    && /^[A-Za-z0-9_.:*\-]+$/.test(value)
+    && !['__proto__', 'prototype', 'constructor'].includes(value);
+}
+
+function normalizeAgentToolNames(input, strict = false) {
+  if (!Array.isArray(input)) {
+    if (strict) throw new Error('Agent 工具列表格式无效');
+    return [...DEFAULT_AGENT_TOOLS];
+  }
+  if (input.length > MAX_AGENT_TOOLS) throw new Error(`Agent 工具最多允许 ${MAX_AGENT_TOOLS} 项`);
+  const names = [];
+  const seen = new Set();
+  for (const raw of input) {
+    const name = typeof raw === 'string' ? raw.trim() : '';
+    if (!isValidAgentToolName(name)) {
+      if (strict) throw new Error(`Agent 工具名称无效：${String(raw)}`);
+      continue;
+    }
+    if (seen.has(name)) continue;
+    seen.add(name);
+    names.push(name);
+  }
+  return names;
+}
+
+/** 来源信息只用于设置页解释工具由谁提供，不会传给 Pi SDK。 */
+function normalizeAgentToolSources(input, enabled) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+  const allowed = new Set(enabled);
+  const text = (value, limit = 512) => typeof value === 'string' ? value.trim().slice(0, limit) : '';
+  const sources = {};
+  for (const [name, value] of Object.entries(input)) {
+    if (!allowed.has(name) || !value || typeof value !== 'object' || Array.isArray(value)) continue;
+    const source = text(value.source, 256);
+    if (!source) continue;
+    sources[name] = {
+      source,
+      label: text(value.label, 160) || source,
+      scope: ['user', 'project', 'temporary', 'manual'].includes(value.scope) ? value.scope : 'user',
+      path: text(value.path, 2048),
+      baseDir: text(value.baseDir, 2048),
+    };
+  }
+  return sources;
+}
+
+/**
+ * 读取本地工具白名单。兼容最早的字符串数组格式，并保证旧配置默认仍只开放
+ * 原有七项编码工具，不会因为升级后引入 `*` 突然开放全部扩展能力。
+ */
+function readAgentToolSelection(config) {
+  const stored = config?.agentTools;
+  if (Array.isArray(stored)) {
+    const enabled = normalizeAgentToolNames(stored);
+    return { enabled, sources: {} };
+  }
+  if (stored && typeof stored === 'object' && Array.isArray(stored.enabled)) {
+    const enabled = normalizeAgentToolNames(stored.enabled);
+    return { enabled, sources: normalizeAgentToolSources(stored.sources, enabled) };
+  }
+  return { enabled: [...DEFAULT_AGENT_TOOLS], sources: {} };
+}
+
+/** 保存工具白名单和来源快照；来源随工具保留，扩展暂时卸载后仍能解释它来自哪里。 */
+function updateAgentTools(config, input) {
+  const previous = readAgentToolSelection(config);
+  const rawEnabled = Array.isArray(input) ? input : input?.enabled;
+  const enabled = normalizeAgentToolNames(rawEnabled, true);
+  const sources = input && !Array.isArray(input) && input.sources !== undefined
+    ? normalizeAgentToolSources(input.sources, enabled)
+    : Object.fromEntries(Object.entries(previous.sources).filter(([name]) => enabled.includes(name)));
+  return { ...config, agentTools: { enabled, sources } };
+}
+
 /** 读 JSON 配置；文件不存在返回 fallback，格式损坏则抛错提示。 */
 function readConfig(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
@@ -132,4 +217,14 @@ function visibleProviderIds(auth, configuredProviders, enabledModels, currentMod
   ]);
 }
 
-module.exports = { readConfig, writeConfig, updateMcp, updateProvider, updateCustomModel, visibleProviderIds };
+module.exports = {
+  DEFAULT_AGENT_TOOLS,
+  readConfig,
+  writeConfig,
+  readAgentToolSelection,
+  updateAgentTools,
+  updateMcp,
+  updateProvider,
+  updateCustomModel,
+  visibleProviderIds,
+};

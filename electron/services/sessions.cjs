@@ -36,6 +36,8 @@ const { consumePendingMode } = require('./mode.cjs');
 const { sessionTitle } = require('./session-title.cjs');
 const { readTurnDiffs } = require('./turn-diff.cjs');
 const { temporaryTitle } = require('./auto-title.cjs');
+const { readAgentToolSelection } = require('../settings-config.cjs');
+const { clearSubagentRuntime } = require('./subagent-runtime.cjs');
 
 /** 内存中的草稿会话：id → { manager, cwd }。 */
 const drafts = new Map();
@@ -162,6 +164,7 @@ function releaseInactiveSessions(activeId) {
     if (session.isStreaming || session.isCompacting) continue;
     try { session.dispose(); } catch { /* 会话已失效 */ }
     agentSessions.delete(id);
+    clearSubagentRuntime(id);
   }
   for (const id of [...detailCache.keys()]) if (id !== activeId) detailCache.delete(id);
 }
@@ -414,15 +417,18 @@ async function createAgent(id, manager, cwd) {
     throw new Error(`无法读取环境变量 ${envName}。请在设置中重新保存该来源的 API Key，或直接填写密钥值。`);
   }
 
+  // Pi Studio 的工具白名单保存在自己的 config.json；每个新 AgentSession
+  // 都在创建时读取，确保设置页的修改不会影响已运行会话，但会应用到后续会话。
+  const tools = readAgentToolSelection(readConfig(configPath(), {})).enabled;
   const { session } = await pi.createAgentSession({
     cwd,
     model,
     thinkingLevel: storedModel.thinking || reasoningFor(model, cwd).effectiveThinkingLevel,
     modelRuntime: runtime,
     sessionManager: manager,
-    // 完整编码工具集：写入/编辑需要 write/edit，执行命令需要 bash。
-    // 权限由 pi-mode-switcher 在 tool_call 阶段拦截询问，不靠裁剪工具实现。
-    tools: ['read', 'write', 'edit', 'bash', 'grep', 'find', 'ls'],
+    // 权限仍由 pi-mode-switcher 在 tool_call 阶段拦截；这里只决定哪些工具
+    // 会暴露给模型。扩展工具必须出现在白名单中才会注册并可调用。
+    tools,
   });
   try {
     await session.bindExtensions({ uiContext: createExtensionUI(id), mode: 'tui' });
@@ -470,8 +476,8 @@ async function forkSession(id) {
 /** 输入框内置的斜杠命令。 */
 const BUILTIN_COMPOSER_COMMANDS = [
   { name: 'new', description: '开始一个新会话', source: 'builtin' },
-  { name: 'model', description: '打开模型与账号设置', source: 'builtin' },
-  { name: 'thinking', description: '调整模型的思考强度', source: 'builtin' },
+  { name: 'model', description: '切换当前会话或新对话的模型', source: 'builtin' },
+  { name: 'thinking', description: '调整当前会话的思考强度', source: 'builtin' },
   { name: 'settings', description: '打开设置', source: 'builtin' },
   { name: 'mcp', description: '管理 MCP 服务器与连接', source: 'builtin' },
   { name: 'copy', description: '复制最后一条助理回复', source: 'builtin' },
