@@ -66,10 +66,24 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
+      - name: Select release notes
+        id: release-notes
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          notes=".github/release-notes/${RELEASE_TAG}.md"
+          if [ -f "$notes" ]; then
+            echo "body_path=$notes" >> "$GITHUB_OUTPUT"
+          else
+            echo "body_path=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           draft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || false }}
-          generate_release_notes: true
+          body_path: ${{ steps.release-notes.outputs.body_path }}
+          generate_release_notes: ${{ steps.release-notes.outputs.body_path == '' }}
           files: artifacts/*.dmg
