@@ -15,7 +15,7 @@ try {
     const React = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react.js')).default;
     const { createRoot } = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react-dom_client.js')).default;
     const { AssistantTurnView } = await import('/src/components/ChatMessage.tsx');
-    const prior = {role:'assistant',timestamp:1,content:[{type:'toolCall',id:'read',name:'read',arguments:{path:'src/components/ChatMessage.tsx'}},{type:'toolCall',id:'edit',name:'edit',arguments:{path:'src/app.css'}}]};
+    const prior = {role:'assistant',timestamp:1,content:[{type:'toolCall',id:'read',name:'read',arguments:{path:'src/components/ChatMessage.tsx'}},{type:'thinking',thinking:'已经定位轨迹布局差异。'},{type:'toolCall',id:'edit',name:'edit',arguments:{path:'src/app.css'}}]};
     const results = new Map(['read','edit'].map(id => [id,{role:'toolResult',content:[{type:'text',text:'Completed'}]}]));
     let update;
     window.tick = () => update(s => ({...s,text:s.text+' 最新增量内容已经显示在这里。'}));
@@ -42,6 +42,23 @@ try {
   await page.locator('.run-history > summary').click();
   await page.locator('.run-history .activity-tool').first().waitFor();
   await page.locator('.run-history .activity-tool-summary').filter({hasText:'src/app.css'}).waitFor();
+  const traceAlignment = await page.evaluate(() => {
+    const completedIcons = Array.from(document.querySelectorAll('.run-history .activity-tool-icon, .run-history .activity-thinking-icon'));
+    const completedText = Array.from(document.querySelectorAll('.run-history .activity-tool-name, .run-history .activity-thinking-preview'));
+    const current = document.querySelector('.run-current');
+    const currentIcon = document.querySelector('.run-current-heading > svg');
+    const currentText = document.querySelector('.run-current-heading > span');
+    const historyRail = document.querySelector('.run-history-list');
+    return {
+      rail: [historyRail, current].map(node => node.getBoundingClientRect().left),
+      icon: [...completedIcons, currentIcon].map(node => node.getBoundingClientRect().left),
+      text: [...completedText, currentText].map(node => node.getBoundingClientRect().left),
+    };
+  });
+  for (const positions of Object.values(traceAlignment)) {
+    assert.ok(Math.max(...positions) - Math.min(...positions) <= 0.5,
+      `execution trace alignment drifted: ${JSON.stringify(traceAlignment)}`);
+  }
   await page.screenshot({path:output+'thinking-light.png',fullPage:true,animations:'disabled'});
   await page.locator('.run-history > summary').click();
   await page.locator('.run-current .markdown').waitFor();

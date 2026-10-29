@@ -15,6 +15,7 @@ const { serializeMessage } = require('../core/serialize.cjs');
 const { updateSidebar } = require('../sidebar-state.cjs');
 const {
   detail,
+  outline,
   createDraft,
   findManager,
   ensureAgent,
@@ -334,6 +335,9 @@ function registerSessionsIpc() {
       compacting: Boolean(runtime?.isCompacting), requestId,
     };
   });
+
+  // 完整提问大纲：内容区仍分页，右侧导航可以独立覆盖整个会话。
+  ipcMain.handle('pi:session-outline', async (_event, id) => outline(id));
 
   // 侧边栏动作
   ipcMain.handle('pi:sidebar-action', async (_event, input) => sidebarAction(input));

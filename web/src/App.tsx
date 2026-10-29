@@ -82,6 +82,8 @@ function BrandMark({ className = '' }: { className?: string }) {
 /** 侧边栏里的会话条目（来自主进程的会话索引）。 */
 type PiSessionSummary = { pinned?: boolean; archived?: boolean; id: string; cwd: string; title: string; updatedAt: number; messageCount: number };
 type ImagePayload = { type: 'image'; data: string; mimeType: string };
+type OutlineItem = { sourceIndex: number; text: string; timestamp?: number };
+type OutlineData = { items: OutlineItem[]; totalMessages: number };
 /**
  * 发送前的完整提交内容：
  *  - displayText：给界面看（长消息已替换成摘要）
@@ -142,6 +144,32 @@ function textOfBlocks(content: ChatMessage['content'], separator = '\n'): string
     .filter((block): block is Extract<ChatMessage['content'][number], { type: 'text' }> => block.type === 'text')
     .map((block) => block.text)
     .join(separator);
+}
+
+/** 旧版主进程或测试桩没有大纲接口时，用当前窗口生成可用的降级大纲。 */
+function outlineFromMessages(messages: ChatMessage[], messageStart = 0): OutlineData {
+  const items = messages.flatMap((message, index): OutlineItem[] => {
+    if (message.role !== 'user') return [];
+    return [{
+      sourceIndex: message.sourceIndex ?? messageStart + index,
+      text: textOfBlocks(message.content, ' ').replace(/\s+/g, ' ').trim() || '消息',
+      timestamp: message.timestamp,
+    }];
+  });
+  return { items, totalMessages: messageStart + messages.length };
+}
+
+/** 当前窗口底部附近的最后一条提问，用于初次打开会话时同步大纲位置。 */
+function lastLoadedOutlineIndex(data: OutlineData, messages: ChatMessage[]): number {
+  const sourceIndexes = messages
+    .map((message) => message.sourceIndex)
+    .filter((value): value is number => typeof value === 'number');
+  if (sourceIndexes.length === 0) return Math.max(0, data.items.length - 1);
+  const loaded = new Set(sourceIndexes);
+  for (let index = data.items.length - 1; index >= 0; index -= 1) {
+    if (loaded.has(data.items[index].sourceIndex)) return index;
+  }
+  return 0;
 }
 
 /** 会话列表使用的相对时间：刚刚 / N 分钟 / N 小时 / N 天。 */
@@ -272,6 +300,10 @@ export function App() {
   const queuedOrderRef = useRef(0);
   const [outlineActive, setOutlineActive] = useState(0);
   const [outlineHover, setOutlineHover] = useState<number | null>(null);
+  const [outlineItems, setOutlineItems] = useState<OutlineItem[]>([]);
+  const [outlineTotalMessages, setOutlineTotalMessages] = useState(0);
+  const outlineRequestRef = useRef(0);
+  const pendingOutlineJumpRef = useRef<{ sessionId: string; sourceIndex: number; index: number } | null>(null);
   const [workspace, setWorkspace] = useState('');
   const [modelSelection, setModelSelection] = useState<ModelSelection>({ modelRef: '', label: '', thinkingLevel: 'default', thinkingLevels: ['default'], effectiveThinkingLevel: 'off', defaultThinkingLevel: 'off' });
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(readStored<string[]>(UI_KEYS.expanded, [])));
@@ -280,7 +312,7 @@ export function App() {
   const [dropHint, setDropHint] = useState<string | null>(null);
   const [draggingItem, setDraggingItem] = useState<DragItem | null>(null);
   const [justDropped, setJustDropped] = useState<string | null>(null);
-  const [session, setSession] = useState<{ id: string; cwd: string; title: string; turnDiffs?: TurnDiff[]; hasMore?: boolean } | null>(null);
+  const [session, setSession] = useState<{ id: string; cwd: string; title: string; turnDiffs?: TurnDiff[]; hasMore?: boolean; messageStart?: number; totalMessages?: number } | null>(null);
   const sessionRef = useRef(session);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   useEffect(() => {
@@ -918,6 +950,14 @@ export function App() {
         setError(null);
         setCompaction({ active: false });
         void loadState();
+        if (session?.id) {
+          void refreshOutline(session.id).then((outline) => {
+            if (!outline) return;
+            setOutlineItems(outline.items);
+            setOutlineTotalMessages(outline.totalMessages);
+            setOutlineActive((current) => Math.min(current, Math.max(0, outline.items.length - 1)));
+          });
+        }
       }
       if (event.type === 'error') {
         flushNow();
@@ -932,7 +972,7 @@ export function App() {
       unsubscribe();
       if (frame) cancelAnimationFrame(frame);
     };
-  }, [loadState]);
+  }, [loadState, session?.id]);
 
   useEffect(() => {
     if (!session?.id || !busy || requestRef.current) return;
@@ -1108,13 +1148,22 @@ export function App() {
     setHistoryLoading(true);
     try {
       const previousCount = messages.length;
-      const detail = await window.piApi.session(sessionId, messages.length + HISTORY_PAGE_SIZE);
+      const firstSourceIndex = messages.find((message) => typeof message.sourceIndex === 'number')?.sourceIndex;
+      const nextLimit = outlineTotalMessages > 0 && firstSourceIndex !== undefined
+        ? outlineTotalMessages - Math.max(0, firstSourceIndex - HISTORY_PAGE_SIZE)
+        : messages.length + HISTORY_PAGE_SIZE;
+      const detail = await window.piApi.session(sessionId, nextLimit);
       if (requestId !== historyRequestRef.current || loadGeneration !== sessionLoadRef.current) return;
       if (!detail) return;
       setMessages(detail.messages.map((message) => ({ ...message })));
       // 若这次没有取到更多消息，直接收口，避免滚动到顶部反复请求。
       setSession((current) => current?.id === sessionId
-        ? { ...current, hasMore: detail.hasMore && detail.messages.length > previousCount }
+        ? {
+            ...current,
+            hasMore: detail.hasMore && detail.messages.length > previousCount,
+            messageStart: detail.messageStart,
+            totalMessages: detail.totalMessages ?? outlineTotalMessages,
+          }
         : current);
     } catch (error) {
       if (requestId === historyRequestRef.current && loadGeneration === sessionLoadRef.current) setError(errorText(error));
@@ -1134,6 +1183,15 @@ export function App() {
     historyAnchorRef.current = null;
   }, [messages, session?.id]);
 
+  // 跨页跳转要等目标消息真正挂载后再测位置；auto 避免长距离平滑滚动途经大量内容。
+  useLayoutEffect(() => {
+    const pending = pendingOutlineJumpRef.current;
+    if (!pending || pending.sessionId !== session?.id) return;
+    const targetLoaded = messages.some((message) => message.sourceIndex === pending.sourceIndex);
+    if (!targetLoaded) return;
+    if (scrollToOutlineItem(pending.index, 'auto')) pendingOutlineJumpRef.current = null;
+  }, [messages, session?.id]);
+
   // ---------- 会话生命周期 ----------
 
   /**
@@ -1142,10 +1200,16 @@ export function App() {
    */
   async function startSession(cwd = session?.cwd || workspace) {
     ++sessionLoadRef.current;
+    ++outlineRequestRef.current;
     requestRef.current = '';
     setSessionLoading(false);
     setSession(null);
     setMessages([]);
+    setOutlineItems([]);
+    setOutlineTotalMessages(0);
+    setOutlineActive(0);
+    setOutlineHover(null);
+    pendingOutlineJumpRef.current = null;
     setError(null);
     setPrompt('');
     setWorkspace(cwd);
@@ -1160,8 +1224,14 @@ export function App() {
 
   function selectDraftWorkspace(cwd: string) {
     ++sessionLoadRef.current;
+    ++outlineRequestRef.current;
     setSessionLoading(false);
     setSession(null);
+    setOutlineItems([]);
+    setOutlineTotalMessages(0);
+    setOutlineActive(0);
+    setOutlineHover(null);
+    pendingOutlineJumpRef.current = null;
     setWorkspace(cwd);
     setComposerMenu(null);
     setError(null);
@@ -1173,6 +1243,29 @@ export function App() {
     if (prefetchedSessionsRef.current.has(id)) return;
     prefetchedSessionsRef.current.add(id);
     void window.piApi.session(id).catch(() => { /* prefetch is best effort */ });
+  }
+
+  /** 安装完整大纲，并把当前标记落在已加载窗口的最后一条提问。 */
+  function applyOutline(data: OutlineData | undefined, loadedMessages: ChatMessage[], fallbackStart = 0) {
+    const next = data ?? outlineFromMessages(loadedMessages, fallbackStart);
+    setOutlineItems(next.items);
+    setOutlineTotalMessages(next.totalMessages);
+    setOutlineActive(lastLoadedOutlineIndex(next, loadedMessages));
+  }
+
+  /**
+   * 刷新独立大纲。大纲请求受会话代数保护，快速切换会话时旧结果不会写回。
+   */
+  async function refreshOutline(sessionId: string, generation = sessionLoadRef.current): Promise<OutlineData | undefined> {
+    const request = ++outlineRequestRef.current;
+    try {
+      const data = await window.piApi.sessionOutline(sessionId);
+      if (request !== outlineRequestRef.current || generation !== sessionLoadRef.current) return undefined;
+      if (!data) return undefined;
+      return { items: data.items, totalMessages: data.totalMessages };
+    } catch {
+      return undefined;
+    }
   }
 
   /**
@@ -1195,9 +1288,14 @@ export function App() {
   async function openSession(item: PiSessionSummary) {
     requestRef.current = '';
     const load = ++sessionLoadRef.current;
+    const outlineRequest = ++outlineRequestRef.current;
+    pendingOutlineJumpRef.current = null;
     setSessionLoading(true);
     try {
-      const detail = await window.piApi.session(item.id, HISTORY_PAGE_SIZE);
+      const [detail, outline] = await Promise.all([
+        window.piApi.session(item.id, HISTORY_PAGE_SIZE),
+        window.piApi.sessionOutline(item.id).catch(() => undefined),
+      ]);
       if (load !== sessionLoadRef.current) return;
       if (!detail) {
         // 侧边栏里的旧条目可能已经被删除或移动；刷新列表，避免用户停在一个空入口。
@@ -1205,9 +1303,20 @@ export function App() {
         void loadState().catch(() => { /* 列表刷新失败时保留错误提示 */ });
         return;
       }
-      setSession({ id: detail.id, cwd: detail.cwd, title: detail.title, turnDiffs: detail.turnDiffs, hasMore: detail.hasMore });
+      setSession({
+        id: detail.id,
+        cwd: detail.cwd,
+        title: detail.title,
+        turnDiffs: detail.turnDiffs,
+        hasMore: detail.hasMore,
+        messageStart: detail.messageStart,
+        totalMessages: detail.totalMessages,
+      });
       if (detail.model) setModelSelection(detail.model);
       setMessages(detail.messages.map((message) => ({ ...message })));
+      if (outlineRequest === outlineRequestRef.current) {
+        applyOutline(outline ? { items: outline.items, totalMessages: outline.totalMessages } : undefined, detail.messages, detail.messageStart);
+      }
       setHistoryLoading(false);
       setWorkspace(detail.cwd);
       expandWorkspace(detail.cwd);
@@ -1412,12 +1521,16 @@ export function App() {
     const container = scrollRef.current;
     if (!container) return;
     const top = container.getBoundingClientRect().top + 14;
-    let next = 0;
+    let next = -1;
+    let firstLoaded = -1;
     for (let index = 0; index < outlineItems.length; index += 1) {
-      const node = document.getElementById(outlineItems[index].id);
-      if (node && node.getBoundingClientRect().top <= top) next = index;
+      const node = document.getElementById(`chat-turn-${outlineItems[index].sourceIndex}`);
+      if (!node) continue;
+      if (firstLoaded < 0) firstLoaded = index;
+      if (node.getBoundingClientRect().top <= top) next = index;
     }
-    setOutlineActive((current) => current === next ? current : next);
+    const resolved = next >= 0 ? next : firstLoaded >= 0 ? firstLoaded : 0;
+    setOutlineActive((current) => current === resolved ? current : resolved);
   }
 
   /**
@@ -1451,14 +1564,67 @@ export function App() {
     scheduleOutlineSync();
   }
 
-  function jumpToOutline(index: number) {
+  function scrollToOutlineItem(index: number, behavior: ScrollBehavior = 'smooth') {
     const item = outlineItems[index];
     const container = scrollRef.current;
-    const node = item ? document.getElementById(item.id) : null;
-    if (!item || !container || !node) return;
+    const node = item ? document.getElementById(`chat-turn-${item.sourceIndex}`) : null;
+    if (!item || !container || !node) return false;
+    // 大纲跳转表示用户主动离开底部阅读，流式更新不能再把视图拉回最新消息。
+    followBottomRef.current = false;
     const delta = node.getBoundingClientRect().top - container.getBoundingClientRect().top;
-    container.scrollTo({ top: container.scrollTop + delta - 12, behavior: 'smooth' });
+    container.scrollTo({ top: container.scrollTop + delta - 12, behavior });
     setOutlineActive(index);
+    return true;
+  }
+
+  /**
+   * 点击大纲：当前窗口已有节点就直接滚动；旧提问尚未加载时，只补载从目标
+   * 提问到最新消息所需的窗口，然后由 layout effect 在 DOM 提交后精确定位。
+   */
+  async function jumpToOutline(index: number) {
+    const item = outlineItems[index];
+    if (!item || !session) return;
+    if (scrollToOutlineItem(index)) return;
+
+    const sessionId = session.id;
+    const loadGeneration = sessionLoadRef.current;
+    const requestId = ++historyRequestRef.current;
+    const totalMessages = Math.max(outlineTotalMessages, session.totalMessages ?? 0, item.sourceIndex + 1);
+    const limit = Math.max(HISTORY_PAGE_SIZE, totalMessages - item.sourceIndex);
+    pendingOutlineJumpRef.current = { sessionId, sourceIndex: item.sourceIndex, index };
+    historyAnchorRef.current = null;
+    historyArmedRef.current = false;
+    historyLoadingRef.current = true;
+    setHistoryLoading(true);
+    setOutlineActive(index);
+    try {
+      const detail = await window.piApi.session(sessionId, limit);
+      if (requestId !== historyRequestRef.current || loadGeneration !== sessionLoadRef.current) return;
+      if (!detail) {
+        pendingOutlineJumpRef.current = null;
+        setError('这条提问对应的历史消息已经不可用。');
+        return;
+      }
+      setMessages(detail.messages.map((message) => ({ ...message })));
+      setSession((current) => current?.id === sessionId
+        ? {
+            ...current,
+            hasMore: detail.hasMore,
+            messageStart: detail.messageStart,
+            totalMessages: detail.totalMessages ?? totalMessages,
+          }
+        : current);
+    } catch (error) {
+      if (requestId === historyRequestRef.current && loadGeneration === sessionLoadRef.current) {
+        pendingOutlineJumpRef.current = null;
+        setError(errorText(error));
+      }
+    } finally {
+      if (requestId === historyRequestRef.current) {
+        historyLoadingRef.current = false;
+        setHistoryLoading(false);
+      }
+    }
   }
 
   // ---------- 发送与排队 ----------
@@ -1555,11 +1721,25 @@ export function App() {
       // 侧边栏刷新与读取历史互不依赖；刷新失败不能让一次成功的回复显示成错误。
       void loadState().catch(() => {});
       if (requestRef.current !== requestId) return;
-      const saved = await window.piApi.session(submission.sessionId, Math.max(HISTORY_PAGE_SIZE, messages.length + 10));
+      const historyLimit = Math.max(HISTORY_PAGE_SIZE, messages.length + 10);
+      const [saved, outline] = await Promise.all([
+        window.piApi.session(submission.sessionId, historyLimit),
+        refreshOutline(submission.sessionId),
+      ]);
       if (requestRef.current !== requestId) return;
       if (saved) {
-        setSession({ id: saved.id, cwd: saved.cwd, title: saved.title, turnDiffs: saved.turnDiffs, hasMore: saved.hasMore });
+        setSession({
+          id: saved.id,
+          cwd: saved.cwd,
+          title: saved.title,
+          turnDiffs: saved.turnDiffs,
+          hasMore: saved.hasMore,
+          messageStart: saved.messageStart,
+          totalMessages: saved.totalMessages,
+        });
         setMessages(saved.messages.map((message) => ({ ...message })));
+        if (outline) applyOutline(outline, saved.messages, saved.messageStart);
+        else if (outlineItems.length === 0) applyOutline(undefined, saved.messages, saved.messageStart);
       }
       setBusy(false);
       void loadState().catch(() => {});
@@ -1904,13 +2084,6 @@ export function App() {
     else transcriptTurns.push({ kind: 'assistant', messages: [message] });
   }
   const lastAssistantTurnIndex = transcriptTurns.reduce((last, turn, index) => turn.kind === 'assistant' ? index : last, -1);
-  /** 对话大纲：每条用户提问生成一个跳转锚点。 */
-  const outlineItems = transcriptTurns.flatMap((turn, index) => {
-    if (turn.kind !== 'user') return [];
-    const text = textOfBlocks(turn.message.content, ' ').replace(/\s+/g, ' ').trim();
-    if (!text) return [];
-    return [{ id: `chat-turn-${index}`, text, timestamp: turn.message.timestamp }];
-  });
   const outlineSamples = useMemo(
     () => sampleOutlineIndices(outlineItems.length, outlineActive),
     [outlineItems.length, outlineActive],
@@ -2320,8 +2493,8 @@ export function App() {
                 {historyLoading && <div className="history-loading" role="status" aria-live="polite" aria-label="正在加载更早消息"><LoaderCircle className="spin" /></div>}
                 {session?.id && <ExtensionHeader sessionId={session.id} />}
                 {transcriptTurns.map((turn, index) => turn.kind === 'user'
-                  ? <ChatMessageView key={turn.message.timestamp ?? `user-${index}`} id={`chat-turn-${index}`} message={turn.message} onOpenFile={(path) => void openFile(path)} />
-                  : <AssistantTurnView key={turn.messages[0]?.timestamp ?? `assistant-${index}`} id={`chat-turn-${index}`} messages={turn.messages} toolResults={toolResultMap} cwd={session?.cwd} busy={busy && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView}
+                  ? <ChatMessageView key={`user-${turn.message.sourceIndex ?? turn.message.timestamp ?? index}`} id={`chat-turn-${turn.message.sourceIndex ?? `pending-${turn.message.timestamp ?? index}`}`} message={turn.message} onOpenFile={(path) => void openFile(path)} />
+                  : <AssistantTurnView key={`assistant-${turn.messages[0]?.sourceIndex ?? turn.messages[0]?.timestamp ?? index}`} id={turn.messages[0]?.sourceIndex !== undefined ? `chat-assistant-turn-${turn.messages[0].sourceIndex}` : undefined} messages={turn.messages} toolResults={toolResultMap} cwd={session?.cwd} busy={busy && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView}
                     gitDiff={index === lastAssistantTurnIndex ? liveDiff ?? (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined) : (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined)}
                     onOpenDiff={openChangesTab} onOpenFile={(path) => void openFile(path)} />)}
                 {busy && extensionWorking.visible && !retryInfo && transcriptTurns.at(-1)?.kind !== 'assistant' && (
@@ -2338,7 +2511,7 @@ export function App() {
             <div className="outline-track">
               {outlineSamples.map((index) => {
                 const item = outlineItems[index];
-                return <div className={`outline-item ${outlineHover === index ? 'is-hovered' : ''}`} key={item.id} onMouseEnter={() => setOutlineHover(index)}>
+                return <div className={`outline-item ${outlineHover === index ? 'is-hovered' : ''}`} key={item.sourceIndex} onMouseEnter={() => setOutlineHover(index)}>
                   <button
                     type="button"
                     className={`outline-tick ${index === outlineActive ? 'is-active' : ''}`}

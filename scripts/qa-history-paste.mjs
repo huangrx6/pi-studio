@@ -42,7 +42,10 @@ await page.addInitScript(() => {
         role: 'assistant',
         timestamp: index + 1,
         content: [{ type: 'text', text: `第 ${(index + 1) / 2} 个回答\n\n这里是一段用于形成真实滚动高度的回复内容。` }],
-      });
+      }).map((message, sourceIndex) => ({ ...message, sourceIndex }));
+  const outlineItems = allMessages.flatMap((message, sourceIndex) => message.role === 'user'
+    ? [{ sourceIndex, text: message.content[0].text, timestamp: message.timestamp }]
+    : []);
   const sessionSummary = {
     id: 'history-session',
     cwd,
@@ -51,6 +54,7 @@ await page.addInitScript(() => {
     messageCount: totalMessages,
   };
   window.__historyCalls = [];
+  window.__outlineCalls = 0;
   window.__savedPastes = [];
   window.__openedFiles = [];
 
@@ -90,6 +94,10 @@ await page.addInitScript(() => {
       return new Promise(resolve => {
         window.__resolveHistory = () => resolve(payload);
       });
+    },
+    sessionOutline: async id => {
+      window.__outlineCalls += 1;
+      return { id, items: outlineItems, totalMessages };
     },
     saveAttachment: async ({ sessionId, text }) => {
       const path = '/var/tmp/pi-studio-long-paste.txt';
@@ -147,10 +155,44 @@ async function assertOutlineFits() {
 
 try {
   await page.goto(process.env.PREVIEW_URL || 'http://127.0.0.1:5180');
-  await page.locator('.workspace-row').first().evaluate(node => node.click());
-  await page.locator('.session-row').first().evaluate(node => node.click());
+
+  async function openHistorySession() {
+    await page.locator('.workspace-row').first().waitFor();
+    if (await page.locator('.session-row').count() === 0) {
+      await page.locator('.workspace-row').first().evaluate(node => node.click());
+    }
+    await page.locator('.session-row').first().evaluate(node => node.click());
+    await page.locator('.chat-scroll').waitFor();
+    await page.waitForFunction(() => window.__historyCalls.length === 1 && window.__outlineCalls === 1);
+  }
+
+  // 内容窗口只取最近 200 条，右侧仍覆盖全部 225 个提问；最早提问可直接跨页跳转。
+  await openHistorySession();
+  assert.equal(await page.locator('.message.user').count(), 100, 'content should stay in the 200-message window');
+  assert.equal(await page.locator('.outline-tick').count(), 12, 'outline should remain visually bounded');
+  assert.equal(await page.locator('.outline-tick').first().getAttribute('aria-label'), '跳转到第 1 条提问');
+  assert.equal(await page.locator('.outline-tick').last().getAttribute('aria-label'), '跳转到第 225 条提问');
+  await page.locator('.outline-tick').first().click();
+  await page.waitForFunction(() => window.__historyCalls.length === 2);
+  assert.equal(await page.evaluate(() => window.__historyCalls.at(-1)), 450, 'jump should load from the target question');
+  await page.evaluate(() => window.__resolveHistory());
+  await page.locator('#chat-turn-0').waitFor();
+  await page.waitForFunction(() => {
+    const container = document.querySelector('.chat-scroll');
+    const target = document.querySelector('#chat-turn-0');
+    if (!container || !target) return false;
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    return targetRect.top >= containerRect.top - 1 && targetRect.top <= containerRect.top + 40;
+  });
+  assert.equal(await page.locator('.message.user').count(), 225);
+  await page.screenshot({ path: `${output}outline-cross-page-jump.png`, animations: 'disabled' });
+
+  // 重新载入模拟，继续验证独立的历史向上分页。
+  await page.reload();
   await page.locator('.chat-scroll').waitFor();
-  await page.waitForFunction(() => window.__historyCalls.length === 1);
+  await page.waitForFunction(() => window.__historyCalls.length >= 1 && window.__outlineCalls >= 1);
+  assert.equal(await page.evaluate(() => window.__historyCalls.length), 1);
   await assertOutlineFits();
   await page.screenshot({ path: `${output}outline-compact.png`, animations: 'disabled' });
 
@@ -175,7 +217,8 @@ try {
   await scrollTranscript(600);
   await scrollTranscript(100);
   await page.waitForFunction(() => window.__historyCalls.length === 3);
-  assert.equal(await page.evaluate(() => window.__historyCalls.at(-1)), 600);
+  // 第二轮窗口已经到消息 50，只需把上限提高到完整 transcript 的 450 条。
+  assert.equal(await page.evaluate(() => window.__historyCalls.at(-1)), 450);
   await assertOutlineFits();
   await page.evaluate(() => window.__resolveHistory());
   await page.locator('.history-loading').waitFor({ state: 'detached' });
@@ -213,7 +256,7 @@ try {
   }
 
   assert.deepEqual(errors, []);
-  console.log('PASS: history auto-loads once near the top, rearms only after scrolling back; oversized pasted batches stay isolated and open in the right panel.');
+  console.log('PASS: the full outline can jump across the 200-message window, history auto-loads once near the top, and oversized pasted batches stay isolated.');
 } catch (error) {
   await page.screenshot({ path: `${output}failure.png`, animations: 'disabled' });
   throw error;

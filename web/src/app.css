@@ -2249,11 +2249,36 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .run-history > summary > svg { margin-left: 0; }
 .run-history-list { border-top: 0; border-left: 1px solid var(--border); margin-left: 6px; padding: 0 0 0 16px; }
 .run-history-row + .run-history-row { border-top: 0; }
-.activity-thinking-icon { width: 14px; height: 14px; flex: none; color: var(--faint); }
+.activity-thinking-icon { display: block; width: 14px; height: 14px; flex: none; color: var(--faint); }
 .standalone-thinking { margin: 8px 0 14px; }
 .standalone-thinking .activity-thinking > summary { padding: 5px 0; }
 .standalone-thinking .activity-thinking-preview { font-size: 12px; }
-.run-current-inline { margin: 10px 0 16px; }
+.run-current-inline { margin: 10px 0 16px 6px; padding: 2px 0 2px 16px; border-left: 1px solid var(--accent-border); }
+.run-current-heading { gap: 10px; }
+.run-history .activity-tool-icon,
+.run-current .activity-tool-icon {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.run-history .activity-thinking-icon,
+.run-current-heading > svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.run-history .activity-tool-icon > svg {
+  width: 14px;
+  height: 14px;
+}
+.run-history .activity-tool > summary,
+.run-history .activity-thinking > summary,
+.run-current-heading {
+  gap: 10px;
+}
 .run-live-status { display: flex; align-items: center; gap: 8px; padding: 8px 0; color: var(--muted); font-size: 12px; }
 .run-live-status svg { width: 14px; height: 14px; color: var(--accent); }
 .run-live-status span:last-child { margin-left: auto; color: var(--faint); font-size: 11px; }

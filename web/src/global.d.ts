@@ -89,9 +89,29 @@ interface PiDetail {
   turnDiffs?: TurnDiff[];
   /** 是否还有更早的历史消息未加载。 */
   hasMore?: boolean;
+  /** 当前窗口第一条消息在完整 transcript 中的绝对序号。 */
+  messageStart?: number;
+  /** 完整 transcript 的消息总数（不是当前窗口长度）。 */
+  totalMessages?: number;
   running?: boolean;
   compacting?: boolean;
   requestId?: string;
+}
+
+/** 右侧对话大纲中的一条用户提问（轻量，不含消息正文对象）。 */
+interface PiSessionOutlineItem {
+  /** 在完整 transcript 中的绝对消息序号，作为稳定 DOM 锚点。 */
+  sourceIndex: number;
+  /** 压缩空白后的纯文本。 */
+  text: string;
+  timestamp?: number;
+}
+
+interface PiSessionOutline {
+  id: string;
+  items: PiSessionOutlineItem[];
+  /** 完整 transcript 的消息总数。 */
+  totalMessages: number;
 }
 
 /** 设置面板一次性读取的快照，覆盖模型、来源、MCP、技能、扩展等配置。 */
@@ -146,6 +166,8 @@ declare global {
       createSession(cwd: string): Promise<PiDetail>;
       /** 读取会话详情；会话不存在时返回 undefined。 */
       session(id: string, limit?: number): Promise<PiDetail | undefined>;
+      /** 读取完整提问大纲；不受消息分页窗口限制。 */
+      sessionOutline(id: string): Promise<PiSessionOutline | undefined>;
       /**
        * 侧边栏操作：重命名、移除、置顶、归档、分叉。
        * 成功返回可能是新建会话的信息（fork 时用）。

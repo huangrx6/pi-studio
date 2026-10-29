@@ -27,6 +27,7 @@ const {
   agentSessions,
 } = require('../core/state.cjs');
 const { serializeMessage, visibleSessionMessages } = require('../core/serialize.cjs');
+const { parseAttachmentMarkers } = require('../core/attachment-markers.cjs');
 const { reasoningFor, modelInfoFor } = require('./models.cjs');
 const { createExtensionUI } = require('./extensions.cjs');
 const { updateSidebar } = require('../sidebar-state.cjs');
@@ -49,15 +50,60 @@ const MAX_DETAIL_CACHE = 3;
 const MAX_CACHED_FILE_BYTES = 4 * 1024 * 1024;
 /** 默认只读取最近这么多条消息；大会话向上翻页，避免一次序列化 15MB JSONL。 */
 const DEFAULT_HISTORY_LIMIT = 200;
+/** 大纲只承担导航，截断过长提问，避免整份会话的正文再次跨 IPC 传输。 */
+const OUTLINE_TEXT_LIMIT = 240;
 
-/** 取最近 limit 条消息，并从最近的用户消息边界开始，避免从半轮开始渲染。 */
+/**
+ * 取最近 limit 条消息，并从最近的用户消息边界开始，避免从半轮开始渲染。
+ * startIndex 是该窗口在完整 transcript 中的绝对消息序号，供跨分页锚点使用。
+ */
 function messageWindow(entries, limit) {
   const total = entries.length;
-  if (!Number.isInteger(limit) || limit <= 0 || total <= limit) return { entries, hasMore: false };
-  let window = entries.slice(-limit);
+  if (!Number.isInteger(limit) || limit <= 0 || total <= limit) {
+    return { entries, hasMore: false, startIndex: 0, total };
+  }
+  let startIndex = total - limit;
+  let window = entries.slice(startIndex);
   const firstUser = window.findIndex((entry) => entry.message?.role === 'user');
-  if (firstUser > 0) window = window.slice(firstUser);
-  return { entries: window, hasMore: window.length < total };
+  if (firstUser > 0) {
+    startIndex += firstUser;
+    window = window.slice(firstUser);
+  }
+  return { entries: window, hasMore: startIndex > 0, startIndex, total };
+}
+
+/** 构造分页详情里的消息，并保留每条消息在完整会话中的绝对序号。 */
+function serializeMessageWindow(entries, limit) {
+  const window = messageWindow(entries, limit);
+  const messages = visibleSessionMessages(
+    window.entries
+      .map((entry, index) => {
+        const message = serializeMessage(entry.message);
+        return message ? { ...message, sourceIndex: window.startIndex + index } : null;
+      })
+      .filter(Boolean),
+  );
+  return {
+    messages,
+    hasMore: window.hasMore,
+    messageStart: window.startIndex,
+    totalMessages: window.total,
+  };
+}
+
+/** 从用户消息里提取大纲文本，不序列化图片、工具结果等大对象。 */
+function outlineText(message) {
+  const raw = typeof message?.content === 'string'
+    ? message.content
+    : Array.isArray(message?.content)
+      ? message.content.filter((block) => block?.type === 'text' && typeof block.text === 'string').map((block) => block.text).join('\n')
+      : '';
+  const parsed = parseAttachmentMarkers(raw);
+  const text = parsed.text.replace(/\s+/g, ' ').trim();
+  if (text) return text.length > OUTLINE_TEXT_LIMIT ? `${text.slice(0, OUTLINE_TEXT_LIMIT).trimEnd()}…` : text;
+  if (parsed.attachments.length > 0) return '附件消息';
+  if (Array.isArray(message?.content) && message.content.some((block) => block?.type === 'image')) return '图片消息';
+  return '无文本消息';
 }
 
 let sessionsIndexedAt = 0;
@@ -219,13 +265,24 @@ async function detail(id, limit = DEFAULT_HISTORY_LIMIT) {
         if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.data;
 
         const manager = piModule().SessionManager.open(info.path, undefined, info.cwd);
-        const window = messageWindow(manager.getEntries().filter((entry) => entry.type === 'message'), limit);
-        const messages = visibleSessionMessages(
-          window.entries.map((entry) => serializeMessage(entry.message)).filter(Boolean),
+        const window = serializeMessageWindow(
+          manager.getEntries().filter((entry) => entry.type === 'message'),
+          limit,
         );
-        const data = { id, cwd: info.cwd, title: info.title, nativeName: info.nativeName || manager.getSessionName?.() || '', messages, hasMore: window.hasMore, model: await sessionModelInfo(manager, info.cwd), turnDiffs: readTurnDiffs(id) };
+        const data = {
+          id,
+          cwd: info.cwd,
+          title: info.title,
+          nativeName: info.nativeName || manager.getSessionName?.() || '',
+          messages: window.messages,
+          hasMore: window.hasMore,
+          messageStart: window.messageStart,
+          totalMessages: window.totalMessages,
+          model: await sessionModelInfo(manager, info.cwd),
+          turnDiffs: readTurnDiffs(id),
+        };
         // 只缓存完整且较小的会话；大会话/分页窗口不在主进程保留第二份副本。
-        if (!window.hasMore && messages.length <= DEFAULT_HISTORY_LIMIT && stat.size <= MAX_CACHED_FILE_BYTES) {
+        if (!window.hasMore && window.messages.length <= DEFAULT_HISTORY_LIMIT && stat.size <= MAX_CACHED_FILE_BYTES) {
           if (detailCache.size >= MAX_DETAIL_CACHE) detailCache.delete(detailCache.keys().next().value);
           detailCache.set(id, { mtimeMs: stat.mtimeMs, size: stat.size, data });
         }
@@ -238,11 +295,42 @@ async function detail(id, limit = DEFAULT_HISTORY_LIMIT) {
 
   const found = await findManager(id);
   if (!found) return undefined;
-  const window = messageWindow(found.manager.getEntries().filter((entry) => entry.type === 'message'), limit);
-  const messages = visibleSessionMessages(
-    window.entries.map((entry) => serializeMessage(entry.message)).filter(Boolean),
-  );
-  return { id, cwd: found.cwd, title: drafts.get(id)?.title || diskSessions.get(id)?.title || '新会话', nativeName: found.manager.getSessionName?.() || '', messages, hasMore: window.hasMore, model: await sessionModelInfo(found.manager, found.cwd), turnDiffs: readTurnDiffs(id) };
+  const entries = found.manager.getEntries().filter((entry) => entry.type === 'message');
+  const window = serializeMessageWindow(entries, limit);
+  return {
+    id,
+    cwd: found.cwd,
+    title: drafts.get(id)?.title || diskSessions.get(id)?.title || '新会话',
+    nativeName: found.manager.getSessionName?.() || '',
+    messages: window.messages,
+    hasMore: window.hasMore,
+    messageStart: window.messageStart,
+    totalMessages: window.totalMessages,
+    model: await sessionModelInfo(found.manager, found.cwd),
+    turnDiffs: readTurnDiffs(id),
+  };
+}
+
+/**
+ * 读取完整提问大纲。
+ * 内容区仍按窗口分页加载，但大纲始终覆盖完整 transcript；只返回提问文本、
+ * 原始消息序号和时间戳，避免把图片或工具结果复制到渲染进程。
+ */
+async function outline(id) {
+  const found = await findManager(id);
+  if (!found) return undefined;
+  const entries = found.manager.getEntries().filter((entry) => entry.type === 'message');
+  const items = [];
+  for (let sourceIndex = 0; sourceIndex < entries.length; sourceIndex += 1) {
+    const message = entries[sourceIndex].message;
+    if (message?.role !== 'user') continue;
+    items.push({
+      sourceIndex,
+      text: outlineText(message),
+      timestamp: typeof message.timestamp === 'number' ? message.timestamp : undefined,
+    });
+  }
+  return { id, items, totalMessages: entries.length };
 }
 
 /**
@@ -489,6 +577,7 @@ module.exports = {
   listWorkspaces,
   findManager,
   detail,
+  outline,
   createDraft,
   ensureAgent,
   setSessionModel,

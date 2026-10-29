@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('piApi', {
   state: (cwd) => ipcRenderer.invoke('pi:state', cwd),
   createSession: (cwd) => ipcRenderer.invoke('pi:session-create', cwd),
   session: (id, limit) => ipcRenderer.invoke('pi:session', id, limit),
+  sessionOutline: (id) => ipcRenderer.invoke('pi:session-outline', id),
   sidebarAction: (payload) => ipcRenderer.invoke('pi:sidebar-action', payload),
   prompt: (payload) => ipcRenderer.invoke('pi:prompt', payload),
   files: (cwd, path) => ipcRenderer.invoke('pi:files', { cwd, path }),
