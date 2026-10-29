@@ -17,6 +17,7 @@ const {
 const { applicationsForFile, applicationIcon, openWithApp } = require('../services/mac-apps.cjs');
 
 function registerFilesIpc() {
+  ipcMain.handle('pi:turn-diff-file', (_event, payload) => require('../services/turn-diff.cjs').readTurnDiffFile(payload));
   // 目录列表（右侧文件树）
   ipcMain.handle('pi:files', async (_event, { cwd, path: requested }) => listDirectory(cwd, requested || '.'));
 

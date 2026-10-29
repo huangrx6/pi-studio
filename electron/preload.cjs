@@ -10,6 +10,11 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('piApi', {
+  temporaryModel: (payload) => ipcRenderer.invoke('pi:temporary-model', payload),
+  temporaryPrompt: (payload) => ipcRenderer.invoke('pi:temporary-prompt', payload),
+  temporaryStop: (id) => ipcRenderer.invoke('pi:temporary-stop', id),
+  temporaryClose: (id) => ipcRenderer.invoke('pi:temporary-close', id),
+  onTemporary: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:temporary-event', handler); return () => ipcRenderer.removeListener('pi:temporary-event', handler); },
   setTheme: (theme) => ipcRenderer.invoke('pi:set-theme', theme),
   modeGet: () => ipcRenderer.invoke('pi:mode-get'),
   modeSet: (payload) => ipcRenderer.invoke('pi:mode-set', payload),
@@ -21,6 +26,7 @@ contextBridge.exposeInMainWorld('piApi', {
   prompt: (payload) => ipcRenderer.invoke('pi:prompt', payload),
   files: (cwd, path) => ipcRenderer.invoke('pi:files', { cwd, path }),
   file: (cwd, path) => ipcRenderer.invoke('pi:file', { cwd, path }),
+  turnDiffFile: (payload) => ipcRenderer.invoke('pi:turn-diff-file', payload),
   fileAbsolute: (path) => ipcRenderer.invoke('pi:file-absolute', path),
   fileActions: (payload) => ipcRenderer.invoke('pi:file-actions', payload),
   openWith: (payload) => ipcRenderer.invoke('pi:open-with', payload),

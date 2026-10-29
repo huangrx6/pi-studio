@@ -206,6 +206,7 @@ export type TurnDiffFile = {
 
 /** 一轮对话结束后的 Git 变更汇总。 */
 export type TurnDiff = {
+  snapshot?: { root: string; before: string; after: string };
   /** 该轮最后一条助手消息的时间戳，用于和回合配对。 */
   at: number;
   files: TurnDiffFile[];

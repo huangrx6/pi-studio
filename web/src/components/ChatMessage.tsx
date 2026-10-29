@@ -7,9 +7,8 @@
  *   toolResult 消息通过 toolResults（toolCallId → 消息）配对进对应工具调用。
  *
  * 一轮内部的「轨迹 / 回复」分区：
- * 找到最后一个 thinking / toolCall 块，它之前的块归入「执行轨迹」抽屉，
- * 之后的文本与图片作为最终回复直接展示；没有轨迹时全部视为回复。
- * 这样多步工具调用不会把最终答案顶到屏幕外。
+ * 正文和图片始终显示；相邻的工具与推理组成独立记录组，保持时间顺序。
+ * 当前输出独立展开，已完成的过程可按偏好折叠。
  *
  * 展开状态：默认由偏好 stepDisplay（精简/标准/详细）和 stepCollapse
  * （回答结束后/保持展开/手动）决定；用户手动 toggle 会立即更新本地状态，
@@ -19,7 +18,7 @@
  * 图片以 data URI 内联渲染，不再额外请求主进程。
  */
 import { useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, CircleAlert, CircleCheck, CircleX, Copy, FileText, LoaderCircle, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
+import { Check, ChevronDown, CircleAlert, CircleCheck, CircleX, Copy, FileText, LoaderCircle, PanelRightOpen, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
 import type { ChatMessage, ContentBlock, ToolCallBlock, TurnDiff, TurnDiffFile } from '../chat-types';
 import type { StepCollapse, StepDisplay } from '../preferences';
 import { AttachmentIcon, attachmentVisual } from './AttachmentIcon';
@@ -139,9 +138,9 @@ function ActivityTool({ call, result, busy }: { call: ToolCallBlock; result?: Ch
  */
 function ActivityThinking({ block }: { block: Extract<ContentBlock, { type: 'thinking' }> }) {
   const preview = block.redacted ? '思考内容已隐藏' : block.thinking.replace(/\s+/g, ' ').trim().slice(0, 110);
-  return <details className="activity-thinking">
+  return <details className="activity-thinking" aria-label="查看推理内容">
     <summary>
-      <span className="activity-thinking-label">思考过程</span>
+      <Sparkles className="activity-thinking-icon" aria-hidden="true" />
       {preview && <span className="activity-thinking-preview">{preview}</span>}
       <ChevronDown className="activity-thinking-chevron" />
     </summary>
@@ -245,6 +244,25 @@ function MessageActions({ text, time, label, align = 'start' }: { text: string; 
   </div>;
 }
 
+function ActivityGroup({ entries, results, live, stepDisplay, stepCollapse }: {
+  entries: ActivityEntry[]; results: Map<string, ChatMessage>; live: boolean; stepDisplay: StepDisplay; stepCollapse: StepCollapse;
+}) {
+  const [open, setOpen] = useState(stepDisplay === 'detailed');
+  useEffect(() => {
+    if (stepDisplay === 'detailed') setOpen(true);
+    else if (stepDisplay === 'compact' || !live && stepCollapse === 'after-answer') setOpen(false);
+  }, [live, stepDisplay, stepCollapse]);
+  if (entries.length === 1 && entries[0].kind === 'thinking') return <div className="standalone-thinking"><ActivityThinking block={entries[0].block} /></div>;
+  const count = entries.filter(entry => entry.kind === 'tool').length;
+  return <details className="run-history" open={open} onToggle={event => setOpen(event.currentTarget.open)}>
+    <summary><ChevronDown /><span className="run-history-title">{count ? `${count} 项工具操作` : '推理记录'}</span></summary>
+    {open && <div className="run-history-list">{entries.map(entry => <div className={`run-history-row is-${entry.kind}`} key={entry.key}>
+      {entry.kind === 'tool' && <ActivityTool call={entry.call} result={results.get(entry.call.id)} busy={false} />}
+      {entry.kind === 'thinking' && <ActivityThinking block={entry.block} />}
+    </div>)}</div>}
+  </details>;
+}
+
 export function AssistantTurnView({ messages, toolResults, busy, id, retry, stepDisplay = 'standard', stepCollapse = 'after-answer', showCodeView = false, cwd, gitDiff, onOpenDiff, onOpenFile }: {
   messages: ChatMessage[];
   toolResults: Map<string, ChatMessage>;
@@ -257,7 +275,7 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
   cwd?: string;
   /** 本轮 Git 快照；比工具参数更完整，包含 bash/脚本产生的改动。 */
   gitDiff?: TurnDiff;
-  onOpenDiff?: (file: TurnDiffFile) => void;
+  onOpenDiff?: (file: TurnDiffFile | undefined, turn: TurnDiff) => void;
   onOpenFile?: (path: string) => void;
 }) {
   const live = Boolean(retry) || busy;
@@ -266,19 +284,6 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
   const error = !live ? lastMessage?.errorMessage : undefined;
   const interrupted = Boolean(error && /aborted/i.test(error));
   const failed = Boolean(error) && !interrupted;
-  // 初始值只在挂载时取一次；之后由下面的 effect 和用户手动 toggle 接管。
-  const [activityOpen, setActivityOpen] = useState(stepDisplay === 'detailed');
-  // 自动展开/收起策略：
-  // - detailed 始终展开、compact 始终收起（用户仍可手动点开）；
-  // - standard 的历史默认折叠；当前输出独立展示，不受折叠偏好影响。
-  // 把 live 放进依赖，“开始运行 / 结束运行”就是自动切换的触发点。
-  useEffect(() => {
-    if (stepDisplay === 'detailed') { setActivityOpen(true); return; }
-    if (stepDisplay === 'compact') { setActivityOpen(false); return; }
-    if (!live && stepCollapse === 'after-answer') {
-      setActivityOpen(false);
-    }
-  }, [live, stepCollapse, stepDisplay]);
   // 把本轮所有消息的内容块拍平；key 用「消息序号-块序号」，流式追加时不会错位。
   const flat: FlatBlock[] = messages.flatMap((message, messageIndex) => message.content.map((block, blockIndex) => ({ block, key: `${messageIndex}-${blockIndex}` })));
   // 找到最后一个思考/工具调用块的位置，用它把内容切成「轨迹」与「最终回复」两段。
@@ -296,17 +301,30 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
     return [];
   });
   // 顶部指标按整轮原始消息统计，不依赖上面的分区结果，避免统计口径随轨迹过滤变化。
-  const toolCount = messages.reduce((total, message) => total + message.content.filter((block) => block.type === 'toolCall').length, 0);
-  const thinkingCount = messages.reduce((total, message) => total + message.content.filter((block) => block.type === 'thinking').length, 0);
   const latest = messages[messages.length - 1];
   const lastBlock = flat.filter(entry => entry.block.type !== 'text' || entry.block.text.trim()).at(-1);
   const currentEntries = live ? activity.filter(entry =>
     entry.kind === 'tool' ? !toolResults.has(entry.call.id)
       : entry.kind === 'thinking' ? entry.key === lastBlock?.key
-        : entry.key.startsWith(`${messages.length - 1}-`)
+        : false
   ) : [];
   const currentKeys = new Set(currentEntries.map(entry => entry.key));
-  const history = activity.filter(entry => !currentKeys.has(entry.key));
+  // Every visible text/image breaks a process group, preserving chronological order.
+  const timeline: Array<{ key: string; entries?: ActivityEntry[]; visible?: FlatBlock; current?: ActivityEntry }> = [];
+  const activityByKey = new Map(activity.map(entry => [entry.key, entry]));
+  for (const entry of flat) {
+    const record = activityByKey.get(entry.key);
+    if (entry.block.type === 'text' && entry.block.text.trim() || entry.block.type === 'image') {
+      timeline.push({ key: entry.key, visible: entry });
+    } else if (record && record.kind !== 'text') {
+      if (currentKeys.has(entry.key)) timeline.push({ key: entry.key, current: record });
+      else {
+        const tail = timeline.at(-1);
+        if (tail?.entries) tail.entries.push(record);
+        else timeline.push({ key: entry.key, entries: [record] });
+      }
+    }
+  }
   const phase = retry ? `正在重试 ${retry.attempt}/${retry.maxAttempts}`
     : currentEntries.some(entry => entry.kind === 'tool') ? '正在执行'
       : lastBlock?.block.type === 'thinking' ? '正在思考'
@@ -329,37 +347,21 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
         <span className="assistant-turn-status" title={retry?.errorMessage}>{retry ? `重试中 ${retry.attempt}/${retry.maxAttempts}` : interrupted ? '已中断' : failed ? '失败' : live ? phase : '已完成'}</span>
         {latest?.timestamp && <time>{formatTime(latest.timestamp)}</time>}
       </div>
-      {/* Historical records may collapse; current output never lives inside them. */}
-      {history.length > 0 && <details className="run-history" open={activityOpen} onToggle={event => setActivityOpen(event.currentTarget.open)}>
-        <summary><span className="run-history-title">执行记录</span><span className="run-history-count">{toolCount} 次工具调用 · {thinkingCount} 次思考</span><ChevronDown /></summary>
-        {activityOpen && <div className="run-history-list">{history.map(entry => <div className={`run-history-row is-${entry.kind}`} key={entry.key}>
-          {entry.kind === 'tool' && <ActivityTool call={entry.call} result={toolResults.get(entry.call.id)} busy={false} />}
-          {entry.kind === 'thinking' && <ActivityThinking block={entry.block} />}
-          {entry.kind === 'text' && <div className="run-history-note"><Markdown>{entry.text}</Markdown></div>}
-        </div>)}</div>}
-      </details>}
-      {live && <section className="run-current" aria-label="当前输出" aria-busy="true">
-        <div className="run-current-heading" role="status"><LoaderCircle className="spin" /><span>{phase}</span><span className="run-current-hint">本轮尚未结束</span></div>
-        {currentEntries.map(entry => <div className="run-current-content" key={entry.key}>
-          {entry.kind === 'thinking' && (entry.block.redacted ? <p className="run-current-redacted">模型正在思考，未提供思考正文。</p> : entry.block.thinking ? <Markdown>{entry.block.thinking}</Markdown> : null)}
-          {entry.kind === 'text' && <Markdown>{entry.text}</Markdown>}
-          {entry.kind === 'tool' && <ActivityTool call={entry.call} result={toolResults.get(entry.call.id)} busy />}
-        </div>)}
-      </section>}
-      {/* 最终回复区：只渲染文本与图片；live 时在末尾显示流式光标。 */}
-      {responseBlocks.length > 0 && <div className="assistant-response">
-        {responseBlocks.map((entry) => entry.block.type === 'text' && entry.block.text
-          ? <Markdown key={entry.key}>{entry.block.text}</Markdown>
-          : entry.block.type === 'image'
-            ? <img className="message-image" key={entry.key} src={`data:${entry.block.mimeType};base64,${entry.block.data}`} alt="" loading="lazy" decoding="async" />
-            : null)}
-        {live && <span className="caret" />}
-      </div>}
+      {timeline.map(item => item.entries
+        ? <ActivityGroup key={item.key} entries={item.entries} results={toolResults} live={live} stepDisplay={stepDisplay} stepCollapse={stepCollapse} />
+        : item.current ? <section className="run-current run-current-inline" key={item.key} aria-label="当前输出" aria-busy="true">
+          {item.current.kind === 'thinking' && <><div className="run-current-heading"><Sparkles /><span>推理中</span><LoaderCircle className="spin" /></div>
+            {item.current.block.redacted ? <p className="run-current-redacted">模型未提供推理正文。</p> : <Markdown>{item.current.block.thinking}</Markdown>}</>}
+          {item.current.kind === 'tool' && <ActivityTool call={item.current.call} result={toolResults.get(item.current.call.id)} busy />}
+        </section>
+        : item.visible?.block.type === 'text' ? <div className="assistant-response" key={item.key}><Markdown>{item.visible.block.text}</Markdown></div>
+        : item.visible?.block.type === 'image' ? <img className="message-image" key={item.key} src={`data:${item.visible.block.mimeType};base64,${item.visible.block.data}`} alt="" loading="lazy" decoding="async" /> : null)}
+      {live && <div className="run-live-status" role="status"><LoaderCircle className="spin" /><span>{phase}</span><span>本轮尚未结束</span></div>}
       {/* 失败卡片只在非 live 时出现，避免自动重试过程中闪错误。 */}
       {!live && error && (interrupted
         ? <div className="assistant-interrupted" role="status">本轮已中断</div>
         : <AssistantError message={error} />)}
-      {(codeFiles.length > 0 || (turnDiff?.files.length ?? 0) > 0) && <FileChangeSummary files={codeFiles} gitDiff={turnDiff} onOpenDiff={onOpenDiff} onOpenFile={onOpenFile} />}
+      {(codeFiles.length > 0 || (turnDiff?.files.length ?? 0) > 0) && <FileChangeSummary files={codeFiles} gitDiff={turnDiff} onOpenDiff={(file, turn) => onOpenDiff?.(file, { ...turn, at: turn.at || messages.at(-1)?.timestamp || 0 })} onOpenFile={onOpenFile} />}
       {/* 回答结束后，悬浮显示复制与完成时间。 */}
       {!live && <MessageActions text={answerText} time={latest?.timestamp} label="复制回答" />}
     </div>
@@ -408,7 +410,7 @@ function UserText({ text }: { text: string }) {
  * @param message 必须是 role === 'user'；assistant / toolResult 由其他视图处理
  * @param id 锚点 id，供右侧大纲跳转
  */
-export function ChatMessageView({ message, id }: { message: ChatMessage; id?: string }) {
+export function ChatMessageView({ message, id, onOpenFile }: { message: ChatMessage; id?: string; onOpenFile?: (path: string) => void }) {
   // 兜底：同一组件被误用于其他角色时不渲染，避免出现空气泡。
   if (message.role !== 'user') return null;
   const text = textBlocks(message.content);
@@ -426,10 +428,15 @@ export function ChatMessageView({ message, id }: { message: ChatMessage; id?: st
     {/* 附件卡片展示名称、体积/行数与类型角标；title 给出去向的绝对路径。 */}
     {message.attachments?.map((attachment) => {
       const visual = attachmentVisual(attachment.name, attachment.mime);
-      return <div className="attachment-card" key={attachment.path} title={attachment.path}>
+      const openable = Boolean(attachment.path && onOpenFile);
+      return <div className={`attachment-card ${openable ? 'is-openable' : ''}`} key={attachment.path} title={`${attachment.path}${openable ? ' · 点击查看' : ''}`}
+        role={openable ? 'button' : undefined} tabIndex={openable ? 0 : undefined} aria-label={openable ? `在右侧面板查看 ${attachment.name}` : undefined}
+        onClick={() => { if (openable) onOpenFile?.(attachment.path); }}
+        onKeyDown={(event) => { if (openable && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onOpenFile?.(attachment.path); } }}>
         <AttachmentIcon name={attachment.name} mime={attachment.mime} />
         <span className="attachment-main"><strong>{attachment.name}</strong><span>{formatBytes(attachment.bytes)}{attachment.lines ? ` · ${attachment.lines.toLocaleString('zh-CN')} 行` : ''}</span></span>
         <span className={`attachment-kind ${visual.tone}`}>{visual.label.toUpperCase()}</span>
+        {openable && <span className="attachment-open-cue" aria-hidden="true"><PanelRightOpen /></span>}
       </div>;
     })}
     <MessageImages blocks={message.content} />

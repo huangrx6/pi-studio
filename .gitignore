@@ -27,6 +27,7 @@ screenshots/chat-review/
 screenshots/popovers/
 screenshots/streaming-trace/
 screenshots/composer-details/
+screenshots/**/failure.png
 
 # Local-only symlink so docs/index.html previews offline; Pages CI copies the real dir
 docs/screenshots

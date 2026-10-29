@@ -9,6 +9,7 @@ const {
   readConfig,
   writeConfig,
   getWindow,
+  agentSessions,
 } = require('../core/state.cjs');
 const { serializeMessage } = require('../core/serialize.cjs');
 const { updateSidebar } = require('../sidebar-state.cjs');
@@ -33,6 +34,9 @@ const { attachmentContext } = require('../services/attachments.cjs');
 const { extensionState, extensionAction, extensionDialogResult, extensionSelectResult, updateEditorText, footerAction } = require('../services/extensions.cjs');
 const { createAutoTitleGenerator } = require('../services/auto-title.cjs');
 const { beginTurn, endTurn, saveTurnDiff } = require('../services/turn-diff.cjs');
+const { watchCompactionRecovery } = require('../services/compaction-recovery.cjs');
+const activeRequests = new Map();
+
 /** 把 Pi Studio 的名称写回 Pi 的 session_info，保证 CLI / resume 看到同一个名字。 */
 async function syncNativeName(id, name) {
   const text = typeof name === 'string' ? name.trim() : '';
@@ -80,6 +84,7 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
   const firstTurn = !found.manager.getEntries().some(entry => entry.type === 'message' && entry.message.role === 'user');
   updateSessionSummary(sessionId, text);
   const session = await ensureAgent(sessionId, found.manager, found.cwd);
+  activeRequests.set(sessionId, requestId);
 
   // 文件 / 附件上下文：作为一条不展示的自定义消息注入，不触发新回合
   const referenceBlocks = await fileReferenceContext(found.cwd, mentions);
@@ -191,7 +196,8 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
     flushUpdate();
     invalidateIndex();
     forgetDetail(sessionId);
-    await indexSessions(true);
+    // Sidebar indexing must not strand a finished run in the busy state.
+    await indexSessions(true).catch(() => {});
     dropDraft(sessionId);
     send({ type: 'done' });
     // diff 在 done 之后异步计算，不阻塞流式收尾。
@@ -201,10 +207,11 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
   function cleanupRun() {
     if (cleaned) return;
     cleaned = true;
-    if (recoveryTimer) { clearInterval(recoveryTimer); recoveryTimer = undefined; }
+    if (recoveryTimer) { recoveryTimer(); recoveryTimer = undefined; }
     invalidateIndex();
     forgetDetail(sessionId);
     unsubscribe();
+    if (activeRequests.get(sessionId) === requestId) activeRequests.delete(sessionId);
     changed();
   }
 
@@ -217,32 +224,17 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
    */
   function watchRecovery() {
     if (recoveryTimer) return;
-    const started = Date.now();
-    let sawStreaming = session.isStreaming;
-    let idleSince = null;
-    recoveryTimer = setInterval(() => {
-      const elapsed = Date.now() - started;
-      if (elapsed > 5 * 60 * 1000) {
-        clearInterval(recoveryTimer);
-        recoveryTimer = undefined;
-        void completeRun().catch(() => {}).finally(() => { recovering = false; cleanupRun(); resolveRecovery?.(); });
-        return;
-      }
-      if (session.isCompacting) { idleSince = null; if (session.isStreaming) sawStreaming = true; return; }
-      if (session.isStreaming) { sawStreaming = true; idleSince = null; return; }
-      // 压缩完成与自动继续之间会有一段空闲；从「真正空闲」开始计时，
-      // 不能在压缩本身耗时较长时提前收尾。
-      if (sawStreaming || (idleSince !== null && Date.now() - idleSince > 5000)) {
-        clearInterval(recoveryTimer);
+    recoveryTimer = watchCompactionRecovery(session, {
+      onCompacted: () => send({ type: 'compaction-end' }),
+      onComplete: () => {
         recoveryTimer = undefined;
         void completeRun().catch(() => { /* 收尾失败仍要解除订阅 */ }).finally(() => {
           recovering = false;
           cleanupRun();
+          resolveRecovery?.();
         });
-        return;
-      }
-      if (idleSince === null) idleSince = Date.now();
-    }, 250);
+      },
+    });
   }
 
   function beginRecovery() {
@@ -251,7 +243,7 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
     }
     if (recovering) return recoveryPromise;
     recovering = true;
-    send({ type: 'compaction-interrupted' });
+    send({ type: 'compaction-interrupted', compacting: session.isCompacting });
     watchRecovery();
     return recoveryPromise;
   }
@@ -271,7 +263,19 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
         hasExplicitName: () => Boolean(found.manager.getSessionName()),
       }).catch(() => {});
     }
-    await session.prompt(text, imageBlocks.length > 0 ? { images: imageBlocks } : undefined);
+    let disposition;
+    // Extension continuations and a reopened session can be running even when
+    // the renderer believes it is idle. Let the SDK atomically decide to queue.
+    await session.prompt(text, {
+      ...(imageBlocks.length ? { images: imageBlocks } : {}),
+      streamingBehavior: 'followUp',
+      preflightResult: value => { disposition = value; },
+    });
+    if (disposition === 'queued' || session.isStreaming) {
+      send({ type: 'run-attached' });
+      await beginRecovery();
+      return;
+    }
     flushUpdate();
     const lastAssistant = [...session.messages].reverse().find((message) => message.role === 'assistant');
     const aborted = Boolean(lastAssistant && (lastAssistant.stopReason === 'aborted' || /aborted/i.test(lastAssistant.errorMessage || '')));
@@ -323,7 +327,12 @@ function registerSessionsIpc() {
     const meta = readConfig(configPath(), {}).sessionMetadata?.[id];
     // Pi 原生名优先（CLI 重命名也能同步）；没有时用桌面端 metadata 兼容旧数据。
     const name = result?.nativeName || meta?.name || meta?.autoTitle;
-    return result && { ...result, title: name || result.title };
+    const runtime = agentSessions.get(id);
+    const requestId = activeRequests.get(id);
+    return result && { ...result, title: name || result.title,
+      running: Boolean(requestId || runtime?.isStreaming || runtime?.isCompacting),
+      compacting: Boolean(runtime?.isCompacting), requestId,
+    };
   });
 
   // 侧边栏动作

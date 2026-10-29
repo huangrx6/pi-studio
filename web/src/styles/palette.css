@@ -196,6 +196,8 @@
 /* Shared roles derive from the active palette in both modes. */
 :root {
   --transparent: transparent;
+  --diff-change-bg: color-mix(in srgb, var(--text) 12%, transparent);
+  --diff-empty-pattern: repeating-linear-gradient(135deg, var(--transparent) 0 5px, var(--border) 5px 6px);
   --image-dismiss-bg: #ffffff;
   --image-dismiss-fg: #202020;
   --primary: var(--color-primary);

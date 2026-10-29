@@ -74,3 +74,40 @@ test('an unchanged turn produces an empty diff', async () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('full historical diff uses saved trees, supports whitespace filtering, and rejects missing records', async () => {
+  const vm = require('node:vm');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-turn-full-'));
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-turn-store-'));
+  const module = { exports: {} };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../electron/services/turn-diff.cjs'), 'utf8'), {
+    module, exports: module.exports, process, require: name => name === 'electron' ? { app: { getPath: () => data } } : require(name),
+  });
+  const api = module.exports;
+  try {
+    git(dir, ['init','-q']);
+    const target = path.join(dir,'long.txt');
+    const before = Array.from({length:30},(_,i)=>`line ${i}`).join('\n')+'\n';
+    fs.writeFileSync(target,before);
+    const token = await api.beginTurn(dir);
+    fs.writeFileSync(target,before.replace('line 15','changed 15'));
+    fs.writeFileSync(path.join(dir,'new.txt'),'new\n');
+    const diff = await api.endTurn(token);
+    api.saveTurnDiff('test', { at:1,...diff });
+    fs.writeFileSync(target,'UNRELATED CURRENT CONTENT');
+    const file = diff.files.find(f=>f.label === 'long.txt');
+    const full = await api.readTurnDiffFile({sessionId:'test',at:1,path:file.path,full:true});
+    assert.match(full.patch,/line 0/); assert.match(full.patch,/line 29/);
+    assert.match(full.patch,/\+changed 15/); assert.doesNotMatch(full.patch,/UNRELATED/);
+    await assert.rejects(api.readTurnDiffFile({sessionId:'test',at:1,path:'/not-in-turn'}),/找不到/);
+    api.saveTurnDiff('legacy',{ at:2, files:diff.files });
+    await assert.rejects(api.readTurnDiffFile({sessionId:'legacy',at:2,path:file.path,full:true}),/没有保存完整快照/);
+    fs.writeFileSync(target,'hello world\n');
+    const whitespace = await api.beginTurn(dir);
+    fs.writeFileSync(target,'hello    world\n');
+    const whitespaceDiff = await api.endTurn(whitespace);
+    api.saveTurnDiff('white',{at:3,...whitespaceDiff});
+    const filtered = await api.readTurnDiffFile({sessionId:'white',at:3,path:whitespaceDiff.files[0].path,ignoreWhitespace:true});
+    assert.equal(filtered.patch,'');
+  } finally { fs.rmSync(dir,{recursive:true,force:true}); fs.rmSync(data,{recursive:true,force:true}); }
+});

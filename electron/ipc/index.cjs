@@ -20,6 +20,7 @@ const { registerModeIpc } = require('./mode.cjs');
 const { registerConfirmIpc } = require('./confirm.cjs');
 
 function registerIpc() {
+  require('./temporary-chat.cjs').registerTemporaryChatIpc();
   registerSystemIpc();
   registerSessionsIpc();
   registerFilesIpc();

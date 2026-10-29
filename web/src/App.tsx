@@ -14,10 +14,10 @@
  * 渲染进程本身不直接访问 Node / 文件系统。
  */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Clock3, Command, Cpu, FileCode2, FileDiff, FileText, Folder, FolderOpen, Info, Sparkles,
-  AppWindow, Columns2, Compass, Eye, Globe2, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, Pencil, Plus, Plug, RotateCw, Search, Settings, ShieldCheck, SquarePen, Sun, Terminal, Trash2, X,
+  AppWindow, Columns2, Compass, Eye, Globe2, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageCirclePlus, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, PanelRightOpen, Pencil, Plus, Plug, RotateCw, Search, Settings, ShieldCheck, SquarePen, Sun, Terminal, Trash2, X,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
 import { ExtensionCustomOverlay, ExtensionDialogHost, ExtensionHeader, ExtensionSelectDialog, ExtensionWidgets } from './components/ExtensionSurfaces';
@@ -25,6 +25,10 @@ import { StatusDock } from './components/StatusDock';
 import { Select } from './components/Select';
 import { FullPermissionDialog, ToolConfirmDialog, type ConfirmRequest } from './components/ConfirmDialog';
 import { DiffView } from './components/DiffView';
+import { TemporaryChat } from './components/TemporaryChat';
+import { destroyTemporary } from './temporary-chat-store';
+import { ChangesView } from './components/ChangesView';
+import { ActionMenu } from './components/ActionMenu';
 import { splitComposerText } from './references';
 import type { ChatMessage, ComposerAttachment, ComposerCommand, ComposerCommandSource, ComposerFile, TodoDetails, TurnDiff, TurnDiffFile } from './chat-types';
 import { AttachmentIcon } from './components/AttachmentIcon';
@@ -39,6 +43,9 @@ import { WorkspacePicker } from './components/WorkspacePicker';
 import { SidebarActions, type SidebarAction } from './components/SidebarActions';
 import type { ModelOption, ModelSelection, ThinkingLevel } from './model-types';
 import { RADIUS_PRESETS, loadPreferences, resolveTheme, savePreferences, setActivePreferences, type Preferences } from './preferences';
+import { pasteExceedsBudget, isLongMessage } from './composer-budget.mjs';
+import { HISTORY_PAGE_SIZE, resolveHistoryScroll } from './history-scroll.mjs';
+import { sampleOutlineIndices } from './outline-samples.mjs';
 
 // 设置页导航：顺序、图标与描述同时用于设置侧栏和页面标题。
 const settingsPages = [
@@ -146,18 +153,6 @@ function relativeTime(ms: number): string {
   return `${Math.floor(diff / 86_400_000)} 天`;
 }
 
-// 超过任一阈值的长文本会自动转成附件，避免模型侧上下文被单条消息占满。
-const LONG_MESSAGE_CHARS = 12_000;
-const LONG_MESSAGE_BYTES = 24_000;
-const LONG_MESSAGE_LINES = 240;
-
-/** 判断一条消息是否应该落盘为附件。 */
-function isLongMessage(text: string): boolean {
-  if (text.length > LONG_MESSAGE_CHARS) return true;
-  if (text.split('\n').length > LONG_MESSAGE_LINES) return true;
-  return new TextEncoder().encode(text).length > LONG_MESSAGE_BYTES;
-}
-
 /** 侧边栏展开状态、手动排序与上次打开的会话都存在 localStorage。 */
 const UI_KEYS = {
   expanded: 'pi-studio:expanded-workspaces',
@@ -182,7 +177,7 @@ function writeStored(key: string, value: unknown): void {
 // ---------- 视图辅助类型 ----------
 type DragItem = { kind: 'workspace' | 'session'; cwd: string; sessionId?: string };
 type PanelFile = { path: string; size: number; binary: boolean; text: string };
-type PanelTab = { id: string; kind: 'start' | 'files' | 'file' | 'diff'; title: string; path?: string; diff?: TurnDiffFile };
+type PanelTab = { id: string; kind: 'start' | 'files' | 'file' | 'diff' | 'changes' | 'temporary'; title: string; path?: string; diff?: TurnDiffFile; review?: { sessionId: string; initial: TurnDiff; turns: TurnDiff[]; focusPath?: string } };
 type ComposerMenuState = { kind: 'slash' | 'file'; query: string; start: number; end: number };
 
 /** 上下文窗口的短标签（128K / 1M），避免卡片被长数字撑开。 */
@@ -256,7 +251,11 @@ export function App() {
   const [stateLoading, setStateLoading] = useState(true);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const historyAnchorRef = useRef<number | null>(null);
+  const historyAnchorRef = useRef<{ sessionId: string; bottomOffset: number } | null>(null);
+  const historyLoadingRef = useRef(false);
+  const historyRequestRef = useRef(0);
+  const historyArmedRef = useRef(true);
+  const historyUserScrollRef = useRef(false);
   const [preferences, setPreferences] = useState<Preferences>(() => loadPreferences());
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
@@ -289,6 +288,14 @@ export function App() {
     // 切走后主进程可以释放旧会话的 AgentSession；流式中的会自己跳过。
     window.piApi.sessionFocus?.(session?.id ?? null);
   }, [session]);
+  // 切换会话时取消旧分页请求，并重新允许一次顶部自动加载。
+  useEffect(() => {
+    historyRequestRef.current += 1;
+    historyLoadingRef.current = false;
+    historyAnchorRef.current = null;
+    historyArmedRef.current = true;
+    setHistoryLoading(false);
+  }, [session?.id]);
   const [prompt, setPrompt] = useState('');
   const [composerAttachments, setComposerAttachments] = useState<ComposerAttachment[]>([]);
   const [composerMenu, setComposerMenu] = useState<ComposerMenuState | null>(null);
@@ -331,11 +338,20 @@ export function App() {
   const [openFiles, setOpenFiles] = useState<Record<string, PanelFile>>({});
   const [panelTabs, setPanelTabs] = useState<PanelTab[]>([{ id: 'start', kind: 'start', title: '开始' }]);
   const [liveDiff, setLiveDiff] = useState<TurnDiff | null>(null);
+  const [tabMenu, setTabMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const closeTabMenu = useCallback(() => setTabMenu(null), []);
   const [activePanelTabId, setActivePanelTabId] = useState('start');
   const [tabDropTarget, setTabDropTarget] = useState<string | null>(null);
   const panelTabsRef = useRef<HTMLDivElement>(null);
   const tabDragRef = useRef<string | null>(null);
   const [panelFullscreen, setPanelFullscreen] = useState(false);
+  const [panelWidth, setPanelWidth] = useState(() => readStored<number>('pi-studio:panel-width', 700));
+  const [panelResizing, setPanelResizing] = useState(false);
+  const panelDrag = useRef<{ x: number; width: number } | null>(null);
+  const resizePanel = (width: number) => {
+    const next = Math.round(Math.max(320, Math.min(window.innerWidth - 48, width)));
+    setPanelWidth(next); writeStored('pi-studio:panel-width', next);
+  };
   const [panelEntered, setPanelEntered] = useState(false);
   const panelCloseTimerRef = useRef<number | null>(null);
   const [panelSplit, setPanelSplit] = useState(false);
@@ -875,14 +891,16 @@ export function App() {
         // 结束帧要立刻落地，否则下一轮的流式消息可能找不到要接续的气泡。
         if (event.type === 'message_end') flushNow();
       }
+      if (event.type === 'run-attached') { setBusy(true); setError(null); }
       if (event.type === 'compaction-start' || event.type === 'compaction-interrupted') {
-        setCompaction({ active: true, reason: event.reason });
+        setCompaction({ active: event.type === 'compaction-start' || event.compacting === true, reason: event.reason });
         setBusy(true);
         setError(null);
       }
       if (event.type === 'compaction-end') {
-        // 压缩结束并不代表恢复回合结束；保持 busy，等待自动继续的流式输出。
-        setCompaction((current) => current.active ? current : { active: true, reason: event.reason });
+        // 压缩与问答是两个生命周期：结束后解除输入限制，busy 由整个回合收尾。
+        setCompaction({ active: false });
+        if (event.errorMessage) setError(event.errorMessage);
       }
       if (event.type === 'turn-diff' && event.diff) {
         setLiveDiff(event.diff);
@@ -915,6 +933,25 @@ export function App() {
       if (frame) cancelAnimationFrame(frame);
     };
   }, [loadState]);
+
+  useEffect(() => {
+    if (!session?.id || !busy || requestRef.current) return;
+    let disposed = false, fetching = false;
+    const timer = window.setInterval(async () => {
+      if (fetching) return;
+      fetching = true;
+      try {
+        const detail = await window.piApi.session(session.id, Math.max(120, messages.length + 10));
+        if (!disposed && detail && !requestRef.current) {
+          setMessages(detail.messages);
+          setBusy(Boolean(detail.running));
+          setCompaction({ active: Boolean(detail.compacting) });
+          if (detail.requestId) requestRef.current = detail.requestId;
+        }
+      } catch { /* Background snapshots may be temporarily unavailable. */ } finally { fetching = false; }
+    }, 750);
+    return () => { disposed = true; window.clearInterval(timer); };
+  }, [session?.id, busy]);
 
   useEffect(() => {
     const node = scrollRef.current;
@@ -1044,31 +1081,58 @@ export function App() {
   }
 
 
+  /** 把一次超长粘贴保存成文本附件，只转换这一批内容。 */
+  async function attachPastedText(text: string): Promise<boolean> {
+    try {
+      const saved = await window.piApi.saveAttachment({ sessionId: session?.id || 'draft', text });
+      setComposerAttachments((current) => [...current, {
+        id: crypto.randomUUID(), kind: 'file', name: saved.name, mime: saved.mime || 'text/plain',
+        bytes: saved.bytes, lines: saved.lines, path: saved.path, marker: saved.marker,
+      }]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** 向前加载更早的历史；保持当前滚动位置不跳。 */
   async function loadOlderHistory() {
-    if (!session || historyLoading) return;
+    if (!session || historyLoadingRef.current) return;
+    const sessionId = session.id;
+    const loadGeneration = sessionLoadRef.current;
+    const requestId = ++historyRequestRef.current;
     const node = scrollRef.current;
-    historyAnchorRef.current = node ? node.scrollHeight - node.scrollTop : null;
+    historyAnchorRef.current = node ? { sessionId, bottomOffset: node.scrollHeight - node.scrollTop } : null;
+    historyArmedRef.current = false;
+    historyLoadingRef.current = true;
     setHistoryLoading(true);
     try {
-      const detail = await window.piApi.session(session.id, messages.length + 120);
+      const previousCount = messages.length;
+      const detail = await window.piApi.session(sessionId, messages.length + HISTORY_PAGE_SIZE);
+      if (requestId !== historyRequestRef.current || loadGeneration !== sessionLoadRef.current) return;
       if (!detail) return;
       setMessages(detail.messages.map((message) => ({ ...message })));
-      setSession((current) => current ? { ...current, hasMore: detail.hasMore } : current);
+      // 若这次没有取到更多消息，直接收口，避免滚动到顶部反复请求。
+      setSession((current) => current?.id === sessionId
+        ? { ...current, hasMore: detail.hasMore && detail.messages.length > previousCount }
+        : current);
     } catch (error) {
-      setError(errorText(error));
+      if (requestId === historyRequestRef.current && loadGeneration === sessionLoadRef.current) setError(errorText(error));
     } finally {
-      setHistoryLoading(false);
+      if (requestId === historyRequestRef.current) {
+        historyLoadingRef.current = false;
+        setHistoryLoading(false);
+      }
     }
   }
 
   useLayoutEffect(() => {
     const anchor = historyAnchorRef.current;
-    if (anchor === null) return;
+    if (!anchor || anchor.sessionId !== session?.id) return;
     const node = scrollRef.current;
-    if (node) node.scrollTop = node.scrollHeight - anchor;
+    if (node) node.scrollTop = node.scrollHeight - anchor.bottomOffset;
     historyAnchorRef.current = null;
-  }, [messages]);
+  }, [messages, session?.id]);
 
   // ---------- 会话生命周期 ----------
 
@@ -1133,7 +1197,7 @@ export function App() {
     const load = ++sessionLoadRef.current;
     setSessionLoading(true);
     try {
-      const detail = await window.piApi.session(item.id, 120);
+      const detail = await window.piApi.session(item.id, HISTORY_PAGE_SIZE);
       if (load !== sessionLoadRef.current) return;
       if (!detail) {
         // 侧边栏里的旧条目可能已经被删除或移动；刷新列表，避免用户停在一个空入口。
@@ -1148,7 +1212,9 @@ export function App() {
       setWorkspace(detail.cwd);
       expandWorkspace(detail.cwd);
       setError(null);
-      setBusy(false);
+      requestRef.current = detail.requestId || '';
+      setBusy(Boolean(detail.running));
+      setCompaction({ active: Boolean(detail.compacting) });
       setRetryInfo(null);
     } catch (error) {
       if (load === sessionLoadRef.current) {
@@ -1372,6 +1438,16 @@ export function App() {
     const node = event.currentTarget;
     // 只有真正回到最底部才恢复跟随，避免在底部附近轻微上滑就被抢回。
     followBottomRef.current = node.scrollHeight - node.clientHeight - node.scrollTop < 2;
+    const next = resolveHistoryScroll({
+      scrollTop: node.scrollTop,
+      armed: historyArmedRef.current,
+      hasMore: Boolean(session?.hasMore),
+      loading: historyLoadingRef.current,
+      userInitiated: historyUserScrollRef.current,
+    });
+    historyUserScrollRef.current = false;
+    historyArmedRef.current = next.armed;
+    if (next.load) void loadOlderHistory();
     scheduleOutlineSync();
   }
 
@@ -1479,7 +1555,7 @@ export function App() {
       // 侧边栏刷新与读取历史互不依赖；刷新失败不能让一次成功的回复显示成错误。
       void loadState().catch(() => {});
       if (requestRef.current !== requestId) return;
-      const saved = await window.piApi.session(submission.sessionId, Math.max(120, messages.length + 10));
+      const saved = await window.piApi.session(submission.sessionId, Math.max(HISTORY_PAGE_SIZE, messages.length + 10));
       if (requestRef.current !== requestId) return;
       if (saved) {
         setSession({ id: saved.id, cwd: saved.cwd, title: saved.title, turnDiffs: saved.turnDiffs, hasMore: saved.hasMore });
@@ -1635,8 +1711,7 @@ export function App() {
       panelCloseTimerRef.current = null;
     }
     if (panelTabs.length === 0) {
-      setPanelTabs([{ id: 'start', kind: 'start', title: '开始' }]);
-      setActivePanelTabId('start');
+      setPanelTabs(current => current.length ? current : [{ id: 'start', kind: 'start', title: '开始' }]);
     }
     setPanelEntered(false);
     setFilesOpen(true);
@@ -1655,6 +1730,17 @@ export function App() {
     }, 280);
   }
 
+  function openStartTab() {
+    setPanelTabs(current => current.some(tab => tab.kind === 'start') ? current : [...current, { id: 'start', kind: 'start', title: '开始' }]);
+    setActivePanelTabId('start');
+  }
+  function openTemporaryChat() {
+    const id = crypto.randomUUID();
+    setPanelTabs(current => [...current, { id, kind: 'temporary', title: '临时聊天' }]);
+    setActivePanelTabId(id);
+    if (filesOpen) setPanelEntered(true); else openPanel();
+  }
+
   function openFilesTab() {
     if (!panelTabs.some((tab) => tab.kind === 'files')) {
       setPanelTabs((current) => [...current, { id: 'files', kind: 'files', title: '文件' }]);
@@ -1666,10 +1752,11 @@ export function App() {
   /** 读取文件并按路径缓存，重复打开时直接命中缓存。 */
   async function loadFileToTab(target: string) {
     const root = workspace || session?.cwd;
-    if (!root) return;
+    const absolute = target.startsWith('/');
+    if (!absolute && !root) return;
     setFileBusy(true);
     try {
-      const content = target.startsWith('/') ? await window.piApi.fileAbsolute(target) : await window.piApi.file(root, target);
+      const content = absolute ? await window.piApi.fileAbsolute(target) : await window.piApi.file(root!, target);
       setOpenFiles((current) => {
         // 只保留最近打开的几个文件，避免长时间浏览把每个预览都留在内存里。
         const next = { ...current, [target]: content };
@@ -1702,16 +1789,17 @@ export function App() {
     setPanelTabs((current) => current.some((tab) => tab.id === id) ? current : [...current, { id, kind: 'file', title, path: target }]);
     setActivePanelTabId(id);
     const cached = openFiles[target];
-    if (cached) setFile(cached);
-    else await loadFileToTab(target);
+    setFile(cached ?? null);
     if (filesOpen) setPanelEntered(true);
     else openPanel();
+    if (!cached) await loadFileToTab(target);
   }
 
   /** 关闭标签；关闭最后一个标签时整个面板一起收起。 */
   function closePanelTab(id: string) {
     const index = panelTabs.findIndex((tab) => tab.id === id);
     if (index < 0) return;
+    if (panelTabs[index].kind === 'temporary') destroyTemporary(id);
     const next = panelTabs.filter((tab) => tab.id !== id);
     setPanelTabs(next);
     if (next.length === 0) { closePanel(); return; }
@@ -1823,6 +1911,10 @@ export function App() {
     if (!text) return [];
     return [{ id: `chat-turn-${index}`, text, timestamp: turn.message.timestamp }];
   });
+  const outlineSamples = useMemo(
+    () => sampleOutlineIndices(outlineItems.length, outlineActive),
+    [outlineItems.length, outlineActive],
+  );
   const composerCommandOptions = composerMenu?.kind === 'slash'
     ? composerCommands.filter((command) => `${command.name} ${command.description}`.toLowerCase().includes(composerMenu.query.toLowerCase()))
     : [];
@@ -1838,19 +1930,40 @@ export function App() {
   const activePanelTab = panelTabs.find((tab) => tab.id === activePanelTabId) ?? panelTabs[0];
 
   function panelTabIcon(tab: PanelTab) {
+    if (tab.kind === 'temporary') return <MessageCirclePlus />;
     if (tab.kind === 'start') return <Compass />;
     if (tab.kind === 'files') return <Folder />;
-    if (tab.kind === 'diff') return <FileDiff />;
+    if (tab.kind === 'diff' || tab.kind === 'changes') return <FileDiff />;
     return <FileText />;
   }
 
   /** 打开文件 diff 标签页；已存在时直接激活。 */
-  function openDiffTab(file: TurnDiffFile) {
-    const id = `diff:${file.path}`;
+  function openDiffTab(file: TurnDiffFile, at: number, sessionId = session?.id) {
+    const id = `diff:${sessionId}:${at}:${file.path}`;
     setPanelTabs((current) => current.some((tab) => tab.id === id) ? current : [...current, { id, kind: 'diff', title: file.label.split('/').pop() || file.label, path: file.path, diff: file }]);
     setActivePanelTabId(id);
     if (filesOpen) setPanelEntered(true);
     else openPanel();
+  }
+
+  function openChangesTab(file: TurnDiffFile | undefined, turn: TurnDiff) {
+    if (!session) return;
+    const id = `changes:${session.id}`;
+    const turns = [...(session.turnDiffs ?? []).filter(item => item.at !== turn.at), turn];
+    const tab: PanelTab = { id, kind: 'changes', title: '变更', review: { sessionId: session.id, initial: turn, turns, focusPath: file?.path } };
+    setPanelTabs(current => current.some(item => item.id === id) ? current.map(item => item.id === id ? tab : item) : [...current, tab]);
+    setActivePanelTabId(id);
+    if (filesOpen) setPanelEntered(true); else openPanel();
+  }
+
+  function closePanelTabs(id: string, scope: 'left' | 'right' | 'others' | 'all') {
+    const index = panelTabs.findIndex(tab => tab.id === id);
+    if (index < 0) return;
+    const next = panelTabs.filter((tab, i) => scope === 'left' ? i >= index : scope === 'right' ? i <= index : scope === 'others' ? tab.id === id : false);
+    for (const tab of panelTabs) if (tab.kind === 'temporary' && !next.some(item => item.id === tab.id)) destroyTemporary(tab.id);
+    setPanelTabs(next);
+    if (!next.length) { setActivePanelTabId(''); setFile(null); closePanel(); }
+    else if (!next.some(tab => tab.id === activePanelTabId)) activatePanelTab(next.find(tab => tab.id === id) ?? next[0]);
   }
 
   async function loadSkillTree(baseDir: string, nextPath: string) {
@@ -1956,7 +2069,10 @@ export function App() {
   }
 
   function renderFilePreview() {
-    if (!file) return <div className="panel-empty"><FileText /><strong>选择一个文件</strong><span>从左侧文件树打开文件，会在这里以标签页显示。</span></div>;
+    if (!file) return fileBusy
+      ? <div className="panel-empty" role="status" aria-label="正在读取文件"><LoaderCircle className="spin" /><strong>正在读取文件</strong><span>内容加载后会在右侧显示。</span></div>
+      : <div className="panel-empty"><FileText /><strong>选择一个文件</strong><span>从左侧文件树打开文件，会在这里以标签页显示。</span></div>;
+    const wrapLines = /\.(?:txt|log)$/i.test(file.path);
     return <div className="panel-file-preview">
       <div className="file-toolbar">
         <span className="path-label" title={file.path}>{file.path}</span>
@@ -1973,7 +2089,7 @@ export function App() {
           </div>}
         </div>
       </div>
-      {file.binary ? <div className="file-empty"><FileText /><strong>暂不支持预览此文件</strong><span>可以在其他应用中查看二进制文件。</span></div> : <pre className="file-code"><code>{file.text.split('\n').map((line, index) => <span className="code-line" key={index}><span className="line-number" aria-hidden="true">{index + 1}</span><span>{line || ' '}</span></span>)}</code></pre>}
+      {file.binary ? <div className="file-empty"><FileText /><strong>暂不支持预览此文件</strong><span>可以在其他应用中查看二进制文件。</span></div> : <pre className={`file-code ${wrapLines ? 'is-wrapped' : ''}`}><code>{file.text.split('\n').map((line, index) => <span className="code-line" key={index}><span className="line-number" aria-hidden="true">{index + 1}</span><span>{line || ' '}</span></span>)}</code></pre>}
       {fileBusy && <div className="file-loading" role="status"><LoaderCircle className="spin" />正在读取文件…</div>}
     </div>;
   }
@@ -1981,6 +2097,7 @@ export function App() {
   function renderPanelStart() {
     return <div className="panel-start">
       <div className="panel-start-tools">
+        <button className="panel-tool" onClick={openTemporaryChat}><span className="panel-tool-icon"><MessageCirclePlus /></span><span><strong>临时聊天</strong><small>无需工作区，退出应用后清除</small></span><ChevronRight className="panel-tool-arrow" /></button>
         <button className="panel-tool" onClick={openFilesTab}><span className="panel-tool-icon is-folder"><Folder /></span><span><strong>工作区文件</strong><small>浏览当前工作区里的文件</small></span><ChevronDown className="panel-tool-arrow" /></button>
         <button className="panel-tool" disabled><span className="panel-tool-icon"><Terminal /></span><span><strong>新建终端</strong><small>即将推出</small></span></button>
         <button className="panel-tool" disabled><span className="panel-tool-icon"><Globe2 /></span><span><strong>浏览器</strong><small>即将推出</small></span></button>
@@ -1991,8 +2108,10 @@ export function App() {
 
   function renderPanelContent() {
     if (!activePanelTab) return null;
+    if (activePanelTab.kind === 'temporary') return <TemporaryChat key={activePanelTab.id} id={activePanelTab.id} selection={modelSelection} onManage={() => void openSettings('models')} />;
     if (activePanelTab.kind === 'start') return renderPanelStart();
     if (activePanelTab.kind === 'files') return renderFileTree();
+    if (activePanelTab.kind === 'changes' && activePanelTab.review) return <ChangesView key={`${activePanelTab.id}:${activePanelTab.review.initial.at}:${activePanelTab.review.focusPath}`} {...activePanelTab.review} onOpenFile={path => void openFile(path)} onOpenDiff={(file, at) => openDiffTab(file, at, activePanelTab.review!.sessionId)} />;
     if (activePanelTab.kind === 'diff' && activePanelTab.diff) return <DiffView file={activePanelTab.diff} />;
     return renderFilePreview();
   }
@@ -2011,6 +2130,7 @@ export function App() {
         </div>
         <button className="new-chat" title="新会话" onClick={() => void startSession()}><SquarePen /><span>新会话</span></button>
         <nav className="nav">
+          <button className="nav-row" title="临时聊天" onClick={openTemporaryChat}><MessageCirclePlus /><span>临时聊天</span></button>
           <button className="nav-row is-active" title="对话" aria-current="page"><MessageSquare /><span>对话</span></button>
           <button className="nav-row" title="扩展" onClick={() => void openSettings('extensions')}><Layers3 /><span>扩展</span></button>
           <button className="nav-row" disabled title="自动化任务即将推出"><Clock3 /><span>自动化任务</span><small>即将推出</small></button>
@@ -2162,7 +2282,6 @@ export function App() {
           {sidebarCollapsed && <button className="icon-button sidebar-expand" aria-label="展开侧边栏" title="展开侧边栏" onClick={() => setSidebarCollapsed(false)}><PanelLeft /></button>}
           {!isNewConversation && <div className="chat-heading">
             <h1>{session?.title || 'Pi Studio'}</h1>
-            <div className="chat-meta"><span className={`state-dot ${busy ? 'is-busy' : ''}`} />{busy ? '正在处理' : '准备就绪'}{activeWorkspace && <><span>·</span><span className="workspace-name">{activeWorkspace.name}</span></>}</div>
           </div>}
           <div className="chat-actions">
             {!filesOpen && <button className="icon-button" onClick={openPanel} aria-label="打开右侧面板" title="打开右侧面板"><PanelRight size={16} /></button>}
@@ -2174,24 +2293,37 @@ export function App() {
           <span className="chat-tabs-note">{messages.filter((message) => message.role !== 'toolResult').length > 0 ? `${messages.filter((message) => message.role !== 'toolResult').length} 条消息` : '从一个想法开始'}</span>
         </div>}
 
+        {isNewConversation && <div className="chat-tabs is-placeholder" aria-hidden="true" />}
         {!isNewConversation && <div
           className="chat-scroll"
           ref={scrollRef}
-          onWheel={event => { if (event.deltaY < 0) followBottomRef.current = false; }}
-          onTouchMove={() => { followBottomRef.current = false; }}
-          onKeyDown={event => { if (event.key === 'PageUp' || event.key === 'ArrowUp' || event.key === 'Home') followBottomRef.current = false; }}
+          onWheel={event => {
+            historyUserScrollRef.current = true;
+            if (event.deltaY < 0) followBottomRef.current = false;
+          }}
+          onTouchMove={() => {
+            historyUserScrollRef.current = true;
+            followBottomRef.current = false;
+          }}
+          onPointerDown={() => { historyUserScrollRef.current = true; }}
+          onKeyDown={event => {
+            if (event.key === 'PageUp' || event.key === 'ArrowUp' || event.key === 'Home') {
+              historyUserScrollRef.current = true;
+              followBottomRef.current = false;
+            }
+          }}
           onScroll={handleTranscriptScroll}
         >
           <div className="chat-column">
             {messages.length > 0 && (
               <div className="messages">
-                {session?.hasMore && <button type="button" className="load-older" disabled={historyLoading} onClick={() => void loadOlderHistory()}>{historyLoading ? '正在加载…' : '加载更早消息'}</button>}
+                {historyLoading && <div className="history-loading" role="status" aria-live="polite" aria-label="正在加载更早消息"><LoaderCircle className="spin" /></div>}
                 {session?.id && <ExtensionHeader sessionId={session.id} />}
                 {transcriptTurns.map((turn, index) => turn.kind === 'user'
-                  ? <ChatMessageView key={turn.message.timestamp ?? `user-${index}`} id={`chat-turn-${index}`} message={turn.message} />
+                  ? <ChatMessageView key={turn.message.timestamp ?? `user-${index}`} id={`chat-turn-${index}`} message={turn.message} onOpenFile={(path) => void openFile(path)} />
                   : <AssistantTurnView key={turn.messages[0]?.timestamp ?? `assistant-${index}`} id={`chat-turn-${index}`} messages={turn.messages} toolResults={toolResultMap} cwd={session?.cwd} busy={busy && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView}
                     gitDiff={index === lastAssistantTurnIndex ? liveDiff ?? (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined) : (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined)}
-                    onOpenDiff={openDiffTab} onOpenFile={(path) => void openFile(path)} />)}
+                    onOpenDiff={openChangesTab} onOpenFile={(path) => void openFile(path)} />)}
                 {busy && extensionWorking.visible && !retryInfo && transcriptTurns.at(-1)?.kind !== 'assistant' && (
                   <div className="thinking"><span /><span /><span />正在思考</div>
                 )}
@@ -2204,20 +2336,23 @@ export function App() {
         {!settingsOpen && !filesOpen && !isNewConversation && outlineItems.length > 1 && (
           <nav className="conversation-outline" aria-label="对话大纲" onMouseLeave={() => setOutlineHover(null)}>
             <div className="outline-track">
-              {outlineItems.map((item, index) => <div className={`outline-item ${outlineHover === index ? 'is-hovered' : ''}`} key={item.id} onMouseEnter={() => setOutlineHover(index)}>
-                <button
-                  type="button"
-                  className={`outline-tick ${index === outlineActive ? 'is-active' : ''}`}
-                  aria-label={`跳转到第 ${index + 1} 条提问`}
-                  title={item.text.slice(0, 100)}
-                  onFocus={() => setOutlineHover(index)}
-                  onClick={() => jumpToOutline(index)}
-                ><span className="outline-line" /></button>
-                {outlineHover === index && <div className="outline-preview">
-                  <div className="outline-preview-role">你 · {item.timestamp ? new Date(item.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}<span>{index + 1} / {outlineItems.length}</span></div>
-                  <p>{item.text}</p>
-                </div>}
-              </div>)}
+              {outlineSamples.map((index) => {
+                const item = outlineItems[index];
+                return <div className={`outline-item ${outlineHover === index ? 'is-hovered' : ''}`} key={item.id} onMouseEnter={() => setOutlineHover(index)}>
+                  <button
+                    type="button"
+                    className={`outline-tick ${index === outlineActive ? 'is-active' : ''}`}
+                    aria-label={`跳转到第 ${index + 1} 条提问`}
+                    title={item.text.slice(0, 100)}
+                    onFocus={() => setOutlineHover(index)}
+                    onClick={() => jumpToOutline(index)}
+                  ><span className="outline-line" /></button>
+                  {outlineHover === index && <div className="outline-preview">
+                    <div className="outline-preview-role">你 · {item.timestamp ? new Date(item.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}<span>{index + 1} / {outlineItems.length}</span></div>
+                    <p>{item.text}</p>
+                  </div>}
+                </div>;
+              })}
             </div>
           </nav>
         )}
@@ -2279,10 +2414,13 @@ export function App() {
                   <img src={`data:${attachment.mime};base64,${attachment.data}`} alt="" />
                   <button type="button" aria-label={`移除 ${attachment.name}`} onClick={() => removeComposerAttachment(attachment.id)}><X /></button>
                 </div>
-                : <div className="composer-attachment is-file" key={attachment.id} title={attachment.path}>
+                : <div className="composer-attachment is-file is-openable" key={attachment.id} title={attachment.path} role={attachment.path ? 'button' : undefined} tabIndex={attachment.path ? 0 : undefined} aria-label={attachment.path ? `在右侧面板查看 ${attachment.name}` : undefined}
+                  onClick={() => { if (attachment.path) void openFile(attachment.path); }}
+                  onKeyDown={(event) => { if (attachment.path && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); void openFile(attachment.path); } }}>
                   <AttachmentIcon name={attachment.name} mime={attachment.mime} />
                   <span><strong>{attachment.name}</strong><small>{filesize(attachment.bytes)}{attachment.lines ? ` · ${attachment.lines.toLocaleString('zh-CN')} 行` : ''}</small></span>
-                  <button type="button" aria-label={`移除 ${attachment.name}`} onClick={() => removeComposerAttachment(attachment.id)}><X /></button>
+                  {attachment.path && <span className="attachment-open-cue" title="在右侧面板查看" aria-hidden="true"><PanelRightOpen /></span>}
+                  <button type="button" aria-label={`移除 ${attachment.name}`} onClick={(event) => { event.stopPropagation(); removeComposerAttachment(attachment.id); }} onKeyDown={(event) => event.stopPropagation()}><X /></button>
                 </div>)}
             </div>}
             <div className={`composer-input ${composing ? 'is-composing' : ''}`}>
@@ -2297,7 +2435,31 @@ export function App() {
               value={prompt}
               onChange={(event) => { const value = event.target.value; setPrompt(value); updateComposerMenu(value, event.target.selectionStart ?? value.length); }}
               onClick={(event) => updateComposerMenu(prompt, event.currentTarget.selectionStart ?? prompt.length)}
-              onPaste={(event) => { const files = Array.from(event.clipboardData.files); if (files.length > 0) { event.preventDefault(); void addComposerFiles(files); } }}
+              onPaste={(event) => {
+                const files = Array.from(event.clipboardData.files);
+                if (files.length > 0) { event.preventDefault(); void addComposerFiles(files); return; }
+                const text = event.clipboardData.getData('text');
+                if (!text) return;
+                const start = event.currentTarget.selectionStart ?? prompt.length;
+                const end = event.currentTarget.selectionEnd ?? prompt.length;
+                const base = prompt.slice(0, start) + prompt.slice(end);
+                if (!pasteExceedsBudget(base, text)) return;
+                event.preventDefault();
+                // 被选中替换的内容随这次粘贴一起移除；粘贴内容单独落成附件。
+                if (start !== end) setPrompt(base);
+                void attachPastedText(text).then((saved) => {
+                  if (saved) return;
+                  // 落盘失败时退回普通文本粘贴，避免内容丢失。
+                  const next = prompt.slice(0, start) + text + prompt.slice(end);
+                  setPrompt(next);
+                  requestAnimationFrame(() => {
+                    const node = textareaRef.current;
+                    if (!node) return;
+                    node.focus();
+                    node.selectionStart = node.selectionEnd = start + text.length;
+                  });
+                });
+              }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && queuedPrompts.length > 0) { event.preventDefault(); void sendAllQueued(); return; }
                 if (composerMenu && composerOptionsCount > 0) {
@@ -2587,11 +2749,25 @@ export function App() {
         <footer className="detail-footer"><span /><button className="settings-outline" onClick={() => setShortcutsOpen(false)}>关闭</button></footer>
       </DetailDialog>}
 
+      {tabMenu && <ActionMenu x={tabMenu.x} y={tabMenu.y} onClose={closeTabMenu} items={[
+        { label: '关闭标签页', run: () => closePanelTab(tabMenu.id) },
+        { label: '关闭左侧标签页', disabled: panelTabs.findIndex(tab => tab.id === tabMenu.id) <= 0, run: () => closePanelTabs(tabMenu.id, 'left') },
+        { label: '关闭右侧标签页', disabled: panelTabs.findIndex(tab => tab.id === tabMenu.id) === panelTabs.length-1, run: () => closePanelTabs(tabMenu.id, 'right') },
+        { label: '关闭其他标签页', disabled: panelTabs.length <= 1, run: () => closePanelTabs(tabMenu.id, 'others') },
+        { label: '关闭所有标签页', run: () => closePanelTabs(tabMenu.id, 'all') },
+      ]} />}
       {/* 右侧工作台：标签、文件树与预览 */}
       {filesOpen && (
         <>
         {!panelFullscreen && <button className="file-panel-backdrop" aria-label="关闭右侧面板" tabIndex={-1} onClick={closePanel} />}
-        <aside className={`file-panel ${panelEntered ? 'is-open' : ''} ${panelFullscreen ? 'is-fullscreen' : ''} ${panelSplit ? 'is-split' : ''}`}>
+        <aside className={`file-panel ${panelEntered ? 'is-open' : ''} ${panelFullscreen ? 'is-fullscreen' : ''} ${panelSplit ? 'is-split' : ''} ${panelResizing ? 'is-resizing' : ''}`} style={{ '--panel-w': `${Number.isFinite(panelWidth) ? panelWidth : 700}px` } as CSSProperties}>
+          {!panelFullscreen && <div className="panel-resize-handle" role="separator" aria-label="调整右侧面板宽度" aria-orientation="vertical" aria-valuenow={panelWidth} aria-valuemin={320} aria-valuemax={window.innerWidth - 48} tabIndex={0}
+            onPointerDown={event => { if (event.button !== 0) return; event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); panelDrag.current = { x: event.clientX, width: event.currentTarget.parentElement!.getBoundingClientRect().width }; setPanelResizing(true); }}
+            onPointerMove={event => { if (panelDrag.current) resizePanel(panelDrag.current.width + panelDrag.current.x - event.clientX); }}
+            onPointerUp={event => { panelDrag.current = null; setPanelResizing(false); event.currentTarget.releasePointerCapture(event.pointerId); }}
+            onLostPointerCapture={() => { panelDrag.current = null; setPanelResizing(false); }}
+            onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); resizePanel(panelWidth + (event.key === 'ArrowLeft' ? 40 : -40)); } }}
+          />}
           <div className="file-panel-inner">
           <div className="panel-tabbar">
             <div className="panel-tabs" ref={panelTabsRef} role="tablist" aria-label="右侧面板标签">
@@ -2603,7 +2779,8 @@ export function App() {
                 className={`panel-tab ${activePanelTabId === tab.id ? 'is-active' : ''} ${tabDragRef.current === tab.id ? 'is-dragging' : ''} ${tabDropTarget === tab.id ? 'tab-drop-before' : ''}`}
                 draggable
                 onClick={() => activatePanelTab(tab)}
-                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activatePanelTab(tab); } }}
+                onContextMenu={event => { event.preventDefault(); setTabMenu({ id: tab.id, x: event.clientX, y: event.clientY }); }}
+                onKeyDown={(event) => { if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setTabMenu({ id: tab.id, x: rect.left, y: rect.bottom }); } else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activatePanelTab(tab); } }}
                 onDragStart={(event) => {
                   tabDragRef.current = tab.id;
                   event.dataTransfer.effectAllowed = 'move';
@@ -2631,7 +2808,7 @@ export function App() {
                 <span className="panel-tab-label">{tab.title}</span>
                 <button className="panel-tab-close" draggable={false} aria-label={`关闭 ${tab.title}`} onDragStart={(event) => event.preventDefault()} onClick={(event) => { event.stopPropagation(); closePanelTab(tab.id); }}><X /></button>
               </div>)}
-              <button className="panel-tab-add" title="打开工作区文件" aria-label="打开工作区文件" onClick={openFilesTab}><Plus /></button>
+              <button className="panel-tab-add" title="新标签页" aria-label="新标签页" onClick={openStartTab}><Plus /></button>
             </div>
             <div className="panel-tools">
               <button className={`icon-button ${panelSplit ? 'is-active' : ''}`} aria-label={panelSplit ? '退出分栏' : '分栏'} title={panelSplit ? '退出分栏' : '分栏'} onClick={() => setPanelSplit((value) => !value)}><Columns2 /></button>

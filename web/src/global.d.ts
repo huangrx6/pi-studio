@@ -89,6 +89,9 @@ interface PiDetail {
   turnDiffs?: TurnDiff[];
   /** 是否还有更早的历史消息未加载。 */
   hasMore?: boolean;
+  running?: boolean;
+  compacting?: boolean;
+  requestId?: string;
 }
 
 /** 设置面板一次性读取的快照，覆盖模型、来源、MCP、技能、扩展等配置。 */
@@ -165,6 +168,12 @@ declare global {
       /** 读取单个文件文本；binary 为 true 时 text 不可直接展示。 */
       file(cwd: string, path: string): Promise<{ path: string; size: number; binary: boolean; text: string }>;
       /** 只读打开工作区外的绝对路径（文件变更卡片）。 */
+      temporaryModel(payload?: { modelRef?: string; thinkingLevel?: import('./model-types').ThinkingLevel }): Promise<import('./model-types').ModelSelection>;
+      temporaryPrompt(payload: { id: string; text: string; images: { data: string; mimeType: string }[]; modelRef: string; thinkingLevel: string }): Promise<{ ok: boolean }>;
+      temporaryStop(id: string): Promise<void>;
+      temporaryClose(id: string): Promise<void>;
+      onTemporary(listener: (event: { id: string; type: 'message' | 'done'; message?: ChatMessage }) => void): () => void;
+      turnDiffFile(payload: { sessionId: string; at: number; path: string; full?: boolean; ignoreWhitespace?: boolean }): Promise<import('./chat-types').TurnDiffFile>;
       fileAbsolute(path: string): Promise<{ path: string; size: number; binary: boolean; text: string }>;
       /** 查询系统里可用来打开该文件的应用。 */
       fileActions(payload: { cwd: string; path: string }): Promise<{ apps: Array<{ name: string; path: string; icon?: string }> }>;
@@ -185,7 +194,7 @@ declare global {
 
       // ---- 附件 ----
       /** 把长文本保存成附件文件，返回路径与可直接插回输入框的 promptText。 */
-      saveAttachment(payload: { sessionId: string; text: string }): Promise<ChatAttachment & { notice: string; promptText: string }>;
+      saveAttachment(payload: { sessionId: string; text: string }): Promise<ChatAttachment & { notice: string; promptText: string; marker: string }>;
       /** 打开系统文件选择器挑选附件。 */
       pickAttachments(payload: { sessionId?: string }): Promise<{ attachments: ComposerAttachment[] }>;
       /** 保存粘贴/拖入的上传文件，返回带 marker 的落盘信息。 */
@@ -290,7 +299,7 @@ declare global {
        * 一轮请求的流式事件。type 覆盖消息开始/增量/结束、自动重试开始与结束、
        * 整体完成与失败；渲染进程按 requestId 过滤出本次请求的事件。
        */
-      onPrompt(listener: (payload: { requestId: string; type: 'message_start' | 'message_update' | 'message_end' | 'retry-start' | 'retry-end' | 'compaction-start' | 'compaction-end' | 'compaction-interrupted' | 'turn-diff' | 'done' | 'error'; message?: ChatMessage; error?: string; attempt?: number; maxAttempts?: number; delayMs?: number; success?: boolean; finalError?: string; errorMessage?: string; diff?: TurnDiff; at?: number; reason?: 'manual' | 'threshold' | 'overflow'; aborted?: boolean }) => void): () => void;
+      onPrompt(listener: (payload: { requestId: string; type: 'message_start' | 'message_update' | 'message_end' | 'retry-start' | 'retry-end' | 'run-attached' | 'compaction-start' | 'compaction-end' | 'compaction-interrupted' | 'turn-diff' | 'done' | 'error'; message?: ChatMessage; error?: string; attempt?: number; maxAttempts?: number; delayMs?: number; success?: boolean; finalError?: string; errorMessage?: string; diff?: TurnDiff; at?: number; reason?: 'manual' | 'threshold' | 'overflow'; aborted?: boolean; compacting?: boolean }) => void): () => void;
 
       // ---- 扩展命令 ----
       /** 运行扩展提供的命令。 */

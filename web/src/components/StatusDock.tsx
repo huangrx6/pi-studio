@@ -1,5 +1,5 @@
 /**
- * 输入框上方的统一状态栏。
+ * 输入框下方的统一状态栏。
  *
  * 数据来自两个 Pi 原语：
  *  - `ctx.ui.setStatus(key, text)`：状态 chip
@@ -12,8 +12,9 @@
  *  - 顺序与显隐存在 localStorage，跨会话保持。
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronLeft, ChevronRight, SlidersHorizontal, X } from 'lucide-react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
+import { PopoverSurface } from './PopoverSurface';
 
 type DockItem = {
   key: string;
@@ -78,16 +79,41 @@ export function StatusDock({ sessionId }: { sessionId: string }) {
   const [detailsKey, setDetailsKey] = useState<string | null>(null);
   const [manageOpen, setManageOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [anchor, setAnchor] = useState({ left: 0, bottom: 34, width: 360 });
+
+  function close(restoreFocus = false) {
+    setDetailsKey(null); setManageOpen(false);
+    if (restoreFocus) triggerRef.current?.focus();
+  }
+
+  useLayoutEffect(() => {
+    if (!detailsKey && !manageOpen) return;
+    const place = () => {
+      const root = rootRef.current, trigger = triggerRef.current;
+      if (!root || !trigger) return;
+      const r = root.getBoundingClientRect(), t = trigger.getBoundingClientRect();
+      const width = Math.min(manageOpen ? 400 : 360, r.width);
+      setAnchor({ width, left: Math.max(0, Math.min(t.left - r.left, r.width - width)), bottom: r.bottom - t.top + 8 });
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    if (rootRef.current) observer.observe(rootRef.current);
+    window.addEventListener('resize', place);
+    return () => { observer.disconnect(); window.removeEventListener('resize', place); };
+  }, [detailsKey, manageOpen, footer, statuses, config]);
 
   useEffect(() => {
-    let disposed = false;
+    let disposed = false, statusRevision = 0, footerRevision = 0;
+    setStatuses([]); setFooter(''); setDetailsKey(null); setManageOpen(false);
     void window.piApi.extensionState(sessionId).then((state) => {
       if (disposed || !state) return;
-      setStatuses(state.statuses || []);
-      setFooter(state.footer || '');
+      if (!statusRevision) setStatuses(state.statuses || []);
+      if (!footerRevision) setFooter(state.footer || '');
     }).catch(() => { /* 扩展未绑定 */ });
     const offStatus = window.piApi.onExtensionStatus?.((event) => {
       if (event.sessionId !== sessionId) return;
+      statusRevision++;
       setStatuses((current) => {
         const next = new Map(current);
         if (!event.text) next.delete(event.key);
@@ -96,7 +122,7 @@ export function StatusDock({ sessionId }: { sessionId: string }) {
       });
     }) ?? (() => {});
     const offFooter = window.piApi.onExtensionFooter?.((event) => {
-      if (event.sessionId === sessionId) setFooter(event.text || '');
+      if (event.sessionId === sessionId) { footerRevision++; setFooter(event.text || ''); }
     }) ?? (() => {});
     return () => { disposed = true; offStatus(); offFooter(); };
   }, [sessionId]);
@@ -107,8 +133,12 @@ export function StatusDock({ sessionId }: { sessionId: string }) {
     const outside = (event: PointerEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) { setDetailsKey(null); setManageOpen(false); }
     };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); close(true); }
+    };
     document.addEventListener('pointerdown', outside);
-    return () => document.removeEventListener('pointerdown', outside);
+    document.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
   }, [detailsKey, manageOpen]);
 
   const items = useMemo(() => sortItems([...footerItems(footer), ...statusItems(statuses)], config.order), [footer, statuses, config.order]);
@@ -143,46 +173,39 @@ export function StatusDock({ sessionId }: { sessionId: string }) {
         className={`status-chip ${item.kind === 'footer' ? 'is-footer' : ''} ${detailsKey === item.key ? 'is-open' : ''}`}
         key={item.key}
         title={item.detail}
-        onClick={() => { setManageOpen(false); setDetailsKey((current) => current === item.key ? null : item.key); }}
+        aria-expanded={detailsKey === item.key}
+        aria-haspopup="dialog"
+        onClick={(event) => { triggerRef.current = event.currentTarget; setManageOpen(false); setDetailsKey((current) => current === item.key ? null : item.key); }}
       >
         <span>{item.label}</span>
         <ChevronDown className="status-chip-chevron" />
       </button>)}
-      <button type="button" className={`status-dock-manage ${manageOpen ? 'is-open' : ''}`} aria-label="管理状态栏" title="管理状态栏" onClick={() => { setDetailsKey(null); setManageOpen((value) => !value); }}><SlidersHorizontal /></button>
+      <button type="button" className={`status-dock-manage ${manageOpen ? 'is-open' : ''}`} aria-label="管理状态栏" title="管理状态栏" aria-expanded={manageOpen} aria-haspopup="dialog" onClick={(event) => { triggerRef.current = event.currentTarget; setDetailsKey(null); setManageOpen((value) => !value); }}><SlidersHorizontal /></button>
     </div>
 
-    {details && <div className="status-dock-popover">
-      <div className="status-dock-popover-head">
-        <div className="status-dock-heading">
-          <span className="status-dock-eyebrow">{details.kind === 'footer' ? 'PI-FOOTER-COMPOSER · 终端 footer' : details.key.replace(/^status:/, '')}</span>
-          <strong>{details.kind === 'footer' ? '运行指标' : '状态详情'}</strong>
-        </div>
-        <button type="button" className="status-dock-close" aria-label="关闭状态详情" onClick={() => setDetailsKey(null)}><X /></button>
+    {details && <PopoverSurface className="status-dock-popover" style={anchor} role="dialog" aria-label="状态详情"
+      heading={details.kind === 'footer' ? '运行指标' : '状态详情'} onClose={() => close(true)} closeLabel="关闭状态详情">
+      <div className="status-dock-detail">
+        {details.detail.split(/\n|\s+[·•]\s+/u).filter(part => part.trim()).map((part, index) => {
+          // Only split explicit label/value text; never infer plugin semantics or calculate metrics.
+          const pair = part.trim().match(/^([^:：]{1,24})[:：]\s+(.+)$/u);
+          return pair
+            ? <div className="status-detail-row" key={index}><span>{pair[1]}</span><strong>{pair[2]}</strong></div>
+            : <div className="status-detail-line" key={index}>{part.trim()}</div>;
+        })}
       </div>
-      <div className="status-dock-detail">{details.detail.split('\n').map((line, index) => <div className="status-detail-line" key={index}>{line}</div>)}</div>
-      <div className="status-dock-actions">
-        <button type="button" onClick={() => reorder(details.key, -1)} aria-label="向前移动"><ChevronLeft /><span>前移</span></button>
-        <button type="button" onClick={() => reorder(details.key, 1)} aria-label="向后移动"><ChevronRight /><span>后移</span></button>
-        <button type="button" onClick={() => { toggle(details.key); setDetailsKey(null); }}><X /><span>隐藏</span></button>
-        <button type="button" onClick={() => { setDetailsKey(null); setManageOpen(true); }}><SlidersHorizontal /><span>管理</span></button>
-      </div>
-    </div>}
+      <div className="status-dock-source">来源 · {details.kind === 'footer' ? '扩展底栏' : details.key.replace(/^status:/, '')}</div>
+    </PopoverSurface>}
 
-    {manageOpen && <div className="status-dock-popover is-manage">
-      <div className="status-dock-popover-head">
-        <div className="status-dock-heading">
-          <span className="status-dock-eyebrow">STATUS BAR</span>
-          <strong>状态栏管理</strong>
-        </div>
-        <button type="button" className="status-dock-close" aria-label="关闭状态栏管理" onClick={() => setManageOpen(false)}><X /></button>
-      </div>
+    {manageOpen && <PopoverSurface className="status-dock-popover is-manage" style={anchor} role="dialog" aria-label="状态栏管理"
+      heading="状态栏管理" onClose={() => close(true)} closeLabel="关闭状态栏管理">
       <p className="status-dock-hint">调整显示顺序与显隐；设置会保存在本机。</p>
-      <div className="status-manage-list">{items.map((item) => <div className={`status-manage-row ${config.hidden.includes(item.key) ? 'is-hidden' : ''}`} key={item.key}>
+      <div className="status-manage-list">{items.map((item, index) => <div className={`status-manage-row ${config.hidden.includes(item.key) ? 'is-hidden' : ''}`} key={item.key}>
         <button type="button" className={`status-manage-check ${config.hidden.includes(item.key) ? '' : 'is-on'}`} aria-label={config.hidden.includes(item.key) ? `显示 ${item.label}` : `隐藏 ${item.label}`} onClick={() => toggle(item.key)}>{config.hidden.includes(item.key) ? null : <Check />}</button>
         <span className="status-manage-label" title={item.label}>{item.label}</span>
-        <button type="button" className="status-manage-move" aria-label="上移" onClick={() => reorder(item.key, -1)}><ChevronLeft /></button>
-        <button type="button" className="status-manage-move" aria-label="下移" onClick={() => reorder(item.key, 1)}><ChevronRight /></button>
+        <button type="button" className="status-manage-move" aria-label="上移" disabled={index === 0} onClick={() => reorder(item.key, -1)}><ChevronLeft /></button>
+        <button type="button" className="status-manage-move" aria-label="下移" disabled={index === items.length - 1} onClick={() => reorder(item.key, 1)}><ChevronRight /></button>
       </div>)}</div>
-    </div>}
+    </PopoverSurface>}
   </div>;
 }

@@ -174,10 +174,24 @@ async function endTurn(requestId) {
       });
       if (files.length >= MAX_FILES) break;
     }
-    return { files, totalAdded, totalRemoved, truncated: files.length >= MAX_FILES };
+    return { files, totalAdded, totalRemoved, truncated: files.length >= MAX_FILES, snapshot: { root: fs.realpathSync(snap.root), before: snap.startTree, after: endTree } };
   } finally {
     fs.rmSync(snap.dir, { recursive: true, force: true });
   }
 }
 
-module.exports = { beginTurn, endTurn, readTurnDiffs, saveTurnDiff };
+/** Re-read immutable trees, never compare historical patches against today's working tree. */
+async function readTurnDiffFile({ sessionId, at, path: requested, full = false, ignoreWhitespace = false }) {
+  const turn = readTurnDiffs(sessionId).find(item => item.at === at);
+  const file = turn?.files.find(item => item.path === requested);
+  if (!file) throw new Error('找不到该轮文件变更');
+  if (!turn.snapshot) throw new Error('这条历史记录没有保存完整快照，只能查看已保存的差异');
+  const { root, before, after } = turn.snapshot;
+  if (![before, after].every(value => /^[a-f0-9]{40,64}$/.test(value))) throw new Error('快照标识无效');
+  const relative = path.relative(root, requested);
+  if (relative.startsWith('../') || path.isAbsolute(relative)) throw new Error('文件不在快照中');
+  const patch = file.binary ? '' : await git(root, ['--literal-pathspecs', 'diff', '--no-ext-diff', '--no-textconv', '--no-color', '--no-renames', full ? '--unified=100000' : '--unified=3', ...(ignoreWhitespace ? ['--ignore-all-space'] : []), before, after, '--', relative]);
+  const limit = full ? 2_000_000 : MAX_PATCH_CHARS;
+  return { ...file, patch: patch.slice(0, limit), truncated: patch.length > limit };
+}
+module.exports = { beginTurn, endTurn, readTurnDiffs, saveTurnDiff, readTurnDiffFile };

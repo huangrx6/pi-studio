@@ -137,7 +137,7 @@ async function saveAttachment({ sessionId, text }) {
   const marker = makeAttachmentMarker(info);
   const preview = text.replace(/\s+/g, ' ').trim().slice(0, 140);
   const notice = `${preview}${text.length > 140 ? '…' : ''}\n\n原始内容已保存为附件。`;
-  return { ...info, promptText: `${notice}\n\n${marker}`, notice };
+  return { ...info, marker, promptText: `${notice}\n\n${marker}`, notice };
 }
 
 /**

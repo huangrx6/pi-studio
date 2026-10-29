@@ -48,7 +48,7 @@ const detailCache = new Map();
 const MAX_DETAIL_CACHE = 3;
 const MAX_CACHED_FILE_BYTES = 4 * 1024 * 1024;
 /** 默认只读取最近这么多条消息；大会话向上翻页，避免一次序列化 15MB JSONL。 */
-const DEFAULT_HISTORY_LIMIT = 120;
+const DEFAULT_HISTORY_LIMIT = 200;
 
 /** 取最近 limit 条消息，并从最近的用户消息边界开始，避免从半轮开始渲染。 */
 function messageWindow(entries, limit) {
@@ -225,7 +225,7 @@ async function detail(id, limit = DEFAULT_HISTORY_LIMIT) {
         );
         const data = { id, cwd: info.cwd, title: info.title, nativeName: info.nativeName || manager.getSessionName?.() || '', messages, hasMore: window.hasMore, model: await sessionModelInfo(manager, info.cwd), turnDiffs: readTurnDiffs(id) };
         // 只缓存完整且较小的会话；大会话/分页窗口不在主进程保留第二份副本。
-        if (!window.hasMore && stat.size <= MAX_CACHED_FILE_BYTES) {
+        if (!window.hasMore && messages.length <= DEFAULT_HISTORY_LIMIT && stat.size <= MAX_CACHED_FILE_BYTES) {
           if (detailCache.size >= MAX_DETAIL_CACHE) detailCache.delete(detailCache.keys().next().value);
           detailCache.set(id, { mtimeMs: stat.mtimeMs, size: stat.size, data });
         }

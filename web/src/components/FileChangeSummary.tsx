@@ -74,7 +74,7 @@ function mergeFiles(git: TurnDiff | undefined, toolFiles: FileChange[]): Display
 export function FileChangeSummary({ files, gitDiff, onOpenDiff, onOpenFile }: {
   files: FileChange[];
   gitDiff?: TurnDiff;
-  onOpenDiff?: (file: TurnDiffFile) => void;
+  onOpenDiff?: (file: TurnDiffFile | undefined, turn: TurnDiff) => void;
   onOpenFile?: (path: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -84,6 +84,7 @@ export function FileChangeSummary({ files, gitDiff, onOpenDiff, onOpenFile }: {
   const hasCounts = display.some((file) => file.complete);
   const added = display.reduce((sum, file) => sum + file.added, 0);
   const removed = display.reduce((sum, file) => sum + file.removed, 0);
+  const review: TurnDiff = { ...gitDiff, at: gitDiff?.at ?? 0, totalAdded: added, totalRemoved: removed, files: display.map(file => ({ ...file, status: file.status === 'written' ? 'modified' : file.status, completeCounts: file.complete })) };
   const visible = expanded ? display : display.slice(0, 4);
 
   return <section className="file-change-summary" aria-label="本轮文件变更">
@@ -93,7 +94,7 @@ export function FileChangeSummary({ files, gitDiff, onOpenDiff, onOpenFile }: {
         <strong>已编辑 {display.length} 个文件</strong>
         {hasCounts && counts(added, removed)}
       </div>
-      <button type="button" onClick={() => setExpanded((value) => !value)}>{expanded ? '收起变更' : '查看变更'}</button>
+      <button type="button" onClick={() => onOpenDiff?.(undefined, review)}>查看变更</button>
     </header>
 
     <div className="file-change-list">{visible.map((file) => {
@@ -110,17 +111,7 @@ export function FileChangeSummary({ files, gitDiff, onOpenDiff, onOpenFile }: {
         onClick={() => {
           if (!openable) return;
           if (!canDiff) { onOpenFile?.(file.path); return; }
-          onOpenDiff?.({
-            path: file.path,
-            label: file.label,
-            status: file.status === 'written' ? 'modified' : file.status,
-            added: file.added,
-            removed: file.removed,
-            binary: file.binary,
-            truncated: file.truncated,
-            patch: file.patch,
-            completeCounts: file.complete,
-          });
+          onOpenDiff?.(review.files.find(item => item.path === file.path), review);
         }}
       >
         <FileText aria-hidden="true" />

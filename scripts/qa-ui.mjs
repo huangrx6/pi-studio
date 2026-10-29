@@ -404,7 +404,7 @@ try {
   await page.goto(process.env.PREVIEW_URL || 'http://127.0.0.1:5180');
   await page.getByRole('heading', { name: '今天，想做点什么？', exact: true }).waitFor();
   // 全新启动时不应出现会话相关的容器，欢迎页应保持干净。
-  assert.equal(await page.locator('.workspace-chip, .chat-tabs, .chat-scroll').count(), 0);
+  assert.equal(await page.locator('.workspace-chip, .chat-tabs:not(.is-placeholder), .chat-scroll').count(), 0);
   await capture('01-welcome');
 
   // 侧边栏搜索：空结果时展示占位文案；再次点击搜索按钮收起搜索框，
