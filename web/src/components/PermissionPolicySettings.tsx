@@ -237,7 +237,7 @@ export function PermissionPolicySettings({
     if (mode === 'full' && draft.preset !== 'full') {
       const accepted = await actionConfirmation.confirm({
         title: '启用完全权限？',
-        description: '普通工具不再逐次确认，包括文件修改和常规命令。你显式设置为“询问”的规则、工作区边界和明显的系统级破坏命令仍会生效。',
+        description: '普通工具、跨工作区操作和无法静态确认的脚本会直接执行。你显式设置为“询问/拒绝”的规则，以及明显的删除和系统破坏命令仍会生效。',
         confirmLabel: '启用完全权限',
         tone: 'danger',
       });

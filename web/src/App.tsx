@@ -1829,13 +1829,6 @@ export function App() {
     void openSession(summary);
   }), [workspaces]);
 
-  useEffect(() => {
-    if (!settingsOpen || editor) return;
-    const onKey = (event: KeyboardEvent): void => { if (event.key === 'Escape') setSettingsOpen(false); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [settingsOpen, editor]);
-
   useEffect(() => { settingsContentRef.current?.scrollTo({ top: 0 }); }, [settingsTab, settingsOpen]);
 
   useEffect(() => {
@@ -4785,7 +4778,7 @@ export function App() {
           <aside className="settings-nav">
             <div className="settings-nav-head"><span>设置</span></div>
             {settingsPages.map((page) => <button key={page.id} className={`settings-nav-row ${settingsTab === page.id ? 'is-active' : ''}`} aria-current={settingsTab === page.id ? 'page' : undefined} onClick={() => { setSettingsTab(page.id); setModelQuery(''); }}><page.icon />{page.label}</button>)}
-            <div className="settings-nav-bottom"><button className="settings-back-button" onClick={() => setSettingsOpen(false)}><ChevronLeft /><span>返回对话</span><kbd>Esc</kbd></button></div>
+            <div className="settings-nav-bottom"><button className="settings-back-button" onClick={() => setSettingsOpen(false)}><ChevronLeft /><span>返回对话</span></button></div>
           </aside>
           <section className="settings-content" ref={settingsContentRef}>
             {settingsError && <div className="settings-error" role="alert">{settingsError}</div>}

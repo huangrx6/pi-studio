@@ -991,6 +991,7 @@ await page.addInitScript(() => {
   }
 
   let draftSequence = 0;
+  let confirmRequestListener = null;
 
   // 2.5 暴露给渲染进程的 PiAPI 子集（只实现 UI 会调用的方法）
   const api = {
@@ -1528,7 +1529,12 @@ await page.addInitScript(() => {
     onOpenSession: () => () => {},
     onConversationListChanged: () => () => {},
     onRuntimeRefresh: () => () => {},
-    onConfirmRequest: () => () => {},
+    onConfirmRequest: (listener) => {
+      confirmRequestListener = listener;
+      return () => {
+        if (confirmRequestListener === listener) confirmRequestListener = null;
+      };
+    },
     setTheme: async () => undefined,
     menuBarSettings: async () => ({ available: true, enabled: true, platform: 'darwin' }),
     setMenuBarVisible: async (enabled) => ({ available: true, enabled, platform: 'darwin' }),
@@ -1596,6 +1602,10 @@ await page.addInitScript(() => {
       return async () => undefined;
     },
   });
+  window.__qaEmitConfirmRequest = (payload) => {
+    if (!confirmRequestListener) throw new Error('Confirm listener is not registered');
+    confirmRequestListener(structuredClone(payload));
+  };
 });
 
 // ---------------------------------------------------------------------------
@@ -1669,6 +1679,97 @@ try {
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await capture('01-welcome-dark');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+
+  // 工具确认弹框：读取与写入必须使用各自的文案；记住范围保持两列，
+  // 下拉展开时不能撑出横向滚动条。
+  const emitConfirm = (payload) => page.evaluate((request) => {
+    window.__qaEmitConfirmRequest(request);
+  }, payload);
+  await emitConfirm({
+    id: 'qa-read-confirm',
+    tool: 'read',
+    title: '读取工具',
+    message: 'read → /Users/huangrx6/.agents/skills/pingcode/SKILL.md',
+    explanation: '该读取操作位于当前工作区之外，需要明确批准。',
+    risk: { level: 'low', title: '读取工具', detail: 'read' },
+    rememberScopes: ['once', 'session', 'workspace', 'always'],
+  });
+  const toolConfirm = page.getByRole('dialog', { name: '读取工具', exact: true });
+  await toolConfirm.waitFor();
+  assert.equal(await toolConfirm.locator('.confirm-eyebrow').innerText(), '读取文件');
+  assert.equal(await toolConfirm.getByRole('button', { name: '允许读取', exact: true }).count(), 1);
+  const rememberLayout = await toolConfirm.locator('.confirm-remember').evaluate((row) => {
+    const text = row.querySelector(':scope > span')?.getBoundingClientRect();
+    const select = row.querySelector('.confirm-remember-select')?.getBoundingClientRect();
+    return {
+      display: getComputedStyle(row).display,
+      textWidth: text?.width || 0,
+      selectWidth: select?.width || 0,
+    };
+  });
+  assert.equal(rememberLayout.display, 'grid');
+  assert.ok(rememberLayout.textWidth > 160);
+  assert.ok(rememberLayout.selectWidth >= 168 && rememberLayout.selectWidth <= 210);
+  const confirmOverflow = await toolConfirm.locator('.confirm-card, .confirm-body, .confirm-remember').evaluateAll(
+    (elements) => elements
+      .filter((element) => element.scrollWidth > element.clientWidth + 2)
+      .map((element) => element.className),
+  );
+  assert.deepEqual(confirmOverflow, []);
+  await capture('01c-tool-confirm-read');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await toolConfirm.getByRole('button', { name: '记住选择范围', exact: true }).click();
+  const confirmMenu = page.locator('.pi-select-menu');
+  await confirmMenu.waitFor();
+  const confirmMenuBounds = await confirmMenu.boundingBox();
+  assert.ok(confirmMenuBounds && confirmMenuBounds.x >= 0 && confirmMenuBounds.x + confirmMenuBounds.width <= 1440);
+  await capture('01d-tool-confirm-select-dark');
+  await page.getByRole('option', { name: '本会话中相同操作', exact: true }).click();
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  await toolConfirm.getByRole('button', { name: '取消', exact: true }).click();
+  await toolConfirm.waitFor({ state: 'detached' });
+
+  await emitConfirm({
+    id: 'qa-write-confirm',
+    tool: 'edit',
+    title: '修改工具',
+    message: 'edit → /workspace/pi-studio/web/src/components/ConfirmDialog.tsx',
+    risk: { level: 'medium', title: '修改工作区文件', detail: 'edit' },
+    rememberScopes: ['once', 'session'],
+  });
+  const writeConfirm = page.getByRole('dialog', { name: '修改工具', exact: true });
+  await writeConfirm.waitFor();
+  assert.equal(await writeConfirm.locator('.confirm-eyebrow').innerText(), '修改文件');
+  assert.equal(await writeConfirm.getByRole('button', { name: '允许写入', exact: true }).count(), 1);
+  await writeConfirm.getByRole('button', { name: '取消', exact: true }).click();
+  await writeConfirm.waitFor({ state: 'detached' });
+
+  await page.setViewportSize({ width: 600, height: 800 });
+  await emitConfirm({
+    id: 'qa-compact-read-confirm',
+    tool: 'read',
+    title: '读取工具',
+    message: 'read → /Users/huangrx6/.agents/skills/pingcode/SKILL.md',
+    explanation: '该读取操作位于当前工作区之外，需要明确批准。',
+    risk: { level: 'low', title: '读取工具', detail: 'read' },
+    rememberScopes: ['once', 'session', 'workspace', 'always'],
+  });
+  const compactConfirm = page.getByRole('dialog', { name: '读取工具', exact: true });
+  await compactConfirm.waitFor();
+  const compactRememberColumns = await compactConfirm.locator('.confirm-remember').evaluate(
+    (row) => getComputedStyle(row).gridTemplateColumns.split(' ').filter(Boolean),
+  );
+  assert.equal(compactRememberColumns.length, 1);
+  const compactConfirmOverflow = await compactConfirm.locator('.confirm-card, .confirm-body, .confirm-remember').evaluateAll(
+    (elements) => elements
+      .filter((element) => element.scrollWidth > element.clientWidth + 2)
+      .map((element) => element.className),
+  );
+  assert.deepEqual(compactConfirmOverflow, []);
+  await capture('01e-tool-confirm-compact');
+  await compactConfirm.getByRole('button', { name: '取消', exact: true }).click();
+  await compactConfirm.waitFor({ state: 'detached' });
+  await page.setViewportSize({ width: 1440, height: 920 });
 
   // 侧边栏搜索：空结果时展示占位文案；再次点击搜索按钮收起搜索框，
   // 然后折叠/展开侧边栏，确认折叠态布局正常。
@@ -1962,6 +2063,9 @@ try {
     await page.locator('.settings-nav-row').allTextContents(),
     ['通用', '模型配置', '使用量', '归档会话', 'Agent 工具', '权限策略', 'Harness 配置', '子 Agent', 'MCP 服务器', '技能', '扩展', '关于'],
   );
+  // Escape has no application-level settings shortcut; only a focused dialog can close with it.
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('.settings-overlay').count(), 1);
   for (const [index, tab] of ['模型配置', '使用量', '归档会话', 'Agent 工具', '权限策略', 'Harness 配置', '子 Agent', 'MCP 服务器', '技能', '扩展', '关于'].entries()) {
     await openSettingsSection(tab);
     await capture(`${String(index + 7).padStart(2, '0')}-settings-${index}`);

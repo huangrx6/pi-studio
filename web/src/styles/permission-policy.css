@@ -845,9 +845,10 @@
 }
 
 .confirm-remember {
-  display: flex;
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(168px, 210px);
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-3);
   margin-top: 14px;
   padding-top: 14px;
@@ -856,13 +857,21 @@
   font-size: var(--text-sm);
 }
 
+.confirm-remember > span {
+  min-width: 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .confirm-remember-select {
-  width: 210px;
-  flex: none;
-  min-width: 168px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .confirm-remember-select .pi-select-trigger {
+  min-width: 0;
+  max-width: 100%;
   height: var(--control-sm);
   padding-inline: 10px 8px;
   font-size: var(--text-sm);
@@ -978,8 +987,8 @@
   }
 
   .confirm-remember {
+    grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
-    flex-direction: column;
   }
 
   .confirm-remember-select {

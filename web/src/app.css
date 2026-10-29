@@ -1858,13 +1858,11 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 
 /* Settings back action lives at the top, before the section title. */
 /* 设置页顶部返回按钮最初做成描边按钮，后来在底部设置页脚区块被改成与侧栏
-底栏一致的透明整行样式；两处同名规则以靠后的为准。返回键提示放在右侧，
-宽度铺满导航列。 */
+底栏一致的透明整行样式；两处同名规则以靠后的为准。 */
 
 .settings-back-button { display: flex; align-items: center; gap: var(--space-2); width: 100%; height: 34px; padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--muted); text-align: left; font-size: var(--text-sm); box-shadow: var(--shadow-card); }
 .settings-back-button:hover { border-color: var(--border-strong); color: var(--text); background: var(--surface-soft); }
 .settings-back-button svg { width: 14px; height: 14px; }
-.settings-back-button kbd { margin-left: auto; font-size: var(--text-xs); color: var(--faint); }
 .settings-nav-head { margin-top: var(--space-4); }
 
 /* Selected models read as objects, not a settings list. */
@@ -1973,8 +1971,6 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .settings-back-button { width: 100%; height: var(--row-height); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--transparent); box-shadow: none; color: var(--muted); font-size: var(--text-base); font-weight: 400; }
 .settings-back-button:hover { border: 0; background: var(--surface-hover); color: var(--text); }
 .settings-back-button svg { width: 16px; height: 16px; }
-.settings-back-button kbd { margin-left: auto; color: var(--faint); font-size: var(--text-xs); }
-
 /* Settings only manages availability; model switching belongs to the conversation picker. */
 /* 设置页只负责启用/禁用模型，不提供切换当前模型的能力；因此卡片禁用 hover
 位移和阴影，主区域光标保持默认，真正的模型切换在对话输入区的选择器里。 */
@@ -3367,7 +3363,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .confirm-head { display: flex; min-width: 0; flex: none; align-items: flex-start; gap: 12px; }
 .confirm-icon { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: var(--radius-control); background: var(--surface-soft); color: var(--muted); }
 .confirm-icon svg { width: 17px; height: 17px; }
-.confirm-icon.is-command, .confirm-icon.is-file, .confirm-icon.is-network { background: var(--accent-soft); color: var(--accent); }
+.confirm-icon.is-command, .confirm-icon.is-read, .confirm-icon.is-file, .confirm-icon.is-network { background: var(--accent-soft); color: var(--accent); }
 .confirm-icon.is-danger { background: var(--error-soft); color: var(--error); }
 .confirm-heading { min-width: 0; flex: 1; }
 .confirm-eyebrow { display: block; margin-bottom: 4px; color: var(--faint); font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; }
@@ -3375,7 +3371,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .confirm-close { display: grid; place-items: center; width: 26px; height: 26px; flex: none; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--faint); }
 .confirm-close:hover { background: var(--surface-hover); color: var(--text); }
 .confirm-close svg { width: 14px; height: 14px; }
-.confirm-body { min-width: 0; min-height: 0; flex: 1 1 auto; margin-top: 16px; padding-right: 4px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.confirm-body { min-width: 0; min-height: 0; flex: 1 1 auto; margin-top: 16px; padding-right: 4px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .confirm-text { margin: 0; color: var(--muted); font-size: var(--text-md); line-height: 1.75; overflow-wrap: anywhere; }
 .confirm-command { min-width: 0; max-width: 100%; max-height: min(48vh, 360px); margin: 0; padding: 12px 14px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--code-bg); color: var(--text); font: 11.5px/1.75 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
 .confirm-token.is-command { color: var(--syntax-keyword); font-weight: 600; }

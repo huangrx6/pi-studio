@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AlertTriangle, FilePenLine, Globe2, Terminal, X } from 'lucide-react';
+import { AlertTriangle, FilePenLine, FileSearch, Globe2, Terminal, X } from 'lucide-react';
 import type {
   PermissionConfirmRequest,
   PermissionConfirmResponse,
@@ -31,16 +31,26 @@ export type ActionConfirmOptions = {
   tone?: 'default' | 'danger';
 };
 
-type ConfirmKind = 'command' | 'file' | 'network' | 'tool';
+type ConfirmKind = 'command' | 'read' | 'file' | 'network' | 'tool';
 
 type ParsedConfirm = { kind: ConfirmKind; tool?: string; detail: string; explanation?: string; risk?: string };
 
 const KIND_META: Record<ConfirmKind, { label: string; icon: ReactNode; acceptLabel: string }> = {
   command: { label: '执行命令', icon: <Terminal />, acceptLabel: '允许执行' },
+  read: { label: '读取文件', icon: <FileSearch />, acceptLabel: '允许读取' },
   file: { label: '修改文件', icon: <FilePenLine />, acceptLabel: '允许写入' },
   network: { label: '访问网络', icon: <Globe2 />, acceptLabel: '允许访问' },
   tool: { label: '工具调用', icon: <Terminal />, acceptLabel: '允许' },
 };
+
+function kindForTool(tool: string, detail?: string): ConfirmKind {
+  if (tool === 'bash') return 'command';
+  if (['read', 'ls', 'find', 'grep'].includes(tool)) return 'read';
+  if (['write', 'edit'].includes(tool)) return 'file';
+  if (tool.startsWith('mcp__')) return 'network';
+  if (detail && /^https?:/i.test(detail)) return 'network';
+  return 'tool';
+}
 
 /**
  * 解析权限守卫传来的描述文本：
@@ -59,28 +69,22 @@ function parseConfirmMessage(request: ConfirmRequest): ParsedConfirm {
       : '低风险';
   const risk = request.risk ? `${riskLabel} · ${request.risk.title}` : undefined;
   if (request.tool) {
-    const kind: ConfirmKind = request.tool === 'bash'
-      ? 'command'
-      : ['read', 'write', 'edit', 'ls', 'find', 'grep'].includes(request.tool)
-        ? 'file'
-        : request.tool.startsWith('mcp__')
-          ? 'network'
-          : 'tool';
+    const detail = request.tool === 'bash'
+      ? text.replace(/^执行命令\s*·\s*/, '')
+      : text.includes('→')
+        ? text.slice(text.indexOf('→') + 1).trim()
+        : text;
     return {
-      kind,
+      kind: kindForTool(request.tool, detail),
       tool: request.tool,
-      detail: request.tool === 'bash'
-        ? text.replace(/^执行命令\s*·\s*/, '')
-        : text.includes('→')
-          ? text.slice(text.indexOf('→') + 1).trim()
-          : text,
+      detail,
       explanation: request.explanation,
       risk,
     };
   }
   if (text.startsWith('执行命令')) return { kind: 'command', detail: text.replace(/^执行命令\s*·\s*/, '') };
   const arrow = /^([\w.-]+)\s*→\s*([\s\S]+)$/.exec(text);
-  if (arrow) return { kind: /^https?:/i.test(arrow[2]) ? 'network' : 'file', tool: arrow[1], detail: arrow[2] };
+  if (arrow) return { kind: kindForTool(arrow[1], arrow[2]), tool: arrow[1], detail: arrow[2] };
   return { kind: 'tool', detail: text };
 }
 
@@ -212,8 +216,8 @@ export function ToolConfirmDialog({ request, onRespond }: { request: ConfirmRequ
           </div>}
       {parsed.explanation && <p className="confirm-explanation">{parsed.explanation}</p>}
       {parsed.risk && <p className="confirm-risk"><AlertTriangle aria-hidden="true" /><span>{parsed.risk}</span></p>}
-      {rememberOptions.length > 0 && <label className="confirm-remember">
-        <span>如果允许，记住这次选择</span>
+      {rememberOptions.length > 0 && <div className="confirm-remember">
+        <span>允许后记住这次选择</span>
         <Select
           className="confirm-remember-select"
           label="记住选择范围"
@@ -231,7 +235,7 @@ export function ToolConfirmDialog({ request, onRespond }: { request: ConfirmRequ
           ]}
           onChange={(value) => setRemember(value as typeof remember)}
         />
-      </label>}
+      </div>}
     </div>
 
     <footer className="confirm-actions">
@@ -259,7 +263,7 @@ export function FullPermissionDialog({ acknowledged, onAcknowledgedChange, onCon
     </header>
 
     <div className="confirm-body">
-      <p className="confirm-text">启用完全权限后，普通工具不再逐次确认，包括文件修改和常规命令。你显式设置为“询问”的规则仍会生效；工作区边界与明显的系统级破坏命令始终拦截。仅建议在你信任当前任务时使用。</p>
+      <p className="confirm-text">启用完全权限后，普通工具、跨工作区操作和无法静态确认的脚本会直接执行。你显式设置为“询问/拒绝”的规则仍会生效；明显的删除与系统破坏命令始终拦截。仅建议在你信任当前任务时使用。</p>
       <label className="confirm-check">
         <input type="checkbox" checked={acknowledged} onChange={(event) => onAcknowledgedChange(event.target.checked)} />
         <span>我已了解风险，并愿意继续</span>

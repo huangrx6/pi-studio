@@ -452,6 +452,16 @@ function savePermissionPolicyStore(value) {
   return next;
 }
 
+function canonicalPermissionSessionId(value) {
+  const sessionId = typeof value === 'string' ? value.trim() : '';
+  if (!sessionId) return '';
+  try {
+    return String(getStudioDatabase().getConversation(sessionId)?.publicId || sessionId);
+  } catch {
+    return sessionId;
+  }
+}
+
 function assertWorkspaceScope(cwd) {
   if (!cwd || !path.isAbsolute(cwd)) throw new Error('工作区权限范围需要绝对工作区路径');
 }
@@ -468,7 +478,7 @@ function setPermissionMode(mode, options = {}) {
     ? options.scope
     : 'user';
   const cwd = typeof options.cwd === 'string' ? options.cwd.trim() : '';
-  const sessionId = typeof options.sessionId === 'string' ? options.sessionId.trim() : '';
+  const sessionId = canonicalPermissionSessionId(options.sessionId);
   const store = getPermissionPolicyStore();
   if (scope === 'workspace') assertWorkspaceScope(cwd);
   if (scope === 'session') assertSessionScope(sessionId);
@@ -499,8 +509,9 @@ function setPermissionPolicy({ scope = 'user', cwd = '', sessionId = '', policy 
     assertWorkspaceScope(cwd);
     store.workspaces[cwd] = normalized;
   } else if (scope === 'session') {
-    assertSessionScope(sessionId);
-    store.sessions[sessionId] = normalized;
+    const id = canonicalPermissionSessionId(sessionId);
+    assertSessionScope(id);
+    store.sessions[id] = normalized;
   } else if (scope === 'user') {
     store.user = normalized;
     getStudioDatabase().setSetting(KEYS.permissionMode, normalized.preset);
@@ -517,8 +528,9 @@ function resetPermissionPolicy({ scope = 'user', cwd = '', sessionId = '' } = {}
     assertWorkspaceScope(cwd);
     delete store.workspaces[cwd];
   } else if (scope === 'session') {
-    assertSessionScope(sessionId);
-    delete store.sessions[sessionId];
+    const id = canonicalPermissionSessionId(sessionId);
+    assertSessionScope(id);
+    delete store.sessions[id];
   } else if (scope === 'user') {
     store.user = defaultPermissionPolicy('smart');
     getStudioDatabase().setSetting(KEYS.permissionMode, 'smart');
@@ -530,7 +542,7 @@ function resetPermissionPolicy({ scope = 'user', cwd = '', sessionId = '' } = {}
 }
 
 function deletePermissionSessionPolicy(sessionId) {
-  const id = typeof sessionId === 'string' ? sessionId.trim() : '';
+  const id = canonicalPermissionSessionId(sessionId);
   if (!id || id.length > MAX_SESSION_POLICY_ID) return false;
   const store = getPermissionPolicyStore();
   if (!Object.hasOwn(store.sessions, id)) return false;
@@ -549,7 +561,7 @@ function deletePermissionPoliciesForWorkspace(cwd, sessionIds = []) {
     changed = true;
   }
   for (const sessionId of sessionIds) {
-    const id = typeof sessionId === 'string' ? sessionId.trim() : '';
+    const id = canonicalPermissionSessionId(sessionId);
     if (!id || id.length > MAX_SESSION_POLICY_ID || !Object.hasOwn(store.sessions, id)) continue;
     delete store.sessions[id];
     changed = true;
@@ -573,7 +585,7 @@ function deleteWorkspaceScopedSettings(cwd, sessionIds = []) {
     const permissionStore = getPermissionPolicyStore();
     delete permissionStore.workspaces[workspace];
     for (const value of sessionIds) {
-      const id = typeof value === 'string' ? value.trim() : '';
+      const id = canonicalPermissionSessionId(value);
       if (id && id.length <= MAX_SESSION_POLICY_ID) delete permissionStore.sessions[id];
     }
     db.setSetting(KEYS.permissionPolicy, permissionStore);
@@ -815,6 +827,7 @@ function setExtensionRegistryUrl(value) {
 }
 
 module.exports = {
+  canonicalPermissionSessionId,
   DEFAULT_HARNESS_PROFILE,
   DEFAULT_HARNESS_SECTIONS,
   HARNESS_SECTION_IDS,

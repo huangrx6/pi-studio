@@ -20,6 +20,7 @@ const {
   normalizePolicy,
 } = require('./permission-policy.cjs');
 const {
+  canonicalPermissionSessionId,
   getPermissionPolicyStore,
   resetPermissionPolicy: resetStoredPermissionPolicy,
   savePermissionPolicyStore,
@@ -45,7 +46,7 @@ const MODE_CATALOG = Object.freeze([
   {
     id: 'full',
     label: '完全权限',
-    description: '普通工具不再逐次询问；显式“询问”规则、工作区边界和系统级破坏命令仍然生效。',
+    description: '普通工具、跨工作区操作和无法静态确认的脚本直接执行；显式“询问/拒绝”与明显删除、系统破坏命令仍会拦截。',
     defaultDecision: 'allow',
   },
 ]);
@@ -53,7 +54,9 @@ const MODE_CATALOG = Object.freeze([
 function cleanContext(input = {}) {
   return {
     cwd: typeof input.cwd === 'string' ? input.cwd.trim() : '',
-    sessionId: typeof input.sessionId === 'string' ? input.sessionId.trim() : '',
+    // The renderer uses public UUIDs while Durable hooks receive numeric IDs.
+    // Permission policies always use the public UUID as the stable session key.
+    sessionId: canonicalPermissionSessionId(input.sessionId),
     scope: input.scope === 'workspace' || input.scope === 'session' ? input.scope : 'user',
     homeDir: typeof input.homeDir === 'string' ? input.homeDir : '',
   };
@@ -206,7 +209,10 @@ async function realPathProtection(call, context) {
 
 async function evaluatePolicy(input, context, layers, extra = {}) {
   const result = evaluatePermission(layers, input.call, context);
-  const resolvedBoundary = result.decision === 'deny'
+  const fullAccess = normalizePolicy(layers[layers.length - 1]?.policy).preset === 'full';
+  const resolvedBoundary = fullAccess && result.decision === 'allow'
+    ? undefined
+    : result.decision === 'deny'
     ? undefined
     : await realPathProtection(input.call, context);
   if (!resolvedBoundary) {

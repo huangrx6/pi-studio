@@ -456,7 +456,7 @@
                 <tbody>
                   <tr><td>请求批准 <code>ask</code></td><td>普通工具逐次确认</td><td>首次接触项目或来源不完全可信</td></tr>
                   <tr><td>帮我批准 <code>smart</code></td><td>只读、安全快捷路径自动允许；风险或未知工具确认</td><td>日常编码，兼顾速度与控制</td></tr>
-                  <tr><td>完全权限 <code>full</code></td><td>普通工具默认允许，硬保护和显式 deny / ask 继续生效</td><td>不希望在已确认路径内反复打断</td></tr>
+                  <tr><td>完全权限 <code>full</code></td><td>普通工具、跨工作区操作和动态脚本默认允许；明显删除、系统破坏和显式 deny / ask 继续生效</td><td>不希望普通操作反复打断，但仍保留危险命令保护</td></tr>
                 </tbody>
               </table>
             </div>

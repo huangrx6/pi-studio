@@ -46,6 +46,10 @@ const ALL_PATH_WRITES = new Set([
   'chmod', 'chown', 'mkdir', 'rm', 'rmdir', 'tee', 'touch', 'truncate',
 ]);
 const DESTINATION_WRITES = new Set(['cp', 'install', 'ln', 'mv']);
+const DESTRUCTIVE_PATH_COMMANDS = new Set([
+  'rm', 'rmdir', 'shred', 'truncate',
+  'git:am', 'git:apply', 'git:checkout', 'git:clean', 'git:reset', 'git:restore', 'git:rm', 'git:switch',
+]);
 
 function presetDefault(mode) {
   return PRESET_DEFAULTS[mode] || PRESET_DEFAULTS.smart;
@@ -539,7 +543,8 @@ function inspectGitWrites(tokens, context, add) {
     break;
   }
   if (!GIT_MUTATING_COMMANDS.has(subcommand)) return;
-  for (const candidate of candidates) add(candidate);
+  const action = DESTRUCTIVE_PATH_COMMANDS.has(`git:${subcommand}`) ? `git:${subcommand}` : 'git';
+  for (const candidate of candidates) add(candidate, action);
 }
 
 function runnerInlineFlag(name, tokens) {
@@ -564,10 +569,11 @@ function inspectShellWrites(tokens, context = {}, depth = 0) {
   if (depth > 3 || tokens.length === 0) return { external: [], ambiguous: [] };
   const name = shellCommandName(tokens);
   const result = { external: [], ambiguous: [] };
-  const add = (target) => {
+  const add = (target, command = name) => {
     const selected = shellPathState(target, context);
-    if (selected.state === 'outside') result.external.push(selected);
-    else if (selected.state === 'ambiguous') result.ambiguous.push(selected);
+    const tagged = { ...selected, command };
+    if (selected.state === 'outside') result.external.push(tagged);
+    else if (selected.state === 'ambiguous') result.ambiguous.push(tagged);
   };
   if (SHELL_WRAPPERS.has(name)) {
     const wrapped = wrapperCommandIndex(name, tokens);
@@ -622,10 +628,11 @@ function inspectShellWrites(tokens, context = {}, depth = 0) {
     const script = runnerScript(tokens);
     if (script) {
       const selected = shellPathState(script, context);
-      if (selected.state === 'outside') result.external.push(selected);
+      if (selected.state === 'outside') result.external.push({ ...selected, command: name });
       else result.ambiguous.push({
         state: 'ambiguous',
         raw: `${name} ${script}`,
+        command: name,
       });
     } else if (!tokens.some((token) => [
       '-h', '--help', '-v', '--version', '-V',
@@ -633,6 +640,7 @@ function inspectShellWrites(tokens, context = {}, depth = 0) {
       result.ambiguous.push({
         state: 'ambiguous',
         raw: `${name} stdin or interactive execution`,
+        command: name,
       });
     }
   }
@@ -655,8 +663,9 @@ function inspectShellCommand(command, context = {}) {
       if (redirect.segmentIndex !== index) continue;
       usedRedirects.add(redirect);
       const selected = shellPathState(redirect.target, shellContext);
-      if (selected.state === 'outside') external.push(selected);
-      else if (selected.state === 'ambiguous') ambiguous.push(selected);
+      const tagged = { ...selected, command: shellCommandName(segment) };
+      if (selected.state === 'outside') external.push(tagged);
+      else if (selected.state === 'ambiguous') ambiguous.push(tagged);
     }
     const inspected = inspectShellWrites(segment, shellContext);
     external.push(...inspected.external);
@@ -669,8 +678,9 @@ function inspectShellCommand(command, context = {}) {
   for (const redirect of parsed.redirects) {
     if (usedRedirects.has(redirect)) continue;
     const selected = shellPathState(redirect.target, context);
-    if (selected.state === 'outside') external.push(selected);
-    else if (selected.state === 'ambiguous') ambiguous.push(selected);
+    const tagged = { ...selected, command: '' };
+    if (selected.state === 'outside') external.push(tagged);
+    else if (selected.state === 'ambiguous') ambiguous.push(tagged);
   }
   return { external, ambiguous };
 }
@@ -792,16 +802,25 @@ function dangerousShellCommand(command, depth = 0) {
   return false;
 }
 
-function bashExternalWriteProtection(call, context = {}) {
+function bashExternalWriteProtection(call, context = {}, options = {}) {
   if (call?.name !== 'bash') return undefined;
   const command = normalizeCommand(call.arguments?.command);
   if (!command || command.length > 100_000) return undefined;
   const inspection = inspectShellCommand(command, context);
-  if (inspection.external.length === 0) return undefined;
-  const targets = [...new Set(inspection.external.map((item) => item.absolute || item.raw))];
+  const fullAccess = options.fullAccess === true;
+  const selected = fullAccess
+    ? [
+        ...inspection.external.filter((item) => DESTRUCTIVE_PATH_COMMANDS.has(item.command)),
+        ...inspection.ambiguous.filter((item) => DESTRUCTIVE_PATH_COMMANDS.has(item.command)),
+      ]
+    : inspection.external;
+  if (selected.length === 0) return undefined;
+  const targets = [...new Set(selected.map((item) => item.absolute || item.raw))];
   return {
-    title: '受保护的 Bash 工作区边界',
-    detail: `命令包含可识别的、指向工作区之外的写入：${targets.slice(0, 4).join(', ')}。这是静态检查，不是 OS 沙箱。`,
+    title: fullAccess ? '受保护的删除命令' : '受保护的 Bash 工作区边界',
+    detail: fullAccess
+      ? `完全权限仍会拦截无法安全确认目标的删除操作：${targets.slice(0, 4).join(', ')}。这是静态检查，不是 OS 沙箱。`
+      : `命令包含可识别的、指向工作区之外的写入：${targets.slice(0, 4).join(', ')}。这是静态检查，不是 OS 沙箱。`,
   };
 }
 
@@ -820,7 +839,7 @@ function bashStaticBoundary(call, context = {}) {
   };
 }
 
-function hardProtection(call, context = {}) {
+function hardProtection(call, context = {}, options = {}) {
   const name = safeString(call?.name, 160);
   const args = call?.arguments && typeof call.arguments === 'object' ? call.arguments : {};
   const command = normalizeCommand(args.command);
@@ -830,7 +849,7 @@ function hardProtection(call, context = {}) {
       dangerousShellCommand(command)
       || /\bdiskutil\s+erase\b/.test(text)
       || /\bdd\b[^\n]*\bof\s*=\s*\/dev\//.test(text)
-      || /\brm\s+(?:-[^\s]+\s+)*(?:\/(?:\s|$)|\.\.(?:\/|\s|$)|~(?:\s|$)|\$home(?:\s|$))/.test(text)
+      || /\brm\s+(?:-[^\s]+\s+)*(?:\/(?:\s|$)|\.(?:\s|$)|\.\.(?:\/|\s|$)|~(?:\s|$)|\$home(?:\s|$))/.test(text)
       || /:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/.test(command);
     if (dangerous) {
       return {
@@ -838,10 +857,15 @@ function hardProtection(call, context = {}) {
         detail: '该命令可能影响工作区之外的文件或系统服务，已由 Studio 安全边界拦截。',
       };
     }
-    const shellWrite = bashExternalWriteProtection(call, context);
+    const shellWrite = bashExternalWriteProtection(call, context, options);
     if (shellWrite) return shellWrite;
   }
-  if (['write', 'edit'].includes(name) && typeof args.path === 'string' && args.path.trim()) {
+  if (
+    options.fullAccess !== true
+    && ['write', 'edit'].includes(name)
+    && typeof args.path === 'string'
+    && args.path.trim()
+  ) {
     const cwd = path.resolve(context.cwd || process.cwd());
     const home = path.resolve(context.homeDir || os.homedir());
     let requested = args.path.trim();
@@ -1027,18 +1051,19 @@ function evaluatePermission(policies, call, context = {}) {
   const layers = (Array.isArray(policies) ? policies : [policies])
     .filter(Boolean)
     .map((entry) => (entry.policy ? entry : { scope: 'user', policy: entry }));
-  const protectedResult = hardProtection(call, context);
+  const effective = [...layers].reverse().find((layer) => (
+    normalizePolicy(layer.policy).default
+  ));
+  const policy = normalizePolicy(effective?.policy);
+  const fullAccess = policy.preset === 'full';
+  const protectedResult = hardProtection(call, context, { fullAccess });
   const decisions = explicitDecisions(layers, call, context);
   const byDecision = (decision) => decisions.find((item) => item.decision === decision);
   const deny = byDecision('deny');
   const ask = byDecision('ask');
   const allow = byDecision('allow');
-  const boundary = workspaceBoundary(call, context);
-  const shellBoundary = bashStaticBoundary(call, context);
-  const effective = [...layers].reverse().find((layer) => (
-    normalizePolicy(layer.policy).default
-  ));
-  const policy = normalizePolicy(effective?.policy);
+  const boundary = fullAccess ? undefined : workspaceBoundary(call, context);
+  const shellBoundary = fullAccess ? undefined : bashStaticBoundary(call, context);
   let matched;
   let decision;
   if (protectedResult) {
