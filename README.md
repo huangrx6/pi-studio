@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml) [![release](https://img.shields.io/badge/release-v0.0.3-111111?style=flat-square)](https://github.com/huangrx6/pi-studio/releases/latest) [![license](https://img.shields.io/badge/license-MIT-111111?style=flat-square)](LICENSE)
 
-[下载 macOS 版](https://github.com/huangrx6/pi-studio/releases/latest) · [文档主页](https://huangrx6.github.io/pi-studio/) · [资源作用域](docs/resources.md) · [问题反馈](https://github.com/huangrx6/pi-studio/issues)
+[下载 macOS 版](https://github.com/huangrx6/pi-studio/releases/latest) · [产品主页](https://huangrx6.github.io/pi-studio/) · [完整手册](https://huangrx6.github.io/pi-studio/guide.html) · [资源作用域](docs/resources.md) · [问题反馈](https://github.com/huangrx6/pi-studio/issues)
 
 ## 概览
 
@@ -17,17 +17,17 @@ Pi Studio 把 Pi Durable 的持久化 Agent 能力带进桌面窗口。每个普
 
 ## 界面
 
-| 深色主题 | 浅色主题 |
+| 深色会话 | 子智能体 |
 | :--: | :--: |
-| ![深色主题下的会话界面](docs/assets/conversation/dark.png) | ![浅色主题下的会话界面](docs/assets/conversation/light.png) |
-| 流式对话、工具调用与子 Agent | 同一会话的浅色主题 |
+| ![深色主题下的会话界面](docs/assets/screens/conversation-dark.png) | ![子智能体总览](docs/assets/screens/subagents-light.png) |
+| 流式对话、工具调用与扩展入口 | 子智能体状态与独立上下文 |
 
-| 设置 | 模型目录 |
+| Harness 配置 | 模型配置 |
 | :--: | :--: |
-| ![设置界面](docs/assets/conversation/dark-settings.png) | ![模型目录](docs/assets/conversation/dark-models.png) |
-| 外观、Harness、工具与交互偏好 | 按 Studio 来源管理模型 |
+| ![Harness 配置](docs/assets/screens/harness-light.png) | ![模型配置](docs/assets/screens/models-light.png) |
+| Prompt、AGENTS.md、Skill 与工具 guidance | 来源、模型发现、能力与 thinking |
 
-更多界面见[文档主页](https://huangrx6.github.io/pi-studio/)。
+更多界面、完整使用说明、扩展开发接口和架构说明见[文档中心](https://huangrx6.github.io/pi-studio/guide.html)。
 
 ## 下载
 
@@ -238,7 +238,7 @@ pi-studio/
 │   └── qa/              # 桌面截图、流式稳定与冷启动内存检查
 ├── extensions/          # 随应用分发的官方扩展
 ├── assets/              # 图标与 README 横幅
-└── docs/assets/         # README / 文档精选截图
+└── docs/assets/screens/ # README / 文档精选截图
 ```
 
 ## 尚未完成

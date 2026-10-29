@@ -1666,6 +1666,9 @@ try {
   await page.evaluate(() => window.__setUpdateState('idle'));
   await updateButton.waitFor({ state: 'detached' });
   await capture('01-welcome');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await capture('01-welcome-dark');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
 
   // 侧边栏搜索：空结果时展示占位文案；再次点击搜索按钮收起搜索框，
   // 然后折叠/展开侧边栏，确认折叠态布局正常。
@@ -1757,6 +1760,9 @@ try {
   await page.locator('.workspace-row').first().click();
   await page.locator('.session-row').first().click();
   await capture('04-conversation');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await capture('04-conversation-dark');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   const conversationContentWidth = await page.locator('.chat-scroll > .chat-column').evaluate((column) => (
     column.getBoundingClientRect().width
   ));
@@ -2290,6 +2296,9 @@ try {
   assert.ok(providerEditBox.width > providerEditBox.height);
   assert.ok(providerEditBox.scrollWidth <= providerEditBox.clientWidth);
   await capture('12-provider-models');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await capture('12-provider-models-dark');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
 
   // 新增来源对话框：填写后取消，不能留下草稿卡片。
   await page.getByRole('button', { name: '添加模型来源', exact: true }).click();
@@ -2710,6 +2719,10 @@ try {
   await modelSearch.fill('自定义模型来源');
   // 等搜索结果稳定（30 个自定义模型）后再用键盘导航，避免重渲染期按键丢失。
   await page.waitForFunction(() => document.querySelectorAll('.model-list [role^="menuitem"]').length === 30);
+  await page.waitForFunction(() => {
+    const first = document.querySelector('.model-list [role^="menuitem"]:not(:disabled)');
+    return Boolean(first && document.activeElement?.getAttribute('aria-label') === '搜索模型');
+  });
   await modelSearch.press('ArrowDown');
   await page.waitForFunction(() => /Long model/.test(document.activeElement?.textContent || ''));
   assert.match(await page.locator(':focus').innerText(), /Long model/);

@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pi Studio® — 基于 Pi Durable 的 macOS 桌面 Agent 工作台</title>
-<meta name="description" content="Pi Studio 是基于 Pi Durable 的原生 macOS Agent 工作台：会话、长期任务、子 Agent、编码 Harness、模型、技能、扩展与 MCP 都由 Studio 独立管理。">
+<title>Pi Studio® — 本地优先的桌面 Agent 工作台</title>
+<meta name="description" content="Pi Studio 是基于 Pi Durable 的原生 macOS Agent 工作台。完整手册覆盖安装、会话、长期任务、子智能体、Harness、模型、权限、技能、MCP、扩展开发与底层架构。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23111110'/%3E%3Ctext x='32' y='43' font-size='34' font-family='Georgia,serif' fill='%23f1efe8' text-anchor='middle'%3E%CF%80%3C/text%3E%3C/svg%3E">
 <style>
 /* ============================================================
@@ -13,15 +13,15 @@
    ============================================================ */
 
 :root {
-  --paper: #f1efe8;
-  --paper-2: #eae7de;
-  --ink: #101010;
-  --ink-2: #5c594f;
-  --ink-3: #8d887c;
-  --rule: rgba(16, 16, 16, 0.16);
-  --rule-strong: rgba(16, 16, 16, 0.34);
+  --paper: #ffffff;
+  --paper-2: #f4f4f4;
+  --ink: #000000;
+  --ink-2: #555555;
+  --ink-3: #858585;
+  --rule: rgba(0, 0, 0, 0.14);
+  --rule-strong: rgba(0, 0, 0, 0.32);
   --accent: #5d7a35;
-  --shadow-card: 0 18px 50px rgba(16, 16, 16, 0.12);
+  --shadow-card: 0 18px 50px rgba(0, 0, 0, 0.12);
   --font-display: "Helvetica Neue", "SF Pro Display", "Inter", "PingFang SC", -apple-system, sans-serif;
   --font-body: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang SC", "Segoe UI", sans-serif;
   --font-mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
@@ -29,13 +29,13 @@
 }
 
 html[data-theme="dark"] {
-  --paper: #0d0d0b;
-  --paper-2: #141410;
-  --ink: #eae7de;
-  --ink-2: #a8a399;
-  --ink-3: #7a7568;
-  --rule: rgba(234, 231, 222, 0.15);
-  --rule-strong: rgba(234, 231, 222, 0.3);
+  --paper: #000000;
+  --paper-2: #0d0d0d;
+  --ink: #ffffff;
+  --ink-2: #aaaaaa;
+  --ink-3: #787878;
+  --rule: rgba(255, 255, 255, 0.15);
+  --rule-strong: rgba(255, 255, 255, 0.3);
   --accent: #a9c47a;
   --shadow-card: 0 18px 50px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
@@ -43,12 +43,19 @@ html[data-theme="dark"] {
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+html::-webkit-scrollbar { width: 0; height: 10px; }
+html::-webkit-scrollbar-thumb {
+  border: 2px solid var(--paper);
+  border-radius: 999px;
+  background: var(--rule-strong);
+}
+html::-webkit-scrollbar-track { background: var(--paper); }
 body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-body);
-  font-size: 15px;
-  line-height: 1.65;
+  font-size: 16px;
+  line-height: 1.7;
   letter-spacing: -0.005em;
   transition: background 0.3s ease, color 0.3s ease;
 }
@@ -65,13 +72,13 @@ body::after {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-.wrap { max-width: 1240px; margin: 0 auto; padding: 0 32px; }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 0 36px; }
 @media (max-width: 720px) { .wrap { padding: 0 20px; } }
 
 /* ---------- type utilities ---------- */
 .label {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-3);
@@ -93,18 +100,18 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 500; letter-spac
 /* ---------- nav ---------- */
 .nav {
   position: sticky; top: 0; z-index: 100;
-  background: rgba(241, 239, 232, 0.86);
+  background: rgba(255, 255, 255, 0.9);
   border-bottom: 1px solid var(--rule);
   backdrop-filter: blur(14px) saturate(1.2);
   -webkit-backdrop-filter: blur(14px) saturate(1.2);
 }
-html[data-theme="dark"] .nav { background: rgba(13, 13, 11, 0.86); }
+html[data-theme="dark"] .nav { background: rgba(0, 0, 0, 0.9); }
 .nav-in {
   display: flex; align-items: center; gap: 28px;
   height: 62px;
-  max-width: 1240px; margin: 0 auto; padding: 0 32px;
+  max-width: 1280px; margin: 0 auto; padding: 0 36px;
 }
-.brand { display: flex; align-items: baseline; gap: 8px; font-family: var(--font-display); font-size: 15px; letter-spacing: -0.02em; }
+.brand { display: flex; align-items: baseline; gap: 8px; font-family: var(--font-display); font-size: 16px; letter-spacing: -0.02em; }
 .brand .mark {
   width: 21px; height: 21px; background: var(--ink); color: var(--paper); border-radius: 2px;
   display: inline-grid; place-items: center; font-size: 12px; font-family: Georgia, serif;
@@ -113,8 +120,8 @@ html[data-theme="dark"] .nav { background: rgba(13, 13, 11, 0.86); }
 .brand sup { font-size: 8px; letter-spacing: 0; color: var(--ink-3); }
 .nav-links { display: flex; align-items: center; margin-left: auto; }
 .nav-links a {
-  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
-  color: var(--ink-2); padding: 8px 2px; transition: color 0.2s;
+  font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-2); line-height: 1.7; padding: 8px 2px; transition: color 0.2s;
 }
 .nav-links a:hover { color: var(--ink); }
 .nav-links .plus { color: var(--ink-3); padding: 0 14px; font-size: 11px; }
@@ -143,7 +150,7 @@ html[data-theme="dark"] .nav { background: rgba(13, 13, 11, 0.86); }
 }
 .wordmark sup { font-size: 0.19em; letter-spacing: 0; vertical-align: super; color: var(--ink-3); margin-left: 0.08em; }
 .hero-aside { max-width: 290px; padding-bottom: 10px; }
-.hero-aside p { font-size: 14px; color: var(--ink-2); line-height: 1.6; }
+.hero-aside p { font-size: 15.5px; color: var(--ink-2); line-height: 1.7; }
 .hero-aside .label { display: block; margin-top: 14px; }
 @media (max-width: 900px) {
   .hero-top { grid-template-columns: 1fr; gap: 24px; }
@@ -158,7 +165,7 @@ html[data-theme="dark"] .nav { background: rgba(13, 13, 11, 0.86); }
 }
 .hero-meta .item { display: flex; align-items: baseline; gap: 8px; }
 .hero-meta .item span:first-child { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
-.hero-meta .item strong { font-weight: 500; font-size: 13px; }
+.hero-meta .item strong { font-weight: 500; font-size: 14px; }
 .hero-meta .cta { margin-left: auto; }
 .link-arrow {
   display: inline-flex; align-items: center; gap: 8px;
@@ -186,7 +193,7 @@ html[data-theme="dark"] .nav { background: rgba(13, 13, 11, 0.86); }
   width: 232px;
   box-shadow: var(--shadow-card);
 }
-.hero-card .t { font-family: var(--font-display); font-size: 15px; letter-spacing: -0.02em; }
+.hero-card .t { font-family: var(--font-display); font-size: 16px; letter-spacing: -0.02em; }
 .hero-card .t sup { font-size: 8px; color: var(--ink-3); }
 .hero-card .m { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); margin-top: 2px; }
 .hero-card a {
@@ -228,7 +235,7 @@ section { padding: 96px 0; }
   align-items: start; margin-bottom: 56px;
 }
 .sec-head h2 { font-size: clamp(30px, 3.6vw, 46px); max-width: 780px; }
-.sec-head .sub { margin-top: 14px; color: var(--ink-2); max-width: 520px; font-size: 14px; }
+.sec-head .sub { margin-top: 16px; color: var(--ink-2); max-width: 580px; font-size: 16px; line-height: 1.7; }
 @media (max-width: 860px) { .sec-head { grid-template-columns: 1fr; gap: 14px; margin-bottom: 36px; } }
 
 /* ---------- statement ---------- */
@@ -276,8 +283,8 @@ section { padding: 96px 0; }
 .feat:not(:nth-child(3n+1)) { padding-left: 28px; }
 .feat:hover { background: var(--paper-2); }
 .feat .idx { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; color: var(--ink-3); }
-.feat h3 { font-size: 18px; margin: 12px 0 8px; letter-spacing: -0.02em; }
-.feat p { font-size: 13px; color: var(--ink-2); line-height: 1.6; }
+.feat h3 { font-size: 20px; margin: 14px 0 9px; letter-spacing: -0.02em; }
+.feat p { font-size: 15px; color: var(--ink-2); line-height: 1.7; }
 @media (max-width: 900px) {
   .feat-grid { grid-template-columns: 1fr 1fr; }
   .feat:nth-child(3n) { border-right: 1px solid var(--rule); }
@@ -305,8 +312,8 @@ section { padding: 96px 0; }
 .step .on { background: var(--ink); border-color: var(--ink); }
 .step:hover .bars i { border-color: var(--ink); }
 .step .k { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; color: var(--ink-3); }
-.step h3 { font-size: 17px; margin: 8px 0 8px; letter-spacing: -0.02em; }
-.step p { font-size: 12.5px; color: var(--ink-2); line-height: 1.6; }
+.step h3 { font-size: 19px; margin: 9px 0; letter-spacing: -0.02em; }
+.step p { font-size: 14.5px; color: var(--ink-2); line-height: 1.7; }
 @media (max-width: 900px) {
   .steps { grid-template-columns: 1fr 1fr; }
   .step:nth-child(2) { border-right: 0; }
@@ -341,18 +348,44 @@ section { padding: 96px 0; }
 @media (max-width: 900px) { .shot.sp-a, .shot.sp-b, .shot.sp-c { grid-column: span 6; } }
 @media (max-width: 620px) { .shot.sp-a, .shot.sp-b, .shot.sp-c { grid-column: span 12; } }
 
+/* ---------- docs entry ---------- */
+.docs-entry { border-top: 1px solid var(--rule); }
+.docs-grid { display: grid; grid-template-columns: 1.08fr .92fr; gap: 64px; align-items: start; }
+.docs-copy h2 { font-size: clamp(34px, 4.6vw, 58px); letter-spacing: -0.045em; }
+.docs-copy .label { display: block; margin-bottom: 18px; }
+.docs-copy p { max-width: 620px; margin-top: 20px; color: var(--ink-2); font-size: 16px; line-height: 1.75; }
+.docs-actions { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; margin-top: 28px; }
+.docs-actions .primary {
+  display: inline-flex; align-items: center; gap: 10px; padding: 11px 15px;
+  border: 1px solid var(--ink); border-radius: 2px; background: var(--ink); color: var(--paper);
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+  transition: background .22s, color .22s;
+}
+.docs-actions .primary:hover { background: transparent; color: var(--ink); }
+.docs-index { border-top: 1px solid var(--rule-strong); }
+.docs-index a {
+  display: grid; grid-template-columns: 32px 1fr auto; gap: 14px; align-items: center;
+  padding: 15px 0; border-bottom: 1px solid var(--rule);
+}
+.docs-index a:hover { color: var(--accent); }
+.docs-index .n { font-family: var(--font-mono); font-size: 9px; color: var(--ink-3); }
+.docs-index strong { display: block; font-size: 16px; font-weight: 500; }
+.docs-index small { display: block; margin-top: 2px; color: var(--ink-3); font-size: 13px; line-height: 1.55; }
+.docs-index .ar { color: var(--ink-3); font-size: 14px; }
+@media (max-width: 900px) { .docs-grid { grid-template-columns: 1fr; gap: 36px; } }
+
 dialog#lightbox {
   border: 0; padding: 0; background: transparent;
   max-width: min(1180px, 94vw); max-height: 94vh;
 }
-dialog#lightbox::backdrop { background: rgba(8, 8, 6, 0.82); backdrop-filter: blur(6px); }
+dialog#lightbox::backdrop { background: rgba(0, 0, 0, 0.82); backdrop-filter: blur(6px); }
 dialog#lightbox img { width: 100%; border-radius: 3px; box-shadow: 0 40px 120px rgba(0, 0, 0, 0.55); }
 
 /* ---------- download ---------- */
 .download { border-top: 1px solid var(--rule); }
 .dl { display: grid; grid-template-columns: 1.05fr 1fr; gap: 64px; align-items: start; }
 .dl-intro h2 { font-size: clamp(34px, 4.6vw, 60px); letter-spacing: -0.045em; }
-.dl-intro p { margin-top: 18px; color: var(--ink-2); font-size: 14px; max-width: 380px; }
+.dl-intro p { margin-top: 20px; color: var(--ink-2); font-size: 16px; line-height: 1.7; max-width: 420px; }
 .dl-intro .label { display: block; margin-bottom: 18px; }
 .dl-list { border-top: 1px solid var(--rule-strong); }
 .dl-row {
@@ -385,7 +418,7 @@ dialog#lightbox img { width: 100%; border-radius: 3px; box-shadow: 0 40px 120px 
   display: grid; grid-template-columns: 150px 1fr; gap: 24px; align-items: start;
 }
 .gatekeeper .label { padding-top: 2px; }
-.gatekeeper p { font-size: 13px; color: var(--ink-2); }
+.gatekeeper p { font-size: 14.5px; color: var(--ink-2); line-height: 1.65; }
 .gatekeeper code {
   font-family: var(--font-mono); font-size: 12px;
   background: var(--paper-2); border: 1px solid var(--rule);
@@ -402,7 +435,7 @@ dialog#lightbox img { width: 100%; border-radius: 3px; box-shadow: 0 40px 120px 
 .invert .label { color: color-mix(in srgb, var(--paper) 55%, transparent); }
 .invert .label .n { color: var(--paper); }
 .invert h2 { font-size: clamp(30px, 3.6vw, 46px); max-width: 640px; }
-.invert p { color: color-mix(in srgb, var(--paper) 72%, transparent); font-size: 14px; }
+.invert p { color: color-mix(in srgb, var(--paper) 72%, transparent); font-size: 15.5px; line-height: 1.7; }
 .share-grid { display: grid; grid-template-columns: 1fr 1.1fr; gap: 64px; align-items: start; }
 .share-copy p + p { margin-top: 14px; }
 .tree {
@@ -435,10 +468,10 @@ dialog#lightbox img { width: 100%; border-radius: 3px; box-shadow: 0 40px 120px 
 /* ---------- footer ---------- */
 footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
 .foot-cols { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 40px; padding-bottom: 64px; border-bottom: 1px solid color-mix(in srgb, var(--paper) 18%, transparent); }
-.foot-cols .note { font-size: 13px; color: color-mix(in srgb, var(--paper) 62%, transparent); max-width: 260px; margin-top: 12px; }
+.foot-cols .note { font-size: 14px; line-height: 1.7; color: color-mix(in srgb, var(--paper) 62%, transparent); max-width: 280px; margin-top: 12px; }
 .foot-cols h4 { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: color-mix(in srgb, var(--paper) 55%, transparent); font-weight: 400; margin-bottom: 14px; }
 .foot-cols ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
-.foot-cols a { font-size: 13.5px; color: color-mix(in srgb, var(--paper) 85%, transparent); }
+.foot-cols a { font-size: 14.5px; color: color-mix(in srgb, var(--paper) 85%, transparent); }
 .foot-cols a:hover { color: var(--paper); text-decoration: underline; text-underline-offset: 4px; }
 .foot-mark {
   font-family: var(--font-display); font-weight: 500;
@@ -468,12 +501,12 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
       <span>Pi Studio</span><sup>®</sup>
     </a>
     <nav class="nav-links">
+      <a href="guide.html">Docs</a><span class="plus">+</span>
       <a href="#features">Features</a><span class="plus">+</span>
       <a href="#gallery">Interface</a><span class="plus">+</span>
       <a href="#download">Download</a><span class="plus">+</span>
       <a href="#sharing">Architecture</a><span class="plus">+</span>
       <a href="#dev">Develop</a><span class="plus">+</span>
-      <a href="https://github.com/huangrx6/pi-studio/blob/main/docs/resources.md">Resources</a>
       <a class="ext" href="https://github.com/huangrx6/pi-studio" style="margin-left:26px">GitHub ↗</a>
     </nav>
     <button class="toggle" id="themeToggle" aria-label="切换亮暗主题">◐</button>
@@ -487,32 +520,32 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
       <div class="hero-top" data-reveal>
         <h1 class="wordmark">Pi Studio<sup>®</sup></h1>
         <div class="hero-aside">
-          <p>一个基于 Pi Durable 的原生 macOS Agent 工作台。会话、模型、编码 Harness、技能、扩展与 MCP 都由 Studio 独立管理。</p>
-          <span class="label">(Local first — 2026)</span>
+          <p>一个本地优先的桌面 Agent 工作台。把持久会话、长期任务、子智能体、编码 Harness、模型与扩展组织成一条可以检查、复用和继续扩展的工作流。</p>
+          <span class="label">(Pi Durable · Local first · 2026)</span>
         </div>
       </div>
 
       <div class="hero-meta" data-reveal>
-        <div class="item"><span>Version</span><strong>0.0.3</strong></div>
+        <div class="item"><span>Branch</span><strong>main · Durable</strong></div>
         <div class="item"><span>Platform</span><strong>macOS 13+</strong></div>
         <div class="item"><span>License</span><strong>MIT</strong></div>
-        <div class="item"><span>Build</span><strong>GitHub Actions</strong></div>
-        <a class="link-arrow cta" href="#download">下载最新版 <span class="ar">↗</span></a>
+        <div class="item"><span>Engine</span><strong>Pi Durable 1.4</strong></div>
+        <a class="link-arrow cta" href="guide.html">阅读完整手册 <span class="ar">↗</span></a>
       </div>
 
       <figure class="hero-fig" data-reveal>
         <div class="frame-wrap">
           <div class="frame">
-            <img src="assets/conversation/dark.png" alt="Pi Studio 深色主题下的会话界面，展示工具调用、代码块与错误状态" width="2880" height="1840">
+            <img src="assets/screens/conversation-dark.png" alt="Pi Studio 当前版本的深色会话界面，展示子智能体、扩展与工具调用" width="2880" height="1840">
           </div>
           <div class="hero-card">
             <div class="t">Pi Studio<sup>®</sup></div>
-            <div class="m">Desktop workspace · 0.0.3</div>
+            <div class="m">Desktop workspace · main</div>
             <a href="https://github.com/huangrx6/pi-studio/releases/latest">Download <span class="ar">↗</span></a>
           </div>
         </div>
         <div class="hero-caption">
-          <span>(01) — Dark · conversation, tool calls</span>
+          <span>(01) — Current main · conversation, subagents, extensions</span>
           <span>2880 × 1840 · 2×</span>
         </div>
       </figure>
@@ -609,7 +642,7 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
         <article class="feat" data-reveal>
           <span class="idx">05 / EXTENSIONS</span>
           <h3>扩展、MCP 与 Skill</h3>
-          <p>Agent 扩展向 Durable 提供 tools、sections、hooks 与 tasks；MCP 默认按需搜索，密钥保存在加密 envelope；Skill 只注入元数据并按需读取正文，同时兼容通用 <code>.agents/skills</code>。项目资源使用显式信任与内容指纹。<a href="https://github.com/huangrx6/pi-studio/blob/main/docs/resources.md" style="border-bottom:1px solid currentColor">资源作用域</a> · <a href="https://github.com/huangrx6/pi-studio/blob/main/docs/extensions.md" style="border-bottom:1px solid currentColor">扩展规范</a> · <a href="https://github.com/huangrx6/pi-studio/blob/main/docs/extension-ui.md" style="border-bottom:1px solid currentColor">声明式 UI</a> · <a href="https://github.com/huangrx6/pi-studio/blob/main/docs/extensions-distribution.md" style="border-bottom:1px solid currentColor">安装与发布 ↗</a> · <a href="https://github.com/huangrx6/pi-studio/blob/main/docs/extensions-audit.md" style="border-bottom:1px solid currentColor">审查结论</a></p>
+          <p>Agent 扩展向 Durable 提供 tools、sections、hooks 与 tasks；MCP 默认按需搜索，密钥保存在加密 envelope；Skill 只注入元数据并按需读取正文，同时兼容通用 <code>.agents/skills</code>。项目资源使用显式信任与内容指纹。<a href="guide.html#skills" style="border-bottom:1px solid currentColor">资源与信任</a> · <a href="guide.html#extensions" style="border-bottom:1px solid currentColor">扩展系统</a> · <a href="guide.html#extension-ui" style="border-bottom:1px solid currentColor">声明式 UI</a> · <a href="guide.html#extension-distribution" style="border-bottom:1px solid currentColor">安装与发布 ↗</a></p>
         </article>
         <article class="feat" data-reveal>
           <span class="idx">06 / CHANGES</span>
@@ -635,11 +668,37 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
     </div>
   </section>
 
+  <!-- DOCUMENTATION -->
+  <section class="docs-entry" id="docs">
+    <div class="wrap">
+      <div class="docs-grid">
+        <div class="docs-copy" data-reveal>
+          <span class="label"><span class="n">(04)</span> — 完整手册</span>
+          <h2>从第一次对话，<br>读到一次请求如何执行。</h2>
+          <p>文档不再只是功能清单。它覆盖安装与工作区、模型与 thinking、Harness 与权限、Skill / MCP / 扩展、子智能体与长期任务，再进入 Durable Runtime、SQLite、热加载和安全边界。</p>
+          <p>扩展作者可以直接找到 Manifest、Tool、Command、声明式 UI、签名、Registry、安装与回滚；贡献者可以找到目录结构、开发命令、QA 和发布流程。</p>
+          <div class="docs-actions">
+            <a class="primary" href="guide.html">打开文档中心 <span>↗</span></a>
+            <a class="link-arrow" href="guide.html#extension-development">扩展开发 <span class="ar">→</span></a>
+            <a class="link-arrow" href="guide.html#runtime-architecture">运行时架构 <span class="ar">→</span></a>
+          </div>
+        </div>
+        <div class="docs-index" data-reveal>
+          <a href="guide.html#quickstart"><span class="n">01</span><span><strong>开始使用</strong><small>安装、模型、工作区、第一条消息</small></span><span class="ar">↗</span></a>
+          <a href="guide.html#harness"><span class="n">02</span><span><strong>配置系统</strong><small>Harness、权限、工具、Skill 与 MCP</small></span><span class="ar">↗</span></a>
+          <a href="guide.html#extension-development"><span class="n">03</span><span><strong>扩展开发</strong><small>契约、UI、签名、Registry 与安装</small></span><span class="ar">↗</span></a>
+          <a href="guide.html#runtime-architecture"><span class="n">04</span><span><strong>实现与安全</strong><small>Durable、IPC、SQLite、热加载与边界</small></span><span class="ar">↗</span></a>
+          <a href="guide.html#development"><span class="n">05</span><span><strong>参与开发</strong><small>目录、测试、构建、发布与排障</small></span><span class="ar">↗</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- PROCESS -->
   <section class="process" style="padding-top:0">
     <div class="wrap">
       <div class="sec-head" data-reveal>
-        <span class="label"><span class="n">(04)</span> — 工作流</span>
+        <span class="label"><span class="n">(05)</span> — 工作流</span>
         <div>
           <h2>从提示词到改动，一条闭环。</h2>
           <p class="sub">打开工作区，选择 Harness，交给 Durable 执行，再在同一窗口里审阅工具调用与文件差异。</p>
@@ -679,10 +738,10 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
   <section class="gallery-sec" id="gallery">
     <div class="wrap">
       <div class="sec-head" data-reveal>
-        <span class="label"><span class="n">(05)</span> — 界面</span>
+        <span class="label"><span class="n">(06)</span> — 界面</span>
         <div>
-          <h2>两套主题，同一种安静。</h2>
-          <p class="sub">亮色与深色都做了完整的对比度校验；点击任意截图可放大。</p>
+          <h2>当前版本，完整的桌面工作流。</h2>
+          <p class="sub">从欢迎页、会话、子智能体，到 Harness、模型、权限与使用量。所有截图均为 2×，点击可放大。</p>
         </div>
       </div>
 
@@ -701,9 +760,9 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
     <div class="wrap">
       <div class="dl">
         <div class="dl-intro" data-reveal>
-          <span class="label"><span class="n">(06)</span> — 下载</span>
+          <span class="label"><span class="n">(07)</span> — 下载</span>
           <h2>拿走它，<br>直接用。</h2>
-          <p>DMG 由 GitHub Actions 在 macOS 上自动构建，Apple Silicon 与 Intel 各一份，均未签名。</p>
+          <p>DMG 由 GitHub Actions 在 macOS 上自动构建，Apple Silicon 与 Intel 各一份。下载前请核对 Release tag；当前 main 的 Pi Durable 架构若尚未发布，可从源码构建。</p>
         </div>
 
         <div class="dl-list" data-reveal>
@@ -740,11 +799,11 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
     <div class="wrap">
       <div class="share-grid">
         <div class="share-copy" data-reveal>
-          <span class="label"><span class="n">(07)</span> — 数据</span>
+          <span class="label"><span class="n">(08)</span> — 数据</span>
           <h2 style="margin-top:18px">没有云端，<br>只有 Studio SQLite</h2>
           <p style="margin-top:18px">Pi Durable 1.4 是唯一执行引擎。Studio 在 <code>pi-studio.sqlite</code> 中持有 <code>durable_*</code> 表，以及自己的工作区、会话投影、模型、凭据、MCP、扩展与设置记录。</p>
           <p>Studio 不读取或回写 Pi CLI 自己的配置。临时聊天只使用独立 <code>MemoryStorage</code>，关闭应用后不会占用磁盘历史。</p>
-          <p><a href="https://github.com/huangrx6/pi-studio/blob/main/docs/resources.md" style="border-bottom:1px solid currentColor">阅读资源作用域与刷新规则 ↗</a> · <a href="https://github.com/huangrx6/pi-studio/blob/main/docs/extensions.md" style="border-bottom:1px solid currentColor">扩展规范 ↗</a></p>
+          <p><a href="guide.html#storage-scopes" style="border-bottom:1px solid currentColor">阅读数据作用域与刷新规则 ↗</a> · <a href="guide.html#extension-development" style="border-bottom:1px solid currentColor">扩展规范 ↗</a></p>
         </div>
         <pre class="tree" data-reveal><span class="p">Pi Studio userData/</span>
 ├── <span class="p">AGENTS.md</span> <span class="c"># 应用级 Harness 指令</span>
@@ -777,7 +836,7 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
   <section class="dev" id="dev">
     <div class="wrap">
       <div class="sec-head" data-reveal>
-        <span class="label"><span class="n">(08)</span> — 开发</span>
+        <span class="label"><span class="n">(09)</span> — 开发</span>
         <div>
           <h2>本地构建。</h2>
           <p class="sub">需要 Node.js ≥ 22.19 与 pnpm。克隆仓库后按顺序执行即可。</p>
@@ -813,11 +872,11 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
       <div>
         <h4>Docs</h4>
         <ul>
+          <li><a href="guide.html">Documentation</a></li>
+          <li><a href="guide.html#quickstart">Quickstart</a></li>
+          <li><a href="guide.html#extension-development">Extension Development</a></li>
+          <li><a href="guide.html#runtime-architecture">Runtime &amp; Security</a></li>
           <li><a href="https://github.com/huangrx6/pi-studio/blob/main/README.md">README</a></li>
-          <li><a href="https://github.com/huangrx6/pi-studio/blob/main/docs/resources.md">Resources</a></li>
-          <li><a href="https://github.com/huangrx6/pi-studio/blob/main/docs/extensions.md">Extensions</a></li>
-          <li><a href="https://github.com/huangrx6/pi-studio/blob/main/docs/extension-ui.md">Extension UI</a></li>
-          <li><a href="https://github.com/huangrx6/pi-studio/blob/main/docs/extensions-distribution.md">Install &amp; Publish</a></li>
           <li><a href="https://github.com/huangrx6/pi-studio/blob/main/LICENSE">License</a></li>
           <li><a href="https://github.com/huangrx6/pi-studio/blob/main/THIRD_PARTY_NOTICES.md">Third-party</a></li>
         </ul>
@@ -860,7 +919,7 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
   }
   var saved = null;
   try { saved = localStorage.getItem('pi-studio-theme'); } catch (e) {}
-  applyTheme(saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  applyTheme(saved === 'dark' ? 'dark' : 'light');
   toggle.addEventListener('click', function () {
     applyTheme(doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
   });
@@ -881,26 +940,21 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
   /* ---------- gallery ---------- */
   var shots = {
     dark: [
-      ['assets/conversation/dark.png', 'Conversation', '会话 · 工具调用与错误状态'],
-      ['assets/conversation/dark-new-chat.png', 'New chat', '新会话 · 工作区'],
-      ['assets/conversation/dark-settings.png', 'Settings', '设置 · 外观与偏好'],
-      ['assets/conversation/dark-models.png', 'Models', '模型目录 · 提供方'],
-      ['assets/conversation/dark-reasoning.png', 'Reasoning', '思维链展开'],
-      ['assets/background/dark.png', 'Background', '图片背景 · 透明度与模糊'],
-      ['assets/temporary-chat/dark.png', 'Temporary', '临时聊天 · 不落盘'],
-      ['assets/updates/dark.png', 'Update', '版本更新 · 下载与重启'],
-      ['assets/changes-workbench/dark.png', 'Changes', '差异工作台 · 回合文件']
+      ['assets/screens/conversation-dark.png', 'Conversation', '会话 · 工具调用与运行状态'],
+      ['assets/screens/home-dark.png', 'New chat', '新会话 · 工作区与权限'],
+      ['assets/screens/models-dark.png', 'Models', '模型来源 · 能力与 thinking'],
+      ['assets/screens/harness-dark.png', 'Harness', '编码 Harness · Prompt sections'],
+      ['assets/screens/settings-dark.png', 'Appearance', '主题 · 配色 · 背景与界面偏好']
     ],
     light: [
-      ['assets/conversation/light.png', 'Conversation', '会话 · 工具调用与错误状态'],
-      ['assets/conversation/light-new-chat.png', 'New chat', '新会话 · 工作区'],
-      ['assets/conversation/light-settings.png', 'Settings', '设置 · 外观与偏好'],
-      ['assets/conversation/light-models.png', 'Models', '模型目录 · 提供方'],
-      ['assets/conversation/light-reasoning.png', 'Reasoning', '思维链展开'],
-      ['assets/background/light.png', 'Background', '图片背景 · 透明度与模糊'],
-      ['assets/temporary-chat/light.png', 'Temporary', '临时聊天 · 不落盘'],
-      ['assets/updates/light.png', 'Update', '版本更新 · 下载与重启'],
-      ['assets/changes-workbench/light.png', 'Changes', '差异工作台 · 回合文件']
+      ['assets/screens/home-light.png', 'New chat', '新会话 · 工作区与权限'],
+      ['assets/screens/conversation-light.png', 'Conversation', '会话 · 子智能体与扩展'],
+      ['assets/screens/subagents-light.png', 'Subagents', '子智能体总览 · 独立上下文'],
+      ['assets/screens/extensions-light.png', 'Extensions', '会话扩展 · 声明式详情'],
+      ['assets/screens/harness-light.png', 'Harness', '编码 Harness · Profile 与工具策略'],
+      ['assets/screens/models-light.png', 'Models', '模型来源 · 发现与能力'],
+      ['assets/screens/permission-light.png', 'Permissions', '权限策略 · 作用域与规则'],
+      ['assets/screens/usage-light.png', 'Usage', 'Token 热力图 · 按模型统计']
     ]
   };
   var spans = ['sp-a', 'sp-b', 'sp-c', 'sp-c', 'sp-c', 'sp-a', 'sp-b', 'sp-c', 'sp-c'];
