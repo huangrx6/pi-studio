@@ -33,6 +33,10 @@ import { FullPermissionDialog, ToolConfirmDialog, useActionConfirmation, type Co
 import { DiffView } from './components/DiffView';
 import { TemporaryChat } from './components/TemporaryChat';
 import { destroyTemporary } from './lib/temporary-chat-store';
+import {
+  eventSaysConversationRunning,
+  isConversationTurnActive,
+} from './lib/conversation-activity';
 import { ChangesView } from './components/ChangesView';
 import { ActionMenu } from './components/ActionMenu';
 import { splitComposerText } from './lib/references';
@@ -698,6 +702,14 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [stoppingSessionIds, setStoppingSessionIds] = useState<string[]>([]);
   const stopping = Boolean(session?.id && stoppingSessionIds.includes(session.id));
+  const selectedSessionSummary = session?.id
+    ? workspaces.flatMap((item) => item.sessions).find((item) => item.id === session.id)
+    : undefined;
+  const turnActive = stopping || isConversationTurnActive({
+    requestRunning: busy,
+    compacting: compaction.active,
+    conversationRunning: Boolean(selectedSessionSummary?.running),
+  });
   const [error, setError] = useState<string | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -1945,7 +1957,7 @@ export function App() {
       }
       switch (event.type) {
         case 'snapshot':
-          setBusy(Boolean(event.payload.run));
+          setBusy(eventSaysConversationRunning(event.payload, Boolean(event.payload.run)));
           setCompaction({ active: event.payload.compactions.length > 0 });
           if (event.payload.generation?.role === 'assistant') {
             schedule({ ...event.payload.generation, streaming: true }, 'message_update');
@@ -1972,6 +1984,14 @@ export function App() {
           setError(null);
           return;
         case 'run.completed':
+          if (eventSaysConversationRunning(event.payload, false)) {
+            flushNow();
+            setBusy(true);
+            setError(null);
+            void loadState().catch(() => {});
+            void refreshSubagentChildren(false);
+            return;
+          }
           refreshCompletion();
           void refreshSubagentChildren(false);
           return;
@@ -2000,9 +2020,10 @@ export function App() {
           flushNow();
           setRetryInfo(null);
           setMessages((current) => current.map((message) => ({ ...message, streaming: false })));
-          setBusy(false);
+          setBusy(eventSaysConversationRunning(event.payload, false));
           setCompaction({ active: false });
           setError(event.payload.message || '执行失败，请重试');
+          if (event.payload.running) void loadState().catch(() => {});
           void refreshSubagentChildren(false);
           return;
         case 'retry.updated':
@@ -2056,7 +2077,7 @@ export function App() {
   }, [loadState, session?.id]);
 
   useEffect(() => {
-    if (!session?.id || !busy) return;
+    if (!session?.id || !turnActive) return;
     let disposed = false;
     const verifyRunState = async () => {
       try {
@@ -2079,7 +2100,7 @@ export function App() {
       disposed = true;
       window.clearInterval(timer);
     };
-  }, [busy, loadState, session?.id]);
+  }, [loadState, session?.id, turnActive]);
 
   useLayoutEffect(() => {
     // 消息提交后先在绘制前贴底；Markdown、图片或折叠区随后长高时，
@@ -2164,7 +2185,7 @@ export function App() {
         return `${item.name} ${item.cwd} ${item.sessions.map((entry) => entry.title).join(' ')}`.toLowerCase().includes(query);
       });
   }, [sidebarKindFilter, workspaceQuery, workspaces]);
-  const isNewConversation = messages.length === 0 && !busy;
+  const isNewConversation = messages.length === 0 && !turnActive;
   const currentSessionKind = session?.kind ?? 'conversation';
   const allExpanded = workspaces.length > 0 && workspaces.every((item) => expanded.has(item.cwd));
 
@@ -2690,11 +2711,11 @@ export function App() {
 
   useEffect(() => {
     if (!session?.id) return;
-    const shouldPoll = busy || hasActiveSubagents || agentView.kind === 'agents';
+    const shouldPoll = turnActive || hasActiveSubagents || agentView.kind === 'agents';
     if (!shouldPoll) return;
     let disposed = false;
     let fetching = false;
-    const delay = busy || hasActiveSubagents ? 1_800 : 6_000;
+    const delay = turnActive || hasActiveSubagents ? 1_800 : 6_000;
     const tick = () => {
       if (disposed || fetching) return;
       fetching = true;
@@ -2705,7 +2726,7 @@ export function App() {
       disposed = true;
       window.clearInterval(timer);
     };
-  }, [agentView.kind, busy, hasActiveSubagents, session?.id]);
+  }, [agentView.kind, hasActiveSubagents, session?.id, turnActive]);
 
   // ---------- 附件 ----------
 
@@ -3431,7 +3452,7 @@ export function App() {
     const text = (overrideText ?? prompt).trim();
     if ((!text && composerAttachments.length === 0)) return;
     if (compaction.active) return;
-    if (!busy && composerAttachments.length === 0 && text === '/todos') {
+    if (!turnActive && composerAttachments.length === 0 && text === '/todos') {
       setTodoPanelOpen(true);
       setPrompt('');
       setComposerMenu(null);
@@ -3485,7 +3506,7 @@ export function App() {
     const prepared = await prepareSubmission(text, queuedAttachments, current.id);
     setPrompt('');
     setComposerAttachments([]);
-    if (busy) {
+    if (turnActive) {
       if (preferences.busySend === 'steer') {
         await dispatchSubmission(prepared, 'steer');
       } else {
@@ -3498,7 +3519,7 @@ export function App() {
   }
 
   async function sendQueuedNow(id: string) {
-    if (!busy) return;
+    if (!turnActive) return;
     const item = queuedPrompts.find((candidate) => candidate.id === id);
     if (!item) return;
     setQueuedPrompts((items) => items.filter((candidate) => candidate.id !== id));
@@ -3506,7 +3527,7 @@ export function App() {
   }
 
   async function sendAllQueued() {
-    if (!busy || queuedPrompts.length === 0) return;
+    if (!turnActive || queuedPrompts.length === 0) return;
     const items = [...queuedPrompts];
     setQueuedPrompts([]);
     queuedDrainRef.current = true;
@@ -3516,7 +3537,7 @@ export function App() {
 
   async function stopGeneration() {
     const currentSession = sessionRef.current;
-    if (!currentSession?.id || stopping || (!busy && !compaction.active)) return;
+    if (!currentSession?.id || stopping || !turnActive) return;
     const sessionId = currentSession.id;
     setStoppingSessionIds((ids) => ids.includes(sessionId) ? ids : [...ids, sessionId]);
     try {
@@ -3569,7 +3590,7 @@ export function App() {
 
   // 空闲时自动把队首消息发出去；queuedDrainRef 防止同一轮重复触发。
   useEffect(() => {
-    if (busy || queuedPrompts.length === 0 || queuedDrainRef.current) return;
+    if (turnActive || queuedPrompts.length === 0 || queuedDrainRef.current) return;
     const next = queuedPrompts[0];
     setQueuedPrompts((items) => items.filter((item) => item.id !== next.id));
     queuedDrainRef.current = true;
@@ -3577,7 +3598,7 @@ export function App() {
       queuedDrainRef.current = false;
       setQueuedPrompts((items) => items.length > 0 ? [...items] : items);
     });
-  }, [busy, queuedPrompts]);
+  }, [queuedPrompts, turnActive]);
 
 
   // ---------- 右侧文件面板 ----------
@@ -4451,10 +4472,10 @@ export function App() {
                 {historyLoading && <div className="history-loading" role="status" aria-live="polite" aria-label="正在加载更早消息"><LoaderCircle className="spin" /></div>}
                 {transcriptTurns.map((turn, index) => turn.kind === 'user'
                   ? <ChatMessageView key={`user-${turn.message.sourceIndex ?? turn.message.timestamp ?? index}`} id={`chat-turn-${turn.message.sourceIndex ?? `pending-${turn.message.timestamp ?? index}`}`} message={turn.message} onOpenFile={handleOpenFile} />
-                  : <AssistantTurnView key={`assistant-${turn.messages[0]?.sourceIndex ?? turn.messages[0]?.timestamp ?? index}`} id={turn.messages[0]?.sourceIndex !== undefined ? `chat-assistant-turn-${turn.messages[0].sourceIndex}` : undefined} messages={turn.messages} toolResults={toolResultMap} cwd={session?.cwd} busy={busy && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView}
+                  : <AssistantTurnView key={`assistant-${turn.messages[0]?.sourceIndex ?? turn.messages[0]?.timestamp ?? index}`} id={turn.messages[0]?.sourceIndex !== undefined ? `chat-assistant-turn-${turn.messages[0].sourceIndex}` : undefined} messages={turn.messages} toolResults={toolResultMap} cwd={session?.cwd} busy={turnActive && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView}
                     gitDiff={index === lastAssistantTurnIndex ? liveDiff ?? (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined) : (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined)}
                     onOpenDiff={handleOpenChanges} onOpenFile={handleOpenFile} />)}
-                {busy && !retryInfo && transcriptTurns.at(-1)?.kind !== 'assistant' && (
+                {turnActive && !retryInfo && transcriptTurns.at(-1)?.kind !== 'assistant' && (
                   <div className="thinking"><span /><span /><span />正在思考</div>
                 )}
               </div>
@@ -4739,8 +4760,8 @@ export function App() {
               </div>
               <div className="composer-right">
                 <ModelPicker selection={modelSelection} scope={session ? 'session' : 'default'} disabled={stateLoading || sessionLoading} hidden={settingsOpen} loadCatalog={loadModelCatalog} onSelectModel={selectModel} onSelectThinking={selectThinking} onManage={() => void openSettings('models')} request={modelPickerRequest} onRequestHandled={() => setModelPickerRequest(null)} />
-                {(busy || compaction.active) && <button type="button" className="send-button is-stop" disabled={stopping} onClick={() => void stopGeneration()} aria-label={stopping ? '正在停止当前任务' : '停止当前任务'} title={stopping ? '正在停止当前任务' : '停止当前任务'}>{stopping ? <LoaderCircle className="spin" aria-hidden="true" /> : <Square fill="currentColor" aria-hidden="true" />}</button>}
-                {(!busy && !compaction.active || prompt.trim() || composerAttachments.length > 0) && <button type="button" className="send-button" disabled={stopping || !workspace || (!prompt.trim() && composerAttachments.length === 0) || compaction.active} onClick={() => void send()} aria-label={compaction.active ? '正在压缩上下文' : busy ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'} title={!workspace ? '请先选择工作区' : compaction.active ? '正在压缩上下文，完成后自动继续' : busy ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'}><ArrowUp /></button>}
+                {turnActive && <button type="button" className="send-button is-stop" disabled={stopping} onClick={() => void stopGeneration()} aria-label={stopping ? '正在停止当前任务' : '停止当前任务'} title={stopping ? '正在停止当前任务' : '停止当前任务'}>{stopping ? <LoaderCircle className="spin" aria-hidden="true" /> : <Square fill="currentColor" aria-hidden="true" />}</button>}
+                {(!turnActive || prompt.trim() || composerAttachments.length > 0) && <button type="button" className="send-button" disabled={stopping || !workspace || (!prompt.trim() && composerAttachments.length === 0) || compaction.active} onClick={() => void send()} aria-label={compaction.active ? '正在压缩上下文' : turnActive ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'} title={!workspace ? '请先选择工作区' : compaction.active ? '正在压缩上下文，完成后自动继续' : turnActive ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'}><ArrowUp /></button>}
               </div>
             </div>
             </div>

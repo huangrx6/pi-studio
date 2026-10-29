@@ -115,6 +115,8 @@ type EventBase<T extends string, P> = {
 export type ConversationEvent =
   | EventBase<'snapshot', {
       run?: { inputs: string[] };
+      /** The whole Studio conversation, including owned background tasks. */
+      running: boolean;
       generation?: ChatMessage;
       tools: unknown[];
       nestedTools: unknown[];
@@ -124,8 +126,13 @@ export type ConversationEvent =
       agent: Record<string, unknown>;
       usage?: unknown;
     }>
-  | EventBase<'run.started' | 'run.completed', { inputs: string[] }>
-  | EventBase<'run.failed', { taskId: string; kind: string; message: string }>
+  | EventBase<'run.started' | 'run.completed', { inputs: string[]; running: boolean }>
+  | EventBase<'run.failed', {
+      taskId: string;
+      kind: string;
+      message: string;
+      running: boolean;
+    }>
   | EventBase<'assistant.updated' | 'assistant.completed', { message: ChatMessage }>
   | EventBase<'transcript.appended', { messages: ChatMessage[] }>
   | EventBase<'inbox.updated', { items: unknown[] }>

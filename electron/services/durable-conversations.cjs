@@ -62,6 +62,7 @@ const MAX_OUTLINE_TEXT = 2_000;
 const MAX_TRACKED_CONVERSATION_COUNTS = 2_000;
 const CONVERSATION_KINDS = new Set(['conversation', 'durable']);
 const BUSY_POLICIES = new Set(['steer', 'followUp', 'reject']);
+const ACTIVE_TASK_STATES = new Set(['running', 'ready', 'waiting', 'sleeping']);
 
 const watches = new Map();
 const subscribers = new Map();
@@ -120,7 +121,11 @@ function conversationDto(row, overrides = {}) {
 function liveSnapshotDto(conversation, snapshot, extra = {}) {
   const runtime = snapshot?.run;
   return conversationDto(conversation, {
-    running: Boolean(runtime),
+    // A model run and the Studio conversation have different lifetimes. A
+    // background subagent can outlive the main generation, so the task
+    // inspection projection is the authoritative "conversation still active"
+    // signal. `snapshot.run` only protects against the brief registration race.
+    running: Boolean(runtime) || runningConversations.has(conversationKey(conversation)),
     requestId: runtime?.inputs?.length ? conversation.lastRequestId : '',
     compacting: Boolean(snapshot?.compactions?.length),
     generation: snapshot?.generation?.message
@@ -373,22 +378,17 @@ async function temporarySnapshot(conversation) {
   }
 }
 
-async function reconcileWatchSnapshot(entry, row, conversation) {
+async function reconcileWatchSnapshot(entry, conversation) {
   if (!entry || !entry.running) return entry?.snapshot;
-  const runtime = await getDurableRuntime();
-  const inspection = await runtime.harness.inspect(runtime.context);
-  const hasForegroundWork = inspection.tasks.some((task) => (
-    Number(task.record?.conversationId) === Number(row.id)
-    && !task.record?.background
-    && ['running', 'ready', 'waiting', 'sleeping'].includes(task.state.kind)
-  ));
-  if (hasForegroundWork) return entry.snapshot;
   const fresh = await temporarySnapshot(conversation);
   if (fresh?.run) return entry.snapshot;
+  // The event stream can briefly lag the task projection. Refresh it before
+  // closing the live entry; background tasks are still part of this Studio
+  // conversation even though they do not keep Durable's parent run busy.
+  await refreshRuntimeState();
   entry.snapshot = fresh;
   entry.partial = fresh?.generation?.message;
   entry.running = false;
-  runningConversations.delete(conversationKey(row));
   return fresh;
 }
 
@@ -396,10 +396,11 @@ async function conversationSnapshot(id) {
   const row = await getConversationRow(id);
   const conversation = await getConversationHandle(id);
   if (!row || !conversation) return undefined;
+  await refreshRuntimeState();
   const key = conversationKey(row);
   const entry = watches.get(key);
   const snapshot = entry
-    ? await reconcileWatchSnapshot(entry, row, conversation)
+    ? await reconcileWatchSnapshot(entry, conversation)
     : await temporarySnapshot(conversation);
   const agent = await conversation.agent((await getDurableRuntime()).context);
   return liveSnapshotDto(row, snapshot, {
@@ -412,6 +413,7 @@ async function conversationPage(id, options = {}) {
   const row = await getConversationRow(id);
   const conversation = await getConversationHandle(id);
   if (!row || !conversation) return undefined;
+  await refreshRuntimeState();
   const page = await scanEntries(conversation, {
     order: 'descending',
     messageLimit: options.limit,
@@ -421,7 +423,7 @@ async function conversationPage(id, options = {}) {
   const key = conversationKey(row);
   const entry = watches.get(key);
   const snapshot = entry
-    ? await reconcileWatchSnapshot(entry, row, conversation)
+    ? await reconcileWatchSnapshot(entry, conversation)
     : await temporarySnapshot(conversation);
   const turnDiffs = getStudioDatabase().readTurnDiffs(key);
   rememberMessageCount(key, Math.max(
@@ -713,11 +715,14 @@ async function configureConversation({ id, modelRef, thinkingLevel } = {}) {
 async function abortConversation(id) {
   const row = await getConversationRow(id);
   const conversation = await getConversationHandle(id);
-  if (!conversation) throw new Error('会话不存在');
+  if (!row || !conversation) throw new Error('会话不存在');
   const wasRunning = runningConversations.has(conversationKey(row));
   const runtime = await getDurableRuntime();
-  await conversation.abort(runtime.context);
-  runningConversations.delete(conversationKey(row));
+  // Stop background children with the main turn. The UI exposes one stop
+  // action for the conversation, so leaving an owned background task alive
+  // would keep the row spinning after the user explicitly stopped it.
+  await conversation.abort(runtime.context, { background: true });
+  await refreshRuntimeState();
   return { ok: true, wasRunning };
 }
 
@@ -1080,7 +1085,7 @@ async function handleAgentEvent(event, entry, conversation, emit) {
       runningConversations.add(key);
       await beginRunDiff(entry, conversation, event.run?.inputs);
     } else {
-      runningConversations.delete(key);
+      await refreshRuntimeState();
     }
     await emit({
       type: 'snapshot',
@@ -1088,6 +1093,7 @@ async function handleAgentEvent(event, entry, conversation, emit) {
       revision: entry.revision,
       payload: {
         run: event.run,
+        running: runningConversations.has(key),
         generation: entry.partial ? partialMessage(entry.partial) : undefined,
         tools: event.tools,
         nestedTools: event.nestedTools,
@@ -1103,27 +1109,36 @@ async function handleAgentEvent(event, entry, conversation, emit) {
 
   if (event.type === 'run_start') {
     entry.running = true;
+    entry.snapshot = { ...entry.snapshot, run: { inputs: event.inputs } };
     runningConversations.add(key);
     await beginRunDiff(entry, conversation, event.inputs);
     await emit({
       type: 'run.started',
       conversationId: key,
       revision: entry.revision,
-      payload: { inputs: event.inputs },
+      payload: { inputs: event.inputs, running: true },
     });
     return;
   }
 
   if (event.type === 'run_end') {
     entry.running = false;
-    runningConversations.delete(key);
+    entry.snapshot = {
+      ...entry.snapshot,
+      run: undefined,
+      generation: undefined,
+      tools: [],
+      nestedTools: [],
+    };
+    await refreshRuntimeState();
+    const running = runningConversations.has(key);
     await finishRunDiff(entry, conversation, emit);
     getStudioDatabase().updateConversation(key, { updatedAt: Date.now() });
     await emit({
       type: 'run.completed',
       conversationId: key,
       revision: entry.revision,
-      payload: { inputs: event.inputs },
+      payload: { inputs: event.inputs, running },
     });
     return;
   }
@@ -1281,7 +1296,7 @@ async function handleAgentEvent(event, entry, conversation, emit) {
 
   if (event.type === 'task_failed') {
     entry.running = false;
-    runningConversations.delete(key);
+    await refreshRuntimeState();
     getStudioDatabase().updateConversation(key, {
       lastError: event.message,
       updatedAt: Date.now(),
@@ -1294,6 +1309,7 @@ async function handleAgentEvent(event, entry, conversation, emit) {
         taskId: String(event.taskId),
         kind: event.kind,
         message: event.message,
+        running: runningConversations.has(key),
       },
     });
   }
@@ -1342,6 +1358,7 @@ async function subscribeConversation(id, owner, emit) {
   const row = await getConversationRow(id);
   if (!row) throw new Error('会话不存在');
   const key = conversationKey(row);
+  await refreshRuntimeState();
   const entry = await ensureWatch(key, emit);
   const owners = subscribers.get(key) || new Set();
   owners.add(owner);
@@ -1350,7 +1367,7 @@ async function subscribeConversation(id, owner, emit) {
   const conversation = await getConversationHandle(row.id);
   if (!conversation) throw new Error('会话不存在');
   const agent = await conversation.agent((await getDurableRuntime()).context);
-  const snapshot = await reconcileWatchSnapshot(entry, row, conversation);
+  const snapshot = await reconcileWatchSnapshot(entry, conversation);
   return liveSnapshotDto(row, snapshot, {
     model: await sessionModelInfo(agent),
   });
@@ -1402,7 +1419,7 @@ async function refreshRuntimeState() {
   const inspection = await runtime.harness.inspect(runtime.context);
   runningConversations.clear();
   for (const task of inspection.tasks) {
-    if (!['running', 'ready', 'waiting', 'sleeping'].includes(task.state.kind)) continue;
+    if (!ACTIVE_TASK_STATES.has(task.state.kind)) continue;
     const conversationId = task.record?.conversationId;
     if (conversationId !== undefined) {
       const row = db.getConversation(String(conversationId));

@@ -20,18 +20,28 @@ try {
   const session={id:'demo',cwd:'/workspace',title:'修复会话状态',kind:'conversation',goal:'',pinned:false,archived:false,createdAt:Date.now()-60_000,updatedAt:Date.now(),messages,turnDiffs:[{at:6,files:[file],added:4,removed:2}]};
   const listeners=new Set();
   let revision=0;
+  window.__interruptIds=[];
   window.emit=({type,payload})=>{revision+=1;for(const fn of listeners)fn({type,payload,conversationId:'demo',revision});};
   const snapshot=()=>({...session,running:!!window.running,requestId:window.running?'running-request':'',compacting:false,inbox:[],tools:[],nestedTools:[],usage:{},agent:{cwd:'/workspace',name:'QA Agent'}});
   window.piApi=new Proxy({state:async()=>({workspaces:[{cwd:'/workspace',name:'Pi Studio',sessions:[session]}],model}),
    conversationPage:async()=>({...snapshot(),messages,turnDiffs:session.turnDiffs,page:{hasOlder:false},messageStart:0}),
    conversationOutline:async()=>({id:'demo',items:[{sourceIndex:0,text:'检查会话运行状态并修复',timestamp:1}],totalMessages:messages.length}),
    conversationSnapshot:async()=>snapshot(),subscribeConversation:async()=>snapshot(),unsubscribeConversation:async()=>({ok:true}),sessionSubagents:async()=>[],
+   conversationInterrupt:async id=>{window.__interruptIds.push(id);window.running=false;return {ok:true};},
    onConversationEvent:fn=>{listeners.add(fn);return()=>listeners.delete(fn);},
-   modeGet:async()=>({available:true,mode:'smart'}),composerResources:async()=>({commands:[],skills:[]}),extensionsUi:async()=>({items:[],errors:[],syncedAt:Date.now(),apiVersion:1})},
+   modeGet:async()=>({available:true,mode:'smart'}),composerResources:async()=>({commands:[],skills:[]}),extensionsUi:async()=>({items:[],errors:[],syncedAt:Date.now(),apiVersion:1}),
+   conversationExtensionUiPreferences:async()=>({version:1,layout:'grid',globalOrder:[],sessionOrders:{}}),
+   saveConversationExtensionUiPreferences:async payload=>({version:1,layout:payload.layout||'grid',globalOrder:payload.globalOrder||[],sessionOrders:payload.sessionOrder?{demo:payload.sessionOrder}:{}})},
    {get:(target,key)=>key in target?target[key]:String(key).startsWith('on')?()=>()=>{}:async()=>undefined});
  });
  await page.goto('http://127.0.0.1:5180');
- await page.locator('.workspace-row').first().click();await page.locator('.session-row').first().click();
+ try {
+  await page.locator('.workspace-row').first().click();await page.locator('.session-row').first().click();
+ } catch (error) {
+  console.error('Page errors:', errors);
+  await page.screenshot({path:output+'startup-failure.png',fullPage:true,animations:'disabled'});
+  throw error;
+ }
  for(const text of ['先检查会话状态来源，确认后台是否仍在执行。','已经定位到状态不同步，接下来补上排队处理。']){
   const prose=page.getByText(text,{exact:true});await prose.waitFor();assert.equal(await prose.evaluate(node=>!!node.closest('details')),false);
  }
@@ -65,6 +75,23 @@ try {
  await page.locator('.run-live-status').waitFor();
  assert.equal(await page.locator('.assistant-turn-status').getByText('已完成',{exact:true}).count(),0);
  await page.evaluate(()=>window.emit({type:'run.completed',payload:{inputs:[]}}));await page.locator('.run-live-status').waitFor({state:'detached'});
+ // 一个 Durable model run 结束并不代表整轮 Studio 对话结束：后台子智能体仍可能运行，
+ // 此时不能提前显示「已完成」或本轮文件变更，且停止按钮必须继续可用。
+ await page.evaluate(()=>window.emit({type:'run.started',payload:{inputs:['background'],running:true}}));
+ await page.locator('.run-live-status').waitFor();
+ assert.equal(await page.locator('.file-change-summary').count(),0);
+ assert.equal(await page.getByRole('button',{name:'停止当前任务'}).count(),1);
+ await page.evaluate(()=>window.emit({type:'run.completed',payload:{inputs:['background'],running:true}}));
+ assert.equal(await page.locator('.run-live-status').count(),1);
+ assert.equal(await page.locator('.assistant-turn-status').getByText('已完成',{exact:true}).count(),0);
+ assert.equal(await page.locator('.file-change-summary').count(),0);
+ await page.evaluate(()=>window.emit({type:'run.completed',payload:{inputs:['background'],running:false}}));
+ await page.locator('.run-live-status').waitFor({state:'detached'});
+ await page.locator('.file-change-summary').waitFor();
+ await page.evaluate(()=>window.emit({type:'run.started',payload:{inputs:['stoppable'],running:true}}));
+ await page.getByRole('button',{name:'停止当前任务'}).click();
+ await page.waitForFunction(()=>window.__interruptIds.length===1&&window.__interruptIds[0]==='demo');
+ await page.locator('.run-live-status').waitFor({state:'detached'});
  assert.deepEqual(errors,[]);
- console.log('PASS: chronological visible prose, separate process groups, split/unified diff, syntax/word highlights, drag and keyboard resize, live session recovery.');
+ console.log('PASS: chronological visible prose, separate process groups, split/unified diff, syntax/word highlights, drag and keyboard resize, aggregate live-session recovery and stop.');
 } finally {await browser.close();}

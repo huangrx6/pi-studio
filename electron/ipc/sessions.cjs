@@ -68,7 +68,10 @@ function contentFreeConversationMetricsEvent(event) {
     return {
       type: event.type,
       conversationId,
-      payload: { run: Boolean(event.payload?.run) },
+      payload: {
+        run: Boolean(event.payload?.run),
+        running: Boolean(event.payload?.running),
+      },
     };
   }
   if (event.type === 'usage.updated') {
@@ -122,7 +125,10 @@ function broadcastConversationEvent(event) {
         });
       }
     }).catch(() => {});
-  } else if (event.type === 'run.completed' || event.type === 'run.failed') {
+  } else if (
+    (event.type === 'run.completed' || event.type === 'run.failed')
+    && !event.payload?.running
+  ) {
     const cancelled = event.type === 'run.completed'
       && cancelledRunIds.delete(event.conversationId);
     publishMenuBarEvent({
