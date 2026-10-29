@@ -50,7 +50,12 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build & package (DMG + auto-update ZIP)
-        run: pnpm run dist
+        shell: bash
+        run: |
+          if [ -z "${CSC_LINK:-}" ]; then
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          fi
+          pnpm run dist
         env:
           # When these repository secrets are configured, electron-builder signs
           # with the Developer ID certificate. Unsigned builds can still check
