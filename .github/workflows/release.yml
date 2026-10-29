@@ -53,6 +53,8 @@ jobs:
         shell: bash
         run: |
           if [ -z "${CSC_LINK:-}" ]; then
+            unset CSC_LINK
+            unset CSC_KEY_PASSWORD
             export CSC_IDENTITY_AUTO_DISCOVERY=false
           fi
           pnpm run dist
