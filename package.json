@@ -1,6 +1,6 @@
 {
   "name": "pi-studio",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "description": "Pi Studio — a native macOS desktop workspace for the Pi coding agent.",
