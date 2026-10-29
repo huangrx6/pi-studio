@@ -12,6 +12,19 @@ function cleanTitle(value, fallback = '新会话') {
   return (text || fallback).slice(0, 96);
 }
 
+/** A completion should interrupt the user only when the app is not already in front. */
+function shouldPresentBackgroundNotification(mainWindow) {
+  if (!mainWindow || typeof mainWindow !== 'object') return true;
+  try {
+    if (typeof mainWindow.isDestroyed === 'function' && mainWindow.isDestroyed()) return true;
+    if (typeof mainWindow.isVisible === 'function' && !mainWindow.isVisible()) return true;
+    if (typeof mainWindow.isFocused === 'function') return !mainWindow.isFocused();
+  } catch {
+    return true;
+  }
+  return true;
+}
+
 function createMenuBarState({ now = () => Date.now(), recentLimit = DEFAULT_RECENT_LIMIT } = {}) {
   const running = new Map();
   let recent = [];
@@ -82,4 +95,4 @@ function createMenuBarState({ now = () => Date.now(), recentLimit = DEFAULT_RECE
   return { start, updateTitle, finish, markSeen, clearRecent, snapshot };
 }
 
-module.exports = { createMenuBarState, cleanTitle };
+module.exports = { createMenuBarState, cleanTitle, shouldPresentBackgroundNotification };

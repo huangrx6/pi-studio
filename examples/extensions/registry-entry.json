@@ -1,0 +1,22 @@
+{
+  "id": "example.agent-starter",
+  "name": "Agent Extension Starter",
+  "publisher": "pi-studio-examples",
+  "summary": "Reference entry generated for a hosted extension package.",
+  "repository": "https://github.com/huangrx6/pi-studio",
+  "versions": [
+    {
+      "version": "0.1.0",
+      "piStudio": ">=0.0.3 <0.2.0",
+      "download": "https://github.com/huangrx6/pi-studio/releases/download/example-agent-v0.1.0/example.agent-starter-0.1.0.pi-extension.zip",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size": 4096,
+      "permissions": [
+        "agent.tools",
+        "ui.commands",
+        "ui.panels"
+      ],
+      "publishedAt": "2026-10-29T00:00:00.000Z"
+    }
+  ]
+}

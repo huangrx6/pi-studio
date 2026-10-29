@@ -10,13 +10,13 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './App';
-import { loadPreferences, resolveTheme } from './preferences';
+import { loadPreferences, resolveTheme } from './lib/preferences';
 import './styles/dsh-scrollbar.css';
 import './styles/tokens.css';
 import './styles/palette.css';
 import './app.css';
 
-// 先应用主题与配色再 render，避免第一帧先按默认青柠色绘制。
+// 先应用主题与配色再 render，避免第一帧先按默认玉石青色绘制。
 const startupPreferences = loadPreferences();
 document.documentElement.dataset.theme = resolveTheme(startupPreferences.theme);
 document.documentElement.dataset.palette = startupPreferences.palette;

@@ -7,22 +7,32 @@ import {
   Package,
   Plus,
   RefreshCw,
+  RotateCcw,
   Save,
+  Search,
   Terminal,
   Trash2,
   Wrench,
   X,
 } from 'lucide-react';
 import { DetailDialog } from './DetailDialog';
+import {
+  SettingsResourceCard,
+  SettingsResourceCardBody,
+  SettingsResourceCardFooter,
+  SettingsResourceCardIcon,
+  SettingsResourceCardMain,
+} from './SettingsResourceCard';
 import type {
   AgentToolCatalog,
   AgentToolCommand,
   AgentToolInfo,
   AgentToolSelection,
   AgentToolSource,
-} from '../agent-tool-types';
+} from '../types/agent-tool-types';
+import { runtimeRefreshFailure } from '../lib/runtime-refresh';
 
-const RECOMMENDED_TOOLS = ['read', 'write', 'edit', 'bash', 'grep', 'find', 'ls'];
+const RECOMMENDED_TOOLS = ['read', 'write', 'edit', 'bash', 'grep', 'find', 'ls', 'tool_search', 'mcp__*'];
 const KNOWN_DESCRIPTIONS: Record<string, string> = {
   read: '读取工作区文件。',
   write: '创建或覆盖文件。',
@@ -31,11 +41,8 @@ const KNOWN_DESCRIPTIONS: Record<string, string> = {
   grep: '搜索文件内容。',
   find: '按名称查找文件。',
   ls: '浏览目录结构。',
-  subagents_enable: '为支持动态工具的模型加载完整子 Agent 能力。',
-  subagent: '启动前台、并行或链式工作的子 Agent。',
-  contact_supervisor: '让子 Agent 向父 Agent 提问或汇报。',
-  subagent_supervisor: '查看并回复正在工作的子 Agent。',
-  bg_wait: '等待后台子 Agent 完成，或读取当前状态。',
+  tool_search: '按需发现 deferred MCP 工具；匹配工具从下一次模型请求起可用。',
+  'mcp__*': '允许所有已连接 MCP 服务器的工具；可按来源或单个工具收窄。',
 };
 
 const SOURCE_KIND_LABEL: Record<AgentToolSource['kind'], string> = {
@@ -84,7 +91,18 @@ function scopeLabel(scope: string): string {
 function exposureLabel(exposure: string): string {
   if (exposure === 'direct') return '直接提供';
   if (exposure === 'on-demand') return '按需加载';
+  if (exposure === 'hidden') return '隐藏';
   return exposure || '标准';
+}
+
+function patternMatches(pattern: string, name: string): boolean {
+  if (pattern === name || pattern === '*') return true;
+  if (!pattern.includes('*')) return false;
+  const expression = pattern
+    .split('*')
+    .map((part) => part.replace(/[|\\{}()[\]^$+?.]/g, '\\$&'))
+    .join('.*');
+  return new RegExp(`^${expression}$`).test(name);
 }
 
 function toolSource(selection: AgentToolSelection, name: string): AgentToolSource {
@@ -180,9 +198,13 @@ export function AgentToolsSettings({ cwd, initialSelection, configPath, onSaved 
     [catalog],
   );
   const availableNames = useMemo(() => new Set((catalog?.tools || []).map((tool) => tool.name)), [catalog]);
-  const enabled = new Set(draft.enabled);
   const dirty = JSON.stringify(draft) !== JSON.stringify(selection);
-  const unavailable = draft.enabled.filter((name) => name !== '*' && !availableNames.has(name));
+  const wildcardRules = draft.enabled.filter((name) => name.includes('*') && name !== '*');
+  const unavailable = draft.enabled.filter((name) => {
+    if (name === '*') return false;
+    if (name.includes('*')) return !(catalog?.tools || []).some((tool) => patternMatches(name, tool.name));
+    return !availableNames.has(name);
+  });
   const groups = useMemo<AgentToolGroupItem[]>(() => {
     const needle = query.trim().toLowerCase();
     const matches = (name: string, description: string, source: AgentToolSource) => (
@@ -215,8 +237,6 @@ export function AgentToolsSettings({ cwd, initialSelection, configPath, onSaved 
     return [...grouped.values()].sort((left, right) => {
       if (left.source.kind === 'core' && right.source.kind !== 'core') return -1;
       if (right.source.kind === 'core' && left.source.kind !== 'core') return 1;
-      if (left.source.label === 'pi-subagents' && right.source.label !== 'pi-subagents') return -1;
-      if (right.source.label === 'pi-subagents' && left.source.label !== 'pi-subagents') return 1;
       return left.source.label.localeCompare(right.source.label);
     });
   }, [catalog?.commands, catalog?.tools, query]);
@@ -233,22 +253,36 @@ export function AgentToolsSettings({ cwd, initialSelection, configPath, onSaved 
 
   const activeGroup = groups.find((group) => group.key === activeSourceKey) || groups[0];
   const detailIsTool = detail?.kind === 'tool';
-  const detailEnabled = detailIsTool && enabled.has(detail.item.name);
+  const selectionEnables = (name: string) => draft.enabled.some((pattern) => patternMatches(pattern, name));
+  const detailEnabled = detailIsTool && selectionEnables(detail.item.name);
 
   function updateEnabled(next: string[]) {
     setDraft((current) => selectionFromSources(next, catalogSources, current));
   }
 
   function toggle(name: string, checked: boolean) {
-    updateEnabled(checked
-      ? [...draft.enabled.filter((item) => item !== '*'), ...(draft.enabled.includes(name) ? [] : [name])]
-      : draft.enabled.filter((item) => item !== name));
+    if (checked) {
+      if (selectionEnables(name)) return;
+      updateEnabled([...draft.enabled.filter((item) => item !== '*'), name]);
+      return;
+    }
+    const matchingRules = draft.enabled.filter((item) => item.includes('*') && patternMatches(item, name));
+    if (matchingRules.length === 0) {
+      updateEnabled(draft.enabled.filter((item) => item !== name));
+      return;
+    }
+    const expanded = draft.enabled
+      .filter((item) => !matchingRules.includes(item))
+      .concat((catalog?.tools || [])
+        .map((tool) => tool.name)
+        .filter((toolName) => toolName !== name && matchingRules.some((rule) => patternMatches(rule, toolName))));
+    updateEnabled(expanded);
   }
 
   function addCustomTool() {
     const name = customName.trim();
-    if (!/^[A-Za-z0-9_.:-]+$/.test(name) || ['__proto__', 'prototype', 'constructor'].includes(name)) {
-      setError('工具名只能包含字母、数字、点、横线、下划线或冒号。');
+    if (!/^[A-Za-z0-9_.:*\-]+$/.test(name) || ['__proto__', 'prototype', 'constructor'].includes(name)) {
+      setError('工具名或通配符只能包含字母、数字、点、横线、下划线、冒号或星号。');
       return;
     }
     if (draft.enabled.includes(name)) {
@@ -269,6 +303,8 @@ export function AgentToolsSettings({ cwd, initialSelection, configPath, onSaved 
     setError(null);
     try {
       const snapshot = await window.piApi.setAgentTools({ tools: draft, cwd });
+      const refreshFailure = runtimeRefreshFailure(snapshot.runtimeRefresh);
+      if (refreshFailure) setError(refreshFailure);
       setSelection(snapshot.agentTools);
       setDraft(snapshot.agentTools);
       onSaved(snapshot);
@@ -335,6 +371,17 @@ export function AgentToolsSettings({ cwd, initialSelection, configPath, onSaved 
       ))}
     </section> : null}
 
+    {wildcardRules.length > 0 && <section className="settings-card">
+      <div className="settings-card-head"><div><h2>批量工具规则 <span className="count-badge">{wildcardRules.length}</span></h2><p>通配符会随来源变化自动覆盖新出现的工具；移除规则后可按单个工具精细配置。</p></div></div>
+      <div className="agent-tool-unavailable-list">
+        {wildcardRules.map((name) => <div className="agent-tool-unavailable" key={name}>
+          <Wrench />
+          <div><code>{name}</code><span>{KNOWN_DESCRIPTIONS[name] || '匹配名称符合这个模式的工具。'}</span></div>
+          <button className="icon-button resource-delete" aria-label={`移除工具规则 ${name}`} title="移除规则" onClick={() => updateEnabled(draft.enabled.filter((item) => item !== name))}><Trash2 /></button>
+        </div>)}
+      </div>
+    </section>}
+
     {unavailable.length > 0 && <section className="settings-card">
       <div className="settings-card-head"><div><h2>当前不可用 <span className="count-badge">{unavailable.length}</span></h2><p>这些工具仍在本地白名单中，但当前没有找到提供它的扩展。</p></div></div>
       <div className="agent-tool-unavailable-list">
@@ -349,14 +396,22 @@ export function AgentToolsSettings({ cwd, initialSelection, configPath, onSaved 
       </div>
     </section>}
 
-    <section className="settings-card">
+    <section className="settings-card agent-tool-catalog-card">
       <div className="settings-card-head">
         <div><h2>可用工具</h2><p>工具与斜杠命令按提供者分组；扩展被移除后，它注册的命令也会一起消失。</p></div>
+      </div>
+      <div className="agent-tool-toolbar">
         <div className="agent-tool-search-wrap">
+          <Search className="agent-tool-search-icon" aria-hidden="true" />
           <input className="agent-tool-search" aria-label="搜索 Agent 工具" placeholder="搜索工具或来源…" value={query} onChange={(event) => setQuery(event.target.value)} />
           {query && <button className="agent-tool-search-clear" aria-label="清除工具搜索" title="清除搜索" onClick={() => setQuery('')}><X /></button>}
         </div>
+        <div className="agent-tool-toolbar-actions">
+          <button className="settings-outline" disabled={saving || !dirty} onClick={resetRecommended}><RotateCcw />恢复核心工具</button>
+          <button className="settings-save" disabled={saving || !dirty} onClick={() => void save()}>{saving ? <LoaderCircle className="spin" /> : <Save />}{saving ? '正在保存…' : '保存更改'}</button>
+        </div>
       </div>
+      {error && <div className="settings-error agent-tool-inline-error" role="alert">{error}</div>}
       {loading && !catalog ? <div className="settings-loading" role="status"><LoaderCircle className="spin" />正在扫描可用工具…</div> : <div className="agent-tool-groups">
         {groups.length > 0 && <>
           <div className="agent-tool-tabs" role="tablist" aria-label="工具来源">
@@ -382,63 +437,77 @@ export function AgentToolsSettings({ cwd, initialSelection, configPath, onSaved 
           </div>
           {activeGroup && <section id="agent-tool-source-panel" role="tabpanel" aria-labelledby={`agent-tool-tab-${groups.indexOf(activeGroup)}`} className="agent-tool-source-panel">
             <header className="agent-tool-source-panel-head">
-              <div>
-                <span className="agent-tool-source-icon">{activeGroup.source.kind === 'core' ? <Wrench /> : <Package />}</span>
-                <div><strong>{activeGroup.source.label}</strong><span>{SOURCE_KIND_LABEL[activeGroup.source.kind]} · {scopeLabel(activeGroup.source.scope)} · {activeGroup.tools.length} 个工具{activeGroup.commands.length ? ` · ${activeGroup.commands.length} 个命令` : ''}</span></div>
-              </div>
+              <div><strong>{activeGroup.source.label}</strong><span>{SOURCE_KIND_LABEL[activeGroup.source.kind]} · {scopeLabel(activeGroup.source.scope)} · {activeGroup.tools.length} 个工具{activeGroup.commands.length ? ` · ${activeGroup.commands.length} 个命令` : ''}</span></div>
               {(activeGroup.source.path || activeGroup.source.source) && <code title={activeGroup.source.path || activeGroup.source.source}>{activeGroup.source.path || activeGroup.source.source}</code>}
             </header>
             <div className="agent-tool-card-grid">
               {activeGroup.tools.map((tool) => {
-                const isEnabled = enabled.has(tool.name);
-                return <article className={`agent-tool-card ${isEnabled ? 'is-enabled' : ''}`} key={tool.name}>
-                  <button type="button" className="agent-tool-card-main" aria-label={`查看工具 ${tool.name} 详情`} onClick={() => setDetail({ kind: 'tool', item: tool })}>
-                    <span className="agent-tool-card-topline">
-                      <span className="agent-tool-card-icon"><Terminal /></span>
-                      <span className="agent-tool-card-type">{exposureLabel(tool.exposure)}</span>
-                    </span>
-                    <span className="agent-tool-card-name"><code>{tool.name}</code>{isEnabled && <Check aria-label="已允许" />}</span>
-                    <span className="agent-tool-card-description">{KNOWN_DESCRIPTIONS[tool.name] || tool.description || '暂无说明'}</span>
-                    <span className="agent-tool-card-footer"><span>{isEnabled ? '已允许模型调用' : '当前已停用'}</span><span>详情 <ArrowUpRight /></span></span>
-                  </button>
-                  <button
-                    className={`switch agent-tool-card-toggle ${isEnabled ? 'is-on' : ''}`}
-                    type="button"
-                    role="switch"
-                    aria-checked={isEnabled}
-                    aria-label={`${isEnabled ? '禁用' : '允许'}工具 ${tool.name}`}
-                    onClick={() => toggle(tool.name, !isEnabled)}
-                  ><span /></button>
-                </article>;
+                const isEnabled = selectionEnables(tool.name);
+                return <SettingsResourceCard
+                  className={`agent-tool-card ${isEnabled ? 'is-enabled' : ''}`}
+                  key={tool.name}
+                >
+                  <SettingsResourceCardMain
+                    className="agent-tool-card-main"
+                    ariaLabel={`查看工具 ${tool.name} 详情`}
+                    onClick={() => setDetail({ kind: 'tool', item: tool })}
+                  >
+                    <SettingsResourceCardIcon className="agent-tool-card-icon"><Terminal /></SettingsResourceCardIcon>
+                    <SettingsResourceCardBody>
+                      <span className="settings-resource-card-heading">
+                        <span className="agent-tool-card-name"><code>{tool.name}</code>{isEnabled && <Check aria-label="已允许" />}</span>
+                        <span className="agent-tool-card-type">{exposureLabel(tool.exposure)}</span>
+                      </span>
+                      <span className="agent-tool-card-description">{KNOWN_DESCRIPTIONS[tool.name] || tool.description || '暂无说明'}</span>
+                    </SettingsResourceCardBody>
+                    <ArrowUpRight className="settings-resource-card-disclosure" aria-hidden="true" />
+                  </SettingsResourceCardMain>
+                  <SettingsResourceCardFooter className="agent-tool-card-footer">
+                    <span className={`resource-status ${isEnabled ? 'is-on' : ''}`}>{isEnabled ? '已允许模型调用' : '当前已停用'}</span>
+                    <button
+                      className={`switch agent-tool-card-toggle ${isEnabled ? 'is-on' : ''}`}
+                      type="button"
+                      role="switch"
+                      aria-checked={isEnabled}
+                      aria-label={`${isEnabled ? '禁用' : '允许'}工具 ${tool.name}`}
+                      onClick={() => toggle(tool.name, !isEnabled)}
+                    ><span /></button>
+                  </SettingsResourceCardFooter>
+                </SettingsResourceCard>;
               })}
-              {activeGroup.commands.map((command) => <article className="agent-tool-card is-command" key={`${activeGroup.source.key}:${command.name}`}>
-                <button type="button" className="agent-tool-card-main" aria-label={`查看扩展命令 ${command.name} 详情`} onClick={() => setDetail({ kind: 'command', item: command })}>
-                  <span className="agent-tool-card-topline">
-                    <span className="agent-tool-card-icon"><Terminal /></span>
-                    <span className="agent-tool-card-type">扩展命令</span>
-                  </span>
-                  <span className="agent-tool-card-name"><code>/{command.name}</code></span>
-                  <span className="agent-tool-card-description">{command.description || '由扩展注册的斜杠命令。'}</span>
-                  <span className="agent-tool-card-footer"><span>随扩展加载</span><span>详情 <ArrowUpRight /></span></span>
-                </button>
-              </article>)}
+              {activeGroup.commands.map((command) => <SettingsResourceCard
+                className="agent-tool-card is-command"
+                key={`${activeGroup.source.key}:${command.name}`}
+              >
+                <SettingsResourceCardMain
+                  className="agent-tool-card-main"
+                  ariaLabel={`查看扩展命令 ${command.name} 详情`}
+                  onClick={() => setDetail({ kind: 'command', item: command })}
+                >
+                  <SettingsResourceCardIcon className="agent-tool-card-icon"><Terminal /></SettingsResourceCardIcon>
+                  <SettingsResourceCardBody>
+                    <span className="settings-resource-card-heading">
+                      <span className="agent-tool-card-name"><code>/{command.name}</code></span>
+                      <span className="agent-tool-card-type">扩展命令</span>
+                    </span>
+                    <span className="agent-tool-card-description">{command.description || '由扩展注册的斜杠命令。'}</span>
+                  </SettingsResourceCardBody>
+                  <ArrowUpRight className="settings-resource-card-disclosure" aria-hidden="true" />
+                </SettingsResourceCardMain>
+                <SettingsResourceCardFooter className="agent-tool-card-footer">
+                  <span className="resource-status">随扩展加载</span>
+                </SettingsResourceCardFooter>
+              </SettingsResourceCard>)}
             </div>
           </section>}
         </>}
         {!groups.length && <div className="settings-empty">{query ? '没有匹配的工具。' : '当前工作区没有检测到可配置工具。'}</div>}
       </div>}
       <div className="agent-tool-custom">
-        <div><strong>手动添加工具</strong><span>扩展尚未加载时，可以先写入工具名；SDK 会在工具实际存在时启用它。</span></div>
-        <div className="agent-tool-custom-control"><input value={customName} placeholder="例如 mcp__docs__search" onChange={(event) => setCustomName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') addCustomTool(); }} /><button className="settings-outline" disabled={!customName.trim()} onClick={addCustomTool}><Plus />添加</button></div>
+        <div><strong>手动添加工具或规则</strong><span>扩展尚未加载时，可以先写入工具名或通配符；SDK 会在工具实际存在时启用它。</span></div>
+        <div className="agent-tool-custom-control"><input value={customName} placeholder="例如 mcp__docs__* 或 mcp__docs__search" onChange={(event) => setCustomName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') addCustomTool(); }} /><button className="settings-outline" disabled={!customName.trim()} onClick={addCustomTool}><Plus />添加</button></div>
       </div>
     </section>
-
-    {error && <div className="settings-error" role="alert">{error}</div>}
-    <div className="agent-tool-savebar">
-      <div><strong>{dirty ? '有未保存的更改' : '已与本地文件同步'}</strong><span>保存后会热更新会话运行时，无需退出或重新启动 App。</span></div>
-      <button className="settings-outline" disabled={saving || !dirty} onClick={resetRecommended}>恢复核心工具</button>
-      <button className="settings-save" disabled={saving || !dirty} onClick={() => void save()}>{saving ? <LoaderCircle className="spin" /> : <Save />}{saving ? '正在保存…' : '保存更改'}</button>
-    </div>
 
     {detail && <DetailDialog className="agent-tool-detail-dialog" onClose={() => setDetail(null)}>
       <header className="detail-header">
@@ -454,7 +523,7 @@ export function AgentToolsSettings({ cwd, initialSelection, configPath, onSaved 
       <div className="detail-body agent-tool-detail-body">
         <div className={`agent-tool-detail-state ${detailEnabled ? 'is-enabled' : ''}`}>
           <span>{detailEnabled ? <Check /> : <CircleAlert />}</span>
-          <div><strong>{detail.kind === 'command' ? '由扩展管理' : detailEnabled ? '已在当前草稿中允许' : '当前草稿中已停用'}</strong><p>{detail.kind === 'command' ? '斜杠命令随提供它的扩展一起加载，不能单独启停。' : '这里的开关只修改当前草稿；点击页面底部的“保存更改”后会同步到 Pi，并热更新会话运行时。'}</p></div>
+          <div><strong>{detail.kind === 'command' ? '由扩展管理' : detailEnabled ? '已在当前草稿中允许' : '当前草稿中已停用'}</strong><p>{detail.kind === 'command' ? '斜杠命令随提供它的扩展一起加载，不能单独启停。' : '这里的开关只修改当前草稿；点击工具目录上方的“保存更改”后会同步到 Pi，并热更新会话运行时。'}</p></div>
         </div>
         <dl className="detail-list">
           <div><dt>类型</dt><dd>{detail.kind === 'tool' ? 'Agent 工具' : '扩展命令'}</dd></div>

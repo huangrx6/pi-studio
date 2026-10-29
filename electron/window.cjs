@@ -1,18 +1,22 @@
 /**
  * 窗口与应用菜单。
  *
- * 窗口创建时要先确定主题偏好（config.json 里的 theme），
+ * 窗口创建时要先确定主题偏好（Studio SQLite 里的 theme），
  * 因为窗口的 backgroundColor 必须在创建时就给出，否则启动会闪白。
  */
 
 const { app, BrowserWindow, Menu, nativeTheme } = require('electron');
 const path = require('node:path');
-const { DEV, getWindow, setWindow, configPath, readJson } = require('./core/state.cjs');
-const { readConfig, writeConfig } = require('./settings-config.cjs');
+const { DEV, getWindow, setWindow } = require('./core/state.cjs');
+const {
+  PALETTES,
+  THEMES,
+  getPalette,
+  getTheme,
+} = require('./core/app-settings.cjs');
+const { getStudioDatabase } = require('./core/studio-db.cjs');
 const { themeBackground } = require('./theme.cjs');
-
-/** 允许的主题偏好值。 */
-const THEMES = ['light', 'dark', 'system'];
+const { publishMenuBarEvent } = require('./menu-bar-events.cjs');
 
 /**
  * 创建主窗口。
@@ -27,8 +31,7 @@ function createWindow() {
     return existing;
   }
 
-  const storedTheme = readJson(configPath(), {}).theme;
-  const preference = THEMES.includes(storedTheme) ? storedTheme : 'light';
+  const preference = getTheme();
   nativeTheme.themeSource = preference;
 
   const win = new BrowserWindow({
@@ -103,16 +106,23 @@ function installMenu({ onCheckForUpdates } = {}) {
 }
 
 /**
- * 切换主题：持久化到 config.json，并同步窗口底色。
- * 主题由渲染进程触发（设置页）。
+ * 切换主题与配色：持久化到 Studio SQLite，同步窗口底色并通知菜单栏。
  */
-function applyTheme(theme) {
-  if (!THEMES.includes(theme)) throw new Error('无效的主题');
-  const config = readConfig(configPath(), {});
-  if (config.theme !== theme) writeConfig(configPath(), { ...config, theme });
+function applyTheme(theme, palette) {
+  if (!THEMES.has(theme)) throw new Error('无效的主题');
+  if (palette !== undefined && !PALETTES.has(palette)) throw new Error('无效的配色方案');
+  const db = getStudioDatabase();
+  const nextPalette = palette === undefined ? getPalette() : palette;
+  db.setSetting('studio.app.theme', theme);
+  db.setSetting('studio.app.palette', nextPalette);
   nativeTheme.themeSource = theme;
   const win = getWindow();
   if (win && !win.isDestroyed()) win.setBackgroundColor(themeBackground(theme, nativeTheme.shouldUseDarkColors));
+  publishMenuBarEvent({
+    type: 'appearance',
+    theme,
+    palette: nextPalette,
+  });
 }
 
 /** 系统外观变化时同步窗口底色（跟随系统或手动切换都会触发）。 */

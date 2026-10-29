@@ -32,17 +32,17 @@
   绘制四张卡片预览，避免预览色与真实主题各维护一份。
   */
 
-  --scheme-lime-primary: #a3e635;
-  --scheme-lime-accent: #436814;
-  --scheme-ocean-primary: #60a5fa;
+  --scheme-lime-primary: #9bd8c0;
+  --scheme-lime-accent: #286b59;
+  --scheme-ocean-primary: #7cb7ff;
   --scheme-ocean-accent: #1d4ed8;
-  --scheme-amber-primary: #fbbf24;
+  --scheme-amber-primary: #ffd15c;
   --scheme-amber-accent: #92400e;
-  --scheme-berry-primary: #f472b6;
+  --scheme-berry-primary: #ff91c6;
   --scheme-berry-accent: #9d174d;
 
   --color-primary: var(--scheme-lime-primary);
-  --color-surface: #f5faee;
+  --color-surface: #f1f7f4;
   --color-highlight: #ffffff;
   --color-dark: #1b2112;
   --color-accent: var(--scheme-lime-accent);
@@ -55,7 +55,8 @@
   --bg: #ffffff;
   --surface: #ffffff;
   --sidebar-bg: #fafafa;
-  --surface-soft: #f5f5f5;
+  --surface-raised: #fafafa;
+  --surface-soft: #fafafa;
   --surface-hover: #eeeeee;
   --surface-active: #e3e3e3;
   --selected-bg: #f0f0f0;
@@ -82,19 +83,19 @@
    */
 
   --accent: var(--color-accent);
-  --accent-hover: #344f10;
+  --accent-hover: #1e5748;
   --accent-soft: var(--color-surface);
-  --accent-border: #bddb96;
+  --accent-border: #b9d8cd;
   --on-accent: var(--color-highlight);
-  --button-bg: var(--color-primary);
-  --button-hover: #93d321;
-  --on-button: var(--color-dark);
+  --button-bg: #286b59;
+  --button-hover: #1e5748;
+  --on-button: var(--color-highlight);
   --switch-off: #d4d4d4;
   --switch-thumb: var(--color-highlight);
-  --switch-on-thumb: var(--color-dark);
-  --focus-color: #6d942c;
-  --focus-halo: rgb(109 148 44 / 18%);
-  --selection: #dfefc8;
+  --switch-on-thumb: var(--color-highlight);
+  --focus-color: #2e725f;
+  --focus-halo: rgb(46 114 95 / 18%);
+  --selection: #dcece6;
   --selection-text: #202020;
 
   /* 语义状态：success/error/warning/info 各有前景、柔和背景、边框三件套。文字用
@@ -141,13 +142,13 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --scheme-lime-primary: #b5e925;
-  --scheme-lime-accent: #42e73c;
-  --scheme-ocean-primary: #60a5fa;
+  --scheme-lime-primary: #8adcc0;
+  --scheme-lime-accent: #79cdb3;
+  --scheme-ocean-primary: #7cbaff;
   --scheme-ocean-accent: #93c5fd;
-  --scheme-amber-primary: #fbbf24;
+  --scheme-amber-primary: #ffd25d;
   --scheme-amber-accent: #fcd34d;
-  --scheme-berry-primary: #f472b6;
+  --scheme-berry-primary: #ff94ca;
   --scheme-berry-accent: #f9a8d4;
 
   --color-primary: var(--scheme-lime-primary);
@@ -159,6 +160,7 @@
   --bg: #101010;
   --surface: #181818;
   --sidebar-bg: #141414;
+  --surface-raised: #232323;
   --surface-soft: #202020;
   --surface-hover: #292929;
   --surface-active: #343434;
@@ -173,17 +175,17 @@
   --border-hover: #676767;
 
   --accent: var(--color-primary);
-  --accent-hover: #cdf478;
-  --accent-soft: #22291a;
-  --accent-border: #4d6130;
+  --accent-hover: #9ce2ca;
+  --accent-soft: #16241f;
+  --accent-border: #315f51;
   --on-accent: var(--color-dark);
-  --button-bg: var(--color-primary);
-  --button-hover: #c7ef66;
+  --button-bg: #286b59;
+  --button-hover: #1e5748;
   --switch-off: #484848;
   --switch-thumb: #c1c1c1;
-  --focus-color: #92ad54;
-  --focus-halo: rgb(146 173 84 / 12%);
-  --selection: #3e5122;
+  --focus-color: #79cdb3;
+  --focus-halo: rgb(121 205 179 / 14%);
+  --selection: #24483d;
   --selection-text: #f8faf4;
 
   --success: #9dce8b;
@@ -221,7 +223,8 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --accent-hover: #1e40af;
   --accent-soft: #eff6ff;
   --accent-border: #bfdbfe;
-  --button-hover: #93c5fd;
+  --button-bg: #1d4ed8;
+  --button-hover: #1e40af;
   --focus-color: #2563eb;
   --focus-halo: rgb(37 99 235 / 18%);
   --selection: #dbeafe;
@@ -235,7 +238,8 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --accent-hover: #bfdbfe;
   --accent-soft: #172235;
   --accent-border: #36557d;
-  --button-hover: #93c5fd;
+  --button-bg: #1d4ed8;
+  --button-hover: #1e40af;
   --focus-color: #7dd3fc;
   --focus-halo: rgb(125 211 252 / 14%);
   --selection: #24415f;
@@ -249,7 +253,8 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --accent-hover: #78350f;
   --accent-soft: #fffaf0;
   --accent-border: #f2d69a;
-  --button-hover: #f59e0b;
+  --button-bg: #92400e;
+  --button-hover: #78350f;
   --focus-color: #b45309;
   --focus-halo: rgb(180 83 9 / 18%);
   --selection: #fef0c7;
@@ -263,7 +268,8 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --accent-hover: #fde68a;
   --accent-soft: #2d2618;
   --accent-border: #6b5325;
-  --button-hover: #fcd34d;
+  --button-bg: #92400e;
+  --button-hover: #78350f;
   --focus-color: #fbbf24;
   --focus-halo: rgb(251 191 36 / 14%);
   --selection: #4d3b16;
@@ -277,7 +283,8 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --accent-hover: #831843;
   --accent-soft: #fff1f6;
   --accent-border: #f4bfd4;
-  --button-hover: #ec4899;
+  --button-bg: #9d174d;
+  --button-hover: #831843;
   --focus-color: #be185d;
   --focus-halo: rgb(190 24 93 / 18%);
   --selection: #fce7f3;
@@ -291,7 +298,8 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --accent-hover: #fbcfe8;
   --accent-soft: #2d1822;
   --accent-border: #6d3650;
-  --button-hover: #f9a8d4;
+  --button-bg: #9d174d;
+  --button-hover: #831843;
   --focus-color: #f472b6;
   --focus-halo: rgb(244 114 182 / 14%);
   --selection: #4c2038;
@@ -328,8 +336,34 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --syntax-comment: var(--faint);
   --message-bg: var(--surface-soft);
   --message-border: var(--border);
-  --background-card-surface: color-mix(in srgb, var(--surface) 92%, transparent);
-  --background-composer-surface: color-mix(in srgb, var(--surface) 94%, transparent);
+  /* 自定义背景的透明表面按层级集中派生。画布媒体只透过外壳底漆，常规卡片再覆盖
+  一层，控件与状态最后落到可读表面；弹框继续使用 overlay-surface，错误、成功和
+  警告也不参与透明混合。组件只消费这些角色，避免每处单独调透明度产生叠加色斑。
+  数值是各层相对透明度，不是页面总透明度；页面总透明度由界面遮挡滑杆控制。
+  */
+  --background-shell-wash: var(--bg);
+  --background-sidebar-wash: var(--sidebar-bg);
+  --background-card-surface: color-mix(in srgb, var(--surface) 68%, transparent);
+  --background-card-strong-surface: color-mix(in srgb, var(--surface) 84%, transparent);
+  --background-control-surface: color-mix(in srgb, var(--surface) 64%, transparent);
+  --background-raised-surface: color-mix(in srgb, var(--surface-raised) 46%, transparent);
+  --background-soft-surface: color-mix(in srgb, var(--surface-soft) 38%, transparent);
+  --background-hover-surface: color-mix(in srgb, var(--text) 4%, transparent);
+  --background-active-surface: color-mix(in srgb, var(--text) 8%, transparent);
+  --background-selected-surface: color-mix(in srgb, var(--selected-bg) 42%, transparent);
+  --background-accent-surface: color-mix(in srgb, var(--accent) 12%, transparent);
+  --background-border: color-mix(in srgb, var(--border) 78%, transparent);
+  --background-border-strong: color-mix(in srgb, var(--border-strong) 84%, transparent);
+  --background-divider: color-mix(in srgb, var(--divider) 70%, transparent);
+  /* Data visualization roles: heat levels derive from the active accent, while
+   * borders and secondary labels retain enough contrast in both themes. */
+  --data-accent-muted: color-mix(in srgb, var(--accent) 68%, var(--muted));
+  --data-cell-border: color-mix(in srgb, var(--border) 62%, transparent);
+  --data-level-1: color-mix(in srgb, var(--accent) 20%, var(--surface-soft));
+  --data-level-2: color-mix(in srgb, var(--accent) 42%, var(--surface-soft));
+  --data-level-3: color-mix(in srgb, var(--accent) 68%, var(--surface-soft));
+  --data-level-4: var(--accent);
+  --data-model-gradient: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 42%, var(--info)));
   --background-surface-opacity: .88;
   --skeleton: var(--surface-active);
   --skeleton-shine: var(--surface-hover);
@@ -341,6 +375,7 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --shadow-popover: 0 14px 42px var(--shadow-deep), 0 2px 8px var(--shadow-color);
   --shadow-dialog: 0 24px 80px var(--shadow-deep);
   --shadow-drawer: -12px 0 40px var(--shadow-color);
+  --shadow-control: 0 1px 2px var(--shadow-color);
   --shadow-thumb: 0 1px 3px var(--shadow-color);
   --loading-gradient: linear-gradient(90deg, var(--transparent), var(--loading), var(--transparent));
   --skeleton-gradient: linear-gradient(90deg, var(--skeleton), var(--skeleton-shine), var(--skeleton));

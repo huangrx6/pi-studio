@@ -18,6 +18,7 @@ const { randomUUID } = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { getStudioDatabase } = require('../core/studio-db.cjs');
 
 const execFileAsync = promisify(execFile);
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
@@ -40,39 +41,14 @@ async function git(cwd, args, env, timeout = GIT_TIMEOUT) {
   return stdout;
 }
 
-/** 应用数据里的回合 diff 存储（按会话分组，保留最近若干轮）。 */
-function storeFile() {
-  const { app } = require('electron');
-  return path.join(app.getPath('userData'), 'turn-diffs.json');
-}
-
-function readStore() {
-  try {
-    return JSON.parse(fs.readFileSync(storeFile(), 'utf8'));
-  } catch {
-    return {};
-  }
-}
-
-function writeStore(data) {
-  const file = storeFile();
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(data));
-}
-
 /** 读取某会话已持久化的回合 diff，供打开历史会话时展示。 */
 function readTurnDiffs(sessionId) {
-  const list = readStore()[sessionId];
-  return Array.isArray(list) ? list : [];
+  return getStudioDatabase().readTurnDiffs(String(sessionId));
 }
 
 /** 保存一轮 diff；同一时间戳重复保存时覆盖，避免重试产生重复项。 */
 function saveTurnDiff(sessionId, diff) {
-  const store = readStore();
-  const list = (Array.isArray(store[sessionId]) ? store[sessionId] : []).filter((item) => item.at !== diff.at);
-  list.push(diff);
-  store[sessionId] = list.slice(-MAX_STORED_TURNS);
-  writeStore(store);
+  return getStudioDatabase().saveTurnDiff(String(sessionId), diff);
 }
 
 /**

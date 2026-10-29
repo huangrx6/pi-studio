@@ -1,9 +1,9 @@
 /**
- * Small process-local bridge between session execution and the menu-bar UI.
+ * Small process-local bridge between app/session state and the menu-bar UI.
  *
- * Session IPC can publish lifecycle events without importing Electron services.
- * This keeps the session layer testable and lets menu-bar initialization decide
- * when native Tray/BrowserWindow work should begin.
+ * Session and appearance code can publish events without importing Electron
+ * services. This keeps those layers testable and lets menu-bar initialization
+ * decide when native Tray/BrowserWindow work should begin.
  */
 
 const listeners = new Set();

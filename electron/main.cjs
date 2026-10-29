@@ -3,7 +3,7 @@
  *
  * 这里只做三件事：
  *  1. 应用生命周期（ready / activate / window-all-closed）
- *  2. 加载 Pi SDK 与持久化配置
+ *  2. 初始化 Studio SQLite、模型目录与 Pi Durable harness
  *  3. 装配：注册 IPC、安装菜单、创建窗口
  *
  * 具体能力拆分在：
@@ -15,7 +15,10 @@
 
 const path = require('node:path');
 const { app, protocol } = require('electron');
-const { loadPi, loadConfig } = require('./core/state.cjs');
+const { initializeStudioModels } = require('./core/studio-models.cjs');
+const { closeDurableRuntime, initializeDurableRuntime } = require('./services/durable-runtime.cjs');
+const { closeConversationWatches } = require('./services/durable-conversations.cjs');
+const { shutdownTemporaryChats } = require('./services/temporary-chat.cjs');
 const { registerIpc } = require('./ipc/index.cjs');
 const { createWindow, showMainWindow, installMenu, watchSystemTheme } = require('./window.cjs');
 const { BACKGROUND_SCHEME } = require('./background-media.cjs');
@@ -44,9 +47,9 @@ app.whenReady().then(async () => {
     app.dock.setIcon(path.join(__dirname, '..', 'assets', 'icon.png'));
   }
 
-  // Pi SDK 必须在 ready 之后加载；config 依赖 userData 路径
-  await loadPi();
-  loadConfig();
+  // Database and credential paths depend on app.getPath('userData').
+  await initializeStudioModels();
+  await initializeDurableRuntime();
 
   // 系统外观变化时同步窗口底色
   watchSystemTheme();
@@ -65,9 +68,28 @@ app.on('before-quit', () => {
   app.isQuitting = true;
 });
 
-app.on('will-quit', () => {
-  shutdownUpdater();
-  shutdownMenuBar();
+let shutdownPromise;
+let shutdownComplete = false;
+
+app.on('will-quit', (event) => {
+  if (shutdownComplete) return;
+  event.preventDefault();
+  if (shutdownPromise) return;
+  shutdownPromise = (async () => {
+    await closeConversationWatches().catch((error) => {
+      console.error('[pi-studio] failed to close conversation watches', error);
+    });
+    await shutdownTemporaryChats().catch((error) => {
+      console.error('[pi-studio] failed to close temporary chats', error);
+    });
+    await closeDurableRuntime().catch((error) => {
+      console.error('[pi-studio] failed to close Durable runtime', error);
+    });
+    shutdownUpdater();
+    shutdownMenuBar();
+    shutdownComplete = true;
+    app.quit();
+  })();
 });
 
 // macOS norm: closing every window leaves Pi Studio running.

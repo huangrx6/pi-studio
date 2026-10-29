@@ -19,6 +19,11 @@ button {
   font: inherit;
 }
 
+button:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
+}
+
 .popover-shell {
   width: 100%;
   height: 100%;
@@ -31,62 +36,112 @@ button {
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: 20px;
   background: var(--overlay-surface);
-  box-shadow: var(--shadow-popover);
+  box-shadow: 0 18px 54px var(--shadow-deep), var(--shadow-popover);
   backdrop-filter: blur(24px) saturate(1.18);
   -webkit-backdrop-filter: blur(24px) saturate(1.18);
 }
 
 .popover-header {
   display: flex;
+  min-height: 66px;
   align-items: center;
-  gap: 12px;
-  padding: 15px 15px 12px;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 11px 13px 10px 15px;
   border-bottom: 1px solid var(--divider);
 }
 
 .brand-lockup {
   display: flex;
   min-width: 0;
-  flex: 1;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
 }
 
 .brand-mark {
   display: grid;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   flex: none;
   place-items: center;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 11px;
   background: var(--surface);
   box-shadow: var(--shadow-card);
   color: var(--text);
   font: 600 20px/1 Georgia, "Times New Roman", serif;
 }
 
-.brand-lockup > div {
+.brand-copy {
+  display: grid;
   min-width: 0;
+  gap: 1px;
+}
+
+.eyebrow {
+  color: var(--faint);
+  font: 650 7.5px/1.2 var(--mono, ui-monospace, "SFMono-Regular", monospace);
+  letter-spacing: 0.13em;
 }
 
 .brand-lockup strong {
   display: block;
   color: var(--text);
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 650;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 
 .brand-lockup p {
   overflow: hidden;
-  margin: 2px 0 0;
+  max-width: 400px;
+  margin: 0;
   color: var(--faint);
-  font-size: 10.5px;
+  font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.header-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.activity-state {
+  display: inline-flex;
+  height: 26px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 9.5px;
+  font-weight: 570;
+}
+
+.activity-state i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--disabled-text);
+}
+
+.activity-state.is-running {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.activity-state.is-running i {
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+  animation: status-breathe 1.8s ease-in-out infinite;
 }
 
 .icon-button,
@@ -98,12 +153,12 @@ button {
 
 .icon-button {
   display: grid;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   place-items: center;
-  border-radius: 8px;
+  border-radius: 9px;
   color: var(--icon);
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1;
 }
 
@@ -113,11 +168,12 @@ button {
 }
 
 .popover-content {
+  display: grid;
+  min-height: 0;
   flex: 1;
-  overflow: auto;
+  grid-template-columns: minmax(0, 0.94fr) minmax(0, 1.06fr);
+  gap: 10px;
   padding: 12px;
-  scrollbar-color: var(--scrollbar) var(--transparent);
-  scrollbar-width: thin;
 }
 
 .popover-content::-webkit-scrollbar {
@@ -130,47 +186,125 @@ button {
   background: var(--scrollbar);
 }
 
-.menu-section + .menu-section {
-  margin-top: 16px;
+.menu-section {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--surface-raised);
+}
+
+.running-section {
+  box-shadow: inset 0 1px 0 var(--surface);
 }
 
 .section-heading {
   display: flex;
-  height: 24px;
+  min-height: 38px;
   align-items: center;
-  gap: 8px;
-  padding: 0 3px;
+  gap: 9px;
+  padding: 0 2px 9px;
+}
+
+.section-mark {
+  position: relative;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--surface);
+}
+
+.section-mark i {
+  display: block;
+  width: 9px;
+  height: 9px;
+}
+
+.section-mark.is-running {
+  color: var(--accent);
+}
+
+.section-mark.is-running i {
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  animation: orbit-spin 1.8s linear infinite;
+}
+
+.section-mark.is-running i::after {
+  display: block;
+  width: 3px;
+  height: 3px;
+  margin: -2px 0 0 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  content: "";
+}
+
+.section-mark.is-recent {
+  color: var(--success);
+}
+
+.section-mark.is-recent i {
+  border: solid currentColor;
+  border-width: 0 0 1.5px 1.5px;
+  transform: translateY(-1px) rotate(-45deg);
+}
+
+.section-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
 }
 
 .section-heading h2 {
-  flex: 1;
   margin: 0;
-  color: var(--muted);
-  font-size: 10px;
+  color: var(--text);
+  font-size: 11px;
   font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: -0.005em;
+}
+
+.section-heading p {
+  overflow: hidden;
+  margin: 0;
+  color: var(--faint);
+  font-size: 8.5px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .count-badge {
-  min-width: 20px;
-  padding: 2px 6px;
+  display: grid;
+  min-width: 25px;
+  height: 22px;
+  place-items: center;
+  padding: 0 7px;
   border: 1px solid var(--accent-border);
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent);
-  font: 600 9px/1.4 ui-monospace, "SFMono-Regular", monospace;
-  text-align: center;
+  font: 650 9px/1 ui-monospace, "SFMono-Regular", monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 .text-button {
-  padding: 3px 4px;
+  flex: none;
+  padding: 4px 5px;
   color: var(--faint);
-  font-size: 10px;
+  font-size: 9px;
 }
 
 .text-button:hover:not(:disabled) {
-  color: var(--icon-hover);
+  color: var(--text);
 }
 
 .text-button:disabled {
@@ -180,21 +314,36 @@ button {
 
 .card-list {
   display: flex;
+  min-height: 0;
+  flex: 1;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 5px;
+  gap: 5px;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-color: var(--scrollbar) var(--transparent);
+  scrollbar-width: thin;
+}
+
+.card-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.card-list::-webkit-scrollbar-thumb {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--scrollbar);
 }
 
 .session-card {
   position: relative;
   display: flex;
   width: 100%;
-  min-height: 52px;
+  min-height: 55px;
   align-items: center;
-  gap: 11px;
-  padding: 9px 10px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  gap: 10px;
+  padding: 9px 9px 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 11px;
   background: var(--surface);
   text-align: left;
   cursor: pointer;
@@ -203,7 +352,7 @@ button {
 
 .session-card:hover {
   border-color: var(--border-hover);
-  background: var(--surface-soft);
+  background: var(--surface-hover);
   transform: translateY(-1px);
 }
 
@@ -211,23 +360,15 @@ button {
   transform: translateY(0);
 }
 
-.session-card:focus-visible,
-.primary-button:focus-visible,
-.icon-button:focus-visible,
-.text-button:focus-visible {
-  outline: 2px solid var(--focus-color);
-  outline-offset: 2px;
-}
-
 .status-orb {
   position: relative;
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: 29px;
+  height: 29px;
   flex: none;
   place-items: center;
   border: 1px solid var(--accent-border);
-  border-radius: 10px;
+  border-radius: 9px;
   background: var(--accent-soft);
   color: var(--accent);
 }
@@ -281,14 +422,14 @@ button {
   min-width: 0;
   flex: 1;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 
 .session-copy strong {
   overflow: hidden;
   color: var(--text);
-  font-size: 11.5px;
-  font-weight: 570;
+  font-size: 10.5px;
+  font-weight: 590;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -297,8 +438,8 @@ button {
 .session-copy small {
   overflow: hidden;
   color: var(--faint);
-  font-size: 9.5px;
-  line-height: 1.3;
+  font-size: 8.5px;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -327,43 +468,99 @@ button {
 
 .empty-state {
   display: flex;
-  min-height: 58px;
+  min-height: 100%;
   align-items: center;
+  justify-content: center;
   gap: 10px;
-  padding: 9px 11px;
-  border: 1px dashed var(--border);
-  border-radius: 12px;
+  padding: 18px 10px;
+  border-radius: 11px;
+  background: var(--surface);
   color: var(--faint);
+  text-align: left;
 }
 
 .empty-state .empty-mark {
-  color: var(--border-hover);
-  font: 500 24px/1 Georgia, "Times New Roman", serif;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--disabled-text);
+  font: 500 19px/1 Georgia, "Times New Roman", serif;
 }
 
 .empty-state span:last-child {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 2px;
 }
 
 .empty-state strong {
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 560;
 }
 
 .empty-state small {
-  font-size: 9.5px;
+  color: var(--faint);
+  font-size: 8.5px;
+  line-height: 1.4;
 }
 
 .popover-footer {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 11px 12px 12px;
+  gap: 14px;
+  min-height: 54px;
+  padding: 9px 12px 10px 15px;
   border-top: 1px solid var(--divider);
   background: var(--surface);
+}
+
+.footer-status {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.footer-status > i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 4px var(--success-soft);
+}
+
+.footer-status > span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.footer-status strong {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 620;
+}
+
+.footer-status small {
+  color: var(--faint);
+  font-size: 8px;
+}
+
+.footer-hint {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--faint);
+  font-size: 8.5px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .primary-button {
@@ -372,12 +569,12 @@ button {
   flex: none;
   align-items: center;
   gap: 7px;
-  padding: 0 12px;
+  padding: 0 13px;
   border: 1px solid var(--button-bg);
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--button-bg);
   color: var(--on-button);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 620;
   cursor: pointer;
 }
@@ -391,14 +588,6 @@ button {
   font: 600 14px/1 Georgia, "Times New Roman", serif;
 }
 
-.footer-hint {
-  overflow: hidden;
-  color: var(--faint);
-  font-size: 9px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 @keyframes running-pulse {
   from {
     opacity: 0.72;
@@ -407,6 +596,19 @@ button {
   to {
     opacity: 0;
     transform: scale(1.45);
+  }
+}
+
+@keyframes orbit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes status-breathe {
+  50% {
+    opacity: 0.55;
+    transform: scale(0.78);
   }
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
-import type { BackgroundMedia } from '../preferences';
+import type { BackgroundMedia } from '../lib/preferences';
 
 type MediaProps = {
   media: BackgroundMedia;
@@ -55,9 +55,12 @@ export function BackgroundLayer({
   blur: number;
   onError?: () => void;
 }) {
+  // 对外统一使用 0–100 的强度。40px 已能充分柔化照片，同时避免 100% 直接变成
+  // 100px 后产生明显性能开销与图像边缘发虚。
+  const blurPixels = Math.round(Math.min(100, Math.max(0, blur)) * 0.4);
   const style = {
     '--background-media-opacity': `${opacity}%`,
-    '--background-media-blur': `${blur}px`,
+    '--background-media-blur': `${blurPixels}px`,
   } as CSSProperties;
 
   return (

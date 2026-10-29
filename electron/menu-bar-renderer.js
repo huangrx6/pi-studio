@@ -3,9 +3,10 @@ const runningList = document.querySelector('#running-list');
 const recentList = document.querySelector('#recent-list');
 const summary = document.querySelector('#summary');
 const runningCount = document.querySelector('#running-count');
+const activityState = document.querySelector('#activity-state');
 const clearRecent = document.querySelector('#clear-recent');
 
-let currentState = { running: [], recent: [], unreadCount: 0, theme: 'system' };
+let currentState = { running: [], recent: [], unreadCount: 0, theme: 'system', palette: 'lime' };
 
 function workspaceName(cwd) {
   if (!cwd) return 'Pi Studio';
@@ -29,11 +30,12 @@ function relativeTime(timestamp) {
   return `${Math.floor(minutes / 60)} 小时前`;
 }
 
-function applyTheme(theme) {
+function applyTheme(theme, palette) {
   const resolved = theme === 'system'
     ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
     : theme;
   document.documentElement.dataset.theme = resolved;
+  document.documentElement.dataset.palette = palette || 'lime';
 }
 
 function emptyState(title, detail) {
@@ -100,15 +102,19 @@ function card(item, kind) {
 }
 
 function render() {
-  applyTheme(currentState.theme);
+  applyTheme(currentState.theme, currentState.palette);
   const running = Array.isArray(currentState.running) ? currentState.running : [];
   const recent = Array.isArray(currentState.recent) ? currentState.recent : [];
+  const isRunning = running.length > 0;
   runningCount.textContent = String(running.length);
-  summary.textContent = running.length
-    ? `${running.length} 个会话正在运行`
+  activityState.classList.toggle('is-running', isRunning);
+  activityState.classList.toggle('is-idle', !isRunning);
+  activityState.lastElementChild.textContent = isRunning ? '运行中' : '空闲';
+  summary.textContent = isRunning
+    ? `${running.length} 个会话正在后台推进`
     : recent[0]
-      ? `最近完成：${recent[0].title}`
-      : '关闭窗口后仍会继续运行';
+      ? `刚刚完成 · ${recent[0].title}`
+      : '所有会话都已完成';
 
   runningList.replaceChildren(
     ...(running.length

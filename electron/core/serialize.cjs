@@ -1,19 +1,10 @@
 /**
- * 消息序列化：把 Pi SDK 的内部消息结构转成渲染进程能直接用的普通对象。
- *
- * 这是「主进程 → 渲染进程」唯一的数据出口，所有 IPC 里传来的消息都经过这里，
- * 好处是渲染进程不需要知道 Pi 的类结构，也方便以后做字段裁剪。
+ * Project a Durable transcript message into the JSON-safe shape used by the
+ * temporary-chat renderer. Persisted Studio conversations use the richer
+ * conversation projection in durable-conversations.cjs.
  */
 
 const { parseAttachmentMarkers } = require('./attachment-markers.cjs');
-
-/**
- * 去掉终端 ANSI 控制字符。
- * 扩展的 footer / 状态行来自 TUI 组件，可能带颜色转义，必须清理后再发给前端。
- */
-function stripAnsi(value) {
-  return String(value ?? '').replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '');
-}
 
 /**
  * 序列化消息内容块。
@@ -49,37 +40,6 @@ function serializeContent(content) {
 }
 
 /**
- * Tool results can carry large extension-owned objects. Subagent transcripts and
- * filesystem session paths stay in the main process; the renderer receives only
- * the compact metadata it needs to render an inline subagent result.
- */
-function serializeSubagentDetails(details) {
-  if (!details || typeof details !== 'object') return undefined;
-  const results = Array.isArray(details.results)
-    ? details.results.slice(0, 100).map((result) => ({
-      index: result?.index,
-      runId: result?.runId,
-      agent: result?.agent,
-      task: typeof result?.task === 'string' ? result.task.slice(0, 2_000) : '',
-      context: result?.context,
-      model: result?.model || result?.requestedModel,
-      thinking: result?.thinking,
-      usage: result?.usage,
-      exitCode: result?.exitCode,
-      error: typeof result?.error === 'string' ? result.error.slice(0, 2_000) : undefined,
-      finalOutput: typeof result?.finalOutput === 'string' ? result.finalOutput.slice(0, 4_000) : undefined,
-    }))
-    : [];
-  return {
-    runId: details.runId,
-    toolCallId: details.toolCallId,
-    background: Boolean(details.background),
-    context: details.context,
-    results,
-  };
-}
-
-/**
  * 序列化一条消息。
  * 返回 null 表示这条消息不需要展示（例如未知角色）。
  */
@@ -112,34 +72,9 @@ function serializeMessage(message) {
     result.toolName = message.toolName;
     result.isError = Boolean(message.isError);
     if (message.durationMs !== undefined) result.durationMs = message.durationMs;
-    // todo 需要完整计划；subagent 只透传不含 session 路径的紧凑摘要。
-    if (message.toolName === 'todo' && message.details) result.details = message.details;
-    if ((message.toolName === 'subagent' || message.toolName === 'subagents') && message.details) {
-      result.details = serializeSubagentDetails(message.details);
-    }
   }
 
   return result;
 }
 
-/**
- * 过滤掉「已经被自动重试覆盖」的失败回复。
- *
- * 判断规则：一条 assistant 消息以 error 结束，但同一轮里后面又有成功的 assistant
- * 回复，就说明这条错误只是中间态，不必展示给用户。
- */
-function visibleSessionMessages(messages) {
-  return messages.filter((message, index) => {
-    if (message.role !== 'assistant' || message.stopReason !== 'error' || !message.errorMessage) return true;
-    let nextUser = messages.length;
-    for (let cursor = index + 1; cursor < messages.length; cursor += 1) {
-      if (messages[cursor].role === 'user') {
-        nextUser = cursor;
-        break;
-      }
-    }
-    return !messages.slice(index + 1, nextUser).some((next) => next.role === 'assistant' && next.stopReason !== 'error');
-  });
-}
-
-module.exports = { stripAnsi, serializeContent, serializeMessage, serializeSubagentDetails, visibleSessionMessages };
+module.exports = { serializeMessage };

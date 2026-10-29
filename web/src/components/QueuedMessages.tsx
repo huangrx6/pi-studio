@@ -8,7 +8,7 @@
  * - 顶部可把全部排队消息一次性插话发送。
  *
  * 本组件只负责渲染与事件上抛；真正的发送/队列状态在 App 中维护，最终通过
- * `piApi.queuePrompt`（behavior: 'steer'）或下一轮 `piApi.prompt` 发给主进程。
+ * `piApi.conversationSubmit` 的 `steer` / `followUp` 行为写入 Durable。
  */
 import { useState } from 'react';
 import { ArrowUp, Clock3, GripVertical, Pencil, Trash2 } from 'lucide-react';

@@ -18,26 +18,41 @@
         <header class="popover-header">
           <div class="brand-lockup">
             <span class="brand-mark" aria-hidden="true">π</span>
-            <div>
+            <div class="brand-copy">
+              <span class="eyebrow">ACTIVITY DESK</span>
               <strong>Pi Studio</strong>
               <p id="summary">后台状态</p>
             </div>
           </div>
-          <button id="close" class="icon-button" type="button" aria-label="关闭菜单栏面板" title="关闭">×</button>
+          <div class="header-actions">
+            <span id="activity-state" class="activity-state is-idle">
+              <i aria-hidden="true"></i>
+              <span>空闲</span>
+            </span>
+            <button id="close" class="icon-button" type="button" aria-label="关闭菜单栏面板" title="关闭">×</button>
+          </div>
         </header>
 
         <main class="popover-content">
-          <section class="menu-section" aria-labelledby="running-heading">
+          <section class="menu-section running-section" aria-labelledby="running-heading">
             <div class="section-heading">
-              <h2 id="running-heading">正在运行</h2>
+              <span class="section-mark is-running" aria-hidden="true"><i></i></span>
+              <div class="section-copy">
+                <h2 id="running-heading">正在运行</h2>
+                <p>后台任务会在这里持续更新</p>
+              </div>
               <span id="running-count" class="count-badge">0</span>
             </div>
             <div id="running-list" class="card-list"></div>
           </section>
 
-          <section class="menu-section" aria-labelledby="recent-heading">
+          <section class="menu-section recent-section" aria-labelledby="recent-heading">
             <div class="section-heading">
-              <h2 id="recent-heading">刚刚完成</h2>
+              <span class="section-mark is-recent" aria-hidden="true"><i></i></span>
+              <div class="section-copy">
+                <h2 id="recent-heading">最近完成</h2>
+                <p>点开会回到对应会话</p>
+              </div>
               <button id="clear-recent" class="text-button" type="button">清除</button>
             </div>
             <div id="recent-list" class="card-list"></div>
@@ -45,11 +60,18 @@
         </main>
 
         <footer class="popover-footer">
+          <span class="footer-status">
+            <i aria-hidden="true"></i>
+            <span>
+              <strong>桌面运行</strong>
+              <small>关闭主窗口后，任务仍会继续</small>
+            </span>
+          </span>
+          <span class="footer-hint">主窗口位于前台时，完成提醒会保持静默</span>
           <button id="open-main" class="primary-button" type="button">
             <span aria-hidden="true">π</span>
-            打开工作台
+            返回工作台
           </button>
-          <span class="footer-hint">关闭窗口后仍会继续运行</span>
         </footer>
       </div>
     </div>

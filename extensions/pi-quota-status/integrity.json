@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "algorithm": "sha256",
+  "files": [
+    {
+      "path": "extension.mjs",
+      "sha256": "7a047699fc9a14788fd7ea3bd09d3c5ff1b6e2f62641be75d08d6f544e839771",
+      "size": 2759
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "a11d00421b80b0563e08f13d2f3b6c4ef823856fad3d148fe435b08a2a9c1366",
+      "size": 1065
+    },
+    {
+      "path": "pi-studio.extension.json",
+      "sha256": "5300e76e65d65ace17e627794c63d150d7381f6c3d531ce36501d52b873ffe0c",
+      "size": 2912
+    },
+    {
+      "path": "quota/adapters.mjs",
+      "sha256": "f42f7d43b7a5594d4539f5cd77b8088f7b699c244b7291c0d9385ba4a6a918b5",
+      "size": 9757
+    },
+    {
+      "path": "quota/monitor.mjs",
+      "sha256": "b77cc4c9e210b3705f9ec659ee39534cf9240055c630080f5d7365f4c7ca9c8b",
+      "size": 5415
+    },
+    {
+      "path": "quota/parse.mjs",
+      "sha256": "1c9c5833411f762fd400ca239dd57b90ed204924ea4142925db4a4380d1ad2e5",
+      "size": 2100
+    },
+    {
+      "path": "quota/types.mjs",
+      "sha256": "7e56a7a3d127ab3a06369ae4989c050068d29df4f07b2770f270dd707fba7245",
+      "size": 83
+    },
+    {
+      "path": "quota/ui.mjs",
+      "sha256": "4f07e7a263624436061a11f31317bb622286c108b8ada1e27273903fefcb9c3a",
+      "size": 4840
+    },
+    {
+      "path": "README.md",
+      "sha256": "f814e119c521f8c99a9e7845af894b1998df28b7416c716b9d25126abbca7f52",
+      "size": 1228
+    }
+  ]
+}

@@ -10,7 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { DetailDialog } from './DetailDialog';
-import type { UpdateSnapshot } from '../update-types';
+import type { UpdateSnapshot } from '../types/update-types';
 
 type UpdateAction = 'check' | 'download' | 'install' | null;
 

@@ -7,29 +7,33 @@
  *  - files        文件浏览、外部打开
  *  - attachments  附件
  *  - models       模型、提供方、API Key
+ *  - usage        本地 Token 用量与模型分布
  *  - settings     MCP、技能、扩展、包
  *  - updates      GitHub Release 检查、下载与安装
  */
 
 const { registerSystemIpc } = require('./system.cjs');
-const { registerSessionsIpc } = require('./sessions.cjs');
+const { registerConversationIpc } = require('./sessions.cjs');
 const { registerFilesIpc } = require('./files.cjs');
 const { registerAttachmentsIpc } = require('./attachments.cjs');
 const { registerModelsIpc } = require('./models.cjs');
+const { registerUsageIpc } = require('./usage.cjs');
 const { registerSettingsIpc } = require('./settings.cjs');
 const { registerModeIpc } = require('./mode.cjs');
+const { registerTemporaryChatIpc } = require('./temporary-chat.cjs');
 const { registerConfirmIpc } = require('./confirm.cjs');
 const { registerUpdatesIpc } = require('./updates.cjs');
 
 function registerIpc() {
-  require('./temporary-chat.cjs').registerTemporaryChatIpc();
   registerSystemIpc();
-  registerSessionsIpc();
+  registerConversationIpc();
   registerFilesIpc();
   registerAttachmentsIpc();
   registerModelsIpc();
+  registerUsageIpc();
   registerSettingsIpc();
   registerModeIpc();
+  registerTemporaryChatIpc();
   registerConfirmIpc();
   registerUpdatesIpc();
 }

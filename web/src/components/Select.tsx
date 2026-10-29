@@ -10,7 +10,7 @@
  *
  * 纯 UI 组件，不涉及 IPC。选项禁用时不可选，但当前值仍会显示。
  */
-import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { PopoverSurface } from './PopoverSurface';
@@ -38,6 +38,8 @@ type SelectProps = {
   className?: string;
   /** 追加到弹出菜单的 class（用于宽度/样式微调）。 */
   menuClassName?: string;
+  /** 触发器前置图标；与文字同属一个点击区域。 */
+  leadingIcon?: ReactNode;
 };
 
 /**
@@ -61,7 +63,7 @@ type Placement = { left: number; top?: number; bottom?: number; width: number };
  * 自适应展开方向由下方 useLayoutEffect 计算：菜单预计高度放不下且上方更宽裕时，
  * 改为向上展开；同时把左边界夹在视口内，防止长下拉在窄窗口里溢出。
  */
-export function Select({ value, options, onChange, label, placeholder = '请选择', disabled = false, autoFocus = false, className = '', menuClassName = '' }: SelectProps) {
+export function Select({ value, options, onChange, label, placeholder = '请选择', disabled = false, autoFocus = false, className = '', menuClassName = '', leadingIcon }: SelectProps) {
   const [open, setOpen] = useState(false);
   const [placement, setPlacement] = useState<Placement | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -111,6 +113,22 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [open]);
 
+  // Chromium 的原生 <dialog> 会在 keydown 后继续派发 cancel。只在菜单打开时于
+  // document 捕获阶段截断 Escape，确保第一下只关闭下拉，不会连带关闭设置弹窗。
+  useEffect(() => {
+    if (!open) return;
+    const onEscapeCapture = (event: globalThis.KeyboardEvent): void => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      setOpen(false);
+      requestAnimationFrame(() => triggerRef.current?.focus());
+    };
+    document.addEventListener('keydown', onEscapeCapture, true);
+    return () => document.removeEventListener('keydown', onEscapeCapture, true);
+  }, [open]);
+
   // 等一帧让 portal 菜单真正挂载后再聚焦：优先当前选中项，否则第一个可用项。
   useEffect(() => {
     if (!open) return;
@@ -134,7 +152,7 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
 
   // 触发按钮键盘：下箭头/Enter/空格打开菜单。preventDefault 阻止按钮的原生
   // click 激活再触发一次 onClick，导致刚打开又被切换关闭。
-  function onTriggerKeyDown(event: KeyboardEvent<HTMLButtonElement>): void {
+  function onTriggerKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>): void {
     if (disabled) return;
     if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
@@ -144,7 +162,7 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
 
   // 菜单键盘：Esc 关闭并把焦点还给触发按钮（stopPropagation 防止外层 dialog 一起关闭）；
   // 上下箭头在可用项之间移动，index 为 -1（焦点不在选项上）时落到第一项。
-  function onMenuKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+  function onMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
@@ -179,6 +197,7 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
         onClick={() => setOpen((current) => !current)}
         onKeyDown={onTriggerKeyDown}
       >
+        {leadingIcon && <span className="pi-select-leading" aria-hidden="true">{leadingIcon}</span>}
         <span className={selected ? 'pi-select-value' : 'pi-select-placeholder'}>{selected?.label ?? placeholder}</span>
         <ChevronDown className="pi-select-chevron" />
       </button>

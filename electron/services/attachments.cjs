@@ -3,15 +3,14 @@
  *
  * 设计：
  *  - 图片直接以 base64 内联进消息（Pi 的多模态输入要求）
- *  - 其它文件先落盘到 ~/.pi/agent/attachments/<sessionId>/，消息里只放标记
+ *  - 其它文件先落盘到 Pi Studio userData/attachments/<sessionId>/，消息里只放标记
  *  - 发消息时 attachmentContext() 再把落盘文件的文本内容读回来
  */
 
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const { dialog } = require('electron');
-const { agentDir, getWindow } = require('../core/state.cjs');
+const { BrowserWindow, app, dialog } = require('electron');
 const { makeAttachmentMarker } = require('../core/attachment-markers.cjs');
 
 /** 常见扩展名 → MIME。 */
@@ -51,9 +50,13 @@ function safeAttachmentName(name) {
   );
 }
 
-/** 附件根目录：~/.pi/agent/attachments */
+/** 附件根目录：Pi Studio 自己的 userData，不读取或改写 ~/.pi。 */
 function attachmentRoot() {
-  return path.join(agentDir(), 'attachments');
+  return path.join(app.getPath('userData'), 'attachments');
+}
+
+function safeSessionDirectoryName(sessionId) {
+  return String(sessionId || 'draft').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 80) || 'draft';
 }
 
 /**
@@ -61,8 +64,7 @@ function attachmentRoot() {
  * 文件名带时间戳前缀，避免同名覆盖。
  */
 function writeAttachment(sessionId, name, buffer) {
-  const safeSession = String(sessionId || 'draft').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 80) || 'draft';
-  const dir = path.join(attachmentRoot(), safeSession);
+  const dir = path.join(attachmentRoot(), safeSessionDirectoryName(sessionId));
   fs.mkdirSync(dir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const target = path.join(dir, `${stamp}-${safeAttachmentName(name)}`);
@@ -88,7 +90,9 @@ function attachmentInfo(name, target, buffer, kind, mime) {
  * 图片走 base64，其它文件落盘并附带标记。
  */
 async function pickAttachments({ sessionId }) {
-  const result = await dialog.showOpenDialog(getWindow(), { properties: ['openFile', 'multiSelections'] });
+  const result = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow() || undefined, {
+    properties: ['openFile', 'multiSelections'],
+  });
   if (result.canceled) return { attachments: [] };
 
   const attachments = [];
@@ -168,10 +172,23 @@ async function attachmentContext(paths) {
   return blocks;
 }
 
+/** Remove only the session-owned attachment directory below Studio userData. */
+function removeAttachmentDirectory(sessionId) {
+  const safeSession = safeSessionDirectoryName(sessionId);
+  const root = attachmentRoot();
+  const target = path.join(root, safeSession);
+  const relative = path.relative(root, target);
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return false;
+  if (!fs.existsSync(target)) return false;
+  fs.rmSync(target, { recursive: true, force: true });
+  return true;
+}
+
 module.exports = {
   pickAttachments,
   saveUpload,
   saveAttachment,
   attachmentContext,
+  removeAttachmentDirectory,
   ATTACHMENT_MIME,
 };

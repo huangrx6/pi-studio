@@ -11,8 +11,8 @@
 
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, FileDiff, FileText } from 'lucide-react';
-import type { TurnDiff, TurnDiffFile } from '../chat-types';
-import type { FileChange } from '../file-changes';
+import type { TurnDiff, TurnDiffFile } from '../types/chat-types';
+import type { FileChange } from '../lib/file-changes';
 
 type DisplayFile = {
   path: string;

@@ -1,0 +1,118 @@
+{
+  "$schema": "../../schemas/pi-studio.extension.schema.json",
+  "format": 1,
+  "id": "pi-quota-status",
+  "name": "额度状态",
+  "version": "0.5.4",
+  "description": "按当前会话的模型来源显示套餐窗口、API Key 额度和账户余额。",
+  "author": "huangrx6",
+  "publisher": "Pi Studio",
+  "license": "MIT",
+  "repository": "https://github.com/huangrx6/pi-studio",
+  "engines": {
+    "piStudio": ">=0.0.3 <0.1.0"
+  },
+  "keywords": [
+    "quota",
+    "usage",
+    "billing",
+    "official"
+  ],
+  "readme": "README.md",
+  "permissions": [
+    "ui.panels",
+    "ui.data",
+    "provider.credentials",
+    "network"
+  ],
+  "providerAccess": [
+    "opencode-go",
+    "zai-coding-cn",
+    "zhipu",
+    "zhipuai",
+    "bigmodel",
+    "bigmodel-cn",
+    "minimax",
+    "cc-switch-mini-max",
+    "minimax-cn",
+    "kimi",
+    "kimi-code",
+    "kimi-coding",
+    "deepseek",
+    "deepseek-cn",
+    "moonshot",
+    "moonshot-cn",
+    "kimi-api",
+    "siliconflow",
+    "siliconflow-cn",
+    "openrouter"
+  ],
+  "runtime": {
+    "durableEntry": "extension.mjs"
+  },
+  "contributes": {
+    "panels": [
+      {
+        "id": "quota-detail",
+        "title": "额度状态",
+        "description": "当前会话模型来源的套餐与余额。",
+        "slot": "conversation.detail",
+        "size": "regular",
+        "priority": 20,
+        "content": [
+          {
+            "kind": "dataView",
+            "sourceId": "user:pi-quota-status/live",
+            "emptyText": "暂无额度数据",
+            "fallback": [
+              {
+                "kind": "statusList",
+                "items": [
+                  {
+                    "id": "quota-loading",
+                    "label": "正在查询额度",
+                    "detail": "凭证只在本次查询中按授权读取",
+                    "status": "active"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "quota-footer",
+        "title": "额度摘要",
+        "description": "当前模型来源的紧凑额度信息。",
+        "slot": "conversation.footer",
+        "size": "compact",
+        "priority": 20,
+        "content": [
+          {
+            "kind": "dataView",
+            "sourceId": "user:pi-quota-status/summary",
+            "emptyText": "暂无额度数据",
+            "fallback": [
+              {
+                "kind": "text",
+                "text": "正在查询额度"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "dataSources": [
+      {
+        "id": "live",
+        "title": "当前模型来源额度",
+        "description": "按 provider 与固定 HTTPS endpoint 查询，不按模型名称猜测账户。"
+      },
+      {
+        "id": "summary",
+        "title": "当前模型来源额度摘要",
+        "description": "面向会话底部的紧凑额度信息。"
+      }
+    ]
+  }
+}

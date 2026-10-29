@@ -22,15 +22,7 @@ __pycache__/
 Thumbs.db
 
 # Local QA scratch output (not part of the docs)
-screenshots/ui-refinement/
-screenshots/chat-review/
-screenshots/popovers/
-screenshots/streaming-trace/
-screenshots/composer-details/
-screenshots/**/failure.png
-
-# Local-only symlink so docs/index.html previews offline; Pages CI copies the real dir
-docs/screenshots
+.qa/
 
 # Env files may contain API keys — never commit
 .env

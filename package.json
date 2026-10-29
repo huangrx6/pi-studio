@@ -3,7 +3,7 @@
   "version": "0.0.3",
   "private": true,
   "type": "module",
-  "description": "Pi Studio — a native macOS desktop workspace for the Pi coding agent.",
+  "description": "Pi Studio — a native desktop workspace built on Pi Durable.",
   "author": "huangrx6",
   "license": "MIT",
   "homepage": "https://huangrx6.github.io/pi-studio/",
@@ -15,21 +15,31 @@
     "url": "https://github.com/huangrx6/pi-studio/issues"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.19.0"
   },
   "packageManager": "pnpm@11.28.5",
   "main": "electron/main.cjs",
+  "bin": {
+    "pi-studio-extension": "tools/cli/pi-studio-extension.mjs"
+  },
   "scripts": {
-    "dev": "concurrently -k \"pnpm run web\" \"wait-on tcp:5180 && cross-env PI_STUDIO_DEV=1 node scripts/launch.mjs\"",
+    "dev": "concurrently -k \"pnpm run web\" \"wait-on tcp:5180 && cross-env PI_STUDIO_DEV=1 node tools/launch.mjs\"",
     "web": "vite --host 127.0.0.1 --port 5180",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
-    "start": "node scripts/launch.mjs",
-    "test": "node --test scripts/*.test.cjs scripts/*.test.mjs",
+    "extension": "node tools/cli/pi-studio-extension.mjs",
+    "extension:official": "node tools/cli/pi-studio-extension.mjs seal-official extensions",
+    "extension:schema": "node tools/cli/generate-extension-schema.mjs",
+    "qa:memory": "node tools/qa/qa-memory-smoke.mjs",
+    "start": "node tools/launch.mjs",
+    "test": "node --test tests/electron/*.test.cjs tests/web/*.test.mjs tests/integration/*.test.cjs tests/integration/*.test.mjs",
     "dist": "pnpm run build && electron-builder --mac --arm64 --x64 --publish never"
   },
   "dependencies": {
+    "@earendil-works/chord": "1.4.0",
     "@earendil-works/pi-ai": "1.4.0",
-    "@earendil-works/pi-coding-agent": "1.4.0",
+    "@earendil-works/pi-durable": "1.4.0",
+    "@earendil-works/pi-mcp": "1.4.0",
+    "@earendil-works/pi-telemetry": "1.4.0",
     "electron-updater": "^6.8.11",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
@@ -37,7 +47,8 @@
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
-    "simple-icons": "16.36.0"
+    "simple-icons": "16.36.0",
+    "yaml": "2.9.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
@@ -65,6 +76,12 @@
       "web-dist/**",
       "web/src/styles/palette.css",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "extensions",
+        "to": "official-extensions"
+      }
     ],
     "mac": {
       "icon": "assets/icon.icns",

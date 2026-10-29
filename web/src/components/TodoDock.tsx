@@ -13,7 +13,7 @@
  */
 import { useMemo } from 'react';
 import { Archive, Check, ChevronDown, ChevronUp, Circle, CircleDot, ListTodo, Lock, Minus } from 'lucide-react';
-import type { TodoDetails, TodoTask } from '../chat-types';
+import type { TodoDetails, TodoTask } from '../types/chat-types';
 
 type TodoDockProps = {
   /** 任务计划快照；undefined 表示当前会话还没有 todo 结果。 */

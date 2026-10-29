@@ -5,8 +5,7 @@
 
 const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const fs = require('node:fs');
-const { configPath, readConfig, writeConfig } = require('../core/state.cjs');
-const { updateSidebar } = require('../sidebar-state.cjs');
+const { getStudioDatabase } = require('../core/studio-db.cjs');
 const {
   workspaceFile,
   searchWorkspaceFiles,
@@ -14,6 +13,7 @@ const {
   readFileText,
   readAbsoluteFile,
 } = require('../services/workspace.cjs');
+const { normalizeExternalHttpUrl } = require('../core/external-url.cjs');
 const { applicationsForFile, applicationIcon, openWithApp } = require('../services/mac-apps.cjs');
 
 function registerFilesIpc() {
@@ -55,7 +55,10 @@ function registerFilesIpc() {
 
   // 打开链接：mode=window 时用内置子窗口，否则交给系统浏览器
   ipcMain.handle('pi:open-link', async (_event, { url, mode }) => {
-    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) throw new Error('链接无效');
+    const safeUrl = normalizeExternalHttpUrl(url);
+    if (mode !== undefined && mode !== 'external' && mode !== 'window') {
+      throw new Error('链接打开方式无效');
+    }
     if (mode === 'window') {
       const child = new BrowserWindow({
         width: 1080,
@@ -64,19 +67,23 @@ function registerFilesIpc() {
         webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
       });
       child.webContents.setWindowOpenHandler(({ url: next }) => {
-        if (/^https?:\/\//i.test(next)) void shell.openExternal(next);
+        try {
+          void shell.openExternal(normalizeExternalHttpUrl(next));
+        } catch {
+          // Deny malformed and non-HTTP popup targets.
+        }
         return { action: 'deny' };
       });
-      await child.loadURL(url);
+      await child.loadURL(safeUrl);
     } else {
-      await shell.openExternal(url);
+      await shell.openExternal(safeUrl);
     }
     return { ok: true };
   });
 
   // 系统浏览器打开
   ipcMain.handle('pi:open-external', async (_event, url) => {
-    if (typeof url === 'string' && /^https?:\/\//i.test(url)) await shell.openExternal(url);
+    await shell.openExternal(normalizeExternalHttpUrl(url));
     return { ok: true };
   });
 
@@ -94,7 +101,7 @@ function registerFilesIpc() {
     const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
     const cwd = result.canceled ? undefined : result.filePaths[0];
     if (cwd) {
-      writeConfig(configPath(), updateSidebar(readConfig(configPath(), {}), { kind: 'workspace', id: cwd, action: 'restore' }));
+      getStudioDatabase().upsertWorkspace({ cwd, hidden: false });
     }
     return cwd;
   });

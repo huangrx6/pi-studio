@@ -14,18 +14,18 @@
  * （回答结束后/保持展开/手动）决定；用户手动 toggle 会立即更新本地状态，
  * 但运行状态或偏好再次变化时，自动策略会重新覆盖。
  *
- * IPC：本组件不直接调用 IPC，消息来自 App 的 piApi.session / onPrompt 事件；
+ * IPC：本组件不直接调用 IPC，消息来自 App 的 Durable 会话快照与事件流；
  * 图片以 data URI 内联渲染，不再额外请求主进程。
  */
 import { memo, useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, CircleAlert, CircleCheck, CircleX, Copy, FileText, LoaderCircle, PanelRightOpen, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
-import type { ChatMessage, ContentBlock, ToolCallBlock, TurnDiff, TurnDiffFile } from '../chat-types';
-import type { StepCollapse, StepDisplay } from '../preferences';
+import type { ChatMessage, ContentBlock, ToolCallBlock, TurnDiff, TurnDiffFile } from '../types/chat-types';
+import type { StepCollapse, StepDisplay } from '../lib/preferences';
 import { AttachmentIcon, attachmentVisual } from './AttachmentIcon';
 import { Markdown } from './Markdown';
-import { collectFileChanges } from '../file-changes';
+import { collectFileChanges } from '../lib/file-changes';
 import { FileChangeSummary } from './FileChangeSummary';
-import { splitMessageText, type Reference } from '../references';
+import { splitMessageText, type Reference } from '../lib/references';
 
 /** 拼出消息里的全部文本块（用换行分隔）；用户正文和工具结果共用这一逻辑。 */
 function textBlocks(blocks: ContentBlock[]): string {
@@ -141,6 +141,7 @@ function ActivityThinking({ block }: { block: Extract<ContentBlock, { type: 'thi
   return <details className="activity-thinking" aria-label="查看推理内容">
     <summary>
       <Sparkles className="activity-thinking-icon" aria-hidden="true" />
+      <span className="activity-thinking-label">Thinking</span>
       {preview && <span className="activity-thinking-preview">{preview}</span>}
       <ChevronDown className="activity-thinking-chevron" />
     </summary>

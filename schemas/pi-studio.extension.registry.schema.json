@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pi.studio/schemas/pi-studio.extension.registry.schema.json",
+  "title": "Pi Studio Extension Registry",
+  "description": "A static, HTTPS-hostable extension registry for Pi Studio.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "extensions"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "extensions": {
+      "type": "array",
+      "maxItems": 5000,
+      "items": {
+        "$ref": "#/$defs/extension"
+      }
+    }
+  },
+  "$defs": {
+    "extensionId": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9._-]+$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "httpsUrl": {
+      "type": "string",
+      "maxLength": 2000,
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "extension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "publisher",
+        "versions"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/extensionId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "publisher": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "publisherKey": {
+          "type": "string",
+          "minLength": 44,
+          "maxLength": 4096,
+          "description": "Ed25519 public key encoded as canonical Base64 SubjectPublicKeyInfo or PEM."
+        },
+        "publisherKeyId": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "description": "SHA-256 fingerprint of the Ed25519 SubjectPublicKeyInfo."
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 1200
+        },
+        "repository": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "homepage": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "icon": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "keywords": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 12,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          }
+        },
+        "versions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1000,
+          "items": {
+            "$ref": "#/$defs/version"
+          }
+        }
+      }
+    },
+    "version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "piStudio",
+        "download",
+        "sha256"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+        },
+        "piStudio": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "download": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 52428800
+        },
+        "permissions": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 16,
+          "items": {
+            "enum": [
+              "agent.tools",
+              "agent.sections",
+              "agent.hooks",
+              "agent.tasks",
+              "ui.commands",
+              "ui.panels",
+              "ui.settings",
+              "ui.data",
+              "provider.credentials",
+              "network"
+            ]
+          }
+        },
+        "requires": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "maxLength": 100,
+            "pattern": "^(?:builtin|user|project):[a-z0-9][a-z0-9._-]{1,63}$"
+          }
+        },
+        "publishedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "deprecated": {
+          "type": "boolean"
+        },
+        "minimumPiStudio": {
+          "type": "string",
+          "maxLength": 64
+        }
+      }
+    }
+  }
+}

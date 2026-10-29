@@ -1,24 +1,26 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bot,
   Check,
-  ChevronRight,
   CircleAlert,
-  Cpu,
+  FolderTree,
+  Info,
+  Layers3,
   LoaderCircle,
-  Package,
   RotateCw,
   Save,
-  Shield,
   Sparkles,
+  Undo2,
+  Wrench,
 } from 'lucide-react';
-import { Select } from './Select';
+import type { AgentToolInfo, AgentToolSource } from '../types/agent-tool-types';
 import type {
-  SubagentAgentDefinition,
   SubagentConfig,
   SubagentSettingsSnapshot,
   SubagentThinking,
-} from '../subagent-types';
+} from '../types/subagent-types';
+import { Select } from './Select';
+import { runtimeRefreshFailure } from '../lib/runtime-refresh';
 
 const THINKING_LABEL: Record<Exclude<SubagentThinking, ''>, string> = {
   off: '关闭',
@@ -29,21 +31,16 @@ const THINKING_LABEL: Record<Exclude<SubagentThinking, ''>, string> = {
   xhigh: '极高',
   max: '最大',
 };
-const THINKING_LEVELS = new Set(Object.keys(THINKING_LABEL));
+const SUBAGENT_CONTROL_TOOLS = new Set([
+  'subagent',
+  'subagent_stop',
+  'bg_wait',
+  'subagent_supervisor',
+  'contact_supervisor',
+]);
 
-const SOURCE_LABEL: Record<SubagentAgentDefinition['source'], string> = {
-  builtin: '内置',
-  package: '扩展包',
-  user: '全局',
-  project: '项目',
-};
-
-function thinkingLabel(value: string): string {
-  if (value === 'false') return '关闭';
-  return value && Object.hasOwn(THINKING_LABEL, value)
-    ? THINKING_LABEL[value as Exclude<SubagentThinking, ''>]
-    : value || '父 Agent';
-}
+type Scope = 'user' | 'project';
+type WorkspaceOption = { cwd: string; name: string };
 
 function emptyConfig(): SubagentConfig {
   return {
@@ -51,21 +48,26 @@ function emptyConfig(): SubagentConfig {
     defaultProvider: '',
     defaultThinking: '',
     maxThinking: '',
-    agentOverrides: {},
+    allowedTools: [],
+    backgroundEnabled: true,
+    defaultMode: 'foreground',
+    supervisorEnabled: true,
+    maxConcurrent: 4,
+    maxSpawns: 32,
+    waitTimeoutMs: 30_000,
   };
 }
 
-function configFor(snapshot: SubagentSettingsSnapshot, scope: 'user' | 'project'): SubagentConfig {
-  return snapshot[scope];
-}
-
-function cloneConfig(config: SubagentConfig): SubagentConfig {
+function cloneConfig(config?: SubagentConfig): SubagentConfig {
+  const source = { ...emptyConfig(), ...(config || {}) };
   return {
-    ...config,
-    agentOverrides: Object.fromEntries(
-      Object.entries(config.agentOverrides).map(([name, value]) => [name, { ...value }]),
-    ),
+    ...source,
+    allowedTools: [...(source.allowedTools || [])],
   };
+}
+
+function configFor(snapshot: SubagentSettingsSnapshot, scope: Scope): SubagentConfig {
+  return cloneConfig(snapshot[scope]);
 }
 
 function thinkingOptions(levels: SubagentThinking[], fallbackLabel: string) {
@@ -78,145 +80,100 @@ function thinkingOptions(levels: SubagentThinking[], fallbackLabel: string) {
   ];
 }
 
-function modelBaseRef(value?: string): string {
-  const text = value?.trim() || '';
-  const separator = text.lastIndexOf(':');
-  if (separator < 0) return text;
-  return THINKING_LEVELS.has(text.slice(separator + 1))
-    ? text.slice(0, separator)
-    : text;
+function sourceLabel(source: AgentToolSource): string {
+  if (source.kind === 'core') return 'Durable Core';
+  if (source.kind === 'local') return `项目 · ${source.label}`;
+  if (source.kind === 'package' || source.kind === 'git') return source.label;
+  if (source.source.startsWith('mcp:')) return source.label;
+  return source.label || '扩展';
 }
 
-function modelForRef(ref: string | undefined, models: SubagentSettingsSnapshot['models']) {
-  const base = modelBaseRef(ref);
-  return base ? models.find((model) => model.modelRef === base) : undefined;
-}
-
-function OverrideRow({
-  agent,
-  draft,
-  scope,
-  models,
-  allThinkingLevels,
-  currentModel,
-  onChange,
-}: {
-  agent: SubagentAgentDefinition;
-  draft: SubagentConfig;
-  scope: 'user' | 'project';
-  models: SubagentSettingsSnapshot['models'];
-  allThinkingLevels: SubagentThinking[];
-  currentModel: string;
-  onChange: (next: { model: string; thinking: SubagentThinking }) => void;
-}) {
-  const override = draft.agentOverrides[agent.name] || { model: '', thinking: '' as const };
-  const overrideModel = override.model === 'inherit' ? currentModel : override.model;
-  const definitionModel = agent.model === 'inherit' ? currentModel : agent.model;
-  const resolvedModel = overrideModel || definitionModel || draft.defaultModel || currentModel;
-  const modelInfo = modelForRef(resolvedModel, models);
-  // A known non-reasoning model deliberately yields an empty list: adding a
-  // thinking value there would advertise a setting that cannot take effect.
-  const levels = modelInfo ? modelInfo.thinkingLevels : allThinkingLevels;
-  const modelOptions = [
-    { value: '', label: '使用默认解析' },
-    { value: 'inherit', label: '强制跟随父 Agent' },
-    ...models.map((model) => ({
-      value: model.modelRef,
-      label: model.label,
-      description: `${model.provider} · ${model.modelRef}`,
-    })),
-  ];
-  const fallbackRef = definitionModel || draft.defaultModel || currentModel;
-  const fallbackModel = modelForRef(fallbackRef, models)?.label
-    || fallbackRef
-    || '父 Agent';
-  const fallbackThinking = thinkingLabel(agent.thinking || draft.defaultThinking);
-  return <article className={`subagent-role ${scope === 'project' ? 'is-project' : ''}`}>
-    <div className="subagent-role-identity">
-      <span className={`subagent-role-icon is-${agent.source}`}>
-        {agent.source === 'package' ? <Package /> : <Bot />}
-      </span>
-      <div>
-        <div className="subagent-role-title">
-          <strong>{agent.name}</strong>
-          <span className={`subagent-source is-${agent.source}`}>{SOURCE_LABEL[agent.source]}</span>
-        </div>
-        <p>{agent.description || '这个角色没有填写说明。'}</p>
-        <span className="subagent-role-path" title={agent.path}>{agent.path}</span>
-      </div>
-    </div>
-    <div className="subagent-role-controls">
-      <div className="subagent-role-field">
-        <span><Cpu />模型</span>
-        <Select
-          label={`${agent.name} 模型`}
-          value={override.model}
-          options={modelOptions}
-          onChange={(model) => onChange({ model, thinking: override.thinking })}
-        />
-        <small>
-          {override.model ? '覆盖 Agent 定义与共享默认。' : `当前解析：${fallbackModel}`}
-        </small>
-      </div>
-      <div className="subagent-role-field">
-        <span><Sparkles />思考强度</span>
-        <Select
-          label={`${agent.name} 思考强度`}
-          value={override.thinking}
-          options={thinkingOptions(levels, '沿用 Agent 定义 / 默认')}
-          onChange={(thinking) => onChange({ model: override.model, thinking: thinking as SubagentThinking })}
-        />
-        <small>
-          {override.thinking ? '覆盖此 Agent 的思考强度。' : `当前回落：${fallbackThinking}`}
-        </small>
-      </div>
-    </div>
-  </article>;
+function matchesTool(pattern: string, name: string): boolean {
+  if (pattern === '*' || pattern === name) return true;
+  if (!pattern.includes('*')) return false;
+  const escaped = pattern
+    .split('*')
+    .map((part) => part.replace(/[|\\{}()[\]^$+?.]/g, '\\$&'))
+    .join('.*');
+  return new RegExp(`^${escaped}$`).test(name);
 }
 
 export function SubagentSettings({
   cwd,
+  workspaces,
   enabledAgentTools,
   onOpenAgentTools,
 }: {
   cwd: string;
+  workspaces: WorkspaceOption[];
   enabledAgentTools?: string[];
   onOpenAgentTools?: () => void;
 }) {
   const [snapshot, setSnapshot] = useState<SubagentSettingsSnapshot | null>(null);
-  const [scope, setScope] = useState<'user' | 'project'>('user');
+  const [catalogTools, setCatalogTools] = useState<AgentToolInfo[]>([]);
+  const [scope, setScope] = useState<Scope>('user');
+  const [targetWorkspace, setTargetWorkspace] = useState(cwd || workspaces[0]?.cwd || '');
   const [draft, setDraft] = useState<SubagentConfig>(emptyConfig);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestRef = useRef(0);
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
 
-  async function load() {
+  // Project scope always targets one explicit workspace; global scope is workspace independent.
+  const effectiveWorkspace = targetWorkspace || cwd || workspaces[0]?.cwd || '';
+  const workspaceName = workspaces.find((workspace) => workspace.cwd === effectiveWorkspace)?.name
+    || effectiveWorkspace.split('/').filter(Boolean).at(-1)
+    || '';
+
+  const load = useCallback(async () => {
     const request = ++requestRef.current;
     setLoading(true);
     setError(null);
     try {
-      const next = await window.piApi.subagentSettings(cwd);
+      const [next, catalog] = await Promise.all([
+        window.piApi.subagentSettings(effectiveWorkspace),
+        window.piApi.agentToolCatalog({ cwd: effectiveWorkspace, refresh: true }),
+      ]);
       if (request !== requestRef.current) return;
       setSnapshot(next);
-      setDraft(cloneConfig(configFor(next, scope)));
+      setDraft(configFor(next, scopeRef.current));
+      setCatalogTools(catalog.tools.filter((tool) => !SUBAGENT_CONTROL_TOOLS.has(tool.name)));
     } catch (cause) {
-      if (request === requestRef.current) setError(cause instanceof Error ? cause.message : String(cause));
+      if (request === requestRef.current) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      }
     } finally {
       if (request === requestRef.current) setLoading(false);
     }
-  }
-
-  useEffect(() => { void load(); }, [cwd]);
+  }, [effectiveWorkspace]);
 
   useEffect(() => {
-    if (snapshot) setDraft(cloneConfig(configFor(snapshot, scope)));
+    setTargetWorkspace((current) => {
+      if (current && (workspaces.some((workspace) => workspace.cwd === current) || current === cwd)) {
+        return current;
+      }
+      return cwd || workspaces[0]?.cwd || '';
+    });
+  }, [cwd, workspaces]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    if (snapshot) setDraft(configFor(snapshot, scope));
   }, [scope, snapshot]);
 
   const savedDraft = snapshot ? configFor(snapshot, scope) : emptyConfig();
   const dirty = JSON.stringify(draft) !== JSON.stringify(savedDraft);
-  const path = snapshot ? (scope === 'user' ? snapshot.userPath : snapshot.projectPath) : '';
-  const scopeText = scope === 'user' ? '全局设置' : '当前项目';
+  const path = snapshot
+    ? scope === 'user'
+      ? snapshot.userPath
+      : `${snapshot.projectPath} · ${snapshot.projectRoot}`
+    : '';
+  const scopeLabel = scope === 'user' ? '所有工作区' : workspaceName || '指定工作区';
   const defaultModelOptions = useMemo(() => [
     { value: '', label: '跟随父 Agent' },
     ...(snapshot?.models || []).map((model) => ({
@@ -225,11 +182,18 @@ export function SubagentSettings({
       description: `${model.provider} · ${model.modelRef}`,
     })),
   ], [snapshot?.models]);
-  const defaultResolvedModel = draft.defaultModel || snapshot?.currentModel || '';
-  const defaultModelInfo = modelForRef(defaultResolvedModel, snapshot?.models || []);
-  const defaultThinkingLevels = defaultModelInfo
-    ? defaultModelInfo.thinkingLevels
+  const selectedModel = snapshot?.models.find((model) => model.modelRef === draft.defaultModel);
+  const thinkingLevels = selectedModel
+    ? selectedModel.thinkingLevels
     : snapshot?.thinkingLevels || [];
+  const parentTools = useMemo(() => catalogTools.filter((tool) => (
+    !enabledAgentTools
+    || enabledAgentTools.some((pattern) => matchesTool(pattern, tool.name))
+  )), [catalogTools, enabledAgentTools]);
+  const availableNames = useMemo(() => new Set(parentTools.map((tool) => tool.name)), [parentTools]);
+  const explicitTools = draft.allowedTools.length > 0;
+  const selectedTools = useMemo(() => new Set(draft.allowedTools), [draft.allowedTools]);
+  const missingTools = draft.allowedTools.filter((name) => !availableNames.has(name));
   const toolsReady = enabledAgentTools === undefined
     ? undefined
     : enabledAgentTools.includes('*') || enabledAgentTools.includes('subagent');
@@ -241,15 +205,47 @@ export function SubagentSettings({
       : toolsReady
         ? 'ready'
         : 'missing';
+  const runtimeLabel = !snapshot?.installed
+    ? '尚未启用'
+    : toolsReady === undefined
+      ? '正在核对'
+      : toolsReady
+        ? '运行就绪'
+        : '等待启用工具';
 
-  function updateOverride(name: string, next: { model: string; thinking: SubagentThinking }) {
+  function updateModel(defaultModel: string) {
+    setDraft((current) => ({
+      ...current,
+      defaultModel,
+      defaultProvider: defaultModel.split('/')[0] || '',
+      defaultThinking: '',
+    }));
+  }
+
+  function toggleTool(name: string) {
     setDraft((current) => {
-      const overrides = { ...current.agentOverrides };
-      // Keep an explicit empty row so saving can clear pre-existing model /
-      // thinking fields while preserving extension-owned fields for the role.
-      overrides[name] = next;
-      return { ...current, agentOverrides: overrides };
+      const base = current.allowedTools.length > 0
+        ? current.allowedTools
+        : parentTools.map((tool) => tool.name);
+      const next = base.includes(name)
+        ? base.filter((item) => item !== name)
+        : [...base, name];
+      return { ...current, allowedTools: [...new Set(next)] };
     });
+  }
+
+  function changeScope(nextScope: Scope) {
+    if (nextScope === 'project' && !effectiveWorkspace && workspaces[0]) {
+      setTargetWorkspace(workspaces[0].cwd);
+    }
+    setScope(nextScope);
+  }
+
+  function changeWorkspace(nextWorkspace: string) {
+    if (nextWorkspace === effectiveWorkspace) return;
+    setSnapshot(null);
+    setDraft(emptyConfig());
+    setTargetWorkspace(nextWorkspace);
   }
 
   async function save() {
@@ -257,9 +253,15 @@ export function SubagentSettings({
     setSaving(true);
     setError(null);
     try {
-      const next = await window.piApi.saveSubagentSettings({ cwd, scope, settings: draft });
+      const next = await window.piApi.saveSubagentSettings({
+        cwd: effectiveWorkspace,
+        scope,
+        settings: draft,
+      });
+      const refreshFailure = runtimeRefreshFailure(next.runtimeRefresh);
+      if (refreshFailure) setError(refreshFailure);
       setSnapshot(next);
-      setDraft(cloneConfig(configFor(next, scope)));
+      setDraft(configFor(next, scope));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -268,135 +270,362 @@ export function SubagentSettings({
   }
 
   if (loading && !snapshot) {
-    return <div className="settings-loading" role="status"><LoaderCircle className="spin" />正在读取子 Agent 配置…</div>;
+    return (
+      <div className="settings-loading" role="status">
+        <LoaderCircle className="spin" />
+        正在读取子 Agent 运行配置…
+      </div>
+    );
   }
 
-  return <div className="settings-sections subagent-settings">
-    <section className="settings-card">
-      <div className="settings-card-head">
-        <div>
-          <h2>子 Agent <span className="count-badge">{snapshot?.agents.length ?? 0}</span></h2>
-          <p>每个子 Agent 使用独立会话，可独立选择模型与思考强度。Studio 只同步配置，实际运行由 pi-subagents 负责。</p>
+  return (
+    <div className="settings-sections subagent-settings">
+      <section className="settings-card subagent-overview">
+        <div className="subagent-overview-head">
+          <div className="subagent-overview-copy">
+            <span className="subagent-eyebrow"><Bot />多 Agent 协作</span>
+            <h2>子 Agent</h2>
+            <p>为子 Agent 设置独立模型、思考强度和工具边界；每次启动都会继承当前 Harness 配置。</p>
+          </div>
+          <div className="subagent-overview-actions">
+            <span className={`subagent-status-pill is-${runtimeState}`}>
+              {runtimeReady
+                ? <Check />
+                : runtimeState === 'checking'
+                  ? <LoaderCircle className="spin" />
+                  : <CircleAlert />}
+              {runtimeLabel}
+            </span>
+            <button
+              type="button"
+              className="icon-button"
+              disabled={loading || saving}
+              aria-label="刷新子 Agent 配置"
+              title="刷新"
+              onClick={() => void load()}
+            >
+              <RotateCw className={loading ? 'spin' : ''} />
+            </button>
+          </div>
         </div>
-        <button className="settings-add-button" disabled={loading || saving} onClick={() => void load()}>
-          {loading ? <LoaderCircle className="spin" /> : <RotateCw />}
-          刷新
+
+        <div className={`subagent-runtime-status is-${runtimeState}`}>
+          <div>
+            <strong>{runtimeReady ? 'Durable 子 Agent 已就绪' : '子 Agent 功能尚未完全启用'}</strong>
+            <span>{runtimeReady
+              ? '配置保存在 Studio SQLite，并从下一次启动的子 Agent 开始生效。'
+              : '在 Agent 工具中开放 subagent 后即可使用；已保存的模型、thinking 和工具限制不会丢失。'}</span>
+          </div>
+          {snapshot?.installed && toolsReady === false && onOpenAgentTools && (
+            <button type="button" className="settings-outline" onClick={onOpenAgentTools}>去启用</button>
+          )}
+        </div>
+
+        <div className="subagent-scope-block">
+          <div className="subagent-section-label">
+            <strong>配置范围</strong>
+            <span>全局值适用于所有工作区；工作区值只覆盖所选工作区。</span>
+          </div>
+          <div className="subagent-scope-grid" role="radiogroup" aria-label="子 Agent 配置范围">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={scope === 'user'}
+              className={scope === 'user' ? 'is-active' : ''}
+              onClick={() => changeScope('user')}
+            >
+              <span><Layers3 /></span>
+              <div>
+                <strong>所有工作区</strong>
+                <small>作为全局默认配置</small>
+              </div>
+              {scope === 'user' && <Check />}
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={scope === 'project'}
+              disabled={workspaces.length === 0 && !effectiveWorkspace}
+              className={scope === 'project' ? 'is-active' : ''}
+              onClick={() => changeScope('project')}
+            >
+              <span><FolderTree /></span>
+              <div>
+                <strong>指定工作区</strong>
+                <small>{workspaceName ? `只覆盖 ${workspaceName}` : '添加工作区后可单独覆盖'}</small>
+              </div>
+              {scope === 'project' && <Check />}
+            </button>
+          </div>
+          {scope === 'project' && (
+            <div className="subagent-workspace-target">
+              <div>
+                <span>目标工作区</span>
+                <small>其他工作区继续使用“所有工作区”配置。</small>
+              </div>
+              <Select
+                label="子 Agent 目标工作区"
+                value={effectiveWorkspace}
+                options={workspaces.map((workspace) => ({
+                  value: workspace.cwd,
+                  label: workspace.name,
+                  description: workspace.cwd,
+                }))}
+                disabled={saving || loading || workspaces.length === 0}
+                placeholder="选择工作区"
+                leadingIcon={<FolderTree />}
+                onChange={changeWorkspace}
+              />
+            </div>
+          )}
+          <div className="subagent-config-path">
+            <span>保存位置</span>
+            <code title={path}>{path || '正在读取 Studio 配置…'}</code>
+          </div>
+        </div>
+      </section>
+
+      <section className="settings-card subagent-section">
+        <div className="subagent-section-heading">
+          <span><Layers3 /></span>
+          <div>
+            <h2>运行方式</h2>
+            <p>前台任务会等待结果；后台任务由 Durable 管理，主 Agent 可以继续工作。</p>
+          </div>
+        </div>
+        <div className="subagent-control-grid">
+          <label className={`subagent-control ${draft.backgroundEnabled ? 'is-enabled' : ''}`}>
+            <span className="subagent-label">允许后台子 Agent</span>
+            <span className="subagent-toggle-row">
+              <span>{draft.backgroundEnabled ? '已开启' : '已关闭'}</span>
+              <input
+                type="checkbox"
+                checked={draft.backgroundEnabled}
+                onChange={(event) => setDraft((current) => ({
+                  ...current,
+                  backgroundEnabled: event.target.checked,
+                  defaultMode: event.target.checked ? current.defaultMode : 'foreground',
+                  supervisorEnabled: event.target.checked && current.supervisorEnabled,
+                }))}
+              />
+            </span>
+            <small>关闭后只接受前台调用，运行中的后台任务不会被中断。</small>
+          </label>
+          <div className={`subagent-control subagent-control-field ${draft.backgroundEnabled ? '' : 'is-disabled'}`}>
+            <span className="subagent-label">默认运行模式</span>
+            <Select
+              label="默认子 Agent 运行模式"
+              value={draft.defaultMode}
+              options={[
+                { value: 'foreground', label: '前台 · 等待结果' },
+                { value: 'background', label: '后台 · 完成后回传' },
+              ]}
+              disabled={!draft.backgroundEnabled}
+              onChange={(value) => setDraft((current) => ({
+                ...current,
+                defaultMode: value === 'background' ? 'background' : 'foreground',
+              }))}
+            />
+            <small>调用子 Agent 未指定模式时使用。</small>
+          </div>
+          <label className={`subagent-control ${draft.supervisorEnabled ? 'is-enabled' : ''} ${draft.backgroundEnabled ? '' : 'is-disabled'}`}>
+            <span className="subagent-label">允许联系主 Agent</span>
+            <span className="subagent-toggle-row">
+              <span>{draft.supervisorEnabled ? '已开启' : '已关闭'}</span>
+              <input
+                type="checkbox"
+                disabled={!draft.backgroundEnabled}
+                checked={draft.supervisorEnabled}
+                onChange={(event) => setDraft((current) => ({
+                  ...current,
+                  supervisorEnabled: event.target.checked,
+                }))}
+              />
+            </span>
+            <small>允许后台任务提问；主 Agent 回复后，任务会继续执行。</small>
+          </label>
+        </div>
+        <div className="subagent-field-grid">
+          <label className="subagent-field">
+            <span className="subagent-label">最大并发</span>
+            <input
+              type="number"
+              min={1}
+              max={16}
+              value={draft.maxConcurrent}
+              onChange={(event) => setDraft((current) => ({
+                ...current,
+                maxConcurrent: Number(event.target.value),
+              }))}
+            />
+            <small>当前主会话里同时运行的后台任务数量。</small>
+          </label>
+          <label className="subagent-field">
+            <span className="subagent-label">最多创建</span>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={draft.maxSpawns}
+              onChange={(event) => setDraft((current) => ({
+                ...current,
+                maxSpawns: Number(event.target.value),
+              }))}
+            />
+            <small>一个主会话累计可创建的子会话数量。</small>
+          </label>
+          <label className="subagent-field">
+            <span className="subagent-label">默认等待时间</span>
+            <div className="subagent-input-unit">
+              <input
+                type="number"
+                min={1}
+                max={600}
+                step={1}
+                value={Math.round(draft.waitTimeoutMs / 1_000)}
+                onChange={(event) => setDraft((current) => ({
+                  ...current,
+                  waitTimeoutMs: Number(event.target.value) * 1_000,
+                }))}
+              />
+              <span>秒</span>
+            </div>
+            <small>超时只结束本次等待，不会停止子 Agent。</small>
+          </label>
+        </div>
+      </section>
+
+      <section className="settings-card subagent-section">
+        <div className="subagent-section-heading">
+          <span><Sparkles /></span>
+          <div>
+            <h2>模型与思考</h2>
+            <p>以下值用于下一次子 Agent conversation；调用参数可以覆盖这里的选择。</p>
+          </div>
+        </div>
+        <div className="subagent-field-grid">
+          <div className="subagent-field">
+            <span className="subagent-label">默认模型</span>
+            <Select
+              label="子 Agent 默认模型"
+              value={draft.defaultModel}
+              options={defaultModelOptions}
+              onChange={updateModel}
+            />
+            <small>留空时跟随父 Agent。</small>
+          </div>
+          <div className="subagent-field">
+            <span className="subagent-label">默认 thinking</span>
+            <Select
+              label="子 Agent 默认 thinking"
+              value={draft.defaultThinking}
+              options={thinkingOptions(thinkingLevels, '跟随父 Agent')}
+              onChange={(value) => setDraft((current) => ({
+                ...current,
+                defaultThinking: value as SubagentThinking,
+              }))}
+            />
+            <small>只显示当前模型支持的强度。</small>
+          </div>
+          <div className="subagent-field">
+            <span className="subagent-label">thinking 上限</span>
+            <Select
+              label="子 Agent thinking 上限"
+              value={draft.maxThinking}
+              options={thinkingOptions(snapshot?.thinkingLevels || [], '不限制')}
+              onChange={(value) => setDraft((current) => ({
+                ...current,
+                maxThinking: value as SubagentThinking,
+              }))}
+            />
+            <small>阻止子 Agent 使用更高成本的推理强度。</small>
+          </div>
+        </div>
+        <div className="subagent-resolution-note">
+          <Info />
+          <span>优先级：调用参数 → 指定工作区 → 所有工作区 → 父 Agent</span>
+        </div>
+      </section>
+
+      <section className="settings-card subagent-section">
+        <div className="subagent-section-heading subagent-tools-heading">
+          <span><Wrench /></span>
+          <div>
+            <h2>工具权限</h2>
+            <p>默认继承父 Agent 当前工具；也可以在交集内保存一份更窄的白名单。</p>
+          </div>
+          <button
+            type="button"
+            className="settings-text-button"
+            disabled={!explicitTools}
+            onClick={() => setDraft((current) => ({ ...current, allowedTools: [] }))}
+          >
+            <Undo2 />
+            恢复继承
+          </button>
+        </div>
+        <div className="subagent-tool-summary">
+          <span><Bot /></span>
+          <div>
+            <strong>{explicitTools ? `仅允许 ${draft.allowedTools.length} 个工具` : '沿用父 Agent 当前工具'}</strong>
+            <small>最终权限始终与父 Agent 的交集一致，子 Agent 不能扩大权限。</small>
+          </div>
+        </div>
+        {missingTools.length > 0 && (
+          <div className="settings-error" role="status">
+            有 {missingTools.length} 个已保存工具当前不可用：{missingTools.join('、')}。它可能来自已删除的扩展或 MCP。
+          </div>
+        )}
+        <div className="subagent-tool-list">
+          {parentTools.map((tool) => {
+            const checked = !explicitTools || selectedTools.has(tool.name);
+            return (
+              <label
+                key={`${tool.source.key}:${tool.name}`}
+                className={`subagent-tool-row ${checked ? 'is-enabled' : ''}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleTool(tool.name)}
+                />
+                <span className="subagent-tool-check">{checked && <Check />}</span>
+                <span className="subagent-tool-copy">
+                  <strong>{tool.name}</strong>
+                  <small>{tool.description || '没有工具说明。'}</small>
+                </span>
+                <span className="subagent-tool-source" title={tool.source.path || tool.source.source}>
+                  {sourceLabel(tool.source)}
+                </span>
+              </label>
+            );
+          })}
+          {!parentTools.length && (
+            <div className="settings-empty">
+              当前父 Agent 还没有可用工具。先在 Agent 工具页启用工具，或检查扩展与 MCP 状态。
+            </div>
+          )}
+        </div>
+      </section>
+
+      {error && <div className="settings-error" role="alert">{error}</div>}
+      <div className="subagent-savebar">
+        <div>
+          <strong>{dirty ? `${scopeLabel}有未保存的更改` : '配置已同步'}</strong>
+          <span>{scopeLabel} · {path} · 下一次启动子 Agent 时生效</span>
+        </div>
+        <button
+          className="settings-outline"
+          disabled={!dirty || saving}
+          onClick={() => setDraft(cloneConfig(savedDraft))}
+        >
+          撤销更改
+        </button>
+        <button className="settings-save" disabled={!dirty || saving} onClick={() => void save()}>
+          {saving ? <LoaderCircle className="spin" /> : <Save />}
+          {saving ? '正在保存…' : '保存配置'}
         </button>
       </div>
-      <div className={`subagent-runtime-status is-${runtimeState}`}>
-        {runtimeReady ? <Check /> : runtimeState === 'checking' ? <LoaderCircle className="spin" /> : <CircleAlert />}
-        <div>
-          <strong>{!snapshot?.installed
-            ? '没有找到 pi-subagents'
-            : toolsReady === undefined
-              ? '正在核对子 Agent 工具'
-              : toolsReady
-                ? 'pi-subagents 已就绪'
-                : 'subagent 工具尚未启用'}</strong>
-          <span>{!snapshot?.installed
-            ? '配置仍会保留；安装扩展并启用 subagent 工具后即可使用。'
-            : toolsReady
-              ? '设置会写入 Pi 的 settings.json，并热更新父会话；下一次启动子 Agent 时直接使用最新配置。'
-              : '模型和思考设置仍会保留；到 Agent 工具中启用 subagent 后，父 Agent 才能启动子会话。'}</span>
-        </div>
-        {snapshot?.installed && toolsReady === false && onOpenAgentTools && <button type="button" className="settings-outline" onClick={onOpenAgentTools}>去启用</button>}
-      </div>
-      <div className="settings-scope-tabs" role="tablist" aria-label="子 Agent 配置范围">
-        <button role="tab" aria-selected={scope === 'user'} className={scope === 'user' ? 'is-active' : ''} onClick={() => setScope('user')}>全局</button>
-        <button role="tab" aria-selected={scope === 'project'} className={scope === 'project' ? 'is-active' : ''} onClick={() => setScope('project')}>当前项目</button>
-      </div>
-      <div className="subagent-config-path">
-        <span>{scopeText}</span>
-        <code title={path}>{path || '正在解析路径…'}</code>
-        {scope === 'project' && snapshot && !snapshot.projectRootExists && <small>首次保存会创建 <code>.pi/settings.json</code></small>}
-      </div>
-    </section>
-
-    <section className="settings-card">
-      <div className="settings-card-head">
-        <div>
-          <h2>共享默认</h2>
-          <p>这些值只在子 Agent 自己或角色覆盖没有指定时生效。项目管理级配置优先于全局配置。</p>
-        </div>
-      </div>
-      <div className="subagent-default-grid">
-        <div className="settings-field">
-          <span>默认模型</span>
-          <Select
-            label="子 Agent 默认模型"
-            value={draft.defaultModel}
-            options={defaultModelOptions}
-            onChange={(defaultModel) => setDraft((current) => ({ ...current, defaultModel }))}
-          />
-          <small>留空时沿用父 Agent 当前模型。角色定义里的模型仍拥有更高优先级。</small>
-        </div>
-        <div className="settings-field">
-          <span>默认思考强度</span>
-          <Select
-            label="子 Agent 默认思考强度"
-            value={draft.defaultThinking}
-            options={thinkingOptions(defaultThinkingLevels, '不设置共享默认')}
-            onChange={(value) => setDraft((current) => ({ ...current, defaultThinking: value as SubagentThinking }))}
-          />
-          <small>用于没有思考强度定义的角色；单个角色的覆盖优先级更高。</small>
-        </div>
-        <div className="settings-field">
-          <span><Shield />思考强度上限</span>
-          <Select
-            label="子 Agent 思考强度上限"
-            value={draft.maxThinking}
-            options={thinkingOptions(snapshot?.thinkingLevels || [], '不限制')}
-            onChange={(value) => setDraft((current) => ({ ...current, maxThinking: value as SubagentThinking }))}
-          />
-          <small>这是硬上限。任何来源请求更高强度时，pi-subagents 会在子 Agent 启动前拒绝。</small>
-        </div>
-      </div>
-    </section>
-
-    <section className="settings-card subagent-roster-card">
-      <div className="settings-card-head">
-        <div>
-          <h2>角色覆盖 <span className="count-badge">{snapshot?.agents.length ?? 0}</span></h2>
-          <p>按角色固定模型和思考强度。留空会依次回落到角色定义、共享默认和父 Agent。</p>
-        </div>
-      </div>
-      <div className="subagent-priority-note">
-        <ChevronRight />
-        <span>覆盖优先级</span>
-        <code>当前角色</code>
-        <ChevronRight />
-        <code>Agent 定义</code>
-        <ChevronRight />
-        <code>共享默认</code>
-        <ChevronRight />
-        <code>父 Agent</code>
-      </div>
-      <div className="subagent-role-list">
-        {snapshot?.agents.map((agent) => <OverrideRow
-          key={`${scope}:${agent.name}:${agent.path}`}
-          agent={agent}
-          draft={draft}
-          scope={scope}
-          models={snapshot.models}
-          allThinkingLevels={snapshot.thinkingLevels}
-          currentModel={snapshot.currentModel}
-          onChange={(next) => updateOverride(agent.name, next)}
-        />)}
-        {!snapshot?.agents.length && <div className="settings-empty">没有发现可配置的子 Agent 定义。</div>}
-      </div>
-    </section>
-
-    {error && <div className="settings-error" role="alert">{error}</div>}
-    <div className="subagent-savebar">
-      <div>
-        <strong>{dirty ? `${scopeText}有未保存的更改` : '已与 Pi 配置同步'}</strong>
-        <span>{path} · 保存后会热更新，无需重启 App</span>
-      </div>
-      <button className="settings-outline" disabled={!dirty || saving} onClick={() => setDraft(cloneConfig(savedDraft))}>撤销</button>
-      <button className="settings-save" disabled={!dirty || saving} onClick={() => void save()}>
-        {saving ? <LoaderCircle className="spin" /> : <Save />}
-        {saving ? '正在保存…' : '保存配置'}
-      </button>
     </div>
-  </div>;
+  );
 }

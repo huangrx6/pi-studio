@@ -52,24 +52,24 @@
   --text-md: 14px;
   --text-lg: 16px;
   --text-title: 24px;
-  --sidebar-w: 256px;
+  --sidebar-w: 280px;
   --panel-w: 430px;
   --content: 860px;
   --settings-content: 1040px;
   --header-height: 48px;
   --toolbar-height: 36px;
-  /* 自定义背景的运行时默认值；App 会按用户偏好覆盖这三个变量。 */
+  /* 自定义背景的运行时默认值；App 会按用户偏好覆盖这两个变量。 */
   --background-media-opacity: 68%;
   --background-media-blur: 0px;
+  /* 通用滑杆由 React 内联覆盖为实际百分比；默认值供静态主题检查与首帧降级。 */
+  --range-progress: 0%;
   /* 动效与字体：transition 统一 160ms ease，交互快慢一致；减少动效偏好下 app.css
-  会全局关闭 transition 与 animation。font 是系统无衬线栈，display-font 用于欢迎
-  标题和助手身份的衬线展示，mono 用于代码、路径和快捷键；font-display 是
-  display-font 的别名，保留给旧规则。
+  会全局关闭 transition 与 animation。font 是界面统一使用的系统无衬线栈，
+  display-font 只用于新对话欢迎语，mono 用于代码、路径和快捷键。
    */
 
   --transition: 160ms ease;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --display-font: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "Times New Roman", serif;
-  --font-display: var(--display-font);
   --mono: "SF Mono", "JetBrains Mono", "Fira Code", Consolas, monospace;
 }

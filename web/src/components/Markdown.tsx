@@ -13,7 +13,7 @@ import { memo } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
-import { getActivePreferences } from '../preferences';
+import { getActivePreferences } from '../lib/preferences';
 
 /**
  * 自定义渲染规则。放在模块作用域：ReactMarkdown 每次 render 都新建

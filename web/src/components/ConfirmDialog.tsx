@@ -2,7 +2,7 @@
  * 应用内的确认弹窗。
  *
  * 两个用途：
- *  1. 扩展请求的工具确认（pi-mode-switcher 在风险操作时触发）：
+ *  1. Studio 权限守卫在策略要求确认时触发的工具确认：
  *     把操作类型、命令或目标路径结构化展示，并给出「取消 / 允许」。
  *  2. 启用「完全权限」前的风险确认：必须勾选已知风险才能继续。
  *
@@ -10,14 +10,30 @@
  * 弹窗本身不做任何权限判断，只负责呈现与收集选择。
  */
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AlertTriangle, FilePenLine, Globe2, Terminal, X } from 'lucide-react';
+import type {
+  PermissionConfirmRequest,
+  PermissionConfirmResponse,
+  PermissionRememberScope,
+} from '../types/permission-types';
+import { Select } from './Select';
+import '../styles/permission-policy.css';
 
-export type ConfirmRequest = { id: string; sessionId?: string; title: string; message: string };
+export type ConfirmRequest = PermissionConfirmRequest;
+export type ConfirmResult = Omit<PermissionConfirmResponse, 'id'>;
+
+export type ActionConfirmOptions = {
+  title: string;
+  description?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  tone?: 'default' | 'danger';
+};
 
 type ConfirmKind = 'command' | 'file' | 'network' | 'tool';
 
-type ParsedConfirm = { kind: ConfirmKind; tool?: string; detail: string };
+type ParsedConfirm = { kind: ConfirmKind; tool?: string; detail: string; explanation?: string; risk?: string };
 
 const KIND_META: Record<ConfirmKind, { label: string; icon: ReactNode; acceptLabel: string }> = {
   command: { label: '执行命令', icon: <Terminal />, acceptLabel: '允许执行' },
@@ -27,13 +43,41 @@ const KIND_META: Record<ConfirmKind, { label: string; icon: ReactNode; acceptLab
 };
 
 /**
- * 解析扩展传来的描述文本。
- * pi-mode-switcher 的格式：
+ * 解析权限守卫传来的描述文本：
  *  - `执行命令 · <command>`
  *  - `<tool> → <path|url|query>`
  */
-function parseConfirmMessage(message: string): ParsedConfirm {
-  const text = message.trim();
+function parseConfirmMessage(request: ConfirmRequest): ParsedConfirm {
+  const text = request.message.trim();
+  // The command or target is already rendered in full above. Repeating its 500
+  // character risk detail here made long approvals grow horizontally and added
+  // no useful information.
+  const riskLabel = request.risk?.level === 'high'
+    ? '高风险'
+    : request.risk?.level === 'medium'
+      ? '中风险'
+      : '低风险';
+  const risk = request.risk ? `${riskLabel} · ${request.risk.title}` : undefined;
+  if (request.tool) {
+    const kind: ConfirmKind = request.tool === 'bash'
+      ? 'command'
+      : ['read', 'write', 'edit', 'ls', 'find', 'grep'].includes(request.tool)
+        ? 'file'
+        : request.tool.startsWith('mcp__')
+          ? 'network'
+          : 'tool';
+    return {
+      kind,
+      tool: request.tool,
+      detail: request.tool === 'bash'
+        ? text.replace(/^执行命令\s*·\s*/, '')
+        : text.includes('→')
+          ? text.slice(text.indexOf('→') + 1).trim()
+          : text,
+      explanation: request.explanation,
+      risk,
+    };
+  }
   if (text.startsWith('执行命令')) return { kind: 'command', detail: text.replace(/^执行命令\s*·\s*/, '') };
   const arrow = /^([\w.-]+)\s*→\s*([\s\S]+)$/.exec(text);
   if (arrow) return { kind: /^https?:/i.test(arrow[2]) ? 'network' : 'file', tool: arrow[1], detail: arrow[2] };
@@ -72,18 +116,89 @@ function ConfirmShell({ onCancel, label, children }: { onCancel: () => void; lab
   </div>;
 }
 
+/**
+ * 通用产品操作确认：删除、撤销信任、丢弃草稿和切换风险模式统一使用同一套
+ * 视觉与键盘行为，避免各页面退回浏览器原生 confirm。
+ */
+export function ActionConfirmDialog({
+  title,
+  description,
+  confirmLabel = '继续',
+  cancelLabel = '取消',
+  tone = 'default',
+  onCancel,
+  onConfirm,
+}: ActionConfirmOptions & { onCancel: () => void; onConfirm: () => void }) {
+  return <ConfirmShell label={title} onCancel={onCancel}>
+    <header className="confirm-head">
+      <span className={`confirm-icon ${tone === 'danger' ? 'is-danger' : 'is-tool'}`}><AlertTriangle /></span>
+      <div className="confirm-heading">
+        <span className="confirm-eyebrow">{tone === 'danger' ? '不可逆操作' : '确认操作'}</span>
+        <h2>{title}</h2>
+      </div>
+      <button type="button" className="confirm-close" aria-label="关闭确认" onClick={onCancel}><X /></button>
+    </header>
+    {description && <div className="confirm-body"><p className="confirm-text">{description}</p></div>}
+    <footer className="confirm-actions">
+      <button type="button" className="confirm-cancel" onClick={onCancel}>{cancelLabel}</button>
+      <button type="button" className={`confirm-accept ${tone === 'danger' ? 'is-danger' : ''}`} onClick={onConfirm}>{confirmLabel}</button>
+    </footer>
+  </ConfirmShell>;
+}
+
+/**
+ * Promise 化的应用内确认。调用方可以自然使用
+ * `if (!(await confirmation.confirm(...))) return;`，并把 `dialog` 渲染在当前页面。
+ */
+export function useActionConfirmation() {
+  const [request, setRequest] = useState<(ActionConfirmOptions & { resolve: (accepted: boolean) => void }) | null>(null);
+  const pending = useRef<(ActionConfirmOptions & { resolve: (accepted: boolean) => void }) | null>(null);
+
+  const confirm = useCallback((options: ActionConfirmOptions) => new Promise<boolean>((resolve) => {
+    pending.current?.resolve(false);
+    const next = { ...options, resolve };
+    pending.current = next;
+    setRequest(next);
+  }), []);
+
+  function settle(accepted: boolean) {
+    request?.resolve(accepted);
+    pending.current = null;
+    setRequest(null);
+  }
+
+  return {
+    confirm,
+    dialog: request && <ActionConfirmDialog
+      title={request.title}
+      description={request.description}
+      confirmLabel={request.confirmLabel}
+      cancelLabel={request.cancelLabel}
+      tone={request.tone}
+      onCancel={() => settle(false)}
+      onConfirm={() => settle(true)}
+    />,
+  };
+}
+
 /** 工具操作确认。 */
-export function ToolConfirmDialog({ request, onRespond }: { request: ConfirmRequest; onRespond: (accepted: boolean) => void }) {
-  const parsed = parseConfirmMessage(request.message);
+export function ToolConfirmDialog({ request, onRespond }: { request: ConfirmRequest; onRespond: (result: ConfirmResult) => void }) {
+  const parsed = parseConfirmMessage(request);
   const meta = KIND_META[parsed.kind];
-  return <ConfirmShell label={request.title} onCancel={() => onRespond(false)}>
+  const rememberOptions = (request.rememberScopes || []).filter((scope): scope is Exclude<PermissionRememberScope, 'once'> => scope !== 'once');
+  const [remember, setRemember] = useState<Exclude<PermissionRememberScope, 'once'> | ''>('');
+  const respond = (accepted: boolean) => onRespond({
+    accepted,
+    ...(accepted && remember ? { remember } : {}),
+  });
+  return <ConfirmShell label={request.title} onCancel={() => respond(false)}>
     <header className="confirm-head">
       <span className={`confirm-icon is-${parsed.kind}`}>{meta.icon}</span>
       <div className="confirm-heading">
         <span className="confirm-eyebrow">{meta.label}</span>
         <h2>{request.title}</h2>
       </div>
-      <button type="button" className="confirm-close" aria-label="关闭确认" onClick={() => onRespond(false)}><X /></button>
+      <button type="button" className="confirm-close" aria-label="关闭确认" onClick={() => respond(false)}><X /></button>
     </header>
 
     <div className="confirm-body">
@@ -95,11 +210,33 @@ export function ToolConfirmDialog({ request, onRespond }: { request: ConfirmRequ
             {parsed.tool && <span className="confirm-tool">{parsed.tool}</span>}
             <code title={parsed.detail}>{parsed.detail}</code>
           </div>}
+      {parsed.explanation && <p className="confirm-explanation">{parsed.explanation}</p>}
+      {parsed.risk && <p className="confirm-risk"><AlertTriangle aria-hidden="true" /><span>{parsed.risk}</span></p>}
+      {rememberOptions.length > 0 && <label className="confirm-remember">
+        <span>如果允许，记住这次选择</span>
+        <Select
+          className="confirm-remember-select"
+          label="记住选择范围"
+          value={remember}
+          options={[
+            { value: '', label: '仅本次' },
+            ...rememberOptions.map((scope) => ({
+              value: scope,
+              label: scope === 'session'
+                ? '本会话中相同操作'
+                : scope === 'workspace'
+                  ? '当前工作区中相同操作'
+                  : '所有工作区中的相同操作',
+            })),
+          ]}
+          onChange={(value) => setRemember(value as typeof remember)}
+        />
+      </label>}
     </div>
 
     <footer className="confirm-actions">
-      <button type="button" className="confirm-cancel" onClick={() => onRespond(false)}>取消</button>
-      <button type="button" className="confirm-accept" onClick={() => onRespond(true)}>{meta.acceptLabel}</button>
+      <button type="button" className="confirm-cancel" onClick={() => respond(false)}>取消</button>
+      <button type="button" className="confirm-accept" onClick={() => respond(true)}>{meta.acceptLabel}</button>
     </footer>
   </ConfirmShell>;
 }
@@ -122,7 +259,7 @@ export function FullPermissionDialog({ acknowledged, onAcknowledgedChange, onCon
     </header>
 
     <div className="confirm-body">
-      <p className="confirm-text">启用完全权限后，智能体将减少确认步骤，并可以直接执行更多操作，包括敏感操作、文件修改或外部命令。仅建议在你信任当前任务时使用。</p>
+      <p className="confirm-text">启用完全权限后，普通工具不再逐次确认，包括文件修改和常规命令。你显式设置为“询问”的规则仍会生效；工作区边界与明显的系统级破坏命令始终拦截。仅建议在你信任当前任务时使用。</p>
       <label className="confirm-check">
         <input type="checkbox" checked={acknowledged} onChange={(event) => onAcknowledgedChange(event.target.checked)} />
         <span>我已了解风险，并愿意继续</span>

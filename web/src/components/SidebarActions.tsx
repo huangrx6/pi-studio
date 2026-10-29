@@ -4,9 +4,9 @@
  * 交互流程：
  * 1. 点「更多」在触发按钮旁弹出 portal 菜单（固定定位、视口内夹取）；
  * 2. 重命名 → 打开 SettingsDialog 输入名称；
- * 3. 归档/分叉/删除工作区 → 先弹 SettingsDialog 二次确认；
- * 4. 确认后调用 onAction，由 App 发 `piApi.sidebarAction({ kind, id, action, name })`
- *    到主进程，成功后 App 会重新拉取侧边栏状态。
+ * 3. 归档/分叉/删除 → 先弹 SettingsDialog 二次确认；
+ * 4. 确认后调用 onAction，由 App 发 `piApi.conversationAction({ kind, id, action, name })`
+ *    到 Durable，成功后 App 会重新拉取侧边栏状态。
  *
  * 状态说明：position 控制菜单，renaming / confirming 控制两个弹窗，三者互斥；
  * busy 期间禁用按钮以免重复提交；error 在弹窗内展示，弹窗关闭后改用浮动错误条。
@@ -16,7 +16,7 @@ import { createPortal } from 'react-dom';
 import { Archive, Copy, GitFork, MoreHorizontal, Pencil, Pin, PinOff, SquarePen, Trash2, Undo2 } from 'lucide-react';
 import { SettingsDialog } from './SettingsDialog';
 
-/** 侧边栏支持的操作类型，与主进程 pi:sidebar-action 的 action 参数一致。 */
+/** 侧边栏支持的操作类型，与 `pi:conversation-action` 的 action 参数一致。 */
 export type SidebarAction = 'rename' | 'remove' | 'pin' | 'archive' | 'fork';
 
 /**
@@ -30,8 +30,9 @@ export type SidebarAction = 'rename' | 'remove' | 'pin' | 'archive' | 'fork';
  * @param onAction 实际执行动作；返回 Promise，失败信息会展示给用户
  * @param onNew 工作区行「新建对话」回调；仅工作区使用
  */
-export function SidebarActions({ kind, id, name, pinned, archived, onAction, onNew }: {
+export function SidebarActions({ kind, id, name, pinned, archived, sessionCount, archivedCount, onAction, onNew }: {
   kind: 'workspace' | 'session'; id: string; name: string; pinned?: boolean; archived?: boolean;
+  sessionCount?: number; archivedCount?: number;
   onAction: (action: SidebarAction, name?: string) => Promise<void>; onNew?: () => void;
 }) {
   /** 菜单的 fixed 坐标；为 null 时菜单关闭。 */
@@ -81,17 +82,24 @@ export function SidebarActions({ kind, id, name, pinned, archived, onAction, onN
     setPosition(null); setError(null); setConfirming(action);
   }
   // 根据动作和当前归档状态生成确认文案：归档与恢复共用同一个入口。
+  const workspaceSessions = Math.max(0, Number(sessionCount) || 0);
+  const workspaceArchived = Math.min(workspaceSessions, Math.max(0, Number(archivedCount) || 0));
+  const workspaceDescription = workspaceSessions > 0
+    ? `将永久删除此工作区下的 ${workspaceSessions} 个会话${workspaceArchived > 0 ? `，其中 ${workspaceArchived} 个已归档` : ''}，并清理所有关联子智能体、附件和 Studio 设置。磁盘中的项目文件夹不会被删除。`
+    : '这个工作区没有会话。将清理它的 Studio 设置、项目扩展状态和归档记录，磁盘中的项目文件夹不会被删除。';
   const confirmation = confirming === 'archive'
-    ? { title: archived ? '恢复这个会话？' : '归档这个会话？', action: archived ? '恢复会话' : '归档会话', description: archived ? '会话将回到工作区的会话列表。' : '归档后会从当前列表隐藏，历史记录会保留，可在“查看归档会话”中恢复。' }
+    ? { title: archived ? '恢复这个会话？' : '归档这个会话？', action: archived ? '恢复会话' : '归档会话', description: archived ? '会话将回到工作区的会话列表。' : '归档后会从当前列表隐藏，历史记录会保留，可在“设置 → 归档会话”中恢复。' }
     : confirming === 'fork'
       ? { title: '分叉这个会话？', action: '创建分叉', description: '将复制当前历史记录，创建并打开一个独立的新会话。原会话保持不变。' }
-      : { title: '删除这个工作区？', action: '从侧边栏移除', description: '仅从侧边栏移除，磁盘文件和会话记录都会保留。重新打开该文件夹可恢复显示。' };
+      : kind === 'workspace'
+        ? { title: '永久删除这个工作区？', action: '永久删除', description: workspaceDescription }
+        : { title: '永久删除这个会话？', action: '永久删除', description: '将停止并删除这个会话及其所有子智能体，同时清理消息、任务、附件和关联设置。此操作无法恢复。' };
   return <div className={`sidebar-row-actions ${position || confirming || renaming ? 'is-open' : ''}`}>
     <button ref={trigger} type="button" disabled={busy} aria-label={`${name}的更多操作`} title="更多" aria-haspopup="menu" aria-expanded={Boolean(position)} onClick={() => {
       const rect = trigger.current!.getBoundingClientRect();
       // 菜单宽 200px（CSS）+ 右侧 8px 余量；高度按菜单项数估算
-      // （会话 5 项约 205px、工作区 2 项约 90px），据此把 top 夹在视口内。
-      setPosition(position ? null : { left: Math.min(rect.left, window.innerWidth - 208), top: Math.max(8, Math.min(rect.bottom + 5, window.innerHeight - (kind === 'session' ? 205 : 90))) });
+      // （会话 6 项约 245px、工作区 2 项约 90px），据此把 top 夹在视口内。
+      setPosition(position ? null : { left: Math.min(rect.left, window.innerWidth - 208), top: Math.max(8, Math.min(rect.bottom + 5, window.innerHeight - (kind === 'session' ? 245 : 90))) });
     }}><MoreHorizontal /></button>
     {/* 工作区只提供「新建对话」；会话额外提供归档与置顶的快捷入口。 */}
     {kind === 'workspace' ? <button type="button" title="在此工作区新建对话" aria-label={`在${name}中新建对话`} onClick={onNew}><SquarePen /></button> : <>
@@ -112,9 +120,10 @@ export function SidebarActions({ kind, id, name, pinned, archived, onAction, onN
     }}>
       {kind === 'session' && <button role="menuitem" onClick={() => void run('pin')}><Pin />{pinLabel}</button>}
       <button role="menuitem" onClick={() => { setPosition(null); setValue(name); setError(null); setRenaming(true); }}><Pencil />{kind === 'workspace' ? '重命名工作区' : '重命名'}</button>
-      {kind === 'workspace' ? <button role="menuitem" onClick={() => confirm('remove')}><Trash2 />删除工作区</button> : <>
+      {kind === 'workspace' ? <button role="menuitem" onClick={() => confirm('remove')}><Trash2 />永久删除工作区</button> : <>
         <button role="menuitem" onClick={() => confirm('fork')}><GitFork />分叉会话</button>
         <button role="menuitem" onClick={() => confirm('archive')}>{archived ? <Undo2 /> : <Archive />}{archiveLabel}</button>
+        <button role="menuitem" className="is-danger" onClick={() => confirm('remove')}><Trash2 />永久删除会话</button>
         <button role="menuitem" onClick={() => { void navigator.clipboard.writeText(id).then(() => setPosition(null)).catch(() => setError('复制失败，请重试')); }}><Copy />复制 SessionId</button>
       </>}
     </div>, document.body)}

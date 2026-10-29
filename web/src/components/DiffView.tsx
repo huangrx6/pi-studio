@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Columns2, Rows3, FileCode2 } from 'lucide-react';
-import type { TurnDiffFile } from '../chat-types';
-import { splitPatch, changedRange, type DiffLine } from '../diff-rows';
+import type { TurnDiffFile } from '../types/chat-types';
+import { splitPatch, changedRange, type DiffLine } from '../lib/diff-rows';
 
 // Small lexical renderer. React escapes every token, including untrusted source text.
 function Code({ text, range }: { text: string; range: [number, number] | null }) {

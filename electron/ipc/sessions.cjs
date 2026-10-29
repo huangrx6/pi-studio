@@ -1,474 +1,363 @@
 /**
- * IPC：会话。
- * 新建 / 读取 / 侧边栏操作（重命名、置顶、归档、分叉）/ 发消息 / 排队 / 扩展状态。
- */
-
-const { ipcMain } = require('electron');
-const {
-  configPath,
-  readConfig,
-  writeConfig,
-  getWindow,
-  agentSessions,
-} = require('../core/state.cjs');
-const { serializeMessage } = require('../core/serialize.cjs');
-const { updateSidebar } = require('../sidebar-state.cjs');
-const {
-  detail,
-  outline,
-  createDraft,
-  findManager,
-  ensureAgent,
-  listWorkspaces,
-  forkSession,
-  composerResources,
-  invalidateIndex,
-  forgetDetail,
-  dropDraft,
-  updateSessionSummary,
-  indexSessions,
-  releaseInactiveSessions,
-} = require('../services/sessions.cjs');
-const { sessionModel, setSessionModel, setSessionThinking, applyPendingSessionModel } = require('../services/sessions.cjs');
-const { fileReferenceContext } = require('../services/workspace.cjs');
-const { attachmentContext } = require('../services/attachments.cjs');
-const { extensionState, extensionAction, extensionDialogResult, extensionSelectResult, updateEditorText, footerAction } = require('../services/extensions.cjs');
-const { createAutoTitleGenerator } = require('../services/auto-title.cjs');
-const { beginTurn, endTurn, saveTurnDiff } = require('../services/turn-diff.cjs');
-const { watchCompactionRecovery } = require('../services/compaction-recovery.cjs');
-const {
-  captureSubagentEvent,
-  sessionSubagents,
-  subagentTranscript,
-} = require('../services/subagent-runtime.cjs');
-const { publishMenuBarEvent } = require('../menu-bar-events.cjs');
-const activeRequests = new Map();
-
-function menuBarFallbackTitle(text) {
-  const clean = String(text || '').replace(/\s+/g, ' ').trim();
-  const chars = [...clean];
-  return chars.length > 24 ? `${chars.slice(0, 23).join('')}…` : clean;
-}
-
-/** 把 Pi Studio 的名称写回 Pi 的 session_info，保证 CLI / resume 看到同一个名字。 */
-async function syncNativeName(id, name) {
-  const text = typeof name === 'string' ? name.trim() : '';
-  if (!text) return;
-  try {
-    const found = await findManager(id);
-    if (!found) return;
-    if (found.manager.getSessionName() === text) return;
-    found.manager.appendSessionInfo(text);
-  } catch {
-    /* 原生名称同步失败不影响桌面端标题 */
-  }
-}
-
-const autoTitles = createAutoTitleGenerator({
-  readMetadata: id => readConfig(configPath(), {}).sessionMetadata?.[id] || {},
-  updateMetadata: (id, patch) => {
-    const config = readConfig(configPath(), {});
-    writeConfig(configPath(), { ...config, sessionMetadata: {
-      ...config.sessionMetadata, [id]: { ...config.sessionMetadata?.[id], ...patch },
-    } });
-  },
-  notify: id => {
-    const meta = readConfig(configPath(), {}).sessionMetadata?.[id];
-    if (meta?.autoTitle) void syncNativeName(id, meta.autoTitle);
-    if (meta?.autoTitle) publishMenuBarEvent({ type: 'title', id, title: meta.autoTitle });
-    invalidateIndex(); forgetDetail(id);
-    const win = getWindow();
-    if (win && !win.isDestroyed()) win.webContents.send('pi:sessions-changed');
-  },
-});
-
-
-/**
- * 发送消息。
+ * Conversation IPC.
  *
- * 流程：
- *  1. 准备 AgentSession（首次会创建）
- *  2. 把 `@` 引用的文件与落盘附件作为隐藏上下文先塞进会话
- *  3. 订阅流式事件并转发给渲染进程（requestId 用于前端配对）
- *  4. 发送真正的 prompt；完成后让会话索引与详情缓存失效
+ * This is a domain API over Pi Durable rather than a compatibility adapter for
+ * the former AgentSession protocol. Renderer clients receive stable DTOs and
+ * can always recover from a fresh snapshot after reconnecting.
  */
-async function prompt(event, { sessionId, text, requestId, mentions, attachments, images }) {
-  const found = await findManager(sessionId);
-  if (!found) throw new Error('会话不存在');
-  const firstTurn = !found.manager.getEntries().some(entry => entry.type === 'message' && entry.message.role === 'user');
-  updateSessionSummary(sessionId, text);
-  const session = await ensureAgent(sessionId, found.manager, found.cwd);
-  // 如果上一轮结束后还有待切换模型，必须在提交新一轮消息之前应用。
-  await applyPendingSessionModel(sessionId, session);
-  activeRequests.set(sessionId, requestId);
-  const initialTitle = found.manager.getSessionName?.()
-    || menuBarFallbackTitle(text)
-    || '新会话';
-  let menuBarRunStarted = false;
-  let menuBarRunFinished = false;
-  publishMenuBarEvent({ type: 'started', id: sessionId, title: initialTitle, cwd: found.cwd, requestId });
-  menuBarRunStarted = true;
 
-  function finishMenuBarRun(status) {
-    if (!menuBarRunStarted || menuBarRunFinished) return;
-    menuBarRunFinished = true;
-    publishMenuBarEvent({ type: 'finished', id: sessionId, status });
-  }
+const { ipcMain, webContents } = require('electron');
+const {
+  abortConversation,
+  composerResources,
+  configureConversation,
+  conversationAction,
+  conversationPage,
+  conversationSnapshot,
+  createConversation,
+  listWorkspaces,
+  outline,
+  refreshRuntimeState,
+  stopConversationWatch,
+  submitConversation,
+  subscribeConversation,
+  taskGraph,
+} = require('../services/durable-conversations.cjs');
+const {
+  executeStudioExtensionCommand,
+  extensionDataSource,
+  extensionHostSnapshot,
+  extensionUiSnapshot,
+} = require('../services/studio-extensions.cjs');
+const {
+  ExtensionDataViewError,
+  closeAllExtensionDataViewServices,
+  closeExtensionDataViewServices,
+  createExtensionDataViewService,
+  registerExtensionDataViewService,
+} = require('../services/extension-data-view.cjs');
+const { normalizeContentList } = require('../services/studio-extension-ui.cjs');
+const {
+  deleteSubagentChild,
+  listSubagentChildren,
+  subagentTranscript,
+} = require('../services/durable-subagents.cjs');
+const {
+  getDurableRuntime,
+  reconcileRuntimeForWorkspace,
+} = require('../services/durable-runtime.cjs');
+const { publishMenuBarEvent } = require('../menu-bar-events.cjs');
 
-  // 文件 / 附件上下文：作为一条不展示的自定义消息注入，不触发新回合
-  const referenceBlocks = await fileReferenceContext(found.cwd, mentions);
-  const attachedBlocks = await attachmentContext(attachments);
-  if (referenceBlocks.length > 0 || attachedBlocks.length > 0) {
-    try {
-      await session.sendCustomMessage(
-        {
-          customType: 'pi-studio:file-reference',
-          content: [
-            { type: 'text', text: 'The user referenced the following workspace files or attachments. Treat them as primary context for this request.' },
-            ...referenceBlocks,
-            ...attachedBlocks,
-          ],
-          display: false,
-        },
-        { triggerTurn: false },
-      );
-    } catch {
-      /* 文件上下文属于尽力而为 */
-    }
-  }
+// `run_end` is also emitted for a user-requested abort. Keep a short-lived
+// marker until that terminal event arrives so the menu bar can distinguish a
+// cancellation from a completed answer without changing Durable's event ABI.
+const cancelledRunIds = new Set();
 
-  // 流式事件 → 渲染进程
-  const changed = () => event.sender.send('pi:sessions-changed');
-  changed();
-  const send = (payload) => event.sender.send('pi:prompt-event', { requestId, ...payload });
-  // message_update 携带的是完整消息而不是增量，可以合并到下一帧再发：
-  // 高速模型每秒会产生大量 token，逐个 IPC 只会把主进程和渲染层都拖慢。
-  // 用 timestamp 分组，避免打断同时流式的助手消息与工具结果。
-  const pendingUpdates = new Map();
-  let updateTimer;
-  const flushUpdate = () => {
-    if (updateTimer) { clearTimeout(updateTimer); updateTimer = undefined; }
-    if (pendingUpdates.size === 0) return;
-    const batch = [...pendingUpdates.values()];
-    pendingUpdates.clear();
-    for (const message of batch) send({ type: 'message_update', message });
-  };
-  let compactionSeen = false;
-  let recovering = false;
-  let recoveryTimer;
-  let recoveryPromise;
-  let resolveRecovery;
-  let cleaned = false;
-  const unsubscribe = session.subscribe((piEvent) => {
-    if (piEvent.type === 'message_update') {
-      if (piEvent.message.role === 'user') return;
-      const message = serializeMessage(piEvent.message);
-      if (!message) return;
-      pendingUpdates.set(`${message.role}:${message.timestamp}`, message);
-      if (!updateTimer) updateTimer = setTimeout(flushUpdate, 16);
-      return;
-    }
-    if (piEvent.type === 'message_start' || piEvent.type === 'message_end') {
-      // 开始 / 结束帧必须立即到达；先把上一帧积压的最新内容发出去。
-      flushUpdate();
-      const message = serializeMessage(piEvent.message);
-      if (message) send({ type: piEvent.type, message });
-      if (piEvent.type === 'message_end') {
-        // 只有用户消息会影响草稿标题与侧边栏排序；助手 / 工具消息沿用文件 mtime。
-        if (piEvent.message.role === 'user') {
-          updateSessionSummary(sessionId, text);
-          changed();
-        }
-      }
-    }
-    if (piEvent.type === 'compaction_start') {
-      compactionSeen = true;
-      send({ type: 'compaction-start', reason: piEvent.reason });
-    }
-    if (piEvent.type === 'compaction_end') {
-      send({ type: 'compaction-end', reason: piEvent.reason, aborted: piEvent.aborted, errorMessage: piEvent.errorMessage });
-      if (recovering) watchRecovery();
-    }
-    if (piEvent.type === 'auto_retry_start') {
-      send({ type: 'retry-start', attempt: piEvent.attempt, maxAttempts: piEvent.maxAttempts, delayMs: piEvent.delayMs, errorMessage: piEvent.errorMessage });
-    }
-    if (piEvent.type === 'auto_retry_end') {
-      send({ type: 'retry-end', success: piEvent.success, attempt: piEvent.attempt, finalError: piEvent.finalError });
-    }
-    const subagents = captureSubagentEvent(
-      sessionId,
-      found.cwd,
-      session.sessionFile || found.manager.getSessionFile?.(),
-      piEvent,
-    );
-    if (subagents) send({ type: 'subagent-update', children: subagents });
-  });
-
-  // 回合开始前记录 Git 工作树快照；非 Git 仓库返回 null，前端回退到工具统计。
-  const diffToken = await beginTurn(found.cwd, requestId).catch(() => null);
-  let diffFinished = false;
-  const finishTurnDiff = async () => {
-    if (diffFinished || !diffToken) return;
-    diffFinished = true;
-    try {
-      const diff = await endTurn(diffToken);
-      if (!diff || diff.files.length === 0) return;
-      const at = [...session.messages].reverse().find((message) => message.role === 'assistant')?.timestamp || Date.now();
-      const payload = { at, ...diff };
-      try { saveTurnDiff(sessionId, payload); } catch { /* 存储失败仍把本轮结果推给界面 */ }
-      forgetDetail(sessionId);
-      send({ type: 'turn-diff', at, diff: payload });
-      changed();
-    } catch {
-      /* 统计失败不影响会话本身 */
-    }
-  };
-
-  /** 收尾：索引、持久化、通知前端。正常回合与压缩恢复共用。 */
-  let doneSent = false;
-  async function completeRun() {
-    if (doneSent) return;
-    doneSent = true;
-    flushUpdate();
-    // 运行期间选择的模型只影响下一轮；在向界面发送 done、触发 loadState 前应用。
-    await session.waitForIdle().catch(() => { /* Agent 已释放时保留 pending，下次发送时重试 */ });
-    await applyPendingSessionModel(sessionId, session).catch(() => { /* 保留 pending，下次发送时重试 */ });
-    const finalModel = await sessionModel(sessionId).catch(() => undefined);
-    invalidateIndex();
-    forgetDetail(sessionId);
-    // Sidebar indexing must not strand a finished run in the busy state.
-    await indexSessions(true).catch(() => {});
-    dropDraft(sessionId);
-    send({ type: 'done', ...(finalModel ? { model: finalModel } : {}) });
-    finishMenuBarRun('success');
-    // diff 在 done 之后异步计算，不阻塞流式收尾。
-    void finishTurnDiff();
-  }
-
-  function cleanupRun() {
-    if (cleaned) return;
-    cleaned = true;
-    if (recoveryTimer) { recoveryTimer(); recoveryTimer = undefined; }
-    invalidateIndex();
-    forgetDetail(sessionId);
-    unsubscribe();
-    if (activeRequests.get(sessionId) === requestId) activeRequests.delete(sessionId);
-    finishMenuBarRun('cancelled');
-    changed();
-  }
-
-  /**
-   * 压缩恢复观察器。
-   *
-   * 自动压缩会中止当前请求，再由扩展注入一条隐藏的「继续」消息启动新回合。
-   * 这里在压缩结束后等待新回合开始并结束，然后才发送 done；期间保持订阅，
-   * 继续把恢复回合的流式输出转发给前端。
-   */
-  function watchRecovery() {
-    if (recoveryTimer) return;
-    recoveryTimer = watchCompactionRecovery(session, {
-      onCompacted: () => send({ type: 'compaction-end' }),
-      onComplete: () => {
-        recoveryTimer = undefined;
-        void completeRun().catch(() => { /* 收尾失败仍要解除订阅 */ }).finally(() => {
-          recovering = false;
-          cleanupRun();
-          resolveRecovery?.();
-        });
-      },
-    });
-  }
-
-  function beginRecovery() {
-    if (!recoveryPromise) {
-      recoveryPromise = new Promise((resolve) => { resolveRecovery = resolve; });
-    }
-    if (recovering) return recoveryPromise;
-    recovering = true;
-    send({ type: 'compaction-interrupted', compacting: session.isCompacting });
-    watchRecovery();
-    return recoveryPromise;
-  }
-
-  try {
-    const imageBlocks = Array.isArray(images)
-      ? images.filter((image) => image && image.type === 'image' && typeof image.data === 'string' && typeof image.mimeType === 'string').slice(0, 8)
-      : [];
-    // 标题与主回合并行生成：不等回答结束，失败也不影响发送。
-    if (firstTurn) {
-      void autoTitles.generate({
-        id: sessionId,
-        firstMessage: text,
-        reply: '',
-        model: session.model,
-        complete: (model, context, options) => session.modelRuntime.completeSimple(model, context, options),
-        hasExplicitName: () => Boolean(found.manager.getSessionName()),
-      }).catch(() => {});
-    }
-    let disposition;
-    // Extension continuations and a reopened session can be running even when
-    // the renderer believes it is idle. Let the SDK atomically decide to queue.
-    await session.prompt(text, {
-      ...(imageBlocks.length ? { images: imageBlocks } : {}),
-      streamingBehavior: 'followUp',
-      preflightResult: value => { disposition = value; },
-    });
-    if (disposition === 'queued' || session.isStreaming) {
-      send({ type: 'run-attached' });
-      await beginRecovery();
-      return;
-    }
-    flushUpdate();
-    const lastAssistant = [...session.messages].reverse().find((message) => message.role === 'assistant');
-    const aborted = Boolean(lastAssistant && (lastAssistant.stopReason === 'aborted' || /aborted/i.test(lastAssistant.errorMessage || '')));
-    // 压缩中止了本回合：不要立刻 done，保持订阅等待扩展自动继续。
-    if (aborted && (compactionSeen || session.isCompacting)) {
-      await beginRecovery();
-      return;
-    }
-    await completeRun();
-  } catch (error) {
-    flushUpdate();
-    const message = error instanceof Error ? error.message : String(error);
-    // 压缩期间提交的 prompt 会被 Pi 拒绝；同样进入恢复流程，不显示原始英文错误。
-    if (compactionSeen || session.isCompacting || /compaction/i.test(message)) {
-      await beginRecovery();
-      return;
-    }
-    void finishTurnDiff();
-    finishMenuBarRun('error');
-    send({ type: 'error', error: message });
-    throw error;
-  } finally {
-    flushUpdate();
-    if (!recovering) cleanupRun();
-  }
-
+function closeExtensionDataViews(extensionId) {
+  return closeExtensionDataViewServices(extensionId);
 }
 
-/** 侧边栏操作：分叉、重命名、置顶、归档、恢复工作区。 */
-async function sidebarAction(input) {
-  if (input.kind === 'session') {
-    const found = await findManager(input.id);
-    if (!found) throw new Error('会话不存在');
-    if (input.action === 'fork') return forkSession(input.id);
-  } else if (input.kind !== 'workspace' || !(await listWorkspaces()).some((item) => item.cwd === input.id)) {
-    throw new Error('工作区不存在');
-  }
-  writeConfig(configPath(), updateSidebar(readConfig(configPath(), {}), input));
-  if (input.kind === 'session' && input.action === 'rename') await syncNativeName(input.id, input.name);
-  return { ok: true };
+function closeAllExtensionDataViews() {
+  return closeAllExtensionDataViewServices();
 }
 
-function registerSessionsIpc() {
-  // 新建草稿会话
-  ipcMain.handle('pi:session-create', async (_event, cwd) => createDraft(cwd));
-
-  // 读取会话详情（标题优先用用户重命名后的）
-  ipcMain.handle('pi:session', async (_event, id, limit) => {
-    const result = await detail(id, Number.isInteger(limit) ? limit : undefined);
-    const meta = readConfig(configPath(), {}).sessionMetadata?.[id];
-    // Pi 原生名优先（CLI 重命名也能同步）；没有时用桌面端 metadata 兼容旧数据。
-    const name = result?.nativeName || meta?.name || meta?.autoTitle;
-    const runtime = agentSessions.get(id);
-    const requestId = activeRequests.get(id);
-    return result && { ...result, title: name || result.title,
-      running: Boolean(requestId || runtime?.isStreaming || runtime?.isCompacting),
-      compacting: Boolean(runtime?.isCompacting), requestId,
+function contentFreeConversationMetricsEvent(event) {
+  if (!event || typeof event !== 'object') return undefined;
+  const conversationId = event.conversationId;
+  if (event.type === 'snapshot') {
+    return {
+      type: event.type,
+      conversationId,
+      payload: { run: Boolean(event.payload?.run) },
     };
-  });
+  }
+  if (event.type === 'usage.updated') {
+    return {
+      type: event.type,
+      conversationId,
+      payload: { usage: event.payload?.usage },
+    };
+  }
+  if (['run.started', 'run.completed', 'run.failed'].includes(event.type)) {
+    return { type: event.type, conversationId };
+  }
+  return undefined;
+}
 
-  // 完整提问大纲：内容区仍分页，右侧导航可以独立覆盖整个会话。
-  ipcMain.handle('pi:session-outline', async (_event, id) => outline(id));
+function notifyConversationList() {
+  for (const target of webContents.getAllWebContents()) {
+    if (!target.isDestroyed()) target.send('pi:conversation-list-changed');
+  }
+}
 
-  // 子 Agent 总览：合并 transcript 中的已完成记录和当前内存中的实时快照。
-  ipcMain.handle('pi:session-subagents', async (_event, id) => {
-    const found = await findManager(id);
-    if (!found) return [];
-    return sessionSubagents(id, found.cwd, found.manager);
-  });
+function closeConversationResource(id, event) {
+  const cleanup = () => {
+    void stopConversationWatch(id, event.sender.id);
+  };
+  event.sender.once('destroyed', cleanup);
+  return cleanup;
+}
 
-  // 子 Agent transcript 只读；真实路径由主进程从受信任的父 session 派生并校验。
-  ipcMain.handle('pi:subagent-transcript', async (_event, { sessionId, childKey, limit } = {}) => {
-    if (typeof sessionId !== 'string' || typeof childKey !== 'string') throw new Error('子 Agent 参数无效');
-    const found = await findManager(sessionId);
-    if (!found) throw new Error('会话不存在');
-    return subagentTranscript(sessionId, childKey, found.cwd, found.manager, limit);
-  });
-
-  // 侧边栏动作
-  ipcMain.handle('pi:sidebar-action', async (_event, input) => sidebarAction(input));
-
-  // 发送消息（流式）
-  ipcMain.handle('pi:prompt', async (event, payload) => prompt(event, payload));
-
-  // 切换会话时释放其它空闲 AgentSession，避免主进程长期保留多份大会话。
-  ipcMain.on('pi:session-focus', (_event, sessionId) => releaseInactiveSessions(typeof sessionId === 'string' ? sessionId : null));
-
-  // 会话级模型 / 推理等级：只改当前会话，不写全局默认、不影响其它会话。
-  ipcMain.handle('pi:set-session-model', (_event, { sessionId, modelRef }) => setSessionModel(sessionId, modelRef));
-  ipcMain.handle('pi:set-session-thinking', (_event, { sessionId, level }) => setSessionThinking(sessionId, level));
-
-  // 运行中排队：steer 立即插话，followUp 当前回合结束后执行
-  ipcMain.handle('pi:queue-prompt', async (_event, { sessionId, text, behavior, mentions, attachments, images }) => {
-    const found = await findManager(sessionId);
-    if (!found) throw new Error('会话不存在');
-    const session = await ensureAgent(sessionId, found.manager, found.cwd);
-
-    const referenceBlocks = await fileReferenceContext(found.cwd, mentions);
-    const attachedBlocks = await attachmentContext(attachments);
-    if (referenceBlocks.length > 0 || attachedBlocks.length > 0) {
-      try {
-        await session.sendCustomMessage(
-          {
-            customType: 'pi-studio:file-reference',
-            content: [
-              { type: 'text', text: 'The user referenced the following workspace files or attachments. Treat them as primary context for this request.' },
-              ...referenceBlocks,
-              ...attachedBlocks,
-            ],
-            display: false,
-          },
-          { triggerTurn: false },
-        );
-      } catch {
-        /* 尽力而为 */
+function broadcastConversationEvent(event) {
+  const metricsEvent = contentFreeConversationMetricsEvent(event);
+  if (metricsEvent) {
+    void getDurableRuntime()
+      .then((runtime) => runtime.metricsRuntime?.recordConversationEvent(metricsEvent))
+      .catch(() => {});
+  }
+  for (const target of webContents.getAllWebContents()) {
+    if (!target.isDestroyed()) target.send('pi:conversation-event', event);
+  }
+  if (event.type === 'run.started') {
+    notifyConversationList();
+    const id = event.conversationId;
+    void conversationSnapshot(id).then((snapshot) => {
+      if (snapshot) {
+        publishMenuBarEvent({
+          type: 'started',
+          id,
+          title: snapshot.title,
+          cwd: snapshot.cwd,
+          requestId: snapshot.requestId,
+        });
       }
+    }).catch(() => {});
+  } else if (event.type === 'run.completed' || event.type === 'run.failed') {
+    const cancelled = event.type === 'run.completed'
+      && cancelledRunIds.delete(event.conversationId);
+    publishMenuBarEvent({
+      type: 'finished',
+      id: event.conversationId,
+      status: event.type === 'run.completed'
+        ? (cancelled ? 'cancelled' : 'done')
+        : 'error',
+    });
+    notifyConversationList();
+  }
+}
+
+function registerExtensionDataViewIpc(options = {}) {
+  const ipc = options.ipcMain || ipcMain;
+  const resolveRuntime = options.resolveRuntime || (async (cwd) => (
+    cwd
+      ? reconcileRuntimeForWorkspace(cwd)
+      : getDurableRuntime()
+  ));
+  const readHostSnapshot = options.extensionHostSnapshot || extensionHostSnapshot;
+  const readDataSource = options.extensionDataSource || extensionDataSource;
+  const readConversationSnapshot = options.conversationSnapshot || conversationSnapshot;
+  const createService = options.createExtensionDataViewService
+    || createExtensionDataViewService;
+  const cleanupTargets = new WeakSet();
+  let service = options.extensionDataViewService;
+
+  const dataViewService = () => {
+    if (!service) {
+      service = createService({
+        normalizeContentList: (value, owner) => (
+          normalizeContentList(value, owner, () => undefined, 64)
+        ),
+      });
+    }
+    registerExtensionDataViewService(service);
+    return service;
+  };
+
+  const cleanWhenDestroyed = (target) => {
+    if (!target || typeof target.once !== 'function' || cleanupTargets.has(target)) return;
+    cleanupTargets.add(target);
+    target.once('destroyed', () => {
+      void dataViewService().closeForRenderer(target).catch((error) => {
+        console.error('[pi-studio] failed to close extension data view', error);
+      });
+    });
+  };
+
+  ipc.handle('pi:extension-data-view-open', async (event, payload = {}) => {
+    const sourceId = typeof payload?.sourceId === 'string'
+      ? payload.sourceId.slice(0, 220)
+      : '';
+    const cwd = typeof payload?.cwd === 'string' ? payload.cwd.slice(0, 4_096) : '';
+    const sessionId = typeof payload?.sessionId === 'string'
+      ? payload.sessionId.slice(0, 100)
+      : '';
+    const requestedModelRef = typeof payload?.modelRef === 'string'
+      && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\/\S{1,155}$/.test(payload.modelRef.trim())
+      ? payload.modelRef.trim()
+      : '';
+    if (!sourceId) {
+      throw new ExtensionDataViewError('INVALID_DATA_VIEW', '实时数据源 ID 不能为空');
     }
 
-    const imageBlocks = Array.isArray(images)
-      ? images.filter((image) => image && image.type === 'image' && typeof image.data === 'string' && typeof image.mimeType === 'string').slice(0, 8)
-      : [];
-    const queued = behavior === 'steer'
-      ? await session.steer(text, imageBlocks.length > 0 ? imageBlocks : undefined, { source: 'interactive' })
-      : await session.followUp(text, imageBlocks.length > 0 ? imageBlocks : undefined, { source: 'interactive' });
-    return { disposition: queued };
+    cleanWhenDestroyed(event.sender);
+    const runtime = await resolveRuntime(cwd);
+    const row = readHostSnapshot().extensions.find((candidate) => {
+      const declared = Array.isArray(candidate.dataSourceIds)
+        ? candidate.dataSourceIds
+        : (candidate.manifest?.contributes?.dataSources || [])
+          .map((source) => `${candidate.id}/${source.id}`);
+      return candidate.available && declared.includes(sourceId);
+    });
+    if (!row) {
+      throw new ExtensionDataViewError('DATA_SOURCE_FORBIDDEN', '实时数据源不存在或所属扩展不可用');
+    }
+    if (!(row.manifest?.permissions || []).includes('ui.data')) {
+      throw new ExtensionDataViewError('DATA_SOURCE_FORBIDDEN', '扩展未声明 ui.data 权限');
+    }
+    const provider = readDataSource(sourceId)
+      || (row.scope === 'builtin'
+        ? runtime?.extensionDataSources?.[sourceId]
+        : undefined);
+    if (!provider || typeof provider.read !== 'function') {
+      throw new ExtensionDataViewError('DATA_SOURCE_UNAVAILABLE', '实时数据源当前不可用');
+    }
+    let context;
+    if (sessionId) {
+      try {
+        const conversation = await readConversationSnapshot(sessionId);
+        if (conversation?.model) {
+          context = {
+            durableSessionId: conversation.durableSessionId,
+            model: {
+              ...conversation.model,
+              ...(requestedModelRef ? { modelRef: requestedModelRef } : {}),
+            },
+          };
+        } else if (conversation?.durableSessionId) {
+          context = { durableSessionId: conversation.durableSessionId };
+        }
+      } catch {
+        // A newly created conversation may not have a Durable handle yet.
+      }
+    }
+    if (!context && requestedModelRef) {
+      context = { model: { modelRef: requestedModelRef } };
+    }
+
+    return dataViewService().open({
+      sourceId,
+      extensionId: row.id,
+      target: event.sender,
+      cwd,
+      sessionId,
+      context,
+      owner: {
+        manifestId: row.manifest.id,
+        scope: row.scope,
+      },
+      normalizeAction: () => undefined,
+    }, provider);
   });
 
-  // 执行扩展注册的斜杠命令（本质上也是一条 prompt）
-  ipcMain.handle('pi:run-extension-command', async (_event, { sessionId, command }) => {
-    const found = await findManager(sessionId);
-    if (!found) throw new Error('会话不存在');
-    const session = await ensureAgent(sessionId, found.manager, found.cwd);
-    await session.prompt(String(command));
+  ipc.handle('pi:extension-data-view-close', async (event, subscriptionId) => {
+    if (typeof subscriptionId !== 'string' || !subscriptionId) {
+      return { closed: false };
+    }
+    return dataViewService().close(subscriptionId, event.sender);
+  });
+}
+
+function registerConversationIpc() {
+  ipcMain.handle('pi:conversation-list', async () => {
+    await refreshRuntimeState();
+    return listWorkspaces();
+  });
+
+  ipcMain.handle('pi:conversation-create', async (_event, input) => {
+    const created = await createConversation(input || {});
+    notifyConversationList();
+    return created;
+  });
+
+  ipcMain.handle('pi:conversation-page', async (_event, { id, limit, cursor } = {}) => (
+    conversationPage(id, { limit, cursor })
+  ));
+  ipcMain.handle('pi:conversation-outline', async (_event, id) => outline(id));
+  ipcMain.handle('pi:conversation-snapshot', async (_event, id) => conversationSnapshot(id));
+
+  ipcMain.handle('pi:conversation-subscribe', async (event, id) => {
+    const cleanup = closeConversationResource(id, event);
+    const snapshot = await subscribeConversation(
+      id,
+      event.sender.id,
+      broadcastConversationEvent,
+    );
+    if (!snapshot) {
+      event.sender.removeListener('destroyed', cleanup);
+      throw new Error('会话不存在');
+    }
+    return snapshot;
+  });
+
+  ipcMain.handle('pi:conversation-unsubscribe', async (event, id) => {
+    await stopConversationWatch(id, event.sender.id);
     return { ok: true };
   });
 
-  // 扩展状态：只读已有 AgentSession，不在「打开历史」时创建它。
-  // 大会话的 AgentSession 会持有完整消息/图片，历史浏览不应为状态栏付这份内存。
-  // 真正发送消息或执行扩展命令时再 ensureAgent，session_start 会推送状态。
-  ipcMain.handle('pi:extension-state', async (_event, sessionId) => extensionState(sessionId));
+  ipcMain.handle('pi:conversation-submit', async (_event, input) => {
+    const result = await submitConversation(input || {}, {
+      onTitleUpdated: ({ id, title }) => {
+        notifyConversationList();
+        publishMenuBarEvent({ type: 'title', id, title });
+      },
+    });
+    notifyConversationList();
+    return result;
+  });
 
-  ipcMain.handle('pi:footer-action', (_event, { sessionId, ...input }) => footerAction(sessionId, input));
-  // 通用扩展 surface：widget / custom / footer 共用同一个输入入口。
-  ipcMain.handle('pi:extension-action', (_event, { sessionId, ...input }) => extensionAction(sessionId, input));
-  ipcMain.handle('pi:extension-dialog-result', (_event, { id, value }) => extensionDialogResult(id, value));
-  ipcMain.handle('pi:extension-select-result', (_event, { id, value }) => extensionSelectResult(id, value));
-  // 渲染层把输入框当前文本同步给主进程，扩展 getEditorText() 才能同步读取。
-  ipcMain.on('pi:editor-text', (_event, { sessionId, text }) => updateEditorText(sessionId, text));
+  ipcMain.handle('pi:conversation-configure', async (_event, input) => configureConversation(input || {}));
+  ipcMain.handle('pi:conversation-interrupt', async (_event, { id } = {}) => {
+    if (typeof id !== 'string' || !id) throw new Error('会话参数无效');
+    cancelledRunIds.add(id);
+    try {
+      const result = await abortConversation(id);
+      if (result.wasRunning) {
+        // Hide the running item immediately. If the stream event arrives later,
+        // the marker above prevents it from being reported as a completion.
+        publishMenuBarEvent({ type: 'finished', id, status: 'cancelled' });
+        const cleanup = setTimeout(() => cancelledRunIds.delete(id), 15_000);
+        cleanup.unref?.();
+      } else {
+        cancelledRunIds.delete(id);
+      }
+      notifyConversationList();
+      return result;
+    } catch (error) {
+      cancelledRunIds.delete(id);
+      throw error;
+    }
+  });
+  ipcMain.handle('pi:conversation-action', async (_event, input) => {
+    const result = await conversationAction(input || {});
+    notifyConversationList();
+    return result;
+  });
+  ipcMain.handle('pi:conversation-task-graph', async (_event, id) => taskGraph(id));
+  ipcMain.handle('pi:conversation-resources', async (_event, input) => composerResources(input || {}));
+  ipcMain.handle('pi:conversation-subagents', async (_event, id) => listSubagentChildren(id));
+  ipcMain.handle('pi:conversation-subagent-transcript', async (_event, payload = {}) => (
+    subagentTranscript(payload.sessionId, payload.childKey, payload)
+  ));
+  ipcMain.handle('pi:conversation-subagent-delete', async (_event, payload = {}) => {
+    const result = await deleteSubagentChild(payload.sessionId, payload.childKey);
+    notifyConversationList();
+    return result;
+  });
 
-  // 输入框斜杠命令与技能列表
-  ipcMain.handle('pi:composer-resources', async (_event, payload) => composerResources(payload || {}));
+  ipcMain.handle('pi:extensions-ui', async (_event, cwd) => {
+    if (typeof cwd === 'string' && cwd) await reconcileRuntimeForWorkspace(cwd);
+    return extensionUiSnapshot();
+  });
+  ipcMain.handle('pi:extensions-command', async (_event, payload = {}) => (
+    executeStudioExtensionCommand(payload)
+  ));
+  registerExtensionDataViewIpc();
 }
 
-module.exports = { registerSessionsIpc };
+module.exports = {
+  closeAllExtensionDataViews,
+  closeExtensionDataViews,
+  contentFreeConversationMetricsEvent,
+  registerConversationIpc,
+  registerExtensionDataViewIpc,
+};

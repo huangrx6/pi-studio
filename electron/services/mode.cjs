@@ -1,101 +1,319 @@
 /**
- * 权限模式（pi-mode-switcher 扩展）的读取、持久化与运行时切换。
+ * Agent tool-approval policy.
  *
- * 这个扩展不控制「哪些工具可用」，而是在 tool_call 阶段按模式决定是否弹窗确认：
- *   ask   请求批准 —— 写文件 / 风险命令都先问
- *   smart 帮我批准 —— 只对高风险操作询问
- *   full  完全权限 —— 不再询问
- *
- * 桌面端只负责两件事：
- *  1. 读写扩展自己的配置文件，让新会话拿到正确模式；
- *  2. 对已绑定的会话发送 `/mode <mode>` 命令，立即更新扩展内存里的状态。
- *
- * 如果用户还没选过模式（扩展未安装），available 为 false，界面不显示入口。
+ * The policy belongs to Studio and lives in SQLite. Durable's permission hook
+ * reads it before every tool call, so policy changes and remembered approvals
+ * apply to the next call without restarting a conversation.
  */
 
-const fs = require('node:fs');
+const { getStudioDatabase } = require('../core/studio-db.cjs');
+const fs = require('node:fs/promises');
 const path = require('node:path');
-const { agentDir, readJson, settingsFile } = require('../core/state.cjs');
+const {
+  PERMISSION_DECISIONS,
+  PERMISSION_MODES,
+  PRESET_DEFAULTS,
+  approvalScopesFor,
+  evaluatePermission,
+  matchingPath,
+  narrowApprovalRule,
+  normalizePolicy,
+} = require('./permission-policy.cjs');
+const {
+  getPermissionPolicyStore,
+  resetPermissionPolicy: resetStoredPermissionPolicy,
+  savePermissionPolicyStore,
+  setPermissionMode,
+  setPermissionPolicy: setStoredPermissionPolicy,
+} = require('../core/app-settings.cjs');
 
-/** 扩展支持的三种模式。 */
-const MODES = ['ask', 'smart', 'full'];
-/** 与扩展 loadPersistedMode 的默认值保持一致。 */
+const MODES = Object.freeze([...PERMISSION_MODES]);
 const DEFAULT_MODE = 'smart';
+const MODE_CATALOG = Object.freeze([
+  {
+    id: 'ask',
+    label: '请求批准',
+    description: '所有工具调用逐次确认；可保存精确到文件、命令或会话的规则。',
+    defaultDecision: 'ask',
+  },
+  {
+    id: 'smart',
+    label: '帮我批准',
+    description: '只自动允许明确的只读工具；风险或未知工具仍会确认。',
+    defaultDecision: 'ask',
+  },
+  {
+    id: 'full',
+    label: '完全权限',
+    description: '普通工具不再逐次询问；显式“询问”规则、工作区边界和系统级破坏命令仍然生效。',
+    defaultDecision: 'allow',
+  },
+]);
 
-/** 扩展自身的配置文件。 */
-function modeDir() {
-  return path.join(agentDir(), 'extensions-data', 'pi-mode-switcher');
+function cleanContext(input = {}) {
+  return {
+    cwd: typeof input.cwd === 'string' ? input.cwd.trim() : '',
+    sessionId: typeof input.sessionId === 'string' ? input.sessionId.trim() : '',
+    scope: input.scope === 'workspace' || input.scope === 'session' ? input.scope : 'user',
+    homeDir: typeof input.homeDir === 'string' ? input.homeDir : '',
+  };
 }
 
-function modeFile() {
-  return path.join(modeDir(), 'config.json');
+function conversationWorkspace(sessionId) {
+  if (!sessionId) return '';
+  return getStudioDatabase().getConversation(sessionId)?.workspace || '';
 }
 
-/** 读取持久化模式；配置缺失或损坏时回落到 smart。 */
-function readMode() {
-  const value = readJson(modeFile(), {});
-  return MODES.includes(value?.mode) ? value.mode : DEFAULT_MODE;
+function resolveContext(input = {}) {
+  const context = cleanContext(input);
+  if (!context.cwd && context.sessionId) context.cwd = conversationWorkspace(context.sessionId);
+  return context;
 }
 
-/** 写入模式；扩展下次加载时会读取它。 */
-function writeMode(mode) {
-  if (!MODES.includes(mode)) throw new Error('无效的权限模式');
-  fs.mkdirSync(modeDir(), { recursive: true });
-  fs.writeFileSync(modeFile(), `${JSON.stringify({ mode }, null, 2)}\n`, 'utf8');
-  return mode;
-}
-
-/**
- * 把 `settings.json` 里的包来源解析成本机安装目录。
- *  - git:github.com/owner/repo → ~/.pi/agent/git/github.com/owner/repo
- *  - npm:package-name          → ~/.pi/agent/npm/node_modules/package-name
- */
-function packageDir(source) {
-  if (typeof source !== 'string') return undefined;
-  if (source.startsWith('git:')) {
-    const url = source.slice(4).replace(/\.git$/, '').replace(/^https?:\/\//, '');
-    return path.join(agentDir(), 'git', url);
+function policyLayers(input = {}, options = {}) {
+  const context = resolveContext(input);
+  const store = getPermissionPolicyStore();
+  const layers = [{ scope: 'user', policy: store.user }];
+  if (context.cwd && store.workspaces[context.cwd]) {
+    layers.push({ scope: 'workspace', policy: store.workspaces[context.cwd] });
   }
-  if (source.startsWith('npm:')) {
-    return path.join(agentDir(), 'npm', 'node_modules', source.slice(4));
+  if (context.sessionId && store.sessions[context.sessionId]) {
+    layers.push({ scope: 'session', policy: store.sessions[context.sessionId] });
   }
-  return undefined;
+  if (options.draft) {
+    const draft = options.draft;
+    const existing = layers.findIndex((layer) => layer.scope === draft.scope);
+    if (existing >= 0) layers[existing] = draft;
+    else layers.push(draft);
+    const rank = { user: 0, workspace: 1, session: 2 };
+    layers.sort((left, right) => rank[left.scope] - rank[right.scope]);
+  }
+  return { context, store, layers };
 }
 
-/** 判断 pi-mode-switcher 是否可用：用户级目录、配置目录或已安装的包里有它。 */
-function modeAvailable() {
-  if (fs.existsSync(modeDir())) return true;
-  if (fs.existsSync(path.join(agentDir(), 'extensions', 'pi-mode-switcher'))) return true;
-  const packages = readJson(settingsFile(), {}).packages;
-  if (!Array.isArray(packages)) return false;
-  return packages.some((source) => {
-    const dir = packageDir(source);
-    return Boolean(dir && fs.existsSync(path.join(dir, 'extensions', 'pi-mode-switcher')));
+function policyState(input = {}) {
+  const { context, store, layers } = policyLayers(input);
+  const effective = layers[layers.length - 1];
+  return {
+    available: modeAvailable(),
+    mode: effective.policy.preset,
+    effectivePolicy: effective.policy,
+    effectiveScope: effective.scope,
+    layers,
+    cwd: context.cwd,
+    sessionId: context.sessionId,
+    scopes: {
+      user: store.user,
+      workspace: context.cwd ? store.workspaces[context.cwd] || null : null,
+      session: context.sessionId ? store.sessions[context.sessionId] || null : null,
+    },
+    catalog: {
+      modes: MODE_CATALOG,
+      decisions: [
+        { id: 'allow', label: '允许' },
+        { id: 'ask', label: '询问' },
+        { id: 'deny', label: '拒绝' },
+      ],
+      decisionsAreValid: PERMISSION_DECISIONS,
+      presetDefaults: PRESET_DEFAULTS,
+    },
+    path: 'SQLite · studio.permissions.policy',
+  };
+}
+
+function readMode(input = {}) {
+  return policyState(input).mode;
+}
+
+function writePolicy(payload = {}) {
+  const input = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? payload
+    : {};
+  const context = cleanContext(input);
+  if (context.scope === 'workspace' && !context.cwd) {
+    throw new Error('工作区权限策略需要工作区路径');
+  }
+  if (context.scope === 'session' && !context.sessionId) {
+    throw new Error('会话权限策略需要会话 ID');
+  }
+  setStoredPermissionPolicy({
+    scope: context.scope,
+    cwd: context.cwd,
+    sessionId: context.sessionId,
+    policy: normalizePolicy(input.policy, { strict: true }),
   });
+  return policyState(context);
+}
+
+function writeMode(mode, options = {}) {
+  if (!MODES.includes(mode)) throw new Error('无效的权限模式');
+  const input = options && typeof options === 'object' && !Array.isArray(options)
+    ? options
+    : {};
+  const context = cleanContext(input);
+  setPermissionMode(mode, context);
+  return policyState(context);
+}
+
+function resetPolicy(payload = {}) {
+  const input = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? payload
+    : {};
+  const context = cleanContext(input);
+  resetStoredPermissionPolicy({
+    scope: context.scope,
+    cwd: context.cwd,
+    sessionId: context.sessionId,
+  });
+  return policyState(context);
+}
+
+async function realPathProtection(call, context) {
+  const selected = matchingPath(call, context);
+  if (!selected || !context.cwd) return undefined;
+  const root = path.resolve(context.cwd);
+  const lexical = selected.absolute;
+  if (lexical !== root && !lexical.startsWith(`${root}${path.sep}`)) return undefined;
+  try {
+    const realRoot = await fs.realpath(root);
+    let cursor = lexical;
+    const missing = [];
+    let realTarget;
+    while (true) {
+      try {
+        const realAncestor = await fs.realpath(cursor);
+        realTarget = path.join(realAncestor, ...missing);
+        break;
+      } catch (error) {
+        if (error?.code !== 'ENOENT') return undefined;
+        const parent = path.dirname(cursor);
+        if (parent === cursor) return undefined;
+        missing.unshift(path.basename(cursor));
+        cursor = parent;
+      }
+    }
+    if (realTarget === realRoot || realTarget.startsWith(`${realRoot}${path.sep}`)) return undefined;
+    return {
+      title: '受保护的工作区边界',
+      detail: '该路径通过符号链接指向当前工作区之外，已由 Studio 安全边界拦截。',
+    };
+  } catch {
+    // Nonexistent or inaccessible roots still retain the lexical boundary check
+    // performed by the pure policy engine.
+    return undefined;
+  }
+}
+
+async function evaluatePolicy(input, context, layers, extra = {}) {
+  const result = evaluatePermission(layers, input.call, context);
+  const resolvedBoundary = result.decision === 'deny'
+    ? undefined
+    : await realPathProtection(input.call, context);
+  if (!resolvedBoundary) {
+    return {
+      ...result,
+      rememberScopes: approvalScopesFor(input.call, context),
+      cwd: context.cwd,
+      sessionId: context.sessionId,
+      ...extra,
+    };
+  }
+  return {
+    ...result,
+    decision: 'deny',
+    hardProtection: resolvedBoundary,
+    explanation: resolvedBoundary.detail,
+    rememberScopes: approvalScopesFor(input.call, context),
+    cwd: context.cwd,
+    sessionId: context.sessionId,
+    ...extra,
+  };
+}
+
+async function evaluateToolCall(input = {}) {
+  const context = resolveContext(input);
+  const { layers } = policyLayers(context);
+  return evaluatePolicy(input, context, layers);
 }
 
 /**
- * 还没有会话时切换的模式：等第一次 ensureAgent 建好会话后补发 `/mode`，
- * 否则扩展内存里仍是它加载时的旧模式。
+ * Evaluate an unsaved policy draft with the same resolver and filesystem
+ * boundary checks as the live hook. This function never persists the draft.
  */
-let pendingMode = null;
-
-function rememberPendingMode(mode) {
-  pendingMode = mode;
+async function previewToolCall(input = {}) {
+  const context = resolveContext(input);
+  const scope = ['workspace', 'session'].includes(input.scope) ? input.scope : 'user';
+  if (scope === 'workspace' && !context.cwd) {
+    throw new Error('预览工作区策略需要工作区路径');
+  }
+  if (scope === 'session' && !context.sessionId) {
+    throw new Error('预览会话策略需要会话 ID');
+  }
+  const policy = normalizePolicy(input.policy, { strict: true });
+  const { layers } = policyLayers(context, {
+    draft: { scope, policy },
+  });
+  return evaluatePolicy(input, context, layers, { previewScope: scope });
 }
 
-function consumePendingMode() {
-  const next = pendingMode;
-  pendingMode = null;
-  return next;
+function rememberApproval(payload = {}) {
+  const input = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? payload
+    : {};
+  const requested = input.remember || input.scope;
+  if (!['session', 'workspace', 'always'].includes(requested)) {
+    throw new Error('无效的批准范围');
+  }
+  const context = resolveContext(input);
+  if (!approvalScopesFor(input.call, context).includes(requested)) {
+    throw new Error('这个工具调用不支持所选批准范围');
+  }
+  const scope = requested === 'always' ? 'user' : requested;
+  if (scope === 'workspace' && !context.cwd) throw new Error('工作区批准需要工作区路径');
+  if (scope === 'session' && !context.sessionId) throw new Error('会话批准需要会话 ID');
+  const store = getPermissionPolicyStore();
+  const current = scope === 'workspace'
+    ? store.workspaces[context.cwd] || store.user
+    : scope === 'session'
+      ? store.sessions[context.sessionId]
+        || (context.cwd ? store.workspaces[context.cwd] : undefined)
+        || store.user
+      : store.user;
+  const rule = narrowApprovalRule(
+    input.call,
+    context,
+    input.label || `批准 ${input.call?.name || '工具'}`,
+  );
+  if (current.rules.some((candidate) => JSON.stringify(candidate.match) === JSON.stringify(rule.match))) {
+    return policyState(context);
+  }
+  const next = {
+    ...current,
+    rules: [...current.rules, rule].slice(-128),
+  };
+  if (scope === 'workspace') store.workspaces[context.cwd] = normalizePolicy(next);
+  else if (scope === 'session') store.sessions[context.sessionId] = normalizePolicy(next);
+  else store.user = normalizePolicy(next);
+  savePermissionPolicyStore(store);
+  return policyState(context);
+}
+
+function modeAvailable() {
+  return true;
 }
 
 module.exports = {
-  MODES,
   DEFAULT_MODE,
-  readMode,
-  writeMode,
+  MODE_CATALOG,
+  MODES,
+  evaluateToolCall,
   modeAvailable,
-  rememberPendingMode,
-  consumePendingMode,
+  policyState,
+  previewToolCall,
+  readMode,
+  rememberApproval,
+  resetPolicy,
+  resolveContext,
+  writeMode,
+  writePolicy,
 };

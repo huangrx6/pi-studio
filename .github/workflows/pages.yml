@@ -1,12 +1,11 @@
 name: Docs Pages
 
-# Publishes docs/ (+ screenshots) to GitHub Pages.
+# Publishes docs/ and its reviewed screenshots to GitHub Pages.
 on:
   push:
     branches: [main, master]
     paths:
       - "docs/**"
-      - "screenshots/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -27,11 +26,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Bundle site
-        run: |
-          cp -R screenshots docs/screenshots
-          ls docs/
 
       - uses: actions/configure-pages@v5
 

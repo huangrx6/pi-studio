@@ -1,0 +1,83 @@
+{
+  "$schema": "../../../schemas/pi-studio.extension.schema.json",
+  "format": 1,
+  "id": "example.agent-starter",
+  "name": "Agent Extension Starter",
+  "version": "0.1.0",
+  "description": "A complete Agent and UI extension starter for Pi Studio.",
+  "author": "huangrx6",
+  "publisher": "pi-studio-examples",
+  "license": "MIT",
+  "repository": "https://github.com/huangrx6/pi-studio",
+  "engines": {
+    "piStudio": ">=0.0.3 <0.2.0"
+  },
+  "keywords": [
+    "starter",
+    "agent",
+    "ui"
+  ],
+  "permissions": [
+    "agent.tools",
+    "ui.commands",
+    "ui.panels"
+  ],
+  "runtime": {
+    "durableEntry": "extension.mjs"
+  },
+  "contributes": {
+    "tools": [
+      {
+        "name": "extension_echo",
+        "description": "Echo text through a Studio extension tool."
+      }
+    ],
+    "commands": [
+      {
+        "id": "welcome",
+        "title": "显示扩展示例",
+        "description": "Open the declarative starter panel.",
+        "placement": "composer"
+      }
+    ],
+    "panels": [
+      {
+        "id": "overview",
+        "title": "Agent Extension Starter",
+        "description": "This panel is declared as JSON and rendered by Pi Studio.",
+        "slot": "panel.side",
+        "size": "compact",
+        "priority": 10,
+        "content": [
+          {
+            "kind": "heading",
+            "text": "Ready to build"
+          },
+          {
+            "kind": "text",
+            "text": "The echo tool is registered in extension.mjs. Every UI block uses Studio design tokens."
+          },
+          {
+            "kind": "keyValue",
+            "items": [
+              {
+                "label": "Tool",
+                "value": "extension_echo"
+              },
+              {
+                "label": "UI",
+                "value": "Declarative JSON only"
+              }
+            ]
+          },
+          {
+            "kind": "notice",
+            "tone": "warning",
+            "title": "Trust boundary",
+            "text": "Agent extensions execute Node.js code. Install only packages you have reviewed and trust."
+          }
+        ]
+      }
+    ]
+  }
+}

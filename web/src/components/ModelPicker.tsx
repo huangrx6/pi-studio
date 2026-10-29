@@ -16,7 +16,7 @@
  */
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Check, ChevronLeft, ChevronRight, ChevronUp, LoaderCircle, TriangleAlert } from 'lucide-react';
-import { thinkingLabels, type ModelCatalog, type ModelOption, type ModelSelection, type ThinkingLevel } from '../model-types';
+import { thinkingLabels, type ModelCatalog, type ModelOption, type ModelSelection, type ThinkingLevel } from '../types/model-types';
 
 /** 浮层当前显示的视图。 */
 type View = 'main' | 'models' | 'thinking';
@@ -55,8 +55,8 @@ export function ModelPicker({ selection, scope, disabled, hidden, loadCatalog, o
   request?: ModelPickerRequest | null;
   onRequestHandled?: () => void;
 }) {
-  // 主进程恢复会话与模型目录加载可能短暂交错，旧版本快照也可能缺少能力数组。
-  // 选择器必须始终能渲染触发按钮，不能因一个不完整快照让整个会话页面白屏。
+  // 会话恢复与模型目录加载可能短暂交错。选择器必须始终能渲染触发按钮，
+  // 不能因一个不完整的 IPC 快照让整个会话页面白屏。
   if (!selection || !Array.isArray(selection.thinkingLevels)) {
     selection = {
       modelRef: '',

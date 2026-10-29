@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, ChevronsUpDown, Columns2, FileCode2, FileSearch, Files, LoaderCircle, MoreHorizontal, RefreshCw, SquareArrowOutUpRight, WrapText } from 'lucide-react';
-import type { TurnDiff, TurnDiffFile } from '../chat-types';
+import type { TurnDiff, TurnDiffFile } from '../types/chat-types';
 import { DiffView, type DiffOptions } from './DiffView';
 import { ActionMenu, type MenuAction } from './ActionMenu';
 import { Markdown } from './Markdown';
-import { splitPatch } from '../diff-rows';
+import { Select } from './Select';
+import { splitPatch } from '../lib/diff-rows';
 
 type Props = { sessionId: string; initial: TurnDiff; turns: TurnDiff[]; focusPath?: string; onOpenFile: (path: string) => void; onOpenDiff: (file: TurnDiffFile, at: number) => void };
 export function ChangesView({ sessionId, initial, turns, focusPath, onOpenFile, onOpenDiff }: Props) {
@@ -48,6 +49,10 @@ export function ChangesView({ sessionId, initial, turns, focusPath, onOpenFile, 
   }, [sessionId, turn, full, ignoreWhitespace, expanded, revision]);
   const totals = { added: turn.totalAdded ?? turn.files.reduce((n,f) => n+f.added,0), removed: turn.totalRemoved ?? turn.files.reduce((n,f) => n+f.removed,0) };
   const ordered = useMemo(() => [...history].sort((a,b) => b.at-a.at), [history]);
+  const roundOptions = useMemo(() => ordered.map((item, index) => ({
+    value: String(item.at),
+    label: `${index === 0 ? '上一轮' : `前 ${index + 1} 轮`} · ${new Date(item.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+  })), [ordered]);
   const allOpen = turn.files.every(file => expanded.has(file.path));
   const toggle = (path: string) => setExpanded(current => { const next = new Set(current); if (next.has(path)) next.delete(path); else next.add(path); return next; });
   const menuAt = (event: React.MouseEvent<HTMLButtonElement>, items: MenuAction[]) => { const box = event.currentTarget.getBoundingClientRect(); setMenu({ x: box.right-220, y: box.bottom+6, items }); };
@@ -63,15 +68,18 @@ export function ChangesView({ sessionId, initial, turns, focusPath, onOpenFile, 
   };
   const refresh = async () => {
     setRefreshing(true); setError('');
-    try { const detail = await window.piApi.session(sessionId); if (!detail) throw new Error('会话记录暂时不可用，请重试'); setHistory(detail.turnDiffs?.length ? detail.turnDiffs : [initial]); setRevision(value => value+1); }
+    try {
+      const detail = await window.piApi.conversationPage({ id: sessionId, limit: 1 });
+      if (!detail) throw new Error('会话记录暂时不可用，请重试');
+      setHistory(detail.turnDiffs.length ? detail.turnDiffs : [initial]);
+      setRevision(value => value + 1);
+    }
     catch (err) { setError(String(err)); } finally { setRefreshing(false); }
   };
   const chooseSnapshotFeature = (apply: () => void) => { if (!turn.snapshot) { setError('这条历史记录未保存完整快照，只能查看已保存的差异。新产生的 Git 变更支持完整文件和忽略空白字符。'); return; } apply(); };
   return <section className="changes-view" aria-label="轮次变更">
     <div className="changes-toolbar">
-      <div className="changes-round"><select aria-label="选择变更轮次" value={turn.at} onChange={event => { setSelectedAt(Number(event.target.value)); setExpanded(new Set()); setPreview(false); setFull(false); setIgnoreWhitespace(false); }}>
-        {ordered.map((item,index) => <option key={item.at} value={item.at}>{index === 0 ? '上一轮' : `前 ${index+1} 轮`} · {new Date(item.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</option>)}
-      </select><span className="diff-view-counts"><span>+{totals.added}</span><span>−{totals.removed}</span></span></div>
+      <div className="changes-round"><Select className="changes-round-select" label="选择变更轮次" value={String(turn.at)} options={roundOptions} onChange={value => { setSelectedAt(Number(value)); setExpanded(new Set()); setPreview(false); setFull(false); setIgnoreWhitespace(false); }} /><span className="diff-view-counts"><span>+{totals.added}</span><span>−{totals.removed}</span></span></div>
       <div className="changes-tools">
         <button className="icon-button" title="差异选项" aria-label="差异选项" onClick={event => menuAt(event, [
           { label: '加载完整文件', checked: full, run: () => chooseSnapshotFeature(() => setFull(!full)) },
