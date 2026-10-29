@@ -34,7 +34,7 @@ const browser = await chromium.launch({
   executablePath: process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
-const page = await browser.newPage({ viewport: { width: 1440, height: 920 } });
+const page = await browser.newPage({ viewport: { width: 1440, height: 920 }, deviceScaleFactor: 2 });
 page.setDefaultTimeout(10000);
 // 收集未捕获异常，最后断言为空。
 const errors = [];
@@ -86,7 +86,6 @@ await page.addInitScript(() => {
     skills: [],
     extensions: [],
     packages: [],
-    extensionData: [],
     authPath: '/demo/auth.json',
     mcpPath: '/demo/mcp.json',
     modelsPath: '/demo/models.json',
@@ -150,7 +149,7 @@ await page.addInitScript(() => {
       return { ok: true };
     },
     settings: async () => snapshot,
-    models: async () => ({ models, current: model.modelRef, enabled: snapshot.enabledModels, selection: model }),
+    models: async () => ({ models, current: model.modelRef, enabled: snapshot.enabledModels, selection: model, defaultSelection: model }),
     // 根据 id 找到会话，附上上面那组消息。
     session: async (id) => ({ ...workspaces.flatMap((item) => item.sessions).find((item) => item.id === id), messages }),
     // 新建会话；记录目标工作区，但不会真的加入列表（用于断言“没有意外创建”）。
@@ -195,17 +194,23 @@ async function capture(name) {
   assert.deepEqual(overflow, []);
 }
 
-// 打开设置并切换到“外观”分页。
+// 打开设置并切换到“界面模式”分页。
 async function openAppearanceSettings() {
   await page.locator('.bottom-row').click();
   await page.getByRole('button', { name: '通用', exact: true }).click();
-  await page.getByRole('heading', { name: '外观', exact: true }).waitFor();
+  await page.getByRole('heading', { name: '界面模式', exact: true }).waitFor();
 }
 
 // 点击主题单选项，并等待 <html data-theme> 真正切换。
 async function setTheme(name, mode) {
   await page.getByRole('button', { name, exact: true }).click();
   await page.waitForFunction((expected) => document.documentElement.dataset.theme === expected, mode);
+}
+
+// 点击全局配色卡片，并等待根节点的 data-palette 同步更新。
+async function setPalette(name, id) {
+  await page.getByRole('radio', { name: new RegExp(`^${name}`) }).click();
+  await page.waitForFunction((expected) => document.documentElement.dataset.palette === expected, id);
 }
 
 // 确保工作区展开后打开第一个会话（有会话行时直接点，否则先展开工作区）。
@@ -294,6 +299,10 @@ try {
     await setTheme(label, mode);
     assert.equal(await page.evaluate(() => window.__nativeTheme), mode);
     await capture(`${mode}-settings`);
+    await setPalette('海蓝', 'ocean');
+    assert.equal(await page.getByRole('radio', { name: /^海蓝/ }).getAttribute('aria-checked'), 'true');
+    await capture(`${mode}-palette-ocean`);
+    await setPalette('青柠', 'lime');
 
     // 设置页：模型与账号 + 添加来源对话框。
     await page.getByRole('button', { name: '模型与账号', exact: true }).click();
@@ -309,7 +318,7 @@ try {
     await workspacePicker.click();
     await capture(`${mode}-workspace-menu`);
     await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: '模型与推理设置', exact: true }).click();
+    await page.getByRole('button', { name: /^(?:新对话默认模型|当前会话模型)$/ }).click();
     await capture(`${mode}-menu`);
     await page.keyboard.press('Escape');
 
@@ -317,7 +326,7 @@ try {
     await openFirstSession();
     await page.locator('.assistant-response').first().waitFor();
     await capture(`${mode}-conversation`);
-    await page.locator('.activity-drawer > summary').first().click();
+    await page.locator('.run-history > summary').first().click();
     await page.locator('.activity-thinking > summary').first().click();
     // 展开后思考预览行应隐藏，避免内容重复。
     assert.equal(await page.locator('.activity-thinking-preview').first().isVisible(), false);
@@ -342,11 +351,16 @@ try {
   await page.emulateMedia({ colorScheme: 'light' });
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
 
-  // 手动选深色后刷新：主题必须持久化，刷新后仍是 dark。
+  // 手动选深色和琥珀配色后刷新：两者都必须持久化。
+  await setPalette('琥珀', 'amber');
   await setTheme('深色', 'dark');
   await page.reload();
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
+  await page.waitForFunction(() => document.documentElement.dataset.palette === 'amber');
   await page.locator('.composer textarea').waitFor();
+  await openAppearanceSettings();
+  await setPalette('青柠', 'lime');
+  await page.locator('.settings-back-button').click();
 
   // 切到 980×640 紧凑视口，先截一张欢迎页。
   await page.setViewportSize({ width: 980, height: 640 });

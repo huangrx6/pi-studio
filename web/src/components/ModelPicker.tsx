@@ -15,7 +15,7 @@
  * - 弹出方向：浮层默认在按钮上方展开，靠近窗口顶部时切换为向下并限制高度。
  */
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Check, ChevronLeft, ChevronRight, ChevronUp, LoaderCircle } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, ChevronUp, LoaderCircle, TriangleAlert } from 'lucide-react';
 import { thinkingLabels, type ModelCatalog, type ModelOption, type ModelSelection, type ThinkingLevel } from '../model-types';
 
 /** 浮层当前显示的视图。 */
@@ -42,8 +42,10 @@ export type ModelPickerRequest = {
  * @param request 斜杠命令发起的外部打开请求
  * @param onRequestHandled 请求已被组件接收后通知 App 清空
  */
-export function ModelPicker({ selection, disabled, hidden, loadCatalog, onSelectModel, onSelectThinking, onManage, request = null, onRequestHandled }: {
+export function ModelPicker({ selection, scope, disabled, hidden, loadCatalog, onSelectModel, onSelectThinking, onManage, request = null, onRequestHandled }: {
   selection: ModelSelection;
+  /** 当前选择属于一条历史会话，还是新对话的全局默认。 */
+  scope: 'session' | 'default';
   disabled: boolean;
   hidden: boolean;
   loadCatalog: () => Promise<ModelCatalog>;
@@ -53,6 +55,18 @@ export function ModelPicker({ selection, disabled, hidden, loadCatalog, onSelect
   request?: ModelPickerRequest | null;
   onRequestHandled?: () => void;
 }) {
+  // 主进程恢复会话与模型目录加载可能短暂交错，旧版本快照也可能缺少能力数组。
+  // 选择器必须始终能渲染触发按钮，不能因一个不完整快照让整个会话页面白屏。
+  if (!selection || !Array.isArray(selection.thinkingLevels)) {
+    selection = {
+      modelRef: '',
+      label: '加载模型…',
+      thinkingLevel: 'default',
+      thinkingLevels: ['default'],
+      effectiveThinkingLevel: 'off',
+      defaultThinkingLevel: 'off',
+    };
+  }
   /** 浮层是否打开。 */
   const [open, setOpen] = useState(false);
   /** 当前视图；每次打开都回到 main。 */
@@ -81,6 +95,12 @@ export function ModelPicker({ selection, disabled, hidden, loadCatalog, onSelect
   const handledRequestRef = useRef(0);
   const panelId = useId();
   const supportsThinking = selection.thinkingLevels.length > 1;
+  const scopeTitle = scope === 'session' ? '当前会话模型' : '新对话默认模型';
+  const scopeHint = selection.pending
+    ? '已排到下一轮；当前回复继续使用原模型'
+    : scope === 'session'
+      ? '只修改这条会话，不会改动新对话默认值'
+      : '修改后会应用到之后创建的新对话';
 
   /**
    * 关闭浮层。
@@ -219,15 +239,17 @@ export function ModelPicker({ selection, disabled, hidden, loadCatalog, onSelect
     if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) close(false);
   }}>
     {/* 触发按钮：title 展示“模型 · modelRef”，支持推理时额外显示当前等级。 */}
-    <button ref={triggerRef} className={`model-label ${open ? 'is-active' : ''}`} disabled={disabled || hidden} aria-label="模型与推理设置" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? panelId : undefined} title={`${selection.label} · ${selection.modelRef}`} onClick={() => void show()}>
-      <span>{selection.label || '选择模型'}</span>{supportsThinking && <span className="thinking-label">{thinkingLabels[selection.thinkingLevel]}</span>}<ChevronUp className={open ? 'is-open' : ''} />
+    <button ref={triggerRef} className={`model-label ${open ? 'is-active' : ''} ${selection.pending ? 'is-pending' : ''} ${selection.unavailable ? 'is-unavailable' : ''}`} disabled={disabled || hidden} aria-label={selection.pending ? `${scopeTitle}，下一轮生效` : scopeTitle} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? panelId : undefined} title={`${scopeTitle}：${selection.label} · ${selection.modelRef}${selection.pending ? ' · 下一轮生效' : ''}`} onClick={() => void show()}>
+      {selection.unavailable && <TriangleAlert aria-hidden="true" />}<span>{selection.label || '选择模型'}</span>{selection.pending && <span className="model-pending-label">下轮生效</span>}{supportsThinking && <span className="thinking-label">{thinkingLabels[selection.thinkingLevel]}</span>}<ChevronUp className={open ? 'is-open' : ''} />
     </button>
     {/* 浮层方向由 is-below 切换，maxHeight 为上方/下方可用空间的较小值。 */}
     {open && <div ref={panelRef} id={panelId} className={`model-popover model-popover--${view} ${placement.below ? 'is-below' : ''}`} style={{ maxHeight: placement.height }} role="dialog" aria-label={view === 'main' ? '模型与推理设置' : view === 'models' ? '选择模型' : '推理等级'} aria-busy={saving} onKeyDown={onKeyDown}>
       {/* 主菜单：模型页加载中也允许进入；推理页要求模型支持多等级。 */}
       {view === 'main' && <div role="menu" aria-label="模型设置">
-        <button className="model-menu-row" role="menuitem" disabled={saving} onClick={() => setView('models')}><span>模型</span><span className="menu-value">{selection.label || '选择模型'}</span><ChevronRight /></button>
-        <button className="model-menu-row" role="menuitem" disabled={saving || loading || !supportsThinking} title={!supportsThinking ? '此模型不支持调整推理等级' : undefined} onClick={() => setView('thinking')}><span>推理等级</span><span className="menu-value">{supportsThinking ? thinkingLabels[selection.thinkingLevel] : '不支持'}</span><ChevronRight /></button>
+        <div className={`model-picker-scope ${selection.pending ? 'is-pending' : ''} ${selection.unavailable ? 'is-unavailable' : ''}`}><strong>{scopeTitle}</strong><small>{scopeHint}</small></div>
+        {selection.unavailable && <div className="model-picker-warning" role="alert"><TriangleAlert />{selection.unavailableReason || '这个会话原来的模型已不可用，请重新选择。'}</div>}
+        <button className="model-menu-row" role="menuitem" disabled={saving} onClick={() => setView('models')}><span>{scope === 'session' ? '切换会话模型' : '修改默认模型'}</span><span className="menu-value">{selection.label || '选择模型'}</span><ChevronRight /></button>
+        <button className="model-menu-row" role="menuitem" disabled={saving || loading || !supportsThinking} title={!supportsThinking ? '此模型不支持调整推理等级' : undefined} onClick={() => setView('thinking')}><span>{scope === 'session' ? '会话思考强度' : '默认思考强度'}</span><span className="menu-value">{supportsThinking ? thinkingLabels[selection.thinkingLevel] : '不支持'}</span><ChevronRight /></button>
       </div>}
       {/* 模型页：搜索 + 按来源分组；loading 期间列表整体替换为状态行。 */}
       {view === 'models' && <>

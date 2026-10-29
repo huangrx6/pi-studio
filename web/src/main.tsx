@@ -16,8 +16,10 @@ import './styles/tokens.css';
 import './styles/palette.css';
 import './app.css';
 
-// 先应用主题再 render：resolveTheme 会把 system 解析成当前实际的 light / dark。
-document.documentElement.dataset.theme = resolveTheme(loadPreferences().theme);
+// 先应用主题与配色再 render，避免第一帧先按默认青柠色绘制。
+const startupPreferences = loadPreferences();
+document.documentElement.dataset.theme = resolveTheme(startupPreferences.theme);
+document.documentElement.dataset.palette = startupPreferences.palette;
 
 // StrictMode 只在开发期重复执行副作用以暴露问题，不改变生产环境行为。
 ReactDOM.createRoot(document.getElementById('root')!).render(

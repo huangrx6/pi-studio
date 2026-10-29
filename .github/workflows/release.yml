@@ -1,7 +1,7 @@
 name: Release
 
 # Builds the macOS app and publishes a GitHub Release.
-# - Push a tag like `v0.1.0` → build + attach .dmg files to that release.
+# - Push a tag like `v0.1.0` → build DMG/ZIP files and updater metadata.
 # - Manual dispatch → build + create a draft release (tag name required).
 on:
   push:
@@ -49,20 +49,31 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build & package (dmg for arm64 and x64)
+      - name: Build & package (DMG + auto-update ZIP)
         run: pnpm run dist
+        env:
+          # When these repository secrets are configured, electron-builder signs
+          # with the Developer ID certificate. Unsigned builds can still check
+          # and download updates, but macOS may reject in-place installation.
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # Electron Builder automatically notarizes when this credential set is
+          # present. Empty secrets keep local and fork builds usable.
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      - name: Collect installers
+      - name: Collect installers and updater metadata
         run: |
           mkdir -p artifacts
-          cp release/*.dmg artifacts/ || true
+          find release -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.zip' -o -name 'latest*.yml' -o -name '*.blockmap' \) -exec cp {} artifacts/ \;
           ls -lh artifacts/
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pi-studio-macos
-          path: artifacts/*.dmg
+          path: artifacts/*
           retention-days: 14
           if-no-files-found: error
 
@@ -86,4 +97,4 @@ jobs:
           draft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || false }}
           body_path: ${{ steps.release-notes.outputs.body_path }}
           generate_release_notes: ${{ steps.release-notes.outputs.body_path == '' }}
-          files: artifacts/*.dmg
+          files: artifacts/*

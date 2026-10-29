@@ -492,7 +492,7 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
       </div>
 
       <div class="hero-meta" data-reveal>
-        <div class="item"><span>Version</span><strong>0.0.2</strong></div>
+        <div class="item"><span>Version</span><strong>0.0.3</strong></div>
         <div class="item"><span>Platform</span><strong>macOS 13+</strong></div>
         <div class="item"><span>License</span><strong>MIT</strong></div>
         <div class="item"><span>Build</span><strong>GitHub Actions</strong></div>
@@ -502,17 +502,17 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
       <figure class="hero-fig" data-reveal>
         <div class="frame-wrap">
           <div class="frame">
-            <img src="screenshots/themes/dark-conversation.png" alt="Pi Studio 深色主题下的会话界面，展示工具调用、代码块与错误状态" width="1440" height="920">
+            <img src="screenshots/themes/dark-conversation.png" alt="Pi Studio 深色主题下的会话界面，展示工具调用、代码块与错误状态" width="2880" height="1840">
           </div>
           <div class="hero-card">
             <div class="t">Pi Studio<sup>®</sup></div>
-            <div class="m">Desktop workspace · 0.0.2</div>
+            <div class="m">Desktop workspace · 0.0.3</div>
             <a href="https://github.com/huangrx6/pi-studio/releases/latest">Download <span class="ar">↗</span></a>
           </div>
         </div>
         <div class="hero-caption">
           <span>(01) — Dark · conversation, tool calls</span>
-          <span>1440 × 920</span>
+          <span>2880 × 1840 · 2×</span>
         </div>
       </figure>
 
@@ -586,47 +586,47 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
         <article class="feat" data-reveal>
           <span class="idx">01 / SESSION</span>
           <h3>流式会话</h3>
-          <p>基于 Pi SessionManager 的流式对话、思维链展开与工具轨迹，重启后从 JSONL 完整恢复。</p>
+          <p>基于 Pi SessionManager 的流式对话、思维链、工具轨迹与稳定贴底跟随，重启后从 JSONL 完整恢复。</p>
         </article>
         <article class="feat" data-reveal>
           <span class="idx">02 / WORKSPACE</span>
-          <h3>多工作区</h3>
-          <p>侧栏切换工作区，右栏文件树与文本预览，随时查看项目里的真实文件。</p>
+          <h3>工作区与临时聊天</h3>
+          <p>在项目工作区之间切换，或改用不落盘的临时聊天；两种模式都支持文字、图片与流式回复。</p>
         </article>
         <article class="feat" data-reveal>
           <span class="idx">03 / MODELS</span>
           <h3>模型与提供方</h3>
-          <p>本地 Pi 目录驱动的模型选择器；编辑 API Key，添加兼容提供方与自定义模型元数据。</p>
+          <p>与 Pi CLI 共用默认模型；配置来源、密钥、模型发现、上下文、输出上限、图片和 thinking 能力。</p>
         </article>
         <article class="feat" data-reveal>
-          <span class="idx">04 / SKILLS</span>
-          <h3>技能</h3>
-          <p>读取全局与项目级 skills，分组展示；新增与移除都走 Pi 的文件约定。</p>
+          <span class="idx">04 / SUBAGENTS</span>
+          <h3>子 Agent 协作</h3>
+          <p>接入 pi-subagents，查看前台、后台与并行任务；按角色覆盖模型、thinking 和可用工具。</p>
         </article>
         <article class="feat" data-reveal>
-          <span class="idx">05 / EXTENSIONS</span>
-          <h3>扩展</h3>
-          <p>列出 settings.json 包与 extensions-data，支持 npm / git 包源的安装与卸载。</p>
+          <span class="idx">05 / CHANGES</span>
+          <h3>差异工作台</h3>
+          <p>按回合汇总改动，展开文件级 diff，支持自动布局、换行、文件跳转、独立标签与可调宽侧栏。</p>
         </article>
         <article class="feat" data-reveal>
-          <span class="idx">06 / MCP</span>
-          <h3>MCP 服务器</h3>
-          <p>可视化读写 mcp.json，添加 stdio / HTTP 服务器，并单独启停。</p>
+          <span class="idx">06 / APPEARANCE</span>
+          <h3>主题与背景</h3>
+          <p>六套全局配色、亮暗外观与语义颜色令牌；支持静态图片、GIF、视频背景和透明度 / 模糊控制。</p>
         </article>
         <article class="feat" data-reveal>
-          <span class="idx">07 / QUEUE</span>
-          <h3>消息队列</h3>
-          <p>运行中继续输入，排队发送；队列内容可编辑、可撤回，不会打断当前回合。</p>
+          <span class="idx">07 / DESKTOP</span>
+          <h3>菜单栏与更新</h3>
+          <p>关闭窗口后继续在菜单栏显示运行任务；GitHub Release 有新版本时在应用内提示、下载并选择重启时机。</p>
         </article>
         <article class="feat" data-reveal>
-          <span class="idx">08 / PLAN</span>
-          <h3>计划面板</h3>
-          <p>把 pi-todo 适配为原生会话计划，任务状态跟随工具调用实时更新。</p>
+          <span class="idx">08 / RUNTIME</span>
+          <h3>配置热加载</h3>
+          <p>模型、thinking、工具与扩展设置保存后立即准备新运行时；忙碌会话在当前回合结束后无缝应用。</p>
         </article>
         <article class="feat" data-reveal>
-          <span class="idx">09 / DETAILS</span>
-          <h3>主题与细节</h3>
-          <p>亮暗双主题、圆角层级、字号与滚动条——都为长时间对话打磨过。</p>
+          <span class="idx">09 / MEMORY</span>
+          <h3>长会话与内存</h3>
+          <p>流式更新按帧合并、历史自动分页、空闲会话释放，并为详情、文件、子 Agent 与工具目录设置缓存上限。</p>
         </article>
       </div>
     </div>
@@ -647,8 +647,8 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
         <div class="step" data-reveal>
           <div class="bars" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i></div>
           <span class="k">01</span>
-          <h3>选择工作区</h3>
-          <p>指向磁盘上的一个目录，Pi 从这里读取项目上下文。</p>
+          <h3>开始会话</h3>
+          <p>选择磁盘上的项目工作区，或打开不保存到本地历史的临时聊天。</p>
         </div>
         <div class="step" data-reveal>
           <div class="bars" aria-hidden="true"><i></i><i class="on"></i><i></i><i></i></div>
@@ -767,7 +767,7 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
       <div class="cmds" data-reveal>
         <div class="cmd"><span class="sign">$</span><code>pnpm install</code><span class="note">安装依赖</span></div>
         <div class="cmd"><span class="sign">$</span><code>pnpm dev</code><span class="note">Vite + Electron 热更新</span></div>
-        <div class="cmd"><span class="sign">$</span><code>pnpm test</code><span class="note">29 项单元测试</span></div>
+        <div class="cmd"><span class="sign">$</span><code>pnpm test</code><span class="note">130 项测试 + 浏览器 QA</span></div>
         <div class="cmd"><span class="sign">$</span><code>pnpm run build &amp;&amp; pnpm start</code><span class="note">生产模式运行</span></div>
         <div class="cmd"><span class="sign">$</span><code>pnpm dist</code><span class="note">打包 arm64 + x64 DMG</span></div>
       </div>
@@ -861,17 +861,25 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
       ['dark-new-chat.png', 'New chat', '新会话 · 工作区'],
       ['dark-settings.png', 'Settings', '设置 · 外观与偏好'],
       ['dark-models.png', 'Models', '模型目录 · 提供方'],
-      ['dark-thinking-expanded.png', 'Reasoning', '思维链展开']
+      ['dark-thinking-expanded.png', 'Reasoning', '思维链展开'],
+      ['../background/dark-image.png', 'Background', '图片背景 · 透明度与模糊'],
+      ['../temporary-chat/chat-dark.png', 'Temporary', '临时聊天 · 不落盘'],
+      ['../updates/available-dark.png', 'Update', '版本更新 · 下载与重启'],
+      ['../changes-workbench/dark.png', 'Changes', '差异工作台 · 回合文件']
     ],
     light: [
       ['light-conversation.png', 'Conversation', '会话 · 工具调用与错误状态'],
       ['light-new-chat.png', 'New chat', '新会话 · 工作区'],
       ['light-settings.png', 'Settings', '设置 · 外观与偏好'],
       ['light-models.png', 'Models', '模型目录 · 提供方'],
-      ['light-thinking-expanded.png', 'Reasoning', '思维链展开']
+      ['light-thinking-expanded.png', 'Reasoning', '思维链展开'],
+      ['../background/light-image.png', 'Background', '图片背景 · 透明度与模糊'],
+      ['../temporary-chat/chat-light.png', 'Temporary', '临时聊天 · 不落盘'],
+      ['../updates/available-light.png', 'Update', '版本更新 · 下载与重启'],
+      ['../changes-workbench/light.png', 'Changes', '差异工作台 · 回合文件']
     ]
   };
-  var spans = ['sp-a', 'sp-b', 'sp-c', 'sp-c', 'sp-c'];
+  var spans = ['sp-a', 'sp-b', 'sp-c', 'sp-c', 'sp-c', 'sp-a', 'sp-b', 'sp-c', 'sp-c'];
   var grid = document.getElementById('galleryGrid');
   var lightbox = document.getElementById('lightbox');
   var lightboxImg = document.getElementById('lightboxImg');
@@ -885,8 +893,8 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
       img.src = 'screenshots/themes/' + s[0];
       img.alt = s[1] + ' — ' + s[2];
       img.loading = 'lazy';
-      img.width = 1440;
-      img.height = 920;
+      img.width = 2880;
+      img.height = 1840;
       var cap = document.createElement('figcaption');
       var left = document.createElement('span');
       var right = document.createElement('span');

@@ -6,7 +6,7 @@ const output = new URL('../screenshots/streaming-trace/', import.meta.url).pathn
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
 try {
-  const page = await browser.newPage({ viewport: { width: 1100, height: 760 } });
+  const page = await browser.newPage({ viewport: { width: 1100, height: 760 }, deviceScaleFactor: 2 });
   page.setDefaultTimeout(8000); page.setDefaultNavigationTimeout(10000);
   const errors = []; page.on('pageerror', error => { errors.push(error.message); console.log(error.message); });
   await page.route('**/popover-preview', route => route.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><meta charset="UTF-8"></head><body style="overflow:auto;height:auto"><div id="fixture"></div><script type="module">

@@ -16,8 +16,8 @@
 
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Clock3, Command, Cpu, FileCode2, FileDiff, FileText, Folder, FolderOpen, Info, Sparkles,
-  AppWindow, Bot, Columns2, Compass, Eye, Globe2, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageCirclePlus, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, PanelRightOpen, Pencil, Plus, Plug, RotateCw, Search, Settings, ShieldCheck, SquarePen, Sun, Terminal, Trash2, X,
+  ArrowUp, BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Clock3, Command, Cpu, ExternalLink, FileCode2, FileDiff, FileText, Folder, FolderOpen, Github, Info, Sparkles, UserRound,
+  AppWindow, Bot, Columns2, Compass, Eye, Film, Globe2, Image as ImageIcon, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageCirclePlus, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, PanelRightOpen, Pencil, Plus, Plug, RotateCw, Search, Settings, ShieldCheck, SquarePen, Sun, Terminal, Trash2, X,
   Wrench,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
@@ -42,17 +42,27 @@ import { SettingsDialog } from './components/SettingsDialog';
 import { AgentToolsSettings } from './components/AgentToolsSettings';
 import { SubagentSettings } from './components/SubagentSettings';
 import { SubagentOverview, SubagentTranscriptView } from './components/SubagentViews';
+import { BackgroundLayer, BackgroundMediaPreview } from './components/BackgroundLayer';
+import { UpdateDialog } from './components/UpdateDialog';
 import type { AgentToolSelection } from './agent-tool-types';
 import type { SubagentChild, SubagentTranscript } from './subagent-types';
 import { ModelPicker, type ModelPickerRequest } from './components/ModelPicker';
 import { WorkspacePicker } from './components/WorkspacePicker';
 import { SidebarActions, type SidebarAction } from './components/SidebarActions';
 import { thinkingLabels, type ModelOption, type ModelSelection, type ThinkingLevel } from './model-types';
-import { RADIUS_PRESETS, loadPreferences, resolveTheme, savePreferences, setActivePreferences, type Preferences } from './preferences';
+import { PALETTE_PRESETS, RADIUS_PRESETS, loadPreferences, resolveTheme, savePreferences, setActivePreferences, type Preferences } from './preferences';
 import { pasteExceedsBudget, isLongMessage } from './composer-budget.mjs';
+import {
+  SCROLL_INTENT_WINDOW_MS,
+  isNearBottom,
+  resolveAutoFollow,
+  shouldReleaseFollowOnWheel,
+} from './chat-scroll.mjs';
 import { HISTORY_PAGE_SIZE, resolveHistoryScroll } from './history-scroll.mjs';
 import { sampleOutlineIndices } from './outline-samples.mjs';
 import { normalizeThinkingLevelArgument, parseStudioCommand } from './composer-command-routes.mjs';
+import type { UpdateSnapshot } from './update-types';
+import type { RuntimeRefreshSnapshot } from './runtime-types';
 
 // 设置页导航：顺序、图标与描述同时用于设置侧栏和页面标题。
 const settingsPages = [
@@ -62,7 +72,7 @@ const settingsPages = [
   { id: 'models', label: '模型与账号', icon: Cpu, description: '连接模型来源，选择适合当前工作的模型。' },
   { id: 'mcp', label: 'MCP 服务器', icon: Plug, description: '连接外部工具，让 Pi 更好地理解你的工作环境。' },
   { id: 'skills', label: '技能', icon: FileCode2, description: '管理可复用的工作方法，为 Pi 扩展专业能力。' },
-  { id: 'extensions', label: '扩展', icon: Layers3, description: '管理扩展包与本地扩展，自定义你的工作方式。' },
+  { id: 'extensions', label: '扩展', icon: Layers3, description: '统一管理已安装的 Pi 扩展和扩展包。' },
   { id: 'about', label: '关于', icon: Info, description: '一个专注、轻巧的 AI 开发工作台。' },
 ] as const;
 
@@ -112,17 +122,29 @@ type PreparedSubmission = {
 /** 排队中的消息：保留原始文本与附件，便于撤回后继续编辑。 */
 type QueuedPrompt = { id: string; order: number; text: string; attachments: ComposerAttachment[]; submission: PreparedSubmission };
 type PiWorkspace = { cwd: string; name: string; sessions: PiSessionSummary[] };
-type CustomModelConfig = { providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean };
+type ModelOrigin = 'builtin' | 'configured' | 'override';
+type CustomModelConfig = { providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean; origin?: Exclude<ModelOrigin, 'builtin'> };
+type ProviderModelInfo = { id: string; model: string; name: string; enabled: boolean; contextWindow?: number; maxTokens?: number; supportsImages?: boolean; reasoning?: boolean; origin: ModelOrigin; deletable?: boolean };
+type DiscoveredModel = { id: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean };
+type ProviderDiscoveryState = { loading?: boolean; importing?: boolean; imported?: number; endpoint?: string; models?: DiscoveredModel[]; error?: string };
+type MenuBarPreference = { available: boolean; enabled: boolean; platform: string };
+
+function packageSourceLabel(source: string) {
+  if (source.startsWith('npm:')) return 'npm 扩展包';
+  if (/^(git:|https?:|ssh:)/.test(source)) return 'Git 扩展包';
+  if (source.startsWith('.') || source.startsWith('/')) return '本地扩展包';
+  return '扩展包';
+}
+
 /** 设置页当前打开的编辑弹窗；editId 为空表示新建。 */
-type SettingsEditor = { kind: 'provider' | 'model' | 'mcp' | 'package' | 'skill' | 'extension'; editId?: string };
+type SettingsEditor = { kind: 'provider' | 'model' | 'mcp' | 'package' | 'skill' | 'extension' | 'extension-install'; editId?: string; providerId?: string };
 type SettingsSnapshot = {
   customModels: CustomModelConfig[];
-  providers: Array<{ id: string; name: string; mode: string; authConfigured?: boolean; envName?: string; envAvailable?: boolean; icon?: string; models: number }>;
+  providers: Array<{ id: string; name: string; mode: string; authConfigured?: boolean; envName?: string; envAvailable?: boolean; icon?: string; models: number; modelsUrl?: string }>;
   mcp: Array<{ name: string; transport: string; enabled: boolean; target: string; description: string }>;
   skills: Array<{ name: string; description: string; path: string; scope: string }>;
   extensions: Array<{ name: string; scope: string; path: string; kind: string; source?: string }>;
-  packages: Array<{ source: string; name: string }>;
-  extensionData: string[];
+  packages: Array<{ source: string; name: string; scope: 'user' | 'project' }>;
   enabledModels: string[];
   agentTools: AgentToolSelection;
   agentToolsPath: string;
@@ -130,6 +152,7 @@ type SettingsSnapshot = {
   mcpPath: string;
   modelsPath: string;
   model: { modelRef: string; label: string };
+  runtimeRefresh?: RuntimeRefreshSnapshot;
 };
 
 type SkillInfo = SettingsSnapshot['skills'][number];
@@ -213,6 +236,18 @@ function writeStored(key: string, value: unknown): void {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
 }
 
+/** 模型状态装载前的占位快照；新对话和当前会话各自持有一份。 */
+function emptyModelSelection(): ModelSelection {
+  return {
+    modelRef: '',
+    label: '',
+    thinkingLevel: 'default',
+    thinkingLevels: ['default'],
+    effectiveThinkingLevel: 'off',
+    defaultThinkingLevel: 'off',
+  };
+}
+
 // ---------- 视图辅助类型 ----------
 type DragItem = { kind: 'workspace' | 'session'; cwd: string; sessionId?: string };
 type PanelFile = { path: string; size: number; binary: boolean; text: string };
@@ -272,6 +307,27 @@ function mergeStreamMessage(current: ChatMessage[], incoming: ChatMessage, type:
   return copy;
 }
 
+/**
+ * A wheel event can bubble out of an overflowing code block or tool result.
+ * While that inner element can still scroll in the requested direction, the
+ * transcript itself must remain pinned.
+ */
+function nestedScrollableConsumesWheel(target: EventTarget | null, viewport: HTMLElement | null, deltaY: number): boolean {
+  if (!viewport || !(target instanceof Element) || !deltaY) return false;
+  let node: HTMLElement | null = target instanceof HTMLElement ? target : target.parentElement;
+  while (node && node !== viewport) {
+    if (node.scrollHeight > node.clientHeight + 1) {
+      const overflowY = window.getComputedStyle(node).overflowY;
+      if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') {
+        if (deltaY < 0 && node.scrollTop > 1) return true;
+        if (deltaY > 0 && node.scrollTop + node.clientHeight < node.scrollHeight - 1) return true;
+      }
+    }
+    node = node.parentElement;
+  }
+  return false;
+}
+
 const SUBAGENT_FINAL_STATUSES = new Set<SubagentChild['status']>(['completed', 'failed', 'stopped', 'paused']);
 
 /** 实时事件只更新字段，不能用迟到的 running 覆盖已经落地的终态。 */
@@ -323,6 +379,12 @@ export function App() {
   const historyArmedRef = useRef(true);
   const historyUserScrollRef = useRef(false);
   const [preferences, setPreferences] = useState<Preferences>(() => loadPreferences());
+  const [backgroundBusy, setBackgroundBusy] = useState(false);
+  const [backgroundError, setBackgroundError] = useState<string | null>(null);
+  const [menuBarPreference, setMenuBarPreference] = useState<MenuBarPreference>({ available: false, enabled: true, platform: '' });
+  const [menuBarBusy, setMenuBarBusy] = useState(false);
+  const [updateSnapshot, setUpdateSnapshot] = useState<UpdateSnapshot>({ currentVersion: '', state: 'idle' });
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [extensionToast, setExtensionToast] = useState<{ message: string; type: 'info' | 'warning' | 'error' } | null>(null);
@@ -343,7 +405,8 @@ export function App() {
   const outlineRequestRef = useRef(0);
   const pendingOutlineJumpRef = useRef<{ sessionId: string; sourceIndex: number; index: number } | null>(null);
   const [workspace, setWorkspace] = useState('');
-  const [modelSelection, setModelSelection] = useState<ModelSelection>({ modelRef: '', label: '', thinkingLevel: 'default', thinkingLevels: ['default'], effectiveThinkingLevel: 'off', defaultThinkingLevel: 'off' });
+  const [modelSelection, setModelSelection] = useState<ModelSelection>(emptyModelSelection);
+  const [defaultModelSelection, setDefaultModelSelection] = useState<ModelSelection>(emptyModelSelection);
   const [modelPickerRequest, setModelPickerRequest] = useState<ModelPickerRequest | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(readStored<string[]>(UI_KEYS.expanded, [])));
   const [workspaceOrder, setWorkspaceOrder] = useState<string[]>(() => readStored<string[]>(UI_KEYS.workspaceOrder, []));
@@ -402,8 +465,9 @@ export function App() {
   const [modelView, setModelView] = useState<'all' | 'provider'>('all');
   const [enabledModels, setEnabledModels] = useState<string[]>([]);
   const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
-  const [providerModels, setProviderModels] = useState<Record<string, Array<{ id: string; model: string; name: string; enabled: boolean; contextWindow?: number; maxTokens?: number; supportsImages?: boolean }>>>({});
-  const [customModel, setCustomModel] = useState({ providerId: '', modelId: '', name: '', contextWindow: '', maxTokens: '', supportsImages: false, reasoning: false });
+  const [providerModels, setProviderModels] = useState<Record<string, ProviderModelInfo[]>>({});
+  const [providerDiscovery, setProviderDiscovery] = useState<Record<string, ProviderDiscoveryState>>({});
+  const [customModel, setCustomModel] = useState({ providerId: '', modelId: '', name: '', contextWindow: '', maxTokens: '', supportsImages: false, reasoning: false, origin: 'configured' as ModelOrigin });
   const [packageDraft, setPackageDraft] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'general' | 'tools' | 'subagents' | 'models' | 'mcp' | 'skills' | 'extensions' | 'about'>('general');
@@ -412,9 +476,11 @@ export function App() {
   const [editorError, setEditorError] = useState<string | null>(null);
   const [editorLoading, setEditorLoading] = useState(false);
   const [resourceScope, setResourceScope] = useState<'user' | 'project'>('user');
+  const [extensionInstallMode, setExtensionInstallMode] = useState<'package' | 'local'>('package');
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsBusy, setSettingsBusy] = useState(false);
-  const [providerDraft, setProviderDraft] = useState({ providerId: '', baseUrl: '', api: 'openai-completions', modelId: '', modelName: '', apiKey: '', icon: '' });
+  const [defaultModelBusy, setDefaultModelBusy] = useState(false);
+  const [providerDraft, setProviderDraft] = useState({ providerId: '', name: '', baseUrl: '', api: 'openai-completions', apiKey: '', icon: '', modelsUrl: '' });
   const [mcpDraft, setMcpDraft] = useState({ name: '', transport: 'stdio', command: '', args: '', url: '', description: '', env: '' });
   const [treePath, setTreePath] = useState('');
   const [entries, setEntries] = useState<Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }>>([]);
@@ -451,8 +517,13 @@ export function App() {
   const [mcpDetail, setMcpDetail] = useState<McpInfo | null>(null);
   const fileActionsRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const outlineSyncRef = useRef(0);
+  const chatContentRef = useRef<HTMLDivElement>(null);
+  const outlineSyncRef = useRef<number | null>(null);
   const followBottomRef = useRef(true);
+  const autoScrollFrameRef = useRef(0);
+  const scrollIntentTimerRef = useRef<number | null>(null);
+  const userScrollIntentRef = useRef(false);
+  const lastTranscriptScrollTopRef = useRef(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerHighlightRef = useRef<HTMLDivElement>(null);
   const [composing, setComposing] = useState(false);
@@ -469,6 +540,53 @@ export function App() {
   const dragRef = useRef<DragItem | null>(null);
   const dragPreviewRef = useRef<HTMLDivElement | null>(null);
   const restoredRef = useRef(false);
+  const openFileHandlerRef = useRef<(path: string) => void>(() => {});
+  const openChangesHandlerRef = useRef<(file: TurnDiffFile | undefined, turn: TurnDiff) => void>(() => {});
+  openFileHandlerRef.current = (path) => { void openFile(path); };
+  openChangesHandlerRef.current = (nextFile, turn) => openChangesTab(nextFile, turn);
+  const handleOpenFile = useCallback((path: string) => {
+    openFileHandlerRef.current(path);
+  }, []);
+  const handleOpenChanges = useCallback((nextFile: TurnDiffFile | undefined, turn: TurnDiff) => {
+    openChangesHandlerRef.current(nextFile, turn);
+  }, []);
+
+  function markUserScrollIntent() {
+    userScrollIntentRef.current = true;
+    if (scrollIntentTimerRef.current !== null) window.clearTimeout(scrollIntentTimerRef.current);
+    scrollIntentTimerRef.current = window.setTimeout(() => {
+      userScrollIntentRef.current = false;
+      scrollIntentTimerRef.current = null;
+    }, SCROLL_INTENT_WINDOW_MS);
+  }
+
+  function pinTranscriptToBottom() {
+    const node = scrollRef.current;
+    if (!node || !followBottomRef.current) return;
+    node.scrollTop = node.scrollHeight;
+    lastTranscriptScrollTopRef.current = node.scrollTop;
+  }
+
+  function scheduleTranscriptPin() {
+    if (autoScrollFrameRef.current || !followBottomRef.current) return;
+    autoScrollFrameRef.current = requestAnimationFrame(() => {
+      autoScrollFrameRef.current = 0;
+      pinTranscriptToBottom();
+    });
+  }
+
+  function pauseTranscriptFollow() {
+    followBottomRef.current = false;
+    if (autoScrollFrameRef.current) {
+      cancelAnimationFrame(autoScrollFrameRef.current);
+      autoScrollFrameRef.current = 0;
+    }
+  }
+
+  function resumeTranscriptFollow() {
+    followBottomRef.current = true;
+    scheduleTranscriptPin();
+  }
 
   // ---------- 偏好与主题 ----------
 
@@ -478,6 +596,7 @@ export function App() {
     setActivePreferences(preferences);
     const root = document.documentElement;
     root.dataset.theme = resolveTheme(preferences.theme);
+    root.dataset.palette = preferences.palette;
     void window.piApi.setTheme(preferences.theme).catch(() => { /* Renderer palette remains available. */ });
     root.style.setProperty('--chat-font-size', `${preferences.fontSize}px`);
     const radii = RADIUS_PRESETS[preferences.radiusStyle] || RADIUS_PRESETS.standard;
@@ -500,6 +619,7 @@ export function App() {
    * 置顶会话始终排在前面，其余按主进程给出的 updatedAt 排序。
    */
   const loadState = useCallback(async () => {
+    const loadGeneration = sessionLoadRef.current;
     setStateLoading(true);
     try {
       const next = await window.piApi.state(workspace);
@@ -533,8 +653,9 @@ export function App() {
         const title = orderedSessions.flatMap(item => item.sessions).find(item => item.id === current.id)?.title;
         return title && title !== current.title ? { ...current, title } : current;
       });
-      // 有打开中的会话时，不让全局默认模型覆盖该会话自己的选择。
-      if (!sessionRef.current) setModelSelection(next.model);
+      setDefaultModelSelection(next.model);
+      // 会话切换会使 generation 增长；旧请求不得覆盖已恢复的历史模型。
+      if (!sessionRef.current && sessionLoadRef.current === loadGeneration) setModelSelection(next.model);
     } finally {
       setStateLoading(false);
     }
@@ -556,7 +677,8 @@ export function App() {
       setSettingsData(snapshot);
       setModels(modelResult.models);
       setEnabledModels(modelResult.enabled ?? []);
-      if (!sessionRef.current) setModelSelection(modelResult.selection);
+      setDefaultModelSelection(modelResult.defaultSelection ?? modelResult.selection);
+      if (!sessionRef.current) setModelSelection(modelResult.defaultSelection ?? modelResult.selection);
     } catch (error) {
       setSettingsError(errorText(error));
     }
@@ -573,21 +695,22 @@ export function App() {
    * 打开某个资源的编辑弹窗。
    * 用 request id 防竞态：用户在加载完成前关掉弹窗，旧请求的结果会被丢弃。
    */
-  async function openEditor(kind: SettingsEditor['kind'], editId?: string) {
+  async function openEditor(kind: SettingsEditor['kind'], editId?: string, providerId?: string) {
     const request = ++editorRequestRef.current;
-    setEditor({ kind, editId });
+    setEditor({ kind, editId, providerId });
     setEditorError(null);
     setEditorLoading(Boolean(editId && (kind === 'provider' || kind === 'mcp')));
     setResourceScope('user');
     setPackageDraft('');
+    setExtensionInstallMode('package');
     originalMcpArgsRef.current = null;
-    setProviderDraft({ providerId: '', baseUrl: '', api: 'openai-completions', modelId: '', modelName: '', apiKey: '', icon: '' });
+    setProviderDraft({ providerId: '', name: '', baseUrl: '', api: 'openai-completions', apiKey: '', icon: '', modelsUrl: '' });
     setMcpDraft({ name: '', transport: 'stdio', command: '', args: '', url: '', description: '', env: '' });
-    setCustomModel({ providerId: '', modelId: '', name: '', contextWindow: '', maxTokens: '', supportsImages: false, reasoning: false });
+    setCustomModel({ providerId: providerId || '', modelId: '', name: '', contextWindow: '', maxTokens: '', supportsImages: false, reasoning: false, origin: 'configured' });
     try {
       if (kind === 'provider' && editId) {
         const config = await window.piApi.providerConfig(editId);
-        if (request === editorRequestRef.current) setProviderDraft({ ...config, modelId: '', modelName: '', apiKey: '' });
+        if (request === editorRequestRef.current) setProviderDraft({ ...config, apiKey: '' });
       }
       if (kind === 'mcp' && editId) {
         const config = await window.piApi.mcpConfig(editId);
@@ -596,13 +719,34 @@ export function App() {
           setMcpDraft({ ...config, args: config.args.join('\n') });
         }
       }
-      if (kind === 'model' && editId) {
-        const config = settingsData?.customModels?.find((item) => `${item.providerId}/${item.modelId}` === editId);
-        if (config) setCustomModel({ ...config, contextWindow: config.contextWindow?.toString() || '', maxTokens: config.maxTokens?.toString() || '' });
+      if (kind === 'model' && editId && providerId) {
+        const model = providerModels[providerId]?.find((item) => item.model === editId);
+        const config = settingsData?.customModels?.find((item) => item.providerId === providerId && item.modelId === editId);
+        const effective = model || config;
+        if (effective) setCustomModel({
+          providerId,
+          modelId: editId,
+          name: effective.name || editId,
+          contextWindow: effective.contextWindow?.toString() || '',
+          maxTokens: effective.maxTokens?.toString() || '',
+          supportsImages: Boolean(effective.supportsImages),
+          reasoning: Boolean(effective.reasoning),
+          origin: model?.origin || config?.origin || 'builtin',
+        });
       }
     } catch (error) {
       if (request === editorRequestRef.current) setEditorError(errorText(error));
     } finally { if (request === editorRequestRef.current) setEditorLoading(false); }
+  }
+
+  function openModelEditor(providerId: string, model?: ProviderModelInfo) {
+    void openEditor('model', model?.model, providerId);
+  }
+
+  async function refreshProviderModels(providerId: string) {
+    const result = await window.piApi.providerModels(providerId);
+    setProviderModels((current) => ({ ...current, [providerId]: result.models }));
+    return result.models;
   }
 
   /** 展开某个来源下的模型列表；同一来源只请求一次。 */
@@ -612,8 +756,7 @@ export function App() {
     setModelQuery('');
     if (!providerModels[providerId]) {
       try {
-        const result = await window.piApi.providerModels(providerId);
-        setProviderModels((current) => ({ ...current, [providerId]: result.models }));
+        await refreshProviderModels(providerId);
       } catch (error) { setSettingsError(errorText(error)); }
     }
   }
@@ -624,6 +767,10 @@ export function App() {
       const snapshot = await window.piApi.setEnabledModels(next);
       setSettingsData(snapshot);
       setEnabledModels(snapshot.enabledModels);
+      setProviderModels((current) => Object.fromEntries(Object.entries(current).map(([providerId, list]) => [
+        providerId,
+        list.map((model) => ({ ...model, enabled: next.includes(model.id) })),
+      ])));
     } catch (error) {
       setSettingsError(errorText(error));
     } finally { setSettingsBusy(false); }
@@ -642,10 +789,12 @@ export function App() {
         maxTokens: Number(customModel.maxTokens) || undefined,
         supportsImages: customModel.supportsImages,
         reasoning: customModel.reasoning,
+        origin: customModel.origin,
       });
       setSettingsData(snapshot);
-      setCustomModel({ providerId: '', modelId: '', name: '', contextWindow: '', maxTokens: '', supportsImages: false, reasoning: false });
-      setProviderModels({});
+      setEnabledModels(snapshot.enabledModels);
+      setCustomModel({ providerId: '', modelId: '', name: '', contextWindow: '', maxTokens: '', supportsImages: false, reasoning: false, origin: 'configured' });
+      if (customModel.providerId) await refreshProviderModels(customModel.providerId);
       const catalog = await window.piApi.models(workspace);
       setModels(catalog.models);
       setEditor(null);
@@ -689,15 +838,59 @@ export function App() {
     finally { setSettingsBusy(false); }
   }
 
-  async function deleteCustomModel(providerId: string, modelId: string, name: string) {
-    if (!window.confirm(`删除自定义模型「${name}」？`)) return;
+  async function deleteCustomModel(providerId: string, model: ProviderModelInfo) {
+    const message = model.origin === 'override'
+      ? `移除「${model.name}」的自定义配置，并恢复 Pi 内置参数？`
+      : `从「${providerId}」删除模型「${model.name}」？`;
+    if (!window.confirm(message)) return;
     setSettingsBusy(true); setSettingsError(null);
     try {
-      setSettingsData(await window.piApi.removeCustomModel({ providerId, modelId }));
-      setProviderModels({});
+      const snapshot = await window.piApi.removeCustomModel({ providerId, modelId: model.model });
+      setSettingsData(snapshot);
+      setEnabledModels(snapshot.enabledModels);
+      await refreshProviderModels(providerId);
       setModels((await window.piApi.models(workspace)).models);
     } catch (error) { setSettingsError(errorText(error)); }
     finally { setSettingsBusy(false); }
+  }
+
+  async function discoverProviderModels(providerId: string) {
+    setProviderDiscovery((current) => ({ ...current, [providerId]: { loading: true } }));
+    try {
+      const result = await window.piApi.discoverProviderModels(providerId);
+      setProviderDiscovery((current) => ({
+        ...current,
+        [providerId]: { endpoint: result.endpoint, models: result.models },
+      }));
+    } catch (error) {
+      setProviderDiscovery((current) => ({
+        ...current,
+        [providerId]: { error: errorText(error) },
+      }));
+    }
+  }
+
+  async function importProviderModels(providerId: string, discovered: DiscoveredModel[]) {
+    setProviderDiscovery((current) => ({
+      ...current,
+      [providerId]: { ...current[providerId], importing: true, error: undefined },
+    }));
+    try {
+      const snapshot = await window.piApi.importProviderModels({ providerId, models: discovered });
+      setSettingsData(snapshot);
+      setEnabledModels(snapshot.enabledModels);
+      await refreshProviderModels(providerId);
+      setModels((await window.piApi.models(workspace)).models);
+      setProviderDiscovery((current) => ({
+        ...current,
+        [providerId]: { ...current[providerId], importing: false, imported: discovered.length },
+      }));
+    } catch (error) {
+      setProviderDiscovery((current) => ({
+        ...current,
+        [providerId]: { ...current[providerId], importing: false, error: errorText(error) },
+      }));
+    }
   }
 
   /** 保存模型来源（新建或编辑），完成后重建模型目录。 */
@@ -705,12 +898,26 @@ export function App() {
     setSettingsBusy(true);
     setEditorError(null);
     try {
+      const providerId = providerDraft.providerId.trim();
       const result = await window.piApi.addProvider({ ...providerDraft, editing: Boolean(editor?.editId) });
       setSettingsData(result.settings);
       setModels(result.models.models);
-      setProviderDraft({ providerId: '', baseUrl: '', api: 'openai-completions', modelId: '', modelName: '', apiKey: '', icon: '' });
-      setProviderModels({});
+      setEnabledModels(result.models.enabled);
+      setProviderDraft({ providerId: '', name: '', baseUrl: '', api: 'openai-completions', apiKey: '', icon: '', modelsUrl: '' });
+      setProviderModels((current) => {
+        const next = { ...current };
+        delete next[providerId];
+        return next;
+      });
+      setProviderDiscovery((current) => {
+        const next = { ...current };
+        delete next[providerId];
+        return next;
+      });
       setEditor(null);
+      setExpandedProvider(providerId);
+      setModelQuery('');
+      await refreshProviderModels(providerId);
       await loadState();
     } catch (error) {
       setEditorError(errorText(error));
@@ -768,6 +975,9 @@ export function App() {
     const result = await window.piApi.models(workspace);
     setModels(result.models);
     setEnabledModels(result.enabled ?? []);
+    const nextDefault = result.defaultSelection ?? result.selection;
+    setDefaultModelSelection(nextDefault);
+    if (!sessionRef.current) setModelSelection(nextDefault);
     return result;
   }
 
@@ -778,7 +988,8 @@ export function App() {
       setModelSelection(result);
       return;
     }
-    const result = await window.piApi.setModel(next, workspace);
+    const result = await window.piApi.setDefaultModel(next, workspace);
+    setDefaultModelSelection(result);
     setModelSelection(result);
   }
 
@@ -789,8 +1000,40 @@ export function App() {
       setModelSelection(result);
       return;
     }
-    const result = await window.piApi.setThinkingLevel({ modelRef: modelSelection.modelRef, level, cwd: workspace });
+    const result = await window.piApi.setDefaultThinkingLevel({ level, cwd: workspace });
+    setDefaultModelSelection(result);
     setModelSelection(result);
+  }
+
+  /** 设置页明确修改新对话默认值，不误改当前打开的历史会话。 */
+  async function selectDefaultModel(next: string) {
+    if (defaultModelBusy) return;
+    setDefaultModelBusy(true);
+    setSettingsError(null);
+    try {
+      const result = await window.piApi.setDefaultModel(next, workspace);
+      setDefaultModelSelection(result);
+      if (!sessionRef.current) setModelSelection(result);
+    } catch (error) {
+      setSettingsError(errorText(error));
+    } finally {
+      setDefaultModelBusy(false);
+    }
+  }
+
+  async function selectDefaultThinking(level: ThinkingLevel) {
+    if (defaultModelBusy) return;
+    setDefaultModelBusy(true);
+    setSettingsError(null);
+    try {
+      const result = await window.piApi.setDefaultThinkingLevel({ level, cwd: workspace });
+      setDefaultModelSelection(result);
+      if (!sessionRef.current) setModelSelection(result);
+    } catch (error) {
+      setSettingsError(errorText(error));
+    } finally {
+      setDefaultModelBusy(false);
+    }
   }
 
   // ---------- 本地持久化与启动恢复 ----------
@@ -845,10 +1088,54 @@ export function App() {
       .catch(() => { /* 扩展未安装或尚未初始化 */ });
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    void window.piApi.menuBarSettings()
+      .then((settings) => { if (active && settings) setMenuBarPreference(settings); })
+      .catch(() => { /* Menu-bar support is optional in browser-only development. */ });
+    return () => { active = false; };
+  }, []);
+
+  // The updater lives in the main process so background checks continue while
+  // the main window is hidden. The renderer mirrors its snapshot for all entry
+  // points: brand button, app menu, tray menu and native notifications.
+  useEffect(() => {
+    let disposed = false;
+    const applySnapshot = (next: UpdateSnapshot | undefined) => {
+      if (disposed || !next || typeof next !== 'object') return;
+      setUpdateSnapshot(next);
+      if (next.state === 'downloaded') setUpdateDialogOpen(true);
+    };
+    void window.piApi.updateState?.().then(applySnapshot).catch(() => { /* Updater is optional in browser-only previews. */ });
+    const offState = window.piApi.onUpdateState?.(applySnapshot) ?? (() => {});
+    const offOpen = window.piApi.onOpenUpdate?.(() => setUpdateDialogOpen(true)) ?? (() => {});
+    return () => {
+      disposed = true;
+      offState();
+      offOpen();
+    };
+  }, []);
+
   // 扩展请求工具确认时，渲染进程负责显示统一样式的弹窗。
   useEffect(() => window.piApi.onConfirmRequest((request) => setConfirmRequest(request)), []);
 
   useEffect(() => window.piApi.onOpenSettings(() => { void openSettings(); }), [workspace]);
+  useEffect(() => window.piApi.onOpenMain(() => { setSettingsOpen(false); }), []);
+  useEffect(() => window.piApi.onOpenSession((target) => {
+    if (!target?.id) return;
+    const summary = workspaces
+      .flatMap((item) => item.sessions)
+      .find((item) => item.id === target.id)
+      ?? {
+        id: target.id,
+        cwd: target.cwd,
+        title: target.title || '会话',
+        updatedAt: Date.now(),
+        messageCount: 0,
+      };
+    setSettingsOpen(false);
+    void openSession(summary);
+  }), [workspaces]);
 
   useEffect(() => {
     if (!settingsOpen || editor) return;
@@ -865,14 +1152,31 @@ export function App() {
 
   // ---------- 扩展状态 ----------
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     followBottomRef.current = true;
+    userScrollIntentRef.current = false;
+    if (autoScrollFrameRef.current) {
+      cancelAnimationFrame(autoScrollFrameRef.current);
+      autoScrollFrameRef.current = 0;
+    }
+    if (scrollIntentTimerRef.current !== null) {
+      window.clearTimeout(scrollIntentTimerRef.current);
+      scrollIntentTimerRef.current = null;
+    }
     setTodoPanelOpen(false);
     setQueuedPrompts([]);
     setCompaction({ active: false });
   }, [session?.id]);
 
   useEffect(() => window.piApi.onSessionsChanged?.(() => { void loadState(); }), [loadState]);
+  useEffect(() => window.piApi.onRuntimeRefresh((snapshot) => {
+    const type = snapshot.status === 'error'
+      ? 'error'
+      : snapshot.status === 'partial'
+        ? 'warning'
+        : 'info';
+    setExtensionToast({ message: snapshot.message, type });
+  }), []);
   useEffect(() => window.piApi.onExtensionNotify(event => {
     if (event.sessionId === session?.id) setExtensionToast({ message: event.message, type: event.type });
   }), [session?.id]);
@@ -1006,6 +1310,9 @@ export function App() {
         setCompaction({ active: false });
         void loadState();
         if (session?.id) {
+          // completeRun 会先应用待切换模型；done 事件直接带回最终快照，
+          // 无需为了清掉“下轮生效”而重新解析整份 transcript。
+          if (event.model && sessionRef.current?.id === session.id) setModelSelection(event.model);
           void refreshOutline(session.id).then((outline) => {
             if (!outline) return;
             setOutlineItems(outline.items);
@@ -1013,7 +1320,7 @@ export function App() {
             setOutlineActive((current) => Math.min(current, Math.max(0, outline.items.length - 1)));
           });
           void window.piApi.sessionSubagents(session.id).then((children) => {
-            if (sessionRef.current?.id === session.id) setSubagentChildren(children);
+            if (sessionRef.current?.id === session.id) setSubagentChildren(Array.isArray(children) ? children : []);
           }).catch(() => { /* A completed parent turn remains usable if fleet refresh fails. */ });
         }
       }
@@ -1051,15 +1358,31 @@ export function App() {
     return () => { disposed = true; window.clearInterval(timer); };
   }, [session?.id, busy]);
 
-  useEffect(() => {
-    const node = scrollRef.current;
-    // 用户向上阅读时不再跟随；停留在底部时在提交后、绘制前直接贴底，
-    // 比每帧再排一次 rAF 更少抖动。
-    if (!node || agentView.kind !== 'conversation' || !followBottomRef.current) return;
-    node.scrollTop = node.scrollHeight;
+  useLayoutEffect(() => {
+    // 消息提交后先在绘制前贴底；Markdown、图片或折叠区随后长高时，
+    // ResizeObserver 会继续补一次，避免输出中途停在半截。
+    if (agentView.kind !== 'conversation' || !followBottomRef.current) return;
+    pinTranscriptToBottom();
   }, [messages, busy, agentView.kind]);
 
-  useEffect(() => () => { if (outlineSyncRef.current) cancelAnimationFrame(outlineSyncRef.current); }, []);
+  useEffect(() => {
+    if (agentView.kind !== 'conversation' || messages.length === 0) return;
+    const content = chatContentRef.current;
+    const viewport = scrollRef.current;
+    if (!content || !viewport || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      if (followBottomRef.current) scheduleTranscriptPin();
+    });
+    observer.observe(content);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [agentView.kind, session?.id, messages.length === 0]);
+
+  useEffect(() => () => {
+    if (autoScrollFrameRef.current) cancelAnimationFrame(autoScrollFrameRef.current);
+    if (scrollIntentTimerRef.current !== null) window.clearTimeout(scrollIntentTimerRef.current);
+    if (outlineSyncRef.current !== null) window.clearTimeout(outlineSyncRef.current);
+  }, []);
 
   useEffect(() => {
     const frame = requestAnimationFrame(syncOutlineActive);
@@ -1281,6 +1604,8 @@ export function App() {
     setComposerAttachments([]);
     setComposerMenu(null);
     setModelPickerRequest(null);
+    setModelSelection(defaultModelSelection);
+    if (!defaultModelSelection.modelRef) void loadModelCatalog().catch(() => {});
     setQueuedPrompts([]);
     setBusy(false);
     setRetryInfo(null);
@@ -1306,6 +1631,8 @@ export function App() {
     setWorkspace(cwd);
     setComposerMenu(null);
     setModelPickerRequest(null);
+    setModelSelection(defaultModelSelection);
+    if (!defaultModelSelection.modelRef) void loadModelCatalog().catch(() => {});
     setError(null);
     if (cwd) expandWorkspace(cwd);
   }
@@ -1387,7 +1714,8 @@ export function App() {
       });
       if (detail.model) setModelSelection(detail.model);
       setMessages(detail.messages.map((message) => ({ ...message })));
-      setSubagentChildren(children);
+      // 旧版本 IPC 或尚未启用子 Agent 的会话可能返回空值；会话页仍必须可用。
+      setSubagentChildren(Array.isArray(children) ? children : []);
       setSubagentTranscript(null);
       setSubagentError(null);
       setSubagentLoading(false);
@@ -1537,6 +1865,87 @@ export function App() {
     setPreferences((current) => ({ ...current, [key]: value }));
   }
 
+  async function checkUpdates(): Promise<void> {
+    try {
+      const next = await window.piApi.checkForUpdates({ interactive: true });
+      if (next) setUpdateSnapshot(next);
+    } catch (error) {
+      setUpdateSnapshot(current => ({ ...current, state: 'error', error: errorText(error) }));
+    }
+  }
+
+  async function downloadUpdate(): Promise<void> {
+    try {
+      const next = await window.piApi.downloadUpdate();
+      if (next) setUpdateSnapshot(next);
+    } catch (error) {
+      setUpdateSnapshot(current => ({ ...current, state: 'error', error: errorText(error) }));
+    }
+  }
+
+  async function installUpdate(): Promise<void> {
+    try {
+      await window.piApi.installUpdate();
+    } catch (error) {
+      setUpdateSnapshot(current => ({ ...current, state: 'error', error: errorText(error) }));
+    }
+  }
+
+  function openUpdateDialog() {
+    setUpdateDialogOpen(true);
+    if (updateSnapshot.state === 'idle') void checkUpdates();
+  }
+
+  async function chooseBackground() {
+    setBackgroundBusy(true);
+    setBackgroundError(null);
+    try {
+      const media = await window.piApi.chooseBackgroundMedia({ replaceUrl: preferences.backgroundMedia?.url });
+      if (media) updatePreference('backgroundMedia', media);
+    } catch (error) {
+      setBackgroundError(errorText(error));
+    } finally {
+      setBackgroundBusy(false);
+    }
+  }
+
+  async function removeBackground() {
+    const media = preferences.backgroundMedia;
+    if (!media) return;
+    setBackgroundBusy(true);
+    setBackgroundError(null);
+    updatePreference('backgroundMedia', null);
+    try {
+      await window.piApi.removeBackgroundMedia(media.url);
+    } catch (error) {
+      setBackgroundError(errorText(error));
+    } finally {
+      setBackgroundBusy(false);
+    }
+  }
+
+  async function changeMenuBarVisibility(enabled: boolean) {
+    if (menuBarBusy || !menuBarPreference.available) return;
+    const previous = menuBarPreference;
+    setMenuBarBusy(true);
+    setMenuBarPreference((current) => ({ ...current, enabled }));
+    try {
+      const next = await window.piApi.setMenuBarVisible(enabled);
+      if (next) setMenuBarPreference(next);
+    } catch (error) {
+      setMenuBarPreference(previous);
+      setSettingsError(errorText(error));
+    } finally {
+      setMenuBarBusy(false);
+    }
+  }
+
+  function handleBackgroundUnavailable(url: string) {
+    setPreferences((current) => current.backgroundMedia?.url === url ? { ...current, backgroundMedia: null } : current);
+    setBackgroundError('背景文件已不可用，请重新选择。');
+    void window.piApi.removeBackgroundMedia(url).catch(() => {});
+  }
+
   /** 真正应用权限模式：先乐观更新，失败时回滚并提示。 */
   async function applyPermission(mode: PermissionMode) {
     const previous = permission;
@@ -1618,8 +2027,8 @@ export function App() {
     if (command.route === 'settings.open') { await openSettings(); return true; }
     if (command.route === 'settings.mcp') { await openSettings('mcp'); return true; }
     if (command.route === 'model.picker') {
-      if (busy || stateLoading || sessionLoading) {
-        setExtensionToast({ message: '请等待当前会话加载或回复完成后再切换模型。', type: 'info' });
+      if (stateLoading || sessionLoading) {
+        setExtensionToast({ message: '请等待当前会话加载完成后再切换模型。', type: 'info' });
         return true;
       }
       if (command.argument) {
@@ -1746,38 +2155,62 @@ export function App() {
     const container = scrollRef.current;
     if (!container) return;
     const top = container.getBoundingClientRect().top + 14;
-    let next = -1;
-    let firstLoaded = -1;
-    for (let index = 0; index < outlineItems.length; index += 1) {
-      const node = document.getElementById(`chat-turn-${outlineItems[index].sourceIndex}`);
-      if (!node) continue;
-      if (firstLoaded < 0) firstLoaded = index;
-      if (node.getBoundingClientRect().top <= top) next = index;
+    const nodes = Array.from(container.querySelectorAll<HTMLElement>('.messages > .message.user[id^="chat-turn-"]'))
+      .filter((node) => /^chat-turn-\d+$/.test(node.id));
+    if (nodes.length === 0) {
+      setOutlineActive(0);
+      return;
     }
-    const resolved = next >= 0 ? next : firstLoaded >= 0 ? firstLoaded : 0;
-    setOutlineActive((current) => current === resolved ? current : resolved);
+
+    // The transcript is in source order, so locate the last visible turn with
+    // one binary search instead of measuring every outline target per frame.
+    let low = 0;
+    let high = nodes.length - 1;
+    let visible = -1;
+    while (low <= high) {
+      const middle = (low + high) >> 1;
+      if (nodes[middle].getBoundingClientRect().top <= top) {
+        visible = middle;
+        low = middle + 1;
+      } else {
+        high = middle - 1;
+      }
+    }
+    const activeNode = nodes[visible >= 0 ? visible : 0];
+    const sourceIndex = Number(activeNode.id.slice('chat-turn-'.length));
+    const resolved = outlineItems.findIndex((item) => item.sourceIndex === sourceIndex);
+    if (resolved >= 0) setOutlineActive((current) => current === resolved ? current : resolved);
   }
 
   /**
-   * 滚动时的大纲同步每帧最多跑一次。
-   * 流式输出会持续触发滚动，逐次测量所有节点会强制同步重排，
-   * 在长会话里正是滚动不丝滑的主要来源。
+   * 滚动期间把大纲同步合并到低频任务里。滚动本身优先交付给合成器，
+   * 停顿后再做一次 DOM 测量，避免长会话里每帧强制布局。
    */
   function scheduleOutlineSync() {
-    if (outlineSyncRef.current) return;
-    outlineSyncRef.current = requestAnimationFrame(() => {
-      outlineSyncRef.current = 0;
+    if (outlineSyncRef.current !== null) return;
+    outlineSyncRef.current = window.setTimeout(() => {
+      outlineSyncRef.current = null;
       syncOutlineActive();
-    });
+    }, 80);
   }
 
-  /** 记录用户是否仍然停在底部；向上滚动后不再被流式输出拉回。 */
+  /** 只有明确的用户滚动意图才能离开或重新进入贴底跟随。 */
   function handleTranscriptScroll(event: React.UIEvent<HTMLDivElement>) {
     const node = event.currentTarget;
-    // 只有真正回到最底部才恢复跟随，避免在底部附近轻微上滑就被抢回。
-    followBottomRef.current = node.scrollHeight - node.clientHeight - node.scrollTop < 2;
+    const nextTop = node.scrollTop;
+    const nextFollow = resolveAutoFollow({
+      following: followBottomRef.current,
+      nearBottom: isNearBottom(node),
+      userInitiated: userScrollIntentRef.current,
+      movedTowardStart: nextTop < lastTranscriptScrollTopRef.current - 0.5,
+    });
+    if (nextFollow !== followBottomRef.current) {
+      if (nextFollow) resumeTranscriptFollow();
+      else pauseTranscriptFollow();
+    }
+    lastTranscriptScrollTopRef.current = nextTop;
     const next = resolveHistoryScroll({
-      scrollTop: node.scrollTop,
+      scrollTop: nextTop,
       armed: historyArmedRef.current,
       hasMore: Boolean(session?.hasMore),
       loading: historyLoadingRef.current,
@@ -1795,7 +2228,7 @@ export function App() {
     const node = item ? document.getElementById(`chat-turn-${item.sourceIndex}`) : null;
     if (!item || !container || !node) return false;
     // 大纲跳转表示用户主动离开底部阅读，流式更新不能再把视图拉回最新消息。
-    followBottomRef.current = false;
+    pauseTranscriptFollow();
     const delta = node.getBoundingClientRect().top - container.getBoundingClientRect().top;
     container.scrollTo({ top: container.scrollTop + delta - 12, behavior });
     setOutlineActive(index);
@@ -1903,7 +2336,7 @@ export function App() {
       setExtensionToast({ message: '上下文正在压缩，完成后会自动继续。', type: 'info' });
       return;
     }
-    followBottomRef.current = true;
+    resumeTranscriptFollow();
     // 先乐观插入用户消息，避免等待 IPC 时输入区看起来没反应。
     setMessages((existing) => [...existing, {
       role: 'user',
@@ -2004,6 +2437,11 @@ export function App() {
     setComposerMenu(null);
     if (!workspace) {
       setError('请先选择一个工作区，再发送消息。');
+      return;
+    }
+    if (session && modelSelection.unavailable) {
+      setError(modelSelection.unavailableReason || '这个会话原来的模型已不可用，请先选择新的模型。');
+      setModelPickerRequest({ id: ++modelPickerRequestRef.current, view: 'models' });
       return;
     }
     let current = session;
@@ -2231,6 +2669,10 @@ export function App() {
     else if (editor.kind === 'model') void saveCustomModel();
     else if (editor.kind === 'mcp') void saveMcp();
     else if (editor.kind === 'package') void addPackage();
+    else if (editor.kind === 'extension-install') {
+      if (extensionInstallMode === 'package') void addPackage();
+      else void importResource('extension', resourceScope);
+    }
     else void importResource(editor.kind, resourceScope);
   }
 
@@ -2248,6 +2690,26 @@ export function App() {
     }
     return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [enabledModels, models]);
+
+  /** 设置页「新对话默认」与当前会话模型完全分开，切换默认值不会影响已打开会话。 */
+  const defaultModelItem = models.find((item) => item.id === defaultModelSelection.modelRef);
+  const defaultModelProvider = defaultModelItem?.providerName || defaultModelItem?.provider || defaultModelSelection.modelRef.split('/')[0] || 'Pi';
+  const defaultModelOptions = useMemo(() => {
+    const ids = [...new Set([defaultModelSelection.modelRef, ...enabledModels].filter(Boolean))];
+    return ids.map((id) => {
+      const item = models.find((entry) => entry.id === id);
+      return {
+        value: id,
+        label: item?.name || id,
+        description: `${item?.providerName || item?.provider || id.split('/')[0]} · ${id}`,
+      };
+    });
+  }, [defaultModelSelection.modelRef, enabledModels, models]);
+  const defaultThinkingOptions = defaultModelSelection.thinkingLevels.map((level) => ({
+    value: level,
+    label: thinkingLabels[level],
+    description: level === 'default' ? '跟随模型和 Pi 的默认推理等级' : `固定使用 ${thinkingLabels[level]}`,
+  }));
 
   /** 渲染一张已启用模型卡片（设置页「模型与账号」）。 */
   function renderModelCard(id: string) {
@@ -2515,8 +2977,21 @@ export function App() {
 
   // ---------- 界面：左侧栏 / 对话 / 设置 / 右侧面板 ----------
 
+  const backgroundStyle = {
+    '--background-surface-opacity': preferences.backgroundSurfaceOpacity / 100,
+  } as CSSProperties;
+
   return (
-    <div className={`app ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${filesOpen && panelFullscreen ? 'is-panel-fullscreen' : ''}`}>
+    <div
+      className={`app ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${filesOpen && panelFullscreen ? 'is-panel-fullscreen' : ''} ${preferences.backgroundMedia ? 'has-custom-background' : ''}`}
+      style={backgroundStyle}
+    >
+      {preferences.backgroundMedia && <BackgroundLayer
+        media={preferences.backgroundMedia}
+        opacity={preferences.backgroundOpacity}
+        blur={preferences.backgroundBlur}
+        onError={() => handleBackgroundUnavailable(preferences.backgroundMedia!.url)}
+      />}
       {/* 左侧：品牌、导航、工作区列表与设置入口 */}
       <aside className="sidebar">
         <div className="sidebar-drag" />
@@ -2524,6 +2999,30 @@ export function App() {
         <div className="brand">
           <BrandMark />
           <span className="brand-name">Pi Studio</span>
+          {(updateSnapshot.state === 'available'
+            || updateSnapshot.state === 'downloading'
+            || updateSnapshot.state === 'downloaded') && <button
+              type="button"
+              className={`brand-update is-${updateSnapshot.state}`}
+              aria-label={updateSnapshot.state === 'downloaded'
+                ? '重启并安装更新'
+                : updateSnapshot.state === 'downloading'
+                  ? `正在下载 Pi Studio 更新，${Math.round(updateSnapshot.progress || 0)}%`
+                  : `Pi Studio ${updateSnapshot.latestVersion ? `v${updateSnapshot.latestVersion} ` : ''}可以更新`}
+              title={updateSnapshot.state === 'downloaded'
+                ? `Pi Studio ${updateSnapshot.latestVersion ? `v${updateSnapshot.latestVersion} ` : ''}已下载，点击安装`
+                : updateSnapshot.state === 'downloading'
+                  ? `正在下载 Pi Studio 更新 · ${Math.round(updateSnapshot.progress || 0)}%`
+                  : `发现 Pi Studio ${updateSnapshot.latestVersion ? `v${updateSnapshot.latestVersion}` : '新版本'}`}
+              onClick={openUpdateDialog}
+            >
+              {updateSnapshot.state === 'downloading'
+                ? <LoaderCircle className="spin" />
+                : updateSnapshot.state === 'downloaded'
+                  ? <ArrowUp />
+                  : <Sparkles />}
+              {updateSnapshot.state === 'available' && <i aria-hidden="true" />}
+            </button>}
         </div>
         <button className="new-chat" title="新会话" onClick={() => void startSession()}><SquarePen /><span>新会话</span></button>
         <nav className="nav">
@@ -2707,32 +3206,50 @@ export function App() {
           aria-hidden={agentView.kind !== 'conversation'}
           ref={scrollRef}
           onWheel={event => {
+            if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) || Math.abs(event.deltaY) < 0.5) return;
+            if (nestedScrollableConsumesWheel(event.target, event.currentTarget, event.deltaY)) return;
+            markUserScrollIntent();
             historyUserScrollRef.current = true;
-            if (event.deltaY < 0) followBottomRef.current = false;
+            if (shouldReleaseFollowOnWheel({ deltaX: event.deltaX, deltaY: event.deltaY, nestedScrollable: false })) {
+              pauseTranscriptFollow();
+            } else if (event.deltaY > 0 && isNearBottom(event.currentTarget)) {
+              resumeTranscriptFollow();
+            }
           }}
           onTouchMove={() => {
+            markUserScrollIntent();
             historyUserScrollRef.current = true;
-            followBottomRef.current = false;
+            pauseTranscriptFollow();
           }}
-          onPointerDown={() => { historyUserScrollRef.current = true; }}
+          onPointerDown={() => {
+            markUserScrollIntent();
+            historyUserScrollRef.current = true;
+          }}
+          onPointerMove={event => {
+            if (event.buttons !== 0) markUserScrollIntent();
+          }}
           onKeyDown={event => {
             if (event.key === 'PageUp' || event.key === 'ArrowUp' || event.key === 'Home') {
+              markUserScrollIntent();
               historyUserScrollRef.current = true;
-              followBottomRef.current = false;
+              pauseTranscriptFollow();
+            } else if (event.key === 'PageDown' || event.key === 'ArrowDown' || event.key === 'End') {
+              markUserScrollIntent();
+              historyUserScrollRef.current = true;
             }
           }}
           onScroll={handleTranscriptScroll}
         >
-          <div className="chat-column">
+          <div className="chat-column" ref={chatContentRef}>
             {messages.length > 0 && (
               <div className="messages">
                 {historyLoading && <div className="history-loading" role="status" aria-live="polite" aria-label="正在加载更早消息"><LoaderCircle className="spin" /></div>}
                 {session?.id && <ExtensionHeader sessionId={session.id} />}
                 {transcriptTurns.map((turn, index) => turn.kind === 'user'
-                  ? <ChatMessageView key={`user-${turn.message.sourceIndex ?? turn.message.timestamp ?? index}`} id={`chat-turn-${turn.message.sourceIndex ?? `pending-${turn.message.timestamp ?? index}`}`} message={turn.message} onOpenFile={(path) => void openFile(path)} />
+                  ? <ChatMessageView key={`user-${turn.message.sourceIndex ?? turn.message.timestamp ?? index}`} id={`chat-turn-${turn.message.sourceIndex ?? `pending-${turn.message.timestamp ?? index}`}`} message={turn.message} onOpenFile={handleOpenFile} />
                   : <AssistantTurnView key={`assistant-${turn.messages[0]?.sourceIndex ?? turn.messages[0]?.timestamp ?? index}`} id={turn.messages[0]?.sourceIndex !== undefined ? `chat-assistant-turn-${turn.messages[0].sourceIndex}` : undefined} messages={turn.messages} toolResults={toolResultMap} cwd={session?.cwd} busy={busy && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView}
                     gitDiff={index === lastAssistantTurnIndex ? liveDiff ?? (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined) : (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined)}
-                    onOpenDiff={openChangesTab} onOpenFile={(path) => void openFile(path)} />)}
+                    onOpenDiff={handleOpenChanges} onOpenFile={handleOpenFile} />)}
                 {busy && extensionWorking.visible && !retryInfo && transcriptTurns.at(-1)?.kind !== 'assistant' && (
                   <div className="thinking"><span /><span /><span />正在思考</div>
                 )}
@@ -2781,7 +3298,7 @@ export function App() {
           showCodeView={preferences.showCodeView}
           onBackMain={returnToMainAgent}
           onOverview={openAgentOverview}
-          onOpenFile={(path) => void openFile(path)}
+          onOpenFile={handleOpenFile}
         />}
         {/* 输入区：计划、排队消息、附件与命令菜单 */}
         <div className="composer-dock" hidden={agentView.kind !== 'conversation'}>
@@ -2931,7 +3448,7 @@ export function App() {
                 )}
               </div>
               <div className="composer-right">
-                <ModelPicker selection={modelSelection} disabled={busy || stateLoading || sessionLoading} hidden={settingsOpen} loadCatalog={loadModelCatalog} onSelectModel={selectModel} onSelectThinking={selectThinking} onManage={() => void openSettings('models')} request={modelPickerRequest} onRequestHandled={() => setModelPickerRequest(null)} />
+                <ModelPicker selection={modelSelection} scope={session ? 'session' : 'default'} disabled={stateLoading || sessionLoading} hidden={settingsOpen} loadCatalog={loadModelCatalog} onSelectModel={selectModel} onSelectThinking={selectThinking} onManage={() => void openSettings('models')} request={modelPickerRequest} onRequestHandled={() => setModelPickerRequest(null)} />
                 <button className="send-button" disabled={!workspace || (!prompt.trim() && composerAttachments.length === 0) || compaction.active} onClick={() => void send()} aria-label={compaction.active ? '正在压缩上下文' : busy ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'} title={!workspace ? '请先选择工作区' : compaction.active ? '正在压缩上下文，完成后自动继续' : busy ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'}><ArrowUp /></button>
               </div>
             </div>
@@ -2961,13 +3478,85 @@ export function App() {
             {settingsTab === 'general' && (
               <div className="settings-sections general-settings">
                 <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>外观</h2><p>选择 Pi Studio 的界面明暗；跟随系统会随 macOS 自动切换。</p></div></div>
+                  <div className="settings-card-head"><div><h2>界面模式</h2><p>选择 Pi Studio 的界面明暗；跟随系统会随 macOS 自动切换。</p></div></div>
                   <div className="theme-choice-row">
                     {([{ value: 'light', label: '浅色', icon: Sun }, { value: 'dark', label: '深色', icon: Moon }, { value: 'system', label: '跟随系统', icon: Monitor }] as const).map((item) => <button key={item.value} className={`theme-choice ${preferences.theme === item.value ? 'is-active' : ''}`} onClick={() => updatePreference('theme', item.value)}><item.icon /><span>{item.label}</span></button>)}
                   </div>
                 </section>
+                <section className="settings-card palette-settings-card">
+                  <div className="settings-card-head"><div><h2>全局配色</h2><p>主色会同步应用到按钮、选中态、链接、焦点与加载动效。页面背景保持中性，成功、警告和错误仍使用固定语义色。</p></div></div>
+                  <div className="palette-choice-grid" role="radiogroup" aria-label="全局配色方案">
+                    {PALETTE_PRESETS.map((preset) => {
+                      const active = preferences.palette === preset.id;
+                      return <button
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        className={`palette-choice ${active ? 'is-active' : ''}`}
+                        data-palette-choice={preset.id}
+                        key={preset.id}
+                        onClick={() => updatePreference('palette', preset.id)}
+                      >
+                        <span className="palette-choice-preview" aria-hidden="true">
+                          <span className="palette-preview-rail"><i /><i /><i /></span>
+                          <span className="palette-preview-page">
+                            <span className="palette-preview-heading" />
+                            <span className="palette-preview-copy" />
+                            <span className="palette-preview-copy is-short" />
+                            <span className="palette-preview-actions"><i /><b /></span>
+                          </span>
+                        </span>
+                        <span className="palette-choice-copy"><strong>{preset.label}</strong><small>{preset.description}</small></span>
+                        <span className="palette-choice-check">{active && <Check />}</span>
+                      </button>;
+                    })}
+                  </div>
+                </section>
+                <section className="settings-card background-settings-card">
+                  <div className="settings-card-head"><div><h2>背景与动态氛围</h2><p>使用本地图片、动态图片或视频作为工作台背景。媒体会复制到 Pi Studio 的私有数据目录，原文件移动后仍可继续使用。</p></div></div>
+                  <div className="background-settings-layout">
+                    <div className="background-preview-column">
+                      {preferences.backgroundMedia
+                        ? <BackgroundMediaPreview media={preferences.backgroundMedia} onError={() => handleBackgroundUnavailable(preferences.backgroundMedia!.url)} />
+                        : <div className="background-media-empty">
+                          <span><ImageIcon /><Film /></span>
+                          <strong>还没有设置背景</strong>
+                          <small>支持图片、GIF、动态 WebP 和视频</small>
+                        </div>}
+                      <div className="background-media-actions">
+                        <button type="button" className="settings-save" disabled={backgroundBusy} onClick={() => void chooseBackground()}>
+                          {backgroundBusy ? <LoaderCircle className="spin" /> : <ImageIcon />}
+                          {preferences.backgroundMedia ? '更换媒体' : '选择媒体'}
+                        </button>
+                        {preferences.backgroundMedia && <button type="button" className="settings-outline" disabled={backgroundBusy} onClick={() => void removeBackground()}><Trash2 />移除</button>}
+                      </div>
+                      <p className="background-format-hint">PNG、JPEG、WebP、GIF、AVIF、MP4、MOV、M4V、WebM，最大 2 GB。</p>
+                    </div>
+                    <div className="background-control-column">
+                      {backgroundError && <div className="background-setting-error" role="alert">{backgroundError}</div>}
+                      {preferences.backgroundMedia && <div className="background-file-summary">
+                        <span className={`background-file-kind ${preferences.backgroundMedia.kind === 'video' ? 'is-video' : 'is-image'}`}>{preferences.backgroundMedia.kind === 'video' ? <Film /> : <ImageIcon />}</span>
+                        <span><strong title={preferences.backgroundMedia.name}>{preferences.backgroundMedia.name}</strong><small>{preferences.backgroundMedia.kind === 'video' ? '视频' : '图片'} · {filesize(preferences.backgroundMedia.bytes)}</small></span>
+                      </div>}
+                      <label className="background-slider" htmlFor="background-opacity">
+                        <span><span><strong>背景透明度</strong><small>控制图片或视频在窗口中的可见程度。</small></span><output>{preferences.backgroundOpacity}%</output></span>
+                        <input id="background-opacity" type="range" min="0" max="100" step="1" value={preferences.backgroundOpacity} disabled={!preferences.backgroundMedia} onChange={(event) => updatePreference('backgroundOpacity', Number(event.target.value))} />
+                      </label>
+                      <label className="background-slider" htmlFor="background-blur">
+                        <span><span><strong>柔化程度</strong><small>轻微模糊背景，让文字与控件更安静。</small></span><output>{preferences.backgroundBlur} px</output></span>
+                        <input id="background-blur" type="range" min="0" max="24" step="1" value={preferences.backgroundBlur} disabled={!preferences.backgroundMedia} onChange={(event) => updatePreference('backgroundBlur', Number(event.target.value))} />
+                      </label>
+                      <label className="background-slider" htmlFor="background-surface">
+                        <span><span><strong>界面遮挡</strong><small>越高越清晰易读，越低越能看见背景细节。</small></span><output>{preferences.backgroundSurfaceOpacity}%</output></span>
+                        <input id="background-surface" type="range" min="55" max="98" step="1" value={preferences.backgroundSurfaceOpacity} disabled={!preferences.backgroundMedia} onChange={(event) => updatePreference('backgroundSurfaceOpacity', Number(event.target.value))} />
+                      </label>
+                      {preferences.backgroundMedia?.kind === 'video' && <p className="background-video-hint"><Film />视频会自动静音循环；MOV 与 WebM 的播放能力取决于其编码格式。</p>}
+                    </div>
+                  </div>
+                </section>
                 <section className="settings-card">
                   <div className="settings-profile-list">
+                    <div className="settings-profile-row"><div><strong>菜单栏图标</strong><p>在 macOS 菜单栏显示运行数量；每轮完成后弹出结果卡片，可直接返回对应会话。</p></div><button className={`switch ${menuBarPreference.enabled ? 'is-on' : ''}`} role="switch" aria-checked={menuBarPreference.enabled} disabled={!menuBarPreference.available || menuBarBusy} title={menuBarPreference.available ? (menuBarPreference.enabled ? '隐藏菜单栏图标' : '显示菜单栏图标') : '当前平台不支持菜单栏图标'} onClick={() => void changeMenuBarVisibility(!menuBarPreference.enabled)}><span /></button></div>
                     <div className="settings-profile-row"><div><strong>圆角风格</strong><p>统一小元素、控件、卡片和大面板的圆角尺度。</p></div><div className="radius-control"><span className="radius-preview" aria-hidden="true"><i /><i /><i /><i /></span><Select label="圆角风格" value={preferences.radiusStyle} onChange={(value) => updatePreference('radiusStyle', value as Preferences['radiusStyle'])} options={[{ value: 'square', label: '直角' }, { value: 'compact', label: '紧凑' }, { value: 'standard', label: '标准' }, { value: 'soft', label: '圆润' }]} /></div></div>
                     <div className="settings-profile-row"><div><strong>字号大小</strong><p>仅影响对话内容的字号。</p></div><div className="settings-inline-control"><Select label="字号大小" value={String(preferences.fontSize)} onChange={(value) => updatePreference('fontSize', Number(value))} options={[12, 13, 14, 15, 16, 17].map((size) => ({ value: String(size), label: String(size) }))} /><span className="settings-unit">px</span></div></div>
                     <div className="settings-profile-row"><div><strong>工作步骤展示</strong><p>选择希望看到多少工具调用细节。</p></div><Select label="工作步骤展示" value={preferences.stepDisplay} onChange={(value) => updatePreference('stepDisplay', value as Preferences['stepDisplay'])} options={[{ value: 'compact', label: '精简' }, { value: 'standard', label: '标准' }, { value: 'detailed', label: '详细' }]} /></div>
@@ -2995,6 +3584,32 @@ export function App() {
             />}
             {settingsData && settingsTab === 'models' && (
               <div className="settings-sections">
+                <section className="settings-card default-model-card">
+                  <div className="settings-card-head">
+                    <div>
+                      <h2>新对话默认</h2>
+                      <p>这里与 Pi CLI 的全局默认模型同步。打开历史会话时，仍会优先恢复那条会话自己最后使用的模型和思考等级。</p>
+                    </div>
+                    {defaultModelBusy && <span className="settings-save-status" role="status"><LoaderCircle className="spin" />同步中</span>}
+                  </div>
+                  <div className="default-model-panel">
+                    <div className="default-model-identity">
+                      <ProviderIcon provider={defaultModelItem?.provider || defaultModelSelection.modelRef.split('/')[0]} name={defaultModelProvider} icon={settingsData.providers.find((entry) => entry.id === defaultModelItem?.provider)?.icon} size={34} />
+                      <span><small>当前新对话使用</small><strong>{defaultModelSelection.label || '尚未选择模型'}</strong><code>{defaultModelSelection.modelRef || '—'}</code></span>
+                    </div>
+                    <div className="default-model-fields">
+                      <label>
+                        <span>默认模型</span>
+                        <Select label="新对话默认模型" value={defaultModelSelection.modelRef} options={defaultModelOptions} disabled={defaultModelBusy || defaultModelOptions.length === 0} onChange={(value) => void selectDefaultModel(value)} />
+                      </label>
+                      <label>
+                        <span>默认思考强度</span>
+                        <Select label="新对话默认思考强度" value={defaultModelSelection.thinkingLevel} options={defaultThinkingOptions} disabled={defaultModelBusy || defaultThinkingOptions.length <= 1} onChange={(value) => void selectDefaultThinking(value as ThinkingLevel)} />
+                      </label>
+                    </div>
+                  </div>
+                  <p className="default-model-note"><Info />App 中修改会立即写入 Pi；终端里修改后，App 会在启动或刷新模型目录时同步。历史会话的临时切换只影响该会话。</p>
+                </section>
                 <section className="settings-card">
                   <div className="settings-card-head"><div><h2>已启用模型 <span className="count-badge">{enabledModels.length}</span></h2><p>这里管理所有会话可用的模型；具体使用哪个模型，在对话输入框中选择。</p></div></div>
                   {enabledModels.length > 0 ? <>
@@ -3003,36 +3618,83 @@ export function App() {
                   </> : <div className="settings-empty">在下方添加来源，再选择要启用的模型。</div>}
                 </section>
                 <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>模型来源 <span className="count-badge">{settingsData.providers.length}</span></h2><p>管理服务地址、认证信息和可用模型。</p></div><button className="settings-add-button" aria-label="添加模型来源" onClick={() => void openEditor('provider')}>添加</button></div>
+                  <div className="settings-card-head"><div><h2>模型来源 <span className="count-badge">{settingsData.providers.length}</span></h2><p>来源负责连接与认证；模型在对应来源内单独添加、发现和管理。</p></div><button className="settings-add-button" aria-label="添加模型来源" onClick={() => void openEditor('provider')}><Plus />添加来源</button></div>
                   <div className="provider-cards">
                     {settingsData.providers.map((provider) => {
                       const list = providerModels[provider.id] ?? [];
                       const filtered = list.filter((item) => `${item.name} ${item.id}`.toLowerCase().includes(modelQuery.toLowerCase()));
-                      return <div className="provider-card" key={provider.id}>
+                      const discovery = providerDiscovery[provider.id];
+                      const discoveredMissing = (discovery?.models || []).filter((item) => !list.some((model) => model.model === item.id));
+                      return <article className={`provider-card ${expandedProvider === provider.id ? 'is-expanded' : ''}`} key={provider.id}>
                         <div className="provider-card-head">
                           <ProviderIcon className="provider-avatar" provider={provider.id} name={provider.name} icon={provider.icon} size={36} />
-                          <div className="provider-main"><strong>{provider.name}</strong><span>{provider.id} · {provider.models} 个模型</span></div>
+                          <div className="provider-main"><strong>{provider.name}</strong><span><code>{provider.id}</code><i />{provider.models} 个模型</span></div>
                           <span className={`provider-mode ${provider.authConfigured === false ? 'is-missing' : ''}`}>{provider.authConfigured === false ? '未配置凭据' : provider.mode === 'oauth' ? 'OAuth' : provider.mode === 'env' ? '环境变量' : 'API Key'}</span>
-                          <div className="row-actions"><button className="icon-button row-edit" aria-label={`编辑 ${provider.name}`} title="编辑" onClick={() => void openEditor('provider', provider.id)}><Pencil /></button><button className="settings-outline row-action" onClick={() => void loadProviderModels(provider.id)} aria-expanded={expandedProvider === provider.id}>{expandedProvider === provider.id ? '收起模型' : '管理模型'}</button></div>
+                          <div className="row-actions"><button className="icon-button row-edit" aria-label={`编辑 ${provider.name}`} title="编辑连接" onClick={() => void openEditor('provider', provider.id)}><Pencil /></button><button className="settings-outline row-action" onClick={() => void loadProviderModels(provider.id)} aria-expanded={expandedProvider === provider.id}>{expandedProvider === provider.id ? '收起' : '管理模型'}</button></div>
                         </div>
                         {provider.authConfigured === false && <p className="provider-auth-hint">已启用此来源的模型，但尚未配置凭据。点击“编辑”完成连接。</p>}
                         {provider.mode === 'env' && <div className={`provider-env-hint ${provider.envAvailable ? 'is-set' : ''}`}>{provider.envAvailable ? '环境变量已设置' : '环境变量未设置'} · <code>{provider.envName}</code></div>}
                         {expandedProvider === provider.id && <div className="provider-model-panel">
-                          <div className="provider-model-tools"><input className="model-search" aria-label={`搜索 ${provider.name} 的模型`} value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} placeholder="搜索名称或模型 ID…" /><span>{list.filter((item) => enabledModels.includes(item.id)).length}/{list.length} 已启用</span></div>
+                          <div className="provider-model-head">
+                            <div><strong>模型目录</strong><span>{list.length > 0 ? `${list.filter((item) => enabledModels.includes(item.id)).length} 个已启用 · 共 ${list.length} 个` : '这个来源还没有模型'}</span></div>
+                            <div className="provider-model-actions">
+                              <button className="settings-outline" disabled={discovery?.loading || settingsBusy} onClick={() => void discoverProviderModels(provider.id)}><RotateCw className={discovery?.loading ? 'spin' : ''} />获取模型</button>
+                              <button className="settings-add-button" onClick={() => openModelEditor(provider.id)}><Plus />添加模型</button>
+                            </div>
+                          </div>
+                          <div className="provider-model-tools">
+                            <div className="provider-model-search"><Search /><input className="model-search" aria-label={`搜索 ${provider.name} 的模型`} value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} placeholder="搜索名称或模型 ID…" /></div>
+                            <span>{provider.modelsUrl ? '已配置模型列表地址' : '未配置地址时自动尝试 /models'}</span>
+                          </div>
+                          {discovery && <div className={`provider-discovery-panel ${discovery.error ? 'is-error' : ''}`} aria-live="polite">
+                            <div className="provider-discovery-head">
+                              <div>
+                                <strong>{discovery.loading ? '正在读取模型列表…' : discovery.error ? '模型发现失败' : `发现 ${discovery.models?.length || 0} 个模型`}</strong>
+                                {discovery.endpoint && <code>{discovery.endpoint}</code>}
+                                {discovery.error && <p>{discovery.error}</p>}
+                                {!discovery.loading && !discovery.error && discovery.imported !== undefined && <p>已同步 {discovery.imported} 个新模型，可逐个调整能力与上下文。</p>}
+                              </div>
+                              <button className="icon-button" aria-label="关闭模型发现结果" title="关闭" onClick={() => setProviderDiscovery((current) => {
+                                const next = { ...current };
+                                delete next[provider.id];
+                                return next;
+                              })}><X /></button>
+                            </div>
+                            {!discovery.loading && !discovery.error && <div className="provider-discovery-body">
+                              <div className="provider-discovery-list">{(discovery.models || []).map((item) => <span key={item.id}>{item.name}</span>)}{!discovery.models?.length && <small>接口返回了空列表。</small>}</div>
+                              <button className="settings-save" disabled={discoveredMissing.length === 0 || discovery.importing} onClick={() => void importProviderModels(provider.id, discoveredMissing)}>{discovery.importing ? <LoaderCircle className="spin" /> : <Plus />}{discoveredMissing.length > 0 ? `添加 ${discoveredMissing.length} 个` : '已全部添加'}</button>
+                            </div>}
+                          </div>}
                           <div className="provider-model-list">
-                            {filtered.slice(0, 150).map((item) => <label className="provider-model-row" key={item.id}><input type="checkbox" disabled={settingsBusy} checked={enabledModels.includes(item.id)} onChange={(event) => void setEnabled(event.target.checked ? [...enabledModels, item.id] : enabledModels.filter((id) => id !== item.id))} /><span>{item.name}</span>{item.supportsImages && <em>图片</em>}{item.contextWindow && <small>{Math.round(item.contextWindow / 1000)}K</small>}</label>)}
-                            {filtered.length === 0 && <div className="settings-empty">{providerModels[provider.id] ? '没有匹配的模型' : '正在加载模型…'}</div>}
+                            {filtered.slice(0, 300).map((item) => <div className="provider-model-row" key={item.id}>
+                              <label className="provider-model-check" title={enabledModels.includes(item.id) ? '停用模型' : '启用模型'}>
+                                <input type="checkbox" aria-label={`${enabledModels.includes(item.id) ? '停用' : '启用'}模型 ${item.name}`} disabled={settingsBusy} checked={enabledModels.includes(item.id)} onChange={(event) => void setEnabled(event.target.checked ? [...enabledModels, item.id] : enabledModels.filter((id) => id !== item.id))} />
+                              </label>
+                              <div className="provider-model-identity"><strong>{item.name}</strong><code>{item.model}</code></div>
+                              <div className="model-capabilities">
+                                {item.contextWindow && <span>{Math.round(item.contextWindow / 1000)}K 上下文</span>}
+                                {item.maxTokens && <span>{Math.round(item.maxTokens / 1000)}K 输出</span>}
+                                {item.supportsImages && <span>图片</span>}
+                                {item.reasoning && <span>推理</span>}
+                                {item.origin === 'configured' && <span className="is-origin">自定义</span>}
+                                {item.origin === 'override' && <span className="is-origin">已覆盖</span>}
+                              </div>
+                              <div className="provider-model-row-actions">
+                                <button className="icon-button row-edit" aria-label={`编辑模型 ${item.name}`} title={item.origin === 'builtin' ? '覆盖内置模型参数' : '编辑模型'} onClick={() => openModelEditor(provider.id, item)}><Pencil /></button>
+                                {item.deletable && <button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`${item.origin === 'override' ? '恢复' : '删除'}模型 ${item.name}`} title={item.origin === 'override' ? '恢复内置参数' : '删除模型'} onClick={() => void deleteCustomModel(provider.id, item)}><Trash2 /></button>}
+                              </div>
+                            </div>)}
+                            {filtered.length === 0 && (list.length > 0
+                              ? <div className="settings-empty">没有匹配的模型。</div>
+                              : providerModels[provider.id]
+                                ? <div className="provider-model-empty"><Layers3 /><strong>这个来源还没有模型</strong><span>手动添加，或从来源的模型列表接口导入。</span><div><button className="settings-outline" onClick={() => openModelEditor(provider.id)}><Plus />添加模型</button><button className="settings-outline" onClick={() => void discoverProviderModels(provider.id)}><RotateCw />获取模型</button></div></div>
+                                : <div className="settings-empty"><LoaderCircle className="spin" />正在加载模型…</div>)}
                           </div>
                         </div>}
-                      </div>;
+                      </article>;
                     })}
                     {settingsData.providers.length === 0 && <div className="settings-empty">还没有模型来源，添加一个开始使用。</div>}
                   </div>
-                </section>
-                <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>自定义模型 <span className="count-badge">{settingsData.customModels?.length || 0}</span></h2><p>手动添加模型，或调整名称、上下文与能力。</p></div><button className="settings-add-button" aria-label="添加自定义模型" onClick={() => void openEditor('model')}>添加</button></div>
-                  <div className="custom-model-list">{settingsData.customModels?.map((item) => <div className="custom-model-row" key={`${item.providerId}/${item.modelId}`}><div className="provider-main"><strong>{item.name}</strong><span>{item.providerId}/{item.modelId}</span></div><div className="model-capabilities">{item.contextWindow && <span>{Math.round(item.contextWindow / 1000)}K</span>}{item.supportsImages && <span>图片</span>}{item.reasoning && <span>推理</span>}</div><button className="icon-button row-edit" aria-label={`编辑模型 ${item.name}`} title="编辑" onClick={() => void openEditor('model', `${item.providerId}/${item.modelId}`)}><Pencil /></button><button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`删除模型 ${item.name}`} title="删除" onClick={() => void deleteCustomModel(item.providerId, item.modelId, item.name)}><Trash2 /></button></div>)}</div>
-                  {!settingsData.customModels?.length && <div className="settings-empty">还没有自定义模型。</div>}
                 </section>
               </div>
             )}
@@ -3072,48 +3734,135 @@ export function App() {
               </section>
             )}
             {settingsData && settingsTab === 'extensions' && (
-              <div className="settings-sections">
-                <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>扩展包 <span className="count-badge">{settingsData.packages.length}</span></h2><p>从 npm 或 Git 仓库安装扩展。</p></div><button className="settings-add-button" aria-label="安装扩展包" onClick={() => void openEditor('package')}>添加</button></div>
-                  <div className="package-list">{settingsData.packages.map((pkg) => <div className="package-row" key={pkg.source}><Plug /><div className="provider-main"><strong>{pkg.name}</strong><span>{pkg.source}</span></div><button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`移除扩展包 ${pkg.name}`} title="移除" onClick={() => void removePackage(pkg.source)}><Trash2 /></button></div>)}{settingsData.packages.length === 0 && <div className="settings-empty">还没有安装扩展包。</div>}</div>
-                </section>
-                <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>本地扩展</h2><p>从本机导入扩展文件或目录。</p></div><button className="settings-add-button" aria-label="添加本地扩展" onClick={() => void openEditor('extension')}>添加</button></div>
-                  {(['user', 'project'] as const).map((scope) => {
-                    const items = settingsData.extensions.filter((item) => item.scope === scope);
-                    return <div className="skill-group" key={scope}><div className="skill-group-title">{scope === 'user' ? '全局' : '项目'}<span>{items.length}</span></div>{items.map((item) => <div className="skill-settings-row" key={item.path}><Plug /><div><strong>{item.name}</strong><p>{item.kind === 'directory' ? '扩展目录' : '扩展文件'}</p><span>{item.path}</span></div><button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`删除扩展 ${item.name}`} title="删除" onClick={() => void deleteExtension(item.path, item.name)}><Trash2 /></button></div>)}{items.length === 0 && <div className="settings-empty settings-empty--small">暂无{scope === 'user' ? '全局' : '项目'}扩展</div>}</div>;
-                  })}
-                </section>
-                {settingsData.extensionData.length > 0 && <section className="settings-card"><div className="settings-card-head"><div><h2>扩展运行数据</h2></div></div><div className="package-list">{settingsData.extensionData.map((name) => <div className="package-row" key={name}><Plug /><div className="provider-main"><strong>{name}</strong></div></div>)}</div></section>}
-              </div>
+              <section className="settings-card">
+                <div className="settings-card-head">
+                  <div>
+                    <h2>已安装扩展 <span className="count-badge">{settingsData.packages.length + settingsData.extensions.length}</span></h2>
+                    <p>扩展包与本地扩展统一显示。每个项目会标明安装来源和生效范围。</p>
+                  </div>
+                  <button className="settings-add-button" aria-label="添加扩展" onClick={() => void openEditor('extension-install')}><Plus />添加扩展</button>
+                </div>
+                <div className="installed-extension-list">
+                  {settingsData.packages.map((pkg) => <article className="installed-extension-row" key={`package:${pkg.source}`}>
+                    <span className="installed-extension-icon"><Layers3 /></span>
+                    <div className="installed-extension-main">
+                      <div className="installed-extension-title"><strong>{pkg.name}</strong><span className="extension-kind-badge">{packageSourceLabel(pkg.source)}</span><span className="extension-scope-badge">{pkg.scope === 'project' ? '当前项目' : '全局'}</span></div>
+                      <code title={pkg.source}>{pkg.source}</code>
+                    </div>
+                    <button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`移除扩展包 ${pkg.name}`} title="移除扩展包" onClick={() => void removePackage(pkg.source)}><Trash2 /></button>
+                  </article>)}
+                  {settingsData.extensions.map((item) => <article className="installed-extension-row" key={`local:${item.path}`}>
+                    <span className="installed-extension-icon"><Plug /></span>
+                    <div className="installed-extension-main">
+                      <div className="installed-extension-title"><strong>{item.name}</strong><span className="extension-kind-badge">{item.kind === 'directory' ? '本地目录' : '本地文件'}</span><span className="extension-scope-badge">{item.scope === 'project' ? '当前项目' : '全局'}</span></div>
+                      <code title={item.path}>{item.path}</code>
+                    </div>
+                    <button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`删除扩展 ${item.name}`} title="删除本地扩展" onClick={() => void deleteExtension(item.path, item.name)}><Trash2 /></button>
+                  </article>)}
+                  {settingsData.packages.length + settingsData.extensions.length === 0 && <div className="settings-empty">还没有安装扩展。可以安装 npm / Git 扩展包，或导入本地扩展文件。</div>}
+                </div>
+                <p className="settings-footnote">扩展会直接在本机运行并访问会话资源，请只安装可信来源。</p>
+              </section>
             )}
             {settingsData && settingsTab === 'about' && (
-              <section className="settings-card about-card">
-                <div className="about-brand"><BrandMark /><div><h2>Pi Studio</h2><p>让想法，在这里成为现实。</p></div><span className="preview-badge">预览版</span></div>
-                <dl className="about-list"><div><dt>内核</dt><dd>@earendil-works/pi-coding-agent</dd></div><div><dt>凭据文件</dt><dd>{settingsData.authPath}</dd></div><div><dt>MCP 配置</dt><dd>{settingsData.mcpPath}</dd></div><div><dt>模型配置</dt><dd>{settingsData.modelsPath}</dd></div></dl>
-              </section>
+              <div className="about-page">
+                <section className="about-hero-card">
+                  <span className="about-watermark" aria-hidden="true">π</span>
+                  <div className="about-hero-main">
+                    <div className="about-eyebrow"><i />Pi Coding Agent 桌面工作台<span>macOS</span></div>
+                    <div className="about-lockup">
+                      <BrandMark className="about-app-icon" />
+                      <div><h1>Pi Studio</h1><p>让想法，在这里成为现实。</p></div>
+                    </div>
+                    <p className="about-lead">一个为 Pi Coding Agent 打造的桌面工作台。把长对话、代码差异、多子 Agent 协作和本地工作区放进同一套安静、清晰的界面里。</p>
+                    <div className="about-actions">
+                      <button type="button" className="about-action-primary" onClick={openUpdateDialog}><RotateCw />检查更新</button>
+                      <button type="button" className="about-action-secondary" onClick={() => void window.piApi.openExternal('https://github.com/huangrx6/pi-studio')}><Github />查看源码</button>
+                    </div>
+                    <div className="about-feature-pills">
+                      <span><Monitor />macOS 原生体验</span>
+                      <span><ShieldCheck />配置与会话保存在本地</span>
+                      <span><Bot />Pi Agent 驱动</span>
+                    </div>
+                  </div>
+                  <aside className="about-release-card">
+                    <span className="about-release-label">当前版本</span>
+                    <strong>{updateSnapshot.currentVersion ? `v${updateSnapshot.currentVersion}` : 'DEV'}</strong>
+                    <div className="about-release-status"><i />GitHub Releases</div>
+                    {updateSnapshot.state === 'available' && updateSnapshot.latestVersion
+                      ? <p>发现新版本 v{updateSnapshot.latestVersion}</p>
+                      : <p>通过 GitHub Releases 获取稳定更新。</p>}
+                    <button type="button" onClick={openUpdateDialog}>版本与更新 <ChevronRight /></button>
+                  </aside>
+                </section>
+
+                <div className="about-info-grid">
+                  <article className="about-info-card about-author-card">
+                    <div className="about-info-head"><span><UserRound /></span><small>设计与开发</small></div>
+                    <h2>huangrx6</h2>
+                    <p>Pi Studio 的创建者，专注于把复杂的 Agent 工作流做成人愿意每天使用的工具。</p>
+                    <button type="button" onClick={() => void window.piApi.openExternal('https://github.com/huangrx6')}>GitHub 主页 <ExternalLink /></button>
+                  </article>
+                  <article className="about-info-card">
+                    <div className="about-info-head"><span><Cpu /></span><small>Agent 内核</small></div>
+                    <h2>Pi Coding Agent</h2>
+                    <code>@earendil-works/pi-coding-agent</code>
+                    <p>负责模型会话、工具调用、扩展运行与会话持久化。</p>
+                  </article>
+                  <article className="about-info-card">
+                    <div className="about-info-head"><span><ShieldCheck /></span><small>开源许可</small></div>
+                    <h2>MIT License</h2>
+                    <p>源码开放，欢迎阅读、改进和基于自己的需求继续构建。</p>
+                    <button type="button" onClick={() => void window.piApi.openExternal('https://github.com/huangrx6/pi-studio/blob/main/LICENSE')}>查看许可 <ExternalLink /></button>
+                  </article>
+                </div>
+
+                <section className="about-resource-card">
+                  <div className="about-resource-head"><div><h2>资源与支持</h2><p>文档、源码和问题反馈都在 GitHub 上持续更新。</p></div><span>Resources</span></div>
+                  <div className="about-resource-links">
+                    <button type="button" onClick={() => void window.piApi.openExternal('https://huangrx6.github.io/pi-studio/')}><span><BookOpen /></span><div><strong>使用文档</strong><small>安装、配置与工作流说明</small></div><ExternalLink /></button>
+                    <button type="button" onClick={() => void window.piApi.openExternal('https://github.com/huangrx6/pi-studio')}><span><Github /></span><div><strong>GitHub 仓库</strong><small>关注最新提交与版本</small></div><ExternalLink /></button>
+                    <button type="button" onClick={() => void window.piApi.openExternal('https://github.com/huangrx6/pi-studio/issues')}><span><MessageSquare /></span><div><strong>问题反馈</strong><small>报告问题和提出建议</small></div><ExternalLink /></button>
+                  </div>
+                </section>
+
+                <details className="about-system-card">
+                  <summary><span><FileCode2 /></span><div><strong>本地配置与诊断信息</strong><small>查看 Pi 实际使用的配置文件路径</small></div><ChevronDown /></summary>
+                  <dl>
+                    <div><dt>凭据文件</dt><dd>{settingsData.authPath}</dd></div>
+                    <div><dt>MCP 配置</dt><dd>{settingsData.mcpPath}</dd></div>
+                    <div><dt>模型配置</dt><dd>{settingsData.modelsPath}</dd></div>
+                  </dl>
+                </details>
+              </div>
             )}
           </section>
           {editor && <SettingsDialog
-            title={editor.kind === 'provider' ? editor.editId ? '编辑模型来源' : '添加模型来源' : editor.kind === 'model' ? editor.editId ? '编辑自定义模型' : '添加自定义模型' : editor.kind === 'mcp' ? editor.editId ? '编辑 MCP 服务器' : '添加 MCP 服务器' : editor.kind === 'package' ? '安装扩展包' : editor.kind === 'skill' ? '添加技能' : '添加本地扩展'}
-            description={editor.kind === 'mcp' ? '配置工具连接，保存后在新会话中生效。' : editor.kind === 'provider' ? '设置连接方式与认证信息。' : editor.kind === 'model' ? '配置模型的名称与能力。' : editor.kind === 'package' ? '请输入可信的扩展包地址。' : '选择生效范围，再从本机导入。'}
-            action={editor.kind === 'skill' ? '选择文件夹并添加' : editor.kind === 'extension' ? '选择文件并添加' : editor.kind === 'package' ? '安装' : editor.editId ? '保存更改' : '添加'}
-            busy={settingsBusy} loading={editorLoading} unavailable={Boolean(editor.editId && (editor.kind === 'provider' ? !providerDraft.providerId : editor.kind === 'mcp' ? !originalMcpArgsRef.current : editor.kind === 'model' ? !customModel.modelId : false))} error={editorError} onClose={closeEditor} onSubmit={submitEditor}>
+            title={editor.kind === 'provider' ? editor.editId ? '编辑模型来源' : '添加模型来源' : editor.kind === 'model' ? editor.editId ? (customModel.origin === 'builtin' ? '调整内置模型' : '编辑模型') : '添加模型' : editor.kind === 'mcp' ? editor.editId ? '编辑 MCP 服务器' : '添加 MCP 服务器' : editor.kind === 'extension-install' ? '添加扩展' : editor.kind === 'package' ? '安装扩展包' : editor.kind === 'skill' ? '添加技能' : '添加本地扩展'}
+            description={editor.kind === 'mcp' ? '配置工具连接，保存后在新会话中生效。' : editor.kind === 'provider' ? '这里只保存连接与认证；模型在来源卡片内独立管理。' : editor.kind === 'model' ? `模型将归属到 ${settingsData?.providers.find((provider) => provider.id === customModel.providerId)?.name || customModel.providerId}。` : editor.kind === 'extension-install' ? '安装扩展包，或从本机导入一个 Pi 扩展。' : editor.kind === 'package' ? '请输入可信的扩展包地址。' : '选择生效范围，再从本机导入。'}
+            action={editor.kind === 'extension-install' ? extensionInstallMode === 'package' ? '安装扩展' : '选择并导入' : editor.kind === 'skill' ? '选择文件夹并添加' : editor.kind === 'extension' ? '选择文件并添加' : editor.kind === 'package' ? '安装' : editor.editId ? '保存更改' : '添加'}
+            busy={settingsBusy} loading={editorLoading} unavailable={editor.kind === 'extension-install' ? extensionInstallMode === 'package' && !packageDraft.trim() : Boolean(editor.editId && (editor.kind === 'provider' ? !providerDraft.providerId : editor.kind === 'mcp' ? !originalMcpArgsRef.current : editor.kind === 'model' ? !customModel.modelId : false))} error={editorError} onClose={closeEditor} onSubmit={submitEditor}>
             {editor.kind === 'provider' && <div className="settings-form-grid">
               <label>来源 ID<input autoFocus={!editor.editId} required disabled={Boolean(editor.editId)} value={providerDraft.providerId} onChange={(event) => setProviderDraft({ ...providerDraft, providerId: event.target.value })} placeholder="my-provider" /></label>
+              <label>显示名称<input required value={providerDraft.name} onChange={(event) => setProviderDraft({ ...providerDraft, name: event.target.value })} placeholder="例如 My Gateway" /></label>
               <div className="settings-field"><span>API 类型</span><Select label="API 类型" value={providerDraft.api} onChange={(value) => setProviderDraft({ ...providerDraft, api: value })} options={[...apiTypeOptions, ...(apiTypeOptions.some((option) => option.value === providerDraft.api) ? [] : [{ value: providerDraft.api, label: providerDraft.api }])]} /></div>
-              <label className="field-wide">服务地址<input autoFocus={Boolean(editor.editId)} required type="url" value={providerDraft.baseUrl} onChange={(event) => setProviderDraft({ ...providerDraft, baseUrl: event.target.value })} placeholder="https://api.example.com/v1" /></label>
+              <label>服务地址<input autoFocus={Boolean(editor.editId)} required type="url" value={providerDraft.baseUrl} onChange={(event) => setProviderDraft({ ...providerDraft, baseUrl: event.target.value })} placeholder="https://api.example.com/v1" /></label>
               <label className="field-wide">API Key<input aria-label="API Key" aria-describedby="provider-key-help" type="password" autoComplete="new-password" value={providerDraft.apiKey} onChange={(event) => setProviderDraft({ ...providerDraft, apiKey: event.target.value })} placeholder={editor.editId ? '已保存的凭据不显示，留空保持原值' : '密钥值或 $ENV_VAR'} /><small id="provider-key-help">填写密钥值，或环境变量名（如 ZAI_CODING_CN_API_KEY、$ZAI_CODING_CN_API_KEY）。macOS 会读取 shell 中 export 的变量；保存时检查是否可读取。</small></label>
-              <label className="field-wide">图标 URL<input value={providerDraft.icon} onChange={(event) => setProviderDraft({ ...providerDraft, icon: event.target.value })} placeholder="可选，https://... 或 data:image/..." /><small>用于替换默认的品牌图标，留空使用内置图标。</small></label>
-              {!editor.editId && <><label>首个模型 ID<input required value={providerDraft.modelId} onChange={(event) => setProviderDraft({ ...providerDraft, modelId: event.target.value })} placeholder="model-id" /></label><label>显示名称<input value={providerDraft.modelName} onChange={(event) => setProviderDraft({ ...providerDraft, modelName: event.target.value })} placeholder="可选，默认使用模型 ID" /></label></>}
+              <label>模型列表地址<input aria-label="模型列表地址" type="url" value={providerDraft.modelsUrl} onChange={(event) => setProviderDraft({ ...providerDraft, modelsUrl: event.target.value })} placeholder="可选，留空自动使用服务地址/models" /><small>支持常见 OpenAI `/models` 响应。保存后可在来源卡片内获取并预览模型。</small></label>
+              <label>图标 URL<input value={providerDraft.icon} onChange={(event) => setProviderDraft({ ...providerDraft, icon: event.target.value })} placeholder="可选，https://... 或 data:image/..." /><small>用于替换默认的品牌图标，留空使用内置图标。</small></label>
+              <div className="provider-flow-note field-wide"><span><Cpu /></span><div><strong>来源和模型分开配置</strong><p>保存来源后，在来源卡片中手动添加模型，或从模型列表接口批量导入。每个模型可单独设置输入能力、推理和 Token 限制。</p></div></div>
             </div>}
-            {editor.kind === 'model' && <div className="settings-form-grid">
-              <div className="settings-field"><span>模型来源</span><Select label="模型来源" autoFocus={!editor.editId} disabled={Boolean(editor.editId)} value={customModel.providerId} onChange={(value) => setCustomModel({ ...customModel, providerId: value })} options={[{ value: '', label: '选择来源' }, ...(settingsData?.providers ?? []).map((provider) => ({ value: provider.id, label: provider.name }))]} /></div>
-              <label>模型 ID<input required disabled={Boolean(editor.editId)} value={customModel.modelId} onChange={(event) => setCustomModel({ ...customModel, modelId: event.target.value })} placeholder="model-id" /></label>
-              <label className="field-wide">显示名称<input autoFocus={Boolean(editor.editId)} value={customModel.name} onChange={(event) => setCustomModel({ ...customModel, name: event.target.value })} placeholder="可选，默认使用模型 ID" /></label>
+            {editor.kind === 'model' && <div className="settings-form-grid model-editor-form">
+              <div className="settings-field field-wide"><span>模型来源</span><Select label="模型来源" disabled value={customModel.providerId} onChange={() => {}} options={(settingsData?.providers ?? []).filter((provider) => provider.id === customModel.providerId).map((provider) => ({ value: provider.id, label: `${provider.name} · ${provider.id}` }))} /></div>
+              <label>模型 ID<input autoFocus required disabled={Boolean(editor.editId)} value={customModel.modelId} onChange={(event) => setCustomModel({ ...customModel, modelId: event.target.value })} placeholder="model-id" /></label>
+              <label>显示名称<input value={customModel.name} onChange={(event) => setCustomModel({ ...customModel, name: event.target.value })} placeholder="可选，默认使用模型 ID" /></label>
               <label>上下文长度<input type="number" min="1" step="1" value={customModel.contextWindow} onChange={(event) => setCustomModel({ ...customModel, contextWindow: event.target.value })} placeholder="默认值" /></label>
               <label>最大输出<input type="number" min="1" step="1" value={customModel.maxTokens} onChange={(event) => setCustomModel({ ...customModel, maxTokens: event.target.value })} placeholder="默认值" /></label>
-              <div className="settings-checkboxes field-wide"><label><input type="checkbox" checked={customModel.supportsImages} onChange={(event) => setCustomModel({ ...customModel, supportsImages: event.target.checked })} />支持图片</label><label><input type="checkbox" checked={customModel.reasoning} onChange={(event) => setCustomModel({ ...customModel, reasoning: event.target.checked })} />推理模型</label></div>
+              <div className="model-capability-options field-wide" role="group" aria-label="模型能力">
+                <label className={customModel.supportsImages ? 'is-selected' : ''}><input type="checkbox" checked={customModel.supportsImages} onChange={(event) => setCustomModel({ ...customModel, supportsImages: event.target.checked })} /><span><strong>图片输入</strong><small>允许在对话中发送图片</small></span><ImageIcon /></label>
+                <label className={customModel.reasoning ? 'is-selected' : ''}><input type="checkbox" checked={customModel.reasoning} onChange={(event) => setCustomModel({ ...customModel, reasoning: event.target.checked })} /><span><strong>推理模型</strong><small>支持 Thinking 强度设置</small></span><Sparkles /></label>
+              </div>
+              {customModel.origin === 'builtin' && <p className="model-editor-note field-wide"><Info />这是 Pi 内置模型。保存会在当前来源中建立参数覆盖，不会替换同一来源的其他内置模型。</p>}
             </div>}
             {editor.kind === 'mcp' && <div className="settings-form-grid">
               <label>名称<input autoFocus required value={mcpDraft.name} onChange={(event) => setMcpDraft({ ...mcpDraft, name: event.target.value })} placeholder="例如 filesystem" /></label>
@@ -3122,8 +3871,15 @@ export function App() {
               {mcpDraft.transport === 'stdio' ? <><label className="field-wide">启动命令<input required value={mcpDraft.command} onChange={(event) => setMcpDraft({ ...mcpDraft, command: event.target.value })} placeholder="npx" /></label><label className="field-wide">启动参数<textarea aria-label="启动参数" aria-describedby="mcp-args-help" value={mcpDraft.args} onChange={(event) => setMcpDraft({ ...mcpDraft, args: event.target.value })} rows={4} placeholder={'-y\n@modelcontextprotocol/server-filesystem\n/path/to/workspace'} /><small id="mcp-args-help">每行一个参数，路径中的空格会保留。</small></label></> : <label className="field-wide">服务器地址<input required type="url" value={mcpDraft.url} onChange={(event) => setMcpDraft({ ...mcpDraft, url: event.target.value })} placeholder="https://example.com/mcp" /></label>}
               <label className="field-wide">环境变量<textarea aria-label="环境变量" value={mcpDraft.env} onChange={(event) => setMcpDraft({ ...mcpDraft, env: event.target.value })} rows={3} placeholder={'TOKEN=...\nBASE_URL=https://...'} /><small>每行一个 KEY=value，留空表示不设置。</small></label>
             </div>}
+            {editor.kind === 'extension-install' && <div className="extension-install-form">
+              <div className="extension-install-methods" role="radiogroup" aria-label="扩展安装方式">
+                <label className={extensionInstallMode === 'package' ? 'is-selected' : ''}><input type="radio" name="extension-install-mode" checked={extensionInstallMode === 'package'} onChange={() => setExtensionInstallMode('package')} /><span><Layers3 /></span><div><strong>安装扩展包</strong><small>从 npm、Git 或本地包路径安装，由 Pi 统一管理。</small></div></label>
+                <label className={extensionInstallMode === 'local' ? 'is-selected' : ''}><input type="radio" name="extension-install-mode" checked={extensionInstallMode === 'local'} onChange={() => setExtensionInstallMode('local')} /><span><Folder /></span><div><strong>导入本地扩展</strong><small>复制一个扩展文件或目录到 Pi 扩展目录。</small></div></label>
+              </div>
+              {extensionInstallMode === 'package' ? <div className="settings-form-grid"><label className="field-wide">扩展包来源<input aria-label="扩展包地址" autoFocus required value={packageDraft} onChange={(event) => setPackageDraft(event.target.value)} placeholder="npm:pi-tools 或 git:github.com/user/pi-plugin" /><small>支持 npm、Git 和本地 package 路径。扩展拥有本机访问权限，请确认来源可信。</small></label></div> : <div className="resource-import"><span className="field-label">生效范围</span><div className="scope-options"><label className={resourceScope === 'user' ? 'is-selected' : ''}><input type="radio" name="extension-scope" checked={resourceScope === 'user'} onChange={() => setResourceScope('user')} /><div><strong>全局</strong><span>在所有工作区中使用</span></div></label><label className={resourceScope === 'project' ? 'is-selected' : ''}><input type="radio" name="extension-scope" disabled={!workspace} checked={resourceScope === 'project'} onChange={() => setResourceScope('project')} /><div><strong>当前项目</strong><span>{activeWorkspace?.name || '请先选择工作区'}</span></div></label></div><p className="import-note">选择扩展文件，或包含 index.ts / index.js 的扩展目录。文件会被复制到 Pi 的扩展目录。</p></div>}
+            </div>}
             {editor.kind === 'package' && <div className="settings-form-grid"><label className="field-wide">扩展包地址<input aria-label="扩展包地址" autoFocus required value={packageDraft} onChange={(event) => setPackageDraft(event.target.value)} placeholder="npm:pi-tools 或 git:github.com/user/pi-plugin" /><small>扩展拥有本机访问权限，请确认来源可信。</small></label></div>}
-            {(editor.kind === 'skill' || editor.kind === 'extension') && <div className="resource-import"><span className="field-label">生效范围</span><div className="scope-options"><label className={resourceScope === 'user' ? 'is-selected' : ''}><input type="radio" name="scope" checked={resourceScope === 'user'} onChange={() => setResourceScope('user')} /><div><strong>全局</strong><span>在所有工作区中使用</span></div></label>{editor.kind === 'extension' && <label className={resourceScope === 'project' ? 'is-selected' : ''}><input type="radio" name="scope" disabled={!workspace} checked={resourceScope === 'project'} onChange={() => setResourceScope('project')} /><div><strong>当前项目</strong><span>{activeWorkspace?.name || '请先选择工作区'}</span></div></label>}</div><p className="import-note">{editor.kind === 'skill' ? '请选择包含 SKILL.md 的技能文件夹。' : '请选择扩展文件，或包含 index.ts / index.js 的文件夹。'}</p></div>}
+            {editor.kind === 'skill' && <div className="resource-import"><span className="field-label">生效范围</span><div className="scope-options"><label className={resourceScope === 'user' ? 'is-selected' : ''}><input type="radio" name="scope" checked={resourceScope === 'user'} onChange={() => setResourceScope('user')} /><div><strong>全局</strong><span>在所有工作区中使用</span></div></label></div><p className="import-note">请选择包含 SKILL.md 的技能文件夹。</p></div>}
           </SettingsDialog>}
         </div>
       )}
@@ -3142,6 +3898,13 @@ export function App() {
         onAcknowledgedChange={setFullPermissionAck}
         onCancel={() => setFullPermissionOpen(false)}
         onConfirm={() => { setFullPermissionOpen(false); void applyPermission('full'); }}
+      />}
+      {updateDialogOpen && <UpdateDialog
+        snapshot={updateSnapshot}
+        onClose={() => setUpdateDialogOpen(false)}
+        onCheck={checkUpdates}
+        onDownload={downloadUpdate}
+        onInstall={installUpdate}
       />}
 
       {/* MCP 详情弹窗 */}

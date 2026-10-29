@@ -16,8 +16,21 @@ const {
   settingsFile,
   piModule,
   modelOptionsModule,
+  syncModelRefFromPiDefault,
 } = require('../core/state.cjs');
 const { visibleProviderIds } = require('../settings-config.cjs');
+
+/** 把 `provider/model` 解析为当前运行时目录中的模型。 */
+function runtimeModelFor(runtime, modelRef) {
+  if (typeof modelRef !== 'string' || !modelRef.includes('/')) return undefined;
+  const [provider, ...parts] = modelRef.split('/');
+  return provider && parts.length > 0 ? runtime.getModel(provider, parts.join('/')) : undefined;
+}
+
+/** 配置失效时使用列表中的第一个可用模型，保证应用仍能启动。 */
+function resolvedRuntimeModel(runtime, preferredRef = getModelRef()) {
+  return runtimeModelFor(runtime, preferredRef) || runtime.getModels()[0];
+}
 
 /**
  * 当前模型的展示信息。
@@ -25,10 +38,14 @@ const { visibleProviderIds } = require('../settings-config.cjs');
  */
 async function modelInfo(cwd = DEFAULT_CWD) {
   const runtime = await getRuntime();
-  const modelRef = getModelRef();
-  const [provider, ...parts] = modelRef.split('/');
-  const found = provider && parts.length > 0 ? runtime.getModel(provider, parts.join('/')) : undefined;
-  return modelInfoFor(found || runtime.getModels()[0], cwd, undefined, found ? modelRef : undefined);
+  // 终端可能在本应用运行期间修改了 Pi 默认模型；刷新模型目录时同步回来。
+  syncModelRefFromPiDefault();
+  const configuredRef = getModelRef();
+  const found = runtimeModelFor(runtime, configuredRef);
+  return {
+    ...modelInfoFor(found || runtime.getModels()[0], cwd, undefined, found ? configuredRef : undefined),
+    source: 'default',
+  };
 }
 
 /**
@@ -90,7 +107,21 @@ async function availableModels(cwd = DEFAULT_CWD) {
       reasoning: Boolean(item.reasoning),
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
-  return { models, enabled, current: getModelRef(), selection: await modelInfo(cwd) };
+  const defaultSelection = await modelInfo(cwd);
+  return {
+    models,
+    enabled,
+    current: defaultSelection.modelRef,
+    selection: defaultSelection,
+    defaultSelection,
+  };
 }
 
-module.exports = { modelInfo, modelInfoFor, reasoningFor, availableModels };
+module.exports = {
+  availableModels,
+  modelInfo,
+  modelInfoFor,
+  reasoningFor,
+  resolvedRuntimeModel,
+  runtimeModelFor,
+};

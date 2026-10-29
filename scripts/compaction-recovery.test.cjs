@@ -48,6 +48,7 @@ test('IPC recovery resolves its pending prompt and unsubscribes after done', asy
   const session = {
     isCompacting: false, isStreaming: false,
     messages: [{ role: 'assistant', stopReason: 'aborted' }],
+    waitForIdle: async () => {},
     subscribe(fn) { listener = fn; return () => { unsubscribed++; }; },
     async prompt() {
       session.isCompacting = true; listener({type:'compaction_start'});
@@ -57,9 +58,10 @@ test('IPC recovery resolves its pending prompt and unsubscribes after done', asy
   };
   const manager = { getEntries: () => [{type:'message',message:{role:'user'}}] };
   const noop = () => {};
+  const finalModel = { modelRef: 'provider/final', label: 'Final', source: 'session' };
   const deps = {
     electron: { ipcMain: { handle: (name, fn) => handlers.set(name,fn), on: noop } },
-    '../services/sessions.cjs': { findManager: async () => ({manager,cwd:'/fixture'}), ensureAgent: async () => session, updateSessionSummary: noop, invalidateIndex: noop, forgetDetail: noop, dropDraft: noop, indexSessions: async () => { throw new Error("index temporarily unavailable"); } },
+    '../services/sessions.cjs': { findManager: async () => ({manager,cwd:'/fixture'}), ensureAgent: async () => session, sessionModel: async () => finalModel, applyPendingSessionModel: async () => false, updateSessionSummary: noop, invalidateIndex: noop, forgetDetail: noop, dropDraft: noop, indexSessions: async () => { throw new Error("index temporarily unavailable"); } },
     '../services/workspace.cjs': { fileReferenceContext: async () => [] },
     '../services/attachments.cjs': { attachmentContext: async () => [] },
     '../services/auto-title.cjs': { createAutoTitleGenerator: () => ({generate:noop}) },
@@ -71,16 +73,18 @@ test('IPC recovery resolves its pending prompt and unsubscribes after done', asy
   module.exports.registerSessionsIpc();
   let settled = false;
   const result = handlers.get('pi:prompt')({sender:{send:(channel,payload)=>sent.push({channel,payload})}}, {sessionId:'demo',requestId:'r',text:'continue'}).then(() => { settled = true; });
-  for (let i=0;i<20;i++) await Promise.resolve();
+  for (let i=0;i<60;i++) await Promise.resolve();
   const interrupted = sent.find(event => event.payload?.type === 'compaction-interrupted');
   assert.equal(interrupted?.payload.compacting, false);
   assert.equal(settled, false);
   for (let i=0;i<24;i++) t.mock.timers.tick(250);
-  for (let i=0;i<20;i++) await Promise.resolve();
+  for (let i=0;i<60;i++) await Promise.resolve();
   assert.equal(settled, true, 'the IPC promise must not hang after the recovered run');
   await result;
   assert.equal(unsubscribed, 1);
-  assert.equal(sent.filter(event => event.payload?.type === 'done').length, 1);
+  const done = sent.filter(event => event.payload?.type === 'done');
+  assert.equal(done.length, 1);
+  assert.equal(done[0].payload.model, finalModel, 'done must carry the post-switch model snapshot');
 });
 
 test('busy Agent accepts one follow-up and keeps the IPC open until the run settles', async t => {
@@ -93,6 +97,7 @@ test('busy Agent accepts one follow-up and keeps the IPC open until the run sett
   const session = {
     isCompacting: false, isStreaming: false,
     messages: [{ role: 'assistant', stopReason: 'aborted' }],
+    waitForIdle: async () => {},
     subscribe(fn) { listener = fn; return () => { unsubscribed++; }; },
     async prompt(text, options) {
       assert.equal(options.streamingBehavior, 'followUp');
@@ -105,7 +110,7 @@ test('busy Agent accepts one follow-up and keeps the IPC open until the run sett
   const noop = () => {};
   const deps = {
     electron: { ipcMain: { handle: (name, fn) => handlers.set(name,fn), on: noop } },
-    '../services/sessions.cjs': { detail: async () => ({id:'demo',title:'demo',messages:[]}), findManager: async () => ({manager,cwd:'/fixture'}), ensureAgent: async () => session, updateSessionSummary: noop, invalidateIndex: noop, forgetDetail: noop, dropDraft: noop, indexSessions: async () => { throw new Error("index temporarily unavailable"); } },
+    '../services/sessions.cjs': { detail: async () => ({id:'demo',title:'demo',messages:[]}), findManager: async () => ({manager,cwd:'/fixture'}), ensureAgent: async () => session, sessionModel: async () => undefined, applyPendingSessionModel: async () => false, updateSessionSummary: noop, invalidateIndex: noop, forgetDetail: noop, dropDraft: noop, indexSessions: async () => { throw new Error("index temporarily unavailable"); } },
     '../services/workspace.cjs': { fileReferenceContext: async () => [] },
     '../services/attachments.cjs': { attachmentContext: async () => [] },
     '../services/auto-title.cjs': { createAutoTitleGenerator: () => ({generate:noop}) },
@@ -117,7 +122,7 @@ test('busy Agent accepts one follow-up and keeps the IPC open until the run sett
   module.exports.registerSessionsIpc();
   let settled = false;
   const result = handlers.get('pi:prompt')({sender:{send:(channel,payload)=>sent.push({channel,payload})}}, {sessionId:'demo',requestId:'r',text:'continue'}).then(() => { settled = true; });
-  for (let i=0;i<20;i++) await Promise.resolve();
+  for (let i=0;i<60;i++) await Promise.resolve();
   const interrupted = sent.find(event => event.payload?.type === 'compaction-interrupted');
   assert.equal(interrupted?.payload.compacting, false);
   assert.equal(settled, false);
@@ -128,7 +133,7 @@ test('busy Agent accepts one follow-up and keeps the IPC open until the run sett
   assert.equal(sent.filter(event => event.payload?.type === 'run-attached').length, 1);
   session.isStreaming = false;
   for (let i=0;i<24;i++) t.mock.timers.tick(250);
-  for (let i=0;i<20;i++) await Promise.resolve();
+  for (let i=0;i<60;i++) await Promise.resolve();
   assert.equal(settled, true, 'the IPC promise must not hang after the recovered run');
   await result;
   const finished = await handlers.get('pi:session')({},'demo');

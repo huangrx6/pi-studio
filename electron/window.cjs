@@ -5,7 +5,7 @@
  * 因为窗口的 backgroundColor 必须在创建时就给出，否则启动会闪白。
  */
 
-const { BrowserWindow, Menu, nativeTheme } = require('electron');
+const { app, BrowserWindow, Menu, nativeTheme } = require('electron');
 const path = require('node:path');
 const { DEV, getWindow, setWindow, configPath, readJson } = require('./core/state.cjs');
 const { readConfig, writeConfig } = require('./settings-config.cjs');
@@ -19,6 +19,14 @@ const THEMES = ['light', 'dark', 'system'];
  * 开发模式连 Vite dev server，生产模式加载打包后的 web-dist。
  */
 function createWindow() {
+  const existing = getWindow();
+  if (existing && !existing.isDestroyed()) {
+    if (existing.isMinimized()) existing.restore();
+    if (!existing.isVisible()) existing.show();
+    existing.focus();
+    return existing;
+  }
+
   const storedTheme = readJson(configPath(), {}).theme;
   const preference = THEMES.includes(storedTheme) ? storedTheme : 'light';
   nativeTheme.themeSource = preference;
@@ -40,18 +48,42 @@ function createWindow() {
   });
 
   setWindow(win);
+  win.on('close', (event) => {
+    // Closing the main window keeps renderer state and in-flight agent turns
+    // alive. A real application quit sets this flag before Electron closes it.
+    if (!app.isQuitting) {
+      event.preventDefault();
+      win.hide();
+    }
+  });
+  win.on('closed', () => {
+    if (getWindow() === win) setWindow(null);
+  });
   if (DEV) void win.loadURL('http://127.0.0.1:5180');
   else void win.loadFile(path.join(__dirname, '..', 'web-dist', 'index.html'));
+  return win;
 }
 
-/** 安装应用菜单（macOS 上带应用菜单与「设置…」快捷键）。 */
-function installMenu() {
+/** Reveal the existing main window or recreate it after a real close. */
+function showMainWindow() {
+  const win = getWindow();
+  if (!win || win.isDestroyed()) return createWindow();
+  if (win.isMinimized()) win.restore();
+  if (!win.isVisible()) win.show();
+  win.focus();
+  return win;
+}
+
+/** 安装应用菜单（macOS 上带应用菜单、检查更新与「设置…」快捷键）。 */
+function installMenu({ onCheckForUpdates } = {}) {
   const template = [
     ...(process.platform === 'darwin'
       ? [{
           label: 'Pi Studio',
           submenu: [
             { role: 'about' },
+            { type: 'separator' },
+            { label: '检查更新…', click: () => onCheckForUpdates?.() },
             { type: 'separator' },
             { label: '设置…', accelerator: 'CmdOrCtrl+,', click: () => getWindow()?.webContents.send('pi:open-settings') },
             { type: 'separator' },
@@ -93,4 +125,4 @@ function watchSystemTheme() {
   });
 }
 
-module.exports = { createWindow, installMenu, applyTheme, watchSystemTheme };
+module.exports = { createWindow, showMainWindow, installMenu, applyTheme, watchSystemTheme };

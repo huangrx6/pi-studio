@@ -8,10 +8,10 @@
  *
  * 纯展示组件；provider id 由设置快照 / 模型目录提供，不涉及 IPC 调用。
  */
-import { siAnthropic, siDeepseek, siGooglegemini, siMinimax, siOpencode } from 'simple-icons';
+import { siAnthropic, siDeepseek, siGooglegemini, siMinimax } from 'simple-icons';
 
 /** simple-icons 的图标对象字段很多，这里只取绘制用的 path。 */
-type IconSpec = { path: string };
+type IconSpec = { path: string } | { mark: 'code' };
 
 /**
  * 已知来源的图标。只 import 用到的图标，避免把整个 simple-icons 打进 bundle；
@@ -21,8 +21,8 @@ const providerIcons: Record<string, IconSpec> = {
   deepseek: siDeepseek,
   'minimax-cn': siMinimax,
   minimax: siMinimax,
-  opencode: siOpencode,
-  'opencode-go': siOpencode,
+  opencode: { mark: 'code' },
+  'opencode-go': { mark: 'code' },
   anthropic: siAnthropic,
   'google-gemini': siGooglegemini,
   google: siGooglegemini,
@@ -44,6 +44,15 @@ const tones: Record<string, string> = {
   google: 'is-sky',
 };
 
+/** OpenCode 官方小图标在高 DPI 下会缩成近似空心方块；使用更清晰的代码标记。 */
+function CodeMark() {
+  return <svg className="provider-code-mark" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M9.25 7.25 4.5 12l4.75 4.75" />
+    <path d="M14.75 7.25 19.5 12l-4.75 4.75" />
+    <path d="M12.75 17.75h6.75" />
+  </svg>;
+}
+
 /**
  * 渲染来源图标。
  *
@@ -63,7 +72,9 @@ export function ProviderIcon({ provider, name, icon, size = 22, className = '' }
     {icon
       ? <img src={icon} alt="" draggable={false} />
       : spec
-        ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d={spec.path} /></svg>
+        ? 'mark' in spec
+          ? <CodeMark />
+          : <svg viewBox="0 0 24 24" aria-hidden="true"><path d={spec.path} /></svg>
         : <span className="provider-icon-letter">{(name || provider).slice(0, 1).toUpperCase()}</span>}
   </span>;
 }

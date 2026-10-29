@@ -17,7 +17,7 @@
  * IPC：本组件不直接调用 IPC，消息来自 App 的 piApi.session / onPrompt 事件；
  * 图片以 data URI 内联渲染，不再额外请求主进程。
  */
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, CircleAlert, CircleCheck, CircleX, Copy, FileText, LoaderCircle, PanelRightOpen, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
 import type { ChatMessage, ContentBlock, ToolCallBlock, TurnDiff, TurnDiffFile } from '../chat-types';
 import type { StepCollapse, StepDisplay } from '../preferences';
@@ -263,7 +263,7 @@ function ActivityGroup({ entries, results, live, stepDisplay, stepCollapse }: {
   </details>;
 }
 
-export function AssistantTurnView({ messages, toolResults, busy, id, retry, stepDisplay = 'standard', stepCollapse = 'after-answer', showCodeView = false, cwd, gitDiff, onOpenDiff, onOpenFile }: {
+type AssistantTurnViewProps = {
   messages: ChatMessage[];
   toolResults: Map<string, ChatMessage>;
   busy: boolean;
@@ -277,7 +277,9 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
   gitDiff?: TurnDiff;
   onOpenDiff?: (file: TurnDiffFile | undefined, turn: TurnDiff) => void;
   onOpenFile?: (path: string) => void;
-}) {
+};
+
+function AssistantTurnViewComponent({ messages, toolResults, busy, id, retry, stepDisplay = 'standard', stepCollapse = 'after-answer', showCodeView = false, cwd, gitDiff, onOpenDiff, onOpenFile }: AssistantTurnViewProps) {
   const live = Boolean(retry) || busy;
   // 只看本轮最后一条助手消息：压缩/重试产生的中间失败不应盖住后面的成功输出。
   const lastMessage = messages[messages.length - 1];
@@ -368,6 +370,40 @@ export function AssistantTurnView({ messages, toolResults, busy, id, retry, step
   </div>;
 }
 
+function sameMessageSequence(previous: ChatMessage[], next: ChatMessage[]): boolean {
+  return previous.length === next.length && previous.every((message, index) => message === next[index]);
+}
+
+function sameRelevantToolResults(previous: Map<string, ChatMessage>, next: Map<string, ChatMessage>, messages: ChatMessage[]): boolean {
+  for (const message of messages) {
+    for (const block of message.content) {
+      if (block.type === 'toolCall' && previous.get(block.id) !== next.get(block.id)) return false;
+    }
+  }
+  return true;
+}
+
+function sameAssistantTurnViewProps(previous: AssistantTurnViewProps, next: AssistantTurnViewProps): boolean {
+  return previous.busy === next.busy
+    && previous.id === next.id
+    && previous.stepDisplay === next.stepDisplay
+    && previous.stepCollapse === next.stepCollapse
+    && previous.showCodeView === next.showCodeView
+    && previous.cwd === next.cwd
+    && previous.gitDiff === next.gitDiff
+    && previous.onOpenDiff === next.onOpenDiff
+    && previous.onOpenFile === next.onOpenFile
+    && (previous.retry === next.retry
+      || (previous.retry?.attempt === next.retry?.attempt
+        && previous.retry?.maxAttempts === next.retry?.maxAttempts
+        && previous.retry?.errorMessage === next.retry?.errorMessage))
+    && sameMessageSequence(previous.messages, next.messages)
+    && sameRelevantToolResults(previous.toolResults, next.toolResults, previous.messages);
+}
+
+/** Completed turns stay mounted but skip work while only the streaming tail changes. */
+export const AssistantTurnView = memo(AssistantTurnViewComponent, sameAssistantTurnViewProps);
+
 /**
  * 一枚引用徽章：技能显示上下文菜单图标，文件显示文档图标。
  * 技能块还会把展开后的正文收进可折叠详情，避免一屏都是 SKILL.md。
@@ -410,7 +446,9 @@ function UserText({ text }: { text: string }) {
  * @param message 必须是 role === 'user'；assistant / toolResult 由其他视图处理
  * @param id 锚点 id，供右侧大纲跳转
  */
-export function ChatMessageView({ message, id, onOpenFile }: { message: ChatMessage; id?: string; onOpenFile?: (path: string) => void }) {
+type ChatMessageViewProps = { message: ChatMessage; id?: string; onOpenFile?: (path: string) => void };
+
+function ChatMessageViewComponent({ message, id, onOpenFile }: ChatMessageViewProps) {
   // 兜底：同一组件被误用于其他角色时不渲染，避免出现空气泡。
   if (message.role !== 'user') return null;
   const text = textBlocks(message.content);
@@ -445,3 +483,8 @@ export function ChatMessageView({ message, id, onOpenFile }: { message: ChatMess
   <MessageActions text={copyText} time={message.timestamp} label="复制消息" align="end" />
   </div>;
 }
+
+export const ChatMessageView = memo(ChatMessageViewComponent, (previous, next) =>
+  previous.message === next.message
+  && previous.id === next.id
+  && previous.onOpenFile === next.onOpenFile);

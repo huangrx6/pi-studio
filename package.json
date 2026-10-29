@@ -1,6 +1,6 @@
 {
   "name": "pi-studio",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "private": true,
   "type": "module",
   "description": "Pi Studio — a native macOS desktop workspace for the Pi coding agent.",
@@ -30,6 +30,7 @@
   "dependencies": {
     "@earendil-works/pi-ai": "1.4.0",
     "@earendil-works/pi-coding-agent": "1.4.0",
+    "electron-updater": "^6.8.11",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -68,11 +69,17 @@
     "mac": {
       "icon": "assets/icon.icns",
       "category": "public.app-category.developer-tools",
-      "identity": null,
+      "hardenedRuntime": true,
       "artifactName": "Pi-Studio-${version}-${arch}.${ext}",
       "target": [
-        "dmg"
+        "dmg",
+        "zip"
       ]
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "huangrx6",
+      "repo": "pi-studio"
     }
   }
 }

@@ -28,11 +28,24 @@
   锚点，下面的语义令牌按需引用；不要跳过语义层直接在组件里使用。
    */
 
-  --color-primary: #a3e635;
+  /* 全局配色预设的原始锚点。当前方案消费对应变量；设置页也会用这些锚点
+  绘制四张卡片预览，避免预览色与真实主题各维护一份。
+  */
+
+  --scheme-lime-primary: #a3e635;
+  --scheme-lime-accent: #436814;
+  --scheme-ocean-primary: #60a5fa;
+  --scheme-ocean-accent: #1d4ed8;
+  --scheme-amber-primary: #fbbf24;
+  --scheme-amber-accent: #92400e;
+  --scheme-berry-primary: #f472b6;
+  --scheme-berry-accent: #9d174d;
+
+  --color-primary: var(--scheme-lime-primary);
   --color-surface: #f5faee;
   --color-highlight: #ffffff;
   --color-dark: #1b2112;
-  --color-accent: #436814;
+  --color-accent: var(--scheme-lime-accent);
 
   /* 页面与表面层级：页面背景、卡片表面、侧栏背景保持中性；surface-soft/hover/
   active 表示交互递进，selected-bg 用于选中行。层级从低到高靠明度差而不是阴影
@@ -72,7 +85,7 @@
   --accent-hover: #344f10;
   --accent-soft: var(--color-surface);
   --accent-border: #bddb96;
-  --on-accent: var(--color-dark);
+  --on-accent: var(--color-highlight);
   --button-bg: var(--color-primary);
   --button-hover: #93d321;
   --on-button: var(--color-dark);
@@ -128,11 +141,20 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --color-primary: #b5e925;
+  --scheme-lime-primary: #b5e925;
+  --scheme-lime-accent: #42e73c;
+  --scheme-ocean-primary: #60a5fa;
+  --scheme-ocean-accent: #93c5fd;
+  --scheme-amber-primary: #fbbf24;
+  --scheme-amber-accent: #fcd34d;
+  --scheme-berry-primary: #f472b6;
+  --scheme-berry-accent: #f9a8d4;
+
+  --color-primary: var(--scheme-lime-primary);
   --color-surface: #f8faf4;
   --color-highlight: #ffffff;
   --color-dark: #1b2112;
-  --color-accent: #42e73c;
+  --color-accent: var(--scheme-lime-accent);
 
   --bg: #101010;
   --surface: #181818;
@@ -154,6 +176,7 @@
   --accent-hover: #cdf478;
   --accent-soft: #22291a;
   --accent-border: #4d6130;
+  --on-accent: var(--color-dark);
   --button-bg: var(--color-primary);
   --button-hover: #c7ef66;
   --switch-off: #484848;
@@ -187,6 +210,94 @@
   --syntax-function: #a3c3df;
 }
 
+/* 配色方案：只替换品牌强调、交互表面、焦点与选区。页面中性表面和
+success/warning/error 等语义状态保持不变，避免配色切换改变状态含义。
+*/
+
+:root[data-palette="ocean"] {
+  --color-primary: var(--scheme-ocean-primary);
+  --color-accent: var(--scheme-ocean-accent);
+  --accent: var(--scheme-ocean-accent);
+  --accent-hover: #1e40af;
+  --accent-soft: #eff6ff;
+  --accent-border: #bfdbfe;
+  --button-hover: #93c5fd;
+  --focus-color: #2563eb;
+  --focus-halo: rgb(37 99 235 / 18%);
+  --selection: #dbeafe;
+  --selection-text: #202020;
+}
+
+:root[data-theme="dark"][data-palette="ocean"] {
+  --color-primary: var(--scheme-ocean-primary);
+  --color-accent: var(--scheme-ocean-accent);
+  --accent: var(--scheme-ocean-accent);
+  --accent-hover: #bfdbfe;
+  --accent-soft: #172235;
+  --accent-border: #36557d;
+  --button-hover: #93c5fd;
+  --focus-color: #7dd3fc;
+  --focus-halo: rgb(125 211 252 / 14%);
+  --selection: #24415f;
+  --selection-text: #f8faf4;
+}
+
+:root[data-palette="amber"] {
+  --color-primary: var(--scheme-amber-primary);
+  --color-accent: var(--scheme-amber-accent);
+  --accent: var(--scheme-amber-accent);
+  --accent-hover: #78350f;
+  --accent-soft: #fffaf0;
+  --accent-border: #f2d69a;
+  --button-hover: #f59e0b;
+  --focus-color: #b45309;
+  --focus-halo: rgb(180 83 9 / 18%);
+  --selection: #fef0c7;
+  --selection-text: #202020;
+}
+
+:root[data-theme="dark"][data-palette="amber"] {
+  --color-primary: var(--scheme-amber-primary);
+  --color-accent: var(--scheme-amber-accent);
+  --accent: var(--scheme-amber-accent);
+  --accent-hover: #fde68a;
+  --accent-soft: #2d2618;
+  --accent-border: #6b5325;
+  --button-hover: #fcd34d;
+  --focus-color: #fbbf24;
+  --focus-halo: rgb(251 191 36 / 14%);
+  --selection: #4d3b16;
+  --selection-text: #f8faf4;
+}
+
+:root[data-palette="berry"] {
+  --color-primary: var(--scheme-berry-primary);
+  --color-accent: var(--scheme-berry-accent);
+  --accent: var(--scheme-berry-accent);
+  --accent-hover: #831843;
+  --accent-soft: #fff1f6;
+  --accent-border: #f4bfd4;
+  --button-hover: #ec4899;
+  --focus-color: #be185d;
+  --focus-halo: rgb(190 24 93 / 18%);
+  --selection: #fce7f3;
+  --selection-text: #202020;
+}
+
+:root[data-theme="dark"][data-palette="berry"] {
+  --color-primary: var(--scheme-berry-primary);
+  --color-accent: var(--scheme-berry-accent);
+  --accent: var(--scheme-berry-accent);
+  --accent-hover: #fbcfe8;
+  --accent-soft: #2d1822;
+  --accent-border: #6d3650;
+  --button-hover: #f9a8d4;
+  --focus-color: #f472b6;
+  --focus-halo: rgb(244 114 182 / 14%);
+  --selection: #4c2038;
+  --selection-text: #f8faf4;
+}
+
 /* 共享角色：在主题切换之后统一派生，组件消费这些别名而不是原始色值。涵盖
 品牌、图标、链接、思考态、代码与消息表面、骨架屏、焦点环、阴影和渐变。
 其中链接下划线由链接色与透明占位混合得到，属于颜色计算，只允许在本文件出现。
@@ -217,6 +328,9 @@
   --syntax-comment: var(--faint);
   --message-bg: var(--surface-soft);
   --message-border: var(--border);
+  --background-card-surface: color-mix(in srgb, var(--surface) 92%, transparent);
+  --background-composer-surface: color-mix(in srgb, var(--surface) 94%, transparent);
+  --background-surface-opacity: .88;
   --skeleton: var(--surface-active);
   --skeleton-shine: var(--surface-hover);
   --focus-ring: 0 0 0 3px var(--focus-halo);

@@ -58,6 +58,9 @@
   --settings-content: 1040px;
   --header-height: 48px;
   --toolbar-height: 36px;
+  /* 自定义背景的运行时默认值；App 会按用户偏好覆盖这三个变量。 */
+  --background-media-opacity: 68%;
+  --background-media-blur: 0px;
   /* 动效与字体：transition 统一 160ms ease，交互快慢一致；减少动效偏好下 app.css
   会全局关闭 transition 与 animation。font 是系统无衬线栈，display-font 用于欢迎
   标题和助手身份的衬线展示，mono 用于代码、路径和快捷键；font-display 是

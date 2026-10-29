@@ -33,7 +33,7 @@ const browser = await chromium.launch({
   executablePath: process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
-const page = await browser.newPage({ viewport: { width: 1440, height: 920 }, deviceScaleFactor: 1 });
+const page = await browser.newPage({ viewport: { width: 1440, height: 920 }, deviceScaleFactor: 2 });
 page.setDefaultTimeout(10000);
 // 收集页面未捕获异常，最后断言为空；避免“截图看着正常、控制台其实报错”。
 const errors = [];
@@ -85,13 +85,117 @@ await page.addInitScript(() => {
 
   let model = selection(localStorage.getItem('qa-model') || models[2].id);
 
+  // Agent 工具目录刻意让每个 Pi 核心工具带不同文件路径，用来验证 UI 仍会把
+  // 同一个提供者合并成一个 Tab，而不是显示成一长串重复的“Pi 核心”。
+  const coreSource = (path) => ({
+    key: path,
+    source: 'builtin',
+    label: 'Pi 核心',
+    kind: 'core',
+    scope: 'user',
+    path,
+    baseDir: '',
+  });
+  const subagentSource = {
+    key: '/Users/demo/.pi/agent/extensions/pi-subagents/index.js',
+    source: 'npm:pi-subagents',
+    label: 'pi-subagents',
+    kind: 'package',
+    scope: 'user',
+    path: '/Users/demo/.pi/agent/extensions/pi-subagents/index.js',
+    baseDir: '/Users/demo/.pi/agent/extensions/pi-subagents',
+  };
+  const workspaceSource = {
+    key: '/workspace/pi-studio/.pi/extensions/workspace/index.js',
+    source: 'local:workspace',
+    label: 'workspace-tools',
+    kind: 'local',
+    scope: 'project',
+    path: '/workspace/pi-studio/.pi/extensions/workspace/index.js',
+    baseDir: '/workspace/pi-studio/.pi/extensions/workspace',
+  };
+  const coreTools = [
+    ['read', '读取工作区文件。', 'direct'],
+    ['write', '创建或覆盖文件。', 'direct'],
+    ['edit', '精确修改文件内容。', 'direct'],
+    ['bash', '执行终端命令。', 'direct'],
+    ['grep', '搜索文件内容。', 'direct'],
+    ['find', '按名称查找文件。', 'direct'],
+    ['ls', '浏览目录结构。', 'direct'],
+  ].map(([name, description, exposure]) => ({
+    name,
+    description,
+    exposure,
+    source: coreSource(`/Applications/Pi Studio.app/Contents/Resources/tools/${name}.js`),
+  }));
+  const agentToolCatalog = {
+    tools: [
+      ...coreTools,
+      {
+        name: 'subagent',
+        description: '启动前台、并行或链式工作的子 Agent。',
+        exposure: 'direct',
+        source: subagentSource,
+      },
+      {
+        name: 'contact_supervisor',
+        description: '让子 Agent 向父 Agent 提问或汇报。',
+        exposure: 'on-demand',
+        source: subagentSource,
+      },
+      {
+        name: 'subagent_supervisor',
+        description: '查看并回复正在工作的子 Agent。',
+        exposure: 'on-demand',
+        source: subagentSource,
+      },
+      {
+        name: 'bg_wait',
+        description: '等待后台子 Agent 完成，或读取当前状态。',
+        exposure: 'direct',
+        source: subagentSource,
+      },
+      {
+        name: 'workspace_inspect',
+        description: '检查当前项目结构、依赖和常用脚本。',
+        exposure: 'direct',
+        source: workspaceSource,
+      },
+    ],
+    commands: [
+      { name: 'model', description: '切换当前会话使用的模型。', source: coreSource('/Applications/Pi Studio.app/Contents/Resources/commands/model.js') },
+      { name: 'thinking', description: '调整当前会话的思考强度。', source: coreSource('/Applications/Pi Studio.app/Contents/Resources/commands/thinking.js') },
+      { name: 'agents', description: '查看当前可用的子 Agent 与状态。', source: subagentSource },
+      { name: 'workspace', description: '查看工作区状态与相关操作。', source: workspaceSource },
+    ],
+    errors: [],
+    warnings: [],
+    agentDir: '/Users/demo/.pi/agent',
+    refreshedAt: Date.now(),
+  };
+  const agentToolSourceSnapshot = (source) => ({
+    source: source.source,
+    label: source.label,
+    scope: source.scope,
+    path: source.path,
+    baseDir: source.baseDir,
+  });
+  const enabledAgentToolNames = [...coreTools.slice(0, 3).map((tool) => tool.name), 'subagent', 'bg_wait'];
+  const agentTools = {
+    enabled: enabledAgentToolNames,
+    sources: Object.fromEntries(enabledAgentToolNames.map((name) => {
+      const source = agentToolCatalog.tools.find((tool) => tool.name === name)?.source || coreSource(`/runtime/${name}.js`);
+      return [name, agentToolSourceSnapshot(source)];
+    })),
+  };
+
   // 2.2 设置页快照：所有分页共享这一份数据
   const snapshot = {
     // 自定义模型列表；Studio Model 挂在 minimax-cn 下，后面会再新增并编辑另一个模型。
     customModels: [{ providerId: 'minimax-cn', modelId: 'studio-model', name: 'Studio Model', contextWindow: 128000, maxTokens: 8192, supportsImages: true, reasoning: false }],
     // 三个来源卡片：mode 决定展示的认证方式（env / api_key / key）。
     providers: [
-      { id: 'minimax-cn', name: 'MiniMax', mode: 'env', envName: 'MINIMAX_CN_API_KEY', envAvailable: true, models: 3 },
+      { id: 'minimax-cn', name: 'MiniMax', mode: 'env', envName: 'MINIMAX_CN_API_KEY', envAvailable: true, models: 2 },
       { id: 'deepseek', name: 'DeepSeek', mode: 'api_key', models: 2 },
       { id: 'opencode-go', name: 'OpenCode Go', mode: 'key', authConfigured: false, models: 1 },
     ],
@@ -109,12 +213,13 @@ await page.addInitScript(() => {
     ],
     // 扩展目录、npm 包，以及已安装扩展的名字列表。
     extensions: [{ name: 'workspace-tools', kind: 'directory', scope: 'user', path: '/Users/demo/.pi/agent/extensions/workspace-tools' }],
-    packages: [{ name: 'pi-tools', source: 'npm:pi-tools' }],
-    extensionData: ['workspace-tools'],
+    packages: [{ name: 'pi-tools', source: 'npm:pi-tools', scope: 'user' }],
     // 这些路径只用于设置页展示，mock 不会真的读写。
     authPath: '/Users/demo/.pi/agent/auth.json',
     mcpPath: '/Users/demo/.pi/agent/mcp.json',
     modelsPath: '/Users/demo/.pi/agent/models.json',
+    agentTools,
+    agentToolsPath: '/Users/demo/Library/Application Support/pi-studio/config.json',
     // 当前模型选择，后续 setModel / setThinkingLevel 会同步更新。
     model,
   };
@@ -122,8 +227,8 @@ await page.addInitScript(() => {
   // 2.3 对话框数据源
   // “编辑来源”表单只读取这几个字段。
   const providerConfigs = {
-    'minimax-cn': { providerId: 'minimax-cn', baseUrl: 'https://api.example.test/v1', api: 'openai-completions' },
-    deepseek: { providerId: 'deepseek', baseUrl: 'https://deepseek.example.test', api: 'openai-completions' },
+    'minimax-cn': { providerId: 'minimax-cn', name: 'MiniMax', baseUrl: 'https://api.example.test/v1', api: 'openai-completions', icon: '', modelsUrl: '' },
+    deepseek: { providerId: 'deepseek', name: 'DeepSeek', baseUrl: 'https://deepseek.example.test', api: 'openai-completions', icon: '', modelsUrl: 'https://deepseek.example.test/models' },
   };
   // “编辑 MCP”表单数据：stdio 用 command/args，http 用 url；
   // args 里特意放带空格的路径，验证参数不会被按空格拆坏。
@@ -189,6 +294,16 @@ await page.addInitScript(() => {
     },
   });
 
+  // 更新提示默认保持隐藏，测试中按需推送“发现新版本”的快照。
+  let updateFixture = { currentVersion: '0.0.3', state: 'idle' };
+  const updateListeners = new Set();
+  window.__setUpdateState = (state) => {
+    updateFixture = state === 'available'
+      ? { currentVersion: '0.0.3', latestVersion: '0.0.4', state, progress: 0 }
+      : { currentVersion: '0.0.3', state };
+    for (const listener of updateListeners) listener(structuredClone(updateFixture));
+  };
+
   // 2.5 暴露给渲染进程的 PiAPI 子集（只实现 UI 会调用的方法）
   const api = {
     // 初始状态：工作区列表、当前目录与当前模型。
@@ -229,16 +344,64 @@ await page.addInitScript(() => {
         enabled: [...snapshot.enabledModels, ...extra.map((item) => item.id)],
         current: model.modelRef,
         selection: model,
+        defaultSelection: model,
       };
     },
     // 某个来源下的模型列表（“管理模型”弹窗使用），补充启用状态与能力字段。
-    providerModels: async (provider) => ({
-      models: models
-        .filter((item) => item.provider === provider)
-        .map((item) => ({ ...item, enabled: true, supportsImages: true, contextWindow: 128000 })),
+    providerModels: async (provider) => {
+      const configured = snapshot.customModels
+        .filter((item) => item.providerId === provider)
+        .map((item) => ({
+          id: `${provider}/${item.modelId}`,
+          model: item.modelId,
+          name: item.name,
+          enabled: snapshot.enabledModels.includes(`${provider}/${item.modelId}`),
+          contextWindow: item.contextWindow,
+          maxTokens: item.maxTokens,
+          supportsImages: item.supportsImages,
+          reasoning: item.reasoning,
+          origin: item.origin || 'configured',
+          deletable: true,
+        }));
+      const configuredIds = new Set(configured.map((item) => item.model));
+      const runtime = models
+        .filter((item) => item.provider === provider && !configuredIds.has(item.model))
+        .map((item) => ({
+          ...item,
+          enabled: snapshot.enabledModels.includes(item.id),
+          supportsImages: provider !== 'deepseek',
+          reasoning: provider === 'minimax-cn',
+          contextWindow: provider === 'opencode-go' ? 1000000 : 128000,
+          maxTokens: 8192,
+          origin: 'builtin',
+          deletable: false,
+        }));
+      return { models: [...configured, ...runtime] };
+    },
+    discoverProviderModels: async (provider) => ({
+      endpoint: `https://${provider}.example.test/v1/models`,
+      models: [
+        { id: 'discovered-fast', name: 'Discovered Fast', contextWindow: 64000, maxTokens: 8192, supportsImages: false, reasoning: false },
+        { id: 'discovered-vision', name: 'Discovered Vision', contextWindow: 128000, maxTokens: 16384, supportsImages: true, reasoning: true },
+      ],
     }),
+    importProviderModels: async ({ providerId, models: discovered }) => {
+      for (const item of discovered) {
+        if (snapshot.customModels.some((model) => model.providerId === providerId && model.modelId === item.id)) continue;
+        snapshot.customModels.push({ providerId, modelId: item.id, ...item, origin: 'configured' });
+      }
+      const provider = snapshot.providers.find((item) => item.id === providerId);
+      if (provider) provider.models += discovered.length;
+      return cloneSnapshot();
+    },
     // 切换模型：更新内存与 localStorage，保证 reload 后仍选中同一模型。
     setModel: async (id) => {
+      model = selection(id);
+      snapshot.model = model;
+      localStorage.setItem('qa-model', id);
+      return model;
+    },
+    setDefaultModel: async (id) => {
       model = selection(id);
       snapshot.model = model;
       localStorage.setItem('qa-model', id);
@@ -258,6 +421,21 @@ await page.addInitScript(() => {
       snapshot.model = model;
       return model;
     },
+    setDefaultThinkingLevel: async ({ level, cwd: target }) => {
+      if (window.__failThinking) throw new Error('保存失败，请重试');
+      if (!model.thinkingLevels.includes(level)) throw new Error('invalid thinking level');
+      window.__lastThinking = { modelRef: model.modelRef, level, cwd: target };
+      preferences[model.modelRef] = level;
+      localStorage.setItem('qa-thinking', JSON.stringify(preferences));
+      model = selection(model.modelRef);
+      snapshot.model = model;
+      return model;
+    },
+    agentToolCatalog: async () => structuredClone(agentToolCatalog),
+    setAgentTools: async ({ tools }) => {
+      snapshot.agentTools = structuredClone(tools);
+      return cloneSnapshot();
+    },
     settings: async () => cloneSnapshot(),
     providerConfig: async (id) => structuredClone(providerConfigs[id]),
     mcpConfig: async (name) => structuredClone(mcpConfigs[name]),
@@ -273,14 +451,26 @@ await page.addInitScript(() => {
     // 新增/编辑自定义模型：editing 时按 providerId + modelId 原地替换，否则追加。
     addCustomModel: async (input) => {
       const index = snapshot.customModels.findIndex((item) => item.providerId === input.providerId && item.modelId === input.modelId);
-      if (input.editing) snapshot.customModels[index] = input;
-      else snapshot.customModels.push(input);
+      if (input.editing && index >= 0) snapshot.customModels[index] = { ...input, origin: input.origin === 'override' ? 'override' : 'configured' };
+      else snapshot.customModels.push({ ...input, origin: 'configured' });
+      const provider = snapshot.providers.find((item) => item.id === input.providerId);
+      if (provider && !input.editing) provider.models += 1;
+      return cloneSnapshot();
+    },
+    removeCustomModel: async ({ providerId, modelId }) => {
+      const index = snapshot.customModels.findIndex((item) => item.providerId === providerId && item.modelId === modelId);
+      if (index >= 0) snapshot.customModels.splice(index, 1);
+      snapshot.enabledModels = snapshot.enabledModels.filter((id) => id !== `${providerId}/${modelId}`);
       return cloneSnapshot();
     },
     // 新增/编辑来源：同步更新 providerConfigs；新建时再补一张来源卡片。
     addProvider: async (input) => {
-      providerConfigs[input.providerId] = { providerId: input.providerId, baseUrl: input.baseUrl, api: input.api };
-      if (!input.editing) snapshot.providers.push({ id: input.providerId, name: input.providerId, mode: 'key', models: 1 });
+      providerConfigs[input.providerId] = { providerId: input.providerId, name: input.name, baseUrl: input.baseUrl, api: input.api, icon: input.icon || '', modelsUrl: input.modelsUrl || '' };
+      if (!input.editing) snapshot.providers.push({ id: input.providerId, name: input.name || input.providerId, mode: 'key', models: 0, modelsUrl: input.modelsUrl || '' });
+      else {
+        const provider = snapshot.providers.find((item) => item.id === input.providerId);
+        if (provider) { provider.name = input.name; provider.modelsUrl = input.modelsUrl || ''; }
+      }
       return {
         settings: cloneSnapshot(),
         models: { models, current: model.modelRef, enabled: snapshot.enabledModels, selection: model },
@@ -334,6 +524,15 @@ await page.addInitScript(() => {
       if (payload.type === 'close') footerPanel = false;
       return footerSnapshot().view;
     },
+    updateState: async () => structuredClone(updateFixture),
+    checkForUpdates: async () => structuredClone(updateFixture),
+    downloadUpdate: async () => structuredClone(updateFixture),
+    installUpdate: async () => ({ started: true }),
+    onUpdateState: (listener) => {
+      updateListeners.add(listener);
+      return () => updateListeners.delete(listener);
+    },
+    onOpenUpdate: () => () => {},
     onOpenSettings: () => () => {},
     // 订阅流式事件，保存回调供 prompt() 使用。
     onPrompt: (callback) => {
@@ -382,8 +581,8 @@ async function capture(name) {
 
 // 打开“模型与推理设置”弹层并展开“模型”子菜单；调用前弹层应处于关闭状态。
 async function openModelMenu() {
-  await page.getByRole('button', { name: '模型与推理设置', exact: true }).click();
-  await page.getByRole('menuitem', { name: /^模型 / }).click();
+  await page.getByRole('button', { name: /^(?:新对话默认模型|当前会话模型)$/ }).click();
+  await page.getByRole('menuitem', { name: /^(?:修改默认模型|切换会话模型)/ }).click();
 }
 
 // 点击某个模型单选项，并等待弹层关闭，确认选择已提交。
@@ -405,6 +604,28 @@ try {
   await page.getByRole('heading', { name: '今天，想做点什么？', exact: true }).waitFor();
   // 全新启动时不应出现会话相关的容器，欢迎页应保持干净。
   assert.equal(await page.locator('.workspace-chip, .chat-tabs:not(.is-placeholder), .chat-scroll').count(), 0);
+  // 没有更新时不占品牌行空间；发现更新后，入口与上方侧栏开关使用相同尺寸和右边线。
+  assert.equal(await page.locator('.brand-update').count(), 0);
+  await page.evaluate(() => window.__setUpdateState('available'));
+  const updateButton = page.getByRole('button', { name: /可以更新/ });
+  await updateButton.waitFor();
+  const [toggleBounds, updateBounds] = await Promise.all([
+    page.getByRole('button', { name: '收起侧边栏' }).boundingBox(),
+    updateButton.boundingBox(),
+  ]);
+  assert.ok(toggleBounds && updateBounds);
+  assert.equal(updateBounds.width, toggleBounds.width);
+  assert.equal(updateBounds.height, toggleBounds.height);
+  assert.ok(Math.abs((updateBounds.x + updateBounds.width) - (toggleBounds.x + toggleBounds.width)) <= 1);
+  const updateAnimation = await updateButton.evaluate((element) => ({
+    glyph: getComputedStyle(element.querySelector('svg')).animationName,
+    ring: getComputedStyle(element, '::before').animationName,
+  }));
+  assert.match(updateAnimation.glyph, /updateGlyph/);
+  assert.match(updateAnimation.ring, /updateAttention/);
+  await capture('01b-update-available');
+  await page.evaluate(() => window.__setUpdateState('idle'));
+  await updateButton.waitFor({ state: 'detached' });
   await capture('01-welcome');
 
   // 侧边栏搜索：空结果时展示占位文案；再次点击搜索按钮收起搜索框，
@@ -421,9 +642,9 @@ try {
   // 5. 模型选择器与推理等级
   // -------------------------------------------------------------------------
   // 先截一张“模型与推理设置”弹层的默认状态，再进入模型子菜单。
-  await page.getByRole('button', { name: '模型与推理设置', exact: true }).click();
+  await page.getByRole('button', { name: /^(?:新对话默认模型|当前会话模型)$/ }).click();
   await capture('03-model-settings');
-  await page.getByRole('menuitem', { name: /^模型 / }).click();
+  await page.getByRole('menuitem', { name: /^(?:修改默认模型|切换会话模型)/ }).click();
   await page.getByRole('group', { name: 'OpenCode Go' }).waitFor();
   await capture('03-model-picker');
 
@@ -438,13 +659,13 @@ try {
   assert.equal(await page.getByRole('dialog', { name: '选择模型' }).count(), 0);
 
   // 推理等级只列出当前模型真正支持的能力（Go DeepSeek 没有 Medium）。
-  await page.getByRole('menuitem', { name: /^推理等级/ }).click();
+  await page.getByRole('menuitem', { name: /^(?:默认思考强度|会话思考强度)/ }).click();
   assert.deepEqual(await page.getByRole('menuitemradio').allTextContents(), ['Default', 'Low', 'High', 'Max']);
   await capture('03-thinking-levels');
 
   // 选择 Max 后：弹层关闭、按钮文案更新、IPC 收到的参数包含当前 cwd。
   await selectModel('Max');
-  assert.match(await page.getByRole('button', { name: '模型与推理设置', exact: true }).innerText(), /Max/);
+  assert.match(await page.getByRole('button', { name: /^(?:新对话默认模型|当前会话模型)$/ }).innerText(), /Max/);
   // 冷启动还没选工作区，cwd 为空串是预期行为（主进程会回退到默认目录）。
   assert.deepEqual(await page.evaluate(() => window.__lastThinking), {
     modelRef: 'opencode-go/deepseek-v4.1-flash',
@@ -455,18 +676,18 @@ try {
   // 切换到不支持推理的 DeepSeek Chat，推理入口应被禁用。
   await openModelMenu();
   await selectModel('DeepSeek Chat');
-  await page.getByRole('button', { name: '模型与推理设置', exact: true }).click();
-  assert.equal(await page.getByRole('menuitem', { name: '推理等级 不支持' }).isDisabled(), true);
+  await page.getByRole('button', { name: /^(?:新对话默认模型|当前会话模型)$/ }).click();
+  assert.equal(await page.getByRole('menuitem', { name: /^(?:默认思考强度|会话思考强度) 不支持$/ }).isDisabled(), true);
 
   // 切回支持 Max 的 Go 模型，之前保存的 Max 应自动恢复（弹层此时仍开着）。
-  await page.getByRole('menuitem', { name: /^模型 / }).click();
+  await page.getByRole('menuitem', { name: /^(?:修改默认模型|切换会话模型)/ }).click();
   await selectModel('DeepSeek V4.1 Flash');
-  assert.match(await page.getByRole('button', { name: '模型与推理设置', exact: true }).innerText(), /Max/);
+  assert.match(await page.getByRole('button', { name: /^(?:新对话默认模型|当前会话模型)$/ }).innerText(), /Max/);
 
   // 保存失败的路径：打开推理菜单，让 IPC 抛错，点击 Low 后应弹出错误提示，
   // 且当前选中项仍停留在 Max（界面不能乐观地改掉已保存值）。
-  await page.getByRole('button', { name: '模型与推理设置', exact: true }).click();
-  await page.getByRole('menuitem', { name: /^推理等级/ }).click();
+  await page.getByRole('button', { name: /^(?:新对话默认模型|当前会话模型)$/ }).click();
+  await page.getByRole('menuitem', { name: /^(?:默认思考强度|会话思考强度)/ }).click();
   await page.evaluate(() => { window.__failThinking = true; });
   await page.getByRole('menuitemradio', { name: 'Low', exact: true }).click();
   await page.getByRole('alert').filter({ hasText: '保存失败' }).waitFor();
@@ -478,7 +699,7 @@ try {
   // 刷新页面验证选择已持久化（mock 通过 localStorage 恢复）。
   await page.reload();
   await page.getByRole('heading', { name: '今天，想做点什么？', exact: true }).waitFor();
-  assert.match(await page.getByRole('button', { name: '模型与推理设置', exact: true }).innerText(), /Max/);
+  assert.match(await page.getByRole('button', { name: /^(?:新对话默认模型|当前会话模型)$/ }).innerText(), /Max/);
 
   // -------------------------------------------------------------------------
   // 6. 会话与文件面板
@@ -496,20 +717,20 @@ try {
   await page.locator('.status-dock-popover').waitFor();
   assert.match(await page.locator('.status-dock-detail').innerText(), /额度 76%/);
   await capture('04b-status-dock');
-  await page.locator('.status-dock-close').first().click();
+  await page.getByRole('button', { name: '关闭状态详情', exact: true }).click();
   await page.locator('.status-dock-popover').waitFor({ state: 'detached' });
   // 状态栏管理：顺序与显隐。
   await page.locator('.status-dock-manage').click();
   await page.locator('.status-manage-list').waitFor();
   assert.ok(await page.locator('.status-manage-row').count() > 0);
   await capture('04c-status-manage');
-  await page.locator('.status-dock-close').first().click();
+  await page.getByRole('button', { name: '关闭状态栏管理', exact: true }).click();
   await page.locator('.status-dock-popover').waitFor({ state: 'detached' });
 
   // 打开文件查看器，读取根目录列表，再点开 package.json 预览代码。
   await page.getByRole('button', { name: '打开右侧面板', exact: true }).click();
   // 面板默认停在「开始」页，先切到文件标签再等文件列表。
-  await page.getByRole('button', { name: '打开工作区文件', exact: true }).click();
+  await page.getByRole('button', { name: /^工作区文件/ }).click();
   await capture('05-files');
   await page.getByRole('button', { name: 'package.json', exact: false }).click();
   await page.locator('.code-line').first().waitFor();
@@ -528,16 +749,78 @@ try {
   // 设置页不应出现独立页面级别的大标题 / 图标（保持紧凑的设置面板风格）。
   assert.equal(await page.locator('.settings-title, .page-icon, .page-eyebrow').count(), 0);
 
-  // 7.1 模型与账号：来源列表、来源编辑对话框的草稿与保存
+  // 7.0 通用设置：四套全局配色使用同一组页面表面与语义状态色；
+  // 切换卡片会同步根节点、按钮实际颜色和本地持久化数据。
+  await openSettingsSection('通用');
+  const paletteChoices = page.getByRole('radiogroup', { name: '全局配色方案' });
+  await paletteChoices.waitFor();
+  assert.equal(await paletteChoices.getByRole('radio').count(), 4);
+  await paletteChoices.getByRole('radio', { name: /^海蓝/ }).click();
+  await page.waitForFunction(() => document.documentElement.dataset.palette === 'ocean');
+  assert.equal(await paletteChoices.getByRole('radio', { name: /^海蓝/ }).getAttribute('aria-checked'), 'true');
+  assert.equal(await paletteChoices.getByRole('radio', { name: /^海蓝/ }).locator('.palette-preview-actions b').evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(96, 165, 250)');
+  await capture('11a-general-palette-light');
+
+  await page.getByRole('button', { name: '深色', exact: true }).click();
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
+  await paletteChoices.getByRole('radio', { name: /^莓果/ }).click();
+  await page.waitForFunction(() => document.documentElement.dataset.palette === 'berry');
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('pi-studio:preferences') || '{}').palette), 'berry');
+  await capture('11b-general-palette-dark');
+
+  await page.getByRole('button', { name: '浅色', exact: true }).click();
+  await paletteChoices.getByRole('radio', { name: /^青柠/ }).click();
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'light' && document.documentElement.dataset.palette === 'lime');
+
+  // 7.1 Agent 工具：同一 Pi 核心来源只出现一个 Tab；卡片开关不误触详情，
+  // 卡片主体打开完整详情，来源切换与搜索都保留正确状态。
+  await openSettingsSection('Agent 工具');
+  await page.getByRole('tablist', { name: '工具来源' }).waitFor();
+  assert.equal(await page.getByRole('tab').count(), 3);
+  assert.equal(await page.getByRole('tab', { name: /^Pi 核心/ }).count(), 1);
+  assert.equal(await page.locator('.agent-tool-card').count(), 9);
+  await capture('12a-agent-tools-core');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await capture('12a-dark-agent-tools-core');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+
+  await page.getByRole('button', { name: '查看工具 bash 详情', exact: true }).click();
+  const toolDetail = page.locator('.agent-tool-detail-dialog');
+  await toolDetail.waitFor();
+  assert.match(await toolDetail.innerText(), /\/Applications\/Pi Studio\.app\/Contents\/Resources\/tools\/bash\.js/);
+  assert.match(await toolDetail.innerText(), /直接提供/);
+  await capture('12b-agent-tool-detail');
+  await page.getByRole('button', { name: '关闭详情', exact: true }).click();
+  await toolDetail.waitFor({ state: 'detached' });
+
+  const bashSwitch = page.getByRole('switch', { name: '允许工具 bash', exact: true });
+  await bashSwitch.click();
+  assert.equal(await page.locator('.agent-tool-detail-dialog').count(), 0);
+  await page.getByRole('switch', { name: '禁用工具 bash', exact: true }).click();
+
+  await page.getByRole('tab', { name: /^pi-subagents/ }).click();
+  await page.getByRole('button', { name: '查看工具 subagent 详情', exact: true }).waitFor();
+  assert.equal(await page.locator('.agent-tool-card').count(), 5);
+  await capture('12c-agent-tools-subagents');
+
+  await page.getByRole('textbox', { name: '搜索 Agent 工具', exact: true }).fill('workspace');
+  await page.getByRole('tab', { name: /^workspace-tools/ }).waitFor();
+  assert.equal(await page.getByRole('tab').count(), 1);
+  await page.getByRole('button', { name: '清除工具搜索', exact: true }).click();
+  await page.getByRole('tab', { name: /^Pi 核心/ }).press('Home');
+  assert.equal(await page.getByRole('tab', { name: /^Pi 核心/ }).getAttribute('aria-selected'), 'true');
+
+  // 7.2 模型与账号：来源列表、来源编辑对话框的草稿与保存
   await openSettingsSection('模型与账号');
   await page.getByRole('button', { name: '管理模型', exact: true }).first().click();
-  await page.locator('.provider-model-row').waitFor();
+  await page.locator('.provider-model-row').first().waitFor();
   await capture('12-provider-models');
   const dialog = page.locator('.settings-dialog');
 
   // 新增来源对话框：填写后取消，不能留下草稿卡片。
   await page.getByRole('button', { name: '添加模型来源', exact: true }).click();
   await capture('13-add-provider-dialog');
+  assert.equal(await dialog.getByLabel('首个模型 ID', { exact: true }).count(), 0);
   await dialog.getByLabel('来源 ID', { exact: true }).fill('draft-only');
   await dialog.getByRole('button', { name: '取消', exact: true }).click();
   assert.equal(await page.locator('.provider-card').count(), 3);
@@ -560,13 +843,12 @@ try {
   await dialog.waitFor({ state: 'detached' });
   assert.equal(await page.locator('.settings-overlay').count(), 1);
 
-  // 7.2 自定义模型：新增后在列表中编辑，名称与上下文长度应更新，
-  // 且原有 Studio Model 仍保留（共两行）。
-  await page.getByRole('button', { name: '添加自定义模型', exact: true }).click();
-  await dialog.getByRole('button', { name: '模型来源', exact: true }).click();
-  await page.getByRole('option', { name: 'MiniMax', exact: true }).click();
+  // 7.3 来源内模型管理：模型归属固定，新增后在同一列表内编辑。
+  await page.getByRole('button', { name: '添加模型', exact: true }).first().click();
   await dialog.getByLabel('模型 ID', { exact: true }).fill('new-model');
   await dialog.getByLabel('显示名称', { exact: true }).fill('New Model');
+  await dialog.getByRole('checkbox', { name: /图片输入/ }).check();
+  await dialog.getByRole('checkbox', { name: /推理模型/ }).check();
   await dialog.getByRole('button', { name: '添加', exact: true }).click();
   await dialog.waitFor({ state: 'detached' });
   await page.getByRole('button', { name: '编辑模型 New Model', exact: true }).click();
@@ -576,9 +858,29 @@ try {
   await dialog.getByRole('button', { name: '保存更改', exact: true }).click();
   await dialog.waitFor({ state: 'detached' });
   await page.getByRole('button', { name: '编辑模型 Updated Model', exact: true }).waitFor();
-  assert.equal(await page.locator('.custom-model-row').count(), 2);
+  assert.equal(await page.locator('.provider-card').first().locator('.provider-model-row').count(), 3);
 
-  // 7.3 MCP 服务器：切换分页后内容应回到顶部；新增时重名要展示行内错误，
+  // 7.3.1 第三方模型发现：先预览，再一次性导入缺失模型。
+  await page.getByRole('button', { name: '获取模型', exact: true }).first().click();
+  await page.getByText('发现 2 个模型', { exact: true }).waitFor();
+  await page.getByRole('button', { name: '添加 2 个', exact: true }).click();
+  await page.getByText('已同步 2 个新模型，可逐个调整能力与上下文。', { exact: true }).waitFor();
+  assert.equal(await page.locator('.provider-card').first().locator('.provider-model-row').count(), 5);
+  await capture('15b-provider-model-discovery');
+
+  // 7.3.2 新来源可以先保持空模型目录；用户随后从来源内部添加第一个模型。
+  await page.getByRole('button', { name: '添加模型来源', exact: true }).click();
+  await dialog.getByLabel('来源 ID', { exact: true }).fill('empty-gateway');
+  await dialog.getByLabel('显示名称', { exact: true }).fill('Empty Gateway');
+  await dialog.getByLabel('服务地址', { exact: true }).fill('https://empty.example.test/v1');
+  await dialog.getByLabel('模型列表地址', { exact: true }).fill('https://empty.example.test/v1/models');
+  await dialog.getByRole('button', { name: '添加', exact: true }).click();
+  await dialog.waitFor({ state: 'detached' });
+  await page.locator('.provider-model-empty').getByText('这个来源还没有模型', { exact: true }).waitFor();
+  assert.equal(await page.locator('.provider-card').count(), 4);
+  await capture('15c-empty-provider');
+
+  // 7.4 MCP 服务器：切换分页后内容应回到顶部；新增时重名要展示行内错误，
   // 修改名称后可成功创建；编辑已有服务器应保留带空格的启动参数。
   await openSettingsSection('MCP 服务器');
   assert.equal(await page.locator('.settings-content').evaluate((element) => element.scrollTop), 0);
@@ -623,22 +925,23 @@ try {
   await dialog.waitFor({ state: 'detached' });
 
   // 紧凑视口下依次检查设置页其余分页（21 系列）。
-  for (const [index, tab] of ['模型与账号', '技能', '扩展', '关于'].entries()) {
+  for (const [index, tab] of ['模型与账号', 'Agent 工具', '技能', '扩展', '关于'].entries()) {
     await openSettingsSection(tab);
     await capture(`21-compact-settings-${index}`);
   }
 
-  // 技能导入、npm 扩展包安装、本地扩展导入三个对话框都应能正常打开/取消。
+  // 技能导入、统一扩展安装与本地扩展导入都应能正常打开/取消。
   await openSettingsSection('技能');
   await page.getByRole('button', { name: '添加全局技能', exact: true }).click();
   await capture('22-skill-import-dialog');
   await dialog.getByRole('button', { name: '取消', exact: true }).click();
   await openSettingsSection('扩展');
-  await page.getByRole('button', { name: '安装扩展包', exact: true }).click();
+  assert.deepEqual(await page.locator('.installed-extension-title strong').allTextContents(), ['pi-tools', 'workspace-tools']);
+  await page.getByRole('button', { name: '添加扩展', exact: true }).click();
+  await dialog.getByLabel('扩展包地址', { exact: true }).waitFor();
   await capture('23-package-dialog');
-  await page.keyboard.press('Escape');
-  await dialog.waitFor({ state: 'detached' });
-  await page.getByRole('button', { name: '添加本地扩展', exact: true }).click();
+  await dialog.getByText('导入本地扩展', { exact: true }).click();
+  await dialog.getByText('生效范围', { exact: true }).waitFor();
   await capture('24-extension-import-dialog');
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'detached' });
@@ -698,7 +1001,7 @@ try {
 
   // 模拟模型目录 IPC 失败：弹层内展示错误提示，Escape 可关闭。
   await page.evaluate(() => { window.__catalogExtras = []; window.__failCatalog = true; });
-  await page.getByRole('button', { name: '模型与推理设置', exact: true }).click();
+  await page.getByRole('button', { name: /^(?:新对话默认模型|当前会话模型)$/ }).click();
   await page.getByRole('alert').filter({ hasText: '模型列表读取失败' }).waitFor();
   await page.keyboard.press('Escape');
   await page.evaluate(() => { window.__failCatalog = false; });
@@ -719,7 +1022,7 @@ try {
   // 点击“新会话”应回到欢迎页，且不残留会话标签。
   await page.getByRole('button', { name: '新会话', exact: true }).first().click();
   await page.getByRole('heading', { name: '今天，想做点什么？', exact: true }).waitFor();
-  assert.equal(await page.locator('.chat-tabs').count(), 0);
+  assert.equal(await page.locator('.chat-tabs:not(.is-placeholder)').count(), 0);
   // 整个流程中浏览器不能有未捕获异常。
   assert.deepEqual(errors, [], 'Browser runtime errors');
   console.log(`UI checks passed; screenshots saved to ${output}`);

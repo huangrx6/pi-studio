@@ -18,6 +18,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { readConfig, writeConfig } = require('../settings-config.cjs');
 const { loadCredentialEnvironment, normalizeAuth } = require('../credential-env.cjs');
+const { normalizedModelRef, resolveStartupModelRef } = require('../model-defaults.cjs');
 
 // 开发模式下渲染进程连 Vite dev server，而不是打包后的 web-dist
 const DEV = process.env.PI_STUDIO_DEV === '1';
@@ -85,11 +86,13 @@ function setThinkingPreferences(next) {
 
 /**
  * 让模型运行时失效：下次 getRuntime() 会重新读取配置并重建。
- * 切换 API Key、增删提供方 / 模型后必须调用，同时清空运行中的会话。
+ * 切换 API Key、增删提供方 / 模型后必须调用。
+ *
+ * 这里不再直接清空 AgentSession：正在流式回答的会话需要继续使用旧运行时
+ * 完成当前回合。调用方随后会请求统一热刷新，由会话服务在空闲边界替换运行时。
  */
 function invalidateModelRuntime() {
   runtimePromise = undefined;
-  agentSessions.clear();
 }
 
 /**
@@ -173,10 +176,50 @@ function configPath() {
   return path.join(app.getPath('userData'), 'config.json');
 }
 
+/** Pi settings.json 中保存的启动模型，供首次启动或 Studio 配置缺失时迁移。 */
+function piDefaultModelRef() {
+  try {
+    const settings = piModule().SettingsManager.create(DEFAULT_CWD);
+    const provider = settings.getDefaultProvider();
+    const model = settings.getDefaultModel();
+    if (typeof provider === 'string' && provider && typeof model === 'string' && model) {
+      return `${provider}/${model}`;
+    }
+  } catch {
+    /* Pi settings 尚未就绪或不可读时使用当前兜底模型。 */
+  }
+  return '';
+}
+
+/**
+ * 读取 Pi 的共享默认模型并同步到 Studio 内存与旧配置。
+ * App 内修改默认值时已直接写 Pi；这里负责反向同步终端里的修改。
+ */
+function syncModelRefFromPiDefault() {
+  if (normalizedModelRef(process.env.PI_MODEL_REF)) return false;
+  const next = piDefaultModelRef();
+  if (!next || next === modelRef) return false;
+  modelRef = next;
+  const value = readJson(configPath(), {});
+  if (value.modelRef !== next) writeConfig(configPath(), { ...value, modelRef: next });
+  return true;
+}
+
 /** 启动时把持久化的模型与推理偏好读进内存。 */
 function loadConfig() {
   const value = readJson(configPath(), {});
-  if (typeof value.modelRef === 'string' && value.modelRef.includes('/')) modelRef = value.modelRef;
+  const savedModelRef = normalizedModelRef(value.modelRef);
+  const terminalModelRef = piDefaultModelRef();
+  const environmentModelRef = normalizedModelRef(process.env.PI_MODEL_REF);
+  modelRef = resolveStartupModelRef({
+    environment: environmentModelRef,
+    terminal: terminalModelRef,
+    stored: savedModelRef,
+    fallback: modelRef,
+  });
+  if (!environmentModelRef && terminalModelRef && savedModelRef !== terminalModelRef) {
+    writeConfig(configPath(), { ...value, modelRef: terminalModelRef });
+  }
   if (value.thinkingLevels && typeof value.thinkingLevels === 'object' && !Array.isArray(value.thinkingLevels)) {
     thinkingPreferences = value.thinkingLevels;
   }
@@ -218,5 +261,6 @@ module.exports = {
   configPath,
   loadConfig,
   saveConfig,
+  syncModelRefFromPiDefault,
   agentSessions,
 };

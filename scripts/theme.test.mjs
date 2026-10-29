@@ -38,12 +38,14 @@ const sourceFiles = fs.readdirSync('web/src', { recursive: true })
  * var() 引用会递归展开（例如 --accent → --color-accent），并用 seen 检测循环，
  * 任何缺失或循环都会让断言失败。
  */
-function tokens(mode) {
+function tokens(mode, paletteName = 'lime') {
   const result = {};
   palette.walkRules((rule) => {
     const isBase = rule.selector === ':root';
     const isDarkOverride = mode === 'dark' && rule.selector === ':root[data-theme="dark"]';
-    if (!isBase && !isDarkOverride) return;
+    const isPaletteOverride = paletteName !== 'lime' && rule.selector === `:root[data-palette="${paletteName}"]`;
+    const isDarkPaletteOverride = mode === 'dark' && paletteName !== 'lime' && rule.selector === `:root[data-theme="dark"][data-palette="${paletteName}"]`;
+    if (!isBase && !isDarkOverride && !isPaletteOverride && !isDarkPaletteOverride) return;
     rule.walkDecls((decl) => {
       if (decl.prop.startsWith('--')) result[decl.prop] = decl.value;
     });
@@ -118,36 +120,51 @@ test('all referenced design tokens resolve', () => {
 //    避免整页被品牌色染色；
 // 2. 前景/背景组合的 WCAG 对比度至少 4.5:1，覆盖正文、弱化文字、按钮、
 //    错误/警告/成功状态、代码语法色与选区文字。
-for (const mode of ['light', 'dark']) {
-  test(`${mode} has neutral surfaces and readable semantic color pairs`, () => {
-    const t = tokens(mode);
-    for (const key of ['--bg', '--surface', '--sidebar-bg']) {
-      const color = t[key].slice(1).match(/../g).map((value) => parseInt(value, 16));
-      assert.equal(Math.max(...color) - Math.min(...color), 0, `${mode} ${key} must stay neutral`);
-    }
-    const pairs = [
-      ['--text', '--bg'],
-      ['--muted', '--surface'],
-      ['--faint', '--surface-soft'],
-      ['--accent', '--accent-soft'],
-      ['--on-button', '--button-bg'],
-      ['--on-button', '--button-hover'],
-      ['--error', '--error-soft'],
-      ['--warning', '--warning-soft'],
-      ['--success', '--success-soft'],
-      ['--syntax-keyword', '--code-bg'],
-      ['--syntax-string', '--code-bg'],
-      ['--syntax-number', '--code-bg'],
-      ['--syntax-function', '--code-bg'],
-      ['--selection-text', '--selection'],
-    ];
-    for (const [fg, bg] of pairs) {
-      const values = [luminance(t[fg]), luminance(t[bg])].sort((a, b) => b - a);
-      const ratio = (values[0] + 0.05) / (values[1] + 0.05);
-      assert.ok(ratio >= 4.5, `${mode} ${fg}/${bg} contrast ${ratio.toFixed(2)}`);
-    }
-  });
+for (const paletteName of ['lime', 'ocean', 'amber', 'berry']) {
+  for (const mode of ['light', 'dark']) {
+    test(`${mode} ${paletteName} has neutral surfaces and readable semantic color pairs`, () => {
+      const t = tokens(mode, paletteName);
+      for (const key of ['--bg', '--surface', '--sidebar-bg']) {
+        const color = t[key].slice(1).match(/../g).map((value) => parseInt(value, 16));
+        assert.equal(Math.max(...color) - Math.min(...color), 0, `${mode} ${key} must stay neutral`);
+      }
+      const pairs = [
+        ['--text', '--bg'],
+        ['--muted', '--surface'],
+        ['--faint', '--surface-soft'],
+        ['--accent', '--accent-soft'],
+        ['--on-accent', '--accent'],
+        ['--on-button', '--button-bg'],
+        ['--on-button', '--button-hover'],
+        ['--error', '--error-soft'],
+        ['--warning', '--warning-soft'],
+        ['--success', '--success-soft'],
+        ['--syntax-keyword', '--code-bg'],
+        ['--syntax-string', '--code-bg'],
+        ['--syntax-number', '--code-bg'],
+        ['--syntax-function', '--code-bg'],
+        ['--selection-text', '--selection'],
+      ];
+      for (const [fg, bg] of pairs) {
+        const values = [luminance(t[fg]), luminance(t[bg])].sort((a, b) => b - a);
+        const ratio = (values[0] + 0.05) / (values[1] + 0.05);
+        assert.ok(ratio >= 4.5, `${mode} ${paletteName} ${fg}/${bg} contrast ${ratio.toFixed(2)}`);
+      }
+    });
+  }
 }
+
+test('palette presets keep semantic status colors stable', () => {
+  for (const mode of ['light', 'dark']) {
+    const base = tokens(mode, 'lime');
+    for (const paletteName of ['ocean', 'amber', 'berry']) {
+      const current = tokens(mode, paletteName);
+      for (const token of ['--success', '--success-soft', '--error', '--error-soft', '--warning', '--warning-soft', '--info', '--info-soft']) {
+        assert.equal(current[token], base[token], `${mode} ${paletteName} must not change ${token}`);
+      }
+    }
+  }
+});
 
 // 原生窗口的 backgroundColor 必须在启动瞬间就和页面一致（否则会闪一下）。
 // Electron 侧从同一份 palette.css 读取 --bg：显式主题直接取对应值，

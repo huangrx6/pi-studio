@@ -51,7 +51,7 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
         <div className="temporary-composer-tools">
           <input ref={upload} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden onChange={event => { if (event.target.files) void addImages([...event.target.files]); event.target.value = ''; }} />
           <button className="icon-button" title="添加图片" aria-label="临时聊天添加图片" onClick={() => upload.current?.click()}><ImagePlus /></button>
-          <ModelPicker selection={state.selection} disabled={state.busy} hidden={false} loadCatalog={() => window.piApi.models()} onSelectModel={modelRef => chooseModel(modelRef)} onSelectThinking={level => chooseModel(state.selection.modelRef, level)} onManage={onManage} />
+          <ModelPicker selection={state.selection} scope="session" disabled={state.busy} hidden={false} loadCatalog={() => window.piApi.models()} onSelectModel={modelRef => chooseModel(modelRef)} onSelectThinking={level => chooseModel(state.selection.modelRef, level)} onManage={onManage} />
           {state.busy ? <button className="temporary-send" aria-label="停止临时回复" onClick={() => void window.piApi.temporaryStop(id).catch(err => updateTemporary(id,{error:String(err)}))}><Square /></button> : <button className="temporary-send" aria-label="发送临时消息" disabled={!state.draft.trim() && !state.images.length} onClick={() => { following.current = true; void sendTemporary(id); }}><ArrowUp /></button>}
         </div>
       </div>

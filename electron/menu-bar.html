@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self'; script-src 'self'; img-src data:;"
+    >
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi Studio</title>
+    <link rel="stylesheet" href="../web/src/styles/palette.css">
+    <link rel="stylesheet" href="./menu-bar.css">
+    <script src="./menu-bar-renderer.js" defer></script>
+  </head>
+  <body>
+    <div class="popover-shell">
+      <div class="popover-panel">
+        <header class="popover-header">
+          <div class="brand-lockup">
+            <span class="brand-mark" aria-hidden="true">π</span>
+            <div>
+              <strong>Pi Studio</strong>
+              <p id="summary">后台状态</p>
+            </div>
+          </div>
+          <button id="close" class="icon-button" type="button" aria-label="关闭菜单栏面板" title="关闭">×</button>
+        </header>
+
+        <main class="popover-content">
+          <section class="menu-section" aria-labelledby="running-heading">
+            <div class="section-heading">
+              <h2 id="running-heading">正在运行</h2>
+              <span id="running-count" class="count-badge">0</span>
+            </div>
+            <div id="running-list" class="card-list"></div>
+          </section>
+
+          <section class="menu-section" aria-labelledby="recent-heading">
+            <div class="section-heading">
+              <h2 id="recent-heading">刚刚完成</h2>
+              <button id="clear-recent" class="text-button" type="button">清除</button>
+            </div>
+            <div id="recent-list" class="card-list"></div>
+          </section>
+        </main>
+
+        <footer class="popover-footer">
+          <button id="open-main" class="primary-button" type="button">
+            <span aria-hidden="true">π</span>
+            打开工作台
+          </button>
+          <span class="footer-hint">关闭窗口后仍会继续运行</span>
+        </footer>
+      </div>
+    </div>
+  </body>
+</html>

@@ -16,7 +16,7 @@ const browser = await chromium.launch({
   executablePath: process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
-const page = await browser.newPage({ viewport: { width: 1440, height: 920 } });
+const page = await browser.newPage({ viewport: { width: 1440, height: 920 }, deviceScaleFactor: 2 });
 page.setDefaultTimeout(10_000);
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
@@ -78,6 +78,7 @@ await page.addInitScript(() => {
       enabled: ['demo/reasoner'],
       current: model.modelRef,
       selection: model,
+      defaultSelection: model,
     }),
     composerResources: async () => ({ commands: [], skills: [] }),
     extensionState: async () => ({

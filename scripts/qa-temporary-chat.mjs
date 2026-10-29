@@ -5,7 +5,7 @@ const output = new URL('../screenshots/temporary-chat/', import.meta.url).pathna
 await mkdir(output,{recursive:true});
 const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
 try {
- const page=await browser.newPage({viewport:{width:1500,height:1000}}); page.setDefaultTimeout(8000);
+ const page=await browser.newPage({viewport:{width:1500,height:1000},deviceScaleFactor:2}); page.setDefaultTimeout(8000);
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.addInitScript(()=>{
   localStorage.setItem("pi-studio:preferences",JSON.stringify({showCodeView:true}));
@@ -25,7 +25,7 @@ try {
   window.piApi=new Proxy({
    onTemporary:fn=>{tempListeners.add(fn);return()=>tempListeners.delete(fn);},
    temporaryModel:async value=>({...model,modelRef:value?.modelRef||model.modelRef,thinkingLevel:value?.thinkingLevel||'default'}),
-   models:async()=>({models:[{id:'demo/model',name:'Demo',provider:'demo',providerName:'Demo',supportsImages:true}],enabled:[],current:'demo/model',selection:model}),
+   models:async()=>({models:[{id:'demo/model',name:'Demo',provider:'demo',providerName:'Demo',supportsImages:true}],enabled:[],current:'demo/model',selection:model,defaultSelection:model}),
    temporaryPrompt:async payload=>{window.temporaryCalls.push(payload);for(const fn of tempListeners)fn({id:payload.id,type:'message',message:{role:'user',timestamp:Date.now(),content:[{type:'text',text:payload.text},...payload.images.map(image=>({...image,type:'image'}))]}});return new Promise(resolve=>window.tempResolve=resolve);},
    temporaryStop:async()=>{window.tempResolve?.({ok:true});},
    temporaryClose:async id=>{window.temporaryClosed.push(id);window.tempResolve?.({ok:true});},

@@ -12,6 +12,14 @@
 
 /** 主题偏好；system 表示跟随 macOS 外观。 */
 export type ThemePreference = 'light' | 'dark' | 'system';
+/** 全局强调色方案；中性背景和语义状态色不随它改变。 */
+export const PALETTE_PRESETS = [
+  { id: 'lime', label: '青柠', description: '清爽、有活力的默认强调色。' },
+  { id: 'ocean', label: '海蓝', description: '冷静、清晰，适合长时间阅读。' },
+  { id: 'amber', label: '琥珀', description: '温暖、专注，强调当前操作。' },
+  { id: 'berry', label: '莓果', description: '柔和、鲜明，增加界面辨识度。' },
+] as const;
+export type PalettePreference = typeof PALETTE_PRESETS[number]['id'];
 /** 工作步骤（工具调用/思考）的展示密度。 */
 export type StepDisplay = 'compact' | 'standard' | 'detailed';
 /** 工作步骤的自动收起时机。 */
@@ -22,11 +30,21 @@ export type LinkPreference = 'external' | 'window';
 export type BusyPreference = 'queue' | 'steer';
 /** 全局圆角风格，映射到 RADIUS_PRESETS。 */
 export type RadiusStyle = 'square' | 'compact' | 'standard' | 'soft';
+/** 由主进程复制到应用私有目录的背景媒体。 */
+export type BackgroundMedia = {
+  kind: 'image' | 'video';
+  url: string;
+  name: string;
+  mime: string;
+  bytes: number;
+};
 
 /** 用户可调整的全部偏好。 */
 export type Preferences = {
   /** 主题偏好。 */
   theme: ThemePreference;
+  /** 全局配色方案；只改变品牌强调色，不改变中性背景与语义状态色。 */
+  palette: PalettePreference;
   /** 对话正文字号（px），仅影响聊天内容。 */
   fontSize: number;
   /** 步骤展示密度。 */
@@ -41,6 +59,14 @@ export type Preferences = {
   busySend: BusyPreference;
   /** 圆角风格。 */
   radiusStyle: RadiusStyle;
+  /** 当前背景媒体；null 表示使用纯色背景。 */
+  backgroundMedia: BackgroundMedia | null;
+  /** 背景媒体自身可见度，0–100。 */
+  backgroundOpacity: number;
+  /** 背景媒体柔化程度，0–24 px。 */
+  backgroundBlur: number;
+  /** 主界面表层的遮挡强度，55–98%。 */
+  backgroundSurfaceOpacity: number;
 };
 
 /** localStorage 键名；改动会导致旧用户偏好失效，需谨慎。 */
@@ -49,6 +75,7 @@ const STORAGE_KEY = 'pi-studio:preferences';
 /** 首次启动或存储损坏时使用的默认偏好。 */
 export const DEFAULT_PREFERENCES: Preferences = {
   theme: 'light',
+  palette: 'lime',
   fontSize: 14,
   stepDisplay: 'standard',
   stepCollapse: 'after-answer',
@@ -56,7 +83,40 @@ export const DEFAULT_PREFERENCES: Preferences = {
   linkOpen: 'external',
   busySend: 'queue',
   radiusStyle: 'standard',
+  backgroundMedia: null,
+  backgroundOpacity: 68,
+  backgroundBlur: 0,
+  backgroundSurfaceOpacity: 88,
 };
+
+function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(number)));
+}
+
+function normalizePalette(value: unknown): PalettePreference {
+  return PALETTE_PRESETS.some((preset) => preset.id === value)
+    ? value as PalettePreference
+    : DEFAULT_PREFERENCES.palette;
+}
+
+function normalizeBackgroundMedia(value: unknown): BackgroundMedia | null {
+  if (!value || typeof value !== 'object') return null;
+  const media = value as Partial<BackgroundMedia>;
+  if (media.kind !== 'image' && media.kind !== 'video') return null;
+  if (typeof media.url !== 'string' || !media.url.startsWith('pi-media://background/')) return null;
+  if (typeof media.name !== 'string' || !media.name.trim()) return null;
+  if (typeof media.mime !== 'string' || !media.mime.trim()) return null;
+  const bytes = Number(media.bytes);
+  return {
+    kind: media.kind,
+    url: media.url,
+    name: media.name,
+    mime: media.mime,
+    bytes: Number.isFinite(bytes) && bytes >= 0 ? bytes : 0,
+  };
+}
 
 /**
  * 圆角风格到各组件的像素预设。
@@ -82,8 +142,18 @@ let activePreferences = DEFAULT_PREFERENCES;
  */
 export function loadPreferences(): Preferences {
   try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    return { ...DEFAULT_PREFERENCES, ...stored, fontSize: Number(stored.fontSize) || DEFAULT_PREFERENCES.fontSize };
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    const stored = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    return {
+      ...DEFAULT_PREFERENCES,
+      ...stored,
+      palette: normalizePalette(stored.palette),
+      fontSize: clampNumber(stored.fontSize, DEFAULT_PREFERENCES.fontSize, 12, 17),
+      backgroundMedia: normalizeBackgroundMedia(stored.backgroundMedia),
+      backgroundOpacity: clampNumber(stored.backgroundOpacity, DEFAULT_PREFERENCES.backgroundOpacity, 0, 100),
+      backgroundBlur: clampNumber(stored.backgroundBlur, DEFAULT_PREFERENCES.backgroundBlur, 0, 24),
+      backgroundSurfaceOpacity: clampNumber(stored.backgroundSurfaceOpacity, DEFAULT_PREFERENCES.backgroundSurfaceOpacity, 55, 98),
+    };
   } catch {
     // 返回副本，避免调用方原地修改污染共享的默认值。
     return { ...DEFAULT_PREFERENCES };

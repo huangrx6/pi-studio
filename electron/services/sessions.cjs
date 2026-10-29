@@ -25,10 +25,13 @@ const {
   agentDir,
   configPath,
   agentSessions,
+  syncModelRefFromPiDefault,
+  getWindow,
 } = require('../core/state.cjs');
 const { serializeMessage, visibleSessionMessages } = require('../core/serialize.cjs');
 const { parseAttachmentMarkers } = require('../core/attachment-markers.cjs');
-const { reasoningFor, modelInfoFor } = require('./models.cjs');
+const { reasoningFor, modelInfoFor, resolvedRuntimeModel, runtimeModelFor } = require('./models.cjs');
+const { resolveSessionModel } = require('./session-model.cjs');
 const { createExtensionUI } = require('./extensions.cjs');
 const { updateSidebar } = require('../sidebar-state.cjs');
 const { envNameOf } = require('../credential-env.cjs');
@@ -38,11 +41,34 @@ const { readTurnDiffs } = require('./turn-diff.cjs');
 const { temporaryTitle } = require('./auto-title.cjs');
 const { readAgentToolSelection } = require('../settings-config.cjs');
 const { clearSubagentRuntime } = require('./subagent-runtime.cjs');
+const {
+  createRuntimeRefreshCoordinator,
+  registerRuntimeRefreshRequester,
+} = require('./runtime-refresh.cjs');
 
 /** 内存中的草稿会话：id → { manager, cwd }。 */
 const drafts = new Map();
 /** 正在创建的 AgentSession：同一会话的并发请求共享同一次创建。 */
 const agentPromises = new Map();
+/** 回复 / 压缩期间选中的会话模型：等 Agent 安全空闲后再写 transcript。 */
+const pendingSessionModels = new Map();
+/** 为待切换模型注册的空闲等待与写入任务，避免 done 与订阅回调重复应用。 */
+const pendingModelWaiters = new Map();
+const pendingModelApplyPromises = new Map();
+/**
+ * 设置保存后统一刷新运行时。空闲会话立即重建；正在回答的会话在本轮结束
+ * 后自动重建。重建会重新读取工具白名单、MCP、技能、扩展和子 Agent 配置。
+ */
+const agentRuntimeRefresh = createRuntimeRefreshCoordinator({
+  sessions: agentSessions,
+  rebuild: (id, current, reason) => rebuildAgentRuntime(id, current, reason),
+  isIdle: session => Boolean(session?.isIdle),
+  notify: payload => {
+    const win = getWindow();
+    if (win && !win.isDestroyed()) win.webContents.send('pi:runtime-refresh', payload);
+  },
+});
+registerRuntimeRefreshRequester(reason => agentRuntimeRefresh.request(reason));
 /** 磁盘会话索引：id → { id, path, cwd, title, updatedAt, messageCount }。 */
 const diskSessions = new Map();
 /** 会话详情缓存：id → { mtimeMs, size, data }，用文件修改时间判断是否需要重读。 */
@@ -164,9 +190,19 @@ function releaseInactiveSessions(activeId) {
     if (session.isStreaming || session.isCompacting) continue;
     try { session.dispose(); } catch { /* 会话已失效 */ }
     agentSessions.delete(id);
+    agentRuntimeRefresh.forget(id);
     clearSubagentRuntime(id);
   }
   for (const id of [...detailCache.keys()]) if (id !== activeId) detailCache.delete(id);
+}
+
+/**
+ * Mark every cached runtime stale after a persisted configuration change.
+ * Idle sessions are rebuilt before this promise resolves. Busy sessions keep
+ * the runtime used by the active turn and are rebuilt after it settles.
+ */
+function requestAgentRuntimeRefresh(reason) {
+  return agentRuntimeRefresh.request(reason);
 }
 
 /** 让索引失效，下次访问时重新扫描磁盘。 */
@@ -184,6 +220,22 @@ function forgetDetail(id) {
 function dropDraft(id) {
   // Keep a manager reachable until a completed disk scan has discovered its file.
   if (diskSessions.has(id)) drafts.delete(id);
+}
+
+/**
+ * 等待 Agent 完全空闲后再应用待切换模型。
+ * AgentSession.waitForIdle 覆盖回复、工具链、follow-up 与压缩恢复，
+ * 因此不会把 model_change 插到尚未完成的工具调用链中间。
+ */
+function watchPendingSessionModel(id, session) {
+  if (pendingModelWaiters.has(id)) return;
+  const task = session.waitForIdle()
+    .then(() => applyPendingSessionModel(id, session))
+    .catch(() => { /* 保留 pending，下一次发送或重新选择时会再次尝试 */ })
+    .finally(() => {
+      if (pendingModelWaiters.get(id) === task) pendingModelWaiters.delete(id);
+    });
+  pendingModelWaiters.set(id, task);
 }
 
 function updateSessionSummary(id, text) {
@@ -281,7 +333,7 @@ async function detail(id, limit = DEFAULT_HISTORY_LIMIT) {
           hasMore: window.hasMore,
           messageStart: window.messageStart,
           totalMessages: window.totalMessages,
-          model: await sessionModelInfo(manager, info.cwd),
+          model: await sessionModelInfo(manager, info.cwd, id),
           turnDiffs: readTurnDiffs(id),
         };
         // 只缓存完整且较小的会话；大会话/分页窗口不在主进程保留第二份副本。
@@ -309,7 +361,7 @@ async function detail(id, limit = DEFAULT_HISTORY_LIMIT) {
     hasMore: window.hasMore,
     messageStart: window.messageStart,
     totalMessages: window.totalMessages,
-    model: await sessionModelInfo(found.manager, found.cwd),
+    model: await sessionModelInfo(found.manager, found.cwd, id),
     turnDiffs: readTurnDiffs(id),
   };
 }
@@ -355,19 +407,30 @@ function createDraft(cwd) {
  * 读取一个会话自己的模型与推理等级。
  * Pi 会把 model_change / thinking_level_change 写进 transcript；没有记录时用全局默认。
  */
-async function sessionModelInfo(manager, cwd) {
+async function sessionModelInfo(manager, cwd, id) {
   const runtime = await getRuntime();
-  const entries = manager.getEntries();
-  const change = [...entries].reverse().find((entry) => entry.type === 'model_change');
-  const stored = change ? runtime.getModel(change.provider, change.modelId) : undefined;
-  let model = stored;
-  if (!model) {
-    const [provider, ...parts] = getModelRef().split('/');
-    model = provider && parts.length > 0 ? runtime.getModel(provider, parts.join('/')) : undefined;
+  const pending = id ? pendingSessionModels.get(id) : undefined;
+  if (pending) {
+    return {
+      ...modelInfoFor(pending, cwd),
+      source: 'session',
+      pending: true,
+    };
   }
-  if (!model) model = runtime.getModels()[0];
-  const thinking = [...entries].reverse().find((entry) => entry.type === 'thinking_level_change')?.thinkingLevel;
-  return modelInfoFor(model, cwd, thinking);
+  const entries = manager.getEntries();
+  const fallback = resolvedRuntimeModel(runtime);
+  return resolveSessionModel(entries, {
+    fallbackModel: fallback,
+    resolveModel: (provider, modelId) => runtimeModelFor(runtime, `${provider}/${modelId}`),
+    describe: (model, thinking) => modelInfoFor(model, cwd, thinking),
+  });
+}
+
+/** 轻量读取当前会话模型；不序列化消息历史。 */
+async function sessionModel(id) {
+  const found = await findManager(id);
+  if (!found) return undefined;
+  return sessionModelInfo(found.manager, found.cwd, id);
 }
 
 /** 会话创建时从 transcript 恢复模型与推理等级，不跟随其它会话的切换。 */
@@ -385,15 +448,58 @@ function storedSessionModel(manager, runtime) {
  * 因此创建过程本身也要去重，否则扩展会被绑定两次。
  */
 async function ensureAgent(id, manager, cwd) {
-  if (agentSessions.has(id)) {
-    // 复用会话时不要用全局偏好覆盖它自己的模型 / 推理等级。
-    return agentSessions.get(id);
+  const existing = agentSessions.get(id);
+  if (existing) {
+    try {
+      // A settings save marks cached runtimes stale. Idle sessions can rebuild
+      // synchronously before the next prompt; busy sessions keep their current
+      // runtime until the coordinated idle callback replaces them.
+      return await agentRuntimeRefresh.ensureFresh(id, existing);
+    } catch {
+      return existing;
+    }
   }
   const pending = agentPromises.get(id);
   if (pending) return pending;
-  const created = createAgent(id, manager, cwd).finally(() => agentPromises.delete(id));
+  // A config save can arrive while createAgentSession is loading resources.
+  // Remember the revision at creation start so a runtime built from older
+  // settings is rebuilt before its first prompt instead of being marked fresh.
+  const creationRevision = agentRuntimeRefresh.currentRevision;
+  const created = createAgent(id, manager, cwd)
+    .then(async (session) => {
+      agentSessions.set(id, session);
+      agentRuntimeRefresh.markCurrent(id, creationRevision);
+      return agentRuntimeRefresh.ensureFresh(id, session);
+    })
+    .finally(() => agentPromises.delete(id));
   agentPromises.set(id, created);
   return created;
+}
+
+/**
+ * Recreate an idle AgentSession with the same transcript and UI bindings.
+ * A new AgentSession is required for changed tool allowlists because Pi stores
+ * that allowlist on the session instance; `session.reload()` alone only reloads
+ * resources and keeps the old allowlist.
+ */
+async function rebuildAgentRuntime(id, current) {
+  if (!current?.isIdle) throw new Error('当前任务仍在运行，暂不能重建 Pi 运行时');
+  const manager = current.sessionManager;
+  const cwd = manager?.getCwd?.()
+    || drafts.get(id)?.cwd
+    || diskSessions.get(id)?.cwd;
+  if (!manager || !cwd) throw new Error('无法恢复当前会话的工作区');
+
+  // A model chosen during the previous run is written at the idle boundary.
+  // Apply it before constructing the replacement so its transcript is current.
+  const modelTask = pendingModelApplyPromises.get(id);
+  if (modelTask) await modelTask.catch(() => {});
+  await applyPendingSessionModel(id, current).catch(() => {});
+
+  const next = await createAgent(id, manager, cwd);
+  if (!next?.isIdle) throw new Error('新的 Pi 运行时未进入空闲状态');
+  clearSubagentRuntime(id);
+  return next;
 }
 
 // 真正的创建流程：只在 ensureAgent 去重后执行一次。
@@ -401,6 +507,7 @@ async function createAgent(id, manager, cwd) {
   const pi = piModule();
   const runtime = await getRuntime();
   const storedModel = storedSessionModel(manager, runtime);
+  if (!storedModel.model) syncModelRefFromPiDefault();
   const [globalProvider, ...globalParts] = getModelRef().split('/');
   const globalModel = globalProvider && globalParts.length > 0 ? runtime.getModel(globalProvider, globalParts.join('/')) : undefined;
   const model = storedModel.model || globalModel || runtime.getModels()[0];
@@ -445,7 +552,6 @@ async function createAgent(id, manager, cwd) {
       /* 扩展未安装或未提供 /mode 命令时忽略 */
     }
   }
-  agentSessions.set(id, session);
   return session;
 }
 
@@ -545,7 +651,11 @@ async function composerResources({ sessionId, cwd }) {
 }
 
 
-/** 会话级模型切换：只写当前会话的 transcript，不碰全局默认。 */
+/**
+ * 会话级模型切换：只写当前会话的 transcript，不碰全局默认。
+ * 回复或压缩期间先记入「下一轮生效」队列；当前回合继续使用原模型，
+ * 完成后由 applyPendingSessionModel 在安全边界写入 transcript。
+ */
 async function setSessionModel(id, modelRef) {
   if (typeof id !== 'string' || typeof modelRef !== 'string' || !modelRef.includes('/')) throw new Error('模型参数无效');
   const found = await findManager(id);
@@ -555,12 +665,48 @@ async function setSessionModel(id, modelRef) {
   const model = provider && parts.length > 0 ? runtime.getModel(provider, parts.join('/')) : undefined;
   if (!model) throw new Error('模型已不存在，请刷新后重试');
   const session = await ensureAgent(id, found.manager, found.cwd);
-  if (session.isStreaming) throw new Error('回复进行中，暂时不能切换模型。');
-  if (session.isCompacting) throw new Error('正在压缩上下文，完成后才能切换模型。');
+  // 空闲边界上可能与自动应用任务交错；先收口旧任务，用户这次选择才能成为最终值。
+  const applying = pendingModelApplyPromises.get(id);
+  if (applying) await applying.catch(() => { /* 失败项仍由下面的新选择覆盖 */ });
+  const activeModelRef = session.model ? `${session.model.provider}/${session.model.id}` : '';
+  if (activeModelRef === modelRef) {
+    pendingSessionModels.delete(id);
+    forgetDetail(id);
+    return { ...modelInfoFor(session.model, found.cwd, session.thinkingLevel), source: 'session' };
+  }
+  if (!session.isIdle) {
+    pendingSessionModels.set(id, model);
+    watchPendingSessionModel(id, session);
+    forgetDetail(id);
+    return { ...modelInfoFor(model, found.cwd), source: 'session', pending: true };
+  }
   await session.setModel(model);
+  pendingSessionModels.delete(id);
   forgetDetail(id);
   // 用运行中的 session 读结果：findManager 可能拿到的是另一个 manager 实例。
-  return modelInfoFor(session.model, found.cwd, session.thinkingLevel);
+  return { ...modelInfoFor(session.model, found.cwd, session.thinkingLevel), source: 'session' };
+}
+
+/**
+ * 在 Agent 空闲时应用最近一次待切换模型。
+ * 同一会话连续切换时以最后一次为准；写入失败则保留队列供用户重试。
+ */
+function applyPendingSessionModel(id, session) {
+  const applying = pendingModelApplyPromises.get(id);
+  if (applying) return applying;
+  const pending = pendingSessionModels.get(id);
+  if (!pending || !session || !session.isIdle) return Promise.resolve(false);
+  const task = session.setModel(pending)
+    .then(() => {
+      if (pendingSessionModels.get(id) === pending) pendingSessionModels.delete(id);
+      forgetDetail(id);
+      return true;
+    })
+    .finally(() => {
+      if (pendingModelApplyPromises.get(id) === task) pendingModelApplyPromises.delete(id);
+    });
+  pendingModelApplyPromises.set(id, task);
+  return task;
 }
 
 /** 会话级推理等级：不跟随全局默认。 */
@@ -571,11 +717,13 @@ async function setSessionThinking(id, level) {
   const session = await ensureAgent(id, found.manager, found.cwd);
   session.setThinkingLevel(level);
   forgetDetail(id);
-  return modelInfoFor(session.model, found.cwd, session.thinkingLevel);
+  // 若已排队了下一轮模型，思考强度刷新仍需保留「下轮生效」快照。
+  return sessionModelInfo(found.manager, found.cwd, id);
 }
 
 module.exports = {
   releaseInactiveSessions,
+  requestAgentRuntimeRefresh,
   drafts,
   diskSessions,
   indexSessions,
@@ -586,7 +734,9 @@ module.exports = {
   outline,
   createDraft,
   ensureAgent,
+  sessionModel,
   setSessionModel,
+  applyPendingSessionModel,
   setSessionThinking,
   forkSession,
   composerResources,

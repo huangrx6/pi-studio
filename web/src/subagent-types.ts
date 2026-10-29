@@ -1,4 +1,5 @@
 import type { ChatMessage } from './chat-types';
+import type { RuntimeRefreshSnapshot } from './runtime-types';
 
 /** pi-subagents 支持的 thinking 强度。空字符串表示没有显式覆盖。 */
 export type SubagentThinking = '' | 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
@@ -46,6 +47,7 @@ export type SubagentSettingsSnapshot = {
   models: SubagentModelOption[];
   currentModel: string;
   thinkingLevels: Exclude<SubagentThinking, ''>[];
+  runtimeRefresh?: RuntimeRefreshSnapshot;
 };
 
 export type SubagentStatus = 'pending' | 'running' | 'completed' | 'failed' | 'stopped' | 'paused';

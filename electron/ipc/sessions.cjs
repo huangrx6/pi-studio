@@ -29,7 +29,7 @@ const {
   indexSessions,
   releaseInactiveSessions,
 } = require('../services/sessions.cjs');
-const { setSessionModel, setSessionThinking } = require('../services/sessions.cjs');
+const { sessionModel, setSessionModel, setSessionThinking, applyPendingSessionModel } = require('../services/sessions.cjs');
 const { fileReferenceContext } = require('../services/workspace.cjs');
 const { attachmentContext } = require('../services/attachments.cjs');
 const { extensionState, extensionAction, extensionDialogResult, extensionSelectResult, updateEditorText, footerAction } = require('../services/extensions.cjs');
@@ -41,7 +41,14 @@ const {
   sessionSubagents,
   subagentTranscript,
 } = require('../services/subagent-runtime.cjs');
+const { publishMenuBarEvent } = require('../menu-bar-events.cjs');
 const activeRequests = new Map();
+
+function menuBarFallbackTitle(text) {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  const chars = [...clean];
+  return chars.length > 24 ? `${chars.slice(0, 23).join('')}…` : clean;
+}
 
 /** 把 Pi Studio 的名称写回 Pi 的 session_info，保证 CLI / resume 看到同一个名字。 */
 async function syncNativeName(id, name) {
@@ -68,6 +75,7 @@ const autoTitles = createAutoTitleGenerator({
   notify: id => {
     const meta = readConfig(configPath(), {}).sessionMetadata?.[id];
     if (meta?.autoTitle) void syncNativeName(id, meta.autoTitle);
+    if (meta?.autoTitle) publishMenuBarEvent({ type: 'title', id, title: meta.autoTitle });
     invalidateIndex(); forgetDetail(id);
     const win = getWindow();
     if (win && !win.isDestroyed()) win.webContents.send('pi:sessions-changed');
@@ -90,7 +98,22 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
   const firstTurn = !found.manager.getEntries().some(entry => entry.type === 'message' && entry.message.role === 'user');
   updateSessionSummary(sessionId, text);
   const session = await ensureAgent(sessionId, found.manager, found.cwd);
+  // 如果上一轮结束后还有待切换模型，必须在提交新一轮消息之前应用。
+  await applyPendingSessionModel(sessionId, session);
   activeRequests.set(sessionId, requestId);
+  const initialTitle = found.manager.getSessionName?.()
+    || menuBarFallbackTitle(text)
+    || '新会话';
+  let menuBarRunStarted = false;
+  let menuBarRunFinished = false;
+  publishMenuBarEvent({ type: 'started', id: sessionId, title: initialTitle, cwd: found.cwd, requestId });
+  menuBarRunStarted = true;
+
+  function finishMenuBarRun(status) {
+    if (!menuBarRunStarted || menuBarRunFinished) return;
+    menuBarRunFinished = true;
+    publishMenuBarEvent({ type: 'finished', id: sessionId, status });
+  }
 
   // 文件 / 附件上下文：作为一条不展示的自定义消息注入，不触发新回合
   const referenceBlocks = await fileReferenceContext(found.cwd, mentions);
@@ -207,12 +230,17 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
     if (doneSent) return;
     doneSent = true;
     flushUpdate();
+    // 运行期间选择的模型只影响下一轮；在向界面发送 done、触发 loadState 前应用。
+    await session.waitForIdle().catch(() => { /* Agent 已释放时保留 pending，下次发送时重试 */ });
+    await applyPendingSessionModel(sessionId, session).catch(() => { /* 保留 pending，下次发送时重试 */ });
+    const finalModel = await sessionModel(sessionId).catch(() => undefined);
     invalidateIndex();
     forgetDetail(sessionId);
     // Sidebar indexing must not strand a finished run in the busy state.
     await indexSessions(true).catch(() => {});
     dropDraft(sessionId);
-    send({ type: 'done' });
+    send({ type: 'done', ...(finalModel ? { model: finalModel } : {}) });
+    finishMenuBarRun('success');
     // diff 在 done 之后异步计算，不阻塞流式收尾。
     void finishTurnDiff();
   }
@@ -225,6 +253,7 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
     forgetDetail(sessionId);
     unsubscribe();
     if (activeRequests.get(sessionId) === requestId) activeRequests.delete(sessionId);
+    finishMenuBarRun('cancelled');
     changed();
   }
 
@@ -307,6 +336,7 @@ async function prompt(event, { sessionId, text, requestId, mentions, attachments
       return;
     }
     void finishTurnDiff();
+    finishMenuBarRun('error');
     send({ type: 'error', error: message });
     throw error;
   } finally {

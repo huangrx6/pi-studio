@@ -28,6 +28,15 @@ const {
   saveSubagentSettings,
   subagentSettings,
 } = require('../services/subagent-settings.cjs');
+const { requestAgentRuntimeRefresh } = require('../services/runtime-refresh.cjs');
+
+async function settingsWithRuntime(cwd, reason) {
+  const runtimeRefresh = await requestAgentRuntimeRefresh(reason);
+  return {
+    ...await settingsSnapshot(cwd),
+    runtimeRefresh,
+  };
+}
 
 function registerSettingsIpc() {
   // 设置页全量快照
@@ -41,7 +50,10 @@ function registerSettingsIpc() {
   // 持久化 Agent 工具白名单；来源快照随配置一起保留，扩展暂时卸载后可解释失效项。
   ipcMain.handle('pi:set-agent-tools', async (_event, { tools, cwd } = {}) => {
     saveInstalledToolSelection(tools);
-    return settingsSnapshot(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
+    return settingsWithRuntime(
+      typeof cwd === 'string' ? cwd : DEFAULT_CWD,
+      'Agent 工具权限',
+    );
   });
 
   // pi-subagents 的模型与 thinking 配置直接同步到 Pi 自己的 settings.json。
@@ -49,13 +61,17 @@ function registerSettingsIpc() {
     subagentSettings(typeof cwd === 'string' ? cwd : DEFAULT_CWD)
   ));
 
-  ipcMain.handle('pi:save-subagent-settings', async (_event, { cwd, scope, settings } = {}) => (
-    saveSubagentSettings(
+  ipcMain.handle('pi:save-subagent-settings', async (_event, { cwd, scope, settings } = {}) => {
+    const snapshot = await saveSubagentSettings(
       typeof cwd === 'string' ? cwd : DEFAULT_CWD,
       scope,
       settings,
-    )
-  ));
+    );
+    return {
+      ...snapshot,
+      runtimeRefresh: await requestAgentRuntimeRefresh('子 Agent 配置'),
+    };
+  });
 
   // 单个 MCP 的编辑数据
   ipcMain.handle('pi:mcp-config', async (_event, name) => {
@@ -76,7 +92,8 @@ function registerSettingsIpc() {
   // 新增 / 编辑 MCP 服务器
   ipcMain.handle('pi:add-mcp', async (_event, input) => {
     writeConfig(mcpFile(), updateMcp(readConfig(mcpFile(), { mcpServers: {} }), input));
-    return settingsSnapshot(DEFAULT_CWD);
+    invalidateAgentToolCatalog();
+    return settingsWithRuntime(DEFAULT_CWD, 'MCP 配置');
   });
 
   // 删除 MCP 服务器
@@ -85,7 +102,8 @@ function registerSettingsIpc() {
     if (!Object.hasOwn(config.mcpServers || {}, name)) throw new Error('MCP 不存在');
     delete config.mcpServers[name];
     writeConfig(mcpFile(), config);
-    return settingsSnapshot(DEFAULT_CWD);
+    invalidateAgentToolCatalog();
+    return settingsWithRuntime(DEFAULT_CWD, 'MCP 配置');
   });
 
   // 启停 MCP 服务器
@@ -95,7 +113,8 @@ function registerSettingsIpc() {
     if (!config.mcpServers[name]) throw new Error('MCP 不存在');
     config.mcpServers[name].enabled = enabled;
     fs.writeFileSync(mcpFile(), JSON.stringify(config, null, 2));
-    return settingsSnapshot();
+    invalidateAgentToolCatalog();
+    return settingsWithRuntime(DEFAULT_CWD, 'MCP 配置');
   });
 
   // 导入技能目录（目录里必须有 SKILL.md）
@@ -110,7 +129,7 @@ function registerSettingsIpc() {
     if (fs.existsSync(target)) throw new Error('同名技能已存在');
     fs.mkdirSync(base, { recursive: true });
     fs.cpSync(source, target, { recursive: true });
-    return settingsSnapshot(cwd || DEFAULT_CWD);
+    return settingsWithRuntime(cwd || DEFAULT_CWD, '技能');
   });
 
   // 删除技能：只允许删 SKILL.md 所在的技能目录
@@ -125,7 +144,7 @@ function registerSettingsIpc() {
     if (!allowed) throw new Error('不能删除这个位置的技能');
     if (!fs.existsSync(parent)) throw new Error('技能不存在');
     fs.rmSync(parent, { recursive: true, force: true });
-    return settingsSnapshot(DEFAULT_CWD);
+    return settingsWithRuntime(DEFAULT_CWD, '技能');
   });
 
   // 导入扩展（目录需含 index.ts/index.js，或直接选单文件）
@@ -151,7 +170,7 @@ function registerSettingsIpc() {
       fs.copyFileSync(source, path.join(base, path.basename(source)));
     }
     invalidateAgentToolCatalog();
-    return settingsSnapshot(cwd || DEFAULT_CWD);
+    return settingsWithRuntime(cwd || DEFAULT_CWD, '扩展');
   });
 
   // 删除扩展：路径必须位于扩展根目录内
@@ -165,7 +184,7 @@ function registerSettingsIpc() {
     if (!fs.existsSync(target)) throw new Error('扩展不存在');
     fs.rmSync(target, { recursive: true, force: true });
     invalidateAgentToolCatalog();
-    return settingsSnapshot(DEFAULT_CWD);
+    return settingsWithRuntime(DEFAULT_CWD, '扩展');
   });
 
   // 通过 Pi 的包管理器安装扩展包（npm / git 源）
@@ -179,7 +198,7 @@ function registerSettingsIpc() {
     });
     await manager.installAndPersist(source.trim());
     invalidateAgentToolCatalog();
-    return settingsSnapshot(DEFAULT_CWD);
+    return settingsWithRuntime(DEFAULT_CWD, '扩展包');
   });
 
   // 卸载扩展包
@@ -193,7 +212,7 @@ function registerSettingsIpc() {
     });
     await manager.removeAndPersist(source);
     invalidateAgentToolCatalog();
-    return settingsSnapshot(DEFAULT_CWD);
+    return settingsWithRuntime(DEFAULT_CWD, '扩展包');
   });
 }
 

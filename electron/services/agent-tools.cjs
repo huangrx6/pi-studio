@@ -24,6 +24,20 @@ const {
 
 const catalogSessions = new Map();
 const catalogPromises = new Map();
+// Extension discovery sessions own their own runtime and extension timers. Keep
+// only recently viewed workspaces so browsing many projects cannot retain an
+// unbounded number of those runtimes in the main process.
+const MAX_CATALOG_SESSIONS = 2;
+
+function touchCatalogSession(cwd, session) {
+  catalogSessions.delete(cwd);
+  catalogSessions.set(cwd, session);
+  while (catalogSessions.size > MAX_CATALOG_SESSIONS) {
+    const [oldestCwd, oldest] = catalogSessions.entries().next().value;
+    try { oldest.dispose(); } catch { /* already disposed */ }
+    catalogSessions.delete(oldestCwd);
+  }
+}
 
 function installedToolSelection() {
   return readAgentToolSelection(readConfig(configPath(), {}));
@@ -135,6 +149,7 @@ async function agentToolCatalog(cwd = DEFAULT_CWD, refresh = false) {
   if (refresh) {
     const session = catalogSessions.get(resolvedCwd);
     if (session) {
+      touchCatalogSession(resolvedCwd, session);
       await session.reload();
       const catalog = serializeCatalog(session, session.resourceLoader.getExtensions());
       return { ...catalog, agentDir: agentDir(), refreshedAt: Date.now() };
@@ -142,6 +157,7 @@ async function agentToolCatalog(cwd = DEFAULT_CWD, refresh = false) {
   }
   const cached = catalogSessions.get(resolvedCwd);
   if (cached) {
+    touchCatalogSession(resolvedCwd, cached);
     return {
       ...serializeCatalog(cached, cached.resourceLoader.getExtensions()),
       agentDir: agentDir(),
@@ -152,7 +168,7 @@ async function agentToolCatalog(cwd = DEFAULT_CWD, refresh = false) {
   if (pending) return pending;
   const request = (async () => {
     const session = await createCatalogSession(resolvedCwd);
-    catalogSessions.set(resolvedCwd, session);
+    touchCatalogSession(resolvedCwd, session);
     return {
       ...serializeCatalog(session, session.resourceLoader.getExtensions()),
       agentDir: agentDir(),

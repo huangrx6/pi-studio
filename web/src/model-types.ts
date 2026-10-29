@@ -23,6 +23,14 @@ export type ModelSelection = {
   effectiveThinkingLevel: Exclude<ThinkingLevel, 'default'>;
   /** Pi 配置里的默认等级，用于推理等级页脚说明。 */
   defaultThinkingLevel: Exclude<ThinkingLevel, 'default'>;
+  /** 该快照属于新对话默认值，还是某条历史会话。 */
+  source?: 'default' | 'session';
+  /** 当前回合仍在运行：模型已选好，但会从下一轮开始生效。 */
+  pending?: boolean;
+  /** 会话 transcript 中记录的原模型已不在当前 Pi 模型目录中。 */
+  unavailable?: boolean;
+  /** 原模型不可用时的可读原因。 */
+  unavailableReason?: string;
 };
 
 /** 模型目录中的一个模型。 */
@@ -57,6 +65,8 @@ export type ModelCatalog = {
   current: string;
   /** 当前选择快照。 */
   selection: ModelSelection;
+  /** 新对话默认值；与 selection 保持兼容并独立于当前会话。 */
+  defaultSelection: ModelSelection;
 };
 
 /**

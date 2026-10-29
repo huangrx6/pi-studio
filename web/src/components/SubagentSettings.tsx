@@ -296,7 +296,7 @@ export function SubagentSettings({
           <span>{!snapshot?.installed
             ? '配置仍会保留；安装扩展并启用 subagent 工具后即可使用。'
             : toolsReady
-              ? '设置会直接写入 Pi 的 settings.json，并在下一次子 Agent 启动时生效。'
+              ? '设置会写入 Pi 的 settings.json，并热更新父会话；下一次启动子 Agent 时直接使用最新配置。'
               : '模型和思考设置仍会保留；到 Agent 工具中启用 subagent 后，父 Agent 才能启动子会话。'}</span>
         </div>
         {snapshot?.installed && toolsReady === false && onOpenAgentTools && <button type="button" className="settings-outline" onClick={onOpenAgentTools}>去启用</button>}
@@ -390,7 +390,7 @@ export function SubagentSettings({
     <div className="subagent-savebar">
       <div>
         <strong>{dirty ? `${scopeText}有未保存的更改` : '已与 Pi 配置同步'}</strong>
-        <span>{path}</span>
+        <span>{path} · 保存后会热更新，无需重启 App</span>
       </div>
       <button className="settings-outline" disabled={!dirty || saving} onClick={() => setDraft(cloneConfig(savedDraft))}>撤销</button>
       <button className="settings-save" disabled={!dirty || saving} onClick={() => void save()}>

@@ -16,6 +16,14 @@ contextBridge.exposeInMainWorld('piApi', {
   temporaryClose: (id) => ipcRenderer.invoke('pi:temporary-close', id),
   onTemporary: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:temporary-event', handler); return () => ipcRenderer.removeListener('pi:temporary-event', handler); },
   setTheme: (theme) => ipcRenderer.invoke('pi:set-theme', theme),
+  updateState: () => ipcRenderer.invoke('pi:update-state'),
+  checkForUpdates: (options) => ipcRenderer.invoke('pi:check-for-updates', options),
+  downloadUpdate: () => ipcRenderer.invoke('pi:download-update'),
+  installUpdate: () => ipcRenderer.invoke('pi:install-update'),
+  menuBarSettings: () => ipcRenderer.invoke('pi:menu-bar-settings'),
+  setMenuBarVisible: (enabled) => ipcRenderer.invoke('pi:menu-bar-set-visible', enabled),
+  chooseBackgroundMedia: (payload) => ipcRenderer.invoke('pi:background-media-choose', payload),
+  removeBackgroundMedia: (url) => ipcRenderer.invoke('pi:background-media-remove', url),
   modeGet: () => ipcRenderer.invoke('pi:mode-get'),
   modeSet: (payload) => ipcRenderer.invoke('pi:mode-set', payload),
   confirmResponse: (payload) => ipcRenderer.send('pi:confirm-response', payload),
@@ -46,6 +54,8 @@ contextBridge.exposeInMainWorld('piApi', {
   chooseWorkspace: () => ipcRenderer.invoke('pi:choose-workspace'),
   models: (cwd) => ipcRenderer.invoke('pi:models', cwd),
   providerModels: (providerId) => ipcRenderer.invoke('pi:provider-models', providerId),
+  discoverProviderModels: (providerId) => ipcRenderer.invoke('pi:discover-provider-models', { providerId }),
+  importProviderModels: (payload) => ipcRenderer.invoke('pi:import-provider-models', payload),
   providerConfig: (providerId) => ipcRenderer.invoke('pi:provider-config', providerId),
   mcpConfig: (name) => ipcRenderer.invoke('pi:mcp-config', name),
   setEnabledModels: (models) => ipcRenderer.invoke('pi:set-enabled-models', models),
@@ -74,10 +84,37 @@ contextBridge.exposeInMainWorld('piApi', {
     ipcRenderer.on('pi:open-settings', handler);
     return () => ipcRenderer.removeListener('pi:open-settings', handler);
   },
+  onOpenUpdate: (listener) => {
+    const handler = () => listener();
+    ipcRenderer.on('pi:open-update', handler);
+    return () => ipcRenderer.removeListener('pi:open-update', handler);
+  },
+  onUpdateState: (listener) => {
+    const handler = (_event, payload) => listener(payload);
+    ipcRenderer.on('pi:update-state', handler);
+    return () => ipcRenderer.removeListener('pi:update-state', handler);
+  },
+  onOpenMain: (listener) => {
+    const handler = () => listener();
+    ipcRenderer.on('pi:open-main', handler);
+    return () => ipcRenderer.removeListener('pi:open-main', handler);
+  },
+  onOpenSession: (listener) => {
+    const handler = (_event, session) => listener(session);
+    ipcRenderer.on('pi:open-session', handler);
+    return () => ipcRenderer.removeListener('pi:open-session', handler);
+  },
+  onRuntimeRefresh: (listener) => {
+    const handler = (_event, payload) => listener(payload);
+    ipcRenderer.on('pi:runtime-refresh', handler);
+    return () => ipcRenderer.removeListener('pi:runtime-refresh', handler);
+  },
   setModel: (modelRef, cwd) => ipcRenderer.invoke('pi:set-model', modelRef, cwd),
+  setDefaultModel: (modelRef, cwd) => ipcRenderer.invoke('pi:set-default-model', modelRef, cwd),
   setSessionModel: (payload) => ipcRenderer.invoke('pi:set-session-model', payload),
   setSessionThinking: (payload) => ipcRenderer.invoke('pi:set-session-thinking', payload),
   setThinkingLevel: (payload) => ipcRenderer.invoke('pi:set-thinking-level', payload),
+  setDefaultThinkingLevel: (payload) => ipcRenderer.invoke('pi:set-default-thinking-level', payload),
   footerAction: (payload) => ipcRenderer.invoke('pi:footer-action', payload),
   extensionAction: (payload) => ipcRenderer.invoke('pi:extension-action', payload),
   extensionDialogResult: (payload) => ipcRenderer.invoke('pi:extension-dialog-result', payload),

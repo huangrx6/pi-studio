@@ -15,6 +15,9 @@ import type { ChatAttachment, ChatMessage, ComposerAttachment, ComposerCommand, 
 import type { ModelCatalog, ModelSelection, ThinkingLevel } from './model-types';
 import type { AgentToolCatalog, AgentToolSelection } from './agent-tool-types';
 import type { SubagentChild, SubagentConfig, SubagentSettingsSnapshot, SubagentTranscript } from './subagent-types';
+import type { BackgroundMedia } from './preferences';
+import type { UpdateSnapshot } from './update-types';
+import type { RuntimeRefreshSnapshot } from './runtime-types';
 
 /** 扩展 widget：字符串数组或 pi-tui 组件统一渲染成字符单元。 */
 interface ExtensionWidget {
@@ -119,9 +122,9 @@ interface PiSessionOutline {
 /** 设置面板一次性读取的快照，覆盖模型、来源、MCP、技能、扩展等配置。 */
 interface SettingsSnapshot {
   /** 用户手动添加的模型。 */
-  customModels: Array<{ providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean }>;
+  customModels: Array<{ providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean; origin?: 'configured' | 'override' }>;
   /** 模型来源列表。 */
-  providers: Array<{ id: string; name: string; mode: string; authConfigured?: boolean; envName?: string; envAvailable?: boolean; icon?: string; models: number }>;
+  providers: Array<{ id: string; name: string; mode: string; authConfigured?: boolean; envName?: string; envAvailable?: boolean; icon?: string; models: number; modelsUrl?: string }>;
   /** MCP 服务器列表。 */
   mcp: Array<{ name: string; transport: string; enabled: boolean; target: string; description: string }>;
   /** 已安装技能。 */
@@ -129,9 +132,7 @@ interface SettingsSnapshot {
   /** 已安装扩展。 */
   extensions: Array<{ name: string; scope: string; path: string; kind: string; source?: string }>;
   /** 已安装包。 */
-  packages: Array<{ source: string; name: string }>;
-  /** 扩展通过 settings 暴露的附加数据（原始字符串行）。 */
-  extensionData: string[];
+  packages: Array<{ source: string; name: string; scope: 'user' | 'project' }>;
   /** 当前启用的模型 id。 */
   enabledModels: string[];
   /** Pi Studio 的 Agent 工具白名单。 */
@@ -146,6 +147,15 @@ interface SettingsSnapshot {
   modelsPath: string;
   /** 当前模型与推理等级。 */
   model: ModelSelection;
+  /** 保存配置后，主进程热更新会话运行时的结果。 */
+  runtimeRefresh?: RuntimeRefreshSnapshot;
+}
+
+/** Native menu-bar integration exposed by the main process. */
+interface MenuBarSettings {
+  available: boolean;
+  enabled: boolean;
+  platform: string;
 }
 
 declare global {
@@ -158,6 +168,22 @@ declare global {
       // ---- 主题、状态与会话 ----
       /** 切换原生窗口主题，并持久化到主进程配置。 */
       setTheme(theme: 'light' | 'dark' | 'system'): Promise<void>;
+      /** Read the current updater snapshot. */
+      updateState(): Promise<UpdateSnapshot>;
+      /** Check the latest public GitHub Release. */
+      checkForUpdates(options?: { interactive?: boolean }): Promise<UpdateSnapshot>;
+      /** Download the currently available release. */
+      downloadUpdate(): Promise<UpdateSnapshot>;
+      /** Restart and install a downloaded release. */
+      installUpdate(): Promise<{ started: boolean }>;
+      /** Read the persisted menu-bar visibility preference. */
+      menuBarSettings(): Promise<MenuBarSettings>;
+      /** Show or remove the native menu-bar status item. */
+      setMenuBarVisible(enabled: boolean): Promise<MenuBarSettings>;
+      /** 打开系统文件选择器，并把图片或视频复制到应用私有背景目录。 */
+      chooseBackgroundMedia(payload?: { replaceUrl?: string }): Promise<BackgroundMedia | null>;
+      /** 删除应用私有背景目录中的媒体文件；无效地址会被安全忽略。 */
+      removeBackgroundMedia(url: string): Promise<{ removed: boolean }>;
       /** 读取 pi-mode-switcher 的批准方式；available=false 时不显示入口。 */
       modeGet(): Promise<{ available: boolean; mode: 'ask' | 'smart' | 'full' }>;
       /** 切换批准方式；有会话时立即下发 /mode，没有会话时等会话建立后补发。 */
@@ -238,21 +264,29 @@ declare global {
       /** 读取模型目录、启用列表与当前选择。 */
       models(cwd?: string): Promise<ModelCatalog>;
       /** 读取某来源下可选模型及启用状态。 */
-      providerModels(providerId: string): Promise<{ models: Array<{ id: string; model: string; name: string; enabled: boolean; contextWindow?: number; maxTokens?: number; supportsImages?: boolean }> }>;
+      providerModels(providerId: string): Promise<{ models: Array<{ id: string; model: string; name: string; enabled: boolean; contextWindow?: number; maxTokens?: number; supportsImages?: boolean; reasoning?: boolean; origin: 'builtin' | 'configured' | 'override'; deletable: boolean }> }>;
+      /** 从来源的 /models 接口读取模型，不保存到 Pi 配置。 */
+      discoverProviderModels(providerId: string): Promise<{ endpoint: string; models: Array<{ id: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean }> }>;
+      /** 把发现的模型合并到来源，已有模型保持不变。 */
+      importProviderModels(payload: { providerId: string; models: Array<{ id: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean }> }): Promise<SettingsSnapshot>;
       /** 读取来源的 baseUrl、API 类型与图标。 */
-      providerConfig(providerId: string): Promise<{ providerId: string; baseUrl: string; api: string; icon: string }>;
+      providerConfig(providerId: string): Promise<{ providerId: string; name: string; baseUrl: string; api: string; icon: string; modelsUrl: string }>;
       /** 切换模型，返回新的选择快照。 */
       setModel(modelRef: string, cwd?: string): Promise<ModelSelection>;
+      /** 设置新对话默认模型，并同步 Pi 的 settings.json。 */
+      setDefaultModel(modelRef: string, cwd?: string): Promise<ModelSelection>;
       /** 只切换当前会话的模型（不写全局默认）。 */
       setSessionModel(payload: { sessionId: string; modelRef: string }): Promise<ModelSelection>;
       /** 只调整当前会话的推理等级。 */
       setSessionThinking(payload: { sessionId: string; level: ThinkingLevel }): Promise<ModelSelection>;
       /** 切换推理等级，返回新的选择快照。 */
       setThinkingLevel(payload: { modelRef: string; level: ThinkingLevel; cwd?: string }): Promise<ModelSelection>;
+      /** 设置新对话默认推理等级，并同步 Pi 的 settings.json。 */
+      setDefaultThinkingLevel(payload: { level: ThinkingLevel; cwd?: string }): Promise<ModelSelection>;
       /** 设置启用的模型 id 列表。 */
       setEnabledModels(models: string[]): Promise<any>;
       /** 添加或编辑自定义模型，成功后返回最新设置快照。 */
-      addCustomModel(payload: { providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages?: boolean; reasoning?: boolean; editing?: boolean }): Promise<SettingsSnapshot>;
+      addCustomModel(payload: { providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages?: boolean; reasoning?: boolean; editing?: boolean; origin?: 'builtin' | 'configured' | 'override' }): Promise<SettingsSnapshot>;
       /** 删除自定义模型。 */
       removeCustomModel(payload: { providerId: string; modelId: string }): Promise<any>;
 
@@ -270,7 +304,7 @@ declare global {
       /** 保存某来源的 API Key。 */
       setKey(payload: { providerId: string; apiKey: string }): Promise<any>;
       /** 保存来源配置（baseUrl、API 类型、首个模型、可选 API Key）。 */
-      addProvider(payload: { providerId: string; baseUrl: string; api: string; modelId: string; modelName: string; apiKey?: string; editing?: boolean }): Promise<{ settings: SettingsSnapshot; models: ModelCatalog }>;
+      addProvider(payload: { providerId: string; name: string; baseUrl: string; api: string; apiKey?: string; icon?: string; modelsUrl?: string; editing?: boolean }): Promise<{ settings: SettingsSnapshot; models: ModelCatalog }>;
       /** 读取 MCP 服务器配置详情。 */
       mcpConfig(name: string): Promise<{ name: string; transport: string; command: string; args: string[]; url: string; description: string; env: string }>;
       /** 保存 MCP 服务器；originalName 用于编辑时重命名。 */
@@ -295,6 +329,16 @@ declare global {
       // ---- 事件订阅（返回取消订阅函数） ----
       /** 应用菜单「设置…」被点击。 */
       onOpenSettings(listener: () => void): () => void;
+      /** App menu, tray, notification or brand action asked to show updates. */
+      onOpenUpdate(listener: () => void): () => void;
+      /** Updater state changed in the main process. */
+      onUpdateState(listener: (snapshot: UpdateSnapshot) => void): () => void;
+      /** The menu-bar panel asked to reveal the main workspace. */
+      onOpenMain(listener: () => void): () => void;
+      /** A menu-bar completion card asked to open one exact session. */
+      onOpenSession(listener: (session: { id: string; cwd: string; title: string }) => void): () => void;
+      /** A saved setting refreshed idle runtimes or queued a busy session for its next idle boundary. */
+      onRuntimeRefresh(listener: (snapshot: RuntimeRefreshSnapshot) => void): () => void;
       /** 读取扩展状态栏与页脚快照（含扩展自己的浮层）。 */
       extensionState(sessionId: string): Promise<{ statuses: Array<[string, string]>; footer: string; view?: FooterView; widgets?: ExtensionWidget[]; custom?: ExtensionCustomPanel | null; header?: { lines: FooterCell[][]; interactive: boolean } | null; working?: { message: string; visible: boolean } }>;
       /** 把 footer 的尺寸 / 点击 / 滚轮输入交给扩展，返回更新后的快照。 */
@@ -339,7 +383,7 @@ declare global {
        * 一轮请求的流式事件。type 覆盖消息开始/增量/结束、自动重试开始与结束、
        * 整体完成与失败；渲染进程按 requestId 过滤出本次请求的事件。
        */
-      onPrompt(listener: (payload: { requestId: string; type: 'message_start' | 'message_update' | 'message_end' | 'retry-start' | 'retry-end' | 'run-attached' | 'compaction-start' | 'compaction-end' | 'compaction-interrupted' | 'turn-diff' | 'subagent-update' | 'done' | 'error'; message?: ChatMessage; children?: SubagentChild[]; error?: string; attempt?: number; maxAttempts?: number; delayMs?: number; success?: boolean; finalError?: string; errorMessage?: string; diff?: TurnDiff; at?: number; reason?: 'manual' | 'threshold' | 'overflow'; aborted?: boolean; compacting?: boolean }) => void): () => void;
+      onPrompt(listener: (payload: { requestId: string; type: 'message_start' | 'message_update' | 'message_end' | 'retry-start' | 'retry-end' | 'run-attached' | 'compaction-start' | 'compaction-end' | 'compaction-interrupted' | 'turn-diff' | 'subagent-update' | 'done' | 'error'; message?: ChatMessage; model?: ModelSelection; children?: SubagentChild[]; error?: string; attempt?: number; maxAttempts?: number; delayMs?: number; success?: boolean; finalError?: string; errorMessage?: string; diff?: TurnDiff; at?: number; reason?: 'manual' | 'threshold' | 'overflow'; aborted?: boolean; compacting?: boolean }) => void): () => void;
 
       // ---- 扩展命令 ----
       /** 运行扩展提供的命令。 */

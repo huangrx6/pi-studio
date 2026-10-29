@@ -26,6 +26,8 @@ const {
   updateMcp,
   updateProvider,
   updateCustomModel,
+  removeCustomModel,
+  importDiscoveredModels,
   visibleProviderIds,
 } = require('../electron/settings-config.cjs');
 
@@ -197,6 +199,26 @@ test('provider editing preserves models, overrides, headers and unrelated metada
   assert.equal(result.$schema, 'schema');
 });
 
+// 新建来源只保存连接信息，不再强制生成“首个模型”。这样第三方来源可以先
+// 配好认证，再从来源卡片里逐个添加模型或调用模型发现接口。
+test('creating a provider does not invent or require a first model', () => {
+  const result = updateProvider(
+    { providers: {} },
+    {
+      providerId: 'private-gateway',
+      name: 'Private Gateway',
+      baseUrl: 'https://gateway.example.test/v1',
+      api: 'openai-completions',
+    },
+  );
+  assert.deepEqual(result.providers['private-gateway'], {
+    baseUrl: 'https://gateway.example.test/v1',
+    api: 'openai-completions',
+    name: 'Private Gateway',
+  });
+  assert.equal(result.providers['private-gateway'].models, undefined);
+});
+
 // 已认证的内置来源（这里用 knownProviders 模拟 deepseek）允许只覆盖
 // baseUrl / api 而不复制整份模型目录，因此不能凭空生成 models 字段。
 // 之后再走“新建”入口添加同一个来源必须报“已存在”，避免误覆盖内置配置。
@@ -267,6 +289,73 @@ test('custom model editing keeps advanced fields and supports disabling image an
   assert.equal(config.providers.custom.models[0].name, 'Old');
 });
 
+// 编辑内置目录中的模型必须写入 modelOverrides。直接写入 models 会把该来源
+// 的内置目录替换成单个模型，导致其余模型从模型选择器消失。
+test('editing a builtin model creates a model override instead of replacing its catalog', () => {
+  const config = { providers: { gateway: { baseUrl: 'https://gateway.test/v1', api: 'openai-completions' } } };
+  const result = updateCustomModel(
+    config,
+    {
+      providerId: 'gateway',
+      modelId: 'builtin-chat',
+      editing: true,
+      origin: 'builtin',
+      name: 'Gateway Chat',
+      contextWindow: 128000,
+      maxTokens: 8192,
+      supportsImages: true,
+      reasoning: true,
+    },
+    ['gateway'],
+    ['builtin-chat', 'builtin-other'],
+  );
+  assert.deepEqual(result.providers.gateway.models, undefined);
+  assert.equal(result.providers.gateway.modelOverrides['builtin-chat'].name, 'Gateway Chat');
+  assert.equal(result.providers.gateway.modelOverrides['builtin-chat'].reasoning, true);
+});
+
+// 模型发现只会追加缺失项；同名模型已有的 cost、compat、headers 等高级字段
+// 不能被接口返回的简化元数据覆盖。
+test('discovered model import preserves existing advanced model fields', () => {
+  const config = {
+    providers: {
+      custom: {
+        models: [{ id: 'existing', name: 'Existing', cost: { input: 1 }, compat: { supportsStore: false } }],
+      },
+    },
+  };
+  const result = importDiscoveredModels(config, {
+    providerId: 'custom',
+    models: [
+      { id: 'existing', name: 'Remote name' },
+      { id: 'new-model', name: 'New Model', contextWindow: 64000, supportsImages: true },
+    ],
+  }, ['custom']);
+  assert.equal(result.providers.custom.models.length, 2);
+  assert.deepEqual(result.providers.custom.models[0].cost, { input: 1 });
+  assert.deepEqual(result.providers.custom.models[0].compat, { supportsStore: false });
+  assert.equal(result.providers.custom.models[0].name, 'Existing');
+  assert.equal(result.providers.custom.models[1].contextWindow, 64000);
+  assert.deepEqual(result.providers.custom.models[1].input, ['text', 'image']);
+});
+
+// 删除内置模型覆盖时只删除 modelOverrides，模型仍由 Pi 的目录提供；自定义
+// 来源中的模型则会从 models 数组移除。
+test('removing a model distinction resets overrides and deletes custom entries', () => {
+  const overridden = removeCustomModel({
+    providers: {
+      gateway: {
+        modelOverrides: { builtin: { name: 'Customized' } },
+        models: [{ id: 'custom' }],
+      },
+    },
+  }, { providerId: 'gateway', modelId: 'builtin' });
+  assert.equal(overridden.providers.gateway.modelOverrides, undefined);
+  assert.deepEqual(overridden.providers.gateway.models, [{ id: 'custom' }]);
+  const deleted = removeCustomModel(overridden, { providerId: 'gateway', modelId: 'custom' });
+  assert.equal(deleted.providers.gateway.models, undefined);
+});
+
 // 自定义模型的三种拒绝路径：新增已存在的模型、编辑不存在的模型、
 // 上下文 / 最大输出不是正整数。这些错误应抛给界面提示，而不是写入坏配置。
 test('custom model validation rejects invalid token limits, missing edits, and duplicate creates', () => {
@@ -274,6 +363,10 @@ test('custom model validation rejects invalid token limits, missing edits, and d
   assert.throws(
     () => updateCustomModel(config, { providerId: 'custom', modelId: 'chat' }),
     /已存在/,
+  );
+  assert.throws(
+    () => updateCustomModel(config, { providerId: 'custom', modelId: 'builtin-chat' }, ['custom'], ['builtin-chat']),
+    /Pi 内置目录提供/,
   );
   assert.throws(
     () => updateCustomModel(config, { providerId: 'custom', modelId: 'missing', editing: true }),

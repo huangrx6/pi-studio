@@ -175,26 +175,15 @@ function updateProvider(config, input, knownProviders = []) {
     const icon = input.icon.trim();
     if (icon) provider.icon = icon; else delete provider.icon;
   }
-  if (!input.editing) {
-    const modelId = String(input.modelId || '').trim();
-    if (!modelId) throw new Error('请填写首个模型的 ID');
-    provider.models = [{ id: modelId, name: String(input.modelName || modelId).trim() || modelId }];
+  if (typeof input.name === 'string') {
+    const name = input.name.trim();
+    if (name) provider.name = name; else delete provider.name;
   }
   return { ...config, providers: { ...providers, [id]: provider } };
 }
 
-/** 新增 / 编辑自定义模型（上下文窗口、最大输出、图像输入、推理标记）。 */
-function updateCustomModel(config, input, knownProviders = []) {
-  const providerId = String(input.providerId || '').trim();
+function normalizedModelFields(input, existing = {}) {
   const id = String(input.modelId || '').trim();
-  const providers = config.providers || {};
-  if (!id || !providerId) throw new Error('来源和模型 ID 必填');
-  if (!Object.hasOwn(providers, providerId) && !knownProviders.includes(providerId)) throw new Error('请先添加模型来源');
-  const provider = providers[providerId] || {};
-  const list = Array.isArray(provider.models) ? provider.models : [];
-  const existing = list.find((model) => model.id === id);
-  if (input.editing && !existing) throw new Error('这个自定义模型已不存在，请刷新后重试');
-  if (!input.editing && existing) throw new Error('模型已存在，请使用编辑入口修改');
   const model = { ...existing, id, name: String(input.name || id).trim() || id, reasoning: Boolean(input.reasoning) };
   for (const key of ['contextWindow', 'maxTokens']) {
     if (input[key] === undefined || input[key] === '') delete model[key];
@@ -204,9 +193,102 @@ function updateCustomModel(config, input, knownProviders = []) {
       model[key] = value;
     }
   }
-  model.input = ['text', ...(input.supportsImages ? ['image'] : []), ...(existing?.input || []).filter((item) => item !== 'text' && item !== 'image')];
+  model.input = [
+    'text',
+    ...(input.supportsImages ? ['image'] : []),
+    ...(existing.input || []).filter((item) => item !== 'text' && item !== 'image'),
+  ];
+  return model;
+}
+
+/**
+ * 新增 / 编辑模型（上下文窗口、最大输出、图像输入、推理标记）。
+ *
+ * 新增模型写入 provider.models；编辑内置模型时写入 modelOverrides，避免把
+ * 内置目录整体替换成一个模型。origin 由调用方根据“管理模型”列表传入。
+ */
+function updateCustomModel(config, input, knownProviders = [], runtimeModelIds = []) {
+  const providerId = String(input.providerId || '').trim();
+  const id = String(input.modelId || '').trim();
+  const providers = config.providers || {};
+  if (!id || !providerId) throw new Error('来源和模型 ID 必填');
+  if (!Object.hasOwn(providers, providerId) && !knownProviders.includes(providerId)) throw new Error('请先添加模型来源');
+  const provider = providers[providerId] || {};
+  const list = Array.isArray(provider.models) ? provider.models : [];
+  const existing = list.find((model) => model.id === id);
+  const overrides = provider.modelOverrides && typeof provider.modelOverrides === 'object' && !Array.isArray(provider.modelOverrides)
+    ? provider.modelOverrides
+    : {};
+  const existingOverride = Object.hasOwn(overrides, id) ? overrides[id] : undefined;
+  const editsBuiltin = input.origin === 'builtin' && runtimeModelIds.includes(id);
+
+  if (!input.editing && !existing && runtimeModelIds.includes(id)) {
+    throw new Error('这个模型由 Pi 内置目录提供，请使用编辑模型');
+  }
+  if (input.origin === 'override' || (editsBuiltin && !existing)) {
+    if (input.origin === 'override' && input.editing && !existingOverride) throw new Error('这个模型配置已不存在，请刷新后重试');
+    const model = normalizedModelFields(input, existingOverride || {});
+    return {
+      ...config,
+      providers: {
+        ...providers,
+        [providerId]: { ...provider, modelOverrides: { ...overrides, [id]: model } },
+      },
+    };
+  }
+
+  if (input.editing && !existing) throw new Error('这个模型配置已不存在，请刷新后重试');
+  if (!input.editing && existing) throw new Error('模型已存在，请使用编辑入口修改');
+  const model = normalizedModelFields(input, existing || {});
   const updated = existing ? list.map((item) => item.id === id ? model : item) : [...list, model];
   return { ...config, providers: { ...providers, [providerId]: { ...provider, models: updated } } };
+}
+
+/** 删除自定义模型；删除 modelOverrides 时只会恢复内置参数，不会移除内置模型本身。 */
+function removeCustomModel(config, input) {
+  const providerId = String(input.providerId || '').trim();
+  const modelId = String(input.modelId || '').trim();
+  const providers = config.providers || {};
+  const provider = providers[providerId];
+  if (!provider || !modelId) throw new Error('模型不存在');
+  const list = Array.isArray(provider.models) ? provider.models : [];
+  const models = list.filter((model) => model.id !== modelId);
+  const overrides = provider.modelOverrides && typeof provider.modelOverrides === 'object' && !Array.isArray(provider.modelOverrides)
+    ? { ...provider.modelOverrides }
+    : {};
+  const hadOverride = Object.hasOwn(overrides, modelId);
+  const hadModel = models.length !== list.length;
+  if (!hadOverride && !hadModel) throw new Error('模型不存在');
+  delete overrides[modelId];
+  const nextProvider = { ...provider };
+  if (models.length > 0) nextProvider.models = models; else delete nextProvider.models;
+  if (Object.keys(overrides).length > 0) nextProvider.modelOverrides = overrides; else delete nextProvider.modelOverrides;
+  return { ...config, providers: { ...providers, [providerId]: nextProvider } };
+}
+
+/** 把发现接口返回的模型合并进来源，已有模型和高级字段保持不变。 */
+function importDiscoveredModels(config, input, knownProviders = [], runtimeModelIds = []) {
+  const providerId = String(input.providerId || '').trim();
+  const providers = config.providers || {};
+  if (!Object.hasOwn(providers, providerId) && !knownProviders.includes(providerId)) throw new Error('请先添加模型来源');
+  if (!Array.isArray(input.models)) throw new Error('模型列表格式无效');
+  const provider = providers[providerId] || {};
+  const list = Array.isArray(provider.models) ? [...provider.models] : [];
+  const overrides = provider.modelOverrides && typeof provider.modelOverrides === 'object' && !Array.isArray(provider.modelOverrides)
+    ? provider.modelOverrides
+    : {};
+  const known = new Set([...list.map((model) => model.id), ...Object.keys(overrides), ...runtimeModelIds]);
+  for (const raw of input.models.slice(0, 500)) {
+    const id = String(raw?.id || '').trim();
+    if (!id || known.has(id) || id.length > 256) continue;
+    const model = normalizedModelFields({ ...raw, modelId: id, name: raw?.name || id, editing: false });
+    list.push(model);
+    known.add(id);
+  }
+  return {
+    ...config,
+    providers: { ...providers, [providerId]: { ...provider, models: list } },
+  };
 }
 
 /** 计算设置页应展示哪些提供方：有密钥、已启用、或当前模型所属。 */
@@ -226,5 +308,7 @@ module.exports = {
   updateMcp,
   updateProvider,
   updateCustomModel,
+  removeCustomModel,
+  importDiscoveredModels,
   visibleProviderIds,
 };

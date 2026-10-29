@@ -14,10 +14,29 @@
  */
 
 const path = require('node:path');
-const { app, BrowserWindow } = require('electron');
+const { app, protocol } = require('electron');
 const { loadPi, loadConfig } = require('./core/state.cjs');
 const { registerIpc } = require('./ipc/index.cjs');
-const { createWindow, installMenu, watchSystemTheme } = require('./window.cjs');
+const { createWindow, showMainWindow, installMenu, watchSystemTheme } = require('./window.cjs');
+const { BACKGROUND_SCHEME } = require('./background-media.cjs');
+const { registerBackgroundProtocol } = require('./services/background.cjs');
+const {
+  initializeMenuBar,
+  registerMenuBarIpc,
+  shutdownMenuBar,
+} = require('./services/menu-bar.cjs');
+const {
+  initializeUpdater,
+  openAndCheckForUpdates,
+  shutdownUpdater,
+} = require('./services/updater.cjs');
+
+// Must be registered before app.ready so <img>/<video> can treat these URLs as
+// secure, streamable resources in both the Vite dev server and packaged builds.
+protocol.registerSchemesAsPrivileged([{
+  scheme: BACKGROUND_SCHEME,
+  privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
+}]);
 
 app.whenReady().then(async () => {
   // macOS 开发模式下 Dock 图标取自项目资源
@@ -32,18 +51,31 @@ app.whenReady().then(async () => {
   // 系统外观变化时同步窗口底色
   watchSystemTheme();
 
-  // 先注册 IPC 再建窗口，避免窗口加载完成后首屏请求落空
+  // 先注册媒体协议与 IPC 再建窗口，避免窗口加载完成后首屏请求落空
+  registerBackgroundProtocol();
   registerIpc();
-  installMenu();
+  registerMenuBarIpc();
+  installMenu({ onCheckForUpdates: openAndCheckForUpdates });
   createWindow();
+  initializeMenuBar();
+  initializeUpdater();
 });
 
-// macOS 习惯：关闭所有窗口不退出应用
+app.on('before-quit', () => {
+  app.isQuitting = true;
+});
+
+app.on('will-quit', () => {
+  shutdownUpdater();
+  shutdownMenuBar();
+});
+
+// macOS norm: closing every window leaves Pi Studio running.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// 点击 Dock 图标且没有窗口时重新创建
+// Clicking the Dock icon reveals the hidden workspace.
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  showMainWindow();
 });
