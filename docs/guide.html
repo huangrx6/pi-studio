@@ -190,12 +190,12 @@
               <figcaption><span>Quickstart 01</span><span>欢迎页 · 工作区 · 新会话类型 · 工具策略</span></figcaption>
             </figure>
             <h3>1. 安装应用</h3>
-            <p>从 Releases 选择 Apple Silicon 或 Intel 安装包。若构建没有 Developer ID 签名，macOS 可能阻止首次启动：</p>
+            <p>从 Releases 选择 Apple Silicon 或 Intel 安装包。构建使用固定的 Pi Studio 自签名证书，但该证书不等同于 Apple Developer ID 或公证，macOS 仍可能阻止首次启动：</p>
             <figure class="code-block">
               <figcaption><span>Shell</span><button class="code-copy" type="button">复制</button></figcaption>
               <pre><code>xattr -cr "/Applications/Pi Studio.app"</code></pre>
             </figure>
-            <p>也可以右键应用 →「打开」→ 再点击「打开」。通过终端移除隔离标记只解决本机首次启动，不能替代正式签名与公证。</p>
+            <p>也可以右键应用 →「打开」→ 再点击「打开」。通过终端移除隔离标记只解决本机首次启动；固定自签名用于保证后续应用内更新的签名身份连续，不提供 Apple 信任链。</p>
 
             <h3>2. 配置模型来源</h3>
             <p>进入 <strong>设置 → 模型配置</strong>，添加来源 ID、服务地址、API 协议和密钥。支持 OpenAI Completions、OpenAI Responses、Anthropic Messages 与 Google Generative AI；模型发现地址是可选项，手动添加模型仍然可用。</p>
@@ -477,6 +477,7 @@
           <div class="doc-copy">
             <p>设置页按来源聚合工具：Pi 核心、内置扩展、用户扩展、项目扩展和 MCP。每个工具会展示稳定名称、用途、来源、路径与当前启用状态。</p>
             <ul>
+              <li>内置 <code>todo</code> 为多步骤请求维护输入框上方的紧凑计划；状态保存在 Durable conversation document，支持依赖、完成、结束、归档和恢复。</li>
               <li>白名单支持精确名称和 <code>*</code> glob，最多 256 项。</li>
               <li>MCP 工具仍受 MCP exposure 与应用级白名单双重过滤。</li>
               <li>父 Agent 创建子智能体时，工具集合是父会话 model tools 与子 Agent 白名单的交集，并始终排除递归 <code>subagent</code>。</li>
@@ -1024,18 +1025,20 @@ git diff --check</code></pre>
             <figure class="code-block">
               <figcaption><span>Build</span><button class="code-copy" type="button">复制</button></figcaption>
               <pre><code>pnpm run build
-pnpm dist
+pnpm release:dist
 
 # GitHub Actions release workflow:
 # - push v* tag, or manual dispatch
 # - verify tag == package.json version
 # - build arm64 + x64 DMG / ZIP / latest-mac.yml
+# - require CSC_LINK / CSC_KEY_PASSWORD and verify every app signature
 # - publish GitHub Release</code></pre>
             </figure>
             <ul>
               <li>DMG 用于首次安装与手动下载。</li>
               <li>ZIP、<code>latest-mac.yml</code> 与 blockmap 用于 electron-updater。</li>
-              <li>没有 Developer ID 与 Apple 公证时，自动覆盖安装可能被 macOS 拒绝。</li>
+              <li>Release 工作流必须使用仓库 secret <code>CSC_LINK</code> 与 <code>CSC_KEY_PASSWORD</code>，并校验 app 和更新 ZIP 内 app 的完整签名。</li>
+              <li>首次生成证书可运行 <code>pnpm release:cert</code>；全部版本必须复用同一自签名身份。重新生成证书会让旧客户端失去 Squirrel.Mac 更新连续性。</li>
               <li><code>.github/workflows/pages.yml</code> 只发布 <code>docs/</code>；修改文档与截图后推送 main 即更新 GitHub Pages。</li>
               <li>发布前必须确认当前 main 的 Durable 架构与目标版本说明一致，不能复用旧 SDK 版本的 release notes。</li>
             </ul>
@@ -1050,7 +1053,7 @@ pnpm dist
           </header>
           <div class="doc-copy">
             <h3>应用无法首次打开</h3>
-            <p>检查 DMG 架构与 macOS 版本。未签名构建可以先右键「打开」，或在确认安装路径后执行 <code>xattr -cr "/Applications/Pi Studio.app"</code>。</p>
+            <p>检查 DMG 架构与 macOS 版本。自签名但未公证的构建可以先右键「打开」，或在确认安装路径后执行 <code>xattr -cr "/Applications/Pi Studio.app"</code>。</p>
             <h3>模型发现返回 401 / 403</h3>
             <p>API Key 和 Authorization 方式必须匹配该来源。模型发现地址与聊天 Base URL 也可能不同；分别填写并提供完整 endpoint。服务端返回 401 时，Studio 不会把 Key 写入错误日志或 renderer。</p>
             <h3>改了设置但当前回复没变化</h3>
@@ -1083,7 +1086,7 @@ pnpm dist
               <li>插件市场、自动发现和后台自动升级尚未完成；当前 registry 与安装器已经可用。</li>
               <li>Agent 扩展没有系统级沙箱，信任它等同于信任主进程 Node 代码。</li>
               <li>Windows / Linux 尚未作为正式支持平台发布。</li>
-              <li>macOS 自动更新达到最佳体验仍需要 Developer ID 签名与 Apple 公证 secrets。</li>
+              <li>macOS 自动更新使用稳定自签名保证身份连续性；目前仍没有 Apple Developer ID 与公证，首次启动仍可能触发 Gatekeeper。</li>
               <li>长期任务与子智能体会继续复用 Durable task lifecycle；不能把 Studio UI 自行定义的状态当成 Durable 事实。</li>
             </ul>
             <div class="reference-grid">

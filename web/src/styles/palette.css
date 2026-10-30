@@ -120,6 +120,7 @@
    */
 
   --scrim: rgb(0 0 0 / 24%);
+  --image-preview-scrim: rgb(0 0 0 / 72%);
   --overlay-surface: rgb(255 255 255 / 97%);
   --scrollbar: #c9c9c9;
   --scrollbar-hover: #969696;
@@ -201,6 +202,7 @@
   --info-soft: #1b2630;
   --info-border: #384f65;
   --scrim: rgb(0 0 0 / 58%);
+  --image-preview-scrim: rgb(0 0 0 / 88%);
   --overlay-surface: rgb(24 24 24 / 97%);
   --scrollbar: #484848;
   --scrollbar-hover: #747474;

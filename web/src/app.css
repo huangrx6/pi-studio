@@ -308,6 +308,28 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 
 .composer-dock { flex: none; padding: var(--space-3) var(--space-8) var(--space-4); background: var(--bg); z-index: 10; }
 .composer { max-width: var(--content); margin: 0 auto; border: 1px solid var(--border-strong); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-composer); transition: border-color var(--transition), box-shadow var(--transition); }
+.composer-feedback {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) 24px;
+  align-items: start;
+  gap: var(--space-2);
+  width: min(var(--content), calc(100% - 2px));
+  margin: 0 auto var(--space-2);
+  padding: 9px 10px 9px 11px;
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-control);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  box-shadow: var(--shadow-thumb);
+}
+.composer-feedback > svg { width: 16px; height: 16px; margin-top: 1px; }
+.composer-feedback > span { min-width: 0; overflow-wrap: anywhere; }
+.composer-feedback-dismiss { display: grid; place-items: center; width: 24px; height: 24px; margin: -3px -4px -3px 0; padding: 0; border-radius: var(--radius-tag); color: currentColor; opacity: .72; }
+.composer-feedback-dismiss:hover { background: var(--surface-hover); opacity: 1; }
+.composer-feedback-dismiss:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; opacity: 1; }
+.composer-feedback-dismiss svg { width: 13px; height: 13px; }
 /* 只有真正编辑消息时才强调整只 composer；点工作区或类型不应把整个输入框点亮。 */
 .composer:has(.composer-input textarea:focus) { border-color: var(--focus-color); box-shadow: var(--focus-ring), var(--shadow-composer); }
 .composer textarea { display: block; width: 100%; min-height: 76px; max-height: 200px; resize: none; padding: var(--space-4) var(--space-4) var(--space-2); border: 0; border-radius: var(--radius-panel); outline: 0; background: var(--transparent); font-size: var(--text-md); line-height: 1.7; }
@@ -2377,8 +2399,178 @@ Agent-shared directories are separate at both user and project scope. */
 .markdown .hljs-comment, .markdown .hljs-quote { color: var(--syntax-comment); font-style: italic; }
 .markdown .hljs-title, .markdown .hljs-name, .markdown .hljs-function { color: var(--syntax-string); }
 .markdown .hljs-variable, .markdown .hljs-params { color: var(--syntax-keyword); }
-.message-images { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-.message-images img, .message-image { max-width: min(420px, 100%); max-height: 420px; border-radius: var(--radius-control); object-fit: contain; }
+/* 会话图片：固定盒子、完整等比显示，图片多时横向滚动而不撑高正文。 */
+.conversation-image-gallery { width: 100%; max-width: 100%; margin: 10px 0; }
+.message-images { margin: 8px 0 0; }
+.user-bubble .conversation-image-gallery { margin: 0 0 10px; }
+.conversation-image-strip {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  padding: 1px 1px 7px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
+}
+.conversation-image-strip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-control); }
+.conversation-image-strip::-webkit-scrollbar { height: 5px; }
+.conversation-image-strip::-webkit-scrollbar-track { background: transparent; }
+.conversation-image-strip::-webkit-scrollbar-thumb { border-radius: var(--radius-round); background: var(--scrollbar); }
+.conversation-image-tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 152px;
+  width: 152px;
+  height: 104px;
+  padding: 6px;
+  overflow: hidden;
+  scroll-snap-align: start;
+  border: 1px solid var(--background-border);
+  border-radius: var(--radius-card);
+  color: var(--text);
+  background: var(--background-card-surface);
+  box-shadow: var(--shadow-control);
+  cursor: zoom-in;
+  touch-action: pan-x;
+  transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+}
+.conversation-image-tile:hover,
+.conversation-image-tile:focus-visible { border-color: var(--accent-border); background: var(--background-card-strong-surface); box-shadow: var(--shadow-card); }
+.conversation-image-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.conversation-image-tile img { display: block; width: 100%; height: 100%; border-radius: calc(var(--radius-card) - 5px); object-fit: contain; }
+.conversation-image-index {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-round);
+  color: var(--text);
+  background: var(--overlay-surface);
+  box-shadow: var(--shadow-control);
+  font: 600 10px/18px var(--font);
+  text-align: center;
+}
+.conversation-image-expand {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--background-border);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  background: var(--overlay-surface);
+  box-shadow: var(--shadow-control);
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity var(--transition), transform var(--transition);
+}
+.conversation-image-expand svg { width: 11px; height: 11px; }
+.conversation-image-tile:hover .conversation-image-expand,
+.conversation-image-tile:focus-visible .conversation-image-expand { opacity: 1; transform: translateY(0); }
+.conversation-image-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 56px;
+  background: var(--image-preview-scrim);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.conversation-image-preview-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(1280px, calc(100vw - 112px));
+  height: calc(100vh - 112px);
+}
+.conversation-image-preview-frame > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 18px 38px var(--shadow-deep));
+  user-select: none;
+}
+.conversation-image-preview-topbar {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.conversation-image-preview-topbar > span {
+  padding: 0 10px;
+  border: 1px solid var(--background-border);
+  border-radius: var(--radius-round);
+  color: var(--text);
+  background: var(--overlay-surface);
+  box-shadow: var(--shadow-control);
+  font: 600 11px/30px var(--font);
+  font-variant-numeric: tabular-nums;
+}
+.conversation-image-preview-topbar button,
+.conversation-image-preview-nav {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--background-border);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  background: var(--overlay-surface);
+  box-shadow: var(--shadow-control);
+  cursor: pointer;
+}
+.conversation-image-preview-topbar button:hover,
+.conversation-image-preview-nav:hover { color: var(--accent); border-color: var(--accent-border); }
+.conversation-image-preview-topbar button:focus-visible,
+.conversation-image-preview-nav:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.conversation-image-preview-topbar svg,
+.conversation-image-preview-nav svg { width: 16px; height: 16px; }
+.conversation-image-preview-nav { position: absolute; z-index: 2; top: 50%; transform: translateY(-50%); }
+.conversation-image-preview-nav.is-previous { left: 0; }
+.conversation-image-preview-nav.is-next { right: 0; }
+.conversation-image-preview-caption {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  max-width: min(680px, 72%);
+  padding: 5px 10px;
+  overflow: hidden;
+  transform: translateX(-50%);
+  border-radius: var(--radius-round);
+  color: var(--text);
+  background: var(--overlay-surface);
+  box-shadow: var(--shadow-control);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .conversation-image-tile { flex-basis: 132px; width: 132px; height: 94px; }
+  .conversation-image-preview { padding: 16px; }
+  .conversation-image-preview-frame { width: calc(100vw - 32px); height: calc(100vh - 32px); }
+  .conversation-image-preview-topbar { top: 6px; right: 6px; }
+  .conversation-image-preview-nav.is-previous { left: 6px; }
+  .conversation-image-preview-nav.is-next { right: 6px; }
+  .conversation-image-preview-caption { bottom: 6px; max-width: 76%; }
+}
 .message-error { margin-top: 12px; padding: 9px 11px; border: 1px solid var(--error-border); border-radius: var(--radius-tag); background: var(--error-soft); color: var(--error); font-size: var(--text-sm); }
 .thinking-block { margin: 8px 0 10px; border-left: 2px solid var(--border-strong); color: var(--muted); }
 .thinking-block summary { display: flex; align-items: center; gap: 7px; padding: 7px 10px; list-style: none; color: var(--muted); font-size: var(--text-sm); cursor: pointer; }
@@ -2664,14 +2856,23 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .activity-tool { margin: 1px 0 4px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); transition: border-color var(--transition), background var(--transition); }
 .activity-tool:hover { border-color: var(--border-hover); background: var(--surface-hover); }
 .activity-tool summary { display: flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 9px; list-style: none; cursor: pointer; }
+.activity-tool summary > .activity-tool-icon,
+.activity-tool summary > .activity-tool-name,
+.activity-tool summary > .activity-tool-summary,
+.activity-tool summary > .activity-tool-status,
+.activity-tool summary > .activity-tool-chevron { align-self: center; }
 .activity-tool summary::-webkit-details-marker { display: none; }
 .activity-tool-name { flex: none; color: var(--muted); font: 10.5px var(--mono); font-weight: 650; }
 .activity-tool-summary { flex: 1; min-width: 0; overflow: hidden; color: var(--faint); font: 10px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
-.activity-tool-status { display: inline-flex; align-items: center; gap: 4px; flex: none; padding: 2px 5px; border-radius: var(--radius-tag); color: var(--faint); font-size: 9px; }
-.activity-tool-status svg { width: 10px; height: 10px; }
+.activity-tool-image-count,
+.run-history-image-count { display: inline-flex; align-items: center; gap: 4px; flex: none; padding: 2px 7px; border: 1px solid var(--accent-border); border-radius: var(--radius-round); color: var(--accent); background: var(--accent-soft); font-size: 10px; font-weight: 600; line-height: 1.4; white-space: nowrap; }
+.activity-tool-image-count svg,
+.run-history-image-count svg { width: 11px; height: 11px; }
+.activity-tool-status { display: inline-flex; min-height: 18px; align-items: center; justify-content: center; box-sizing: border-box; gap: 4px; flex: none; padding: 2px 5px; border-radius: var(--radius-tag); color: var(--faint); font-size: 9px; line-height: 1; }
+.activity-tool-status svg { display: block; width: 10px; height: 10px; flex: none; }
 .activity-tool.is-running .activity-tool-status { color: var(--loading); background: var(--accent-soft); }
 .activity-tool.is-error .activity-tool-status { color: var(--error); background: var(--error-soft); }
-.activity-tool-chevron { width: 12px; height: 12px; flex: none; color: var(--faint); transition: transform var(--transition); }
+.activity-tool-chevron { display: block; width: 12px; height: 12px; flex: none; color: var(--faint); transition: transform var(--transition); }
 .activity-tool[open] .activity-tool-chevron { transform: rotate(180deg); }
 .activity-tool-body { padding: 0 12px 12px; border-top: 1px solid var(--border); }
 .activity-tool-label { margin: 11px 0 6px; color: var(--faint); font-size: 8.5px; letter-spacing: .08em; text-transform: uppercase; }
@@ -2758,21 +2959,26 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 
 /* Composer image/file attachments. */
 /* composer 附件区：缩略图 64px 方形、文件卡最大 245px，横向滚动但隐藏滚动条；
-删除按钮浮在右上角，用绝对定位和小尺寸避免遮挡预览。图片用 object-fit:cover，
-文件信息两行省略。 */
+图片预览与删除是两个独立按钮，删除按钮浮在右上角；文件信息两行省略。 */
 
 .composer-attachments { display: flex; gap: 7px; overflow-x: auto; padding: 11px 12px 0; }
 .composer-attachments::-webkit-scrollbar { height: 0; }
 .composer-attachment { position: relative; flex: none; display: flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); }
 .composer-attachment.is-image { width: 64px; height: 64px; padding: 3px; }
-.composer-attachment.is-image img { width: 100%; height: 100%; border-radius: var(--radius-tag); object-fit: cover; transition: filter var(--transition); }
-.composer-attachment.is-image:hover img,
-.composer-attachment.is-image:focus-within img { filter: brightness(.8) saturate(.75); }
+.composer-image-preview-trigger { position: relative; display: grid; place-items: center; width: 100%; height: 100%; padding: 0; overflow: hidden; border: 0; border-radius: var(--radius-tag); background: transparent; cursor: zoom-in; }
+.composer-image-preview-trigger img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; transition: filter var(--transition); }
+.composer-image-preview-trigger:hover img,
+.composer-image-preview-trigger:focus-visible img { filter: brightness(.8) saturate(.75); }
+.composer-image-preview-trigger:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 1px; }
+.composer-image-preview-cue { position: absolute; right: 4px; bottom: 4px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: calc(var(--radius-tag) - 1px); color: var(--image-dismiss-fg); background: var(--image-dismiss-bg); opacity: 0; transform: translateY(2px); transition: opacity var(--transition), transform var(--transition); }
+.composer-image-preview-cue svg { width: 10px; height: 10px; }
+.composer-image-preview-trigger:hover .composer-image-preview-cue,
+.composer-image-preview-trigger:focus-visible .composer-image-preview-cue { opacity: 1; transform: translateY(0); }
 .composer-attachment.is-file { max-width: 245px; min-height: 40px; padding: 5px 7px; }
 .composer-attachment > span:not(.attachment-icon):not(.attachment-open-cue) { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .composer-attachment > span strong { overflow: hidden; color: var(--muted); font: 10px var(--mono); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .composer-attachment > span small { color: var(--faint); font-size: 9px; }
-.composer-attachment > button { position: absolute; top: -5px; right: -5px; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; line-height: 1; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--faint); box-shadow: var(--shadow-thumb); }
+.composer-attachment-remove { position: absolute; z-index: 2; top: -5px; right: -5px; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; line-height: 1; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--faint); box-shadow: var(--shadow-thumb); }
 
 /* 引用徽章：输入框引用条与用户消息共用同一套外观。 */
 .ref-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; min-width: 0; padding: 1px 6px 1px 7px; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--muted); font-size: var(--text-xs); line-height: 1.7; vertical-align: baseline; }
@@ -2784,8 +2990,8 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .ref-skill-body { margin: 6px 0 0; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-soft); }
 .ref-skill-body > summary { padding: 5px 10px; color: var(--muted); font-size: var(--text-xs); cursor: pointer; }
 .ref-skill-body > pre { max-height: 240px; margin: 0; padding: 0 10px 10px; overflow: auto; color: var(--muted); font: var(--text-xs)/1.6 var(--mono); white-space: pre-wrap; }
-.composer-attachment > button:hover { color: var(--error); border-color: var(--border-hover); background: var(--surface-hover); }
-.composer-attachment > button svg { display: block; width: 12px; height: 12px; }
+.composer-attachment-remove:hover { color: var(--error); border-color: var(--border-hover); background: var(--surface-hover); }
+.composer-attachment-remove svg { display: block; width: 12px; height: 12px; }
 .composer-attach-button { display: grid; place-items: center; width: 30px; height: var(--control-sm); flex: none; border-radius: var(--radius-control); color: var(--muted); }
 .composer-attach-button:hover:not(:disabled) { background: var(--surface-soft); color: var(--text); }
 .composer-attach-button svg { width: 16px; height: 16px; }
@@ -3097,10 +3303,10 @@ body { background: var(--bg); color: var(--text); }
 .attachment-icon, .attachment-icon.is-image, .attachment-icon.is-code, .attachment-icon.is-archive, .attachment-icon.is-sheet, .attachment-icon.is-doc, .attachment-icon.is-generic { color: var(--accent); background: var(--accent-soft); }
 .attachment-kind, .attachment-kind.is-code, .attachment-kind.is-archive, .attachment-kind.is-sheet, .attachment-kind.is-doc { color: var(--muted); background: var(--surface-soft); }
 .attachment-card, .composer-attachment { background: var(--surface); border-color: var(--border); }
-.composer-attachment > button { background: var(--surface); border-color: var(--border); color: var(--muted); }
-.composer-attachment.is-image > button { background: var(--image-dismiss-bg); color: var(--image-dismiss-fg); border: 2px solid var(--surface); }
-.composer-attachment.is-image > button:hover { color: var(--image-dismiss-fg); background: var(--image-dismiss-bg); }
-.composer-attachment > button:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
+.composer-attachment-remove { background: var(--surface); border-color: var(--border); color: var(--muted); }
+.composer-attachment.is-image > .composer-attachment-remove { background: var(--image-dismiss-bg); color: var(--image-dismiss-fg); border: 2px solid var(--surface); }
+.composer-attachment.is-image > .composer-attachment-remove:hover { color: var(--image-dismiss-fg); background: var(--image-dismiss-bg); }
+.composer-attachment-remove:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
 .assistant-error, .error-card, .settings-error { border-color: var(--error-border); background: var(--error-soft); box-shadow: none; }
 .assistant-error::before, .error-card::before { background: var(--error); }
 .assistant-error-mark { color: var(--error); background: var(--surface); box-shadow: 0 0 0 1px var(--error-border); }
@@ -3325,6 +3531,8 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .run-history-count { color: var(--faint); font-size: 11px; }
 .run-history > summary > svg { width: 13px; height: 13px; margin-left: auto; color: var(--faint); }
 .run-history[open] > summary > svg { transform: rotate(180deg); }
+.run-history-images { max-width: calc(100% - 38px); margin: -4px 0 14px 38px; }
+.run-history-images .conversation-image-gallery { margin-bottom: 0; }
 .run-history-list { padding: 2px 14px 8px; border-top: 1px solid var(--border); }
 .run-history-row + .run-history-row { border-top: 1px solid var(--border); }
 .run-history .activity-tool:not([open]), .run-current .activity-tool:not([open]) { margin: 0; border: 0; border-radius: 0; background: none; }
@@ -3333,8 +3541,8 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .run-history .activity-tool[open]:hover, .run-current .activity-tool[open]:hover { border-color: var(--border-hover); background: var(--surface); }
 .run-history .activity-tool > summary, .run-current .activity-tool > summary { min-height: 38px; padding: 4px 0; gap: 10px; }
 .run-history .activity-tool[open] > summary, .run-current .activity-tool[open] > summary { padding-inline: 12px; }
-.activity-tool-icon { display: flex; color: var(--faint); }
-.activity-tool-icon > svg { width: 14px; height: 14px; stroke-width: 1.5; }
+.activity-tool-icon { display: grid; min-height: 18px; place-items: center; color: var(--faint); }
+.activity-tool-icon > svg { display: block; width: 14px; height: 14px; flex: none; stroke-width: 1.5; }
 .run-history .activity-tool-name, .run-current .activity-tool-name { font: 500 12px/1.5 var(--font); }
 .run-history .activity-tool-summary, .run-current .activity-tool-summary { font-size: 11px; }
 .run-history .activity-tool.is-done .activity-tool-status { color: var(--faint); }
@@ -3358,7 +3566,13 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 @media (prefers-reduced-motion: reduce) { .run-current .spin { animation: none; } }
 
 .run-history .activity-tool-status, .run-current .activity-tool-status { margin-left: auto; }
-@media (max-width: 600px) { .run-history > summary { gap: 8px; } .run-history-count { font-size: 10px; } .run-current-hint { font-size: 10px; } }
+@media (max-width: 600px) {
+  .run-history > summary { gap: 8px; }
+  .run-history-count { font-size: 10px; }
+  .run-history-image-count { display: none; }
+  .run-history-images { max-width: calc(100% - 22px); margin-left: 22px; }
+  .run-current-hint { font-size: 10px; }
+}
 
 /* 确认弹窗：工具风险确认与完全权限确认共用。 */
 .confirm-overlay { position: fixed; inset: 0; z-index: 320; display: grid; place-items: center; padding: 24px; background: var(--scrim); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
@@ -3576,6 +3790,8 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .temporary-messages { width: 100%; gap: var(--space-8); }
 .temporary-thinking { min-height: 24px; }
 .temporary-composer-dock {
+  position: relative;
+  z-index: 10;
   flex: none;
   padding: var(--space-3) var(--space-8) var(--space-4);
   background: var(--bg);
@@ -3584,7 +3800,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   max-width: var(--content);
   margin-inline: auto;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
   border-color: var(--border-strong);
   border-radius: var(--radius-panel);
   background: var(--surface);
@@ -3612,26 +3828,8 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .temporary-error-card { position: relative; display: flex; align-items: flex-start; gap: var(--space-3); max-width: var(--content); margin: 0 auto var(--space-2); }
 .temporary-error-card > span { min-width: 0; flex: 1; font-family: var(--mono); line-height: 1.6; }
 .temporary-error-card > button { flex: none; color: currentColor; }
-.temporary-attachments { display: flex; gap: 7px; overflow-x: auto; padding: 11px 12px 0; scrollbar-width: none; }
+.temporary-attachments { scrollbar-width: none; }
 .temporary-attachments::-webkit-scrollbar { height: 0; }
-.temporary-attachments button {
-  position: relative;
-  width: 64px;
-  height: 64px;
-  flex: none;
-  padding: 3px;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: var(--surface);
-}
-.temporary-attachments img { width: 100%; height: 100%; border-radius: var(--radius-tag); object-fit: cover; transition: filter var(--transition); }
-.temporary-attachments span { position: absolute; inset: 3px; display: grid; place-items: center; border-radius: var(--radius-tag); opacity: 0; background: var(--image-dismiss-bg); color: var(--image-dismiss-fg); transition: opacity var(--transition); }
-.temporary-attachments svg { width: 18px; height: 18px; }
-.temporary-attachments button:hover img,
-.temporary-attachments button:focus-visible img { filter: brightness(.8) saturate(.75); }
-.temporary-attachments button:hover span,
-.temporary-attachments button:focus-visible span { opacity: 1; }
 .diff-view-head, .panel-body .file-toolbar { height: var(--toolbar-height); min-height: var(--toolbar-height); max-height: var(--toolbar-height); padding-top: 0; padding-bottom: 0; flex: none; }
 .temporary-chat .model-popover { max-width: min(360px, calc(var(--panel-w, 700px) - 40px)); }
 
@@ -4461,6 +4659,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   .queued-item,
   .outline-preview,
   .composer-attachment,
+  .composer-feedback,
   .temporary-composer,
   .agent-main-card,
   .agent-child-card,

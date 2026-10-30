@@ -152,8 +152,11 @@ Module._load = function patchedLoad(request, parent, isMain) {
       modelInfoFor: (_model, _cwd, thinkingLevel, modelRef) => ({
         modelRef,
         label: _model.name,
-        thinkingLevel: thinkingLevel || 'medium',
-        effectiveThinkingLevel: thinkingLevel || 'medium',
+        supportsImages: Array.isArray(_model.input) && _model.input.includes('image'),
+        thinkingLevel: thinkingLevel || 'default',
+        thinkingLevels: ['default', 'low', 'high'],
+        effectiveThinkingLevel: thinkingLevel === 'default' ? 'low' : (thinkingLevel || 'low'),
+        defaultThinkingLevel: 'low',
       }),
       runtimeModelFor: () => model,
       splitModelRef: (value) => {
@@ -232,6 +235,23 @@ test('temporary chat uses Durable MemoryStorage, supports images, and hot switch
 
   model = {
     provider: 'mock',
+    id: 'text-model-3',
+    name: 'Text model 3',
+    input: ['text'],
+  };
+  await assert.rejects(
+    temporaryChat.temporaryPrompt(202, {
+      id: 'vision-chat',
+      text: 'continue after an image',
+      images: [],
+      modelRef: 'mock/text-model-3',
+      thinkingLevel: 'low',
+    }, () => {}),
+    /不支持图片/,
+  );
+
+  model = {
+    provider: 'mock',
     id: 'vision-model-2',
     name: 'Vision model 2',
     input: ['text', 'image'],
@@ -254,6 +274,23 @@ test('temporary chat uses Durable MemoryStorage, supports images, and hot switch
   await temporaryChat.closeTemporary(202, 'vision-chat');
   assert.equal(currentRuntime.storage.closed, true);
   currentRuntime = createMockRuntime();
+});
+
+test('temporary model switching resolves the target model without inheriting the saved chat level', async () => {
+  model = {
+    provider: 'mock',
+    id: 'vision-model-3',
+    name: 'Vision model 3',
+    input: ['text', 'image'],
+  };
+  const selection = await temporaryChat.temporaryModel({
+    modelRef: 'mock/vision-model-3',
+  });
+  assert.equal(selection.modelRef, 'mock/vision-model-3');
+  assert.equal(selection.label, 'Vision model 3');
+  assert.equal(selection.supportsImages, true);
+  assert.equal(selection.thinkingLevel, 'default');
+  assert.deepEqual(selection.thinkingLevels, ['default', 'low', 'high']);
 });
 
 test('stop, close, and shutdown tear down streams and the memory runtime in order', async () => {

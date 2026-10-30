@@ -67,6 +67,16 @@ function docApi(documents, parentConversationId) {
   };
 }
 
+function todoApi(documents, conversationId, taskId) {
+  return {
+    ...docApi(documents, conversationId),
+    taskId,
+    commit: async (callback) => callback({
+      doc: (token, id) => documents.doc(token, id),
+    }),
+  };
+}
+
 function publicBuiltinManifest(manifest) {
   const {
     runtimeName: _runtimeName,
@@ -83,6 +93,101 @@ function publicBuiltinManifest(manifest) {
 test.after(() => {
   closeStudioDatabase();
   fs.rmSync(temporary, { recursive: true, force: true });
+});
+
+test('the todo built-in persists plans, lifecycle state, dependencies, and replay idempotency', async () => {
+  const durable = fakeDurable([]);
+  const builtins = createStudioBuiltins({
+    durable,
+    piAi: {
+      Type: schemaFactory(),
+      getSupportedThinkingLevels: () => ['off', 'low', 'medium', 'high'],
+    },
+    codingTools: { name: 'coding-tools', tools: [] },
+    toolSearch: { name: 'tool-search', tools: [] },
+  });
+  const extension = builtins.get('builtin:studio-todo');
+  assert.equal(extension.name, 'studio-todo');
+  const tool = extension.tools.find((item) => item.name === 'todo');
+  assert.ok(tool);
+
+  const documents = fakeDocuments();
+  const conversationId = 71;
+  const created = await tool.execute({
+    action: 'createMany',
+    items: [
+      { subject: 'Inspect the current behavior' },
+      { subject: 'Implement the fix', activeForm: 'Implementing the fix' },
+    ],
+  }, todoApi(documents, conversationId, 1001), {});
+
+  assert.equal(created.details.nextId, 3);
+  assert.deepEqual(
+    created.details.tasks.map((task) => [task.id, task.subject, task.status]),
+    [
+      [1, 'Inspect the current behavior', 'pending'],
+      [2, 'Implement the fix', 'pending'],
+    ],
+  );
+  assert.equal(documents.inspect({ kind: 'studio.todo' }, conversationId).lastMutationTaskId, 1001);
+
+  // A replayed tool task returns the current snapshot instead of creating duplicates.
+  const replayed = await tool.execute({
+    action: 'createMany',
+    items: [
+      { subject: 'Inspect the current behavior' },
+      { subject: 'Implement the fix', activeForm: 'Implementing the fix' },
+    ],
+  }, todoApi(documents, conversationId, 1001), {});
+  assert.equal(replayed.details.tasks.length, 2);
+
+  await tool.execute(
+    { action: 'update', id: 2, blockedBy: [1] },
+    todoApi(documents, conversationId, 1002),
+    {},
+  );
+  await assert.rejects(
+    tool.execute(
+      { action: 'start', id: 2 },
+      todoApi(documents, conversationId, 1003),
+      {},
+    ),
+    /阻塞/,
+  );
+
+  await tool.execute(
+    { action: 'start', id: 1 },
+    todoApi(documents, conversationId, 1004),
+    {},
+  );
+  const completed = await tool.execute(
+    { action: 'complete', id: 1 },
+    todoApi(documents, conversationId, 1005),
+    {},
+  );
+  assert.equal(completed.details.tasks[0].status, 'completed');
+
+  await tool.execute(
+    { action: 'start', id: 2 },
+    todoApi(documents, conversationId, 1006),
+    {},
+  );
+  await assert.rejects(
+    tool.execute(
+      { action: 'update', id: 1, blockedBy: [2] },
+      todoApi(documents, conversationId, 1007),
+      {},
+    ),
+    /循环/,
+  );
+
+  const listed = await tool.execute(
+    { action: 'list' },
+    todoApi(documents, conversationId, 1008),
+    {},
+  );
+  assert.match(listed.output[0].text, /进度 1\/2/);
+  assert.equal(listed.details.tasks[1].blockedBy[0], 1);
 });
 
 test('a task-owned subagent is configured inside the creating transaction', async () => {

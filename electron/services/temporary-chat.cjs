@@ -139,13 +139,16 @@ async function resolveModel(modelRef, thinkingLevel) {
   const ref = splitModelRef(modelRef || fallback.modelRef);
   const model = runtimeModelFor(studioModels.models, ref);
   if (!model) throw new Error('请选择一个已配置的模型');
+  // An explicit model switch should resolve that model's own preference instead
+  // of carrying the previous conversation's effective thinking level into it.
+  const preference = modelRef ? thinkingLevel : (thinkingLevel || fallback.thinkingLevel);
   return {
     model,
     selection: {
       ...modelInfoFor(
         model,
         os.tmpdir(),
-        thinkingLevel || fallback.thinkingLevel,
+        preference,
         ref ? `${ref.provider}/${ref.modelId}` : fallback.modelRef,
         studioModels,
       ),

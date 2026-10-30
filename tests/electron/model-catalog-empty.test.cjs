@@ -70,6 +70,7 @@ test('an empty custom provider stays configurable until its first model is added
       thinkingLevels: ['off'],
       effectiveThinkingLevel: 'off',
       defaultThinkingLevel: 'off',
+      supportsImages: false,
       source: 'default',
     },
     defaultSelection: {
@@ -79,6 +80,7 @@ test('an empty custom provider stays configurable until its first model is added
       thinkingLevels: ['off'],
       effectiveThinkingLevel: 'off',
       defaultThinkingLevel: 'off',
+      supportsImages: false,
       source: 'default',
     },
   });

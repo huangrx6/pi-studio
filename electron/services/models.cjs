@@ -93,12 +93,14 @@ function modelInfoFor(model, _cwd = DEFAULT_CWD, thinkingLevelOverride, modelRef
       thinkingLevels: ['off'],
       effectiveThinkingLevel: 'off',
       defaultThinkingLevel: 'off',
+      supportsImages: false,
     };
   }
   const actualRuntime = runtime || throwSync('模型运行时尚未初始化');
   return {
     modelRef: modelRefOverride || modelRefFor(model),
     label: model.name || model.id,
+    supportsImages: Array.isArray(model.input) && model.input.includes('image'),
     ...thinkingOptions(model, thinkingLevelOverride, actualRuntime),
   };
 }
@@ -234,6 +236,7 @@ async function sessionModelInfo(agent) {
       thinkingLevels: ['off'],
       effectiveThinkingLevel: 'off',
       defaultThinkingLevel: 'off',
+      supportsImages: false,
       source: 'session',
       unavailable: true,
       unavailableReason: '这条会话使用的模型已从 Studio 模型目录移除，请重新选择。',

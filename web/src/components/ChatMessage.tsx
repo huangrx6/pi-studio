@@ -18,10 +18,11 @@
  * 图片以 data URI 内联渲染，不再额外请求主进程。
  */
 import { memo, useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, CircleAlert, CircleCheck, CircleX, Copy, FileText, LoaderCircle, PanelRightOpen, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
+import { Check, ChevronDown, CircleAlert, CircleCheck, CircleX, Copy, FileText, Image as ImageIcon, LoaderCircle, PanelRightOpen, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
 import type { ChatMessage, ContentBlock, ToolCallBlock, TurnDiff, TurnDiffFile } from '../types/chat-types';
 import type { StepCollapse, StepDisplay } from '../lib/preferences';
 import { AttachmentIcon, attachmentVisual } from './AttachmentIcon';
+import { ConversationImageGallery, type ConversationImage } from './ConversationImageGallery';
 import { Markdown } from './Markdown';
 import { collectFileChanges } from '../lib/file-changes';
 import { FileChangeSummary } from './FileChangeSummary';
@@ -32,6 +33,12 @@ function textBlocks(blocks: ContentBlock[]): string {
   return blocks.flatMap((block) => block.type === 'text' ? [block.text] : []).join('\n');
 }
 
+function imagesFromBlocks(blocks: ContentBlock[]): ConversationImage[] {
+  return blocks.flatMap((block): ConversationImage[] => block.type === 'image'
+    ? [{ src: `data:${block.mimeType};base64,${block.data}` }]
+    : []);
+}
+
 /**
  * 内联图片列表。
  * 只取 image 块，base64 数据直接拼成 data URI；没有任何图片时不占位。
@@ -39,9 +46,9 @@ function textBlocks(blocks: ContentBlock[]): string {
  * @param blocks 消息内容块（用户消息或工具结果都可能带图片）
  */
 function MessageImages({ blocks }: { blocks: ContentBlock[] }) {
-  const images = blocks.filter((block) => block.type === 'image');
+  const images = imagesFromBlocks(blocks);
   if (images.length === 0) return null;
-  return <div className="message-images">{images.map((block, index) => block.type === 'image' && <img key={index} src={`data:${block.mimeType};base64,${block.data}`} alt="" loading="lazy" decoding="async" />)}</div>;
+  return <ConversationImageGallery className="message-images" images={images} />;
 }
 
 /** 字节数转可读体积；附件卡片用，保留一位小数。 */
@@ -111,11 +118,14 @@ function ActivityTool({ call, result, busy }: { call: ToolCallBlock; result?: Ch
   const failed = Boolean(result?.isError);
   const done = Boolean(result);
   const summary = toolSummary(call);
+  const resultText = result ? textBlocks(result.content) : '';
+  const resultImages = result ? imagesFromBlocks(result.content) : [];
   return <details className={`activity-tool ${failed ? 'is-error' : ''} ${done ? 'is-done' : busy ? 'is-running' : 'is-incomplete'}`}>
     <summary>
       <span className="activity-tool-icon"><ToolIcon name={call.name} /></span>
       <span className="activity-tool-name">{call.name}</span>
       {summary && <span className="activity-tool-summary">{summary}</span>}
+      {resultImages.length > 0 && <span className="activity-tool-image-count"><ImageIcon />{resultImages.length} 张图片</span>}
       <span className="activity-tool-status">{failed ? <><CircleX />失败</> : done ? <><CircleCheck />完成</> : busy ? <><LoaderCircle className="spin" />执行中</> : <><CircleAlert />未完成</>}</span>
       <ChevronDown className="activity-tool-chevron" />
     </summary>
@@ -124,8 +134,8 @@ function ActivityTool({ call, result, busy }: { call: ToolCallBlock; result?: Ch
       <pre className="activity-tool-code">{JSON.stringify(call.arguments, null, 2)}</pre>
       {result && <>
         <div className="activity-tool-label">结果</div>
-        <pre className={`activity-tool-code ${failed ? 'is-error' : ''}`}>{textBlocks(result.content)}</pre>
         <MessageImages blocks={result.content} />
+        {resultText && <pre className={`activity-tool-code ${failed ? 'is-error' : ''}`}>{resultText}</pre>}
       </>}
     </div>
   </details>;
@@ -255,13 +265,25 @@ function ActivityGroup({ entries, results, live, stepDisplay, stepCollapse }: {
   }, [live, stepDisplay, stepCollapse]);
   if (entries.length === 1 && entries[0].kind === 'thinking') return <div className="standalone-thinking"><ActivityThinking block={entries[0].block} /></div>;
   const count = entries.filter(entry => entry.kind === 'tool').length;
-  return <details className="run-history" open={open} onToggle={event => setOpen(event.currentTarget.open)}>
-    <summary><ChevronDown /><span className="run-history-title">{count ? `${count} 项工具操作` : '推理记录'}</span></summary>
-    {open && <div className="run-history-list">{entries.map(entry => <div className={`run-history-row is-${entry.kind}`} key={entry.key}>
-      {entry.kind === 'tool' && <ActivityTool call={entry.call} result={results.get(entry.call.id)} busy={false} />}
-      {entry.kind === 'thinking' && <ActivityThinking block={entry.block} />}
-    </div>)}</div>}
-  </details>;
+  const resultImages = entries.flatMap(entry => entry.kind === 'tool'
+    ? imagesFromBlocks(results.get(entry.call.id)?.content ?? [])
+    : []);
+  return <>
+    <details className="run-history" open={open} onToggle={event => setOpen(event.currentTarget.open)}>
+      <summary>
+        <ChevronDown />
+        <span className="run-history-title">{count ? `${count} 项工具操作` : '推理记录'}</span>
+        {resultImages.length > 0 && <span className="run-history-image-count"><ImageIcon />{resultImages.length} 张截图</span>}
+      </summary>
+      {open && <div className="run-history-list">{entries.map(entry => <div className={`run-history-row is-${entry.kind}`} key={entry.key}>
+        {entry.kind === 'tool' && <ActivityTool call={entry.call} result={results.get(entry.call.id)} busy={false} />}
+        {entry.kind === 'thinking' && <ActivityThinking block={entry.block} />}
+      </div>)}</div>}
+    </details>
+    {!open && resultImages.length > 0 && <div className="run-history-images">
+      <ConversationImageGallery images={resultImages} />
+    </div>}
+  </>;
 }
 
 type AssistantTurnViewProps = {
@@ -313,11 +335,16 @@ function AssistantTurnViewComponent({ messages, toolResults, busy, id, retry, st
   ) : [];
   const currentKeys = new Set(currentEntries.map(entry => entry.key));
   // Every visible text/image breaks a process group, preserving chronological order.
-  const timeline: Array<{ key: string; entries?: ActivityEntry[]; visible?: FlatBlock; current?: ActivityEntry }> = [];
+  const timeline: Array<{ key: string; entries?: ActivityEntry[]; visible?: FlatBlock; images?: ConversationImage[]; current?: ActivityEntry }> = [];
   const activityByKey = new Map(activity.map(entry => [entry.key, entry]));
   for (const entry of flat) {
     const record = activityByKey.get(entry.key);
-    if (entry.block.type === 'text' && entry.block.text.trim() || entry.block.type === 'image') {
+    if (entry.block.type === 'image') {
+      const image = { src: `data:${entry.block.mimeType};base64,${entry.block.data}` };
+      const tail = timeline.at(-1);
+      if (tail?.images) tail.images.push(image);
+      else timeline.push({ key: entry.key, images: [image] });
+    } else if (entry.block.type === 'text' && entry.block.text.trim()) {
       timeline.push({ key: entry.key, visible: entry });
     } else if (record && record.kind !== 'text') {
       if (currentKeys.has(entry.key)) timeline.push({ key: entry.key, current: record });
@@ -352,13 +379,13 @@ function AssistantTurnViewComponent({ messages, toolResults, busy, id, retry, st
       </div>
       {timeline.map(item => item.entries
         ? <ActivityGroup key={item.key} entries={item.entries} results={toolResults} live={live} stepDisplay={stepDisplay} stepCollapse={stepCollapse} />
+        : item.images ? <ConversationImageGallery key={item.key} images={item.images} />
         : item.current ? <section className="run-current run-current-inline" key={item.key} aria-label="当前输出" aria-busy="true">
           {item.current.kind === 'thinking' && <><div className="run-current-heading"><Sparkles /><span>推理中</span><LoaderCircle className="spin" /></div>
             {item.current.block.redacted ? <p className="run-current-redacted">模型未提供推理正文。</p> : <Markdown>{item.current.block.thinking}</Markdown>}</>}
           {item.current.kind === 'tool' && <ActivityTool call={item.current.call} result={toolResults.get(item.current.call.id)} busy />}
         </section>
-        : item.visible?.block.type === 'text' ? <div className="assistant-response" key={item.key}><Markdown>{item.visible.block.text}</Markdown></div>
-        : item.visible?.block.type === 'image' ? <img className="message-image" key={item.key} src={`data:${item.visible.block.mimeType};base64,${item.visible.block.data}`} alt="" loading="lazy" decoding="async" /> : null)}
+        : item.visible?.block.type === 'text' ? <div className="assistant-response" key={item.key}><Markdown>{item.visible.block.text}</Markdown></div> : null)}
       {live && <div className="run-live-status" role="status"><LoaderCircle className="spin" /><span>{phase}</span><span>本轮尚未结束</span></div>}
       {/* 失败卡片只在非 live 时出现，避免自动重试过程中闪错误。 */}
       {!live && error && (interrupted
@@ -463,6 +490,7 @@ function ChatMessageViewComponent({ message, id, onOpenFile }: ChatMessageViewPr
     .join('')
     .trim();
   return <div id={id} className="message user"><div className="user-bubble">
+    <MessageImages blocks={message.content} />
     {text && <UserText text={text} />}
     {/* 附件卡片展示名称、体积/行数与类型角标；title 给出去向的绝对路径。 */}
     {message.attachments?.map((attachment) => {
@@ -478,7 +506,6 @@ function ChatMessageViewComponent({ message, id, onOpenFile }: ChatMessageViewPr
         {openable && <span className="attachment-open-cue" aria-hidden="true"><PanelRightOpen /></span>}
       </div>;
     })}
-    <MessageImages blocks={message.content} />
   </div>
   {/* 用户消息同样在悬浮时显示复制与发送时间。 */}
   <MessageActions text={copyText} time={message.timestamp} label="复制消息" align="end" />

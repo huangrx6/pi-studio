@@ -43,6 +43,8 @@ import { splitComposerText } from './lib/references';
 import type { ChatMessage, ComposerAttachment, ComposerCommand, ComposerCommandSource, ComposerFile, TodoDetails, TurnDiff, TurnDiffFile } from './types/chat-types';
 import { AttachmentIcon } from './components/AttachmentIcon';
 import { AssistantTurnView, ChatMessageView } from './components/ChatMessage';
+import { ComposerImageAttachment } from './components/ComposerImageAttachment';
+import { ComposerFeedback } from './components/ComposerFeedback';
 import { TodoDock } from './components/TodoDock';
 import { QueuedMessages, type QueuedPreview } from './components/QueuedMessages';
 import { DetailDialog } from './components/DetailDialog';
@@ -428,6 +430,7 @@ function emptyModelSelection(): ModelSelection {
     thinkingLevels: ['default'],
     effectiveThinkingLevel: 'off',
     defaultThinkingLevel: 'off',
+    supportsImages: false,
   };
 }
 
@@ -557,9 +560,8 @@ export function App() {
   const [fullPermissionOpen, setFullPermissionOpen] = useState(false);
   const [fullPermissionAck, setFullPermissionAck] = useState(false);
   const [todoPanelOpen, setTodoPanelOpen] = useState(false);
-  const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([]);
-  const queuedDrainRef = useRef(false);
-  const queuedOrderRef = useRef(0);
+  const [queuedPromptsBySession, setQueuedPromptsBySession] = useState<Record<string, QueuedPrompt[]>>({});
+  const queuedDrainSessionsRef = useRef<Set<string>>(new Set());
   const [outlineActive, setOutlineActive] = useState(0);
   const [outlineHover, setOutlineHover] = useState<number | null>(null);
   const [outlineItems, setOutlineItems] = useState<OutlineItem[]>([]);
@@ -589,6 +591,7 @@ export function App() {
     totalMessages?: number;
   } | null>(null);
   const sessionRef = useRef(session);
+  const queuedPrompts = session?.id ? queuedPromptsBySession[session.id] ?? [] : [];
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [agentView, setAgentView] = useState<AgentView>({ kind: 'conversation' });
   const conversationExtensionSurface = useExtensionUiSnapshot(session?.cwd);
@@ -691,6 +694,18 @@ export function App() {
   }, [session?.id]);
   const [prompt, setPrompt] = useState('');
   const [composerAttachments, setComposerAttachments] = useState<ComposerAttachment[]>([]);
+  const composerImages = useMemo(
+    () => composerAttachments.flatMap((attachment) => attachment.kind === 'image'
+      ? [{ src: `data:${attachment.mime};base64,${attachment.data || ''}`, alt: attachment.name }]
+      : []),
+    [composerAttachments],
+  );
+  const composerImageIndexes = useMemo(() => {
+    let imageIndex = 0;
+    return new Map(composerAttachments.flatMap((attachment) => (
+      attachment.kind === 'image' ? [[attachment.id, imageIndex++]] : []
+    )));
+  }, [composerAttachments]);
   const [composerMenu, setComposerMenu] = useState<ComposerMenuState | null>(null);
   const [composerCommands, setComposerCommands] = useState<ComposerCommand[]>([]);
   const [composerFiles, setComposerFiles] = useState<ComposerFile[]>([]);
@@ -711,6 +726,7 @@ export function App() {
     conversationRunning: Boolean(selectedSessionSummary?.running),
   });
   const [error, setError] = useState<string | null>(null);
+  const [composerFeedback, setComposerFeedback] = useState<string | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [workspaceSearchOpen, setWorkspaceSearchOpen] = useState(false);
@@ -749,6 +765,10 @@ export function App() {
       createdAt,
       read: false,
     }, ...current].slice(0, 50));
+  }, []);
+
+  const showComposerFeedback = useCallback((message: string) => {
+    setComposerFeedback(message);
   }, []);
 
   const notifyExtension = useCallback((notice: ExtensionNotice) => {
@@ -1675,6 +1695,13 @@ export function App() {
   }
 
   async function selectModel(next: string) {
+    const target = models.find((item) => item.id === next);
+    if (target?.supportsImages === false && composerAttachments.some((item) => item.kind === 'image')) {
+      const message = `${target.name || target.id} 不支持图片输入。请先移除输入框中的图片，再切换模型。`;
+      showComposerFeedback(message);
+      throw new Error(message);
+    }
+    setComposerFeedback(null);
     // 会话配置写入下一次请求；正在生成时也不禁用，当前回复不受影响。
     if (session) {
       const result = await window.piApi.conversationConfigure({
@@ -1866,7 +1893,6 @@ export function App() {
       scrollIntentTimerRef.current = null;
     }
     setTodoPanelOpen(false);
-    setQueuedPrompts([]);
     setCompaction({ active: false });
   }, [session?.id]);
 
@@ -2379,7 +2405,6 @@ export function App() {
     setModelPickerRequest(null);
     setModelSelection(defaultModelSelection);
     if (!defaultModelSelection.modelRef) void loadModelCatalog().catch(() => {});
-    setQueuedPrompts([]);
     setBusy(false);
     setRetryInfo(null);
     requestAnimationFrame(() => textareaRef.current?.focus());
@@ -2448,6 +2473,13 @@ export function App() {
    */
   async function sidebarAction(kind: 'workspace' | 'session', id: string, action: SidebarAction, name?: string) {
     const result = await window.piApi.conversationAction({ kind, id, action, name });
+    if (kind === 'session' && (action === 'archive' || action === 'remove')) {
+      clearSessionQueuedPrompts(id);
+    }
+    if (kind === 'workspace' && action === 'remove') {
+      const removedWorkspace = workspaces.find((item) => item.cwd === id);
+      for (const item of removedWorkspace?.sessions ?? []) clearSessionQueuedPrompts(item.id);
+    }
     const current = sessionRef.current;
     const currentSummary = current
       ? workspaces.flatMap((item) => item.sessions).find((item) => item.id === current.id)
@@ -2777,8 +2809,17 @@ export function App() {
   }
 
   async function addComposerFiles(files: File[]) {
-    for (const file of files) {
-      if (file.size > 20_000_000) { setError(`文件「${file.name}」超过 20MB`); continue; }
+    const images = files.filter((file) => file.type.startsWith('image/'));
+    const accepted = modelSelection.supportsImages === false && images.length > 0
+      ? files.filter((file) => !file.type.startsWith('image/'))
+      : files;
+    if (accepted.length !== files.length) {
+      showComposerFeedback(`${modelSelection.label || '当前模型'} 不支持图片输入。请切换到支持图片的模型后再添加图片。`);
+    } else if (images.length > 0) {
+      setComposerFeedback(null);
+    }
+    for (const file of accepted) {
+      if (file.size > 20_000_000) { showComposerFeedback(`文件「${file.name}」超过 20MB`); continue; }
       try {
         if (file.type.startsWith('image/')) {
           const data = await readFileBase64(file);
@@ -2788,15 +2829,24 @@ export function App() {
           const saved = await window.piApi.saveUpload({ sessionId: session?.id, name: file.name || 'attachment', mime: file.type, data });
           setComposerAttachments((current) => [...current, { ...saved, id: crypto.randomUUID() }]);
         }
-      } catch (error) { setError(errorText(error)); }
+      } catch (error) { showComposerFeedback(errorText(error)); }
     }
   }
 
   async function pickComposerAttachments() {
     try {
       const result = await window.piApi.pickAttachments({ sessionId: session?.id });
-      setComposerAttachments((current) => [...current, ...result.attachments]);
-    } catch (error) { setError(errorText(error)); }
+      const rejectedImages = modelSelection.supportsImages === false
+        ? result.attachments.filter((attachment) => attachment.kind === 'image').length
+        : 0;
+      const accepted = rejectedImages > 0
+        ? result.attachments.filter((attachment) => attachment.kind !== 'image')
+        : result.attachments;
+      if (rejectedImages > 0) {
+        showComposerFeedback(`${modelSelection.label || '当前模型'} 不支持图片输入，已保留可发送的普通文件。`);
+      }
+      setComposerAttachments((current) => [...current, ...accepted]);
+    } catch (error) { showComposerFeedback(errorText(error)); }
   }
 
   function updatePreference<K extends keyof Preferences>(key: K, value: Preferences[K]) {
@@ -3320,6 +3370,32 @@ export function App() {
 
   // ---------- 发送与排队 ----------
 
+  /** 排队消息按会话隔离；更新时保留其他会话的队列。 */
+  function updateSessionQueuedPrompts(
+    sessionId: string,
+    update: (items: QueuedPrompt[]) => QueuedPrompt[],
+  ) {
+    setQueuedPromptsBySession((current) => {
+      const items = update(current[sessionId] ?? []);
+      if (items.length === 0) {
+        if (!(sessionId in current)) return current;
+        const next = { ...current };
+        delete next[sessionId];
+        return next;
+      }
+      return { ...current, [sessionId]: items };
+    });
+  }
+
+  function clearSessionQueuedPrompts(sessionId: string) {
+    setQueuedPromptsBySession((current) => {
+      if (!(sessionId in current)) return current;
+      const next = { ...current };
+      delete next[sessionId];
+      return next;
+    });
+  }
+
   /**
    * 组装一次提交：
    *  - 超长文本落盘为附件（界面显示摘要，模型收到标记）
@@ -3329,6 +3405,11 @@ export function App() {
   async function prepareSubmission(text: string, attachments: ComposerAttachment[], sessionId: string): Promise<PreparedSubmission> {
     const files = attachments.filter((attachment) => attachment.kind === 'file');
     const images = attachments.filter((attachment) => attachment.kind === 'image');
+    if (images.length > 0 && modelSelection.supportsImages === false) {
+      const message = `${modelSelection.label || '当前模型'} 不支持图片输入。请先移除图片，或切换到支持图片的模型。`;
+      showComposerFeedback(message);
+      throw new Error(message);
+    }
     let displayText = text;
     let outgoingText = text;
     let longAttachments: ChatMessage['attachments'] = [];
@@ -3442,6 +3523,28 @@ export function App() {
     }
   }
 
+  /** 非当前会话的队列不能写入当前聊天 UI，直接提交到它自己的 Durable 会话。 */
+  async function submitQueuedInBackground(submission: PreparedSubmission) {
+    try {
+      await window.piApi.conversationSubmit({
+        id: submission.sessionId,
+        text: submission.outgoingText,
+        requestId: crypto.randomUUID(),
+        whenBusy: 'followUp',
+        mentions: submission.mentions,
+        attachments: submission.attachmentPaths,
+        images: submission.imagePayload,
+      });
+      await loadState();
+    } catch (error) {
+      pushNotification(
+        `排队消息未能继续发送：${errorText(error)}`,
+        'error',
+        '排队发送失败',
+      );
+    }
+  }
+
   /**
    * 输入框的发送入口。
    * 依次处理内置命令、懒创建会话、长消息/附件预处理，
@@ -3503,15 +3606,29 @@ export function App() {
       void loadState().catch(() => { /* 侧边栏刷新失败不阻塞发送 */ });
     }
     const queuedAttachments = composerAttachments;
-    const prepared = await prepareSubmission(text, queuedAttachments, current.id);
+    let prepared: PreparedSubmission;
+    try {
+      prepared = await prepareSubmission(text, queuedAttachments, current.id);
+    } catch (error) {
+      // prepareSubmission already anchors capability errors above the composer.
+      if (!composerFeedback) showComposerFeedback(errorText(error));
+      return;
+    }
     setPrompt('');
     setComposerAttachments([]);
     if (turnActive) {
       if (preferences.busySend === 'steer') {
         await dispatchSubmission(prepared, 'steer');
       } else {
-        const order = ++queuedOrderRef.current;
-        setQueuedPrompts((items) => [...items, { id: crypto.randomUUID(), order, text, attachments: queuedAttachments, submission: prepared }].sort((a, b) => a.order - b.order));
+        updateSessionQueuedPrompts(current.id, (items) => (
+          [...items, {
+            id: crypto.randomUUID(),
+            order: items.length + 1,
+            text,
+            attachments: queuedAttachments,
+            submission: prepared,
+          }].sort((a, b) => a.order - b.order)
+        ));
       }
       return;
     }
@@ -3519,20 +3636,22 @@ export function App() {
   }
 
   async function sendQueuedNow(id: string) {
-    if (!turnActive) return;
+    const sessionId = sessionRef.current?.id;
+    if (!turnActive || !sessionId) return;
     const item = queuedPrompts.find((candidate) => candidate.id === id);
     if (!item) return;
-    setQueuedPrompts((items) => items.filter((candidate) => candidate.id !== id));
+    updateSessionQueuedPrompts(sessionId, (items) => items.filter((candidate) => candidate.id !== id));
     await dispatchSubmission(item.submission, 'steer');
   }
 
   async function sendAllQueued() {
-    if (!turnActive || queuedPrompts.length === 0) return;
+    const sessionId = sessionRef.current?.id;
+    if (!turnActive || !sessionId || queuedPrompts.length === 0) return;
     const items = [...queuedPrompts];
-    setQueuedPrompts([]);
-    queuedDrainRef.current = true;
+    clearSessionQueuedPrompts(sessionId);
+    queuedDrainSessionsRef.current.add(sessionId);
     for (const item of items) await dispatchSubmission(item.submission, 'steer');
-    queuedDrainRef.current = false;
+    queuedDrainSessionsRef.current.delete(sessionId);
   }
 
   async function stopGeneration() {
@@ -3563,42 +3682,60 @@ export function App() {
   }
 
   function editQueued(id: string) {
+    const sessionId = sessionRef.current?.id;
+    if (!sessionId) return;
     const item = queuedPrompts.find((candidate) => candidate.id === id);
     if (!item) return;
-    setQueuedPrompts((items) => items.filter((candidate) => candidate.id !== id));
+    updateSessionQueuedPrompts(sessionId, (items) => items.filter((candidate) => candidate.id !== id));
     setPrompt(item.text);
     setComposerAttachments(item.attachments);
     window.requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
   function deleteQueued(id: string) {
-    setQueuedPrompts((items) => items.filter((candidate) => candidate.id !== id));
+    const sessionId = sessionRef.current?.id;
+    if (!sessionId) return;
+    updateSessionQueuedPrompts(sessionId, (items) => items.filter((candidate) => candidate.id !== id));
   }
 
   function reorderQueued(fromId: string, toId: string) {
-    setQueuedPrompts((items) => {
+    const sessionId = sessionRef.current?.id;
+    if (!sessionId) return;
+    updateSessionQueuedPrompts(sessionId, (items) => {
       const from = items.findIndex((item) => item.id === fromId);
       const to = items.findIndex((item) => item.id === toId);
       if (from < 0 || to < 0 || from === to) return items;
       const next = [...items];
       const [moved] = next.splice(from, 1);
       next.splice(from < to ? to - 1 : to, 0, moved);
-      queuedOrderRef.current = Math.max(queuedOrderRef.current, next.length);
       return next.map((item, index) => ({ ...item, order: index + 1 }));
     });
   }
 
-  // 空闲时自动把队首消息发出去；queuedDrainRef 防止同一轮重复触发。
+  // 每条会话独立消费自己的队列。即使用户切到别处，原会话结束时也会继续处理。
   useEffect(() => {
-    if (turnActive || queuedPrompts.length === 0 || queuedDrainRef.current) return;
-    const next = queuedPrompts[0];
-    setQueuedPrompts((items) => items.filter((item) => item.id !== next.id));
-    queuedDrainRef.current = true;
-    void dispatchSubmission(next.submission, 'prompt').finally(() => {
-      queuedDrainRef.current = false;
-      setQueuedPrompts((items) => items.length > 0 ? [...items] : items);
-    });
-  }, [queuedPrompts, turnActive]);
+    for (const [sessionId, items] of Object.entries(queuedPromptsBySession)) {
+      if (items.length === 0 || queuedDrainSessionsRef.current.has(sessionId)) continue;
+      const sameActiveSession = session?.id === sessionId;
+      const summary = workspaces
+        .flatMap((item) => item.sessions)
+        .find((item) => item.id === sessionId);
+      const running = sameActiveSession ? turnActive : Boolean(summary?.running);
+      if (running || (!sameActiveSession && !summary)) continue;
+
+      const next = items[0];
+      queuedDrainSessionsRef.current.add(sessionId);
+      updateSessionQueuedPrompts(sessionId, (current) => (
+        current.filter((item) => item.id !== next.id)
+      ));
+      const dispatch = sameActiveSession
+        ? dispatchSubmission(next.submission, 'prompt')
+        : submitQueuedInBackground(next.submission);
+      void dispatch.finally(() => {
+        queuedDrainSessionsRef.current.delete(sessionId);
+      });
+    }
+  }, [queuedPromptsBySession, session?.id, turnActive, workspaces]);
 
 
   // ---------- 右侧文件面板 ----------
@@ -4655,6 +4792,7 @@ export function App() {
               onSendPrompt={sendPromptFromExtension}
               onNotify={notifyExtension}
             />
+            {composerFeedback && <ComposerFeedback message={composerFeedback} onDismiss={() => setComposerFeedback(null)} />}
             <div
               className="composer"
               onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }}
@@ -4662,17 +4800,19 @@ export function App() {
             >
             {composerAttachments.length > 0 && <div className="composer-attachments">
               {composerAttachments.map((attachment) => attachment.kind === 'image'
-                ? <div className="composer-attachment is-image" key={attachment.id} title={attachment.name}>
-                  <img src={`data:${attachment.mime};base64,${attachment.data}`} alt="" />
-                  <button type="button" aria-label={`移除 ${attachment.name}`} onClick={() => removeComposerAttachment(attachment.id)}><X /></button>
-                </div>
+                ? <ComposerImageAttachment
+                  key={attachment.id}
+                  images={composerImages}
+                  index={composerImageIndexes.get(attachment.id) ?? 0}
+                  onRemove={() => removeComposerAttachment(attachment.id)}
+                />
                 : <div className="composer-attachment is-file is-openable" key={attachment.id} title={attachment.path} role={attachment.path ? 'button' : undefined} tabIndex={attachment.path ? 0 : undefined} aria-label={attachment.path ? `在右侧面板查看 ${attachment.name}` : undefined}
                   onClick={() => { if (attachment.path) void openFile(attachment.path); }}
                   onKeyDown={(event) => { if (attachment.path && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); void openFile(attachment.path); } }}>
                   <AttachmentIcon name={attachment.name} mime={attachment.mime} />
                   <span><strong>{attachment.name}</strong><small>{filesize(attachment.bytes)}{attachment.lines ? ` · ${attachment.lines.toLocaleString('zh-CN')} 行` : ''}</small></span>
                   {attachment.path && <span className="attachment-open-cue" title="在右侧面板查看" aria-hidden="true"><PanelRightOpen /></span>}
-                  <button type="button" aria-label={`移除 ${attachment.name}`} onClick={(event) => { event.stopPropagation(); removeComposerAttachment(attachment.id); }} onKeyDown={(event) => event.stopPropagation()}><X /></button>
+                  <button type="button" className="composer-attachment-remove" aria-label={`移除 ${attachment.name}`} onClick={(event) => { event.stopPropagation(); removeComposerAttachment(attachment.id); }} onKeyDown={(event) => event.stopPropagation()}><X /></button>
                 </div>)}
             </div>}
             <div className={`composer-input ${composing ? 'is-composing' : ''}`}>
@@ -4741,7 +4881,7 @@ export function App() {
             </div>
             <div className="composer-bar">
               <div className={`composer-left ${isNewConversation ? 'is-new-conversation' : ''}`}>
-                <button type="button" className="composer-attach-button" disabled={busy} onClick={() => void pickComposerAttachments()} aria-label="添加图片或文件" title="添加图片或文件"><Plus /></button>
+                <button type="button" className="composer-attach-button" disabled={busy} onClick={() => void pickComposerAttachments()} aria-label="添加图片或文件" title={modelSelection.supportsImages === false ? '添加文件；当前模型不支持图片' : '添加图片或文件'}><Plus /></button>
                 <div className="composer-context-group">
                   {isNewConversation && <WorkspacePicker value={workspace} workspaces={workspaces} onChange={selectDraftWorkspace} onBrowse={chooseFile} />}
                   {permission.available && (

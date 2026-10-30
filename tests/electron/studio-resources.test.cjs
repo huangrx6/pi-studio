@@ -670,11 +670,12 @@ test('MCP stderr diagnostics are bounded and redact configured secrets', () => {
   assert.doesNotMatch(failure.message, new RegExp(secret));
 });
 
-test('Agent tool wildcards select MCP namespaces and legacy selections gain MCP access', () => {
+test('Agent tool wildcards select MCP namespaces and legacy selections gain new built-ins', () => {
   assert.equal(matches('mcp__*', 'mcp__docs__search'), true);
   assert.equal(matches('mcp__docs__*', 'mcp__docs__search'), true);
   assert.equal(matches('mcp__docs__*', 'mcp__github__search'), false);
   assert.equal(DEFAULT_AGENT_TOOLS.includes('mcp__*'), true);
+  assert.equal(DEFAULT_AGENT_TOOLS.includes('todo'), true);
   assert.deepEqual(normalizeSelection(['read', 'read', 'mcp__*']).enabled, ['read', 'mcp__*']);
 
   const values = new Map([
@@ -692,5 +693,6 @@ test('Agent tool wildcards select MCP namespaces and legacy selections gain MCP 
   };
   const selection = readAgentToolSelection(db);
   assert.equal(selection.enabled.includes('mcp__*'), true);
-  assert.equal(values.get('studio.agent.tools.version'), 2);
+  assert.equal(selection.enabled.includes('todo'), true);
+  assert.equal(values.get('studio.agent.tools.version'), 3);
 });

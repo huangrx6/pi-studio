@@ -44,7 +44,7 @@ try {
   await page.locator('.run-history .activity-tool-summary').filter({hasText:'src/app.css'}).waitFor();
   const traceAlignment = await page.evaluate(() => {
     const completedIcons = Array.from(document.querySelectorAll('.run-history .activity-tool-icon, .run-history .activity-thinking-icon'));
-    const completedText = Array.from(document.querySelectorAll('.run-history .activity-tool-name, .run-history .activity-thinking-preview'));
+    const completedText = Array.from(document.querySelectorAll('.run-history .activity-tool-name, .run-history .activity-thinking-label'));
     const current = document.querySelector('.run-current');
     const currentIcon = document.querySelector('.run-current-heading > svg');
     const currentText = document.querySelector('.run-current-heading > span');
@@ -59,6 +59,23 @@ try {
     assert.ok(Math.max(...positions) - Math.min(...positions) <= 0.5,
       `execution trace alignment drifted: ${JSON.stringify(traceAlignment)}`);
   }
+  const toolVerticalAlignment = await page.evaluate(() => Array.from(document.querySelectorAll('.run-history .activity-tool')).map(tool => {
+    const center = selector => {
+      const rect = tool.querySelector(selector).getBoundingClientRect();
+      return rect.top + rect.height / 2;
+    };
+    return {
+      summary: center('summary'),
+      icon: center('.activity-tool-icon'),
+      name: center('.activity-tool-name'),
+      status: center('.activity-tool-status'),
+      chevron: center('.activity-tool-chevron'),
+    };
+  }));
+  for (const alignment of toolVerticalAlignment) {
+    assert.ok(Math.max(...Object.values(alignment)) - Math.min(...Object.values(alignment)) <= 0.5,
+      `completed tool row is not vertically centered: ${JSON.stringify(alignment)}`);
+  }
   await page.screenshot({path:output+'thinking-light.png',fullPage:true,animations:'disabled'});
   await page.locator('.run-history > summary').click();
   await page.locator('.run-current .markdown').waitFor();
@@ -66,6 +83,24 @@ try {
   await page.locator('.run-live-status').getByText('正在执行',{exact:true}).waitFor();
   await page.locator('.assistant-response').getByText('接下来检查构建结果。',{exact:true}).waitFor();
   await page.locator('.run-current .activity-tool-summary').filter({hasText:'pnpm run build'}).waitFor();
+  const currentToolVerticalAlignment = await page.locator('.run-current .activity-tool').evaluate(tool => {
+    const center = selector => {
+      const rect = tool.querySelector(selector).getBoundingClientRect();
+      return rect.top + rect.height / 2;
+    };
+    return {
+      summary: center('summary'),
+      icon: center('.activity-tool-icon'),
+      name: center('.activity-tool-name'),
+      summaryText: center('.activity-tool-summary'),
+      status: center('.activity-tool-status'),
+      chevron: center('.activity-tool-chevron'),
+    };
+  });
+  assert.ok(
+    Math.max(...Object.values(currentToolVerticalAlignment)) - Math.min(...Object.values(currentToolVerticalAlignment)) <= 0.5,
+    `running tool row is not vertically centered: ${JSON.stringify(currentToolVerticalAlignment)}`,
+  );
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await page.screenshot({path:output+'tool-dark.png',fullPage:true,animations:'disabled'});
   await page.evaluate(() => window.reply());

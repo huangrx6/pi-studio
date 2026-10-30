@@ -38,7 +38,7 @@ Pi Studio 把 Pi Durable 的持久化 Agent 能力带进桌面窗口。每个普
 | Apple Silicon | `Pi-Studio-<版本>-arm64.dmg` | M1 — M4 |
 | Intel | `Pi-Studio-<版本>-x64.dmg` | Intel 芯片 Mac |
 
-安装包由 GitHub Actions 在 macOS 上自动构建。未配置 Developer ID 与 Apple 公证时，首次打开可能提示「无法验证开发者」：
+安装包由 GitHub Actions 在 macOS 上使用固定的自签名证书构建。该证书让后续 Release 保持同一更新身份，但不等同于 Apple Developer ID 或公证，首次打开仍可能提示「无法验证开发者」：
 
 ```bash
 xattr -cr "/Applications/Pi Studio.app"
@@ -78,6 +78,8 @@ Pi Durable 提供可组合的 Agent Runtime，Studio 负责构建面向编码任
 profile 支持全局选择和按工作区覆盖，也可以为单个工具增加 guidance。设置保存后会重建 registry；空闲会话直接采用新配置，忙碌会话等待下一请求边界。
 
 Durable 运行策略独立保存在 Studio SQLite，并覆盖请求超时、自动重试、上下文压缩、工具并行、失败后排队输入、崩溃恢复和内存缓存。默认采用`parallel`：模型在同一轮发出的独立读取、搜索、读取工具或子 Agent 调用会同时执行；依赖前一步结果的调用仍留到下一轮，避免用并发破坏正确性。策略由 getter 在每次执行边界读取，修改后不需要重启应用。
+
+多步骤工作由内置 `todo` 工具维护会话级计划。计划状态保存为 Durable conversation document，UI 从最新工具结果读取快照并显示在输入框上方；切换会话、重启应用或上下文压缩后仍可继续。任务支持依赖、进行中、完成、结束、归档与恢复，模型默认在多步任务开始前用一次 `createMany` 建立计划。
 
 Studio 不声称与 Pi Coding Agent SDK 逐字节一致。默认 Harness 明确提供编码身份、执行规则、项目 `AGENTS.md`、Skill、工具说明和工作区上下文；实际工具 schema 与执行行为由扩展提供，用户可通过 profile 覆盖 Prompt section 和工具 guidance，也可安装 Agent 扩展注册新工具。相同模型在不同 Harness 下仍可能产生不同结果，因此质量和兼容性应以真实编码任务及测试结果判断。
 
@@ -195,10 +197,18 @@ pnpm extension -- pack examples/extensions/agent-starter --out release
 ## 打包与发布
 
 ```bash
-pnpm dist         # arm64 / x64 的 DMG、自动更新 ZIP 与 latest-mac.yml
+pnpm release:dist # 使用稳定自签名身份构建并验证 arm64 / x64 安装与更新包
 ```
 
 发布由 [Release workflow](.github/workflows/release.yml) 完成。推送 `v*` 标签或在 Actions 页手动触发后，macOS runner 会构建并创建 GitHub Release；CI 检查见 [CI workflow](.github/workflows/ci.yml)。
+
+正式 macOS 包必须使用稳定签名身份。首次发布或证书轮换时运行：
+
+```bash
+pnpm release:cert
+```
+
+将 `.release-signing/pi-studio-self-signed.p12` 的 Base64 内容保存为仓库 secret `CSC_LINK`，将密码文件内容保存为 `CSC_KEY_PASSWORD`。后续发布必须复用同一份证书；重新生成证书会改变更新身份，使旧客户端无法通过 Squirrel.Mac 自动覆盖安装。证书私钥不得提交到仓库。
 
 ## 应用更新
 
@@ -211,7 +221,9 @@ Pi Studio 使用 `electron-updater` 读取 GitHub 最新 Release。GitHub 不会
 | `latest-mac.yml` | 版本、下载地址与校验信息 |
 | `*.blockmap` | 差分下载加速 |
 
-应用不会自动下载更新。macOS 的原地安装需要 Developer ID 签名与 Apple 公证；未配置签名时仍可检查与下载，但系统可能拒绝自动覆盖。
+应用不会自动下载更新。macOS runner 会用稳定的自签名身份完整签署 `.app`，并在发布前验证 `.app` 与自动更新 ZIP 内的签名。只要后续 Release 复用同一证书，即可保持 Squirrel.Mac 的原地更新身份连续性。
+
+自签名证书只解决更新身份连续性，不提供 Apple 信任链或公证。由于历史版本包含无效的 ad-hoc 签名，首次迁移到重新发布的 `v0.0.5` 需要手动下载并覆盖安装一次；从该版本开始，后续更新可以正常走应用内安装。
 
 ## 仓库结构
 
@@ -247,7 +259,7 @@ pi-studio/
 - MCP resources/templates、prompts、sampling 与 tasks 的专用界面。
 - 插件市场与自动发现。
 - Windows / Linux 支持。
-- Developer ID 签名与 Apple 公证所需的仓库 secrets。
+- Apple Developer ID 签名与公证；当前稳定自签名只保证 Pi Studio 自身更新身份连续。
 
 ## 许可
 

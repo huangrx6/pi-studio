@@ -597,6 +597,14 @@ async function submitConversation(input = {}, options = {}) {
     attachments: input.attachments,
     images: input.images,
   });
+  if (content.some((block) => block?.type === 'image')) {
+    const agent = await conversation.agent(runtime.context);
+    const studioModels = await getStudioModelsRuntime();
+    const model = runtimeModelFor(studioModels.models, agent.model);
+    if (!Array.isArray(model?.input) || !model.input.includes('image')) {
+      throw new Error(`${model?.name || '当前模型'} 不支持图片输入，请切换模型后重试`);
+    }
+  }
   const displayText = String(input.text || '').trim();
   const requestId = typeof input.requestId === 'string' && input.requestId
     ? input.requestId

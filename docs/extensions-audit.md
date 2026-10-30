@@ -1,10 +1,10 @@
 # Pi Studio 扩展与内置能力审查
 
-本文记录 `0.0.3` 开发线上对扩展运行时、声明式 UI、MCP、Skill、权限和九个内置扩展的审查结果。审查目标是可靠加载、明确失败、可热更新、可撤销信任和资源可释放；它不等于对第三方 Node 代码的安全认证。
+本文记录 `0.0.3` 开发线上对扩展运行时、声明式 UI、MCP、Skill、权限和十个内置扩展的审查结果。审查目标是可靠加载、明确失败、可热更新、可撤销信任和资源可释放；它不等于对第三方 Node 代码的安全认证。
 
 ## 结论
 
-- 九个内置扩展已经拆成独立贡献，使用与第三方扩展相同的 Durable registry、依赖、健康状态和卸载生命周期。
+- 十个内置扩展已经拆成独立贡献，使用与第三方扩展相同的 Durable registry、依赖、健康状态和卸载生命周期。
 - `core` 与 `optional` 工具受保护，用户扩展不能通过同名工具替换权限守卫或可选能力。
 - 项目扩展、项目 Skill 和外部路径默认按不可信输入处理；内容变化会使旧信任失效。
 - Agent 扩展仍是受用户信任的本机 Node 代码。当前没有 OS 进程沙箱；需要强隔离时应使用容器、受限账户或系统沙箱。
@@ -15,6 +15,7 @@
 | --- | --- | --- | --- | --- |
 | `builtin:durable-coding-tools` | system | 提供 Pi Durable 官方 `read`、`write`、`edit`、`bash` | 依赖权限守卫；工具身份不可被 `core`/`optional` 冲突静默覆盖；通过真实 Durable registry 测试 | 工具行为以 Pi Durable 1.4 为准 |
 | `builtin:studio-filesystem-tools` | system | 提供工作区内的 `ls`、`find`、`grep` | realpath containment；文件、总字节、结果数量和行长度上限；`grep` 正则进入可终止 Worker | 静态扫描不是内容索引，超限会明确截断 |
+| `builtin:studio-todo` | system | 提供会话级 `todo` 工具和输入框上方计划快照 | Durable conversation document；原子 `createMany`；单调 ID；状态、依赖与循环校验；工具重放幂等；重启和分叉后恢复 | 计划记录执行状态，不替代 Durable Task 的调度与崩溃恢复 |
 | `builtin:studio-harness` | system | 组合编码身份、规则、工具说明、`AGENTS.md`、Skill、工作区和附加指令 | profile 校验与版本化；下一请求边界热刷新；工具 guidance 跟随实际工具集 | 不能保证与 Pi Coding Agent SDK 的模型输出逐次一致 |
 | `builtin:studio-tool-search` | system | 为 deferred MCP 工具提供官方 `tool_search` | tool_search 按需加载；MCP namespace 工具选择；加载结果在后续请求使用 | 需要模型主动发现工具，不能保证每次任务都调用 |
 | `builtin:studio-skills` | system | 把 Agent Skills 元数据注入 Prompt，正文按需读取 | Studio 项目优先、`.agents/skills` 互操作、YAML 校验、整目录指纹、项目显式信任、热重载 | 缺失 description 或解析失败的 Skill 会被跳过并报告诊断 |

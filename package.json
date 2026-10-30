@@ -29,6 +29,8 @@
     "extension": "node tools/cli/pi-studio-extension.mjs",
     "extension:official": "node tools/cli/pi-studio-extension.mjs seal-official extensions",
     "extension:schema": "node tools/cli/generate-extension-schema.mjs",
+    "release:cert": "bash tools/release/create-self-signed-macos-certificate.sh",
+    "release:dist": "bash tools/release/build-signed-macos.sh",
     "qa:memory": "node tools/qa/qa-memory-smoke.mjs",
     "start": "node tools/launch.mjs",
     "test": "node --test tests/electron/*.test.cjs tests/web/*.test.mjs tests/integration/*.test.cjs tests/integration/*.test.mjs",
@@ -51,6 +53,7 @@
     "yaml": "2.9.0"
   },
   "devDependencies": {
+    "@electron/osx-sign": "1.3.1",
     "@types/node": "^22.10.0",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
@@ -67,6 +70,7 @@
   "build": {
     "appId": "dev.pi.studio",
     "productName": "Pi Studio",
+    "afterPack": "tools/release/electron-builder-after-pack.cjs",
     "directories": {
       "output": "release"
     },
@@ -86,7 +90,7 @@
     "mac": {
       "icon": "assets/icon.icns",
       "category": "public.app-category.developer-tools",
-      "hardenedRuntime": true,
+      "hardenedRuntime": false,
       "artifactName": "Pi-Studio-${version}-${arch}.${ext}",
       "target": [
         "dmg",

@@ -37,6 +37,8 @@ export type ModelSelection = {
   effectiveThinkingLevel: Exclude<ThinkingLevel, 'default'>;
   /** Studio 为新对话保存的默认等级，用于推理等级页脚说明。 */
   defaultThinkingLevel: Exclude<ThinkingLevel, 'default'>;
+  /** 当前模型是否接受图片内容；输入框用它提前限制附件类型。 */
+  supportsImages?: boolean;
   /** 该快照属于新对话默认值，还是某条历史会话。 */
   source?: 'default' | 'session';
   /** 当前回合仍在运行：模型已选好，但会从下一轮开始生效。 */

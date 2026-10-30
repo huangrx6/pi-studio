@@ -65,6 +65,7 @@ export function ModelPicker({ selection, scope, disabled, hidden, loadCatalog, o
       thinkingLevels: ['default'],
       effectiveThinkingLevel: 'off',
       defaultThinkingLevel: 'off',
+      supportsImages: false,
     };
   }
   /** 浮层是否打开。 */

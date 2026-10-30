@@ -50,6 +50,7 @@ const TOOL_GUIDANCE = Object.freeze({
   ls: 'Use directory listings to orient before opening files.',
   find: 'Locate files by name when the path is unknown, then read the relevant matches.',
   grep: 'Search definitions and call sites before changing an API or shared behavior.',
+  todo: 'For multi-step work, create a compact plan before implementation, keep one task in progress, and complete it immediately after verification. Skip this tool for simple one-step requests.',
   subagent: 'Delegate only self-contained work. Give the child complete context and incorporate its verified result.',
 });
 

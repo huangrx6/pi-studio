@@ -14,9 +14,9 @@ const { mcpSnapshot } = require('./mcp-runtime.cjs');
 
 const SETTING_KEY = 'studio.agent.tools';
 const SETTING_VERSION_KEY = 'studio.agent.tools.version';
-const SETTING_VERSION = 2;
+const SETTING_VERSION = 3;
 const DEFAULT_AGENT_TOOLS = Object.freeze([
-  'read', 'write', 'edit', 'bash', 'grep', 'find', 'ls', 'tool_search', 'mcp__*',
+  'read', 'write', 'edit', 'bash', 'grep', 'find', 'ls', 'todo', 'tool_search', 'mcp__*',
 ]);
 const MAX_AGENT_TOOLS = 256;
 const RESERVED = new Set(['__proto__', 'prototype', 'constructor']);
@@ -87,9 +87,13 @@ function readAgentToolSelection(db = getStudioDatabase()) {
     return normalizeSelection({ enabled: DEFAULT_AGENT_TOOLS, sources: {} });
   }
   const selection = normalizeSelection(stored);
-  if ((Number(db.getSetting(SETTING_VERSION_KEY, 1)) || 1) < SETTING_VERSION) {
-    if (!selection.enabled.some((name) => name.startsWith('mcp__'))) {
+  const version = Number(db.getSetting(SETTING_VERSION_KEY, 1)) || 1;
+  if (version < SETTING_VERSION) {
+    if (version < 2 && !selection.enabled.some((name) => name.startsWith('mcp__'))) {
       selection.enabled.push('mcp__*');
+    }
+    if (version < 3 && !selection.enabled.some((pattern) => matches(pattern, 'todo'))) {
+      selection.enabled.push('todo');
     }
     db.setSetting(SETTING_KEY, selection);
     db.setSetting(SETTING_VERSION_KEY, SETTING_VERSION);

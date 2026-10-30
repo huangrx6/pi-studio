@@ -209,6 +209,8 @@ Agent 工具白名单保存在应用级 SQLite `studio.agent.tools`。Studio 只
 
 白名单最多 256 项，支持精确名称和 glob。保存后会刷新运行选择；当前请求和已经开始调用保持原样，下一模型请求使用新集合。
 
+内置 `todo` 工具是白名单中的普通 Agent 工具，但它的计划状态保存在 conversation-scoped Durable document `studio.todo`，而不是 Studio SQLite。每次成功的变更原子写入该文档，并把 JSON 安全的公开快照放进工具结果 `details`；renderer 只读取最新结果并显示在输入框上方。任务 ID 单调递增，`createMany` 原子提交，依赖必须存在且不能成环。该文档随会话分叉和恢复，不替代 Durable task graph。
+
 ## 8. Skill
 
 ### 8.1 发现位置与优先级

@@ -3,7 +3,7 @@ node_modules/
 
 # Build output
 web-dist/
-release/
+/release/
 dist/
 
 # Package manager
@@ -27,3 +27,6 @@ Thumbs.db
 # Env files may contain API keys — never commit
 .env
 .env.*
+
+# Local macOS release-signing material — never commit
+.release-signing/

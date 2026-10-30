@@ -18,6 +18,7 @@ const {
 } = require('./mode.cjs');
 const { createStudioHarnessExtension, renderSection } = require('./studio-harness.cjs');
 const { skillInstructions } = require('./studio-skills.cjs');
+const { createStudioTodoExtension } = require('./studio-todo.cjs');
 const {
   METRICS_FOOTER_SOURCE_ID,
   METRICS_SOURCE_ID,
@@ -54,6 +55,20 @@ const BUILTIN_MANIFESTS = Object.freeze([
     requires: ['builtin:studio-permissions'],
     contributes: {
       tools: ['ls', 'find', 'grep'].map((name) => ({ name })),
+    },
+  },
+  {
+    id: 'studio-todo',
+    tier: 'system',
+    name: 'Studio 任务计划',
+    version: '1.0.0',
+    description: '为多步骤工作创建可恢复的任务计划，并在对话输入框上方持续显示进度。',
+    runtimeName: 'studio-todo',
+    runtimeNames: ['studio-todo'],
+    permissions: ['agent.tools'],
+    requires: ['builtin:studio-permissions'],
+    contributes: {
+      tools: [{ name: 'todo', description: '创建和维护当前会话的任务计划。' }],
     },
   },
   {
@@ -1623,6 +1638,7 @@ function createStudioBuiltins({
   return new Map([
     ['builtin:durable-coding-tools', codingTools],
     ['builtin:studio-filesystem-tools', createFilesystemTools(durable, piAi)],
+    ['builtin:studio-todo', createStudioTodoExtension(durable, piAi)],
     ['builtin:studio-harness', createStudioHarnessExtension(durable)],
     ['builtin:studio-tool-search', toolSearch],
     ['builtin:studio-skills', createSkillsExtension(durable)],
