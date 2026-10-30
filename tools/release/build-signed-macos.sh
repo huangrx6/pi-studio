@@ -42,13 +42,12 @@ security create-keychain -p "$keychain_password" "$keychain"
 security unlock-keychain -p "$keychain_password" "$keychain"
 security set-keychain-settings -lut 21600 "$keychain"
 security import "$certificate" \
+  -f pkcs12 \
   -k "$keychain" \
   -P "$certificate_password" \
-  -T /usr/bin/codesign \
-  -T /usr/bin/security \
-  -T /usr/bin/productbuild
+  -T /usr/bin/codesign
 security set-key-partition-list \
-  -S apple-tool:,apple: \
+  -S apple-tool:,apple:,codesign: \
   -s \
   -k "$keychain_password" \
   "$keychain" >/dev/null
