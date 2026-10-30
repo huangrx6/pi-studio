@@ -11,6 +11,10 @@ try {
   const errors = []; page.on('pageerror', error => { errors.push(error.message); console.log(error.message); });
   await page.route('**/popover-preview', route => route.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><meta charset="UTF-8"></head><body style="overflow:auto;height:auto"><div id="fixture"></div><script type="module">
     import RefreshRuntime from '/@react-refresh'; RefreshRuntime.injectIntoGlobalHook(window); window.$RefreshReg$ = () => {}; window.$RefreshSig$ = () => (type) => type; window.__vite_plugin_react_preamble_installed__ = true;
+    await import('/@fs/${process.cwd()}/node_modules/yet-another-react-lightbox/dist/styles.css');
+    await import('/@fs/${process.cwd()}/node_modules/yet-another-react-lightbox/dist/plugins/captions/captions.css');
+    await import('/@fs/${process.cwd()}/node_modules/yet-another-react-lightbox/dist/plugins/counter/counter.css');
+    await import('/@fs/${process.cwd()}/node_modules/yet-another-react-lightbox/dist/plugins/thumbnails/thumbnails.css');
     await import('/src/styles/tokens.css'); await import('/src/styles/palette.css'); await import('/src/app.css');
     const React = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react.js')).default;
     const { createRoot } = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react-dom_client.js')).default;
@@ -76,16 +80,73 @@ try {
   assert.equal(await card.getByText('src/component-0.tsx', {exact:true}).count(), 0, 'read-only paths excluded');
   const fonts = await page.locator('.assistant-response').filter({ has: page.locator('h2') }).first().locator('.markdown').evaluate(node => [getComputedStyle(node.querySelector('h2')).fontFamily, getComputedStyle(node.querySelector('p')).fontFamily]);
   assert.equal(fonts[0], fonts[1]);
+  const standaloneThinking = page.locator('.standalone-thinking .activity-thinking').first();
+  const thinkingLabelBox = await standaloneThinking.locator('.activity-thinking-label').boundingBox();
+  await standaloneThinking.locator('summary').click();
+  await page.waitForTimeout(220);
+  const thinkingBodyBox = await standaloneThinking.locator('.activity-thinking-body .markdown p').first().boundingBox();
+  assert.ok(thinkingLabelBox && thinkingBodyBox && Math.abs(thinkingLabelBox.x - thinkingBodyBox.x) <= 1, 'standalone thinking body aligns with its label');
+  await standaloneThinking.locator('summary').click();
+  await page.waitForTimeout(220);
   const icon = await page.locator('.run-history .activity-tool').first().evaluate(node => ({border:getComputedStyle(node).borderWidth,shadow:getComputedStyle(node).boxShadow}));
   assert.equal(icon.border, '0px'); assert.equal(icon.shadow, 'none');
+  const runHistory = page.locator('.run-history').first();
+  const runHistorySummary = runHistory.locator(':scope > summary');
+  const historyList = runHistory.locator('.run-history-list');
+  const historyImages = page.locator('.run-history-images');
   assert.equal(await page.locator('.activity-tool-image-count').count(), 1, 'tool summaries identify image-bearing tool results');
-  assert.equal(await page.locator('.run-history .conversation-image-tile').count(), 1, 'expanded traces render screenshot results');
-  await page.locator('.run-history > summary').click();
+  assert.equal(await historyList.count(), 1, 'trace content stays mounted before collapsing');
+  assert.equal(await historyImages.locator('.conversation-image-gallery').count(), 1, 'trace renders one shared screenshot gallery');
+  const assistantContentBox = await page.locator('.assistant-turn-main').first().boundingBox();
+  const collapsedTileBox = await historyImages.locator('.conversation-image-tile').boundingBox();
+  assert.ok(assistantContentBox && collapsedTileBox && Math.abs(assistantContentBox.x - collapsedTileBox.x) <= 1, `expanded screenshot columns align with the assistant content edge (${assistantContentBox?.x} vs ${collapsedTileBox?.x})`);
+  const summaryBefore = await runHistory.evaluate(node => ({
+    x: node.getBoundingClientRect().x,
+    top: node.querySelector(':scope > summary').offsetTop,
+  }));
+  await runHistorySummary.click();
   await page.locator('.run-history:not([open])').waitFor();
-  await page.locator('.run-history-images .conversation-image-tile').waitFor();
-  assert.equal(await page.locator('.run-history-images .conversation-image-tile').count(), 1, 'collapsed traces keep screenshot thumbnails visible');
-  await page.locator('.run-history > summary').click();
+  await page.waitForTimeout(220);
+  assert.equal(await historyList.count(), 1, 'trace content remains mounted while collapsed');
+  const closedTraceState = await runHistory.evaluate(node => {
+    const content = getComputedStyle(node, '::details-content');
+    return { open: node.open, blockSize: content.blockSize, opacity: content.opacity };
+  });
+  assert.equal(closedTraceState.open, false);
+  assert.equal(closedTraceState.blockSize, '0px', 'collapsed trace content has zero block size');
+  assert.equal(closedTraceState.opacity, '0', 'collapsed trace content is visually hidden');
+  assert.equal(await historyImages.locator('.conversation-image-tile').count(), 1, 'collapsed traces keep screenshot thumbnails visible');
+  const summaryAfter = await runHistory.evaluate(node => ({
+    x: node.getBoundingClientRect().x,
+    top: node.querySelector(':scope > summary').offsetTop,
+  }));
+  const collapsedAfterTileBox = await historyImages.locator('.conversation-image-tile').boundingBox();
+  assert.ok(Math.abs(summaryBefore.x - summaryAfter.x) <= .5 && Math.abs(summaryBefore.top - summaryAfter.top) <= .5, 'opening and collapsing does not move the trace header');
+  assert.ok(assistantContentBox && collapsedAfterTileBox && Math.abs(assistantContentBox.x - collapsedAfterTileBox.x) <= 1, `collapsed screenshot columns align with the assistant content edge (${assistantContentBox?.x} vs ${collapsedAfterTileBox?.x})`);
+  await page.screenshot({path:output+'trajectory-collapsed.png',fullPage:true,animations:'disabled'});
+  await runHistorySummary.click();
   await page.locator('.run-history[open]').waitFor();
+  await page.waitForTimeout(220);
+  assert.equal(await historyImages.locator('.conversation-image-gallery').count(), 1, 'screenshot gallery is never duplicated during expansion');
+  const detailsTransition = await runHistory.evaluate(node => getComputedStyle(node, '::details-content').transitionDuration);
+  assert.notEqual(detailsTransition, '0s', 'trace content uses the shared smooth details transition');
+  const firstTraceTool = runHistory.locator('.activity-tool').first();
+  const toolIconBefore = await firstTraceTool.evaluate(node => {
+    const icon = node.querySelector('.activity-tool-icon').getBoundingClientRect();
+    const summary = node.querySelector(':scope > summary').getBoundingClientRect();
+    return { viewportX: icon.x, centerOffset: icon.y + icon.height / 2 - summary.y };
+  });
+  await firstTraceTool.locator('summary').click();
+  await page.waitForTimeout(220);
+  const toolIconAfter = await firstTraceTool.evaluate(node => {
+    const icon = node.querySelector('.activity-tool-icon').getBoundingClientRect();
+    const summary = node.querySelector(':scope > summary').getBoundingClientRect();
+    return { viewportX: icon.x, centerOffset: icon.y + icon.height / 2 - summary.y };
+  });
+  assert.ok(Math.abs(toolIconBefore.viewportX - toolIconAfter.viewportX) <= 1.5, `opening a tool row keeps its icon fixed horizontally (${JSON.stringify(toolIconBefore)} vs ${JSON.stringify(toolIconAfter)})`);
+  assert.ok(Math.abs(toolIconBefore.centerOffset - toolIconAfter.centerOffset) <= .5, 'opening a tool row keeps its icon vertically centered');
+  await firstTraceTool.locator('summary').click();
+  await page.waitForTimeout(220);
   const imageStrip = page.locator('.assistant-turn-main > .conversation-image-gallery .conversation-image-strip').first();
   await imageStrip.waitFor();
   assert.equal(await imageStrip.locator('.conversation-image-tile').count(), 7, 'consecutive image blocks render as one gallery');
@@ -112,17 +173,42 @@ try {
   assert.ok(imageLayout.tiles.every(tile => tile.imageWidth <= tile.width && tile.imageHeight <= tile.height));
   assert.ok(imageLayout.tiles.every(tile => tile.objectFit === 'contain'));
   await page.screenshot({path:output+'image-gallery.png',fullPage:true,animations:'disabled'});
-  await imageStrip.locator('.conversation-image-tile').first().click();
-  const imagePreview = page.getByRole('dialog', {name:'查看第 1 张图片，共 7 张'});
+  const firstImageTrigger = imageStrip.locator('.conversation-image-tile').first();
+  await firstImageTrigger.click();
+  const imagePreview = page.getByRole('dialog', {name:'图片预览'});
   await imagePreview.waitFor();
   await page.screenshot({path:output+'image-preview.png',animations:'disabled'});
-  await page.keyboard.press('ArrowRight');
+  for (const label of ['下载图片', '进入全屏', '放大', '缩小', '隐藏缩略图', '关闭图片预览']) {
+    assert.equal(await imagePreview.getByRole('button', {name:label}).count(), 1, `lightbox exposes ${label}`);
+  }
+  const thumbnailNavigation = imagePreview.getByRole('navigation', {name:'图片缩略图'});
+  const renderedThumbnailCount = await thumbnailNavigation.locator('.yarl__thumbnails_thumbnail').count();
+  assert.ok(renderedThumbnailCount >= 3 && renderedThumbnailCount <= 7, `lightbox renders a navigable window of thumbnails (${renderedThumbnailCount})`);
+  assert.equal(await imagePreview.getByText('第 1 张，共 7 张', {exact:true}).count(), 1, 'lightbox shows the localized caption');
+  await imagePreview.getByRole('button', {name:'放大'}).click();
+  await page.waitForTimeout(260);
+  const zoomTransform = await imagePreview.locator('.yarl__slide_current .yarl__slide_wrapper').evaluate(node => getComputedStyle(node).transform);
+  assert.notEqual(zoomTransform, 'none', 'lightbox zoom control transforms the active image');
+  await imagePreview.getByRole('button', {name:'缩小'}).click();
+  await page.waitForTimeout(260);
+  assert.equal(
+    await imagePreview.locator('.yarl__slide_current .yarl__slide_wrapper').evaluate(node => getComputedStyle(node).transform),
+    'matrix(1, 0, 0, 1, 0, 0)',
+    'zoom out restores the active image to its fitted size',
+  );
+  await imagePreview.getByRole('button', {name:'隐藏缩略图'}).click();
+  assert.equal(await thumbnailNavigation.isVisible(), false, 'thumbnail navigator can be collapsed');
+  await imagePreview.getByRole('button', {name:'显示缩略图'}).click();
+  await thumbnailNavigation.waitFor();
+  await imagePreview.locator('.yarl__container').press('ArrowRight');
+  await page.waitForTimeout(260);
   assert.equal(await page.getByText('2 / 7', {exact:true}).count(), 1);
   await page.keyboard.press('Escape');
-  assert.equal(await imagePreview.count(), 0, 'Escape closes the image preview');
+  await imagePreview.waitFor({state:'detached'});
+  assert.equal(await firstImageTrigger.evaluate(node => document.activeElement === node), true, 'closing the lightbox restores focus to the trigger');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await imageStrip.locator('.conversation-image-tile').nth(1).click();
-  await page.getByRole('dialog', {name:'查看第 2 张图片，共 7 张'}).waitFor();
+  await page.getByRole('dialog', {name:'图片预览'}).waitFor();
   await page.screenshot({path:output+'image-preview-dark.png',animations:'disabled'});
   await page.keyboard.press('Escape');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });

@@ -113,8 +113,9 @@ type FlatBlock = { block: ContentBlock; key: string };
  * @param call 工具调用块
  * @param result 已配对的 toolResult 消息（可能尚未到达）
  * @param busy 当前会话是否仍在运行，控制加载图标动画
+ * @param showImages 是否在工具详情内展示图片；执行轨迹由分组统一展示，避免重复
  */
-function ActivityTool({ call, result, busy }: { call: ToolCallBlock; result?: ChatMessage; busy: boolean }) {
+function ActivityTool({ call, result, busy, showImages = true }: { call: ToolCallBlock; result?: ChatMessage; busy: boolean; showImages?: boolean }) {
   const failed = Boolean(result?.isError);
   const done = Boolean(result);
   const summary = toolSummary(call);
@@ -134,7 +135,7 @@ function ActivityTool({ call, result, busy }: { call: ToolCallBlock; result?: Ch
       <pre className="activity-tool-code">{JSON.stringify(call.arguments, null, 2)}</pre>
       {result && <>
         <div className="activity-tool-label">结果</div>
-        <MessageImages blocks={result.content} />
+        {showImages && <MessageImages blocks={result.content} />}
         {resultText && <pre className={`activity-tool-code ${failed ? 'is-error' : ''}`}>{resultText}</pre>}
       </>}
     </div>
@@ -275,12 +276,12 @@ function ActivityGroup({ entries, results, live, stepDisplay, stepCollapse }: {
         <span className="run-history-title">{count ? `${count} 项工具操作` : '推理记录'}</span>
         {resultImages.length > 0 && <span className="run-history-image-count"><ImageIcon />{resultImages.length} 张截图</span>}
       </summary>
-      {open && <div className="run-history-list">{entries.map(entry => <div className={`run-history-row is-${entry.kind}`} key={entry.key}>
-        {entry.kind === 'tool' && <ActivityTool call={entry.call} result={results.get(entry.call.id)} busy={false} />}
+      <div className="run-history-list">{entries.map(entry => <div className={`run-history-row is-${entry.kind}`} key={entry.key}>
+        {entry.kind === 'tool' && <ActivityTool call={entry.call} result={results.get(entry.call.id)} busy={false} showImages={false} />}
         {entry.kind === 'thinking' && <ActivityThinking block={entry.block} />}
-      </div>)}</div>}
+      </div>)}</div>
     </details>
-    {!open && resultImages.length > 0 && <div className="run-history-images">
+    {resultImages.length > 0 && <div className="run-history-images">
       <ConversationImageGallery images={resultImages} />
     </div>}
   </>;

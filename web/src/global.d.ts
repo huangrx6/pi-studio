@@ -30,6 +30,7 @@ import type {
   ConversationSubmitResult,
   ConversationSummary,
   ConversationTaskGraph,
+  LongTaskState,
 } from './types/durable-types';
 import type { BackgroundMedia } from './lib/preferences';
 import type { UpdateSnapshot } from './types/update-types';
@@ -277,7 +278,7 @@ declare global {
       confirmResponse(payload: PermissionConfirmResponse): void;
       /** 读取侧边栏工作区/会话列表、当前模型与工作目录。 */
       state(cwd?: string): Promise<{ workspaces: PiWorkspace[]; model: ModelSelection; cwd: string }>;
-      /** 新建一条 Durable 会话；长期任务只是 Studio 的会话投影类型。 */
+      /** 新建一条 Durable 会话；长期任务同时启用持久目标续跑。 */
       createConversation(payload: {
         cwd: string;
         kind?: ConversationKind;
@@ -309,10 +310,10 @@ declare global {
       conversationAction(payload: {
         kind: 'workspace' | 'session';
         id: string;
-        action: 'rename' | 'remove' | 'pin' | 'archive' | 'fork';
+        action: 'rename' | 'remove' | 'pin' | 'archive' | 'fork' | 'long-task-pause' | 'long-task-resume';
         name?: string;
         entryId?: string;
-      }): Promise<ConversationSummary | { ok: boolean }>;
+      }): Promise<ConversationSummary | { ok: boolean; longTask?: LongTaskState; wasRunning?: boolean }>;
       conversationTaskGraph(id: string): Promise<ConversationTaskGraph>;
       /** 读取当前会话的子 Agent 总览，包含已完成记录与实时快照。 */
       sessionSubagents(id: string): Promise<SubagentChild[]>;

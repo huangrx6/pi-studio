@@ -46,6 +46,7 @@ import { AssistantTurnView, ChatMessageView } from './components/ChatMessage';
 import { ComposerImageAttachment } from './components/ComposerImageAttachment';
 import { ComposerFeedback } from './components/ComposerFeedback';
 import { TodoDock } from './components/TodoDock';
+import { LongTaskDock } from './components/LongTaskDock';
 import { QueuedMessages, type QueuedPreview } from './components/QueuedMessages';
 import { DetailDialog } from './components/DetailDialog';
 import { ProviderIcon } from './components/ProviderIcon';
@@ -74,6 +75,7 @@ import {
 } from './components/SettingsResourceCard';
 import type { AgentToolSelection } from './types/agent-tool-types';
 import type { SubagentChild, SubagentTranscript } from './types/subagent-types';
+import type { LongTaskState } from './types/durable-types';
 import { ModelPicker, type ModelPickerRequest } from './components/ModelPicker';
 import { WorkspacePicker } from './components/WorkspacePicker';
 import { ConversationKindSwitch } from './components/ConversationKindSwitch';
@@ -579,11 +581,13 @@ export function App() {
   const [draggingItem, setDraggingItem] = useState<DragItem | null>(null);
   const [justDropped, setJustDropped] = useState<string | null>(null);
   const [draftKind, setDraftKind] = useState<SessionKind>('conversation');
+  const [longTaskBusy, setLongTaskBusy] = useState(false);
   const [session, setSession] = useState<{
     id: string;
     cwd: string;
     title: string;
     kind?: SessionKind;
+    longTask?: LongTaskState;
     turnDiffs?: TurnDiff[];
     hasMore?: boolean;
     pageCursor?: string;
@@ -1949,6 +1953,11 @@ export function App() {
         ...snapshot.model,
         pending: snapshot.running && current.modelRef !== snapshot.model.modelRef,
       }));
+      if (snapshot.longTask) {
+        setSession((current) => current?.id === conversationId
+          ? { ...current, longTask: snapshot.longTask }
+          : current);
+      }
       if (snapshot.requestId) requestRef.current = snapshot.requestId;
       if (snapshot.generation && snapshot.generation.role === 'assistant') {
         schedule({ ...snapshot.generation, streaming: true }, 'message_update');
@@ -1966,6 +1975,11 @@ export function App() {
       void loadState();
       void window.piApi.conversationSnapshot(conversationId).then((snapshot) => {
         if (!disposed && snapshot?.model) setModelSelection(snapshot.model);
+        if (!disposed && snapshot?.longTask) {
+          setSession((current) => current?.id === conversationId
+            ? { ...current, longTask: snapshot.longTask }
+            : current);
+        }
       }).catch(() => {});
       void refreshOutline(conversationId).then((outline) => {
         if (!outline || disposed) return;
@@ -2557,6 +2571,7 @@ export function App() {
         cwd: detail.cwd,
         title: detail.title,
         kind: detail.kind ?? item.kind ?? 'conversation',
+        longTask: detail.longTask,
         turnDiffs: detail.turnDiffs,
         hasMore: detail.page.hasOlder,
         pageCursor: detail.page.nextCursor,
@@ -3503,6 +3518,7 @@ export function App() {
           cwd: saved.cwd,
           title: saved.title,
           kind: saved.kind ?? session?.kind ?? draftKind,
+          longTask: saved.longTask,
           turnDiffs: saved.turnDiffs,
           hasMore: saved.page.hasOlder,
           pageCursor: saved.page.nextCursor,
@@ -3598,7 +3614,13 @@ export function App() {
       }
       catch (error) { setError(errorText(error)); return; }
       if (sessionLoadRef.current !== draftGeneration) return;
-      current = { id: created.id, cwd: created.cwd, title: created.title, kind: created.kind ?? draftKind };
+      current = {
+        id: created.id,
+        cwd: created.cwd,
+        title: created.title,
+        kind: created.kind ?? draftKind,
+        longTask: created.longTask,
+      };
       setSession(current);
       setDraftKind(created.kind ?? draftKind);
       setMessages([]);
@@ -3654,6 +3676,41 @@ export function App() {
     queuedDrainSessionsRef.current.delete(sessionId);
   }
 
+  async function changeLongTaskStatus(action: 'long-task-pause' | 'long-task-resume') {
+    const currentSession = sessionRef.current;
+    if (!currentSession?.id || currentSession.kind !== 'durable' || longTaskBusy) return;
+    const sessionId = currentSession.id;
+    setLongTaskBusy(true);
+    try {
+      const result = await window.piApi.conversationAction({
+        kind: 'session',
+        id: sessionId,
+        action,
+      });
+      if (sessionRef.current?.id !== sessionId) return;
+      if ('longTask' in result && result.longTask) {
+        setSession((current) => current?.id === sessionId
+          ? { ...current, longTask: result.longTask }
+          : current);
+      }
+      if (action === 'long-task-resume') {
+        setBusy(true);
+        setError(null);
+      } else {
+        setMessages((current) => current.map((message) => ({ ...message, streaming: false })));
+        setBusy(false);
+        setError(null);
+        requestRef.current = '';
+      }
+      await loadState();
+      void refreshSubagentChildren(false).catch(() => {});
+    } catch (error) {
+      if (sessionRef.current?.id === sessionId) setError(errorText(error));
+    } finally {
+      setLongTaskBusy(false);
+    }
+  }
+
   async function stopGeneration() {
     const currentSession = sessionRef.current;
     if (!currentSession?.id || stopping || !turnActive) return;
@@ -3671,6 +3728,14 @@ export function App() {
       await Promise.all([
         loadState().catch(() => {}),
         refreshSubagentChildren(false).catch(() => {}),
+        window.piApi.conversationSnapshot(sessionId).then((snapshot) => {
+          const longTask = snapshot?.longTask;
+          if (sessionRef.current?.id === sessionId && longTask) {
+            setSession((current) => current?.id === sessionId
+              ? { ...current, longTask }
+              : current);
+          }
+        }).catch(() => {}),
       ]);
     } catch (cause) {
       if (sessionRef.current?.id === sessionId) setError(errorText(cause));
@@ -4732,6 +4797,14 @@ export function App() {
         />}
         {/* 输入区：计划、排队消息、附件与命令菜单 */}
         <div className="composer-dock" hidden={agentView.kind !== 'conversation'}>
+          {!isNewConversation && currentSessionKind === 'durable' && (
+            <LongTaskDock
+              state={session?.longTask}
+              running={turnActive}
+              busy={longTaskBusy}
+              onChange={(action) => void changeLongTaskStatus(action)}
+            />
+          )}
           {(todoDetails || todoPanelOpen) && <TodoDock details={todoDetails} open={todoPanelOpen} onToggle={() => setTodoPanelOpen((value) => !value)} />}
           {queuedPrompts.length > 0 && <QueuedMessages items={queuedPreviews} onEdit={editQueued} onDelete={deleteQueued} onSendNow={(id) => void sendQueuedNow(id)} onSendAll={() => void sendAllQueued()} onReorder={reorderQueued} />}
           {isNewConversation && <div className="new-conversation-intro">

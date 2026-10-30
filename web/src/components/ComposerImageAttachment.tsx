@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Maximize2, X } from 'lucide-react';
 import {
   ConversationImagePreview,
@@ -21,7 +21,6 @@ export function ComposerImageAttachment({
   onRemove: () => void;
 }) {
   const image = images[index];
-  const triggerRef = useRef<HTMLButtonElement>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
   if (!image) return null;
@@ -29,7 +28,6 @@ export function ComposerImageAttachment({
   return <>
     <div className="composer-attachment is-image">
       <button
-        ref={triggerRef}
         type="button"
         className="composer-image-preview-trigger"
         aria-label={`放大预览图片 ${index + 1}${image.alt ? `：${image.alt}` : ''}`}
@@ -50,7 +48,6 @@ export function ComposerImageAttachment({
     {activeIndex !== null && <ConversationImagePreview
       images={images}
       index={activeIndex}
-      returnFocus={triggerRef.current}
       onClose={() => setActiveIndex(null)}
       onIndexChange={setActiveIndex}
     />}

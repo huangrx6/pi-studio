@@ -279,7 +279,9 @@
           <div class="doc-copy">
             <p>
               新会话入口把「对话 / 长期任务」做成轻量切换。提交时 Studio 创建同一种 Durable conversation；
-              长期任务额外携带 goal 与任务投影，因此可以从长期任务视图查看进展，而普通对话保持轻量。
+              长期任务会把第一条目标描述、完成条件和执行状态写入 Durable document。只要目标仍处于执行中，
+              Studio 就通过 Durable 原生 <code>GenerationTask.onYield</code> 开始下一轮，直到模型报告已验证完成、
+              明确阻塞，或用户暂停目标；普通对话在单次回答后保持空闲。
             </p>
             <div class="table-wrap">
               <table class="doc-table">

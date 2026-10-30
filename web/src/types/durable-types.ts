@@ -3,6 +3,30 @@ import type { ModelSelection } from './model-types';
 
 export type ConversationKind = 'conversation' | 'durable';
 
+export type LongTaskStatus =
+  | 'idle'
+  | 'active'
+  | 'paused'
+  | 'blocked'
+  | 'completed'
+  | 'failed';
+
+export type LongTaskState = {
+  enabled: boolean;
+  goal: string;
+  completionCriteria: string;
+  status: LongTaskStatus;
+  iteration: number;
+  lastProgress: string;
+  nextStep: string;
+  completionSummary: string;
+  blockReason: string;
+  createdAt: number;
+  updatedAt: number;
+  completedAt: number;
+  blockedAt: number;
+};
+
 export type ConversationSummary = {
   id: string;
   cwd: string;
@@ -15,6 +39,7 @@ export type ConversationSummary = {
   updatedAt: number;
   messageCount?: number;
   running?: boolean;
+  longTask?: LongTaskState;
 };
 
 export type ConversationPageCursor = string;

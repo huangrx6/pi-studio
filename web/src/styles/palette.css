@@ -121,6 +121,8 @@
 
   --scrim: rgb(0 0 0 / 24%);
   --image-preview-scrim: rgb(0 0 0 / 72%);
+  --image-preview-title-fg: rgb(255 255 255 / 92%);
+  --image-preview-muted-fg: rgb(255 255 255 / 64%);
   --overlay-surface: rgb(255 255 255 / 97%);
   --scrollbar: #c9c9c9;
   --scrollbar-hover: #969696;

@@ -11,6 +11,7 @@ const { getStudioDatabase } = require('../core/studio-db.cjs');
 const { getDurableRuntime } = require('./durable-runtime.cjs');
 const { extensionHostSnapshot, runtimeExtensionName } = require('./studio-extensions.cjs');
 const { mcpSnapshot } = require('./mcp-runtime.cjs');
+const { LONG_TASK_EXTENSION_NAME, LONG_TASK_TOOL_NAME } = require('./studio-long-task.cjs');
 
 const SETTING_KEY = 'studio.agent.tools';
 const SETTING_VERSION_KEY = 'studio.agent.tools.version';
@@ -242,7 +243,7 @@ async function enabledRuntimeToolNames() {
   return installed.filter((name) => selected.enabled.some((pattern) => matches(pattern, name)));
 }
 
-async function runtimeSelection() {
+async function runtimeSelection(options = {}) {
   const runtime = await getDurableRuntime();
   const snapshot = runtime.registry.snapshot();
   const extensionSnapshot = extensionHostSnapshot();
@@ -253,6 +254,12 @@ async function runtimeSelection() {
       ? row.manifest?.runtimeNames || [row.manifest?.runtimeName || row.id]
       : [runtimeExtensionName(row.id)];
   }));
+  // The extension is core so its implementation cannot be replaced, but its
+  // continuation hook and model tool are only selected for long-running goals.
+  activeRuntimeNames.delete(LONG_TASK_EXTENSION_NAME);
+  if (options.kind === 'durable' && snapshot.extension(LONG_TASK_EXTENSION_NAME)) {
+    activeRuntimeNames.add(LONG_TASK_EXTENSION_NAME);
+  }
   const selected = readAgentToolSelection();
   const enabledMcpEntries = snapshot.tools().filter(({ extension, tool }) => (
     extension.name.startsWith('studio-mcp:')
@@ -274,6 +281,10 @@ async function runtimeSelection() {
       && (
         selected.enabled.some((pattern) => matches(pattern, tool.name))
         || (needsToolSearch && tool.name === 'tool_search')
+        || (
+          extension.name === LONG_TASK_EXTENSION_NAME
+          && tool.name === LONG_TASK_TOOL_NAME
+        )
       )
     ))
     .map(({ tool }) => tool);

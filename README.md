@@ -50,7 +50,7 @@ xattr -cr "/Applications/Pi Studio.app"
 
 ### Durable 会话与工作区
 
-普通对话和长期任务共用同一条 Durable 会话链路。Studio 在 SQLite 中保存标题、工作区、置顶、归档和长期任务投影；Durable 保存 transcript、task、document、usage 与 live state。流式输出、thinking、工具调用、中断和分叉都由 Durable 事件驱动。
+普通对话和长期任务共用同一条 Durable 会话链路。Studio 在 SQLite 中保存标题、工作区、置顶、归档和长期任务侧边栏投影；目标正文、完成条件与执行状态保存在 Durable document 中。长期任务通过原生 `GenerationTask.onYield` 继续执行，直到目标完成、阻塞或用户暂停。Durable 同时保存 transcript、task、usage 与 live state，流式输出、thinking、工具调用、中断和分叉都由 Durable 事件驱动。
 
 会话历史按页加载，右侧大纲始终基于完整会话；向上滚动接近顶部时才继续补载。多工作区切换、文件树、可调宽预览、按回合汇总的 Git 差异、`@` 文件引用和附件上传都在同一桌面界面中完成。
 

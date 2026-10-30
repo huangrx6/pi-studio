@@ -29,6 +29,7 @@ function schemaFactory() {
 function fakeDurable(configured) {
   return {
     ToolTask: { name: 'ToolTask' },
+    GenerationTask: { name: 'GenerationTask' },
     LiveDoc: { kind: 'pi.live' },
     defineDoc: (definition) => definition,
     defineTask: (definition) => definition,
@@ -888,7 +889,11 @@ test('built-in responsibilities use independent runtimes and explicit dependency
   );
   assert.equal(
     BUILTIN_MANIFESTS.filter((manifest) => manifest.tier === 'core').length,
-    1,
+    2,
+  );
+  assert.deepEqual(
+    BUILTIN_MANIFESTS.find((manifest) => manifest.id === 'studio-long-task').permissions,
+    ['agent.tools', 'agent.sections', 'agent.hooks'],
   );
   assert.equal(
     BUILTIN_MANIFESTS.find((manifest) => manifest.id === 'studio-metrics').tier,

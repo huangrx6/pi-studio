@@ -19,6 +19,7 @@ const {
 const { createStudioHarnessExtension, renderSection } = require('./studio-harness.cjs');
 const { skillInstructions } = require('./studio-skills.cjs');
 const { createStudioTodoExtension } = require('./studio-todo.cjs');
+const { createLongTaskExtension } = require('./studio-long-task.cjs');
 const {
   METRICS_FOOTER_SOURCE_ID,
   METRICS_SOURCE_ID,
@@ -69,6 +70,23 @@ const BUILTIN_MANIFESTS = Object.freeze([
     requires: ['builtin:studio-permissions'],
     contributes: {
       tools: [{ name: 'todo', description: '创建和维护当前会话的任务计划。' }],
+    },
+  },
+  {
+    id: 'studio-long-task',
+    tier: 'core',
+    name: 'Studio 长期目标',
+    version: '1.0.0',
+    description: '持久保存长期目标、完成条件与执行状态，并由 Durable GenerationTask 在目标完成或阻塞前持续执行。',
+    runtimeName: 'studio-long-task',
+    runtimeNames: ['studio-long-task'],
+    permissions: ['agent.tools', 'agent.sections', 'agent.hooks'],
+    requires: ['builtin:studio-permissions'],
+    contributes: {
+      tools: [{
+        name: 'long_task',
+        description: '记录长期目标的实质进展、已验证完成或阻塞原因。',
+      }],
     },
   },
   {
@@ -1639,6 +1657,7 @@ function createStudioBuiltins({
     ['builtin:durable-coding-tools', codingTools],
     ['builtin:studio-filesystem-tools', createFilesystemTools(durable, piAi)],
     ['builtin:studio-todo', createStudioTodoExtension(durable, piAi)],
+    ['builtin:studio-long-task', createLongTaskExtension(durable, piAi)],
     ['builtin:studio-harness', createStudioHarnessExtension(durable)],
     ['builtin:studio-tool-search', toolSearch],
     ['builtin:studio-skills', createSkillsExtension(durable)],

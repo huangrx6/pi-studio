@@ -17,7 +17,7 @@ const PRESET_DEFAULTS = Object.freeze({
   smart: 'ask',
   full: 'allow',
 });
-const SAFE_TOOLS = new Set(['read', 'ls', 'find', 'grep', 'tool_search']);
+const SAFE_TOOLS = new Set(['read', 'ls', 'find', 'grep', 'tool_search', 'long_task']);
 const PATH_TOOLS = new Set(['read', 'write', 'edit', 'ls', 'find', 'grep']);
 const MAX_TOOL_ENTRIES = 256;
 const MAX_RULES = 128;
