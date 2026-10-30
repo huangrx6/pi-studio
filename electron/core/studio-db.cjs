@@ -21,10 +21,11 @@ const {
 } = require('./thinking-levels.cjs');
 
 const DATABASE_NAME = 'pi-studio.sqlite';
-const SCHEMA_VERSION = 11;
+const SCHEMA_VERSION = 12;
 const USAGE_REQUEST_LEDGER_LIMIT = 8_192;
 const USAGE_REQUEST_PRUNE_BATCH = 256;
 const METRIC_REQUEST_HISTORY_LIMIT = 8;
+const REQUEST_TRACE_HISTORY_LIMIT = 48;
 
 function json(value, fallback) {
   if (value === undefined || value === null || value === '') return fallback;
@@ -363,6 +364,16 @@ class StudioDatabase {
         );
         CREATE INDEX IF NOT EXISTS conversation_metric_requests_conversation_idx
           ON conversation_metric_requests(conversation_id, finished_at DESC);
+
+        CREATE TABLE IF NOT EXISTS conversation_request_traces (
+          conversation_id TEXT NOT NULL,
+          request_id TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          payload TEXT NOT NULL,
+          PRIMARY KEY (conversation_id, request_id)
+        );
+        CREATE INDEX IF NOT EXISTS conversation_request_traces_conversation_idx
+          ON conversation_request_traces(conversation_id, created_at DESC);
       `);
 
       const conversationColumns = new Set(
@@ -732,6 +743,12 @@ class StudioDatabase {
       this.db.prepare(
         'DELETE FROM conversation_metric_requests WHERE conversation_id = ? OR conversation_id = ?',
       ).run(current.id, current.publicId);
+      this.db.prepare(
+        'DELETE FROM conversation_request_traces WHERE conversation_id = ?',
+      ).run(current.id);
+      this.db.prepare(
+        'DELETE FROM conversation_request_traces WHERE conversation_id = ?',
+      ).run(current.publicId);
       this.db.prepare('DELETE FROM conversations WHERE id = ?').run(current.id);
     });
   }
@@ -908,6 +925,10 @@ class StudioDatabase {
       `).run(encodedStudioIds);
       this.db.prepare(`
         DELETE FROM conversation_metric_requests
+        WHERE conversation_id IN (SELECT value FROM json_each(?))
+      `).run(encodedStudioIds);
+      this.db.prepare(`
+        DELETE FROM conversation_request_traces
         WHERE conversation_id IN (SELECT value FROM json_each(?))
       `).run(encodedStudioIds);
       this.db.prepare(`
@@ -1133,6 +1154,62 @@ class StudioDatabase {
       SELECT payload FROM turn_diffs WHERE conversation_id = ? ORDER BY at ASC
     `).all(conversationId);
     return rows.map((row) => json(row.payload, null)).filter(Boolean);
+  }
+
+  /**
+   * Persist a redacted, bounded UI projection of one actual model request.
+   * A retry reuses taskId:attempt only when it is the same durable attempt, so
+   * an upsert keeps recovery idempotent without collapsing distinct requests.
+   */
+  saveRequestTrace(conversationId, trace) {
+    const key = typeof conversationId === 'string' || typeof conversationId === 'number'
+      ? String(conversationId).trim()
+      : '';
+    const requestId = typeof trace?.requestId === 'string' ? trace.requestId.trim() : '';
+    if (!key || !requestId) return false;
+    const createdAt = Number.isFinite(trace.createdAt) && trace.createdAt > 0
+      ? trace.createdAt
+      : Date.now();
+    this.transaction(() => {
+      this.db.prepare(`
+        INSERT INTO conversation_request_traces(conversation_id, request_id, created_at, payload)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(conversation_id, request_id) DO UPDATE SET
+          created_at = excluded.created_at,
+          payload = excluded.payload
+      `).run(key, requestId.slice(0, 320), createdAt, encode(trace));
+      this.db.prepare(`
+        DELETE FROM conversation_request_traces
+        WHERE conversation_id = ? AND request_id IN (
+          SELECT request_id
+          FROM conversation_request_traces
+          WHERE conversation_id = ?
+          ORDER BY created_at DESC, request_id DESC
+          LIMIT -1 OFFSET ?
+        )
+      `).run(key, key, REQUEST_TRACE_HISTORY_LIMIT);
+    });
+    return true;
+  }
+
+  listRequestTraces(conversationId, { limit = REQUEST_TRACE_HISTORY_LIMIT } = {}) {
+    const key = typeof conversationId === 'string' || typeof conversationId === 'number'
+      ? String(conversationId)
+      : '';
+    if (!key) return [];
+    const safeLimit = Number.isSafeInteger(limit)
+      ? Math.max(1, Math.min(limit, REQUEST_TRACE_HISTORY_LIMIT))
+      : REQUEST_TRACE_HISTORY_LIMIT;
+    return this.db.prepare(`
+      SELECT payload
+      FROM conversation_request_traces
+      WHERE conversation_id = ?
+      ORDER BY created_at DESC, request_id DESC
+      LIMIT ?
+    `).all(key, safeLimit)
+      .map((row) => json(row.payload, undefined))
+      .filter((trace) => trace && typeof trace === 'object' && !Array.isArray(trace))
+      .reverse();
   }
 
   saveTurnDiff(conversationId, diff) {

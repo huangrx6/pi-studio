@@ -163,6 +163,71 @@ export type ChatMessage = {
   details?: unknown;
 };
 
+export type RequestTraceContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'thinking'; thinking: string; redacted?: boolean }
+  | {
+      type: 'toolCall';
+      id?: string;
+      name: string;
+      arguments: unknown;
+    }
+  | {
+      type: 'image';
+      mimeType: string;
+      bytes: number;
+      omitted: true;
+    }
+  | { type: 'unknown'; originalType?: string; value?: unknown };
+
+/** One provider-bound message, reduced to a JSON-safe and redacted trace. */
+export type RequestTraceMessage = {
+  index: number;
+  role: string;
+  content: RequestTraceContentBlock[];
+  timestamp?: number;
+  toolCallId?: string;
+  toolName?: string;
+  isError?: boolean;
+  truncated?: boolean;
+};
+
+export type RequestTraceTool = {
+  name: string;
+  description: string;
+  parameters?: unknown;
+};
+
+/**
+ * Snapshot of one actual model request captured immediately before the
+ * provider call. This is a Studio-owned UI projection; Durable still owns the
+ * live request and transcript.
+ */
+export type RequestTrace = {
+  id: string;
+  requestId: string;
+  conversationId: string;
+  taskId: string;
+  attempt: number;
+  createdAt: number;
+  model?: { provider: string; modelId: string };
+  thinkingLevel?: string;
+  messages: RequestTraceMessage[];
+  tools: RequestTraceTool[];
+  stats: {
+    messageCount: number;
+    systemChars: number;
+    userChars: number;
+    assistantChars: number;
+    toolResultChars: number;
+    imageCount: number;
+    toolCallCount: number;
+    toolDefinitionCount: number;
+    estimatedChars: number;
+  };
+  truncated: boolean;
+};
+
 /** 斜杠命令来源，决定菜单里显示的图标。 */
 export type ComposerCommandSource = 'builtin' | 'extension' | 'prompt' | 'skill';
 

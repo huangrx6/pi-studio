@@ -1,4 +1,4 @@
-import type { ChatMessage, TurnDiff } from './chat-types';
+import type { ChatMessage, RequestTrace, TurnDiff } from './chat-types';
 import type { ModelSelection } from './model-types';
 
 export type ConversationKind = 'conversation' | 'durable';
@@ -47,6 +47,7 @@ export type ConversationPageCursor = string;
 export type ConversationPage = ConversationSummary & {
   messages: ChatMessage[];
   model: ModelSelection;
+  requestTraces: RequestTrace[];
   turnDiffs: TurnDiff[];
   page: {
     hasOlder: boolean;
@@ -67,6 +68,7 @@ export type ConversationPage = ConversationSummary & {
 
 export type ConversationSnapshot = ConversationSummary & {
   model: ModelSelection;
+  requestTraces: RequestTrace[];
   running: boolean;
   requestId: string;
   compacting: boolean;
@@ -160,6 +162,7 @@ export type ConversationEvent =
     }>
   | EventBase<'assistant.updated' | 'assistant.completed', { message: ChatMessage }>
   | EventBase<'transcript.appended', { messages: ChatMessage[] }>
+  | EventBase<'request.trace', { trace: RequestTrace }>
   | EventBase<'inbox.updated', { items: unknown[] }>
   | EventBase<'submission.updated', { record: { id: string; status: string; reason?: string; detail?: unknown } }>
   | EventBase<'agent.updated', { agent: Record<string, unknown> }>

@@ -26,8 +26,6 @@ export type StepDisplay = 'compact' | 'standard' | 'detailed';
 export type StepCollapse = 'after-answer' | 'keep-open' | 'manual';
 /** 对话内网页链接的打开方式：系统浏览器或应用内窗口。 */
 export type LinkPreference = 'external' | 'window';
-/** 智能体繁忙时按 Enter / 点发送的行为：排队或插话引导。 */
-export type BusyPreference = 'queue' | 'steer';
 /** 全局圆角风格，映射到 RADIUS_PRESETS。 */
 export type RadiusStyle = 'square' | 'compact' | 'standard' | 'soft';
 /** 由主进程复制到应用私有目录的背景媒体。 */
@@ -55,8 +53,6 @@ export type Preferences = {
   showCodeView: boolean;
   /** 网页链接打开方式。 */
   linkOpen: LinkPreference;
-  /** 繁忙时的发送行为。 */
-  busySend: BusyPreference;
   /** 圆角风格。 */
   radiusStyle: RadiusStyle;
   /** 当前背景媒体；null 表示使用纯色背景。 */
@@ -81,7 +77,6 @@ export const DEFAULT_PREFERENCES: Preferences = {
   stepCollapse: 'after-answer',
   showCodeView: false,
   linkOpen: 'external',
-  busySend: 'queue',
   radiusStyle: 'standard',
   backgroundMedia: null,
   backgroundOpacity: 68,

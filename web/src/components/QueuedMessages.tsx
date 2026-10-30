@@ -1,10 +1,11 @@
 /**
- * 排队消息面板：智能体运行期间用户按 Enter（偏好为 queue）时暂存的消息。
+ * 排队消息面板：智能体运行期间用户按 Cmd/Ctrl+Enter 时暂存的消息。
  *
  * 交互：
  * - 列表顺序即发送顺序；
  * - 整行可拖拽，拖到另一行上即调整顺序；
  * - 每条可「立即插话发送」「编辑并移回输入框」「删除」；
+ *   编辑后再次排队会保留原来的队列位置；
  * - 顶部可把全部排队消息一次性插话发送。
  *
  * 本组件只负责渲染与事件上抛；真正的发送/队列状态在 App 中维护，最终通过
@@ -77,7 +78,7 @@ export function QueuedMessages({ items, onEdit, onDelete, onSendNow, onSendAll, 
         </span>
         <span className="queued-actions">
           <button type="button" title="立即插话发送" aria-label="立即插话发送" onClick={() => onSendNow(item.id)}><ArrowUp /></button>
-          <button type="button" title="编辑并移回输入框" aria-label="编辑排队消息" onClick={() => onEdit(item.id)}><Pencil /></button>
+          <button type="button" title="编辑；再次排队时放回原位置" aria-label="编辑排队消息" onClick={() => onEdit(item.id)}><Pencil /></button>
           <button type="button" title="删除排队消息" aria-label="删除排队消息" onClick={() => onDelete(item.id)}><Trash2 /></button>
         </span>
       </div>)}

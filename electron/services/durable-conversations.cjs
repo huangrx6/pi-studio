@@ -64,6 +64,7 @@ const {
   publicLongTaskState,
   readLongTaskState,
 } = require('./studio-long-task.cjs');
+const { onRequestTrace } = require('./studio-request-trace.cjs');
 
 const DEFAULT_PAGE_SIZE = 80;
 const MAX_PAGE_SIZE = 2_000;
@@ -80,6 +81,28 @@ const subscribers = new Map();
 const messageCounts = new Map();
 const runningConversations = new Set();
 const runDiffSnapshots = new Map();
+const REQUEST_TRACE_PAGE_LIMIT = 16;
+
+onRequestTrace(async (trace) => {
+  const numericConversationId = normalizeId(trace?.conversationId);
+  if (!numericConversationId) return;
+  const row = await getConversationRow(String(numericConversationId));
+  const key = row ? conversationKey(row) : String(numericConversationId);
+  const dto = {
+    ...trace,
+    conversationId: key,
+  };
+  if (!getStudioDatabase().saveRequestTrace(key, dto)) return;
+  const entry = watches.get(key);
+  if (!entry) return;
+  entry.revision += 1;
+  await entry.emit({
+    type: 'request.trace',
+    conversationId: key,
+    revision: entry.revision,
+    payload: { trace: dto },
+  });
+});
 
 function rememberMessageCount(id, count) {
   const key = String(id);
@@ -440,6 +463,9 @@ async function conversationSnapshot(id) {
     durableSessionId: String(row.id),
     model: await sessionModelInfo(agent),
     longTask: await longTaskDto(row),
+    requestTraces: getStudioDatabase().listRequestTraces(key, {
+      limit: REQUEST_TRACE_PAGE_LIMIT,
+    }),
   });
 }
 
@@ -469,6 +495,9 @@ async function conversationPage(id, options = {}) {
     model: await sessionModelInfo(agent),
     turnDiffs,
     longTask: await longTaskDto(row),
+    requestTraces: getStudioDatabase().listRequestTraces(key, {
+      limit: REQUEST_TRACE_PAGE_LIMIT,
+    }),
     page: {
       hasOlder: page.hasOlder,
       nextCursor: page.nextCursor,
@@ -1633,6 +1662,9 @@ async function subscribeConversation(id, owner, emit) {
   return liveSnapshotDto(row, snapshot, {
     model: await sessionModelInfo(agent),
     longTask: await longTaskDto(row),
+    requestTraces: getStudioDatabase().listRequestTraces(key, {
+      limit: REQUEST_TRACE_PAGE_LIMIT,
+    }),
   });
 }
 

@@ -3507,14 +3507,28 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 
 .sidebar-row-shell { position: relative; min-width: 0; }
 .sidebar-row-actions { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 5px; padding: 0; background: var(--transparent); opacity: 0; visibility: hidden; }
-.sidebar-row-shell:hover > .sidebar-row-actions, .sidebar-row-shell:focus-within > .sidebar-row-actions, .sidebar-row-actions.is-open { opacity: 1; visibility: visible; }
+/* 行按钮被鼠标点击后仍会持有焦点；只在 hover、键盘可见焦点或操作栏自身
+有焦点/浮层时显示，避免操作栏粘在选中行上并遮住运行状态。 */
+.sidebar-row-shell:hover > .sidebar-row-actions,
+.sidebar-row-shell:has(> :is(.workspace-row, .session-row):focus-visible) > .sidebar-row-actions,
+.sidebar-row-actions:focus-within,
+.sidebar-row-actions.is-open { opacity: 1; visibility: visible; }
 .sidebar-row-actions > button { display: grid; place-items: center; width: 24px; height: 28px; padding: 0; color: var(--faint); border-radius: var(--radius-tag); background: var(--transparent); }
 .sidebar-row-actions > button:hover, .sidebar-row-actions > button:focus-visible { background: var(--transparent); color: var(--text); }
 .sidebar-row-actions > button svg { width: 13px; height: 13px; }
 .sidebar-confirm-name { margin: 0; color: var(--text); font-size: var(--text-md); font-weight: 550; overflow-wrap: anywhere; }
-.sidebar-row-shell:hover > .workspace-row, .workspace-row-shell:focus-within > .workspace-row { padding-right: 62px; }
-.sidebar-row-shell:hover > .session-row, .session-row-shell:focus-within > .session-row { padding-right: 88px; }
-.sidebar-row-shell:hover .session-meta, .sidebar-row-shell:focus-within .session-meta, .workspace-row-shell:hover .chevron, .workspace-row-shell:focus-within .chevron { display: none; }
+.sidebar-row-shell:hover > .workspace-row,
+.workspace-row-shell:has(> .workspace-row:focus-visible) > .workspace-row,
+.workspace-row-shell:has(> .sidebar-row-actions:is(:focus-within, .is-open)) > .workspace-row { padding-right: 62px; }
+.sidebar-row-shell:hover > .session-row,
+.session-row-shell:has(> .session-row:focus-visible) > .session-row,
+.session-row-shell:has(> .sidebar-row-actions:is(:focus-within, .is-open)) > .session-row { padding-right: 88px; }
+.sidebar-row-shell:hover .session-meta,
+.sidebar-row-shell:has(> :is(.workspace-row, .session-row):focus-visible) .session-meta,
+.sidebar-row-shell:has(> .sidebar-row-actions:is(:focus-within, .is-open)) .session-meta,
+.workspace-row-shell:hover .chevron,
+.workspace-row-shell:has(> .workspace-row:focus-visible) .chevron,
+.workspace-row-shell:has(> .sidebar-row-actions:is(:focus-within, .is-open)) .chevron { display: none; }
 .session-pin-mark { grid-column: 1; width: 18px; color: var(--faint); font-size: 9px; line-height: 16px; text-align: center; white-space: nowrap; }
 .sidebar-action-menu { position: fixed; z-index: 250; width: 200px; padding: 5px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-popover); }
 .sidebar-action-menu button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; padding: 7px 10px; text-align: left; border-radius: var(--radius-control); color: var(--text); }
@@ -3563,6 +3577,270 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .activity-drawer[open] > summary { border-color: var(--transparent); }
 .activity-tool { border-color: var(--border); border-radius: var(--radius-control); }
 .activity-tool:hover { border-color: var(--border-hover); }
+
+/* Exact provider request snapshots: one quiet row, with the full redacted
+   prompt available in-place instead of competing with tool execution cards. */
+.activity-request { min-width: 0; margin: 1px 0 10px; }
+.activity-request > summary {
+  display: flex;
+  min-width: 0;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-radius: var(--radius-control);
+  list-style: none;
+  cursor: pointer;
+}
+.activity-request > summary::-webkit-details-marker { display: none; }
+.activity-request > summary:hover,
+.activity-request[open] > summary { background: var(--surface-soft); }
+.activity-request-icon {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  place-items: center;
+  border-radius: var(--radius-tag);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.activity-request-icon svg { width: 12px; height: 12px; stroke-width: 1.7; }
+.activity-request-label { flex: none; color: var(--muted); font-size: 11px; font-weight: 600; }
+.activity-request-model {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--faint);
+  font: 10px var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.activity-request-metrics { flex: none; color: var(--faint); font-size: 9.5px; white-space: nowrap; }
+.activity-request-retry {
+  flex: none;
+  padding: 2px 5px;
+  border-radius: var(--radius-tag);
+  color: var(--loading);
+  background: var(--accent-soft);
+  font-size: 9px;
+}
+.activity-request-chevron {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--faint);
+  transition: transform var(--transition);
+}
+.activity-request[open] .activity-request-chevron { transform: rotate(180deg); }
+.activity-request-body {
+  max-height: min(68vh, 760px);
+  margin-top: 3px;
+  padding: 10px 12px 12px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+}
+.activity-request-user {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+.activity-request-user > span {
+  color: var(--faint);
+  font-size: 8.5px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.activity-request-user > p {
+  display: -webkit-box;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.activity-request-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 0;
+  margin-bottom: 10px;
+  color: var(--faint);
+  font-size: 9.5px;
+}
+.activity-request-facts > span + span::before {
+  margin: 0 7px;
+  content: '·';
+  color: var(--border-strong);
+}
+.activity-request-facts .is-warning { color: var(--error); }
+.request-section-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 2px 0 5px;
+}
+.request-section-heading > span { color: var(--muted); font-size: 10px; font-weight: 600; }
+.request-section-heading > small { color: var(--faint); font-size: 9px; }
+.request-message-list { display: flex; min-width: 0; flex-direction: column; }
+.request-message { min-width: 0; border-radius: var(--radius-control); }
+.request-message > summary {
+  display: flex;
+  min-width: 0;
+  min-height: 30px;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 5px;
+  border-radius: var(--radius-control);
+  list-style: none;
+  cursor: pointer;
+}
+.request-message > summary::-webkit-details-marker { display: none; }
+.request-message > summary:hover,
+.request-message[open] > summary { background: var(--surface); }
+.request-message-role {
+  width: 66px;
+  flex: none;
+  color: var(--faint);
+  font-size: 9px;
+}
+.request-message.is-system .request-message-role { color: var(--accent); }
+.request-message.is-user .request-message-role { color: var(--text); }
+.request-message-preview {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--faint);
+  font: 9.5px var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.request-message-truncated {
+  flex: none;
+  color: var(--error);
+  font-size: 8.5px;
+}
+.request-message-chevron {
+  width: 11px;
+  height: 11px;
+  flex: none;
+  color: var(--faint);
+  transition: transform var(--transition);
+}
+.request-message[open] .request-message-chevron { transform: rotate(180deg); }
+.request-message-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  padding: 2px 0 9px 79px;
+}
+.request-block,
+.request-tool-call > pre,
+.request-tool > pre {
+  max-height: 320px;
+  margin: 0;
+  padding: 9px 10px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 0;
+  border-radius: var(--radius-tag);
+  background: var(--surface);
+  color: var(--muted);
+  font: 10px/1.65 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.request-block.is-thinking { color: var(--thinking); }
+.request-tool-call { overflow: hidden; border-radius: var(--radius-tag); background: var(--surface); }
+.request-tool-call-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px 5px;
+  color: var(--muted);
+  font: 9.5px var(--mono);
+}
+.request-tool-call-head svg { width: 11px; height: 11px; color: var(--faint); }
+.request-tool-call > pre { max-height: 240px; padding-top: 5px; border-radius: 0; background: transparent; }
+.request-image-placeholder {
+  display: grid;
+  grid-template-columns: auto auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border-radius: var(--radius-tag);
+  color: var(--faint);
+  background: var(--surface);
+  font-size: 9.5px;
+}
+.request-image-placeholder > svg { width: 13px; height: 13px; color: var(--muted); }
+.request-image-placeholder > small { min-width: 0; overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.request-tools { margin-top: 7px; }
+.request-tools > summary {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 5px;
+  border-radius: var(--radius-control);
+  list-style: none;
+  cursor: pointer;
+}
+.request-tools > summary::-webkit-details-marker { display: none; }
+.request-tools > summary:hover { background: var(--surface); }
+.request-tools > summary > svg { width: 12px; height: 12px; color: var(--faint); }
+.request-tools > summary > span { color: var(--muted); font-size: 10px; font-weight: 600; }
+.request-tools > summary > small { color: var(--faint); font-size: 9px; }
+.request-tools > summary > svg:last-child { margin-left: auto; transition: transform var(--transition); }
+.request-tools[open] > summary > svg:last-child { transform: rotate(180deg); }
+.request-tool-list { margin: 2px 0 0 82px; }
+.request-tool { border-radius: var(--radius-tag); }
+.request-tool + .request-tool { margin-top: 2px; }
+.request-tool > summary {
+  display: flex;
+  min-width: 0;
+  min-height: 29px;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: var(--radius-tag);
+  list-style: none;
+  cursor: pointer;
+}
+.request-tool > summary::-webkit-details-marker { display: none; }
+.request-tool > summary:hover,
+.request-tool[open] > summary { background: var(--surface); }
+.request-tool > summary > span:first-child { flex: none; color: var(--muted); font: 9.5px var(--mono); font-weight: 600; }
+.request-tool > summary > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--faint);
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.request-tool > summary > svg { width: 11px; height: 11px; flex: none; color: var(--faint); transition: transform var(--transition); }
+.request-tool[open] > summary > svg { transform: rotate(180deg); }
+.request-tool > pre { margin-top: 3px; max-height: 260px; }
+@media (max-width: 680px) {
+  .activity-request-metrics { display: none; }
+  .activity-request-model { flex: 1; }
+  .activity-request-body { padding-inline: 9px; }
+  .request-message-body { padding-left: 0; }
+  .request-tool-list { margin-left: 0; }
+  .request-image-placeholder { grid-template-columns: auto auto auto; }
+  .request-image-placeholder > small { display: none; }
+}
+
 .assistant-turn-meta > span { background: none; padding-inline: 2px; }
 .file-change-summary { margin-top: 22px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); font: 13px/1.5 var(--font); }
 .file-change-summary > header { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--surface-soft); }
@@ -3729,105 +4007,411 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .attachment-open-cue svg { width: 13px; height: 13px; }
 .is-openable:hover .attachment-open-cue, .is-openable:focus-visible .attachment-open-cue { color: var(--accent); opacity: 1; transform: translateX(1px); }
 
-/* Process groups remain quiet; assistant prose always stays in the conversation.
-   Screenshots use the full assistant content width, while nested rows retain the
-   shared 21px indent from the trajectory chevron. */
-.run-history { border: 0; border-radius: 0; margin: 10px 0 16px; }
-.run-history > summary { justify-content: flex-start; min-height: 32px; padding: 3px 0; gap: 8px; }
-.run-history > summary:hover { background: var(--transparent); color: var(--text); }
-.run-history > summary > svg { width: 13px; height: 13px; margin-left: 0; flex: none; color: var(--faint); transition: transform 160ms cubic-bezier(.22,.8,.2,1); }
-.run-history[open] > summary > svg { transform: rotate(180deg); }
-.run-history-images { max-width: 100%; margin: 0 0 14px; }
-.run-history-images .conversation-image-gallery { margin: 8px 0 0; }
-.run-history-images .conversation-image-strip { padding-inline: 0; }
-.run-history-list { border-top: 0; border-left: 1px solid var(--border); margin-left: 6px; padding: 2px 0 4px 16px; }
-.run-history-row + .run-history-row { border-top: 0; }
-.activity-thinking-icon { display: block; width: 14px; height: 14px; flex: none; color: var(--faint); }
-.standalone-thinking { margin: 8px 0 14px; }
-.standalone-thinking .activity-thinking > summary { padding: 5px 0; }
-.standalone-thinking .activity-thinking-preview { font-size: 12px; }
-.run-current-inline { margin: 10px 0 16px 6px; padding: 2px 0 2px 16px; border-left: 1px solid var(--accent-border); }
-.run-current-heading { gap: 10px; }
-.run-current-inline > .markdown,
-.run-current-inline > .run-current-redacted { margin-left: 24px; }
-.run-history .activity-tool > summary,
-.run-current .activity-tool > summary {
-  padding: 4px 0;
-  gap: 10px;
-}
-.run-history .activity-tool[open],
-.run-current .activity-tool[open] {
-  margin-inline: -10px;
-}
-.run-history .activity-tool[open] > summary,
-.run-current .activity-tool[open] > summary {
-  padding-inline: 10px;
-}
-.run-history .activity-tool-name,
-.run-current .activity-tool-name {
+/* One disclosure language for every execution record. Request, thinking, tool,
+   group and live status share the same 34px rhythm and soft expanded surface. */
+.assistant-turn-main .activity-disclosure:is(
+  .activity-request,
+  .activity-tool,
+  .activity-thinking,
+  .run-history,
+  .run-current
+) {
   min-width: 0;
-  max-width: min(36%, 280px);
+  margin: 2px 0;
   overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--transparent);
+  overflow-anchor: none;
+  interpolate-size: allow-keywords;
+  transition: background-color var(--transition);
+}
+
+.assistant-turn-main .activity-request.activity-disclosure { margin: 1px 0 10px; }
+.assistant-turn-main .activity-thinking.activity-disclosure { margin-block: 2px; }
+.assistant-turn-main .run-history.activity-group { margin: 10px 0 14px; }
+.assistant-turn-main .run-current.activity-disclosure { margin: 10px 0 14px; }
+
+.assistant-turn-main .activity-disclosure:is(
+  .activity-request,
+  .activity-tool,
+  .activity-thinking,
+  .run-current
+)[open],
+.assistant-turn-main .run-current.activity-disclosure.is-open {
+  background: var(--surface-soft);
+}
+
+.assistant-turn-main .activity-disclosure:is(
+  .activity-request,
+  .activity-tool,
+  .activity-thinking,
+  .run-history,
+  .run-current
+) > .activity-disclosure-summary {
+  display: flex;
+  min-width: 0;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 4px 0;
+  border-radius: var(--radius-control);
+  list-style: none;
+  cursor: pointer;
+  transition: background-color var(--transition);
+}
+
+.assistant-turn-main .activity-disclosure > .activity-disclosure-summary::-webkit-details-marker {
+  display: none;
+}
+
+.assistant-turn-main .activity-disclosure > .activity-disclosure-summary:hover,
+.assistant-turn-main .run-history[open] > .activity-disclosure-summary {
+  background: var(--surface-soft);
+}
+
+.assistant-turn-main .activity-disclosure > .activity-disclosure-summary:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: -2px;
+}
+
+.assistant-turn-main .run-current-heading.activity-disclosure-summary {
+  cursor: default;
+}
+
+.assistant-turn-main .activity-disclosure-icon {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  place-items: center;
+  border-radius: var(--radius-tag);
+  color: var(--faint);
+  background: var(--surface);
+}
+
+.assistant-turn-main .activity-disclosure-icon > svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+  stroke-width: 1.7;
+}
+
+.assistant-turn-main .activity-request-icon {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.assistant-turn-main .activity-thinking-icon,
+.assistant-turn-main .run-current-icon {
+  color: var(--thinking);
+  background: var(--thinking-soft);
+}
+
+.assistant-turn-main .activity-tool.is-running > .activity-disclosure-summary > .activity-tool-icon,
+.assistant-turn-main .run-live-icon {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.assistant-turn-main .activity-tool.is-error > .activity-disclosure-summary > .activity-tool-icon {
+  color: var(--error);
+  background: var(--error-soft);
+}
+
+.assistant-turn-main .activity-disclosure-title {
+  min-width: 0;
+  flex: none;
+  color: var(--muted);
+  font: 600 11px/1.4 var(--font);
+  white-space: nowrap;
+}
+
+.assistant-turn-main .activity-tool-name {
+  max-width: min(34%, 260px);
+  overflow: hidden;
+  font: 650 10.5px/1.4 var(--mono);
+  text-overflow: ellipsis;
+}
+
+.assistant-turn-main .activity-disclosure-preview {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--faint);
+  font-size: 10.5px;
+  line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.run-history .activity-tool-status,
-.run-current .activity-tool-status {
-  min-width: 52px;
-  margin-left: auto;
-}
-.run-history .activity-tool-body,
-.run-current .activity-tool-body {
-  padding: 0 14px 14px;
-}
-.run-history .activity-tool-code,
-.run-current .activity-tool-code {
-  box-sizing: border-box;
-  padding-inline: 13px;
-}
-.run-history .activity-tool-icon,
-.run-current .activity-tool-icon {
-  display: grid;
-  place-items: center;
-  width: 14px;
-  height: 14px;
-  flex: none;
-}
-.run-history .activity-thinking-icon,
-.run-current-heading > svg {
-  display: block;
-  width: 14px;
-  height: 14px;
-  flex: none;
-}
-.run-history .activity-tool-icon > svg {
-  width: 14px;
-  height: 14px;
-}
-.run-history .activity-tool > summary,
-.run-history .activity-thinking > summary,
-.run-current-heading {
-  gap: 10px;
-}
-.activity-thinking-preview {
-  transition: opacity 120ms ease, visibility 120ms;
-}
-.activity-thinking[open] .activity-thinking-preview {
-  display: block;
-  visibility: hidden;
-  opacity: 0;
-}
-.activity-thinking-body .markdown > :first-child { margin-top: 0; }
-.activity-thinking-body .markdown > :last-child { margin-bottom: 0; }
 
-/* Native details content stays mounted and animates its block size. This removes
-   the abrupt list swap that used to move the surrounding answer on toggle. */
-.run-history,
-.activity-tool,
-.activity-thinking { interpolate-size: allow-keywords; overflow-anchor: none; }
-.run-history::details-content,
-.activity-tool::details-content,
-.activity-thinking::details-content {
+.assistant-turn-main .activity-request-model {
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.assistant-turn-main .activity-disclosure-meta,
+.assistant-turn-main .run-history-count {
+  flex: none;
+  color: var(--faint);
+  font-size: 9.5px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.assistant-turn-main .activity-tool-status {
+  display: inline-flex;
+  min-width: 52px;
+  min-height: 18px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  box-sizing: border-box;
+  flex: none;
+  padding: 2px 5px;
+  border-radius: var(--radius-tag);
+  color: var(--faint);
+  background: var(--transparent);
+  font-size: 9.5px;
+  line-height: 1;
+}
+
+.assistant-turn-main .activity-tool-status svg {
+  display: block;
+  width: 10px;
+  height: 10px;
+  flex: none;
+}
+
+.assistant-turn-main .activity-tool.is-running .activity-tool-status {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.assistant-turn-main .activity-tool.is-error .activity-tool-status {
+  color: var(--error);
+  background: var(--error-soft);
+}
+
+.assistant-turn-main .activity-disclosure-chevron {
+  display: block;
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--faint);
+  transition: transform var(--transition);
+}
+
+.assistant-turn-main .activity-disclosure[open] > .activity-disclosure-summary > .activity-disclosure-chevron {
+  transform: rotate(180deg);
+}
+
+.assistant-turn-main .activity-disclosure-body {
+  min-width: 0;
+  padding: 10px 12px 12px;
+}
+
+.assistant-turn-main .activity-request-body {
+  max-height: min(68vh, 760px);
+  margin-top: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-radius: 0 0 var(--radius-control) var(--radius-control);
+  background: var(--transparent);
+}
+
+.assistant-turn-main .activity-tool-body {
+  padding-top: 2px;
+  background: var(--transparent);
+}
+
+.assistant-turn-main .activity-thinking-body {
+  max-height: 280px;
+  margin: 0;
+  padding-top: 2px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: var(--transparent);
+}
+
+.assistant-turn-main .activity-thinking-body .markdown {
+  color: var(--muted);
+  font-size: var(--text-base);
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.assistant-turn-main .activity-thinking-body .markdown > :first-child { margin-top: 0; }
+.assistant-turn-main .activity-thinking-body .markdown > :last-child { margin-bottom: 0; }
+
+.assistant-turn-main .run-history-list {
+  margin: 0;
+  padding: 1px 0 7px;
+  border: 0;
+}
+
+.assistant-turn-main .run-history-row + .run-history-row { border-top: 0; }
+.assistant-turn-main .run-history-row > .activity-disclosure { margin: 0; }
+.assistant-turn-main .run-history-row .activity-disclosure-icon { background: var(--surface); }
+.assistant-turn-main .run-history .activity-tool.activity-disclosure[open],
+.assistant-turn-main .run-history .activity-thinking.activity-disclosure[open] {
+  margin: 0;
+  overflow: hidden;
+  border: 0;
+  background: var(--surface-soft);
+}
+.assistant-turn-main .run-history .activity-disclosure.activity-tool > .activity-disclosure-summary,
+.assistant-turn-main .run-history .activity-disclosure.activity-thinking > .activity-disclosure-summary {
+  min-height: 34px;
+  gap: 8px;
+  padding: 4px 7px;
+}
+
+.assistant-turn-main .run-history-images {
+  max-width: 100%;
+  margin: 0 0 14px;
+}
+
+.assistant-turn-main .run-history-images .conversation-image-gallery { margin: 8px 0 0; }
+.assistant-turn-main .run-history-images .conversation-image-strip { padding-inline: 0; }
+
+.assistant-turn-main .activity-sequence {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  margin: -5px 0 15px;
+  padding: 2px 0 2px 28px;
+}
+
+.assistant-turn-main .activity-sequence::before {
+  position: absolute;
+  top: -7px;
+  bottom: 9px;
+  left: 9px;
+  width: 1px;
+  background: var(--border);
+  content: '';
+  opacity: .7;
+}
+
+.assistant-turn-main .activity-sequence-item {
+  position: relative;
+  min-width: 0;
+}
+
+.assistant-turn-main .activity-sequence-item::before {
+  position: absolute;
+  top: 15px;
+  left: -20px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  content: '';
+}
+
+.assistant-turn-main .activity-sequence .activity-tool,
+.assistant-turn-main .activity-sequence .activity-thinking {
+  margin: 0;
+}
+
+.assistant-turn-main .activity-sequence .activity-tool > .activity-disclosure-summary,
+.assistant-turn-main .activity-sequence .activity-thinking > .activity-disclosure-summary {
+  display: grid;
+  grid-template-columns: 18px 64px minmax(0, 1fr) 56px 12px;
+  gap: 8px;
+  min-height: 32px;
+  align-items: center;
+  padding: 3px 6px;
+}
+
+.assistant-turn-main .activity-sequence .activity-disclosure-summary > .activity-disclosure-icon {
+  grid-column: 1;
+  width: 18px;
+  height: 18px;
+  border-radius: 0;
+  background: var(--transparent);
+}
+
+.assistant-turn-main .activity-sequence .activity-disclosure-icon > svg {
+  width: 12px;
+  height: 12px;
+}
+
+.assistant-turn-main .activity-sequence .activity-disclosure-title {
+  grid-column: 2;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--faint);
+  font: 600 11px/1.4 var(--font);
+  text-overflow: ellipsis;
+}
+
+.assistant-turn-main .activity-sequence .activity-disclosure-preview {
+  grid-column: 3;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.assistant-turn-main .activity-sequence .activity-thinking-icon { color: var(--thinking); }
+.assistant-turn-main .activity-sequence .activity-tool.is-error > .activity-disclosure-summary > .activity-tool-icon { color: var(--error); background: var(--transparent); }
+.assistant-turn-main .activity-sequence .activity-tool-status { grid-column: 4; justify-self: end; }
+.assistant-turn-main .activity-sequence .activity-disclosure-chevron { grid-column: 5; justify-self: end; }
+.assistant-turn-main .activity-sequence .activity-tool-image-count { display: none; }
+
+.assistant-turn-main .activity-sequence-note {
+  padding: 5px 6px 7px 28px;
+}
+
+.assistant-turn-main .activity-sequence-note .markdown {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.assistant-turn-main .activity-sequence-note .markdown > :first-child { margin-top: 0; }
+.assistant-turn-main .activity-sequence-note .markdown > :last-child { margin-bottom: 0; }
+
+.assistant-turn-main .activity-sequence-images {
+  max-width: calc(100% - 28px);
+  margin: -7px 0 14px 28px;
+}
+
+.assistant-turn-main .activity-sequence-images .conversation-image-gallery { margin: 8px 0 0; }
+.assistant-turn-main .activity-sequence-images .conversation-image-strip { padding-inline: 0; }
+.assistant-turn-main .activity-sequence + .activity-request { margin-top: 16px; }
+
+.assistant-turn-main .standalone-thinking { margin: 8px 0 14px; }
+.assistant-turn-main .run-current-heading { color: var(--muted); }
+.assistant-turn-main .run-current-spinner {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  margin-left: 1px;
+  color: var(--accent);
+}
+
+.assistant-turn-main .run-current-content {
+  margin: 0;
+  padding-top: 3px;
+  background: var(--transparent);
+}
+
+.assistant-turn-main .run-current-content .markdown,
+.assistant-turn-main .run-current-redacted {
+  color: var(--muted);
+  font-size: var(--text-base);
+  line-height: 1.8;
+}
+
+/* Native details content stays mounted and animates its block size, so opening a
+   trace does not jump the surrounding answer. */
+.activity-disclosure::details-content {
   block-size: 0;
   overflow: clip;
   opacity: 0;
@@ -3837,23 +4421,57 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
     opacity 120ms ease,
     content-visibility 180ms allow-discrete;
 }
-.run-history[open]::details-content,
-.activity-tool[open]::details-content,
-.activity-thinking[open]::details-content {
+.activity-disclosure[open]::details-content {
   block-size: auto;
   opacity: 1;
   content-visibility: visible;
 }
 @media (prefers-reduced-motion: reduce) {
-  .run-history::details-content,
-  .activity-tool::details-content,
-  .activity-thinking::details-content,
-  .run-history > summary > svg { transition: none; }
+  .activity-disclosure::details-content,
+  .activity-disclosure > .activity-disclosure-summary,
+  .activity-disclosure-chevron { transition: none; }
 }
-.run-live-status { display: flex; align-items: center; min-height: 35px; gap: 8px; padding: 8px 0; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.run-live-status svg { width: 14px; height: 14px; color: var(--accent); }
+
+.assistant-turn-main .run-live-status {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  margin: 4px 0 10px;
+  padding: 4px 0;
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.assistant-turn-main .run-live-status .activity-disclosure-icon > svg {
+  width: 12px;
+  height: 12px;
+  color: var(--accent);
+}
+
 .run-live-status span { white-space: nowrap; }
 .run-live-status span:last-child { margin-left: auto; color: var(--faint); font-size: 11px; }
+
+@media (max-width: 600px) {
+  .assistant-turn-main .run-history-image-count { display: none; }
+  .assistant-turn-main .run-history-list { padding-inline: 0; }
+  .assistant-turn-main .activity-request-metrics { display: none; }
+  .assistant-turn-main .activity-sequence { padding-left: 24px; }
+  .assistant-turn-main .activity-sequence::before { left: 8px; }
+  .assistant-turn-main .activity-sequence-item::before { left: -18px; }
+  .assistant-turn-main .activity-sequence .activity-tool > .activity-disclosure-summary,
+  .assistant-turn-main .activity-sequence .activity-thinking > .activity-disclosure-summary {
+    grid-template-columns: 18px 54px minmax(0, 1fr) 52px 12px;
+  }
+  .assistant-turn-main .activity-sequence-images {
+    max-width: calc(100% - 24px);
+    margin-left: 24px;
+  }
+}
 
 .file-panel.is-open:not(.is-fullscreen), .file-panel.is-open.is-split:not(.is-fullscreen) { width: min(var(--panel-w, 700px), calc(100vw - 48px)); }
 .file-panel:not(.is-fullscreen) .file-panel-inner, .file-panel.is-split:not(.is-fullscreen) .file-panel-inner { width: 100%; min-width: 0; }
@@ -4838,7 +5456,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   .about-resource-card,
   .about-system-card,
   .file-change-summary,
-  .activity-tool[open],
+  .activity-disclosure[open],
   .activity-drawer > summary,
   .thinking-block summary,
   .todo-dock,
@@ -5002,7 +5620,8 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   .pi-select-trigger,
   .panel-tab,
   .composer-attachment.is-openable,
-  .activity-tool[open],
+  .activity-disclosure[open],
+  .activity-disclosure > .activity-disclosure-summary,
   .activity-drawer > summary,
   .file-action,
   .confirm-cancel,
@@ -5047,7 +5666,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   .pi-select-trigger,
   .panel-tab,
   .composer-attachment.is-openable,
-  .activity-tool[open],
+  .activity-disclosure[open],
   .activity-drawer > summary,
   .file-action,
   .confirm-cancel,
@@ -5058,7 +5677,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   background: var(--background-active-surface);
 }
 
-.app.has-custom-background :is(.run-history, .run-current) .activity-tool:not([open]) > summary:hover {
+.app.has-custom-background :is(.activity-sequence, .run-current) .activity-tool:not([open]) > summary:hover {
   border-radius: var(--radius-control);
   background: var(--background-hover-surface);
 }

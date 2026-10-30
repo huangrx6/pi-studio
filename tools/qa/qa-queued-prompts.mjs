@@ -178,10 +178,34 @@ try {
   await page.locator('.session-row').filter({ hasText: '会话 A' }).click();
   const composer = page.locator('.composer textarea');
   await composer.fill('切换会话后仍然保留的排队消息');
-  await page.getByRole('button', { name: '排队发送', exact: true }).click();
+  await composer.press('Control+Enter');
   const queuePanel = page.locator('.queued-panel[aria-label="排队消息"]');
   await queuePanel.waitFor();
   assert.equal(await page.getByText('切换会话后仍然保留的排队消息', { exact: true }).count(), 1);
+
+  await composer.fill('需要编辑后回到中间的排队消息');
+  await composer.press('Control+Enter');
+  await composer.fill('保持在最后的排队消息');
+  await composer.press('Control+Enter');
+  await page.waitForFunction(() => document.querySelectorAll('.queued-item').length === 3);
+
+  await queuePanel.locator('.queued-item').filter({ hasText: '需要编辑后回到中间的排队消息' })
+    .getByRole('button', { name: '编辑排队消息' })
+    .click();
+  await page.waitForFunction(() => document.querySelectorAll('.queued-item').length === 2);
+  assert.match(await composer.getAttribute('placeholder'), /放回原位置/);
+  await composer.fill('修改后仍回到中间位置');
+  await composer.press('Control+Enter');
+  await page.waitForFunction(() => document.querySelectorAll('.queued-item').length === 3);
+  assert.deepEqual(
+    await page.locator('.queued-text').allTextContents(),
+    [
+      '切换会话后仍然保留的排队消息',
+      '修改后仍回到中间位置',
+      '保持在最后的排队消息',
+    ],
+    'editing and re-queueing must preserve the original queue slot',
+  );
 
   await page.locator('.session-row').filter({ hasText: '会话 B' }).click();
   assert.equal(await queuePanel.count(), 0, 'session B has its own empty queue');
@@ -205,7 +229,7 @@ try {
   assert.equal(await page.getByText('会话 B 空闲。', { exact: true }).count(), 1);
   await queuePanel.waitFor({ state: 'detached' });
   assert.deepEqual(errors, []);
-  console.log('PASS: queued prompts are session-scoped, survive switching, and submit to their original session while another chat is open.');
+  console.log('PASS: queued prompts preserve edited slots, survive switching, and submit to their original session while another chat is open.');
 } catch (error) {
   const page = browser.contexts()[0]?.pages()[0];
   if (page) {

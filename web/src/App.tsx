@@ -40,7 +40,19 @@ import {
 import { ChangesView } from './components/ChangesView';
 import { ActionMenu } from './components/ActionMenu';
 import { splitComposerText } from './lib/references';
-import type { ChatMessage, ComposerAttachment, ComposerCommand, ComposerCommandSource, ComposerFile, TodoDetails, TurnDiff, TurnDiffFile } from './types/chat-types';
+import { composerSubmitAction } from './lib/composer-submit';
+import {
+  clearComposerDraft,
+  composerDraftKeyForNew,
+  composerDraftKeyForSession,
+  emptyComposerDraft,
+  moveComposerDraft,
+  readComposerDraft,
+  saveComposerDraft,
+  type ComposerDraft,
+  type ComposerDraftStore,
+} from './lib/composer-drafts';
+import type { ChatMessage, ComposerAttachment, ComposerCommand, ComposerCommandSource, ComposerFile, RequestTrace, TodoDetails, TurnDiff, TurnDiffFile } from './types/chat-types';
 import { AttachmentIcon } from './components/AttachmentIcon';
 import { AssistantTurnView, ChatMessageView } from './components/ChatMessage';
 import { ComposerImageAttachment } from './components/ComposerImageAttachment';
@@ -208,6 +220,8 @@ type PreparedSubmission = {
 };
 /** 排队中的消息：保留原始文本与附件，便于撤回后继续编辑。 */
 type QueuedPrompt = { id: string; order: number; text: string; attachments: ComposerAttachment[]; submission: PreparedSubmission };
+/** 编辑中的队列项一次性保留原 id 与槽位，重新排队时插回原位置。 */
+type QueuedEditContext = { id: string; index: number };
 type PiWorkspace = {
   cwd: string;
   name: string;
@@ -500,6 +514,13 @@ function mergeStreamMessage(current: ChatMessage[], incoming: ChatMessage, type:
   return copy;
 }
 
+function mergeRequestTrace(current: RequestTrace[], incoming: RequestTrace): RequestTrace[] {
+  const next = current.filter((trace) => trace.requestId !== incoming.requestId);
+  next.push(incoming);
+  next.sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id));
+  return next.slice(-48);
+}
+
 /**
  * A wheel event can bubble out of an overflowing code block or tool result.
  * While that inner element can still scroll in the requested direction, the
@@ -564,6 +585,7 @@ export function App() {
   const [todoPanelOpen, setTodoPanelOpen] = useState(false);
   const [queuedPromptsBySession, setQueuedPromptsBySession] = useState<Record<string, QueuedPrompt[]>>({});
   const queuedDrainSessionsRef = useRef<Set<string>>(new Set());
+  const queuedEditContextsRef = useRef<Record<string, QueuedEditContext>>({});
   const [outlineActive, setOutlineActive] = useState(0);
   const [outlineHover, setOutlineHover] = useState<number | null>(null);
   const [outlineItems, setOutlineItems] = useState<OutlineItem[]>([]);
@@ -596,7 +618,9 @@ export function App() {
   } | null>(null);
   const sessionRef = useRef(session);
   const queuedPrompts = session?.id ? queuedPromptsBySession[session.id] ?? [] : [];
+  const queuedEditContext = session?.id ? queuedEditContextsRef.current[session.id] : undefined;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [requestTraces, setRequestTraces] = useState<RequestTrace[]>([]);
   const [agentView, setAgentView] = useState<AgentView>({ kind: 'conversation' });
   const conversationExtensionSurface = useExtensionUiSnapshot(session?.cwd);
   const [conversationExtensionUiPreferences, setConversationExtensionUiPreferences] = useState<ConversationExtensionUiPreferences>(
@@ -698,6 +722,8 @@ export function App() {
   }, [session?.id]);
   const [prompt, setPrompt] = useState('');
   const [composerAttachments, setComposerAttachments] = useState<ComposerAttachment[]>([]);
+  const composerDraftKeyRef = useRef(composerDraftKeyForNew(''));
+  const composerDraftsRef = useRef<ComposerDraftStore>(new Map());
   const composerImages = useMemo(
     () => composerAttachments.flatMap((attachment) => attachment.kind === 'image'
       ? [{ src: `data:${attachment.mime};base64,${attachment.data || ''}`, alt: attachment.name }]
@@ -1811,6 +1837,16 @@ export function App() {
     if (textarea) { textarea.style.height = 'auto'; textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`; }
   }, [prompt]);
 
+  // Drafts live only for the current renderer process. This keeps unsent text
+  // and attachments isolated by conversation without adding SQLite state.
+  useEffect(() => {
+    saveComposerDraft(composerDraftsRef.current, composerDraftKeyRef.current, {
+      text: prompt,
+      attachments: composerAttachments,
+      kind: draftKind,
+    });
+  }, [composerAttachments, draftKind, prompt]);
+
   // 读取扩展当前的批准方式；扩展未安装时 available=false，界面不显示入口。
   useEffect(() => {
     void window.piApi.modeGet({ cwd: workspace || undefined, sessionId: session?.id })
@@ -1943,6 +1979,7 @@ export function App() {
     const applySnapshot = (snapshot: ConversationSnapshot | undefined) => {
       if (disposed || !snapshot) return;
       setBusy(Boolean(snapshot.running));
+      setRequestTraces(Array.isArray(snapshot.requestTraces) ? snapshot.requestTraces : []);
       setCompaction({ active: Boolean(snapshot.compacting) });
       setRetryInfo(snapshot.retry ? {
         attempt: 1,
@@ -1975,6 +2012,9 @@ export function App() {
       void loadState();
       void window.piApi.conversationSnapshot(conversationId).then((snapshot) => {
         if (!disposed && snapshot?.model) setModelSelection(snapshot.model);
+        if (!disposed && Array.isArray(snapshot?.requestTraces)) {
+          setRequestTraces(snapshot.requestTraces);
+        }
         if (!disposed && snapshot?.longTask) {
           setSession((current) => current?.id === conversationId
             ? { ...current, longTask: snapshot.longTask }
@@ -2018,6 +2058,9 @@ export function App() {
           for (const message of event.payload.messages) {
             if (message.role === 'toolResult') schedule(message, 'message_end');
           }
+          return;
+        case 'request.trace':
+          setRequestTraces((current) => mergeRequestTrace(current, event.payload.trace));
           return;
         case 'run.started':
           setBusy(true);
@@ -2304,12 +2347,16 @@ export function App() {
 
   /** 把一次超长粘贴保存成文本附件，只转换这一批内容。 */
   async function attachPastedText(text: string): Promise<boolean> {
+    const targetKey = composerDraftKeyRef.current;
+    const targetKind = draftKind;
+    const baseAttachments = composerAttachments;
     try {
       const saved = await window.piApi.saveAttachment({ sessionId: session?.id || 'draft', text });
-      setComposerAttachments((current) => [...current, {
+      const attachment: ComposerAttachment = {
         id: crypto.randomUUID(), kind: 'file', name: saved.name, mime: saved.mime || 'text/plain',
         bytes: saved.bytes, lines: saved.lines, path: saved.path, marker: saved.marker,
-      }]);
+      };
+      appendComposerAttachments([attachment], targetKey, targetKind, baseAttachments);
       return true;
     } catch {
       return false;
@@ -2387,11 +2434,59 @@ export function App() {
 
   // ---------- 会话生命周期 ----------
 
+  function currentComposerDraft(kind: SessionKind = draftKind): ComposerDraft {
+    return { text: prompt, attachments: composerAttachments, kind };
+  }
+
+  /** Keep the active composer in its conversation slot before navigation. */
+  function checkpointComposerDraft(): void {
+    saveComposerDraft(
+      composerDraftsRef.current,
+      composerDraftKeyRef.current,
+      currentComposerDraft(),
+    );
+  }
+
+  /** Install a conversation-specific draft into the shared composer fields. */
+  function installComposerDraft(
+    key: string,
+    fallbackKind: SessionKind,
+    restore = true,
+  ): void {
+    const next = restore
+      ? readComposerDraft(composerDraftsRef.current, key, fallbackKind)
+      : emptyComposerDraft(fallbackKind);
+    composerDraftKeyRef.current = key;
+    setPrompt(next.text);
+    setComposerAttachments(next.attachments);
+    setDraftKind(next.kind);
+  }
+
+  function clearActiveComposerDraftText(): void {
+    const key = composerDraftKeyRef.current;
+    saveComposerDraft(composerDraftsRef.current, key, {
+      ...currentComposerDraft(),
+      text: '',
+    });
+    setPrompt('');
+  }
+
+  function clearActiveComposerDraft(): void {
+    clearComposerDraft(composerDraftsRef.current, composerDraftKeyRef.current);
+    setPrompt('');
+    setComposerAttachments([]);
+  }
+
   /**
    * 开始一个新会话（草稿态）。
-   * 会话真正落盘发生在第一次发送消息时，所以这里只清空本地状态并选中工作区。
+   * 会话真正落盘发生在第一次发送消息时；未发送内容按工作区暂存在 renderer。
    */
-  async function startSession(cwd = session?.cwd || workspace, kind: SessionKind = 'conversation') {
+  async function startSession(
+    cwd = session?.cwd || workspace,
+    kind: SessionKind = 'conversation',
+    options: { restoreDraft?: boolean; checkpoint?: boolean } = {},
+  ) {
+    if (options.checkpoint !== false) checkpointComposerDraft();
     ++sessionLoadRef.current;
     ++outlineRequestRef.current;
     ++subagentRequestRef.current;
@@ -2399,6 +2494,7 @@ export function App() {
     setSessionLoading(false);
     setSession(null);
     setMessages([]);
+    setRequestTraces([]);
     setAgentView({ kind: 'conversation' });
     setSubagentChildren([]);
     setSubagentTranscript(null);
@@ -2410,11 +2506,12 @@ export function App() {
     setOutlineHover(null);
     pendingOutlineJumpRef.current = null;
     setError(null);
-    setPrompt('');
     setWorkspace(cwd);
-    setDraftKind(kind);
+    const nextKey = composerDraftKeyForNew(cwd);
+    const restoreDraft = options.restoreDraft !== false;
+    if (!restoreDraft) clearComposerDraft(composerDraftsRef.current, nextKey);
+    installComposerDraft(nextKey, kind, restoreDraft);
     if (cwd) expandWorkspace(cwd);
-    setComposerAttachments([]);
     setComposerMenu(null);
     setModelPickerRequest(null);
     setModelSelection(defaultModelSelection);
@@ -2425,6 +2522,7 @@ export function App() {
   }
 
   function selectDraftWorkspace(cwd: string) {
+    checkpointComposerDraft();
     ++sessionLoadRef.current;
     ++outlineRequestRef.current;
     ++subagentRequestRef.current;
@@ -2441,6 +2539,7 @@ export function App() {
     setOutlineHover(null);
     pendingOutlineJumpRef.current = null;
     setWorkspace(cwd);
+    installComposerDraft(composerDraftKeyForNew(cwd), draftKind);
     setComposerMenu(null);
     setModelPickerRequest(null);
     setModelSelection(defaultModelSelection);
@@ -2489,10 +2588,14 @@ export function App() {
     const result = await window.piApi.conversationAction({ kind, id, action, name });
     if (kind === 'session' && (action === 'archive' || action === 'remove')) {
       clearSessionQueuedPrompts(id);
+      delete queuedEditContextsRef.current[id];
     }
     if (kind === 'workspace' && action === 'remove') {
       const removedWorkspace = workspaces.find((item) => item.cwd === id);
-      for (const item of removedWorkspace?.sessions ?? []) clearSessionQueuedPrompts(item.id);
+      for (const item of removedWorkspace?.sessions ?? []) {
+        clearSessionQueuedPrompts(item.id);
+        delete queuedEditContextsRef.current[item.id];
+      }
     }
     const current = sessionRef.current;
     const currentSummary = current
@@ -2501,6 +2604,16 @@ export function App() {
     if (kind === 'workspace' && action === 'remove' && workspace === id) await startSession('');
     if (kind === 'session' && action === 'archive' && current?.id === id && !currentSummary?.archived) await startSession(current.cwd);
     if (kind === 'session' && action === 'remove' && current?.id === id) await startSession(current.cwd);
+    if (kind === 'session' && action === 'remove') {
+      clearComposerDraft(composerDraftsRef.current, composerDraftKeyForSession(id));
+    }
+    if (kind === 'workspace' && action === 'remove') {
+      const removedWorkspace = workspaces.find((item) => item.cwd === id);
+      for (const item of removedWorkspace?.sessions ?? []) {
+        clearComposerDraft(composerDraftsRef.current, composerDraftKeyForSession(item.id));
+      }
+      clearComposerDraft(composerDraftsRef.current, composerDraftKeyForNew(id));
+    }
     if (kind === 'session' && action === 'rename' && current?.id === id) setSession(value => value ? { ...value, title: name!.trim() } : value);
     await loadState();
     if (kind === 'workspace' && action === 'remove') {
@@ -2548,6 +2661,7 @@ export function App() {
    * 用递增的 sessionLoadRef 丢弃过期结果，避免快速切换时串会话。
    */
   async function openSession(item: PiSessionSummary) {
+    checkpointComposerDraft();
     requestRef.current = '';
     const load = ++sessionLoadRef.current;
     const outlineRequest = ++outlineRequestRef.current;
@@ -2566,11 +2680,12 @@ export function App() {
         void loadState().catch(() => { /* 列表刷新失败时保留错误提示 */ });
         return;
       }
+      const kind = detail.kind ?? item.kind ?? 'conversation';
       setSession({
         id: detail.id,
         cwd: detail.cwd,
         title: detail.title,
-        kind: detail.kind ?? item.kind ?? 'conversation',
+        kind,
         longTask: detail.longTask,
         turnDiffs: detail.turnDiffs,
         hasMore: detail.page.hasOlder,
@@ -2580,6 +2695,7 @@ export function App() {
       });
       if (detail.model) setModelSelection(detail.model);
       setMessages(detail.messages.map((message) => ({ ...message })));
+      setRequestTraces(Array.isArray(detail.requestTraces) ? detail.requestTraces : []);
       // 子 Agent 查询失败不应阻止主会话打开；该查询在调用处按空列表降级。
       setSubagentChildren(Array.isArray(children) ? children : []);
       setSubagentTranscript(null);
@@ -2591,7 +2707,7 @@ export function App() {
       }
       setHistoryLoading(false);
       setWorkspace(detail.cwd);
-      setDraftKind(detail.kind ?? item.kind ?? 'conversation');
+      installComposerDraft(composerDraftKeyForSession(detail.id), kind);
       expandWorkspace(detail.cwd);
       setModelPickerRequest(null);
       setError(null);
@@ -2787,6 +2903,30 @@ export function App() {
     });
   }
 
+  function appendComposerAttachments(
+    additions: ComposerAttachment[],
+    targetKey = composerDraftKeyRef.current,
+    targetKind = draftKind,
+    baseAttachments?: ComposerAttachment[],
+  ): void {
+    const active = targetKey === composerDraftKeyRef.current;
+    const stored = composerDraftsRef.current.get(targetKey);
+    const current = stored
+      ? { ...stored, attachments: [...stored.attachments] }
+      : active
+        ? currentComposerDraft(targetKind)
+        : readComposerDraft(composerDraftsRef.current, targetKey, targetKind);
+    const nextAttachments = [
+      ...(baseAttachments ?? current.attachments),
+      ...additions,
+    ];
+    saveComposerDraft(composerDraftsRef.current, targetKey, {
+      ...current,
+      attachments: nextAttachments,
+    });
+    if (active) setComposerAttachments(nextAttachments);
+  }
+
   async function deleteSubagent(child: SubagentChild) {
     const sessionId = session?.id;
     if (!sessionId || subagentDeletingKey) return;
@@ -2824,6 +2964,9 @@ export function App() {
   }
 
   async function addComposerFiles(files: File[]) {
+    const targetKey = composerDraftKeyRef.current;
+    const targetKind = draftKind;
+    let pendingAttachments = composerAttachments;
     const images = files.filter((file) => file.type.startsWith('image/'));
     const accepted = modelSelection.supportsImages === false && images.length > 0
       ? files.filter((file) => !file.type.startsWith('image/'))
@@ -2838,17 +2981,24 @@ export function App() {
       try {
         if (file.type.startsWith('image/')) {
           const data = await readFileBase64(file);
-          setComposerAttachments((current) => [...current, { id: crypto.randomUUID(), kind: 'image', name: file.name || 'image.png', mime: file.type || 'image/png', bytes: file.size, data }]);
+          const attachment: ComposerAttachment = { id: crypto.randomUUID(), kind: 'image', name: file.name || 'image.png', mime: file.type || 'image/png', bytes: file.size, data };
+          appendComposerAttachments([attachment], targetKey, targetKind, pendingAttachments);
+          pendingAttachments = [...pendingAttachments, attachment];
         } else {
           const data = await readFileBase64(file);
           const saved = await window.piApi.saveUpload({ sessionId: session?.id, name: file.name || 'attachment', mime: file.type, data });
-          setComposerAttachments((current) => [...current, { ...saved, id: crypto.randomUUID() }]);
+          const attachment: ComposerAttachment = { ...saved, id: crypto.randomUUID() };
+          appendComposerAttachments([attachment], targetKey, targetKind, pendingAttachments);
+          pendingAttachments = [...pendingAttachments, attachment];
         }
       } catch (error) { showComposerFeedback(errorText(error)); }
     }
   }
 
   async function pickComposerAttachments() {
+    const targetKey = composerDraftKeyRef.current;
+    const targetKind = draftKind;
+    const baseAttachments = composerAttachments;
     try {
       const result = await window.piApi.pickAttachments({ sessionId: session?.id });
       const rejectedImages = modelSelection.supportsImages === false
@@ -2860,7 +3010,7 @@ export function App() {
       if (rejectedImages > 0) {
         showComposerFeedback(`${modelSelection.label || '当前模型'} 不支持图片输入，已保留可发送的普通文件。`);
       }
-      setComposerAttachments((current) => [...current, ...accepted]);
+      appendComposerAttachments(accepted, targetKey, targetKind, baseAttachments);
     } catch (error) { showComposerFeedback(errorText(error)); }
   }
 
@@ -2977,7 +3127,12 @@ export function App() {
   }
 
   function removeComposerAttachment(id: string) {
-    setComposerAttachments((current) => current.filter((attachment) => attachment.id !== id));
+    const nextAttachments = composerAttachments.filter((attachment) => attachment.id !== id);
+    saveComposerDraft(composerDraftsRef.current, composerDraftKeyRef.current, {
+      ...currentComposerDraft(),
+      attachments: nextAttachments,
+    });
+    setComposerAttachments(nextAttachments);
   }
 
   // ---------- 输入建议（/ 命令与 @ 文件） ----------
@@ -3025,8 +3180,15 @@ export function App() {
     if (!command) return false;
 
     if (command.route === 'session.new') {
-      if (busy) return true;
-      await startSession();
+      if (busy) {
+        clearActiveComposerDraftText();
+        return true;
+      }
+      clearActiveComposerDraft();
+      await startSession(undefined, 'conversation', {
+        restoreDraft: false,
+        checkpoint: false,
+      });
       return true;
     }
     if (command.route === 'settings.open') { await openSettings(); return true; }
@@ -3184,14 +3346,14 @@ export function App() {
     if (!command) return;
     if (command.source === 'builtin') {
       setComposerMenu(null);
-      setPrompt('');
+      clearActiveComposerDraftText();
       setComposerMenuIndex(0);
       void executeBuiltinCommand(`/${command.name}`);
       return;
     }
     if (command.source === 'extension' && command.commandId && !command.argumentHint) {
       setComposerMenu(null);
-      setPrompt('');
+      clearActiveComposerDraftText();
       setComposerMenuIndex(0);
       void executeExtensionCommand(command.commandId, '');
       return;
@@ -3526,6 +3688,7 @@ export function App() {
           totalMessages: outline?.totalMessages,
         });
         setMessages(saved.messages.map((message) => ({ ...message })));
+        setRequestTraces(Array.isArray(saved.requestTraces) ? saved.requestTraces : []);
         if (outline) applyOutline(outline, saved.messages, saved.messageStart);
         else if (outlineItems.length === 0) applyOutline(undefined, saved.messages, saved.messageStart);
       }
@@ -3566,28 +3729,33 @@ export function App() {
    * 依次处理内置命令、懒创建会话、长消息/附件预处理，
    * 最后根据是否正在运行决定「直接发送 / 插话 / 排队」。
    */
-  async function send(overrideText?: string) {
+  async function send(overrideText?: string, busyBehavior: 'steer' | 'queue' = 'steer') {
     if (stopping) return;
-    const text = (overrideText ?? prompt).trim();
+    const draftText = overrideText ?? prompt;
+    const text = draftText.trim();
     if ((!text && composerAttachments.length === 0)) return;
     if (compaction.active) return;
     if (!turnActive && composerAttachments.length === 0 && text === '/todos') {
       setTodoPanelOpen(true);
-      setPrompt('');
+      clearActiveComposerDraftText();
       setComposerMenu(null);
       return;
     }
-    if (composerAttachments.length === 0 && text.startsWith('/')) {
+    // An explicit queue action keeps the draft literal. Commands execute only
+    // through the primary send action, never as a side effect of queuing.
+    if (busyBehavior !== 'queue' && composerAttachments.length === 0 && text.startsWith('/')) {
       const extensionCommand = await findExtensionCommand(text);
       if (extensionCommand) {
         setComposerMenu(null);
         if (await executeExtensionCommand(extensionCommand.commandId, extensionCommand.argument)) {
-          setPrompt('');
+          clearActiveComposerDraftText();
         }
         return;
       }
       if (await executeBuiltinCommand(text)) {
-        setPrompt('');
+        if (parseStudioCommand(text)?.route !== 'session.new') {
+          clearActiveComposerDraftText();
+        }
         setComposerMenu(null);
         return;
       }
@@ -3603,6 +3771,7 @@ export function App() {
       return;
     }
     let current = session;
+    const sourceDraftKey = composerDraftKeyRef.current;
     if (!current) {
       const draftGeneration = sessionLoadRef.current;
       let created;
@@ -3621,9 +3790,17 @@ export function App() {
         kind: created.kind ?? draftKind,
         longTask: created.longTask,
       };
+      const nextDraftKey = composerDraftKeyForSession(current.id);
+      moveComposerDraft(composerDraftsRef.current, sourceDraftKey, nextDraftKey, {
+        text: draftText,
+        attachments: composerAttachments,
+        kind: current.kind ?? 'conversation',
+      });
+      composerDraftKeyRef.current = nextDraftKey;
       setSession(current);
       setDraftKind(created.kind ?? draftKind);
       setMessages([]);
+      setRequestTraces([]);
       // 草稿会话也要马上出现在侧边栏，否则用户发完第一条消息后找不到入口。
       void loadState().catch(() => { /* 侧边栏刷新失败不阻塞发送 */ });
     }
@@ -3636,24 +3813,34 @@ export function App() {
       if (!composerFeedback) showComposerFeedback(errorText(error));
       return;
     }
-    setPrompt('');
-    setComposerAttachments([]);
+    clearActiveComposerDraft();
+    const editContext = queuedEditContextsRef.current[current.id];
+    const queuedItem: QueuedPrompt = {
+      id: editContext?.id ?? crypto.randomUUID(),
+      order: 1,
+      text,
+      attachments: queuedAttachments,
+      submission: prepared,
+    };
     if (turnActive) {
-      if (preferences.busySend === 'steer') {
-        await dispatchSubmission(prepared, 'steer');
+      if (busyBehavior === 'queue') {
+        updateSessionQueuedPrompts(current.id, (items) => {
+          const remaining = items.filter((item) => item.id !== queuedItem.id);
+          const insertAt = editContext
+            ? Math.min(Math.max(editContext.index, 0), remaining.length)
+            : remaining.length;
+          const next = [...remaining];
+          next.splice(insertAt, 0, queuedItem);
+          return next.map((item, index) => ({ ...item, order: index + 1 }));
+        });
+        delete queuedEditContextsRef.current[current.id];
       } else {
-        updateSessionQueuedPrompts(current.id, (items) => (
-          [...items, {
-            id: crypto.randomUUID(),
-            order: items.length + 1,
-            text,
-            attachments: queuedAttachments,
-            submission: prepared,
-          }].sort((a, b) => a.order - b.order)
-        ));
+        delete queuedEditContextsRef.current[current.id];
+        await dispatchSubmission(prepared, 'steer');
       }
       return;
     }
+    delete queuedEditContextsRef.current[current.id];
     await dispatchSubmission(prepared, 'prompt');
   }
 
@@ -3749,9 +3936,16 @@ export function App() {
   function editQueued(id: string) {
     const sessionId = sessionRef.current?.id;
     if (!sessionId) return;
-    const item = queuedPrompts.find((candidate) => candidate.id === id);
+    const index = queuedPrompts.findIndex((candidate) => candidate.id === id);
+    const item = queuedPrompts[index];
     if (!item) return;
+    queuedEditContextsRef.current[sessionId] = { id, index };
     updateSessionQueuedPrompts(sessionId, (items) => items.filter((candidate) => candidate.id !== id));
+    saveComposerDraft(composerDraftsRef.current, composerDraftKeyRef.current, {
+      text: item.text,
+      attachments: item.attachments,
+      kind: draftKind,
+    });
     setPrompt(item.text);
     setComposerAttachments(item.attachments);
     window.requestAnimationFrame(() => textareaRef.current?.focus());
@@ -4046,6 +4240,36 @@ export function App() {
     else transcriptTurns.push({ kind: 'assistant', messages: [message] });
   }
   const lastAssistantTurnIndex = transcriptTurns.reduce((last, turn, index) => turn.kind === 'assistant' ? index : last, -1);
+  const requestTracesByTurn = new Map<number, RequestTrace[]>();
+  const pendingRequestTraces: RequestTrace[] = [];
+  for (const trace of [...requestTraces].sort((left, right) => (
+    left.createdAt - right.createdAt || left.id.localeCompare(right.id)
+  ))) {
+    let targetTurn = transcriptTurns.findIndex((turn) => (
+      turn.kind === 'assistant'
+      && turn.messages.some((message) => (
+        typeof message.timestamp === 'number' && message.timestamp >= trace.createdAt
+      ))
+    ));
+    if (
+      targetTurn < 0
+      && turnActive
+      && transcriptTurns.at(-1)?.kind === 'assistant'
+      && lastAssistantTurnIndex >= 0
+    ) {
+      targetTurn = lastAssistantTurnIndex;
+    }
+    if (targetTurn < 0) pendingRequestTraces.push(trace);
+    else requestTracesByTurn.set(targetTurn, [
+      ...(requestTracesByTurn.get(targetTurn) || []),
+      trace,
+    ]);
+  }
+  const pendingAssistantVisible = transcriptTurns.at(-1)?.kind !== 'assistant'
+    && (turnActive || pendingRequestTraces.length > 0);
+  const pendingTurnError = !turnActive && pendingRequestTraces.length > 0
+    ? error || '本轮没有生成助手消息。'
+    : undefined;
   const outlineSamples = useMemo(
     () => sampleOutlineIndices(outlineItems.length, outlineActive),
     [outlineItems.length, outlineActive],
@@ -4674,15 +4898,27 @@ export function App() {
                 {historyLoading && <div className="history-loading" role="status" aria-live="polite" aria-label="正在加载更早消息"><LoaderCircle className="spin" /></div>}
                 {transcriptTurns.map((turn, index) => turn.kind === 'user'
                   ? <ChatMessageView key={`user-${turn.message.sourceIndex ?? turn.message.timestamp ?? index}`} id={`chat-turn-${turn.message.sourceIndex ?? `pending-${turn.message.timestamp ?? index}`}`} message={turn.message} onOpenFile={handleOpenFile} />
-                  : <AssistantTurnView key={`assistant-${turn.messages[0]?.sourceIndex ?? turn.messages[0]?.timestamp ?? index}`} id={turn.messages[0]?.sourceIndex !== undefined ? `chat-assistant-turn-${turn.messages[0].sourceIndex}` : undefined} messages={turn.messages} toolResults={toolResultMap} cwd={session?.cwd} busy={turnActive && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView}
+                  : <AssistantTurnView key={`assistant-${turn.messages[0]?.sourceIndex ?? turn.messages[0]?.timestamp ?? index}`} id={turn.messages[0]?.sourceIndex !== undefined ? `chat-assistant-turn-${turn.messages[0].sourceIndex}` : undefined} messages={turn.messages} toolResults={toolResultMap} requestTraces={requestTracesByTurn.get(index)} cwd={session?.cwd} busy={turnActive && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView}
                     gitDiff={index === lastAssistantTurnIndex ? liveDiff ?? (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined) : (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined)}
                     onOpenDiff={handleOpenChanges} onOpenFile={handleOpenFile} />)}
-                {turnActive && !retryInfo && transcriptTurns.at(-1)?.kind !== 'assistant' && (
-                  <div className="thinking"><span /><span /><span />正在思考</div>
+                {pendingAssistantVisible && (
+                  <AssistantTurnView
+                    key={`assistant-pending-${pendingRequestTraces[0]?.id || messages.length}`}
+                    messages={[]}
+                    toolResults={toolResultMap}
+                    requestTraces={pendingRequestTraces}
+                    cwd={session?.cwd}
+                    busy={turnActive}
+                    turnError={pendingTurnError}
+                    retry={turnActive ? retryInfo ?? undefined : undefined}
+                    stepDisplay={preferences.stepDisplay}
+                    stepCollapse={preferences.stepCollapse}
+                    showCodeView={false}
+                  />
                 )}
               </div>
             )}
-            {error && <div className="error-card" role="alert"><strong>暂时无法完成操作</strong><p>{error}</p></div>}
+            {error && (!pendingAssistantVisible || turnActive) && <div className="error-card" role="alert"><strong>暂时无法完成操作</strong><p>{error}</p></div>}
           </div>
         </div>}
 
@@ -4926,20 +5162,36 @@ export function App() {
                 });
               }}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && queuedPrompts.length > 0) { event.preventDefault(); void sendAllQueued(); return; }
+                const submitAction = composerSubmitAction({
+                  key: event.key,
+                  shiftKey: event.shiftKey,
+                  metaKey: event.metaKey,
+                  ctrlKey: event.ctrlKey,
+                  altKey: event.altKey,
+                  isComposing: event.nativeEvent.isComposing,
+                  busy: turnActive,
+                });
+                if (submitAction === 'queue') {
+                  event.preventDefault();
+                  void send(undefined, 'queue');
+                  return;
+                }
                 if (composerMenu && composerOptionsCount > 0) {
                   if (event.key === 'ArrowDown') { event.preventDefault(); setComposerMenuIndex((index) => (index + 1) % composerOptionsCount); return; }
                   if (event.key === 'ArrowUp') { event.preventDefault(); setComposerMenuIndex((index) => (index - 1 + composerOptionsCount) % composerOptionsCount); return; }
                   if ((event.key === 'Enter' || event.key === 'Tab') && !event.nativeEvent.isComposing) { event.preventDefault(); selectComposerOption(composerMenuIndex); return; }
                   if (event.key === 'Escape') { event.preventDefault(); setComposerMenu(null); return; }
                 }
-                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); }
+                if (submitAction === 'send' || submitAction === 'steer') {
+                  event.preventDefault();
+                  void send();
+                }
               }}
               aria-label="发送给 Pi 的消息"
               aria-describedby={isNewConversation ? 'workspace-selection-hint' : undefined}
               className={`${queuedPrompts.length > 0 ? 'has-queued' : ''} ${composing ? 'is-composing' : ''}`.trim() || undefined}
               aria-expanded={Boolean(composerMenu)}
-              placeholder={compaction.active ? '正在压缩上下文，完成后自动继续…' : queuedPrompts.length > 0 ? 'Cmd/Ctrl+Enter 插话发送全部排队消息' : draftKind === 'durable' ? '描述目标与完成条件，或输入 / 命令、@ 文件…' : '描述你的想法，或输入 / 命令、@ 文件…'}
+              placeholder={compaction.active ? '正在压缩上下文，完成后自动继续…' : queuedEditContext ? '编辑排队消息 · Cmd/Ctrl+Enter 放回原位置 · Shift+Enter 换行' : turnActive ? 'Enter 补充当前任务 · Cmd/Ctrl+Enter 排队 · Shift+Enter 换行' : draftKind === 'durable' ? '描述目标与完成条件，或输入 / 命令、@ 文件…' : '描述你的想法，或输入 / 命令、@ 文件…'}
               rows={2}
               onScroll={(event) => {
                 // 高亮层与 textarea 同步滚动，保证长文本换行时不错位。
@@ -4974,7 +5226,7 @@ export function App() {
               <div className="composer-right">
                 <ModelPicker selection={modelSelection} scope={session ? 'session' : 'default'} disabled={stateLoading || sessionLoading} hidden={settingsOpen} loadCatalog={loadModelCatalog} onSelectModel={selectModel} onSelectThinking={selectThinking} onManage={() => void openSettings('models')} request={modelPickerRequest} onRequestHandled={() => setModelPickerRequest(null)} />
                 {turnActive && <button type="button" className="send-button is-stop" disabled={stopping} onClick={() => void stopGeneration()} aria-label={stopping ? '正在停止当前任务' : '停止当前任务'} title={stopping ? '正在停止当前任务' : '停止当前任务'}>{stopping ? <LoaderCircle className="spin" aria-hidden="true" /> : <Square fill="currentColor" aria-hidden="true" />}</button>}
-                {(!turnActive || prompt.trim() || composerAttachments.length > 0) && <button type="button" className="send-button" disabled={stopping || !workspace || (!prompt.trim() && composerAttachments.length === 0) || compaction.active} onClick={() => void send()} aria-label={compaction.active ? '正在压缩上下文' : turnActive ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'} title={!workspace ? '请先选择工作区' : compaction.active ? '正在压缩上下文，完成后自动继续' : turnActive ? (preferences.busySend === 'queue' ? '排队发送' : '引导当前任务') : '发送消息'}><ArrowUp /></button>}
+                {(!turnActive || prompt.trim() || composerAttachments.length > 0) && <button type="button" className="send-button" disabled={stopping || !workspace || (!prompt.trim() && composerAttachments.length === 0) || compaction.active} onClick={() => void send()} aria-label={compaction.active ? '正在压缩上下文' : turnActive ? '补充当前任务' : '发送消息'} title={!workspace ? '请先选择工作区' : compaction.active ? '正在压缩上下文，完成后自动继续' : turnActive ? '补充当前任务；Cmd/Ctrl+Enter 排队' : '发送消息'}><ArrowUp /></button>}
               </div>
             </div>
             </div>
@@ -5120,7 +5372,6 @@ export function App() {
                     <div className="settings-profile-row"><div><strong>显示代码工作视图</strong><p>本轮回答结束后，显示工具确认的文件修改与可用差异。</p></div><button className={`switch ${preferences.showCodeView ? 'is-on' : ''}`} role="switch" aria-checked={preferences.showCodeView} onClick={() => updatePreference('showCodeView', !preferences.showCodeView)}><span /></button></div>
                     <div className="settings-profile-row"><div><strong>快捷键</strong><p>查看当前可用的键盘操作。</p></div><button className="settings-outline" onClick={() => setShortcutsOpen(true)}><Keyboard />编辑快捷键</button></div>
                     <div className="settings-profile-row"><div><strong>网页链接默认打开方式</strong><p>对话中网页链接的打开位置。</p></div><Select label="网页链接默认打开方式" value={preferences.linkOpen} onChange={(value) => updatePreference('linkOpen', value as Preferences['linkOpen'])} options={[{ value: 'external', label: '系统浏览器' }, { value: 'window', label: '应用内窗口' }]} /></div>
-                    <div className="settings-profile-row"><div><strong>繁忙时的发送行为</strong><p>智能体运行时 Enter 键和发送按钮的行为。</p></div><Select label="繁忙时的发送行为" value={preferences.busySend} onChange={(value) => updatePreference('busySend', value as Preferences['busySend'])} options={[{ value: 'queue', label: '排队发送' }, { value: 'steer', label: '引导当前任务' }]} /></div>
                   </div>
                 </section>
               </div>
@@ -5856,7 +6107,7 @@ export function App() {
       {shortcutsOpen && <DetailDialog className="shortcuts-dialog" onClose={() => setShortcutsOpen(false)}>
         <header className="detail-header"><div className="detail-heading"><span className="detail-icon"><Keyboard /></span><div><h2>快捷键</h2><p>Pi Studio 桌面端当前可用的键盘操作。</p></div></div><button className="icon-button" aria-label="关闭快捷键" onClick={() => setShortcutsOpen(false)}><X /></button></header>
         <div className="shortcut-list">
-          {[['发送消息', 'Enter'], ['换行', 'Shift + Enter'], ['打开命令与技能', '/'], ['引用工作区文件', '@'], ['关闭浮层', 'Esc'], ['打开设置', 'Cmd + ,']].map(([label, key]) => <div className="shortcut-row" key={label}><span>{label}</span><kbd>{key}</kbd></div>)}
+          {[['发送消息 / 补充当前任务', 'Enter'], ['排队下一条消息', 'Cmd/Ctrl + Enter'], ['换行', 'Shift + Enter'], ['打开命令与技能', '/'], ['引用工作区文件', '@'], ['关闭浮层', 'Esc'], ['打开设置', 'Cmd + ,']].map(([label, key]) => <div className="shortcut-row" key={label}><span>{label}</span><kbd>{key}</kbd></div>)}
         </div>
         <footer className="detail-footer"><span /><button className="settings-outline" onClick={() => setShortcutsOpen(false)}>关闭</button></footer>
       </DetailDialog>}

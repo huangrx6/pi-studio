@@ -20,6 +20,7 @@ const { createStudioHarnessExtension, renderSection } = require('./studio-harnes
 const { skillInstructions } = require('./studio-skills.cjs');
 const { createStudioTodoExtension } = require('./studio-todo.cjs');
 const { createLongTaskExtension } = require('./studio-long-task.cjs');
+const { createStudioRequestTraceExtension } = require('./studio-request-trace.cjs');
 const {
   METRICS_FOOTER_SOURCE_ID,
   METRICS_SOURCE_ID,
@@ -125,6 +126,18 @@ const BUILTIN_MANIFESTS = Object.freeze([
     runtimeNames: ['studio-skills'],
     permissions: ['agent.sections'],
     requires: ['builtin:studio-harness'],
+    contributes: {},
+  },
+  {
+    id: 'studio-request-trace',
+    tier: 'system',
+    name: 'Studio 模型请求轨迹',
+    version: '1.0.0',
+    description: '捕获 Pi Durable 实际发送给模型的提示词、上下文消息、模型参数与工具定义，并显示在对话轨迹中。',
+    runtimeName: 'studio-request-trace',
+    runtimeNames: ['studio-request-trace'],
+    permissions: ['agent.sections', 'agent.hooks'],
+    requires: [],
     contributes: {},
   },
   {
@@ -1661,6 +1674,7 @@ function createStudioBuiltins({
     ['builtin:studio-harness', createStudioHarnessExtension(durable)],
     ['builtin:studio-tool-search', toolSearch],
     ['builtin:studio-skills', createSkillsExtension(durable)],
+    ['builtin:studio-request-trace', createStudioRequestTraceExtension(durable)],
     ['builtin:studio-permissions', createPermissionsExtension(durable)],
     ['builtin:studio-subagents', subagents.parentExtension],
     ['builtin:studio-subagent-channel', subagents.channel],
