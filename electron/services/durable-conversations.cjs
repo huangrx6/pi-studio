@@ -17,6 +17,7 @@ const { getStudioDatabase } = require('../core/studio-db.cjs');
 const {
   deleteWorkspaceScopedSettings,
   deletePermissionSessionPolicy,
+  getRuntimePolicy,
 } = require('../core/app-settings.cjs');
 const { getStudioModelsRuntime } = require('../core/studio-models.cjs');
 const {
@@ -855,6 +856,7 @@ async function setLongTaskStatus(row, conversation, status) {
     state.status = status;
     state.updatedAt = Date.now();
     if (status === 'active') {
+      state.pauseReason = '';
       state.blockReason = '';
       state.blockedAt = 0;
       state.completionSummary = '';
@@ -885,7 +887,7 @@ async function pauseLongTaskForContinuationGuard(entry, row, reason) {
     const state = normalizeLongTaskState(stored);
     if (state.status !== 'active') return;
     state.status = 'paused';
-    state.nextStep = reason;
+    state.pauseReason = reason;
     state.updatedAt = Date.now();
     Object.assign(stored, state);
   }, runtime.context);
@@ -903,11 +905,14 @@ async function guardLongTaskContinuation(entry, row) {
     runtime.context,
   );
   if (state.status !== 'active') return;
+  const policy = getRuntimePolicy();
   const decision = nextLongTaskContinuationGuard({
     continuations: entry.longTaskContinuations,
     stalledContinuations: entry.longTaskStalledContinuations,
     iteration: state.iteration,
     lastIteration: entry.longTaskLastIteration,
+    maxContinuations: policy.longTask.maxContinuations,
+    maxStalledContinuations: policy.longTask.maxStalledContinuations,
   });
   entry.longTaskContinuations = decision.continuations;
   entry.longTaskStalledContinuations = decision.stalledContinuations;
@@ -1346,10 +1351,6 @@ async function handleAgentEvent(event, entry, conversation, emit) {
     entry.snapshot = event;
     entry.partial = event.generation?.message;
     entry.running = Boolean(event.run);
-    if (conversation.kind === 'durable') {
-      entry.longTaskStalledContinuations = 0;
-      entry.longTaskGuardTriggered = false;
-    }
     if (entry.running) {
       runningConversations.add(key);
       await beginRunDiff(entry, conversation, event.run?.inputs);

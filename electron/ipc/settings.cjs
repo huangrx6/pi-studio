@@ -236,7 +236,7 @@ function registerSettingsIpc() {
     saveInstalledToolSelection(tools);
     return settingsWithRuntime(
       typeof cwd === 'string' ? cwd : DEFAULT_CWD,
-      'Agent 工具权限',
+      '智能体工具权限',
     );
   });
 
@@ -250,7 +250,7 @@ function registerSettingsIpc() {
       scope,
       settings,
     );
-    return { ...snapshot, runtimeRefresh: runtimeRefresh('子 Agent 配置') };
+    return { ...snapshot, runtimeRefresh: runtimeRefresh('子智能体配置') };
   });
 
   ipcMain.handle('pi:harness-settings', async (_event, cwd) => (

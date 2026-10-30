@@ -133,7 +133,8 @@ try {
 
   await page.evaluate(() => window.emitConversation('compaction.started', { reason: 'manual' }));
   await page.locator('.compaction-banner').waitFor();
-  assert.ok(await page.getByRole('button', { name: '正在压缩上下文', exact: true }).isDisabled());
+  assert.match(await page.locator('.composer textarea').getAttribute('placeholder'), /正在压缩上下文/);
+  assert.equal(await page.locator('.send-button[aria-label="正在压缩上下文"]:not(:disabled)').count(), 0);
   await page.evaluate(() => window.emitConversation('compaction.completed'));
   await page.locator('.compaction-banner').waitFor({ state: 'detached' });
   assert.doesNotMatch(await page.locator('.composer textarea').getAttribute('placeholder'), /压缩/);
@@ -147,7 +148,7 @@ try {
   }));
   await page.getByText('压缩完成，继续检查代码。', { exact: true }).waitFor();
   await page.locator('.composer textarea').fill('补充说明');
-  assert.equal(await page.getByRole('button', { name: /发送消息|排队发送|引导当前任务/ }).isDisabled(), false);
+  assert.equal(await page.locator('.send-button[aria-label="补充当前任务"]').isDisabled(), false);
 
   // Completed-but-aborted compaction and a later run completion remain idempotent.
   await page.evaluate(() => window.emitConversation('compaction.started'));

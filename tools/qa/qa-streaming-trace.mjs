@@ -28,38 +28,34 @@ try {
       const content = state.stage === 'thinking' ? [{type:'thinking',thinking:state.text}]
         : state.stage === 'tool' ? [{type:'text',text:'接下来检查构建结果。'},{type:'toolCall',id:'build',name:'bash',arguments:{command:'pnpm run build'}}]
         : [{type:'text',text:'已完成调整，实时输出不会藏在历史记录中。'}];
-      return React.createElement('main',{style:{maxWidth:900,margin:'60px auto',padding:'0 24px'}},React.createElement(AssistantTurnView,{messages:[prior,{role:'assistant',timestamp:2,streaming:state.busy && state.stage !== 'waiting',content}],toolResults:results,busy:state.busy,stepDisplay:'compact'}));
+      return React.createElement('main',{style:{maxWidth:900,margin:'60px auto',padding:'0 24px'}},React.createElement(AssistantTurnView,{messages:[prior,{role:'assistant',timestamp:2,streaming:state.busy && state.stage !== 'waiting',content}],toolResults:results,busy:state.busy,stepDisplay:'standard'}));
     }
     createRoot(document.getElementById('fixture')).render(React.createElement(Fixture));
     </script></body></html>` }));
   await page.goto('http://127.0.0.1:5180/popover-preview', { waitUntil: 'domcontentloaded' });
-  await page.getByRole('region',{name:'当前输出'}).waitFor();
-  assert.equal(await page.locator('.run-history').getAttribute('open'),null);
+  await page.locator('.run-current').waitFor();
+  await page.locator('.activity-sequence').waitFor();
+  assert.equal(await page.locator('.activity-sequence .activity-thinking').getAttribute('open'), null);
+  await page.locator('.run-current').getByText('思考中',{exact:true}).waitFor();
   await page.locator('.run-current').getByText('推理中',{exact:true}).waitFor();
   await page.evaluate(() => window.tick());
   await page.locator('.run-current .markdown').filter({hasText:'最新增量内容已经显示在这里'}).waitFor();
   assert.equal(await page.locator('.run-current details').count(),0,'thinking is not nested in details');
-  await page.locator('.run-history > summary').click();
-  await page.locator('.run-history .activity-tool').first().waitFor();
-  await page.locator('.run-history .activity-tool-summary').filter({hasText:'src/app.css'}).waitFor();
+  await page.locator('.activity-sequence .activity-tool').first().waitFor();
+  await page.locator('.activity-sequence .activity-tool-summary').filter({hasText:'src/app.css'}).waitFor();
   const traceAlignment = await page.evaluate(() => {
-    const completedIcons = Array.from(document.querySelectorAll('.run-history .activity-tool-icon, .run-history .activity-thinking-icon'));
-    const completedText = Array.from(document.querySelectorAll('.run-history .activity-tool-name, .run-history .activity-thinking-label'));
-    const current = document.querySelector('.run-current');
-    const currentIcon = document.querySelector('.run-current-heading > svg');
-    const currentText = document.querySelector('.run-current-heading > span');
-    const historyRail = document.querySelector('.run-history-list');
+    const completedIcons = Array.from(document.querySelectorAll('.activity-sequence .activity-tool-icon, .activity-sequence .activity-thinking-icon'));
+    const completedText = Array.from(document.querySelectorAll('.activity-sequence .activity-tool-name, .activity-sequence .activity-thinking-label'));
     return {
-      rail: [historyRail, current].map(node => node.getBoundingClientRect().left),
-      icon: [...completedIcons, currentIcon].map(node => node.getBoundingClientRect().left),
-      text: [...completedText, currentText].map(node => node.getBoundingClientRect().left),
+      icon: completedIcons.map(node => node.getBoundingClientRect().left),
+      text: completedText.map(node => node.getBoundingClientRect().left),
     };
   });
   for (const positions of Object.values(traceAlignment)) {
     assert.ok(Math.max(...positions) - Math.min(...positions) <= 0.5,
       `execution trace alignment drifted: ${JSON.stringify(traceAlignment)}`);
   }
-  const toolVerticalAlignment = await page.evaluate(() => Array.from(document.querySelectorAll('.run-history .activity-tool')).map(tool => {
+  const toolVerticalAlignment = await page.evaluate(() => Array.from(document.querySelectorAll('.activity-sequence .activity-tool')).map(tool => {
     const center = selector => {
       const rect = tool.querySelector(selector).getBoundingClientRect();
       return rect.top + rect.height / 2;
@@ -77,13 +73,12 @@ try {
       `completed tool row is not vertically centered: ${JSON.stringify(alignment)}`);
   }
   await page.screenshot({path:output+'thinking-light.png',fullPage:true,animations:'disabled'});
-  await page.locator('.run-history > summary').click();
   await page.locator('.run-current .markdown').waitFor();
   await page.evaluate(() => window.tool());
   await page.locator('.run-live-status').getByText('正在执行',{exact:true}).waitFor();
   await page.locator('.assistant-response').getByText('接下来检查构建结果。',{exact:true}).waitFor();
-  await page.locator('.run-current .activity-tool-summary').filter({hasText:'pnpm run build'}).waitFor();
-  const currentToolVerticalAlignment = await page.locator('.run-current .activity-tool').evaluate(tool => {
+  await page.locator('.assistant-turn-main > .activity-tool.is-running .activity-tool-summary').filter({hasText:'pnpm run build'}).waitFor();
+  const currentToolVerticalAlignment = await page.locator('.assistant-turn-main > .activity-tool.is-running').evaluate(tool => {
     const center = selector => {
       const rect = tool.querySelector(selector).getBoundingClientRect();
       return rect.top + rect.height / 2;

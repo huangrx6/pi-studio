@@ -19,6 +19,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
+const { readAbsoluteFile } = require('./workspace.cjs');
 
 const execFileAsync = promisify(execFile);
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
@@ -170,4 +171,38 @@ async function readTurnDiffFile({ sessionId, at, path: requested, full = false, 
   const limit = full ? 2_000_000 : MAX_PATCH_CHARS;
   return { ...file, patch: patch.slice(0, limit), truncated: patch.length > limit };
 }
-module.exports = { beginTurn, endTurn, readTurnDiffs, saveTurnDiff, readTurnDiffFile };
+
+/**
+ * Open a changed file referenced by one of this session's persisted turn diffs.
+ * Canonicalizing before the membership check prevents a later symlink swap from
+ * turning a previously approved path into an arbitrary-file read.
+ */
+function resolveTurnDiffAbsoluteFile({ sessionId, path: requested } = {}) {
+  if (typeof sessionId !== 'string' || !sessionId) throw new Error('缺少会话标识');
+  if (typeof requested !== 'string' || !path.isAbsolute(requested)) throw new Error('需要绝对路径');
+  let target;
+  try {
+    target = fs.realpathSync(requested);
+  } catch {
+    throw new Error('文件不存在或无法访问');
+  }
+  const authorized = readTurnDiffs(sessionId).some((turn) => (
+    Array.isArray(turn.files) && turn.files.some((file) => file.path === target)
+  ));
+  if (!authorized) throw new Error('文件不在当前会话的变更记录中');
+  return target;
+}
+
+function readTurnDiffAbsoluteFile(payload = {}) {
+  return readAbsoluteFile(resolveTurnDiffAbsoluteFile(payload));
+}
+
+module.exports = {
+  beginTurn,
+  endTurn,
+  readTurnDiffs,
+  saveTurnDiff,
+  readTurnDiffFile,
+  resolveTurnDiffAbsoluteFile,
+  readTurnDiffAbsoluteFile,
+};

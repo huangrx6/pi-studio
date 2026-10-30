@@ -334,6 +334,10 @@ try {
   // 选择列表里的 pi-studio 后发送按钮应启用；取消选择后回到未选状态。
   await workspacePicker.click();
   await page.getByRole('option', { name: 'pi-studio /workspace/pi-studio', exact: true }).click();
+  await page.waitForFunction(() => {
+    const button = document.querySelector('.send-button[aria-label="发送消息"]');
+    return button && !button.disabled;
+  });
   assert.equal(await page.getByRole('button', { name: '发送消息', exact: true }).isDisabled(), false);
   await page.getByRole('button', { name: '取消选择工作区' }).click();
   await openAppearanceSettings();
@@ -402,7 +406,7 @@ try {
     // 设置页：模型配置 + 添加来源对话框。
     await page.getByRole('button', { name: '模型配置', exact: true }).click();
     await capture(`${mode}-models`);
-    await page.getByRole('button', { name: '添加模型来源', exact: true }).click();
+    await page.locator('.settings-add-button').first().click();
     await page.locator('.settings-dialog').waitFor();
     await capture(`${mode}-dialog`);
     await page.keyboard.press('Escape');
@@ -425,7 +429,6 @@ try {
     await openFirstSession();
     await page.locator('.assistant-response').first().waitFor();
     await capture(`${mode}-conversation`);
-    await page.locator('.run-history > summary').first().click();
     await page.locator('.activity-thinking > summary').first().click();
     // 展开后思考预览行应隐藏，避免内容重复。
     assert.equal(await page.locator('.activity-thinking-preview').first().isVisible(), false);
@@ -547,9 +550,9 @@ try {
   assert.equal(await sessionShell.locator('.sidebar-row-actions').evaluate((element) => getComputedStyle(element).backgroundColor), 'rgba(0, 0, 0, 0)');
   await capture('sidebar-session-hover');
 
-  // 会话菜单应有 5 项；置顶后出现 pin 标记。
+  // 会话菜单应有 6 项；置顶后出现 pin 标记。
   await page.getByRole('button', { name: '全局主题预览的更多操作', exact: true }).click();
-  assert.equal(await page.getByRole('menuitem').count(), 5);
+  assert.equal(await page.getByRole('menuitem').count(), 6);
   await capture('sidebar-session-menu');
   await page.getByRole('menuitem', { name: '置顶会话', exact: true }).click();
   await sessionShell.locator('.session-pin-mark').waitFor({ state: 'attached' });
@@ -569,13 +572,14 @@ try {
   await page.getByRole('dialog', { name: '归档这个会话？' }).getByRole('button', { name: '取消', exact: true }).click();
   assert.equal(await page.evaluate(() => window.__sidebarActions.filter((entry) => entry.action === 'archive').length), 0);
 
-  // 确认归档 → 查看归档列表 → 恢复会话 → 返回未归档列表。
+  // 确认归档 → 在设置中查看归档列表 → 恢复会话。
   await hoverAndClick(renamedShell, '归档会话：已重命名的会话');
   await page.getByRole('dialog', { name: '归档这个会话？' }).getByRole('button', { name: '归档会话', exact: true }).click();
-  await page.getByRole('button', { name: '查看归档会话', exact: true }).click();
-  await hoverAndClick(renamedShell, '恢复会话：已重命名的会话');
-  await page.getByRole('dialog', { name: '恢复这个会话？' }).getByRole('button', { name: '恢复会话', exact: true }).click();
-  await page.getByRole('button', { name: '返回未归档会话', exact: true }).click();
+  await openAppearanceSettings();
+  await page.locator('.settings-nav-row').filter({ hasText: '归档会话' }).click();
+  const archivedCard = page.locator('.archive-session-card').filter({ hasText: '已重命名的会话' });
+  await archivedCard.getByRole('button', { name: '恢复会话', exact: true }).click();
+  await page.locator('.settings-back-button').click();
 
   // 复制 SessionId：替换 navigator.clipboard.writeText，断言复制的是会话 id。
   await hoverAndClick(renamedShell, '已重命名的会话的更多操作');
@@ -621,17 +625,17 @@ try {
   assert.equal(await page.locator('.composer').evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(255, 255, 255)');
   await capture('workspace-white-no-label');
 
-  // 删除工作区需要二次确认：取消不产生 remove 调用；确认“从侧边栏移除”后
+  // 删除工作区需要二次确认：取消不产生 remove 调用；确认永久删除后
   // 该工作区从列表消失。
   const otherWorkspaceShell = page.locator('.workspace-row-shell').filter({ hasText: 'another-project' });
   await hoverAndClick(otherWorkspaceShell, 'another-project的更多操作');
-  await page.getByRole('menuitem', { name: '删除工作区', exact: true }).click();
+  await page.getByRole('menuitem', { name: '永久删除工作区', exact: true }).click();
   assert.equal(await page.evaluate(() => window.__sidebarActions.filter((entry) => entry.action === 'remove').length), 0);
-  await page.getByRole('dialog', { name: '删除这个工作区？' }).getByRole('button', { name: '取消', exact: true }).click();
+  await page.getByRole('dialog', { name: '永久删除这个工作区？' }).getByRole('button', { name: '取消', exact: true }).click();
   assert.equal(await page.evaluate(() => window.__sidebarActions.filter((entry) => entry.action === 'remove').length), 0);
   await hoverAndClick(otherWorkspaceShell, 'another-project的更多操作');
-  await page.getByRole('menuitem', { name: '删除工作区', exact: true }).click();
-  await page.getByRole('dialog', { name: '删除这个工作区？' }).getByRole('button', { name: '从侧边栏移除', exact: true }).click();
+  await page.getByRole('menuitem', { name: '永久删除工作区', exact: true }).click();
+  await page.getByRole('dialog', { name: '永久删除这个工作区？' }).getByRole('button', { name: '永久删除', exact: true }).click();
   await otherWorkspaceShell.waitFor({ state: 'detached' });
 
   // 整个流程中浏览器不能有未捕获异常。

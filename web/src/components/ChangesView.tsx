@@ -57,13 +57,17 @@ export function ChangesView({ sessionId, initial, turns, focusPath, onOpenFile, 
   const toggle = (path: string) => setExpanded(current => { const next = new Set(current); if (next.has(path)) next.delete(path); else next.add(path); return next; });
   const menuAt = (event: React.MouseEvent<HTMLButtonElement>, items: MenuAction[]) => { const box = event.currentTarget.getBoundingClientRect(); setMenu({ x: box.right-220, y: box.bottom+6, items }); };
   const safe = (job: Promise<unknown>) => { void job.catch(err => setError(String(err))); };
+  const diffFileRequest = (file: TurnDiffFile) => ({
+    path: file.path,
+    source: 'diff' as const,
+    sessionId,
+  });
   const chooseEditor = async (file: TurnDiffFile, x: number, y: number) => {
     try {
-      const cwd = file.path.slice(0,file.path.lastIndexOf('/'));
-      const { apps } = await window.piApi.fileActions({ cwd, path: file.path });
+      const { apps } = await window.piApi.fileActions(diffFileRequest(file));
       const editors = apps.filter(app => /code|cursor|zed|sublime|textedit|idea|webstorm|bbedit|nova|vim|emacs/i.test(app.name));
       if (!editors.length) { setError('没有找到可用的编辑器，可以使用“在默认应用中打开”。'); return; }
-      setMenu({ x, y, items: editors.map(app => ({ label: app.name, run: () => safe(window.piApi.openWith({ cwd, path: file.path, appPath: app.path })) })) });
+      setMenu({ x, y, items: editors.map(app => ({ label: app.name, run: () => safe(window.piApi.openWith({ ...diffFileRequest(file), appPath: app.path })) })) });
     } catch (err) { setError(String(err)); }
   };
   const refresh = async () => {
@@ -113,8 +117,8 @@ export function ChangesView({ sessionId, initial, turns, focusPath, onOpenFile, 
               { label: '复制路径', run: () => safe(navigator.clipboard.writeText(file.path)) },
               { label: '打开当前文件', disabled: file.status === 'deleted', run: () => onOpenFile(file.path) },
               { label: '在编辑器中打开', disabled: file.status === 'deleted', run: () => void chooseEditor(file, event.clientX-220, event.clientY) },
-              { label: '在默认应用中打开', disabled: file.status === 'deleted', run: () => safe(window.piApi.openWith({ cwd: file.path.slice(0,file.path.lastIndexOf('/')), path: file.path })) },
-              { label: '在 Finder 中显示', disabled: file.status === 'deleted', run: () => safe(window.piApi.revealFile({ cwd: file.path.slice(0,file.path.lastIndexOf('/')), path: file.path })) },
+              { label: '在默认应用中打开', disabled: file.status === 'deleted', run: () => safe(window.piApi.openWith(diffFileRequest(file))) },
+              { label: '在 Finder 中显示', disabled: file.status === 'deleted', run: () => safe(window.piApi.revealFile(diffFileRequest(file))) },
               { label: open ? '折叠文件' : '展开文件', run: () => toggle(file.path) },
               { label: '复制文件补丁', run: () => safe(navigator.clipboard.writeText(file.patch || '')) },
             ])}><MoreHorizontal /></button>

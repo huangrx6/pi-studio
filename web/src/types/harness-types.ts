@@ -45,6 +45,10 @@ export type RuntimePolicy = {
   toolExecution: 'parallel' | 'sequential';
   afterFailedRun: 'keep' | 'continue' | 'withdraw';
   restartLimit: number;
+  longTask: {
+    maxContinuations: number;
+    maxStalledContinuations: number;
+  };
   contextRetentionMs: number;
   documentRetentionMs: number;
 };

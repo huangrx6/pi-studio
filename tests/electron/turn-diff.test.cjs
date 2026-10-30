@@ -97,7 +97,9 @@ test('full historical diff uses saved trees, supports whitespace filtering, and 
     process,
     require: name => name === '../core/studio-db.cjs'
       ? { getStudioDatabase: () => database }
-      : require(name),
+      : name === './workspace.cjs'
+        ? require('../../electron/services/workspace.cjs')
+        : require(name),
   });
   const api = module.exports;
   try {
@@ -125,6 +127,57 @@ test('full historical diff uses saved trees, supports whitespace filtering, and 
     api.saveTurnDiff('white',{at:3,...whitespaceDiff});
     const filtered = await api.readTurnDiffFile({sessionId:'white',at:3,path:whitespaceDiff.files[0].path,ignoreWhitespace:true});
     assert.equal(filtered.patch,'');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('absolute file preview is limited to files recorded by that session', async () => {
+  const vm = require('node:vm');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-turn-preview-'));
+  const allowed = path.join(dir, 'allowed.txt');
+  const unrelated = path.join(dir, 'unrelated.txt');
+  fs.writeFileSync(allowed, 'allowed content\n');
+  fs.writeFileSync(unrelated, 'private content\n');
+  const turns = new Map([['session-a', [{
+    at: 1,
+    files: [{ path: fs.realpathSync(allowed), label: 'allowed.txt' }],
+  }]]]);
+  const database = {
+    readTurnDiffs(sessionId) {
+      return structuredClone(turns.get(sessionId) || []);
+    },
+  };
+  const module = { exports: {} };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../electron/services/turn-diff.cjs'), 'utf8'), {
+    module,
+    exports: module.exports,
+    process,
+    Buffer,
+    require: name => name === '../core/studio-db.cjs'
+      ? { getStudioDatabase: () => database }
+      : name === './workspace.cjs'
+        ? require('../../electron/services/workspace.cjs')
+        : require(name),
+  });
+  try {
+    const preview = module.exports.readTurnDiffAbsoluteFile({
+      sessionId: 'session-a',
+      path: allowed,
+    });
+    assert.equal(preview.text, 'allowed content\n');
+    assert.throws(
+      () => module.exports.readTurnDiffAbsoluteFile({ sessionId: 'session-a', path: unrelated }),
+      /不在当前会话的变更记录中/,
+    );
+    assert.throws(
+      () => module.exports.readTurnDiffAbsoluteFile({ sessionId: 'session-b', path: allowed }),
+      /不在当前会话的变更记录中/,
+    );
+    assert.throws(
+      () => module.exports.readTurnDiffAbsoluteFile({ path: allowed }),
+      /缺少会话标识/,
+    );
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

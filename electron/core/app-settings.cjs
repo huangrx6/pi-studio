@@ -114,6 +114,10 @@ const RUNTIME_POLICY_DEFAULTS = Object.freeze({
   toolExecution: 'parallel',
   afterFailedRun: 'keep',
   restartLimit: 5,
+  longTask: Object.freeze({
+    maxContinuations: 32,
+    maxStalledContinuations: 3,
+  }),
   contextRetentionMs: 90_000,
   documentRetentionMs: 90_000,
 });
@@ -201,6 +205,11 @@ function normalizeRuntimePolicy(value) {
     && !Array.isArray(source.compaction)
     ? source.compaction
     : {};
+  const longTask = source.longTask
+    && typeof source.longTask === 'object'
+    && !Array.isArray(source.longTask)
+    ? source.longTask
+    : {};
   const defaults = RUNTIME_POLICY_DEFAULTS;
   return {
     version: 1,
@@ -250,6 +259,20 @@ function normalizeRuntimePolicy(value) {
       ? source.afterFailedRun
       : defaults.afterFailedRun,
     restartLimit: boundedInteger(source.restartLimit, defaults.restartLimit, 1, 50),
+    longTask: {
+      maxContinuations: boundedInteger(
+        longTask.maxContinuations,
+        defaults.longTask.maxContinuations,
+        1,
+        500,
+      ),
+      maxStalledContinuations: boundedInteger(
+        longTask.maxStalledContinuations,
+        defaults.longTask.maxStalledContinuations,
+        1,
+        50,
+      ),
+    },
     contextRetentionMs: boundedInteger(
       source.contextRetentionMs,
       defaults.contextRetentionMs,

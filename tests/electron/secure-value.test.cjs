@@ -66,14 +66,12 @@ test('credential storage encrypts at the SQLite boundary and reads legacy values
   });
 });
 
-test('credential storage falls back to a tagged JSON envelope without Electron', (t) => {
+test('credential storage fails closed when Electron safeStorage is unavailable', (t) => {
   mockElectron(t, {});
-  const { encryptValue, decryptValue, isEncryptedEnvelope } = require('../../electron/core/secure-value.cjs');
+  const { encryptValue, SECURE_STORAGE_UNAVAILABLE } = require('../../electron/core/secure-value.cjs');
   const value = { type: 'api_key', key: 'headless-secret' };
-  const stored = encryptValue(value);
-
-  assert.deepEqual(stored, { format: 'json-v1', data: value });
-  assert.equal(isEncryptedEnvelope(stored), true);
-  assert.deepEqual(decryptValue(stored), value);
-  assert.equal(decryptValue({ format: 'unknown', data: 'value' }), undefined);
+  assert.throws(
+    () => encryptValue(value),
+    (error) => error.code === SECURE_STORAGE_UNAVAILABLE && /未写入/.test(error.message),
+  );
 });

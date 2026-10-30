@@ -12,6 +12,7 @@ const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { BrowserWindow, app, dialog } = require('electron');
 const { makeAttachmentMarker } = require('../core/attachment-markers.cjs');
+const { readFilePath } = require('./workspace.cjs');
 
 /** 常见扩展名 → MIME。 */
 const ATTACHMENT_MIME = {
@@ -53,6 +54,34 @@ function safeAttachmentName(name) {
 /** 附件根目录：Pi Studio 自己的 userData，不读取或改写 ~/.pi。 */
 function attachmentRoot() {
   return path.join(app.getPath('userData'), 'attachments');
+}
+
+/**
+ * Resolve a file under the Studio attachment root.
+ *
+ * Both sides are canonicalized before the containment check so `..` segments
+ * and symlinks that escape the managed directory are rejected.
+ */
+function resolveAttachmentPath(root, requested) {
+  if (typeof requested !== 'string' || !path.isAbsolute(requested)) {
+    throw new Error('需要附件绝对路径');
+  }
+  const canonicalRoot = fs.realpathSync(root);
+  const target = fs.realpathSync(requested);
+  if (target !== canonicalRoot && !target.startsWith(canonicalRoot + path.sep)) {
+    throw new Error('文件不在 Studio 附件目录中');
+  }
+  if (!fs.statSync(target).isFile()) throw new Error('不是附件文件');
+  return target;
+}
+
+function resolveAttachmentFile(requested) {
+  return resolveAttachmentPath(attachmentRoot(), requested);
+}
+
+function readAttachmentFile({ path: requested } = {}) {
+  const target = resolveAttachmentFile(requested);
+  return readFilePath(target, target);
 }
 
 function safeSessionDirectoryName(sessionId) {
@@ -154,9 +183,7 @@ async function attachmentContext(paths) {
   for (const target of [...new Set(Array.isArray(paths) ? paths : [])].slice(0, 6)) {
     if (typeof target !== 'string') continue;
     try {
-      const canonical = fs.realpathSync(target);
-      const root = attachmentRoot();
-      if (canonical !== root && !canonical.startsWith(root + path.sep)) continue;
+      const canonical = resolveAttachmentFile(target);
       const stat = fs.statSync(canonical);
       if (!stat.isFile() || stat.size > budget) continue;
       const content = fs.readFileSync(canonical, 'utf8');
@@ -188,6 +215,9 @@ module.exports = {
   pickAttachments,
   saveUpload,
   saveAttachment,
+  readAttachmentFile,
+  resolveAttachmentPath,
+  resolveAttachmentFile,
   attachmentContext,
   removeAttachmentDirectory,
   ATTACHMENT_MIME,

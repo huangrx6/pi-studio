@@ -32,16 +32,16 @@ function isValidToolName(value) {
 
 function normalizeNames(input, strict = false) {
   if (!Array.isArray(input)) {
-    if (strict) throw new Error('Agent 工具列表格式无效');
+    if (strict) throw new Error('智能体工具列表格式无效');
     return [...DEFAULT_AGENT_TOOLS];
   }
-  if (input.length > MAX_AGENT_TOOLS) throw new Error(`Agent 工具最多允许 ${MAX_AGENT_TOOLS} 项`);
+  if (input.length > MAX_AGENT_TOOLS) throw new Error(`智能体工具最多允许 ${MAX_AGENT_TOOLS} 项`);
   const seen = new Set();
   const names = [];
   for (const raw of input) {
     const name = typeof raw === 'string' ? raw.trim() : '';
     if (!isValidToolName(name)) {
-      if (strict) throw new Error(`Agent 工具名称无效：${String(raw)}`);
+      if (strict) throw new Error(`智能体工具名称无效：${String(raw)}`);
       continue;
     }
     if (seen.has(name)) continue;

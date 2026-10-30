@@ -33,6 +33,8 @@ export function LongTaskDock({
   const status = state.status;
   const detail = status === 'blocked'
     ? state.blockReason
+    : status === 'paused'
+      ? state.pauseReason || state.nextStep || state.lastProgress
     : status === 'completed'
       ? state.completionSummary
       : state.nextStep || state.lastProgress;

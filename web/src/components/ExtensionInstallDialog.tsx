@@ -17,7 +17,7 @@ import type {
 import { SettingsDialog } from './SettingsDialog';
 
 const PERMISSION_LABELS: Record<ExtensionPermission, string> = {
-  'agent.tools': '向 Agent 提供工具',
+  'agent.tools': '向智能体提供工具',
   'agent.sections': '影响系统提示词',
   'agent.hooks': '拦截或观察工具调用',
   'agent.tasks': '创建后台任务',

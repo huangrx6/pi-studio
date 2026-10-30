@@ -1,6 +1,6 @@
 # Pi Studio 资源作用域、优先级与刷新
 
-本文是 Pi Studio 跨资源配置的权威入口，统一说明指令、Harness、运行策略、模型、权限、工具、Skill、MCP、扩展、子 Agent 与界面偏好的作用域、存储位置、冲突规则、信任边界和生效时机。
+本文是 Pi Studio 跨资源配置的权威入口，统一说明指令、Harness、运行策略、模型、权限、工具、Skill、MCP、扩展、子智能体与界面偏好的作用域、存储位置、冲突规则、信任边界和生效时机。
 
 Pi Durable 仍是唯一执行引擎。Studio SQLite 保存 Studio 自己的配置、投影和资源信任记录；Durable 保存会话、任务、文档、事件与运行状态。Studio 不读取或回写 `~/.pi`、Pi CLI 配置或另一套凭据目录。
 
@@ -23,7 +23,7 @@ Pi Durable 仍是唯一执行引擎。Studio SQLite 保存 Studio 自己的配�
 
 Studio 的一般原则是显式 scope 与显式优先级。不同资源的冲突规则并不相同，不能把“更具体一定覆盖更宽”套用到所有资源：
 
-- Harness、子 Agent 和常规工作区覆盖使用更具体的值。
+- Harness、子智能体和常规工作区覆盖使用更具体的值。
 - Skill 同名冲突由固定的发现顺序决定。
 - 权限会让所有 scope 的显式规则共同参与，并固定执行 `deny > ask > allow`。
 - 扩展按运行时层级解析，但受保护的 `core` / `optional` 贡献不能被普通扩展替换。
@@ -37,11 +37,11 @@ Studio 的一般原则是显式 scope 与显式优先级。不同资源的冲突
 | Durable 运行策略 | 应用 | SQLite `studio.runtime.policy` | 单一应用级策略，无工作区或会话覆盖 | 下一次执行边界 |
 | 模型、凭据与默认值 | 应用；当前会话另有运行配置 | SQLite `model_providers`、`model_catalog`、`credentials`、`settings` | 默认值只用于新会话；已有会话保留自己的模型与 thinking | 模型运行时重建后，下一次请求 |
 | 工具权限 | user + 精确工作区 + 精确会话 | SQLite `studio.permissions.policy` | 各层显式规则共同参与，固定 `deny > ask > allow`；模式默认值按会话、工作区、用户取最具体一层 | 下一次工具调用 |
-| Agent 工具白名单 | 应用 | SQLite `studio.agent.tools` | 单一白名单；精确名称或 glob 命中已安装工具 | 下一次模型请求 |
+| 智能体工具白名单 | 应用 | SQLite `studio.agent.tools` | 单一白名单；精确名称或 glob 命中已安装工具 | 下一次模型请求 |
 | Skill | user + 精确工作区项目目录 | `<userData>/skills`、`<home>/.agents/skills`、工作区 `.pi-studio/skills`、`.agents/skills`；项目信任在 SQLite | 项目私有、项目通用、用户私有、用户通用；同名先发现者生效 | 下一次提示渲染；显式 `/skill:` 在提交前展开 |
 | MCP server | 应用 | SQLite `mcp_servers` | 每台 server 独立配置；逐工具 exposure 覆盖 server 默认值；仍受 Agent 白名单过滤 | 配置保存后重连；下一次模型请求使用新目录 |
 | 扩展 | builtin + user + 精确工作区 project | SQLite `studio_extensions`；用户与项目受管目录 | 运行时顺序为 `core → system → optional → user → project`；`core` / `optional` 受保护 | 设置操作立即重载；直接文件变化在下一次提交前校验 |
-| 子 Agent 默认值 | user + 精确工作区 project | SQLite `studio.subagents` | project 已设置字段覆盖 user；仍未设置的字段继承父 Agent | 下一次创建子 Agent |
+| 子智能体默认值 | user + 精确工作区 project | SQLite `studio.subagents` | project 已设置字段覆盖 user；仍未设置的字段继承父智能体 | 下一次创建子智能体 |
 | 会话模型与 thinking | 会话 | Durable conversation 状态；Studio 只保存会话投影 | 会话选择覆盖新会话默认值；运行中修改排队到下一请求 | 下一次请求 |
 | 界面偏好 | renderer 本地 | `localStorage`；原生主题和菜单栏另有 SQLite 镜像 | 不参与 Agent 决策；本机 renderer 状态优先 | 保存后立即 |
 | 临时聊天 | 运行时内存 | Durable `MemoryStorage` | 不读取项目资源、不创建 Studio 会话投影 | 当前内存会话有效期 |
@@ -105,7 +105,7 @@ Harness profile 定义 Prompt section 开关、section 覆盖、自定义补充�
 
 ### 4.3 工具并行不是权限
 
-`toolExecution: "parallel"` 只表示同一模型轮次里的独立工具可以并发启动。具体工具仍可声明自身为顺序执行；是否允许工具运行仍由 Agent 工具白名单和权限策略分别决定。
+`toolExecution: "parallel"` 只表示同一模型轮次里的独立工具可以并发启动。具体工具仍可声明自身为顺序执行；是否允许工具运行仍由智能体工具白名单和权限策略分别决定。
 
 ## 5. 模型、会话与界面偏好
 
@@ -135,7 +135,7 @@ Harness profile 定义 Prompt section 开关、section 覆盖、自定义补充�
 临时聊天使用独立 `MemoryStorage` 和空 registry：
 
 - 不写入 Studio SQLite、JSONL、工作区文件、凭据附件或会话历史。
-- 不使用 Agent 工具，也不加载项目指令、Skill、扩展或 MCP。
+- 不使用智能体工具，也不加载项目指令、Skill、扩展或 MCP。
 - 可以读取应用级模型运行时中的已配置模型与凭据。
 - 关闭最后一个临时聊天或退出应用后，transcript、图片和临时运行状态随之消失。
 
@@ -157,7 +157,7 @@ workspace[精确 cwd]
 session[精确 conversation ID]
 ```
 
-工作区层只匹配精确 `cwd`。会话层只匹配当前会话 ID。子 Agent 的工具调用会同时评估子会话与父会话的权限，并采用更严格的结果。
+工作区层只匹配精确 `cwd`。会话层只匹配当前会话 ID。子智能体的工具调用会同时评估子会话与父会话的权限，并采用更严格的结果。
 
 ### 6.2 冲突规则
 
@@ -194,9 +194,9 @@ session[精确 conversation ID]
 
 权限检查和文件边界是产品级防护，不是操作系统沙箱。Bash 的越界识别是静态检查，无法覆盖所有 shell 语义；来自不受信任来源的代码和命令仍应按不可信内容处理。
 
-## 7. Agent 工具白名单
+## 7. 智能体工具白名单
 
-Agent 工具白名单保存在应用级 SQLite `studio.agent.tools`。Studio 只有一个全局白名单，没有独立的 user、workspace 或 project 白名单。
+智能体工具白名单保存在应用级 SQLite `studio.agent.tools`。Studio 只有一个全局白名单，没有独立的 user、workspace 或 project 白名单。
 
 选择过程是：
 
@@ -209,7 +209,7 @@ Agent 工具白名单保存在应用级 SQLite `studio.agent.tools`。Studio 只
 
 白名单最多 256 项，支持精确名称和 glob。保存后会刷新运行选择；当前请求和已经开始调用保持原样，下一模型请求使用新集合。
 
-内置 `todo` 工具是白名单中的普通 Agent 工具，但它的计划状态保存在 conversation-scoped Durable document `studio.todo`，而不是 Studio SQLite。每次成功的变更原子写入该文档，并把 JSON 安全的公开快照放进工具结果 `details`；renderer 只读取最新结果并显示在输入框上方。任务 ID 单调递增，`createMany` 原子提交，依赖必须存在且不能成环。该文档随会话分叉和恢复，不替代 Durable task graph。
+内置 `todo` 工具是白名单中的普通智能体工具，但它的计划状态保存在 conversation-scoped Durable document `studio.todo`，而不是 Studio SQLite。每次成功的变更原子写入该文档，并把 JSON 安全的公开快照放进工具结果 `details`；renderer 只读取最新结果并显示在输入框上方。任务 ID 单调递增，`createMany` 原子提交，依赖必须存在且不能成环。该文档随会话分叉和恢复，不替代 Durable task graph。
 
 ## 8. Skill
 
@@ -257,7 +257,7 @@ MCP server 全部是应用级共享连接，保存在 SQLite `mcp_servers`，没
 - `deferred`：模型先看到目录和摘要，通过 `tool_search` 按需加载。
 - `hidden`：不允许模型直接调用，只供其他工具通过 `executeTool()` 使用。
 
-逐工具精确覆盖优先；没有精确项时使用第一个匹配的 glob，最后才使用 server 默认值。所有 MCP 工具仍受应用级 Agent 工具白名单和权限策略双重过滤。
+逐工具精确覆盖优先；没有精确项时使用第一个匹配的 glob，最后才使用 server 默认值。所有 MCP 工具仍受应用级智能体工具白名单和权限策略双重过滤。
 
 ### 9.2 存储与安全
 
@@ -328,25 +328,25 @@ core → system → optional → user → project
 - 直接修改项目扩展文件时，Studio 在下一次创建会话或提交任务前重新验证完整性并重载。被篡改或变化的代码不会继续沿用旧信任。
 - 禁用、撤销信任或卸载后，贡献立即从新请求消失；历史 transcript 中的旧工具结果继续作为历史事实展示。
 
-## 11. 子 Agent
+## 11. 子智能体
 
-子 Agent 配置保存在 SQLite `studio.subagents`：
+子智能体配置保存在 SQLite `studio.subagents`：
 
 ```text
 studio.subagents.user
 studio.subagents.projects[精确 cwd]
 ```
 
-运行时按字段合并：project 已设置的值覆盖 user，未设置的字段继续继承 user；模型和 thinking 两级都没有配置时继承父 Agent。
+运行时按字段合并：project 已设置的值覆盖 user，未设置的字段继续继承 user；模型和 thinking 两级都没有配置时继承父智能体。
 
 主要字段的语义：
 
-- `defaultModel` / `defaultThinking`：新子 Agent 的默认模型与 thinking。
-- `maxThinking`：限制子 Agent 请求可使用的 thinking 上限。
-- `allowedTools`：非空时与父 Agent 当前工具求交集，并排除递归子 Agent 的管理工具；空列表表示不增加子 Agent 专属白名单。
-- `backgroundEnabled`、`defaultMode`、`supervisorEnabled`、并发数、派生上限和等待超时：控制子 Agent 的派生与后台运行行为。
+- `defaultModel` / `defaultThinking`：新子智能体的默认模型与 thinking。
+- `maxThinking`：限制子智能体请求可使用的 thinking 上限。
+- `allowedTools`：非空时与父智能体当前工具求交集，并排除递归子智能体的管理工具；空列表表示不增加子智能体专属白名单。
+- `backgroundEnabled`、`defaultMode`、`supervisorEnabled`、并发数、派生上限和等待超时：控制子智能体的派生与后台运行行为。
 
-子 Agent 是 task-owned Durable child conversation，不是 Studio 侧边栏中的独立会话。配置只在下一次创建子 Agent 时读取；修改设置不会重配置已有子 Agent。子 Agent 工具仍经过自身和父会话的权限评估。
+子智能体是 task-owned Durable child conversation，不是 Studio 侧边栏中的独立会话。配置只在下一次创建子智能体时读取；修改设置不会重配置已有子智能体。子智能体工具仍经过自身和父会话的权限评估。
 
 ## 12. 存储边界
 
@@ -357,7 +357,7 @@ Pi Studio userData/
 │   ├── durable_*             # Pi Durable 的会话、任务、文档、事件与用量
 │   ├── conversations         # Studio 会话 / 长期任务投影
 │   ├── workspaces            # Studio 工作区记录
-│   ├── settings              # Harness、模型默认值、权限、工具、子 Agent、界面设置
+│   ├── settings              # Harness、模型默认值、权限、工具、子智能体、界面设置
 │   ├── model_providers       # 模型来源
 │   ├── model_catalog         # 模型目录与启停
 │   ├── credentials           # safeStorage 加密凭据
@@ -409,12 +409,12 @@ Studio 不把内容哈希、路径校验、HTTPS 或静态命令检查描述为�
 | 修改默认模型 / thinking | 下一次创建会话 |
 | 切换当前会话模型或 thinking | 下一次请求；运行中切换排队 |
 | 修改权限模式、规则或记住批准 | 下一次工具调用 |
-| 修改 Agent 工具白名单 | 下一次模型请求 |
+| 修改 智能体工具白名单 | 下一次模型请求 |
 | 新增、删除或修改 Skill | 下一次模型提示渲染；显式 `/skill:` 在提交前 |
 | 修改 MCP 配置 | 立即重连；下一次模型请求使用新目录 |
 | 安装、升级、启停、信任或卸载扩展 | 立即重载；下一次模型请求 / UI 读取 |
 | 直接修改项目 Skill 或扩展文件 | 下一次发现或提交前校验，必要时撤销信任 |
-| 修改子 Agent 配置 | 下一次创建子 Agent |
+| 修改子智能体配置 | 下一次创建子智能体 |
 | 修改 renderer 偏好 | 立即 |
 
 ## 15. 常见误解

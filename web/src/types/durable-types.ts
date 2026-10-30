@@ -19,6 +19,7 @@ export type LongTaskState = {
   iteration: number;
   lastProgress: string;
   nextStep: string;
+  pauseReason: string;
   completionSummary: string;
   blockReason: string;
   createdAt: number;

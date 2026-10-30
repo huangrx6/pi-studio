@@ -2,13 +2,13 @@
 
 **基于 Pi Durable 的原生 macOS 桌面 Agent 工作台。** 会话、模型、凭据、MCP、技能与扩展由 Pi Studio 独立管理；应用不读取，也不修改 Pi CLI 自己的配置。
 
-[![CI](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml) [![release](https://img.shields.io/badge/release-v0.0.5-111111?style=flat-square)](https://github.com/huangrx6/pi-studio/releases/latest) [![license](https://img.shields.io/badge/license-MIT-111111?style=flat-square)](LICENSE)
+[![CI](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml) [![release](https://img.shields.io/badge/release-v0.0.6-111111?style=flat-square)](https://github.com/huangrx6/pi-studio/releases/latest) [![license](https://img.shields.io/badge/license-MIT-111111?style=flat-square)](LICENSE)
 
 [下载 macOS 版](https://github.com/huangrx6/pi-studio/releases/latest) · [产品主页](https://huangrx6.github.io/pi-studio/) · [完整手册](https://huangrx6.github.io/pi-studio/guide.html) · [资源作用域](docs/resources.md) · [问题反馈](https://github.com/huangrx6/pi-studio/issues)
 
 ## 概览
 
-Pi Studio 把 Pi Durable 的持久化 Agent 能力带进桌面窗口。每个普通对话、长期任务和子 Agent 都由同一个 Durable Harness 执行；Studio 负责工作区、模型目录、编码提示、工具权限、附件和原生交互。
+Pi Studio 把 Pi Durable 的持久化 Agent 能力带进桌面窗口。每个普通对话、长期任务和子智能体都由同一个 Durable Harness 执行；Studio 负责工作区、模型目录、编码提示、工具权限、附件和原生交互。
 
 - **唯一执行引擎是 Pi Durable 1.4。** 对话、任务、流式事件、分叉、恢复和 owned child conversations 都走 Durable Runtime。
 - **Studio 拥有自己的数据。** 应用使用 `pi-studio.sqlite` 保存 Durable 的 `durable_*` 表，以及 Studio 的工作区、会话投影、模型、凭据、MCP、扩展和设置记录。
@@ -50,7 +50,7 @@ xattr -cr "/Applications/Pi Studio.app"
 
 ### Durable 会话与工作区
 
-普通对话和长期任务共用同一条 Durable 会话链路。Studio 在 SQLite 中保存标题、工作区、置顶、归档和长期任务侧边栏投影；目标正文、完成条件与执行状态保存在 Durable document 中。长期任务通过原生 `GenerationTask.onYield` 继续执行，直到目标完成、阻塞或用户暂停。Durable 同时保存 transcript、task、usage 与 live state，流式输出、thinking、工具调用、中断和分叉都由 Durable 事件驱动。
+普通对话和长期任务共用同一条 Durable 会话链路。Studio 在 SQLite 中保存标题、工作区、置顶、归档和长期任务侧边栏投影；目标正文、完成条件与执行状态保存在 Durable document 中。长期任务通过原生 `GenerationTask.onYield` 继续执行，直到目标完成、阻塞、用户暂停，或触发可配置的单次轮次/连续无进展安全阀。安全暂停会保留原因并等待用户确认后继续。Durable 同时保存 transcript、task、usage 与 live state，流式输出、thinking、工具调用、中断和分叉都由 Durable 事件驱动。
 
 会话历史按页加载，右侧大纲始终基于完整会话；向上滚动接近顶部时才继续补载。多工作区切换、文件树、可调宽预览、按回合汇总的 Git 差异、`@` 文件引用和附件上传都在同一桌面界面中完成。
 
@@ -77,7 +77,7 @@ Pi Durable 提供可组合的 Agent Runtime，Studio 负责构建面向编码任
 
 profile 支持全局选择和按工作区覆盖，也可以为单个工具增加 guidance。设置保存后会重建 registry；空闲会话直接采用新配置，忙碌会话等待下一请求边界。
 
-Durable 运行策略独立保存在 Studio SQLite，并覆盖请求超时、自动重试、上下文压缩、工具并行、失败后排队输入、崩溃恢复和内存缓存。默认采用`parallel`：模型在同一轮发出的独立读取、搜索、读取工具或子 Agent 调用会同时执行；依赖前一步结果的调用仍留到下一轮，避免用并发破坏正确性。策略由 getter 在每次执行边界读取，修改后不需要重启应用。
+Durable 运行策略独立保存在 Studio SQLite，并覆盖请求超时、自动重试、上下文压缩、工具并行、失败后排队输入、崩溃恢复和内存缓存。默认采用 `parallel`：模型在同一轮发出的独立读取、搜索、读取工具或子智能体调用会同时执行；依赖前一步结果的调用仍留到下一轮，避免用并发破坏正确性。策略由 getter 在每次执行边界读取，修改后不需要重启应用。
 
 多步骤工作由内置 `todo` 工具维护会话级计划。计划状态保存为 Durable conversation document，UI 从最新工具结果读取快照并显示在输入框上方；切换会话、重启应用或上下文压缩后仍可继续。任务支持依赖、进行中、完成、结束、归档与恢复，模型默认在多步任务开始前用一次 `createMany` 建立计划。
 
@@ -106,11 +106,11 @@ MCP 默认使用 `deferred` 和 Durable 官方 `tool_search`。模型先搜索�
 
 当前 Studio 没有 codemode，因此 `deferred` 是 MCP 的合理默认，同时保留 `direct` 和 `hidden` 覆盖。HTTP 认证使用配置的 headers；MCP OAuth 登录、资源列表/读取工具、prompts、sampling 和 tasks 尚未接入。环境变量支持 `${NAME}` 引用，但不执行配置中的 `!command`。完整的应用级 scope、存储与热加载语义见[资源作用域](docs/resources.md#9-mcp)。
 
-### 子 Agent
+### 子智能体
 
-Studio 的 `subagent` 工具通过 Durable 创建 owned child conversation。子 Agent 拥有独立上下文、模型、thinking 强度和可用工具；父会话以工具任务为归属读取子会话，不额外创建 Studio 会话投影。支持前台执行、后台并行、`bg_wait`、`subagent_stop`、子 Agent 发起 `contact_supervisor` 和父 Agent 使用 `subagent_supervisor` 回复。
+Studio 的 `subagent` 工具通过 Durable 创建 owned child conversation。子智能体拥有独立上下文、模型、thinking 强度和可用工具；父会话以工具任务为归属读取子会话，不额外创建 Studio 会话投影。支持前台执行、后台并行、`bg_wait`、`subagent_stop`、子智能体发起 `contact_supervisor` 和父智能体使用 `subagent_supervisor` 回复。
 
-界面提供子 Agent 总览、运行状态、只读 transcript、独立上下文页面和返回主 Agent 的路径。长 transcript 继续使用分页，避免打开子 Agent 时一次性加载全部历史。
+界面提供子智能体总览、运行状态、只读 transcript、独立上下文页面和返回主智能体的路径。长 transcript 继续使用分页，避免打开子智能体时一次性加载全部历史。
 
 ### 桌面体验
 
@@ -122,7 +122,7 @@ Studio 的 `subagent` 工具通过 Durable 创建 owned child conversation。子
 
 ### 性能
 
-流式文本按帧合并，历史和子 Agent transcript 都有窗口上限；完成的思考与工具步骤支持折叠。对话详情、文件预览、工具目录和子 Agent 数据都有独立缓存边界，长时间使用时不会无限累积浏览器侧状态。
+流式文本按帧合并，历史和子智能体 transcript 都有窗口上限；完成的思考与工具步骤支持折叠。对话详情、文件预览、工具目录和子智能体数据都有独立缓存边界，长时间使用时不会无限累积浏览器侧状态。
 
 ## 数据边界
 
@@ -132,7 +132,7 @@ Pi Studio userData/
 ├── pi-studio.sqlite
 │   ├── durable_*        # Durable 会话、任务、文档、用量与实时状态
 │   ├── conversations    # Studio 的侧边栏与长期任务投影
-│   ├── settings         # 外观、Harness、工具与子 Agent 配置
+│   ├── settings         # 外观、Harness、工具与子智能体配置
 │   ├── model_*          # Studio 模型来源与目录
 │   ├── credentials      # Studio API Key
 │   ├── mcp_servers      # Studio MCP 配置
@@ -187,12 +187,12 @@ pnpm install
 pnpm dev          # Vite + Electron 热更新
 pnpm test         # Node 契约、状态、Harness、扩展与任务测试
 pnpm build        # TypeScript 检查 + Vite 生产构建
-pnpm qa:memory    # 隔离 userData 的真实 Electron 冷启动内存门槛
+pnpm qa:memory    # 长会话、图片、子智能体、反复切换与退出回收
 pnpm extension -- validate examples/extensions/agent-starter
 pnpm extension -- pack examples/extensions/agent-starter --out release
 ```
 
-测试覆盖会话分页与标题、Durable task、Harness profile 与项目指令、扩展 manifest/信任/路径边界、子 Agent 设置、文件差异、更新状态和 Electron import 完整性。视觉与真实窗口交互由 `tools/qa/qa-*.mjs` 单独运行，不与 `pnpm test` 混为一组。
+测试覆盖会话分页与标题、Durable task、Harness profile 与项目指令、扩展 manifest/信任/路径边界、子智能体设置、文件差异、更新状态和 Electron import 完整性。视觉与真实窗口交互由 `tools/qa/qa-*.mjs` 单独运行，不与 `pnpm test` 混为一组。
 
 ## 打包与发布
 
@@ -247,7 +247,7 @@ pi-studio/
 ├── tools/
 │   ├── cli/             # 扩展作者与维护 CLI
 │   ├── icons/           # 应用、菜单栏图标生成
-│   └── qa/              # 桌面截图、流式稳定与冷启动内存检查
+│   └── qa/              # 桌面截图、流式稳定与真实 Electron 内存检查
 ├── extensions/          # 随应用分发的官方扩展
 ├── assets/              # 图标与 README 横幅
 └── docs/assets/screens/ # README / 文档精选截图

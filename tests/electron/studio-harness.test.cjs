@@ -155,6 +155,10 @@ test('runtime policy normalizes nested Durable settings and clamps unsafe values
     toolExecution: 'parallel',
     afterFailedRun: 'continue',
     restartLimit: 0,
+    longTask: {
+      maxContinuations: 999,
+      maxStalledContinuations: 0,
+    },
     contextRetentionMs: 0,
     documentRetentionMs: 9_999_999,
   });
@@ -173,6 +177,10 @@ test('runtime policy normalizes nested Durable settings and clamps unsafe values
   assert.equal(normalized.toolExecution, 'parallel');
   assert.equal(normalized.afterFailedRun, 'continue');
   assert.equal(normalized.restartLimit, 1);
+  assert.deepEqual(normalized.longTask, {
+    maxContinuations: 500,
+    maxStalledContinuations: 1,
+  });
   assert.equal(normalized.contextRetentionMs, 0);
   assert.equal(normalized.documentRetentionMs, 3_600_000);
   assert.equal(normalizeRuntimePolicy({ toolExecution: 'race' }).toolExecution, 'parallel');

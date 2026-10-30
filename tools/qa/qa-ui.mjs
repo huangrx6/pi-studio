@@ -85,7 +85,7 @@ await page.addInitScript(() => {
 
   let model = selection(localStorage.getItem('qa-model') || models[2].id);
 
-  // Agent 工具目录刻意让每个 Pi 核心工具带不同文件路径，用来验证 UI 仍会把
+  // 智能体工具目录刻意让每个 Pi 核心工具带不同文件路径，用来验证 UI 仍会把
   // 同一个提供者合并成一个 Tab，而不是显示成一长串重复的“Pi 核心”。
   const coreSource = () => ({
     key: 'durable:coding',
@@ -133,7 +133,7 @@ await page.addInitScript(() => {
       ...coreTools,
       {
         name: 'subagent',
-        description: '启动一个拥有独立上下文的子 Agent。',
+        description: '启动一个拥有独立上下文的子智能体。',
         exposure: 'direct',
         source: subagentSource,
       },
@@ -145,7 +145,7 @@ await page.addInitScript(() => {
       },
     ],
     commands: [
-      { name: 'subagent', description: '启动一个子 Agent。', source: subagentSource },
+      { name: 'subagent', description: '启动一个子智能体。', source: subagentSource },
       { name: 'workspace', description: '查看工作区状态与相关操作。', source: workspaceSource },
     ],
     errors: [],
@@ -189,15 +189,15 @@ await page.addInitScript(() => {
   const subagentManifest = {
     format: 1,
     id: 'studio-subagents',
-    name: 'Studio 子 Agent',
+    name: 'Studio 子智能体',
     version: '1.0.0',
-    description: '使用 Durable owned conversation 启动独立上下文的子 Agent。',
+    description: '使用 Durable owned conversation 启动独立上下文的子智能体。',
     author: 'Pi Studio',
     scope: 'builtin',
     permissions: ['agent.tools', 'agent.sections'],
     runtime: { durableEntry: '' },
     contributes: {
-      tools: [{ name: 'subagent', description: '启动一个拥有独立上下文的子 Agent。' }],
+      tools: [{ name: 'subagent', description: '启动一个拥有独立上下文的子智能体。' }],
       commands: [],
       panels: [],
       settings: [],
@@ -226,7 +226,7 @@ await page.addInitScript(() => {
     },
     {
       id: 'builtin:studio-subagents',
-      name: 'Studio 子 Agent',
+      name: 'Studio 子智能体',
       version: '1.0.0',
       scope: 'builtin',
       source: 'durable:studio-subagents',
@@ -401,7 +401,7 @@ await page.addInitScript(() => {
         { kind: 'list', items: [
           { title: 'Git', text: 'main 分支，工作树有 2 个文件变更。' },
           { title: 'Context', text: '当前上下文窗口使用 42%。' },
-          { title: 'Tools', text: 'Agent 工具白名单已热更新。' },
+          { title: 'Tools', text: '智能体工具白名单已热更新。' },
         ] },
       ],
     },
@@ -445,6 +445,7 @@ await page.addInitScript(() => {
     toolExecution: 'parallel',
     afterFailedRun: 'keep',
     restartLimit: 5,
+    longTask: { maxContinuations: 32, maxStalledContinuations: 3 },
     contextRetentionMs: 90000,
     documentRetentionMs: 90000,
   };
@@ -1115,7 +1116,7 @@ await page.addInitScript(() => {
     subagentTranscript: async ({ sessionId, childKey }) => {
       if (sessionId !== 'session-1') throw new Error('会话不存在');
       const child = subagentChildrenFixture.find((item) => item.key === childKey);
-      if (!child) throw new Error('子 Agent 会话不存在');
+      if (!child) throw new Error('子智能体会话不存在');
       const messages = subagentTranscriptMessages[childKey] || [];
       return {
         child: structuredClone(child),
@@ -2061,12 +2062,12 @@ try {
   await page.locator('.bottom-row').click();
   assert.deepEqual(
     await page.locator('.settings-nav-row').allTextContents(),
-    ['通用', '模型配置', '使用量', '归档会话', 'Agent 工具', '权限策略', 'Harness 配置', '子 Agent', 'MCP 服务器', '技能', '扩展', '关于'],
+    ['通用', '模型配置', '使用量', '归档会话', '智能体工具', '权限策略', 'Harness 配置', '子智能体', 'MCP 服务器', '技能', '扩展', '关于'],
   );
   // Escape has no application-level settings shortcut; only a focused dialog can close with it.
   await page.keyboard.press('Escape');
   assert.equal(await page.locator('.settings-overlay').count(), 1);
-  for (const [index, tab] of ['模型配置', '使用量', '归档会话', 'Agent 工具', '权限策略', 'Harness 配置', '子 Agent', 'MCP 服务器', '技能', '扩展', '关于'].entries()) {
+  for (const [index, tab] of ['模型配置', '使用量', '归档会话', '智能体工具', '权限策略', 'Harness 配置', '子智能体', 'MCP 服务器', '技能', '扩展', '关于'].entries()) {
     await openSettingsSection(tab);
     await capture(`${String(index + 7).padStart(2, '0')}-settings-${index}`);
   }
@@ -2149,9 +2150,9 @@ try {
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '未命中时的权限决定');
 
-  // 7.1 Agent 工具：同一 Pi 核心来源只出现一个 Tab；卡片开关不误触详情，
+  // 7.1 智能体工具：同一 Pi 核心来源只出现一个 Tab；卡片开关不误触详情，
   // 卡片主体打开完整详情，来源切换与搜索都保留正确状态。
-  await openSettingsSection('Agent 工具');
+  await openSettingsSection('智能体工具');
   await page.getByRole('tablist', { name: '工具来源' }).waitFor();
   assert.equal(await page.getByRole('tab').count(), 3);
   assert.equal(await page.getByRole('tab', { name: /^Pi 核心/ }).count(), 1);
@@ -2180,7 +2181,7 @@ try {
   assert.equal(await page.locator('.agent-tool-card').count(), 2);
   await capture('12c-agent-tools-subagents');
 
-  await page.getByRole('textbox', { name: '搜索 Agent 工具', exact: true }).fill('workspace');
+  await page.getByRole('textbox', { name: '搜索智能体工具', exact: true }).fill('workspace', { timeout: 5000 });
   await page.getByRole('tab', { name: /^workspace-tools/ }).waitFor();
   assert.equal(await page.getByRole('tab').count(), 1);
   await page.getByRole('button', { name: '清除工具搜索', exact: true }).click();
@@ -2196,7 +2197,7 @@ try {
   assert.equal(await page.locator('.harness-workspace, .harness-profile-rail, .harness-actionbar').count(), 0);
   assert.equal(await page.locator('.harness-editor-head .harness-editor-actions').count(), 1);
   assert.equal(await page.locator('.harness-section-card').count(), 8);
-  assert.equal(await page.locator('.harness-policy-group').count(), 4);
+  assert.equal(await page.locator('.harness-policy-group').count(), 5);
   assert.equal(
     await page.locator('.harness-policy-group').first()
       .evaluate((element) => getComputedStyle(element).backgroundColor),
@@ -2285,14 +2286,14 @@ try {
   assert.equal(await page.locator('.harness-editor-head').getByRole('button', { name: '已应用', exact: true }).isDisabled(), true);
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
 
-  // 7.1.2 子 Agent：全局默认与指定工作区的覆盖必须明确区分，保存使用所选工作区。
-  await openSettingsSection('子 Agent');
+  // 7.1.2 子智能体：全局默认与指定工作区的覆盖必须明确区分，保存使用所选工作区。
+  await openSettingsSection('子智能体');
   await page.locator('.subagent-runtime-status.is-ready').waitFor();
   assert.equal(await page.getByRole('radio', { name: /所有工作区/ }).count(), 1);
   assert.equal(await page.getByRole('radio', { name: /指定工作区/ }).count(), 1);
   await page.getByRole('radio', { name: /指定工作区/ }).click();
-  await page.getByLabel('子 Agent 目标工作区', { exact: true }).waitFor();
-  await page.getByLabel('子 Agent 目标工作区', { exact: true }).click();
+  await page.getByLabel('子智能体目标工作区', { exact: true }).waitFor();
+  await page.getByLabel('子智能体目标工作区', { exact: true }).click();
   await page.getByRole('option', { name: /design-system/ }).click();
   await page.waitForFunction(() => window.__lastSubagentLoadCwd === '/workspace/design-system');
   await page.locator('.settings-content').evaluate((element) => { element.scrollTop = 0; });
@@ -2405,7 +2406,9 @@ try {
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
 
   // 新增来源对话框：填写后取消，不能留下草稿卡片。
-  await page.getByRole('button', { name: '添加模型来源', exact: true }).click();
+  await page.locator('.settings-page-header')
+    .getByRole('button', { name: '添加模型来源', exact: true })
+    .click();
   await capture('13-add-provider-dialog');
   assert.equal(await dialog.getAttribute('class'), 'settings-dialog is-backdropless');
   const providerDialogBackdrop = await dialog.evaluate((element) => {
@@ -2517,7 +2520,9 @@ try {
   assert.equal(await fastDiscovery.isChecked(), false);
 
   // 7.3.2 新来源可以先保持空模型目录；用户随后从来源内部添加第一个模型。
-  await page.getByRole('button', { name: '添加模型来源', exact: true }).click();
+  await page.locator('.settings-page-header')
+    .getByRole('button', { name: '添加模型来源', exact: true })
+    .click();
   await dialog.getByLabel('来源 ID', { exact: true }).fill('empty-gateway');
   await dialog.getByLabel('显示名称', { exact: true }).fill('Empty Gateway');
   await dialog.getByLabel('服务地址', { exact: true }).fill('https://empty.example.test/v1');
@@ -2616,7 +2621,7 @@ try {
   await dialog.waitFor({ state: 'detached' });
 
   // 紧凑视口下依次检查设置页其余分页（21 系列）。
-  for (const [index, tab] of ['模型配置', '使用量', 'Agent 工具', '权限策略', 'Harness 配置', '子 Agent', 'MCP 服务器', '技能', '扩展', '关于'].entries()) {
+  for (const [index, tab] of ['模型配置', '使用量', '智能体工具', '权限策略', 'Harness 配置', '子智能体', 'MCP 服务器', '技能', '扩展', '关于'].entries()) {
     await openSettingsSection(tab);
     await capture(`21-compact-settings-${index}`);
   }
@@ -2636,7 +2641,8 @@ try {
   await openSettingsSection('技能');
   assert.equal(await page.locator('.skill-source-head').count(), 4);
   assert.equal(await page.getByRole('heading', { name: /Studio 应用技能/ }).count(), 1);
-  assert.equal(await page.getByRole('heading', { name: /^Agent Skills/ }).count(), 2);
+  assert.equal(await page.getByRole('heading', { name: /^共享技能/ }).count(), 1);
+  assert.equal(await page.getByRole('heading', { name: /^项目共享技能/ }).count(), 1);
   assert.equal(
     await page.locator('.skill-source-head code').first().innerText(),
     '/Users/demo/Library/Application Support/pi-studio/skills',
@@ -2689,7 +2695,7 @@ try {
   }]);
 
   await openSettingsSection('扩展');
-  assert.deepEqual(await page.locator('.installed-extension-title strong').allTextContents(), ['workspace-tools', 'Studio 子 Agent']);
+  assert.deepEqual(await page.locator('.installed-extension-title strong').allTextContents(), ['workspace-tools', 'Studio 子智能体']);
   assert.equal(await page.locator('.installed-extension-card').count(), 2);
   assert.equal(await page.locator('.installed-extension-row').count(), 0);
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
@@ -2745,7 +2751,7 @@ try {
   const extensionDetail = page.locator('.extension-detail-dialog');
   await extensionDetail.waitFor();
   await extensionDetail.getByRole('heading', { name: 'workspace-tools', exact: true }).waitFor();
-  await extensionDetail.getByText('Agent 工具', { exact: true }).waitFor();
+  await extensionDetail.getByText('智能体工具', { exact: true }).waitFor();
   const extensionDetailOverlay = await page.locator('.detail-overlay').evaluate((element) => {
     const style = getComputedStyle(element);
     return { background: style.backgroundColor, backdrop: style.backdropFilter };
@@ -2892,4 +2898,7 @@ try {
   // 整个流程中浏览器不能有未捕获异常。
   assert.deepEqual(errors, [], 'Browser runtime errors');
   console.log(`UI checks passed; screenshots saved to ${output}`);
+} catch (error) {
+  if (errors.length > 0) console.error('Browser runtime errors:', errors);
+  throw error;
 } finally { await browser.close(); }

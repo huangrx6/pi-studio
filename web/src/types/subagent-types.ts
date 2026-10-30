@@ -1,7 +1,7 @@
 import type { ChatMessage } from './chat-types';
 import type { RuntimeRefreshSnapshot } from './runtime-types';
 
-/** Pi Durable 支持的 thinking 强度。空字符串表示沿用父 Agent。 */
+/** Pi Durable 支持的 thinking 强度。空字符串表示沿用父智能体。 */
 export type SubagentThinking = '' | 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export type SubagentConfig = {
@@ -9,7 +9,7 @@ export type SubagentConfig = {
   defaultProvider: string;
   defaultThinking: SubagentThinking;
   maxThinking: SubagentThinking;
-  /** 空数组表示沿用父 Agent 当前提供给模型的工具。 */
+  /** 空数组表示沿用父智能体当前提供给模型的工具。 */
   allowedTools: string[];
   backgroundEnabled: boolean;
   defaultMode: 'foreground' | 'background';
@@ -43,7 +43,7 @@ export type SubagentSettingsSnapshot = {
 
 export type SubagentStatus = 'pending' | 'running' | 'completed' | 'failed' | 'stopped' | 'paused' | 'waiting';
 
-/** 主会话中的一张子 Agent 卡片。key 由主进程生成，渲染层只把它当作稳定句柄。 */
+/** 主会话中的一张子智能体卡片。key 由主进程生成，渲染层只把它当作稳定句柄。 */
 export type SubagentChild = {
   key: string;
   runId: string;

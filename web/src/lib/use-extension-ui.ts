@@ -8,6 +8,20 @@ const EMPTY_SNAPSHOT: ExtensionUiSnapshot = {
   apiVersion: 1,
 };
 
+function safeSnapshot(value: unknown): ExtensionUiSnapshot {
+  if (!value || typeof value !== 'object') return EMPTY_SNAPSHOT;
+  const candidate = value as Partial<ExtensionUiSnapshot>;
+  if (!Array.isArray(candidate.items) || !Array.isArray(candidate.errors)) {
+    return EMPTY_SNAPSHOT;
+  }
+  return {
+    items: candidate.items,
+    errors: candidate.errors,
+    syncedAt: Number.isFinite(candidate.syncedAt) ? Number(candidate.syncedAt) : 0,
+    apiVersion: Number.isFinite(candidate.apiVersion) ? Number(candidate.apiVersion) : 1,
+  };
+}
+
 /**
  * Loads the declarative extension surface for one workspace.
  *
@@ -28,7 +42,7 @@ export function useExtensionUiSnapshot(cwd?: string, enabled = true) {
     const load = () => {
       void window.piApi.extensionsUi(cwd)
         .then((next) => {
-          if (!disposed) setSnapshot(next);
+          if (!disposed) setSnapshot(safeSnapshot(next));
         })
         .catch(() => {
           if (!disposed) setSnapshot(EMPTY_SNAPSHOT);

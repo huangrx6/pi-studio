@@ -157,7 +157,7 @@ await page.addInitScript(() => {
         promptText: `原始内容已保存为附件。\n\n[[pi-studio-attachment:qa]]`,
       };
     },
-    fileAbsolute: async path => {
+    attachmentFile: async ({ path }) => {
       const saved = window.__savedPastes.at(-1)?.text || '';
       window.__openedFiles.push(path);
       return { path, size: new TextEncoder().encode(saved).length, binary: false, text: saved };

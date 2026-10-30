@@ -154,7 +154,7 @@ function ChildCard({
         className="agent-card-delete"
         disabled={deleting}
         title="永久删除这个子智能体及其上下文"
-        aria-label={`删除子智能体 ${child.name || child.agent}`}
+        aria-label={`删除子智能体${child.name || child.agent}`}
         onClick={onDelete}
       >
         {deleting ? <LoaderCircle className="spin" /> : <Trash2 />}
@@ -202,7 +202,7 @@ export function SubagentOverview({
   return <div className="agent-overview">
     <header className="agent-overview-head">
       <div>
-        <span className="agent-overview-eyebrow">多 Agent 协作</span>
+        <span className="agent-overview-eyebrow">多智能体协作</span>
         <h2>子智能体总览</h2>
         <p>同一父会话里的子智能体会集中显示。打开会话会替换当前内容区，顶部“对话”标签和“返回主智能体”都能回到原位置。</p>
       </div>
@@ -227,7 +227,7 @@ export function SubagentOverview({
     <button type="button" className="agent-main-card" onClick={onReturnMain}>
       <span className="agent-main-orb">π</span>
       <div>
-        <span className="agent-card-source"><UserRound />父 Agent · 主对话</span>
+        <span className="agent-card-source"><UserRound />父智能体· 主对话</span>
         <strong>主智能体</strong>
         <p>返回你正在进行的对话。父智能体负责拆分任务、等待子智能体，并汇总最终结果。</p>
         <span className="agent-main-return"><ArrowLeft />返回主对话</span>
@@ -253,7 +253,7 @@ export function SubagentOverview({
       : <div className="agent-overview-empty">
         <GitFork />
         <strong>这次对话还没有子智能体</strong>
-        <span>父 Agent 调用 subagent 工具后，运行记录会自动出现在这里。</span>
+        <span>父智能体调用 subagent 工具后，运行记录会自动出现在这里。</span>
       </div>}
   </div>;
 }
@@ -326,7 +326,7 @@ export function SubagentTranscriptView({
           <span className={`agent-status is-${child.status}`}>{statusIcon(child.status)}<span>{STATUS_LABEL[child.status]}</span></span>
         </header>
         <div className="agent-context-meta">
-          <span><Cpu /><small>模型</small><strong>{child.model || '继承父 Agent'}</strong></span>
+          <span><Cpu /><small>模型</small><strong>{child.model || '继承父智能体'}</strong></span>
           <span><Sparkles /><small>思考强度</small><strong>{thinkingLabel(child.thinking)}</strong></span>
           <span><FolderGit2 /><small>上下文</small><strong>{contextLabel(child.context)}</strong></span>
           <span><Clock3 /><small>耗时</small><strong>{duration(child.durationMs)}</strong></span>

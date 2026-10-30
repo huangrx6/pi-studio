@@ -175,7 +175,7 @@ export function SubagentSettings({
     : '';
   const scopeLabel = scope === 'user' ? '所有工作区' : workspaceName || '指定工作区';
   const defaultModelOptions = useMemo(() => [
-    { value: '', label: '跟随父 Agent' },
+    { value: '', label: '跟随父智能体' },
     ...(snapshot?.models || []).map((model) => ({
       value: model.modelRef,
       label: model.label,
@@ -273,7 +273,7 @@ export function SubagentSettings({
     return (
       <div className="settings-loading" role="status">
         <LoaderCircle className="spin" />
-        正在读取子 Agent 运行配置…
+        正在读取子智能体运行配置…
       </div>
     );
   }
@@ -283,9 +283,9 @@ export function SubagentSettings({
       <section className="settings-card subagent-overview">
         <div className="subagent-overview-head">
           <div className="subagent-overview-copy">
-            <span className="subagent-eyebrow"><Bot />多 Agent 协作</span>
-            <h2>子 Agent</h2>
-            <p>为子 Agent 设置独立模型、思考强度和工具边界；每次启动都会继承当前 Harness 配置。</p>
+            <span className="subagent-eyebrow"><Bot />多智能体协作</span>
+            <h2>子智能体</h2>
+            <p>为子智能体设置独立模型、思考强度和工具边界；每次启动都会继承当前 Harness 配置。</p>
           </div>
           <div className="subagent-overview-actions">
             <span className={`subagent-status-pill is-${runtimeState}`}>
@@ -300,7 +300,7 @@ export function SubagentSettings({
               type="button"
               className="icon-button"
               disabled={loading || saving}
-              aria-label="刷新子 Agent 配置"
+              aria-label="刷新子智能体配置"
               title="刷新"
               onClick={() => void load()}
             >
@@ -311,10 +311,10 @@ export function SubagentSettings({
 
         <div className={`subagent-runtime-status is-${runtimeState}`}>
           <div>
-            <strong>{runtimeReady ? 'Durable 子 Agent 已就绪' : '子 Agent 功能尚未完全启用'}</strong>
+            <strong>{runtimeReady ? 'Durable 子智能体已就绪' : '子智能体功能尚未完全启用'}</strong>
             <span>{runtimeReady
-              ? '配置保存在 Studio SQLite，并从下一次启动的子 Agent 开始生效。'
-              : '在 Agent 工具中开放 subagent 后即可使用；已保存的模型、thinking 和工具限制不会丢失。'}</span>
+              ? '配置保存在 Studio SQLite，并从下一次启动的子智能体开始生效。'
+              : '在智能体工具中开放 subagent 后即可使用；已保存的模型、thinking 和工具限制不会丢失。'}</span>
           </div>
           {snapshot?.installed && toolsReady === false && onOpenAgentTools && (
             <button type="button" className="settings-outline" onClick={onOpenAgentTools}>去启用</button>
@@ -326,7 +326,7 @@ export function SubagentSettings({
             <strong>配置范围</strong>
             <span>全局值适用于所有工作区；工作区值只覆盖所选工作区。</span>
           </div>
-          <div className="subagent-scope-grid" role="radiogroup" aria-label="子 Agent 配置范围">
+          <div className="subagent-scope-grid" role="radiogroup" aria-label="子智能体配置范围">
             <button
               type="button"
               role="radio"
@@ -364,7 +364,7 @@ export function SubagentSettings({
                 <small>其他工作区继续使用“所有工作区”配置。</small>
               </div>
               <Select
-                label="子 Agent 目标工作区"
+                label="子智能体目标工作区"
                 value={effectiveWorkspace}
                 options={workspaces.map((workspace) => ({
                   value: workspace.cwd,
@@ -390,12 +390,12 @@ export function SubagentSettings({
           <span><Layers3 /></span>
           <div>
             <h2>运行方式</h2>
-            <p>前台任务会等待结果；后台任务由 Durable 管理，主 Agent 可以继续工作。</p>
+            <p>前台任务会等待结果；后台任务由 Durable 管理，主智能体可以继续工作。</p>
           </div>
         </div>
         <div className="subagent-control-grid">
           <label className={`subagent-control ${draft.backgroundEnabled ? 'is-enabled' : ''}`}>
-            <span className="subagent-label">允许后台子 Agent</span>
+            <span className="subagent-label">允许后台子智能体</span>
             <span className="subagent-toggle-row">
               <span>{draft.backgroundEnabled ? '已开启' : '已关闭'}</span>
               <input
@@ -414,7 +414,7 @@ export function SubagentSettings({
           <div className={`subagent-control subagent-control-field ${draft.backgroundEnabled ? '' : 'is-disabled'}`}>
             <span className="subagent-label">默认运行模式</span>
             <Select
-              label="默认子 Agent 运行模式"
+              label="默认子智能体运行模式"
               value={draft.defaultMode}
               options={[
                 { value: 'foreground', label: '前台 · 等待结果' },
@@ -426,10 +426,10 @@ export function SubagentSettings({
                 defaultMode: value === 'background' ? 'background' : 'foreground',
               }))}
             />
-            <small>调用子 Agent 未指定模式时使用。</small>
+            <small>调用子智能体未指定模式时使用。</small>
           </div>
           <label className={`subagent-control ${draft.supervisorEnabled ? 'is-enabled' : ''} ${draft.backgroundEnabled ? '' : 'is-disabled'}`}>
-            <span className="subagent-label">允许联系主 Agent</span>
+            <span className="subagent-label">允许联系主智能体</span>
             <span className="subagent-toggle-row">
               <span>{draft.supervisorEnabled ? '已开启' : '已关闭'}</span>
               <input
@@ -442,7 +442,7 @@ export function SubagentSettings({
                 }))}
               />
             </span>
-            <small>允许后台任务提问；主 Agent 回复后，任务会继续执行。</small>
+            <small>允许后台任务提问；主智能体回复后，任务会继续执行。</small>
           </label>
         </div>
         <div className="subagent-field-grid">
@@ -490,7 +490,7 @@ export function SubagentSettings({
               />
               <span>秒</span>
             </div>
-            <small>超时只结束本次等待，不会停止子 Agent。</small>
+            <small>超时只结束本次等待，不会停止子智能体。</small>
           </label>
         </div>
       </section>
@@ -500,26 +500,26 @@ export function SubagentSettings({
           <span><Sparkles /></span>
           <div>
             <h2>模型与思考</h2>
-            <p>以下值用于下一次子 Agent conversation；调用参数可以覆盖这里的选择。</p>
+            <p>以下值用于下一次子智能体会话；调用参数可以覆盖这里的选择。</p>
           </div>
         </div>
         <div className="subagent-field-grid">
           <div className="subagent-field">
             <span className="subagent-label">默认模型</span>
             <Select
-              label="子 Agent 默认模型"
+              label="子智能体默认模型"
               value={draft.defaultModel}
               options={defaultModelOptions}
               onChange={updateModel}
             />
-            <small>留空时跟随父 Agent。</small>
+            <small>留空时跟随父智能体。</small>
           </div>
           <div className="subagent-field">
             <span className="subagent-label">默认 thinking</span>
             <Select
-              label="子 Agent 默认 thinking"
+              label="子智能体默认 thinking"
               value={draft.defaultThinking}
-              options={thinkingOptions(thinkingLevels, '跟随父 Agent')}
+              options={thinkingOptions(thinkingLevels, '跟随父智能体')}
               onChange={(value) => setDraft((current) => ({
                 ...current,
                 defaultThinking: value as SubagentThinking,
@@ -530,7 +530,7 @@ export function SubagentSettings({
           <div className="subagent-field">
             <span className="subagent-label">thinking 上限</span>
             <Select
-              label="子 Agent thinking 上限"
+              label="子智能体 thinking 上限"
               value={draft.maxThinking}
               options={thinkingOptions(snapshot?.thinkingLevels || [], '不限制')}
               onChange={(value) => setDraft((current) => ({
@@ -538,12 +538,12 @@ export function SubagentSettings({
                 maxThinking: value as SubagentThinking,
               }))}
             />
-            <small>阻止子 Agent 使用更高成本的推理强度。</small>
+            <small>阻止子智能体使用更高成本的推理强度。</small>
           </div>
         </div>
         <div className="subagent-resolution-note">
           <Info />
-          <span>优先级：调用参数 → 指定工作区 → 所有工作区 → 父 Agent</span>
+          <span>优先级：调用参数 → 指定工作区 → 所有工作区 → 父智能体</span>
         </div>
       </section>
 
@@ -552,7 +552,7 @@ export function SubagentSettings({
           <span><Wrench /></span>
           <div>
             <h2>工具权限</h2>
-            <p>默认继承父 Agent 当前工具；也可以在交集内保存一份更窄的白名单。</p>
+            <p>默认继承父智能体当前工具；也可以在交集内保存一份更窄的白名单。</p>
           </div>
           <button
             type="button"
@@ -567,8 +567,8 @@ export function SubagentSettings({
         <div className="subagent-tool-summary">
           <span><Bot /></span>
           <div>
-            <strong>{explicitTools ? `仅允许 ${draft.allowedTools.length} 个工具` : '沿用父 Agent 当前工具'}</strong>
-            <small>最终权限始终与父 Agent 的交集一致，子 Agent 不能扩大权限。</small>
+            <strong>{explicitTools ? `仅允许 ${draft.allowedTools.length} 个工具` : '沿用父智能体当前工具'}</strong>
+            <small>最终权限始终与父智能体的交集一致，子智能体不能扩大权限。</small>
           </div>
         </div>
         {missingTools.length > 0 && (
@@ -602,7 +602,7 @@ export function SubagentSettings({
           })}
           {!parentTools.length && (
             <div className="settings-empty">
-              当前父 Agent 还没有可用工具。先在 Agent 工具页启用工具，或检查扩展与 MCP 状态。
+              当前父智能体还没有可用工具。先在智能体工具页启用工具，或检查扩展与 MCP 状态。
             </div>
           )}
         </div>
@@ -612,7 +612,7 @@ export function SubagentSettings({
       <div className="subagent-savebar">
         <div>
           <strong>{dirty ? `${scopeLabel}有未保存的更改` : '配置已同步'}</strong>
-          <span>{scopeLabel} · {path} · 下一次启动子 Agent 时生效</span>
+          <span>{scopeLabel} · {path} · 下一次启动子智能体时生效</span>
         </div>
         <button
           className="settings-outline"

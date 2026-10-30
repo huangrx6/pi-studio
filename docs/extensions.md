@@ -246,7 +246,7 @@ export async function activate(context) {
 
 内置扩展不能从受支持的设置与管理接口删除。`core` 不能停用；`optional` 可以在没有启用的依赖者时停用，也可以重新启用。安装阶段会重新写入内置记录；普通扩展使用 scope 前缀，不能以同 ID 覆盖这些受保护条目。工具被卸载后，旧 transcript 中的调用和结果仍保留用于展示，但新请求不会再提供该工具。
 
-子 Agent 必须通过 Durable 的 `api.commit()` 创建 `ownership: { kind: "task", taskId: api.taskId }` 的 child conversation，不能用普通 ownerless 会话冒充。可配置工具白名单是父 Agent 当前 model tools 与白名单的交集，且始终排除递归的 `subagent` 工具；没有交集时在创建 child 前失败。父会话取消或工具任务失败时，由 Durable 的 ownership cascade 终止 child；工具还会在提交前后检查 `abortSignal`，避免取消后继续等待或返回成功结果。
+子智能体必须通过 Durable 的 `api.commit()` 创建 `ownership: { kind: "task", taskId: api.taskId }` 的 child conversation，不能用普通 ownerless 会话冒充。可配置工具白名单是父智能体当前 model tools 与白名单的交集，且始终排除递归的 `subagent` 工具；没有交集时在创建 child 前失败。父会话取消或工具任务失败时，由 Durable 的 ownership cascade 终止 child；工具还会在提交前后检查 `abortSignal`，避免取消后继续等待或返回成功结果。
 
 ## 6. Commands
 
@@ -455,7 +455,7 @@ MCP server、启用状态、exposure、逐工具覆盖、超时、stdio 工作�
 
 Studio 的 MCP 连接按应用共享，因此 stdio `cwd` 只接受绝对路径或以 `~/` 开头的路径。未配置时使用 Studio userData 目录，而不是打包后不可预期的 Electron `process.cwd()`。`command`、`args` 和 `cwd` 支持 `~/`；env/header 值支持 `${ENV_NAME}`。Studio 有意不执行 `!command`。stdio 子进程只继承 `PATH`、`HOME`、临时目录、locale 和系统启动所需的少量环境变量，不会自动继承 shell 中其他密钥；需要时必须在 server 配置里显式使用 `${NAME}`。远程 HTTP endpoint 必须是 HTTPS，只有 `localhost`、`127.0.0.1` 和 `::1` 可使用 HTTP 开发。
 
-Studio 当前没有 codemode，因此默认使用 Pi Durable 的 `deferred + tool_search`。模型先看到 server namespace 与摘要，通过 `tool_search` 加载具体工具；加载结果从下一模型请求开始可用，并写入该会话分支的 `modelTools`，后续轮次和分支继续可见。`direct` 工具直接进入请求，`hidden` 工具只允许其他工具经 `executeTool()` 调用。每个 MCP 工具仍受 Studio Agent 工具白名单约束，支持 `mcp__*` 和 `mcp__server__*`。
+Studio 当前没有 codemode，因此默认使用 Pi Durable 的 `deferred + tool_search`。模型先看到 server namespace 与摘要，通过 `tool_search` 加载具体工具；加载结果从下一模型请求开始可用，并写入该会话分支的 `modelTools`，后续轮次和分支继续可见。`direct` 工具直接进入请求，`hidden` 工具只允许其他工具经 `executeTool()` 调用。每个 MCP 工具仍受 Studio 智能体工具白名单约束，支持 `mcp__*` 和 `mcp__server__*`。
 
 MCP 配置保存后立即重连或重建 registry；活动中的模型请求和已经开始的工具调用不会被改写。需要替换连接时，旧 client 进入退休态，等它的活动工具调用结束后再关闭。server 发出 `tools/list_changed` 后只刷新该 server 的目录，下一请求看到新工具。文本超过 20KB 时保留首尾并保存完整临时文件；图片内容继续作为图片传给模型。
 
@@ -477,7 +477,7 @@ Studio 只发现 Agent Skills 标准目录形式的 `SKILL.md`，递归扫描时
 
 系统提示只注入 `name`、`description` 和绝对 location，正文由模型的 `read` 工具按需加载；如果本次没有 `read`，则允许 `bash` 读取，两者都未开放时不会注入自动 Skill 提示。模型根据 description 自行判断是否加载，不能保证每个任务都会调用；`/skill:name` 是确定性的显式加载方式。`disable-model-invocation: true` 只隐藏自动提示，显式命令仍会由主进程展开。
 
-frontmatter 使用 Pi 同款 YAML parser。`name`、`description`、`compatibility`、`metadata` 和实验性的 `allowed-tools` 会按 Agent Skills 约束检查；名称或目录不匹配等问题作为诊断保留，缺失 description 或无法解析 YAML 会跳过该技能。Studio 当前读取但不强制 `allowed-tools`，因为该字段仍属实验性能力，工具权限继续由 Studio Agent 工具白名单控制。
+frontmatter 使用 Pi 同款 YAML parser。`name`、`description`、`compatibility`、`metadata` 和实验性的 `allowed-tools` 会按 Agent Skills 约束检查；名称或目录不匹配等问题作为诊断保留，缺失 description 或无法解析 YAML 会跳过该技能。Studio 当前读取但不强制 `allowed-tools`，因为该字段仍属实验性能力，工具权限继续由 Studio 智能体工具白名单控制。
 
 项目 Skill 默认不信任。信任指纹覆盖整个技能目录，包括隐藏文件；符号链接目标必须仍位于技能目录或工作区内。任何文件、权限或链接变化都会使旧信任失效。首次计算后使用文件元数据签名判断是否需要重新读取内容，正常文件修改仍会触发完整内容哈希。导入项目 Skill 时会在复制前验证源目录，复制后再验证目标目录，失败不会留下半成品。
 
@@ -513,7 +513,7 @@ Studio 会执行以下防护：
 - 不把 HTML、脚本或任意 IPC 塞进 UI 数据。
 - 项目扩展清楚说明权限和信任要求。
 - 运行成功、错误、禁用、未信任和卸载场景。
-- 用真实 Durable child conversation 测试子 Agent/任务相关工具。
+- 用真实 Durable child conversation 测试子智能体/任务相关工具。
 
 ## 16. 兼容与演进
 

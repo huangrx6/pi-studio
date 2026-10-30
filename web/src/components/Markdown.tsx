@@ -14,6 +14,7 @@ import ReactMarkdown, { type Components } from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 import { getActivePreferences } from '../lib/preferences';
+import { safeMarkdownImageSource } from '../lib/safe-url.js';
 
 /**
  * 自定义渲染规则。放在模块作用域：ReactMarkdown 每次 render 都新建
@@ -33,6 +34,11 @@ const components: Components = {
         void window.piApi.openLink(href, getActivePreferences().linkOpen);
       }
     }}>{children}</a>;
+  },
+  img({ src, alt, node: _node, ...props }) {
+    const safeSrc = safeMarkdownImageSource(src);
+    if (!safeSrc) return null;
+    return <img {...props} src={safeSrc} alt={alt || ''} loading="lazy" referrerPolicy="no-referrer" />;
   },
 };
 

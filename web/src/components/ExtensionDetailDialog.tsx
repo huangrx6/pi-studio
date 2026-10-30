@@ -19,7 +19,7 @@ import {
 import { DetailDialog } from './DetailDialog';
 
 const PERMISSION_LABELS: Record<string, string> = {
-  'agent.tools': 'Agent 工具',
+  'agent.tools': '智能体工具',
   'agent.sections': '系统提示词',
   'agent.hooks': '工具钩子',
   'agent.tasks': '持久任务',

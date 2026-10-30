@@ -4,6 +4,11 @@ import {
   ConversationImagePreview,
   type ConversationImage,
 } from './ConversationImageGallery';
+import {
+  ImageContextMenu,
+  imageContextMenuState,
+  type ImageContextMenuState,
+} from './ImageContextMenu';
 
 /**
  * 输入框中的待发送图片。
@@ -22,6 +27,7 @@ export function ComposerImageAttachment({
 }) {
   const image = images[index];
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [contextMenu, setContextMenu] = useState<ImageContextMenuState | null>(null);
 
   if (!image) return null;
 
@@ -33,6 +39,7 @@ export function ComposerImageAttachment({
         aria-label={`放大预览图片 ${index + 1}${image.alt ? `：${image.alt}` : ''}`}
         title="点击放大预览"
         onClick={() => setActiveIndex(index)}
+        onContextMenu={(event) => setContextMenu(imageContextMenuState(event, image))}
       >
         <img src={image.src} alt={image.alt || ''} draggable={false} />
         <span className="composer-image-preview-cue" aria-hidden="true"><Maximize2 /></span>
@@ -51,5 +58,6 @@ export function ComposerImageAttachment({
       onClose={() => setActiveIndex(null)}
       onIndexChange={setActiveIndex}
     />}
+    {contextMenu && <ImageContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />}
   </>;
 }

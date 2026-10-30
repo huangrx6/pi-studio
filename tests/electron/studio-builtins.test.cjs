@@ -564,7 +564,7 @@ test('a subagent allowlist with no available tools fails clearly before creating
         committed = true;
       },
     }, {}),
-    /白名单与父 Agent 当前工具没有交集/,
+    /白名单与父智能体当前工具没有交集/,
   );
   assert.equal(committed, false);
 });

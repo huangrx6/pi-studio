@@ -21,7 +21,7 @@ const {
 } = require('./thinking-levels.cjs');
 
 const DATABASE_NAME = 'pi-studio.sqlite';
-const SCHEMA_VERSION = 12;
+const SCHEMA_VERSION = 13;
 const USAGE_REQUEST_LEDGER_LIMIT = 8_192;
 const USAGE_REQUEST_PRUNE_BATCH = 256;
 const METRIC_REQUEST_HISTORY_LIMIT = 8;
@@ -494,11 +494,25 @@ class StudioDatabase {
       for (const row of secretRows) {
         const rawEnv = json(row.env, {});
         const rawHeaders = json(row.headers, {});
-        const env = isEncryptedEnvelope(rawEnv) ? row.env : encodeSecretMap(rawEnv);
-        const headers = isEncryptedEnvelope(rawHeaders) ? row.headers : encodeSecretMap(rawHeaders);
+        const env = isEncryptedEnvelope(rawEnv) ? row.env : encodeSecretMap(decryptValue(rawEnv));
+        const headers = isEncryptedEnvelope(rawHeaders) ? row.headers : encodeSecretMap(decryptValue(rawHeaders));
         if (env !== row.env || headers !== row.headers) {
           updateSecrets.run(env, headers, row.name);
         }
+      }
+
+      const credentialRows = this.db.prepare(
+        'SELECT provider_id, value FROM credentials',
+      ).all();
+      const updateCredential = this.db.prepare(
+        'UPDATE credentials SET value = ?, updated_at = ? WHERE provider_id = ?',
+      );
+      for (const row of credentialRows) {
+        const stored = json(row.value, undefined);
+        if (isEncryptedEnvelope(stored)) continue;
+        const plaintext = decryptValue(stored);
+        if (plaintext === undefined) continue;
+        updateCredential.run(encode(encryptValue(plaintext)), Date.now(), row.provider_id);
       }
       this.db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
     });
@@ -1119,17 +1133,15 @@ class StudioDatabase {
   readCredential(providerId) {
     const row = this.db.prepare('SELECT value FROM credentials WHERE provider_id = ?').get(providerId);
     if (!row) return undefined;
-    const stored = json(row.value, undefined);
-    return isEncryptedEnvelope(stored) ? decryptValue(stored) : stored;
+    return decryptValue(json(row.value, undefined));
   }
 
   listCredentials() {
     return this.db.prepare('SELECT provider_id, value FROM credentials ORDER BY provider_id').all()
       .map((row) => {
-        const stored = json(row.value, undefined);
         return {
           providerId: row.provider_id,
-          credential: isEncryptedEnvelope(stored) ? decryptValue(stored) : stored,
+          credential: decryptValue(json(row.value, undefined)),
         };
       })
       .filter((row) => row.credential !== undefined);
@@ -1137,7 +1149,7 @@ class StudioDatabase {
 
   writeCredential(providerId, credential) {
     const at = Date.now();
-    const encrypted = isEncryptedEnvelope(credential) ? credential : encryptValue(credential);
+    const encrypted = encryptValue(credential);
     this.db.prepare(`
       INSERT INTO credentials(provider_id, value, updated_at) VALUES (?, ?, ?)
       ON CONFLICT(provider_id) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at

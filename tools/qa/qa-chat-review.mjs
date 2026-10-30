@@ -80,7 +80,7 @@ try {
   assert.equal(await card.getByText('src/component-0.tsx', {exact:true}).count(), 0, 'read-only paths excluded');
   const fonts = await page.locator('.assistant-response').filter({ has: page.locator('h2') }).first().locator('.markdown').evaluate(node => [getComputedStyle(node.querySelector('h2')).fontFamily, getComputedStyle(node.querySelector('p')).fontFamily]);
   assert.equal(fonts[0], fonts[1]);
-  const standaloneThinking = page.locator('.standalone-thinking .activity-thinking').first();
+  const standaloneThinking = page.locator('.activity-sequence .activity-thinking').first();
   const thinkingLabelBox = await standaloneThinking.locator('.activity-thinking-label').boundingBox();
   await standaloneThinking.locator('summary').click();
   await page.waitForTimeout(220);
@@ -88,27 +88,24 @@ try {
   assert.ok(thinkingLabelBox && thinkingBodyBox && Math.abs(thinkingLabelBox.x - thinkingBodyBox.x) <= 1, 'standalone thinking body aligns with its label');
   await standaloneThinking.locator('summary').click();
   await page.waitForTimeout(220);
-  const icon = await page.locator('.run-history .activity-tool').first().evaluate(node => ({border:getComputedStyle(node).borderWidth,shadow:getComputedStyle(node).boxShadow}));
+  const firstTool = page.locator('.activity-sequence .activity-tool').first();
+  const icon = await firstTool.evaluate(node => ({border:getComputedStyle(node).borderWidth,shadow:getComputedStyle(node).boxShadow}));
   assert.equal(icon.border, '0px'); assert.equal(icon.shadow, 'none');
-  const runHistory = page.locator('.run-history').first();
-  const runHistorySummary = runHistory.locator(':scope > summary');
-  const historyList = runHistory.locator('.run-history-list');
-  const historyImages = page.locator('.run-history-images');
+  const historyImages = page.locator('.activity-sequence-images').first();
   assert.equal(await page.locator('.activity-tool-image-count').count(), 1, 'tool summaries identify image-bearing tool results');
-  assert.equal(await historyList.count(), 1, 'trace content stays mounted before collapsing');
   assert.equal(await historyImages.locator('.conversation-image-gallery').count(), 1, 'trace renders one shared screenshot gallery');
   const assistantContentBox = await page.locator('.assistant-turn-main').first().boundingBox();
   const collapsedTileBox = await historyImages.locator('.conversation-image-tile').boundingBox();
   assert.ok(assistantContentBox && collapsedTileBox && Math.abs(assistantContentBox.x - collapsedTileBox.x) <= 1, `expanded screenshot columns align with the assistant content edge (${assistantContentBox?.x} vs ${collapsedTileBox?.x})`);
-  const summaryBefore = await runHistory.evaluate(node => ({
+  const summaryBefore = await firstTool.evaluate(node => ({
     x: node.getBoundingClientRect().x,
     top: node.querySelector(':scope > summary').offsetTop,
   }));
-  await runHistorySummary.click();
-  await page.locator('.run-history:not([open])').waitFor();
+  await firstTool.locator('summary').click();
+  await firstTool.locator(':scope:not([open])').waitFor();
   await page.waitForTimeout(220);
-  assert.equal(await historyList.count(), 1, 'trace content remains mounted while collapsed');
-  const closedTraceState = await runHistory.evaluate(node => {
+  assert.equal(await firstTool.locator('.activity-tool-body').count(), 1, 'tool content remains mounted while collapsed');
+  const closedTraceState = await firstTool.evaluate(node => {
     const content = getComputedStyle(node, '::details-content');
     return { open: node.open, blockSize: content.blockSize, opacity: content.opacity };
   });
@@ -116,7 +113,7 @@ try {
   assert.equal(closedTraceState.blockSize, '0px', 'collapsed trace content has zero block size');
   assert.equal(closedTraceState.opacity, '0', 'collapsed trace content is visually hidden');
   assert.equal(await historyImages.locator('.conversation-image-tile').count(), 1, 'collapsed traces keep screenshot thumbnails visible');
-  const summaryAfter = await runHistory.evaluate(node => ({
+  const summaryAfter = await firstTool.evaluate(node => ({
     x: node.getBoundingClientRect().x,
     top: node.querySelector(':scope > summary').offsetTop,
   }));
@@ -124,13 +121,13 @@ try {
   assert.ok(Math.abs(summaryBefore.x - summaryAfter.x) <= .5 && Math.abs(summaryBefore.top - summaryAfter.top) <= .5, 'opening and collapsing does not move the trace header');
   assert.ok(assistantContentBox && collapsedAfterTileBox && Math.abs(assistantContentBox.x - collapsedAfterTileBox.x) <= 1, `collapsed screenshot columns align with the assistant content edge (${assistantContentBox?.x} vs ${collapsedAfterTileBox?.x})`);
   await page.screenshot({path:output+'trajectory-collapsed.png',fullPage:true,animations:'disabled'});
-  await runHistorySummary.click();
-  await page.locator('.run-history[open]').waitFor();
+  await firstTool.locator('summary').click();
+  await firstTool.locator(':scope[open]').waitFor();
   await page.waitForTimeout(220);
   assert.equal(await historyImages.locator('.conversation-image-gallery').count(), 1, 'screenshot gallery is never duplicated during expansion');
-  const detailsTransition = await runHistory.evaluate(node => getComputedStyle(node, '::details-content').transitionDuration);
+  const detailsTransition = await firstTool.evaluate(node => getComputedStyle(node, '::details-content').transitionDuration);
   assert.notEqual(detailsTransition, '0s', 'trace content uses the shared smooth details transition');
-  const firstTraceTool = runHistory.locator('.activity-tool').first();
+  const firstTraceTool = firstTool;
   const toolIconBefore = await firstTraceTool.evaluate(node => {
     const icon = node.querySelector('.activity-tool-icon').getBoundingClientRect();
     const summary = node.querySelector(':scope > summary').getBoundingClientRect();
@@ -218,8 +215,6 @@ try {
     fixture.classList.add('app','has-custom-background');
     fixture.style.cssText = 'display:block;height:auto;overflow:visible';
   });
-  const firstTool = page.locator('.run-history .activity-tool').first();
-  await firstTool.locator('summary').click();
   const openTool = await firstTool.evaluate(node => {
     const body = node.querySelector('.activity-tool-body');
     const code = node.querySelector('.activity-tool-code');
@@ -237,7 +232,7 @@ try {
     };
   });
   assert.equal(openTool.open, true);
-  assert.ok(openTool.border >= 1, 'expanded tool keeps its card border over custom backgrounds');
+  assert.equal(openTool.border, 0, 'execution rows use the shared borderless disclosure style');
   assert.ok(openTool.radius >= 8, 'expanded tool keeps its shared corner radius');
   assert.equal(openTool.bodyBackground, 'rgba(0, 0, 0, 0)', 'tool body does not add an opaque rectangular layer');
   assert.ok(openTool.codePadding >= 12, 'expanded tool parameters have breathing room');

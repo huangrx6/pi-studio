@@ -3,9 +3,11 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const { installElectronSafeStorage } = require('./helpers/electron-safe-storage.cjs');
 
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-model-migration-'));
 process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
+installElectronSafeStorage(test);
 
 const {
   closeStudioDatabase,

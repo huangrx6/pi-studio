@@ -20,8 +20,8 @@
 | `builtin:studio-tool-search` | system | 为 deferred MCP 工具提供官方 `tool_search` | tool_search 按需加载；MCP namespace 工具选择；加载结果在后续请求使用 | 需要模型主动发现工具，不能保证每次任务都调用 |
 | `builtin:studio-skills` | system | 把 Agent Skills 元数据注入 Prompt，正文按需读取 | Studio 项目优先、`.agents/skills` 互操作、YAML 校验、整目录指纹、项目显式信任、热重载 | 缺失 description 或解析失败的 Skill 会被跳过并报告诊断 |
 | `builtin:studio-permissions` | core | 在 Durable `ToolTask` 前应用 `ask`、`smart`、`full` 策略 | 全局/工作区/会话继承；`deny > ask > allow`；模型、MCP、nested ToolTask 统一检查；符号链接越界和明显系统破坏命令硬拦截 | Bash 是保守静态分析，包装器、编译程序、动态路径等仍可能绕过 |
-| `builtin:studio-subagents` | system | 通过 task-owned child conversation 创建子 Agent | 独立模型、thinking 和上下文；前台、后台、并行与链式子 Agent；工具白名单与父工具取交集；禁止递归；停止、等待、监督询问、取消传播、transcript 分页与归属校验 | 子 Agent 仍共享受信任的主进程执行边界，不是独立 OS 沙箱 |
-| `builtin:studio-subagent-channel` | system | 提供 child-owned `contact_supervisor` 通道 | 只注入 Studio 创建的子会话；请求有数量与长度上限；父 Agent 通过 `subagent_supervisor` 回复 | 监督是异步协作协议，不代表前台批准本身会暂停整个子 Agent |
+| `builtin:studio-subagents` | system | 通过 task-owned child conversation 创建子智能体 | 独立模型、thinking 和上下文；前台、后台、并行与链式子智能体；工具白名单与父工具取交集；禁止递归；停止、等待、监督询问、取消传播、transcript 分页与归属校验 | 子智能体仍共享受信任的主进程执行边界，不是独立 OS 沙箱 |
+| `builtin:studio-subagent-channel` | system | 提供 child-owned `contact_supervisor` 通道 | 只注入 Studio 创建的子会话；请求有数量与长度上限；父智能体通过 `subagent_supervisor` 回复 | 监督是异步协作协议，不代表前台批准本身会暂停整个子智能体 |
 | `builtin:studio-metrics` | optional | 实时展示 TTFT、TPS、Token、成本、请求和任务阶段 | 使用官方 Pi AI/Durable telemetry；缓冲和订阅有界；内容无关；停用与关闭时释放 provider | 属于可选观测能力，不影响 Agent 执行正确性 |
 
 ## 扩展宿主

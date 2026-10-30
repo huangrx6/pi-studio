@@ -186,11 +186,11 @@ interface SettingsSnapshot {
   extensionRegistryUrl: string;
   /** 当前启用的模型 id。 */
   enabledModels: string[];
-  /** Pi Studio 的 Agent 工具白名单。 */
+  /** Pi Studio 的智能体工具白名单。 */
   agentTools: AgentToolSelection;
   /** 当前工作区生效的 Harness 配置与全部可切换 profile。 */
   harness: HarnessSettingsSnapshot;
-  /** Agent 工具白名单在 Studio SQLite 中的位置。 */
+  /** 智能体工具白名单在 Studio SQLite 中的位置。 */
   agentToolsPath: string;
   /** Studio 的 SQLite 数据库与私有资源目录。 */
   storagePath: string;
@@ -315,9 +315,9 @@ declare global {
         entryId?: string;
       }): Promise<ConversationSummary | { ok: boolean; longTask?: LongTaskState; wasRunning?: boolean }>;
       conversationTaskGraph(id: string): Promise<ConversationTaskGraph>;
-      /** 读取当前会话的子 Agent 总览，包含已完成记录与实时快照。 */
+      /** 读取当前会话的子智能体总览，包含已完成记录与实时快照。 */
       sessionSubagents(id: string): Promise<SubagentChild[]>;
-      /** 读取一个受信任子 Agent session 的只读 transcript。 */
+      /** 读取一个受信任子智能体 session 的只读 transcript。 */
       subagentTranscript(payload: { sessionId: string; childKey: string; limit?: number; cursor?: string }): Promise<SubagentTranscript>;
       /** 永久删除当前父会话中的一个子智能体及其独立上下文。 */
       deleteSubagent(payload: { sessionId: string; childKey: string }): Promise<{ ok: boolean; name: string; deletedConversations: number }>;
@@ -327,7 +327,7 @@ declare global {
       files(cwd: string, path: string): Promise<{ path: string; entries: Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }> }>;
       /** 读取单个文件文本；binary 为 true 时 text 不可直接展示。 */
       file(cwd: string, path: string): Promise<{ path: string; size: number; binary: boolean; text: string }>;
-      /** 只读打开工作区外的绝对路径（文件变更卡片）。 */
+      /** 只读打开当前会话已记录的轮次变更文件。 */
       temporaryModel(payload?: { modelRef?: string; thinkingLevel?: import('./types/model-types').ThinkingLevel }): Promise<import('./types/model-types').ModelSelection>;
       temporaryPrompt(payload: { id: string; text: string; images: { data: string; mimeType: string }[]; modelRef: string; thinkingLevel: string }): Promise<{ ok: boolean }>;
       temporaryStop(id: string): Promise<void>;
@@ -337,13 +337,15 @@ declare global {
         | { id: string; type: 'error'; message: string }
       ) => void): () => void;
       turnDiffFile(payload: { sessionId: string; at: number; path: string; full?: boolean; ignoreWhitespace?: boolean }): Promise<import('./types/chat-types').TurnDiffFile>;
-      fileAbsolute(path: string): Promise<{ path: string; size: number; binary: boolean; text: string }>;
+      turnDiffAbsoluteFile(payload: { sessionId: string; path: string }): Promise<{ path: string; size: number; binary: boolean; text: string }>;
+      /** 只读打开 Studio 自己管理的附件文件；主进程会拒绝附件目录之外的路径。 */
+      attachmentFile(payload: { path: string }): Promise<{ path: string; size: number; binary: boolean; text: string }>;
       /** 查询系统里可用来打开该文件的应用。 */
-      fileActions(payload: { cwd: string; path: string }): Promise<{ apps: Array<{ name: string; path: string; icon?: string }> }>;
+      fileActions(payload: { cwd?: string; path: string; source?: 'workspace' | 'attachment' | 'diff'; sessionId?: string }): Promise<{ apps: Array<{ name: string; path: string; icon?: string }> }>;
       /** 用指定应用（或系统默认应用）打开文件。 */
-      openWith(payload: { cwd: string; path: string; appPath?: string }): Promise<{ ok: boolean }>;
+      openWith(payload: { cwd?: string; path: string; appPath?: string; source?: 'workspace' | 'attachment' | 'diff'; sessionId?: string }): Promise<{ ok: boolean }>;
       /** 在 Finder 中定位文件。 */
-      revealFile(payload: { cwd: string; path: string }): Promise<{ ok: boolean }>;
+      revealFile(payload: { cwd?: string; path: string; source?: 'workspace' | 'attachment' | 'diff'; sessionId?: string }): Promise<{ ok: boolean }>;
       /** 用系统浏览器打开任意 http(s) 链接。 */
       openExternal(url: string): Promise<{ ok: boolean }>;
       /** 按偏好打开链接：external 走系统浏览器，window 走应用内子窗口。 */
@@ -365,6 +367,8 @@ declare global {
       pickAttachments(payload: { sessionId?: string }): Promise<{ attachments: ComposerAttachment[] }>;
       /** 保存粘贴/拖入的上传文件，返回带 marker 的落盘信息。 */
       saveUpload(payload: { sessionId?: string; name: string; mime: string; data: string }): Promise<UploadedAttachment>;
+      /** 把受支持的内联图片 data URI 写入系统剪贴板。 */
+      copyImage(payload: { src: string }): Promise<{ ok: boolean }>;
       /** 打开系统目录选择器，返回所选工作区路径。 */
       chooseWorkspace(): Promise<string | undefined>;
 
@@ -411,7 +415,7 @@ declare global {
       }): Promise<ConversationExtensionUiPreferences>;
       /** 扫描当前工作区可用的核心、扩展包与本地扩展工具。 */
       agentToolCatalog(payload?: { cwd?: string; refresh?: boolean }): Promise<AgentToolCatalog>;
-      /** 保存 Agent 工具白名单与来源快照。 */
+      /** 保存智能体工具白名单与来源快照。 */
       setAgentTools(payload: { tools: AgentToolSelection; cwd?: string }): Promise<SettingsSnapshot>;
       /** 读取 Harness 配置 profile、section 定义与当前工作区选择。 */
       harnessSettings(cwd?: string): Promise<HarnessSettingsSnapshot>;
@@ -441,9 +445,9 @@ declare global {
         cwd?: string;
         policy: RuntimePolicy;
       }): Promise<HarnessSettingsSnapshot>;
-      /** 读取 Studio 子 Agent 的模型、thinking 与工具权限。 */
+      /** 读取 Studio 子智能体的模型、thinking 与工具权限。 */
       subagentSettings(cwd?: string): Promise<SubagentSettingsSnapshot>;
-      /** 保存一个范围的模型、thinking 与子 Agent 工具白名单。 */
+      /** 保存一个范围的模型、thinking 与子智能体工具白名单。 */
       saveSubagentSettings(payload: { cwd: string; scope: 'user' | 'project'; settings: SubagentConfig }): Promise<SubagentSettingsSnapshot>;
       /** 保存某来源的 API Key。 */
       setKey(payload: { providerId: string; apiKey: string }): Promise<any>;

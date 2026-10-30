@@ -83,31 +83,31 @@ try {
   await page.screenshot({path:output+theme+'.png',animations:'disabled'});
  }
  // Each file opens separately only when explicitly requested; context menu operates on clicked tab.
- const review=page.getByRole('tab').filter({has:page.locator('.panel-tab-label',{hasText:/^变更$/})});
+ const review=page.locator('.panel-tab').filter({has:page.locator('.panel-tab-label',{hasText:/^变更$/})});
  for (const name of ['src/session.ts','readme.md','other.ts']) {
   await page.getByRole('button',{name:`在新标签页打开 ${name}`,exact:true}).click();
   await review.click();
  }
- assert.equal(await page.getByRole('tab').count(),5);
- const sessionTab=page.getByRole('tab').filter({hasText:'session.ts'});
+ assert.equal(await page.locator('.panel-tab').count(),5);
+ const sessionTab=page.locator('.panel-tab').filter({hasText:'session.ts'});
  await sessionTab.click({button:'right'});
  await page.getByRole('menuitem',{name:'关闭右侧标签页',exact:true}).click();
- assert.equal(await page.getByRole('tab').count(),3);
+ assert.equal(await page.locator('.panel-tab').count(),3);
  await sessionTab.click({button:'right'});
  await page.getByRole('menuitem',{name:'关闭左侧标签页',exact:true}).click();
- assert.equal(await page.getByRole('tab').count(),1);
+ assert.equal(await page.locator('.panel-tab').count(),1);
  await page.locator('.file-change-summary > header button').click();
  await page.getByRole('button',{name:'在新标签页打开 other.ts',exact:true}).click();
  await review.click({button:'right'});
  await page.getByRole('menuitem',{name:'关闭其他标签页',exact:true}).click();
- assert.equal(await page.getByRole('tab').count(),1);
+ assert.equal(await page.locator('.panel-tab').count(),1);
  assert.equal(await review.getAttribute('aria-selected'),'true');
  await review.click({button:'right'});
  await page.getByRole('menuitem',{name:'关闭所有标签页',exact:true}).click();
  await page.locator('.file-panel').waitFor({state:'detached'});
  await page.locator('.file-change-summary > header button').click();
  await page.locator('.changes-view').waitFor();
- assert.equal(await page.getByRole('tab').count(),1);
+ assert.equal(await page.locator('.panel-tab').count(),1);
  const handle=page.getByRole('separator',{name:'调整右侧面板宽度'});
  await handle.focus(); for(let i=0;i<10;i++) await page.keyboard.press('ArrowRight');
  await page.waitForFunction(()=>document.querySelector('.file-panel').getBoundingClientRect().width<330);

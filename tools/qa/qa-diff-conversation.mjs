@@ -46,7 +46,9 @@ try {
   const prose=page.getByText(text,{exact:true});await prose.waitFor();assert.equal(await prose.evaluate(node=>!!node.closest('details')),false);
  }
  assert.equal(await page.getByText('思考过程',{exact:true}).count(),0);
- assert.ok(await page.locator('.run-history').count()>=2);
+ assert.ok(await page.locator('.activity-sequence').count()>=2);
+ assert.ok(await page.locator('.activity-thinking').count()>=2);
+ assert.ok(await page.locator('.activity-sequence .activity-tool').count()>=2);
  const positions=await page.locator('.assistant-turn-main > .assistant-response').evaluateAll(nodes=>nodes.map(node=>node.getBoundingClientRect().y));
  assert.ok(positions.every((n,i)=>!i||n>positions[i-1]));
  await page.screenshot({path:output+'conversation-light.png',fullPage:true,animations:'disabled'});

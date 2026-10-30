@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { DetailDialog } from './DetailDialog';
+import { SettingsPageHeader } from './SettingsPageHeader';
 import {
   SettingsResourceCard,
   SettingsResourceCardBody,
@@ -336,17 +337,17 @@ export function AgentToolsSettings({ cwd, initialSelection, configPath, onSaved 
   }
 
   return <div className="settings-sections agent-tools-settings">
+    <SettingsPageHeader
+      icon={<Wrench />}
+      title="智能体工具"
+      meta={<span className="count-badge">{draft.enabled.length}</span>}
+      description="决定智能体可以调用哪些工具。保存后会热更新已打开的会话；正在回答的会话在本轮结束后自动应用。"
+      actions={<button type="button" className="settings-add-button" disabled={loading} onClick={() => void loadCatalog(true)}>
+        {loading ? <LoaderCircle className="spin" /> : <RefreshCw />}
+        刷新目录
+      </button>}
+    />
     <section className="settings-card">
-      <div className="settings-card-head">
-        <div>
-          <h2>Agent 工具 <span className="count-badge">{draft.enabled.length}</span></h2>
-          <p>决定模型能调用哪些工具。保存后会热更新已打开的会话；正在回答的会话在本轮结束后自动应用。</p>
-        </div>
-        <button className="settings-add-button" disabled={loading} onClick={() => void loadCatalog(true)}>
-          {loading ? <LoaderCircle className="spin" /> : <RefreshCw />}
-          刷新目录
-        </button>
-      </div>
       <div className="agent-tool-summary">
         <span><Wrench />{draft.enabled.length} 个已允许</span>
         <span><Package />{catalog?.tools.length ?? 0} 个已检测到</span>
@@ -403,7 +404,7 @@ export function AgentToolsSettings({ cwd, initialSelection, configPath, onSaved 
       <div className="agent-tool-toolbar">
         <div className="agent-tool-search-wrap">
           <Search className="agent-tool-search-icon" aria-hidden="true" />
-          <input className="agent-tool-search" aria-label="搜索 Agent 工具" placeholder="搜索工具或来源…" value={query} onChange={(event) => setQuery(event.target.value)} />
+          <input className="agent-tool-search" aria-label="搜索智能体工具" placeholder="搜索工具或来源…" value={query} onChange={(event) => setQuery(event.target.value)} />
           {query && <button className="agent-tool-search-clear" aria-label="清除工具搜索" title="清除搜索" onClick={() => setQuery('')}><X /></button>}
         </div>
         <div className="agent-tool-toolbar-actions">
@@ -526,7 +527,7 @@ export function AgentToolsSettings({ cwd, initialSelection, configPath, onSaved 
           <div><strong>{detail.kind === 'command' ? '由扩展管理' : detailEnabled ? '已在当前草稿中允许' : '当前草稿中已停用'}</strong><p>{detail.kind === 'command' ? '斜杠命令随提供它的扩展一起加载，不能单独启停。' : '这里的开关只修改当前草稿；点击工具目录上方的“保存更改”后会同步到 Pi，并热更新会话运行时。'}</p></div>
         </div>
         <dl className="detail-list">
-          <div><dt>类型</dt><dd>{detail.kind === 'tool' ? 'Agent 工具' : '扩展命令'}</dd></div>
+          <div><dt>类型</dt><dd>{detail.kind === 'tool' ? '智能体工具' : '扩展命令'}</dd></div>
           {detail.kind === 'tool' && <div><dt>提供方式</dt><dd>{exposureLabel(detail.item.exposure)}</dd></div>}
           <div><dt>来源</dt><dd>{detail.item.source.label}</dd></div>
           <div><dt>来源类型</dt><dd>{SOURCE_KIND_LABEL[detail.item.source.kind]}</dd></div>

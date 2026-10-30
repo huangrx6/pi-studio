@@ -5,6 +5,7 @@ import {
   applyConversationExtensionUiPatch,
   DEFAULT_CONVERSATION_EXTENSION_UI_PREFERENCES,
   hasSessionExtensionOrder,
+  normalizeConversationExtensionUiPreferences,
   orderConversationExtensionItems,
 } from '../../web/src/lib/conversation-extension-order.ts';
 
@@ -38,6 +39,29 @@ test('declaration order stays grouped by extension and sourceOrder', () => {
       'session-a',
     ).map((entry) => entry.contributionId),
     ['detail', 'summary', 'detail'],
+  );
+});
+
+test('malformed persisted extension preferences fall back to safe defaults', () => {
+  assert.deepEqual(
+    normalizeConversationExtensionUiPreferences(undefined),
+    DEFAULT_CONVERSATION_EXTENSION_UI_PREFERENCES,
+  );
+  assert.deepEqual(
+    normalizeConversationExtensionUiPreferences({
+      layout: 'unknown',
+      globalOrder: ['kept', 42],
+      sessionOrders: {
+        session: ['alpha', null],
+        invalid: 'not-an-array',
+      },
+    }),
+    {
+      version: 1,
+      layout: 'grid',
+      globalOrder: ['kept'],
+      sessionOrders: { session: ['alpha'] },
+    },
   );
 });
 

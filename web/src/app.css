@@ -1391,6 +1391,7 @@ Every surface, interaction and semantic state uses the shared Studio tokens. */
 .harness-policy-note > code { max-width: 220px; overflow: hidden; color: var(--faint); font: 9.5px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .harness-policy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
 .harness-policy-group { display: flex; min-width: 0; flex-direction: column; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-raised); }
+.harness-policy-group.is-wide { grid-column: 1 / -1; }
 .harness-policy-group > header { display: flex; flex-direction: column; gap: 2px; padding-bottom: var(--space-2); border-bottom: 1px solid var(--border); }
 .harness-policy-group > header strong { color: var(--text); font-size: var(--text-sm); font-weight: 600; }
 .harness-policy-group > header span { color: var(--faint); font-size: var(--text-xs); line-height: 1.5; }
@@ -4242,6 +4243,11 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   overflow-wrap: anywhere;
 }
 
+.assistant-turn-main .activity-sequence .activity-thinking-body {
+  padding-right: 6px;
+  padding-left: 32px;
+}
+
 .assistant-turn-main .activity-thinking-body .markdown > :first-child { margin-top: 0; }
 .assistant-turn-main .activity-thinking-body .markdown > :last-child { margin-bottom: 0; }
 
@@ -4378,8 +4384,8 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .assistant-turn-main .activity-sequence-note .markdown > :last-child { margin-bottom: 0; }
 
 .assistant-turn-main .activity-sequence-images {
-  max-width: calc(100% - 28px);
-  margin: -7px 0 14px 28px;
+  max-width: 100%;
+  margin: -7px 0 14px;
 }
 
 .assistant-turn-main .activity-sequence-images .conversation-image-gallery { margin: 8px 0 0; }
@@ -6400,7 +6406,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   display: flex;
   width: 100%;
   min-width: 0;
-  min-height: 138px;
+  min-height: 0;
   flex: 1;
   align-items: flex-start;
   gap: var(--space-3);
@@ -6491,7 +6497,7 @@ button.settings-resource-card-main:disabled { cursor: default; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.settings-resource-card-body > small { margin-top: auto; }
+.settings-resource-card-body > small { margin-top: 2px; }
 
 .settings-resource-card-footer {
   display: flex;
@@ -6650,7 +6656,7 @@ button.settings-resource-card-main:disabled { cursor: default; }
 .model-card-footer .model-card-remove svg { width: 13px; height: 13px; }
 
 .provider-card { padding: 0; }
-.provider-card-head { min-height: 104px; }
+.provider-card-head { min-height: 0; }
 .provider-card .provider-main strong { color: var(--text); font-size: var(--text-base); font-weight: 600; }
 .provider-card .provider-main > span {
   display: flex;
@@ -6683,7 +6689,7 @@ button.settings-resource-card-main:disabled { cursor: default; }
   white-space: nowrap;
 }
 
-.mcp-card-main { min-height: 156px; }
+.mcp-card-main { min-height: 0; }
 .mcp-card-transport {
   flex: none;
   color: var(--faint);
@@ -6691,17 +6697,17 @@ button.settings-resource-card-main:disabled { cursor: default; }
   white-space: nowrap;
 }
 .mcp-card-description { flex: none; margin: 0; }
-.mcp-card-target { margin-top: auto; }
+.mcp-card-target { margin-top: 2px; }
 .mcp-card-meta { display: flex; gap: var(--space-2); justify-content: space-between; margin: 0; }
 .mcp-card-footer { padding-bottom: var(--space-3); }
 
-.skill-card-main { min-height: 138px; }
+.skill-card-main { min-height: 0; }
 .skill-card-footer { padding: 0 9px 7px; }
 
-.extension-card { gap: 0; }
+.extension-card { min-height: 0; gap: 0; }
 .installed-extension-card { min-height: 0; }
 .installed-extension-main,
-.official-extension-main { min-height: 138px; }
+.official-extension-main { min-height: 0; }
 .extension-card-icon {
   width: 30px;
   height: 30px;
@@ -6747,10 +6753,10 @@ button.settings-resource-card-main:disabled { cursor: default; }
   font-size: 9.5px;
   font-weight: 550;
 }
-.installed-extension-blocked { margin-top: auto; }
-.official-extension-change { margin-top: auto; }
+.installed-extension-blocked,
+.official-extension-change { margin-top: 2px; }
 
-.agent-tool-card-main { min-height: 138px; }
+.agent-tool-card-main { min-height: 0; }
 .agent-tool-card-icon {
   width: 30px;
   height: 30px;

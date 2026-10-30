@@ -577,7 +577,7 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
       <span class="label"><span class="n">(02)</span> — 设计原则</span>
       <p>
         Pi Studio 不是一个聊天窗口。<br>
-        它把 Pi Durable 的持久化 Agent 能力搬进桌面——会话、长期任务与子 Agent
+        它把 Pi Durable 的持久化 Agent 能力搬进桌面——会话、长期任务与子智能体
         都留在本地；<em>编码 Prompt、工具说明、项目指令与偏好都可以被检查</em>。
       </p>
     </div>
@@ -651,8 +651,8 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
         </article>
         <article class="feat" data-reveal>
           <span class="idx">07 / SUBAGENTS</span>
-          <h3>子 Agent 上下文</h3>
-          <p>子 Agent 使用独立 Durable conversation、模型与上下文；可以从主 Agent 进入子会话查看 transcript，再返回原来的主对话。</p>
+          <h3>子智能体上下文</h3>
+          <p>子智能体使用独立 Durable conversation、模型与上下文；可以从主智能体进入子会话查看 transcript，再返回原来的主对话。</p>
         </article>
         <article class="feat" data-reveal>
           <span class="idx">08 / DESKTOP</span>
@@ -662,7 +662,7 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
         <article class="feat" data-reveal>
           <span class="idx">09 / RUNTIME</span>
           <h3>热加载与内存</h3>
-          <p>配置在下一请求边界热刷新；流式更新按帧合并、历史自动分页，并为详情、文件、子 Agent 与工具目录设置缓存上限。</p>
+          <p>配置在下一请求边界热刷新；流式更新按帧合并、历史自动分页，并为详情、文件、子智能体与工具目录设置缓存上限。</p>
         </article>
       </div>
     </div>
@@ -762,7 +762,7 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
         <div class="dl-intro" data-reveal>
           <span class="label"><span class="n">(07)</span> — 下载</span>
           <h2>拿走它，<br>直接用。</h2>
-          <p>DMG 由 GitHub Actions 在 macOS 上自动构建，Apple Silicon 与 Intel 各一份。v0.0.5 修复了后台任务仍运行时过早结束会话的问题，请从 latest Release 下载对应架构。</p>
+          <p>DMG 由 GitHub Actions 在 macOS 上自动构建，Apple Silicon 与 Intel 各一份。v0.0.6 完善了文件预览安全、图片复制、长期任务控制、配置热加载与内存回收，请从 latest Release 下载对应架构。</p>
         </div>
 
         <div class="dl-list" data-reveal>

@@ -131,6 +131,7 @@ import {
   DEFAULT_CONVERSATION_EXTENSION_UI_PREFERENCES,
   applyConversationExtensionUiPatch,
   hasSessionExtensionOrder,
+  normalizeConversationExtensionUiPreferences,
   orderConversationExtensionItems,
 } from './lib/conversation-extension-order';
 import type {
@@ -162,10 +163,10 @@ const settingsPages = [
   { id: 'models', label: '模型配置', icon: Cpu, description: '配置模型来源、可用模型与新对话默认值。' },
   { id: 'usage', label: '使用量', icon: BarChart3, description: '查看每日 Token 热力图与各模型使用分布。' },
   { id: 'archives', label: '归档会话', icon: ArchiveRestore, description: '恢复或永久删除已归档的会话。' },
-  { id: 'tools', label: 'Agent 工具', icon: Wrench, description: '控制模型可以调用哪些工具，并查看它们来自哪里。' },
+  { id: 'tools', label: '智能体工具', icon: Wrench, description: '控制智能体可以调用哪些工具，并查看它们来自哪里。' },
   { id: 'permissions', label: '权限策略', icon: ShieldCheck, description: '按工具、命令和路径配置允许、询问与拒绝规则。' },
   { id: 'harness', label: 'Harness 配置', icon: Code2, description: '组合系统提示、项目上下文、技能与工具指导。' },
-  { id: 'subagents', label: '子 Agent', icon: Bot, description: '配置子 Agent 的模型、思考强度与角色覆盖。' },
+  { id: 'subagents', label: '子智能体', icon: Bot, description: '配置子智能体的模型、思考强度与角色覆盖。' },
   { id: 'mcp', label: 'MCP 服务器', icon: Plug, description: '连接外部工具，让 Pi 更好地理解你的工作环境。' },
   { id: 'skills', label: '技能', icon: FileCode2, description: '管理可复用的工作方法，为 Pi 扩展专业能力。' },
   { id: 'extensions', label: '扩展', icon: Layers3, description: '统一管理已安装的 Pi 扩展和扩展包。' },
@@ -453,7 +454,8 @@ function emptyModelSelection(): ModelSelection {
 // ---------- 视图辅助类型 ----------
 type DragItem = { kind: 'workspace' | 'session'; cwd: string; sessionId?: string };
 type PanelFile = { path: string; size: number; binary: boolean; text: string };
-type PanelTab = { id: string; kind: 'start' | 'files' | 'file' | 'diff' | 'changes' | 'temporary'; title: string; path?: string; diff?: TurnDiffFile; review?: { sessionId: string; initial: TurnDiff; turns: TurnDiff[]; focusPath?: string } };
+type PanelFileSource = 'workspace' | 'attachment' | 'diff';
+type PanelTab = { id: string; kind: 'start' | 'files' | 'file' | 'diff' | 'changes' | 'temporary'; title: string; path?: string; source?: PanelFileSource; sessionId?: string; diff?: TurnDiffFile; review?: { sessionId: string; initial: TurnDiff; turns: TurnDiff[]; focusPath?: string } };
 type ComposerMenuState = { kind: 'slash' | 'file'; query: string; start: number; end: number };
 type AgentView =
   | { kind: 'conversation' }
@@ -635,7 +637,11 @@ export function App() {
     if (!window.piApi.conversationExtensionUiPreferences) return;
     void window.piApi.conversationExtensionUiPreferences()
       .then((preferences) => {
-        if (!disposed) setConversationExtensionUiPreferences(preferences);
+        if (!disposed) {
+          setConversationExtensionUiPreferences(
+            normalizeConversationExtensionUiPreferences(preferences),
+          );
+        }
       })
       .catch(() => {
         // Extension presentation remains usable with declaration order defaults.
@@ -809,6 +815,19 @@ export function App() {
       : 'info';
     pushNotification(notice.message, tone);
   }, [pushNotification]);
+  useEffect(() => {
+    const handleNotice = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        message?: string;
+        title?: string;
+        tone?: NotificationTone;
+      }>).detail;
+      if (!detail?.message) return;
+      pushNotification(detail.message, detail.tone, detail.title);
+    };
+    window.addEventListener('pi-studio:notify', handleNotice);
+    return () => window.removeEventListener('pi-studio:notify', handleNotice);
+  }, [pushNotification]);
   const [extensionDetail, setExtensionDetail] = useState<ExtensionHostItem | null>(null);
   const [extensionUpdates, setExtensionUpdates] = useState<Record<string, ExtensionUpdateCheckResult>>({});
   const [officialExtensions, setOfficialExtensions] = useState<OfficialExtensionCatalogSnapshot | null>(null);
@@ -899,12 +918,15 @@ export function App() {
   const dragRef = useRef<DragItem | null>(null);
   const dragPreviewRef = useRef<HTMLDivElement | null>(null);
   const restoredRef = useRef(false);
-  const openFileHandlerRef = useRef<(path: string) => void>(() => {});
+  const openFileHandlerRef = useRef<(path: string, source?: PanelFileSource) => void>(() => {});
   const openChangesHandlerRef = useRef<(file: TurnDiffFile | undefined, turn: TurnDiff) => void>(() => {});
-  openFileHandlerRef.current = (path) => { void openFile(path); };
+  openFileHandlerRef.current = (path, source = 'diff') => { void openFile(path, session?.id, source); };
   openChangesHandlerRef.current = (nextFile, turn) => openChangesTab(nextFile, turn);
   const handleOpenFile = useCallback((path: string) => {
-    openFileHandlerRef.current(path);
+    openFileHandlerRef.current(path, 'diff');
+  }, []);
+  const handleOpenAttachment = useCallback((path: string) => {
+    openFileHandlerRef.current(path, 'attachment');
   }, []);
   const handleOpenChanges = useCallback((nextFile: TurnDiffFile | undefined, turn: TurnDiff) => {
     openChangesHandlerRef.current(nextFile, turn);
@@ -2522,6 +2544,11 @@ export function App() {
   }
 
   function selectDraftWorkspace(cwd: string) {
+    const previousKey = composerDraftKeyRef.current;
+    const pending = currentComposerDraft();
+    const hasPending = Boolean(pending.text.trim())
+      || pending.attachments.length > 0
+      || pending.kind === 'durable';
     checkpointComposerDraft();
     ++sessionLoadRef.current;
     ++outlineRequestRef.current;
@@ -2539,7 +2566,13 @@ export function App() {
     setOutlineHover(null);
     pendingOutlineJumpRef.current = null;
     setWorkspace(cwd);
-    installComposerDraft(composerDraftKeyForNew(cwd), draftKind);
+    const nextKey = composerDraftKeyForNew(cwd);
+    if (hasPending) {
+      // The uncommitted new-conversation composer follows workspace changes.
+      // Session drafts remain isolated because they use a different callback.
+      moveComposerDraft(composerDraftsRef.current, previousKey, nextKey, pending);
+    }
+    installComposerDraft(nextKey, pending.kind);
     setComposerMenu(null);
     setModelPickerRequest(null);
     setModelSelection(defaultModelSelection);
@@ -2696,7 +2729,7 @@ export function App() {
       if (detail.model) setModelSelection(detail.model);
       setMessages(detail.messages.map((message) => ({ ...message })));
       setRequestTraces(Array.isArray(detail.requestTraces) ? detail.requestTraces : []);
-      // 子 Agent 查询失败不应阻止主会话打开；该查询在调用处按空列表降级。
+      // 子智能体查询失败不应阻止主会话打开；该查询在调用处按空列表降级。
       setSubagentChildren(Array.isArray(children) ? children : []);
       setSubagentTranscript(null);
       setSubagentError(null);
@@ -2746,12 +2779,16 @@ export function App() {
     setConversationExtensionUiPreferences((current) => applyConversationExtensionUiPatch(current, patch));
     try {
       const saved = await window.piApi.saveConversationExtensionUiPreferences(patch);
-      setConversationExtensionUiPreferences(saved);
+      setConversationExtensionUiPreferences(
+        normalizeConversationExtensionUiPreferences(saved),
+      );
       return true;
     } catch (error) {
       try {
         setConversationExtensionUiPreferences(
-          await window.piApi.conversationExtensionUiPreferences(),
+          normalizeConversationExtensionUiPreferences(
+            await window.piApi.conversationExtensionUiPreferences(),
+          ),
         );
       } catch {
         setConversationExtensionUiPreferences(previous);
@@ -2806,7 +2843,7 @@ export function App() {
 
   function openAgentTranscript(child: SubagentChild) {
     if (!session?.id || !child.hasTranscript) {
-      setSubagentError('这个子 Agent 没有可安全读取的本地会话。');
+      setSubagentError('这个子智能体没有可安全读取的本地会话。');
       return;
     }
     rememberMainScrollPosition();
@@ -4058,16 +4095,31 @@ export function App() {
   }
 
   /** 读取文件并按路径缓存，重复打开时直接命中缓存。 */
-  async function loadFileToTab(target: string) {
+  async function loadFileToTab(
+    target: string,
+    accessSessionId?: string,
+    source: PanelFileSource = target.startsWith('/') ? 'diff' : 'workspace',
+  ) {
     const root = workspace || session?.cwd;
-    const absolute = target.startsWith('/');
-    if (!absolute && !root) return;
+    const activeSessionId = accessSessionId || session?.id;
+    if (source === 'workspace' && !root) return;
+    if (source === 'diff' && !activeSessionId) {
+      setError('文件变更需要所属会话才能打开');
+      return;
+    }
     setFileBusy(true);
     try {
-      const content = absolute ? await window.piApi.fileAbsolute(target) : await window.piApi.file(root!, target);
+      const content = source === 'attachment'
+        ? await window.piApi.attachmentFile({ path: target })
+        : source === 'diff'
+          ? await window.piApi.turnDiffAbsoluteFile({ sessionId: activeSessionId!, path: target })
+          : await window.piApi.file(root!, target);
+      const cacheKey = source === 'workspace'
+        ? target
+        : `${source}:${activeSessionId || 'draft'}:${target}`;
       setOpenFiles((current) => {
         // 只保留最近打开的几个文件，避免长时间浏览把每个预览都留在内存里。
-        const next = { ...current, [target]: content };
+        const next = { ...current, [cacheKey]: content };
         const keys = Object.keys(next);
         if (keys.length > 8) delete next[keys[0]];
         return next;
@@ -4082,25 +4134,47 @@ export function App() {
   function activatePanelTab(tab: PanelTab) {
     setActivePanelTabId(tab.id);
     if (tab.kind === 'file' && tab.path) {
-      const cached = openFiles[tab.path];
+      const source = tab.source || (tab.path.startsWith('/') ? 'diff' : 'workspace');
+      const cacheKey = source === 'workspace'
+        ? tab.path
+        : `${source}:${tab.sessionId || session?.id || 'draft'}:${tab.path}`;
+      const cached = openFiles[cacheKey];
       setFile(cached ?? null);
-      if (!cached) void loadFileToTab(tab.path);
+      if (!cached) void loadFileToTab(tab.path, tab.sessionId, source);
     } else {
       setFile(null);
     }
   }
 
   /** 从文件树打开文件：不存在则新建标签，已存在则复用。 */
-  async function openFile(target: string) {
-    const id = `file:${target}`;
+  async function openFile(
+    target: string,
+    accessSessionId = session?.id,
+    source: PanelFileSource = target.startsWith('/') ? 'diff' : 'workspace',
+  ) {
+    const id = source === 'workspace'
+      ? `file:${target}`
+      : `${source}:${accessSessionId || 'draft'}:${target}`;
     const title = target.split('/').pop() || target;
-    setPanelTabs((current) => current.some((tab) => tab.id === id) ? current : [...current, { id, kind: 'file', title, path: target }]);
+    setPanelTabs((current) => current.some((tab) => tab.id === id)
+      ? current
+      : [...current, {
+          id,
+          kind: 'file',
+          title,
+          path: target,
+          source,
+          sessionId: source === 'workspace' ? undefined : accessSessionId,
+        }]);
     setActivePanelTabId(id);
-    const cached = openFiles[target];
+    const cacheKey = source === 'workspace'
+      ? target
+      : `${source}:${accessSessionId || 'draft'}:${target}`;
+    const cached = openFiles[cacheKey];
     setFile(cached ?? null);
     if (filesOpen) setPanelEntered(true);
     else openPanel();
-    if (!cached) await loadFileToTab(target);
+    if (!cached) await loadFileToTab(target, accessSessionId, source);
   }
 
   /** 关闭标签；关闭最后一个标签时整个面板一起收起。 */
@@ -4293,8 +4367,8 @@ export function App() {
     },
     {
       key: 'user-agents',
-      title: 'Agent Skills',
-      meta: '用户级 · 跨客户端共享',
+      title: '共享技能',
+      meta: '用户级 · Agent Skills 共享目录',
       path: settingsData?.agentsSkillsPath || '',
       items: skills.filter((skill) => skill.scope === 'user' && skill.origin === 'agents'),
     },
@@ -4307,8 +4381,8 @@ export function App() {
     },
     {
       key: 'project-agents',
-      title: 'Agent Skills',
-      meta: activeWorkspace?.name ? `${activeWorkspace.name} · 项目共享` : '项目级 · Agent 通用目录',
+      title: '项目共享技能',
+      meta: activeWorkspace?.name ? `${activeWorkspace.name} · Agent Skills 共享目录` : '项目级 · Agent Skills 共享目录',
       path: settingsData?.projectAgentsSkillsPath || '',
       items: skills.filter((skill) => skill.scope === 'project' && skill.origin === 'agents'),
     },
@@ -4463,27 +4537,43 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [skillDetail, mcpDetail]);
 
+  function currentFileRequest(appPath?: string) {
+    if (!file || !activePanelTab || activePanelTab.kind !== 'file') return null;
+    const source = activePanelTab.source || (file.path.startsWith('/') ? 'diff' : 'workspace');
+    if (source === 'workspace' && !workspace) return null;
+    return {
+      cwd: workspace || session?.cwd || '',
+      path: file.path,
+      source,
+      sessionId: activePanelTab.sessionId || session?.id,
+      ...(appPath ? { appPath } : {}),
+    };
+  }
+
   async function showFileActions() {
-    if (!file || !workspace) return;
+    const request = currentFileRequest();
+    if (!request) return;
     if (fileMenuOpen) { setFileMenuOpen(false); return; }
     setFileMenuOpen(true);
     try {
-      const result = await window.piApi.fileActions({ cwd: workspace, path: file.path });
+      const result = await window.piApi.fileActions(request);
       setFileApps(result.apps);
     } catch (error) { setError(errorText(error)); }
   }
 
   async function openFileWith(appPath?: string) {
-    if (!file || !workspace) return;
+    const request = currentFileRequest(appPath);
+    if (!request) return;
     setFileMenuOpen(false);
-    try { await window.piApi.openWith({ cwd: workspace, path: file.path, appPath }); }
+    try { await window.piApi.openWith(request); }
     catch (error) { setError(errorText(error)); }
   }
 
   async function revealCurrentFile() {
-    if (!file || !workspace) return;
+    const request = currentFileRequest();
+    if (!request) return;
     setFileMenuOpen(false);
-    try { await window.piApi.revealFile({ cwd: workspace, path: file.path }); }
+    try { await window.piApi.revealFile(request); }
     catch (error) { setError(errorText(error)); }
   }
 
@@ -4553,7 +4643,7 @@ export function App() {
     if (activePanelTab.kind === 'temporary') return <TemporaryChat key={activePanelTab.id} id={activePanelTab.id} selection={modelSelection} onManage={() => void openSettings('models')} />;
     if (activePanelTab.kind === 'start') return renderPanelStart();
     if (activePanelTab.kind === 'files') return renderFileTree();
-    if (activePanelTab.kind === 'changes' && activePanelTab.review) return <ChangesView key={`${activePanelTab.id}:${activePanelTab.review.initial.at}:${activePanelTab.review.focusPath}`} {...activePanelTab.review} onOpenFile={path => void openFile(path)} onOpenDiff={(file, at) => openDiffTab(file, at, activePanelTab.review!.sessionId)} />;
+    if (activePanelTab.kind === 'changes' && activePanelTab.review) return <ChangesView key={`${activePanelTab.id}:${activePanelTab.review.initial.at}:${activePanelTab.review.focusPath}`} {...activePanelTab.review} onOpenFile={path => void openFile(path, activePanelTab.review!.sessionId, 'diff')} onOpenDiff={(file, at) => openDiffTab(file, at, activePanelTab.review!.sessionId)} />;
     if (activePanelTab.kind === 'diff' && activePanelTab.diff) return <DiffView file={activePanelTab.diff} />;
     return renderFilePreview();
   }
@@ -4897,7 +4987,7 @@ export function App() {
               <div className="messages">
                 {historyLoading && <div className="history-loading" role="status" aria-live="polite" aria-label="正在加载更早消息"><LoaderCircle className="spin" /></div>}
                 {transcriptTurns.map((turn, index) => turn.kind === 'user'
-                  ? <ChatMessageView key={`user-${turn.message.sourceIndex ?? turn.message.timestamp ?? index}`} id={`chat-turn-${turn.message.sourceIndex ?? `pending-${turn.message.timestamp ?? index}`}`} message={turn.message} onOpenFile={handleOpenFile} />
+                  ? <ChatMessageView key={`user-${turn.message.sourceIndex ?? turn.message.timestamp ?? index}`} id={`chat-turn-${turn.message.sourceIndex ?? `pending-${turn.message.timestamp ?? index}`}`} message={turn.message} onOpenFile={handleOpenAttachment} />
                   : <AssistantTurnView key={`assistant-${turn.messages[0]?.sourceIndex ?? turn.messages[0]?.timestamp ?? index}`} id={turn.messages[0]?.sourceIndex !== undefined ? `chat-assistant-turn-${turn.messages[0].sourceIndex}` : undefined} messages={turn.messages} toolResults={toolResultMap} requestTraces={requestTracesByTurn.get(index)} cwd={session?.cwd} busy={turnActive && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView}
                     gitDiff={index === lastAssistantTurnIndex ? liveDiff ?? (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined) : (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined)}
                     onOpenDiff={handleOpenChanges} onOpenFile={handleOpenFile} />)}
@@ -5116,8 +5206,8 @@ export function App() {
                   onRemove={() => removeComposerAttachment(attachment.id)}
                 />
                 : <div className="composer-attachment is-file is-openable" key={attachment.id} title={attachment.path} role={attachment.path ? 'button' : undefined} tabIndex={attachment.path ? 0 : undefined} aria-label={attachment.path ? `在右侧面板查看 ${attachment.name}` : undefined}
-                  onClick={() => { if (attachment.path) void openFile(attachment.path); }}
-                  onKeyDown={(event) => { if (attachment.path && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); void openFile(attachment.path); } }}>
+                  onClick={() => { if (attachment.path) void openFile(attachment.path, session?.id, 'attachment'); }}
+                  onKeyDown={(event) => { if (attachment.path && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); void openFile(attachment.path, session?.id, 'attachment'); } }}>
                   <AttachmentIcon name={attachment.name} mime={attachment.mime} />
                   <span><strong>{attachment.name}</strong><small>{filesize(attachment.bytes)}{attachment.lines ? ` · ${attachment.lines.toLocaleString('zh-CN')} 行` : ''}</small></span>
                   {attachment.path && <span className="attachment-open-cue" title="在右侧面板查看" aria-hidden="true"><PanelRightOpen /></span>}
@@ -5413,6 +5503,13 @@ export function App() {
             {settingsTab === 'usage' && <UsageSettings active={settingsOpen} />}
             {settingsData && settingsTab === 'models' && (
               <div className="settings-sections">
+                <SettingsPageHeader
+                  icon={<Cpu />}
+                  title="模型配置"
+                  meta={<span className="count-badge">{enabledModels.length}</span>}
+                  description="配置模型来源、发现与启用模型，并为新对话选择默认模型。本轮运行中的请求不会被配置变化打断。"
+                  actions={<button type="button" className="settings-add-button" onClick={() => void openEditor('provider')}><Plus />添加模型来源</button>}
+                />
                 <section className="settings-card default-model-card">
                   <div className="settings-card-head">
                     <div>
@@ -5622,8 +5719,15 @@ export function App() {
               </div>
             )}
             {settingsData && settingsTab === 'mcp' && (
-              <section className="settings-card">
-                <div className="settings-card-head"><div><h2>MCP 服务器 <span className="count-badge">{settingsData.mcp.length}</span></h2><p>外部工具默认通过官方 `tool_search` 按需发现，连接和工具变化会热更新。</p></div><button className="settings-add-button" aria-label="添加 MCP 服务器" onClick={() => void openEditor('mcp')}><Plus />添加服务器</button></div>
+              <div className="settings-sections">
+                <SettingsPageHeader
+                  icon={<Plug />}
+                  title="MCP 服务器"
+                  meta={<span className="count-badge">{settingsData.mcp.length}</span>}
+                  description="连接外部工具。默认通过官方 tool_search 按需发现，连接和工具变化会在下一次模型请求前热更新。"
+                  actions={<button type="button" className="settings-add-button" aria-label="添加 MCP 服务器" onClick={() => void openEditor('mcp')}><Plus />添加服务器</button>}
+                />
+                <section className="settings-card">
                 <div className="mcp-card-grid">
                   {settingsData.mcp.map((server) => <SettingsResourceCard
                     className={`mcp-card ${server.enabled ? 'is-on' : ''}`}
@@ -5652,17 +5756,19 @@ export function App() {
                   {settingsData.mcp.length === 0 && <div className="settings-empty">还没有 MCP 服务器。</div>}
                 </div>
                 <p className="settings-footnote">配置变更只重连受影响的服务；本轮的模型请求与已开始的工具调用保持稳定，新工具从下一次模型请求起生效。</p>
-              </section>
+                </section>
+              </div>
             )}
             {settingsData && settingsTab === 'skills' && (
-              <section className="settings-card">
-                <div className="settings-card-head">
-                  <div>
-                    <h2>技能 <span className="count-badge">{settingsData.skills.length}</span></h2>
-                    <p>Studio 私有目录与通用 <code>.agents/skills</code> 都会被发现；项目技能优先于用户技能，并在下一次请求前热更新。</p>
-                  </div>
-                  <button className="settings-add-button" aria-label="添加技能" onClick={() => void openEditor('skill')}><Plus />添加技能</button>
-                </div>
+              <div className="settings-sections">
+                <SettingsPageHeader
+                  icon={<FileCode2 />}
+                  title="技能"
+                  meta={<span className="count-badge">{settingsData.skills.length}</span>}
+                  description="管理 Studio 私有技能与通用 .agents/skills。项目技能优先于用户技能，并在下一次请求前热更新。"
+                  actions={<button type="button" className="settings-add-button" aria-label="添加技能" onClick={() => void openEditor('skill')}><Plus />添加技能</button>}
+                />
+                <section className="settings-card">
                 <div className="skill-group-sections">
                   {skillGroups.map((group) => <section className="skill-source-group" key={group.key}>
                     <div className="skill-source-head">
@@ -5716,8 +5822,9 @@ export function App() {
                 {settingsData.skillErrors.length > 0 && <div className="settings-error-list">
                   {settingsData.skillErrors.map((item) => <div key={`${item.path}:${item.message}`}><code>{item.path}</code><span>{item.message}</span></div>)}
                 </div>}
-                <p className="settings-footnote">提示词只包含名称、描述和 SKILL.md 路径；模型匹配后才会读取正文。项目技能默认不加载，目录内容变化会让既有信任失效。Studio 新建技能写入应用数据目录；`.agents/skills` 由其他 Agent 客户端共享。</p>
-              </section>
+                <p className="settings-footnote">提示词只包含名称、描述和 SKILL.md 路径；模型匹配后才会读取正文。项目技能默认不加载，目录内容变化会让既有信任失效。Studio 新建技能写入应用数据目录；`.agents/skills` 由其他智能体客户端共享。</p>
+                </section>
+              </div>
             )}
             {settingsData && settingsTab === 'extensions' && (
               <div className="settings-sections extensions-settings">
@@ -5788,7 +5895,7 @@ export function App() {
                       <BrandMark className="about-app-icon" />
                       <div><h1>Pi Studio</h1><p>让想法，在这里成为现实。</p></div>
                     </div>
-                    <p className="about-lead">一个基于 Pi Durable 的本地 Agent 工作台。把长对话、代码差异、多子 Agent 协作和本地工作区放进同一套安静、清晰的界面里。</p>
+                    <p className="about-lead">一个基于 Pi Durable 的本地智能体工作台。把长对话、代码差异、多子智能体协作和本地工作区放进同一套安静、清晰的界面里。</p>
                     <div className="about-actions">
                       <button type="button" className="about-action-primary" onClick={openUpdateDialog}><RotateCw />检查更新</button>
                       <button type="button" className="about-action-secondary" onClick={() => void window.piApi.openExternal('https://github.com/huangrx6/pi-studio')}><Github />查看源码</button>
@@ -5796,7 +5903,7 @@ export function App() {
                     <div className="about-feature-pills">
                       <span><Monitor />macOS 原生体验</span>
                       <span><ShieldCheck />配置与会话保存在本地</span>
-                      <span><Bot />Pi Agent 驱动</span>
+                      <span><Bot />Pi 智能体驱动</span>
                     </div>
                   </div>
                   <aside className="about-release-card">
@@ -5814,7 +5921,7 @@ export function App() {
                   <article className="about-info-card about-author-card">
                     <div className="about-info-head"><span><UserRound /></span><small>设计与开发</small></div>
                     <h2>huangrx6</h2>
-                    <p>Pi Studio 的创建者，专注于把复杂的 Agent 工作流做成人愿意每天使用的工具。</p>
+                    <p>Pi Studio 的创建者，专注于把复杂的智能体工作流做成人愿意每天使用的工具。</p>
                     <button type="button" onClick={() => void window.piApi.openExternal('https://github.com/huangrx6')}>GitHub 主页 <ExternalLink /></button>
                   </article>
                   <article className="about-info-card">

@@ -6,29 +6,60 @@
 const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const fs = require('node:fs');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
+const { getWindow } = require('../core/state.cjs');
 const {
   workspaceFile,
   searchWorkspaceFiles,
   listDirectory,
   readFileText,
-  readAbsoluteFile,
 } = require('../services/workspace.cjs');
 const { normalizeExternalHttpUrl } = require('../core/external-url.cjs');
 const { applicationsForFile, applicationIcon, openWithApp } = require('../services/mac-apps.cjs');
+const { resolveAttachmentFile } = require('../services/attachments.cjs');
+const { resolveTurnDiffAbsoluteFile } = require('../services/turn-diff.cjs');
+
+function assertMainWindow(event) {
+  const window = getWindow();
+  if (!window || window.isDestroyed() || event.sender !== window.webContents) {
+    throw new Error('拒绝来自非主窗口的文件读取请求');
+  }
+}
+
+function resolveFileRequest({ cwd, path: requested, source = 'workspace', sessionId } = {}) {
+  if (typeof requested !== 'string' || !requested) throw new Error('缺少文件路径');
+  if (source === 'workspace') return workspaceFile(cwd, requested);
+  if (source === 'attachment') return resolveAttachmentFile(requested);
+  if (source === 'diff') return resolveTurnDiffAbsoluteFile({ sessionId, path: requested });
+  throw new Error('文件来源无效');
+}
 
 function registerFilesIpc() {
-  ipcMain.handle('pi:turn-diff-file', (_event, payload) => require('../services/turn-diff.cjs').readTurnDiffFile(payload));
+  ipcMain.handle('pi:turn-diff-file', (event, payload) => {
+    assertMainWindow(event);
+    return require('../services/turn-diff.cjs').readTurnDiffFile(payload);
+  });
   // 目录列表（右侧文件树）
-  ipcMain.handle('pi:files', async (_event, { cwd, path: requested }) => listDirectory(cwd, requested || '.'));
+  ipcMain.handle('pi:files', async (event, { cwd, path: requested } = {}) => {
+    assertMainWindow(event);
+    return listDirectory(cwd, requested || '.');
+  });
 
   // 单个文件内容（二进制 / 超大文件只返回元信息）
-  ipcMain.handle('pi:file', async (_event, { cwd, path: requested }) => readFileText(cwd, requested));
-  // 文件变更卡片可能指向工作区之外（bash / 脚本输出），只读预览走绝对路径。
-  ipcMain.handle('pi:file-absolute', async (_event, requested) => readAbsoluteFile(requested));
+  ipcMain.handle('pi:file', async (event, { cwd, path: requested } = {}) => {
+    assertMainWindow(event);
+    return readFileText(cwd, requested);
+  });
+  // Absolute previews are scoped to paths present in this session's persisted
+  // turn-diffs. The renderer cannot turn this into a general file reader.
+  ipcMain.handle('pi:turn-diff-absolute-file', async (event, payload) => {
+    assertMainWindow(event);
+    return require('../services/turn-diff.cjs').readTurnDiffAbsoluteFile(payload);
+  });
 
   // 「打开方式」候选应用 + 图标
-  ipcMain.handle('pi:file-actions', async (_event, { cwd, path: requested }) => {
-    const target = workspaceFile(cwd, requested);
+  ipcMain.handle('pi:file-actions', async (event, payload) => {
+    assertMainWindow(event);
+    const target = resolveFileRequest(payload);
     if (!fs.existsSync(target)) throw new Error('文件不存在');
     const apps = await applicationsForFile(target);
     const withIcons = await Promise.all(
@@ -47,14 +78,16 @@ function registerFilesIpc() {
   });
 
   // 用指定应用打开文件
-  ipcMain.handle('pi:open-with', async (_event, { cwd, path: requested, appPath }) => {
-    const target = workspaceFile(cwd, requested);
-    await openWithApp(target, typeof appPath === 'string' ? appPath : undefined);
+  ipcMain.handle('pi:open-with', async (event, payload) => {
+    assertMainWindow(event);
+    const target = resolveFileRequest(payload);
+    await openWithApp(target, typeof payload?.appPath === 'string' ? payload.appPath : undefined);
     return { ok: true };
   });
 
   // 打开链接：mode=window 时用内置子窗口，否则交给系统浏览器
-  ipcMain.handle('pi:open-link', async (_event, { url, mode }) => {
+  ipcMain.handle('pi:open-link', async (event, { url, mode } = {}) => {
+    assertMainWindow(event);
     const safeUrl = normalizeExternalHttpUrl(url);
     if (mode !== undefined && mode !== 'external' && mode !== 'window') {
       throw new Error('链接打开方式无效');
@@ -64,7 +97,12 @@ function registerFilesIpc() {
         width: 1080,
         height: 760,
         titleBarStyle: 'hiddenInset',
-        webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+          sandbox: true,
+          partition: 'pi-studio-browser',
+        },
       });
       child.webContents.setWindowOpenHandler(({ url: next }) => {
         try {
@@ -82,22 +120,28 @@ function registerFilesIpc() {
   });
 
   // 系统浏览器打开
-  ipcMain.handle('pi:open-external', async (_event, url) => {
+  ipcMain.handle('pi:open-external', async (event, url) => {
+    assertMainWindow(event);
     await shell.openExternal(normalizeExternalHttpUrl(url));
     return { ok: true };
   });
 
   // 在 Finder 中显示文件
-  ipcMain.handle('pi:reveal-file', async (_event, { cwd, path: requested }) => {
-    shell.showItemInFolder(workspaceFile(cwd, requested));
+  ipcMain.handle('pi:reveal-file', async (event, payload) => {
+    assertMainWindow(event);
+    shell.showItemInFolder(resolveFileRequest(payload));
     return { ok: true };
   });
 
   // `@` 文件搜索
-  ipcMain.handle('pi:search-files', async (_event, { cwd, query }) => searchWorkspaceFiles(cwd, query));
+  ipcMain.handle('pi:search-files', async (event, { cwd, query } = {}) => {
+    assertMainWindow(event);
+    return searchWorkspaceFiles(cwd, query);
+  });
 
   // 选择工作区：选中后取消隐藏，让它重新出现在侧边栏
-  ipcMain.handle('pi:choose-workspace', async () => {
+  ipcMain.handle('pi:choose-workspace', async (event) => {
+    assertMainWindow(event);
     const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
     const cwd = result.canceled ? undefined : result.filePaths[0];
     if (cwd) {
@@ -107,4 +151,4 @@ function registerFilesIpc() {
   });
 }
 
-module.exports = { registerFilesIpc };
+module.exports = { registerFilesIpc, resolveFileRequest };

@@ -243,6 +243,10 @@ function installUpdate() {
   return { started: true };
 }
 
+function updaterOwnsApplicationQuit() {
+  return installing || updateState.state === 'downloaded';
+}
+
 function shutdownUpdater() {
   if (startupTimer) clearTimeout(startupTimer);
   if (intervalTimer) clearInterval(intervalTimer);
@@ -261,6 +265,7 @@ module.exports = {
   getUpdateState,
   initializeUpdater,
   installUpdate,
+  updaterOwnsApplicationQuit,
   notifyUpdateUi,
   openAndCheckForUpdates,
   shutdownUpdater,

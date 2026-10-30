@@ -4,6 +4,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { createRegistry } = require('@earendil-works/pi-durable');
+const { installElectronSafeStorage } = require('./helpers/electron-safe-storage.cjs');
+
+installElectronSafeStorage({ after });
 
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-mcp-reload-'));
 process.env.PI_STUDIO_USER_DATA = path.join(temporary, 'user-data');

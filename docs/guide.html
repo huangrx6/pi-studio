@@ -71,7 +71,7 @@
           <ul>
             <li data-search="Harness Prompt profile AGENTS.md 编码提示 运行策略"><a href="#harness">Harness 配置</a></li>
             <li data-search="权限 请求批准 帮我批准 完全权限 allow ask deny"><a href="#permissions">权限策略</a></li>
-            <li data-search="工具 Agent 工具 白名单 tool_search 来源 glob"><a href="#tools">Agent 工具</a></li>
+            <li data-search="工具 智能体工具 白名单 tool_search 来源 glob"><a href="#tools">智能体工具</a></li>
             <li data-search="Skill 技能 SKILL.md 信任 按需加载"><a href="#skills">技能</a></li>
             <li data-search="MCP stdio HTTP deferred tool_search 服务器"><a href="#mcp">MCP 服务器</a></li>
             <li data-search="扩展 extension 面板 命令 安装 启用 排序"><a href="#extensions">扩展系统</a></li>
@@ -123,14 +123,14 @@
             <code>main</code> 分支的产品边界和技术契约。
           </p>
           <dl class="article-meta">
-            <div><dt>Version</dt><dd>v0.0.5 · Stable</dd></div>
+            <div><dt>Version</dt><dd>v0.0.6 · Stable</dd></div>
             <div><dt>Runtime</dt><dd>Pi Durable 1.4</dd></div>
             <div><dt>Ownership</dt><dd>Studio SQLite</dd></div>
             <div><dt>License</dt><dd>MIT · macOS</dd></div>
           </dl>
           <div class="status-note">
             <strong>版本说明</strong>
-            <p><code>v0.0.5</code> 修复了后台任务尚未结束时过早显示“已完成”和文件变更的问题。会话、任务与子智能体由 Durable 执行；模型、凭据、工作区、MCP、Skill 与扩展由 Pi Studio 自己的 SQLite 和受管目录保存。</p>
+            <p><code>v0.0.6</code> 完善了附件与文件预览边界、图片复制、长期任务安全阀、配置热加载和退出可靠性。会话、任务与子智能体由 Durable 执行；模型、凭据、工作区、MCP、Skill 与扩展由 Pi Studio 自己的 SQLite 和受管目录保存。</p>
           </div>
 
           <div class="chapter-index" aria-label="主要章节">
@@ -281,7 +281,8 @@
               新会话入口把「对话 / 长期任务」做成轻量切换。提交时 Studio 创建同一种 Durable conversation；
               长期任务会把第一条目标描述、完成条件和执行状态写入 Durable document。只要目标仍处于执行中，
               Studio 就通过 Durable 原生 <code>GenerationTask.onYield</code> 开始下一轮，直到模型报告已验证完成、
-              明确阻塞，或用户暂停目标；普通对话在单次回答后保持空闲。
+              明确阻塞、用户暂停目标，或触发单次轮次/连续无进展安全阀。阈值可在 Harness 配置中调整；
+              自动暂停会保留原因并等待确认后继续；普通对话在单次回答后保持空闲。
             </p>
             <div class="table-wrap">
               <table class="doc-table">
@@ -473,7 +474,7 @@
         <section class="doc-section" id="tools">
           <header class="section-heading">
             <span class="section-kicker">11 / Tools</span>
-            <h2 id="tools-title">Agent 工具与来源</h2>
+            <h2 id="tools-title">智能体工具与来源</h2>
             <p>工具目录从 Durable registry 生成；白名单选择暴露给模型的子集，权限决定每次调用是否执行。</p>
           </header>
           <div class="doc-copy">
@@ -482,7 +483,7 @@
               <li>内置 <code>todo</code> 为多步骤请求维护输入框上方的紧凑计划；状态保存在 Durable conversation document，支持依赖、完成、结束、归档和恢复。</li>
               <li>白名单支持精确名称和 <code>*</code> glob，最多 256 项。</li>
               <li>MCP 工具仍受 MCP exposure 与应用级白名单双重过滤。</li>
-              <li>父 Agent 创建子智能体时，工具集合是父会话 model tools 与子 Agent 白名单的交集，并始终排除递归 <code>subagent</code>。</li>
+              <li>父智能体创建子智能体时，工具集合是父会话 model tools 与子智能体白名单的交集，并始终排除递归 <code>subagent</code>。</li>
               <li>卸载工具不会删除历史消息里的旧调用记录；新请求不再提供该工具。</li>
             </ul>
           </div>
@@ -868,7 +869,7 @@ Model provider</code></pre>
                   <tr><td>模型默认值</td><td>应用</td><td>只用于新会话</td></tr>
                   <tr><td>会话模型 / thinking</td><td>会话</td><td>会话选择优先，下一请求生效</td></tr>
                   <tr><td>工具权限</td><td>user + workspace + session</td><td><code>deny &gt; ask &gt; allow</code></td></tr>
-                  <tr><td>Agent 工具白名单</td><td>应用</td><td>单一白名单</td></tr>
+                  <tr><td>智能体工具白名单</td><td>应用</td><td>单一白名单</td></tr>
                   <tr><td>Skill</td><td>user + 精确工作区</td><td>项目私有 → 项目通用 → 用户私有 → 用户通用</td></tr>
                   <tr><td>MCP</td><td>应用</td><td>每 server 独立，再受 exposure / 白名单过滤</td></tr>
                   <tr><td>扩展</td><td>builtin + user + 精确工作区</td><td><code>core → system → optional → user → project</code></td></tr>
@@ -999,7 +1000,7 @@ git diff --check</code></pre>
                   <tr><td><code>pnpm dev</code></td><td>Vite + Electron 开发模式</td></tr>
                   <tr><td><code>pnpm test</code></td><td>主进程、renderer 纯函数与集成测试</td></tr>
                   <tr><td><code>pnpm run build</code></td><td>TypeScript 检查与 Vite 生产构建</td></tr>
-                  <tr><td><code>pnpm qa:memory</code></td><td>隔离 userData 的真实 Electron 内存门槛</td></tr>
+                  <tr><td><code>pnpm qa:memory</code></td><td>隔离 userData，检查长会话、图片、子智能体、反复切换和退出回收</td></tr>
                   <tr><td><code>pnpm extension -- validate …</code></td><td>校验扩展目录</td></tr>
                   <tr><td><code>pnpm extension -- pack …</code></td><td>生成确定性扩展包</td></tr>
                 </tbody>

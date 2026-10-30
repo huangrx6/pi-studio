@@ -8,7 +8,7 @@
  */
 
 const LONG_TASK_DOC_KIND = 'studio.long-task';
-const LONG_TASK_SCHEMA_VERSION = 1;
+const LONG_TASK_SCHEMA_VERSION = 2;
 const LONG_TASK_EXTENSION_NAME = 'studio-long-task';
 const LONG_TASK_TOOL_NAME = 'long_task';
 const LONG_TASK_CONTINUATION_PREFIX = '[studio-long-task-continuation]';
@@ -41,6 +41,7 @@ function emptyLongTaskState() {
     iteration: 0,
     lastProgress: '',
     nextStep: '',
+    pauseReason: '',
     completionSummary: '',
     blockReason: '',
     lastMutationTaskId: 0,
@@ -66,6 +67,7 @@ function normalizeLongTaskState(value) {
       : 0,
     lastProgress: cleanText(source.lastProgress, MAX_SUMMARY_LENGTH),
     nextStep: cleanText(source.nextStep, MAX_SUMMARY_LENGTH),
+    pauseReason: cleanText(source.pauseReason, MAX_REASON_LENGTH),
     completionSummary: cleanText(source.completionSummary, MAX_SUMMARY_LENGTH),
     blockReason: cleanText(source.blockReason, MAX_REASON_LENGTH),
     lastMutationTaskId: Number.isSafeInteger(source.lastMutationTaskId)
@@ -97,6 +99,7 @@ function createLongTaskContract(durable) {
     history: 'latest',
     // A fork should preserve the goal and progress it branched from.
     fork: 'current',
+    migrate: (value) => normalizeLongTaskState(value),
     checkpointWhen: (_value, _ops, info) => info.deltasSinceBase >= 32,
     initial: emptyLongTaskState,
   });
@@ -131,6 +134,7 @@ function publicLongTaskState(value) {
     iteration: state.iteration,
     lastProgress: state.lastProgress,
     nextStep: state.nextStep,
+    pauseReason: state.pauseReason,
     completionSummary: state.completionSummary,
     blockReason: state.blockReason,
     createdAt: state.createdAt,
@@ -161,16 +165,22 @@ function nextLongTaskContinuationGuard({
   stalledContinuations = 0,
   iteration = 0,
   lastIteration = 0,
+  maxContinuations = MAX_LONG_TASK_CONTINUATIONS,
+  maxStalledContinuations = MAX_LONG_TASK_STALLED_CONTINUATIONS,
 } = {}) {
+  const continuationLimit = Math.max(1, Math.trunc(Number(maxContinuations))
+    || MAX_LONG_TASK_CONTINUATIONS);
+  const stalledLimit = Math.max(1, Math.trunc(Number(maxStalledContinuations))
+    || MAX_LONG_TASK_STALLED_CONTINUATIONS);
   const nextContinuations = Math.max(0, Number(continuations) || 0) + 1;
   const progressed = Number(iteration) > Number(lastIteration);
   const nextStalledContinuations = progressed
     ? 0
     : Math.max(0, Number(stalledContinuations) || 0) + 1;
-  const pauseReason = nextStalledContinuations >= MAX_LONG_TASK_STALLED_CONTINUATIONS
-    ? `自动暂停：连续 ${MAX_LONG_TASK_STALLED_CONTINUATIONS} 轮没有通过 long_task 记录实际进展。检查目标与完成条件后，可继续执行。`
-    : nextContinuations >= MAX_LONG_TASK_CONTINUATIONS
-      ? `自动暂停：本次执行已达到 ${MAX_LONG_TASK_CONTINUATIONS} 轮安全上限。确认方向后，可继续执行。`
+  const pauseReason = nextStalledContinuations >= stalledLimit
+    ? `自动暂停：连续 ${stalledLimit} 轮没有通过 long_task 记录实际进展。检查目标与完成条件后，可继续执行。`
+    : nextContinuations >= continuationLimit
+      ? `自动暂停：本次执行已达到 ${continuationLimit} 轮安全上限。确认方向后，可继续执行。`
       : '';
   return {
     continuations: nextContinuations,
@@ -293,6 +303,7 @@ function createLongTaskExtension(durable, piAi) {
           current.iteration += 1;
           current.lastProgress = summary;
           current.nextStep = nextStep;
+          current.pauseReason = '';
           current.blockReason = '';
           current.blockedAt = 0;
         } else if (operation === 'complete') {
@@ -302,12 +313,14 @@ function createLongTaskExtension(durable, piAi) {
             .filter((item, index, items) => items.indexOf(item) === index)
             .join('\n\n');
           current.completedAt = now;
+          current.pauseReason = '';
           current.blockReason = '';
           current.blockedAt = 0;
         } else {
           current.status = 'blocked';
           current.blockReason = reason;
           current.blockedAt = now;
+          current.pauseReason = '';
         }
         current.updatedAt = now;
         if (Number.isSafeInteger(mutationTaskId) && mutationTaskId > 0) {

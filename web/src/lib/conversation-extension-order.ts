@@ -11,6 +11,31 @@ export const DEFAULT_CONVERSATION_EXTENSION_UI_PREFERENCES: ConversationExtensio
   sessionOrders: {},
 };
 
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string')
+    : [];
+}
+
+export function normalizeConversationExtensionUiPreferences(
+  value: unknown,
+): ConversationExtensionUiPreferences {
+  if (!value || typeof value !== 'object') return DEFAULT_CONVERSATION_EXTENSION_UI_PREFERENCES;
+  const candidate = value as Partial<ConversationExtensionUiPreferences>;
+  const sessionOrders: Record<string, string[]> = {};
+  if (candidate.sessionOrders && typeof candidate.sessionOrders === 'object') {
+    for (const [sessionId, order] of Object.entries(candidate.sessionOrders)) {
+      if (sessionId && Array.isArray(order)) sessionOrders[sessionId] = stringList(order);
+    }
+  }
+  return {
+    version: 1,
+    layout: candidate.layout === 'list' ? 'list' : 'grid',
+    globalOrder: stringList(candidate.globalOrder),
+    sessionOrders,
+  };
+}
+
 export type ConversationExtensionUiPatch = {
   layout?: ConversationExtensionLayout;
   globalOrder?: string[];

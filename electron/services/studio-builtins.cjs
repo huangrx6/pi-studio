@@ -155,34 +155,34 @@ const BUILTIN_MANIFESTS = Object.freeze([
   {
     id: 'studio-subagents',
     tier: 'system',
-    name: 'Studio 子 Agent',
+    name: 'Studio 子智能体',
     version: '2.0.0',
-    description: '使用 Durable owned conversation、background anchor 与 reporter 管理前台和后台子 Agent。',
+    description: '使用 Durable owned conversation、background anchor 与 reporter 管理前台和后台子智能体。',
     runtimeName: 'studio-subagents',
     runtimeNames: ['studio-subagents'],
     permissions: ['agent.tools', 'agent.sections', 'agent.tasks'],
     requires: ['builtin:studio-permissions', 'builtin:studio-subagent-channel'],
     contributes: {
       tools: [
-        { name: 'subagent', description: '运行、启动、发消息或查看拥有独立上下文的子 Agent。' },
-        { name: 'subagent_stop', description: '停止指定后台子 Agent 的当前运行。' },
-        { name: 'bg_wait', description: '等待自己的后台 reporter，超时不会停止子 Agent。' },
-        { name: 'subagent_supervisor', description: '查看或回复子 Agent 发来的监督请求。' },
+        { name: 'subagent', description: '运行、启动、发消息或查看拥有独立上下文的子智能体。' },
+        { name: 'subagent_stop', description: '停止指定后台子智能体的当前运行。' },
+        { name: 'bg_wait', description: '等待自己的后台 reporter，超时不会停止子智能体。' },
+        { name: 'subagent_supervisor', description: '查看或回复子智能体发来的监督请求。' },
       ],
     },
   },
   {
     id: 'studio-subagent-channel',
     tier: 'system',
-    name: 'Studio 子 Agent 监督通道',
+    name: 'Studio 子智能体监督通道',
     version: '1.0.0',
-    description: '仅由 Studio 子 Agent 使用的父级联系通道；父 Agent 默认看不到这个 child 工具。',
+    description: '仅由 Studio 子智能体使用的父级联系通道；父智能体默认看不到这个 child 工具。',
     runtimeName: 'studio-subagent-channel',
     runtimeNames: ['studio-subagent-channel'],
     permissions: ['agent.tools'],
     requires: ['builtin:studio-permissions'],
     contributes: {
-      tools: [{ name: 'contact_supervisor', description: '向创建此子 Agent 的主 Agent 发起异步确认请求。' }],
+      tools: [{ name: 'contact_supervisor', description: '向创建此子智能体的主智能体发起异步确认请求。' }],
     },
   },
   {
@@ -728,7 +728,7 @@ function throwIfAborted(context) {
   const signal = context?.abortSignal;
   if (!signal?.aborted) return;
   if (typeof signal.throwIfAborted === 'function') signal.throwIfAborted();
-  throw signal.reason instanceof Error ? signal.reason : new Error('子 Agent 已取消');
+  throw signal.reason instanceof Error ? signal.reason : new Error('子智能体已取消');
 }
 
 const RESERVED_SUBAGENT_NAMES = new Set(['__proto__', 'prototype', 'constructor']);
@@ -744,7 +744,7 @@ function normalizeSubagentName(value, fallback) {
   const name = typeof value === 'string' ? value.trim() : '';
   if (!name && fallback) return fallback;
   if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(name) || RESERVED_SUBAGENT_NAMES.has(name)) {
-    throw new Error('子 Agent 名称必须以字母开头，只能包含字母、数字、_、-，且最长 64 个字符');
+    throw new Error('子智能体名称必须以字母开头，只能包含字母、数字、_、-，且最长 64 个字符');
   }
   return name;
 }
@@ -845,7 +845,7 @@ function childToolsFor(agent, defaults, childSupervisorTool) {
   }
   if (defaults.allowedTools.length > 0 && enabledTools.length === 0) {
     throw new Error(
-      `子 Agent 的工具白名单与父 Agent 当前工具没有交集：${defaults.allowedTools.join(', ')}`,
+      `子智能体的工具白名单与父智能体当前工具没有交集：${defaults.allowedTools.join(', ')}`,
     );
   }
   if (defaults.supervisorEnabled && childSupervisorTool) {
@@ -883,24 +883,24 @@ async function resolveChildSettings(args, api, context, childSupervisorTool, piA
   );
   const requestedModel = args.model ? modelRef(args.model) : defaults.modelRef;
   if (args.model && !requestedModel) {
-    throw new Error('子 Agent 模型必须使用 provider/modelId 格式');
+    throw new Error('子智能体模型必须使用 provider/modelId 格式');
   }
   const requestedThinking = args.thinkingLevel || defaults.thinkingLevel;
   if (requestedThinking && !THINKING_LEVELS.includes(requestedThinking)) {
-    throw new Error(`子 Agent thinking 强度无效：${requestedThinking}`);
+    throw new Error(`子智能体 thinking 强度无效：${requestedThinking}`);
   }
   if (
     requestedThinking
     && defaults.maxThinking
     && thinkingRank(requestedThinking) > thinkingRank(defaults.maxThinking)
   ) {
-    throw new Error(`子 Agent thinking 强度不能高于 ${defaults.maxThinking}`);
+    throw new Error(`子智能体 thinking 强度不能高于 ${defaults.maxThinking}`);
   }
   const childModel = requestedModel
     ? api.models.getModel(requestedModel.provider, requestedModel.modelId)
     : undefined;
   if (requestedModel && !childModel) {
-    throw new Error(`子 Agent 模型不存在或尚未启用：${args.model || defaults.modelRef.provider + '/' + defaults.modelRef.modelId}`);
+    throw new Error(`子智能体模型不存在或尚未启用：${args.model || defaults.modelRef.provider + '/' + defaults.modelRef.modelId}`);
   }
   if (
     childModel
@@ -911,7 +911,7 @@ async function resolveChildSettings(args, api, context, childSupervisorTool, piA
   }
   let childCwd = agent.cwd || '';
   if (args.cwd) {
-    if (!agent.cwd) throw new Error('父 Agent 没有工作区，不能设置子 Agent 工作目录');
+    if (!agent.cwd) throw new Error('父智能体没有工作区，不能设置子智能体工作目录');
     const resolved = await resolveWorkspacePath(agent.cwd, args.cwd);
     childCwd = resolved.target;
   }
@@ -1003,7 +1003,7 @@ async function createReporter({
   const existing = registryReporter(registry, requestKey);
   if (existing) return existing;
   if (activeReporterCount(registry) >= maximum) {
-    throw new Error(`后台子 Agent 已达到并发上限 ${maximum}`);
+    throw new Error(`后台子智能体已达到并发上限 ${maximum}`);
   }
   const taskId = await tx.createTask(protocol.Reporter, {
     name,
@@ -1047,24 +1047,24 @@ function createSubagentChannelExtension(durable, piAi) {
         async execute(args, api, context) {
           const child = await api.snapshot(protocol.ChildContext, api.conversationId, context);
           if (!child?.parentConversationId) {
-            throw new Error('contact_supervisor 只能在 Studio 创建的子 Agent 中调用');
+            throw new Error('contact_supervisor 只能在 Studio 创建的子智能体中调用');
           }
           if (!child.supervisorEnabled) {
-            throw new Error('当前子 Agent 没有启用父级监督通道');
+            throw new Error('当前子智能体没有启用父级监督通道');
           }
           const question = String(args.question || '').trim();
           if (!question || question.length > MAX_SUBAGENT_SUPERVISOR_LENGTH) {
             throw new Error(`监督问题不能为空，且不能超过 ${MAX_SUBAGENT_SUPERVISOR_LENGTH} 个字符`);
           }
           const main = await api.conversation(child.parentConversationId, context);
-          if (!main) throw new Error('创建此子 Agent 的主会话不存在');
+          if (!main) throw new Error('创建此子智能体的主会话不存在');
           const requestId = `supervisor:${api.taskId}`;
           const now = api.now();
           await api.commit(async (tx) => {
             const registry = await tx.doc(protocol.Subagents, child.parentConversationId);
             const agent = registryAgent(registry, child.name);
             if (!agent || agent.conversationId !== api.conversationId) {
-              throw new Error('子 Agent 归属信息已经失效');
+              throw new Error('子智能体归属信息已经失效');
             }
             if (!Object.hasOwn(registry.supervisorRequests, requestId)) {
               const pendingForChild = Object.values(registry.supervisorRequests)
@@ -1073,7 +1073,7 @@ function createSubagentChannelExtension(durable, piAi) {
                   && request.childConversationId === api.conversationId
                 )).length;
               if (pendingForChild >= 4) {
-                throw new Error('该子 Agent 最多同时保留 4 个待回复监督请求');
+                throw new Error('该子智能体最多同时保留 4 个待回复监督请求');
               }
               registry.supervisorRequests[requestId] = {
                 requestId,
@@ -1102,7 +1102,7 @@ function createSubagentChannelExtension(durable, piAi) {
           return {
             output: [{
               type: 'text',
-              text: `已把监督请求发给主 Agent（${requestId}）。请求是异步的；不要把它描述成同步阻塞。`,
+              text: `已把监督请求发给主智能体（${requestId}）。请求是异步的；不要把它描述成同步阻塞。`,
             }],
             details: {
               supervisorRequestId: requestId,
@@ -1171,7 +1171,7 @@ function createSubagentExtension(durable, piAi, chordContext) {
           throwIfAborted(context);
           const parentConversationId = Number(api.conversationId);
           if (!Number.isSafeInteger(parentConversationId) || parentConversationId <= 0) {
-            throw new Error('子 Agent 只能在持久会话中运行');
+            throw new Error('子智能体只能在持久会话中运行');
           }
           const action = args.action || 'run';
           const now = api.now();
@@ -1204,14 +1204,14 @@ function createSubagentExtension(durable, piAi, chordContext) {
             const state = await api.snapshot(protocol.Subagents, parentConversationId, context)
               || emptyRegistry();
             const agent = registryAgent(state, name);
-            if (!agent) throw new Error(`没有名为 ${name} 的子 Agent`);
+            if (!agent) throw new Error(`没有名为 ${name} 的子智能体`);
             if (agent.mode !== 'background') {
-              throw new Error(`${name} 是前台子 Agent，不能继续发送消息`);
+              throw new Error(`${name} 是前台子智能体，不能继续发送消息`);
             }
             const message = String(args.message || args.task || '').trim();
             if (!message) throw new Error('send 需要 message');
             if (message.length > MAX_SUBAGENT_TEXT_LENGTH) {
-              throw new Error(`子 Agent 消息不能超过 ${MAX_SUBAGENT_TEXT_LENGTH} 个字符`);
+              throw new Error(`子智能体消息不能超过 ${MAX_SUBAGENT_TEXT_LENGTH} 个字符`);
             }
             const defaults = normalizeSubagentConfig(
               getSubagentConfig('user'),
@@ -1250,16 +1250,16 @@ function createSubagentExtension(durable, piAi, chordContext) {
           const background = explicitBackground
             || (!args.mode && settings.defaults.defaultMode === 'background');
           if (background && !settings.defaults.backgroundEnabled) {
-            throw new Error('后台子 Agent 已在 Studio 设置中关闭');
+            throw new Error('后台子智能体已在 Studio 设置中关闭');
           }
           const taskText = String(args.task || args.message || '').trim();
           if (!taskText) throw new Error(`${action} 需要 task 或 message`);
           if (taskText.length > MAX_SUBAGENT_TEXT_LENGTH) {
-            throw new Error(`子 Agent 任务不能超过 ${MAX_SUBAGENT_TEXT_LENGTH} 个字符`);
+            throw new Error(`子智能体任务不能超过 ${MAX_SUBAGENT_TEXT_LENGTH} 个字符`);
           }
           const instructions = String(args.instructions || '').trim();
           if (instructions.length > MAX_SUBAGENT_INSTRUCTIONS_LENGTH) {
-            throw new Error(`子 Agent 附加指令不能超过 ${MAX_SUBAGENT_INSTRUCTIONS_LENGTH} 个字符`);
+            throw new Error(`子智能体附加指令不能超过 ${MAX_SUBAGENT_INSTRUCTIONS_LENGTH} 个字符`);
           }
           const requestedName = background
             ? normalizeSubagentName(args.name, `agent-${api.taskId}`)
@@ -1278,10 +1278,10 @@ function createSubagentExtension(durable, piAi, chordContext) {
                 };
               }
               if (Object.keys(state.agents).length >= settings.defaults.maxSpawns) {
-                throw new Error(`当前会话最多创建 ${settings.defaults.maxSpawns} 个子 Agent`);
+                throw new Error(`当前会话最多创建 ${settings.defaults.maxSpawns} 个子智能体`);
               }
               if (registryAgent(state, requestedName)) {
-                throw new Error(`子 Agent 名称已存在：${requestedName}；请使用 action=send`);
+                throw new Error(`子智能体名称已存在：${requestedName}；请使用 action=send`);
               }
               const anchorTaskId = await tx.createTask(
                 protocol.Anchor,
@@ -1341,7 +1341,7 @@ function createSubagentExtension(durable, piAi, chordContext) {
                 type: 'text',
                 text: created.replayed
                   ? `${created.name} 的本次后台请求已经在运行。`
-                  : `已在后台启动 ${created.name}；主 Agent 可以继续工作，结果会作为 follow-up 回传。`,
+                  : `已在后台启动 ${created.name}；主智能体可以继续工作，结果会作为 follow-up 回传。`,
               }],
               details: {
                 name: created.name,
@@ -1362,10 +1362,10 @@ function createSubagentExtension(durable, piAi, chordContext) {
             const name = existingRegistryChild?.name
               || normalizeSubagentName(args.name, `foreground-${api.taskId}`);
             if (registryAgent(state, name) && !existingRegistryChild) {
-              throw new Error(`子 Agent 名称已存在：${name}`);
+              throw new Error(`子智能体名称已存在：${name}`);
             }
             if (!existingRegistryChild && Object.keys(state.agents).length >= settings.defaults.maxSpawns) {
-              throw new Error(`当前会话最多创建 ${settings.defaults.maxSpawns} 个子 Agent`);
+              throw new Error(`当前会话最多创建 ${settings.defaults.maxSpawns} 个子智能体`);
             }
             await configureChildConversation({
               tx,
@@ -1392,7 +1392,7 @@ function createSubagentExtension(durable, piAi, chordContext) {
             conversationId: String(childId.id),
           }, context);
           const conversation = await api.conversation(childId.id, context);
-          if (!conversation) throw new Error('子 Agent 会话创建失败');
+          if (!conversation) throw new Error('子智能体会话创建失败');
           const submission = await conversation.submit({
             type: 'input',
             content: taskText,
@@ -1401,7 +1401,7 @@ function createSubagentExtension(durable, piAi, chordContext) {
           let settled;
           let text = '';
           let lastStatus = 'failed';
-          let lastError = '子 Agent 执行失败';
+          let lastError = '子智能体执行失败';
           try {
             settled = await submission.wait(context);
             if (settled.status === 'done' && settled.type === 'input' && settled.answer !== undefined) {
@@ -1419,7 +1419,7 @@ function createSubagentExtension(durable, piAi, chordContext) {
                   ? 'stopped'
                   : 'failed';
             lastError = lastStatus === 'failed'
-              ? String(settled.reason || settled.status || '子 Agent 执行失败')
+              ? String(settled.reason || settled.status || '子智能体执行失败')
               : undefined;
           } catch (error) {
             lastStatus = context?.abortSignal?.aborted ? 'stopped' : 'failed';
@@ -1447,8 +1447,8 @@ function createSubagentExtension(durable, piAi, chordContext) {
             output: [{
               type: 'text',
               text: settled.status === 'done'
-                ? text || '子 Agent 已完成，但没有返回文本。'
-                : `子 Agent 未能回答：${settled.reason || settled.status}`,
+                ? text || '子智能体已完成，但没有返回文本。'
+                : `子智能体未能回答：${settled.reason || settled.status}`,
             }],
             details: {
               name: childId.name,
@@ -1472,9 +1472,9 @@ function createSubagentExtension(durable, piAi, chordContext) {
           const state = await api.snapshot(protocol.Subagents, parentConversationId, context)
             || emptyRegistry();
           const agent = registryAgent(state, name);
-          if (!agent) throw new Error(`没有名为 ${name} 的子 Agent`);
+          if (!agent) throw new Error(`没有名为 ${name} 的子智能体`);
           if (agent.mode !== 'background') {
-            throw new Error(`${name} 不是后台子 Agent`);
+            throw new Error(`${name} 不是后台子智能体`);
           }
           const conversation = await api.conversation(agent.conversationId, context);
           if (conversation) await conversation.abort(context, { background: true });
@@ -1583,7 +1583,7 @@ function createSubagentExtension(durable, piAi, chordContext) {
               ? pending.map((request) => (
                 `${request.requestId} · ${request.childName}: ${request.question}`
               )).join('\n')
-              : '没有待回复的子 Agent 监督请求。';
+              : '没有待回复的子智能体监督请求。';
             return {
               output: [{ type: 'text', text }],
               details: { requests: pending },
@@ -1604,7 +1604,7 @@ function createSubagentExtension(durable, piAi, chordContext) {
           }
           const agent = registryAgent(state, request.childName);
           if (!agent || agent.conversationId !== request.childConversationId) {
-            throw new Error('监督请求对应的子 Agent 已失效');
+            throw new Error('监督请求对应的子智能体已失效');
           }
           const now = api.now();
           const defaults = normalizeSubagentConfig(

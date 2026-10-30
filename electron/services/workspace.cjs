@@ -223,6 +223,7 @@ module.exports = {
   workspaceFile,
   searchWorkspaceFiles,
   listDirectory,
+  readFilePath,
   readFileText,
   readAbsoluteFile,
   directoryReferenceText,

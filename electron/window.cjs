@@ -5,9 +5,15 @@
  * 因为窗口的 backgroundColor 必须在创建时就给出，否则启动会闪白。
  */
 
-const { app, BrowserWindow, Menu, nativeTheme } = require('electron');
+const { app, BrowserWindow, Menu, nativeTheme, shell } = require('electron');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const { DEV, getWindow, setWindow } = require('./core/state.cjs');
+const { normalizeExternalHttpUrl } = require('./core/external-url.cjs');
+const {
+  isTrustedRendererUrl,
+  rendererContentSecurityPolicy,
+} = require('./core/web-security.cjs');
 const {
   PALETTES,
   THEMES,
@@ -17,6 +23,47 @@ const {
 const { getStudioDatabase } = require('./core/studio-db.cjs');
 const { themeBackground } = require('./theme.cjs');
 const { publishMenuBarEvent } = require('./menu-bar-events.cjs');
+
+const configuredCspSessions = new WeakSet();
+
+function installRendererSecurity(win, rendererUrl) {
+  const session = win.webContents.session;
+  if (!configuredCspSessions.has(session)) {
+    const filter = DEV
+      ? { urls: ['http://127.0.0.1:5180/*'] }
+      : { urls: ['file://*/*'] };
+    session.webRequest.onHeadersReceived(filter, (details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [rendererContentSecurityPolicy({ dev: DEV })],
+        },
+      });
+    });
+    configuredCspSessions.add(session);
+  }
+
+  win.webContents.on('will-navigate', (event, target) => {
+    if (!isTrustedRendererUrl(target, {
+      dev: DEV,
+      devUrl: 'http://127.0.0.1:5180/',
+      productionUrl: rendererUrl,
+    })) {
+      event.preventDefault();
+    }
+  });
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    try {
+      void shell.openExternal(normalizeExternalHttpUrl(url));
+    } catch {
+      // Deny malformed and non-HTTP popup targets.
+    }
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-attach-webview', (event) => {
+    event.preventDefault();
+  });
+}
 
 /**
  * 创建主窗口。
@@ -47,10 +94,16 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
     },
   });
 
   setWindow(win);
+  const rendererUrl = DEV
+    ? 'http://127.0.0.1:5180/'
+    : pathToFileURL(path.join(__dirname, '..', 'web-dist', 'index.html')).href;
+  installRendererSecurity(win, rendererUrl);
   win.on('close', (event) => {
     // Closing the main window keeps renderer state and in-flight agent turns
     // alive. A real application quit sets this flag before Electron closes it.
@@ -62,8 +115,8 @@ function createWindow() {
   win.on('closed', () => {
     if (getWindow() === win) setWindow(null);
   });
-  if (DEV) void win.loadURL('http://127.0.0.1:5180');
-  else void win.loadFile(path.join(__dirname, '..', 'web-dist', 'index.html'));
+  if (DEV) void win.loadURL(rendererUrl);
+  else void win.loadURL(rendererUrl);
   return win;
 }
 

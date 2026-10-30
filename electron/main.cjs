@@ -32,6 +32,7 @@ const {
   initializeUpdater,
   openAndCheckForUpdates,
   shutdownUpdater,
+  updaterOwnsApplicationQuit,
 } = require('./services/updater.cjs');
 
 // Must be registered before app.ready so <img>/<video> can treat these URLs as
@@ -64,32 +65,70 @@ app.whenReady().then(async () => {
   initializeUpdater();
 });
 
-app.on('before-quit', () => {
-  app.isQuitting = true;
-});
-
 let shutdownPromise;
 let shutdownComplete = false;
 
-app.on('will-quit', (event) => {
+function boundedShutdownStep(label, operation, timeoutMs) {
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      console.error(`[pi-studio] ${label} shutdown timed out after ${timeoutMs}ms`);
+      resolve();
+    }, timeoutMs);
+  });
+  return Promise.race([
+    Promise.resolve()
+      .then(operation)
+      .catch((error) => {
+        console.error(`[pi-studio] ${label} shutdown failed`, error);
+      }),
+    timeout,
+  ]).finally(() => clearTimeout(timer));
+}
+
+app.on('before-quit', (event) => {
+  app.isQuitting = true;
+  // electron-updater owns the restart/install path and must be allowed to quit.
+  if (updaterOwnsApplicationQuit()) return;
   if (shutdownComplete) return;
   event.preventDefault();
   if (shutdownPromise) return;
-  shutdownPromise = (async () => {
-    await closeConversationWatches().catch((error) => {
-      console.error('[pi-studio] failed to close conversation watches', error);
-    });
-    await shutdownTemporaryChats().catch((error) => {
-      console.error('[pi-studio] failed to close temporary chats', error);
-    });
-    await closeDurableRuntime().catch((error) => {
-      console.error('[pi-studio] failed to close Durable runtime', error);
-    });
+  shutdownPromise = new Promise((resolve) => setImmediate(resolve)).then(async () => {
+    await Promise.all([
+      boundedShutdownStep(
+        'conversation watches',
+        closeConversationWatches,
+        3_000,
+      ),
+      boundedShutdownStep(
+        'temporary chats',
+        shutdownTemporaryChats,
+        3_000,
+      ),
+    ]);
+    await boundedShutdownStep(
+      'Durable runtime',
+      closeDurableRuntime,
+      8_000,
+    );
     shutdownUpdater();
     shutdownMenuBar();
     shutdownComplete = true;
-    app.quit();
-  })();
+    // Electron 45 can stop advancing the main-process event loop once
+    // will-quit has been cancelled. Finish cleanup at before-quit instead and
+    // terminate after every owned service has completed its bounded cleanup.
+    app.exit(0);
+  }).catch((error) => {
+    console.error('[pi-studio] shutdown failed', error);
+    shutdownUpdater();
+    shutdownMenuBar();
+    shutdownComplete = true;
+    app.exit(1);
+  });
+});
+
+app.on('will-quit', (event) => {
+  if (!shutdownComplete && !updaterOwnsApplicationQuit()) event.preventDefault();
 });
 
 // macOS norm: closing every window leaves Pi Studio running.

@@ -869,7 +869,47 @@ export function HarnessSettings({
               </div>
             </section>
 
-            <section className="harness-policy-group">
+            <section className="harness-policy-group is-wide">
+              <header><strong>长期任务安全阀</strong><span>防止目标空转或在单次运行中无限循环</span></header>
+              <div className="harness-policy-fields">
+                <label>
+                  <span>单次运行轮次上限</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={policyDraft.longTask.maxContinuations}
+                    onChange={(event) => setPolicyDraft((current) => ({
+                      ...current,
+                      longTask: {
+                        ...current.longTask,
+                        maxContinuations: Number(event.target.value),
+                      },
+                    }))}
+                  />
+                  <small>达到上限后暂停，等待你确认方向再继续。</small>
+                </label>
+                <label>
+                  <span>连续无进展上限</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={policyDraft.longTask.maxStalledContinuations}
+                    onChange={(event) => setPolicyDraft((current) => ({
+                      ...current,
+                      longTask: {
+                        ...current.longTask,
+                        maxStalledContinuations: Number(event.target.value),
+                      },
+                    }))}
+                  />
+                  <small>只有 long_task 记录的实际进展会重置计数。</small>
+                </label>
+              </div>
+            </section>
+
+            <section className="harness-policy-group is-wide">
               <header><strong>内存缓存</strong><span>空闲后释放 transcript 与 document 缓存</span></header>
               <div className="harness-policy-fields">
                 <label>

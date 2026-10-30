@@ -70,6 +70,24 @@ test('the long-task continuation guard stops repeated no-progress loops and reta
     lastIteration: 11,
   });
   assert.match(hardLimit.pauseReason, /安全上限/);
+
+  const customStalled = nextLongTaskContinuationGuard({
+    continuations: 1,
+    stalledContinuations: 1,
+    iteration: 4,
+    lastIteration: 4,
+    maxStalledContinuations: 2,
+  });
+  assert.match(customStalled.pauseReason, /连续 2 轮/);
+
+  const customHardLimit = nextLongTaskContinuationGuard({
+    continuations: 3,
+    stalledContinuations: 0,
+    iteration: 8,
+    lastIteration: 7,
+    maxContinuations: 4,
+  });
+  assert.match(customHardLimit.pauseReason, /4 轮安全上限/);
 });
 
 test('an active long task continues across GenerationTask boundaries until it is completed', async () => {

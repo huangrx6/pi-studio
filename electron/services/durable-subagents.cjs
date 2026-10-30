@@ -70,10 +70,10 @@ function taskError(task) {
   if (state?.status !== 'terminal') return undefined;
   const outcome = state.outcome;
   if (outcome?.status === 'failed' || outcome?.status === 'faulted') {
-    return outcome.error?.message || '子 Agent 执行失败';
+    return outcome.error?.message || '子智能体执行失败';
   }
-  if (outcome?.status === 'aborted') return outcome.reason || '子 Agent 已停止';
-  if (outcome?.status === 'orphaned') return outcome.reason || '子 Agent 定义已不可用';
+  if (outcome?.status === 'aborted') return outcome.reason || '子智能体已停止';
+  if (outcome?.status === 'orphaned') return outcome.reason || '子智能体定义已不可用';
   return undefined;
 }
 
@@ -163,7 +163,7 @@ async function childDto(record, info, index, runtimeOverride, overrides = {}) {
   const inputTask = typeof info?.call?.arguments?.task === 'string'
     ? info.call.arguments.task.trim()
     : '';
-  const taskText = inputTask || messageText(firstUser) || '子 Agent 任务';
+  const taskText = inputTask || messageText(firstUser) || '子智能体任务';
   const preview = messageText(lastAssistant)
     || taskError(task)
     || (status === 'running' ? '正在独立上下文中执行…' : '等待输出');
@@ -269,7 +269,7 @@ async function listSubagentChildren(parentId) {
       error: agent.lastError || taskError(statusTask),
     });
     if (child) {
-      const firstUser = child.task !== '子 Agent 任务';
+      const firstUser = child.task !== '子智能体任务';
       child.agent = 'subagent';
       if (
         !live?.run
@@ -311,13 +311,13 @@ async function listSubagentChildren(parentId) {
 async function subagentTranscript(parentId, childKeyValue, options = {}) {
   const children = await listSubagentChildren(parentId);
   const child = children.find((item) => item.key === childKeyValue);
-  if (!child) throw new Error('子 Agent 不属于当前会话');
+  if (!child) throw new Error('子智能体不属于当前会话');
   const conversationId = Number(childKeyValue.slice('conversation:'.length));
   if (!Number.isSafeInteger(conversationId) || conversationId <= 0) {
-    throw new Error('子 Agent 标识无效');
+    throw new Error('子智能体标识无效');
   }
   const conversation = await openChildConversation(conversationId);
-  if (!conversation) throw new Error('子 Agent 会话不存在');
+  if (!conversation) throw new Error('子智能体会话不存在');
   const limit = Math.max(1, Math.min(500, Number(options.limit) || 200));
   const page = await scanEntries(conversation, {
     order: 'descending',
@@ -342,21 +342,21 @@ async function subagentTranscript(parentId, childKeyValue, options = {}) {
  */
 async function deleteSubagentChild(parentId, childKeyValue) {
   if (typeof childKeyValue !== 'string' || !childKeyValue.startsWith('conversation:')) {
-    throw new Error('子 Agent 标识无效');
+    throw new Error('子智能体标识无效');
   }
   const parent = await getConversationHandle(parentId);
   if (!parent) throw new Error('父会话不存在');
   const children = await listSubagentChildren(parentId);
   const child = children.find((item) => item.key === childKeyValue);
-  if (!child) throw new Error('子 Agent 不属于当前会话');
+  if (!child) throw new Error('子智能体不属于当前会话');
   const conversationId = Number(childKeyValue.slice('conversation:'.length));
   if (!Number.isSafeInteger(conversationId) || conversationId <= 0) {
-    throw new Error('子 Agent 标识无效');
+    throw new Error('子智能体标识无效');
   }
   const runtime = await getDurableRuntime();
   const protocol = createProtocol(runtime.durable);
   const childConversation = await openChildConversation(conversationId, runtime);
-  if (!childConversation) throw new Error('子 Agent 会话不存在');
+  if (!childConversation) throw new Error('子智能体会话不存在');
   await childConversation.abort(runtime.context, { background: true });
   const removed = await purgeConversationData([conversationId]);
 

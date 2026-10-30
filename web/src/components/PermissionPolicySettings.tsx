@@ -380,11 +380,11 @@ export function PermissionPolicySettings({
     </div>;
   }
 
-  return <div className={`settings-sections permission-policy ${className}`.trim()} aria-label="Agent 权限策略">
+  return <div className={`settings-sections permission-policy ${className}`.trim()} aria-label="智能体权限策略">
     <SettingsPageHeader
       className="permission-policy-page-head"
       icon={<ShieldCheck />}
-      title="Agent 权限"
+      title="智能体权限"
       meta={<span className="permission-policy-live"><i />实时生效</span>}
       description="按工具、命令或路径配置允许、询问和拒绝。更改从下一次工具调用开始生效，不中断当前任务。"
       actions={<button type="button" className="settings-outline permission-policy-reset" disabled={busy} onClick={() => void resetPolicy()}>
