@@ -1643,7 +1643,7 @@ await page.addInitScript(() => {
         if (confirmRequestListener === listener) confirmRequestListener = null;
       };
     },
-    setTheme: async () => undefined,
+    setAppearance: async () => undefined,
     menuBarSettings: async () => ({ available: true, enabled: true, platform: 'darwin' }),
     setMenuBarVisible: async (enabled) => ({ available: true, enabled, platform: 'darwin' }),
     permissionPolicyGet: async () => permissionPolicyState(),

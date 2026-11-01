@@ -3,7 +3,7 @@
  *
  * 与 qa-ui.mjs 不同，本脚本聚焦主题 / 视觉回归：
  * - 亮色 / 暗色下设置页、模型页、对话框、欢迎页、模型菜单、会话与错误态的截图；
- * - 主题切换后 Electron 原生窗口底色是否同步（mock 记录 setTheme 调用）；
+ * - 主题切换后 Electron 原生窗口底色是否同步（mock 记录 setAppearance 调用）；
  * - 跟随系统、刷新后持久化、小窗口紧凑布局；
  * - 侧边栏会话 / 工作区的 hover、菜单、置顶、重命名、归档恢复、复制 SessionId、
  *   分叉与删除确认等操作。
@@ -194,10 +194,11 @@ await page.addInitScript(() => {
         whenBusy: 'followUp',
       };
     },
-    // 记录 renderer 请求的主题与配色，断言菜单栏和原生窗口收到同一选择。
-    setTheme: async (theme, palette) => {
+    // 记录 renderer 请求的主题、配色和圆角，断言原生外观收到同一选择。
+    setAppearance: async (theme, palette, radiusStyle) => {
       window.__nativeTheme = theme;
       window.__nativePalette = palette;
+      window.__nativeRadiusStyle = radiusStyle;
     },
     // 工作区列表会过滤 hidden（删除工作区只设置 hidden，不真删 fixture）。
     state: async () => ({ workspaces: workspaces.filter((item) => !item.hidden), cwd, model }),

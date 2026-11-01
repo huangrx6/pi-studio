@@ -981,7 +981,11 @@ export function App() {
     const root = document.documentElement;
     root.dataset.theme = resolveTheme(preferences.theme);
     root.dataset.palette = preferences.palette;
-    void window.piApi.setTheme(preferences.theme, preferences.palette).catch(() => { /* Renderer palette remains available. */ });
+    void window.piApi.setAppearance(
+      preferences.theme,
+      preferences.palette,
+      preferences.radiusStyle,
+    ).catch(() => { /* Renderer appearance remains available. */ });
     root.style.setProperty('--chat-font-size', `${preferences.fontSize}px`);
     const radii = RADIUS_PRESETS[preferences.radiusStyle] || RADIUS_PRESETS.standard;
     root.style.setProperty('--radius-tag', `${radii.tag}px`);

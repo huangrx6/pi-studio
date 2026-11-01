@@ -221,8 +221,12 @@ declare global {
      */
     piApi: {
       // ---- 主题、状态与会话 ----
-      /** 切换原生窗口主题与全局配色，并同步到主进程及菜单栏。 */
-      setTheme(theme: 'light' | 'dark' | 'system', palette: 'lime' | 'ocean' | 'amber' | 'berry'): Promise<void>;
+      /** 切换原生窗口、菜单栏与全局组件圆角。 */
+      setAppearance(
+        theme: 'light' | 'dark' | 'system',
+        palette: 'lime' | 'ocean' | 'amber' | 'berry',
+        radiusStyle: 'square' | 'compact' | 'standard' | 'soft',
+      ): Promise<void>;
       /** Read the current updater snapshot. */
       updateState(): Promise<UpdateSnapshot>;
       /** Check the latest public GitHub Release. */

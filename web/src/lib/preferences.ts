@@ -7,7 +7,7 @@
  * 读取同一份最新值，避免层层传 props。
  *
  * 与主进程的关系：本文件只写 localStorage，不直接走 IPC；原生窗口主题由 App
- * 调用 `window.piApi.setTheme` 同步给 electron 主进程（见 App.tsx 的偏好 effect）。
+ * 调用 `window.piApi.setAppearance` 同步给 electron 主进程（见 App.tsx 的偏好 effect）。
  */
 
 /** 主题偏好；system 表示跟随 macOS 外观。 */

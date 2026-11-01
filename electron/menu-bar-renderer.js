@@ -6,7 +6,15 @@ const runningCount = document.querySelector('#running-count');
 
 const clearRecent = document.querySelector('#clear-recent');
 
-let currentState = { running: [], recent: [], unreadCount: 0, theme: 'system', palette: 'lime' };
+const DEFAULT_RADII = { tag: 4, control: 8, card: 12, panel: 16, round: 999 };
+let currentState = {
+  running: [],
+  recent: [],
+  unreadCount: 0,
+  theme: 'system',
+  palette: 'lime',
+  radii: DEFAULT_RADII,
+};
 
 function workspaceName(cwd) {
   if (!cwd) return 'Pi Studio';
@@ -30,12 +38,19 @@ function relativeTime(timestamp) {
   return `${Math.floor(minutes / 60)} 小时前`;
 }
 
-function applyTheme(theme, palette) {
+function applyAppearance({ theme, palette, radii } = {}) {
   const resolved = theme === 'system'
     ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
     : theme;
   document.documentElement.dataset.theme = resolved;
   document.documentElement.dataset.palette = palette || 'lime';
+  const values = radii && typeof radii === 'object' ? { ...DEFAULT_RADII, ...radii } : DEFAULT_RADII;
+  for (const key of ['tag', 'control', 'card', 'panel', 'round']) {
+    const value = Number(values[key]);
+    if (Number.isFinite(value)) {
+      document.documentElement.style.setProperty(`--radius-${key}`, `${Math.max(0, value)}px`);
+    }
+  }
 }
 
 function card(item, kind) {
@@ -93,7 +108,7 @@ function card(item, kind) {
 }
 
 function render() {
-  applyTheme(currentState.theme, currentState.palette);
+  applyAppearance(currentState);
   const running = Array.isArray(currentState.running) ? currentState.running : [];
   const recent = Array.isArray(currentState.recent) ? currentState.recent : [];
   const errors = recent.filter(item => item.status === 'error').length;

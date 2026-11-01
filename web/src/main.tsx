@@ -5,7 +5,7 @@
  * 否则第一帧会先按 CSS 默认色绘制，出现浅色闪屏（FOUC）。
  *
  * 与主进程的关系：本文件不直接调用 IPC。主题偏好的持久化、原生窗口底色同步
- * 都由 App 负责（`window.piApi.setTheme`），这里只读取 localStorage 里的偏好。
+ * 都由 App 负责（`window.piApi.setAppearance`），这里只读取 localStorage 里的偏好。
  */
 import React from 'react';
 import ReactDOM from 'react-dom/client';

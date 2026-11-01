@@ -16,12 +16,12 @@ button:disabled { opacity: .45; cursor: default; }
 }
 .popover-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px 3px; gap: var(--space-3); }
 .brand-lockup { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
-.brand-mark { font-size: 22px; font-weight: 650; line-height: 1; }
-.brand-lockup strong { font-size: var(--text-md); font-weight: 600; }
+.brand-mark { width: 24px; height: 24px; display: block; flex: none; object-fit: contain; border-radius: var(--radius-tag); }
+.brand-lockup strong { font-size: var(--text-md); font-weight: 650; line-height: 20px; letter-spacing: -.15px; }
 .header-label {
-  margin-left: 2px; padding: 2px 6px; border-radius: var(--radius-tag);
-  background: var(--surface-soft); color: var(--faint); font-size: var(--text-xs);
+  margin-left: 1px; color: var(--faint); font-size: var(--text-xs); line-height: 16px;
 }
+.header-label::before { margin-right: 6px; content: '·'; color: var(--disabled-text); }
 .icon-button {
   width: var(--space-7, 28px); height: var(--space-7, 28px); display: grid; place-items: center;
   padding: 0; border: 0; border-radius: var(--radius-control);

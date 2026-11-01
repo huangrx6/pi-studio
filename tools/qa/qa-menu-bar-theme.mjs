@@ -29,6 +29,7 @@ page.on('pageerror', (error) => errors.push(error.message));
 
 await page.addInitScript(() => {
   let listener = null;
+  const standardRadii = { tag: 4, control: 8, card: 12, panel: 16, round: 999 };
   window.piMenuBarApi = {
     state: async () => ({
       running: [
@@ -58,6 +59,7 @@ await page.addInitScript(() => {
       unreadCount: 1,
       theme: 'dark',
       palette: 'ocean',
+      radii: standardRadii,
     }),
     onState: (next) => {
       listener = next;
@@ -69,7 +71,10 @@ await page.addInitScript(() => {
     clearRecent: () => {},
     hide: () => {},
   };
-  window.__emitMenuBarState = (state) => listener?.(state);
+  window.__emitMenuBarState = (state) => listener?.({
+    ...state,
+    radii: state.radii || standardRadii,
+  });
 });
 
 async function appearance(buttonColor) {
@@ -88,6 +93,14 @@ try {
   assert.equal(await page.locator('html').getAttribute('data-palette'), 'ocean');
   const panel = await page.locator('.popover-panel').boundingBox();
   assert.ok(panel && panel.width === 504);
+  const brandMark = await page.locator('.brand-mark').boundingBox();
+  const brandTitle = await page.locator('.brand-lockup strong').boundingBox();
+  assert.ok(brandMark && brandTitle);
+  assert.equal(brandMark.width, 24);
+  assert.equal(brandMark.height, 24);
+  assert.ok(Math.abs((brandMark.y + brandMark.height / 2) - (brandTitle.y + brandTitle.height / 2)) <= 1);
+  assert.equal(await page.locator('.brand-mark').evaluate(img => img.naturalWidth > 0), true);
+  assert.equal(await page.locator('.header-label').evaluate(node => getComputedStyle(node).backgroundColor), 'rgba(0, 0, 0, 0)');
   assert.equal(await page.locator('.session-card').count(), 3);
   const first = await page.locator('.session-card').first().boundingBox();
   const second = await page.locator('.session-card').nth(1).boundingBox();
@@ -100,6 +113,24 @@ try {
   await page.mouse.move(0, 0);
   await page.screenshot({ path: `${output}dark-active.png`, animations: 'disabled' });
   await appearance('rgb(59, 110, 211)');
+  await page.evaluate(() => window.__emitMenuBarState({
+    running: [],
+    recent: [],
+    unreadCount: 0,
+    theme: 'dark',
+    palette: 'ocean',
+    radii: { tag: 0, control: 0, card: 0, panel: 0, round: 0 },
+  }));
+  assert.equal(await page.locator('.popover-panel').evaluate(node => getComputedStyle(node).borderRadius), '0px');
+  assert.equal(await page.locator('#open-main').evaluate(node => getComputedStyle(node).borderRadius), '0px');
+  assert.equal(await page.locator('.brand-mark').evaluate(node => getComputedStyle(node).borderRadius), '0px');
+  await page.evaluate(() => window.__emitMenuBarState({
+    running: [],
+    recent: [],
+    unreadCount: 0,
+    theme: 'dark',
+    palette: 'ocean',
+  }));
 
   const singleResult = {
     running: [],
@@ -117,6 +148,7 @@ try {
   };
   await page.setViewportSize({ width: 520, height: menuBarPopoverHeight(singleResult) });
   await page.evaluate(state => window.__emitMenuBarState(state), singleResult);
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const singleOverflow = await page.locator('.popover-content').evaluate(el => ({
     vertical: el.scrollHeight > el.clientHeight,
     horizontal: el.scrollWidth > el.clientWidth,
@@ -176,7 +208,7 @@ try {
   assert.ok(await page.locator('#open-main').isVisible());
   await page.screenshot({ path: `${output}light-busy.png`, animations: 'disabled' });
   assert.deepEqual(errors, []);
-  console.log('Menu-bar theme QA passed: palette changes update the isolated popover immediately.');
+  console.log('Menu-bar appearance QA passed: palette, radius, and isolated popover layout update immediately.');
 } finally {
   await browser.close();
 }

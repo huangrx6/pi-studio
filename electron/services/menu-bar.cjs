@@ -21,6 +21,7 @@ const { getWindow } = require('../core/state.cjs');
 const {
   getMenuBarEnabled,
   getPalette,
+  getRadiusPreset,
   getTheme,
 } = require('../core/app-settings.cjs');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
@@ -30,6 +31,7 @@ const {
   shouldPresentBackgroundNotification,
 } = require('../menu-bar-state.cjs');
 const { subscribeMenuBarEvent } = require('../menu-bar-events.cjs');
+const { playCompletionSound } = require('../completion-sound.cjs');
 const { themeBackground } = require('../theme.cjs');
 const { showMainWindow } = require('../window.cjs');
 const { openAndCheckForUpdates } = require('./updater.cjs');
@@ -71,6 +73,7 @@ function snapshot() {
   return state.snapshot({
     theme: storedTheme(),
     palette: storedPalette(),
+    radii: getRadiusPreset(),
     resolvedTheme: nativeTheme.shouldUseDarkColors ? 'dark' : 'light',
     enabled: menuBarEnabled(),
   });
@@ -175,7 +178,7 @@ function ensurePopover() {
   return popover;
 }
 
-async function showMenuBarPopover({ automatic = false } = {}) {
+async function showMenuBarPopover() {
   if (!menuBarEnabled() || app.isQuitting) return;
   const win = ensurePopover();
   await popoverReady;
@@ -183,7 +186,6 @@ async function showMenuBarPopover({ automatic = false } = {}) {
   positionPopover();
   win.setBackgroundColor(themeBackground(storedTheme(), nativeTheme.shouldUseDarkColors));
   win.show();
-  if (automatic) playCompletionChime();
   broadcast();
 }
 
@@ -196,11 +198,10 @@ function playCompletionChime(now = Date.now()) {
   if (now - lastCompletionChimeAt < COMPLETION_CHIME_GAP) return false;
   lastCompletionChimeAt = now;
   try {
-    shell.beep();
+    return playCompletionSound({ beep: () => shell.beep() });
   } catch {
     return false;
   }
-  return true;
 }
 
 function createTray() {
@@ -322,7 +323,15 @@ function menuBarSessionTitle(id, title) {
 
 function menuBarSessionFinished(input) {
   const completed = state.finish(input);
-  if (!completed || completed.status === 'cancelled' || !menuBarEnabled()) {
+  if (!completed || completed.status === 'cancelled') {
+    refreshTray();
+    return;
+  }
+  refreshTray();
+  if (app.isQuitting) return;
+  playCompletionChime();
+  if (!menuBarEnabled()) {
+    state.markSeen();
     refreshTray();
     return;
   }
@@ -336,8 +345,8 @@ function menuBarSessionFinished(input) {
   if (process.platform === 'darwin') app.dock?.bounce('informational');
   // The popover must become focused for the native blur event to dismiss it
   // when the user clicks anywhere else. The automatic completion notification
-  // also plays the system alert tone, debounced for simultaneous completions.
-  if (!app.isQuitting) void showMenuBarPopover({ automatic: true });
+  // stays separate from the completion sound so foreground work is audible too.
+  void showMenuBarPopover();
 }
 
 function clearMenuBarRecent() {

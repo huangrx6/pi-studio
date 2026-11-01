@@ -21,6 +21,7 @@ const {
 const KEYS = Object.freeze({
   theme: 'studio.app.theme',
   palette: 'studio.app.palette',
+  radiusStyle: 'studio.app.radiusStyle',
   menuBarEnabled: 'studio.app.menuBarEnabled',
   permissionMode: 'studio.permissions.mode',
   permissionPolicy: 'studio.permissions.policy',
@@ -33,6 +34,14 @@ const KEYS = Object.freeze({
 
 const THEMES = new Set(['light', 'dark', 'system']);
 const PALETTES = new Set(['lime', 'ocean', 'amber', 'berry']);
+const RADIUS_STYLES = new Set(['square', 'compact', 'standard', 'soft']);
+const RADIUS_PRESETS = Object.freeze({
+  square: Object.freeze({ tag: 0, control: 0, card: 0, panel: 0, round: 0 }),
+  compact: Object.freeze({ tag: 3, control: 6, card: 9, panel: 12, round: 999 }),
+  standard: Object.freeze({ tag: 4, control: 8, card: 12, panel: 16, round: 999 }),
+  soft: Object.freeze({ tag: 6, control: 10, card: 16, panel: 22, round: 999 }),
+});
+const DEFAULT_RADIUS_STYLE = 'standard';
 const PERMISSION_MODES = new Set(['ask', 'smart', 'full']);
 const TOOL_EXECUTION_MODES = new Set(['parallel', 'sequential']);
 const HARNESS_PROFILE_ID = /^[a-z0-9][a-z0-9._-]{1,63}$/;
@@ -443,6 +452,20 @@ function getTheme() {
 function getPalette() {
   const value = getStudioDatabase().getSetting(KEYS.palette, 'lime');
   return PALETTES.has(value) ? value : 'lime';
+}
+
+function normalizeRadiusStyle(value, fallback = DEFAULT_RADIUS_STYLE) {
+  return RADIUS_STYLES.has(value) ? value : fallback;
+}
+
+function getRadiusStyle() {
+  return normalizeRadiusStyle(
+    getStudioDatabase().getSetting(KEYS.radiusStyle, DEFAULT_RADIUS_STYLE),
+  );
+}
+
+function getRadiusPreset(style = getRadiusStyle()) {
+  return { ...RADIUS_PRESETS[normalizeRadiusStyle(style)] };
 }
 
 function getMenuBarEnabled() {
@@ -857,6 +880,8 @@ module.exports = {
   HARNESS_SECTIONS,
   KEYS,
   PALETTES,
+  RADIUS_PRESETS,
+  RADIUS_STYLES,
   PERMISSION_MODES,
   RUNTIME_POLICY_DEFAULTS,
   THEMES,
@@ -872,6 +897,8 @@ module.exports = {
   getExtensionRegistryUrl,
   getMenuBarEnabled,
   getPalette,
+  getRadiusPreset,
+  getRadiusStyle,
   getPermissionMode,
   getPermissionPolicyStore,
   getRuntimePolicy,
@@ -881,6 +908,7 @@ module.exports = {
   normalizeHarnessSections,
   normalizeHarnessStore,
   normalizeRuntimePolicy,
+  normalizeRadiusStyle,
   normalizeSectionOverrides,
   normalizeToolGuidance,
   resetHarnessProfile,

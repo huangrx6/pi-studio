@@ -15,7 +15,9 @@ contextBridge.exposeInMainWorld('piApi', {
   temporaryStop: (id) => ipcRenderer.invoke('pi:temporary-stop', id),
   temporaryClose: (id) => ipcRenderer.invoke('pi:temporary-close', id),
   onTemporary: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:temporary-event', handler); return () => ipcRenderer.removeListener('pi:temporary-event', handler); },
-  setTheme: (theme, palette) => ipcRenderer.invoke('pi:set-theme', theme, palette),
+  setAppearance: (theme, palette, radiusStyle) => (
+    ipcRenderer.invoke('pi:set-appearance', theme, palette, radiusStyle)
+  ),
   updateState: () => ipcRenderer.invoke('pi:update-state'),
   checkForUpdates: (options) => ipcRenderer.invoke('pi:check-for-updates', options),
   downloadUpdate: () => ipcRenderer.invoke('pi:download-update'),

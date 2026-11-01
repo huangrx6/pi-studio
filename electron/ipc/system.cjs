@@ -6,12 +6,15 @@
 const { ipcMain } = require('electron');
 const { listWorkspaces, refreshRuntimeState } = require('../services/durable-conversations.cjs');
 const { DEFAULT_CWD, modelInfo } = require('../services/models.cjs');
-const { applyTheme } = require('../window.cjs');
+const { applyAppearance } = require('../window.cjs');
 const { chooseBackgroundMedia, removeBackgroundMedia } = require('../services/background.cjs');
 
 function registerSystemIpc() {
-  // 渲染进程切换主题（设置页），持久化并同步窗口底色
-  ipcMain.handle('pi:set-theme', (_event, theme, palette) => applyTheme(theme, palette));
+  // 渲染进程切换外观（设置页），持久化并同步原生窗口与菜单栏。
+  ipcMain.handle(
+    'pi:set-appearance',
+    (_event, theme, palette, radiusStyle) => applyAppearance(theme, palette, radiusStyle),
+  );
   ipcMain.handle('pi:background-media-choose', (_event, payload) => chooseBackgroundMedia(payload));
   ipcMain.handle('pi:background-media-remove', (_event, url) => removeBackgroundMedia(url));
 

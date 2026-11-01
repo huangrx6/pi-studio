@@ -16,8 +16,10 @@ const {
 } = require('./core/web-security.cjs');
 const {
   PALETTES,
+  RADIUS_STYLES,
   THEMES,
   getPalette,
+  getRadiusStyle,
   getTheme,
 } = require('./core/app-settings.cjs');
 const { getStudioDatabase } = require('./core/studio-db.cjs');
@@ -159,15 +161,20 @@ function installMenu({ onCheckForUpdates } = {}) {
 }
 
 /**
- * 切换主题与配色：持久化到 Studio SQLite，同步窗口底色并通知菜单栏。
+ * 切换主题、配色与圆角：持久化到 Studio SQLite，同步窗口底色并通知菜单栏。
  */
-function applyTheme(theme, palette) {
+function applyAppearance(theme, palette, radiusStyle) {
   if (!THEMES.has(theme)) throw new Error('无效的主题');
   if (palette !== undefined && !PALETTES.has(palette)) throw new Error('无效的配色方案');
+  if (radiusStyle !== undefined && !RADIUS_STYLES.has(radiusStyle)) {
+    throw new Error('无效的圆角风格');
+  }
   const db = getStudioDatabase();
   const nextPalette = palette === undefined ? getPalette() : palette;
+  const nextRadiusStyle = radiusStyle === undefined ? getRadiusStyle() : radiusStyle;
   db.setSetting('studio.app.theme', theme);
   db.setSetting('studio.app.palette', nextPalette);
+  db.setSetting('studio.app.radiusStyle', nextRadiusStyle);
   nativeTheme.themeSource = theme;
   const win = getWindow();
   if (win && !win.isDestroyed()) win.setBackgroundColor(themeBackground(theme, nativeTheme.shouldUseDarkColors));
@@ -175,6 +182,7 @@ function applyTheme(theme, palette) {
     type: 'appearance',
     theme,
     palette: nextPalette,
+    radiusStyle: nextRadiusStyle,
   });
 }
 
@@ -188,4 +196,4 @@ function watchSystemTheme() {
   });
 }
 
-module.exports = { createWindow, showMainWindow, installMenu, applyTheme, watchSystemTheme };
+module.exports = { createWindow, showMainWindow, installMenu, applyAppearance, watchSystemTheme };

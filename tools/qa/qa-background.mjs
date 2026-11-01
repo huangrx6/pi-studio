@@ -117,7 +117,7 @@ await page.addInitScript(() => {
   window.__removedBackgrounds = [];
   window.__nextBackground = null;
   const api = {
-    setTheme: async (theme) => { window.__nativeTheme = theme; },
+    setAppearance: async (theme) => { window.__nativeTheme = theme; },
     modeGet: async () => ({ available: false, mode: 'smart' }),
     state: async () => ({ workspaces, cwd, model }),
     settings: async () => settings,

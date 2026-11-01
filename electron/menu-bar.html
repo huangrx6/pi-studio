@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src 'self'; script-src 'self'; img-src data:;"
+      content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:;"
     >
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pi Studio</title>
@@ -17,7 +17,7 @@
     <div class="popover-shell">
       <div class="popover-panel">
         <header class="popover-header">
-          <div class="brand-lockup"><span class="brand-mark" aria-hidden="true">π</span><strong>Pi Studio</strong><span class="header-label">后台会话</span></div>
+          <div class="brand-lockup"><img class="brand-mark" src="../assets/icon.png" alt="" draggable="false"><strong>Pi Studio</strong><span class="header-label">后台会话</span></div>
           <button id="close" class="icon-button" type="button" aria-label="关闭菜单栏面板" title="关闭">×</button>
         </header>
         <p id="summary" class="summary" aria-live="polite">正在读取后台状态…</p>
