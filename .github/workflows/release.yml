@@ -49,6 +49,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Run tests
+        run: pnpm test
+
+      - name: Validate extension schema and official extension
+        run: |
+          pnpm run extension:schema
+          node tools/cli/pi-studio-extension.mjs validate examples/extensions/agent-starter --scope user --json
+          node tools/cli/pi-studio-extension.mjs validate extensions/pi-quota-status --scope user --json
+
       - name: Validate macOS signing certificate
         shell: bash
         env:
@@ -79,6 +88,9 @@ jobs:
       - name: Build & package (DMG + auto-update ZIP)
         shell: bash
         run: pnpm release:dist
+
+      - name: Packaged startup regression
+        run: pnpm run qa:startup
 
       - name: Collect installers and updater metadata
         run: |

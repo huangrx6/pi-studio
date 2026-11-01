@@ -1,6 +1,6 @@
 {
   "name": "pi-studio",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "private": true,
   "type": "module",
   "description": "Pi Studio — a native desktop workspace built on Pi Durable.",
@@ -32,6 +32,7 @@
     "release:cert": "bash tools/release/create-self-signed-macos-certificate.sh",
     "release:dist": "bash tools/release/build-signed-macos.sh",
     "qa:memory": "node tools/qa/qa-memory-smoke.mjs",
+    "qa:startup": "node tools/qa/qa-packaged-startup.mjs",
     "start": "node tools/launch.mjs",
     "test": "node --test tests/electron/*.test.cjs tests/web/*.test.mjs tests/integration/*.test.cjs tests/integration/*.test.mjs",
     "dist": "pnpm run build && electron-builder --mac --arm64 --x64 --publish never"

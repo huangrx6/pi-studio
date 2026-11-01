@@ -13,9 +13,12 @@
  *  - window.cjs  窗口、菜单、主题
  */
 
+const fs = require('node:fs');
 const path = require('node:path');
-const { app, protocol } = require('electron');
+const { app, dialog, protocol } = require('electron');
 const { installApplicationShutdown } = require('./core/app-lifecycle.cjs');
+const { installSingleInstanceGuard } = require('./core/single-instance.cjs');
+const { createStartupGate } = require('./core/startup-gate.cjs');
 const { initializeStudioModels } = require('./core/studio-models.cjs');
 const { closeDurableRuntime, initializeDurableRuntime } = require('./services/durable-runtime.cjs');
 const { closeConversationWatches } = require('./services/durable-conversations.cjs');
@@ -36,60 +39,95 @@ const {
   updaterOwnsApplicationQuit,
 } = require('./services/updater.cjs');
 
-// Must be registered before app.ready so <img>/<video> can treat these URLs as
-// secure, streamable resources in both the Vite dev server and packaged builds.
-protocol.registerSchemesAsPrivileged([{
-  scheme: BACKGROUND_SCHEME,
-  privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
-}]);
+// Tests and QA can run complete packaged applications without sharing the
+// production Chromium profile, SQLite database, or single-instance lock.
+if (process.env.PI_STUDIO_USER_DATA) {
+  const userData = path.resolve(process.env.PI_STUDIO_USER_DATA);
+  fs.mkdirSync(userData, { recursive: true });
+  app.setPath('userData', userData);
+}
 
-app.whenReady().then(async () => {
-  // macOS 开发模式下 Dock 图标取自项目资源
-  if (process.platform === 'darwin') {
-    app.dock.setIcon(path.join(__dirname, '..', 'assets', 'icon.png'));
-  }
+let startupGate;
+const primaryInstance = installSingleInstanceGuard(app, () => {
+  if (startupGate?.requestReveal()) showMainWindow();
+});
 
-  // Database and credential paths depend on app.getPath('userData').
-  await initializeStudioModels();
-  await initializeDurableRuntime();
-
-  if (app.isQuitting) return;
-
-  // 系统外观变化时同步窗口底色
-  watchSystemTheme();
-
-  // 先注册媒体协议与 IPC 再建窗口，避免窗口加载完成后首屏请求落空
-  registerBackgroundProtocol();
+if (primaryInstance) {
+  // IPC registration is synchronous. It happens before any asynchronous
+  // database/runtime work so activation cannot expose a renderer without
+  // handlers.
   registerIpc();
   registerMenuBarIpc();
-  installMenu({ onCheckForUpdates: openAndCheckForUpdates });
-  createWindow();
-  initializeMenuBar();
-  initializeUpdater();
-});
 
-installApplicationShutdown({
-  app,
-  updaterOwnsQuit: updaterOwnsApplicationQuit,
-  stopUi: () => {
-    shutdownMenuBar();
-    shutdownUpdater();
-  },
-  steps: [
-    [
-      { label: 'conversation watches', run: closeConversationWatches, timeoutMs: 3_000 },
-      { label: 'temporary chats', run: shutdownTemporaryChats, timeoutMs: 3_000 },
+  // Must be registered before app.ready so <img>/<video> can treat these URLs
+  // as secure, streamable resources in development and packaged builds.
+  protocol.registerSchemesAsPrivileged([{
+    scheme: BACKGROUND_SCHEME,
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
+  }]);
+
+  installApplicationShutdown({
+    app,
+    updaterOwnsQuit: updaterOwnsApplicationQuit,
+    stopUi: () => {
+      shutdownMenuBar();
+      shutdownUpdater();
+    },
+    steps: [
+      [
+        { label: 'conversation watches', run: closeConversationWatches, timeoutMs: 3_000 },
+        { label: 'temporary chats', run: shutdownTemporaryChats, timeoutMs: 3_000 },
+      ],
+      [{ label: 'Durable runtime', run: closeDurableRuntime, timeoutMs: 8_000 }],
     ],
-    [{ label: 'Durable runtime', run: closeDurableRuntime, timeoutMs: 8_000 }],
-  ],
-});
+  });
 
-// macOS norm: closing every window leaves Pi Studio running.
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
+  // macOS norm: closing every window leaves Pi Studio running.
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit();
+  });
 
-// Clicking the Dock icon reveals the hidden workspace.
-app.on('activate', () => {
-  if (!app.isQuitting) showMainWindow();
-});
+  // Dock activation may arrive before model and Durable startup finishes. The
+  // gate defers it instead of creating a renderer against a half-ready main.
+  app.on('activate', () => {
+    if (app.isQuitting) return;
+    if (startupGate?.requestReveal()) showMainWindow();
+  });
+
+  startupGate = createStartupGate({
+    initialize: async () => {
+      await app.whenReady();
+      // macOS 开发模式下 Dock 图标取自项目资源
+      if (process.platform === 'darwin') {
+        app.dock.setIcon(path.join(__dirname, '..', 'assets', 'icon.png'));
+      }
+      // Database and credential paths depend on app.getPath('userData').
+      await initializeStudioModels();
+      await initializeDurableRuntime();
+    },
+    ready: () => {
+      if (app.isQuitting) return;
+      // 系统外观变化时同步窗口底色
+      watchSystemTheme();
+      registerBackgroundProtocol();
+      installMenu({ onCheckForUpdates: openAndCheckForUpdates });
+      createWindow();
+      initializeMenuBar();
+      initializeUpdater();
+    },
+    failed: (error) => {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error('[pi-studio] startup failed', error);
+      try {
+        dialog.showErrorBox(
+          'Pi Studio 无法启动',
+          `${detail}\n\n请确认旧实例已经完全退出后重试。如果问题持续，请保留应用数据目录中的数据库文件以便恢复。`,
+        );
+      } finally {
+        app.quit();
+      }
+    },
+  });
+
+  void startupGate.start();
+}
