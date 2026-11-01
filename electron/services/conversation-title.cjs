@@ -9,6 +9,10 @@ const TITLE_LIMIT = 24;
 const RAW_TITLE_LIMIT = 60;
 const SKILL_BLOCK = /<skill\s+[^>]*>[\s\S]*?<\/skill>/gi;
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+}
+
 function cleanQuestion(value) {
   return String(value || '')
     .replace(SKILL_BLOCK, ' ')
@@ -95,7 +99,41 @@ async function generateConversationTitle({
   }
 }
 
+/**
+ * Wait for the conversation's ordinary Durable work to finish before making a
+ * provider request. A quiet interval covers a freshly committed run ending;
+ * one retry absorbs transient provider throttling without blocking the chat.
+ */
+async function generateConversationTitleAfterIdle({
+  conversation,
+  context,
+  getModel,
+  question,
+  complete,
+  settleMs = 250,
+  retryDelaysMs = [0, 400],
+}) {
+  if (typeof conversation?.waitForIdle !== 'function') return '';
+  await conversation.waitForIdle(context);
+  if (settleMs > 0) await delay(settleMs);
+  // Work may have started during the quiet interval. Do not race that run.
+  await conversation.waitForIdle(context);
+
+  for (const retryDelay of retryDelaysMs) {
+    if (retryDelay > 0) await delay(retryDelay);
+    const model = await getModel();
+    const title = await generateConversationTitle({
+      question,
+      model,
+      complete,
+    });
+    if (title) return title;
+  }
+  return '';
+}
+
 module.exports = {
+  generateConversationTitleAfterIdle,
   generateConversationTitle,
   normalizeGeneratedTitle,
   temporaryTitle,

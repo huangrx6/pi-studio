@@ -51,7 +51,7 @@ const {
 } = require('./studio-extensions.cjs');
 const { composerSkills, expandSkillCommand } = require('./studio-skills.cjs');
 const {
-  generateConversationTitle,
+  generateConversationTitleAfterIdle,
   temporaryTitle,
 } = require('./conversation-title.cjs');
 const {
@@ -154,6 +154,7 @@ function conversationDto(row, overrides = {}) {
     archived: Boolean(row.archived),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    ...(Number.isFinite(row.lastDurationMs) ? { lastDurationMs: row.lastDurationMs } : {}),
     ...overrides,
   };
 }
@@ -402,6 +403,31 @@ async function fullDisplayMessages(conversation) {
   const messages = [];
   await scanDisplayMessages(conversation, (message) => messages.push(message));
   return messages;
+}
+
+async function firstUserQuestion(conversation) {
+  const runtime = await getDurableRuntime();
+  let cursor;
+  do {
+    const page = await conversation.entries(
+      { order: 'ascending' },
+      ENTRY_SCAN_PAGE_SIZE,
+      cursor,
+      runtime.context,
+    );
+    for (const entry of page.items) {
+      const message = entryToMessages(entry).find((item) => item.role === 'user');
+      if (!message) continue;
+      return message.content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+    cursor = page.next;
+  } while (cursor);
+  return '';
 }
 
 async function conversationMessageSummary(conversation, options = {}) {
@@ -754,8 +780,16 @@ async function submitConversation(input = {}, options = {}) {
     },
   }, runtime.context);
   const record = await submission.status(runtime.context);
-  const shouldGenerateTitle = row.title === '新会话' && Boolean(displayText);
-  const nextTitle = shouldGenerateTitle ? temporaryTitle(displayText) : row.title;
+  const repairingFallbackTitle = row.titleSource === 'auto-fallback';
+  const needsInitialTitle = row.title === '新会话';
+  const shouldGenerateTitle = (
+    (needsInitialTitle || repairingFallbackTitle)
+    && Boolean(displayText)
+  );
+  const titleQuestion = repairingFallbackTitle
+    ? (await firstUserQuestion(conversation) || displayText)
+    : displayText;
+  const nextTitle = needsInitialTitle ? temporaryTitle(displayText) : row.title;
   getStudioDatabase().updateConversation(row.id, {
     title: nextTitle,
     titleSource: shouldGenerateTitle ? 'auto-pending' : row.titleSource,
@@ -767,14 +801,15 @@ async function submitConversation(input = {}, options = {}) {
       const db = getStudioDatabase();
       let generated = '';
       try {
-        const [agent, modelRuntime] = await Promise.all([
-          conversation.agent(runtime.context),
-          getStudioModelsRuntime(),
-        ]);
-        const model = runtimeModelFor(modelRuntime.models, agent.model);
-        generated = await generateConversationTitle({
-          question: displayText,
-          model,
+        const modelRuntime = await getStudioModelsRuntime();
+        generated = await generateConversationTitleAfterIdle({
+          conversation,
+          context: runtime.context,
+          question: titleQuestion,
+          getModel: async () => {
+            const agent = await conversation.agent(runtime.context);
+            return runtimeModelFor(modelRuntime.models, agent.model);
+          },
           complete: (selectedModel, context, requestOptions) => (
             modelRuntime.models.completeSimple(
               selectedModel,
@@ -1513,6 +1548,7 @@ async function handleAgentEvent(event, entry, conversation, emit) {
     entry.partial = event.generation?.message;
     entry.running = Boolean(event.run);
     if (entry.running) {
+      entry.runStartedAt ||= Date.now();
       runningConversations.add(key);
       await beginRunDiff(entry, conversation, event.run?.inputs);
     } else {
@@ -1540,6 +1576,7 @@ async function handleAgentEvent(event, entry, conversation, emit) {
 
   if (event.type === 'run_start') {
     entry.running = true;
+    entry.runStartedAt ||= Date.now();
     entry.snapshot = { ...entry.snapshot, run: { inputs: event.inputs } };
     entry.longTaskContinuations = 0;
     entry.longTaskStalledContinuations = 0;
@@ -1556,7 +1593,12 @@ async function handleAgentEvent(event, entry, conversation, emit) {
   }
 
   if (event.type === 'run_end') {
+    const endedAt = Date.now();
+    const lastDurationMs = entry.runStartedAt === undefined
+      ? undefined
+      : Math.max(0, endedAt - entry.runStartedAt);
     entry.running = false;
+    entry.runStartedAt = undefined;
     entry.snapshot = {
       ...entry.snapshot,
       run: undefined,
@@ -1567,7 +1609,10 @@ async function handleAgentEvent(event, entry, conversation, emit) {
     await refreshRuntimeState();
     const running = runningConversations.has(key);
     await finishRunDiff(entry, conversation, emit);
-    getStudioDatabase().updateConversation(key, { updatedAt: Date.now() });
+    getStudioDatabase().updateConversation(key, {
+      updatedAt: endedAt,
+      ...(lastDurationMs === undefined ? {} : { lastDurationMs }),
+    });
     await emit({
       type: 'run.completed',
       conversationId: key,
@@ -1785,6 +1830,7 @@ async function ensureWatch(id, emit) {
     longTaskStalledContinuations: 0,
     longTaskLastIteration: initialLongTask?.iteration || 0,
     longTaskGuardTriggered: false,
+    runStartedAt: stream.snapshot?.run ? Date.now() : undefined,
   };
   watches.set(key, entry);
   if (entry.running) runningConversations.add(key);

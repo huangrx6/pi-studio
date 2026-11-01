@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
+  generateConversationTitleAfterIdle,
   generateConversationTitle,
   normalizeGeneratedTitle,
   temporaryTitle,
@@ -74,6 +75,43 @@ test('timeouts and provider errors return an empty title without throwing', asyn
     complete: async () => { throw new Error('provider unavailable'); },
   });
   assert.equal(failed, '');
+});
+
+test('automatic naming waits for Durable idle and retries once after failure', async () => {
+  const events = [];
+  let attempts = 0;
+  const title = await generateConversationTitleAfterIdle({
+    conversation: {
+      waitForIdle: async () => {
+        events.push('idle');
+      },
+    },
+    context: {},
+    settleMs: 0,
+    retryDelaysMs: [0, 0],
+    getModel: async () => {
+      events.push('model');
+      return { id: 'model-a' };
+    },
+    question: '为这个会话生成标题',
+    complete: async () => {
+      events.push('request');
+      attempts += 1;
+      if (attempts === 1) throw new Error('provider throttled');
+      return answer('修复会话自动命名');
+    },
+  });
+
+  assert.equal(title, '修复会话自动命名');
+  assert.equal(attempts, 2);
+  assert.deepEqual(events, [
+    'idle',
+    'idle',
+    'model',
+    'request',
+    'model',
+    'request',
+  ]);
 });
 
 test('temporary titles are bounded and strip injected skill blocks', () => {

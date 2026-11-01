@@ -37,6 +37,7 @@ import {
   eventSaysConversationRunning,
   isConversationTurnActive,
 } from './lib/conversation-activity';
+import { completedTurnDuration } from './lib/session-summary';
 import { ChangesView } from './components/ChangesView';
 import { ActionMenu } from './components/ActionMenu';
 import { splitComposerText } from './lib/references';
@@ -4906,7 +4907,10 @@ export function App() {
                           {sessionItem.pinned && <span className="session-pin-mark" title="已置顶">置顶</span>}
                           {sessionItem.running
                             ? <span className="session-running" role="status" aria-label="会话正在运行" title="会话正在运行"><LoaderCircle className="spin" aria-hidden="true" /></span>
-                            : <span className="session-time">{relativeTime(sessionItem.updatedAt, sidebarClock)}</span>}
+                            : <span className="session-time" title="最近一次回答耗时">{(
+                                completedTurnDuration(sessionItem.lastDurationMs)
+                                || relativeTime(sessionItem.updatedAt, sidebarClock)
+                              )}</span>}
                         </span>
                       </button>
                       <SidebarActions kind="session" id={sessionItem.id} name={sessionItem.title} pinned={sessionItem.pinned} archived={sessionItem.archived} onAction={(action, name) => sidebarAction('session', sessionItem.id, action, name)} />

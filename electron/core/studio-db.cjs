@@ -21,7 +21,7 @@ const {
 } = require('./thinking-levels.cjs');
 
 const DATABASE_NAME = 'pi-studio.sqlite';
-const SCHEMA_VERSION = 13;
+const SCHEMA_VERSION = 14;
 const USAGE_REQUEST_LEDGER_LIMIT = 8_192;
 const USAGE_REQUEST_PRUNE_BATCH = 256;
 const METRIC_REQUEST_HISTORY_LIMIT = 8;
@@ -73,6 +73,9 @@ function normalizeConversationRow(row) {
     archived: Boolean(row.archived),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    lastDurationMs: row.last_duration_ms === null || row.last_duration_ms === undefined
+      ? undefined
+      : metricNumber(row.last_duration_ms),
     lastRequestId: row.last_request_id || '',
     lastError: row.last_error || '',
   };
@@ -223,6 +226,7 @@ class StudioDatabase {
           archived INTEGER NOT NULL DEFAULT 0,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL,
+          last_duration_ms INTEGER,
           last_request_id TEXT NOT NULL DEFAULT '',
           last_error TEXT NOT NULL DEFAULT ''
         );
@@ -381,6 +385,21 @@ class StudioDatabase {
       );
       if (!conversationColumns.has('public_id')) {
         this.db.exec('ALTER TABLE conversations ADD COLUMN public_id TEXT');
+      }
+      if (!conversationColumns.has('last_duration_ms')) {
+        this.db.exec('ALTER TABLE conversations ADD COLUMN last_duration_ms INTEGER');
+        this.db.exec(`
+          UPDATE conversations
+          SET last_duration_ms = (
+            SELECT CAST(ROUND(metric.duration_ms) AS INTEGER)
+            FROM conversation_metric_requests AS metric
+            WHERE metric.conversation_id = conversations.id
+              OR metric.conversation_id = conversations.public_id
+            ORDER BY metric.finished_at DESC, metric.request_id DESC
+            LIMIT 1
+          )
+          WHERE last_duration_ms IS NULL
+        `);
       }
       const conversationIds = this.db.prepare(
         'SELECT id, public_id FROM conversations ORDER BY id',
@@ -690,8 +709,8 @@ class StudioDatabase {
     this.db.prepare(`
       INSERT INTO conversations(
         id, public_id, workspace, kind, title, title_source, goal, pinned, archived,
-        created_at, updated_at, last_request_id, last_error
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        created_at, updated_at, last_duration_ms, last_request_id, last_error
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       input.id,
       publicId,
@@ -704,6 +723,7 @@ class StudioDatabase {
       input.archived ? 1 : 0,
       at,
       input.updatedAt || at,
+      Number.isFinite(input.lastDurationMs) ? Math.max(0, Math.round(input.lastDurationMs)) : null,
       input.lastRequestId || '',
       input.lastError || '',
     );
@@ -720,6 +740,7 @@ class StudioDatabase {
       pinned: patch.pinned ?? current.pinned,
       archived: patch.archived ?? current.archived,
       updatedAt: patch.updatedAt ?? Date.now(),
+      lastDurationMs: patch.lastDurationMs ?? current.lastDurationMs,
       lastRequestId: patch.lastRequestId ?? current.lastRequestId,
       lastError: patch.lastError ?? current.lastError,
       kind: patch.kind ?? current.kind,
@@ -729,7 +750,8 @@ class StudioDatabase {
     this.db.prepare(`
       UPDATE conversations SET
         workspace = ?, kind = ?, title = ?, title_source = ?, goal = ?,
-        pinned = ?, archived = ?, updated_at = ?, last_request_id = ?, last_error = ?
+        pinned = ?, archived = ?, updated_at = ?, last_duration_ms = ?,
+        last_request_id = ?, last_error = ?
       WHERE id = ?
     `).run(
       next.workspace,
@@ -740,6 +762,7 @@ class StudioDatabase {
       next.pinned ? 1 : 0,
       next.archived ? 1 : 0,
       next.updatedAt,
+      Number.isFinite(next.lastDurationMs) ? Math.max(0, Math.round(next.lastDurationMs)) : null,
       next.lastRequestId,
       next.lastError,
       current.id,

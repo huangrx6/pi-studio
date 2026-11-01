@@ -101,6 +101,29 @@ try {
   await page.screenshot({ path: `${output}dark-active.png`, animations: 'disabled' });
   await appearance('rgb(59, 110, 211)');
 
+  const singleResult = {
+    running: [],
+    recent: [{
+      id: 'recent-only',
+      title: '检查一条完成记录是否会被误判为溢出',
+      cwd: '/workspace/pi-studio',
+      completedAt: Date.now(),
+      status: 'success',
+      unread: true,
+    }],
+    unreadCount: 1,
+    theme: 'dark',
+    palette: 'ocean',
+  };
+  await page.setViewportSize({ width: 520, height: menuBarPopoverHeight(singleResult) });
+  await page.evaluate(state => window.__emitMenuBarState(state), singleResult);
+  const singleOverflow = await page.locator('.popover-content').evaluate(el => ({
+    vertical: el.scrollHeight > el.clientHeight,
+    horizontal: el.scrollWidth > el.clientWidth,
+  }));
+  assert.deepEqual(singleOverflow, { vertical: false, horizontal: false });
+  await page.screenshot({ path: `${output}dark-single-result.png`, animations: 'disabled' });
+
   await page.evaluate(() => window.__emitMenuBarState({
     running: [],
     recent: [],

@@ -80,6 +80,7 @@ test('popover fits its rows and caps long lists without stretching the idle stat
   const { menuBarPopoverHeight } = require('../../electron/menu-bar-state.cjs');
   assert.equal(menuBarPopoverHeight(), 196);
   assert.equal(menuBarPopoverHeight({ running: [{}] }), 240);
+  assert.equal(menuBarPopoverHeight({ recent: [{}] }), 240);
   assert.equal(menuBarPopoverHeight({ running: [{}, {}], recent: [{}] }), 388);
   assert.equal(menuBarPopoverHeight({ running: Array(100).fill({}) }), 440);
 });

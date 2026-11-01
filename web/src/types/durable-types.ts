@@ -39,6 +39,7 @@ export type ConversationSummary = {
   archived: boolean;
   createdAt: number;
   updatedAt: number;
+  lastDurationMs?: number;
   messageCount?: number;
   running?: boolean;
   longTask?: LongTaskState;
