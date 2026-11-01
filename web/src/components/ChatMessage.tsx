@@ -7,22 +7,22 @@
  *   toolResult 消息通过 toolResults（toolCallId → 消息）配对进对应工具调用。
  *
  * 一轮内部的「轨迹 / 回复」分区：
- * 正文和图片始终显示；每次真实模型请求之后的推理与工具组成一个执行阶段。
- * 多个模型请求按时间依次展开，当前输出独立呈现，避免把所有阶段塞进同一个折叠块。
+ * 轨迹按请求与正文边界分段；中间说明与最终回答始终独立显示。
  *
  * 展开状态：默认由偏好 stepDisplay（精简/标准/详细）和 stepCollapse
  * （回答结束后/保持展开/手动）决定；用户手动 toggle 会立即更新本地状态，
- * 但运行状态或偏好再次变化时，自动策略会重新覆盖。
+ * 流式增量保留手动选择；自动策略仅在整轮运行边界或配置改变时应用。
  *
  * IPC：本组件不直接调用 IPC，消息来自 App 的 Durable 会话快照与事件流；
  * 图片以 data URI 内联渲染，不再额外请求主进程。
  */
-import { memo, useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, CircleAlert, CircleCheck, CircleX, Copy, FileText, Image as ImageIcon, LoaderCircle, PanelRightOpen, Pencil, Search, Send, Sparkles, Terminal, Wrench } from 'lucide-react';
-import type { ChatMessage, ContentBlock, RequestTrace, RequestTraceContentBlock, RequestTraceMessage, ToolCallBlock, TurnDiff, TurnDiffFile } from '../types/chat-types';
+import { memo, useEffect, useId, useRef, useState } from 'react';
+import { Check, ChevronDown, CircleAlert, CircleCheck, CircleX, Copy, FileText, Image as ImageIcon, LoaderCircle, PanelRightOpen, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
+import type { ChatMessage, ContentBlock, RequestTrace, ToolCallBlock, TurnDiff, TurnDiffFile } from '../types/chat-types';
 import type { StepCollapse, StepDisplay } from '../lib/preferences';
 import { AttachmentIcon, attachmentVisual } from './AttachmentIcon';
 import { ConversationImageGallery, type ConversationImage } from './ConversationImageGallery';
+import { ActivityRequest } from './ModelRequestTrace';
 import { Markdown } from './Markdown';
 import { collectFileChanges } from '../lib/file-changes';
 import { FileChangeSummary } from './FileChangeSummary';
@@ -113,9 +113,8 @@ type FlatBlock = { block: ContentBlock; key: string; messageTimestamp?: number }
  * @param call 工具调用块
  * @param result 已配对的 toolResult 消息（可能尚未到达）
  * @param busy 当前会话是否仍在运行，控制加载图标动画
- * @param showImages 是否在工具详情内展示图片；执行轨迹由分组统一展示，避免重复
  */
-function ActivityTool({ call, result, busy, showImages = true, defaultOpen = false }: { call: ToolCallBlock; result?: ChatMessage; busy: boolean; showImages?: boolean; defaultOpen?: boolean }) {
+function ActivityTool({ call, result, busy, defaultOpen = false }: { call: ToolCallBlock; result?: ChatMessage; busy: boolean; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
   useEffect(() => {
     if (defaultOpen) setOpen(true);
@@ -125,7 +124,8 @@ function ActivityTool({ call, result, busy, showImages = true, defaultOpen = fal
   const summary = toolSummary(call);
   const resultText = result ? textBlocks(result.content) : '';
   const resultImages = result ? imagesFromBlocks(result.content) : [];
-  return <details
+  return <>
+  <details
     className={`activity-tool activity-disclosure ${failed ? 'is-error' : ''} ${done ? 'is-done' : busy ? 'is-running' : 'is-incomplete'}`}
     open={open}
     onToggle={(event) => setOpen(event.currentTarget.open)}
@@ -134,7 +134,6 @@ function ActivityTool({ call, result, busy, showImages = true, defaultOpen = fal
       <span className="activity-tool-icon activity-disclosure-icon"><ToolIcon name={call.name} /></span>
       <span className="activity-tool-name activity-disclosure-title">{call.name}</span>
       {summary && <span className="activity-tool-summary activity-disclosure-preview">{summary}</span>}
-      {resultImages.length > 0 && <span className="activity-tool-image-count"><ImageIcon />{resultImages.length} 张图片</span>}
       <span className="activity-tool-status">{failed ? <><CircleX />失败</> : done ? <><CircleCheck />完成</> : busy ? <><LoaderCircle className="spin" />执行中</> : <><CircleAlert />未完成</>}</span>
       <ChevronDown className="activity-tool-chevron activity-disclosure-chevron" />
     </summary>
@@ -143,11 +142,28 @@ function ActivityTool({ call, result, busy, showImages = true, defaultOpen = fal
       <pre className="activity-tool-code">{JSON.stringify(call.arguments, null, 2)}</pre>
       {result && <>
         <div className="activity-tool-label">结果</div>
-        {showImages && <MessageImages blocks={result.content} />}
         {resultText && <pre className={`activity-tool-code ${failed ? 'is-error' : ''}`}>{resultText}</pre>}
       </>}
     </div>
-  </details>;
+  </details>
+  {resultImages.length > 0 && <ToolResultImages callId={call.id} images={resultImages} />}
+  </>;
+}
+
+/** 图片属于工具产物，与参数详情分别折叠；预览仅浏览当前步骤的图片。 */
+function ToolResultImages({ callId, images }: { callId: string; images: ConversationImage[] }) {
+  const [open, setOpen] = useState(true);
+  const bodyId = useId();
+  return <div className="tool-result-images" data-tool-call-id={callId}>
+    <button type="button" className="tool-result-images-toggle" aria-expanded={open}
+      aria-controls={bodyId} onClick={() => setOpen(value => !value)}>
+      <span className="tool-result-images-icon activity-disclosure-icon" aria-hidden="true"><ImageIcon /></span><span className="tool-result-images-label">图像结果</span><span className="tool-result-images-count">{images.length}</span>
+      <ChevronDown className={open ? 'is-open' : ''} />
+    </button>
+    <div id={bodyId} hidden={!open}>
+      <ConversationImageGallery images={images} />
+    </div>
+  </div>;
 }
 
 /**
@@ -174,141 +190,6 @@ function ActivityThinking({ block, defaultOpen = false }: { block: Extract<Conte
       <ChevronDown className="activity-thinking-chevron activity-disclosure-chevron" />
     </summary>
     {!block.redacted && block.thinking && <div className="activity-thinking-body activity-disclosure-body"><Markdown>{block.thinking}</Markdown></div>}
-  </details>;
-}
-
-function requestRoleLabel(role: string): string {
-  if (role === 'system') return '系统提示词';
-  if (role === 'user') return '用户消息';
-  if (role === 'assistant') return '助手消息';
-  if (role === 'toolResult' || role === 'tool') return '工具结果';
-  if (role === 'trace') return '快照提示';
-  return role || '消息';
-}
-
-function requestMessagePreview(message: RequestTraceMessage): string {
-  const text = message.content.map((block) => {
-    if (block.type === 'text') return block.text;
-    if (block.type === 'thinking') return block.thinking;
-    if (block.type === 'toolCall') return `${block.name} ${JSON.stringify(block.arguments)}`;
-    if (block.type === 'image') return `[图片 ${block.mimeType}]`;
-    return '';
-  }).join(' ').replace(/\s+/g, ' ').trim();
-  return text.slice(0, 150);
-}
-
-function requestBlockValue(block: RequestTraceContentBlock): string {
-  if (block.type === 'text') return block.text;
-  if (block.type === 'thinking') return block.thinking;
-  if (block.type === 'toolCall') return JSON.stringify(block.arguments, null, 2);
-  if ('value' in block) return JSON.stringify(block.value, null, 2);
-  return '';
-}
-
-function RequestTraceMessageView({ message }: { message: RequestTraceMessage }) {
-  const preview = requestMessagePreview(message);
-  return <details className={`request-message is-${message.role}`}>
-    <summary>
-      <span className="request-message-role">{requestRoleLabel(message.role)}</span>
-      {preview && <span className="request-message-preview">{preview}</span>}
-      {message.truncated && <span className="request-message-truncated">已截断</span>}
-      <ChevronDown className="request-message-chevron" />
-    </summary>
-    <div className="request-message-body">
-      {message.content.map((block, index) => {
-        if (block.type === 'image') {
-          return <div className="request-image-placeholder" key={index}>
-            <ImageIcon />
-            <span>{block.mimeType}</span>
-            <span>{formatBytes(block.bytes)}</span>
-            <small>图片数据未复制到请求轨迹</small>
-          </div>;
-        }
-        if (block.type === 'toolCall') {
-          return <div className="request-tool-call" key={index}>
-            <div className="request-tool-call-head"><Wrench /><span>{block.name}</span></div>
-            <pre>{requestBlockValue(block)}</pre>
-          </div>;
-        }
-        const value = requestBlockValue(block);
-        return value ? <pre className={`request-block is-${block.type}`} key={index}>{value}</pre> : null;
-      })}
-    </div>
-  </details>;
-}
-
-function formatRequestSize(chars: number): string {
-  if (chars >= 1_000_000) return `${(chars / 1_000_000).toFixed(1)}M`;
-  if (chars >= 1_000) return `${(chars / 1_000).toFixed(1)}K`;
-  return String(chars);
-}
-
-/**
- * One actual provider request. The summary remains compact while every exact
- * prompt message and offered tool definition is available one level deeper.
- */
-function ActivityRequest({ trace, index, stepDisplay }: {
-  trace: RequestTrace;
-  index: number;
-  stepDisplay: StepDisplay;
-}) {
-  const [open, setOpen] = useState(stepDisplay === 'detailed');
-  useEffect(() => {
-    if (stepDisplay === 'detailed') setOpen(true);
-    else if (stepDisplay === 'compact') setOpen(false);
-  }, [stepDisplay]);
-  const model = trace.model
-    ? `${trace.model.provider}/${trace.model.modelId}`
-    : '模型参数未记录';
-  const userMessage = [...trace.messages].reverse().find((message) => message.role === 'user');
-  const userPreview = userMessage ? requestMessagePreview(userMessage) : '';
-  return <details className="activity-request activity-disclosure" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
-    <summary className="activity-disclosure-summary">
-      <span className="activity-request-icon activity-disclosure-icon"><Send /></span>
-      <span className="activity-request-label activity-disclosure-title">模型请求 {index + 1}</span>
-      <span className="activity-request-model activity-disclosure-preview">{model}</span>
-      <span className="activity-request-metrics activity-disclosure-meta">
-        {trace.stats.messageCount} 条消息
-        {trace.thinkingLevel ? ` · ${trace.thinkingLevel}` : ''}
-        {trace.stats.toolDefinitionCount ? ` · ${trace.stats.toolDefinitionCount} 个工具定义` : ''}
-      </span>
-      {trace.attempt > 1 && <span className="activity-request-retry">第 {trace.attempt} 次</span>}
-      <ChevronDown className="activity-request-chevron activity-disclosure-chevron" />
-    </summary>
-    <div className="activity-request-body activity-disclosure-body">
-      {userPreview && <div className="activity-request-user"><span>本次输入</span><p>{userPreview}</p></div>}
-      <div className="activity-request-facts">
-        <span>{trace.model?.provider || 'provider 未知'}</span>
-        <span>{trace.thinkingLevel ? `Thinking ${trace.thinkingLevel}` : 'Thinking 默认'}</span>
-        <span>{formatRequestSize(trace.stats.estimatedChars)} 字符</span>
-        {trace.stats.imageCount > 0 && <span>{trace.stats.imageCount} 张图片</span>}
-        {trace.truncated && <span className="is-warning">上下文已截断</span>}
-      </div>
-      <div className="request-section-heading">
-        <span>发送给模型的提示词</span>
-        <small>{trace.stats.messageCount} 条 · 已脱敏</small>
-      </div>
-      <div className="request-message-list">
-        {trace.messages.map((message) => <RequestTraceMessageView
-          key={`${message.index}-${message.role}-${message.toolCallId || ''}`}
-          message={message}
-        />)}
-      </div>
-      {trace.tools.length > 0 && <details className="request-tools">
-        <summary>
-          <Wrench />
-          <span>工具定义</span>
-          <small>{trace.tools.length} 个</small>
-          <ChevronDown />
-        </summary>
-        <div className="request-tool-list">
-          {trace.tools.map((tool, toolIndex) => <details className="request-tool" key={`${tool.name}-${toolIndex}`}>
-            <summary><span>{tool.name}</span><span>{tool.description}</span><ChevronDown /></summary>
-            {tool.parameters !== undefined && <pre>{JSON.stringify(tool.parameters, null, 2)}</pre>}
-          </details>)}
-        </div>
-      </details>}
-    </div>
   </details>;
 }
 
@@ -408,17 +289,12 @@ function MessageActions({ text, time, label, align = 'start' }: { text: string; 
   </div>;
 }
 
-function ActivitySequence({ entries, results, live, stepDisplay, stepCollapse }: {
+function ActivitySequence({ entries, results, stepDisplay }: {
   entries: ActivityEntry[];
   results: Map<string, ChatMessage>;
-  live: boolean;
   stepDisplay: StepDisplay;
-  stepCollapse: StepCollapse;
 }) {
-  const defaultOpen = stepDisplay === 'detailed' || stepCollapse === 'keep-open' && !live;
-  const resultImages = entries.flatMap(entry => entry.kind === 'tool'
-    ? imagesFromBlocks(results.get(entry.call.id)?.content ?? [])
-    : []);
+  const defaultOpen = stepDisplay === 'detailed';
   return <>
     <section className="activity-sequence" aria-label="本轮执行步骤">
       {entries.map(entry => <div className={`activity-sequence-item is-${entry.kind}`} key={entry.key}>
@@ -426,17 +302,50 @@ function ActivitySequence({ entries, results, live, stepDisplay, stepCollapse }:
           call={entry.call}
           result={results.get(entry.call.id)}
           busy={false}
-          showImages={false}
           defaultOpen={defaultOpen}
         />}
         {entry.kind === 'thinking' && <ActivityThinking block={entry.block} defaultOpen={defaultOpen} />}
         {entry.kind === 'text' && <div className="activity-sequence-note"><Markdown>{entry.text}</Markdown></div>}
       </div>)}
     </section>
-    {resultImages.length > 0 && <div className="activity-sequence-images">
-      <ConversationImageGallery images={resultImages} />
-    </div>}
   </>;
+}
+
+/** 折叠策略只在整轮运行边界或配置变化时应用，流式增量不覆盖手动操作。 */
+function TurnTrace({ live, active, policy, phase, steps, requests, errors, children }: {
+  live: boolean; active: boolean; policy: StepCollapse; phase: string; steps: number; requests: number;
+  errors: number; children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(policy !== 'after-answer' || live);
+  const bodyId = useId();
+  const header = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (policy === 'after-answer') setOpen(live);
+    else if (policy === 'keep-open') setOpen(true);
+  }, [live, policy]);
+  const collapseFromBottom = () => {
+    // 底部收起后把入口带回视野，避免长轨迹移除后滚动位置落到另一轮。
+    header.current?.scrollIntoView({ block: 'nearest' });
+    setOpen(false);
+    header.current?.focus({ preventScroll: true });
+  };
+  return <section className={`turn-trace ${open ? 'is-open' : ''}`} aria-label="执行轨迹">
+    <button ref={header} type="button" className="turn-trace-toggle"
+      aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(value => !value)}>
+      <span className="turn-trace-mark" aria-hidden="true"><ChevronDown className="turn-trace-chevron" /></span>
+      <strong>执行轨迹</strong>
+      <span className="turn-trace-count">{[steps > 0 && `${steps} 步`, requests > 0 && `${requests} 次请求`].filter(Boolean).join(' · ')}</span>
+      {errors > 0 && <span className="turn-trace-errors"><CircleAlert />{errors} 次异常</span>}
+      <span className="turn-trace-state">{active ? phase : open ? '收起' : '展开'}</span>
+      {active && <LoaderCircle className="spin" />}
+    </button>
+    <div id={bodyId} hidden={!open} className="turn-trace-body">
+      {children}
+      {steps + requests > 6 && <button type="button" className="turn-trace-collapse" onClick={collapseFromBottom}>
+        <ChevronDown />收起执行轨迹
+      </button>}
+    </div>
+  </section>;
 }
 
 type AssistantTurnViewProps = {
@@ -470,9 +379,7 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
     key: `${messageIndex}-${blockIndex}`,
     messageTimestamp: message.timestamp,
   })));
-  // 找到最后一个思考/工具调用块的位置，用它把内容切成「轨迹」与「最终回复」两段。
-  // 之所以按最后一个而不是第一个切分：模型可能先回答一段、中途又调用工具，
-  // 最后的总结文本必须留在回复区，前面的工具过程才折叠。
+  // 最后一次操作仅用于确定“复制回答”的范围；视觉分组在下方按正文边界处理。
   let lastActivity = -1;
   flat.forEach((entry, index) => { if (entry.block.type === 'thinking' || entry.block.type === 'toolCall') lastActivity = index; });
   const activityBlocks = lastActivity >= 0 ? flat.slice(0, lastActivity + 1) : [];
@@ -501,7 +408,6 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
     images?: ConversationImage[];
     current?: ActivityEntry;
     request?: RequestTrace;
-    requestIndex?: number;
   }> = [];
   const activityByKey = new Map(activity.map(entry => [entry.key, entry]));
   const orderedTraces = [...requestTraces].sort((left, right) => (
@@ -514,7 +420,6 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
     timeline.push({
       key: `request-${orderedTraces[0].id}`,
       request: orderedTraces[0],
-      requestIndex: 0,
     });
     traceIndex = 1;
   }
@@ -524,13 +429,12 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
       timeline.push({
         key: `request-${trace.id}`,
         request: trace,
-        requestIndex: traceIndex,
       });
       traceIndex += 1;
     }
   };
   for (const entry of flat) {
-    appendTracesThrough(entry.messageTimestamp ?? Number.POSITIVE_INFINITY);
+    if (entry.messageTimestamp !== undefined) appendTracesThrough(entry.messageTimestamp);
     const record = activityByKey.get(entry.key);
     if (entry.block.type === 'image') {
       const image = { src: `data:${entry.block.mimeType};base64,${entry.block.data}` };
@@ -566,21 +470,20 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
     .map((entry) => entry.block.type === 'text' ? entry.block.text : '')
     .join('\n\n')
     .trim();
-  return <div id={id} className={`assistant-turn ${live ? 'is-live' : ''} ${retry ? 'is-retrying' : ''} ${failed ? 'has-error' : ''} is-steps-${stepDisplay}`}>
-    <div className="assistant-turn-rail"><span className="assistant-orb">π</span></div>
-    <div className="assistant-turn-main">
-      {/* 头部状态只在整轮结束后变为已完成，工具之间的等待仍是运行中。 */}
-      <div className="assistant-turn-head">
-        <span className="assistant-turn-name">Pi</span>
-        <span className="assistant-turn-status" title={retry?.errorMessage}>{retry ? `重试中 ${retry.attempt}/${retry.maxAttempts}` : interrupted ? '已中断' : failed ? '失败' : live ? phase : '已完成'}</span>
-        {latest?.timestamp && <time>{formatTime(latest.timestamp)}</time>}
-      </div>
-      {timeline.map(item => item.entries
-        ? <ActivitySequence key={item.key} entries={item.entries} results={toolResults} live={live} stepDisplay={stepDisplay} stepCollapse={stepCollapse} />
+  // A visible explanation or a new request ends the previous execution segment.
+  // Keys use the first item, so streaming appends never reset a manual disclosure.
+  const segments: Array<{ key: string; process: boolean; items: typeof timeline }> = [];
+  for (const item of timeline) {
+    const process = Boolean(item.entries || item.current || item.request);
+    const tail = segments.at(-1);
+    if (process && tail?.process && !item.request) tail.items.push(item);
+    else segments.push({ key: item.key, process, items: [item] });
+  }
+  const renderTimelineItem = (item: typeof timeline[number]) => item.entries
+        ? <ActivitySequence key={item.key} entries={item.entries} results={toolResults} stepDisplay={stepDisplay} />
         : item.request ? <ActivityRequest
             key={item.key}
             trace={item.request}
-            index={item.requestIndex ?? 0}
             stepDisplay={stepDisplay}
           />
         : item.images ? <ConversationImageGallery key={item.key} images={item.images} />
@@ -596,7 +499,25 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
           </div>
         </section>
         : item.current?.kind === 'tool' ? <ActivityTool key={item.key} call={item.current.call} result={toolResults.get(item.current.call.id)} busy />
-        : item.visible?.block.type === 'text' ? <div className="assistant-response" key={item.key}><Markdown>{item.visible.block.text}</Markdown></div> : null)}
+        : item.visible?.block.type === 'text' ? <div className="assistant-response" key={item.key}><Markdown>{item.visible.block.text}</Markdown></div> : null;
+  return <div id={id} className={`assistant-turn ${live ? 'is-live' : ''} ${retry ? 'is-retrying' : ''} ${failed ? 'has-error' : ''} is-steps-${stepDisplay}`}>
+    <div className="assistant-turn-rail"><span className="assistant-orb">π</span></div>
+    <div className="assistant-turn-main">
+      {/* 头部状态只在整轮结束后变为已完成，工具之间的等待仍是运行中。 */}
+      <div className="assistant-turn-head">
+        <span className="assistant-turn-name">Pi</span>
+        <span className="assistant-turn-status" title={retry?.errorMessage}>{retry ? `重试中 ${retry.attempt}/${retry.maxAttempts}` : interrupted ? '已中断' : failed ? '失败' : live ? phase : '已完成'}</span>
+        {latest?.timestamp && <time>{formatTime(latest.timestamp)}</time>}
+      </div>
+      {segments.map((segment, index) => {
+        if (!segment.process) return segment.items.map(renderTimelineItem);
+        const entries = segment.items.flatMap(item => item.entries || (item.current ? [item.current] : []));
+        return <TurnTrace key={segment.key} live={live} active={live && index === segments.length - 1} policy={stepCollapse} phase={phase}
+          steps={entries.length} requests={segment.items.filter(item => item.request).length}
+          errors={entries.filter(entry => entry.kind === 'tool' && toolResults.get(entry.call.id)?.isError).length}>
+          {segment.items.map(renderTimelineItem)}
+        </TurnTrace>;
+      })}
       {live && <div className="run-live-status" role="status">
         <span className="run-live-icon activity-disclosure-icon"><LoaderCircle className="spin" /></span>
         <span>{phase}</span>

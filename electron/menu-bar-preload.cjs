@@ -10,5 +10,6 @@ contextBridge.exposeInMainWorld('piMenuBarApi', {
   openMain: () => ipcRenderer.send('pi:menu-bar-open-main'),
   openSession: (session) => ipcRenderer.send('pi:menu-bar-open-session', session),
   clearRecent: () => ipcRenderer.send('pi:menu-bar-clear-recent'),
+  quit: () => ipcRenderer.send('pi:menu-bar-quit'),
   hide: () => ipcRenderer.send('pi:menu-bar-hide'),
 });

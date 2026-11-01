@@ -3,7 +3,7 @@
 用途
 ----
 assets/icon-source.png 是设计稿（四周带少量抗锯齿杂边）。本脚本负责：
-1. 裁掉多余边缘，缩放到 940×940 的内容瓦片；
+1. 裁掉多余边缘，缩放到 824×824 的内容瓦片；
 2. 给瓦片加暖白底与圆角蒙版，居中放进 1024×1024 透明画布；
 3. 输出 assets/icon.png；
 4. 按 macOS ICNS 的 chunk 结构打包 assets/icon.icns。
@@ -31,14 +31,14 @@ import struct
 from PIL import Image, ImageDraw
 
 
-ASSETS = Path(__file__).resolve().parents[1] / "assets"
+ASSETS = Path(__file__).resolve().parents[2] / "assets"
 
-# 最终图标规格：1024×1024 画布，内容瓦片 940×940，四周各留 42px。
+# 最终图标规格：1024×1024 画布，内容瓦片 824×824，四周各留 100px。
 ICON_SIZE = 1024
-TILE_SIZE = 940
+TILE_SIZE = 824
 TILE_MARGIN = (ICON_SIZE - TILE_SIZE) // 2
 # 圆角半径约为瓦片边长的 1/4，接近 macOS Big Sur 之后的图标轮廓。
-CORNER_RADIUS = 235
+CORNER_RADIUS = TILE_SIZE // 4
 # 暖白底色，衬托艺术图里透明/半透明的区域。
 BACKGROUND = (253, 251, 247, 255)
 # 设计稿中有效内容的裁剪框：(左, 上, 右, 下)，去掉四周杂散像素。

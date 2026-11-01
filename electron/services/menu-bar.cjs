@@ -26,6 +26,7 @@ const {
 const { getStudioDatabase } = require('../core/studio-db.cjs');
 const {
   createMenuBarState,
+  menuBarPopoverHeight,
   shouldPresentBackgroundNotification,
 } = require('../menu-bar-state.cjs');
 const { subscribeMenuBarEvent } = require('../menu-bar-events.cjs');
@@ -33,8 +34,7 @@ const { themeBackground } = require('../theme.cjs');
 const { showMainWindow } = require('../window.cjs');
 const { openAndCheckForUpdates } = require('./updater.cjs');
 
-const POPOVER_WIDTH = 720;
-const POPOVER_HEIGHT = 440;
+const POPOVER_WIDTH = 520;
 const COMPLETION_CHIME_GAP = 800;
 const TRAY_CLICK_GUARD_DURATION = 180;
 const state = createMenuBarState();
@@ -78,6 +78,7 @@ function snapshot() {
 
 function broadcast() {
   if (!popover || popover.isDestroyed() || popover.webContents.isLoading()) return;
+  positionPopover();
   popover.webContents.send('pi:menu-bar-updated', snapshot());
 }
 
@@ -115,24 +116,26 @@ function positionPopover() {
     y: Math.round(trayBounds.y + trayBounds.height / 2),
   });
   const { workArea } = display;
+  const width = Math.min(POPOVER_WIDTH, workArea.width - 16);
+  const height = Math.min(menuBarPopoverHeight(snapshot()), workArea.height - 16);
   const x = Math.max(
     workArea.x + 8,
     Math.min(
-      Math.round(trayBounds.x + trayBounds.width / 2 - POPOVER_WIDTH / 2),
-      workArea.x + workArea.width - POPOVER_WIDTH - 8,
+      Math.round(trayBounds.x + trayBounds.width / 2 - width / 2),
+      workArea.x + workArea.width - width - 8,
     ),
   );
   const below = trayBounds.y < workArea.y + workArea.height / 2;
-  const preferredY = below ? trayBounds.y + trayBounds.height + 6 : trayBounds.y - POPOVER_HEIGHT - 6;
-  const y = Math.max(workArea.y + 8, Math.min(preferredY, workArea.y + workArea.height - POPOVER_HEIGHT - 8));
-  popover.setPosition(x, y, false);
+  const preferredY = below ? trayBounds.y + trayBounds.height + 6 : trayBounds.y - height - 6;
+  const y = Math.max(workArea.y + 8, Math.min(preferredY, workArea.y + workArea.height - height - 8));
+  popover.setBounds({ x, y, width, height }, false);
 }
 
 function ensurePopover() {
   if (popover && !popover.isDestroyed()) return popover;
   popover = new BrowserWindow({
     width: POPOVER_WIDTH,
-    height: POPOVER_HEIGHT,
+    height: menuBarPopoverHeight(snapshot()),
     show: false,
     frame: false,
     transparent: true,
@@ -173,10 +176,10 @@ function ensurePopover() {
 }
 
 async function showMenuBarPopover({ automatic = false } = {}) {
-  if (!menuBarEnabled()) return;
+  if (!menuBarEnabled() || app.isQuitting) return;
   const win = ensurePopover();
   await popoverReady;
-  if (win.isDestroyed()) return;
+  if (win.isDestroyed() || app.isQuitting) return;
   positionPopover();
   win.setBackgroundColor(themeBackground(storedTheme(), nativeTheme.shouldUseDarkColors));
   win.show();
@@ -297,6 +300,8 @@ function initializeMenuBar() {
 }
 
 function shutdownMenuBar() {
+  nativeTheme.removeListener('updated', refreshMenuBarAppearance);
+  initialized = false;
   unsubscribeSessionEvents?.();
   unsubscribeSessionEvents = undefined;
   hideMenuBarPopover();
@@ -353,6 +358,7 @@ function registerMenuBarIpc() {
   ipcMain.on('pi:menu-bar-open-main', () => openMenuBarMain());
   ipcMain.on('pi:menu-bar-open-session', (_event, session) => openMenuBarSession(session));
   ipcMain.on('pi:menu-bar-clear-recent', () => clearMenuBarRecent());
+  ipcMain.on('pi:menu-bar-quit', () => app.quit());
   ipcMain.on('pi:menu-bar-hide', () => hideMenuBarPopover());
 }
 

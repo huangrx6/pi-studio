@@ -16,62 +16,23 @@
     <div class="popover-shell">
       <div class="popover-panel">
         <header class="popover-header">
-          <div class="brand-lockup">
-            <span class="brand-mark" aria-hidden="true">π</span>
-            <div class="brand-copy">
-              <span class="eyebrow">ACTIVITY DESK</span>
-              <strong>Pi Studio</strong>
-              <p id="summary">后台状态</p>
-            </div>
-          </div>
-          <div class="header-actions">
-            <span id="activity-state" class="activity-state is-idle">
-              <i aria-hidden="true"></i>
-              <span>空闲</span>
-            </span>
-            <button id="close" class="icon-button" type="button" aria-label="关闭菜单栏面板" title="关闭">×</button>
-          </div>
+          <div class="brand-lockup"><span class="brand-mark" aria-hidden="true">π</span><strong>Pi Studio</strong><span class="header-label">后台会话</span></div>
+          <button id="close" class="icon-button" type="button" aria-label="关闭菜单栏面板" title="关闭">×</button>
         </header>
-
+        <p id="summary" class="summary" aria-live="polite">正在读取后台状态…</p>
         <main class="popover-content">
-          <section class="menu-section running-section" aria-labelledby="running-heading">
-            <div class="section-heading">
-              <span class="section-mark is-running" aria-hidden="true"><i></i></span>
-              <div class="section-copy">
-                <h2 id="running-heading">正在运行</h2>
-                <p>后台任务会在这里持续更新</p>
-              </div>
-              <span id="running-count" class="count-badge">0</span>
-            </div>
+          <section class="menu-section" id="running-section" aria-labelledby="running-heading" hidden>
+            <div class="section-heading"><h2 id="running-heading">运行中 <span id="running-count">0</span></h2></div>
             <div id="running-list" class="card-list"></div>
           </section>
-
-          <section class="menu-section recent-section" aria-labelledby="recent-heading">
-            <div class="section-heading">
-              <span class="section-mark is-recent" aria-hidden="true"><i></i></span>
-              <div class="section-copy">
-                <h2 id="recent-heading">最近完成</h2>
-                <p>点开会回到对应会话</p>
-              </div>
-              <button id="clear-recent" class="text-button" type="button">清除</button>
-            </div>
+          <section class="menu-section" id="recent-section" aria-labelledby="recent-heading" hidden>
+            <div class="section-heading"><h2 id="recent-heading">最近结束</h2><button id="clear-recent" class="text-button" type="button" title="仅清除此处的完成记录，不删除会话">清除记录</button></div>
             <div id="recent-list" class="card-list"></div>
           </section>
         </main>
-
         <footer class="popover-footer">
-          <span class="footer-status">
-            <i aria-hidden="true"></i>
-            <span>
-              <strong>桌面运行</strong>
-              <small>关闭主窗口后，任务仍会继续</small>
-            </span>
-          </span>
-          <span class="footer-hint">主窗口位于前台时，完成提醒会保持静默</span>
-          <button id="open-main" class="primary-button" type="button">
-            <span aria-hidden="true">π</span>
-            返回工作台
-          </button>
+          <button id="quit" class="text-button" type="button" title="退出应用并停止后台运行">退出应用</button>
+          <button id="open-main" class="primary-button" type="button">打开 Pi Studio <span aria-hidden="true">↗</span></button>
         </footer>
       </div>
     </div>

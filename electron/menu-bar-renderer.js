@@ -3,22 +3,22 @@ const runningList = document.querySelector('#running-list');
 const recentList = document.querySelector('#recent-list');
 const summary = document.querySelector('#summary');
 const runningCount = document.querySelector('#running-count');
-const activityState = document.querySelector('#activity-state');
+
 const clearRecent = document.querySelector('#clear-recent');
 
 let currentState = { running: [], recent: [], unreadCount: 0, theme: 'system', palette: 'lime' };
 
 function workspaceName(cwd) {
   if (!cwd) return 'Pi Studio';
-  return cwd.split('/').filter(Boolean).at(-1) || cwd;
+  return cwd.split(/[\\/]/).filter(Boolean).at(-1) || cwd;
 }
 
 function elapsed(startedAt) {
   const seconds = Math.max(0, Math.floor((Date.now() - Number(startedAt || Date.now())) / 1000));
-  if (seconds < 60) return `${seconds} 秒`;
+  if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} 分钟`;
-  return `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分钟`;
+  if (minutes < 60) return `${minutes}m`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
 function relativeTime(timestamp) {
@@ -38,22 +38,6 @@ function applyTheme(theme, palette) {
   document.documentElement.dataset.palette = palette || 'lime';
 }
 
-function emptyState(title, detail) {
-  const row = document.createElement('div');
-  row.className = 'empty-state';
-  const mark = document.createElement('span');
-  mark.className = 'empty-mark';
-  mark.textContent = 'π';
-  const copy = document.createElement('span');
-  const strong = document.createElement('strong');
-  strong.textContent = title;
-  const small = document.createElement('small');
-  small.textContent = detail;
-  copy.append(strong, small);
-  row.append(mark, copy);
-  return row;
-}
-
 function card(item, kind) {
   const button = document.createElement('button');
   button.type = 'button';
@@ -68,6 +52,12 @@ function card(item, kind) {
   const orb = document.createElement('span');
   orb.className = 'status-orb';
   orb.setAttribute('aria-hidden', 'true');
+  // Fixed local paths only; session content is always inserted with textContent.
+  const paths = kind === 'running' ? '<path d="M20 12a8 8 0 1 1-8-8"/>'
+    : item.status === 'error' ? '<circle cx="12" cy="12" r="9"/><path d="M12 7v6m0 3h.01"/>'
+    : item.status === 'cancelled' ? '<path d="m7 7 10 10M17 7 7 17"/>'
+    : '<path d="m5 12 4 4L19 6"/>';
+  orb.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
 
   const copy = document.createElement('span');
   copy.className = 'session-copy';
@@ -91,13 +81,14 @@ function card(item, kind) {
   action.setAttribute('aria-hidden', 'true');
   action.textContent = '›';
 
-  button.append(orb, copy, action);
+  button.append(orb, copy);
   if (kind !== 'running' && item.unread) {
     const unread = document.createElement('i');
     unread.className = 'unread-dot';
     unread.setAttribute('aria-label', '新完成');
     button.append(unread);
   }
+  button.append(action);
   return button;
 }
 
@@ -105,27 +96,16 @@ function render() {
   applyTheme(currentState.theme, currentState.palette);
   const running = Array.isArray(currentState.running) ? currentState.running : [];
   const recent = Array.isArray(currentState.recent) ? currentState.recent : [];
-  const isRunning = running.length > 0;
+  const errors = recent.filter(item => item.status === 'error').length;
   runningCount.textContent = String(running.length);
-  activityState.classList.toggle('is-running', isRunning);
-  activityState.classList.toggle('is-idle', !isRunning);
-  activityState.lastElementChild.textContent = isRunning ? '运行中' : '空闲';
-  summary.textContent = isRunning
-    ? `${running.length} 个会话正在后台推进`
-    : recent[0]
-      ? `刚刚完成 · ${recent[0].title}`
-      : '所有会话都已完成';
-
-  runningList.replaceChildren(
-    ...(running.length
-      ? running.map(item => card(item, 'running'))
-      : [emptyState('后台很安静', '从 Pi Studio 发送任务后，这里会显示实时状态。')]),
-  );
-  recentList.replaceChildren(
-    ...(recent.length
-      ? recent.map(item => card(item, 'recent'))
-      : [emptyState('还没有完成记录', '任务结束后会在这里留下一个入口。')]),
-  );
+  summary.textContent = running.length
+    ? `${running.length} 个会话运行中${errors ? ` · ${errors} 个异常待查看` : ' · 关闭窗口后仍会继续'}`
+    : errors ? `${errors} 个会话异常，点击查看详情`
+    : recent.length ? '后台会话已结束，点击查看结果' : '暂无后台会话，可回到应用开始对话';
+  document.querySelector('#running-section').hidden = running.length === 0;
+  document.querySelector('#recent-section').hidden = recent.length === 0;
+  runningList.replaceChildren(...running.map(item => card(item, 'running')));
+  recentList.replaceChildren(...recent.map(item => card(item, 'recent')));
   clearRecent.disabled = recent.length === 0;
 }
 
@@ -138,6 +118,7 @@ function updateElapsed() {
   }
 }
 
+document.querySelector('#quit').addEventListener('click', () => api.quit());
 document.querySelector('#close').addEventListener('click', () => api.hide());
 document.querySelector('#open-main').addEventListener('click', () => api.openMain());
 clearRecent.addEventListener('click', () => api.clearRecent());

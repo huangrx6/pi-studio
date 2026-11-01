@@ -63,15 +63,23 @@ function tokens(mode, paletteName = 'lime') {
 }
 
 /**
- * 计算 WCAG 相对亮度。只接受不透明的 #rrggbb（带 alpha 的值无法直接比较，
- * 会先被断言拦下），然后把 sRGB 通道转换为线性光强。
+ * 计算 WCAG 相对亮度，支持不透明颜色和不透明 sRGB 混合结果。
+ * 透明色需有实际背景才可计算，不在这里隐式假设背景。
  */
-function luminance(hex) {
-  const rgb = hex.match(/^#([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
-  assert.ok(rgb, `contrast requires an opaque palette color: ${hex}`);
-  const [r, g, b] = rgb.slice(1)
-    .map((value) => parseInt(value, 16) / 255)
-    .map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+function colorChannels(value) {
+  const hex = value.match(/^#([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+  if (hex) return hex.slice(1).map(channel => parseInt(channel, 16) / 255);
+  // Shared tints are an opaque sRGB blend, just as rendered by Chromium.
+  const mix = value.match(/^color-mix\(in srgb, (#[a-f\d]{6}) ([\d.]+)%, (#[a-f\d]{6})\)$/i);
+  assert.ok(mix, `contrast requires an opaque color or sRGB blend: ${value}`);
+  const weight = Number(mix[2]) / 100;
+  const first = colorChannels(mix[1]), second = colorChannels(mix[3]);
+  return first.map((channel, i) => channel * weight + second[i] * (1 - weight));
+}
+
+function luminance(value) {
+  const [r, g, b] = colorChannels(value)
+    .map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
   return r * 0.2126 + g * 0.7152 + b * 0.0722;
 }
 
@@ -133,8 +141,7 @@ for (const paletteName of ['lime', 'ocean', 'amber', 'berry']) {
         ['--text', '--bg'],
         ['--muted', '--surface'],
         ['--faint', '--surface-soft'],
-        ['--accent', '--accent-soft'],
-        ['--on-accent', '--accent'],
+        ['--accent-foreground', '--accent-soft'],
         ['--on-button', '--button-bg'],
         ['--on-button', '--button-hover'],
         ['--error', '--error-soft'],
@@ -186,4 +193,19 @@ test('Electron reads both backgrounds from the same palette', () => {
   assert.equal(themeBackground('dark', false), tokens('dark')['--bg']);
   assert.equal(themeBackground('system', true), tokens('dark')['--bg']);
   assert.equal(themeBackground('system', false), tokens('light')['--bg']);
+});
+
+
+test('each palette has one solid accent shared by buttons, focus and previews', () => {
+  for (const name of ['lime', 'ocean', 'amber', 'berry']) {
+    for (const mode of ['light', 'dark']) {
+      const t = tokens(mode, name);
+      for (const role of ['--accent', '--accent-hover', '--accent-border', '--button-bg', '--button-hover', '--focus-color', '--data-model-fill']) {
+        assert.equal(t[role], t[`--scheme-${name}`], `${mode} ${name} ${role}`);
+      }
+      assert.equal(t['--accent-soft'], t['--surface-soft']);
+      const values = [luminance(t['--accent']), luminance(t['--accent-soft'])].sort((a, b) => b - a);
+      assert.ok((values[0] + .05) / (values[1] + .05) >= 3, 'graphical accent contrast');
+    }
+  }
 });

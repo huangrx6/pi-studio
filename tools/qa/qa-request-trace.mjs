@@ -150,7 +150,8 @@ try {
           content: [{ type: 'text', text: 'Updated web/src/app.css.' }],
         }],
       ]);
-      createRoot(document.getElementById('fixture')).render(
+      const root = createRoot(document.getElementById('fixture'));
+      const render = (extra = {}) => root.render(
         React.createElement('main', { style: { maxWidth: 900, margin: '30px auto', padding: '0 24px' } },
           React.createElement(AssistantTurnView, {
             messages: [firstAnswer, secondAnswer],
@@ -159,171 +160,101 @@ try {
             busy: false,
             cwd: '/project',
             stepDisplay: 'standard',
+            ...extra,
           })
         )
       );
+      window.renderTrace = render;
+      window.longRequest = () => render({ requestTraces: [{ ...trace, messages: [trace.messages[0], ...Array.from({length: 738}, (_, i) => ({index: i + 1, role: i % 2 ? 'assistant' : 'user', content: [{type:'text', text: 'Context entry ' + (i + 1)}]}))], stats:{...trace.stats, messageCount:739, estimatedChars:13000}}, secondTrace], stepCollapse:'keep-open' });
+      window.largePrompt = () => render({requestTraces:[{...trace, messages:[{index:0, role:'system', content:[{type:'text', text:'Project instructions. '.repeat(8000)}]}, trace.messages[1]], stats:{...trace.stats, estimatedChars:176042}}], stepCollapse:'keep-open'});
+      window.splitWithinMessage = () => render({requestTraces: [], stepCollapse:'keep-open', messages:[{...firstAnswer, content:[...firstAnswer.content, ...secondAnswer.content]}]});
+      render();
     </script></body></html>`,
   }));
 
   await page.goto('http://127.0.0.1:5180/request-trace-preview', { waitUntil: 'domcontentloaded' });
+  const groups = page.locator('.turn-trace');
+  const toggles = page.locator('.turn-trace-toggle');
+  await toggles.first().waitFor();
+  assert.equal(await groups.count(), 2, 'a visible explanation splits execution groups');
+  assert.deepEqual(await toggles.evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-expanded'))), ['false', 'false']);
+  const order = await page.locator('.assistant-turn-main').evaluate(node => [...node.children].filter(child => child.matches('.turn-trace, .assistant-response')).map(child => child.className.split(' ')[0]));
+  assert.deepEqual(order, ['turn-trace', 'assistant-response', 'turn-trace', 'assistant-response']);
+  assert.equal(await page.locator('.request-inspector').count(), 0, 'collapsed requests do not mount large contexts');
+  assert.ok(await page.getByText('第一次请求返回了读取与验证步骤。', {exact:true}).isVisible());
+  await toggles.first().click();
+  await toggles.last().click();
   const requests = page.locator('.activity-request');
-  await requests.first().waitFor();
-  assert.equal(await requests.count(), 2, 'each provider request gets its own stage anchor');
-  const order = await page.locator('.assistant-turn-main').evaluate((node) => (
-    [...node.children].map((child) => child.className)
-  ));
-  const requestOrder = order.flatMap((className, index) => className.includes('activity-request') ? [index] : []);
-  const sequenceOrder = order.flatMap((className, index) => className.includes('activity-sequence') ? [index] : []);
-  const responseOrder = order.flatMap((className, index) => className.includes('assistant-response') ? [index] : []);
-  assert.equal(requestOrder.length, 2, `both requests are visible: ${order.join(', ')}`);
-  assert.equal(sequenceOrder.length, 2, `each request keeps its own execution sequence: ${order.join(', ')}`);
-  assert.ok(
-    requestOrder[0] < sequenceOrder[0]
-      && sequenceOrder[0] < responseOrder[0]
-      && responseOrder[0] < requestOrder[1]
-      && requestOrder[1] < sequenceOrder[1]
-      && sequenceOrder[1] < responseOrder[1],
-    `trace follows request -> decision/tools -> next request -> answer: ${order.join(', ')}`,
-  );
-  assert.equal(await page.locator('.run-history').count(), 0, 'legacy monolithic execution block is removed');
-  assert.equal(await requests.nth(0).getByText('模型请求 1', { exact: true }).count(), 1);
-  assert.equal(await requests.nth(0).getByText('deepseek/deepseek-flash', { exact: true }).count(), 1);
-  assert.equal(await requests.nth(1).getByText('模型请求 2', { exact: true }).count(), 1);
-  assert.equal(await requests.nth(1).getByText('deepseek/deepseek-reasoner', { exact: true }).count(), 1);
-  const firstSequence = page.locator('.activity-sequence').nth(0);
-  const secondSequence = page.locator('.activity-sequence').nth(1);
-  assert.equal(await firstSequence.locator('.activity-tool').count(), 2);
-  assert.equal(await secondSequence.locator('.activity-tool').count(), 1);
-  assert.equal(await firstSequence.locator('.activity-thinking').count(), 1);
-  assert.equal(await secondSequence.locator('.activity-thinking').count(), 1);
-  assert.equal(await firstSequence.getByText('决策', { exact: true }).count(), 1);
-  const rowAlignment = await page.locator('.activity-sequence .activity-sequence-item').evaluateAll((items) => items.map((item) => {
-    const rect = (selector) => item.querySelector(selector)?.getBoundingClientRect();
-    return {
-      icon: rect('.activity-disclosure-icon')?.left,
-      title: rect('.activity-disclosure-title')?.left,
-      preview: rect('.activity-disclosure-preview')?.left,
-      status: rect('.activity-tool-status')?.right,
-      chevron: rect('.activity-disclosure-chevron')?.right,
-    };
-  }));
-  const aligned = (field) => {
-    const values = rowAlignment.map((entry) => entry[field]).filter((value) => value !== undefined);
-    return values.length > 0 && values.every((value) => Math.abs(value - values[0]) < 1);
-  };
-  assert.ok(
-    aligned('icon') && aligned('title') && aligned('preview') && aligned('status') && aligned('chevron'),
-    `execution rows share fixed icon, text, status and disclosure columns: ${JSON.stringify(rowAlignment)}`,
-  );
-  const shortToolNamesFit = await page.locator('.activity-sequence .activity-disclosure-title').evaluateAll((titles) => (
-    titles.every((title) => title.scrollWidth <= title.clientWidth + 1)
-  ));
-  assert.equal(shortToolNamesFit, true, 'short tool names remain fully visible in the fixed label column');
-  const alignment = await page.evaluate(() => {
-    const left = (selector) => document.querySelector(selector)?.getBoundingClientRect().left;
-    return {
-      response: left('.assistant-response'),
-      requestIcon: left('.activity-request-icon'),
-      sequence: left('.activity-sequence-item'),
-    };
+  assert.equal(await requests.count(), 2);
+  assert.deepEqual(await requests.locator('.activity-request-label').allTextContents(), ['模型调用', '模型调用']);
+  await requests.first().locator(':scope > summary').click();
+  const inspector = requests.first().locator('.request-inspector');
+  await inspector.getByRole('button', {name:'系统提示词'}).click();
+  assert.equal(await inspector.locator('pre').count(), 0, 'message body is lazy');
+  const systemRow = inspector.locator('.request-message > summary');
+  const background = await systemRow.evaluate(node => getComputedStyle(node).backgroundColor);
+  await systemRow.hover();
+  assert.equal(await systemRow.evaluate(node => getComputedStyle(node).backgroundColor), background, 'no nested hover surface');
+  await systemRow.click();
+  await inspector.getByText('<harness>', {exact:false}).last().waitFor();
+  await inspector.getByRole('button', {name:'工具定义'}).click();
+  await inspector.locator('.request-tool > summary').click();
+  assert.match(await inspector.locator('pre').innerText(), /properties/);
+  await inspector.getByRole('button', {name:'上下文'}).click();
+  const aligned = await page.evaluate(() => {
+    const icons = [...document.querySelectorAll('.turn-trace .activity-disclosure-icon')];
+    return icons.map(node => ({left:node.getBoundingClientRect().left, width:node.getBoundingClientRect().width}));
   });
-  assert.ok(
-    Math.abs(alignment.requestIcon - alignment.response) < 1
-      && alignment.sequence > alignment.response,
-    `trajectory content aligns with assistant text: ${JSON.stringify(alignment)}`,
-  );
-
-  await page.screenshot({
-    path: `${output}light-collapsed.png`,
-    fullPage: true,
-    animations: 'disabled',
-  });
-
-  await requests.nth(0).locator(':scope > summary').click();
-  await requests.nth(0).locator('.request-message.is-system > summary').click();
-  await requests.nth(0).locator('.request-block.is-text', {
-    hasText: 'You are a precise coding agent.',
-  }).waitFor();
-  await page.screenshot({
-    path: `${output}light-open.png`,
-    fullPage: true,
-    animations: 'disabled',
-  });
-
-  await firstSequence.locator('.activity-thinking > summary').click();
-  await firstSequence.locator('.activity-tool.is-error > summary').click();
-  await firstSequence.locator('.activity-tool.is-done:not(.is-error) > summary').click();
-  await secondSequence.locator('.activity-thinking > summary').click();
-  await page.waitForTimeout(250);
-  const nestedAlignment = await page.evaluate(() => {
-    const rect = (selector) => {
-      const bounds = document.querySelector(selector)?.getBoundingClientRect();
-      return bounds ? { left: bounds.left, right: bounds.right } : undefined;
-    };
-    return {
-      sequence: rect('.activity-sequence-item'),
-      thinking: rect('.activity-sequence .activity-thinking > summary'),
-      tool: rect('.activity-sequence .activity-tool > summary'),
-    };
-  });
-  assert.ok(
-    nestedAlignment.sequence
-      && nestedAlignment.thinking
-      && nestedAlignment.tool
-      && Math.abs(nestedAlignment.thinking.left - nestedAlignment.sequence.left) < 1
-      && Math.abs(nestedAlignment.tool.left - nestedAlignment.sequence.left) < 1
-      && Math.abs(nestedAlignment.thinking.right - nestedAlignment.sequence.right) < 1
-      && Math.abs(nestedAlignment.tool.right - nestedAlignment.sequence.right) < 1,
-    `operations share the stage bounds: ${JSON.stringify(nestedAlignment)}`,
-  );
-  const verticalFlow = await page.locator('.activity-sequence .activity-tool[open]').evaluateAll((tools) => tools.map((tool) => {
-    const summary = tool.querySelector(':scope > summary')?.getBoundingClientRect();
-    const body = tool.querySelector(':scope > .activity-tool-body')?.getBoundingClientRect();
-    return summary && body ? { summaryBottom: summary.bottom, bodyTop: body.top, bodyBottom: body.bottom } : undefined;
-  }));
-  assert.ok(
-    verticalFlow.every((entry) => entry && entry.bodyTop >= entry.summaryBottom - 1),
-    `expanded operation content follows its summary: ${JSON.stringify(verticalFlow)}`,
-  );
-  await page.screenshot({
-    path: `${output}light-open-operations.png`,
-    fullPage: true,
-    animations: 'disabled',
-  });
-
+  assert.ok(aligned.every(rect => rect.width === 18 && Math.abs(rect.left - aligned[0].left) < 1), JSON.stringify(aligned));
+  await page.screenshot({path:output+'light-segments.png', fullPage:true, animations:'disabled'});
+  await page.evaluate(() => window.longRequest());
+  await page.waitForFunction(() => document.querySelector('.activity-request-metrics')?.textContent.includes('739'));
+  assert.ok(await inspector.locator('.request-message').count() <= 16);
+  assert.match(await inspector.locator('.request-inspector-footer').innerText(), /738/);
+  await inspector.getByRole('button', {name:'最早', exact:true}).click();
+  assert.match(await inspector.locator('.request-message-preview').first().innerText(), /Context entry 1$/);
+  await inspector.getByRole('button', {name:'最近', exact:true}).click();
+  await inspector.getByRole('textbox', {name:'搜索请求内容'}).fill('Context entry 402');
+  assert.equal(await inspector.locator('.request-message').count(), 1);
+  await inspector.getByRole('textbox', {name:'搜索请求内容'}).fill('');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
-  await page.screenshot({
-    path: `${output}dark-open.png`,
-    fullPage: true,
-    animations: 'disabled',
-  });
-
-  await page.setViewportSize({ width: 520, height: 760 });
-  const overflow = await page.locator('.activity-request-body').evaluateAll((nodes) => nodes.map((node) => ({
-    clientWidth: node.clientWidth,
-    scrollWidth: node.scrollWidth,
-  })));
-  assert.ok(
-    overflow.every((entry) => entry.scrollWidth <= entry.clientWidth + 1),
-    `request bodies have no horizontal overflow: ${JSON.stringify(overflow)}`,
-  );
-  const sequenceOverflow = await page.locator('.activity-sequence').evaluateAll((nodes) => nodes.map((node) => ({
-    clientWidth: node.clientWidth,
-    scrollWidth: node.scrollWidth,
-  })));
-  assert.ok(
-    sequenceOverflow.every((entry) => entry.scrollWidth <= entry.clientWidth + 1),
-    `operation stages have no horizontal overflow: ${JSON.stringify(sequenceOverflow)}`,
-  );
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
-  await page.screenshot({
-    path: `${output}light-narrow-open.png`,
-    fullPage: true,
-    animations: 'disabled',
-  });
-
+  await page.screenshot({path:output+'dark-long-context.png', fullPage:true, animations:'disabled'});
+  const searchFocus = await inspector.getByRole('textbox').evaluate(node => ({shadow:getComputedStyle(node).boxShadow, height:node.getBoundingClientRect().height}));
+  assert.deepEqual(searchFocus, {shadow:'none', height:24});
+  for (const width of [720, 390]) {
+    await page.setViewportSize({width, height:800});
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no overflow at '+width);
+    await page.screenshot({path:output+'narrow-'+width+'.png', fullPage:true, animations:'disabled'});
+  }
+  await page.setViewportSize({width:1100, height:760});
+  await page.evaluate(() => window.largePrompt());
+  await inspector.getByRole('button', {name:'系统提示词'}).click();
+  await inspector.locator('.request-message > summary').click();
+  const prompt = inspector.locator('.request-block');
+  await prompt.waitFor();
+  assert.ok((await prompt.innerText()).length > 150000);
+  assert.ok(await prompt.evaluate(node => node.getBoundingClientRect().height <= 300 && node.scrollHeight > node.clientHeight));
+  await page.screenshot({path:output+'dark-large-prompt.png', fullPage:true, animations:'disabled'});
+  for (const selector of ['.activity-tool > summary', '.activity-thinking > summary']) {
+    const row = page.locator(selector).first();
+    await page.mouse.move(0,0);
+    const before = await row.evaluate(node => getComputedStyle(node).backgroundColor);
+    await row.hover();
+    assert.equal(await row.evaluate(node => getComputedStyle(node).backgroundColor), before);
+  }
+  await page.evaluate(() => window.splitWithinMessage());
+  assert.equal(await groups.count(), 2, 'one assistant message can contain multiple execution groups');
+  assert.equal(await page.locator('.assistant-response').count(), 2);
+  await page.evaluate(() => window.renderTrace({stepCollapse:'after-answer', busy:true}));
+  await page.waitForFunction(() => [...document.querySelectorAll('.turn-trace-toggle')].every(node => node.getAttribute('aria-expanded') === 'true'));
+  const footer = await page.locator('.run-live-status').evaluate(node => ({left:parseFloat(getComputedStyle(node).paddingLeft), right:parseFloat(getComputedStyle(node).paddingRight)}));
+  assert.deepEqual(footer, {left:12, right:12});
+  await toggles.first().click();
+  await page.evaluate(() => window.renderTrace({stepCollapse:'after-answer', busy:true}));
+  assert.equal(await toggles.first().getAttribute('aria-expanded'), 'false', 'updates preserve manual collapse');
+  assert.equal(await toggles.last().getAttribute('aria-expanded'), 'true', 'groups fold independently');
+  await page.evaluate(() => window.renderTrace({stepCollapse:'after-answer', busy:false}));
+  await page.waitForFunction(() => [...document.querySelectorAll('.turn-trace-toggle')].every(node => node.getAttribute('aria-expanded') === 'false'));
   assert.deepEqual(errors, []);
   console.log(`Request trace QA passed; screenshots saved to ${output}`);
-} finally {
-  await browser.close();
-}
+} finally { await browser.close(); }

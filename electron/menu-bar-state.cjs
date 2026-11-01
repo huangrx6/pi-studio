@@ -95,4 +95,11 @@ function createMenuBarState({ now = () => Date.now(), recentLimit = DEFAULT_RECE
   return { start, updateTitle, finish, markSeen, clearRecent, snapshot };
 }
 
-module.exports = { createMenuBarState, cleanTitle, shouldPresentBackgroundNotification };
+/** Keep the popover compact when idle; only the list scrolls when busy. */
+function menuBarPopoverHeight({ running = [], recent = [] } = {}) {
+  const sections = Number(running.length > 0) + Number(recent.length > 0);
+  return Math.max(196, Math.min(440, 156 + sections * 28
+    + (sections > 1 ? 8 : 0) + (running.length + recent.length) * 56));
+}
+
+module.exports = { menuBarPopoverHeight, createMenuBarState, cleanTitle, shouldPresentBackgroundNotification };

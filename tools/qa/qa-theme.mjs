@@ -401,6 +401,36 @@ try {
     assert.equal(await page.getByRole('radio', { name: /^海蓝/ }).getAttribute('aria-checked'), 'true');
     assert.equal(await page.evaluate(() => window.__nativePalette), 'ocean');
     await capture(`${mode}-palette-ocean`);
+    for (const [name, id] of [['琥珀', 'amber'], ['莓果', 'berry'], ['玉石', 'lime']]) {
+      await setPalette(name, id);
+      const roles = await page.evaluate(() => {
+        const token = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        return ['--theme-accent', '--accent', '--accent-border', '--button-bg', '--button-hover', '--focus-color'].map(token);
+      });
+      assert.equal(new Set(roles).size, 1, `${mode}/${id}: solid accents must agree`);
+      const swatches = await page.locator(`[data-palette-choice="${id}"]`).evaluate(el =>
+        ['.palette-preview-rail i', '.palette-preview-heading', '.palette-preview-actions b']
+          .map(selector => getComputedStyle(el.querySelector(selector)).backgroundColor));
+      assert.equal(new Set(swatches).size, 1, `${mode}/${id}: preview should show one accent`);
+      await page.waitForFunction(() => {
+        const style = selector => getComputedStyle(document.querySelector(selector));
+        const painted = [style('.theme-choice.is-active').borderTopColor,
+          style('.theme-choice.is-active svg').color,
+          style('.palette-choice.is-active').borderTopColor,
+          style('.palette-choice-check:not(:empty)').backgroundColor];
+        return new Set(painted).size === 1;
+      });
+      const disabledRange = page.locator('.settings-range-control.is-disabled').first();
+      if (await disabledRange.count()) {
+        const disabled = await disabledRange.evaluate(el => {
+          const style = getComputedStyle(el);
+          return { opacity: style.opacity, accent: style.getPropertyValue('--accent').trim(), expected: style.getPropertyValue('--disabled-text').trim() };
+        });
+        assert.equal(disabled.opacity, '1');
+        assert.equal(disabled.accent, disabled.expected);
+      }
+      await capture(`${mode}-palette-${id}`);
+    }
     await setPalette('玉石', 'lime');
 
     // 设置页：模型配置 + 添加来源对话框。
@@ -429,6 +459,8 @@ try {
     await openFirstSession();
     await page.locator('.assistant-response').first().waitFor();
     await capture(`${mode}-conversation`);
+    const trace = page.locator('.turn-trace-toggle').first();
+    if (await trace.getAttribute('aria-expanded') === 'false') await trace.click();
     await page.locator('.activity-thinking > summary').first().click();
     // 展开后思考预览行应隐藏，避免内容重复。
     assert.equal(await page.locator('.activity-thinking-preview').first().isVisible(), false);

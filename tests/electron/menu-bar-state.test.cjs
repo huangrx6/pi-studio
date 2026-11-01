@@ -75,3 +75,11 @@ test('cancelled sessions leave the running tray without creating unread results'
   assert.equal(result.unread, false);
   assert.equal(state.snapshot().unreadCount, 0);
 });
+
+test('popover fits its rows and caps long lists without stretching the idle state', () => {
+  const { menuBarPopoverHeight } = require('../../electron/menu-bar-state.cjs');
+  assert.equal(menuBarPopoverHeight(), 196);
+  assert.equal(menuBarPopoverHeight({ running: [{}] }), 240);
+  assert.equal(menuBarPopoverHeight({ running: [{}, {}], recent: [{}] }), 388);
+  assert.equal(menuBarPopoverHeight({ running: Array(100).fill({}) }), 440);
+});

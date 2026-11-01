@@ -125,7 +125,6 @@ async function closeProcessTree() {
     electronApp = undefined;
     await Promise.race([
       app.evaluate(({ app: electron }) => {
-        electron.isQuitting = true;
         electron.quit();
       }).catch(() => {}),
       sleep(2_000),
@@ -554,7 +553,6 @@ try {
   console.log('requesting application quit');
   await closingApp.evaluate(({ app }) => {
     setImmediate(() => {
-      app.isQuitting = true;
       app.quit();
     });
   });

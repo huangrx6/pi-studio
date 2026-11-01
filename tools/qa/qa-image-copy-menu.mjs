@@ -18,6 +18,7 @@ try {
 
   await page.addInitScript(() => {
     localStorage.clear();
+    localStorage.setItem('pi-studio:preferences', JSON.stringify({ theme: 'dark' }));
     const canvas = document.createElement('canvas');
     canvas.width = 320;
     canvas.height = 180;
@@ -43,7 +44,7 @@ try {
         timestamp: 1,
         content: [
           { type: 'text', text: '检查这张图片' },
-          { type: 'image', mimeType: 'image/png', data: png },
+          ...Array.from({ length: 13 }, () => ({ type: 'image', mimeType: 'image/png', data: png })),
         ],
       },
       { role: 'assistant', timestamp: 2, content: [{ type: 'text', text: '图片已收到。' }] },
@@ -163,6 +164,15 @@ try {
   const preview = page.getByRole('dialog', { name: '图片预览' });
   await preview.waitFor();
   await page.waitForTimeout(500);
+  const counterBox = await preview.locator('.yarl__counter').boundingBox();
+  const toolbarBox = await preview.locator('.yarl__toolbar').boundingBox();
+  assert.ok(counterBox);
+  assert.ok(toolbarBox);
+  assert.ok(counterBox.x >= 90, `preview counter must clear native window controls, got x=${counterBox.x}`);
+  assert.ok(
+    counterBox.x + counterBox.width < toolbarBox.x,
+    'preview counter must not collide with the toolbar',
+  );
   const previewImage = preview.locator('.yarl__slide_current .yarl__slide_image').first();
   const previewImageBox = await previewImage.boundingBox();
   assert.ok(previewImageBox);
@@ -178,6 +188,17 @@ try {
   await page.getByRole('menuitem', { name: '复制图片', exact: true }).waitFor();
   await page.screenshot({ path: output + 'preview-context-menu.png', animations: 'disabled' });
   await page.getByRole('menuitem', { name: '复制图片', exact: true }).click();
+  await page.screenshot({ path: output + 'preview-layout.png', animations: 'disabled' });
+  await page.setViewportSize({ width: 980, height: 640 });
+  await page.waitForTimeout(250);
+  const compactCounterBox = await preview.locator('.yarl__counter').boundingBox();
+  const compactToolbarBox = await preview.locator('.yarl__toolbar').boundingBox();
+  assert.ok(compactCounterBox);
+  assert.ok(compactToolbarBox);
+  assert.ok(compactCounterBox.x >= 90);
+  assert.ok(compactCounterBox.x + compactCounterBox.width < compactToolbarBox.x);
+  assert.ok(compactToolbarBox.x + compactToolbarBox.width <= 980);
+  await page.screenshot({ path: output + 'preview-layout-compact.png', animations: 'disabled' });
 
   const calls = await page.evaluate(() => window.copyImageCalls);
   const expectedImageSrc = await page.evaluate(() => window.expectedImageSrc);
