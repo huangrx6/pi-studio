@@ -10,15 +10,23 @@
  */
 import { siAnthropic, siDeepseek, siGooglegemini, siMinimax } from 'simple-icons';
 
-/** simple-icons 的图标对象字段很多，这里只取绘制用的 path。 */
-type IconSpec = { path: string } | { mark: 'code' };
+type OpticalOffset = {
+  /** Optical correction as a percentage of the rendered SVG box. */
+  x: number;
+  y: number;
+};
+
+/** simple-icons 的图标对象字段很多，这里只取绘制需要的数据。 */
+type IconSpec = { path: string; opticalOffset?: OpticalOffset } | { mark: 'code' };
 
 /**
  * 已知来源的图标。只 import 用到的图标，避免把整个 simple-icons 打进 bundle；
  * 同一个图标可映射多个来源别名（如 minimax 与 minimax-cn）。
  */
 const providerIcons: Record<string, IconSpec> = {
-  deepseek: siDeepseek,
+  // Match the visible weight of the whale, whose tail makes its geometric
+  // bounding-box center sit slightly left and above its visual center.
+  deepseek: { path: siDeepseek.path, opticalOffset: { x: 3.18, y: 2.48 } },
   'minimax-cn': siMinimax,
   minimax: siMinimax,
   opencode: { mark: 'code' },
@@ -65,8 +73,15 @@ function CodeMark() {
 export function ProviderIcon({ provider, name, icon, size = 22, className = '' }: { provider: string; name?: string; icon?: string; size?: number; className?: string }) {
   const spec = providerIcons[provider];
   const tone = tones[provider] ?? 'is-neutral';
+  const opticalOffset = spec && 'path' in spec ? spec.opticalOffset : undefined;
   // --provider-icon-size 让 CSS 里的内边距/圆角随尺寸缩放。
-  const style = { width: size, height: size, '--provider-icon-size': `${size}px` } as React.CSSProperties;
+  const style = {
+    width: size,
+    height: size,
+    '--provider-icon-size': `${size}px`,
+    '--provider-icon-optical-x': `${opticalOffset?.x ?? 0}%`,
+    '--provider-icon-optical-y': `${opticalOffset?.y ?? 0}%`,
+  } as React.CSSProperties;
 
   return <span className={`provider-icon ${tone} ${className}`} style={style} title={name || provider}>
     {icon
