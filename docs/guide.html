@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pi Studio 文档 — 使用、扩展开发与架构</title>
-  <meta name="description" content="Pi Studio 完整文档：安装、工作区、会话、长期任务、子智能体、模型、Harness、权限、技能、MCP、扩展开发、Durable 运行时、安全边界、构建发布与故障排查。">
+  <meta name="description" content="Pi Studio 完整文档：安装、工作区、会话、长期目标、子智能体、模型、Harness、权限、技能、MCP、扩展开发、Durable 运行时、安全边界、构建发布与故障排查。">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23111110'/%3E%3Ctext x='32' y='43' font-size='34' font-family='Georgia,serif' fill='%23f1efe8' text-anchor='middle'%3E%CF%80%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="docs.css">
 </head>
@@ -58,7 +58,7 @@
           <h2 class="nav-group-title">日常使用</h2>
           <ul>
             <li data-search="工作区 临时对话 workspace cwd 归档"><a href="#workspaces">工作区与临时对话</a></li>
-            <li data-search="会话 长期任务 对话 goal durable 生命周期"><a href="#conversations">对话与长期任务</a></li>
+            <li data-search="会话 长期目标 对话 goal durable 生命周期"><a href="#conversations">会话与 /goal</a></li>
             <li data-search="子智能体 subagent 并行 supervisor 后台"><a href="#subagents">子智能体</a></li>
             <li data-search="文件 附件 引用 diff 变更 工作台 预览"><a href="#files-changes">文件、附件与差异</a></li>
             <li data-search="模型 提供方 API Key 模型发现 thinking 推理"><a href="#models">模型与推理</a></li>
@@ -150,7 +150,7 @@
           <div class="doc-copy">
             <p>
               Pi Studio 的核心不是某一个聊天模型，而是一套可检查、可配置、可扩展的 Agent 运行环境。
-              普通对话、长期任务和子智能体都由 Pi Durable Harness 执行；Studio 负责工作区、模型来源、
+              持久会话、按需启用的长期目标和子智能体都由 Pi Durable Harness 执行；Studio 负责工作区、模型来源、
               凭据、系统提示、工具注册、资源信任、SQLite 投影与原生桌面交互。
             </p>
             <div class="feature-pairs">
@@ -187,7 +187,7 @@
           <div class="doc-copy">
             <figure class="figure">
               <img src="assets/screens/home-light.png" alt="Pi Studio 当前版本的欢迎页、工作区与输入框" width="2880" height="1840" loading="lazy">
-              <figcaption><span>Quickstart 01</span><span>欢迎页 · 工作区 · 新会话类型 · 工具策略</span></figcaption>
+              <figcaption><span>Quickstart 01</span><span>欢迎页 · 工作区 · 目标入口 · 工具策略</span></figcaption>
             </figure>
             <h3>1. 安装应用</h3>
             <p>从 Releases 选择 Apple Silicon 或 Intel 安装包。构建使用固定的 Pi Studio 自签名证书，但该证书不等同于 Apple Developer ID 或公证，macOS 仍可能阻止首次启动：</p>
@@ -207,7 +207,7 @@
             </ul>
 
             <h3>3. 添加工作区并开始</h3>
-            <p>左侧工作区入口选择项目目录，然后点击「新会话」。在输入框上方选择「对话」或「长期任务」、工作区与权限策略，发送第一条消息。</p>
+            <p>左侧工作区入口选择项目目录，然后点击「新会话」。选择工作区与权限策略后发送第一条消息；需要跨多轮持续推进时，可在输入框直接使用 <code>/goal &lt;目标&gt;</code>。</p>
             <div class="feature-pairs">
               <div class="feature-pair"><span>Reference</span><strong><code>@</code> 文件</strong><p>把工作区中的文件或目录加入上下文。</p></div>
               <div class="feature-pair"><span>Command</span><strong><code>/</code> 命令</strong><p>执行 Studio 命令、Skill、扩展命令或会话动作。</p></div>
@@ -273,20 +273,39 @@
         <section class="doc-section" id="conversations">
           <header class="section-heading">
             <span class="section-kicker">05 / Sessions</span>
-            <h2 id="conversations-title">对话与长期任务</h2>
-            <p>两类持久会话共用一个 Harness 和执行链路；长期任务多一个目标与更完整的任务生命周期。</p>
+            <h2 id="conversations-title">会话与 /goal</h2>
+            <p>Studio 只有一种持久会话；输入 <code>/goal</code> 后，同一会话按需获得目标与持续执行能力。</p>
           </header>
           <div class="doc-copy">
             <p>
-              新会话入口把「对话 / 长期任务」做成轻量切换。提交时 Studio 创建同一种 Durable conversation；
-              长期任务会把第一条目标描述、完成条件和执行状态写入 Durable document。只要目标仍处于执行中，
+              新会话不需要预先选择会话类型。普通输入创建一条 Durable conversation；第一次设置目标时，
+              Studio 才会启用长期目标扩展，并把目标描述、完成条件和执行状态写入 Durable document。只要目标仍处于执行中，
               Studio 就通过 Durable 原生 <code>GenerationTask.onYield</code> 开始下一轮，直到模型报告已验证完成、
               明确阻塞、用户暂停目标，或触发单次轮次/连续无进展安全阀。阈值可在 Harness 配置中调整；
-              自动暂停会保留原因并等待确认后继续；普通对话在单次回答后保持空闲。
+              自动暂停会保留原因并等待确认后继续；没有目标或目标结束后，会话继续保持普通聊天体验。
+            </p>
+            <p>
+              长期目标在输入框中使用 <code>/goal</code> 管理。设置新目标或替换旧目标时，Studio 会先停止旧执行，
+              清空旧进度并从新的 Durable goal state 开始；目标完成后，完成卡片会退出输入区，需要继续工作时可以直接
+              用 <code>/goal &lt;新目标&gt;</code> 开始下一项。
             </p>
             <div class="table-wrap">
               <table class="doc-table">
-                <thead><tr><th>能力</th><th>普通对话</th><th>长期任务</th><th>临时对话</th></tr></thead>
+                <thead><tr><th>命令</th><th>用途</th></tr></thead>
+                <tbody>
+                  <tr><td><code>/goal &lt;目标&gt;</code></td><td>设置或完整替换当前目标，并立即开始执行。</td></tr>
+                  <tr><td><code>/goal</code></td><td>查看当前目标、状态和保存的目标正文。</td></tr>
+                  <tr><td><code>/goal edit &lt;目标&gt;</code></td><td>修改目标正文；暂停状态下保持暂停，其他状态会从新目标继续。</td></tr>
+                  <tr><td><code>/goal pause</code> / <code>/goal resume</code></td><td>暂停当前执行，或在之后恢复。</td></tr>
+                  <tr><td><code>/goal complete [说明]</code></td><td>用户确认提前结束目标，并停止当前 Durable 执行。</td></tr>
+                  <tr><td><code>/goal clear</code></td><td>移除目标与暂存进度；会话恢复为普通状态，之后仍可再次设置目标。</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>目标正文最多 4,000 个字符。更长的要求应写入工作区文件，再让目标引用该文件。</p>
+            <div class="table-wrap">
+              <table class="doc-table">
+                <thead><tr><th>能力</th><th>普通输入</th><th>设置 /goal 后</th><th>临时对话</th></tr></thead>
                 <tbody>
                   <tr><td>Durable 持久化</td><td>是</td><td>是</td><td>否，MemoryStorage</td></tr>
                   <tr><td>Harness / 工具 / 工作区</td><td>是</td><td>是</td><td>否</td></tr>
@@ -385,7 +404,7 @@
           <header class="section-heading">
             <span class="section-kicker">09 / Harness</span>
             <h2 id="harness-title">Harness 配置</h2>
-            <p>普通持久对话和长期任务都使用 Harness；临时对话是唯一例外。</p>
+            <p>所有持久会话，无论是否启用了 <code>/goal</code>，都使用同一套 Harness；临时对话是唯一例外。</p>
           </header>
           <div class="doc-copy">
             <figure class="figure">
@@ -424,10 +443,10 @@
             <h3>Harness 对哪些会话有效</h3>
             <div class="table-wrap">
               <table class="doc-table">
-                <thead><tr><th>会话类型</th><th>工作区 Profile</th><th>全局运行策略</th></tr></thead>
+                <thead><tr><th>会话状态</th><th>工作区 Profile</th><th>全局运行策略</th></tr></thead>
                 <tbody>
-                  <tr><td>普通持久对话</td><td>是</td><td>是</td></tr>
-                  <tr><td>长期任务</td><td>是</td><td>是</td></tr>
+                  <tr><td>未启用 /goal</td><td>是</td><td>是</td></tr>
+                  <tr><td>已启用 /goal</td><td>是</td><td>是</td></tr>
                   <tr><td>临时对话</td><td>否</td><td>否，使用独立内存 Harness</td></tr>
                 </tbody>
               </table>
@@ -1090,7 +1109,7 @@ pnpm release:dist
               <li>Agent 扩展没有系统级沙箱，信任它等同于信任主进程 Node 代码。</li>
               <li>Windows / Linux 尚未作为正式支持平台发布。</li>
               <li>macOS 自动更新使用稳定自签名保证身份连续性；目前仍没有 Apple Developer ID 与公证，首次启动仍可能触发 Gatekeeper。</li>
-              <li>长期任务与子智能体会继续复用 Durable task lifecycle；不能把 Studio UI 自行定义的状态当成 Durable 事实。</li>
+              <li><code>/goal</code> 目标与子智能体会继续复用 Durable task lifecycle；不能把 Studio UI 自行定义的状态当成 Durable 事实。</li>
             </ul>
             <div class="reference-grid">
               <a class="ref-link" href="https://github.com/huangrx6/pi-studio/blob/main/README.md"><span>README 与快速总览</span><span>↗</span></a>

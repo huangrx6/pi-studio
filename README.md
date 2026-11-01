@@ -8,7 +8,7 @@
 
 ## 概览
 
-Pi Studio 把 Pi Durable 的持久化 Agent 能力带进桌面窗口。每个普通对话、长期任务和子智能体都由同一个 Durable Harness 执行；Studio 负责工作区、模型目录、编码提示、工具权限、附件和原生交互。
+Pi Studio 把 Pi Durable 的持久化 Agent 能力带进桌面窗口。每个会话和子智能体都由同一个 Durable Harness 执行；Studio 负责工作区、模型目录、编码提示、工具权限、附件和原生交互。
 
 - **唯一执行引擎是 Pi Durable 1.4。** 对话、任务、流式事件、分叉、恢复和 owned child conversations 都走 Durable Runtime。
 - **Studio 拥有自己的数据。** 应用使用 `pi-studio.sqlite` 保存 Durable 的 `durable_*` 表，以及 Studio 的工作区、会话投影、模型、凭据、MCP、扩展和设置记录。
@@ -50,7 +50,9 @@ xattr -cr "/Applications/Pi Studio.app"
 
 ### Durable 会话与工作区
 
-普通对话和长期任务共用同一条 Durable 会话链路。Studio 在 SQLite 中保存标题、工作区、置顶、归档和长期任务侧边栏投影；目标正文、完成条件与执行状态保存在 Durable document 中。长期任务通过原生 `GenerationTask.onYield` 继续执行，直到目标完成、阻塞、用户暂停，或触发可配置的单次轮次/连续无进展安全阀。安全暂停会保留原因并等待用户确认后继续。Durable 同时保存 transcript、task、usage 与 live state，流式输出、thinking、工具调用、中断和分叉都由 Durable 事件驱动。
+Studio 只有一种持久会话，不需要在创建前选择“普通对话”或“长期任务”。输入 `/goal <目标>` 时，同一条会话按需获得 Durable 目标与续跑能力；完成、清除或还没有目标时，它继续表现为普通会话。Studio 在 SQLite 中保存标题、工作区、置顶、归档和目标索引投影；目标正文、完成条件与执行状态保存在 Durable document 中。目标通过原生 `GenerationTask.onYield` 继续执行，直到完成、阻塞、用户暂停，或触发可配置的单次轮次/连续无进展安全阀。安全暂停会保留原因并等待用户确认后继续。Durable 同时保存 transcript、task、usage 与 live state，流式输出、thinking、工具调用、中断和分叉都由 Durable 事件驱动。
+
+长期目标沿用输入框内建命令：`/goal <目标>` 设置或替换目标，单独输入 `/goal` 查看，`/goal edit <目标>` 修改，另支持 `pause`、`resume`、`complete` 与 `clear`。目标最多 4,000 个字符；替换、提前完成或清除时会先停止旧执行，再在同一 Durable document 上提交新状态，避免旧目标在下一个 GenerationTask 边界继续续跑。
 
 会话历史按页加载，右侧大纲始终基于完整会话；向上滚动接近顶部时才继续补载。多工作区切换、文件树、可调宽预览、按回合汇总的 Git 差异、`@` 文件引用和附件上传都在同一桌面界面中完成。
 
@@ -131,7 +133,7 @@ Pi Studio userData/
 ├── AGENTS.md            # 应用级 Harness 指令
 ├── pi-studio.sqlite
 │   ├── durable_*        # Durable 会话、任务、文档、用量与实时状态
-│   ├── conversations    # Studio 的侧边栏与长期任务投影
+│   ├── conversations    # Studio 的侧边栏与目标索引投影
 │   ├── settings         # 外观、Harness、工具与子智能体配置
 │   ├── model_*          # Studio 模型来源与目录
 │   ├── credentials      # Studio API Key

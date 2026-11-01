@@ -254,10 +254,14 @@ async function runtimeSelection(options = {}) {
       ? row.manifest?.runtimeNames || [row.manifest?.runtimeName || row.id]
       : [runtimeExtensionName(row.id)];
   }));
-  // The extension is core so its implementation cannot be replaced, but its
-  // continuation hook and model tool are only selected for long-running goals.
+  // The extension is core so its implementation cannot be replaced. It is
+  // activated lazily when a conversation has a persisted goal; legacy durable
+  // rows continue to request it through their kind.
   activeRuntimeNames.delete(LONG_TASK_EXTENSION_NAME);
-  if (options.kind === 'durable' && snapshot.extension(LONG_TASK_EXTENSION_NAME)) {
+  if (
+    (options.longTask === true || options.kind === 'durable')
+    && snapshot.extension(LONG_TASK_EXTENSION_NAME)
+  ) {
     activeRuntimeNames.add(LONG_TASK_EXTENSION_NAME);
   }
   const selected = readAgentToolSelection();

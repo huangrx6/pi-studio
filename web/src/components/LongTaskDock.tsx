@@ -1,4 +1,4 @@
-import { Check, CircleAlert, LoaderCircle, Pause, Play, Target } from 'lucide-react';
+import { CircleAlert, LoaderCircle, Pause, PencilLine, Play, Target } from 'lucide-react';
 import type { LongTaskState } from '../types/durable-types';
 
 const STATUS_LABELS: Record<LongTaskState['status'], string> = {
@@ -11,7 +11,6 @@ const STATUS_LABELS: Record<LongTaskState['status'], string> = {
 };
 
 function statusIcon(status: LongTaskState['status']) {
-  if (status === 'completed') return <Check aria-hidden="true" />;
   if (status === 'blocked') return <CircleAlert aria-hidden="true" />;
   if (status === 'paused') return <Pause aria-hidden="true" />;
   if (status === 'active') return <Target aria-hidden="true" />;
@@ -23,22 +22,27 @@ export function LongTaskDock({
   running,
   busy,
   onChange,
+  onEditGoal,
 }: {
   state: LongTaskState | undefined;
   running: boolean;
   busy: boolean;
   onChange: (action: 'long-task-pause' | 'long-task-resume') => void;
+  onEditGoal: () => void;
 }) {
   if (!state?.enabled && !state?.goal) return null;
   const status = state.status;
+  // Completion already has a durable transcript result. Keeping a second dock
+  // above the composer would permanently consume space after the goal ends.
+  if (status === 'completed') return null;
   const detail = status === 'blocked'
     ? state.blockReason
     : status === 'paused'
       ? state.pauseReason || state.nextStep || state.lastProgress
-    : status === 'completed'
-      ? state.completionSummary
       : state.nextStep || state.lastProgress;
-  const canResume = status !== 'active' || !running;
+  const canResume = status === 'paused'
+    || status === 'blocked'
+    || (status === 'active' && !running);
   return (
     <div className={`long-task-dock is-${status}`} role="status">
       <div className="long-task-status">
@@ -57,6 +61,16 @@ export function LongTaskDock({
           </span>
         </span>
       </div>
+      <button
+        type="button"
+        className="long-task-action is-quiet"
+        disabled={busy}
+        title="换目标（/goal）"
+        onClick={onEditGoal}
+      >
+        <PencilLine aria-hidden="true" />
+        换目标
+      </button>
       {canResume && (
         <button
           type="button"
@@ -65,7 +79,7 @@ export function LongTaskDock({
           onClick={() => onChange('long-task-resume')}
         >
           {busy ? <LoaderCircle className="spin" aria-hidden="true" /> : <Play aria-hidden="true" />}
-          {status === 'active' ? '继续执行' : '继续目标'}
+          继续
         </button>
       )}
       {running && status === 'active' && (

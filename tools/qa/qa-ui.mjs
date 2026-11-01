@@ -719,13 +719,29 @@ await page.addInitScript(() => {
           id: 'session-2',
           cwd,
           title: '优化文件预览和设置页面的排版',
-          kind: 'durable',
+          kind: 'conversation',
           goal: '完成 Durable UI 重构',
+          longTask: {
+            enabled: true,
+            goal: '完成 Durable UI 重构',
+            completionCriteria: '长期任务控制和界面都通过回归检查。',
+            status: 'active',
+            iteration: 2,
+            lastProgress: '完成目标命令与状态卡片。',
+            nextStep: '验证替换目标和完成后的收尾状态。',
+            pauseReason: '',
+            completionSummary: '',
+            blockReason: '',
+            createdAt: Date.now() - 7200000,
+            updatedAt: Date.now() - 60000,
+            completedAt: 0,
+            blockedAt: 0,
+          },
           pinned: false,
           archived: false,
           createdAt: Date.now() - 86400000,
           updatedAt: Date.now() - 3600000,
-          messageCount: 4,
+          messageCount: 2,
         },
       ],
     },
@@ -749,6 +765,20 @@ await page.addInitScript(() => {
           text: '我梳理了界面中的布局与组件，可以从以下几个方面改进：\n\n## 统一基础尺寸\n\n按钮、输入框、卡片和列表使用一致的间距与圆角，让操作更自然。\n\n## 整理内容层级\n\n通过标题、说明和状态的对比，让关键信息更容易找到。\n\n## 完善边界状态\n\n为加载、空列表和长文本保留足够的空间，保证小窗口下也能正常使用。',
         }],
         timestamp: Date.now() - 30_000,
+        sourceIndex: 1,
+      },
+    ]],
+    ['session-2', [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: '继续完成 Durable UI 重构。' }],
+        timestamp: Date.now() - 3_600_000,
+        sourceIndex: 0,
+      },
+      {
+        role: 'assistant',
+        content: [{ type: 'text', text: '已记录长期目标，并继续处理剩余的界面与状态收尾。' }],
+        timestamp: Date.now() - 3_590_000,
         sourceIndex: 1,
       },
     ]],
@@ -1004,8 +1034,8 @@ await page.addInitScript(() => {
       const summary = {
         id: `new-${draftSequence}`,
         cwd: input.cwd || cwd,
-        title: '新会话',
-        kind: input.kind === 'durable' ? 'durable' : 'conversation',
+        title: input.title || '新会话',
+        kind: 'conversation',
         goal: input.goal || '',
         pinned: false,
         archived: false,
@@ -1090,7 +1120,7 @@ await page.addInitScript(() => {
     },
     conversationConfigure: async ({ id }) => structuredClone(conversationSnapshot(id)),
     conversationInterrupt: async () => ({ ok: true }),
-    conversationAction: async ({ kind, action, id, name }) => {
+    conversationAction: async ({ kind, action, id, name, goal, summary }) => {
       if (kind === 'session' && action === 'fork') {
         const source = sessionSummary(id);
         const copy = {
@@ -1107,6 +1137,83 @@ await page.addInitScript(() => {
       if (kind === 'session' && action === 'rename' && name) {
         const target = sessionSummary(id);
         if (target) target.title = name;
+      }
+      if (kind === 'session' && action.startsWith('long-task-')) {
+        const target = sessionSummary(id);
+        if (!target) throw new Error('会话不存在');
+        const previous = target.longTask || {
+          enabled: false,
+          goal: '',
+          completionCriteria: '',
+          status: 'idle',
+          iteration: 0,
+          lastProgress: '',
+          nextStep: '',
+          pauseReason: '',
+          completionSummary: '',
+          blockReason: '',
+          createdAt: 0,
+          updatedAt: 0,
+          completedAt: 0,
+          blockedAt: 0,
+        };
+        const now = Date.now();
+        let next = { ...previous };
+        if (action === 'long-task-set') {
+          next = {
+            ...previous,
+            enabled: true,
+            goal,
+            completionCriteria: goal,
+            status: 'active',
+            iteration: 0,
+            lastProgress: '',
+            nextStep: '',
+            pauseReason: '',
+            completionSummary: '',
+            blockReason: '',
+            createdAt: now,
+            updatedAt: now,
+            completedAt: 0,
+            blockedAt: 0,
+          };
+        } else if (action === 'long-task-pause') {
+          next = { ...previous, status: 'paused', updatedAt: now };
+        } else if (action === 'long-task-resume') {
+          next = { ...previous, status: 'active', updatedAt: now };
+        } else if (action === 'long-task-complete') {
+          next = {
+            ...previous,
+            status: 'completed',
+            completionSummary: summary || '用户提前结束了目标。',
+            completedAt: now,
+            updatedAt: now,
+          };
+        } else if (action === 'long-task-clear') {
+          next = {
+            enabled: false,
+            goal: '',
+            completionCriteria: '',
+            status: 'idle',
+            iteration: 0,
+            lastProgress: '',
+            nextStep: '',
+            pauseReason: '',
+            completionSummary: '',
+            blockReason: '',
+            createdAt: 0,
+            updatedAt: 0,
+            completedAt: 0,
+            blockedAt: 0,
+          };
+        }
+        target.goal = next.goal;
+        target.longTask = next;
+        return {
+          ok: true,
+          started: action === 'long-task-set' || action === 'long-task-resume',
+          longTask: structuredClone(next),
+        };
       }
       return { ok: true };
     },
@@ -2124,7 +2231,16 @@ try {
   await paletteChoices.getByRole('radio', { name: /^海蓝/ }).click();
   await page.waitForFunction(() => document.documentElement.dataset.palette === 'ocean');
   assert.equal(await paletteChoices.getByRole('radio', { name: /^海蓝/ }).getAttribute('aria-checked'), 'true');
-  assert.equal(await paletteChoices.getByRole('radio', { name: /^海蓝/ }).locator('.palette-preview-actions b').evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(124, 183, 255)');
+  const oceanPaletteColors = await paletteChoices.getByRole('radio', { name: /^海蓝/ }).locator('.palette-preview-actions b').evaluate((element) => {
+    const probe = document.createElement('span');
+    probe.style.backgroundColor = 'var(--accent)';
+    document.body.append(probe);
+    const expected = getComputedStyle(probe).backgroundColor;
+    const actual = getComputedStyle(element).backgroundColor;
+    probe.remove();
+    return { actual, expected };
+  });
+  assert.equal(oceanPaletteColors.actual, oceanPaletteColors.expected);
   await capture('11a-general-palette-light');
 
   await page.getByRole('button', { name: '深色', exact: true }).click();
@@ -2865,10 +2981,41 @@ try {
   await page.locator('.session-row', { hasText: '验证从新对话进入问答' }).waitFor();
   await capture('29-first-message');
 
+  // 长期目标使用 /goal 管理：完成后输入区卡片消失，并引导设置下一项目标。
+  await page.locator('.session-row', { hasText: '优化文件预览和设置页面的排版' }).click();
+  const longTaskDock = page.locator('.long-task-dock');
+  await longTaskDock.waitFor();
+  assert.match(await longTaskDock.innerText(), /目标执行中/);
+  const composerInput = page.getByRole('textbox', { name: '发送给 Pi 的消息' });
+  await composerInput.fill('/goal');
+  await page.getByRole('button', { name: '发送消息', exact: true }).click();
+  await page.locator('.composer-feedback.is-info').filter({ hasText: '当前目标' }).waitFor();
+  await composerInput.fill('/goal 验证新的长期目标');
+  await page.getByRole('button', { name: '发送消息', exact: true }).click();
+  await page.locator('.long-task-dock').filter({ hasText: '验证新的长期目标' }).waitFor();
+  await composerInput.fill('/goal complete 已完成目标流程验证');
+  await page.getByRole('button', { name: '发送消息', exact: true }).click();
+  await page.locator('.long-task-dock').waitFor({ state: 'detached' });
+  assert.equal(await page.locator('.composer-feedback.is-info').count(), 0);
+  assert.match(await composerInput.getAttribute('placeholder'), /输入 \/goal/);
+  await capture('29a-goal-lifecycle');
+
   // 点击“新会话”应回到欢迎页，且不残留会话标签。
   await page.getByRole('button', { name: '新会话', exact: true }).first().click();
   await page.getByRole('heading', { name: '今天，想做点什么？', exact: true }).waitFor();
   assert.equal(await page.locator('.chat-tabs:not(.is-placeholder)').count(), 0);
+
+  // 新会话不需要预选“长期任务”；/goal 会在第一次设置目标时按需创建普通会话并启用目标能力。
+  await composerInput.fill('/goal 从新会话直接启动目标');
+  await page.getByRole('button', { name: '发送消息', exact: true }).click();
+  await page.locator('.long-task-dock').filter({ hasText: '从新会话直接启动目标' }).waitFor();
+  await page.locator('.chat-heading-kind').filter({ hasText: '目标执行中' }).waitFor();
+  assert.equal(await page.locator('.session-kind-badge').count(), 0);
+  await capture('29b-goal-from-new-session');
+  await composerInput.fill('/goal complete 新会话目标流程验证完成');
+  await page.getByRole('button', { name: '发送消息', exact: true }).click();
+  await page.locator('.long-task-dock').waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: '新会话', exact: true }).first().click();
 
   // 没有模型来源时，新对话默认区必须显示可操作的引导空状态，
   // 而不是渲染禁用下拉框和仅有首字母的伪 Provider 图标。

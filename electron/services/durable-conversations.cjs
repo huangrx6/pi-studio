@@ -55,8 +55,11 @@ const {
   temporaryTitle,
 } = require('./conversation-title.cjs');
 const {
+  clearLongTaskState,
+  completeLongTaskState,
   continuationText,
   createLongTaskContract,
+  editLongTaskState,
   emptyLongTaskState,
   initializeLongTaskState,
   isLongTaskContinuation,
@@ -64,6 +67,9 @@ const {
   normalizeLongTaskState,
   publicLongTaskState,
   readLongTaskState,
+  replaceLongTaskState,
+  shouldStartLongTaskGoal,
+  validateLongTaskGoal,
 } = require('./studio-long-task.cjs');
 const { onRequestTrace } = require('./studio-request-trace.cjs');
 
@@ -73,7 +79,6 @@ const ENTRY_SCAN_PAGE_SIZE = 300;
 const MAX_OUTLINE_ITEMS = 10_000;
 const MAX_OUTLINE_TEXT = 2_000;
 const MAX_TRACKED_CONVERSATION_COUNTS = 2_000;
-const CONVERSATION_KINDS = new Set(['conversation', 'durable']);
 const BUSY_POLICIES = new Set(['steer', 'followUp', 'reject']);
 const ACTIVE_TASK_STATES = new Set(['running', 'ready', 'waiting', 'sleeping']);
 
@@ -154,7 +159,7 @@ function conversationDto(row, overrides = {}) {
 }
 
 async function longTaskDto(row) {
-  if (!row || row.kind !== 'durable') return undefined;
+  if (!row) return undefined;
   const runtime = await getDurableRuntime();
   const state = await readLongTaskState(
     runtime.durable,
@@ -528,22 +533,21 @@ function validateWorkspace(cwd) {
   return path.resolve(cwd);
 }
 
-async function createConversation({ cwd, kind = 'conversation', title = '新会话', goal = '' } = {}) {
+async function createConversation({ cwd, title = '新会话', goal = '' } = {}) {
   const workspace = validateWorkspace(cwd);
-  if (!CONVERSATION_KINDS.has(kind)) throw new Error('无效的工作项类型');
+  const cleanGoal = String(goal || '').trim();
   const runtime = await getDurableRuntime();
   const modelRuntime = await getStudioModelsRuntime();
   await reconcileRuntimeForWorkspace(workspace, { verifyExtensionIntegrity: true });
-  const agentSelection = await runtimeSelection({ kind });
+  const agentSelection = await runtimeSelection({
+    longTask: Boolean(cleanGoal),
+  });
   const modelSelection = await modelInfo(workspace);
   const ref = splitModelRef(modelSelection.modelRef);
   const model = runtimeModelFor(modelRuntime.models, ref);
   if (!model) throw new Error('没有可用模型，请先在设置中配置模型来源与 API Key');
   const thinkingLevel = modelSelection.effectiveThinkingLevel;
-  const cleanGoal = String(goal || '').trim();
-  const longTaskContract = kind === 'durable'
-    ? createLongTaskContract(runtime.durable)
-    : undefined;
+  const longTaskContract = createLongTaskContract(runtime.durable);
   const conversation = await runtime.harness.createConversation({
     ownership: { kind: 'ownerless' },
     agent: {
@@ -553,7 +557,7 @@ async function createConversation({ cwd, kind = 'conversation', title = '新会�
       extensions: agentSelection.extensions,
       tools: agentSelection.tools,
     },
-    ...(longTaskContract && cleanGoal
+    ...(cleanGoal
       ? {
           init: async (tx, conversationId) => {
             const state = await tx.doc(
@@ -573,7 +577,7 @@ async function createConversation({ cwd, kind = 'conversation', title = '新会�
   const row = getStudioDatabase().insertConversation({
     id: String(conversation.id),
     workspace,
-    kind,
+    kind: 'conversation',
     title: String(title || '新会话').trim() || '新会话',
     goal: cleanGoal,
   });
@@ -655,7 +659,6 @@ function busyPolicy(value) {
 }
 
 async function prepareLongTaskSubmission({ row, conversation, text }) {
-  if (row.kind !== 'durable') return undefined;
   const runtime = await getDurableRuntime();
   const { LongTask } = createLongTaskContract(runtime.durable);
   const cleanGoal = String(text || '').trim();
@@ -666,7 +669,7 @@ async function prepareLongTaskSubmission({ row, conversation, text }) {
     const now = Date.now();
     // Older Studio rows may still carry only the SQLite goal projection.
     // Promote that value before considering the new message as the goal.
-    const initialGoal = row.goal || cleanGoal;
+    const initialGoal = row.goal || (row.kind === 'durable' ? cleanGoal : '');
     if (!state.goal && initialGoal) {
       initializeLongTaskState(state, {
         goal: initialGoal,
@@ -705,17 +708,20 @@ async function submitConversation(input = {}, options = {}) {
   });
   if (!row || !conversation) throw new Error('会话不存在');
   const runtime = await getDurableRuntime();
-  const selection = await runtimeSelection({ kind: row.kind });
-  await conversation.configure({
-    extensions: selection.extensions,
-    tools: selection.tools,
-  }, runtime.context);
   const displayText = String(input.text || '').trim();
-  await prepareLongTaskSubmission({
+  const longTask = await prepareLongTaskSubmission({
     row,
     conversation,
     text: displayText,
   });
+  const selection = await runtimeSelection({
+    kind: row.kind,
+    longTask: Boolean(longTask?.enabled && longTask?.goal),
+  });
+  await conversation.configure({
+    extensions: selection.extensions,
+    tools: selection.tools,
+  }, runtime.context);
   const content = await inputContent({
     cwd: row.workspace,
     text: expandSkillCommand(input.text, row.workspace),
@@ -846,7 +852,7 @@ async function configureConversation({ id, modelRef, thinkingLevel } = {}) {
 }
 
 async function setLongTaskStatus(row, conversation, status) {
-  if (!row || row.kind !== 'durable') return undefined;
+  if (!row) return undefined;
   const runtime = await getDurableRuntime();
   const { LongTask } = createLongTaskContract(runtime.durable);
   await conversation.commit(async (tx) => {
@@ -872,8 +878,28 @@ async function setLongTaskStatus(row, conversation, status) {
   );
 }
 
+async function submitLongTaskContinuation(row, conversation, state, requestPrefix) {
+  if (!state?.goal || state.status !== 'active') return false;
+  const runtime = await getDurableRuntime();
+  const selection = await runtimeSelection({
+    kind: row.kind,
+    longTask: true,
+  });
+  await conversation.configure({
+    extensions: selection.extensions,
+    tools: selection.tools,
+  }, runtime.context);
+  await conversation.submit({
+    type: 'input',
+    content: continuationText(state),
+    requestId: `${requestPrefix}:${randomUUID()}`,
+    whenBusy: 'followUp',
+  }, runtime.context);
+  return true;
+}
+
 async function pauseLongTaskForContinuationGuard(entry, row, reason) {
-  if (entry.longTaskGuardTriggered || row.kind !== 'durable') return;
+  if (entry.longTaskGuardTriggered) return;
   entry.longTaskGuardTriggered = true;
   const runtime = await getDurableRuntime();
   const conversation = await runtime.harness.conversation(
@@ -896,7 +922,7 @@ async function pauseLongTaskForContinuationGuard(entry, row, reason) {
 }
 
 async function guardLongTaskContinuation(entry, row) {
-  if (entry.longTaskGuardTriggered || row.kind !== 'durable') return;
+  if (entry.longTaskGuardTriggered) return;
   const runtime = await getDurableRuntime();
   const state = await readLongTaskState(
     runtime.durable,
@@ -930,14 +956,22 @@ async function longTaskPause(id) {
   const row = await getConversationRow(id);
   const conversation = await getConversationHandle(id);
   if (!row || !conversation) throw new Error('会话不存在');
-  if (row.kind !== 'durable') throw new Error('只有长期任务支持暂停目标');
+  const runtime = await getDurableRuntime();
+  const current = await readLongTaskState(
+    runtime.durable,
+    runtime.harness,
+    Number(row.id),
+    runtime.context,
+  );
+  if (!current.enabled || !current.goal) throw new Error('当前会话没有可暂停的长期目标');
+  if (!['active', 'blocked'].includes(current.status)) {
+    throw new Error('当前目标已经暂停或结束，无需再次暂停');
+  }
+  await refreshRuntimeState();
   const state = await setLongTaskStatus(row, conversation, 'paused');
   const wasRunning = runningConversations.has(conversationKey(row));
-  if (wasRunning) {
-    const runtime = await getDurableRuntime();
-    await conversation.abort(runtime.context, { background: true });
-    await refreshRuntimeState();
-  }
+  await conversation.abort(runtime.context, { background: true });
+  await refreshRuntimeState();
   return { ok: true, wasRunning, longTask: state };
 }
 
@@ -945,25 +979,26 @@ async function longTaskResume(id) {
   const row = await getConversationRow(id);
   const conversation = await getConversationHandle(id);
   if (!row || !conversation) throw new Error('会话不存在');
-  if (row.kind !== 'durable') throw new Error('只有长期任务支持继续目标');
   const runtime = await getDurableRuntime();
-  const selection = await runtimeSelection({ kind: row.kind });
-  await conversation.configure({
-    extensions: selection.extensions,
-    tools: selection.tools,
-  }, runtime.context);
-  const state = await setLongTaskStatus(row, conversation, 'active');
-  if (!state?.goal) throw new Error('请先发送目标描述，再开始长期任务');
-  if (!runningConversations.has(conversationKey(row))) {
-    await conversation.submit({
-      type: 'input',
-      content: continuationText(state),
-      requestId: `long-task-resume:${randomUUID()}`,
-      whenBusy: 'followUp',
-    }, runtime.context);
+  const current = await readLongTaskState(
+    runtime.durable,
+    runtime.harness,
+    Number(row.id),
+    runtime.context,
+  );
+  if (!current.enabled || !current.goal) throw new Error('请先设置一个长期目标');
+  if (!['active', 'paused', 'blocked'].includes(current.status)) {
+    throw new Error(current.status === 'completed'
+      ? '当前目标已经完成，请使用 /goal <新目标>'
+      : '当前目标状态无法继续');
   }
+  await refreshRuntimeState();
+  const state = await setLongTaskStatus(row, conversation, 'active');
+  const started = !runningConversations.has(conversationKey(row))
+    && await submitLongTaskContinuation(row, conversation, state, 'long-task-resume');
   return {
     ok: true,
+    started,
     longTask: await readLongTaskState(
       runtime.durable,
       runtime.harness,
@@ -973,17 +1008,127 @@ async function longTaskResume(id) {
   };
 }
 
+async function longTaskSetGoal(id, options = {}) {
+  const row = await getConversationRow(id);
+  const conversation = await getConversationHandle(id);
+  if (!row || !conversation) throw new Error('会话不存在');
+
+  const goal = validateLongTaskGoal(options.goal);
+  const completionCriteria = String(options.completionCriteria || goal).trim().slice(0, 32_000);
+  const runtime = await getDurableRuntime();
+  const { LongTask } = createLongTaskContract(runtime.durable);
+  let previousStatus = 'idle';
+  let shouldStart = false;
+
+  await refreshRuntimeState();
+  const wasRunning = runningConversations.has(conversationKey(row));
+  const stagedState = await conversation.commit(async (tx) => {
+    const stored = await tx.doc(LongTask, Number(row.id));
+    const current = normalizeLongTaskState(stored);
+    previousStatus = current.status;
+    shouldStart = shouldStartLongTaskGoal(options.mode, previousStatus);
+    const next = options.mode === 'edit'
+      ? editLongTaskState(stored, {
+          goal,
+          completionCriteria,
+          previousStatus,
+          now: Date.now(),
+        })
+      : replaceLongTaskState(stored, {
+          goal,
+          completionCriteria,
+          now: Date.now(),
+        });
+    next.status = 'paused';
+    next.pauseReason = options.mode === 'edit'
+      ? '正在更新目标。'
+      : '正在切换目标。';
+    next.updatedAt = Date.now();
+    Object.assign(stored, next);
+    return publicLongTaskState(next);
+  }, runtime.context);
+  await conversation.abort(runtime.context, { background: true });
+
+  const state = shouldStart
+    ? await setLongTaskStatus(row, conversation, 'active')
+    : stagedState;
+
+  getStudioDatabase().updateConversation(row.id, {
+    goal: state.goal,
+    updatedAt: Date.now(),
+  });
+  const started = state.status === 'active'
+    && await submitLongTaskContinuation(row, conversation, state, 'long-task-set');
+  await refreshRuntimeState();
+  return {
+    ok: true,
+    wasRunning,
+    started,
+    longTask: await readLongTaskState(
+      runtime.durable,
+      runtime.harness,
+      Number(row.id),
+      runtime.context,
+    ),
+  };
+}
+
+async function longTaskComplete(id, summary = '') {
+  const row = await getConversationRow(id);
+  const conversation = await getConversationHandle(id);
+  if (!row || !conversation) throw new Error('会话不存在');
+  const runtime = await getDurableRuntime();
+  const { LongTask } = createLongTaskContract(runtime.durable);
+  await refreshRuntimeState();
+  const wasRunning = runningConversations.has(conversationKey(row));
+  const state = await conversation.commit(async (tx) => {
+    const stored = await tx.doc(LongTask, Number(row.id));
+    const next = completeLongTaskState(stored, {
+      summary,
+      now: Date.now(),
+    });
+    return publicLongTaskState(next);
+  }, runtime.context);
+  await conversation.abort(runtime.context, { background: true });
+  getStudioDatabase().updateConversation(row.id, {
+    goal: state.goal,
+    updatedAt: Date.now(),
+  });
+  await refreshRuntimeState();
+  return { ok: true, wasRunning, started: false, longTask: state };
+}
+
+async function longTaskClear(id) {
+  const row = await getConversationRow(id);
+  const conversation = await getConversationHandle(id);
+  if (!row || !conversation) throw new Error('会话不存在');
+  const runtime = await getDurableRuntime();
+  const { LongTask } = createLongTaskContract(runtime.durable);
+  await refreshRuntimeState();
+  const wasRunning = runningConversations.has(conversationKey(row));
+  const state = await conversation.commit(async (tx) => {
+    const stored = await tx.doc(LongTask, Number(row.id));
+    const next = clearLongTaskState(stored);
+    return publicLongTaskState(next);
+  }, runtime.context);
+  await conversation.abort(runtime.context, { background: true });
+  getStudioDatabase().updateConversation(row.id, {
+    goal: '',
+    updatedAt: Date.now(),
+  });
+  await refreshRuntimeState();
+  return { ok: true, wasRunning, started: false, longTask: state };
+}
+
 async function abortConversation(id) {
   const row = await getConversationRow(id);
   const conversation = await getConversationHandle(id);
   if (!row || !conversation) throw new Error('会话不存在');
   const wasRunning = runningConversations.has(conversationKey(row));
   const runtime = await getDurableRuntime();
-  // A stopped long-running goal becomes paused before the abort reaches the
-  // GenerationTask. Otherwise the final boundary could immediately continue.
-  if (row.kind === 'durable') {
-    await setLongTaskStatus(row, conversation, 'paused');
-  }
+  // A stopped goal becomes paused before the abort reaches GenerationTask.
+  // Otherwise the final boundary could immediately continue after Stop.
+  await setLongTaskStatus(row, conversation, 'paused');
   // Stop background children with the main turn. The UI exposes one stop
   // action for the conversation, so leaving an owned background task alive
   // would keep the row spinning after the user explicitly stopped it.
@@ -1181,7 +1326,23 @@ async function conversationAction(input = {}) {
   if (input.action === 'fork') return forkConversation(input.id, input.entryId);
   const row = await getConversationRow(input.id);
   if (!row) throw new Error('会话不存在');
-  if (input.action === 'long-task-pause') {
+  if (input.action === 'long-task-set') {
+    return longTaskSetGoal(row.id, {
+      goal: input.goal,
+      completionCriteria: input.completionCriteria,
+      mode: 'replace',
+    });
+  } else if (input.action === 'long-task-edit') {
+    return longTaskSetGoal(row.id, {
+      goal: input.goal,
+      completionCriteria: input.completionCriteria,
+      mode: 'edit',
+    });
+  } else if (input.action === 'long-task-complete') {
+    return longTaskComplete(row.id, input.summary);
+  } else if (input.action === 'long-task-clear') {
+    return longTaskClear(row.id);
+  } else if (input.action === 'long-task-pause') {
     return longTaskPause(row.id);
   } else if (input.action === 'long-task-resume') {
     return longTaskResume(row.id);
@@ -1380,11 +1541,9 @@ async function handleAgentEvent(event, entry, conversation, emit) {
   if (event.type === 'run_start') {
     entry.running = true;
     entry.snapshot = { ...entry.snapshot, run: { inputs: event.inputs } };
-    if (conversation.kind === 'durable') {
-      entry.longTaskContinuations = 0;
-      entry.longTaskStalledContinuations = 0;
-      entry.longTaskGuardTriggered = false;
-    }
+    entry.longTaskContinuations = 0;
+    entry.longTaskStalledContinuations = 0;
+    entry.longTaskGuardTriggered = false;
     runningConversations.add(key);
     await beginRunDiff(entry, conversation, event.inputs);
     await emit({
@@ -1523,12 +1682,9 @@ async function handleAgentEvent(event, entry, conversation, emit) {
 
   if (event.type === 'entry_appended') {
     const messages = entryToMessages(event.entry);
-    if (
-      conversation.kind === 'durable'
-      && messages.some((message) => (
-        message.role === 'user' && isLongTaskContinuation(message.content)
-      ))
-    ) {
+    if (messages.some((message) => (
+      message.role === 'user' && isLongTaskContinuation(message.content)
+    ))) {
       await guardLongTaskContinuation(entry, conversation);
     }
     if (messages.length > 0) {
@@ -1612,9 +1768,7 @@ async function ensureWatch(id, emit) {
     conversation.id,
     runtime.context,
   );
-  const initialLongTask = row.kind === 'durable'
-    ? await longTaskDto(row)
-    : undefined;
+  const initialLongTask = await longTaskDto(row);
   const entry = {
     id: key,
     stream,
@@ -1699,6 +1853,12 @@ async function composerResources(input = {}) {
       { name: 'new', description: '开始一个新会话', source: 'builtin' },
       { name: 'model', description: '切换当前会话或新对话的模型', source: 'builtin' },
       { name: 'thinking', description: '调整当前会话的思考强度', source: 'builtin' },
+      {
+        name: 'goal',
+        description: '设置、查看、编辑、暂停、恢复或清除长期目标',
+        source: 'builtin',
+        argumentHint: '[目标|edit|pause|resume|complete|clear]',
+      },
       { name: 'settings', description: '打开设置', source: 'builtin' },
       { name: 'copy', description: '复制最后一条助理回复', source: 'builtin' },
       ...extensionCommands,

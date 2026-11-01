@@ -108,7 +108,6 @@ export function ArchivedConversationsSettings({
                   <strong>{session.title || '未命名会话'}</strong>
                   <span className="archive-session-path" title={workspace.cwd}><code>{workspace.cwd}</code></span>
                   <span className="archive-session-meta">
-                    <span className={`archive-session-kind is-${session.kind}`}>{session.kind === 'durable' ? '长期任务' : '对话'}</span>
                     <span><Clock3 />{updatedLabel(session.updatedAt)}</span>
                     {session.pinned && <span>已置顶</span>}
                   </span>

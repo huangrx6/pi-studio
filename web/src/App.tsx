@@ -16,8 +16,8 @@
 
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertTriangle, ArchiveRestore, ArrowUp, BarChart3, BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Clock3, Command, Cpu, ExternalLink, FileCode2, FileDiff, FileText, Folder, FolderOpen, Github, Info, Sparkles, UserRound,
-  AppWindow, Bot, Code2, Columns2, Compass, Eye, Film, Globe2, Image as ImageIcon, Keyboard, Layers3, LayoutGrid, ListFilter, LoaderCircle, Maximize2, MessageCirclePlus, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, PanelRightOpen, Pencil, Plus, Plug, RotateCw, Search, Settings, ShieldCheck, Square, SquarePen, Sun, Terminal, Trash2, X,
+  AlertTriangle, ArchiveRestore, ArrowUp, BarChart3, BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Command, Cpu, ExternalLink, FileCode2, FileDiff, FileText, Folder, FolderOpen, Github, Info, Sparkles, UserRound,
+  AppWindow, Bot, Code2, Columns2, Compass, Eye, Film, Globe2, Image as ImageIcon, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageCirclePlus, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, PanelRightOpen, Pencil, Plus, Plug, RotateCw, Search, Settings, ShieldCheck, Square, SquarePen, Sun, Target, Terminal, Trash2, X,
   Wrench,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
@@ -90,7 +90,6 @@ import type { SubagentChild, SubagentTranscript } from './types/subagent-types';
 import type { LongTaskState } from './types/durable-types';
 import { ModelPicker, type ModelPickerRequest } from './components/ModelPicker';
 import { WorkspacePicker } from './components/WorkspacePicker';
-import { ConversationKindSwitch } from './components/ConversationKindSwitch';
 import { SidebarActions, type SidebarAction } from './components/SidebarActions';
 import {
   concreteThinkingLevels,
@@ -121,7 +120,11 @@ import {
 } from './lib/chat-scroll.mjs';
 import { HISTORY_PAGE_SIZE, resolveHistoryScroll } from './lib/history-scroll.mjs';
 import { sampleOutlineIndices } from './lib/outline-samples.mjs';
-import { normalizeThinkingLevelArgument, parseStudioCommand } from './lib/composer-command-routes.mjs';
+import {
+  normalizeThinkingLevelArgument,
+  parseGoalCommandArgument,
+  parseStudioCommand,
+} from './lib/composer-command-routes.mjs';
 import { mergeSubagentChild, mergeSubagentChildren } from './lib/subagent-state.mjs';
 import type { UpdateSnapshot } from './types/update-types';
 import type { RuntimeRefreshSnapshot } from './types/runtime-types';
@@ -151,7 +154,6 @@ import type {
 } from './types/extension-types';
 import type {
   ConversationEvent,
-  ConversationKind,
   ConversationPage,
   ConversationSnapshot,
   ConversationSummary,
@@ -196,9 +198,6 @@ function BrandMark({ className = '' }: { className?: string }) {
 
 // ---------- 类型定义 ----------
 
-/** 侧边栏里的会话条目（来自主进程的会话索引）。 */
-type SessionKind = ConversationKind;
-type SidebarKindFilter = 'all' | SessionKind;
 type PiSessionSummary = ConversationSummary;
 type ImagePayload = { type: 'image'; data: string; mimeType: string };
 type OutlineItem = { sourceIndex: number; text: string; timestamp?: number };
@@ -405,15 +404,13 @@ function nextRelativeTimeTick(ms: number, now = Date.now()): number {
   return Math.max(1_000, 86_400_000 - (elapsed % 86_400_000));
 }
 
-/** 会话投影缺少 kind 时按普通对话处理；未知值不应破坏侧边栏渲染。 */
-function sessionKind(session: PiSessionSummary): SessionKind {
-  return session.kind === 'durable' ? 'durable' : 'conversation';
-}
-
-function sidebarKindFilterLabel(filter: SidebarKindFilter): string {
-  if (filter === 'conversation') return '只看对话';
-  if (filter === 'durable') return '只看长期任务';
-  return '显示全部';
+function goalStatusLabel(state: LongTaskState | undefined): string {
+  if (!state?.enabled || !state.goal) return '';
+  if (state.status === 'active') return '目标执行中';
+  if (state.status === 'paused') return '目标已暂停';
+  if (state.status === 'blocked') return '目标等待补充';
+  if (state.status === 'failed') return '目标执行失败';
+  return '';
 }
 
 /** 侧边栏展开状态、手动排序与上次打开的会话都存在 localStorage。 */
@@ -422,7 +419,6 @@ const UI_KEYS = {
   workspaceOrder: 'pi-studio:workspace-order',
   sessionOrder: 'pi-studio:session-order',
   activeSession: 'pi-studio:active-session',
-  sidebarKindFilter: 'pi-studio:sidebar-kind-filter',
 } as const;
 
 /** 读本地存储；解析失败时退回默认值。 */
@@ -604,13 +600,11 @@ export function App() {
   const [dropHint, setDropHint] = useState<string | null>(null);
   const [draggingItem, setDraggingItem] = useState<DragItem | null>(null);
   const [justDropped, setJustDropped] = useState<string | null>(null);
-  const [draftKind, setDraftKind] = useState<SessionKind>('conversation');
   const [longTaskBusy, setLongTaskBusy] = useState(false);
   const [session, setSession] = useState<{
     id: string;
     cwd: string;
     title: string;
-    kind?: SessionKind;
     longTask?: LongTaskState;
     turnDiffs?: TurnDiff[];
     hasMore?: boolean;
@@ -762,17 +756,15 @@ export function App() {
     conversationRunning: Boolean(selectedSessionSummary?.running),
   });
   const [error, setError] = useState<string | null>(null);
-  const [composerFeedback, setComposerFeedback] = useState<string | null>(null);
+  const [composerFeedback, setComposerFeedback] = useState<{
+    message: string;
+    tone: 'info' | 'warning';
+  } | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [workspaceSearchOpen, setWorkspaceSearchOpen] = useState(false);
   const [workspaceQuery, setWorkspaceQuery] = useState('');
   const [sidebarClock, setSidebarClock] = useState(() => Date.now());
-  const [sidebarKindFilter, setSidebarKindFilter] = useState<SidebarKindFilter>(() => {
-    const stored = readStored<SidebarKindFilter>(UI_KEYS.sidebarKindFilter, 'all');
-    return stored === 'conversation' || stored === 'durable' ? stored : 'all';
-  });
-  const [workspaceFilterMenu, setWorkspaceFilterMenu] = useState<{ x: number; y: number } | null>(null);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [modelQuery, setModelQuery] = useState('');
   const [modelView, setModelView] = useState<'all' | 'provider'>('all');
@@ -803,8 +795,8 @@ export function App() {
     }, ...current].slice(0, 50));
   }, []);
 
-  const showComposerFeedback = useCallback((message: string) => {
-    setComposerFeedback(message);
+  const showComposerFeedback = useCallback((message: string, tone: 'info' | 'warning' = 'warning') => {
+    setComposerFeedback({ message, tone });
   }, []);
 
   const notifyExtension = useCallback((notice: ExtensionNotice) => {
@@ -1865,9 +1857,8 @@ export function App() {
     saveComposerDraft(composerDraftsRef.current, composerDraftKeyRef.current, {
       text: prompt,
       attachments: composerAttachments,
-      kind: draftKind,
     });
-  }, [composerAttachments, draftKind, prompt]);
+  }, [composerAttachments, prompt]);
 
   // 读取扩展当前的批准方式；扩展未安装时 available=false，界面不显示入口。
   useEffect(() => {
@@ -2279,19 +2270,17 @@ export function App() {
     return workspaces
       .map((item) => ({
         ...item,
-        sessions: item.sessions.filter((entry) => (
-          !entry.archived
-          && (sidebarKindFilter === 'all' || sessionKind(entry) === sidebarKindFilter)
-        )),
+        sessions: item.sessions.filter((entry) => !entry.archived),
       }))
-      .filter((item) => {
-        if (sidebarKindFilter !== 'all' && item.sessions.length === 0) return false;
-        if (!query) return true;
-        return `${item.name} ${item.cwd} ${item.sessions.map((entry) => entry.title).join(' ')}`.toLowerCase().includes(query);
-      });
-  }, [sidebarKindFilter, workspaceQuery, workspaces]);
-  const isNewConversation = messages.length === 0 && !turnActive;
-  const currentSessionKind = session?.kind ?? 'conversation';
+      .filter((item) => (
+        !query
+        || `${item.name} ${item.cwd} ${item.sessions.map((entry) => entry.title).join(' ')}`.toLowerCase().includes(query)
+      ));
+  }, [workspaceQuery, workspaces]);
+  // A persisted conversation remains a conversation even before its first
+  // visible transcript entry exists. This matters for goal initialization,
+  // where Durable can start the continuation before a user message arrives.
+  const isNewConversation = !session?.id;
   const allExpanded = workspaces.length > 0 && workspaces.every((item) => expanded.has(item.cwd));
 
   // ---------- 侧边栏：展开、排序与拖拽 ----------
@@ -2370,7 +2359,6 @@ export function App() {
   /** 把一次超长粘贴保存成文本附件，只转换这一批内容。 */
   async function attachPastedText(text: string): Promise<boolean> {
     const targetKey = composerDraftKeyRef.current;
-    const targetKind = draftKind;
     const baseAttachments = composerAttachments;
     try {
       const saved = await window.piApi.saveAttachment({ sessionId: session?.id || 'draft', text });
@@ -2378,7 +2366,7 @@ export function App() {
         id: crypto.randomUUID(), kind: 'file', name: saved.name, mime: saved.mime || 'text/plain',
         bytes: saved.bytes, lines: saved.lines, path: saved.path, marker: saved.marker,
       };
-      appendComposerAttachments([attachment], targetKey, targetKind, baseAttachments);
+      appendComposerAttachments([attachment], targetKey, baseAttachments);
       return true;
     } catch {
       return false;
@@ -2456,8 +2444,8 @@ export function App() {
 
   // ---------- 会话生命周期 ----------
 
-  function currentComposerDraft(kind: SessionKind = draftKind): ComposerDraft {
-    return { text: prompt, attachments: composerAttachments, kind };
+  function currentComposerDraft(): ComposerDraft {
+    return { text: prompt, attachments: composerAttachments };
   }
 
   /** Keep the active composer in its conversation slot before navigation. */
@@ -2472,16 +2460,14 @@ export function App() {
   /** Install a conversation-specific draft into the shared composer fields. */
   function installComposerDraft(
     key: string,
-    fallbackKind: SessionKind,
     restore = true,
   ): void {
     const next = restore
-      ? readComposerDraft(composerDraftsRef.current, key, fallbackKind)
-      : emptyComposerDraft(fallbackKind);
+      ? readComposerDraft(composerDraftsRef.current, key)
+      : emptyComposerDraft();
     composerDraftKeyRef.current = key;
     setPrompt(next.text);
     setComposerAttachments(next.attachments);
-    setDraftKind(next.kind);
   }
 
   function clearActiveComposerDraftText(): void {
@@ -2505,7 +2491,6 @@ export function App() {
    */
   async function startSession(
     cwd = session?.cwd || workspace,
-    kind: SessionKind = 'conversation',
     options: { restoreDraft?: boolean; checkpoint?: boolean } = {},
   ) {
     if (options.checkpoint !== false) checkpointComposerDraft();
@@ -2532,7 +2517,7 @@ export function App() {
     const nextKey = composerDraftKeyForNew(cwd);
     const restoreDraft = options.restoreDraft !== false;
     if (!restoreDraft) clearComposerDraft(composerDraftsRef.current, nextKey);
-    installComposerDraft(nextKey, kind, restoreDraft);
+    installComposerDraft(nextKey, restoreDraft);
     if (cwd) expandWorkspace(cwd);
     setComposerMenu(null);
     setModelPickerRequest(null);
@@ -2547,8 +2532,7 @@ export function App() {
     const previousKey = composerDraftKeyRef.current;
     const pending = currentComposerDraft();
     const hasPending = Boolean(pending.text.trim())
-      || pending.attachments.length > 0
-      || pending.kind === 'durable';
+      || pending.attachments.length > 0;
     checkpointComposerDraft();
     ++sessionLoadRef.current;
     ++outlineRequestRef.current;
@@ -2572,7 +2556,7 @@ export function App() {
       // Session drafts remain isolated because they use a different callback.
       moveComposerDraft(composerDraftsRef.current, previousKey, nextKey, pending);
     }
-    installComposerDraft(nextKey, pending.kind);
+    installComposerDraft(nextKey);
     setComposerMenu(null);
     setModelPickerRequest(null);
     setModelSelection(defaultModelSelection);
@@ -2713,12 +2697,10 @@ export function App() {
         void loadState().catch(() => { /* 列表刷新失败时保留错误提示 */ });
         return;
       }
-      const kind = detail.kind ?? item.kind ?? 'conversation';
       setSession({
         id: detail.id,
         cwd: detail.cwd,
         title: detail.title,
-        kind,
         longTask: detail.longTask,
         turnDiffs: detail.turnDiffs,
         hasMore: detail.page.hasOlder,
@@ -2740,7 +2722,7 @@ export function App() {
       }
       setHistoryLoading(false);
       setWorkspace(detail.cwd);
-      installComposerDraft(composerDraftKeyForSession(detail.id), kind);
+      installComposerDraft(composerDraftKeyForSession(detail.id));
       expandWorkspace(detail.cwd);
       setModelPickerRequest(null);
       setError(null);
@@ -2943,7 +2925,6 @@ export function App() {
   function appendComposerAttachments(
     additions: ComposerAttachment[],
     targetKey = composerDraftKeyRef.current,
-    targetKind = draftKind,
     baseAttachments?: ComposerAttachment[],
   ): void {
     const active = targetKey === composerDraftKeyRef.current;
@@ -2951,8 +2932,8 @@ export function App() {
     const current = stored
       ? { ...stored, attachments: [...stored.attachments] }
       : active
-        ? currentComposerDraft(targetKind)
-        : readComposerDraft(composerDraftsRef.current, targetKey, targetKind);
+        ? currentComposerDraft()
+        : readComposerDraft(composerDraftsRef.current, targetKey);
     const nextAttachments = [
       ...(baseAttachments ?? current.attachments),
       ...additions,
@@ -3002,7 +2983,6 @@ export function App() {
 
   async function addComposerFiles(files: File[]) {
     const targetKey = composerDraftKeyRef.current;
-    const targetKind = draftKind;
     let pendingAttachments = composerAttachments;
     const images = files.filter((file) => file.type.startsWith('image/'));
     const accepted = modelSelection.supportsImages === false && images.length > 0
@@ -3019,13 +2999,13 @@ export function App() {
         if (file.type.startsWith('image/')) {
           const data = await readFileBase64(file);
           const attachment: ComposerAttachment = { id: crypto.randomUUID(), kind: 'image', name: file.name || 'image.png', mime: file.type || 'image/png', bytes: file.size, data };
-          appendComposerAttachments([attachment], targetKey, targetKind, pendingAttachments);
+          appendComposerAttachments([attachment], targetKey, pendingAttachments);
           pendingAttachments = [...pendingAttachments, attachment];
         } else {
           const data = await readFileBase64(file);
           const saved = await window.piApi.saveUpload({ sessionId: session?.id, name: file.name || 'attachment', mime: file.type, data });
           const attachment: ComposerAttachment = { ...saved, id: crypto.randomUUID() };
-          appendComposerAttachments([attachment], targetKey, targetKind, pendingAttachments);
+          appendComposerAttachments([attachment], targetKey, pendingAttachments);
           pendingAttachments = [...pendingAttachments, attachment];
         }
       } catch (error) { showComposerFeedback(errorText(error)); }
@@ -3034,7 +3014,6 @@ export function App() {
 
   async function pickComposerAttachments() {
     const targetKey = composerDraftKeyRef.current;
-    const targetKind = draftKind;
     const baseAttachments = composerAttachments;
     try {
       const result = await window.piApi.pickAttachments({ sessionId: session?.id });
@@ -3047,7 +3026,7 @@ export function App() {
       if (rejectedImages > 0) {
         showComposerFeedback(`${modelSelection.label || '当前模型'} 不支持图片输入，已保留可发送的普通文件。`);
       }
-      appendComposerAttachments(accepted, targetKey, targetKind, baseAttachments);
+      appendComposerAttachments(accepted, targetKey, baseAttachments);
     } catch (error) { showComposerFeedback(errorText(error)); }
   }
 
@@ -3222,7 +3201,7 @@ export function App() {
         return true;
       }
       clearActiveComposerDraft();
-      await startSession(undefined, 'conversation', {
+      await startSession(undefined, {
         restoreDraft: false,
         checkpoint: false,
       });
@@ -3259,6 +3238,87 @@ export function App() {
       } catch (error) {
         pushNotification(errorText(error), 'error');
       }
+      return true;
+    }
+    if (command.route === 'goal.control') {
+      const currentSession = sessionRef.current;
+      const goalCommand = parseGoalCommandArgument(command.argument);
+      if (!currentSession?.id && goalCommand.action === 'set') {
+        if (!goalCommand.text) {
+          showComposerFeedback('/goal 后需要填写目标。');
+          return true;
+        }
+        if (!workspace) {
+          showComposerFeedback('请先选择一个工作区，再设置长期目标。');
+          return true;
+        }
+        setLongTaskBusy(true);
+        try {
+          const created = await window.piApi.createConversation({
+            cwd: workspace,
+            title: goalCommand.text.replace(/\s+/g, ' ').slice(0, 48),
+          });
+          await window.piApi.conversationAction({
+            kind: 'session',
+            id: created.id,
+            action: 'long-task-set',
+            goal: goalCommand.text,
+          });
+          clearActiveComposerDraft();
+          await loadState();
+          await openSession(created);
+          setBusy(true);
+          showComposerFeedback('新目标已建立，正在执行。', 'info');
+        } catch (error) {
+          showComposerFeedback(errorText(error));
+        } finally {
+          setLongTaskBusy(false);
+        }
+        return true;
+      }
+      if (!currentSession?.id) {
+        showComposerFeedback('请先打开一个会话，再使用 /goal。', 'info');
+        return true;
+      }
+      if (goalCommand.action === 'view') {
+        const state = currentSession.longTask;
+        if (!state?.enabled || !state.goal) {
+          showComposerFeedback('当前还没有目标。使用 /goal <目标> 开始。', 'info');
+        } else {
+          const statusLabels: Record<LongTaskState['status'], string> = {
+            idle: '等待目标',
+            active: '执行中',
+            paused: '已暂停',
+            blocked: '等待补充',
+            completed: '已完成',
+            failed: '执行失败',
+          };
+          const goalPreview = state.goal.length > 320 ? `${state.goal.slice(0, 320)}…` : state.goal;
+          showComposerFeedback(`当前目标 · ${statusLabels[state.status]}：${goalPreview}`, 'info');
+        }
+        return true;
+      }
+      if ((goalCommand.action === 'set' || goalCommand.action === 'edit') && !goalCommand.text) {
+        showComposerFeedback(`/${goalCommand.action} 后需要填写新的目标。`);
+        return true;
+      }
+      const action = goalCommand.action === 'set'
+        ? 'long-task-set'
+        : goalCommand.action === 'edit'
+          ? 'long-task-edit'
+          : goalCommand.action === 'complete'
+            ? 'long-task-complete'
+            : goalCommand.action === 'clear'
+              ? 'long-task-clear'
+              : goalCommand.action === 'pause'
+                ? 'long-task-pause'
+                : 'long-task-resume';
+      await executeLongTaskAction(action, {
+        goal: goalCommand.action === 'set' || goalCommand.action === 'edit'
+          ? goalCommand.text
+          : undefined,
+        summary: goalCommand.action === 'complete' ? goalCommand.text : undefined,
+      });
       return true;
     }
     if (command.route === 'assistant.copy') {
@@ -3381,7 +3441,7 @@ export function App() {
     }
     const command = composerCommandOptions[index];
     if (!command) return;
-    if (command.source === 'builtin') {
+    if (command.source === 'builtin' && !command.argumentHint) {
       setComposerMenu(null);
       clearActiveComposerDraftText();
       setComposerMenuIndex(0);
@@ -3716,7 +3776,6 @@ export function App() {
           id: saved.id,
           cwd: saved.cwd,
           title: saved.title,
-          kind: saved.kind ?? session?.kind ?? draftKind,
           longTask: saved.longTask,
           turnDiffs: saved.turnDiffs,
           hasMore: saved.page.hasOlder,
@@ -3815,7 +3874,6 @@ export function App() {
       try {
         created = await window.piApi.createConversation({
           cwd: workspace,
-          kind: draftKind,
         });
       }
       catch (error) { setError(errorText(error)); return; }
@@ -3824,18 +3882,15 @@ export function App() {
         id: created.id,
         cwd: created.cwd,
         title: created.title,
-        kind: created.kind ?? draftKind,
         longTask: created.longTask,
       };
       const nextDraftKey = composerDraftKeyForSession(current.id);
       moveComposerDraft(composerDraftsRef.current, sourceDraftKey, nextDraftKey, {
         text: draftText,
         attachments: composerAttachments,
-        kind: current.kind ?? 'conversation',
       });
       composerDraftKeyRef.current = nextDraftKey;
       setSession(current);
-      setDraftKind(created.kind ?? draftKind);
       setMessages([]);
       setRequestTraces([]);
       // 草稿会话也要马上出现在侧边栏，否则用户发完第一条消息后找不到入口。
@@ -3900,9 +3955,18 @@ export function App() {
     queuedDrainSessionsRef.current.delete(sessionId);
   }
 
-  async function changeLongTaskStatus(action: 'long-task-pause' | 'long-task-resume') {
+  async function executeLongTaskAction(
+    action:
+      | 'long-task-set'
+      | 'long-task-edit'
+      | 'long-task-complete'
+      | 'long-task-clear'
+      | 'long-task-pause'
+      | 'long-task-resume',
+    payload: { goal?: string; completionCriteria?: string; summary?: string } = {},
+  ) {
     const currentSession = sessionRef.current;
-    if (!currentSession?.id || currentSession.kind !== 'durable' || longTaskBusy) return;
+    if (!currentSession?.id || longTaskBusy) return;
     const sessionId = currentSession.id;
     setLongTaskBusy(true);
     try {
@@ -3910,17 +3974,22 @@ export function App() {
         kind: 'session',
         id: sessionId,
         action,
+        ...payload,
       });
       if (sessionRef.current?.id !== sessionId) return;
+      setComposerFeedback(null);
       if ('longTask' in result && result.longTask) {
         setSession((current) => current?.id === sessionId
           ? { ...current, longTask: result.longTask }
           : current);
       }
-      if (action === 'long-task-resume') {
+      const started = 'started' in result && result.started;
+      if (started) {
         setBusy(true);
         setError(null);
-      } else {
+      } else if (action === 'long-task-pause'
+        || action === 'long-task-complete'
+        || action === 'long-task-clear') {
         setMessages((current) => current.map((message) => ({ ...message, streaming: false })));
         setBusy(false);
         setError(null);
@@ -3933,6 +4002,10 @@ export function App() {
     } finally {
       setLongTaskBusy(false);
     }
+  }
+
+  async function changeLongTaskStatus(action: 'long-task-pause' | 'long-task-resume') {
+    await executeLongTaskAction(action);
   }
 
   async function stopGeneration() {
@@ -3981,7 +4054,6 @@ export function App() {
     saveComposerDraft(composerDraftsRef.current, composerDraftKeyRef.current, {
       text: item.text,
       attachments: item.attachments,
-      kind: draftKind,
     });
     setPrompt(item.text);
     setComposerAttachments(item.attachments);
@@ -4349,7 +4421,9 @@ export function App() {
     [outlineItems.length, outlineActive],
   );
   const composerCommandOptions = composerMenu?.kind === 'slash'
-    ? composerCommands.filter((command) => `${command.name} ${command.description}`.toLowerCase().includes(composerMenu.query.toLowerCase()))
+    ? composerCommands.filter((command) => (
+        `${command.name} ${command.description}`.toLowerCase().includes(composerMenu.query.toLowerCase())
+      ))
     : [];
   const composerFileOptions = composerMenu?.kind === 'file' ? composerFiles : [];
   const composerOptionsCount = composerMenu?.kind === 'slash' ? composerCommandOptions.length : composerFileOptions.length;
@@ -4716,23 +4790,6 @@ export function App() {
           <span>工作区</span>
           <div>
             {workspaces.length > 0 && <>
-              <button
-                className={`icon-button ${sidebarKindFilter !== 'all' ? 'is-active' : ''}`}
-                aria-label="筛选工作项类型"
-                aria-haspopup="menu"
-                aria-expanded={Boolean(workspaceFilterMenu)}
-                title={sidebarKindFilterLabel(sidebarKindFilter)}
-                onClick={(event) => {
-                  if (workspaceFilterMenu) {
-                    setWorkspaceFilterMenu(null);
-                    return;
-                  }
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  setWorkspaceFilterMenu({ x: rect.right - 224, y: rect.bottom + 5 });
-                }}
-              >
-                <ListFilter />
-              </button>
               <button className="icon-button" aria-label={allExpanded ? '收起所有工作区' : '展开所有工作区'} title={allExpanded ? '收起所有工作区' : '展开所有工作区'} onClick={toggleAllExpanded}>{allExpanded ? <ChevronsUp /> : <ChevronsDown />}</button>
               <button className={`icon-button ${workspaceSearchOpen ? 'is-active' : ''}`} aria-label="搜索工作区" title="搜索工作区" onClick={() => { setWorkspaceSearchOpen((value) => !value); setWorkspaceQuery(''); }}><Search /></button>
             </>}
@@ -4810,7 +4867,6 @@ export function App() {
                 {isOpen && (
                   <div className="sessions">
                     {item.sessions.map((sessionItem) => {
-                      const kind = sessionKind(sessionItem);
                       return <div className={`sidebar-row-shell session-row-shell ${sessionItem.pinned ? 'is-pinned' : ''}`} key={sessionItem.id}>
                       <button
                         key={sessionItem.id}
@@ -4848,7 +4904,6 @@ export function App() {
                         <span className="session-title">{sessionItem.title}</span>
                         <span className="session-meta">
                           {sessionItem.pinned && <span className="session-pin-mark" title="已置顶">置顶</span>}
-                          <span className={`session-kind-badge is-${kind}`}>{kind === 'durable' ? '长期' : '对话'}</span>
                           {sessionItem.running
                             ? <span className="session-running" role="status" aria-label="会话正在运行" title="会话正在运行"><LoaderCircle className="spin" aria-hidden="true" /></span>
                             : <span className="session-time">{relativeTime(sessionItem.updatedAt, sidebarClock)}</span>}
@@ -4865,7 +4920,7 @@ export function App() {
           })}
           {!stateLoading && visibleWorkspaces.length === 0 && (
             <div className="sidebar-empty" role="status" aria-live="polite">
-              <span>{workspaceQuery ? '没有匹配的结果' : sidebarKindFilter === 'durable' ? '暂无长期任务' : sidebarKindFilter === 'conversation' ? '暂无对话' : '还没有工作区'}</span>
+              <span>{workspaceQuery ? '没有匹配的结果' : '还没有工作区'}</span>
             </div>
           )}
         </div>
@@ -4881,7 +4936,7 @@ export function App() {
           {sidebarCollapsed && <button className="icon-button sidebar-expand" aria-label="展开侧边栏" title="展开侧边栏" onClick={() => setSidebarCollapsed(false)}><PanelLeft /></button>}
           {!isNewConversation && <div className="chat-heading">
             <h1>{agentView.kind === 'child' ? `${agentView.child.agent} · 子智能体` : (session?.title || 'Pi Studio')}</h1>
-            {agentView.kind === 'conversation' && currentSessionKind === 'durable' && <span className="chat-heading-kind"><Clock3 aria-hidden="true" />长期任务</span>}
+            {agentView.kind === 'conversation' && goalStatusLabel(session?.longTask) && <span className="chat-heading-kind"><Target aria-hidden="true" />{goalStatusLabel(session?.longTask)}</span>}
           </div>}
           <div className="chat-actions">
             <NotificationCenter
@@ -5123,12 +5178,13 @@ export function App() {
         />}
         {/* 输入区：计划、排队消息、附件与命令菜单 */}
         <div className="composer-dock" hidden={agentView.kind !== 'conversation'}>
-          {!isNewConversation && currentSessionKind === 'durable' && (
+          {!isNewConversation && (
             <LongTaskDock
               state={session?.longTask}
               running={turnActive}
               busy={longTaskBusy}
               onChange={(action) => void changeLongTaskStatus(action)}
+              onEditGoal={() => sendPromptFromExtension('/goal ', false)}
             />
           )}
           {(todoDetails || todoPanelOpen) && <TodoDock details={todoDetails} open={todoPanelOpen} onToggle={() => setTodoPanelOpen((value) => !value)} />}
@@ -5136,15 +5192,8 @@ export function App() {
           {isNewConversation && <div className="new-conversation-intro">
             <h2>今天，<em>想做点什么？</em></h2>
             <p id="workspace-selection-hint" role="status">{workspace
-              ? draftKind === 'durable'
-                ? '建立一份需要跨多轮持续推进的工作项。'
-                : '从一个念头开始，在这个工作区里继续。'
-              : draftKind === 'durable'
-                ? '先选择一个工作区，再创建长期任务。'
-                : '先选择一个工作区，再开始对话。'}</p>
-          </div>}
-          {isNewConversation && <div className="new-conversation-kind">
-            <ConversationKindSwitch value={draftKind} onChange={setDraftKind} />
+              ? '从一个念头开始，在这个工作区里继续。'
+              : '先选择一个工作区，再开始对话。'}</p>
           </div>}
           <div className="composer-wrap" ref={composerWrapRef}>
             {composerMenu && <div className="composer-picker" role="listbox" aria-label={composerMenu.kind === 'slash' ? '命令与技能' : '工作区文件与目录'}>
@@ -5191,7 +5240,11 @@ export function App() {
               onSendPrompt={sendPromptFromExtension}
               onNotify={notifyExtension}
             />
-            {composerFeedback && <ComposerFeedback message={composerFeedback} onDismiss={() => setComposerFeedback(null)} />}
+            {composerFeedback && <ComposerFeedback
+              message={composerFeedback.message}
+              tone={composerFeedback.tone}
+              onDismiss={() => setComposerFeedback(null)}
+            />}
             <div
               className="composer"
               onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }}
@@ -5281,7 +5334,15 @@ export function App() {
               aria-describedby={isNewConversation ? 'workspace-selection-hint' : undefined}
               className={`${queuedPrompts.length > 0 ? 'has-queued' : ''} ${composing ? 'is-composing' : ''}`.trim() || undefined}
               aria-expanded={Boolean(composerMenu)}
-              placeholder={compaction.active ? '正在压缩上下文，完成后自动继续…' : queuedEditContext ? '编辑排队消息 · Cmd/Ctrl+Enter 放回原位置 · Shift+Enter 换行' : turnActive ? 'Enter 补充当前任务 · Cmd/Ctrl+Enter 排队 · Shift+Enter 换行' : draftKind === 'durable' ? '描述目标与完成条件，或输入 / 命令、@ 文件…' : '描述你的想法，或输入 / 命令、@ 文件…'}
+              placeholder={compaction.active
+                ? '正在压缩上下文，完成后自动继续…'
+                : queuedEditContext
+                  ? '编辑排队消息 · Cmd/Ctrl+Enter 放回原位置 · Shift+Enter 换行'
+                  : turnActive
+                    ? 'Enter 补充当前任务 · Cmd/Ctrl+Enter 排队 · Shift+Enter 换行'
+                    : goalStatusLabel(session?.longTask)
+                      ? '描述目标与完成条件，或输入 /goal、/ 命令、@ 文件…'
+                      : '描述你的想法，或输入 /goal、/ 命令、@ 文件…'}
               rows={2}
               onScroll={(event) => {
                 // 高亮层与 textarea 同步滚动，保证长文本换行时不错位。
@@ -6226,23 +6287,6 @@ export function App() {
         { label: '关闭其他标签页', disabled: panelTabs.length <= 1, run: () => closePanelTabs(tabMenu.id, 'others') },
         { label: '关闭所有标签页', run: () => closePanelTabs(tabMenu.id, 'all') },
       ]} />}
-      {workspaceFilterMenu && <ActionMenu
-        x={workspaceFilterMenu.x}
-        y={workspaceFilterMenu.y}
-        onClose={() => setWorkspaceFilterMenu(null)}
-        items={([
-          ['all', '显示全部'],
-          ['conversation', '只看对话'],
-          ['durable', '只看长期任务'],
-        ] as const).map(([value, label]) => ({
-          label,
-          checked: sidebarKindFilter === value,
-          run: () => {
-            setSidebarKindFilter(value);
-            writeStored(UI_KEYS.sidebarKindFilter, value);
-          },
-        }))}
-      />}
       {/* 右侧工作台：标签、文件树与预览 */}
       {filesOpen && (
         <>

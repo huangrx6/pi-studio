@@ -6,13 +6,14 @@
  * 控件的少数命令才在这里登记，避免每接入一个扩展就要改前端分支。
  */
 
-/** @typedef {'session.new' | 'model.picker' | 'thinking.picker' | 'settings.open' | 'settings.mcp' | 'assistant.copy'} StudioCommandRoute */
+/** @typedef {'session.new' | 'model.picker' | 'thinking.picker' | 'goal.control' | 'settings.open' | 'settings.mcp' | 'assistant.copy'} StudioCommandRoute */
 
 /** @type {Readonly<Record<string, StudioCommandRoute>>} */
 export const STUDIO_COMMAND_ROUTES = Object.freeze({
   new: 'session.new',
   model: 'model.picker',
   thinking: 'thinking.picker',
+  goal: 'goal.control',
   settings: 'settings.open',
   mcp: 'settings.mcp',
   copy: 'assistant.copy',
@@ -61,4 +62,28 @@ export function parseStudioCommand(input) {
 export function normalizeThinkingLevelArgument(value) {
   const normalized = value.trim().toLowerCase().replace(/[-_\s]+/g, '');
   return THINKING_LEVELS.has(normalized) ? normalized : null;
+}
+
+/**
+ * 解析 `/goal` 的受控动作。未知首词会作为新目标的一部分，因此目标本身仍可
+ * 自然书写；需要编辑或结束目标时使用明确的关键字。
+ *
+ * @param {string} value
+ * @returns {{ action: 'view', text: '' }
+ *   | { action: 'set' | 'edit' | 'complete', text: string }
+ *   | { action: 'pause' | 'resume' | 'clear', text: '' }}
+ */
+export function parseGoalCommandArgument(value) {
+  const argument = typeof value === 'string' ? value.trim() : '';
+  if (!argument) return { action: 'view', text: '' };
+  const match = argument.match(/^(edit|pause|resume|complete|clear)(?:\s+([\s\S]*))?$/i);
+  if (!match) return { action: 'set', text: argument };
+  const action = match[1].toLowerCase();
+  if (action === 'pause' || action === 'resume' || action === 'clear') {
+    return { action, text: '' };
+  }
+  return {
+    action,
+    text: (match[2] || '').trim(),
+  };
 }

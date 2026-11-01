@@ -1,6 +1,7 @@
 import type { ChatMessage, RequestTrace, TurnDiff } from './chat-types';
 import type { ModelSelection } from './model-types';
 
+/** Existing rows may still carry the pre-/goal kind; new product logic ignores it. */
 export type ConversationKind = 'conversation' | 'durable';
 
 export type LongTaskStatus =

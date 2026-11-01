@@ -13,6 +13,7 @@ const LONG_TASK_EXTENSION_NAME = 'studio-long-task';
 const LONG_TASK_TOOL_NAME = 'long_task';
 const LONG_TASK_CONTINUATION_PREFIX = '[studio-long-task-continuation]';
 const MAX_GOAL_LENGTH = 32_000;
+const MAX_LONG_TASK_COMMAND_LENGTH = 4_000;
 const MAX_SUMMARY_LENGTH = 8_000;
 const MAX_REASON_LENGTH = 8_000;
 const MAX_LONG_TASK_CONTINUATIONS = 32;
@@ -30,6 +31,15 @@ const contracts = new WeakMap();
 
 function cleanText(value, maximum = MAX_GOAL_LENGTH) {
   return typeof value === 'string' ? value.trim().slice(0, maximum) : '';
+}
+
+function validateLongTaskGoal(value) {
+  const goal = cleanText(value, MAX_LONG_TASK_COMMAND_LENGTH + 1);
+  if (!goal) throw new Error('目标不能为空');
+  if (goal.length > MAX_LONG_TASK_COMMAND_LENGTH) {
+    throw new Error(`目标不能超过 ${MAX_LONG_TASK_COMMAND_LENGTH} 个字符；更长的说明请写入文件后在目标中引用。`);
+  }
+  return goal;
 }
 
 function emptyLongTaskState() {
@@ -122,6 +132,77 @@ function initializeLongTaskState(target, options = {}) {
   }
   Object.assign(target, state);
   return state;
+}
+
+function replaceLongTaskState(target, options = {}) {
+  const now = Number(options.now) || Date.now();
+  const goal = validateLongTaskGoal(options.goal);
+  const next = emptyLongTaskState();
+  next.enabled = true;
+  next.goal = goal;
+  next.completionCriteria = cleanText(options.completionCriteria) || goal;
+  next.status = 'active';
+  next.createdAt = now;
+  next.updatedAt = now;
+  Object.assign(target, next);
+  return next;
+}
+
+function editLongTaskState(target, options = {}) {
+  const current = normalizeLongTaskState(target);
+  if (!current.enabled || !current.goal) {
+    throw new Error('当前会话没有可编辑的长期目标');
+  }
+  const now = Number(options.now) || Date.now();
+  const goal = validateLongTaskGoal(options.goal);
+  const previousStatus = LONG_TASK_STATUSES.has(options.previousStatus)
+    ? options.previousStatus
+    : current.status;
+  current.goal = goal;
+  current.completionCriteria = cleanText(options.completionCriteria) || goal;
+  current.updatedAt = now;
+  if (previousStatus === 'paused') {
+    current.status = 'paused';
+  } else {
+    current.status = 'active';
+    current.pauseReason = '';
+    current.completionSummary = '';
+    current.completedAt = 0;
+    current.blockReason = '';
+    current.blockedAt = 0;
+  }
+  Object.assign(target, current);
+  return current;
+}
+
+function shouldStartLongTaskGoal(mode, previousStatus) {
+  // Replacing a goal always starts a new lifecycle. Editing an existing goal
+  // preserves an explicit pause, while active or blocked goals continue.
+  return mode === 'replace' || previousStatus !== 'paused';
+}
+
+function completeLongTaskState(target, options = {}) {
+  const current = normalizeLongTaskState(target);
+  if (!current.enabled || !current.goal) {
+    throw new Error('当前会话没有可完成的长期目标');
+  }
+  const now = Number(options.now) || Date.now();
+  current.status = 'completed';
+  current.completionSummary = cleanText(options.summary, MAX_SUMMARY_LENGTH)
+    || '用户提前结束了目标。';
+  current.completedAt = now;
+  current.updatedAt = now;
+  current.pauseReason = '';
+  current.blockReason = '';
+  current.blockedAt = 0;
+  Object.assign(target, current);
+  return current;
+}
+
+function clearLongTaskState(target) {
+  const next = emptyLongTaskState();
+  Object.assign(target, next);
+  return next;
 }
 
 function publicLongTaskState(value) {
@@ -387,11 +468,15 @@ module.exports = {
   LONG_TASK_SCHEMA_VERSION,
   LONG_TASK_TOOL_NAME,
   MAX_LONG_TASK_CONTINUATIONS,
+  MAX_LONG_TASK_COMMAND_LENGTH,
   MAX_LONG_TASK_STALLED_CONTINUATIONS,
   cleanText,
+  clearLongTaskState,
+  completeLongTaskState,
   continuationText,
   createLongTaskContract,
   createLongTaskExtension,
+  editLongTaskState,
   emptyLongTaskState,
   initializeLongTaskState,
   isLongTaskContinuation,
@@ -400,4 +485,7 @@ module.exports = {
   normalizeLongTaskState,
   publicLongTaskState,
   readLongTaskState,
+  replaceLongTaskState,
+  shouldStartLongTaskGoal,
+  validateLongTaskGoal,
 };

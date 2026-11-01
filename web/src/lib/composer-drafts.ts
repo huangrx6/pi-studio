@@ -1,10 +1,8 @@
 import type { ComposerAttachment } from '../types/chat-types';
-import type { ConversationKind } from '../types/durable-types';
 
 export type ComposerDraft = {
   text: string;
   attachments: ComposerAttachment[];
-  kind: ConversationKind;
 };
 
 export type ComposerDraftStore = Map<string, ComposerDraft>;
@@ -17,19 +15,18 @@ export function composerDraftKeyForNew(cwd: string): string {
   return `new:${cwd}`;
 }
 
-export function emptyComposerDraft(kind: ConversationKind): ComposerDraft {
-  return { text: '', attachments: [], kind };
+export function emptyComposerDraft(): ComposerDraft {
+  return { text: '', attachments: [] };
 }
 
 export function readComposerDraft(
   store: ComposerDraftStore,
   key: string,
-  fallbackKind: ConversationKind,
 ): ComposerDraft {
   const saved = store.get(key);
   return saved
     ? { ...saved, attachments: [...saved.attachments] }
-    : emptyComposerDraft(fallbackKind);
+    : emptyComposerDraft();
 }
 
 export function saveComposerDraft(
@@ -37,7 +34,7 @@ export function saveComposerDraft(
   key: string,
   draft: ComposerDraft,
 ): void {
-  if (!draft.text && draft.attachments.length === 0 && draft.kind === 'conversation') {
+  if (!draft.text && draft.attachments.length === 0) {
     store.delete(key);
     return;
   }

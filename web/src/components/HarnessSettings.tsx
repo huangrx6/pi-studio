@@ -870,7 +870,7 @@ export function HarnessSettings({
             </section>
 
             <section className="harness-policy-group is-wide">
-              <header><strong>长期任务安全阀</strong><span>防止目标空转或在单次运行中无限循环</span></header>
+              <header><strong>长期目标安全阀</strong><span>防止目标空转或在单次运行中无限循环</span></header>
               <div className="harness-policy-fields">
                 <label>
                   <span>单次运行轮次上限</span>

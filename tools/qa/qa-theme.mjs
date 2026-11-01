@@ -64,7 +64,7 @@ await page.addInitScript(() => {
     contextWindow: 1048576,
     reasoning: true,
   }];
-  // 两个工作区：第一个带对话和长期任务（侧边栏操作与对齐检查的目标），第二个用于删除确认。
+  // 两个工作区：第一个带普通会话与按需启用的目标状态，第二个用于删除确认。
   const now = Date.now();
   const workspaces = [
     {
@@ -72,7 +72,34 @@ await page.addInitScript(() => {
       name: 'pi-studio',
       sessions: [
         { id: 'theme-review', cwd, title: '全局主题预览', kind: 'conversation', goal: '', pinned: false, archived: false, createdAt: now - 120000, messageCount: 3, updatedAt: now },
-        { id: 'durable-review', cwd, title: '长期任务预览', kind: 'durable', goal: '完成主题回归', pinned: false, archived: false, createdAt: now - 7200000, messageCount: 1, updatedAt: now - 66 * 60_000 },
+        {
+          id: 'goal-review',
+          cwd,
+          title: '目标会话预览',
+          kind: 'conversation',
+          goal: '完成主题回归',
+          longTask: {
+            enabled: true,
+            goal: '完成主题回归',
+            completionCriteria: '主题与状态样式通过回归检查。',
+            status: 'active',
+            iteration: 2,
+            lastProgress: '统一主题令牌与组件状态。',
+            nextStep: '检查动态目标状态。',
+            pauseReason: '',
+            completionSummary: '',
+            blockReason: '',
+            createdAt: now - 7200000,
+            updatedAt: now - 60000,
+            completedAt: 0,
+            blockedAt: 0,
+          },
+          pinned: false,
+          archived: false,
+          createdAt: now - 7200000,
+          messageCount: 1,
+          updatedAt: now - 66 * 60_000,
+        },
       ],
     },
     { cwd: '/workspace/another-project', name: 'another-project', sessions: [] },
@@ -80,7 +107,7 @@ await page.addInitScript(() => {
 
   // 2.2 测试钩子：记录 UI 实际发给“主进程”的数据，供断言检查。
   window.__createdWorkspaces = [];  // createConversation 收到的 cwd
-  window.__createdKinds = [];       // createConversation 收到的会话类型
+  window.__createdKinds = [];       // 新会话不得再提交类型字段
   window.__sidebarActions = [];     // conversationAction 的调用历史
   // window.__nativeTheme / __promptFailure / __chosenWorkspace / __copiedSessionId
   // 会在后续步骤中动态赋值，分别模拟原生主题、发送失败、文件夹选择与剪贴板。
@@ -218,14 +245,15 @@ await page.addInitScript(() => {
     },
     sessionSubagents: async () => [],
     // 新建会话；记录目标工作区，但不会真的加入列表（用于断言“没有意外创建”）。
-    createConversation: async ({ cwd: selected, kind, goal } = {}) => {
+    createConversation: async (input = {}) => {
+      const { cwd: selected, goal } = input;
       window.__createdWorkspaces.push(selected);
-      window.__createdKinds.push(kind);
+      window.__createdKinds.push(Object.hasOwn(input, 'kind') ? input.kind : null);
       return {
         id: `new-${window.__createdWorkspaces.length}`,
         cwd: selected,
         title: '新会话',
-        kind: kind || 'conversation',
+        kind: 'conversation',
         goal: goal || '',
         pinned: false,
         archived: false,
@@ -315,11 +343,9 @@ try {
   await page.goto(process.env.PREVIEW_URL || 'http://127.0.0.1:5180');
   await page.locator('.composer textarea').waitFor();
   const workspacePicker = page.getByRole('button', { name: '新对话工作区', exact: true });
-  const conversationKind = page.locator('.conversation-kind-switch').getByRole('button', { name: '对话', exact: true });
-  const durableKind = page.locator('.conversation-kind-switch').getByRole('button', { name: '长期任务', exact: true });
   assert.equal(await workspacePicker.innerText(), '选择工作区');
-  assert.equal(await conversationKind.getAttribute('aria-pressed'), 'true');
-  assert.equal(await durableKind.getAttribute('aria-pressed'), 'false');
+  assert.equal(await page.locator('.conversation-kind-switch').count(), 0);
+  assert.match(await page.locator('#workspace-selection-hint').innerText(), /先选择一个工作区，再开始对话/);
 
   // 没有工作区时可以先输入草稿，但发送按钮必须禁用；按 Enter 不能创建会话。
   await page.getByRole('textbox', { name: '发送给 Pi 的消息' }).fill('保留这份草稿');
@@ -348,23 +374,19 @@ try {
   await workspacePicker.click();
   await page.getByRole('option', { name: 'another-project /workspace/another-project', exact: true }).click();
   assert.equal(await page.getByRole('textbox', { name: '发送给 Pi 的消息' }).inputValue(), '保留这份草稿');
-  await durableKind.click();
-  assert.equal(await durableKind.getAttribute('aria-pressed'), 'true');
-  assert.match(await page.locator('#workspace-selection-hint').innerText(), /跨多轮持续推进/);
+  assert.match(await page.locator('#workspace-selection-hint').innerText(), /从一个念头开始/);
 
   // 发送失败（IPC 抛错）时展示错误提示；此时 createConversation 已被调用一次，
-  // 目标工作区就是 another-project，类型是长期任务；随后点击“新会话”
-  // 不应重复创建，并应回到默认的普通对话类型。
+  // 目标工作区就是 another-project；随后点击“新会话”不应重复创建。
   await page.evaluate(() => { window.__promptFailure = 'Fixture send failure'; });
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   await page.getByRole('alert').filter({ hasText: 'Fixture send failure' }).waitFor();
   assert.deepEqual(await page.evaluate(() => window.__createdWorkspaces), ['/workspace/another-project']);
-  assert.deepEqual(await page.evaluate(() => window.__createdKinds), ['durable']);
+  assert.deepEqual(await page.evaluate(() => window.__createdKinds), [null]);
   await page.getByRole('button', { name: '新会话', exact: true }).first().click();
   assert.equal(await workspacePicker.innerText(), 'another-project');
-  assert.equal(await conversationKind.getAttribute('aria-pressed'), 'true');
   assert.deepEqual(await page.evaluate(() => window.__createdWorkspaces), ['/workspace/another-project']);
-  assert.deepEqual(await page.evaluate(() => window.__createdKinds), ['durable']);
+  assert.deepEqual(await page.evaluate(() => window.__createdKinds), [null]);
   await page.evaluate(() => { window.__promptFailure = undefined; });
 
   // -------------------------------------------------------------------------
@@ -444,10 +466,7 @@ try {
 
     // 欢迎页的模型选择器、工作区菜单与模型/推理菜单。
     await capture(`${mode}-new-chat`);
-    await durableKind.click();
-    assert.equal(await durableKind.getAttribute('aria-pressed'), 'true');
-    await capture(`${mode}-new-chat-durable`);
-    await conversationKind.click();
+    assert.equal(await page.locator('.conversation-kind-switch').count(), 0);
     await workspacePicker.click();
     await capture(`${mode}-workspace-menu`);
     await page.keyboard.press('Escape');
@@ -520,22 +539,19 @@ try {
   // -------------------------------------------------------------------------
   // 10. 侧边栏会话操作
   // -------------------------------------------------------------------------
-  // 对话和长期任务的 badge、时间分别落在固定网格列，不能因 badge 文案或
-  // 时间长度不同而左右错位；超过一分钟后也不再显示秒。
+  // 统一会话不再显示永久类型 badge；时间列仍需跨行对齐。
   const conversationShell = page.locator('.session-row-shell').filter({ hasText: '全局主题预览' });
-  const durableShell = page.locator('.session-row-shell').filter({ hasText: '长期任务预览' });
+  const goalShell = page.locator('.session-row-shell').filter({ hasText: '目标会话预览' });
   const alignmentMetrics = await page.evaluate(() => {
     const summarize = (title) => {
       const shell = Array.from(document.querySelectorAll('.session-row-shell'))
         .find((element) => element.querySelector('.session-title')?.textContent === title);
       const row = shell?.querySelector('.session-row');
       const meta = shell?.querySelector('.session-meta');
-      const kind = shell?.querySelector('.session-kind-badge');
       const time = shell?.querySelector('.session-time');
       return {
         row: row?.getBoundingClientRect().toJSON(),
         meta: meta?.getBoundingClientRect().toJSON(),
-        kind: kind?.getBoundingClientRect().toJSON(),
         time: time?.getBoundingClientRect().toJSON(),
         grid: meta ? getComputedStyle(meta).gridTemplateColumns : null,
         gap: meta ? getComputedStyle(meta).columnGap : null,
@@ -544,26 +560,22 @@ try {
     };
     return {
       conversation: summarize('全局主题预览'),
-      durable: summarize('长期任务预览'),
+      goal: summarize('目标会话预览'),
     };
   });
-  assert.ok(alignmentMetrics.conversation.kind && alignmentMetrics.durable.kind);
-  assert.ok(alignmentMetrics.conversation.time && alignmentMetrics.durable.time);
+  assert.equal(await page.locator('.session-kind-badge').count(), 0);
+  assert.ok(alignmentMetrics.conversation.time && alignmentMetrics.goal.time);
   assert.ok(
-    Math.abs(alignmentMetrics.conversation.kind.x - alignmentMetrics.durable.kind.x) < 0.5,
-    `badge columns differ: ${JSON.stringify(alignmentMetrics)}`,
-  );
-  assert.ok(
-    Math.abs(alignmentMetrics.conversation.time.x - alignmentMetrics.durable.time.x) < 0.5,
+    Math.abs(alignmentMetrics.conversation.time.x - alignmentMetrics.goal.time.x) < 0.5,
     `time columns differ: ${JSON.stringify(alignmentMetrics)}`,
   );
-  assert.equal(await durableShell.locator('.session-time').innerText(), '1h6m');
-  await capture('sidebar-kind-alignment');
+  assert.equal(await goalShell.locator('.session-time').innerText(), '1h6m');
+  await capture('sidebar-session-alignment');
 
-  // 长期任务打开后要在会话标题旁保留明确但克制的类型标记。
-  await durableShell.locator('.session-row').click();
-  await page.locator('.chat-heading-kind').filter({ hasText: '长期任务' }).waitFor();
-  await capture('durable-conversation');
+  // 目标存在时只在标题旁显示动态状态；会话本身仍是普通会话。
+  await goalShell.locator('.session-row').click();
+  await page.locator('.chat-heading-kind').filter({ hasText: '目标执行中' }).waitFor();
+  await capture('goal-conversation');
   await conversationShell.locator('.session-row').click();
   await page.getByRole('heading', { name: '全局主题预览', exact: true }).waitFor();
 

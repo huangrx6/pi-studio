@@ -21,7 +21,6 @@ import type {
 } from './types/harness-types';
 import type {
   ConversationEvent,
-  ConversationKind,
   ConversationOutline,
   ConversationPage,
   ConversationPageCursor,
@@ -278,10 +277,9 @@ declare global {
       confirmResponse(payload: PermissionConfirmResponse): void;
       /** 读取侧边栏工作区/会话列表、当前模型与工作目录。 */
       state(cwd?: string): Promise<{ workspaces: PiWorkspace[]; model: ModelSelection; cwd: string }>;
-      /** 新建一条 Durable 会话；长期任务同时启用持久目标续跑。 */
+      /** 新建一条 Durable 会话；持久目标由 /goal 在同一会话中按需启用。 */
       createConversation(payload: {
         cwd: string;
-        kind?: ConversationKind;
         title?: string;
         goal?: string;
       }): Promise<ConversationPage>;
@@ -310,10 +308,29 @@ declare global {
       conversationAction(payload: {
         kind: 'workspace' | 'session';
         id: string;
-        action: 'rename' | 'remove' | 'pin' | 'archive' | 'fork' | 'long-task-pause' | 'long-task-resume';
+        action:
+          | 'rename'
+          | 'remove'
+          | 'pin'
+          | 'archive'
+          | 'fork'
+          | 'long-task-set'
+          | 'long-task-edit'
+          | 'long-task-complete'
+          | 'long-task-clear'
+          | 'long-task-pause'
+          | 'long-task-resume';
         name?: string;
         entryId?: string;
-      }): Promise<ConversationSummary | { ok: boolean; longTask?: LongTaskState; wasRunning?: boolean }>;
+        goal?: string;
+        completionCriteria?: string;
+        summary?: string;
+      }): Promise<ConversationSummary | {
+        ok: boolean;
+        longTask?: LongTaskState;
+        wasRunning?: boolean;
+        started?: boolean;
+      }>;
       conversationTaskGraph(id: string): Promise<ConversationTaskGraph>;
       /** 读取当前会话的子智能体总览，包含已完成记录与实时快照。 */
       sessionSubagents(id: string): Promise<SubagentChild[]>;

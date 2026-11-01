@@ -12,7 +12,7 @@ Pi Durable 仍是唯一执行引擎。Studio SQLite 保存 Studio 自己的配�
 | --- | --- |
 | 应用 / 全局 | 当前 Studio 用户目录下的所有工作区共享；通常对应 Studio SQLite 中的一条应用级设置或表。 |
 | 工作区 | 按绝对、解析后的 `cwd` 精确匹配。一般不会从父目录继承，也不会自动扩展到该目录的子目录。 |
-| 会话 | 按 Durable conversation ID 匹配，只影响该对话或长期任务本身。owned child conversation 有独立 ID；权限 hook 会额外显式评估父会话策略。 |
+| 会话 | 按 Durable conversation ID 匹配，只影响该对话或其中的目标状态。owned child conversation 有独立 ID；权限 hook 会额外显式评估父会话策略。 |
 | 渲染进程本地 | 保存在 Electron renderer 的 `localStorage`，属于本机界面状态，不进入 Durable 请求。 |
 | 运行时内存 | 只描述当前进程中的连接、工具目录、缓存或临时会话，应用退出后消失。 |
 
@@ -355,7 +355,7 @@ Pi Studio userData/
 ├── AGENTS.md                 # 应用级 Harness 指令
 ├── pi-studio.sqlite
 │   ├── durable_*             # Pi Durable 的会话、任务、文档、事件与用量
-│   ├── conversations         # Studio 会话 / 长期任务投影
+│   ├── conversations         # Studio 会话与目标索引投影
 │   ├── workspaces            # Studio 工作区记录
 │   ├── settings              # Harness、模型默认值、权限、工具、子智能体、界面设置
 │   ├── model_providers       # 模型来源

@@ -26,31 +26,28 @@ test('composer drafts stay isolated by conversation', () => {
   saveComposerDraft(drafts, first, {
     text: 'first draft',
     attachments: [image],
-    kind: 'conversation',
   });
   saveComposerDraft(drafts, second, {
     text: 'second draft',
     attachments: [],
-    kind: 'durable',
   });
 
-  assert.equal(readComposerDraft(drafts, first, 'conversation').text, 'first draft');
-  assert.equal(readComposerDraft(drafts, first, 'conversation').attachments[0].name, 'screen.png');
-  assert.equal(readComposerDraft(drafts, second, 'conversation').text, 'second draft');
-  assert.equal(readComposerDraft(drafts, second, 'conversation').kind, 'durable');
+  assert.equal(readComposerDraft(drafts, first).text, 'first draft');
+  assert.equal(readComposerDraft(drafts, first).attachments[0].name, 'screen.png');
+  assert.equal(readComposerDraft(drafts, second).text, 'second draft');
 });
 
 test('clearing a sent draft leaves other conversations untouched', () => {
   const drafts = new Map();
   const first = composerDraftKeyForSession('session-a');
   const second = composerDraftKeyForSession('session-b');
-  saveComposerDraft(drafts, first, { text: 'sent', attachments: [], kind: 'conversation' });
-  saveComposerDraft(drafts, second, { text: 'keep me', attachments: [], kind: 'conversation' });
+  saveComposerDraft(drafts, first, { text: 'sent', attachments: [] });
+  saveComposerDraft(drafts, second, { text: 'keep me', attachments: [] });
 
   clearComposerDraft(drafts, first);
 
-  assert.equal(readComposerDraft(drafts, first, 'conversation').text, '');
-  assert.equal(readComposerDraft(drafts, second, 'conversation').text, 'keep me');
+  assert.equal(readComposerDraft(drafts, first).text, '');
+  assert.equal(readComposerDraft(drafts, second).text, 'keep me');
 });
 
 test('a new conversation draft migrates to its durable id after creation', () => {
@@ -60,19 +57,18 @@ test('a new conversation draft migrates to its durable id after creation', () =>
   saveComposerDraft(drafts, newKey, {
     text: 'create this',
     attachments: [image],
-    kind: 'conversation',
   });
 
-  moveComposerDraft(drafts, newKey, sessionKey, readComposerDraft(drafts, newKey, 'conversation'));
+  moveComposerDraft(drafts, newKey, sessionKey, readComposerDraft(drafts, newKey));
 
   assert.equal(drafts.has(newKey), false);
-  assert.equal(readComposerDraft(drafts, sessionKey, 'conversation').text, 'create this');
-  assert.equal(readComposerDraft(drafts, sessionKey, 'conversation').attachments.length, 1);
+  assert.equal(readComposerDraft(drafts, sessionKey).text, 'create this');
+  assert.equal(readComposerDraft(drafts, sessionKey).attachments.length, 1);
 });
 
 test('empty ordinary drafts are not retained in memory', () => {
   const drafts = new Map();
   const key = composerDraftKeyForSession('session-a');
-  saveComposerDraft(drafts, key, { text: '', attachments: [], kind: 'conversation' });
+  saveComposerDraft(drafts, key, { text: '', attachments: [] });
   assert.equal(drafts.has(key), false);
 });
