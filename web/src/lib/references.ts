@@ -116,6 +116,31 @@ export function extractComposerMentions(text: string): string[] {
 }
 
 /**
+ * Replace the active `/` or `@` query with a complete reference while keeping
+ * it separated from adjacent prose. The leading marker remains in the raw
+ * textarea value for command parsing and caret alignment; the renderer hides
+ * only its visible glyph.
+ */
+export function insertComposerToken(
+  text: string,
+  start: number,
+  end: number,
+  token: string,
+): { text: string; caret: number } {
+  const safeStart = Math.max(0, Math.min(text.length, start));
+  const safeEnd = Math.max(safeStart, Math.min(text.length, end));
+  const before = text.slice(0, safeStart);
+  const after = text.slice(safeEnd);
+  const leading = safeStart > 0 && !/\s$/u.test(before) ? ' ' : '';
+  const trailing = /^\s/u.test(after) ? '' : ' ';
+  const inserted = `${leading}${token}${trailing}`;
+  return {
+    text: `${before}${inserted}${after}`,
+    caret: safeStart + inserted.length,
+  };
+}
+
+/**
  * 输入框内联高亮：把技能 / 文件 / 已加载的命令标成彩色 token。
  * 只影响显示，textarea 的真实文本保持不变。
  *

@@ -48,7 +48,9 @@ try {
                 React.createElement('div', { className: 'composer-highlight', 'aria-hidden': 'true' },
                   current.map((segment, index) => segment.kind === 'text'
                     ? React.createElement('span', { key: index }, segment.text)
-                    : React.createElement('span', { key: index, className: 'composer-token is-' + segment.tokenKind }, segment.text))
+                    : React.createElement('span', { key: index, className: 'composer-token is-' + segment.tokenKind },
+                      React.createElement('span', { className: 'composer-token-prefix' }, segment.text.slice(0, 1)),
+                      segment.text.slice(1)))
                 ),
                 React.createElement('textarea', {
                   'aria-label': '消息',
@@ -84,17 +86,18 @@ try {
 
   const tokenStyle = await page.locator('.composer-token').first().evaluate((node) => {
     const style = getComputedStyle(node);
+    const prefix = node.querySelector('.composer-token-prefix');
     return {
       background: style.backgroundColor,
       borderWidth: style.borderWidth,
       boxShadow: style.boxShadow,
-      borderRadius: style.borderTopLeftRadius,
+      prefixVisibility: prefix ? getComputedStyle(prefix).visibility : '',
     };
   });
   assert.equal(tokenStyle.borderWidth, '0px');
   assert.equal(tokenStyle.boxShadow, 'none');
-  assert.notEqual(tokenStyle.background, 'rgba(0, 0, 0, 0)');
-  assert.notEqual(tokenStyle.borderRadius, '0px');
+  assert.equal(tokenStyle.background, 'rgba(0, 0, 0, 0)');
+  assert.equal(tokenStyle.prefixVisibility, 'hidden');
   await page.screenshot({ path: output + 'composer-light.png', animations: 'disabled' });
 
   const user = page.locator('.message.user');

@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   extractComposerMentions,
   formatFileReference,
+  insertComposerToken,
   splitComposerText,
   splitMessageText,
 } from '../../web/src/lib/references.ts';
@@ -44,4 +45,23 @@ test('simple paths remain readable and ordinary email text is not treated as a m
   assert.equal(formatFileReference('src/App.tsx'), '@src/App.tsx');
   assert.deepEqual(extractComposerMentions('mail me at name@example.com'), []);
   assert.deepEqual(extractComposerMentions('Inspect @src/App.tsx'), ['src/App.tsx']);
+});
+
+test('selected composer tokens gain safe surrounding spacing', () => {
+  assert.deepEqual(insertComposerToken('/g', 0, 2, '/goal'), {
+    text: '/goal ',
+    caret: 6,
+  });
+  assert.deepEqual(insertComposerToken('/g next', 0, 2, '/goal'), {
+    text: '/goal next',
+    caret: 5,
+  });
+  assert.deepEqual(insertComposerToken('Use @src tail', 4, 8, '@src/App.tsx'), {
+    text: 'Use @src/App.tsx tail',
+    caret: 16,
+  });
+  assert.deepEqual(insertComposerToken('use@g tail', 3, 5, '@goal.md'), {
+    text: 'use @goal.md tail',
+    caret: 12,
+  });
 });

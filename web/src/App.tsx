@@ -41,7 +41,7 @@ import { completedTurnDuration } from './lib/session-summary';
 import { placeRequestTraces } from './lib/request-trace-turns';
 import { ChangesView } from './components/ChangesView';
 import { ActionMenu } from './components/ActionMenu';
-import { extractComposerMentions, formatFileReference, splitComposerText } from './lib/references';
+import { extractComposerMentions, formatFileReference, insertComposerToken, splitComposerText } from './lib/references';
 import { composerSubmitAction } from './lib/composer-submit';
 import {
   clearComposerDraft,
@@ -3440,12 +3440,11 @@ export function App() {
     if (menu.kind === 'file') {
       const file = composerFileOptions[index];
       if (!file) return;
-      const inserted = `${formatFileReference(`${file.path}${file.type === 'directory' ? '/' : ''}`)} `;
-      const next = `${prompt.slice(0, menu.start)}${inserted}${prompt.slice(caret)}`;
-      const nextCaret = menu.start + inserted.length;
-      setPrompt(next);
+      const token = formatFileReference(`${file.path}${file.type === 'directory' ? '/' : ''}`);
+      const insertion = insertComposerToken(prompt, menu.start, caret, token);
+      setPrompt(insertion.text);
       setComposerMenu(null);
-      requestAnimationFrame(() => { textareaRef.current?.focus(); textareaRef.current?.setSelectionRange(nextCaret, nextCaret); });
+      requestAnimationFrame(() => { textareaRef.current?.focus(); textareaRef.current?.setSelectionRange(insertion.caret, insertion.caret); });
       return;
     }
     const command = composerCommandOptions[index];
@@ -3464,12 +3463,10 @@ export function App() {
       void executeExtensionCommand(command.commandId, '');
       return;
     }
-    const inserted = `/${command.name} `;
-    const next = `${prompt.slice(0, menu.start)}${inserted}${prompt.slice(caret)}`;
-    const nextCaret = menu.start + inserted.length;
-    setPrompt(next);
+    const insertion = insertComposerToken(prompt, menu.start, caret, `/${command.name}`);
+    setPrompt(insertion.text);
     setComposerMenu(null);
-    requestAnimationFrame(() => { textareaRef.current?.focus(); textareaRef.current?.setSelectionRange(nextCaret, nextCaret); });
+    requestAnimationFrame(() => { textareaRef.current?.focus(); textareaRef.current?.setSelectionRange(insertion.caret, insertion.caret); });
   }
 
   useEffect(() => {
@@ -5328,7 +5325,10 @@ export function App() {
               <div className="composer-highlight" ref={composerHighlightRef} aria-hidden="true">
                 {composerSegments.map((segment, index) => segment.kind === 'text'
                   ? <span key={index}>{segment.text}</span>
-                  : <span key={index} className={`composer-token is-${segment.tokenKind}`}>{segment.text}</span>)}
+                  : <span key={index} className={`composer-token is-${segment.tokenKind}`}>
+                    <span className="composer-token-prefix">{segment.text.slice(0, 1)}</span>
+                    {segment.text.slice(1)}
+                  </span>)}
                 {prompt.endsWith('\n') && <span>{'\u200b'}</span>}
               </div>
               <textarea
@@ -5389,6 +5389,7 @@ export function App() {
               }}
               aria-label="发送给 Pi 的消息"
               aria-describedby={isNewConversation ? 'workspace-selection-hint' : undefined}
+              spellCheck={false}
               className={`${queuedPrompts.length > 0 ? 'has-queued' : ''} ${composing ? 'is-composing' : ''}`.trim() || undefined}
               aria-expanded={Boolean(composerMenu)}
               placeholder={compaction.active

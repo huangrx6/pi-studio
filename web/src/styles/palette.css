@@ -223,9 +223,6 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --syntax-comment: var(--faint);
   --message-bg: var(--surface-soft);
   --message-border: var(--border);
-  --composer-token-bg: color-mix(in srgb, var(--text) 7%, transparent);
-  --composer-token-accent-bg: color-mix(in srgb, var(--accent) 16%, transparent);
-  --composer-token-accent-fg: color-mix(in srgb, var(--accent) 78%, var(--text));
   /* 自定义背景的透明表面按层级集中派生。画布媒体只透过外壳底漆，常规卡片再覆盖
   一层，控件与状态最后落到可读表面；弹框继续使用 overlay-surface，错误、成功和
   警告也不参与透明混合。组件只消费这些角色，避免每处单独调透明度产生叠加色斑。

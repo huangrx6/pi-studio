@@ -359,19 +359,15 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .composer textarea::placeholder { color: var(--faint); -webkit-text-fill-color: var(--faint); }
 .composer-input.is-composing .composer-highlight { visibility: hidden; }
 .composer-input.is-composing textarea { color: var(--text); -webkit-text-fill-color: currentColor; }
-/* Keep the decoration inside the existing inline box so the highlight layer and
- * transparent textarea continue to share the exact same line and caret layout. */
+/* Keep the marker in layout so the transparent textarea and highlight layer
+ * share exact glyph positions, while presenting only the readable token. */
 .composer-token {
-  border-radius: var(--radius-tag);
-  background: var(--composer-token-bg);
-  color: var(--composer-token-accent-fg);
+  background: none;
+  color: var(--accent);
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
-.composer-token:is(.is-command, .is-skill) {
-  background: var(--composer-token-accent-bg);
-  color: var(--composer-token-accent-fg);
-}
+.composer-token-prefix { visibility: hidden; }
 .composer-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2) var(--space-3) var(--space-3); }
 .composer-left, .composer-right { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
 .composer-left.is-new-conversation { flex: 1; }
