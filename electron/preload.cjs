@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('piApi', {
   conversationOutline: (id) => ipcRenderer.invoke('pi:conversation-outline', id),
   conversationSnapshot: (id) => ipcRenderer.invoke('pi:conversation-snapshot', id),
   conversationSubmit: (payload) => ipcRenderer.invoke('pi:conversation-submit', payload),
+  conversationEdit: (payload) => ipcRenderer.invoke('pi:conversation-edit', payload),
   conversationConfigure: (payload) => ipcRenderer.invoke('pi:conversation-configure', payload),
   conversationInterrupt: (id) => ipcRenderer.invoke('pi:conversation-interrupt', { id }),
   conversationAction: (payload) => ipcRenderer.invoke('pi:conversation-action', payload),

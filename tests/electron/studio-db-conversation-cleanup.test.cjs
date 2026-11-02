@@ -221,6 +221,55 @@ test('parent cleanup removes every descendant while preserving unrelated convers
   }
 });
 
+test('edited branches clear request projections without deleting usage history', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-edit-projections-'));
+  const database = createStudioDatabase(path.join(directory, 'studio.sqlite'));
+  try {
+    database.saveTurnDiff('edited-conversation', { at: 100, files: ['old'] });
+    database.saveTurnDiff('edited-conversation', { at: 300, files: ['newer'] });
+    database.saveTurnDiff('other-conversation', { at: 100, files: ['other'] });
+    database.saveRequestTrace('edited-conversation', {
+      requestId: 'old-request',
+      createdAt: 100,
+      messages: [],
+      tools: [],
+    });
+    database.saveRequestTrace('edited-conversation', {
+      requestId: 'newer-request',
+      createdAt: 300,
+      messages: [],
+      tools: [],
+    });
+    database.saveRequestTrace('other-conversation', {
+      requestId: 'other-request',
+      createdAt: 100,
+      messages: [],
+      tools: [],
+    });
+    database.recordMetricRequest({
+      requestId: 'old-metric',
+      conversationId: '10',
+      at: 100,
+      finishedAt: 110,
+      providerId: 'test',
+      modelId: 'test-model',
+      durationMs: 10,
+      input: 10,
+      output: 5,
+    });
+
+    assert.equal(database.deleteConversationProjectionsFrom('edited-conversation', 100), true);
+    assert.equal(rowCount(database, 'turn_diffs', "WHERE conversation_id = 'edited-conversation'"), 0);
+    assert.equal(rowCount(database, 'conversation_request_traces', "WHERE conversation_id = 'edited-conversation'"), 0);
+    assert.equal(rowCount(database, 'turn_diffs', "WHERE conversation_id = 'other-conversation'"), 1);
+    assert.equal(rowCount(database, 'conversation_request_traces', "WHERE conversation_id = 'other-conversation'"), 1);
+    assert.equal(rowCount(database, 'conversation_metric_requests', "WHERE conversation_id = '10'"), 1);
+  } finally {
+    database.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('workspace removal clears only project extensions bound to that workspace', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-workspace-cleanup-'));
   const database = createStudioDatabase(path.join(directory, 'studio.sqlite'));

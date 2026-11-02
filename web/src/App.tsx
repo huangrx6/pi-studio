@@ -3807,6 +3807,65 @@ export function App() {
     }
   }
 
+  /**
+   * Replace a user message and rebuild the active branch from that point.
+   * Durable applies the context boundary before generating the replacement,
+   * so this is a real edit rather than a renderer-only transcript mask.
+   */
+  async function handleEditMessage(entryId: number, text: string) {
+    const sessionId = session?.id;
+    if (!sessionId) throw new Error('会话不存在，请重新打开后再试');
+    if (turnActive || compaction.active) {
+      throw new Error('当前会话仍在运行，请停止回答后再编辑消息');
+    }
+    const requestId = crypto.randomUUID();
+    requestRef.current = requestId;
+    resumeTranscriptFollow();
+    setBusy(true);
+    setError(null);
+    setRetryInfo(null);
+    try {
+      await window.piApi.conversationEdit({
+        id: sessionId,
+        entryId,
+        text,
+        requestId,
+        mentions: extractComposerMentions(text),
+      });
+      void loadState().catch(() => {});
+      if (requestRef.current !== requestId) return;
+      const historyLimit = Math.max(HISTORY_PAGE_SIZE, messages.length + 10);
+      const [saved, outline] = await Promise.all([
+        window.piApi.conversationPage({ id: sessionId, limit: historyLimit }),
+        refreshOutline(sessionId),
+      ]);
+      if (requestRef.current !== requestId) return;
+      if (saved) {
+        setSession({
+          id: saved.id,
+          cwd: saved.cwd,
+          title: saved.title,
+          longTask: saved.longTask,
+          turnDiffs: saved.turnDiffs,
+          hasMore: saved.page.hasOlder,
+          pageCursor: saved.page.nextCursor,
+          messageStart: saved.messageStart,
+          totalMessages: outline?.totalMessages,
+        });
+        setMessages(saved.messages.map((message) => ({ ...message })));
+        setRequestTraces(Array.isArray(saved.requestTraces) ? saved.requestTraces : []);
+        if (outline) applyOutline(outline, saved.messages, saved.messageStart);
+        else if (outlineItems.length === 0) applyOutline(undefined, saved.messages, saved.messageStart);
+      }
+    } catch (error) {
+      if (requestRef.current === requestId) {
+        setBusy(false);
+        setRetryInfo(null);
+      }
+      throw new Error(errorText(error));
+    }
+  }
+
   /** 非当前会话的队列不能写入当前聊天 UI，直接提交到它自己的 Durable 会话。 */
   async function submitQueuedInBackground(submission: PreparedSubmission) {
     try {
@@ -5032,7 +5091,13 @@ export function App() {
                 {historyLoading && <div className="history-loading" role="status" aria-live="polite" aria-label="正在加载更早消息"><LoaderCircle className="spin" /></div>}
                 {transcriptTurns.map((turn, index) => turn.kind === 'user'
                   ? <Fragment key={`user-${turn.message.sourceIndex ?? turn.message.timestamp ?? index}`}>
-                    <ChatMessageView id={`chat-turn-${turn.message.sourceIndex ?? `pending-${turn.message.timestamp ?? index}`}`} message={turn.message} onOpenFile={handleOpenAttachment} />
+                    <ChatMessageView
+                      id={`chat-turn-${turn.message.sourceIndex ?? `pending-${turn.message.timestamp ?? index}`}`}
+                      message={turn.message}
+                      onOpenFile={handleOpenAttachment}
+                      onEdit={handleEditMessage}
+                      editDisabled={turnActive || compaction.active}
+                    />
                     {requestPlacement.unansweredByUserTurn.has(index) && <AssistantTurnView messages={[]} toolResults={toolResultMap} requestTraces={requestPlacement.unansweredByUserTurn.get(index)} cwd={session?.cwd} busy={false} turnError={NO_ANSWER_TEXT} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={false} />}
                   </Fragment>
                   : <AssistantTurnView key={`assistant-${turn.messages[0]?.sourceIndex ?? turn.messages[0]?.timestamp ?? index}`} id={turn.messages[0]?.sourceIndex !== undefined ? `chat-assistant-turn-${turn.messages[0].sourceIndex}` : undefined} messages={turn.messages} toolResults={toolResultMap} requestTraces={requestPlacement.byAssistantTurn.get(index)} cwd={session?.cwd} busy={turnActive && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView}

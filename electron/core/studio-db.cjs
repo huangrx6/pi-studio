@@ -1192,6 +1192,30 @@ class StudioDatabase {
   }
 
   /**
+   * Remove Studio projections that belong to a branch replaced by an edited
+   * user message. Durable remains the transcript source of truth; metrics stay
+   * untouched because they describe provider usage that already happened.
+   */
+  deleteConversationProjectionsFrom(conversationId, since) {
+    const key = typeof conversationId === 'string' || typeof conversationId === 'number'
+      ? String(conversationId).trim()
+      : '';
+    const cutoff = Number(since);
+    if (!key || !Number.isFinite(cutoff) || cutoff <= 0) return false;
+    this.transaction(() => {
+      this.db.prepare(`
+        DELETE FROM turn_diffs
+        WHERE conversation_id = ? AND at >= ?
+      `).run(key, cutoff);
+      this.db.prepare(`
+        DELETE FROM conversation_request_traces
+        WHERE conversation_id = ? AND created_at >= ?
+      `).run(key, cutoff);
+    });
+    return true;
+  }
+
+  /**
    * Persist a redacted, bounded UI projection of one actual model request.
    * A retry reuses taskId:attempt only when it is the same durable attempt, so
    * an upsert keeps recovery idempotent without collapsing distinct requests.

@@ -112,6 +112,19 @@ export type ConversationSubmitResult = {
   whenBusy: 'steer' | 'followUp' | 'reject';
 };
 
+export type ConversationEditInput = {
+  id: string;
+  entryId: number;
+  text: string;
+  requestId: string;
+  mentions?: string[];
+};
+
+export type ConversationEditResult = ConversationSubmitResult & {
+  editedEntryId: number;
+  markerId: string;
+};
+
 export type ConversationTaskNode = {
   id: string;
   kind: string;

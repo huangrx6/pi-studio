@@ -280,10 +280,25 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .message.user:hover .message-actions, .message.user:focus-within .message-actions { opacity: 1; }
 .message-action { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border-radius: 6px; color: var(--faint); }
 .message-action:hover { background: var(--surface-hover); color: var(--text); }
+.message-action:disabled { color: var(--disabled-text); background: transparent; cursor: not-allowed; }
 .message-action.is-copied { color: var(--success); }
 .message-action svg { width: 13px; height: 13px; }
 .message-action-time { padding: 0 4px; color: var(--faint); font-size: 10px; font-variant-numeric: tabular-nums; }
 .user-bubble { max-width: 85%; padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-panel) var(--radius-panel) var(--radius-tag) var(--radius-panel); background: var(--surface-soft); font-size: var(--text-md); line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
+.message-edit { width: min(85%, 760px); overflow: hidden; border: 1px solid var(--border-strong); border-radius: var(--radius-panel); background: var(--surface); }
+.message-edit:focus-within { border-color: var(--focus-color); box-shadow: var(--focus-ring); }
+.message-edit-body { padding: var(--space-3) var(--space-4) 0; }
+.message-edit textarea { display: block; width: 100%; min-height: 84px; max-height: 320px; resize: none; padding: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--text-md); line-height: 1.7; }
+.message-edit-preserved { margin-top: 6px; color: var(--faint); font-size: var(--text-xs); }
+.message-edit-error { margin-top: 8px; color: var(--error); font-size: var(--text-sm); line-height: 1.5; }
+.message-edit-actions { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-2) var(--space-3) var(--space-3); }
+.message-edit-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 62px; height: var(--control-sm); padding: 0 var(--space-3); border-radius: var(--radius-control); font-size: var(--text-sm); font-weight: 550; }
+.message-edit-actions button:disabled { cursor: not-allowed; opacity: .58; }
+.message-edit-cancel { border: 1px solid var(--border); background: var(--surface); color: var(--muted); }
+.message-edit-cancel:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
+.message-edit-send { border: 1px solid var(--button-bg); background: var(--button-bg); color: var(--on-button); }
+.message-edit-send:hover:not(:disabled) { border-color: var(--button-hover); background: var(--button-hover); }
+.message-edit-send svg { width: 13px; height: 13px; }
 .assistant-text { max-width: 100%; font-size: var(--text-md); line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
 .caret { display: inline-block; width: 2px; height: 16px; margin-left: 3px; vertical-align: -2px; background: var(--accent); animation: blink 1s steps(2) infinite; }
 .caret.hidden { display: none; }
@@ -348,16 +363,14 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
  * transparent textarea continue to share the exact same line and caret layout. */
 .composer-token {
   border-radius: var(--radius-tag);
-  background: var(--surface-hover);
-  color: var(--text);
-  box-shadow: inset 0 0 0 1px var(--border-hover);
+  background: var(--composer-token-bg);
+  color: var(--composer-token-accent-fg);
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
 .composer-token:is(.is-command, .is-skill) {
-  background: var(--accent-soft);
-  color: var(--accent-foreground);
-  box-shadow: inset 0 0 0 1px var(--accent-border);
+  background: var(--composer-token-accent-bg);
+  color: var(--composer-token-accent-fg);
 }
 .composer-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2) var(--space-3) var(--space-3); }
 .composer-left, .composer-right { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }

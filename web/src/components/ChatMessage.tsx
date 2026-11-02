@@ -301,11 +301,26 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   >{copied ? <Check /> : <Copy />}</button>;
 }
 
-/** 消息下方的悬浮操作行：复制与时间；没有内容时整行隐藏。 */
-function MessageActions({ text, time, label, align = 'start' }: { text: string; time?: number; label: string; align?: 'start' | 'end' }) {
+/** 消息下方的悬浮操作行：复制、编辑与时间；没有内容时整行隐藏。 */
+function MessageActions({ text, time, label, align = 'start', onEdit, editDisabled = false }: {
+  text: string;
+  time?: number;
+  label: string;
+  align?: 'start' | 'end';
+  onEdit?: () => void;
+  editDisabled?: boolean;
+}) {
   if (!text.trim() && !time) return null;
   return <div className={`message-actions is-${align}`}>
     {text.trim() && <CopyButton text={text} label={label} />}
+    {onEdit && <button
+      type="button"
+      className="message-action"
+      aria-label="编辑消息"
+      title={editDisabled ? '回答结束后可编辑消息' : '编辑消息'}
+      disabled={editDisabled}
+      onClick={onEdit}
+    ><Pencil /></button>}
     {time ? <time className="message-action-time">{formatTime(time)}</time> : null}
   </div>;
 }
@@ -618,9 +633,20 @@ function UserText({ text }: { text: string }) {
  * @param message 必须是 role === 'user'；assistant / toolResult 由其他视图处理
  * @param id 锚点 id，供右侧大纲跳转
  */
-type ChatMessageViewProps = { message: ChatMessage; id?: string; onOpenFile?: (path: string) => void };
+type ChatMessageViewProps = {
+  message: ChatMessage;
+  id?: string;
+  onOpenFile?: (path: string) => void;
+  onEdit?: (entryId: number, text: string) => Promise<void>;
+  editDisabled?: boolean;
+};
 
-function ChatMessageViewComponent({ message, id, onOpenFile }: ChatMessageViewProps) {
+function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisabled = false }: ChatMessageViewProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState('');
+  const editRef = useRef<HTMLTextAreaElement>(null);
   // 兜底：同一组件被误用于其他角色时不渲染，避免出现空气泡。
   if (message.role !== 'user') return null;
   const text = textBlocks(message.content);
@@ -633,7 +659,91 @@ function ChatMessageViewComponent({ message, id, onOpenFile }: ChatMessageViewPr
         : segment.reference.token)
     .join('')
     .trim();
-  return <div id={id} className="message user"><div className="user-bubble">
+  const imageCount = message.content.filter((block) => block.type === 'image').length;
+  const preservedCount = imageCount + (message.attachments?.length ?? 0);
+  const canEdit = Boolean(onEdit && Number.isSafeInteger(message.sourceIndex));
+
+  function resizeEdit() {
+    const node = editRef.current;
+    if (!node) return;
+    node.style.height = '0px';
+    node.style.height = `${Math.min(320, Math.max(84, node.scrollHeight))}px`;
+  }
+
+  function beginEdit() {
+    if (!canEdit || editDisabled) return;
+    setDraft(copyText);
+    setEditError('');
+    setEditing(true);
+    requestAnimationFrame(() => {
+      resizeEdit();
+      const node = editRef.current;
+      if (!node) return;
+      node.focus();
+      node.selectionStart = node.selectionEnd = node.value.length;
+    });
+  }
+
+  function cancelEdit() {
+    if (savingEdit) return;
+    setEditing(false);
+    setEditError('');
+  }
+
+  async function saveEdit() {
+    if (!onEdit || !canEdit || savingEdit || editDisabled) return;
+    const next = draft.trim();
+    if (!next || next === copyText) {
+      setEditing(false);
+      return;
+    }
+    setSavingEdit(true);
+    setEditError('');
+    try {
+      await onEdit(message.sourceIndex as number, next);
+      setEditing(false);
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  return <div id={id} className={`message user ${editing ? 'is-editing' : ''}`}>
+  {editing
+    ? <div className="message-edit">
+      <div className="message-edit-body">
+        <textarea
+          ref={editRef}
+          value={draft}
+          aria-label="编辑消息"
+          disabled={savingEdit}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            requestAnimationFrame(resizeEdit);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              cancelEdit();
+            } else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault();
+              void saveEdit();
+            }
+          }}
+        />
+        {preservedCount > 0 && <div className="message-edit-preserved">保留 {preservedCount} 个图片或附件</div>}
+        {editError && <div className="message-edit-error" role="alert">{editError}</div>}
+      </div>
+      <div className="message-edit-actions">
+        <button type="button" className="message-edit-cancel" disabled={savingEdit} onClick={cancelEdit}>取消</button>
+        <button type="button" className="message-edit-send" disabled={savingEdit || !draft.trim()} onClick={() => void saveEdit()}>
+          {savingEdit ? <LoaderCircle className="spin" /> : null}
+          {savingEdit ? '发送中' : '发送'}
+        </button>
+      </div>
+    </div>
+    : <div className="user-bubble">
     <MessageImages blocks={message.content} />
     {text && <UserText text={text} />}
     {/* 附件卡片展示名称、体积/行数与类型角标；title 给出去向的绝对路径。 */}
@@ -650,13 +760,22 @@ function ChatMessageViewComponent({ message, id, onOpenFile }: ChatMessageViewPr
         {openable && <span className="attachment-open-cue" aria-hidden="true"><PanelRightOpen /></span>}
       </div>;
     })}
-  </div>
-  {/* 用户消息同样在悬浮时显示复制与发送时间。 */}
-  <MessageActions text={copyText} time={message.timestamp} label="复制消息" align="end" />
+  </div>}
+  {/* 用户消息同样在悬浮时显示复制、编辑与发送时间。 */}
+  {!editing && <MessageActions
+    text={copyText}
+    time={message.timestamp}
+    label="复制消息"
+    align="end"
+    onEdit={canEdit ? beginEdit : undefined}
+    editDisabled={editDisabled}
+  />}
   </div>;
 }
 
 export const ChatMessageView = memo(ChatMessageViewComponent, (previous, next) =>
   previous.message === next.message
   && previous.id === next.id
-  && previous.onOpenFile === next.onOpenFile);
+  && previous.onOpenFile === next.onOpenFile
+  && previous.onEdit === next.onEdit
+  && previous.editDisabled === next.editDisabled);

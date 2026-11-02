@@ -87,6 +87,7 @@ const subscribers = new Map();
 const messageCounts = new Map();
 const runningConversations = new Set();
 const runDiffSnapshots = new Map();
+const editRangesCache = new Map();
 const REQUEST_TRACE_PAGE_LIMIT = 16;
 
 onRequestTrace(async (trace) => {
@@ -309,8 +310,64 @@ function partialMessage(message) {
   return messageToChat(message, { id: 0, data: undefined })[0];
 }
 
+function editToken(entry) {
+  const token = entry.data && typeof entry.data === 'object'
+    ? entry.data.editToken
+    : undefined;
+  return typeof token === 'string' && token
+    ? token
+    : `entry:${entry.id}`;
+}
+
+/**
+ * Studio edit markers are immutable Durable entries. A marker maps a user
+ * message to the branch it replaced; a restore marker withdraws that range
+ * when the replacement input could not be admitted.
+ */
+async function loadEditRanges(conversation) {
+  const cacheKey = String(conversation.id);
+  if (editRangesCache.has(cacheKey)) return editRangesCache.get(cacheKey);
+  const runtime = await getDurableRuntime();
+  const active = new Map();
+  let cursor;
+  do {
+    const page = await conversation.entries(
+      { order: 'ascending' },
+      ENTRY_SCAN_PAGE_SIZE,
+      cursor,
+      runtime.context,
+    );
+    for (const entry of page.items) {
+      if (entry.kind === 'studio.edit') {
+        const from = Number(entry.data?.editFrom);
+        const through = Number(entry.id);
+        if (
+          Number.isSafeInteger(from)
+          && from > 0
+          && Number.isSafeInteger(through)
+          && from <= through
+        ) {
+          active.set(editToken(entry), { from, through });
+        }
+      } else if (entry.kind === 'studio.edit-restore') {
+        active.delete(editToken(entry));
+      }
+    }
+    cursor = page.next;
+  } while (cursor);
+  const ranges = [...active.values()];
+  editRangesCache.set(cacheKey, ranges);
+  return ranges;
+}
+
+function entryIsHidden(entryId, ranges) {
+  const id = Number(entryId);
+  return ranges.some((range) => id >= range.from && id <= range.through);
+}
+
 async function scanEntries(conversation, options = {}) {
   const runtime = await getDurableRuntime();
+  const editRanges = await loadEditRanges(conversation);
   const order = options.order === 'ascending' ? 'ascending' : 'descending';
   const messageLimit = Math.max(
     1,
@@ -340,7 +397,9 @@ async function scanEntries(conversation, options = {}) {
     let consumedInPage = 0;
     let pageMessages = 0;
     for (const entry of page.items) {
-      const entryMessages = entryToMessages(entry);
+      const entryMessages = entryIsHidden(entry.id, editRanges)
+        ? []
+        : entryToMessages(entry);
       pageMessages += entryMessages.length;
       if (skip >= entryMessages.length) {
         skip -= entryMessages.length;
@@ -388,6 +447,7 @@ async function scanEntries(conversation, options = {}) {
 
 async function scanDisplayMessages(conversation, visit) {
   const runtime = await getDurableRuntime();
+  const editRanges = await loadEditRanges(conversation);
   let cursor;
   do {
     const page = await conversation.entries(
@@ -397,6 +457,7 @@ async function scanDisplayMessages(conversation, visit) {
       runtime.context,
     );
     for (const entry of page.items) {
+      if (entryIsHidden(entry.id, editRanges)) continue;
       for (const message of entryToMessages(entry)) visit(message);
     }
     cursor = page.next;
@@ -411,6 +472,7 @@ async function fullDisplayMessages(conversation) {
 
 async function firstUserQuestion(conversation) {
   const runtime = await getDurableRuntime();
+  const editRanges = await loadEditRanges(conversation);
   let cursor;
   do {
     const page = await conversation.entries(
@@ -420,6 +482,7 @@ async function firstUserQuestion(conversation) {
       runtime.context,
     );
     for (const entry of page.items) {
+      if (entryIsHidden(entry.id, editRanges)) continue;
       const message = entryToMessages(entry).find((item) => item.role === 'user');
       if (!message) continue;
       return message.content
@@ -774,7 +837,7 @@ async function submitConversation(input = {}, options = {}) {
     type: 'input',
     content,
     requestId,
-    whenBusy: busyPolicy(input.whenBusy),
+    whenBusy: options.edit ? 'reject' : busyPolicy(input.whenBusy),
     entry: {
       kind: 'studio.user',
       data: {
@@ -783,10 +846,13 @@ async function submitConversation(input = {}, options = {}) {
       },
     },
   }, runtime.context);
+  options.onAdmitted?.();
   const record = await submission.status(runtime.context);
   const repairingFallbackTitle = row.titleSource === 'auto-fallback';
   const needsInitialTitle = row.title === '新会话';
   const shouldGenerateTitle = (
+    !options.edit
+    &&
     (needsInitialTitle || repairingFallbackTitle)
     && Boolean(displayText)
   );
@@ -795,8 +861,10 @@ async function submitConversation(input = {}, options = {}) {
     : displayText;
   const nextTitle = needsInitialTitle ? temporaryTitle(displayText) : row.title;
   getStudioDatabase().updateConversation(row.id, {
-    title: nextTitle,
-    titleSource: shouldGenerateTitle ? 'auto-pending' : row.titleSource,
+    ...(options.edit ? {} : { title: nextTitle }),
+    ...(options.edit ? {} : {
+      titleSource: shouldGenerateTitle ? 'auto-pending' : row.titleSource,
+    }),
     lastRequestId: requestId,
     updatedAt: Date.now(),
   });
@@ -856,8 +924,167 @@ async function submitConversation(input = {}, options = {}) {
     submissionId: String(submission.id),
     requestId,
     status: record.status,
-    whenBusy: busyPolicy(input.whenBusy),
+    whenBusy: options.edit ? 'reject' : busyPolicy(input.whenBusy),
   };
+}
+
+/**
+ * Edit a user message by appending a Durable context boundary and then
+ * submitting the replacement as a normal user input. Old answers remain
+ * auditable Durable entries, but neither the model nor Studio's transcript
+ * projection sees them after the edit.
+ */
+async function editConversation(input = {}, options = {}) {
+  const id = input.id || input.sessionId;
+  const entryId = Number(input.entryId);
+  const text = String(input.text || '').trim();
+  if (!text) throw new Error('编辑后的消息不能为空');
+  if (!Number.isSafeInteger(entryId) || entryId <= 0) {
+    throw new Error('要编辑的消息标识无效');
+  }
+
+  const row = await getConversationRow(id);
+  const conversation = await getConversationHandle(id, {
+    verifyExtensionIntegrity: true,
+  });
+  if (!row || !conversation) throw new Error('会话不存在');
+
+  const runtime = await getDurableRuntime();
+  const inspection = await runtime.harness.inspect(runtime.context);
+  const durableConversationId = String(row.id);
+  const hasLiveTask = inspection.tasks.some((task) => (
+    ACTIVE_TASK_STATES.has(task.state.kind)
+    && String(task.record?.conversationId || '') === durableConversationId
+  ));
+  const hasSubmission = inspection.submissions.some((submission) => (
+    String(submission.conversationId || '') === durableConversationId
+    && (submission.status === 'queued' || submission.status === 'placed')
+  ));
+  if (hasLiveTask || hasSubmission) {
+    throw new Error('当前会话仍在运行，请停止回答后再编辑消息');
+  }
+
+  const [context, editRanges] = await Promise.all([
+    conversation.context(runtime.context),
+    loadEditRanges(conversation),
+  ]);
+  const targetIndex = context.entries.findIndex((entry) => Number(entry.id) === entryId);
+  if (targetIndex < 0) {
+    throw new Error('这条消息不在当前可编辑的上下文范围内');
+  }
+  if (entryIsHidden(entryId, editRanges)) {
+    throw new Error('这条消息已经被后续编辑替换');
+  }
+  const target = context.entries[targetIndex];
+  const targetContribution = context.contributions[targetIndex] || [];
+  const targetUserMessage = targetContribution.find((message) => message.role === 'user');
+  if (!targetUserMessage) {
+    throw new Error('只能编辑当前上下文中的用户消息');
+  }
+
+  const requestId = typeof input.requestId === 'string' && input.requestId
+    ? input.requestId
+    : randomUUID();
+  const token = `edit:${requestId}`;
+  const covered = context.entries.slice(targetIndex).map((entry) => Number(entry.id));
+  const data = target.data && typeof target.data === 'object' ? target.data : {};
+  const attachments = Array.isArray(data.attachments)
+    ? data.attachments
+      .map((attachment) => attachment?.path)
+      .filter((attachmentPath) => typeof attachmentPath === 'string' && attachmentPath)
+    : [];
+  const images = targetContribution
+    .filter((message) => message.role === 'user')
+    .flatMap((message) => message.content)
+    .filter((block) => block?.type === 'image')
+    .map((block) => ({
+      type: 'image',
+      data: block.data,
+      mimeType: block.mimeType,
+    }));
+  const projectionCutoff = Number(targetUserMessage.timestamp)
+    || Number(context.entries[Math.max(0, targetIndex - 1)]?.model?.[0]?.timestamp)
+    || Date.now();
+  const db = getStudioDatabase();
+  const projectionKey = conversationKey(row);
+  const removedTurnDiffs = db.readTurnDiffs(projectionKey)
+    .filter((diff) => Number(diff?.at) >= projectionCutoff);
+  const removedRequestTraces = db.listRequestTraces(projectionKey)
+    .filter((trace) => Number(trace?.createdAt) >= projectionCutoff);
+
+  const marker = await conversation.submit({
+    type: 'write',
+    requestId: `marker:${requestId}`,
+    entry: {
+      kind: 'studio.edit',
+      data: {
+        editToken: token,
+        editFrom: entryId,
+      },
+      edits: covered.map((targetId) => ({ target: targetId, action: 'omit' })),
+    },
+  }, runtime.context);
+  editRangesCache.delete(String(conversation.id));
+  const markerRecord = await marker.status(runtime.context);
+  if (markerRecord.status !== 'done') {
+    throw new Error('编辑边界未能写入，请重试');
+  }
+
+  let admitted = false;
+  try {
+    db.deleteConversationProjectionsFrom(projectionKey, projectionCutoff);
+    const result = await submitConversation({
+      id,
+      text,
+      requestId,
+      mentions: input.mentions,
+      attachments,
+      images,
+    }, {
+      ...options,
+      edit: true,
+      onAdmitted: () => {
+        admitted = true;
+      },
+    });
+    return {
+      ...result,
+      editedEntryId: entryId,
+      markerId: String(marker.id),
+    };
+  } catch (error) {
+    if (admitted) throw error;
+    const restoredEdits = context.entries.slice(targetIndex).map((entry, index) => ({
+      target: Number(entry.id),
+      action: 'replace',
+      messages: context.contributions[targetIndex + index] || [],
+    }));
+    try {
+      await conversation.submit({
+        type: 'write',
+        requestId: `restore:${requestId}`,
+        entry: {
+          kind: 'studio.edit-restore',
+          data: {
+            editToken: token,
+          },
+          edits: restoredEdits,
+        },
+      }, runtime.context);
+      editRangesCache.delete(String(conversation.id));
+      for (const diff of removedTurnDiffs) db.saveTurnDiff(projectionKey, diff);
+      for (const trace of removedRequestTraces) db.saveRequestTrace(projectionKey, trace);
+    } catch (restoreError) {
+      throw new Error(
+        `编辑消息失败，且上下文恢复失败：${String(
+          error instanceof Error ? error.message : error,
+        )}；${String(
+          restoreError instanceof Error ? restoreError.message : restoreError,
+        )}`,
+      );
+    }
+    throw error;
+  }
 }
 
 async function configureConversation({ id, modelRef, thinkingLevel } = {}) {
@@ -1319,6 +1546,7 @@ async function purgeConversationData(rootIds, options = {}) {
     runningConversations.delete(key);
     messageCounts.delete(key);
     runDiffSnapshots.delete(key);
+    editRangesCache.delete(key);
     deletePermissionSessionPolicy(key);
   }
 
@@ -1945,6 +2173,7 @@ async function closeConversationWatches() {
   subscribers.clear();
   runningConversations.clear();
   runDiffSnapshots.clear();
+  editRangesCache.clear();
 }
 
 module.exports = {
@@ -1957,6 +2186,7 @@ module.exports = {
   conversationPage,
   conversationSnapshot,
   createConversation,
+  editConversation,
   fullDisplayMessages,
   forkConversation,
   getConversationHandle,

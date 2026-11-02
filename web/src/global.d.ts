@@ -21,6 +21,8 @@ import type {
 } from './types/harness-types';
 import type {
   ConversationEvent,
+  ConversationEditInput,
+  ConversationEditResult,
   ConversationOutline,
   ConversationPage,
   ConversationPageCursor,
@@ -302,6 +304,8 @@ declare global {
       unsubscribeConversation(id: string): Promise<{ ok: boolean }>;
       /** 提交输入。繁忙策略直接映射 Durable 的 steer / followUp / reject。 */
       conversationSubmit(payload: ConversationSubmitInput): Promise<ConversationSubmitResult>;
+      /** 原位编辑一条用户消息，并重新生成该分支。 */
+      conversationEdit(payload: ConversationEditInput): Promise<ConversationEditResult>;
       /** 热切换模型与 thinking；繁忙时只影响下一请求。 */
       conversationConfigure(payload: {
         id: string;

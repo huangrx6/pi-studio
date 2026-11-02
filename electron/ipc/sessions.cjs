@@ -15,6 +15,7 @@ const {
   conversationPage,
   conversationSnapshot,
   createConversation,
+  editConversation,
   listWorkspaces,
   outline,
   refreshRuntimeState,
@@ -302,6 +303,17 @@ function registerConversationIpc() {
 
   ipcMain.handle('pi:conversation-submit', async (_event, input) => {
     const result = await submitConversation(input || {}, {
+      onTitleUpdated: ({ id, title }) => {
+        notifyConversationList();
+        publishMenuBarEvent({ type: 'title', id, title });
+      },
+    });
+    notifyConversationList();
+    return result;
+  });
+
+  ipcMain.handle('pi:conversation-edit', async (_event, input) => {
+    const result = await editConversation(input || {}, {
       onTitleUpdated: ({ id, title }) => {
         notifyConversationList();
         publishMenuBarEvent({ type: 'title', id, title });
