@@ -41,7 +41,7 @@ import { completedTurnDuration } from './lib/session-summary';
 import { placeRequestTraces } from './lib/request-trace-turns';
 import { ChangesView } from './components/ChangesView';
 import { ActionMenu } from './components/ActionMenu';
-import { splitComposerText } from './lib/references';
+import { extractComposerMentions, formatFileReference, splitComposerText } from './lib/references';
 import { composerSubmitAction } from './lib/composer-submit';
 import {
   clearComposerDraft,
@@ -3440,7 +3440,7 @@ export function App() {
     if (menu.kind === 'file') {
       const file = composerFileOptions[index];
       if (!file) return;
-      const inserted = `@${file.path}${file.type === 'directory' ? '/' : ''} `;
+      const inserted = `${formatFileReference(`${file.path}${file.type === 'directory' ? '/' : ''}`)} `;
       const next = `${prompt.slice(0, menu.start)}${inserted}${prompt.slice(caret)}`;
       const nextCaret = menu.start + inserted.length;
       setPrompt(next);
@@ -3719,7 +3719,7 @@ export function App() {
     }
     const persistentAttachments = [...(longAttachments ?? []), ...fileAttachments];
     const imagePayload = images.filter((image) => image.data).map((image) => ({ type: 'image' as const, data: image.data as string, mimeType: image.mime }));
-    const mentions = [...text.matchAll(/(?:^|\s)@([^\s]+)/g)].map((match) => match[1]);
+    const mentions = extractComposerMentions(text);
     return { sessionId, displayText, outgoingText, content, persistentAttachments, imagePayload, mentions, attachmentPaths: persistentAttachments.map((attachment) => attachment.path) };
   }
 

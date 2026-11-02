@@ -30,8 +30,15 @@ export type TextSegment = { kind: 'text'; text: string } | { kind: 'reference'; 
 
 // 展开后的技能块：Pi 写成 <skill name="x" location="...">正文</skill>。
 const SKILL_BLOCK = /<skill\s+name="([^"]+)"(?:\s+location="([^"]*)")?\s*>([\s\S]*?)<\/skill>/g;
-// 未展开的行内引用：`/skill:name` 或 `@path`，允许出现在文本中间（前面需是行首或空白）。
-const INLINE_REF = /(^|[^A-Za-z0-9_])(\/skill:[\w.-]+|@[^\s@]+)/g;
+// 含空格、引号或 @ 的路径用 JSON 字符串包在 @ 后，避免路径在第一个空格处被截断。
+const AT_REFERENCE_SOURCE = String.raw`@(?:"(?:\\.|[^"\\])*"|[^\s@]+)`;
+// 未展开的行内引用：`/skill:name` 或 `@path`；允许出现在文本中间（前面需是行首或非单词字符）。
+const INLINE_REF = new RegExp(
+  String.raw`(^|[^A-Za-z0-9_])(\/skill:[\w.-]+|${AT_REFERENCE_SOURCE})`,
+  'g',
+);
+// 发送时只提取真实路径并交给主进程读取文件上下文。
+const INLINE_MENTION = new RegExp(String.raw`(?:^|\s)(${AT_REFERENCE_SOURCE})`, 'g');
 
 /** 文件路径的短标签：取最后一段（目录保留尾部斜杠的语义）。 */
 function fileLabel(path: string): string {
@@ -39,10 +46,23 @@ function fileLabel(path: string): string {
   return trimmed.split('/').pop() || trimmed;
 }
 
+function atReferencePath(token: string): string {
+  const source = token.slice(1);
+  if (!source.startsWith('"')) return source;
+  try {
+    const parsed: unknown = JSON.parse(source);
+    return typeof parsed === 'string' ? parsed : '';
+  } catch {
+    return source.slice(1, -1);
+  }
+}
+
 function inlineReference(token: string): Reference {
-  return token.startsWith('/skill:')
-    ? { kind: 'skill', token, label: token.slice('/skill:'.length) }
-    : { kind: 'file', token, label: fileLabel(token.slice(1)), location: token.slice(1) };
+  if (token.startsWith('/skill:')) {
+    return { kind: 'skill', token, label: token.slice('/skill:'.length) };
+  }
+  const path = atReferencePath(token);
+  return { kind: 'file', token, label: fileLabel(path), location: path };
 }
 
 /** 把一段纯文本拆成「文本 + 行内引用」。 */
@@ -82,6 +102,19 @@ export type ComposerSegment =
   | { kind: 'text'; text: string }
   | { kind: 'token'; text: string; tokenKind: 'skill' | 'file' | 'command' };
 
+/** 把工作区路径格式化为输入框可识别、可安全包含空格的 @ 引用。 */
+export function formatFileReference(path: string): string {
+  return /[\s@"]/u.test(path) ? `@${JSON.stringify(path)}` : `@${path}`;
+}
+
+/** 从一段将要发送的文本中提取 @ 文件路径，供主进程注入文件上下文。 */
+export function extractComposerMentions(text: string): string[] {
+  return [...text.matchAll(INLINE_MENTION)].flatMap((match) => {
+    const path = atReferencePath(match[1]);
+    return path ? [path] : [];
+  });
+}
+
 /**
  * 输入框内联高亮：把技能 / 文件 / 已加载的命令标成彩色 token。
  * 只影响显示，textarea 的真实文本保持不变。
@@ -91,7 +124,10 @@ export type ComposerSegment =
  */
 export function splitComposerText(text: string, commandNames: ReadonlySet<string>): ComposerSegment[] {
   const segments: ComposerSegment[] = [];
-  const pattern = /(^|[^A-Za-z0-9_])(\/[A-Za-z][\w:.-]*|@[^\s@]+)/g;
+  const pattern = new RegExp(
+    String.raw`(^|[^A-Za-z0-9_])(\/[A-Za-z][\w:.-]*|${AT_REFERENCE_SOURCE})`,
+    'g',
+  );
   let last = 0;
   for (const match of text.matchAll(pattern)) {
     const start = match.index + match[1].length;
