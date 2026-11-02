@@ -47,14 +47,14 @@ try {
     createRoot(document.getElementById('fixture')).render(React.createElement(Fixture));
     </script></body></html>` }));
   await page.goto('http://127.0.0.1:5180/popover-preview', { waitUntil: 'domcontentloaded' });
-  await page.locator('.run-current').waitFor();
+  await page.locator('.activity-thinking.is-live').waitFor();
   await page.locator('.activity-sequence').waitFor();
   assert.equal(await page.locator('.activity-sequence .activity-thinking').getAttribute('open'), null);
-  await page.locator('.run-current').getByText('思考中',{exact:true}).waitFor();
-  await page.locator('.run-current').getByText('推理中',{exact:true}).waitFor();
+  await page.locator('.activity-thinking.is-live').getByText('思考中',{exact:true}).waitFor();
+  await page.locator('.activity-thinking.is-live').getByText('推理中',{exact:true}).waitFor();
   await page.evaluate(() => window.tick());
-  await page.locator('.run-current .markdown').filter({hasText:'最新增量内容已经显示在这里'}).waitFor();
-  assert.equal(await page.locator('.run-current details').count(),0,'thinking is not nested in details');
+  await page.locator('.activity-thinking.is-live .markdown').filter({hasText:'最新增量内容已经显示在这里'}).waitFor();
+  assert.equal(await page.locator('.activity-thinking.is-live details').count(),0,'thinking is not nested in details');
   await page.locator('.activity-sequence .activity-tool').first().waitFor();
   await page.locator('.activity-sequence .activity-tool-summary').filter({hasText:'src/app.css'}).waitFor();
   const traceAlignment = await page.evaluate(() => {
@@ -87,7 +87,7 @@ try {
       `completed tool row is not vertically centered: ${JSON.stringify(alignment)}`);
   }
   await page.screenshot({path:output+'thinking-light.png',fullPage:true,animations:'disabled'});
-  await page.locator('.run-current .markdown').waitFor();
+  await page.locator('.activity-thinking.is-live .markdown').waitFor();
   await page.evaluate(() => window.tool());
   await page.locator('.run-live-status').getByText('正在执行',{exact:true}).waitFor();
   await page.locator('.assistant-response').getByText('接下来检查构建结果。',{exact:true}).waitFor();
@@ -120,7 +120,7 @@ try {
   await page.locator('.run-live-status').getByText('正在继续处理',{exact:true}).waitFor();
   assert.equal(await page.getByText('已完成',{exact:true}).count(),0);
   await page.evaluate(() => window.finish());
-  await page.locator('.run-current').waitFor({state:'detached'});
+  await page.locator('.activity-thinking.is-live').waitFor({state:'detached'});
   await page.getByText('已完成',{exact:true}).waitFor();
 
   const toggle = page.locator('.turn-trace-toggle');
@@ -170,7 +170,6 @@ try {
     assert.equal(await group.locator('.conversation-image-tile').count(),count);
     assert.ok(await group.evaluate(el => el.previousElementSibling?.classList.contains('activity-tool')));
   }
-  assert.equal(await page.locator('.activity-sequence-images').count(),0);
   const imageAlignment = await page.evaluate(() => ({
     icons: [...document.querySelectorAll('.activity-sequence .activity-disclosure-icon > svg')].map(el => {
       const { x, width, height } = el.getBoundingClientRect(); return { x, width, height };

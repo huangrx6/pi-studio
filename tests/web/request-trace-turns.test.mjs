@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { requestTraceTargetTurnIndex } from '../../web/src/lib/request-trace-turns.ts';
+import { placeRequestTraces, requestTraceTargetTurnIndex } from '../../web/src/lib/request-trace-turns.ts';
 
 const turns = [
   { kind: 'user', message: { timestamp: 100 } },
@@ -91,4 +91,76 @@ test('a request without any visible answer remains unmatched instead of moving f
     }), turns),
     -1,
   );
+});
+
+function attempt(id, { createdAt, userTimestamp, taskId = id }) {
+  return { id, ...trace({ taskId, createdAt, userTimestamp }) };
+}
+
+test('failed attempts of an older message stay after that message once a newer message exists', () => {
+  const failedTurns = [
+    { kind: 'user', message: { timestamp: 100 } },
+    { kind: 'user', message: { timestamp: 200 } },
+  ];
+  const placement = placeRequestTraces({
+    traces: [
+      attempt('retry-1', { createdAt: 150, userTimestamp: 100 }),
+      attempt('retry-2', { createdAt: 160, userTimestamp: 100 }),
+      attempt('next', { createdAt: 205, userTimestamp: 200 }),
+    ],
+    turns: failedTurns,
+    turnActive: true,
+  });
+  assert.deepEqual(placement.unansweredByUserTurn.get(0)?.map((item) => item.id), ['retry-1', 'retry-2']);
+  assert.deepEqual(placement.pending.map((item) => item.id), ['next']);
+  assert.equal(placement.byAssistantTurn.size, 0);
+});
+
+test('attempts of the newest message stay pending when that turn has no answer', () => {
+  const placement = placeRequestTraces({
+    traces: [
+      attempt('retry-1', { createdAt: 150, userTimestamp: 100 }),
+      attempt('retry-2', { createdAt: 160, userTimestamp: 100 }),
+    ],
+    turns: [{ kind: 'user', message: { timestamp: 100 } }],
+    turnActive: false,
+  });
+  assert.deepEqual(placement.pending.map((item) => item.id), ['retry-1', 'retry-2']);
+  assert.equal(placement.unansweredByUserTurn.size, 0);
+});
+
+test('a running request keeps pending when a steering message arrives during the turn', () => {
+  const placement = placeRequestTraces({
+    traces: [attempt('running', { createdAt: 120, userTimestamp: 100 })],
+    turns: [
+      { kind: 'user', message: { timestamp: 100 } },
+      { kind: 'user', message: { timestamp: 150 } },
+    ],
+    turnActive: true,
+  });
+  assert.deepEqual(placement.pending.map((item) => item.id), ['running']);
+  assert.equal(placement.unansweredByUserTurn.size, 0);
+});
+
+test('an unanswered attempt stays with its turn when a later message ended without any request', () => {
+  const placement = placeRequestTraces({
+    traces: [attempt('failed', { createdAt: 150, userTimestamp: 100 })],
+    turns: [
+      { kind: 'user', message: { timestamp: 100 } },
+      { kind: 'user', message: { timestamp: 200 } },
+    ],
+    turnActive: false,
+  });
+  assert.deepEqual(placement.unansweredByUserTurn.get(0)?.map((item) => item.id), ['failed']);
+  assert.equal(placement.pending.length, 0);
+});
+
+test('answered attempts are placed on their assistant turn', () => {
+  const placement = placeRequestTraces({
+    traces: [attempt('next-task', { createdAt: 200, userTimestamp: 200, taskId: 'next-task' })],
+    turns,
+    turnActive: false,
+  });
+  assert.deepEqual(placement.byAssistantTurn.get(3)?.map((item) => item.id), ['next-task']);
+  assert.equal(placement.pending.length, 0);
 });

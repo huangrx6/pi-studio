@@ -1,0 +1,323 @@
+/* 执行轨迹：每个处理段一个外框，框内每条记录（模型调用、决策、工具）都是同一个网格中的一行。
+   实时与已完成的行使用同一套结构，因此图标、标题、预览、状态和箭头在所有状态下列对齐。
+   选择器统一以 .turn-trace 开头，不依赖样式表的先后顺序。 */
+
+.turn-trace {
+  --trace-inset: 12px;
+  --trace-glyph: 12px;
+  --trace-gap: 8px;
+  --trace-row: 32px;
+  --trace-title-col: 64px;
+  --trace-status-col: 56px;
+  min-width: 0;
+  margin: 8px 0 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface-soft);
+}
+
+/* 标题栏 */
+.turn-trace-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--trace-gap);
+  width: 100%;
+  min-height: 36px;
+  padding: 8px var(--trace-inset);
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--muted);
+  font: var(--text-xs)/1.5 var(--font);
+  text-align: left;
+  cursor: pointer;
+}
+.turn-trace-toggle:hover { color: var(--text); }
+.turn-trace-toggle:focus-visible,
+.turn-trace-collapse:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
+  border-radius: var(--radius-control);
+}
+.turn-trace-toggle > svg,
+.turn-trace-mark > svg,
+.turn-trace-errors > svg,
+.turn-trace-collapse > svg { width: var(--trace-glyph); height: var(--trace-glyph); flex: none; }
+.turn-trace-toggle strong { font-weight: 550; white-space: nowrap; }
+.turn-trace-mark { display: grid; place-items: center; flex: none; width: var(--trace-glyph); height: var(--trace-glyph); }
+.turn-trace-chevron { transform: rotate(-90deg); transition: transform var(--transition); }
+.turn-trace.is-open .turn-trace-chevron { transform: none; }
+.turn-trace-count { padding: 1px 6px; border-radius: var(--radius-tag); background: var(--surface-hover); color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.turn-trace-count:empty { display: none; }
+.turn-trace-errors { display: inline-flex; align-items: center; gap: 5px; color: var(--error); white-space: nowrap; }
+.turn-trace-state { margin-left: auto; color: var(--faint); white-space: nowrap; }
+
+/* 框内容：与标题栏共用左右内边距，图标和文字都从同一条左边线开始。 */
+.turn-trace-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 0 var(--trace-inset) 2px;
+}
+.turn-trace-body[hidden] { display: none; }
+.turn-trace-collapse {
+  display: flex;
+  align-items: center;
+  gap: var(--trace-gap);
+  justify-self: start;
+  min-height: var(--trace-row);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: var(--text-sm)/1.5 var(--font);
+}
+.turn-trace-collapse > svg { transform: rotate(180deg); }
+.turn-trace-collapse:hover { color: var(--text); }
+
+/* 记录行：模型调用、决策、工具共用一套 5 列网格 图标 | 标题 | 预览 | 状态 | 箭头。 */
+.turn-trace .activity-disclosure {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  interpolate-size: allow-keywords;
+}
+.turn-trace .activity-disclosure > .activity-disclosure-summary {
+  display: grid;
+  grid-template-columns: var(--trace-glyph) var(--trace-title-col) minmax(0, 1fr) var(--trace-status-col) var(--trace-glyph);
+  align-items: center;
+  column-gap: var(--trace-gap);
+  min-height: var(--trace-row);
+  padding: 0;
+  list-style: none;
+  cursor: pointer;
+}
+.turn-trace .activity-disclosure > .activity-disclosure-summary::-webkit-details-marker { display: none; }
+.turn-trace .activity-disclosure > summary.activity-disclosure-summary:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
+  border-radius: var(--radius-tag);
+}
+.turn-trace .activity-disclosure > summary.activity-disclosure-summary:hover .activity-disclosure-title,
+.turn-trace .activity-disclosure > summary.activity-disclosure-summary:hover .activity-disclosure-chevron { color: var(--text); }
+.turn-trace .activity-request { --trace-status-col: auto; }
+
+.turn-trace .activity-disclosure-icon {
+  display: grid;
+  grid-column: 1;
+  place-items: center;
+  width: var(--trace-glyph);
+  height: var(--trace-glyph);
+  color: var(--faint);
+}
+.turn-trace .activity-disclosure-icon > svg { display: block; width: 100%; height: 100%; stroke-width: 1.7; }
+.turn-trace .activity-request-icon { color: var(--accent); }
+.turn-trace .activity-thinking-icon { color: var(--thinking); }
+.turn-trace .activity-tool.is-running .activity-tool-icon { color: var(--accent); }
+.turn-trace .activity-tool.is-error .activity-tool-icon { color: var(--error); }
+
+.turn-trace .activity-disclosure-title {
+  grid-column: 2;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font: 600 11px/1.4 var(--font);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.turn-trace .activity-thinking-label { color: var(--thinking); }
+
+.turn-trace .activity-disclosure-preview {
+  grid-column: 3;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.turn-trace .activity-tool-summary,
+.turn-trace .activity-request-model { font-family: var(--mono); }
+/* 精简模式只隐藏已完成工具的参数摘要；执行中的工具保留，便于看到正在做什么。 */
+.is-steps-compact .turn-trace .activity-tool:not(.is-running) .activity-tool-summary { display: none; }
+
+.turn-trace .activity-tool-status,
+.turn-trace .activity-request-metrics {
+  grid-column: 4;
+  justify-self: end;
+  color: var(--faint);
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.turn-trace .activity-tool-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 18px;
+  padding: 2px 6px;
+  border-radius: var(--radius-tag);
+}
+.turn-trace .activity-tool-status > svg { display: block; width: 10px; height: 10px; flex: none; }
+.turn-trace .activity-tool.is-running .activity-tool-status { color: var(--accent-foreground); background: var(--accent-soft); }
+.turn-trace .activity-tool.is-error .activity-tool-status { color: var(--error); background: var(--error-soft); }
+.turn-trace .activity-request-metrics { padding: 0; }
+
+.turn-trace .activity-disclosure-chevron {
+  grid-column: 5;
+  justify-self: end;
+  width: var(--trace-glyph);
+  height: var(--trace-glyph);
+  color: var(--faint);
+  transition: transform var(--transition);
+}
+.turn-trace .activity-disclosure[open] > summary > .activity-disclosure-chevron { transform: rotate(180deg); }
+
+/* 展开内容与行共用左边线：内容从图标所在的左边线开始。 */
+.turn-trace .activity-disclosure-body { min-width: 0; padding: 4px 0 8px; }
+.turn-trace .activity-request-body { max-height: none; overflow: visible; }
+.turn-trace .activity-request-body .request-inspector { padding-top: 2px; }
+
+/* 思考：完成后是可折叠的「决策」行，执行中是常驻展开的「思考中」行。 */
+.turn-trace .activity-thinking-body {
+  max-height: 280px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.turn-trace .activity-thinking-body .markdown {
+  color: var(--muted);
+  font-size: var(--text-base);
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.turn-trace .activity-thinking-body .markdown > :first-child { margin-top: 0; }
+.turn-trace .activity-thinking-body .markdown > :last-child { margin-bottom: 0; }
+.turn-trace .activity-thinking.is-live > .activity-disclosure-summary { cursor: default; }
+.turn-trace .activity-thinking-spinner {
+  grid-column: 5;
+  justify-self: end;
+  width: var(--trace-glyph);
+  height: var(--trace-glyph);
+  color: var(--accent);
+}
+.turn-trace .activity-thinking-note { margin: 0; color: var(--faint); font-size: var(--text-xs); }
+
+/* 工具：参数与结果是本行展开后的代码块，不再套额外卡片。 */
+.turn-trace .activity-tool-label {
+  margin: 6px 0 4px;
+  color: var(--faint);
+  font-size: 9px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.turn-trace .activity-tool-code {
+  max-height: 270px;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+  color: var(--muted);
+  font: 10.5px/1.6 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.turn-trace .activity-tool-code.is-error { color: var(--error); background: var(--error-soft); }
+
+/* 引用块在框内只保留左侧强调线，不再叠加底色；首尾段落不带外边距，上下留白与其他行一致。 */
+.turn-trace .markdown blockquote { margin: 8px 0; background: transparent; }
+.turn-trace .markdown blockquote > :first-child { margin-top: 0; }
+.turn-trace .markdown blockquote > :last-child { margin-bottom: 0; }
+
+.turn-trace .activity-sequence {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+.turn-trace .activity-sequence-item { display: grid; min-width: 0; }
+
+/* 工具产生的图片：与工具行同一条左边线，默认展开，点击图片可放大预览。 */
+.turn-trace .tool-result-images { min-width: 0; max-width: 100%; margin: 0; padding: 0 0 4px; }
+.turn-trace .tool-result-images-toggle {
+  display: grid;
+  grid-template-columns: var(--trace-glyph) var(--trace-title-col) minmax(0, 1fr) var(--trace-glyph);
+  align-items: center;
+  column-gap: var(--trace-gap);
+  width: 100%;
+  min-height: var(--trace-row);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: var(--text-xs)/1.5 var(--font);
+  text-align: left;
+  cursor: pointer;
+}
+.turn-trace .tool-result-images-toggle:hover { color: var(--text); }
+.turn-trace .tool-result-images-toggle:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; border-radius: var(--radius-control); }
+.turn-trace .tool-result-images-icon { grid-column: 1; }
+.turn-trace .tool-result-images-label { grid-column: 2; font-weight: 600; }
+.turn-trace .tool-result-images-count { grid-column: 3; justify-self: start; color: var(--faint); font-variant-numeric: tabular-nums; }
+.turn-trace .tool-result-images-toggle > svg:last-child { grid-column: 4; width: var(--trace-glyph); height: var(--trace-glyph); transform: rotate(-90deg); transition: transform var(--transition); }
+.turn-trace .tool-result-images-toggle > svg.is-open { transform: none; }
+.turn-trace .tool-result-images [hidden] { display: none; }
+.turn-trace .tool-result-images .conversation-image-gallery { margin: 4px 0 0; }
+.turn-trace .tool-result-images .conversation-image-strip { padding: 1px 0 4px; }
+.turn-trace .tool-result-images .conversation-image-tile { flex-basis: 120px; width: 120px; height: 80px; }
+
+/* 展开与收起的高度动画：内容保持挂载，打开轨迹时不会把下方正文整体挤动。 */
+.turn-trace .activity-disclosure::details-content {
+  block-size: 0;
+  overflow: clip;
+  opacity: 0;
+  content-visibility: hidden;
+  transition:
+    block-size 180ms cubic-bezier(.22,.8,.2,1),
+    opacity 120ms ease,
+    content-visibility 180ms allow-discrete;
+}
+.turn-trace .activity-disclosure[open]::details-content {
+  block-size: auto;
+  opacity: 1;
+  content-visibility: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turn-trace .activity-disclosure::details-content,
+  .turn-trace .activity-disclosure > .activity-disclosure-summary,
+  .turn-trace .activity-disclosure-chevron,
+  .turn-trace-chevron { transition: none; }
+  .turn-trace .activity-thinking-spinner.spin { animation: none; }
+}
+
+@media (max-width: 600px) {
+  .turn-trace .activity-request-metrics { display: none; }
+}
+
+/* 轨迹下方的实时状态条，与轨迹框同一套字号与圆角。 */
+.run-live-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  box-sizing: border-box;
+  margin: 4px 0 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.run-live-status > .run-live-icon { display: grid; flex: none; }
+.run-live-status > .run-live-icon > svg { width: 12px; height: 12px; color: var(--accent); }
+.run-live-status > span { white-space: nowrap; }
+.run-live-status > span:last-child { margin-left: auto; color: var(--faint); }
+

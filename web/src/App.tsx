@@ -14,7 +14,7 @@
  * 渲染进程本身不直接访问 Node / 文件系统。
  */
 
-import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle, ArchiveRestore, ArrowUp, BarChart3, BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Command, Cpu, ExternalLink, FileCode2, FileDiff, FileText, Folder, FolderOpen, Github, Info, Sparkles, UserRound,
   AppWindow, Bot, Code2, Columns2, Compass, Eye, Film, Globe2, Image as ImageIcon, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageCirclePlus, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, PanelRightOpen, Pencil, Plus, Plug, RotateCw, Search, Settings, ShieldCheck, Square, SquarePen, Sun, Target, Terminal, Trash2, X,
@@ -38,7 +38,7 @@ import {
   isConversationTurnActive,
 } from './lib/conversation-activity';
 import { completedTurnDuration } from './lib/session-summary';
-import { requestTraceTargetTurnIndex } from './lib/request-trace-turns';
+import { placeRequestTraces } from './lib/request-trace-turns';
 import { ChangesView } from './components/ChangesView';
 import { ActionMenu } from './components/ActionMenu';
 import { splitComposerText } from './lib/references';
@@ -414,6 +414,9 @@ function goalStatusLabel(state: LongTaskState | undefined): string {
   if (state.status === 'failed') return '目标执行失败';
   return '';
 }
+
+/** 没有生成助手消息的请求尝试，在对应用户消息之后显示的说明。 */
+const NO_ANSWER_TEXT = '本轮没有生成助手消息。';
 
 /** 侧边栏展开状态、手动排序与上次打开的会话都存在 localStorage。 */
 const UI_KEYS = {
@@ -4392,33 +4395,12 @@ export function App() {
     else transcriptTurns.push({ kind: 'assistant', messages: [message] });
   }
   const lastAssistantTurnIndex = transcriptTurns.reduce((last, turn, index) => turn.kind === 'assistant' ? index : last, -1);
-  const requestTracesByTurn = new Map<number, RequestTrace[]>();
-  const pendingRequestTraces: RequestTrace[] = [];
-  for (const trace of [...requestTraces].sort((left, right) => (
-    left.createdAt - right.createdAt || left.id.localeCompare(right.id)
-  ))) {
-    let targetTurn = requestTraceTargetTurnIndex(trace, transcriptTurns);
-    if (
-      targetTurn < 0
-      && !trace.messages.some((message) => (
-        message.role === 'user' && Number.isFinite(message.timestamp)
-      ))
-      && turnActive
-      && transcriptTurns.at(-1)?.kind === 'assistant'
-      && lastAssistantTurnIndex >= 0
-    ) {
-      targetTurn = lastAssistantTurnIndex;
-    }
-    if (targetTurn < 0) pendingRequestTraces.push(trace);
-    else requestTracesByTurn.set(targetTurn, [
-      ...(requestTracesByTurn.get(targetTurn) || []),
-      trace,
-    ]);
-  }
+  // Every request trace goes to its own answer, to the unanswered message it served, or to the live tail.
+  const requestPlacement = placeRequestTraces({ traces: requestTraces, turns: transcriptTurns, turnActive });
   const pendingAssistantVisible = transcriptTurns.at(-1)?.kind !== 'assistant'
-    && (turnActive || pendingRequestTraces.length > 0);
-  const pendingTurnError = !turnActive && pendingRequestTraces.length > 0
-    ? error || '本轮没有生成助手消息。'
+    && (turnActive || requestPlacement.pending.length > 0);
+  const pendingTurnError = !turnActive && requestPlacement.pending.length > 0
+    ? error || NO_ANSWER_TEXT
     : undefined;
   const outlineSamples = useMemo(
     () => sampleOutlineIndices(outlineItems.length, outlineActive),
@@ -5049,16 +5031,19 @@ export function App() {
               <div className="messages">
                 {historyLoading && <div className="history-loading" role="status" aria-live="polite" aria-label="正在加载更早消息"><LoaderCircle className="spin" /></div>}
                 {transcriptTurns.map((turn, index) => turn.kind === 'user'
-                  ? <ChatMessageView key={`user-${turn.message.sourceIndex ?? turn.message.timestamp ?? index}`} id={`chat-turn-${turn.message.sourceIndex ?? `pending-${turn.message.timestamp ?? index}`}`} message={turn.message} onOpenFile={handleOpenAttachment} />
-                  : <AssistantTurnView key={`assistant-${turn.messages[0]?.sourceIndex ?? turn.messages[0]?.timestamp ?? index}`} id={turn.messages[0]?.sourceIndex !== undefined ? `chat-assistant-turn-${turn.messages[0].sourceIndex}` : undefined} messages={turn.messages} toolResults={toolResultMap} requestTraces={requestTracesByTurn.get(index)} cwd={session?.cwd} busy={turnActive && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView}
+                  ? <Fragment key={`user-${turn.message.sourceIndex ?? turn.message.timestamp ?? index}`}>
+                    <ChatMessageView id={`chat-turn-${turn.message.sourceIndex ?? `pending-${turn.message.timestamp ?? index}`}`} message={turn.message} onOpenFile={handleOpenAttachment} />
+                    {requestPlacement.unansweredByUserTurn.has(index) && <AssistantTurnView messages={[]} toolResults={toolResultMap} requestTraces={requestPlacement.unansweredByUserTurn.get(index)} cwd={session?.cwd} busy={false} turnError={NO_ANSWER_TEXT} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={false} />}
+                  </Fragment>
+                  : <AssistantTurnView key={`assistant-${turn.messages[0]?.sourceIndex ?? turn.messages[0]?.timestamp ?? index}`} id={turn.messages[0]?.sourceIndex !== undefined ? `chat-assistant-turn-${turn.messages[0].sourceIndex}` : undefined} messages={turn.messages} toolResults={toolResultMap} requestTraces={requestPlacement.byAssistantTurn.get(index)} cwd={session?.cwd} busy={turnActive && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView}
                     gitDiff={index === lastAssistantTurnIndex ? liveDiff ?? (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined) : (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined)}
                     onOpenDiff={handleOpenChanges} onOpenFile={handleOpenFile} />)}
                 {pendingAssistantVisible && (
                   <AssistantTurnView
-                    key={`assistant-pending-${pendingRequestTraces[0]?.id || messages.length}`}
+                    key={`assistant-pending-${requestPlacement.pending[0]?.id || messages.length}`}
                     messages={[]}
                     toolResults={toolResultMap}
-                    requestTraces={pendingRequestTraces}
+                    requestTraces={requestPlacement.pending}
                     cwd={session?.cwd}
                     busy={turnActive}
                     turnError={pendingTurnError}

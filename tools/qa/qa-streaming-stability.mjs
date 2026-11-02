@@ -220,7 +220,7 @@ try {
     samples.push(await page.evaluate(() => {
       const viewport = document.querySelector('.chat-scroll').getBoundingClientRect();
       const status = document.querySelector('.run-live-status').getBoundingClientRect();
-      const rail = document.querySelector('.run-current-inline').getBoundingClientRect();
+      const rail = document.querySelector('.activity-thinking.is-live').getBoundingClientRect();
       const scroll = document.querySelector('.chat-scroll');
       return {
         footerBottom: status.bottom - viewport.bottom,
@@ -249,7 +249,7 @@ try {
     samples.push(await page.evaluate(() => {
       const viewport = document.querySelector('.chat-scroll').getBoundingClientRect();
       const status = document.querySelector('.run-live-status').getBoundingClientRect();
-      const rail = document.querySelector('.run-current-inline')?.getBoundingClientRect();
+      const rail = document.querySelector('.activity-thinking.is-live')?.getBoundingClientRect();
       const scroll = document.querySelector('.chat-scroll');
       return {
         footerBottom: status.bottom - viewport.bottom,

@@ -2372,7 +2372,9 @@ Agent-shared directories are separate at both user and project scope. */
 .markdown ul, .markdown ol { margin: 0 0 12px; padding-left: 22px; }
 .markdown li { margin: 3px 0; }
 .markdown li > p { margin-bottom: 5px; }
-.markdown blockquote { margin: 12px 0; padding: 2px 0 2px 14px; border-left: 2px solid var(--border-strong); color: var(--muted); }
+.markdown blockquote { margin: 12px 0; padding: 2px 0 2px 14px; border-left: 2px solid var(--accent); border-radius: 0 var(--radius-tag) var(--radius-tag) 0; background: var(--surface-soft); color: var(--muted); }
+.markdown blockquote > :first-child { margin-top: 0; }
+.markdown blockquote > :last-child { margin-bottom: 0; }
 .markdown hr { margin: 20px 0; border: 0; border-top: 1px solid var(--border); }
 .markdown a { color: var(--accent-foreground); text-decoration: underline; text-underline-offset: 2px; }
 .markdown strong { font-weight: 650; }
@@ -2642,34 +2644,6 @@ Agent-shared directories are separate at both user and project scope. */
   .studio-lightbox-hint { display: none; }
 }
 .message-error { margin-top: 12px; padding: 9px 11px; border: 1px solid var(--error-border); border-radius: var(--radius-tag); background: var(--error-soft); color: var(--error); font-size: var(--text-sm); }
-.thinking-block { margin: 8px 0 10px; border-left: 2px solid var(--border-strong); color: var(--muted); }
-.thinking-block summary { display: flex; align-items: center; gap: 7px; padding: 7px 10px; list-style: none; color: var(--muted); font-size: var(--text-sm); cursor: pointer; }
-.thinking-block summary::-webkit-details-marker, .tool-call summary::-webkit-details-marker { display: none; }
-.thinking-block summary > svg:first-child { width: 14px; height: 14px; color: var(--faint); }
-.thinking-block summary > svg:last-child { width: 13px; height: 13px; margin-left: auto; color: var(--faint); transition: transform var(--transition); }
-.thinking-block[open] summary > svg:last-child { transform: rotate(180deg); }
-.thinking-content { padding: 2px 12px 8px; color: var(--muted); font-size: var(--text-sm); }
-.thinking-content .markdown { color: var(--muted); font-size: var(--text-sm); line-height: 1.75; }
-.tool-call { margin: 9px 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); }
-.tool-call.is-running { border-color: var(--border); }
-.tool-call.is-error { border-color: var(--error-border); background: var(--error-soft); }
-.tool-call summary { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 10px; list-style: none; cursor: pointer; }
-.tool-call summary:hover { background: var(--surface-soft); }
-.tool-call-icon { display: grid; place-items: center; width: 22px; height: 22px; flex: none; border-radius: var(--radius-tag); color: var(--icon); background: var(--surface-soft); }
-.tool-call-icon svg { width: 13px; height: 13px; }
-.tool-call.is-error .tool-call-icon { color: var(--error); background: var(--error-soft); }
-.tool-call-name { flex: none; color: var(--text); font: 11px var(--mono); font-weight: 600; }
-.tool-call-summary { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--faint); font: 10.5px var(--mono); }
-.tool-call-status { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--faint); font-size: 10px; }
-.tool-call-status svg { width: 11px; height: 11px; }
-.tool-call.is-error .tool-call-status { color: var(--error); }
-.tool-call.is-done .tool-call-status { color: var(--success); }
-.tool-call-chevron { width: 13px; height: 13px; flex: none; color: var(--faint); transition: transform var(--transition); }
-.tool-call[open] .tool-call-chevron { transform: rotate(180deg); }
-.tool-call-body { padding: 0 10px 10px; border-top: 1px solid var(--border); }
-.tool-call-label { margin: 9px 0 5px; color: var(--faint); font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; }
-.tool-call-args, .tool-call-output { max-height: 270px; margin: 0; padding: 9px 10px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface); color: var(--muted); font: 10.5px/1.65 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
-.tool-call-output.is-error { border-color: var(--error-border); color: var(--error); }
 .spin { color: var(--loading); animation: rotate 1s linear infinite; }
 .settings-save .spin { color: var(--on-button); }
 .settings-save:disabled .spin { color: var(--disabled-text); }
@@ -2736,45 +2710,6 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .markdown h1 { font-size: 24px; }
 .markdown h2 { font-size: 19px; }
 .markdown h3 { font-weight: 650; }
-.markdown blockquote { border-left-color: var(--border-strong); background: var(--surface-soft); border-radius: 0 var(--radius-tag) var(--radius-tag) 0; }
-/* Thinking is a small affordance, not a full-width empty bar. */
-.thinking-block { margin: 5px 0 11px; border: 0; }
-.thinking-block summary { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 26px; padding: 3px 8px 3px 5px; border: 1px solid var(--border); border-radius: var(--radius-round); background: var(--surface); color: var(--muted); font-size: 10.5px; line-height: 1.4; transition: border-color var(--transition), background var(--transition); }
-.thinking-block summary:hover { border-color: var(--border-hover); background: var(--surface-hover); }
-.thinking-symbol { display: grid; place-items: center; width: 18px; height: 18px; flex: none; border-radius: 50%; color: var(--icon); background: var(--surface-soft); }
-.thinking-symbol svg { width: 11px; height: 11px; }
-.thinking-title { flex: none; color: var(--muted); font-weight: 500; }
-.thinking-preview { min-width: 0; overflow: hidden; color: var(--faint); text-overflow: ellipsis; white-space: nowrap; }
-.thinking-chevron { width: 12px; height: 12px; flex: none; color: var(--faint); transition: transform var(--transition); }
-.thinking-block[open] .thinking-chevron { transform: rotate(180deg); }
-.thinking-block[open] summary { border-radius: var(--radius-control) var(--radius-control) 0 0; border-bottom-color: var(--transparent); background: var(--surface); }
-.thinking-content { margin-top: 0; padding: 11px 13px; border: 1px solid var(--border); border-top: 0; border-radius: 0 var(--radius-control) var(--radius-control) var(--radius-control); background: var(--surface); color: var(--muted); font-size: var(--text-sm); }
-.thinking-content .markdown { color: var(--muted); font-size: var(--text-sm); line-height: 1.8; }
-/* Consecutive tool calls read as one compact execution trace. */
-.tool-cluster { margin: 8px 0 11px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); box-shadow: var(--shadow-card); }
-.tool-cluster-head { display: flex; align-items: center; gap: 6px; height: 29px; padding: 0 9px; color: var(--faint); font-size: 9.5px; letter-spacing: .03em; background: var(--surface-soft); border-bottom: 1px solid var(--border); }
-.tool-cluster-symbol { display: grid; place-items: center; color: var(--icon); }
-.tool-cluster-symbol svg { width: 12px; height: 12px; }
-.tool-cluster-count { display: grid; place-items: center; min-width: 15px; height: 15px; padding: 0 4px; border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--faint); font-size: 9px; }
-.tool-cluster-line { flex: 1; height: 1px; background: var(--border); }
-.tool-cluster .tool-call { margin: 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: var(--transparent); }
-.tool-cluster .tool-call:first-child { border-top: 0; }
-.tool-cluster .tool-call summary { min-height: 36px; padding: 0 9px; }
-.tool-cluster .tool-call summary:hover { background: var(--surface-hover); }
-.tool-cluster .tool-call-body { border-top-color: var(--border); }
-.tool-call-icon { width: 21px; height: 21px; border-radius: var(--radius-tag); }
-.tool-call-icon.tone-shell { color: var(--icon); background: var(--surface-soft); }
-.tool-call-icon.tone-read { color: var(--icon); background: var(--surface-soft); }
-.tool-call-icon.tone-search { color: var(--icon); background: var(--surface-soft); }
-.tool-call-icon.tone-edit { color: var(--icon); background: var(--surface-soft); }
-.tool-call-name { font-size: 10.5px; font-weight: 600; letter-spacing: .01em; }
-.tool-call-summary { font-size: 10px; color: var(--faint); }
-.tool-call-status { padding: 2px 5px; border-radius: var(--radius-tag); background: var(--surface-soft); font-size: 9px; }
-.tool-call.is-done .tool-call-status { color: var(--success); background: var(--transparent); }
-.tool-call.is-error .tool-call-status { color: var(--error); background: var(--error-soft); }
-.tool-call-chevron { width: 12px; height: 12px; }
-.tool-call-label { font-size: 9px; }
-.tool-call-args, .tool-call-output { font-size: 10.5px; border-color: var(--border); }
 @keyframes assistant-turn-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes live-pulse { 0%, 100% { opacity: .45; transform: scale(.85); } 50% { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .assistant-turn { animation: none; } }
@@ -2795,10 +2730,6 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .assistant-turn-meta svg { width: 9px; height: 9px; opacity: .7; }
 .assistant-turn-meta .turn-metric-tools { color: var(--faint); background: var(--surface-soft); }
 .assistant-turn-meta .turn-metric-thinking { color: var(--faint); background: var(--surface-soft); }
-.tool-cluster { background: var(--surface-soft); }
-.tool-cluster-body { background: var(--surface); }
-.tool-call.is-running .tool-call-status { color: var(--loading); background: var(--accent-soft); }
-.tool-call.is-running .tool-call-status svg { animation: rotate 1s linear infinite; }
 @keyframes assistant-mark-breathe {
   0%, 100% { opacity: .35; transform: translate(0, 0); }
   50% { opacity: .82; transform: translate(1px, 1px); }
@@ -2814,34 +2745,6 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 }
 
 /* Run log + warm reply sheet: activity is a compact aside, the answer is the artifact. */
-/* 运行日志与回复分层：活动是可折叠的紧凑侧记，回复是主要产出。早期版本给
-回复加了卡片边框，后面的 raw prose 区块会把卡片完全去掉，只保留正文。日志
-容器负责内部滚动和超长文本换行。 */
-
-.activity-drawer { margin: 4px 0 12px; }
-.activity-drawer > summary { display: inline-flex; align-items: center; gap: 6px; min-height: 27px; padding: 3px 8px; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--muted); font-size: 10px; cursor: pointer; list-style: none; transition: border-color var(--transition), background var(--transition); }
-.activity-drawer > summary::-webkit-details-marker { display: none; }
-.activity-drawer > summary:hover { border-color: var(--border-hover); background: var(--surface-hover); }
-.activity-symbol { display: grid; place-items: center; width: 17px; height: 17px; border-radius: var(--radius-tag); color: var(--icon); background: var(--surface-soft); }
-.activity-symbol svg { width: 10px; height: 10px; }
-.activity-summary { color: var(--faint); font-size: 9.5px; }
-.activity-chevron { width: 12px; height: 12px; margin-left: 2px; color: var(--faint); transition: transform var(--transition); }
-.activity-drawer[open] > summary { border-color: var(--border); border-radius: var(--radius-tag) var(--radius-tag) 0 0; background: var(--surface); }
-.activity-drawer[open] .activity-chevron { transform: rotate(180deg); }
-.activity-log { position: relative; margin: 0; padding: 5px 0 3px 15px; border: 1px solid var(--border); border-top: 0; border-radius: 0 0 var(--radius-tag) var(--radius-tag); background: var(--surface); }
-.activity-log::before { content: ''; position: absolute; left: 7px; top: 12px; bottom: 12px; width: 1px; background: var(--border); }
-.activity-log > * { position: relative; }
-.activity-log .thinking-block { margin: 5px 7px 7px; }
-.activity-log .thinking-block summary { background: var(--surface); }
-.activity-log .tool-call { margin: 0 7px; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: var(--transparent); box-shadow: none; }
-.activity-log .tool-call:first-of-type { border-top: 0; }
-.activity-log .tool-call summary { min-height: 34px; padding: 0 3px; }
-.activity-log .tool-call summary:hover { background: var(--surface-hover); }
-.activity-log .tool-call-body { border-top-color: var(--border); }
-.activity-note { padding: 4px 7px 6px; color: var(--muted); font-size: var(--text-sm); }
-.activity-note::before { content: ''; position: absolute; left: -10px; top: 13px; width: 4px; height: 4px; border-radius: 50%; background: var(--border); }
-.activity-note .markdown { color: var(--muted); font-size: var(--text-sm); line-height: 1.75; }
-.activity-note .markdown p { margin-bottom: 5px; }
 .assistant-response { position: relative; margin: 10px 0 0; padding: 15px 18px 17px 20px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface-soft); box-shadow: var(--shadow-card); }
 .assistant-response::before { content: ''; position: absolute; left: -1px; top: 15px; bottom: 15px; width: 2px; border-radius: 0 var(--radius-tag) var(--radius-tag) 0; background: var(--border); }
 .assistant-response .markdown { font-size: 14px; line-height: 1.95; }
@@ -2888,82 +2791,6 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .assistant-response .markdown code { background: var(--surface-soft); }
 
 /* Open execution canvas: dot grid, vertical thread, colored nodes, soft log rows. */
-/* 执行画布版活动日志：点阵底、纵向连线、带边框节点和逐行入场动画。节点按
-工具类型着色，部分类型保留强调色；note 节点是小圆点。每个节点左侧的 gutter
-画连接线，最后一行不画。内容区各自限高滚动。 */
-
-.activity-drawer { margin: 5px 0 13px; }
-.activity-drawer > summary { gap: 7px; min-height: 28px; padding: 3px 9px 3px 6px; border-color: var(--border); border-radius: var(--radius-control); background: var(--surface); }
-.activity-drawer > summary:hover { border-color: var(--border-hover); background: var(--surface-hover); }
-.activity-symbol { width: 18px; height: 18px; border-radius: var(--radius-tag); color: var(--icon); background: var(--surface-soft); }
-.activity-symbol svg { width: 11px; height: 11px; }
-.activity-title { color: var(--muted); font-weight: 600; }
-.activity-pulse { display: flex; align-items: center; gap: 2px; height: 12px; margin-left: 1px; }
-.activity-pulse i { width: 2px; height: 8px; border-radius: var(--radius-tag); background: var(--border); }
-.activity-pulse i.is-thinking { height: 6px; background: var(--border); }
-.activity-pulse i.tone-shell { background: var(--border); }
-.activity-pulse i.tone-read { background: var(--border); }
-.activity-pulse i.tone-search { background: var(--border); }
-.activity-pulse i.tone-edit { background: var(--border); }
-.activity-pulse i.is-note { height: 3px; background: var(--border); }
-.activity-summary { color: var(--faint); }
-.activity-drawer[open] > summary { border-radius: var(--radius-control); border-color: var(--border); background: var(--surface); }
-.activity-log { margin: 4px 0 0 -2px; padding: 10px 0 2px 0; border: 0; border-radius: 0; background-color: var(--transparent); background-image: var(--surface-soft); background-size: 14px 14px; }
-.activity-log::before { display: none; }
-.activity-line { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 9px; position: relative; padding: 2px 0 7px; animation: activity-in .35s cubic-bezier(.22,.8,.2,1) both; }
-.activity-gutter { position: relative; display: flex; justify-content: center; padding-top: 4px; }
-.activity-gutter::before { content: ''; position: absolute; left: 50%; top: 25px; bottom: -9px; width: 1px; background: var(--border); }
-.activity-line:last-child .activity-gutter::before { display: none; }
-.activity-node { position: relative; z-index: 1; display: grid; place-items: center; width: 22px; height: 22px; flex: none; border: 2px solid var(--border); border-radius: var(--radius-tag); color: var(--icon); background: var(--surface-soft); box-shadow: 0 0 0 1px var(--border); }
-.activity-node svg { width: 12px; height: 12px; }
-.activity-node.is-thinking { color: var(--icon); background: var(--surface-soft); box-shadow: 0 0 0 1px var(--thinking-border); border-radius: 50%; }
-.activity-node.is-note { width: 8px; height: 8px; margin-top: 8px; border: 2px solid var(--border); background: var(--surface-soft); box-shadow: 0 0 0 1px var(--border); }
-.activity-node.tone-shell { color: var(--icon); background: var(--surface-soft); box-shadow: 0 0 0 1px var(--border); }
-.activity-node.tone-read { color: var(--icon); background: var(--surface-soft); box-shadow: 0 0 0 1px var(--border); }
-.activity-node.tone-search { color: var(--icon); background: var(--surface-soft); box-shadow: 0 0 0 1px var(--border); }
-.activity-node.tone-edit { color: var(--icon); background: var(--surface-soft); box-shadow: 0 0 0 1px var(--border); }
-.activity-content { min-width: 0; padding-top: 1px; }
-.activity-tool { margin: 1px 0 4px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); transition: border-color var(--transition), background var(--transition); }
-.activity-tool:hover { border-color: var(--border-hover); background: var(--surface-hover); }
-.activity-tool summary { display: flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 9px; list-style: none; cursor: pointer; }
-.activity-tool summary > .activity-tool-icon,
-.activity-tool summary > .activity-tool-name,
-.activity-tool summary > .activity-tool-summary,
-.activity-tool summary > .activity-tool-status,
-.activity-tool summary > .activity-tool-chevron { align-self: center; }
-.activity-tool summary::-webkit-details-marker { display: none; }
-.activity-tool-name { flex: none; color: var(--muted); font: 10.5px var(--mono); font-weight: 650; }
-.activity-tool-summary { flex: 1; min-width: 0; overflow: hidden; color: var(--faint); font: 10px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
-.activity-tool-image-count,
-.run-history-image-count { display: inline-flex; align-items: center; gap: 4px; flex: none; padding: 2px 7px; border: 1px solid var(--accent-border); border-radius: var(--radius-round); color: var(--accent-foreground); background: var(--accent-soft); font-size: 10px; font-weight: 600; line-height: 1.4; white-space: nowrap; }
-.activity-tool-image-count svg,
-.run-history-image-count svg { width: 11px; height: 11px; }
-.activity-tool-status { display: inline-flex; min-height: 18px; align-items: center; justify-content: center; box-sizing: border-box; gap: 4px; flex: none; padding: 2px 5px; border-radius: var(--radius-tag); color: var(--faint); font-size: 9px; line-height: 1; }
-.activity-tool-status svg { display: block; width: 10px; height: 10px; flex: none; }
-.activity-tool.is-running .activity-tool-status { color: var(--loading); background: var(--accent-soft); }
-.activity-tool.is-error .activity-tool-status { color: var(--error); background: var(--error-soft); }
-.activity-tool-chevron { display: block; width: 12px; height: 12px; flex: none; color: var(--faint); transition: transform var(--transition); }
-.activity-tool[open] .activity-tool-chevron { transform: rotate(180deg); }
-.activity-tool-body { padding: 0 12px 12px; border-top: 1px solid var(--border); }
-.activity-tool-label { margin: 11px 0 6px; color: var(--faint); font-size: 8.5px; letter-spacing: .08em; text-transform: uppercase; }
-.activity-tool-code { max-height: 270px; margin: 0; padding: 10px 12px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--muted); font: 10.5px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
-.activity-tool-code.is-error { color: var(--error); background: var(--error-soft); }
-.activity-thinking { padding: 2px 0 3px; }
-.activity-thinking summary { display: flex; align-items: center; gap: 7px; min-height: 22px; list-style: none; cursor: pointer; }
-.activity-thinking summary::-webkit-details-marker { display: none; }
-.activity-thinking-label { flex: none; color: var(--faint); font-size: var(--text-sm); font-weight: 500; }
-.activity-thinking-preview { flex: 1; min-width: 0; overflow: hidden; color: var(--faint); font-size: var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
-.activity-thinking-chevron { width: 12px; height: 12px; flex: none; color: var(--faint); transition: transform var(--transition); }
-.activity-thinking[open] .activity-thinking-chevron { transform: rotate(180deg); }
-.activity-thinking[open] .activity-thinking-preview { display: none; }
-.activity-thinking-chevron { margin-left: auto; }
-.activity-thinking-body { max-height: 280px; overflow: auto; overscroll-behavior: contain; margin: 6px 0 4px; padding: 0 0 2px 24px; border-left: 0; }
-.activity-thinking-body .markdown { color: var(--muted); font-size: var(--text-base); line-height: 1.8; overflow-wrap: anywhere; }
-.activity-note { padding: 2px 0 5px; color: var(--muted); font-size: var(--text-sm); }
-.activity-note .markdown { color: var(--faint); font-size: 12px; line-height: 1.7; }
-.activity-note .markdown p { margin-bottom: 4px; }
-@keyframes activity-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-@media (prefers-reduced-motion: reduce) { .activity-line { animation: none; } }
 
 /* Floating conversation outline: hover reveals a message preview, click jumps. */
 /* 会话大纲浮在消息区右侧：absolute 定位在 main 内、z-index 9，hover 显示四行
@@ -3171,7 +2998,6 @@ error-card 也在这里被统一成同一套视觉。 */
 .code-work-view { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin: 7px 0 3px; }
 .code-work-label { margin-right: 3px; color: var(--faint); font: 8.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
 .code-work-view code { max-width: 260px; overflow: hidden; padding: 2px 6px; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--muted); font: 9.5px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
-.is-steps-compact .activity-pulse, .is-steps-compact .activity-summary, .is-steps-compact .activity-tool-summary { display: none; }
 .messages .markdown, .messages .user-bubble { font-size: var(--chat-font-size, 14px); }
 
 /* pi-todo plan dock: a quiet, pinned execution plan, not a chat log. */
@@ -3297,19 +3123,8 @@ error-card 也在这里被统一成同一套视觉。 */
 .composer textarea.has-queued::placeholder { color: var(--muted); -webkit-text-fill-color: var(--muted); }
 
 /* Do not flood expanded tool cards on hover; keep each parameter/result surface legible. */
-/* 展开后的工具卡不再整体变色：hover 只加深边框和表面，参数与结果区域保持
-独立可读的代码块背景，避免整卡高亮淹没内容。 */
-
-.activity-tool:hover { background: var(--surface); border-color: var(--border-strong); }
-.activity-drawer > summary:hover { background: var(--surface-soft); }
-.activity-tool-body { background: var(--transparent); }
-.activity-tool-code { border: 1px solid var(--border); background: var(--surface-soft); }
 
 /* The note row already renders its own activity node in the gutter. */
-/* note 行的活动节点已经由 gutter 自己绘制，这里去掉额外的伪元素圆点，防止
-同一条日志出现两个节点。 */
-
-.activity-note::before { content: none; display: none; }
 
 /* Four radius tiers: tag, control, card, panel; 50% stays reserved for circles. */
 /* 统一圆角层级：详情、设置、模型浮层和 composer 都使用 panel 级圆角，圆形
@@ -3331,7 +3146,6 @@ error-card 也在这里被统一成同一套视觉。 */
 .radius-preview i:nth-child(4) { border-radius: var(--radius-panel); }
 .radius-control .pi-select { width: 148px; flex: 0 0 148px; }
 @media (max-width: 900px) { .radius-preview { display: none; } .radius-control .pi-select { width: 130px; flex-basis: 130px; } }
-
 
 /* Component theme map. Every color here comes from palette.css. */
 /* 组件主题映射：文件最后统一把所有组件的背景、边框、文字、按钮、语法高亮
@@ -3387,7 +3201,6 @@ body { background: var(--bg); color: var(--text); }
 .assistant-turn.is-live .assistant-turn-status::before { background: var(--live); }
 .user-bubble { border-color: var(--message-border); background: var(--message-bg); box-shadow: none; }
 .markdown a { color: var(--link); text-decoration-color: var(--link-decoration); }
-.markdown blockquote { border-left-color: var(--accent); background: var(--surface-soft); }
 .markdown pre { border-color: var(--border); background: var(--surface-soft); }
 .markdown code { background: var(--surface-soft); }
 .markdown .hljs-keyword, .markdown .hljs-selector-tag, .markdown .hljs-built_in,
@@ -3399,27 +3212,6 @@ body { background: var(--bg); color: var(--text); }
 .markdown .hljs-comment, .markdown .hljs-quote { color: var(--faint); }
 .assistant-response .markdown h1, .assistant-response .markdown h2 { color: var(--text); }
 .assistant-response .markdown pre, .assistant-response .markdown code { background: var(--surface-soft); border-color: var(--border); }
-.thinking-symbol, .activity-node.is-thinking, .thinking-block summary { color: var(--thinking); background: var(--thinking-soft); border-color: var(--thinking-border); }
-.activity-node.is-thinking { box-shadow: 0 0 0 1px var(--thinking-border); }
-.activity-thinking-label { color: var(--thinking); }
-.activity-thinking-body { border-left-color: var(--thinking-border); background: var(--transparent); }
-.activity-thinking-body .markdown, .thinking-content .markdown { color: var(--muted); }
-.activity-node.tone-shell { color: var(--muted); background: var(--surface-soft); box-shadow: 0 0 0 1px var(--border); }
-.activity-node.tone-read, .activity-node.tone-search { color: var(--secondary); background: var(--surface-soft); box-shadow: 0 0 0 1px var(--border); }
-.activity-node.tone-edit, .activity-node.tone-tool { color: var(--accent-foreground); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--border); }
-.activity-tool { border-color: var(--border); background: var(--surface); }
-.activity-tool:hover { border-color: var(--accent-border); background: var(--surface); }
-.activity-tool-status, .activity-tool.is-done .activity-tool-status { color: var(--success); }
-.activity-tool.is-running .activity-tool-status { color: var(--accent-foreground); background: var(--accent-soft); }
-.activity-tool.is-error .activity-tool-status { color: var(--error); background: var(--error-soft); }
-.activity-tool-code { background: var(--surface-soft); border-color: var(--border); }
-.activity-tool-code.is-error { color: var(--error); background: var(--error-soft); }
-.activity-pulse i { background: var(--border-strong); }
-.activity-pulse i.is-thinking, .activity-pulse i.tone-edit, .activity-pulse i.tone-tool { background: var(--thinking); }
-.activity-pulse i.tone-shell { background: var(--success); }
-.activity-pulse i.tone-read, .activity-pulse i.tone-search { background: var(--secondary); }
-.activity-pulse i.is-note { background: var(--border-strong); }
-.activity-summary, .activity-title { color: var(--muted); }
 .attachment-icon, .attachment-icon.is-image, .attachment-icon.is-code, .attachment-icon.is-archive, .attachment-icon.is-sheet, .attachment-icon.is-doc, .attachment-icon.is-generic { color: var(--accent); background: var(--accent-soft); }
 .attachment-kind, .attachment-kind.is-code, .attachment-kind.is-archive, .attachment-kind.is-sheet, .attachment-kind.is-doc { color: var(--muted); background: var(--surface-soft); }
 .attachment-card, .composer-attachment { background: var(--surface); border-color: var(--border); }
@@ -3466,14 +3258,13 @@ body { --dsh-scrollbar-thumb: var(--scrollbar); --dsh-scrollbar-thumb-hover: var
 @media (max-width: 900px) { .settings-profile-row > .pi-select { width: 150px; flex-basis: 150px; } }
 
 /* Neutralize optional decorative hues; only accent, warning and error remain. */
-/* 收掉装饰性色相：文件/命令/工具图标、供应商图标、模型标签、回合元信息全部
+/* 收掉装饰性色相：文件/命令图标、供应商图标、模型标签、回合元信息全部
 回到中性图标色和柔和表面，只保留 accent、warning、error 三类语义色。 */
 
 .panel-tab-icon, .panel-tab-icon.is-file, .panel-tab-icon.is-files,
 .composer-option-icon, .composer-option-icon.is-builtin, .composer-option-icon.is-skill,
 .composer-option-icon.is-prompt, .composer-option-icon.is-extension,
-.composer-option-icon.is-directory, .tool-call-icon, .tool-call-icon.tone-shell,
-.tool-call-icon.tone-read, .tool-call-icon.tone-search, .tool-call-icon.tone-edit {
+.composer-option-icon.is-directory {
   color: var(--muted);
   background: var(--surface-soft);
 }
@@ -3503,14 +3294,6 @@ body { --dsh-scrollbar-thumb: var(--scrollbar); --dsh-scrollbar-thumb-hover: var
 .provider-mode.is-missing, .extension-toast.is-warning { color: var(--warning); background: var(--warning-soft); border-color: var(--warning-border); }
 
 /* Remaining accent-bearing surfaces are derived from the same page palette. */
-/* 最后一轮强调色落点：活动符号、目录图标、建议卡 hover、设置描边按钮等使用
-accent 或 accent-soft；同时把 note 节点、思考块边框、连接线改回中性边框色。 */
-
-.activity-symbol { color: var(--accent-foreground); background: var(--accent-soft); }
-.activity-drawer > summary { background: var(--surface); border-color: var(--border); }
-.activity-drawer > summary:hover { background: var(--surface-soft); border-color: var(--border-strong); }
-.activity-node.is-note { border-color: var(--surface); background: var(--muted); box-shadow: 0 0 0 1px var(--border); }
-.thinking-block { border-left-color: var(--border); }
 .file-row.is-directory > svg:first-child, .panel-tool-icon.is-folder { color: var(--accent); }
 .new-conversation-intro h2 em { color: var(--text); }
 .suggestion:hover { border-color: var(--accent-border); background: var(--surface-soft); }
@@ -3582,19 +3365,6 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 /* Quiet execution timeline: fine connectors, consistent unboxed glyphs. */
 .markdown, .markdown h1, .markdown h2, .markdown h3, .markdown h4, .markdown h5, .markdown h6 { font-family: var(--font); }
 .assistant-turn-name { font-family: var(--font); }
-.activity-line { grid-template-columns: 24px minmax(0, 1fr); gap: 12px; padding-bottom: 10px; }
-.activity-gutter { padding-top: 7px; }
-.activity-gutter::before { top: 30px; bottom: -5px; background: var(--border); }
-.activity-gutter .activity-node { width: 20px; height: 20px; border: 0; border-radius: 0; background: var(--bg); color: var(--faint); box-shadow: none; }
-.activity-gutter .activity-node svg { width: 14px; height: 14px; stroke-width: 1.5; }
-.activity-gutter .activity-node.is-thinking { color: var(--muted); }
-.activity-gutter .activity-node.is-note { width: 4px; height: 4px; margin-top: 8px; border-radius: 50%; background: var(--border-strong); }
-.activity-symbol { background: none; color: var(--faint); }
-.activity-symbol svg { width: 13px; height: 13px; }
-.activity-drawer > summary { padding: 5px 8px; gap: 8px; border-color: var(--transparent); background: none; }
-.activity-drawer[open] > summary { border-color: var(--transparent); }
-.activity-tool { border-color: var(--border); border-radius: var(--radius-control); }
-.activity-tool:hover { border-color: var(--border-hover); }
 
 .assistant-turn-meta > span { background: none; padding-inline: 2px; }
 .file-change-summary { margin-top: 22px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); font: 13px/1.5 var(--font); }
@@ -3656,59 +3426,6 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .diff-empty span { font-size: 12px; }
 .diff-note { margin: 0; padding: 8px 16px; border-top: 1px solid var(--border); color: var(--faint); font-size: 11px; }
 
-/* Execution records and current output are separate, so collapsing history
-   can never hide ongoing thinking, commentary or tool progress. */
-.run-history { margin: 12px 0 20px; border: 1px solid var(--border); border-radius: var(--radius-card); overflow: hidden; }
-.run-history > summary { display: flex; align-items: center; gap: 12px; min-height: 42px; padding: 8px 14px; list-style: none; cursor: pointer; font: 12px/1.5 var(--font); }
-.run-history > summary::-webkit-details-marker { display: none; }
-.run-history > summary:hover { background: var(--surface-soft); }
-.run-history-title { color: var(--muted); font-weight: 550; }
-.run-history-count { color: var(--faint); font-size: 11px; }
-.run-history > summary > svg { width: 13px; height: 13px; margin-left: auto; color: var(--faint); }
-.run-history[open] > summary > svg { transform: rotate(180deg); }
-.run-history-images { max-width: calc(100% - 38px); margin: -4px 0 14px 38px; }
-.run-history-images .conversation-image-gallery { margin-bottom: 0; }
-.run-history-list { padding: 2px 14px 8px; border-top: 1px solid var(--border); }
-.run-history-row + .run-history-row { border-top: 1px solid var(--border); }
-.run-history .activity-tool:not([open]), .run-current .activity-tool:not([open]) { margin: 0; border: 0; border-radius: 0; background: none; }
-.run-history .activity-tool:not([open]):hover, .run-current .activity-tool:not([open]):hover { background: none; }
-.run-history .activity-tool[open], .run-current .activity-tool[open] { margin: 6px 0 10px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); }
-.run-history .activity-tool[open]:hover, .run-current .activity-tool[open]:hover { border-color: var(--border-hover); background: var(--surface); }
-.run-history .activity-tool > summary, .run-current .activity-tool > summary { min-height: 38px; padding: 4px 0; gap: 10px; }
-.run-history .activity-tool[open] > summary, .run-current .activity-tool[open] > summary { padding-inline: 12px; }
-.activity-tool-icon { display: grid; min-height: 18px; place-items: center; color: var(--faint); }
-.activity-tool-icon > svg { display: block; width: 14px; height: 14px; flex: none; stroke-width: 1.5; }
-.run-history .activity-tool-name, .run-current .activity-tool-name { font: 500 12px/1.5 var(--font); }
-.run-history .activity-tool-summary, .run-current .activity-tool-summary { font-size: 11px; }
-.run-history .activity-tool.is-done .activity-tool-status { color: var(--faint); }
-.run-history .activity-tool.is-incomplete .activity-tool-status { color: var(--muted); }
-.run-history .activity-tool-status, .run-current .activity-tool-status { font-size: 10px; }
-.run-history .activity-thinking { margin: 0; }
-.run-history .activity-thinking > summary { padding: 9px 0; min-height: 38px; }
-.run-history .activity-thinking-label { font: 500 12px/1.5 var(--font); color: var(--muted); }
-.run-history .activity-thinking-preview { font-size: 11px; }
-.run-history-note { padding: 9px 0; }
-.run-history-note .markdown { color: var(--muted); font-size: 12px; }
-.run-history-note .markdown p:last-child { margin-bottom: 0; }
-.run-current { margin: 14px 0 18px; padding: 2px 0 2px 14px; border-left: 2px solid var(--accent-border); }
-.run-current-heading { display: flex; align-items: center; gap: 8px; min-height: 28px; font: 500 12px/1.5 var(--font); color: var(--accent-foreground); }
-.run-current-heading > svg { width: 13px; height: 13px; }
-.run-current-hint { margin-left: auto; color: var(--faint); font-size: 11px; font-weight: 400; }
-.run-current-content { margin-top: 8px; }
-.run-current-content .markdown { color: var(--muted); font-size: var(--text-base); line-height: 1.8; }
-.run-current-redacted { color: var(--faint); font-size: 12px; }
-.is-steps-compact .run-current .activity-tool-summary, .is-steps-compact .run-history .activity-tool-summary { display: block; }
-@media (prefers-reduced-motion: reduce) { .run-current .spin { animation: none; } }
-
-.run-history .activity-tool-status, .run-current .activity-tool-status { margin-left: auto; }
-@media (max-width: 600px) {
-  .run-history > summary { gap: 8px; }
-  .run-history-count { font-size: 10px; }
-  .run-history-image-count { display: none; }
-  .run-history-images { max-width: calc(100% - 22px); margin-left: 22px; }
-  .run-current-hint { font-size: 10px; }
-}
-
 /* 确认弹窗：工具风险确认与完全权限确认共用。 */
 .confirm-overlay { position: fixed; inset: 0; z-index: 320; display: grid; place-items: center; padding: 24px; background: var(--scrim); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
 .confirm-card { display: flex; width: min(620px, 100%); max-height: min(86vh, 760px); min-width: 0; flex-direction: column; overflow: hidden; padding: 20px; border: 1px solid var(--border-strong); border-radius: var(--radius-panel); background: var(--overlay-surface); box-shadow: var(--shadow-dialog); outline: none; }
@@ -3761,443 +3478,6 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .attachment-open-cue { display: grid; place-items: center; width: 16px; height: 16px; flex: none; color: var(--faint); opacity: .62; transition: color var(--transition), opacity var(--transition), transform var(--transition); }
 .attachment-open-cue svg { width: 13px; height: 13px; }
 .is-openable:hover .attachment-open-cue, .is-openable:focus-visible .attachment-open-cue { color: var(--accent-foreground); opacity: 1; transform: translateX(1px); }
-
-/* One disclosure language for every execution record. Request, thinking, tool,
-   group and live status share the same 34px rhythm and soft expanded surface. */
-.assistant-turn-main .activity-disclosure:is(
-  .activity-request,
-  .activity-tool,
-  .activity-thinking,
-  .run-history,
-  .run-current
-) {
-  min-width: 0;
-  margin: 2px 0;
-  overflow: hidden;
-  border: 0;
-  border-radius: var(--radius-control);
-  background: var(--transparent);
-  overflow-anchor: none;
-  interpolate-size: allow-keywords;
-  transition: background-color var(--transition);
-}
-
-.assistant-turn-main .activity-request.activity-disclosure { margin: 1px 0 10px; }
-.assistant-turn-main .activity-thinking.activity-disclosure { margin-block: 2px; }
-.assistant-turn-main .run-history.activity-group { margin: 10px 0 14px; }
-.assistant-turn-main .run-current.activity-disclosure { margin: 10px 0 14px; }
-
-.assistant-turn-main .activity-disclosure:is(
-  .activity-request,
-  .activity-tool,
-  .activity-thinking,
-  .run-current
-)[open],
-.assistant-turn-main .run-current.activity-disclosure.is-open {
-  background: var(--surface-soft);
-}
-
-.assistant-turn-main .activity-disclosure:is(
-  .activity-request,
-  .activity-tool,
-  .activity-thinking,
-  .run-history,
-  .run-current
-) > .activity-disclosure-summary {
-  display: flex;
-  min-width: 0;
-  min-height: 34px;
-  align-items: center;
-  gap: 8px;
-  box-sizing: border-box;
-  padding: 4px 0;
-  border-radius: var(--radius-control);
-  list-style: none;
-  cursor: pointer;
-  transition: background-color var(--transition);
-}
-
-.assistant-turn-main .activity-disclosure > .activity-disclosure-summary::-webkit-details-marker {
-  display: none;
-}
-
-.assistant-turn-main .activity-disclosure > .activity-disclosure-summary:hover,
-.assistant-turn-main .run-history[open] > .activity-disclosure-summary {
-  background: var(--surface-soft);
-}
-
-.assistant-turn-main .activity-disclosure > .activity-disclosure-summary:focus-visible {
-  outline: 2px solid var(--focus-color);
-  outline-offset: -2px;
-}
-
-.assistant-turn-main .run-current-heading.activity-disclosure-summary {
-  cursor: default;
-}
-
-.assistant-turn-main .activity-disclosure-icon {
-  display: grid;
-  width: 20px;
-  height: 20px;
-  flex: none;
-  place-items: center;
-  border-radius: var(--radius-tag);
-  color: var(--faint);
-  background: var(--surface);
-}
-
-.assistant-turn-main .activity-disclosure-icon > svg {
-  display: block;
-  width: 12px;
-  height: 12px;
-  stroke-width: 1.7;
-}
-
-.assistant-turn-main .activity-request-icon {
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.assistant-turn-main .activity-thinking-icon,
-.assistant-turn-main .run-current-icon {
-  color: var(--thinking);
-  background: var(--thinking-soft);
-}
-
-.assistant-turn-main .activity-tool.is-running > .activity-disclosure-summary > .activity-tool-icon,
-.assistant-turn-main .run-live-icon {
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.assistant-turn-main .activity-tool.is-error > .activity-disclosure-summary > .activity-tool-icon {
-  color: var(--error);
-  background: var(--error-soft);
-}
-
-.assistant-turn-main .activity-disclosure-title {
-  min-width: 0;
-  flex: none;
-  color: var(--muted);
-  font: 600 11px/1.4 var(--font);
-  white-space: nowrap;
-}
-
-.assistant-turn-main .activity-tool-name {
-  max-width: min(34%, 260px);
-  overflow: hidden;
-  font: 650 10.5px/1.4 var(--mono);
-  text-overflow: ellipsis;
-}
-
-.assistant-turn-main .activity-disclosure-preview {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  color: var(--faint);
-  font-size: 10.5px;
-  line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.assistant-turn-main .activity-request-model {
-  font-family: var(--mono);
-  font-size: 10px;
-}
-
-.assistant-turn-main .activity-disclosure-meta,
-.assistant-turn-main .run-history-count {
-  flex: none;
-  color: var(--faint);
-  font-size: 9.5px;
-  line-height: 1.4;
-  white-space: nowrap;
-}
-
-.assistant-turn-main .activity-tool-status {
-  display: inline-flex;
-  min-width: 52px;
-  min-height: 18px;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  box-sizing: border-box;
-  flex: none;
-  padding: 2px 5px;
-  border-radius: var(--radius-tag);
-  color: var(--faint);
-  background: var(--transparent);
-  font-size: 9.5px;
-  line-height: 1;
-}
-
-.assistant-turn-main .activity-tool-status svg {
-  display: block;
-  width: 10px;
-  height: 10px;
-  flex: none;
-}
-
-.assistant-turn-main .activity-tool.is-running .activity-tool-status {
-  color: var(--accent-foreground);
-  background: var(--accent-soft);
-}
-
-.assistant-turn-main .activity-tool.is-error .activity-tool-status {
-  color: var(--error);
-  background: var(--error-soft);
-}
-
-.assistant-turn-main .activity-disclosure-chevron {
-  display: block;
-  width: 12px;
-  height: 12px;
-  flex: none;
-  color: var(--faint);
-  transition: transform var(--transition);
-}
-
-.assistant-turn-main .activity-disclosure[open] > .activity-disclosure-summary > .activity-disclosure-chevron {
-  transform: rotate(180deg);
-}
-
-.assistant-turn-main .activity-disclosure-body {
-  min-width: 0;
-  padding: 10px 12px 12px;
-}
-
-.assistant-turn-main .activity-request-body {
-  max-height: min(68vh, 760px);
-  margin-top: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-  border-radius: 0 0 var(--radius-control) var(--radius-control);
-  background: var(--transparent);
-}
-
-.assistant-turn-main .activity-tool-body {
-  padding-top: 2px;
-  background: var(--transparent);
-}
-
-.assistant-turn-main .activity-thinking-body {
-  max-height: 280px;
-  margin: 0;
-  padding-top: 2px;
-  overflow: auto;
-  overscroll-behavior: contain;
-  background: var(--transparent);
-}
-
-.assistant-turn-main .activity-thinking-body .markdown {
-  color: var(--muted);
-  font-size: var(--text-base);
-  line-height: 1.8;
-  overflow-wrap: anywhere;
-}
-
-.assistant-turn-main .activity-sequence .activity-thinking-body {
-  padding-right: 6px;
-  padding-left: 32px;
-}
-
-.assistant-turn-main .activity-thinking-body .markdown > :first-child { margin-top: 0; }
-.assistant-turn-main .activity-thinking-body .markdown > :last-child { margin-bottom: 0; }
-
-.assistant-turn-main .run-history-list {
-  margin: 0;
-  padding: 1px 0 7px;
-  border: 0;
-}
-
-.assistant-turn-main .run-history-row + .run-history-row { border-top: 0; }
-.assistant-turn-main .run-history-row > .activity-disclosure { margin: 0; }
-.assistant-turn-main .run-history-row .activity-disclosure-icon { background: var(--surface); }
-.assistant-turn-main .run-history .activity-tool.activity-disclosure[open],
-.assistant-turn-main .run-history .activity-thinking.activity-disclosure[open] {
-  margin: 0;
-  overflow: hidden;
-  border: 0;
-  background: var(--surface-soft);
-}
-.assistant-turn-main .run-history .activity-disclosure.activity-tool > .activity-disclosure-summary,
-.assistant-turn-main .run-history .activity-disclosure.activity-thinking > .activity-disclosure-summary {
-  min-height: 34px;
-  gap: 8px;
-  padding: 4px 7px;
-}
-
-.assistant-turn-main .run-history-images {
-  max-width: 100%;
-  margin: 0 0 14px;
-}
-
-.assistant-turn-main .run-history-images .conversation-image-gallery { margin: 8px 0 0; }
-.assistant-turn-main .run-history-images .conversation-image-strip { padding-inline: 0; }
-
-.assistant-turn-main .activity-sequence {
-  --step-icon-size: 12px;
-  --step-icon-slot: 18px;
-  --step-content-gap: 8px;
-  position: relative;
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-}
-
-.assistant-turn-main .activity-sequence-item { min-width: 0; padding: 2px 0; }
-.assistant-turn-main .activity-sequence-item:has(.tool-result-images) { padding-bottom: 6px; }
-
-.assistant-turn-main .activity-sequence .activity-tool,
-.assistant-turn-main .activity-sequence .activity-thinking {
-  margin: 0;
-}
-
-.assistant-turn-main .activity-sequence .activity-tool > .activity-disclosure-summary,
-.assistant-turn-main .activity-sequence .activity-thinking > .activity-disclosure-summary {
-  display: grid;
-  grid-template-columns: var(--step-icon-slot) 64px minmax(0, 1fr) 56px 12px;
-  gap: var(--step-content-gap);
-  text-align: left;
-  min-height: 32px;
-  align-items: center;
-  padding: 3px 6px;
-}
-
-.assistant-turn-main .activity-sequence .activity-disclosure-summary > .activity-disclosure-icon,
-.assistant-turn-main .activity-sequence .tool-result-images-icon {
-  grid-column: 1;
-  width: var(--step-icon-slot);
-  height: var(--step-icon-slot);
-  border-radius: 0;
-  background: var(--transparent);
-}
-
-.assistant-turn-main .activity-sequence .activity-disclosure-icon > svg {
-  width: var(--step-icon-size);
-  height: var(--step-icon-size);
-}
-
-.assistant-turn-main .activity-sequence .activity-disclosure-title {
-  grid-column: 2;
-  width: 100%;
-  max-width: none;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--faint);
-  font: 600 11px/1.4 var(--font);
-  text-overflow: ellipsis;
-}
-
-.assistant-turn-main .activity-sequence .activity-disclosure-preview {
-  grid-column: 3;
-  min-width: 0;
-  color: var(--muted);
-  font-size: 10.5px;
-}
-
-.assistant-turn-main .activity-sequence .activity-thinking-icon { color: var(--thinking); }
-.assistant-turn-main .activity-sequence .activity-tool.is-error > .activity-disclosure-summary > .activity-tool-icon { color: var(--error); background: var(--transparent); }
-.assistant-turn-main .activity-sequence .activity-tool-status { grid-column: 4; justify-self: end; }
-.assistant-turn-main .activity-sequence .activity-disclosure-chevron { grid-column: 5; justify-self: end; }
-
-.assistant-turn-main .activity-sequence-note {
-  padding: 5px 6px 7px 28px;
-}
-
-.assistant-turn-main .activity-sequence-note .markdown {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.65;
-}
-
-.assistant-turn-main .activity-sequence-note .markdown > :first-child { margin-top: 0; }
-.assistant-turn-main .activity-sequence-note .markdown > :last-child { margin-bottom: 0; }
-
-.assistant-turn-main .activity-sequence + .activity-request { margin-top: 16px; }
-
-.assistant-turn-main .standalone-thinking { margin: 8px 0 14px; }
-.assistant-turn-main .run-current-heading { color: var(--muted); }
-.assistant-turn-main .run-current-spinner {
-  width: 13px;
-  height: 13px;
-  flex: none;
-  margin-left: 1px;
-  color: var(--accent);
-}
-
-.assistant-turn-main .run-current-content {
-  margin: 0;
-  padding-top: 3px;
-  background: var(--transparent);
-}
-
-.assistant-turn-main .run-current-content .markdown,
-.assistant-turn-main .run-current-redacted {
-  color: var(--muted);
-  font-size: var(--text-base);
-  line-height: 1.8;
-}
-
-/* Native details content stays mounted and animates its block size, so opening a
-   trace does not jump the surrounding answer. */
-.activity-disclosure::details-content {
-  block-size: 0;
-  overflow: clip;
-  opacity: 0;
-  content-visibility: hidden;
-  transition:
-    block-size 180ms cubic-bezier(.22,.8,.2,1),
-    opacity 120ms ease,
-    content-visibility 180ms allow-discrete;
-}
-.activity-disclosure[open]::details-content {
-  block-size: auto;
-  opacity: 1;
-  content-visibility: visible;
-}
-@media (prefers-reduced-motion: reduce) {
-  .activity-disclosure::details-content,
-  .activity-disclosure > .activity-disclosure-summary,
-  .activity-disclosure-chevron { transition: none; }
-}
-
-.assistant-turn-main .run-live-status {
-  display: flex;
-  min-height: 34px;
-  align-items: center;
-  gap: 8px;
-  box-sizing: border-box;
-  margin: 4px 0 10px;
-  padding: 8px 12px;
-  border-radius: var(--radius-control);
-  color: var(--muted);
-  background: var(--surface-soft);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-
-.assistant-turn-main .run-live-status .activity-disclosure-icon > svg {
-  width: 12px;
-  height: 12px;
-  color: var(--accent);
-}
-
-.run-live-status span { white-space: nowrap; }
-.run-live-status span:last-child { margin-left: auto; color: var(--faint); font-size: 11px; }
-
-@media (max-width: 600px) {
-  .assistant-turn-main .run-history-image-count { display: none; }
-  .assistant-turn-main .run-history-list { padding-inline: 0; }
-  .assistant-turn-main .activity-request-metrics { display: none; }
-  .assistant-turn-main .activity-sequence .activity-tool > .activity-disclosure-summary,
-  .assistant-turn-main .activity-sequence .activity-thinking > .activity-disclosure-summary {
-    grid-template-columns: var(--step-icon-slot) 54px minmax(0, 1fr) 52px 12px;
-  }
-}
 
 .file-panel.is-open:not(.is-fullscreen), .file-panel.is-open.is-split:not(.is-fullscreen) { width: min(var(--panel-w, 700px), calc(100vw - 48px)); }
 .file-panel:not(.is-fullscreen) .file-panel-inner, .file-panel.is-split:not(.is-fullscreen) .file-panel-inner { width: 100%; min-width: 0; }
@@ -5182,9 +4462,6 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   .about-resource-card,
   .about-system-card,
   .file-change-summary,
-  .activity-disclosure[open],
-  .activity-drawer > summary,
-  .thinking-block summary,
   .todo-dock,
   .queued-item,
   .outline-preview,
@@ -5209,12 +4486,6 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   border-color: var(--background-border);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-}
-
-.app.has-custom-background .activity-tool[open] .activity-tool-body { background: var(--transparent); }
-.app.has-custom-background .activity-tool[open] .activity-tool-code:not(.is-error) {
-  border-color: var(--background-border);
-  background: var(--background-soft-surface);
 }
 
 /* Full work panes need a quieter but more legible glass layer than inset cards. */
@@ -5342,9 +4613,6 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   .pi-select-trigger,
   .panel-tab,
   .composer-attachment.is-openable,
-  .activity-disclosure[open],
-  .activity-disclosure > .activity-disclosure-summary,
-  .activity-drawer > summary,
   .file-action,
   .confirm-cancel,
   .confirm-close,
@@ -5388,8 +4656,6 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   .pi-select-trigger,
   .panel-tab,
   .composer-attachment.is-openable,
-  .activity-disclosure[open],
-  .activity-drawer > summary,
   .file-action,
   .confirm-cancel,
   .confirm-close,
@@ -5397,16 +4663,6 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   .popover-close
 ):active:not(:disabled) {
   background: var(--background-active-surface);
-}
-
-.app.has-custom-background :is(.activity-sequence, .run-current) .activity-tool:not([open]) > summary:hover {
-  border-radius: var(--radius-control);
-  background: var(--background-hover-surface);
-}
-
-.app.has-custom-background .activity-tool[open]:hover {
-  border-color: var(--background-border-strong);
-  background: var(--background-card-surface);
 }
 
 .app.has-custom-background :is(
@@ -5450,7 +4706,6 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   .provider-avatar,
   .resource-icon,
   .file-change-icon,
-  .activity-symbol,
   .todo-row.is-active,
   .queued-actions button:hover
 ) {
@@ -6727,88 +5982,3 @@ button.settings-resource-card-main:disabled { cursor: default; }
   .archive-session-card .settings-resource-card-footer > div,
   .archive-session-card .settings-resource-card-footer > button { flex: 1; }
 }
-
-/* Turn trace: one quiet summary, chronological detail, answer outside the disclosure. */
-.turn-trace { min-width: 0; margin: 8px 0 16px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface-soft); }
-.turn-trace-toggle {
-  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px;
-  padding: 8px 12px; border: 0; border-radius: inherit;
-  background: transparent; color: var(--muted); text-align: left; cursor: pointer;
-  font: var(--text-xs)/1.5 var(--font);
-}
-.turn-trace-toggle:hover { color: var(--text); background: var(--surface-hover); }
-.turn-trace-toggle:focus-visible, .turn-trace-collapse:focus-visible {
-  outline: 2px solid var(--focus-color); outline-offset: 3px; border-radius: var(--radius-control);
-}
-.turn-trace-toggle > svg, .turn-trace-errors > svg, .turn-trace-collapse > svg { width: 14px; height: 14px; flex: none; }
-.turn-trace-toggle strong { font-weight: 550; white-space: nowrap; }
-.turn-trace-mark { display: grid; place-items: center; flex: none; width: 18px; height: 18px; }
-.turn-trace-mark > svg { display: block; width: 12px; height: 12px; }
-.turn-trace-chevron { transform: rotate(-90deg); }
-.turn-trace.is-open .turn-trace-chevron { transform: none; }
-.turn-trace-count { padding: 1px 6px; border-radius: var(--radius-tag); background: var(--surface-hover); color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.turn-trace-count:empty { display: none; }
-.turn-trace-errors { display: inline-flex; align-items: center; gap: 5px; color: var(--error); white-space: nowrap; }
-.turn-trace-state { margin-left: auto; color: var(--faint); white-space: nowrap; }
-.turn-trace-body { padding: 0 6px 6px; min-width: 0; }
-.turn-trace-body[hidden] { display: none; }
-.turn-trace-collapse {
-  display: flex; align-items: center; gap: 8px; margin: 8px 0 0; padding: 8px 0;
-  border: 0; background: transparent; color: var(--muted); cursor: pointer;
-  font: var(--text-sm)/1.5 var(--font);
-}
-.turn-trace-collapse > svg { transform: rotate(180deg); }
-.turn-trace-collapse:hover { color: var(--text); }
-@media (max-width: 720px) {
-  .turn-trace-toggle { flex-wrap: wrap; gap: 6px; }
-  .turn-trace-count { font-size: var(--text-xs); }
-}
-
-/* Tool-owned image output shares the step's left edge, without a second card shell. */
-.tool-result-images { min-width: 0; max-width: 100%; margin: 0; padding: 0 6px; }
-.tool-result-images-toggle {
-  display: flex; align-items: center; gap: var(--step-content-gap, 8px); min-height: 26px; padding: 2px 0;
-  text-align: left;
-  border: 0; background: transparent; color: var(--muted);
-  font: var(--text-xs)/1.5 var(--font); cursor: pointer;
-}
-.tool-result-images-toggle > svg { width: var(--step-icon-size, 12px); height: var(--step-icon-size, 12px); flex: none; }
-.tool-result-images-toggle > svg:last-child { margin-left: 3px; transform: rotate(-90deg); }
-.tool-result-images-toggle > svg.is-open { transform: none; }
-.tool-result-images-toggle:hover { color: var(--text); }
-.tool-result-images-toggle:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; border-radius: var(--radius-control); }
-.tool-result-images-count { color: var(--faint); font-variant-numeric: tabular-nums; }
-.tool-result-images [hidden] { display: none; }
-.tool-result-images .conversation-image-gallery { margin: 4px 0 0; }
-.tool-result-images .conversation-image-strip { padding: 1px 0 4px; }
-.tool-result-images .conversation-image-tile { flex-basis: 120px; width: 120px; height: 80px; }
-
-/* One disclosure language for requests, decisions and tools. Only the outer
-   segment owns a surface; hovering a nested record never paints another card. */
-.assistant-turn-main .turn-trace .activity-disclosure,
-.assistant-turn-main .turn-trace .activity-disclosure[open],
-.assistant-turn-main .turn-trace .activity-disclosure.is-open,
-.assistant-turn-main .turn-trace .activity-disclosure > .activity-disclosure-summary,
-.assistant-turn-main .turn-trace .activity-disclosure > .activity-disclosure-summary:hover {
-  background: transparent;
-}
-.assistant-turn-main .turn-trace .activity-disclosure > .activity-disclosure-summary { padding: 6px; }
-.assistant-turn-main .turn-trace .activity-disclosure > summary:hover .activity-disclosure-title,
-.assistant-turn-main .turn-trace .activity-disclosure > summary:hover .activity-disclosure-chevron { color: var(--text); }
-.assistant-turn-main .turn-trace .activity-disclosure-icon { width: 18px; height: 18px; background: transparent; }
-.assistant-turn-main .turn-trace .activity-disclosure-body { padding: 6px 6px 12px; }
-.assistant-turn-main .turn-trace .activity-request { margin: 0; }
-.assistant-turn-main .turn-trace .activity-request-body { max-height: none; overflow: visible; }
-.assistant-turn-main .turn-trace .run-current { margin: 0; }
-.assistant-turn-main .turn-trace .run-current-content { max-height: 280px; overflow: auto; overscroll-behavior: contain; }
-.assistant-turn-main .turn-trace .activity-sequence .activity-thinking-body { padding-inline: 6px; }
-.turn-trace-collapse { padding-inline: 6px; }
-.turn-trace-toggle:hover { background: transparent; }
-
-.assistant-turn-main .turn-trace .activity-request > .activity-disclosure-summary {
-  display: grid;
-  grid-template-columns: 18px 64px minmax(0, 1fr) auto 12px;
-  gap: 8px;
-}
-.assistant-turn-main .turn-trace .activity-request-chevron { grid-column: 5; }
-.assistant-turn-main .run-live-status .run-live-icon { width: 18px; height: 18px; background: transparent; }

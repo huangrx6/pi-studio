@@ -91,8 +91,8 @@ try {
   const firstTool = page.locator('.activity-sequence .activity-tool').first();
   const icon = await firstTool.evaluate(node => ({border:getComputedStyle(node).borderWidth,shadow:getComputedStyle(node).boxShadow}));
   assert.equal(icon.border, '0px'); assert.equal(icon.shadow, 'none');
-  const historyImages = page.locator('.activity-sequence-images').first();
-  assert.equal(await page.locator('.activity-tool-image-count').count(), 1, 'tool summaries identify image-bearing tool results');
+  const historyImages = page.locator('.tool-result-images').first();
+  assert.equal(await page.locator('.tool-result-images').count(), 1, 'only the tool result with images renders a gallery');
   assert.equal(await historyImages.locator('.conversation-image-gallery').count(), 1, 'trace renders one shared screenshot gallery');
   const assistantContentBox = await page.locator('.assistant-turn-main').first().boundingBox();
   const collapsedTileBox = await historyImages.locator('.conversation-image-tile').boundingBox();

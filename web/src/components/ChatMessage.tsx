@@ -16,7 +16,7 @@
  * IPC：本组件不直接调用 IPC，消息来自 App 的 Durable 会话快照与事件流；
  * 图片以 data URI 内联渲染，不再额外请求主进程。
  */
-import { memo, useEffect, useId, useRef, useState } from 'react';
+import { memo, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, CircleAlert, CircleCheck, CircleX, Copy, FileText, Image as ImageIcon, LoaderCircle, PanelRightOpen, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
 import type { ChatMessage, ContentBlock, RequestTrace, ToolCallBlock, TurnDiff, TurnDiffFile } from '../types/chat-types';
 import type { StepCollapse, StepDisplay } from '../lib/preferences';
@@ -27,6 +27,7 @@ import { Markdown } from './Markdown';
 import { collectFileChanges } from '../lib/file-changes';
 import { FileChangeSummary } from './FileChangeSummary';
 import { splitMessageText, type Reference } from '../lib/references';
+import '../styles/execution-trace.css';
 
 /** 拼出消息里的全部文本块（用换行分隔）；用户正文和工具结果共用这一逻辑。 */
 function textBlocks(blocks: ContentBlock[]): string {
@@ -94,10 +95,8 @@ function formatTime(timestamp?: number): string {
 type ToolEntry = { kind: 'tool'; call: ToolCallBlock };
 /** 执行轨迹里的一条思考。 */
 type ThinkingEntry = { kind: 'thinking'; block: Extract<ContentBlock, { type: 'thinking' }> };
-/** 执行轨迹里夹在工具之间的说明文本（模型的过渡叙述）。 */
-type TextEntry = { kind: 'text'; text: string };
-/** 轨迹条目联合类型。 */
-type ActivityEntry = (ToolEntry | ThinkingEntry | TextEntry) & { key: string };
+/** 轨迹条目：工具调用或思考。live 表示仍在执行（工具尚无结果，或思考仍在输出）。 */
+type ActivityEntry = (ToolEntry | ThinkingEntry) & { key: string; live?: boolean };
 /** 拍平后的内容块；key 由「消息序号-块序号」组成，流式追加时保持稳定。 */
 type FlatBlock = { block: ContentBlock; key: string; messageTimestamp?: number };
 
@@ -191,6 +190,28 @@ function ActivityThinking({ block, defaultOpen = false }: { block: Extract<Conte
     </summary>
     {!block.redacted && block.thinking && <div className="activity-thinking-body activity-disclosure-body"><Markdown>{block.thinking}</Markdown></div>}
   </details>;
+}
+
+/**
+ * 正在推理的思考行。与「决策」行共用同一套行结构（图标 | 标题 | 预览 | 状态 | 箭头），
+ * 状态位换成转圈；正文随流式增量更新，超出上限后跟随最新内容。推理结束后变成可折叠的「决策」行。
+ */
+function LiveThinking({ block }: { block: Extract<ContentBlock, { type: 'thinking' }> }) {
+  const body = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (body.current) body.current.scrollTop = body.current.scrollHeight;
+  }, [block.thinking]);
+  return <div className="activity-thinking is-live activity-disclosure" aria-busy="true">
+    <div className="activity-disclosure-summary">
+      <span className="activity-thinking-icon activity-disclosure-icon" aria-hidden="true"><Sparkles /></span>
+      <span className="activity-thinking-label activity-disclosure-title">思考中</span>
+      <span className="activity-thinking-preview activity-disclosure-preview">推理中</span>
+      <LoaderCircle className="spin activity-thinking-spinner" aria-hidden="true" />
+    </div>
+    <div ref={body} className="activity-thinking-body activity-disclosure-body">
+      {block.redacted ? <p className="activity-thinking-note">模型未提供推理正文。</p> : <Markdown>{block.thinking}</Markdown>}
+    </div>
+  </div>;
 }
 
 /**
@@ -289,26 +310,26 @@ function MessageActions({ text, time, label, align = 'start' }: { text: string; 
   </div>;
 }
 
+/** 一段连续的执行记录。所有行共用一个网格，运行中的行与已完成的行逐列对齐。 */
 function ActivitySequence({ entries, results, stepDisplay }: {
   entries: ActivityEntry[];
   results: Map<string, ChatMessage>;
   stepDisplay: StepDisplay;
 }) {
   const defaultOpen = stepDisplay === 'detailed';
-  return <>
-    <section className="activity-sequence" aria-label="本轮执行步骤">
-      {entries.map(entry => <div className={`activity-sequence-item is-${entry.kind}`} key={entry.key}>
-        {entry.kind === 'tool' && <ActivityTool
-          call={entry.call}
-          result={results.get(entry.call.id)}
-          busy={false}
-          defaultOpen={defaultOpen}
-        />}
-        {entry.kind === 'thinking' && <ActivityThinking block={entry.block} defaultOpen={defaultOpen} />}
-        {entry.kind === 'text' && <div className="activity-sequence-note"><Markdown>{entry.text}</Markdown></div>}
-      </div>)}
-    </section>
-  </>;
+  return <section className="activity-sequence" aria-label="本轮执行步骤">
+    {entries.map(entry => <div className={`activity-sequence-item is-${entry.kind}`} key={entry.key}>
+      {entry.kind === 'tool' && <ActivityTool
+        call={entry.call}
+        result={results.get(entry.call.id)}
+        busy={Boolean(entry.live)}
+        defaultOpen={defaultOpen}
+      />}
+      {entry.kind === 'thinking' && (entry.live
+        ? <LiveThinking block={entry.block} />
+        : <ActivityThinking block={entry.block} defaultOpen={defaultOpen} />)}
+    </div>)}
+  </section>;
 }
 
 /** 折叠策略只在整轮运行边界或配置变化时应用，流式增量不覆盖手动操作。 */
@@ -384,11 +405,10 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
   flat.forEach((entry, index) => { if (entry.block.type === 'thinking' || entry.block.type === 'toolCall') lastActivity = index; });
   const activityBlocks = lastActivity >= 0 ? flat.slice(0, lastActivity + 1) : [];
   const responseBlocks = lastActivity >= 0 ? flat.slice(lastActivity + 1) : flat;
-  // 轨迹条目只保留思考、工具调用和非空文本；空文本块（流式占位）直接丢弃。
+  // 轨迹条目只有思考和工具调用；可见文本、图片与请求快照各自分段显示。
   const activity: ActivityEntry[] = activityBlocks.flatMap((entry): ActivityEntry[] => {
     if (entry.block.type === 'thinking') return [{ kind: 'thinking', block: entry.block, key: entry.key }];
     if (entry.block.type === 'toolCall') return [{ kind: 'tool', call: entry.block, key: entry.key }];
-    if (entry.block.type === 'text' && entry.block.text.trim()) return [{ kind: 'text', text: entry.block.text, key: entry.key }];
     return [];
   });
   // 顶部指标按整轮原始消息统计，不依赖上面的分区结果，避免统计口径随轨迹过滤变化。
@@ -396,8 +416,7 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
   const lastBlock = flat.filter(entry => entry.block.type !== 'text' || entry.block.text.trim()).at(-1);
   const currentEntries = live ? activity.filter(entry =>
     entry.kind === 'tool' ? !toolResults.has(entry.call.id)
-      : entry.kind === 'thinking' ? entry.key === lastBlock?.key
-        : false
+      : entry.key === lastBlock?.key
   ) : [];
   const currentKeys = new Set(currentEntries.map(entry => entry.key));
   // Every visible text/image breaks a process group, preserving chronological order.
@@ -406,7 +425,6 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
     entries?: ActivityEntry[];
     visible?: FlatBlock;
     images?: ConversationImage[];
-    current?: ActivityEntry;
     request?: RequestTrace;
   }> = [];
   const activityByKey = new Map(activity.map(entry => [entry.key, entry]));
@@ -443,13 +461,11 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
       else timeline.push({ key: entry.key, images: [image] });
     } else if (entry.block.type === 'text' && entry.block.text.trim()) {
       timeline.push({ key: entry.key, visible: entry });
-    } else if (record && record.kind !== 'text') {
-      if (currentKeys.has(entry.key)) timeline.push({ key: entry.key, current: record });
-      else {
-        const tail = timeline.at(-1);
-        if (tail?.entries) tail.entries.push(record);
-        else timeline.push({ key: entry.key, entries: [record] });
-      }
+    } else if (record) {
+      const row = { ...record, live: currentKeys.has(entry.key) };
+      const tail = timeline.at(-1);
+      if (tail?.entries) tail.entries.push(row);
+      else timeline.push({ key: entry.key, entries: [row] });
     }
   }
   // A request that has started but whose assistant message has not arrived yet
@@ -474,7 +490,7 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
   // Keys use the first item, so streaming appends never reset a manual disclosure.
   const segments: Array<{ key: string; process: boolean; items: typeof timeline }> = [];
   for (const item of timeline) {
-    const process = Boolean(item.entries || item.current || item.request);
+    const process = Boolean(item.entries || item.request);
     const tail = segments.at(-1);
     if (process && tail?.process && !item.request) tail.items.push(item);
     else segments.push({ key: item.key, process, items: [item] });
@@ -487,18 +503,6 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
             stepDisplay={stepDisplay}
           />
         : item.images ? <ConversationImageGallery key={item.key} images={item.images} />
-        : item.current?.kind === 'thinking' ? <section className="run-current run-current-inline activity-disclosure is-open" key={item.key} aria-label="当前推理" aria-busy="true">
-          <div className="run-current-heading activity-disclosure-summary">
-            <span className="run-current-icon activity-disclosure-icon"><Sparkles /></span>
-            <span className="activity-disclosure-title">思考中</span>
-            <span className="activity-disclosure-preview">推理中</span>
-            <LoaderCircle className="spin run-current-spinner" />
-          </div>
-          <div className="run-current-content activity-disclosure-body">
-            {item.current.block.redacted ? <p className="run-current-redacted">模型未提供推理正文。</p> : <Markdown>{item.current.block.thinking}</Markdown>}
-          </div>
-        </section>
-        : item.current?.kind === 'tool' ? <ActivityTool key={item.key} call={item.current.call} result={toolResults.get(item.current.call.id)} busy />
         : item.visible?.block.type === 'text' ? <div className="assistant-response" key={item.key}><Markdown>{item.visible.block.text}</Markdown></div> : null;
   return <div id={id} className={`assistant-turn ${live ? 'is-live' : ''} ${retry ? 'is-retrying' : ''} ${failed ? 'has-error' : ''} is-steps-${stepDisplay}`}>
     <div className="assistant-turn-rail"><span className="assistant-orb">π</span></div>
@@ -511,7 +515,7 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
       </div>
       {segments.map((segment, index) => {
         if (!segment.process) return segment.items.map(renderTimelineItem);
-        const entries = segment.items.flatMap(item => item.entries || (item.current ? [item.current] : []));
+        const entries = segment.items.flatMap(item => item.entries || []);
         return <TurnTrace key={segment.key} live={live} active={live && index === segments.length - 1} policy={stepCollapse} phase={phase}
           steps={entries.length} requests={segment.items.filter(item => item.request).length}
           errors={entries.filter(entry => entry.kind === 'tool' && toolResults.get(entry.call.id)?.isError).length}>
