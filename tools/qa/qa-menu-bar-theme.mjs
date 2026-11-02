@@ -99,7 +99,11 @@ try {
   assert.equal(brandMark.width, 22);
   assert.equal(brandMark.height, 22);
   assert.equal(brandTitle.x - (brandMark.x + brandMark.width), 10);
-  assert.equal(await page.locator('.brand-lockup strong').evaluate(node => getComputedStyle(node).fontSize), '13px');
+  assert.equal(await page.locator('.brand-lockup strong').evaluate(node => getComputedStyle(node).fontSize), '12px');
+  assert.equal(await page.locator('.header-label').evaluate(node => getComputedStyle(node).fontSize), '10px');
+  assert.equal(await page.locator('#summary').evaluate(node => getComputedStyle(node).fontSize), '11px');
+  assert.equal(await page.locator('#quit').evaluate(node => getComputedStyle(node).fontSize), '11px');
+  assert.equal(await page.locator('#open-main').evaluate(node => getComputedStyle(node).fontSize), '11px');
   assert.ok(Math.abs((brandMark.y + brandMark.height / 2) - (brandTitle.y + brandTitle.height / 2)) <= 1);
   assert.equal(await page.locator('.brand-mark').evaluate(img => img.naturalWidth > 0), true);
   assert.equal(await page.locator('.header-label').evaluate(node => getComputedStyle(node).backgroundColor), 'rgba(0, 0, 0, 0)');

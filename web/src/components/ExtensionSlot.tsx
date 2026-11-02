@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -13,8 +13,10 @@ import {
   LoaderCircle,
   Minus,
   Plug,
+  RefreshCw,
   TrendingDown,
   TrendingUp,
+  WifiOff,
   X,
   XCircle,
 } from 'lucide-react';
@@ -31,6 +33,7 @@ import type {
   ExtensionUiSlot,
   ExtensionUiSnapshot,
 } from '../types/extension-types';
+import { presentExtensionDataViewError } from '../lib/extension-data-view-error';
 import { useExtensionUiSnapshot } from '../lib/use-extension-ui';
 
 export type ExtensionNotice = { message: string; tone?: ExtensionTone };
@@ -161,6 +164,30 @@ function Chart({ title, description, labels, series, unit }: {
   </figure>;
 }
 
+function LiveDataErrorNotice({
+  presentation,
+  compact,
+  stale = false,
+  onRetry,
+}: {
+  presentation: ReturnType<typeof presentExtensionDataViewError>;
+  compact: boolean;
+  stale?: boolean;
+  onRetry: () => void;
+}) {
+  return <div className={`extension-data-error${compact ? ' is-compact' : ''}`} role="status" aria-live="polite">
+    <WifiOff aria-hidden="true" />
+    <span className="extension-data-error-copy">
+      <strong>{compact ? (stale ? '数据暂未更新' : '实时数据暂不可用') : presentation.title}</strong>
+      {!compact && <small>{presentation.message}</small>}
+    </span>
+    <button type="button" aria-label="重试连接实时数据" title="重试连接实时数据" onClick={onRetry}>
+      <RefreshCw aria-hidden="true" />
+      <span>{compact ? '重试' : '重新连接'}</span>
+    </button>
+  </div>;
+}
+
 function LiveDataView({
   block,
   busyButton,
@@ -177,16 +204,35 @@ function LiveDataView({
   const [snapshot, setSnapshot] = useState<ExtensionDataViewSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
+  const requestContext = JSON.stringify([block.sourceId, cwd || '', sessionId || '', modelRef || '']);
+  const lastContext = useRef<string | null>(null);
+  const lastRetryKey = useRef(retryKey);
+  const snapshotRef = useRef<ExtensionDataViewSnapshot | null>(null);
+  const hasVisibleData = useRef(false);
 
   useEffect(() => {
     let disposed = false;
     let subscriptionId = '';
-    setSnapshot(null);
-    setLoading(true);
+    const isRetry = lastContext.current === requestContext && lastRetryKey.current !== retryKey;
+    lastContext.current = requestContext;
+    lastRetryKey.current = retryKey;
+    if (!isRetry) {
+      snapshotRef.current = null;
+      hasVisibleData.current = false;
+      setSnapshot(null);
+    }
+    setLoading(!isRetry || !hasVisibleData.current);
     setError('');
     const accept = (next: ExtensionDataViewSnapshot) => {
       if (next.sourceId !== block.sourceId) return;
-      setSnapshot((current) => current && current.revision > next.revision ? current : next);
+      const current = snapshotRef.current;
+      if (current && current.revision > next.revision) return;
+      if (!(next.error && current)) {
+        snapshotRef.current = next;
+        hasVisibleData.current = !next.error && next.content.length > 0;
+        setSnapshot(next);
+      }
       setError(next.error || '');
       setLoading(false);
     };
@@ -216,13 +262,33 @@ function LiveDataView({
       off();
       if (subscriptionId) void window.piApi.closeExtensionDataView(subscriptionId);
     };
-  }, [block.sourceId, cwd, modelRef, sessionId]);
+  }, [block.sourceId, cwd, modelRef, requestContext, retryKey, sessionId]);
 
   if (error) {
-    return <div className="extension-notice is-error" role="status">
-      <XCircle />
-      <span><strong>实时数据不可用</strong>{error}</span>
-    </div>;
+    const presentation = presentExtensionDataViewError(error);
+    const errorNotice = <LiveDataErrorNotice
+      presentation={presentation}
+      compact={compact}
+      stale={Boolean(snapshot?.content.length)}
+      onRetry={() => setRetryKey((current) => current + 1)}
+    />;
+    if (snapshot?.content.length) {
+      return <div className={`extension-data-view is-stale${compact ? ' is-compact' : ''}`}>
+        {!compact && errorNotice}
+        <ContentBlocks
+          blocks={snapshot.content}
+          busyButton={busyButton}
+          onAction={onAction}
+          depth={depth + 1}
+          cwd={cwd}
+          sessionId={sessionId}
+          modelRef={modelRef}
+          compact={compact}
+        />
+        {compact && errorNotice}
+      </div>;
+    }
+    return errorNotice;
   }
   if (loading) {
     if (block.fallback?.length) {

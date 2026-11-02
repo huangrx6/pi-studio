@@ -38,6 +38,7 @@ import {
   isConversationTurnActive,
 } from './lib/conversation-activity';
 import { completedTurnDuration } from './lib/session-summary';
+import { requestTraceTargetTurnIndex } from './lib/request-trace-turns';
 import { ChangesView } from './components/ChangesView';
 import { ActionMenu } from './components/ActionMenu';
 import { splitComposerText } from './lib/references';
@@ -4396,14 +4397,12 @@ export function App() {
   for (const trace of [...requestTraces].sort((left, right) => (
     left.createdAt - right.createdAt || left.id.localeCompare(right.id)
   ))) {
-    let targetTurn = transcriptTurns.findIndex((turn) => (
-      turn.kind === 'assistant'
-      && turn.messages.some((message) => (
-        typeof message.timestamp === 'number' && message.timestamp >= trace.createdAt
-      ))
-    ));
+    let targetTurn = requestTraceTargetTurnIndex(trace, transcriptTurns);
     if (
       targetTurn < 0
+      && !trace.messages.some((message) => (
+        message.role === 'user' && Number.isFinite(message.timestamp)
+      ))
       && turnActive
       && transcriptTurns.at(-1)?.kind === 'assistant'
       && lastAssistantTurnIndex >= 0

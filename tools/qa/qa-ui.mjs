@@ -349,6 +349,25 @@ await page.addInitScript(() => {
       ],
     },
     {
+      id: 'builtin:studio-metrics/summary-panel',
+      extensionId: 'builtin:studio-metrics',
+      extensionName: 'Studio 指标',
+      scope: 'builtin',
+      contributionId: 'summary-panel',
+      title: '实时指标',
+      description: '当前会话的紧凑指标状态。',
+      slot: 'conversation.footer',
+      size: 'compact',
+      priority: 15,
+      sourceOrder: 7,
+      content: [{
+        kind: 'dataView',
+        sourceId: 'builtin:studio-metrics/summary',
+        emptyText: '暂无指标',
+        fallback: [{ kind: 'text', text: '等待指标' }],
+      }],
+    },
+    {
       id: 'user:review-tools/focus',
       extensionId: 'user:review-tools',
       extensionName: 'Review Tools',
@@ -1023,6 +1042,10 @@ await page.addInitScript(() => {
 
   let draftSequence = 0;
   let confirmRequestListener = null;
+  const extensionDataViewQa = { opens: 0, failNext: false };
+  let extensionDataViewListener = null;
+  window.__extensionDataViewQa = extensionDataViewQa;
+  window.__emitExtensionDataView = (event) => extensionDataViewListener?.(event);
 
   // 2.5 暴露给渲染进程的 PiAPI 子集（只实现 UI 会调用的方法）
   const api = {
@@ -1604,6 +1627,29 @@ await page.addInitScript(() => {
       syncedAt: Date.now(),
       apiVersion: 1,
     }),
+    openExtensionDataView: async () => {
+      extensionDataViewQa.opens += 1;
+      if (extensionDataViewQa.failNext) {
+        extensionDataViewQa.failNext = false;
+        throw new Error("Error invoking remote method 'pi:extension-data-view-open': ExtensionDataViewError: 实时数据源读取超时");
+      }
+      return {
+        subscriptionId: 'qa-data-view',
+        snapshot: {
+          sourceId: 'builtin:studio-metrics/summary',
+          revision: 1,
+          updatedAt: Date.now(),
+          content: [{ kind: 'text', text: '157 tok/s · TTFT 3.75 s' }],
+        },
+      };
+    },
+    closeExtensionDataView: async () => ({ closed: false }),
+    onExtensionDataView: (listener) => {
+      extensionDataViewListener = listener;
+      return () => {
+        if (extensionDataViewListener === listener) extensionDataViewListener = null;
+      };
+    },
     conversationExtensionUiPreferences: async () => structuredClone(conversationExtensionUi),
     saveConversationExtensionUiPreferences: async (payload) => {
       if (payload.layout === 'grid' || payload.layout === 'list') {
@@ -1968,6 +2014,18 @@ try {
   // 冷启动时工作区是收起的：先展开，再点开第一个会话。
   await page.locator('.workspace-row').first().click();
   await page.locator('.session-row').first().click();
+  await page.locator('.conversation-extension-dock-item .extension-data-view .extension-compact-content').waitFor();
+  await page.evaluate(() => window.__emitExtensionDataView({
+    subscriptionId: 'qa-data-view',
+    snapshot: {
+      sourceId: 'builtin:studio-metrics/summary',
+      revision: 2,
+      updatedAt: Date.now(),
+      content: [],
+      error: '实时数据源读取超时',
+    },
+  }));
+  await page.locator('.extension-data-error').waitFor();
   await capture('04-conversation');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await capture('04-conversation-dark');
@@ -1982,13 +2040,13 @@ try {
   const footerExtensionDock = page.getByRole('navigation', { name: '会话底部扩展', exact: true });
   assert.equal(await page.locator('.conversation-extension-dock-label').count(), 0);
   assert.equal(await headerExtensionDock.locator('.conversation-extension-dock-item').count(), 1);
-  assert.equal(await footerExtensionDock.locator('.conversation-extension-dock-item').count(), 2);
+  assert.equal(await footerExtensionDock.locator('.conversation-extension-dock-item').count(), 3);
   assert.equal(await footerExtensionDock.locator('button.conversation-extension-dock-item').count(), 0);
   assert.deepEqual(
     await footerExtensionDock.locator('.conversation-extension-dock-item').evaluateAll((items) => (
       items.map((item) => item.tagName)
     )),
-    ['ARTICLE', 'ARTICLE'],
+    ['ARTICLE', 'ARTICLE', 'ARTICLE'],
   );
   const footerGeometry = await footerExtensionDock
     .locator('.conversation-extension-dock-item')
@@ -2001,18 +2059,33 @@ try {
         '.extension-metric-grid, .extension-section, .extension-table, .extension-disclosure',
       )),
       compactWhiteSpace: getComputedStyle(
-        item.querySelector('.extension-compact-content'),
+        item.querySelector('.extension-compact-content') || item,
       ).whiteSpace,
+      hasDataError: Boolean(item.querySelector('.extension-data-error')),
     })));
   assert.ok(footerGeometry.every((item) => item.height <= 34));
   assert.ok(footerGeometry.every((item) => item.scrollHeight <= item.clientHeight + 1));
   assert.ok(footerGeometry.every((item) => item.overflowY === 'hidden'));
   assert.ok(footerGeometry.every((item) => item.hasFullLayout === false));
   assert.ok(footerGeometry.every((item) => item.compactWhiteSpace === 'nowrap'));
+  assert.equal(footerGeometry.filter((item) => item.hasDataError).length, 1);
   assert.match(await headerExtensionDock.innerText(), /消息/);
   assert.match(await headerExtensionDock.innerText(), /工具/);
   assert.match(await footerExtensionDock.innerText(), /main · 2 files changed/);
   assert.match(await footerExtensionDock.innerText(), /审查 · 2 个关注点/);
+  const compactDataError = footerExtensionDock.locator('.extension-data-error');
+  assert.match(await compactDataError.innerText(), /数据暂未更新[\s\S]*重试/);
+  assert.match(await footerExtensionDock.innerText(), /157 tok\/s · TTFT 3\.75 s/);
+  assert.doesNotMatch(await compactDataError.innerText(), /Error invoking remote method|ExtensionDataViewError|pi:extension-data-view-open/);
+  const opensBeforeRetry = await page.evaluate(() => window.__extensionDataViewQa.opens);
+  await page.evaluate(() => { window.__extensionDataViewQa.failNext = true; });
+  await compactDataError.getByRole('button', { name: '重试连接实时数据' }).click();
+  await page.waitForFunction((previous) => {
+    const notice = document.querySelector('.extension-data-error');
+    return window.__extensionDataViewQa.opens > previous
+      && notice?.textContent?.includes('数据暂未更新');
+  }, opensBeforeRetry);
+  assert.match(await footerExtensionDock.innerText(), /157 tok\/s · TTFT 3\.75 s/);
   const conversationTabs = page.getByRole('tablist', { name: '对话视图' }).getByRole('tab');
   assert.equal(await conversationTabs.count(), 3);
   assert.equal(await page.locator('.chat-tab-list .tab > svg').count(), 3);

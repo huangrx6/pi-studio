@@ -133,6 +133,8 @@ export type ChatMessage = {
   content: ContentBlock[];
   /** 毫秒时间戳，用于显示时间，也常被用作列表 key。 */
   timestamp?: number;
+  /** Durable 任务标识，用于将模型请求轨迹归到实际生成它的轮次。 */
+  taskId?: string;
   /** 在完整会话消息数组中的绝对序号；分页后保持不变，供跨页跳转使用。 */
   sourceIndex?: number;
   /** 助手是否仍在流式输出。 */

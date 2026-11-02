@@ -268,10 +268,14 @@ function messageToChat(message, entry) {
     }];
   }
   if (message.role === 'assistant') {
+    const taskId = entry.byTaskId === undefined || entry.byTaskId === null
+      ? ''
+      : String(entry.byTaskId);
     return [{
       role: 'assistant',
       content: contentToChat(message.content),
       timestamp: message.timestamp,
+      ...(taskId ? { taskId } : {}),
       sourceIndex: Number(entry.id),
       streaming: false,
       stopReason: message.stopReason,
