@@ -3134,7 +3134,32 @@ try {
   await page.setViewportSize({ width: 1440, height: 920 });
   await capture('22-skill-hub');
   await exportScreen('skills');
+  const skillSearch = hub.getByLabel('搜索技能源', { exact: true });
+  await skillSearch.focus();
+  const searchFocusStyles = await hub.locator('.skill-hub-search').evaluate((container) => {
+    const input = container.querySelector('input');
+    const containerStyle = getComputedStyle(container);
+    const inputStyle = getComputedStyle(input);
+    return {
+      borderWidth: containerStyle.borderTopWidth,
+      outlineStyle: containerStyle.outlineStyle,
+      containerShadow: containerStyle.boxShadow,
+      inputBorderWidth: inputStyle.borderTopWidth,
+      inputOutlineStyle: inputStyle.outlineStyle,
+      inputShadow: inputStyle.boxShadow,
+    };
+  });
+  assert.deepEqual(searchFocusStyles, {
+    borderWidth: '1px',
+    outlineStyle: 'none',
+    containerShadow: 'none',
+    inputBorderWidth: '0px',
+    inputOutlineStyle: 'none',
+    inputShadow: 'none',
+  });
+  await capture('22-skill-hub-search-focus');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await capture('22-skill-hub-search-focus-dark');
   await capture('22-skill-hub-dark');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   await hub.getByRole('button', { name: '管理源', exact: true }).click();
