@@ -114,40 +114,40 @@ function branchStatus(page, branch) {
 function createModelComparisonService(overrides = {}) {
   const dependencies = {
     conversationAction: (...args) => (
-      require('./durable-conversations.cjs').conversationAction(...args)
+      require('../runtime/conversations.cjs').conversationAction(...args)
     ),
     conversationPage: (...args) => (
-      require('./durable-conversations.cjs').conversationPage(...args)
+      require('../runtime/conversations.cjs').conversationPage(...args)
     ),
     configureConversation: (...args) => (
-      require('./durable-conversations.cjs').configureConversation(...args)
+      require('../runtime/conversations.cjs').configureConversation(...args)
     ),
     submitConversation: (...args) => (
-      require('./durable-conversations.cjs').submitConversation(...args)
+      require('../runtime/conversations.cjs').submitConversation(...args)
     ),
     configureConversationAgentCwd: (...args) => (
-      require('./durable-conversations.cjs').configureConversationAgentCwd(...args)
+      require('../runtime/conversations.cjs').configureConversationAgentCwd(...args)
     ),
     abortConversation: (...args) => (
-      require('./durable-conversations.cjs').abortConversation(...args)
+      require('../runtime/conversations.cjs').abortConversation(...args)
     ),
     bindManagedWorktree: (...args) => (
-      require('./managed-worktrees.cjs').bindManagedWorktree(...args)
+      require('../capabilities/subagents/index.cjs').bindManagedWorktree(...args)
     ),
     completeManagedWorktree: (...args) => (
-      require('./managed-worktrees.cjs').completeManagedWorktree(...args)
+      require('../capabilities/subagents/index.cjs').completeManagedWorktree(...args)
     ),
     createManagedWorktree: (...args) => (
-      require('./managed-worktrees.cjs').createManagedWorktree(...args)
+      require('../capabilities/subagents/index.cjs').createManagedWorktree(...args)
     ),
     discardManagedWorktree: (...args) => (
-      require('./managed-worktrees.cjs').discardManagedWorktree(...args)
+      require('../capabilities/subagents/index.cjs').discardManagedWorktree(...args)
     ),
     inspectManagedWorktree: (...args) => (
-      require('./managed-worktrees.cjs').inspectManagedWorktree(...args)
+      require('../capabilities/subagents/index.cjs').inspectManagedWorktree(...args)
     ),
     applyManagedWorktree: (...args) => (
-      require('./managed-worktrees.cjs').applyManagedWorktree(...args)
+      require('../capabilities/subagents/index.cjs').applyManagedWorktree(...args)
     ),
     metricTotals: (conversationId) => (
       require('../core/studio-db.cjs')

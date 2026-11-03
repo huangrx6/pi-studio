@@ -13,7 +13,7 @@ const {
   clearMcpOAuth,
   expandOAuthHeaders,
   stateStore,
-} = require('../../electron/services/mcp-oauth.cjs');
+} = require('../../electron/integrations/mcp/index.cjs');
 const { closeStudioDatabase } = require('../../electron/core/studio-db.cjs');
 
 test.after(() => {

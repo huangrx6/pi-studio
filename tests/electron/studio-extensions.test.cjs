@@ -36,7 +36,7 @@ const {
   syncStudioExtensions,
   toolConflictDiagnostics,
 } = studioExtensions;
-const { openChildConversation } = require('../../electron/services/durable-subagents.cjs');
+const { openChildConversation } = require('../../electron/capabilities/subagents/index.cjs');
 
 after(() => fs.rmSync(userRoot, { recursive: true, force: true }));
 

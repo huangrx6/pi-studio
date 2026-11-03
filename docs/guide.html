@@ -860,7 +860,7 @@ Pi Durable 1.5 Harness
   ▼
 Model provider</code></pre>
             </figure>
-            <p><code>electron/services/durable-runtime.cjs</code> 是唯一共享运行时装配点。<code>electron/ipc/sessions.cjs</code> 把 Durable 的提交、任务状态、实时事件、分页、分叉、模型与 thinking 切换映射成 renderer contract。</p>
+            <p><code>electron/runtime/durable-runtime.cjs</code> 是唯一共享运行时装配点。<code>electron/ipc/sessions.cjs</code> 把 Durable 的提交、任务状态、实时事件、分页、分叉、模型与 thinking 切换映射成 renderer contract。</p>
             <p>扩展、MCP、Skill 和 Harness 在下一请求边界热刷新；外部文件 handle、Durable task 对象、凭据明文和原始扩展实现都不能穿过 renderer 契约。</p>
           </div>
         </section>
@@ -986,13 +986,17 @@ Model provider</code></pre>
               <pre><code>pi-studio/
 ├── electron/
 │   ├── core/           # SQLite、模型、序列化、扩展契约
-│   ├── services/       # Durable、文件、MCP、Skill、发行
+│   ├── runtime/        # Durable 启动、内置注册与会话投影
+│   ├── capabilities/   # Agent 能力及其唯一公共入口
+│   ├── integrations/   # MCP 等外部系统适配
+│   ├── services/       # 更新、文件、发行等通用应用服务
 │   ├── ipc/            # typed preload / IPC boundary
 │   ├── main.cjs        # lifecycle and module assembly
 │   └── window.cjs      # native window / menu / theme
 ├── web/src/
-│   ├── components/     # renderer UI
-│   ├── lib/            # pure renderer-safe helpers
+│   ├── shell/          # application frame and navigation
+│   ├── features/       # capability-aligned UI, styles and helpers
+│   ├── shared/         # reusable UI and renderer-safe helpers
 │   ├── types/          # renderer contracts
 │   └── styles/         # tokens and component styles
 ├── tests/

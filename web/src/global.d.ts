@@ -43,7 +43,8 @@ import type {
   ConversationTaskGraph,
   LongTaskState,
 } from './types/durable-types';
-import type { BackgroundMedia } from './lib/preferences';
+import type { BackgroundMedia } from './shared/preferences';
+import type { FilePreviewResult } from './types/file-preview-types';
 import type { UpdateSnapshot } from './types/update-types';
 import type { RuntimeRefreshSnapshot } from './types/runtime-types';
 import type { UsageAnalyticsSnapshot, UsageModelMix } from './types/usage-types';
@@ -291,8 +292,6 @@ interface SettingsSnapshot {
   agentTools: AgentToolSelection;
   /** 当前工作区生效的 Harness 配置与全部可切换 profile。 */
   harness: HarnessSettingsSnapshot;
-  /** 智能体工具白名单在 Studio SQLite 中的位置。 */
-  agentToolsPath: string;
   /** Studio 的 SQLite 数据库与私有资源目录。 */
   storagePath: string;
   databasePath: string;
@@ -465,6 +464,8 @@ declare global {
       files(cwd: string, path: string): Promise<{ path: string; entries: Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }> }>;
       /** 读取单个文件文本；binary 为 true 时 text 不可直接展示。 */
       file(cwd: string, path: string): Promise<{ path: string; size: number; binary: boolean; text: string }>;
+      /** 读取有大小上限、可直接交给统一预览组件的数据。 */
+      filePreview(cwd: string, path: string): Promise<FilePreviewResult>;
       /** 只读打开当前会话已记录的轮次变更文件。 */
       temporaryModel(payload?: { modelRef?: string; thinkingLevel?: import('./types/model-types').ThinkingLevel }): Promise<import('./types/model-types').ModelSelection>;
       temporaryPrompt(payload: { id: string; text: string; images: { data: string; mimeType: string }[]; modelRef: string; thinkingLevel: string }): Promise<{ ok: boolean }>;

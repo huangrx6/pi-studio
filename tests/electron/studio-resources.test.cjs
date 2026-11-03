@@ -21,20 +21,20 @@ const {
   setSkillTrusted,
   sharedUserSkillsDirectory,
   skillInstructions,
-} = require('../../electron/services/studio-skills.cjs');
+} = require('../../electron/capabilities/skills/index.cjs');
 const {
   DEFAULT_AGENT_TOOLS,
   matches,
   normalizeSelection,
   readAgentToolSelection,
-} = require('../../electron/services/tool-selection.cjs');
+} = require('../../electron/runtime/tool-selection.cjs');
 const {
   mcpSnapshot,
   reloadMcpServers,
   toolExposureFor,
   toolName,
   __test: mcpTest,
-} = require('../../electron/services/mcp-runtime.cjs');
+} = require('../../electron/integrations/mcp/index.cjs');
 
 after(() => {
   closeStudioDatabase();

@@ -7,7 +7,7 @@ import {
   hasSessionExtensionOrder,
   normalizeConversationExtensionUiPreferences,
   orderConversationExtensionItems,
-} from '../../web/src/lib/conversation-extension-order.ts';
+} from '../../web/src/features/conversation/conversation-extension-order.ts';
 
 function item(extensionId, id, sourceOrder) {
   return {

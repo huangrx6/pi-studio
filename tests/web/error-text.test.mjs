@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { errorText } from '../../web/src/lib/error-text.ts';
+import { errorText } from '../../web/src/shared/error-text.ts';
 
 test('electron IPC wrappers are stripped down to the real reason', () => {
   assert.equal(

@@ -19,14 +19,14 @@ import {
   fauxProvider,
   fauxToolCall,
 } from '@earendil-works/pi-ai';
-import toolSchema from '../../electron/services/tool-schema.cjs';
+import toolSchema from '../../electron/runtime/tool-schema.cjs';
 
 const require = createRequire(import.meta.url);
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-todo-loop-'));
 process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
 
 const { closeStudioDatabase } = require('../../electron/core/studio-db.cjs');
-const { createStudioBuiltins } = require('../../electron/services/studio-builtins.cjs');
+const { createStudioBuiltins } = require('../../electron/runtime/builtin-registry.cjs');
 
 after(() => {
   closeStudioDatabase();

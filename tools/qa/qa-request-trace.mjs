@@ -30,7 +30,7 @@ try {
       await import('/src/app.css');
       const React = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react.js')).default;
       const { createRoot } = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react-dom_client.js')).default;
-      const { AssistantTurnView } = await import('/src/components/ChatMessage.tsx');
+      const { AssistantTurnView } = await import('/src/features/conversation/ChatMessage.tsx');
       const trace = {
         id: 'trace-1',
         requestId: 'trace-1',
@@ -87,7 +87,7 @@ try {
             role: 'assistant',
             content: [
               { type: 'thinking', thinking: '先读取组件与样式。' },
-              { type: 'toolCall', id: 'read-1', name: 'read', arguments: { path: 'web/src/components/ChatMessage.tsx' } },
+              { type: 'toolCall', id: 'read-1', name: 'read', arguments: { path: 'web/src/features/conversation/ChatMessage.tsx' } },
             ],
           },
           {
@@ -112,7 +112,7 @@ try {
         timestamp: 2000,
         content: [
           { type: 'thinking', thinking: '先读取实际 provider 请求，确认当前轨迹组件和样式结构。' },
-          { type: 'toolCall', id: 'read-1', name: 'read', arguments: { path: 'web/src/components/ChatMessage.tsx' } },
+          { type: 'toolCall', id: 'read-1', name: 'read', arguments: { path: 'web/src/features/conversation/ChatMessage.tsx' } },
           { type: 'toolCall', id: 'bash-1', name: 'bash', arguments: { command: 'pnpm test --filter request-trace' } },
           { type: 'text', text: '第一次请求返回了读取与验证步骤。' },
         ],

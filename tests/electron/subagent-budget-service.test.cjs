@@ -22,7 +22,7 @@ test('budget endpoint resolves public IDs and uses the stored workspace scope', 
   const original = Module._load;
   let requestedId;
   Module._load = function load(request, ...rest) {
-    if (request === './durable-runtime.cjs') return { getDurableRuntime: async () => ({
+    if (request === '../../runtime/durable-runtime.cjs') return { getDurableRuntime: async () => ({
       durable, context: {}, harness: { snapshot: async (_doc, id) => {
         requestedId = id;
         return { agents: { first: { conversationId: 200 }, alias: { conversationId: 200 } } };
@@ -30,10 +30,12 @@ test('budget endpoint resolves public IDs and uses the stored workspace scope', 
     }) };
     return original.call(this, request, ...rest);
   };
-  let service;
-  try { service = require('../../electron/services/subagent-settings.cjs'); }
+  let result;
+  try {
+    const service = require('../../electron/capabilities/subagents/index.cjs');
+    result = await service.subagentBudgetSnapshot(parent.publicId, '/unrelated-workspace');
+  }
   finally { Module._load = original; }
-  const result = await service.subagentBudgetSnapshot(parent.publicId, '/unrelated-workspace');
   assert.equal(requestedId, 100);
   assert.equal(result.parentConversationId, parent.publicId);
   assert.equal(result.tokens, 40);

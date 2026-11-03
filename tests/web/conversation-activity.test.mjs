@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   eventSaysConversationRunning,
   isConversationTurnActive,
-} from '../../web/src/lib/conversation-activity.ts';
+} from '../../web/src/features/conversation/conversation-activity.ts';
 
 test('a conversation stays active after its current model request ends', () => {
   assert.equal(isConversationTurnActive({

@@ -6,7 +6,7 @@ import {
   isNearBottom,
   resolveAutoFollow,
   shouldReleaseFollowOnWheel,
-} from '../../web/src/lib/chat-scroll.mjs';
+} from '../../web/src/features/conversation/chat-scroll.mjs';
 
 test('distance and follow threshold use the rendered viewport, not a 2px clamp', () => {
   const metrics = { scrollTop: 664, clientHeight: 300, scrollHeight: 1000 };

@@ -23,7 +23,7 @@ const {
   skillHubSnapshot,
   setSkillSourceEnabled,
   __test,
-} = require('../../electron/services/skill-sources.cjs');
+} = require('../../electron/capabilities/skills/index.cjs');
 
 test.after(() => {
   closeStudioDatabase();

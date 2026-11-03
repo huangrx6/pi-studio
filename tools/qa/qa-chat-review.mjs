@@ -18,7 +18,7 @@ try {
     await import('/src/styles/tokens.css'); await import('/src/styles/palette.css'); await import('/src/app.css');
     const React = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react.js')).default;
     const { createRoot } = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react-dom_client.js')).default;
-    const { AssistantTurnView } = await import('/src/components/ChatMessage.tsx');
+    const { AssistantTurnView } = await import('/src/features/conversation/ChatMessage.tsx');
     const tools = ['read', 'edit', 'edit', 'write', 'edit', 'edit'];
     const imageColors = ['d6f5e8','dce9ff','fff0cf','f3dcff','ffe1dc','dff2f0','e7e8ff'];
     const images = imageColors.map((color,index) => {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { composerSubmitAction } from '../../web/src/lib/composer-submit.ts';
+import { composerSubmitAction } from '../../web/src/features/conversation/composer-submit.ts';
 
 const enter = {
   key: 'Enter',

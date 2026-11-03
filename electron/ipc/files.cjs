@@ -13,6 +13,7 @@ const {
   listDirectory,
   readFileText,
 } = require('../services/workspace.cjs');
+const { readFilePreview } = require('../services/file-preview.cjs');
 const { normalizeExternalHttpUrl } = require('../core/external-url.cjs');
 const { applicationsForFile, applicationIcon, openWithApp } = require('../services/mac-apps.cjs');
 const { resolveAttachmentFile } = require('../services/attachments.cjs');
@@ -48,6 +49,12 @@ function registerFilesIpc() {
   ipcMain.handle('pi:file', async (event, { cwd, path: requested } = {}) => {
     assertMainWindow(event);
     return readFileText(cwd, requested);
+  });
+  // Structured preview for the shared renderer component. The service bounds
+  // text/media payloads and never inlines arbitrary binary formats.
+  ipcMain.handle('pi:file-preview', async (event, { cwd, path: requested } = {}) => {
+    assertMainWindow(event);
+    return readFilePreview(cwd, requested);
   });
   // Absolute previews are scoped to paths present in this session's persisted
   // turn-diffs. The renderer cannot turn this into a general file reader.

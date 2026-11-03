@@ -127,7 +127,7 @@ test('Harness 与 Conversation 的实例契约仍然存在', async () => {
 });
 
 test('defineTool 接受纯 JSON Schema 作为 parameters', async () => {
-  // Studio 的工具参数 schema 由 electron/services/tool-schema.cjs 生成纯
+  // Studio 的工具参数 schema 由 electron/runtime/tool-schema.cjs 生成纯
   // JSON Schema，不依赖 TypeBox 或 pi-schema。上游若要求特定构造器，
   // 这里会先失败。
   const durable = await loadModule('@earendil-works/pi-durable');

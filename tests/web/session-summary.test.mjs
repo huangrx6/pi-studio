@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { completedTurnDuration } from '../../web/src/lib/session-summary.ts';
+import { completedTurnDuration } from '../../web/src/features/conversation/session-summary.ts';
 
 test('completed answer duration is compact and stays frozen', () => {
   assert.equal(completedTurnDuration(0), '0s');

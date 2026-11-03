@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { outlineIndexAt, outlineIndexForMessages } from '../../web/src/lib/outline-sync.mjs';
+import { outlineIndexAt, outlineIndexForMessages } from '../../web/src/features/conversation/outline-sync.mjs';
 
 const items = [
   { sourceIndex: 1, text: '第一问' },

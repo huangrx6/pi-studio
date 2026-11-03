@@ -30,7 +30,7 @@ try {
       await import('/src/app.css');
       const React = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react.js')).default;
       const { createRoot } = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react-dom_client.js')).default;
-      const { ChatMessageView } = await import('/src/components/ChatMessage.tsx');
+      const { ChatMessageView } = await import('/src/features/conversation/ChatMessage.tsx');
       const { splitComposerText } = await import('/src/lib/references.ts');
       const prompt = '/goal @"00 Inbox/"';
       let resolveEdit;

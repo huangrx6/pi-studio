@@ -15,8 +15,8 @@ try {
     await import('/@fs/${process.cwd()}/node_modules/yet-another-react-lightbox/dist/styles.css');
     const React = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react.js')).default;
     const { createRoot } = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react-dom_client.js')).default;
-    const { AssistantTurnView } = await import('/src/components/ChatMessage.tsx');
-    const prior = {role:'assistant',timestamp:1,content:[{type:'toolCall',id:'read',name:'read',arguments:{path:'src/components/ChatMessage.tsx'}},{type:'thinking',thinking:'已经定位轨迹布局差异。'},{type:'toolCall',id:'edit',name:'edit',arguments:{path:'src/app.css'}}]};
+    const { AssistantTurnView } = await import('/src/features/conversation/ChatMessage.tsx');
+    const prior = {role:'assistant',timestamp:1,content:[{type:'toolCall',id:'read',name:'read',arguments:{path:'src/features/conversation/ChatMessage.tsx'}},{type:'thinking',thinking:'已经定位轨迹布局差异。'},{type:'toolCall',id:'edit',name:'edit',arguments:{path:'src/app.css'}}]};
     const results = new Map(['read','edit'].map(id => [id,{role:'toolResult',content:[{type:'text',text:'Completed'}]}]));
     const canvas = document.createElement('canvas'); canvas.width=480; canvas.height=300;
     const ctx = canvas.getContext('2d'); ctx.fillStyle='#192126'; ctx.fillRect(0,0,480,300);

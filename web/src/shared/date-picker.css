@@ -1,0 +1,217 @@
+/* Shared date picker. Colors come only from semantic theme tokens. */
+
+.pi-date-picker {
+  position: relative;
+  width: 148px;
+  min-width: 0;
+}
+
+.pi-date-trigger {
+  display: flex;
+  width: 100%;
+  height: var(--control-sm);
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px 0 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text);
+  font: var(--text-sm) var(--font);
+  text-align: left;
+}
+
+.pi-date-trigger:hover:not(:disabled) {
+  border-color: var(--border-hover);
+}
+
+.pi-date-trigger.is-open,
+.pi-date-trigger:focus-visible {
+  border-color: var(--focus-color);
+  box-shadow: var(--focus-ring);
+  outline: none;
+}
+
+.pi-date-trigger:disabled {
+  background: var(--surface-soft);
+  color: var(--disabled-text);
+  cursor: not-allowed;
+}
+
+.pi-date-leading,
+.pi-date-chevron {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--faint);
+}
+
+.pi-date-value,
+.pi-date-placeholder {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.pi-date-placeholder {
+  color: var(--faint);
+}
+
+.pi-date-chevron {
+  margin-left: auto;
+  transition: transform var(--transition);
+}
+
+.pi-date-trigger.is-open .pi-date-chevron {
+  transform: rotate(180deg);
+}
+
+.pi-date-popover {
+  position: fixed;
+  z-index: 210;
+  padding: 12px;
+}
+
+.pi-date-calendar-head {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 30px;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: 10px;
+}
+
+.pi-date-nav {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: var(--radius-control);
+  color: var(--faint);
+}
+
+.pi-date-nav:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.pi-date-nav:focus-visible,
+.pi-date-day:focus-visible,
+.pi-date-footer-action:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 1px;
+}
+
+.pi-date-nav:disabled {
+  color: var(--disabled-text);
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.pi-date-nav svg {
+  width: 15px;
+  height: 15px;
+}
+
+.pi-date-month {
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: 620;
+  letter-spacing: -.01em;
+  text-align: center;
+}
+
+.pi-date-weekdays,
+.pi-date-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.pi-date-weekdays {
+  margin-bottom: 5px;
+  color: var(--faint);
+  font-size: var(--text-xs);
+  line-height: 24px;
+  text-align: center;
+}
+
+.pi-date-day {
+  position: relative;
+  display: grid;
+  height: 32px;
+  place-items: center;
+  border-radius: calc(var(--radius-control) - 2px);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.pi-date-day:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.pi-date-day.is-outside-month {
+  color: var(--faint);
+  opacity: .48;
+}
+
+.pi-date-day.is-today:not(.is-selected) {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  color: var(--text);
+}
+
+.pi-date-day.is-selected {
+  background: var(--surface-active);
+  box-shadow: inset 0 -2px 0 var(--accent);
+  color: var(--text);
+  font-weight: 620;
+}
+
+.pi-date-day:disabled {
+  color: var(--disabled-text);
+  cursor: not-allowed;
+  opacity: .3;
+}
+
+.pi-date-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--divider);
+}
+
+.pi-date-footer-action {
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: var(--radius-control);
+  color: var(--faint);
+  font-size: var(--text-xs);
+}
+
+.pi-date-footer-action:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.pi-date-footer-action.is-primary {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.pi-date-footer-action:disabled {
+  color: var(--disabled-text);
+  cursor: not-allowed;
+}
+
+@media (max-width: 520px) {
+  .pi-date-popover {
+    padding: 10px;
+  }
+}

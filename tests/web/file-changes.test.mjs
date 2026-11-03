@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { collectFileChanges } from '../../web/src/lib/file-changes.ts';
+import { collectFileChanges } from '../../web/src/features/conversation/file-changes.ts';
 const call = (id, name, path) => ({ type: 'toolCall', id, name, arguments: { path } });
 const message = content => ({ role: 'assistant', content });
 const result = (id, details, isError = false) => [id, { role: 'toolResult', toolCallId: id, content: [], details, isError }];

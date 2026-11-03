@@ -4,7 +4,7 @@ import {
   HISTORY_LOAD_DISTANCE,
   HISTORY_REARM_DISTANCE,
   resolveHistoryScroll,
-} from '../../web/src/lib/history-scroll.mjs';
+} from '../../web/src/features/conversation/history-scroll.mjs';
 
 test('history loads once when entering the prefetch distance', () => {
   const first = resolveHistoryScroll({

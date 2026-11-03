@@ -135,7 +135,7 @@ let currentRuntime = createMockRuntime();
 
 const originalLoad = Module._load;
 Module._load = function patchedLoad(request, parent, isMain) {
-  if (request === './durable-runtime.cjs') {
+  if (request === '../runtime/durable-runtime.cjs') {
     return {
       getDurableRuntime: async () => currentRuntime,
     };

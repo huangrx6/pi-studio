@@ -21,7 +21,7 @@ const {
   sharedProjectSkillsDirectory,
   sharedUserSkillsDirectory,
   userSkillsDirectory,
-} = require('./studio-skills.cjs');
+} = require('../capabilities/skills/index.cjs');
 const {
   extensionHostSnapshot,
   officialExtensionsSnapshot,
@@ -31,8 +31,8 @@ const {
 const {
   agentToolCatalog,
   readAgentToolSelection,
-} = require('./tool-selection.cjs');
-const { mcpSnapshot } = require('./mcp-runtime.cjs');
+} = require('../runtime/tool-selection.cjs');
+const { mcpSnapshot } = require('../integrations/mcp/index.cjs');
 
 async function settingsSnapshot(cwd = DEFAULT_CWD) {
   const db = getStudioDatabase();
@@ -115,7 +115,6 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
     agentToolCatalog: agentTools,
     harness: getHarnessSettings(cwd),
     storagePath,
-    agentToolsPath: `${storagePath} · studio.agent.tools`,
     databasePath: storagePath,
     skillsPath: userSkillsDirectory(),
     agentsSkillsPath: sharedUserSkillsDirectory(),

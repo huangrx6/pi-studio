@@ -9,7 +9,7 @@ const {
   boundMessages,
   normalizeRequestMessages,
   sanitizeValue,
-} = require('../../electron/services/studio-request-trace.cjs');
+} = require('../../electron/capabilities/request-trace/index.cjs');
 const {
   createStudioDatabase,
 } = require('../../electron/core/studio-db.cjs');

@@ -182,7 +182,7 @@ Electron preload / IPC
 Pi Durable 1.5 Harness
 ```
 
-`electron/services/durable-runtime.cjs` 是唯一共享运行时装配点。`electron/ipc/sessions.cjs` 把 Durable 的提交、分页、分叉、状态、模型和 thinking 映射成 renderer DTO；扩展与 MCP 在下一个请求边界热刷新。
+`electron/runtime/durable-runtime.cjs` 是唯一共享运行时装配点。`electron/ipc/sessions.cjs` 把 Durable 的提交、分页、分叉、状态、模型和 thinking 映射成 renderer DTO；扩展与 MCP 在下一个请求边界热刷新。
 
 ## 本地开发
 
@@ -236,14 +236,20 @@ Pi Studio 使用 `electron-updater` 读取 GitHub 最新 Release。GitHub 不会
 ```text
 pi-studio/
 ├── electron/
-│   ├── core/            # Studio SQLite、设置与序列化
-│   ├── services/        # Durable runtime、模型、扩展、MCP、文件与桌面能力
+│   ├── core/            # SQLite、模型、设置、扩展契约与共享原语
+│   ├── runtime/         # Durable 启动、内置能力注册与会话投影
+│   ├── capabilities/    # 每项 Agent 能力及其唯一公共入口
+│   ├── integrations/    # MCP 等外部系统适配
+│   ├── services/        # 更新、窗口、发行等通用应用服务
 │   ├── ipc/             # 按领域注册的 IPC
 │   ├── main.cjs         # 生命周期与模块装配
 │   └── window.cjs       # 窗口、菜单、主题
 ├── web/                 # React + Vite renderer
 │   └── src/
-│       ├── components/
+│       ├── shell/       # 应用框架与全局导航
+│       ├── features/    # 按能力组织的 UI、样式与纯逻辑
+│       ├── shared/      # 跨功能复用的 UI 与纯逻辑
+│       ├── types/       # renderer 数据契约
 │       └── styles/      # 全局 token 与调色板
 ├── docs/                # GitHub Pages、资源作用域与扩展规范
 ├── tests/

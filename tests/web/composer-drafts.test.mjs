@@ -7,7 +7,7 @@ import {
   moveComposerDraft,
   readComposerDraft,
   saveComposerDraft,
-} from '../../web/src/lib/composer-drafts.ts';
+} from '../../web/src/features/conversation/composer-drafts.ts';
 
 const image = {
   id: 'image-1',

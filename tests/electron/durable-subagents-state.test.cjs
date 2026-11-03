@@ -10,7 +10,7 @@ process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
 
 const {
   resolveSubagentStatus,
-} = require('../../electron/services/durable-subagents.cjs');
+} = require('../../electron/capabilities/subagents/index.cjs');
 
 test.after(() => {
   fs.rmSync(temporary, { recursive: true, force: true });

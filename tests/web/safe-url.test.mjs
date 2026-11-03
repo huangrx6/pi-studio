@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { safeMarkdownImageSource } from '../../web/src/lib/safe-url.js';
+import { safeMarkdownImageSource } from '../../web/src/shared/safe-url.js';
 
 test('Markdown images allow only intended image protocols', () => {
   assert.equal(

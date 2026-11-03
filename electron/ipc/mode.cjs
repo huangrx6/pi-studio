@@ -10,7 +10,7 @@ const {
   resetPolicy,
   writeMode,
   writePolicy,
-} = require('../services/mode.cjs');
+} = require('../capabilities/permissions/index.cjs');
 
 function registerModeIpc() {
   ipcMain.handle('pi:mode-get', async (_event, payload = {}) => {

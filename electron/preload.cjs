@@ -58,6 +58,7 @@ contextBridge.exposeInMainWorld('piApi', {
   unsubscribeConversation: (id) => ipcRenderer.invoke('pi:conversation-unsubscribe', id),
   files: (cwd, path) => ipcRenderer.invoke('pi:files', { cwd, path }),
   file: (cwd, path) => ipcRenderer.invoke('pi:file', { cwd, path }),
+  filePreview: (cwd, path) => ipcRenderer.invoke('pi:file-preview', { cwd, path }),
   turnDiffFile: (payload) => ipcRenderer.invoke('pi:turn-diff-file', payload),
   turnDiffAbsoluteFile: (payload) => ipcRenderer.invoke('pi:turn-diff-absolute-file', payload),
   attachmentFile: (payload) => ipcRenderer.invoke('pi:attachment-file', payload),

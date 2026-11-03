@@ -18,7 +18,7 @@ import {
   fauxProvider,
   fauxToolCall,
 } from '@earendil-works/pi-ai';
-import Type from '../../electron/services/tool-schema.cjs';
+import Type from '../../electron/runtime/tool-schema.cjs';
 
 const require = createRequire(import.meta.url);
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-request-trace-'));
@@ -28,7 +28,7 @@ const { closeStudioDatabase } = require('../../electron/core/studio-db.cjs');
 const {
   createStudioRequestTraceExtension,
   onRequestTrace,
-} = require('../../electron/services/studio-request-trace.cjs');
+} = require('../../electron/capabilities/request-trace/index.cjs');
 
 test.after(() => {
   closeStudioDatabase();

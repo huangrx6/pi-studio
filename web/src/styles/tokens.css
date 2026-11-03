@@ -52,9 +52,15 @@
   --text-md: 14px;
   --text-lg: 16px;
   --text-title: 24px;
+  /* 聊天正文使用比通用正文更紧凑但仍有足够呼吸的固定比例；字号偏好变化时
+  行高会随字号一起缩放，避免大字号下过挤或小字号下过松。 */
+  --chat-line-height: 1.7;
   --sidebar-w: 280px;
   --panel-w: 430px;
   --content: 860px;
+  /* 会话一级视图共用同一组内容宽度和左右留白；窗口或主面板变窄时只改
+  gutter，所有视图随之同步收缩。 */
+  --session-gutter: var(--space-8);
   --settings-content: 1040px;
   --header-height: 48px;
   --toolbar-height: 36px;

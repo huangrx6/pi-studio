@@ -10,7 +10,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './App';
-import { loadPreferences, resolveTheme } from './lib/preferences';
+import { loadPreferences, resolveTheme } from './shared/preferences';
 import 'yet-another-react-lightbox/styles.css';
 import 'yet-another-react-lightbox/plugins/captions.css';
 import 'yet-another-react-lightbox/plugins/counter.css';

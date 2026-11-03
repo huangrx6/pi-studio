@@ -20,7 +20,7 @@ const {
   normalizePolicy: normalizePermissionPolicy,
   normalizePolicyStore: normalizePermissionStore,
   presetDefault: permissionPresetDefault,
-} = require('../services/permission-policy.cjs');
+} = require('./permission-policy.cjs');
 
 const KEYS = Object.freeze({
   theme: 'studio.app.theme',

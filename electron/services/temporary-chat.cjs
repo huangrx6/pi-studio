@@ -14,8 +14,8 @@ const {
   runtimeModelFor,
   splitModelRef,
 } = require('./models.cjs');
-const { getDurableRuntime } = require('./durable-runtime.cjs');
-const durableView = require('./durable-view.cjs');
+const { getDurableRuntime } = require('../runtime/durable-runtime.cjs');
+const durableView = require('../runtime/view.cjs');
 
 const chats = new Map();
 let memoryRuntime;

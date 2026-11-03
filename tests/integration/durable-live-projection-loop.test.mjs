@@ -13,7 +13,7 @@ import {
 } from '@earendil-works/pi-ai';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 
-import durableView from '../../electron/services/durable-view.cjs';
+import durableView from '../../electron/runtime/view.cjs';
 
 /**
  * 端到端护栏：用真实 Harness + 脚本化模型跑一轮，确认 Studio 的投影层能从

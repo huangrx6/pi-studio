@@ -7,7 +7,7 @@ import {
   tokenInputValue,
   tokenLabel,
   tokenUnitOptions,
-} from '../../web/src/lib/token-units.ts';
+} from '../../web/src/shared/token-units.ts';
 
 test('token labels promote 1000K to 1M and stay compact', () => {
   assert.equal(tokenLabel(999), '999');

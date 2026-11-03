@@ -21,7 +21,7 @@ import {
   fauxProvider,
   fauxToolCall,
 } from '@earendil-works/pi-ai';
-import toolSchema from '../../electron/services/tool-schema.cjs';
+import toolSchema from '../../electron/runtime/tool-schema.cjs';
 
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-subagent-loop-'));
 process.env.PI_STUDIO_USER_DATA = path.join(temporary, 'user-data');
@@ -36,11 +36,11 @@ const {
 } = require('../../electron/core/app-settings.cjs');
 const {
   createStudioBuiltins,
-} = require('../../electron/services/studio-builtins.cjs');
+} = require('../../electron/runtime/builtin-registry.cjs');
 const {
   discardManagedWorktree,
   listManagedWorktrees,
-} = require('../../electron/services/managed-worktrees.cjs');
+} = require('../../electron/capabilities/subagents/index.cjs');
 
 after(() => {
   closeStudioDatabase();

@@ -24,7 +24,7 @@ const {
   submitConversation,
   subscribeConversation,
   taskGraph,
-} = require('../services/durable-conversations.cjs');
+} = require('../runtime/conversations.cjs');
 const {
   executeStudioExtensionCommand,
   extensionDataSource,
@@ -44,11 +44,11 @@ const {
   listSubagentChildren,
   replySubagentSupervisor,
   subagentTranscript,
-} = require('../services/durable-subagents.cjs');
+} = require('../capabilities/subagents/index.cjs');
 const {
   getDurableRuntime,
   reconcileRuntimeForWorkspace,
-} = require('../services/durable-runtime.cjs');
+} = require('../runtime/durable-runtime.cjs');
 const {
   adoptModelComparisonBranch,
   discardModelComparisonBranch,

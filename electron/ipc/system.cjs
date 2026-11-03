@@ -4,7 +4,7 @@
  */
 
 const { ipcMain } = require('electron');
-const { listWorkspaces, refreshRuntimeState } = require('../services/durable-conversations.cjs');
+const { listWorkspaces, refreshRuntimeState } = require('../runtime/conversations.cjs');
 const { DEFAULT_CWD, modelInfo } = require('../services/models.cjs');
 const { applyAppearance } = require('../window.cjs');
 const { chooseBackgroundMedia, removeBackgroundMedia } = require('../services/background.cjs');

@@ -9,13 +9,17 @@
 ## Source layout
 
 - `electron/core/`: application state, SQLite, models, extension contracts, and shared primitives.
-- `electron/services/`: Durable runtime and application services.
+- `electron/runtime/`: Durable composition, the explicit built-in registry, and runtime-only helpers.
+- `electron/capabilities/`: cohesive Agent capabilities. Each capability owns its manifest and one public `index.cjs` entry point.
+- `electron/integrations/`: external systems such as MCP and model providers.
+- `electron/services/`: application services that do not own an Agent capability, such as updates, menus, windows, and distribution.
 - `electron/ipc/`: typed preload/IPC boundaries grouped by domain.
-- `web/src/components/`: React UI components.
-- `web/src/lib/`: renderer-safe pure helpers.
+- `web/src/shell/`: application frame, navigation, and shared page chrome.
+- `web/src/features/`: capability-aligned React UI, hooks, styles, and pure helpers.
+- `web/src/shared/`: small components and helpers used by more than one feature.
 - `web/src/types/`: renderer contracts.
 - `web/src/styles/`: global tokens, palettes, and component styles.
-- `tests/electron/`, `tests/web/`, `tests/integration/`: automated Node tests by boundary.
+- `tests/electron/`, `tests/web/`, `tests/integration/`: automated Node tests by execution boundary. File names identify the owning capability, feature, or service.
 - `tools/qa/`: local Playwright QA scripts, with ignored output under `.qa/`.
 - `tools/cli/` and `tools/icons/`: maintainer tooling.
 - `examples/extensions/`: author-facing examples.
@@ -27,6 +31,8 @@ Do not add source, tests, generated output, and screenshots to the same first-le
 ## Implementation rules
 
 - Keep Pi Durable as the execution source of truth. Studio SQLite stores only projections, settings, resource trust, and metadata it owns.
+- Register built-ins through an explicit static table. Do not scan directories at runtime; packaged Electron builds need deterministic ordering, dependency validation, and visible imports.
+- A capability's internals are private. Other areas depend on its `index.cjs` or a shared runtime contract.
 - Do not add compatibility shims for deleted Pi Coding Agent modules or old IPC shapes. Data migrations are allowed only when they protect existing Studio data and must be versioned.
 - Keep the renderer contract JSON-safe. Durable handles, task objects, storage paths, credentials, and raw extension implementations must not cross into the renderer.
 - Extension UI is declarative and token-based. Do not execute extension-provided HTML, JavaScript, or CSS in the renderer.

@@ -6,7 +6,7 @@ import {
   insertComposerToken,
   splitComposerText,
   splitMessageText,
-} from '../../web/src/lib/references.ts';
+} from '../../web/src/features/conversation/references.ts';
 
 test('composer references keep paths with spaces inside one highlighted token', () => {
   const token = formatFileReference('02 Areas/饭撒的发生地/');

@@ -17,7 +17,7 @@ process.env.PI_STUDIO_USER_DATA = path.join(temporary, 'user-data');
 require('../electron/helpers/electron-safe-storage.cjs').installElectronSafeStorage({ after });
 const { getStudioDatabase, closeStudioDatabase } = require('../../electron/core/studio-db.cjs');
 const { setPermissionMode } = require('../../electron/core/app-settings.cjs');
-const { createStudioBuiltins } = require('../../electron/services/studio-builtins.cjs');
+const { createStudioBuiltins } = require('../../electron/runtime/builtin-registry.cjs');
 const { createSecretAwareRegistry } = require('../../electron/services/secret-tool-runtime.cjs');
 after(() => { closeStudioDatabase(); fs.rmSync(temporary, { recursive: true, force: true }); });
 

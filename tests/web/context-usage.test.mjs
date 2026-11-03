@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { compactTokens, contextUsage, usageTokens } from '../../web/src/lib/context-usage.ts';
+import { compactTokens, contextUsage, usageTokens } from '../../web/src/features/conversation/context-usage.ts';
 
 test('a request\'s context size adds input, cache and output', () => {
   assert.equal(usageTokens({ input: 1_000, output: 200, cacheRead: 3_000, cacheWrite: 50 }), 4_250);

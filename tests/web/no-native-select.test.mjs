@@ -23,12 +23,15 @@ function withoutComments(source) {
     .replace(/^\s*\/\/.*$/gm, '');
 }
 
-test('web UI renders the shared Select component instead of native select elements', async () => {
+test('web UI uses shared Select and DatePicker components instead of native popups', async () => {
   const files = await typescriptSources(webSource);
   const violations = [];
   for (const file of files) {
     const source = withoutComments(await readFile(file, 'utf8'));
     if (/<select(?:\s|>)/.test(source)) violations.push(path.relative(webSource, file));
+    if (/<input\b[^>]*\btype\s*=\s*["']date["']/i.test(source)) {
+      violations.push(`${path.relative(webSource, file)} (native date input)`);
+    }
   }
   assert.deepEqual(violations, []);
 });

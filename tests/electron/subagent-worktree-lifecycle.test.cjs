@@ -6,14 +6,14 @@ test('background worktrees remain active across supervisor waits and queued repo
   const completed = [];
   const original = Module._load;
   Module._load = function load(request, ...args) {
-    if (request === './managed-worktrees.cjs') return {
+    if (request === './worktrees.cjs') return {
       reactivateManagedWorktree() {},
       completeManagedWorktree: async (id) => { completed.push(id); },
     };
     return original.call(this, request, ...args);
   };
   let createProtocol;
-  try { ({ createProtocol } = require('../../electron/services/durable-subagent-protocol.cjs')); }
+  try { ({ createProtocol } = require('../../electron/capabilities/subagents/index.cjs')); }
   finally { Module._load = original; }
   const protocol = createProtocol({ defineDoc: (value) => value, defineTask: (value) => value });
   const state = {

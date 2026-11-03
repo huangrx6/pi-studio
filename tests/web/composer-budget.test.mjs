@@ -5,7 +5,7 @@ import {
   LONG_MESSAGE_CHARS,
   LONG_MESSAGE_LINES,
   pasteExceedsBudget,
-} from '../../web/src/lib/composer-budget.mjs';
+} from '../../web/src/features/conversation/composer-budget.mjs';
 
 test('an empty composer converts only an oversized pasted batch', () => {
   assert.equal(pasteExceedsBudget('', 'a'.repeat(LONG_MESSAGE_CHARS)), false);

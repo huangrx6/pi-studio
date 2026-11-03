@@ -30,7 +30,7 @@ const {
 const {
   refreshExtensionRuntime,
   reconcileRuntimeForWorkspace,
-} = require('../services/durable-runtime.cjs');
+} = require('../runtime/durable-runtime.cjs');
 const {
   closeAllExtensionDataViews,
   closeExtensionDataViews,
@@ -39,20 +39,20 @@ const { settingsSnapshot } = require('../services/settings.cjs');
 const {
   invalidateMcpConnection,
   testMcpConnection,
-} = require('../services/mcp-runtime.cjs');
+} = require('../integrations/mcp/index.cjs');
 const {
   authorizeMcpServer,
   clearMcpOAuth,
-} = require('../services/mcp-oauth.cjs');
+} = require('../integrations/mcp/index.cjs');
 const {
   agentToolCatalog,
   saveInstalledToolSelection,
-} = require('../services/tool-selection.cjs');
+} = require('../runtime/tool-selection.cjs');
 const {
   saveSubagentSettings,
   subagentBudgetSnapshot,
   subagentSettings,
-} = require('../services/subagent-settings.cjs');
+} = require('../capabilities/subagents/index.cjs');
 const {
   autoUpdateOfficialExtensions,
   extensionHostSnapshot,
@@ -70,7 +70,7 @@ const {
   importSkill,
   removeSkill,
   setSkillTrusted,
-} = require('../services/studio-skills.cjs');
+} = require('../capabilities/skills/index.cjs');
 const {
   disposePreparedSkill,
   installPreparedSkill,
@@ -80,7 +80,7 @@ const {
   saveSkillSource,
   setSkillSourceEnabled,
   skillHubSnapshot,
-} = require('../services/skill-sources.cjs');
+} = require('../capabilities/skills/index.cjs');
 const {
   listSecrets,
   removeSecret,
@@ -92,7 +92,7 @@ const {
   discardManagedWorktree,
   inspectManagedWorktree,
   listManagedWorktrees,
-} = require('../services/managed-worktrees.cjs');
+} = require('../capabilities/subagents/index.cjs');
 
 function runtimeRefresh(reason, status = 'ready', message = '配置已热更新') {
   return {

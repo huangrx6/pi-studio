@@ -39,7 +39,11 @@ function loadResolver() {
           searchWorkspaceFiles: async () => ({ files: [] }),
           listDirectory: () => ({ entries: [] }),
           readFileText: () => ({ text: '' }),
+          readFilePreview: () => ({ kind: 'text', text: '' }),
         };
+      }
+      if (name === '../services/file-preview.cjs') {
+        return { readFilePreview: () => ({ kind: 'text', text: '' }) };
       }
       if (name === '../services/attachments.cjs') {
         return {

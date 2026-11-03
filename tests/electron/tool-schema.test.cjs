@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * `electron/services/tool-schema.cjs` 的输出契约。
+ * `electron/runtime/tool-schema.cjs` 的输出契约。
  *
  * fixture 取自 TypeBox 1.3.27（Studio 升级前的实际行为），冻结在这里而不是
  * 从 typebox 包现算——升级后该包不再存在，而这些 schema 会直接进入模型请求，
@@ -11,7 +11,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const Type = require('../../electron/services/tool-schema.cjs');
+const Type = require('../../electron/runtime/tool-schema.cjs');
 
 /** 断言输出与冻结的 TypeBox 结果完全一致（含键顺序之外的深比较）。 */
 function assertSchema(actual, expected) {

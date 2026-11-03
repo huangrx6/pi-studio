@@ -19,7 +19,7 @@ import {
   fauxProvider,
   fauxToolCall,
 } from '@earendil-works/pi-ai';
-import Type from '../../electron/services/tool-schema.cjs';
+import Type from '../../electron/runtime/tool-schema.cjs';
 
 const require = createRequire(import.meta.url);
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-durable-resources-'));
@@ -31,7 +31,7 @@ const {
 } = require('../../electron/core/studio-db.cjs');
 const {
   skillInstructions,
-} = require('../../electron/services/studio-skills.cjs');
+} = require('../../electron/capabilities/skills/index.cjs');
 
 after(() => {
   closeStudioDatabase();

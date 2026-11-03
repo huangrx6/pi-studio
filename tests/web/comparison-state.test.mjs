@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { reconcileComparisonSnapshot } from '../../web/src/lib/comparison-state.ts';
+import { reconcileComparisonSnapshot } from '../../web/src/features/comparison/comparison-state.ts';
 
 test('a delayed comparison poll cannot revive a discarded branch while its sibling keeps updating', () => {
   const discarded = { sessionId: 'left', status: 'discarded', running: false };

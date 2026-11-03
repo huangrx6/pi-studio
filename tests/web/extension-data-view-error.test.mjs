@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { presentExtensionDataViewError } from '../../web/src/lib/extension-data-view-error.ts';
+import { presentExtensionDataViewError } from '../../web/src/features/extensions/extension-data-view-error.ts';
 
 test('IPC timeout messages become concise connection guidance', () => {
   assert.deepEqual(

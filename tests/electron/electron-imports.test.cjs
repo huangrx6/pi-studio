@@ -21,6 +21,7 @@ const ELECTRON_DIR = path.join(ROOT, 'electron');
 // 名称部分不允许出现 } ; =，避免跨语句匹配到下一个 require。
 const REQUIRE_PATTERN = /const\s*\{([^};=]*)\}\s*=\s*require\(\s*'(\.[^']+)'\s*\)/g;
 const LOCAL_REQUIRE_PATTERN = /require\(\s*'(\.[^']+)'\s*\)/g;
+const ANY_LOCAL_REQUIRE_PATTERN = /require\(\s*(['"])(\.[^'"]+)\1\s*\)/g;
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.mjs', '.js']);
 
 /** 从一个文件的源码里取出所有解构导入：[{ file, target, names }]。 */
@@ -74,6 +75,23 @@ function reachableSources(entries) {
   return [...visited];
 }
 
+function electronSources() {
+  const pending = [ELECTRON_DIR];
+  const sources = [];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const target = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        pending.push(target);
+      } else if (entry.isFile() && SOURCE_EXTENSIONS.has(path.extname(entry.name))) {
+        sources.push(target);
+      }
+    }
+  }
+  return sources;
+}
+
 /** 尝试加载目标模块；依赖 Electron 或缺失的模块返回 undefined（跳过）。 */
 function loadModule(target) {
   for (const candidate of [target, `${target}.cjs`, `${target}.mjs`, path.join(target, 'index.cjs')]) {
@@ -118,5 +136,40 @@ test('local destructured imports point at real exports', () => {
 
   assert.ok(checked.length > 0, 'expected at least one import to be verifiable');
   // 防止正则或目录扫描失效后测试变成空跑。
-  assert.ok(checked.some((file) => file.endsWith(path.join('services', 'durable-conversations.cjs'))));
+  assert.ok(checked.some((file) => file.endsWith(path.join('runtime', 'conversations.cjs'))));
+});
+
+test('capability internals are imported only through their public index', () => {
+  const violations = [];
+  let checked = 0;
+
+  for (const file of electronSources()) {
+    const source = fs.readFileSync(file, 'utf8');
+    const sourceParts = path.relative(ELECTRON_DIR, file).split(path.sep);
+    const sourceCapability = sourceParts[0] === 'capabilities' ? sourceParts[1] : undefined;
+
+    for (const match of source.matchAll(ANY_LOCAL_REQUIRE_PATTERN)) {
+      const resolved = resolveLocal(file, match[2]);
+      if (!resolved) continue;
+      const targetParts = path.relative(ELECTRON_DIR, resolved).split(path.sep);
+      if (targetParts[0] !== 'capabilities' || !targetParts[1]) continue;
+
+      checked += 1;
+      const targetCapability = targetParts[1];
+      const sameCapability = sourceCapability === targetCapability;
+      const publicEntry = targetParts.slice(2).join(path.sep) === 'index.cjs';
+      if (!sameCapability && !publicEntry) {
+        violations.push(
+          `${path.relative(ROOT, file)} -> ${path.relative(ROOT, resolved)}`,
+        );
+      }
+    }
+  }
+
+  assert.ok(checked > 0, 'expected capability imports in electron/');
+  assert.deepEqual(
+    violations,
+    [],
+    `capability internals must be accessed through index.cjs:\n${violations.join('\n')}`,
+  );
 });

@@ -12,7 +12,7 @@ const {
   normalizeConfig,
   saveSubagentSettings,
   subagentSettings,
-} = require('../../electron/services/subagent-settings.cjs');
+} = require('../../electron/capabilities/subagents/index.cjs');
 const {
   getSubagentConfig,
   setSubagentConfig,

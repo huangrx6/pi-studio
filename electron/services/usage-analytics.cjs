@@ -7,7 +7,7 @@
  */
 
 const { getStudioDatabase } = require('../core/studio-db.cjs');
-const { METRICS_EXTENSION_ID } = require('./metrics-runtime.cjs');
+const { METRICS_EXTENSION_ID } = require('../capabilities/metrics/index.cjs');
 
 const DEFAULT_DAYS = 371;
 const MAX_DAYS = 3_660;

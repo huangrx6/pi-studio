@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { placeRequestTraces, requestTraceTargetTurnIndex } from '../../web/src/lib/request-trace-turns.ts';
+import { placeRequestTraces, requestTraceTargetTurnIndex } from '../../web/src/features/conversation/request-trace-turns.ts';
 
 const turns = [
   { kind: 'user', message: { timestamp: 100 } },

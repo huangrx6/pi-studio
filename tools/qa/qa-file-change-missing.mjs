@@ -30,7 +30,7 @@ try {
     const cwd = '/workspace/pi-studio';
     const model = { modelRef: 'demo/model', label: 'Demo', thinkingLevel: 'default', thinkingLevels: ['default'], effectiveThinkingLevel: 'off' };
     const gone = '/workspace/pi-studio/.qa/probe-outline.mjs';
-    const kept = '/workspace/pi-studio/web/src/lib/fresh.mjs';
+    const kept = '/workspace/pi-studio/web/src/shared/runtime-refresh.ts';
     const messages = [
       { role: 'user', timestamp: 1, content: [{ type: 'text', text: '整理一下大纲回归脚本' }] },
       {

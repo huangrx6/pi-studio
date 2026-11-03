@@ -10,7 +10,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const view = require('../../electron/services/durable-view.cjs');
+const view = require('../../electron/runtime/view.cjs');
 
 /** 造一个最小可用的 ConversationView。 */
 function makeView({ entries = [], docs = {} } = {}) {

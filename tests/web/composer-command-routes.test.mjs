@@ -4,7 +4,7 @@ import {
   normalizeThinkingLevelArgument,
   parseGoalCommandArgument,
   parseStudioCommand,
-} from '../../web/src/lib/composer-command-routes.mjs';
+} from '../../web/src/features/conversation/composer-command-routes.mjs';
 
 test('thinking opens the current-session picker and accepts an optional level', () => {
   assert.deepEqual(parseStudioCommand('/thinking'), {

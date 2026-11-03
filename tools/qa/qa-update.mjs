@@ -36,7 +36,7 @@ try {
       await import('/src/app.css');
       const React = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react.js')).default;
       const { createRoot } = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react-dom_client.js')).default;
-      const { UpdateDialog } = await import('/src/components/UpdateDialog.tsx');
+      const { UpdateDialog } = await import('/src/features/update/UpdateDialog.tsx');
 
       const states = {
         idle: { currentVersion: '0.0.3', state: 'idle' },

@@ -37,7 +37,7 @@ const {
   replaceLongTaskState,
   shouldStartLongTaskGoal,
   validateLongTaskGoal,
-} = require('../../electron/services/studio-long-task.cjs');
+} = require('../../electron/capabilities/long-task/index.cjs');
 
 test('goal commands replace, edit, complete, and clear Durable-owned state predictably', () => {
   const state = {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { conversationActions, filterConversationActions } from '../../web/src/lib/conversation-actions.ts';
+import { conversationActions, filterConversationActions } from '../../web/src/features/conversation/conversation-actions.ts';
 
 const context = { sessionId: 'chat-a', workspace: '/project', running: false, loading: false, hasMessages: true, hasChildren: true, hasExtensions: true };
 
@@ -15,7 +15,7 @@ test('actions explain unavailable contexts and guard a running fork', () => {
   assert.equal(empty.find(action => action.id === 'models').disabledReason, undefined);
 });
 
-test('model comparison uses the same action registry without a sidebar entry', () => {
+test('model comparison remains available through the shared action registry', () => {
   const actions = conversationActions(context);
   const compare = actions.find(action => action.id === 'compare');
   assert.equal(compare?.group, 'conversation');

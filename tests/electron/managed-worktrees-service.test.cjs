@@ -18,7 +18,7 @@ const {
   inspectManagedWorktree,
   listManagedWorktrees,
   reactivateManagedWorktree,
-} = require('../../electron/services/managed-worktrees.cjs');
+} = require('../../electron/capabilities/subagents/index.cjs');
 
 installElectronSafeStorage(test);
 

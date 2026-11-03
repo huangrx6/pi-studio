@@ -3,7 +3,7 @@ import test from 'node:test';
 import {
   OUTLINE_MAX_SAMPLES,
   sampleOutlineIndices,
-} from '../../web/src/lib/outline-samples.mjs';
+} from '../../web/src/features/conversation/outline-samples.mjs';
 
 test('short transcripts keep every real question in the outline', () => {
   assert.deepEqual(sampleOutlineIndices(0, 0), []);

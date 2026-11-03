@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { splitPatch, changedRange } from '../../web/src/lib/diff-rows.ts';
+import { splitPatch, changedRange } from '../../web/src/features/conversation/diff-rows.ts';
 test('split diffs pair replacements, leave unmatched rows blank and preserve hunk numbers', () => {
   const rows=splitPatch('--- a/a.ts\n+++ b/a.ts\n@@ -10,3 +10,4 @@\n same\n-old\n+new\n+extra\n tail\n@@ -20 +21 @@\n-x\n+y\n\\ No newline at end of file\n');
   assert.equal(rows[0].gap,'省略 9 行未改动内容');

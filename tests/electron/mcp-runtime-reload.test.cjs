@@ -24,7 +24,7 @@ const {
   reloadMcpServers,
   testMcpConnection,
   toolName,
-} = require('../../electron/services/mcp-runtime.cjs');
+} = require('../../electron/integrations/mcp/index.cjs');
 
 const serverFile = path.join(temporary, 'mcp-server.mjs');
 fs.writeFileSync(serverFile, String.raw`

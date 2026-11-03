@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createZipArchive, sha256 } from '../../electron/core/extension-archive.cjs';
-import { inspectSingleSkillDirectory } from '../../electron/services/studio-skills.cjs';
+import { inspectSingleSkillDirectory } from '../../electron/capabilities/skills/index.cjs';
 
 function print(value, json) {
   if (json) console.log(JSON.stringify(value, null, 2));

@@ -2,7 +2,7 @@
  * Pi Studio 渲染进程的视觉 / 布局 QA 脚本（本地手动运行）。
  *
  * 它用 Playwright 打开 Vite 开发服务器，在页面加载前注入一整套 PiAPI mock，
- * 然后走一遍接近真实使用的流程：欢迎页 → 侧边栏搜索/折叠 → 模型与推理等级 →
+ * 然后走一遍接近真实使用的流程：新对话空态 → 侧边栏搜索/折叠 → 模型与推理等级 →
  * 会话与文件面板 → 设置页各分页 → 小窗口紧凑布局 → 长模型列表与错误态 →
  * 首条消息。关键步骤截图到 .qa/screenshots/ui-refinement/，同时检查关键容器没有
  * 横向溢出，最后断言浏览器没有运行时错误。
@@ -285,6 +285,24 @@ await page.addInitScript(() => {
     removed: [],
   };
   window.__skillQa = skillQa;
+  const skillPreviewFiles = {
+    'SKILL.md': {
+      text: '# code-review\n\n审查代码改动，并在提交前检查边界条件。\n\n## 工作流程\n\n1. 阅读变更与调用方\n2. 检查错误处理和测试覆盖\n3. 给出可直接执行的修改建议\n\n> 项目规则优先于通用检查清单。',
+      mimeType: 'text/markdown',
+    },
+    'config.json': {
+      text: '{"name":"code-review","version":"1.0.0","checks":["types","tests","errors"],"enabled":true}',
+      mimeType: 'application/json',
+    },
+    'checks.csv': {
+      text: '检查项,状态,负责人\n边界条件,通过,Lin\n错误处理,复核,Ada\n测试覆盖,通过,Mio',
+      mimeType: 'text/csv',
+    },
+    'preview.svg': {
+      dataUrl: `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" width="560" height="280" viewBox="0 0 560 280"><rect width="560" height="280" rx="18" fill="#f3f5f4"/><path d="M80 180h400M80 120h280M80 60h200" stroke="#327f68" stroke-width="12" stroke-linecap="round"/><circle cx="410" cy="120" r="26" fill="#327f68"/></svg>')}`,
+      mimeType: 'image/svg+xml',
+    },
+  };
 
   const extensionUiItems = [
     {
@@ -1191,6 +1209,25 @@ await page.addInitScript(() => {
         sessionId: `compare-${index + 1}`,
         worktreeId: `comparison-fixture-${index + 1}`,
       }));
+      const parent = sessionSummary(parentId);
+      const target = workspaces.find((workspace) => workspace.cwd === parent?.cwd) || workspaces[0];
+      const branchSummaries = compareBranches.map((branch) => {
+        const summary = {
+          id: branch.sessionId,
+          cwd: parent?.cwd || cwd,
+          title: `对比 · ${branch.label}`,
+          kind: 'conversation',
+          goal: '',
+          pinned: false,
+          archived: false,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          messageCount: (parent?.messageCount || 0) + 1,
+        };
+        conversationMessages.set(summary.id, structuredClone(conversationMessages.get(parentId) || []));
+        return summary;
+      });
+      target.sessions.unshift(...branchSummaries.slice().reverse());
       return {
         id: 'comparison-fixture',
         parentId,
@@ -1211,8 +1248,8 @@ await page.addInitScript(() => {
         compacting: false,
         answer: running ? undefined : {
           text: index === 0
-            ? '分支 A 给出更短的实现，并补充了失败路径测试。'
-            : '分支 B 保留了更多解释，也修改了两个关联文件。',
+            ? '### 修复摘要\n\n- 修正了 **失败路径**\n- 新增回归测试\n\n`src/parser.ts`'
+            : '### 修复摘要\n\n保留 **兼容性**，并补充了关联文件的说明。',
           streaming: false,
         },
         metrics: {
@@ -1706,14 +1743,23 @@ await page.addInitScript(() => {
       return cloneSnapshot();
     },
     chooseWorkspace: async () => cwd,
-    // 只 mock 了根目录；path 非空时返回空列表（本脚本不展开子目录）。
-    files: async (_cwd, path) => ({
+    // 工作区文件树保持原有右侧面板用例；技能目录返回统一预览支持的格式。
+    files: async (root, path) => ({
       path,
-      entries: path ? [] : [
-        { name: 'src', path: 'src', type: 'directory', size: 0 },
-        { name: 'package.json', path: 'package.json', type: 'file', size: 1397 },
-        { name: 'a-long-filename-for-checking-file-list-truncation.tsx', path: 'long.tsx', type: 'file', size: 3800 },
-      ],
+      entries: root.includes('/skills/')
+        ? path ? [] : [
+          { name: 'references', path: 'references', type: 'directory', size: 0 },
+          { name: 'SKILL.md', path: 'SKILL.md', type: 'file', size: 241 },
+          { name: 'config.json', path: 'config.json', type: 'file', size: 91 },
+          { name: 'checks.csv', path: 'checks.csv', type: 'file', size: 98 },
+          { name: 'preview.svg', path: 'preview.svg', type: 'file', size: 640 },
+          { name: 'manual.pdf', path: 'manual.pdf', type: 'file', size: 40960 },
+        ]
+        : path ? [] : [
+          { name: 'src', path: 'src', type: 'directory', size: 0 },
+          { name: 'package.json', path: 'package.json', type: 'file', size: 1397 },
+          { name: 'a-long-filename-for-checking-file-list-truncation.tsx', path: 'long.tsx', type: 'file', size: 3800 },
+        ],
     }),
     // 任意文件都返回同一段 package.json 文本，供预览与代码行渲染。
     file: async () => ({
@@ -1722,6 +1768,31 @@ await page.addInitScript(() => {
       binary: false,
       text: '{\n  "name": "pi-studio",\n  "description": "A thoughtfully designed developer workspace",\n  "version": "0.1.0"\n}',
     }),
+    filePreview: async (_cwd, requestedPath) => {
+      const fixture = skillPreviewFiles[requestedPath];
+      const name = requestedPath.split('/').pop();
+      if (requestedPath === 'manual.pdf') {
+        return {
+          path: requestedPath,
+          name,
+          size: 40960,
+          mimeType: 'application/pdf',
+          kind: 'binary',
+        };
+      }
+      if (!fixture) throw new Error('QA 未提供这个文件');
+      return {
+        path: requestedPath,
+        name,
+        size: fixture.text ? new TextEncoder().encode(fixture.text).length : 640,
+        mimeType: fixture.mimeType,
+        kind: fixture.dataUrl ? 'image' : 'text',
+        text: fixture.text,
+        dataUrl: fixture.dataUrl,
+        truncated: false,
+      };
+    },
+    openWith: async () => ({ ok: true }),
     // UI contribution 只返回声明式数据，ExtensionSlot 负责统一渲染。
     extensionsUi: async () => ({
       items: structuredClone(extensionUiItems),
@@ -1943,12 +2014,13 @@ async function openSettingsSection(name) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. 冷启动与欢迎页
+// 4. 冷启动与新对话空态
 // ---------------------------------------------------------------------------
 try {
   await page.goto(process.env.PREVIEW_URL || 'http://127.0.0.1:5180');
-  await page.getByRole('heading', { name: '今天，想做点什么？', exact: true }).waitFor();
-  // 全新启动时不应出现会话相关的容器，欢迎页应保持干净。
+  await page.getByRole('textbox', { name: '发送给 Pi 的消息' }).waitFor();
+  assert.equal(await page.getByText('今天，想做点什么？', { exact: true }).count(), 0);
+  // 全新启动时不应出现会话相关的容器，空态应保持干净。
   assert.equal(await page.locator('.workspace-chip, .chat-tabs:not(.is-placeholder), .chat-scroll').count(), 0);
   // 没有更新时不占品牌行空间；发现更新后，入口与上方侧栏开关使用相同尺寸和右边线。
   assert.equal(await page.locator('.brand-update').count(), 0);
@@ -2030,7 +2102,7 @@ try {
     id: 'qa-write-confirm',
     tool: 'edit',
     title: '修改工具',
-    message: 'edit → /workspace/pi-studio/web/src/components/ConfirmDialog.tsx',
+    message: 'edit → /workspace/pi-studio/web/src/shared/ConfirmDialog.tsx',
     risk: { level: 'medium', title: '修改工作区文件', detail: 'edit' },
     rememberScopes: ['once', 'session'],
   });
@@ -2148,7 +2220,7 @@ try {
 
   // 刷新页面验证选择已持久化（mock 通过 localStorage 恢复）。
   await page.reload();
-  await page.getByRole('heading', { name: '今天，想做点什么？', exact: true }).waitFor();
+  await page.getByRole('textbox', { name: '发送给 Pi 的消息' }).waitFor();
   assert.match(await page.getByRole('button', { name: /^(?:新对话默认模型|当前会话模型)$/ }).innerText(), /Max/);
 
   // -------------------------------------------------------------------------
@@ -2230,11 +2302,13 @@ try {
   }, opensBeforeRetry);
   assert.match(await footerExtensionDock.innerText(), /157 tok\/s · TTFT 3\.75 s/);
   const conversationTabs = page.getByRole('tablist', { name: '对话视图' }).getByRole('tab');
-  assert.equal(await conversationTabs.count(), 3);
-  assert.equal(await page.locator('.chat-tab-list .tab > svg').count(), 3);
+  assert.equal(await conversationTabs.count(), 4);
+  assert.equal(await page.locator('.chat-tab-list .tab > svg').count(), 4);
   assert.match(await conversationTabs.nth(0).innerText(), /^对话$/);
   assert.match(await conversationTabs.nth(1).innerText(), /^子智能体\s*2/);
-  assert.match(await conversationTabs.nth(2).innerText(), /^扩展\s*2/);
+  assert.match(await conversationTabs.nth(2).innerText(), /^双跑$/);
+  assert.match(await conversationTabs.nth(3).innerText(), /^扩展\s*2/);
+  assert.equal(await page.locator('.chat-tabs-note').count(), 0);
   const extensionTab = page.getByRole('tab', { name: /^扩展/ });
   assert.equal(await extensionTab.locator('.tab-count').innerText(), '2');
   await extensionTab.click();
@@ -2251,6 +2325,8 @@ try {
     await page.locator('.extension-hub-card-title strong').allTextContents(),
     ['运行状态', '审查焦点'],
   );
+  assert.equal(await page.locator('.extension-hub-card-description, .extension-hub-card-meta').count(), 0);
+  assert.equal(await page.locator('.extension-hub-card .info-hint').count(), 2);
   await page.getByRole('button', { name: '紧凑列表', exact: true }).click();
   assert.match(await page.locator('.extension-hub-items').getAttribute('class'), /\bis-list\b/);
   await page.getByRole('button', { name: '下移 运行状态', exact: true }).click();
@@ -2343,6 +2419,8 @@ try {
   assert.match(await agentTab.locator('.agent-tab-count').getAttribute('aria-label'), /有任务正在运行/);
   await agentTab.click();
   await page.getByRole('heading', { name: '子智能体', exact: true }).waitFor();
+  assert.equal(await page.locator('.agent-overview-head > p').count(), 0);
+  assert.equal(await page.getByRole('button', { name: '刷新子智能体', exact: true }).count(), 1);
   assert.equal(await page.locator('.agent-list-row').count(), 2);
   assert.match(await page.locator('.agent-fleet-strip').innerText(), /运行\s*1/);
   assert.match(await page.locator('.agent-fleet-strip').innerText(), /完成\s*1/);
@@ -2359,7 +2437,7 @@ try {
   await page.locator('.agent-list-row.is-running .agent-list-main').click();
   await page.locator('.agent-context-view').waitFor();
   assert.match(await page.locator('.agent-context-view').innerText(), /Durable Runtime 审查/);
-  assert.match(await page.locator('.agent-context-view').innerText(), /审查 Durable 请求边界和模型热更新路径/);
+  await page.getByText('审查 Durable 请求边界和模型热更新路径。', { exact: true }).waitFor();
   assert.equal(await page.locator('.composer-dock').isVisible(), false);
   assert.equal(await page.locator('.agent-overview').count(), 0);
   const agentContextWidths = await page.locator('.agent-context-view').evaluate((context) => (
@@ -2381,25 +2459,96 @@ try {
   await page.locator('.composer-more-button').click();
   const actionPalette = page.getByRole('dialog', { name: '会话动作', exact: true });
   await actionPalette.waitFor();
+  const paletteSearch = actionPalette.locator('.conversation-action-search');
+  const paletteSearchInput = paletteSearch.locator('input');
+  assert.equal(await paletteSearchInput.evaluate((input) => document.activeElement === input), true);
+  await paletteSearch.evaluate(async (search) => {
+    await Promise.all(search.getAnimations().map((animation) => animation.finished.catch(() => {})));
+  });
+  const paletteSearchFocus = await paletteSearch.evaluate((search) => {
+    const input = search.querySelector('input');
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--focus-color)';
+    document.body.append(probe);
+    const styles = {
+      focusColor: getComputedStyle(probe).color,
+      wrapperBorderColor: getComputedStyle(search).borderColor,
+      wrapperBorderWidth: getComputedStyle(search).borderWidth,
+      wrapperBoxShadow: getComputedStyle(search).boxShadow,
+      inputBorderWidth: getComputedStyle(input).borderWidth,
+      inputBoxShadow: getComputedStyle(input).boxShadow,
+      inputOutlineStyle: getComputedStyle(input).outlineStyle,
+    };
+    probe.remove();
+    return styles;
+  });
+  assert.equal(paletteSearchFocus.wrapperBorderWidth, '1px');
+  assert.equal(paletteSearchFocus.wrapperBorderColor, paletteSearchFocus.focusColor);
+  assert.equal(paletteSearchFocus.wrapperBoxShadow, 'none');
+  assert.equal(paletteSearchFocus.inputBorderWidth, '0px');
+  assert.equal(paletteSearchFocus.inputBoxShadow, 'none');
+  assert.equal(paletteSearchFocus.inputOutlineStyle, 'none');
+  await capture('04g-action-palette-search-focus');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await capture('04h-action-palette-search-focus-dark');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   await actionPalette.getByRole('option', { name: /模型同题双跑/ }).click();
   const comparison = page.locator('.model-comparison');
   await comparison.waitFor();
   assert.equal(await page.locator('.file-panel').count(), 0);
   assert.equal(await page.locator('.main .model-comparison').count(), 1);
-  assert.equal(await page.getByRole('tab', { name: '对话', exact: true }).getAttribute('aria-selected'), 'true');
-  assert.equal(await page.getByRole('tab', { name: '模型双跑', exact: true }).count(), 0);
+  const comparisonTab = page.getByRole('tab', { name: /^双跑/ });
+  assert.equal(await comparisonTab.count(), 1);
+  assert.equal(await comparisonTab.getAttribute('aria-selected'), 'true');
+  assert.equal(await page.getByRole('tab', { name: /^子智能体/ }).count(), 1);
+  assert.equal(await comparison.locator('.comparison-head').count(), 0);
+  assert.equal(await comparison.locator('.comparison-intro').count(), 0);
+  const comparisonHelp = comparison.locator('.comparison-start-hint');
+  assert.equal(await comparisonHelp.count(), 1);
+  assert.match(await comparisonHelp.getAttribute('aria-label'), /分别计费/);
+  await comparisonHelp.hover();
+  assert.equal(await comparisonHelp.locator('[role="tooltip"]').evaluate((node) => getComputedStyle(node).visibility), 'visible');
+  const comparisonFormBounds = await comparison.locator('.comparison-form').boundingBox();
+  assert.ok(
+    comparisonFormBounds
+      && Math.abs(comparisonFormBounds.width - conversationContentWidth) <= 1,
+    `comparison setup width ${comparisonFormBounds?.width}px, conversation width ${conversationContentWidth}px`,
+  );
   await comparison.getByLabel('要对比的问题').fill('比较两个模型对同一代码问题的修复');
+  await capture('04e-model-comparison-setup');
   await comparison.getByRole('button', { name: '开始双跑', exact: true }).click();
   await page.waitForFunction(() => (
     document.querySelectorAll('.comparison-result').length === 2
     && [...document.querySelectorAll('.comparison-result-status')]
       .every((node) => node.textContent?.includes('已完成'))
   ));
+  assert.equal(await comparison.locator('.comparison-answer .markdown h3').count(), 2);
+  assert.match(await comparison.locator('.comparison-answer .markdown').first().innerText(), /失败路径/);
+  assert.doesNotMatch(await comparison.locator('.comparison-answer').first().innerText(), /\*\*/);
   assert.equal(await page.locator('.comparison-result').count(), 2);
   assert.equal(await page.locator('.comparison-worktree').count(), 2);
+  const comparisonActionLayout = await comparison.locator('.comparison-result-actions').first().evaluate((element) => (
+    [...element.querySelectorAll('button')].map((button) => {
+      const icon = button.querySelector('svg');
+      const label = button.querySelector('span');
+      const buttonBox = button.getBoundingClientRect();
+      const iconBox = icon?.getBoundingClientRect();
+      const labelBox = label?.getBoundingClientRect();
+      return {
+        height: buttonBox.height,
+        iconWidth: iconBox?.width || 0,
+        iconHeight: iconBox?.height || 0,
+        iconOffset: iconBox ? Math.abs(iconBox.top + iconBox.height / 2 - buttonBox.top - buttonBox.height / 2) : Infinity,
+        labelOffset: labelBox ? Math.abs(labelBox.top + labelBox.height / 2 - buttonBox.top - buttonBox.height / 2) : Infinity,
+      };
+    })
+  ));
+  assert.equal(comparisonActionLayout.length, 2);
+  assert.ok(comparisonActionLayout.every((item) => item.height === 32));
+  assert.ok(comparisonActionLayout.every((item) => item.iconWidth === 14 && item.iconHeight === 14));
+  assert.ok(comparisonActionLayout.every((item) => item.iconOffset <= 1 && item.labelOffset <= 1));
   const comparisonWidths = await comparison.evaluate((element) => (
     [
-      element.querySelector('.comparison-head'),
       element.querySelector('.comparison-results'),
     ].map((node) => node?.getBoundingClientRect().width || 0)
   ));
@@ -2419,24 +2568,31 @@ try {
   await capture('04f-model-comparison-dark');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
 
-  // 双跑是“对话”内的临时视图。切到子智能体后仍可从统一动作面板恢复同一组分支，
-  // 不会出现第四个一级 Tab，也不会要求重新创建两个 fork。
+  // 双跑是会话的稳定一级入口，不依赖命令面板恢复。
   await page.getByRole('tab', { name: /^子智能体/ }).click();
   await page.locator('.agent-overview').waitFor();
-  await page.keyboard.press('Meta+k');
-  const resumedPalette = page.getByRole('dialog', { name: '会话动作', exact: true });
-  await resumedPalette.waitFor();
-  await resumedPalette.getByRole('option', { name: /模型同题双跑/ }).click();
+  await comparisonTab.click();
   await comparison.waitFor();
   await page.waitForFunction(() => (
     document.querySelectorAll('.comparison-result').length === 2
     && [...document.querySelectorAll('.comparison-result-status')]
       .every((node) => node.textContent?.includes('已完成'))
   ));
-  assert.equal(await page.getByRole('tab', { name: '对话', exact: true }).getAttribute('aria-selected'), 'true');
-  assert.equal(await page.getByRole('tab', { name: '模型双跑', exact: true }).count(), 0);
+  assert.equal(await comparisonTab.getAttribute('aria-selected'), 'true');
 
-  await page.getByRole('button', { name: '返回对话', exact: true }).click();
+  // 打开分支后，一级双跑入口仍保留；可随时回到本次对比总览和另一个分支。
+  await comparison.getByRole('button', { name: '应用并打开', exact: true }).first().click();
+  await comparison.waitFor({ state: 'detached' });
+  await page.locator('.messages').waitFor();
+  assert.equal(await comparisonTab.count(), 1);
+  assert.equal(await page.getByRole('tab', { name: /^子智能体/ }).locator('.tab-count').count(), 0);
+  assert.match(await page.locator('.chat-heading h1').innerText(), /^对比 ·/);
+  await capture('04i-model-comparison-branch-entry');
+  await comparisonTab.click();
+  await comparison.waitFor();
+  assert.equal(await page.locator('.comparison-result').count(), 2);
+  assert.equal(await comparisonTab.getAttribute('aria-selected'), 'true');
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
   await comparison.waitFor({ state: 'detached' });
   await page.locator('.messages').waitFor();
 
@@ -2532,13 +2688,35 @@ try {
     date.setDate(date.getDate() + offset);
     return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
   };
+  const selectDate = async (label, value) => {
+    const trigger = page.getByRole('button', { name: new RegExp(label) });
+    await trigger.click();
+    const dialog = page.getByRole('dialog', { name: `选择${label}` });
+    await dialog.waitFor();
+    const targetMonth = value.slice(0, 7);
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      const visibleMonth = await dialog.locator('.pi-date-month').getAttribute('data-month');
+      if (visibleMonth === targetMonth) break;
+      await dialog.getByRole('button', { name: visibleMonth > targetMonth ? '上个月' : '下个月' }).click();
+    }
+    const day = dialog.locator(`.pi-date-day[data-date="${value}"]`);
+    await day.click();
+    await dialog.waitFor({ state: 'detached' });
+  };
   await usageMixRanges.getByRole('button', { name: '自定义', exact: true }).click();
-  await page.getByLabel('模型分布起始日期').fill(isoDay(-20));
-  await page.getByLabel('模型分布结束日期').fill(isoDay(0));
+  await selectDate('模型分布起始日期', isoDay(-20));
+  await selectDate('模型分布结束日期', isoDay(0));
   await page.waitForFunction(() => document.querySelectorAll('.usage-model-row').length === 4);
   assert.match(await page.locator('.usage-models-meta').innerText(), new RegExp(`${isoDay(-20)} 至 ${isoDay(0)}`));
   await page.locator('.usage-models-card').scrollIntoViewIfNeeded();
   await capture('06b-usage-model-range');
+  await page.getByRole('button', { name: /模型分布起始日期/ }).click();
+  await page.getByRole('dialog', { name: '选择模型分布起始日期' }).waitFor();
+  await capture('06c-usage-date-picker');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await capture('06d-usage-date-picker-dark');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  await page.getByRole('dialog', { name: '选择模型分布起始日期' }).getByRole('button', { name: '取消' }).click();
   await usageMixRanges.getByRole('button', { name: '全部时间', exact: true }).click();
   await page.waitForFunction(() => document.querySelectorAll('.usage-model-row').length === 4);
   await page.getByRole('grid', { name: /DeepSeek V4\.1 Flash，365 天 Token 使用量/ }).waitFor();
@@ -2748,7 +2926,8 @@ try {
 
   // 7.1.2 子智能体：全局默认与指定工作区的覆盖必须明确区分，保存使用所选工作区。
   await openSettingsSection('子智能体');
-  await page.locator('.subagent-runtime-status.is-ready').waitFor();
+  await page.locator('.subagent-status-pill.is-ready').waitFor();
+  assert.equal(await page.locator('.subagent-runtime-status').count(), 0);
   assert.equal(await page.getByRole('radio', { name: /所有工作区/ }).count(), 1);
   assert.equal(await page.getByRole('radio', { name: /指定工作区/ }).count(), 1);
   await page.getByRole('radio', { name: /指定工作区/ }).click();
@@ -2797,53 +2976,47 @@ try {
 
   // 7.2 模型配置：来源列表、来源编辑对话框的草稿与保存
   await openSettingsSection('模型配置');
+  await page.locator('.settings-content').evaluate((element) => { element.scrollTop = 0; });
+  const providerMarkAlignment = await page.locator('.default-model-panel .provider-code-mark').evaluate((svg) => {
+    const icon = svg.parentElement;
+    const svgBox = svg.getBoundingClientRect();
+    const iconBox = icon.getBoundingClientRect();
+    return {
+      x: Math.abs((svgBox.left + svgBox.width / 2) - (iconBox.left + iconBox.width / 2)),
+      y: Math.abs((svgBox.top + svgBox.height / 2) - (iconBox.top + iconBox.height / 2)),
+    };
+  });
+  assert.ok(providerMarkAlignment.x <= .5, `provider mark x offset: ${providerMarkAlignment.x}px`);
+  assert.ok(providerMarkAlignment.y <= .5, `provider mark y offset: ${providerMarkAlignment.y}px`);
+  await capture('12a-default-model-icons');
   const modelFooterLayout = await page.locator('.model-card-footer').first().evaluate((footer) => {
-    const status = footer.querySelector('.resource-status');
     const remove = footer.querySelector('.model-card-remove');
     const footerBox = footer.getBoundingClientRect();
-    const statusBox = status.getBoundingClientRect();
     const removeBox = remove.getBoundingClientRect();
-    const statusStyle = getComputedStyle(status);
     const removeStyle = getComputedStyle(remove);
     return {
-      statusInset: statusBox.left - footerBox.left,
       removeInset: footerBox.right - removeBox.right,
-      hasGap: statusBox.right < removeBox.left,
-      statusDisplay: statusStyle.display,
-      statusBackground: statusStyle.backgroundColor,
-      statusBorder: statusStyle.borderTopWidth,
+      redundantStatus: footer.querySelector('.resource-status') !== null,
       removeDisplay: removeStyle.display,
       removePadding: removeStyle.paddingInlineStart,
       removeBorder: removeStyle.borderTopWidth,
     };
   });
-  assert.ok(modelFooterLayout.statusInset <= 16);
   assert.ok(modelFooterLayout.removeInset <= 16);
-  assert.equal(modelFooterLayout.hasGap, true);
-  assert.match(modelFooterLayout.statusDisplay, /^(inline-)?flex$/);
-  assert.notEqual(modelFooterLayout.statusBackground, 'rgba(0, 0, 0, 0)');
-  assert.notEqual(modelFooterLayout.statusBorder, '0px');
+  assert.equal(modelFooterLayout.redundantStatus, false);
   assert.match(modelFooterLayout.removeDisplay, /^(inline-)?flex$/);
   assert.notEqual(modelFooterLayout.removePadding, '0px');
   assert.notEqual(modelFooterLayout.removeBorder, '0px');
-  const providerFooterAlignment = await page.locator('.provider-card').first().evaluate((card) => {
+  const providerFooterLayout = await page.locator('.provider-card').first().evaluate((card) => {
     const cardBox = card.getBoundingClientRect();
-    const iconBox = card.querySelector('.provider-avatar').getBoundingClientRect();
-    const statusBox = card.querySelector('.resource-status').getBoundingClientRect();
     const actionsBox = card.querySelector('.provider-actions').getBoundingClientRect();
-    const statusStyle = getComputedStyle(card.querySelector('.resource-status'));
     return {
-      iconInset: iconBox.left - cardBox.left,
-      statusInset: statusBox.left - cardBox.left,
       actionsInset: cardBox.right - actionsBox.right,
-      statusDisplay: statusStyle.display,
-      statusBorder: statusStyle.borderTopWidth,
+      redundantStatus: card.querySelector('.resource-status') !== null,
     };
   });
-  assert.ok(Math.abs(providerFooterAlignment.statusInset - providerFooterAlignment.iconInset) <= 1);
-  assert.ok(providerFooterAlignment.actionsInset <= 16);
-  assert.match(providerFooterAlignment.statusDisplay, /^(inline-)?flex$/);
-  assert.notEqual(providerFooterAlignment.statusBorder, '0px');
+  assert.equal(providerFooterLayout.redundantStatus, false);
+  assert.ok(providerFooterLayout.actionsInset <= 16);
   await page.getByRole('button', { name: '管理模型', exact: true }).first().click();
   await page.locator('.provider-model-row').first().waitFor();
   const nativeCheckbox = await page.locator('.provider-model-check input:checked').first().evaluate((input) => ({
@@ -2959,7 +3132,7 @@ try {
   await visionDiscovery.check();
   await capture('15b-provider-model-selection');
   await page.getByRole('button', { name: '添加所选 1 个', exact: true }).click();
-  await page.getByText('已添加并启用 1 个模型，可逐个调整能力与上下文。', { exact: true }).waitFor();
+  await page.getByText('已添加并启用 1 个模型。', { exact: true }).waitFor();
   assert.equal(await page.locator('.provider-card').first().locator('.provider-model-row').count(), 4);
   assert.equal(
     await page.getByRole('checkbox', { name: '停用模型 Discovered Vision', exact: true }).isChecked(),
@@ -3088,6 +3261,7 @@ try {
   // 紧凑视口下依次检查设置页其余分页（21 系列）。
   for (const [index, tab] of ['模型配置', '使用量', '智能体工具', '权限策略', 'Harness 配置', '子智能体', 'MCP 服务器', '技能', '扩展', '关于'].entries()) {
     await openSettingsSection(tab);
+    assert.equal(await page.locator('.settings-page-header .settings-page-header-copy > p').count(), 0);
     await capture(`21-compact-settings-${index}`);
   }
   await openSettingsSection('使用量');
@@ -3189,7 +3363,7 @@ try {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(150);
   assert.equal(await page.evaluate(() => window.__qaPreparedSkills.size), 0);
-  await page.setViewportSize({ width: 980, height: 720 });
+  await page.setViewportSize({ width: 1440, height: 920 });
   await page.locator('.skill-card', { hasText: 'code-review' }).locator('.skill-card-main').click();
   const skillDetail = page.locator('.skill-detail-dialog');
   await skillDetail.waitFor();
@@ -3200,6 +3374,61 @@ try {
   assert.equal(skillDetailOverlay.background, 'rgba(0, 0, 0, 0)');
   assert.equal(skillDetailOverlay.backdrop, 'none');
   assert.equal(await skillDetail.getByRole('button', { name: '删除技能', exact: true }).count(), 0);
+
+  // 统一预览按格式分流：Markdown 渲染/源码、JSON、CSV、图片和不支持格式
+  // 共用同一工具栏与状态结构。文件树也复用了相同的类型图标。
+  assert.equal(await skillDetail.locator('.file-kind-icon').count(), 5);
+  await skillDetail.locator('.file-preview-markdown h1').getByText('code-review', { exact: true }).waitFor();
+  assert.equal(await skillDetail.getByRole('button', { name: /SKILL\.md/ }).getAttribute('aria-current'), 'page');
+  await skillDetail.getByRole('button', { name: /SKILL\.md/ }).click();
+  await skillDetail.locator('.file-preview-markdown h1').getByText('code-review', { exact: true }).waitFor();
+  assert.equal(await skillDetail.getByRole('group', { name: '预览方式', exact: true }).count(), 1);
+  assert.equal(await skillDetail.locator('.file-preview-format').innerText(), 'MD');
+  await capture('23-skill-file-preview-markdown');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await capture('23-skill-file-preview-markdown-dark');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  await skillDetail.getByRole('button', { name: '查看文件源码', exact: true }).click();
+  await skillDetail.locator('.file-preview-code').getByText(/项目规则优先于通用检查清单/).waitFor();
+  await skillDetail.getByRole('button', { name: '预览渲染结果', exact: true }).click();
+
+  await skillDetail.getByRole('button', { name: /config\.json/ }).click();
+  await skillDetail.locator('.file-preview-code').getByText(/"checks": \[/).waitFor();
+  assert.equal(await skillDetail.locator('.file-preview-format').innerText(), 'JSON');
+  await capture('23-skill-file-preview-json');
+
+  await skillDetail.getByRole('button', { name: /checks\.csv/ }).click();
+  await skillDetail.locator('.file-preview-table-wrap table').waitFor();
+  assert.equal(await skillDetail.locator('.file-preview-table-wrap tbody tr').count(), 3);
+  await capture('23-skill-file-preview-csv');
+
+  await skillDetail.getByRole('button', { name: /preview\.svg/ }).click();
+  await skillDetail.locator('.file-preview-media img[alt="preview.svg"]').waitFor();
+  assert.equal(await skillDetail.locator('.file-preview-media img').evaluate((image) => image.naturalWidth > 0), true);
+  await capture('23-skill-file-preview-image');
+
+  await page.setViewportSize({ width: 980, height: 720 });
+  await skillDetail.getByRole('button', { name: /SKILL\.md/ }).click();
+  await skillDetail.locator('.file-preview-markdown h1').waitFor();
+  const compactPreviewToolbar = await skillDetail.locator('.file-preview-toolbar').evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+  }));
+  assert.ok(compactPreviewToolbar.scrollWidth <= compactPreviewToolbar.clientWidth + 2);
+  await capture('23-skill-file-preview-compact');
+  await page.setViewportSize({ width: 1440, height: 920 });
+
+  await skillDetail.getByRole('button', { name: /manual\.pdf/ }).click();
+  await skillDetail.getByText('暂不支持内嵌预览', { exact: false }).waitFor();
+  await skillDetail.getByRole('button', { name: '用系统应用打开', exact: true }).waitFor();
+  assert.equal(await skillDetail.locator('.file-preview-unsupported p').count(), 0);
+  const filePreviewOverflow = await skillDetail.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+  }));
+  assert.ok(filePreviewOverflow.scrollWidth <= filePreviewOverflow.clientWidth + 2);
+  await capture('23-skill-file-preview-fallback');
+
   await skillDetail.getByRole('button', { name: '关闭', exact: true }).click();
   await skillDetail.waitFor({ state: 'detached' });
   await page.getByRole('button', { name: '删除技能 code-review', exact: true }).click();
@@ -3239,18 +3468,15 @@ try {
   assert.equal(await installedCard.evaluate((card) => card.classList.contains('settings-resource-card')), true);
   const installedCardStyle = await installedCard.evaluate((card) => {
     const icon = card.querySelector('.extension-card-icon');
-    const state = card.querySelector('.extension-card-state.is-ready');
     const toggle = card.querySelector('.switch');
     const thumb = toggle?.querySelector('span');
     const iconStyle = icon ? getComputedStyle(icon) : null;
-    const stateStyle = state ? getComputedStyle(state) : null;
     const toggleBox = toggle?.getBoundingClientRect();
     const thumbBox = thumb?.getBoundingClientRect();
     return {
       iconColor: iconStyle?.color,
       iconBackground: iconStyle?.backgroundColor,
-      stateColor: stateStyle?.color,
-      stateBackground: stateStyle?.backgroundColor,
+      redundantReadyState: card.querySelector('.extension-card-state.is-ready') !== null,
       toggleWidth: toggleBox?.width,
       toggleHeight: toggleBox?.height,
       toggleLeft: toggleBox?.left,
@@ -3259,8 +3485,7 @@ try {
       thumbRight: thumbBox?.right,
     };
   });
-  assert.equal(installedCardStyle.stateColor, installedCardStyle.iconColor);
-  assert.equal(installedCardStyle.stateBackground, installedCardStyle.iconBackground);
+  assert.equal(installedCardStyle.redundantReadyState, false);
   assert.equal(installedCardStyle.toggleWidth, 38);
   assert.equal(installedCardStyle.toggleHeight, 22);
   assert.ok(installedCardStyle.thumbLeft >= installedCardStyle.toggleLeft);
@@ -3319,7 +3544,7 @@ try {
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'detached' });
 
-  // 关闭设置回到欢迎页，确认紧凑视口下欢迎页没有残留的旧会话容器。
+  // 关闭设置回到新对话，确认空态没有残留的旧会话容器。
   await page.getByRole('button', { name: '返回对话' }).click();
   await page.getByRole('button', { name: '新会话', exact: true }).first().click();
   await capture('25-compact-welcome');
@@ -3386,11 +3611,11 @@ try {
   // -------------------------------------------------------------------------
   // 10. 首条消息与收尾
   // -------------------------------------------------------------------------
-  // 从欢迎页发送第一条消息：应切换到会话视图（chat-tabs 出现，欢迎页元素消失）。
+  // 从新对话发送第一条消息：应切换到会话视图。
   await page.getByRole('textbox', { name: '发送给 Pi 的消息' }).fill('验证从新对话进入问答');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   await page.locator('.chat-tabs').waitFor();
-  assert.equal(await page.locator('.new-conversation-intro, .workspace-chip').count(), 0);
+  assert.equal(await page.locator('.workspace-chip').count(), 0);
   await page.locator('.chat-scroll').getByText('验证从新对话进入问答', { exact: true }).waitFor();
   // 新会话发完第一条消息后必须出现在侧边栏，否则用户离开就找不到入口。
   await page.locator('.session-row', { hasText: '验证从新对话进入问答' }).waitFor();
@@ -3412,12 +3637,12 @@ try {
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   await page.locator('.long-task-dock').waitFor({ state: 'detached' });
   assert.equal(await page.locator('.composer-feedback.is-info').count(), 0);
-  assert.match(await composerInput.getAttribute('placeholder'), /输入 \/goal/);
+  assert.match(await composerInput.getAttribute('placeholder'), /输入问题.*\/ 命令/);
   await capture('29a-goal-lifecycle');
 
-  // 点击“新会话”应回到欢迎页，且不残留会话标签。
+  // 点击“新会话”应回到空态，且不残留会话标签。
   await page.getByRole('button', { name: '新会话', exact: true }).first().click();
-  await page.getByRole('heading', { name: '今天，想做点什么？', exact: true }).waitFor();
+  await page.getByRole('textbox', { name: '发送给 Pi 的消息' }).waitFor();
   assert.equal(await page.locator('.chat-tabs:not(.is-placeholder)').count(), 0);
 
   // 新会话不需要预选“长期任务”；/goal 会在第一次设置目标时按需创建普通会话并启用目标能力。

@@ -37,10 +37,10 @@ const {
   projectRoot,
   sectionOverride,
   toolGuidance,
-} = require('../../electron/services/studio-harness.cjs');
+} = require('../../electron/capabilities/harness/index.cjs');
 const {
   durableHarnessSettings,
-} = require('../../electron/services/durable-runtime.cjs');
+} = require('../../electron/runtime/durable-runtime.cjs');
 
 test.after(() => {
   closeStudioDatabase();

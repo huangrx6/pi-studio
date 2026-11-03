@@ -14,7 +14,7 @@ const {
   METRICS_SOURCE_ID,
   compactFooterDuration,
   createMetricsRuntime,
-} = require('../../electron/services/metrics-runtime.cjs');
+} = require('../../electron/capabilities/metrics/index.cjs');
 
 function flatten(value) {
   if (Array.isArray(value)) return value.flatMap(flatten);

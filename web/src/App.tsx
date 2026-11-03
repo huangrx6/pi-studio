@@ -21,31 +21,31 @@ import {
   Wrench,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
-import { ExtensionSlot, type ExtensionNotice } from './components/ExtensionSlot';
-import { NotificationCenter, type AppNotification, type NotificationTone } from './components/NotificationCenter';
-import { ExtensionInstallDialog } from './components/ExtensionInstallDialog';
-import { OfficialExtensionCatalog } from './components/OfficialExtensionCatalog';
-import { PublisherTrustSettings } from './components/PublisherTrustSettings';
-import { InstalledExtensionCard } from './components/InstalledExtensionCard';
-import { ExtensionDetailDialog } from './components/ExtensionDetailDialog';
-import { Select } from './components/Select';
-import { FullPermissionDialog, ToolConfirmDialog, useActionConfirmation, type ConfirmRequest } from './components/ConfirmDialog';
-import { DiffView } from './components/DiffView';
-import { TemporaryChat } from './components/TemporaryChat';
-import { ModelComparisonPanel } from './components/ModelComparisonPanel';
-import { destroyTemporary } from './lib/temporary-chat-store';
+import { ExtensionSlot, type ExtensionNotice } from './features/extensions/ExtensionSlot';
+import { NotificationCenter, type AppNotification, type NotificationTone } from './shell/NotificationCenter';
+import { ExtensionInstallDialog } from './features/extensions/ExtensionInstallDialog';
+import { OfficialExtensionCatalog } from './features/extensions/OfficialExtensionCatalog';
+import { PublisherTrustSettings } from './features/extensions/PublisherTrustSettings';
+import { InstalledExtensionCard } from './features/extensions/InstalledExtensionCard';
+import { ExtensionDetailDialog } from './features/extensions/ExtensionDetailDialog';
+import { Select } from './shared/Select';
+import { FullPermissionDialog, ToolConfirmDialog, useActionConfirmation, type ConfirmRequest } from './shared/ConfirmDialog';
+import { DiffView } from './features/conversation/DiffView';
+import { TemporaryChat } from './features/conversation/TemporaryChat';
+import { ModelComparisonPanel } from './features/comparison/ModelComparisonPanel';
+import { destroyTemporary } from './features/conversation/temporary-chat-store';
 import {
   eventSaysConversationRunning,
   isConversationTurnActive,
-} from './lib/conversation-activity';
-import { completedTurnDuration } from './lib/session-summary';
-import { placeRequestTraces } from './lib/request-trace-turns';
-import { ChangesView } from './components/ChangesView';
-import { ActionMenu } from './components/ActionMenu';
-import { ConversationActionPalette } from './components/ConversationActionPalette';
-import { conversationActions, type ConversationAction } from './lib/conversation-actions';
-import { extractComposerMentions, formatFileReference, insertComposerToken, splitComposerText } from './lib/references';
-import { composerSubmitAction } from './lib/composer-submit';
+} from './features/conversation/conversation-activity';
+import { completedTurnDuration } from './features/conversation/session-summary';
+import { placeRequestTraces } from './features/conversation/request-trace-turns';
+import { ChangesView } from './features/conversation/ChangesView';
+import { ActionMenu } from './shared/ActionMenu';
+import { ConversationActionPalette } from './features/conversation/ConversationActionPalette';
+import { conversationActions, type ConversationAction } from './features/conversation/conversation-actions';
+import { extractComposerMentions, formatFileReference, insertComposerToken, splitComposerText } from './features/conversation/references';
+import { composerSubmitAction } from './features/conversation/composer-submit';
 import {
   clearComposerDraft,
   composerDraftKeyForNew,
@@ -56,51 +56,53 @@ import {
   saveComposerDraft,
   type ComposerDraft,
   type ComposerDraftStore,
-} from './lib/composer-drafts';
+} from './features/conversation/composer-drafts';
 import type { ChatMessage, ComposerAttachment, ComposerCommand, ComposerCommandSource, ComposerFile, RequestTrace, TodoDetails, TurnDiff, TurnDiffFile } from './types/chat-types';
-import { AttachmentIcon } from './components/AttachmentIcon';
-import { AssistantTurnView, ChatMessageView } from './components/ChatMessage';
-import { ComposerImageAttachment } from './components/ComposerImageAttachment';
-import { ComposerFeedback } from './components/ComposerFeedback';
-import { TodoDock } from './components/TodoDock';
-import { LongTaskDock } from './components/LongTaskDock';
-import { QueuedMessages, type QueuedPreview } from './components/QueuedMessages';
-import { DetailDialog } from './components/DetailDialog';
-import { McpDetailDialog } from './components/McpDetailDialog';
-import { ProviderIcon } from './components/ProviderIcon';
-import { SettingsDialog } from './components/SettingsDialog';
-import { SettingsPageHeader } from './components/SettingsPageHeader';
-import { AgentToolsSettings } from './components/AgentToolsSettings';
-import { HarnessSettings } from './components/HarnessSettings';
-import { PermissionPolicySettings } from './components/PermissionPolicySettings';
-import { SkillHub } from './components/SkillHub';
-import { SubagentSettings } from './components/SubagentSettings';
-import { SubagentOverview, SubagentTranscriptView } from './components/SubagentViews';
-import { UsageSettings } from './components/UsageSettings';
-import { ArchivedConversationsSettings } from './components/ArchivedConversationsSettings';
+import { AttachmentIcon } from './shared/AttachmentIcon';
+import { AssistantTurnView, ChatMessageView } from './features/conversation/ChatMessage';
+import { ComposerImageAttachment } from './features/conversation/ComposerImageAttachment';
+import { ComposerFeedback } from './features/conversation/ComposerFeedback';
+import { TodoDock } from './features/conversation/TodoDock';
+import { LongTaskDock } from './features/conversation/LongTaskDock';
+import { QueuedMessages, type QueuedPreview } from './features/conversation/QueuedMessages';
+import { DetailDialog } from './shared/DetailDialog';
+import { FileKindIcon, FilePreview } from './shared/FilePreview';
+import { McpDetailDialog } from './features/mcp/McpDetailDialog';
+import { ProviderIcon } from './features/models/ProviderIcon';
+import { SettingsDialog } from './shared/SettingsDialog';
+import { SettingsPageHeader } from './shared/SettingsPageHeader';
+import { InfoHint } from './shared/InfoHint';
+import { AgentToolsSettings } from './features/tools/AgentToolsSettings';
+import { HarnessSettings } from './features/harness/HarnessSettings';
+import { PermissionPolicySettings } from './features/permissions/PermissionPolicySettings';
+import { SkillHub } from './features/skills/SkillHub';
+import { SubagentSettings } from './features/subagents/SubagentSettings';
+import { SubagentOverview, SubagentTranscriptView } from './features/subagents/SubagentViews';
+import { UsageSettings } from './features/usage/UsageSettings';
+import { ArchivedConversationsSettings } from './features/archives/ArchivedConversationsSettings';
 import {
   ConversationExtensionDock,
   ConversationExtensionHub,
-} from './components/ConversationExtensionHub';
-import { BackgroundLayer, BackgroundMediaPreview } from './components/BackgroundLayer';
-import { RangeControl } from './components/RangeControl';
-import { UpdateDialog } from './components/UpdateDialog';
+} from './features/extensions/ConversationExtensionHub';
+import { BackgroundLayer, BackgroundMediaPreview } from './shell/BackgroundLayer';
+import { RangeControl } from './shared/RangeControl';
+import { UpdateDialog } from './features/update/UpdateDialog';
 import {
   SettingsResourceCard,
   SettingsResourceCardBody,
   SettingsResourceCardFooter,
   SettingsResourceCardIcon,
   SettingsResourceCardMain,
-} from './components/SettingsResourceCard';
+} from './shared/SettingsResourceCard';
 import type { AgentToolSelection } from './types/agent-tool-types';
 import type { ModelComparisonStartResult } from './types/comparison-types';
 import type { SubagentBudgetSnapshot, SubagentChild, SubagentTranscript } from './types/subagent-types';
 import type { LongTaskState } from './types/durable-types';
-import { ModelPicker, type ModelPickerRequest } from './components/ModelPicker';
-import { ContextUsageChip, type ContextPolicy } from './components/ContextUsageChip';
-import { contextUsage } from './lib/context-usage';
-import { WorkspacePicker } from './components/WorkspacePicker';
-import { SidebarActions, type SidebarAction } from './components/SidebarActions';
+import { ModelPicker, type ModelPickerRequest } from './features/models/ModelPicker';
+import { ContextUsageChip, type ContextPolicy } from './features/conversation/ContextUsageChip';
+import { contextUsage } from './features/conversation/context-usage';
+import { WorkspacePicker } from './shell/WorkspacePicker';
+import { SidebarActions, type SidebarAction } from './shell/SidebarActions';
 import {
   concreteThinkingLevels,
   thinkingLabels,
@@ -109,8 +111,8 @@ import {
   type ModelSelection,
   type ThinkingLevel,
 } from './types/model-types';
-import { PALETTE_PRESETS, RADIUS_PRESETS, loadPreferences, resolveTheme, savePreferences, setActivePreferences, type Preferences } from './lib/preferences';
-import { pasteExceedsBudget, isLongMessage } from './lib/composer-budget.mjs';
+import { PALETTE_PRESETS, RADIUS_PRESETS, loadPreferences, resolveTheme, savePreferences, setActivePreferences, type Preferences } from './shared/preferences';
+import { pasteExceedsBudget, isLongMessage } from './features/conversation/composer-budget.mjs';
 import {
   automaticTokenUnit,
   contextLabel,
@@ -121,34 +123,36 @@ import {
   tokenUnitOptions,
   type TokenField,
   type TokenUnit,
-} from './lib/token-units';
+} from './shared/token-units';
 import {
   SCROLL_INTENT_WINDOW_MS,
   isNearBottom,
   resolveAutoFollow,
   shouldReleaseFollowOnWheel,
-} from './lib/chat-scroll.mjs';
-import { HISTORY_PAGE_SIZE, resolveHistoryScroll } from './lib/history-scroll.mjs';
-import { sampleOutlineIndices } from './lib/outline-samples.mjs';
-import { outlineIndexAt, outlineIndexForMessages } from './lib/outline-sync.mjs';
-import { errorText } from './lib/error-text';
+} from './features/conversation/chat-scroll.mjs';
+import { HISTORY_PAGE_SIZE, resolveHistoryScroll } from './features/conversation/history-scroll.mjs';
+import { sampleOutlineIndices } from './features/conversation/outline-samples.mjs';
+import { outlineIndexAt, outlineIndexForMessages } from './features/conversation/outline-sync.mjs';
+import { errorText } from './shared/error-text';
 import {
   normalizeThinkingLevelArgument,
   parseGoalCommandArgument,
   parseStudioCommand,
-} from './lib/composer-command-routes.mjs';
-import { mergeSubagentChild, mergeSubagentChildren } from './lib/subagent-state.mjs';
+} from './features/conversation/composer-command-routes.mjs';
+import { mergeSubagentChild, mergeSubagentChildren } from './features/subagents/subagent-state.mjs';
 import type { UpdateSnapshot } from './types/update-types';
 import type { RuntimeRefreshSnapshot } from './types/runtime-types';
-import { runtimeRefreshFailure } from './lib/runtime-refresh';
-import { useExtensionUiSnapshot } from './lib/use-extension-ui';
+import type { FilePreviewResult } from './types/file-preview-types';
+import { runtimeRefreshFailure } from './shared/runtime-refresh';
+import { formatFileSize } from './shared/filesize';
+import { useExtensionUiSnapshot } from './features/extensions/use-extension-ui';
 import {
   DEFAULT_CONVERSATION_EXTENSION_UI_PREFERENCES,
   applyConversationExtensionUiPatch,
   hasSessionExtensionOrder,
   normalizeConversationExtensionUiPreferences,
   orderConversationExtensionItems,
-} from './lib/conversation-extension-order';
+} from './features/conversation/conversation-extension-order';
 import type {
   ConversationExtensionLayout,
   ConversationExtensionOrderScope,
@@ -171,20 +175,21 @@ import type {
   ConversationSummary,
 } from './types/durable-types';
 
-// 设置页导航：顺序、图标与描述同时用于设置侧栏和页面标题。
+// Keep navigation to the noun labels users need to scan; each page's controls
+// and layout carry the detail rather than repeating it as sidebar subtitles.
 const settingsPages = [
-  { id: 'general', label: '通用', icon: Settings, description: '外观、工作步骤、链接与输入行为。' },
-  { id: 'models', label: '模型配置', icon: Cpu, description: '配置模型来源、可用模型与新对话默认值。' },
-  { id: 'usage', label: '使用量', icon: BarChart3, description: '查看每日 Token 热力图与各模型使用分布。' },
-  { id: 'archives', label: '归档会话', icon: ArchiveRestore, description: '恢复或永久删除已归档的会话。' },
-  { id: 'tools', label: '智能体工具', icon: Wrench, description: '控制智能体可以调用哪些工具，并查看它们来自哪里。' },
-  { id: 'permissions', label: '权限策略', icon: ShieldCheck, description: '按工具、命令和路径配置允许、询问与拒绝规则。' },
-  { id: 'harness', label: 'Harness 配置', icon: Code2, description: '组合系统提示、项目上下文、技能与工具指导。' },
-  { id: 'subagents', label: '子智能体', icon: Bot, description: '配置子智能体的模型、思考强度与角色覆盖。' },
-  { id: 'mcp', label: 'MCP 服务器', icon: Plug, description: '连接外部工具，让 Pi 更好地理解你的工作环境。' },
-  { id: 'skills', label: '技能', icon: FileCode2, description: '管理可复用的工作方法，为 Pi 扩展专业能力。' },
-  { id: 'extensions', label: '扩展', icon: Layers3, description: '统一管理已安装的 Pi 扩展和扩展包。' },
-  { id: 'about', label: '关于', icon: Info, description: '一个专注、轻巧的 AI 开发工作台。' },
+  { id: 'general', label: '通用', icon: Settings },
+  { id: 'models', label: '模型配置', icon: Cpu },
+  { id: 'usage', label: '使用量', icon: BarChart3 },
+  { id: 'archives', label: '归档会话', icon: ArchiveRestore },
+  { id: 'tools', label: '智能体工具', icon: Wrench },
+  { id: 'permissions', label: '权限策略', icon: ShieldCheck },
+  { id: 'harness', label: 'Harness 配置', icon: Code2 },
+  { id: 'subagents', label: '子智能体', icon: Bot },
+  { id: 'mcp', label: 'MCP 服务器', icon: Plug },
+  { id: 'skills', label: '技能', icon: FileCode2 },
+  { id: 'extensions', label: '扩展', icon: Layers3 },
+  { id: 'about', label: '关于', icon: Info },
 ] as const;
 type SettingsTab = typeof settingsPages[number]['id'];
 
@@ -316,7 +321,6 @@ type SettingsSnapshot = {
   extensionRegistryUrl: string;
   enabledModels: string[];
   agentTools: AgentToolSelection;
-  agentToolsPath: string;
   harness: import('./types/harness-types').HarnessSettingsSnapshot;
   storagePath: string;
   databasePath: string;
@@ -334,14 +338,6 @@ type SkillInfo = SettingsSnapshot['skills'][number];
 type McpInfo = SettingsSnapshot['mcp'][number];
 type McpTestResult = Awaited<ReturnType<typeof window.piApi.testMcp>>;
 type SkillDetailState = SkillInfo & { baseDir: string };
-
-/** 文件大小的紧凑展示，用于文件列表与附件卡片。 */
-function filesize(size: number): string {
-  if (!size) return '';
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${Math.round(size / 102.4) / 10} KB`;
-  return `${Math.round(size / (1024 * 1024) * 10) / 10} MB`;
-}
 
 /** 把未知异常转成可展示的一行文本（IPC 抛出的错误不一定是 Error 实例）。 */
 
@@ -482,6 +478,7 @@ const UI_KEYS = {
   workspaceOrder: 'pi-studio:workspace-order',
   sessionOrder: 'pi-studio:session-order',
   activeSession: 'pi-studio:active-session',
+  comparisons: 'pi-studio:model-comparisons',
 } as const;
 
 /** 读本地存储；解析失败时退回默认值。 */
@@ -524,6 +521,13 @@ type ModelComparisonContext = {
   initialModelRef: string;
   initialThinkingLevel: ThinkingLevel;
 };
+type StoredModelComparison = {
+  result: ModelComparisonStartResult;
+  cwd: string;
+  initialModelRef: string;
+  initialThinkingLevel: ThinkingLevel;
+};
+type StoredModelComparisonMap = Record<string, StoredModelComparison>;
 type PanelTab = { id: string; kind: 'start' | 'files' | 'file' | 'diff' | 'changes' | 'temporary'; title: string; path?: string; source?: PanelFileSource; sessionId?: string; diff?: TurnDiffFile; review?: { sessionId: string; initial: TurnDiff; turns: TurnDiff[]; focusPath?: string } };
 type ComposerMenuState = { kind: 'slash' | 'file'; query: string; start: number; end: number };
 type AgentView =
@@ -531,6 +535,26 @@ type AgentView =
   | { kind: 'extensions'; itemId?: string }
   | { kind: 'agents'; child?: SubagentChild }
   | { kind: 'comparison'; comparison: ModelComparisonContext };
+
+function normalizeStoredModelComparisons(value: unknown): StoredModelComparisonMap {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).flatMap(([parentId, candidate]) => {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return [];
+    const entry = candidate as Partial<StoredModelComparison>;
+    const result = entry.result;
+    if (
+      !result
+      || result.parentId !== parentId
+      || !Array.isArray(result.branches)
+      || result.branches.length !== 2
+      || result.branches.some((branch) => !branch || typeof branch.sessionId !== 'string' || !branch.sessionId)
+      || typeof entry.cwd !== 'string'
+      || typeof entry.initialModelRef !== 'string'
+      || typeof entry.initialThinkingLevel !== 'string'
+    ) return [];
+    return [[parentId, entry as StoredModelComparison]];
+  }));
+}
 
 function notificationTitle(tone: NotificationTone) {
   if (tone === 'success') return '操作完成';
@@ -692,7 +716,17 @@ export function App() {
   const [contextPolicy, setContextPolicy] = useState<ContextPolicy | null>(null);
   const [requestTraces, setRequestTraces] = useState<RequestTrace[]>([]);
   const [agentView, setAgentView] = useState<AgentView>({ kind: 'conversation' });
-  const [comparisonByParent, setComparisonByParent] = useState<Record<string, ModelComparisonStartResult>>({});
+  const [comparisonByParent, setComparisonByParent] = useState<StoredModelComparisonMap>(() => (
+    normalizeStoredModelComparisons(readStored<unknown>(UI_KEYS.comparisons, {}))
+  ));
+  const activeSessionComparison = useMemo(() => {
+    const sessionId = session?.id;
+    if (!sessionId) return null;
+    if (comparisonByParent[sessionId]) return comparisonByParent[sessionId];
+    return Object.values(comparisonByParent).find((entry) => (
+      entry.result.branches.some((branch) => branch.sessionId === sessionId)
+    )) ?? null;
+  }, [comparisonByParent, session?.id]);
   const conversationExtensionSurface = useExtensionUiSnapshot(session?.cwd);
   const [conversationExtensionUiPreferences, setConversationExtensionUiPreferences] = useState<ConversationExtensionUiPreferences>(
     () => ({
@@ -722,6 +756,9 @@ export function App() {
   useEffect(() => {
     setConversationExtensionOrderScope('global');
   }, [session?.id]);
+  useEffect(() => {
+    writeStored(UI_KEYS.comparisons, comparisonByParent);
+  }, [comparisonByParent]);
   const conversationExtensionItems = useMemo(
     () => orderConversationExtensionItems(
       conversationExtensionSurface.items.filter((item) => (
@@ -961,9 +998,12 @@ export function App() {
   const [skillDetail, setSkillDetail] = useState<SkillDetailState | null>(null);
   const [skillEntries, setSkillEntries] = useState<Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }>>([]);
   const [skillTreePath, setSkillTreePath] = useState('');
-  const [skillFile, setSkillFile] = useState<PanelFile | null>(null);
-  const [skillBusy, setSkillBusy] = useState(false);
+  const [skillFile, setSkillFile] = useState<FilePreviewResult | null>(null);
+  const [skillTreeBusy, setSkillTreeBusy] = useState(false);
+  const [skillFileBusy, setSkillFileBusy] = useState(false);
   const [skillDetailError, setSkillDetailError] = useState<string | null>(null);
+  const skillTreeRequestRef = useRef(0);
+  const skillFileRequestRef = useRef(0);
   const [mcpDetail, setMcpDetail] = useState<McpInfo | null>(null);
   const [mcpTestResult, setMcpTestResult] = useState<McpTestResult | null>(null);
   const [mcpTesting, setMcpTesting] = useState(false);
@@ -2951,7 +2991,7 @@ export function App() {
   }
 
   function openAgentOverview() {
-    if (!session?.id || subagentChildren.length === 0) return;
+    if (!session?.id) return;
     rememberMainScrollPosition();
     setAgentView({ kind: 'agents' });
     void refreshSubagentChildren(true);
@@ -4444,8 +4484,30 @@ export function App() {
     if (filesOpen) setPanelEntered(true); else openPanel();
   }
 
+  function openStoredModelComparison(entry: StoredModelComparison) {
+    rememberMainScrollPosition();
+    setAgentView({
+      kind: 'comparison',
+      comparison: {
+        parentId: entry.result.parentId,
+        cwd: entry.cwd,
+        prompt: entry.result.prompt,
+        mentions: [],
+        attachments: [],
+        images: [],
+        initialModelRef: entry.initialModelRef,
+        initialThinkingLevel: entry.initialThinkingLevel,
+      },
+    });
+    if (filesOpen) closePanel();
+  }
+
   function openModelComparison() {
     if (!session?.id || !workspace) return;
+    if (activeSessionComparison) {
+      openStoredModelComparison(activeSessionComparison);
+      return;
+    }
     const images = composerAttachments.flatMap((attachment) => (
       attachment.kind === 'image' && attachment.data
         ? [{ type: 'image' as const, data: attachment.data, mimeType: attachment.mime }]
@@ -4657,7 +4719,6 @@ export function App() {
         </SettingsResourceCardBody>
       </SettingsResourceCardMain>
       <SettingsResourceCardFooter className="model-card-footer">
-        <span className="resource-status is-on">已启用</span>
         <button className="settings-outline model-card-remove" disabled={settingsBusy} aria-label={`移除模型 ${item?.name ?? id}`} title="移除" onClick={() => void setEnabled(enabledModels.filter((entry) => entry !== id))}><X />移除</button>
       </SettingsResourceCardFooter>
     </SettingsResourceCard>;
@@ -4809,14 +4870,23 @@ export function App() {
   }
 
   async function loadSkillTree(baseDir: string, nextPath: string) {
-    setSkillBusy(true);
+    const request = ++skillTreeRequestRef.current;
+    setSkillTreeBusy(true);
     setSkillDetailError(null);
     try {
       const result = await window.piApi.files(baseDir, nextPath);
+      if (request !== skillTreeRequestRef.current) return;
       setSkillTreePath(result.path);
       setSkillEntries(result.entries);
-    } catch (error) { setSkillDetailError(errorText(error)); }
-    finally { setSkillBusy(false); }
+      if (!nextPath && skillFileRequestRef.current === 0) {
+        const skillDocument = result.entries.find((entry) => entry.type === 'file' && entry.path === 'SKILL.md');
+        if (skillDocument) void openSkillFile(skillDocument.path, baseDir);
+      }
+    } catch (error) {
+      if (request === skillTreeRequestRef.current) setSkillDetailError(errorText(error));
+    } finally {
+      if (request === skillTreeRequestRef.current) setSkillTreeBusy(false);
+    }
   }
 
   function openSkillDetail(skill: SkillInfo) {
@@ -4825,16 +4895,39 @@ export function App() {
     setSkillFile(null);
     setSkillTreePath('');
     setSkillEntries([]);
+    setSkillDetailError(null);
+    skillTreeRequestRef.current = 0;
+    skillFileRequestRef.current = 0;
     void loadSkillTree(baseDir, '');
   }
 
-  async function openSkillFile(target: string) {
-    if (!skillDetail) return;
-    setSkillBusy(true);
+  async function openSkillFile(target: string, baseDir = skillDetail?.baseDir) {
+    if (!baseDir) return;
+    const request = ++skillFileRequestRef.current;
+    setSkillFileBusy(true);
     setSkillDetailError(null);
-    try { setSkillFile(await window.piApi.file(skillDetail.baseDir, target)); }
-    catch (error) { setSkillDetailError(errorText(error)); }
-    finally { setSkillBusy(false); }
+    try {
+      const result = await window.piApi.filePreview(baseDir, target);
+      if (request === skillFileRequestRef.current) setSkillFile(result);
+    } catch (error) {
+      if (request === skillFileRequestRef.current) setSkillDetailError(errorText(error));
+    } finally {
+      if (request === skillFileRequestRef.current) setSkillFileBusy(false);
+    }
+  }
+
+  async function openSkillFileExternal(file: FilePreviewResult) {
+    if (!skillDetail) return;
+    setSkillDetailError(null);
+    try {
+      await window.piApi.openWith({
+        cwd: skillDetail.baseDir,
+        path: file.path,
+        source: 'workspace',
+      });
+    } catch (error) {
+      setSkillDetailError(errorText(error));
+    }
   }
 
   async function deleteSkill(skill: SkillInfo) {
@@ -4892,9 +4985,13 @@ export function App() {
   }
 
   function closeSkillDetail() {
+    skillTreeRequestRef.current += 1;
+    skillFileRequestRef.current += 1;
     setSkillDetail(null);
     setSkillFile(null);
     setSkillEntries([]);
+    setSkillTreeBusy(false);
+    setSkillFileBusy(false);
     setSkillDetailError(null);
   }
 
@@ -4958,11 +5055,11 @@ export function App() {
           <button key={entry.path} className={`file-row ${entry.type === 'directory' ? 'is-directory' : ''}`} title={entry.name} onClick={() => entry.type === 'directory' ? void loadTree(entry.path) : void openFile(entry.path)}>
             {entry.type === 'directory' ? <Folder size={15} /> : <FileText size={15} />}
             <span>{entry.name}</span>
-            {entry.type === 'file' && <small>{filesize(entry.size)}</small>}
+            {entry.type === 'file' && <small>{formatFileSize(entry.size, '')}</small>}
             {entry.type === 'directory' && <ChevronDown size={13} className="chevron-left" />}
           </button>
         ))}
-        {!fileBusy && entries.length === 0 && <div className="file-empty"><FolderOpen /><strong>这个目录还是空的</strong><span>添加文件后，它们会出现在这里。</span></div>}
+        {!fileBusy && entries.length === 0 && <div className="file-empty"><FolderOpen /><strong>目录为空</strong></div>}
       </div>
       {fileBusy && <div className="file-loading" role="status"><LoaderCircle className="spin" />正在读取文件…</div>}
     </div>;
@@ -4970,13 +5067,13 @@ export function App() {
 
   function renderFilePreview() {
     if (!file) return fileBusy
-      ? <div className="panel-empty" role="status" aria-label="正在读取文件"><LoaderCircle className="spin" /><strong>正在读取文件</strong><span>内容加载后会在右侧显示。</span></div>
-      : <div className="panel-empty"><FileText /><strong>选择一个文件</strong><span>从左侧文件树打开文件，会在这里以标签页显示。</span></div>;
+      ? <div className="panel-empty" role="status" aria-label="正在读取文件"><LoaderCircle className="spin" /><strong>正在读取文件</strong></div>
+      : <div className="panel-empty"><FileText /><strong>在左侧选择文件</strong></div>;
     const wrapLines = /\.(?:txt|log)$/i.test(file.path);
     return <div className="panel-file-preview">
       <div className="file-toolbar">
         <span className="path-label" title={file.path}>{file.path}</span>
-        <small>{filesize(file.size)}</small>
+        <small>{formatFileSize(file.size)}</small>
         <div className="file-actions" ref={fileActionsRef}>
           <button className="icon-button" aria-label="文件操作" title="文件操作" aria-expanded={fileMenuOpen} onClick={() => void showFileActions()}><MoreHorizontal /></button>
           {fileMenuOpen && <div className="file-actions-menu" role="menu">
@@ -4989,7 +5086,7 @@ export function App() {
           </div>}
         </div>
       </div>
-      {file.binary ? <div className="file-empty"><FileText /><strong>暂不支持预览此文件</strong><span>可以在其他应用中查看二进制文件。</span></div> : <pre className={`file-code ${wrapLines ? 'is-wrapped' : ''}`}><code>{file.text.split('\n').map((line, index) => <span className="code-line" key={index}><span className="line-number" aria-hidden="true">{index + 1}</span><span>{line || ' '}</span></span>)}</code></pre>}
+      {file.binary ? <div className="file-empty"><FileText /><strong>无法预览此文件</strong></div> : <pre className={`file-code ${wrapLines ? 'is-wrapped' : ''}`}><code>{file.text.split('\n').map((line, index) => <span className="code-line" key={index}><span className="line-number" aria-hidden="true">{index + 1}</span><span>{line || ' '}</span></span>)}</code></pre>}
       {fileBusy && <div className="file-loading" role="status"><LoaderCircle className="spin" />正在读取文件…</div>}
     </div>;
   }
@@ -4997,11 +5094,8 @@ export function App() {
   function renderPanelStart() {
     return <div className="panel-start">
       <div className="panel-start-tools">
-        <button className="panel-tool" onClick={openTemporaryChat}><span className="panel-tool-icon"><MessageCirclePlus /></span><span><strong>临时聊天</strong><small>无需工作区，退出应用后清除</small></span><ChevronRight className="panel-tool-arrow" /></button>
-        <button className="panel-tool" onClick={openFilesTab}><span className="panel-tool-icon is-folder"><Folder /></span><span><strong>工作区文件</strong><small>浏览当前工作区里的文件</small></span><ChevronDown className="panel-tool-arrow" /></button>
-        <button className="panel-tool" disabled><span className="panel-tool-icon"><Terminal /></span><span><strong>新建终端</strong><small>即将推出</small></span></button>
-        <button className="panel-tool" disabled><span className="panel-tool-icon"><Globe2 /></span><span><strong>浏览器</strong><small>即将推出</small></span></button>
-        <button className="panel-tool" disabled><span className="panel-tool-icon"><LayoutGrid /></span><span><strong>更多工具</strong><small>即将推出</small></span></button>
+        <button className="panel-tool" onClick={openTemporaryChat}><span className="panel-tool-icon"><MessageCirclePlus /></span><span><strong>临时聊天</strong><small>关闭后清除</small></span><ChevronRight className="panel-tool-arrow" /></button>
+        <button className="panel-tool" onClick={openFilesTab}><span className="panel-tool-icon is-folder"><Folder /></span><span><strong>工作区文件</strong></span><ChevronRight className="panel-tool-arrow" /></button>
       </div>
     </div>;
   }
@@ -5024,17 +5118,21 @@ export function App() {
         parentId={comparison.parentId}
         cwd={comparison.cwd}
         initialPrompt={comparison.prompt}
-        initialComparison={comparisonByParent[comparison.parentId] ?? null}
+        initialComparison={comparisonByParent[comparison.parentId]?.result ?? null}
         initialModelRef={comparison.initialModelRef}
         initialThinkingLevel={comparison.initialThinkingLevel}
         mentions={comparison.mentions}
         attachments={comparison.attachments}
         images={comparison.images}
-        onBack={returnToMainAgent}
         onStarted={(started) => {
           setComparisonByParent((current) => ({
             ...current,
-            [started.parentId]: started,
+            [started.parentId]: {
+              result: started,
+              cwd: comparison.cwd,
+              initialModelRef: comparison.initialModelRef,
+              initialThinkingLevel: comparison.initialThinkingLevel,
+            },
           }));
         }}
         onAdopt={(sessionId) => {
@@ -5298,18 +5396,25 @@ export function App() {
         </header>
         {!isNewConversation && <div className="chat-tabs">
           <div className="chat-tab-list" role="tablist" aria-label="对话视图">
-            <button type="button" role="tab" aria-selected={agentView.kind === 'conversation' || agentView.kind === 'comparison'} className={`tab ${agentView.kind === 'conversation' || agentView.kind === 'comparison' ? 'is-active' : ''}`} onClick={returnToMainAgent}><MessageSquare /><span>对话</span></button>
-            {subagentChildren.length > 0 && <button type="button" role="tab" aria-selected={agentView.kind === 'agents'} className={`tab agent-tab ${agentView.kind === 'agents' ? 'is-active' : ''}`} onClick={openAgentOverview}>
+            <button type="button" role="tab" aria-selected={agentView.kind === 'conversation'} className={`tab ${agentView.kind === 'conversation' ? 'is-active' : ''}`} onClick={returnToMainAgent}><MessageSquare /><span>对话</span></button>
+            <button type="button" role="tab" aria-selected={agentView.kind === 'agents'} className={`tab agent-tab ${agentView.kind === 'agents' ? 'is-active' : ''}`} onClick={openAgentOverview}>
               <Bot />
               <span className="tab-label">
                 子智能体
-                <span
+                {subagentChildren.length > 0 && <span
                   className={`tab-count agent-tab-count ${hasActiveSubagents ? 'is-live' : ''}`}
                   aria-live="polite"
                   aria-label={`${subagentChildren.length} 个子智能体${hasActiveSubagents ? '，有任务正在运行' : '，当前无任务运行'}`}
-                >{subagentChildren.length}</span>
+                >{subagentChildren.length}</span>}
               </span>
-            </button>}
+            </button>
+            <button type="button" role="tab" aria-selected={agentView.kind === 'comparison'} className={`tab comparison-tab ${agentView.kind === 'comparison' ? 'is-active' : ''}`} onClick={openModelComparison}>
+              <Columns2 />
+              <span className="tab-label">
+                双跑
+                {activeSessionComparison && <span className="tab-count">{activeSessionComparison.result.branches.length}</span>}
+              </span>
+            </button>
             {conversationDetailExtensionItems.length > 0 && <button
               type="button"
               role="tab"
@@ -5322,17 +5427,6 @@ export function App() {
               <span className="tab-label">扩展<span className="tab-count">{conversationDetailExtensionItems.length}</span></span>
             </button>}
           </div>
-          <span className="chat-tabs-note">
-            {agentView.kind === 'comparison'
-              ? '同一问题 · 两个隔离分支'
-              : agentView.kind === 'extensions'
-              ? activeExtensionItem?.title || (conversationExtensionOrderScope === 'session' ? '当前会话排序' : '全局扩展顺序')
-              : subagentChildren.length > 0
-              ? `${subagentChildren.filter((child) => child.status === 'running' || child.status === 'pending').length} 运行中 · ${subagentChildren.length} 个子智能体`
-              : messages.filter((message) => message.role !== 'toolResult').length > 0
-                ? `${messages.filter((message) => message.role !== 'toolResult').length} 条消息`
-                : '从一个想法开始'}
-          </span>
         </div>}
 
         {isNewConversation && <div className="chat-tabs is-placeholder" aria-hidden="true" />}
@@ -5575,12 +5669,7 @@ export function App() {
           )}
           {(todoDetails || todoPanelOpen) && <TodoDock details={todoDetails} open={todoPanelOpen} onToggle={() => setTodoPanelOpen((value) => !value)} />}
           {queuedPrompts.length > 0 && <QueuedMessages items={queuedPreviews} onEdit={editQueued} onDelete={deleteQueued} onSendNow={(id) => void sendQueuedNow(id)} onSendAll={() => void sendAllQueued()} onReorder={reorderQueued} />}
-          {isNewConversation && <div className="new-conversation-intro">
-            <h2>今天，<em>想做点什么？</em></h2>
-            <p id="workspace-selection-hint" role="status">{workspace
-              ? '从一个念头开始，在这个工作区里继续。'
-              : '先选择一个工作区，再开始对话。'}</p>
-          </div>}
+          {isNewConversation && !workspace && <p id="workspace-selection-hint" className="sr-only" role="status">选择一个工作区后开始对话</p>}
           <div className="composer-wrap" ref={composerWrapRef}>
             {composerMenu && <div className="composer-picker" role="listbox" aria-label={composerMenu.kind === 'slash' ? '命令与技能' : '工作区文件与目录'}>
               <div className="composer-picker-head"><span>{composerMenu.kind === 'slash' ? '命令与技能' : '引用工作区文件或目录'}</span><span>{composerMenuLoading ? '正在加载…' : composerMenu.kind === 'slash' ? '输入以筛选' : '↑↓ 选择文件或目录'}</span></div>
@@ -5648,7 +5737,7 @@ export function App() {
                   onClick={() => { if (attachment.path) void openFile(attachment.path, session?.id, 'attachment'); }}
                   onKeyDown={(event) => { if (attachment.path && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); void openFile(attachment.path, session?.id, 'attachment'); } }}>
                   <AttachmentIcon name={attachment.name} mime={attachment.mime} />
-                  <span><strong>{attachment.name}</strong><small>{filesize(attachment.bytes)}{attachment.lines ? ` · ${attachment.lines.toLocaleString('zh-CN')} 行` : ''}</small></span>
+                  <span><strong>{attachment.name}</strong><small>{formatFileSize(attachment.bytes)}{attachment.lines ? ` · ${attachment.lines.toLocaleString('zh-CN')} 行` : ''}</small></span>
                   {attachment.path && <span className="attachment-open-cue" title="在右侧面板查看" aria-hidden="true"><PanelRightOpen /></span>}
                   <button type="button" className="composer-attachment-remove" aria-label={`移除 ${attachment.name}`} onClick={(event) => { event.stopPropagation(); removeComposerAttachment(attachment.id); }} onKeyDown={(event) => event.stopPropagation()}><X /></button>
                 </div>)}
@@ -5720,7 +5809,7 @@ export function App() {
                 }
               }}
               aria-label="发送给 Pi 的消息"
-              aria-describedby={isNewConversation ? 'workspace-selection-hint' : undefined}
+              aria-describedby={isNewConversation && !workspace ? 'workspace-selection-hint' : undefined}
               spellCheck={false}
               className={`${queuedPrompts.length > 0 ? 'has-queued' : ''} ${composing ? 'is-composing' : ''}`.trim() || undefined}
               aria-expanded={Boolean(composerMenu)}
@@ -5732,7 +5821,7 @@ export function App() {
                     ? 'Enter 补充当前任务 · Cmd/Ctrl+Enter 排队 · Shift+Enter 换行'
                     : goalStatusLabel(session?.longTask)
                       ? '描述目标与完成条件，或输入 /goal、/ 命令、@ 文件…'
-                      : '描述你的想法，或输入 /goal、/ 命令、@ 文件…'}
+                      : '输入问题，或使用 / 命令、@ 文件…'}
               rows={2}
               onScroll={(event) => {
                 // 高亮层与 textarea 同步滚动，保证长文本换行时不错位。
@@ -5825,14 +5914,15 @@ export function App() {
             {!settingsData && !settingsError && settingsTab !== 'general' && settingsTab !== 'usage' && settingsTab !== 'archives' && settingsTab !== 'permissions' && settingsTab !== 'subagents' && <div className="settings-loading" role="status"><LoaderCircle className="spin" />正在加载设置…</div>}
             {settingsTab === 'general' && (
               <div className="settings-sections general-settings">
+                <SettingsPageHeader icon={<Settings />} title="通用" />
                 <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>界面模式</h2><p>选择 Pi Studio 的界面明暗；跟随系统会随 macOS 自动切换。</p></div></div>
+                  <div className="settings-card-head"><div><h2>界面模式</h2></div></div>
                   <div className="theme-choice-row">
                     {([{ value: 'light', label: '浅色', icon: Sun }, { value: 'dark', label: '深色', icon: Moon }, { value: 'system', label: '跟随系统', icon: Monitor }] as const).map((item) => <button key={item.value} className={`theme-choice ${preferences.theme === item.value ? 'is-active' : ''}`} onClick={() => updatePreference('theme', item.value)}><item.icon /><span>{item.label}</span></button>)}
                   </div>
                 </section>
                 <section className="settings-card palette-settings-card">
-                  <div className="settings-card-head"><div><h2>全局配色</h2><p>主色会同步应用到按钮、选中态、链接、焦点与加载动效。页面背景保持中性，成功、警告和错误仍使用固定语义色。</p></div></div>
+                  <div className="settings-card-head"><div><h2>全局配色</h2></div></div>
                   <div className="palette-choice-grid" role="radiogroup" aria-label="全局配色方案">
                     {PALETTE_PRESETS.map((preset) => {
                       const active = preferences.palette === preset.id;
@@ -5854,14 +5944,17 @@ export function App() {
                             <span className="palette-preview-actions"><i /><b /></span>
                           </span>
                         </span>
-                        <span className="palette-choice-copy"><strong>{preset.label}</strong><small>{preset.description}</small></span>
+                        <span className="palette-choice-copy"><strong>{preset.label}</strong></span>
                         <span className="palette-choice-check">{active && <Check />}</span>
                       </button>;
                     })}
                   </div>
                 </section>
                 <section className="settings-card background-settings-card">
-                  <div className="settings-card-head"><div><h2>背景与动态氛围</h2><p>使用本地图片、动态图片或视频作为工作台背景。媒体会复制到 Pi Studio 的私有数据目录，原文件移动后仍可继续使用。</p></div></div>
+                  <div className="settings-card-head">
+                    <div><h2>背景</h2></div>
+                    <InfoHint align="end" label="支持 PNG、JPEG、WebP、GIF、AVIF、MP4、MOV、M4V、WebM，最大 2 GB。视频会静音循环；MOV 与 WebM 取决于编码格式。" />
+                  </div>
                   <div className="background-settings-layout">
                     <div className="background-preview-column">
                       {preferences.backgroundMedia
@@ -5869,7 +5962,6 @@ export function App() {
                         : <div className="background-media-empty">
                           <span><ImageIcon /><Film /></span>
                           <strong>还没有设置背景</strong>
-                          <small>支持图片、GIF、动态 WebP 和视频</small>
                         </div>}
                       <div className="background-media-actions">
                         <button type="button" className="settings-save" disabled={backgroundBusy} onClick={() => void chooseBackground()}>
@@ -5878,19 +5970,17 @@ export function App() {
                         </button>
                         {preferences.backgroundMedia && <button type="button" className="settings-outline" disabled={backgroundBusy} onClick={() => void removeBackground()}><Trash2 />移除</button>}
                       </div>
-                      <p className="background-format-hint">PNG、JPEG、WebP、GIF、AVIF、MP4、MOV、M4V、WebM，最大 2 GB。</p>
                     </div>
                     <div className="background-control-column">
                       {backgroundError && <div className="background-setting-error" role="alert">{backgroundError}</div>}
                       {preferences.backgroundMedia && <div className="background-file-summary">
                         <span className={`background-file-kind ${preferences.backgroundMedia.kind === 'video' ? 'is-video' : 'is-image'}`}>{preferences.backgroundMedia.kind === 'video' ? <Film /> : <ImageIcon />}</span>
-                        <span><strong title={preferences.backgroundMedia.name}>{preferences.backgroundMedia.name}</strong><small>{preferences.backgroundMedia.kind === 'video' ? '视频' : '图片'} · {filesize(preferences.backgroundMedia.bytes)}</small></span>
+                        <span><strong title={preferences.backgroundMedia.name}>{preferences.backgroundMedia.name}</strong><small>{preferences.backgroundMedia.kind === 'video' ? '视频' : '图片'} · {formatFileSize(preferences.backgroundMedia.bytes)}</small></span>
                       </div>}
                       <div className="background-range-list">
                         <RangeControl
                           id="background-opacity"
                           label="背景透明度"
-                          description="控制图片或视频自身的可见度；0% 完全隐藏，100% 完整显示。"
                           value={preferences.backgroundOpacity}
                           disabled={!preferences.backgroundMedia}
                           onChange={(value) => updatePreference('backgroundOpacity', value)}
@@ -5898,7 +5988,6 @@ export function App() {
                         <RangeControl
                           id="background-blur"
                           label="柔化程度"
-                          description="柔化背景细节，让正文和控件保持更稳定的视觉层级。"
                           value={preferences.backgroundBlur}
                           disabled={!preferences.backgroundMedia}
                           onChange={(value) => updatePreference('backgroundBlur', value)}
@@ -5906,26 +5995,24 @@ export function App() {
                         <RangeControl
                           id="background-surface"
                           label="界面遮挡"
-                          description="调整侧栏与内容区的底漆强度；卡片、按钮和菜单始终保持清晰。"
                           value={preferences.backgroundSurfaceOpacity}
                           disabled={!preferences.backgroundMedia}
                           onChange={(value) => updatePreference('backgroundSurfaceOpacity', value)}
                         />
                       </div>
-                      {preferences.backgroundMedia?.kind === 'video' && <p className="background-video-hint"><Film />视频会自动静音循环；MOV 与 WebM 的播放能力取决于其编码格式。</p>}
                     </div>
                   </div>
                 </section>
                 <section className="settings-card">
                   <div className="settings-profile-list">
-                    <div className="settings-profile-row"><div><strong>菜单栏图标</strong><p>在 macOS 菜单栏显示运行数量；每轮完成后弹出结果卡片，可直接返回对应会话。</p></div><button className={`switch ${menuBarPreference.enabled ? 'is-on' : ''}`} role="switch" aria-checked={menuBarPreference.enabled} disabled={!menuBarPreference.available || menuBarBusy} title={menuBarPreference.available ? (menuBarPreference.enabled ? '隐藏菜单栏图标' : '显示菜单栏图标') : '当前平台不支持菜单栏图标'} onClick={() => void changeMenuBarVisibility(!menuBarPreference.enabled)}><span /></button></div>
-                    <div className="settings-profile-row"><div><strong>圆角风格</strong><p>统一小元素、控件、卡片和大面板的圆角尺度。</p></div><div className="radius-control"><span className="radius-preview" aria-hidden="true"><i /><i /><i /><i /></span><Select label="圆角风格" value={preferences.radiusStyle} onChange={(value) => updatePreference('radiusStyle', value as Preferences['radiusStyle'])} options={[{ value: 'square', label: '直角' }, { value: 'compact', label: '紧凑' }, { value: 'standard', label: '标准' }, { value: 'soft', label: '圆润' }]} /></div></div>
-                    <div className="settings-profile-row"><div><strong>字号大小</strong><p>仅影响对话内容的字号。</p></div><div className="settings-inline-control"><Select label="字号大小" value={String(preferences.fontSize)} onChange={(value) => updatePreference('fontSize', Number(value))} options={[12, 13, 14, 15, 16, 17].map((size) => ({ value: String(size), label: String(size) }))} /><span className="settings-unit">px</span></div></div>
-                    <div className="settings-profile-row"><div><strong>工作步骤展示</strong><p>选择希望看到多少工具调用细节。</p></div><Select label="工作步骤展示" value={preferences.stepDisplay} onChange={(value) => updatePreference('stepDisplay', value as Preferences['stepDisplay'])} options={[{ value: 'compact', label: '精简' }, { value: 'standard', label: '标准' }, { value: 'detailed', label: '详细' }]} /></div>
-                    <div className="settings-profile-row"><div><strong>工作步骤收起时机</strong><p>选择何时自动收起工作步骤。</p></div><Select label="工作步骤收起时机" value={preferences.stepCollapse} onChange={(value) => updatePreference('stepCollapse', value as Preferences['stepCollapse'])} options={[{ value: 'after-answer', label: '回答结束后' }, { value: 'keep-open', label: '保持展开' }, { value: 'manual', label: '手动控制' }]} /></div>
-                    <div className="settings-profile-row"><div><strong>显示代码工作视图</strong><p>本轮回答结束后，显示工具确认的文件修改与可用差异。</p></div><button className={`switch ${preferences.showCodeView ? 'is-on' : ''}`} role="switch" aria-checked={preferences.showCodeView} onClick={() => updatePreference('showCodeView', !preferences.showCodeView)}><span /></button></div>
-                    <div className="settings-profile-row"><div><strong>快捷键</strong><p>查看当前可用的键盘操作。</p></div><button className="settings-outline" onClick={() => setShortcutsOpen(true)}><Keyboard />编辑快捷键</button></div>
-                    <div className="settings-profile-row"><div><strong>网页链接默认打开方式</strong><p>对话中网页链接的打开位置。</p></div><Select label="网页链接默认打开方式" value={preferences.linkOpen} onChange={(value) => updatePreference('linkOpen', value as Preferences['linkOpen'])} options={[{ value: 'external', label: '系统浏览器' }, { value: 'window', label: '应用内窗口' }]} /></div>
+                    <div className="settings-profile-row"><div><strong>菜单栏图标</strong></div><button className={`switch ${menuBarPreference.enabled ? 'is-on' : ''}`} role="switch" aria-checked={menuBarPreference.enabled} disabled={!menuBarPreference.available || menuBarBusy} aria-label={menuBarPreference.enabled ? '隐藏菜单栏图标' : '显示菜单栏图标'} title={menuBarPreference.available ? (menuBarPreference.enabled ? '隐藏菜单栏图标' : '显示菜单栏图标') : '当前平台不支持菜单栏图标'} onClick={() => void changeMenuBarVisibility(!menuBarPreference.enabled)}><span /></button></div>
+                    <div className="settings-profile-row"><div><strong>圆角风格</strong></div><div className="radius-control"><span className="radius-preview" aria-hidden="true"><i /><i /><i /><i /></span><Select label="圆角风格" value={preferences.radiusStyle} onChange={(value) => updatePreference('radiusStyle', value as Preferences['radiusStyle'])} options={[{ value: 'square', label: '直角' }, { value: 'compact', label: '紧凑' }, { value: 'standard', label: '标准' }, { value: 'soft', label: '圆润' }]} /></div></div>
+                    <div className="settings-profile-row"><div><strong>字号大小</strong></div><div className="settings-inline-control"><Select label="字号大小" value={String(preferences.fontSize)} onChange={(value) => updatePreference('fontSize', Number(value))} options={[12, 13, 14, 15, 16, 17].map((size) => ({ value: String(size), label: String(size) }))} /><span className="settings-unit">px</span></div></div>
+                    <div className="settings-profile-row"><div><strong>工作步骤展示</strong></div><Select label="工作步骤展示" value={preferences.stepDisplay} onChange={(value) => updatePreference('stepDisplay', value as Preferences['stepDisplay'])} options={[{ value: 'compact', label: '精简' }, { value: 'standard', label: '标准' }, { value: 'detailed', label: '详细' }]} /></div>
+                    <div className="settings-profile-row"><div><strong>工作步骤收起时机</strong></div><Select label="工作步骤收起时机" value={preferences.stepCollapse} onChange={(value) => updatePreference('stepCollapse', value as Preferences['stepCollapse'])} options={[{ value: 'after-answer', label: '回答结束后' }, { value: 'keep-open', label: '保持展开' }, { value: 'manual', label: '手动控制' }]} /></div>
+                    <div className="settings-profile-row"><div><strong>回答后显示代码改动</strong></div><button className={`switch ${preferences.showCodeView ? 'is-on' : ''}`} role="switch" aria-checked={preferences.showCodeView} aria-label="回答后显示代码改动" onClick={() => updatePreference('showCodeView', !preferences.showCodeView)}><span /></button></div>
+                    <div className="settings-profile-row"><div><strong>快捷键</strong></div><button className="settings-outline" onClick={() => setShortcutsOpen(true)}><Keyboard />编辑快捷键</button></div>
+                    <div className="settings-profile-row"><div><strong>网页链接打开方式</strong></div><Select label="网页链接打开方式" value={preferences.linkOpen} onChange={(value) => updatePreference('linkOpen', value as Preferences['linkOpen'])} options={[{ value: 'external', label: '系统浏览器' }, { value: 'window', label: '应用内窗口' }]} /></div>
                   </div>
                 </section>
               </div>
@@ -5946,7 +6033,6 @@ export function App() {
               <AgentToolsSettings
                 cwd={workspace}
                 initialSelection={settingsData.agentTools}
-                configPath={settingsData.agentToolsPath}
                 onSaved={(snapshot) => setSettingsData((current) => current ? { ...current, agentTools: snapshot.agentTools } : current)}
               />
             )}
@@ -5971,14 +6057,12 @@ export function App() {
                   icon={<Cpu />}
                   title="模型配置"
                   meta={<span className="count-badge">{enabledModels.length}</span>}
-                  description="配置模型来源、发现与启用模型，并为新对话选择默认模型。本轮运行中的请求不会被配置变化打断。"
                   actions={<button type="button" className="settings-add-button" onClick={() => void openEditor('provider')}><Plus />添加模型来源</button>}
                 />
                 <section className="settings-card default-model-card">
                   <div className="settings-card-head">
                     <div>
                       <h2>新对话默认</h2>
-                      <p>新对话默认值保存在 Pi Studio SQLite。打开历史会话时，仍会优先恢复那条会话自己最后使用的模型和思考等级。</p>
                     </div>
                     {defaultModelBusy && <span className="settings-save-status" role="status"><LoaderCircle className="spin" />同步中</span>}
                   </div>
@@ -5986,7 +6070,7 @@ export function App() {
                     {defaultModelAvailable ? <>
                       <div className="default-model-identity">
                         <ProviderIcon provider={defaultModelItem?.provider || defaultModelSelection.modelRef.split('/')[0]} name={defaultModelProvider} icon={settingsData.providers.find((entry) => entry.id === defaultModelItem?.provider)?.icon} size={34} />
-                        <span><small>当前新对话使用</small><strong>{defaultModelSelection.label || '尚未选择模型'}</strong><code>{defaultModelSelection.modelRef || '—'}</code></span>
+                        <span><strong>{defaultModelSelection.label || '尚未选择模型'}</strong><code>{defaultModelSelection.modelRef || '—'}</code></span>
                       </div>
                       <div className="default-model-fields">
                         <label>
@@ -6002,22 +6086,20 @@ export function App() {
                       <span className="default-model-empty-icon" aria-hidden="true"><Cpu /></span>
                       <span className="default-model-empty-copy">
                         <strong>{settingsData.providers.length === 0 ? '还没有模型来源' : '还没有启用模型'}</strong>
-                        <small>{settingsData.providers.length === 0 ? '添加来源并完成认证后，就可以选择新对话默认模型。' : '打开下方模型来源，启用至少一个模型即可设置默认值。'}</small>
                       </span>
                       <button type="button" className="settings-outline" onClick={() => void openEditor('provider')}><Plus />添加模型来源</button>
                     </div>}
                   </div>
-                  <p className="default-model-note"><Info />默认模型与思考等级由 Studio 独立管理，不读取或改写 Pi CLI 配置。历史会话的临时切换只影响该会话。</p>
                 </section>
                 <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>已启用模型 <span className="count-badge">{enabledModels.length}</span></h2><p>这里管理所有会话可用的模型；具体使用哪个模型，在对话输入框中选择。</p></div></div>
+                  <div className="settings-card-head"><div><h2>已启用模型 <span className="count-badge">{enabledModels.length}</span></h2></div></div>
                   {enabledModels.length > 0 ? <>
-                    <div className="model-view-bar"><span>查看方式</span><div className="model-view-toggle" role="group" aria-label="模型查看方式"><button className={modelView === 'all' ? 'is-active' : ''} onClick={() => setModelView('all')}>全部</button><button className={modelView === 'provider' ? 'is-active' : ''} onClick={() => setModelView('provider')}>按来源</button></div></div>
+                    <div className="model-view-bar"><div className="model-view-toggle" role="group" aria-label="模型查看方式"><button className={modelView === 'all' ? 'is-active' : ''} onClick={() => setModelView('all')}>全部</button><button className={modelView === 'provider' ? 'is-active' : ''} onClick={() => setModelView('provider')}>按来源</button></div></div>
                     {modelView === 'all' ? <div className="model-card-grid">{enabledModels.map(renderModelCard)}</div> : <div className="model-groups">{enabledModelGroups.map((group) => <section className="model-group" key={group.name}><div className="model-group-head"><ProviderIcon className="model-card-avatar" provider={group.provider} name={group.name} icon={settingsData?.providers.find((entry) => entry.id === group.provider)?.icon} size={22} /><strong>{group.name}</strong><span>{group.ids.length}</span></div><div className="model-card-grid">{group.ids.map(renderModelCard)}</div></section>)}</div>}
-                  </> : <div className="settings-empty">在下方添加来源，再选择要启用的模型。</div>}
+                  </> : <div className="settings-empty">还没有启用模型</div>}
                 </section>
                 <section className="settings-card">
-                  <div className="settings-card-head"><div><h2>模型来源 <span className="count-badge">{settingsData.providers.length}</span></h2><p>来源负责连接与认证；模型在对应来源内单独添加、发现和管理。</p></div><button className="settings-add-button" aria-label="添加模型来源" onClick={() => void openEditor('provider')}><Plus />添加来源</button></div>
+                  <div className="settings-card-head"><div><h2>模型来源 <span className="count-badge">{settingsData.providers.length}</span></h2></div><button className="settings-add-button" aria-label="添加模型来源" onClick={() => void openEditor('provider')}><Plus />添加来源</button></div>
                   <div className="provider-cards">
                     {settingsData.providers.map((provider) => {
                       const list = providerModels[provider.id] ?? [];
@@ -6048,12 +6130,10 @@ export function App() {
                             <span className={`provider-mode ${!providerEnabled ? 'is-disabled' : provider.authConfigured === false ? 'is-missing' : ''}`}>{!providerEnabled ? '已停用' : provider.authConfigured === false ? '未配置凭据' : provider.mode === 'oauth' ? 'OAuth' : provider.mode === 'env' ? '环境变量' : 'API Key'}</span>
                           </SettingsResourceCardBody>
                         </SettingsResourceCardMain>
-                        {!providerEnabled && <p className="provider-disabled-hint">来源已停用。模型与凭据仍保留，重新启用后会回到模型选择器。</p>}
-                        {providerEnabled && provider.authConfigured === false && <p className="provider-auth-hint">尚未配置凭据。点击“编辑”完成连接。</p>}
                         {provider.mode === 'env' && <div className={`provider-env-hint ${provider.envAvailable ? 'is-set' : ''}`}>{provider.envAvailable ? '环境变量已设置' : '环境变量未设置'} · <code>{provider.envName}</code></div>}
                         {expandedProvider === provider.id && <div className="provider-model-panel">
                           <div className="provider-model-head">
-                            <div><strong>模型目录</strong><span>{list.length > 0 ? `${list.filter((item) => enabledModels.includes(item.id)).length} 个已启用 · 共 ${list.length} 个` : '这个来源还没有模型'}</span></div>
+                            <div><strong>模型目录 <InfoHint label="配置模型列表地址后使用该地址；留空时自动尝试来源的 /models 接口。" /></strong><span>{list.length > 0 ? `${list.filter((item) => enabledModels.includes(item.id)).length} 个已启用 · 共 ${list.length} 个` : '这个来源还没有模型'}</span></div>
                             <div className="provider-model-actions">
                               <button className="settings-outline" disabled={discovery?.loading || settingsBusy} onClick={() => void discoverProviderModels(provider.id)}><RotateCw className={discovery?.loading ? 'spin' : ''} />获取模型</button>
                               <button className="settings-add-button" onClick={() => openModelEditor(provider.id)}><Plus />添加模型</button>
@@ -6061,7 +6141,6 @@ export function App() {
                           </div>
                           <div className="provider-model-tools">
                             <div className="provider-model-search"><Search /><input className="model-search" aria-label={`搜索 ${provider.name} 的模型`} value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} placeholder="搜索名称或模型 ID…" /></div>
-                            <span>{provider.modelsUrl ? '已配置模型列表地址' : '未配置地址时自动尝试 /models'}</span>
                           </div>
                           {discovery && <div className={`provider-discovery-panel ${discovery.error ? 'is-error' : ''}`} aria-live="polite">
                             <div className="provider-discovery-head">
@@ -6069,7 +6148,7 @@ export function App() {
                                 <strong>{discovery.loading ? '正在读取模型列表…' : discovery.error ? '模型发现失败' : `发现 ${discovery.models?.length || 0} 个模型`}</strong>
                                 {discovery.endpoint && <code>{discovery.endpoint}</code>}
                                 {discovery.error && <p>{discovery.error}</p>}
-                                {!discovery.loading && !discovery.error && discovery.imported !== undefined && <p>已添加并启用 {discovery.imported} 个模型，可逐个调整能力与上下文。</p>}
+                                {!discovery.loading && !discovery.error && discovery.imported !== undefined && <p>已添加并启用 {discovery.imported} 个模型。</p>}
                               </div>
                               <button className="icon-button" aria-label="关闭模型发现结果" title="关闭" onClick={() => setProviderDiscovery((current) => {
                                 const next = { ...current };
@@ -6160,16 +6239,18 @@ export function App() {
                             {filtered.length === 0 && (list.length > 0
                               ? <div className="settings-empty">没有匹配的模型。</div>
                               : providerModels[provider.id]
-                                ? <div className="provider-model-empty is-compact"><span>暂无模型，请使用上方的“添加模型”或“获取模型”。</span></div>
+                                ? <div className="provider-model-empty is-compact"><span>暂无模型</span></div>
                                 : <div className="settings-empty"><LoaderCircle className="spin" />正在加载模型…</div>)}
                           </div>
                         </div>}
                         <SettingsResourceCardFooter className="provider-card-footer">
-                          <span className={`resource-status ${providerEnabled ? provider.authConfigured === false ? 'is-pending' : 'is-on' : ''}`}>
-                            {!providerEnabled ? '已停用' : provider.authConfigured === false ? '等待认证' : '可用于新对话'}
-                          </span>
+                          {(!providerEnabled || provider.authConfigured === false) && (
+                            <span className={`resource-status ${provider.authConfigured === false ? 'is-pending' : ''}`}>
+                              {!providerEnabled ? '已停用' : '等待认证'}
+                            </span>
+                          )}
                           <div className="row-actions provider-actions">
-                            <button className="settings-text-button row-edit" aria-label={`编辑 ${provider.name}`} title="编辑连接" onClick={() => void openEditor('provider', provider.id)}>编辑</button>
+                            <button className="settings-text-button row-edit" aria-label={`${provider.authConfigured === false ? '配置连接' : '编辑'} ${provider.name}`} title={provider.authConfigured === false ? '配置连接' : '编辑连接'} onClick={() => void openEditor('provider', provider.id)}>{provider.authConfigured === false ? '配置连接' : '编辑'}</button>
                             <button className="settings-text-button row-action" disabled={!providerEnabled} onClick={() => void loadProviderModels(provider.id)} aria-expanded={expandedProvider === provider.id}>{expandedProvider === provider.id ? '收起' : '管理模型'}</button>
                             <button className={`switch provider-source-switch ${providerEnabled ? 'is-on' : ''}`} role="switch" aria-checked={providerEnabled} disabled={settingsBusy} aria-label={`${providerEnabled ? '停用' : '启用'}模型来源 ${provider.name}`} title={providerEnabled ? '停用来源' : '启用来源'} onClick={() => void toggleProvider(provider, !providerEnabled)}><span /></button>
                             <button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`删除模型来源 ${provider.name}`} title="删除来源" onClick={() => void deleteProvider(provider)}><Trash2 /></button>
@@ -6177,7 +6258,7 @@ export function App() {
                         </SettingsResourceCardFooter>
                       </SettingsResourceCard>;
                     })}
-                    {settingsData.providers.length === 0 && <div className="settings-empty">还没有模型来源，添加一个开始使用。</div>}
+                    {settingsData.providers.length === 0 && <div className="settings-empty">还没有模型来源</div>}
                   </div>
                 </section>
               </div>
@@ -6187,8 +6268,10 @@ export function App() {
                 <SettingsPageHeader
                   icon={<Plug />}
                   title="MCP 服务器"
-                  meta={<span className="count-badge">{settingsData.mcp.length}</span>}
-                  description="连接外部工具。默认通过官方 tool_search 按需发现，连接和工具变化会在下一次模型请求前热更新。"
+                  meta={<>
+                    <span className="count-badge">{settingsData.mcp.length}</span>
+                    <InfoHint label="默认通过 tool_search 按需发现工具；连接变更从下一次请求开始生效。" />
+                  </>}
                   actions={<button type="button" className="settings-add-button" aria-label="添加 MCP 服务器" onClick={() => void openEditor('mcp')}><Plus />添加服务器</button>}
                 />
                 <section className="settings-card">
@@ -6204,22 +6287,23 @@ export function App() {
                           <strong>{server.name}</strong>
                           <span className="mcp-card-transport">{server.transport === 'stdio' ? '本地进程' : 'HTTP 服务'}</span>
                         </span>
-                        <p className="mcp-card-description">{server.description || '没有填写描述'}</p>
+                        {server.description && <p className="mcp-card-description">{server.description}</p>}
                         <code className="mcp-card-target" title={server.target}>{server.target}</code>
                         <span className="mcp-card-meta"><span>{server.exposure === 'deferred' ? '按需搜索' : server.exposure === 'direct' ? '直接提供' : '隐藏工具'}</span><span>{server.connected ? `${server.toolCount} 个工具` : server.error || (server.enabled ? '等待连接' : '未连接')}</span></span>
                       </SettingsResourceCardBody>
                     </SettingsResourceCardMain>
                     <SettingsResourceCardFooter className="mcp-card-footer">
-                      <span className={`resource-status ${server.enabled && server.connected ? 'is-on' : ''}`}>{!server.enabled ? '已停用' : server.connected ? '已连接' : '连接异常'}</span>
+                      {(!server.enabled || !server.connected) && (
+                        <span className="resource-status">{!server.enabled ? '已停用' : '连接异常'}</span>
+                      )}
                       <button className="settings-text-button" onClick={() => setMcpDetail(server)}>查看详情</button>
                       <button className={`switch ${server.enabled ? 'is-on' : ''}`} role="switch" aria-checked={server.enabled} disabled={settingsBusy} onClick={() => void toggleMcp(server.name, !server.enabled)} aria-label={`${server.name} ${server.enabled ? '禁用' : '启用'}`}><span /></button>
                       <button className="icon-button row-edit" aria-label={`编辑 ${server.name}`} title="编辑" onClick={() => void openEditor('mcp', server.name)}><Pencil /></button>
                       <button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`删除 MCP ${server.name}`} title="删除" onClick={() => void deleteMcp(server.name)}><Trash2 /></button>
                     </SettingsResourceCardFooter>
                   </SettingsResourceCard>)}
-                  {settingsData.mcp.length === 0 && <div className="settings-empty">还没有 MCP 服务器。</div>}
+                  {settingsData.mcp.length === 0 && <div className="settings-empty">还没有 MCP 服务器</div>}
                 </div>
-                <p className="settings-footnote">配置变更只重连受影响的服务；本轮的模型请求与已开始的工具调用保持稳定，新工具从下一次模型请求起生效。</p>
                 </section>
               </div>
             )}
@@ -6228,8 +6312,10 @@ export function App() {
                 <SettingsPageHeader
                   icon={<FileCode2 />}
                   title="技能"
-                  meta={<span className="count-badge">{settingsData.skills.length}</span>}
-                  description="管理 Studio 私有技能与通用 .agents/skills。项目技能优先于用户技能，并在下一次请求前热更新。"
+                  meta={<>
+                    <span className="count-badge">{settingsData.skills.length}</span>
+                    <InfoHint label="项目技能默认不加载；目录内容变化后需要重新信任，配置会在下一次请求前生效。" />
+                  </>}
                   actions={<button type="button" className="settings-add-button" aria-label="添加技能" onClick={() => void openEditor('skill')}><Plus />添加技能</button>}
                 />
                 <SkillHub
@@ -6291,13 +6377,12 @@ export function App() {
                           </div>
                         </SettingsResourceCardFooter>
                       </SettingsResourceCard>)}
-                    </div> : <div className="settings-empty settings-empty--small">这个来源还没有技能。</div>}
+                    </div> : <div className="settings-empty settings-empty--small">暂无技能</div>}
                   </section>)}
                 </div>
                 {settingsData.skillErrors.length > 0 && <div className="settings-error-list">
                   {settingsData.skillErrors.map((item) => <div key={`${item.path}:${item.message}`}><code>{item.path}</code><span>{item.message}</span></div>)}
                 </div>}
-                <p className="settings-footnote">提示词只包含名称、描述和 SKILL.md 路径；模型匹配后才会读取正文。项目技能默认不加载，目录内容变化会让既有信任失效。Studio 新建技能写入应用数据目录；`.agents/skills` 由其他智能体客户端共享。</p>
                 </section>
               </div>
             )}
@@ -6306,8 +6391,10 @@ export function App() {
                 <SettingsPageHeader
                   icon={<Layers3 />}
                   title="扩展"
-                  meta={<span className="count-badge">{settingsData.extensions.length}</span>}
-                  description="官方精选与第三方扩展共用同一套隔离安装、权限确认、原子升级和回滚流程。"
+                  meta={<>
+                    <span className="count-badge">{settingsData.extensions.length}</span>
+                    <InfoHint label="全局扩展安装后默认信任；项目扩展必须手动信任后才能加载可执行代码。启停和信任从下一次请求开始生效。" />
+                  </>}
                   actions={<>
                     <button type="button" className="settings-outline" onClick={() => void window.piApi.openExternal('https://github.com/huangrx6/pi-studio/blob/main/docs/extensions-distribution.md')}><BookOpen />开发与发布</button>
                     <button type="button" className="settings-outline" disabled={settingsBusy} onClick={() => void reloadExtensions()}><RotateCw className={settingsBusy ? 'spin' : ''} />重新加载</button>
@@ -6330,7 +6417,6 @@ export function App() {
                   <div className="settings-card-head extension-section-heading">
                     <div>
                       <h2>已安装 <span className="count-badge">{settingsData.extensions.length}</span></h2>
-                      <p>内置能力、全局扩展和当前工作区扩展都在同一处管理。</p>
                     </div>
                   </div>
                   <div className="extension-card-grid installed-extension-grid">
@@ -6342,7 +6428,7 @@ export function App() {
                     onToggle={(extension, enabled) => void toggleExtension(extension, enabled)}
                     onDelete={(id, name) => void deleteExtension(id, name)}
                   />)}
-                  {settingsData.extensions.length === 0 && <div className="settings-empty">还没有安装扩展。导入包含 `pi-studio.extension.json` 的目录即可。</div>}
+                  {settingsData.extensions.length === 0 && <div className="settings-empty">还没有安装扩展</div>}
                   </div>
                 </section>
                 {settingsData.extensionErrors.length > 0 && <div className="settings-error-list">
@@ -6357,7 +6443,6 @@ export function App() {
                   onSendPrompt={sendPromptFromExtension}
                   onNotify={notifyExtension}
                 />
-                <p className="settings-footnote">全局扩展安装后默认信任；项目扩展必须手动信任后才能加载可执行代码。启停和信任会在下一轮请求生效。</p>
               </div>
             )}
             {settingsData && settingsTab === 'about' && (
@@ -6365,65 +6450,53 @@ export function App() {
                 <section className="about-hero-card">
                   <span className="about-watermark" aria-hidden="true">π</span>
                   <div className="about-hero-main">
-                    <div className="about-eyebrow"><i />Pi Durable 桌面工作台<span>macOS</span></div>
                     <div className="about-lockup">
                       <BrandMark className="about-app-icon" />
-                      <div><h1>Pi Studio</h1><p>让想法，在这里成为现实。</p></div>
+                      <h1>Pi Studio</h1>
                     </div>
-                    <p className="about-lead">一个基于 Pi Durable 的本地智能体工作台。把长对话、代码差异、多子智能体协作和本地工作区放进同一套安静、清晰的界面里。</p>
                     <div className="about-actions">
                       <button type="button" className="about-action-primary" onClick={openUpdateDialog}><RotateCw />检查更新</button>
                       <button type="button" className="about-action-secondary" onClick={() => void window.piApi.openExternal('https://github.com/huangrx6/pi-studio')}><Github />查看源码</button>
-                    </div>
-                    <div className="about-feature-pills">
-                      <span><Monitor />macOS 原生体验</span>
-                      <span><ShieldCheck />配置与会话保存在本地</span>
-                      <span><Bot />Pi 智能体驱动</span>
                     </div>
                   </div>
                   <aside className="about-release-card">
                     <span className="about-release-label">当前版本</span>
                     <strong>{updateSnapshot.currentVersion ? `v${updateSnapshot.currentVersion}` : 'DEV'}</strong>
                     <div className="about-release-status"><i />GitHub Releases</div>
-                    {updateSnapshot.state === 'available' && updateSnapshot.latestVersion
-                      ? <p>发现新版本 v{updateSnapshot.latestVersion}</p>
-                      : <p>通过 GitHub Releases 获取稳定更新。</p>}
+                    {updateSnapshot.state === 'available' && updateSnapshot.latestVersion && <p>新版本 v{updateSnapshot.latestVersion}</p>}
                     <button type="button" onClick={openUpdateDialog}>版本与更新 <ChevronRight /></button>
                   </aside>
                 </section>
 
                 <div className="about-info-grid">
                   <article className="about-info-card about-author-card">
-                    <div className="about-info-head"><span><UserRound /></span><small>设计与开发</small></div>
+                    <div className="about-info-head"><span><UserRound /></span></div>
                     <h2>huangrx6</h2>
-                    <p>Pi Studio 的创建者，专注于把复杂的智能体工作流做成人愿意每天使用的工具。</p>
                     <button type="button" onClick={() => void window.piApi.openExternal('https://github.com/huangrx6')}>GitHub 主页 <ExternalLink /></button>
                   </article>
                   <article className="about-info-card">
-                    <div className="about-info-head"><span><Cpu /></span><small>Agent 内核</small></div>
+                    <div className="about-info-head"><span><Cpu /></span></div>
                     <h2>Pi Durable</h2>
                     <code>@earendil-works/pi-durable</code>
-                    <p>负责可恢复会话、模型轮次、工具调用、任务图与扩展运行。</p>
                   </article>
                   <article className="about-info-card">
-                    <div className="about-info-head"><span><ShieldCheck /></span><small>开源许可</small></div>
+                    <div className="about-info-head"><span><ShieldCheck /></span></div>
                     <h2>MIT License</h2>
-                    <p>源码开放，欢迎阅读、改进和基于自己的需求继续构建。</p>
                     <button type="button" onClick={() => void window.piApi.openExternal('https://github.com/huangrx6/pi-studio/blob/main/LICENSE')}>查看许可 <ExternalLink /></button>
                   </article>
                 </div>
 
                 <section className="about-resource-card">
-                  <div className="about-resource-head"><div><h2>资源与支持</h2><p>文档、源码和问题反馈都在 GitHub 上持续更新。</p></div><span>Resources</span></div>
+                  <div className="about-resource-head"><div><h2>资源与支持</h2></div></div>
                   <div className="about-resource-links">
-                    <button type="button" onClick={() => void window.piApi.openExternal('https://huangrx6.github.io/pi-studio/')}><span><BookOpen /></span><div><strong>使用文档</strong><small>安装、配置与工作流说明</small></div><ExternalLink /></button>
-                    <button type="button" onClick={() => void window.piApi.openExternal('https://github.com/huangrx6/pi-studio')}><span><Github /></span><div><strong>GitHub 仓库</strong><small>关注最新提交与版本</small></div><ExternalLink /></button>
-                    <button type="button" onClick={() => void window.piApi.openExternal('https://github.com/huangrx6/pi-studio/issues')}><span><MessageSquare /></span><div><strong>问题反馈</strong><small>报告问题和提出建议</small></div><ExternalLink /></button>
+                    <button type="button" onClick={() => void window.piApi.openExternal('https://huangrx6.github.io/pi-studio/')}><span><BookOpen /></span><strong>使用文档</strong><ExternalLink /></button>
+                    <button type="button" onClick={() => void window.piApi.openExternal('https://github.com/huangrx6/pi-studio')}><span><Github /></span><strong>GitHub 仓库</strong><ExternalLink /></button>
+                    <button type="button" onClick={() => void window.piApi.openExternal('https://github.com/huangrx6/pi-studio/issues')}><span><MessageSquare /></span><strong>问题反馈</strong><ExternalLink /></button>
                   </div>
                 </section>
 
                 <details className="about-system-card">
-                  <summary><span><FileCode2 /></span><div><strong>本地存储与诊断信息</strong><small>所有 Studio 配置、凭据与会话都在应用私有目录</small></div><ChevronDown /></summary>
+                  <summary><span><FileCode2 /></span><div><strong>本地存储与诊断信息</strong></div><ChevronDown /></summary>
                   <dl>
                     <div><dt>SQLite 数据库</dt><dd>{settingsData.databasePath}</dd></div>
                     <div><dt>技能目录</dt><dd>{settingsData.skillsPath}</dd></div>
@@ -6435,21 +6508,31 @@ export function App() {
           </section>
           {editor && <SettingsDialog
             title={editor.kind === 'provider' ? editor.editId ? '编辑模型来源' : '添加模型来源' : editor.kind === 'model' ? editor.editId ? (customModel.origin === 'builtin' ? '调整内置模型' : '编辑模型') : '添加模型' : editor.kind === 'mcp' ? editor.editId ? '编辑 MCP 服务器' : '添加 MCP 服务器' : '添加技能'}
-            description={editor.kind === 'mcp' ? '配置连接、超时与工具暴露；密钥只在主进程加密保存，不返回渲染页面。' : editor.kind === 'provider' ? '这里只保存连接与认证；模型在来源卡片内独立管理。' : editor.kind === 'model' ? `模型将归属到 ${settingsData?.providers.find((provider) => provider.id === customModel.providerId)?.name || customModel.providerId}。` : '选择技能所属范围，再导入包含 SKILL.md 的目录。'}
             action={editor.kind === 'skill' ? '选择文件夹并添加' : editor.editId ? '保存更改' : '添加'}
             busy={settingsBusy} loading={editorLoading} unavailable={editorUnavailable} error={editorError} onClose={closeEditor} onSubmit={submitEditor} showBackdrop={false}>
             {editor.kind === 'provider' && <div className="settings-form-grid">
-              <label>来源 ID<input autoFocus={!editor.editId} required disabled={Boolean(editor.editId)} value={providerDraft.providerId} onChange={(event) => setProviderDraft({ ...providerDraft, providerId: event.target.value })} placeholder="my-provider" /></label>
+              <div className="settings-field">
+                <span className="settings-field-heading"><label htmlFor="provider-id">来源 ID</label><InfoHint label="用于区分模型来源和凭据，创建后不能修改。" /></span>
+                <input id="provider-id" autoFocus={!editor.editId} required disabled={Boolean(editor.editId)} value={providerDraft.providerId} onChange={(event) => setProviderDraft({ ...providerDraft, providerId: event.target.value })} placeholder="my-provider" />
+              </div>
               <label>显示名称<input required value={providerDraft.name} onChange={(event) => setProviderDraft({ ...providerDraft, name: event.target.value })} placeholder="例如 My Gateway" /></label>
               <div className="settings-field"><span>API 类型</span><Select label="API 类型" value={providerDraft.api} onChange={(value) => setProviderDraft({ ...providerDraft, api: value })} options={[...apiTypeOptions, ...(apiTypeOptions.some((option) => option.value === providerDraft.api) ? [] : [{ value: providerDraft.api, label: providerDraft.api }])]} /></div>
               <label>服务地址<input autoFocus={Boolean(editor.editId)} required type="url" value={providerDraft.baseUrl} onChange={(event) => setProviderDraft({ ...providerDraft, baseUrl: event.target.value })} placeholder="https://api.example.com/v1" /></label>
-              <label className="field-wide">API Key<input aria-label="API Key" aria-describedby="provider-key-help" type="password" autoComplete="new-password" value={providerDraft.apiKey} onChange={(event) => setProviderDraft({ ...providerDraft, apiKey: event.target.value })} placeholder={editor.editId ? '已保存的凭据不显示，留空保持原值' : '粘贴 API Key'} /><small id="provider-key-help">请粘贴密钥值本身。Studio 使用自己的加密凭据库，不会把环境变量名或 shell 命令当作密钥解析。</small></label>
-              <label>模型列表地址<input aria-label="模型列表地址" type="url" value={providerDraft.modelsUrl} onChange={(event) => setProviderDraft({ ...providerDraft, modelsUrl: event.target.value })} placeholder="可选，留空自动使用服务地址/models" /><small>支持常见 OpenAI `/models` 响应。保存后可在来源卡片内获取并预览模型。</small></label>
-              <label>图标 URL<input value={providerDraft.icon} onChange={(event) => setProviderDraft({ ...providerDraft, icon: event.target.value })} placeholder="可选，https://... 或 data:image/..." /><small>用于替换默认的品牌图标，留空使用内置图标。</small></label>
-              <div className="provider-flow-note field-wide"><span><Cpu /></span><div><strong>来源和模型分开配置</strong><p>保存来源后，在来源卡片中手动添加模型，或从模型列表接口批量导入。每个模型可单独设置输入能力、推理和 Token 限制。</p></div></div>
+              <div className="settings-field field-wide">
+                <span className="settings-field-heading"><label htmlFor="provider-api-key">API Key</label><InfoHint label="只填写密钥值。Studio 使用自己的加密凭据库，并把环境变量名、shell 命令等按普通文本处理。" /></span>
+                <input id="provider-api-key" type="password" autoComplete="new-password" value={providerDraft.apiKey} onChange={(event) => setProviderDraft({ ...providerDraft, apiKey: event.target.value })} placeholder={editor.editId ? '已保存的凭据不显示，留空保持原值' : '粘贴 API Key'} />
+              </div>
+              <div className="settings-field">
+                <span className="settings-field-heading"><label htmlFor="provider-models-url">模型列表地址</label><InfoHint label="支持常见的 OpenAI /models 响应。保存来源后可在来源卡片内获取并预览模型。" /></span>
+                <input id="provider-models-url" type="url" value={providerDraft.modelsUrl} onChange={(event) => setProviderDraft({ ...providerDraft, modelsUrl: event.target.value })} placeholder="可选，默认使用服务地址/models" />
+              </div>
+              <label>图标 URL<input value={providerDraft.icon} onChange={(event) => setProviderDraft({ ...providerDraft, icon: event.target.value })} placeholder="可选，URL 或 data:image/…" /></label>
             </div>}
             {editor.kind === 'model' && <div className="settings-form-grid model-editor-form">
-              <div className="settings-field field-wide"><span>模型来源</span><Select label="模型来源" disabled value={customModel.providerId} onChange={() => {}} options={(settingsData?.providers ?? []).filter((provider) => provider.id === customModel.providerId).map((provider) => ({ value: provider.id, label: `${provider.name} · ${provider.id}` }))} /></div>
+              <div className="settings-field field-wide">
+                <span className="settings-field-heading"><span>模型来源</span>{customModel.origin === 'builtin' && <InfoHint label="这是 Pi 内置模型。保存会为当前来源建立参数覆盖，不会替换同一来源的其他内置模型。" />}</span>
+                <Select label="模型来源" disabled value={customModel.providerId} onChange={() => {}} options={(settingsData?.providers ?? []).filter((provider) => provider.id === customModel.providerId).map((provider) => ({ value: provider.id, label: `${provider.name} · ${provider.id}` }))} />
+              </div>
               <label>模型 ID<input autoFocus required disabled={Boolean(editor.editId)} value={customModel.modelId} onChange={(event) => setCustomModel({ ...customModel, modelId: event.target.value })} placeholder="model-id" /></label>
               <label>显示名称<input value={customModel.name} onChange={(event) => setCustomModel({ ...customModel, name: event.target.value })} placeholder="可选，默认使用模型 ID" /></label>
               <div className="model-token-field">
@@ -6473,11 +6556,9 @@ export function App() {
                     options={tokenUnitOptions}
                   />
                 </div>
-                <small className="model-token-exact">
-                  {tokenInputAsInteger(String(customModel.contextWindow), tokenUnits.contextWindow)
-                    ? `${tokenInputAsInteger(String(customModel.contextWindow), tokenUnits.contextWindow)?.toLocaleString()} tokens`
-                    : '可切换 Tokens / K / M / B / T'}
-                </small>
+                {tokenInputAsInteger(String(customModel.contextWindow), tokenUnits.contextWindow)
+                  ? <small className="model-token-exact">{tokenInputAsInteger(String(customModel.contextWindow), tokenUnits.contextWindow)?.toLocaleString()} tokens</small>
+                  : null}
               </div>
               <div className="model-token-field">
                 <label htmlFor="model-max-tokens">最大输出</label>
@@ -6500,19 +6581,17 @@ export function App() {
                     options={tokenUnitOptions}
                   />
                 </div>
-                <small className="model-token-exact">
-                  {tokenInputAsInteger(String(customModel.maxTokens), tokenUnits.maxTokens)
-                    ? `${tokenInputAsInteger(String(customModel.maxTokens), tokenUnits.maxTokens)?.toLocaleString()} tokens`
-                    : '可切换 Tokens / K / M / B / T'}
-                </small>
+                {tokenInputAsInteger(String(customModel.maxTokens), tokenUnits.maxTokens)
+                  ? <small className="model-token-exact">{tokenInputAsInteger(String(customModel.maxTokens), tokenUnits.maxTokens)?.toLocaleString()} tokens</small>
+                  : null}
               </div>
               <div className="model-capability-options field-wide" role="group" aria-label="模型能力">
-                <label className={customModel.supportsImages ? 'is-selected' : ''}><input type="checkbox" checked={customModel.supportsImages} onChange={(event) => setCustomModel({ ...customModel, supportsImages: event.target.checked })} /><span><strong>图片输入</strong><small>允许在对话中发送图片</small></span><ImageIcon /></label>
-                <label className={customModel.reasoning ? 'is-selected' : ''}><input type="checkbox" checked={customModel.reasoning} onChange={(event) => toggleModelReasoning(event.target.checked)} /><span><strong>推理模型</strong><small>支持 Thinking 强度设置</small></span><Sparkles /></label>
+                <label className={customModel.supportsImages ? 'is-selected' : ''}><input type="checkbox" checked={customModel.supportsImages} onChange={(event) => setCustomModel({ ...customModel, supportsImages: event.target.checked })} /><span><strong>图片输入</strong></span><ImageIcon /></label>
+                <label className={customModel.reasoning ? 'is-selected' : ''}><input type="checkbox" checked={customModel.reasoning} onChange={(event) => toggleModelReasoning(event.target.checked)} /><span><strong>推理模型</strong></span><Sparkles /></label>
               </div>
               {customModel.reasoning && <div className="model-thinking-levels field-wide">
                 <div className="model-thinking-levels-head">
-                  <div><strong>可用推理等级</strong><span>选择该模型实际接受的强度。请求参数由对应的 Pi Provider 适配。</span></div>
+                  <div><strong>可用推理等级 <InfoHint label="只勾选模型实际接受的强度；请求参数由对应的 Pi Provider 适配。模型目录没有声明时会尝试 models.dev、Pi 官方目录，最后回退到 Off–High。" /></strong></div>
                   <small>{customModel.thinkingLevels.length} / {concreteThinkingLevels.length}</small>
                 </div>
                 <div className="model-thinking-level-options" role="group" aria-label="可用推理等级">
@@ -6531,50 +6610,74 @@ export function App() {
                     </button>;
                   })}
                 </div>
-                <p>模型接口没有声明推理等级时，优先使用 models.dev 统一目录，再以 Pi 官方目录补齐；都未提供时才默认启用 Off 到 High。</p>
               </div>}
-              {customModel.origin === 'builtin' && <p className="model-editor-note field-wide"><Info />这是 Pi 内置模型。保存会在当前来源中建立参数覆盖，不会替换同一来源的其他内置模型。</p>}
             </div>}
             {editor.kind === 'mcp' && <div className="settings-form-grid">
               <label>名称<input autoFocus required value={mcpDraft.name} onChange={(event) => setMcpDraft({ ...mcpDraft, name: event.target.value })} placeholder="例如 filesystem" /></label>
               <div className="settings-field"><span>传输方式</span><Select label="传输方式" value={mcpDraft.transport} onChange={(value) => setMcpDraft({ ...mcpDraft, transport: value })} options={[{ value: 'stdio', label: '本地进程 · stdio' }, { value: 'http', label: 'Streamable HTTP' }]} /></div>
               <div className="settings-field"><span>工具暴露</span><Select label="工具暴露" value={mcpDraft.exposure} onChange={(value) => setMcpDraft({ ...mcpDraft, exposure: value })} options={[{ value: 'deferred', label: '按需搜索 · tool_search' }, { value: 'direct', label: '直接提供' }, { value: 'hidden', label: '不提供给模型' }]} /></div>
-              <label>请求超时<input type="number" min="1" max="3600" step="1" value={mcpDraft.timeoutSeconds} onChange={(event) => setMcpDraft({ ...mcpDraft, timeoutSeconds: event.target.value })} /><small>秒。默认 60；进度通知会重置计时。</small></label>
+              <div className="settings-field">
+                <span className="settings-field-heading"><label htmlFor="mcp-timeout">请求超时</label><InfoHint label="单位为秒，默认 60；收到进度通知会重新计时。" /></span>
+                <input id="mcp-timeout" type="number" min="1" max="3600" step="1" value={mcpDraft.timeoutSeconds} onChange={(event) => setMcpDraft({ ...mcpDraft, timeoutSeconds: event.target.value })} />
+              </div>
               <label className="field-wide">描述<input value={mcpDraft.description} onChange={(event) => setMcpDraft({ ...mcpDraft, description: event.target.value })} placeholder="简要说明用途，可选" /></label>
-              {mcpDraft.transport === 'stdio' ? <><label className="field-wide">启动命令<input required value={mcpDraft.command} onChange={(event) => setMcpDraft({ ...mcpDraft, command: event.target.value })} placeholder="npx" /><small>只填写可执行文件；不要拼接 shell 命令。支持开头的 ~/ 展开。</small></label><label className="field-wide">启动参数<textarea aria-label="启动参数" aria-describedby="mcp-args-help" value={mcpDraft.args} onChange={(event) => setMcpDraft({ ...mcpDraft, args: event.target.value })} rows={4} placeholder={'-y\n@modelcontextprotocol/server-filesystem\n/path/to/workspace'} /><small id="mcp-args-help">每行一个参数，路径中的空格会保留。</small></label><label className="field-wide">工作目录<input value={mcpDraft.cwd} onChange={(event) => setMcpDraft({ ...mcpDraft, cwd: event.target.value })} placeholder="可选；例如 /path/to/workspace 或 ~/projects/demo" /><small>Studio 的 MCP 连接由所有工作区共享，因此这里只接受绝对路径或 ~/ 路径，避免不同会话隐式复用错误目录。</small></label></> : <label className="field-wide">服务器地址<input aria-label="服务器地址" aria-describedby="mcp-url-help" required type="url" value={mcpDraft.url} onChange={(event) => setMcpDraft({ ...mcpDraft, url: event.target.value })} placeholder="https://example.com/mcp" /><small id="mcp-url-help">远程服务必须使用 HTTPS；<code>localhost</code>、<code>127.0.0.1</code> 与 <code>::1</code> 可使用 HTTP 做本机开发。</small></label>}
-              {mcpDraft.transport === 'stdio' ? <label className="field-wide">环境变量<textarea aria-label="环境变量" value={mcpDraft.env} onChange={(event) => setMcpDraft({ ...mcpDraft, env: event.target.value })} rows={3} placeholder={'TOKEN=值\nBASE_URL=${BASE_URL}'} /><small>每行一个 KEY=value；值支持 <code>{'${ENV_VAR}'}</code> 引用。Studio 只向子进程传入 PATH、HOME 等运行所需变量，不会自动透传 shell 中的其他密钥；需要时请显式引用。编辑时 <code>KEY=</code> 会保留已保存值，删除整行可移除该变量；值只保存在主进程的加密存储中。</small></label> : <label className="field-wide">HTTP Headers<textarea aria-label="HTTP Headers" value={mcpDraft.headers} onChange={(event) => setMcpDraft({ ...mcpDraft, headers: event.target.value })} rows={3} placeholder={'Authorization=Bearer ${TOKEN}\nX-API-Key=...'} /><small>每行一个 Header=value；值支持 <code>{'${ENV_VAR}'}</code> 引用。编辑时只回传 Header 名称，已保存的值不会暴露给页面。</small></label>}
-              <label className="field-wide">逐工具暴露覆盖<textarea aria-label="逐工具暴露覆盖" value={mcpDraft.toolExposure} onChange={(event) => setMcpDraft({ ...mcpDraft, toolExposure: event.target.value })} rows={3} placeholder={'search_*=deferred\ndelete_*=hidden\nstatus=direct'} /><small>每行一个 `工具名或通配符=direct|deferred|hidden`。精确名称优先，随后按输入顺序匹配通配符。</small></label>
+              {mcpDraft.transport === 'stdio' ? <>
+                <div className="settings-field field-wide">
+                  <span className="settings-field-heading"><label htmlFor="mcp-command">启动命令</label><InfoHint label="只填写可执行文件，不要拼接 shell 命令。开头支持 ~/ 展开。" /></span>
+                  <input id="mcp-command" required value={mcpDraft.command} onChange={(event) => setMcpDraft({ ...mcpDraft, command: event.target.value })} placeholder="npx" />
+                </div>
+                <div className="settings-field field-wide">
+                  <span className="settings-field-heading"><label htmlFor="mcp-args">启动参数</label><InfoHint label="每行一个参数；路径中的空格会保留。" /></span>
+                  <textarea id="mcp-args" value={mcpDraft.args} onChange={(event) => setMcpDraft({ ...mcpDraft, args: event.target.value })} rows={4} placeholder={'-y\n@modelcontextprotocol/server-filesystem\n/path/to/workspace'} />
+                </div>
+                <div className="settings-field field-wide">
+                  <span className="settings-field-heading"><label htmlFor="mcp-cwd">工作目录</label><InfoHint label="MCP 连接由所有工作区共享，这里只接受绝对路径或 ~/ 路径，避免不同会话隐式复用错误目录。" /></span>
+                  <input id="mcp-cwd" value={mcpDraft.cwd} onChange={(event) => setMcpDraft({ ...mcpDraft, cwd: event.target.value })} placeholder="可选；例如 /path/to/workspace 或 ~/projects/demo" />
+                </div>
+              </> : <div className="settings-field field-wide">
+                <span className="settings-field-heading"><label htmlFor="mcp-url">服务器地址</label><InfoHint label="远程服务必须使用 HTTPS；localhost、127.0.0.1 与 ::1 可使用 HTTP 做本机开发。" /></span>
+                <input id="mcp-url" required type="url" value={mcpDraft.url} onChange={(event) => setMcpDraft({ ...mcpDraft, url: event.target.value })} placeholder="https://example.com/mcp" />
+              </div>}
+              {mcpDraft.transport === 'stdio' ? <div className="settings-field field-wide">
+                <span className="settings-field-heading"><label htmlFor="mcp-env">环境变量</label><InfoHint label="每行 KEY=value；支持 ${ENV_VAR} 引用。Studio 只传入 PATH、HOME 等运行所需变量，不会自动透传 shell 密钥；编辑时 KEY= 可保留已保存值。值只保存在主进程的加密存储中。" /></span>
+                <textarea id="mcp-env" value={mcpDraft.env} onChange={(event) => setMcpDraft({ ...mcpDraft, env: event.target.value })} rows={3} placeholder={'TOKEN=值\nBASE_URL=${BASE_URL}'} />
+              </div> : <div className="settings-field field-wide">
+                <span className="settings-field-heading"><label htmlFor="mcp-headers">HTTP Headers</label><InfoHint label="每行 Header=value；支持 ${ENV_VAR} 引用。页面只接收 Header 名称，已保存的值不会回显。" /></span>
+                <textarea id="mcp-headers" value={mcpDraft.headers} onChange={(event) => setMcpDraft({ ...mcpDraft, headers: event.target.value })} rows={3} placeholder={'Authorization=Bearer ${TOKEN}\nX-API-Key=...'} />
+              </div>}
+              <div className="settings-field field-wide">
+                <span className="settings-field-heading"><label htmlFor="mcp-tool-exposure">逐工具暴露覆盖</label><InfoHint label="每行一个“工具名或通配符=direct|deferred|hidden”。精确名称优先，随后按输入顺序匹配通配符。" /></span>
+                <textarea id="mcp-tool-exposure" value={mcpDraft.toolExposure} onChange={(event) => setMcpDraft({ ...mcpDraft, toolExposure: event.target.value })} rows={3} placeholder={'search_*=deferred\ndelete_*=hidden\nstatus=direct'} />
+              </div>
               {editor.editId && mcpDraft.transport === 'stdio' && mcpDraft.env.trim() && <label className="mcp-secret-clear"><input type="checkbox" checked={mcpDraft.clearEnv} onChange={(event) => setMcpDraft({ ...mcpDraft, clearEnv: event.target.checked })} />清除全部已保存环境变量</label>}
               {editor.editId && mcpDraft.transport === 'http' && mcpDraft.headers.trim() && <label className="mcp-secret-clear"><input type="checkbox" checked={mcpDraft.clearHeaders} onChange={(event) => setMcpDraft({ ...mcpDraft, clearHeaders: event.target.checked })} />清除全部已保存 Headers</label>}
-              <p className="settings-footnote field-wide">保存后只重连受影响的服务。当前模型请求保持稳定；新增或变化的工具从下一次请求起可见，`tool_search` 加载结果也会在下一轮可用。</p>
               <div className="mcp-connection-test field-wide">
-                <div>
-                  <strong>连接与工具预览</strong>
-                  <span>使用当前草稿连接一次；成功后再保存，失败信息已脱敏。</span>
+                <div className="mcp-connection-test-actions">
+                  <button type="button" className="settings-outline" disabled={mcpTesting || settingsBusy} onClick={() => void testCurrentMcp()}>
+                    {mcpTesting ? <LoaderCircle className="spin" /> : <Plug />}
+                    {mcpTesting ? '正在连接…' : '测试连接'}
+                  </button>
+                  <InfoHint label="使用当前草稿连接一次；错误信息会先脱敏。" />
                 </div>
-                <button type="button" className="settings-outline" disabled={mcpTesting || settingsBusy} onClick={() => void testCurrentMcp()}>
-                  {mcpTesting ? <LoaderCircle className="spin" /> : <Plug />}
-                  {mcpTesting ? '正在连接…' : '测试连接'}
-                </button>
                 {mcpTestResult && <div className="mcp-test-result" role="status">
                   <span className="mcp-test-summary"><CheckCircle2 /><strong>连接成功</strong><span>{mcpTestResult.durationMs}ms · {mcpTestResult.tools.length} 个工具 · {mcpTestResult.resources.length} 个资源</span></span>
                   {mcpTestResult.instructions && <p>{mcpTestResult.instructions}</p>}
                   {mcpTestResult.tools.length > 0 && <div className="mcp-test-tools">
                     {mcpTestResult.tools.map(tool => <div key={tool.name}>
-                      <span><strong>{tool.name}</strong><small>{tool.description || '源未提供描述'}</small></span>
+                      <span><strong>{tool.name}</strong>{tool.description && <small>{tool.description}</small>}</span>
                       <span>{tool.argumentCount} 参数 · {tool.exposure === 'deferred' ? '按需' : tool.exposure === 'direct' ? '直接' : '隐藏'}</span>
                     </div>)}
                   </div>}
-                  <small>Resources {mcpTestResult.capabilities.resources ? `已发现 ${mcpTestResult.resources.length}` : '未声明'} · Prompts 暂未接入</small>
+                  <small>Resources {mcpTestResult.capabilities.resources ? `已发现 ${mcpTestResult.resources.length}` : '未声明'}</small>
                 </div>}
               </div>
             </div>}
             {editor.kind === 'skill' && <div className="resource-import">
-              <span className="field-label">生效范围</span>
+              <div className="field-label-row"><span className="field-label">生效范围</span><InfoHint label="全局技能写入 Studio 应用数据目录；项目技能写入所选工作区的 .pi-studio/skills。待导入目录必须直接包含 SKILL.md。" /></div>
               <div className="scope-options">
                 <label className={resourceScope === 'user' ? 'is-selected' : ''}>
                   <input type="radio" name="scope" checked={resourceScope === 'user'} onChange={() => setResourceScope('user')} />
-                  <div><strong>全局</strong><span>Studio 应用数据目录，所有工作区可用</span></div>
+                  <div><strong>全局</strong></div>
                 </label>
                 <label className={resourceScope === 'project' ? 'is-selected' : ''}>
                   <input
@@ -6587,9 +6690,11 @@ export function App() {
                       if (!skillWorkspace) setSkillWorkspace(workspaces[0]?.cwd || '');
                     }}
                   />
-                  <div><strong>项目</strong><span>只对指定工作区生效</span></div>
+                  <div><strong>项目</strong></div>
                 </label>
               </div>
+              {/* Project imports target skillWorkspace, which is intentionally
+                  independent from the settings page's active workspace. */}
               {resourceScope === 'project' && <div className="skill-workspace-picker">
                 <label>目标工作区</label>
                 <Select
@@ -6601,9 +6706,7 @@ export function App() {
                   leadingIcon={<Folder />}
                   onChange={setSkillWorkspace}
                 />
-                <small>技能会写入所选工作区的 <code>.pi-studio/skills</code>，与设置页外层当前选择的工作区无关。</small>
               </div>}
-              <p className="import-note">下一步会打开文件夹选择器；所选目录必须直接包含 <code>SKILL.md</code>。</p>
             </div>}
           </SettingsDialog>}
         </div>
@@ -6674,26 +6777,91 @@ export function App() {
       {/* 技能详情弹窗：左侧文件树 + 右侧预览 */}
       {skillDetail && (
         <DetailDialog className="skill-detail-dialog" onClose={closeSkillDetail}>
-            <header className="detail-header"><div className="detail-heading"><span className="detail-icon is-skill"><FileCode2 /></span><div><h2>{skillDetail.name}</h2><p>{skillDetail.description}</p><small className={`resource-status ${skillDetail.available ? 'is-on' : ''}`}>{skillDetail.trustChanged ? '项目内容已变化，信任已失效' : skillDetail.scope === 'project' && !skillDetail.trusted ? '项目技能尚未信任' : skillDetail.disableModelInvocation ? '仅允许通过 /skill 显式调用' : '模型可按描述自动发现'}</small></div></div><button className="icon-button" aria-label="关闭技能详情" onClick={closeSkillDetail}><X /></button></header>
-            <div className="skill-detail-path"><code>{skillDetail.path}</code></div>
-            {skillDetailError && <div className="detail-error">{skillDetailError}</div>}
-            <div className="skill-detail-body">
-              <aside className="skill-file-tree">
-                <div className="skill-tree-toolbar"><button className="icon-button" aria-label="返回上级目录" disabled={!skillTreePath} onClick={() => void loadSkillTree(skillDetail.baseDir, skillTreePath.split('/').slice(0, -1).join('/'))}><ChevronLeft /></button><span>{skillTreePath ? `/${skillTreePath}` : '/'}</span><button className="icon-button" aria-label="刷新技能文件" onClick={() => void loadSkillTree(skillDetail.baseDir, skillTreePath)}><RotateCw /></button></div>
-                <div className="skill-tree-list">{skillEntries.map((entry) => <button key={entry.path} className={`file-row ${entry.type === 'directory' ? 'is-directory' : ''}`} onClick={() => entry.type === 'directory' ? void loadSkillTree(skillDetail.baseDir, entry.path) : void openSkillFile(entry.path)}>{entry.type === 'directory' ? <Folder /> : <FileText />}<span>{entry.name}</span>{entry.type === 'file' && <small>{filesize(entry.size)}</small>}{entry.type === 'directory' && <ChevronRight />}</button>)}</div>
-              </aside>
-              <section className="skill-file-preview">
-                {skillFile ? <><div className="file-toolbar"><span className="path-label">{skillFile.path}</span><small>{filesize(skillFile.size)}</small></div>{skillFile.binary ? <div className="panel-empty"><FileText /><strong>无法预览此文件</strong></div> : <pre className="detail-code">{skillFile.text}</pre>}</> : <div className="panel-empty"><FileCode2 /><strong>选择一个文件</strong><span>查看技能目录下的 SKILL.md 和配套文件。</span></div>}
-                {skillBusy && <div className="detail-loading"><LoaderCircle className="spin" />正在读取…</div>}
-              </section>
+          <header className="detail-header">
+            <div className="detail-heading">
+              <span className="detail-icon is-skill"><FileCode2 /></span>
+              <div>
+                <h2>{skillDetail.name}</h2>
+                <p>{skillDetail.description}</p>
+                <small className={`resource-status ${skillDetail.available ? 'is-on' : ''}`}>
+                  {skillDetail.trustChanged
+                    ? '项目内容已变化，信任已失效'
+                    : skillDetail.scope === 'project' && !skillDetail.trusted
+                      ? '项目技能尚未信任'
+                      : skillDetail.disableModelInvocation
+                        ? '仅允许通过 /skill 显式调用'
+                        : '模型可按描述自动发现'}
+                </small>
+              </div>
             </div>
-            <footer className="detail-footer"><span />{skillDetail.scope === 'project' && <button className="settings-outline" disabled={settingsBusy} onClick={() => void toggleSkillTrust(skillDetail, !skillDetail.trusted)}>{skillDetail.trusted ? '撤销信任' : skillDetail.trustChanged ? '重新信任' : '信任技能'}</button>}<button className="settings-outline" onClick={closeSkillDetail}>关闭</button></footer>
+            <button type="button" className="icon-button" aria-label="关闭技能详情" onClick={closeSkillDetail}><X /></button>
+          </header>
+          <div className="skill-detail-path"><code>{skillDetail.path}</code></div>
+          {skillDetailError && <div className="detail-error" role="alert">{skillDetailError}</div>}
+          <div className="skill-detail-body">
+            <aside className="skill-file-tree">
+              <div className="skill-tree-toolbar">
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="返回上级目录"
+                  disabled={!skillTreePath || skillTreeBusy}
+                  onClick={() => void loadSkillTree(skillDetail.baseDir, skillTreePath.split('/').slice(0, -1).join('/'))}
+                ><ChevronLeft /></button>
+                <span>{skillTreePath ? `/${skillTreePath}` : '/'}</span>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="刷新技能文件"
+                  disabled={skillTreeBusy}
+                  onClick={() => void loadSkillTree(skillDetail.baseDir, skillTreePath)}
+                ><RotateCw className={skillTreeBusy ? 'spin' : ''} /></button>
+              </div>
+              <div className="skill-tree-list">
+                {skillEntries.map((entry) => <button
+                  type="button"
+                  key={entry.path}
+                  className={`file-row ${entry.type === 'directory' ? 'is-directory' : ''} ${skillFile?.path === entry.path ? 'is-active' : ''}`}
+                  aria-current={skillFile?.path === entry.path ? 'page' : undefined}
+                  onClick={() => entry.type === 'directory'
+                    ? void loadSkillTree(skillDetail.baseDir, entry.path)
+                    : void openSkillFile(entry.path)}
+                >
+                  {entry.type === 'directory'
+                    ? <Folder />
+                    : <FileKindIcon path={entry.path} className="file-kind-icon" />}
+                  <span>{entry.name}</span>
+                  {entry.type === 'file' && <small>{formatFileSize(entry.size)}</small>}
+                  {entry.type === 'directory' && <ChevronRight />}
+                </button>)}
+                {!skillEntries.length && !skillTreeBusy && <div className="skill-tree-empty">这个目录是空的。</div>}
+              </div>
+            </aside>
+            <section className="skill-file-preview">
+              <FilePreview
+                file={skillFile}
+                loading={skillFileBusy}
+                emptyTitle="选择一个文件"
+                onOpenExternal={(file) => void openSkillFileExternal(file)}
+              />
+            </section>
+          </div>
+          <footer className="detail-footer">
+            <span />
+            {skillDetail.scope === 'project' && <button
+              type="button"
+              className="settings-outline"
+              disabled={settingsBusy}
+              onClick={() => void toggleSkillTrust(skillDetail, !skillDetail.trusted)}
+            >{skillDetail.trusted ? '撤销信任' : skillDetail.trustChanged ? '重新信任' : '信任技能'}</button>}
+            <button type="button" className="settings-outline" onClick={closeSkillDetail}>关闭</button>
+          </footer>
         </DetailDialog>
       )}
 
       {/* 快捷键说明 */}
       {shortcutsOpen && <DetailDialog className="shortcuts-dialog" onClose={() => setShortcutsOpen(false)}>
-        <header className="detail-header"><div className="detail-heading"><span className="detail-icon"><Keyboard /></span><div><h2>快捷键</h2><p>Pi Studio 桌面端当前可用的键盘操作。</p></div></div><button className="icon-button" aria-label="关闭快捷键" onClick={() => setShortcutsOpen(false)}><X /></button></header>
+        <header className="detail-header"><div className="detail-heading"><span className="detail-icon"><Keyboard /></span><div><h2>快捷键</h2></div></div><button className="icon-button" aria-label="关闭快捷键" onClick={() => setShortcutsOpen(false)}><X /></button></header>
         <div className="shortcut-list">
           {[['发送消息 / 补充当前任务', 'Enter'], ['排队下一条消息', 'Cmd/Ctrl + Enter'], ['换行', 'Shift + Enter'], ['打开命令与技能', '/'], ['引用工作区文件', '@'], ['关闭浮层', 'Esc'], ['打开设置', 'Cmd + ,']].map(([label, key]) => <div className="shortcut-row" key={label}><span>{label}</span><kbd>{key}</kbd></div>)}
         </div>
@@ -6770,7 +6938,7 @@ export function App() {
           <div className={`panel-body ${panelSplit ? 'is-split' : ''}`}>
             {panelSplit ? <>
               <div className="panel-split-tree">{renderFileTree()}</div>
-              <div className="panel-split-main">{activePanelTab?.kind === 'files' ? <div className="panel-empty"><FolderOpen /><strong>从左侧选择文件</strong><span>文件会在右侧以标签页打开。</span></div> : renderPanelContent()}</div>
+              <div className="panel-split-main">{activePanelTab?.kind === 'files' ? <div className="panel-empty"><FolderOpen /><strong>从左侧选择文件</strong></div> : renderPanelContent()}</div>
             </> : renderPanelContent()}
           </div>
           <div className="panel-extension-dock">

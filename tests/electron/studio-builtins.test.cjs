@@ -9,11 +9,13 @@ process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
 
 const {
   BUILTIN_MANIFESTS,
-  createFilesystemTools,
   createStudioBuiltins,
+} = require('../../electron/runtime/builtin-registry.cjs');
+const {
+  createFilesystemTools,
   resolveWorkspacePath,
   walkFiles,
-} = require('../../electron/services/studio-builtins.cjs');
+} = require('../../electron/capabilities/filesystem/index.cjs');
 const {
   normalizeManifest,
 } = require('../../electron/core/extension-manifest.cjs');
