@@ -4714,18 +4714,6 @@ export function App() {
     () => sampleOutlineIndices(outlineItems.length, outlineActive),
     [outlineItems.length, outlineActive],
   );
-  // 刻度按条目在会话里的真实位置分布（sourceIndex 比例），滚动时高亮才会连续移动，
-  // 而不是只在等距的采样槽之间跳。
-  const outlinePositions = useMemo(() => {
-    const first = Number(outlineItems[0]?.sourceIndex) || 0;
-    const last = Number(outlineItems.at(-1)?.sourceIndex) || first;
-    const span = Math.max(1, last - first);
-    return new Map(outlineSamples.map((index) => {
-      const value = Number(outlineItems[index]?.sourceIndex);
-      const ratio = Number.isFinite(value) ? (value - first) / span : index / Math.max(1, outlineItems.length - 1);
-      return [index, Math.min(100, Math.max(0, ratio * 100))];
-    }));
-  }, [outlineItems, outlineSamples]);
   const composerCommandOptions = composerMenu?.kind === 'slash'
     ? composerCommands.filter((command) => (
         `${command.name} ${command.description}`.toLowerCase().includes(composerMenu.query.toLowerCase())
@@ -5517,22 +5505,27 @@ export function App() {
                 return <div
                   className={`outline-item ${outlineHover === index ? 'is-hovered' : ''}`}
                   key={item.sourceIndex}
-                  // clamp 让首尾刻度的盒子完整留在轨道内（translateY(-50%) 居中）。
-                  style={{ top: `clamp(4px, ${outlinePositions.get(index) ?? 0}%, calc(100% - 4px))` }}
                   onMouseEnter={() => setOutlineHover(index)}
                 >
                   <button
                     type="button"
                     className={`outline-tick ${index === outlineActive ? 'is-active' : ''}`}
                     aria-label={`跳转到第 ${index + 1} 条提问`}
+                    aria-current={index === outlineActive ? 'location' : undefined}
                     title={item.text.slice(0, 100)}
                     onFocus={() => setOutlineHover(index)}
-                    onClick={() => jumpToOutline(index)}
+                    onClick={() => void jumpToOutline(index)}
                   ><span className="outline-line" /></button>
-                  {outlineHover === index && <div className="outline-preview">
-                    <div className="outline-preview-role">你 · {item.timestamp ? new Date(item.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}<span>{index + 1} / {outlineItems.length}</span></div>
-                    <p>{item.text}</p>
-                  </div>}
+                  {outlineHover === index && <button
+                    type="button"
+                    className="outline-preview"
+                    tabIndex={-1}
+                    aria-label={`跳转到第 ${index + 1} 条提问：${item.text.slice(0, 100)}`}
+                    onClick={() => void jumpToOutline(index)}
+                  >
+                    <span className="outline-preview-role">你 · {item.timestamp ? new Date(item.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}<span>{index + 1} / {outlineItems.length}</span></span>
+                    <span className="outline-preview-text">{item.text}</span>
+                  </button>}
                 </div>;
               })}
             </div>

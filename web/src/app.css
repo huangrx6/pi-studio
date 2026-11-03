@@ -2941,43 +2941,73 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 
 /* Open execution canvas: dot grid, vertical thread, colored nodes, soft log rows. */
 
-/* Floating conversation outline: hover reveals a message preview, click jumps. */
-/* 会话大纲浮在消息区右侧：absolute 定位在 main 内、z-index 9，hover 显示四行
-消息预览并可点击跳转。宽度只有 34px，不参与消息列布局；≤1100px 整体隐藏，
-避免和文件抽屉抢空间。 */
-
-.conversation-outline { position: absolute; z-index: 9; top: 112px; right: 10px; bottom: 104px; width: 34px; min-height: 0; }
-.outline-track { display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; width: 100%; height: 100%; min-height: 0; max-height: 100%; box-sizing: border-box; overflow: visible; padding: 12px 0; }
-.outline-tick { display: flex; align-items: center; justify-content: flex-end; width: 30px; min-height: 8px; padding: 0; border-radius: var(--radius-tag); }
-.outline-line { width: 7px; height: 1.5px; border-radius: var(--radius-tag); background: var(--border); transition: width .18s ease, height .18s ease, background .18s ease; }
-.outline-tick:hover .outline-line { width: 15px; background: var(--surface-hover); }
-.outline-tick.is-active .outline-line { width: 19px; height: 2px; background: var(--border); }
-.outline-preview { position: absolute; z-index: 3; right: 32px; width: 268px; padding: 11px 13px 12px; transform: translateY(-50%); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--border); box-shadow: var(--shadow-popover); pointer-events: none; }
-.outline-preview::after { content: ''; position: absolute; right: -6px; top: calc(50% - 5px); width: 9px; height: 9px; border-top: 1px solid var(--border); border-right: 1px solid var(--border); background: var(--border); transform: rotate(45deg); }
-.outline-preview-role { display: flex; align-items: center; gap: 6px; color: var(--faint); font-size: 9px; letter-spacing: .04em; }
-.outline-preview-role::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--border); }
-.outline-preview-role > span { margin-left: auto; color: var(--faint); font-variant-numeric: tabular-nums; }
-.outline-preview p { display: -webkit-box; margin: 6px 0 0; overflow: hidden; color: var(--muted); font-size: 11.5px; line-height: 1.65; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
-@media (max-width: 1100px) { .conversation-outline { display: none; } }
-
-.outline-track { position: relative; }
-.outline-track::before { content: ''; position: absolute; z-index: 0; top: 17px; bottom: 17px; right: 3px; width: 1px; background: var(--track-gradient); }
-.outline-tick { position: relative; z-index: 1; }
-
-/* The outline is a position map, not a spaced-out list: every sampled question sits
-   at its own place in the conversation, so the active tick travels with the scroll. */
-/* 大纲按会话里的真实位置分布刻度：滚动时高亮连续移动，而不是在等距采样槽之间跳。 */
-
-.conversation-outline { top: 112px; bottom: 104px; }
-.outline-track { position: relative; display: block; padding: 0; }
-.outline-item { position: absolute; right: 0; z-index: 1; display: flex; align-items: center; justify-content: flex-end; width: 100%; min-height: 8px; transform: translateY(-50%); }
+/* The outline follows Codex's compact turn navigator: 28px rows stay close
+   together, while the full row is clickable instead of only the visible line. */
+.conversation-outline {
+  position: absolute;
+  z-index: 9;
+  top: 112px;
+  right: 8px;
+  bottom: 104px;
+  display: flex;
+  align-items: center;
+  width: 44px;
+  min-height: 0;
+  pointer-events: none;
+}
+.outline-track {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  pointer-events: auto;
+}
+.outline-item { position: relative; z-index: 1; display: flex; width: 44px; min-height: 28px; align-items: center; justify-content: flex-end; }
 .outline-item.is-hovered { z-index: 4; }
-.outline-tick { width: 30px; height: 8px; min-height: 8px; }
-.outline-line { width: 12px; height: 2px; }
-.outline-tick:hover .outline-line { width: 17px; }
-.outline-tick.is-active .outline-line { width: 22px; }
-.outline-preview { top: 50%; right: 31px; transform: translateY(-50%); }
-.outline-track::before { top: 4px; bottom: 4px; opacity: .6; }
+.outline-tick {
+  display: flex;
+  width: 44px;
+  height: 28px;
+  min-height: 28px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 1px 0 18px;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+.outline-tick:focus-visible { outline: 1px solid var(--focus-color); outline-offset: -2px; }
+.outline-line { width: 11px; height: 2px; border-radius: var(--radius-tag); background: var(--border); transition: width 140ms ease, background 140ms ease; }
+.outline-tick:hover .outline-line { width: 16px; background: var(--accent); }
+.outline-tick.is-active .outline-line { width: 21px; background: var(--accent); }
+.outline-preview {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  right: 41px;
+  width: min(340px, calc(100vw - 72px));
+  padding: 12px 14px 13px;
+  transform: translateY(-50%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--overlay-surface);
+  box-shadow: var(--shadow-popover);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.outline-preview:hover { border-color: var(--border-hover); }
+.outline-preview:focus-visible { outline: 1px solid var(--focus-color); outline-offset: 2px; }
+.outline-preview-role { display: flex; align-items: center; gap: 6px; color: var(--faint); font-size: 11px; letter-spacing: 0; }
+.outline-preview-role::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.outline-preview-role > span { margin-left: auto; color: var(--faint); font-variant-numeric: tabular-nums; }
+.outline-preview-text { display: -webkit-box; margin-top: 7px; overflow: hidden; color: var(--muted); font-size: 12px; line-height: 1.65; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+@media (max-height: 560px) {
+  .outline-item, .outline-tick { min-height: 22px; height: 22px; }
+  .outline-preview { padding-block: 10px; }
+}
+@media (max-width: 1100px) { .conversation-outline { display: none; } }
 
 /* Long user input becomes a compact file attachment in the bubble. */
 /* 用户消息里的长文本与附件展示：文本保留换行，附件卡显示图标、文件名、大小
@@ -2991,16 +3021,6 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .attachment-main strong { overflow: hidden; color: var(--muted); font: 10.5px var(--mono); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .attachment-main > span { color: var(--faint); font-size: 9.5px; }
 .attachment-kind { flex: none; padding: 2px 4px; border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--faint); font: 8px var(--mono); letter-spacing: .06em; }
-
-/* Outline: no rail line, tighter cluster, subtler tick lengths. */
-/* 去掉大纲的竖线轨道，进一步缩小刻度长度和间距，让右侧只剩一组短横线；
-这是大纲的最终视觉。 */
-
-.outline-track::before { display: none; }
-.outline-track { gap: 6px; }
-.outline-line { width: 10px; }
-.outline-tick:hover .outline-line { width: 14px; }
-.outline-tick.is-active .outline-line { width: 18px; }
 
 /* Composer image/file attachments. */
 /* composer 附件区：缩略图 64px 方形、文件卡最大 245px，横向滚动但隐藏滚动条；

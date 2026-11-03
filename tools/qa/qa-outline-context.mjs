@@ -156,9 +156,19 @@ try {
   const loadedBefore = await page.locator('.message.user').count();
   assert.ok(loadedBefore < TURNS, `only the newest window is loaded at first (${loadedBefore}/${TURNS})`);
 
-  // The rail is a position map: the oldest tick sits above the newest one.
-  const tickTops = await page.locator('.outline-item').evaluateAll((nodes) => nodes.map((node) => Math.round(node.getBoundingClientRect().top)));
+  // The rail is a compact turn navigator: rows keep a stable, short pitch and
+  // the whole 44x28 hit area remains clickable.
+  const tickGeometry = await page.locator('.outline-tick').evaluateAll((nodes) => nodes.map((node) => {
+    const box = node.getBoundingClientRect();
+    return { top: Math.round(box.top), width: Math.round(box.width), height: Math.round(box.height) };
+  }));
+  const tickTops = tickGeometry.map(({ top }) => top);
   assert.deepEqual(tickTops, [...tickTops].sort((left, right) => left - right), 'ticks follow conversation order');
+  assert.ok(tickGeometry.every(({ width, height }) => width >= 44 && height >= 28), 'ticks use a full-size click target');
+  assert.ok(
+    tickTops.slice(1).every((top, index) => top - tickTops[index] === 28),
+    `ticks should use a compact 28px pitch: ${tickTops.join(', ')}`,
+  );
 
   // Scrolling up with the wheel moves the active tick along the rail.
   const box = await page.locator('.chat-scroll').boundingBox();
@@ -172,8 +182,13 @@ try {
   assert.equal(new Set(actives).size >= 3, true, `active tick should travel while scrolling: ${actives.join(' → ')}`);
   await page.screenshot({ path: `${output}scrolled.png`, animations: 'disabled' });
 
-  // Jumping to the oldest question loads up to that entry and scrolls it into view.
-  await page.locator('.outline-tick').first().click();
+  // Clicking the visible preview card, not only the hairline, jumps to the target.
+  await page.locator('.outline-tick').first().hover();
+  const preview = page.locator('.outline-preview').first();
+  await preview.waitFor();
+  assert.equal(await preview.evaluate((node) => getComputedStyle(node).pointerEvents), 'auto');
+  await page.screenshot({ path: `${output}hover-preview.png`, animations: 'disabled' });
+  await preview.click();
   await page.waitForFunction(() => document.getElementById('chat-turn-1') !== null);
   await page.waitForTimeout(300);
   const target = await page.evaluate(() => {
@@ -191,6 +206,26 @@ try {
     'the whole transcript is loaded after the jump, without dropping already seen messages',
   );
   assert.equal(await page.locator('.outline-tick.is-active').getAttribute('aria-label'), '跳转到第 1 条提问');
+
+  // A loaded target uses native smooth scrolling rather than an instant jump.
+  await page.evaluate(() => {
+    const scroll = document.querySelector('.chat-scroll');
+    window.__outlineScrollSamples = [];
+    const startedAt = performance.now();
+    const sample = () => {
+      window.__outlineScrollSamples.push(Math.round(scroll.scrollTop));
+      if (performance.now() - startedAt < 800) requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+  await page.locator('.outline-tick').last().click();
+  await page.waitForTimeout(850);
+  const scrollSamples = await page.evaluate(() => window.__outlineScrollSamples);
+  assert.ok(new Set(scrollSamples).size >= 4, `outline jump should animate through intermediate positions: ${scrollSamples.join(', ')}`);
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await page.locator('.outline-tick').nth(1).hover();
+  await page.locator('.outline-preview').waitFor();
+  await page.screenshot({ path: `${output}hover-preview-dark.png`, animations: 'disabled' });
   await page.screenshot({ path: `${output}jumped.png`, animations: 'disabled' });
 
   assert.deepEqual(errors, []);
