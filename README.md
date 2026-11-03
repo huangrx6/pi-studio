@@ -2,7 +2,7 @@
 
 **基于 Pi Durable 的原生 macOS 桌面 Agent 工作台。** 会话、模型、凭据、MCP、技能与扩展由 Pi Studio 独立管理；应用不读取，也不修改 Pi CLI 自己的配置。
 
-[![CI](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml) [![release](https://img.shields.io/badge/release-v0.0.13-111111?style=flat-square)](https://github.com/huangrx6/pi-studio/releases/latest) [![license](https://img.shields.io/badge/license-MIT-111111?style=flat-square)](LICENSE)
+[![CI](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml) [![release](https://img.shields.io/badge/release-v0.0.14-111111?style=flat-square)](https://github.com/huangrx6/pi-studio/releases/latest) [![license](https://img.shields.io/badge/license-MIT-111111?style=flat-square)](LICENSE)
 
 [下载 macOS 版](https://github.com/huangrx6/pi-studio/releases/latest) · [产品主页](https://huangrx6.github.io/pi-studio/) · [完整手册](https://huangrx6.github.io/pi-studio/guide.html) · [资源作用域](docs/resources.md) · [问题反馈](https://github.com/huangrx6/pi-studio/issues)
 
@@ -127,7 +127,7 @@ Studio 的 `subagent` 工具通过 Durable 创建 owned child conversation。子
 
 应用会检查 GitHub Releases。发现新版本或同一版本的新构建后，会在品牌入口、系统通知和菜单栏提示；下载完成后由用户选择立即重启，或留到下一次退出时安装。
 
-右侧工作台的终端以窗口为所有权边界，支持重连、回放、主题同步和最多 8 个并行 PTY；关闭终端 Tab 或窗口时会结束对应进程。运行服务页按当前任务、工作区和全部本机监听端口三种范围展示 TCP 服务，进程归属来自 Studio 后代关系与主进程登记工作区目录，不把“监听端口”直接等同于“Agent 启动”。只有 Studio 子进程或已登记工作区进程可以通过确认框终止，命令中的常见密钥格式会在进入 renderer 前脱敏。
+右侧工作台的终端以窗口为所有权边界，支持重连、回放、主题同步和最多 8 个并行 PTY；POSIX 终端以登录 shell 启动，会先加载 `.zprofile` / `.zlogin`，再加载 `.zshrc` 等交互配置。关闭终端 Tab 或窗口时会结束对应进程。运行服务页按当前任务、工作区和全部本机监听端口三种范围展示 TCP 服务，进程归属来自 Studio 后代关系与主进程登记工作区目录，不把“监听端口”直接等同于“Agent 启动”。只有 Studio 子进程或已登记工作区进程可以通过确认框终止，命令中的常见密钥格式会在进入 renderer 前脱敏。
 
 ### 性能
 

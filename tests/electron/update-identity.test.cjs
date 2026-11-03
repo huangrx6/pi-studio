@@ -21,7 +21,7 @@ test('same-version rebuilds are detected from a changed remote build id', () => 
     '1234567890abcdef',
   ), false);
   assert.equal(isSameVersionBuildUpdate(
-    { version: '0.0.13', buildId: '1234567890abcdef' },
+    { version: '0.0.14', buildId: '1234567890abcdef' },
     '0.0.11',
     undefined,
   ), false);

@@ -15,6 +15,18 @@ const path = require('node:path');
 const MAX_SESSIONS_PER_RENDERER = 8;
 const MAX_OUTPUT_CHARS = 1_000_000;
 const MAX_WRITE_CHARS = 64 * 1024;
+const LOGIN_SHELLS = new Set([
+  'bash',
+  'csh',
+  'dash',
+  'fish',
+  'ksh',
+  'mksh',
+  'nu',
+  'sh',
+  'tcsh',
+  'zsh',
+]);
 
 function clampDimension(value, fallback, minimum, maximum) {
   const numeric = Number(value);
@@ -54,6 +66,12 @@ function shellForPlatform(platform = process.platform, environment = process.env
   } catch {
     return '/bin/sh';
   }
+}
+
+function shellArgsForPlatform(shell, platform = process.platform) {
+  if (platform === 'win32') return [];
+  const executable = path.basename(shell).replace(/\.exe$/i, '').toLowerCase();
+  return LOGIN_SHELLS.has(executable) ? ['-l'] : [];
 }
 
 function appendBounded(current, chunk, limit = MAX_OUTPUT_CHARS) {
@@ -162,9 +180,13 @@ function createTerminalSessionManager(options = {}) {
     }
 
     const shell = shellForPlatform(platform, environment);
+    const shellArgs = shellArgsForPlatform(shell, platform);
     const workingDirectory = normalizeCwd(cwd);
     const title = path.basename(shell).replace(/\.exe$/i, '') || 'shell';
-    const ptyProcess = spawnPty(shell, [], {
+    // A GUI-launched app inherits a minimal launchd environment. Starting the
+    // user's login shell lets ~/.zprofile run `brew shellenv` before ~/.zshrc
+    // resolves Homebrew tools, matching Terminal.app instead of only /usr/bin.
+    const ptyProcess = spawnPty(shell, shellArgs, {
       name: 'xterm-256color',
       cols: clampDimension(cols, 90, 20, 500),
       rows: clampDimension(rows, 24, 5, 300),
@@ -272,5 +294,6 @@ module.exports = {
   appendBounded,
   createTerminalSessionManager,
   normalizeCwd,
+  shellArgsForPlatform,
   shellForPlatform,
 };

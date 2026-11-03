@@ -124,14 +124,14 @@
             <code>main</code> 分支的产品边界和技术契约。
           </p>
           <dl class="article-meta">
-            <div><dt>Version</dt><dd>v0.0.13 · Stable</dd></div>
+            <div><dt>Version</dt><dd>v0.0.14 · Stable</dd></div>
             <div><dt>Runtime</dt><dd>Pi Durable 1.5</dd></div>
             <div><dt>Ownership</dt><dd>Studio SQLite</dd></div>
             <div><dt>License</dt><dd>MIT · macOS</dd></div>
           </dl>
           <div class="status-note">
             <strong>版本说明</strong>
-            <p><code>v0.0.13</code> 增加窗口级交互式终端与任务监听端口视图，并让应用内更新识别同一语义版本的新构建。当前版本同时固定原生模块的发布构建工具链，确保 Apple Silicon 与 Intel 安装包都能稳定生成。Durable 继续负责会话、任务与子智能体执行；Studio 只保存自己的投影、设置、资源信任和受管目录。</p>
+            <p><code>v0.0.14</code> 修复从 Finder 启动后终端没有加载登录 shell 配置的问题，Homebrew、Starship、zoxide 等用户环境现在与 Terminal.app 一致。Durable 继续负责会话、任务与子智能体执行；Studio 只保存自己的投影、设置、资源信任和受管目录。</p>
           </div>
 
           <div class="chapter-index" aria-label="主要章节">
@@ -645,7 +645,7 @@
             <p>菜单栏和应用内通知只做入口，不复制完整对话。点击通知会回到对应会话；没有被启用的通知可以静默留在通知中心。</p>
 
             <h3>交互式终端</h3>
-            <p>从右侧工作台打开终端时，Studio 在 Electron 主进程创建 PTY，renderer 只接收 JSON-safe 会话元数据和输出字符串。终端跟随当前主题与对话字号，切换 Tab 时由主进程保留输出并回放；最多同时打开 8 个窗口级 PTY。</p>
+            <p>从右侧工作台打开终端时，Studio 在 Electron 主进程创建 PTY，renderer 只接收 JSON-safe 会话元数据和输出字符串。POSIX 终端以登录 shell 启动，因此 `.zprofile` 和 `.zlogin` 会先于 `.zshrc` 执行，Finder 启动的窗口也能获得与 Terminal.app 一致的 Homebrew 和用户工具路径。终端跟随当前主题与对话字号，切换 Tab 时由主进程保留输出并回放；最多同时打开 8 个窗口级 PTY。</p>
             <ul>
               <li>工作区可用时以工作区为起始目录；工作区已移动或不可用时回退到用户主目录。</li>
               <li>关闭终端 Tab、关闭所属窗口或退出 Studio 会结束对应 PTY；仅收起右侧面板不会终止进程。</li>

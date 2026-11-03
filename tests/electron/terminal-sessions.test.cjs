@@ -6,6 +6,7 @@ const test = require('node:test');
 const {
   appendBounded,
   createTerminalSessionManager,
+  shellArgsForPlatform,
 } = require('../../electron/services/terminal-sessions.cjs');
 
 class FakePty {
@@ -49,12 +50,14 @@ class FakePty {
 function fixture() {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-terminal-'));
   const processes = [];
+  const spawns = [];
   const events = [];
   const manager = createTerminalSessionManager({
     cwd,
-    spawnPty: () => {
+    spawnPty: (shell, args, options) => {
       const pty = new FakePty();
       processes.push(pty);
+      spawns.push({ shell, args, options });
       return pty;
     },
     send: (_ownerId, channel, payload) => events.push({ channel, payload }),
@@ -63,15 +66,16 @@ function fixture() {
     platform: 'darwin',
     environment: { SHELL: '/bin/zsh' },
   });
-  return { cwd, manager, processes, events };
+  return { cwd, manager, processes, spawns, events };
 }
 
 test('terminal sessions keep a bounded replay buffer and sequenced events', () => {
-  const { cwd, manager, processes, events } = fixture();
+  const { cwd, manager, processes, spawns, events } = fixture();
   const created = manager.create({ ownerId: 7, id: 'terminal:one', cwd, cols: 80, rows: 20 });
   assert.equal(created.createdNow, true);
   assert.equal(created.cwd, cwd);
   assert.equal(processes.length, 1);
+  assert.deepEqual(spawns[0].args, ['-l']);
 
   processes[0].emitData('abcdef');
   processes[0].emitData('ghijkl');
@@ -130,4 +134,12 @@ test('closing an owner kills every PTY it owns', () => {
 
 test('appendBounded keeps only the newest output', () => {
   assert.equal(appendBounded('abcdef', 'ghij', 6), 'efghij');
+});
+
+test('POSIX terminals use a login shell while Windows and unknown shells do not', () => {
+  assert.deepEqual(shellArgsForPlatform('/bin/zsh', 'darwin'), ['-l']);
+  assert.deepEqual(shellArgsForPlatform('/opt/homebrew/bin/fish', 'darwin'), ['-l']);
+  assert.deepEqual(shellArgsForPlatform('/bin/bash', 'linux'), ['-l']);
+  assert.deepEqual(shellArgsForPlatform('/custom/terminal-shell', 'linux'), []);
+  assert.deepEqual(shellArgsForPlatform('C:\\Windows\\System32\\cmd.exe', 'win32'), []);
 });
