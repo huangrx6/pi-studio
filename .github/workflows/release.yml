@@ -29,6 +29,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      # node-pty is rebuilt for Electron during packaging. Its node-gyp 9
+      # toolchain imports distutils, which Python 3.12+ no longer ships.
+      - name: Setup Python for native modules
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify native build toolchain
+        run: python -c "import distutils.version"
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 
@@ -98,6 +108,8 @@ jobs:
 
       - name: Build & package (DMG + auto-update ZIP)
         shell: bash
+        env:
+          npm_config_python: python3
         run: pnpm release:dist
 
       - name: Packaged startup regression
