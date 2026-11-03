@@ -19,7 +19,7 @@ export function SettingsPageHeader({
     <span className="settings-page-header-icon" aria-hidden="true">{icon}</span>
     <div className="settings-page-header-copy">
       <div className="settings-page-header-title">
-        <h2>{title}</h2>
+        <h1>{title}</h1>
         {meta}
       </div>
       <p>{description}</p>

@@ -46,7 +46,13 @@ try {
     };
     const messages = [
       { role: 'user', sourceIndex: 0, timestamp: 1, content: [{ type: 'text', text: '继续优化代码' }] },
-      { role: 'assistant', sourceIndex: 1, timestamp: 2, content: [{ type: 'text', text: '我先检查当前实现。' }] },
+      {
+        role: 'assistant',
+        sourceIndex: 1,
+        timestamp: 2,
+        content: [{ type: 'text', text: '我先检查当前实现。' }],
+        usage: { input: 60_000, output: 2_000, cacheRead: 10_000, cacheWrite: 0 },
+      },
     ];
     const listeners = new Set();
     let revision = 0;
@@ -109,6 +115,16 @@ try {
         };
       },
       sessionSubagents: async () => [],
+      contextPolicy: async () => ({
+        modelRef: 'demo/reasoner',
+        contextWindow: 128_000,
+        autoCompactPercent: 85,
+        compactAtTokens: 108_800,
+      }),
+      conversationCompact: async () => {
+        window.compacted = true;
+        return { ok: true, taskId: 'compaction-task' };
+      },
       onConversationEvent: listener => {
         listeners.add(listener);
         return () => listeners.delete(listener);
@@ -131,6 +147,22 @@ try {
   await page.locator('.composer textarea').fill('继续优化代码');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
 
+  // 输入区始终显示上下文占用；点开可以手动压缩，阈值来自运行策略。
+  const chip = page.getByRole('button', { name: '上下文已用 56%', exact: true });
+  await chip.waitFor();
+  await chip.click();
+  const panel = page.getByRole('dialog', { name: '上下文用量', exact: true });
+  await panel.waitFor();
+  assert.match(await panel.innerText(), /72\.0k \/ 128k tokens/);
+  assert.match(await panel.innerText(), /自动压缩：用到 85%/);
+  assert.match(await panel.innerText(), /完成后自动继续/);
+  await page.screenshot({ path: `${output}context-usage.png`, animations: 'disabled' });
+  await page.getByRole('button', { name: '立即压缩', exact: true }).click();
+  await page.waitForFunction(() => window.compacted === true);
+  await page.locator('.compaction-banner').waitFor();
+  await page.evaluate(() => window.emitConversation('compaction.completed'));
+  await page.locator('.compaction-banner').waitFor({ state: 'detached' });
+
   await page.evaluate(() => window.emitConversation('compaction.started', { reason: 'manual' }));
   await page.locator('.compaction-banner').waitFor();
   assert.match(await page.locator('.composer textarea').getAttribute('placeholder'), /正在压缩上下文/);
@@ -147,6 +179,18 @@ try {
     },
   }));
   await page.getByText('压缩完成，继续检查代码。', { exact: true }).waitFor();
+
+  // 新读数跨过阈值时，读数改用告警色；阈值来自同一个策略。
+  await page.evaluate(() => window.emitConversation('assistant.updated', {
+    message: {
+      role: 'assistant',
+      timestamp: 11,
+      content: [{ type: 'text', text: '上下文已经接近窗口上限。' }],
+      usage: { input: 118_000, output: 2_000, cacheRead: 0, cacheWrite: 0 },
+    },
+  }));
+  await page.waitForFunction(() => document.querySelector('.context-usage-trigger')?.classList.contains('is-critical'));
+  assert.equal(await page.getByRole('button', { name: '上下文已用 94%', exact: true }).count(), 1);
   await page.locator('.composer textarea').fill('补充说明');
   assert.equal(await page.locator('.send-button[aria-label="补充当前任务"]').isDisabled(), false);
 

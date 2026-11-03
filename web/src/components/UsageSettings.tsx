@@ -12,12 +12,22 @@ import {
   RefreshCw,
   ShieldCheck,
 } from 'lucide-react';
-import type { UsageAnalyticsSnapshot, UsageDay } from '../types/usage-types';
+import type { UsageAnalyticsSnapshot, UsageModelMix } from '../types/usage-types';
 import { SettingsPageHeader } from './SettingsPageHeader';
 
 const RANGE_OPTIONS = [90, 180, 365] as const;
 const DAY_LABELS = ['一', '', '三', '', '五', '', '日'];
 const ALL_MODELS = '__all__';
+const MODEL_RANGES = [
+  { id: 'all', label: '全部时间' },
+  { id: 'today', label: '今天' },
+  { id: '7', label: '7 天' },
+  { id: '30', label: '30 天' },
+  { id: '90', label: '90 天' },
+  { id: '365', label: '1 年' },
+  { id: 'custom', label: '自定义' },
+] as const;
+type ModelRange = (typeof MODEL_RANGES)[number]['id'];
 
 function modelKey(providerId: string, modelId: string): string {
   return `${providerId}\0${modelId}`;
@@ -55,6 +65,13 @@ function dayKey(date: Date): string {
     String(date.getMonth() + 1).padStart(2, '0'),
     String(date.getDate()).padStart(2, '0'),
   ].join('-');
+}
+
+/** Local day `offset` days from today; 0 is today itself. */
+function dayFromToday(offset: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + offset);
+  return dayKey(date);
 }
 
 function heatmapDates(snapshot: UsageAnalyticsSnapshot): string[] {
@@ -138,6 +155,12 @@ export function UsageSettings({ active }: { active: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [modelFilter, setModelFilter] = useState<string>(ALL_MODELS);
+  const [modelRange, setModelRange] = useState<ModelRange>('all');
+  const [customFrom, setCustomFrom] = useState(() => dayFromToday(-29));
+  const [customTo, setCustomTo] = useState(() => dayFromToday(0));
+  const [mix, setMix] = useState<UsageModelMix | null>(null);
+  const [mixLoading, setMixLoading] = useState(false);
+  const [mixError, setMixError] = useState<string | null>(null);
   const [request, setRequest] = useState(0);
 
   useEffect(() => {
@@ -196,10 +219,35 @@ export function UsageSettings({ active }: { active: boolean }) {
     [dailyByDate],
   );
   const selected = selectedDay ? dailyByDate.get(selectedDay) : undefined;
-  const modelMaximum = Math.max(1, ...(snapshot?.models || []).map((item) => item.totalTokens));
   const filterLabel = selectedModel
     ? `${selectedModel.providerName} · ${selectedModel.displayName}`
     : '全部模型';
+  // The model mix keeps its own window: the heatmap answers "when", this answers
+  // "which model" for a range the reader picks independently of the calendar.
+  const modelWindow = useMemo(() => {
+    if (modelRange === 'all') return { all: true };
+    if (modelRange === 'custom') return { sinceDay: customFrom, untilDay: customTo };
+    if (modelRange === 'today') return { sinceDay: dayFromToday(0), untilDay: dayFromToday(0) };
+    return { days: Number(modelRange) };
+  }, [customFrom, customTo, modelRange]);
+
+  useEffect(() => {
+    if (!active) return;
+    let disposed = false;
+    setMixLoading(true);
+    setMixError(null);
+    void window.piApi.usageModels(modelWindow)
+      .then((next) => {
+        if (!disposed) setMix(next);
+      })
+      .catch((cause) => {
+        if (!disposed) setMixError(cause instanceof Error ? cause.message : String(cause));
+      })
+      .finally(() => {
+        if (!disposed) setMixLoading(false);
+      });
+    return () => { disposed = true; };
+  }, [active, modelWindow, request]);
 
   useEffect(() => {
     if (!snapshot || modelFilter === ALL_MODELS) return;
@@ -284,7 +332,7 @@ export function UsageSettings({ active }: { active: boolean }) {
             <span className="usage-eyebrow"><CalendarDays />DAILY TOKENS</span>
             <h2 id="usage-heatmap-title">每日使用热力图</h2>
           </div>
-          <div className="usage-range-switch" aria-label="热力图日期范围">
+          <div className="usage-range-switch" role="group" aria-label="热力图日期范围">
             {RANGE_OPTIONS.map((option) => <button
               type="button"
               className={days === option ? 'is-active' : ''}
@@ -368,36 +416,84 @@ export function UsageSettings({ active }: { active: boolean }) {
             <span className="usage-eyebrow"><Cpu />MODEL MIX</span>
             <h2 id="usage-models-title">模型分布</h2>
           </div>
-          <span className="usage-models-total">{snapshot.models.length} 个模型</span>
-        </header>
-        {snapshot.models.length > 0
-          ? <div className="usage-model-list">
-            {snapshot.models.map((model, index) => {
-              const rangeTotal = Math.max(0, Number(snapshot.range.totalTokens) || 0);
-              const modelTotal = Math.max(0, Number(model.totalTokens) || 0);
-              const share = rangeTotal > 0 ? modelTotal / rangeTotal : 0;
-              return <article className="usage-model-row" key={`${model.providerId}/${model.modelId}`}>
-                <span className="usage-model-rank">{String(index + 1).padStart(2, '0')}</span>
-                <div className="usage-model-main">
-                  <div className="usage-model-title">
-                    <strong>{model.displayName}</strong>
-                    <span>{model.providerName} · {model.modelId}</span>
-                  </div>
-                  <div className="usage-model-track" aria-hidden="true">
-                    <i style={{ width: `${Math.max(1, share * 100)}%` }} />
-                  </div>
-                </div>
-                <div className="usage-model-numbers">
-                  <strong>{tokenNumber(modelTotal)}</strong>
-                  <span>{Math.round(share * 1000) / 10}% · {model.requests} 次</span>
-                </div>
-              </article>;
-            })}
+          <div className="usage-range-switch" role="group" aria-label="模型分布时间范围">
+            {MODEL_RANGES.map((option) => <button
+              type="button"
+              className={modelRange === option.id ? 'is-active' : ''}
+              aria-pressed={modelRange === option.id}
+              key={option.id}
+              onClick={() => setModelRange(option.id)}
+            >{option.label}</button>)}
           </div>
+        </header>
+
+        {modelRange === 'custom' && <div className="usage-range-custom">
+          <label>开始
+            <input
+              type="date"
+              aria-label="模型分布起始日期"
+              value={customFrom}
+              max={customTo}
+              onChange={(event) => { if (event.target.value) setCustomFrom(event.target.value); }}
+            />
+          </label>
+          <label>结束
+            <input
+              type="date"
+              aria-label="模型分布结束日期"
+              value={customTo}
+              min={customFrom}
+              onChange={(event) => { if (event.target.value) setCustomTo(event.target.value); }}
+            />
+          </label>
+        </div>}
+
+        <div className="usage-models-meta">
+          <span>{mix ? `${mix.models.length} 个模型` : '正在汇总'}</span>
+          {mix && <span>{mix.window.all ? '全部时间' : mix.window.sinceDay === mix.window.untilDay ? mix.window.sinceDay : `${mix.window.sinceDay} 至 ${mix.window.untilDay}`}</span>}
+          {mix && <span>{tokenNumber(mix.totals.totalTokens)} tokens · {mix.totals.requests} 次请求</span>}
+          {mixLoading && mix && <span>更新中…</span>}
+        </div>
+
+        {mixError && <div className="settings-error" role="alert">
+          <strong>暂时无法读取模型分布</strong>
+          <span>{mixError}</span>
+        </div>}
+
+        {mix
+          ? mix.models.length > 0
+            ? <div className={`usage-model-list ${mixLoading ? 'is-loading' : ''}`}>
+              {mix.models.map((model, index) => {
+                const rangeTotal = Math.max(0, Number(mix.totals.totalTokens) || 0);
+                const modelTotal = Math.max(0, Number(model.totalTokens) || 0);
+                const share = rangeTotal > 0 ? modelTotal / rangeTotal : 0;
+                return <article className="usage-model-row" key={`${model.providerId}/${model.modelId}`}>
+                  <span className="usage-model-rank">{String(index + 1).padStart(2, '0')}</span>
+                  <div className="usage-model-main">
+                    <div className="usage-model-title">
+                      <strong>{model.displayName}</strong>
+                      <span>{model.providerName} · {model.modelId}</span>
+                    </div>
+                    <div className="usage-model-track" aria-hidden="true">
+                      <i style={{ width: `${Math.max(1, share * 100)}%` }} />
+                    </div>
+                  </div>
+                  <div className="usage-model-numbers">
+                    <strong>{tokenNumber(modelTotal)}</strong>
+                    <span>{Math.round(share * 1000) / 10}% · {model.requests} 次</span>
+                  </div>
+                </article>;
+              })}
+            </div>
+            : <div className="usage-empty">
+              <BarChart3 />
+              <strong>这个时间范围内没有模型请求</strong>
+              <span>换一个范围，或完成一次问答后再回来查看。</span>
+            </div>
           : <div className="usage-empty">
             <BarChart3 />
-            <strong>还没有可统计的模型请求</strong>
-            <span>完成一次正常问答后，这里会按 Provider 和模型分开汇总。</span>
+            <strong>{mixError ? '暂时无法读取模型分布' : '正在汇总模型用量'}</strong>
+            <span>{mixError ? '可以直接重试，或使用右上角刷新。' : '按所选时间范围读取本地 SQLite 汇总。'}</span>
           </div>}
       </section>
 

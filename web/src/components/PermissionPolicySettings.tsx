@@ -15,6 +15,7 @@ import {
   SlidersHorizontal,
   Trash2,
 } from 'lucide-react';
+import { errorText } from '../lib/error-text';
 import type {
   PermissionDecision,
   PermissionEvaluation,
@@ -26,6 +27,7 @@ import type {
 } from '../types/permission-types';
 import { useActionConfirmation } from './ConfirmDialog';
 import { Select } from './Select';
+import { SecretVaultSettings } from './SecretVaultSettings';
 import { SettingsPageHeader } from './SettingsPageHeader';
 import '../styles/permission-policy.css';
 
@@ -84,10 +86,6 @@ function modeLabel(snapshot: PermissionPolicyState, mode: PermissionMode) {
 
 function clonePolicy(policy: PermissionPolicy): PermissionPolicy {
   return JSON.parse(JSON.stringify(policy)) as PermissionPolicy;
-}
-
-function errorText(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function ruleCondition(rule: PermissionRule): RuleCondition {
@@ -674,6 +672,8 @@ export function PermissionPolicySettings({
         </div>}
       </div>}
     </section>
+
+    <SecretVaultSettings />
 
     {error && <div className="permission-policy-message is-error" role="alert">{error}</div>}
     {notice && <div className="permission-policy-message is-success" role="status">{notice}</div>}

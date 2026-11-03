@@ -12,6 +12,7 @@ const {
   getStudioDatabase,
 } = require('../core/studio-db.cjs');
 const { getRuntimePolicy } = require('../core/app-settings.cjs');
+const { autoCompactOverrides } = require('../core/context-policy.cjs');
 const {
   closeStudioModelsRuntime,
   getStudioModelsRuntime,
@@ -36,6 +37,8 @@ const {
   reloadStudioExtensions,
   uninstallStudioExtensions,
 } = require('./studio-extensions.cjs');
+const { cleanupManagedWorktrees } = require('./managed-worktrees.cjs');
+const { createSecretAwareRegistry } = require('./secret-tool-runtime.cjs');
 
 const DURABLE_PREFIX = 'durable_';
 const DEFAULT_PAGE_SIZE = 500;
@@ -61,6 +64,11 @@ function sanitizedShellEnv() {
  */
 function durableHarnessSettings() {
   const policy = getRuntimePolicy();
+  // 百分比阈值按每个模型自己的窗口换算成 reserve，Durable 在每次请求边界读取它。
+  // 窗口未知的模型继续使用 Harness 的 token 阈值。
+  const modelOverrides = policy.compaction.enabled
+    ? autoCompactOverrides(getStudioDatabase().listModels(), policy.compaction.autoCompactPercent)
+    : {};
   return {
     ...(policy.streamTimeoutMs > 0
       ? { stream: { timeoutMs: policy.streamTimeoutMs } }
@@ -75,6 +83,7 @@ function durableHarnessSettings() {
       reserveTokens: policy.compaction.reserveTokens,
       keepRecentTokens: policy.compaction.keepRecentTokens,
       backgroundTokens: policy.compaction.backgroundTokens,
+      ...(Object.keys(modelOverrides).length > 0 ? { modelOverrides } : {}),
     },
     progress: {
       partialIntervalMs: 32,
@@ -121,7 +130,7 @@ async function createRuntime() {
       db.recordMetricRequest(request);
     },
   });
-  const registry = durable.createRegistry();
+  const registry = createSecretAwareRegistry(durable.createRegistry());
   const builtinExtensions = createStudioBuiltins({
     durable,
     piAi,
@@ -156,16 +165,19 @@ async function createRuntime() {
       cwd: cwd || process.cwd(),
       shellEnv,
     }),
-    onReport(error, info) {
-      const report = {
+    onReport(report) {
+      // 1.5.0：单个 `Report`，按 `kind` 标记（1.4.0 是 `(error, info)`）。
+      const entry = {
         at: Date.now(),
-        type: info.type,
-        message: error instanceof Error ? error.message : String(error),
-        info,
+        kind: report.kind,
+        message: report.error instanceof Error
+          ? report.error.message
+          : String(report.error),
+        report,
       };
-      reports.push(report);
+      reports.push(entry);
       if (reports.length > 100) reports.shift();
-      console.error('[pi-durable]', info.type, report.message);
+      console.error('[pi-durable]', report.kind, entry.message);
     },
   }, context);
   harness.resume();
@@ -215,6 +227,11 @@ async function createRuntime() {
   await reloadMcpServers(runtime);
   await reloadStudioExtensions(runtime, '');
   syncMetricsExtensionRuntime(runtime);
+  runtime.managedWorktreeCleanup = await cleanupManagedWorktrees()
+    .catch((error) => ({
+      removed: 0,
+      failures: [error instanceof Error ? error.message : String(error)],
+    }));
   return runtime;
 }
 

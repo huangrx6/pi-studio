@@ -7,95 +7,20 @@
  */
 
 const path = require('node:path');
+const { getStudioDatabase } = require('../core/studio-db.cjs');
 const {
   getSubagentConfig,
   setSubagentConfig,
 } = require('../core/app-settings.cjs');
 const { availableModels, modelInfo } = require('./models.cjs');
 const { extensionHostSnapshot } = require('./studio-extensions.cjs');
+const { listManagedWorktrees } = require('./managed-worktrees.cjs');
+const { getDurableRuntime } = require('./durable-runtime.cjs');
+const { createProtocol, emptyRegistry } = require('./durable-subagent-protocol.cjs');
+const { evaluateSubagentBudget } = require('../core/subagent-budget.cjs');
+const { subagentUsage } = require('./subagent-usage.cjs');
 
-const THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
-const MODEL_REF = /^[A-Za-z0-9][A-Za-z0-9._-]*\/.+$/;
-const TOOL_NAME = /^[A-Za-z0-9_.:-]{1,120}$/;
-const SUBAGENT_TOOL_NAMES = new Set([
-  'subagent',
-  'bg_wait',
-  'subagent_supervisor',
-  'contact_supervisor',
-]);
-const DEFAULT_MAX_CONCURRENT = 4;
-const DEFAULT_MAX_SPAWNS = 32;
-const DEFAULT_WAIT_TIMEOUT_MS = 30_000;
-
-function normalizeThinking(value) {
-  return THINKING_LEVELS.includes(value) ? value : '';
-}
-
-function normalizeModel(value) {
-  return typeof value === 'string' && MODEL_REF.test(value.trim()) ? value.trim() : '';
-}
-
-function boundedInteger(value, fallback, minimum, maximum) {
-  if (value === undefined || value === null || value === '') return fallback;
-  const number = Number(value);
-  if (!Number.isSafeInteger(number) || number < minimum || number > maximum) {
-    throw new Error(`数值必须是 ${minimum} 到 ${maximum} 之间的整数`);
-  }
-  return number;
-}
-
-function normalizeConfig(raw) {
-  const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-  const defaultModel = normalizeModel(source.defaultModel);
-  const defaultThinking = normalizeThinking(source.defaultThinking);
-  const maxThinking = normalizeThinking(source.maxThinking);
-  const backgroundEnabled = source.backgroundEnabled !== false;
-  const requestedMode = source.defaultMode === 'background' ? 'background' : 'foreground';
-  const defaultMode = backgroundEnabled ? requestedMode : 'foreground';
-  const supervisorEnabled = backgroundEnabled && source.supervisorEnabled !== false;
-  if (
-    defaultThinking
-    && maxThinking
-    && THINKING_LEVELS.indexOf(defaultThinking) > THINKING_LEVELS.indexOf(maxThinking)
-  ) {
-    throw new Error('默认 thinking 不能高于 thinking 上限');
-  }
-  const allowedTools = Array.isArray(source.allowedTools)
-    ? [...new Set(source.allowedTools
-      .filter((name) => typeof name === 'string')
-      .map((name) => name.trim())
-      .filter((name) => TOOL_NAME.test(name)))]
-      .slice(0, 256)
-    : [];
-  return {
-    defaultModel,
-    defaultProvider: defaultModel.split('/')[0] || '',
-    defaultThinking,
-    maxThinking,
-    allowedTools,
-    backgroundEnabled,
-    defaultMode,
-    supervisorEnabled,
-    maxConcurrent: boundedInteger(
-      source.maxConcurrent,
-      DEFAULT_MAX_CONCURRENT,
-      1,
-      16,
-    ),
-    maxSpawns: boundedInteger(
-      source.maxSpawns,
-      DEFAULT_MAX_SPAWNS,
-      1,
-      100,
-    ),
-    waitTimeoutMs: boundedInteger(
-      source.waitTimeoutMs,
-      DEFAULT_WAIT_TIMEOUT_MS,
-      1_000,
-      600_000,
-    ),
-  };
-}
+const { THINKING_LEVELS, SUBAGENT_TOOL_NAMES, normalizeConfig } = require('../core/subagent-config.cjs');
 
 function hasAvailableSubagentExtension(extensions) {
   return Array.isArray(extensions) && extensions.some((row) => (
@@ -106,21 +31,37 @@ function hasAvailableSubagentExtension(extensions) {
   ));
 }
 
+/**
+ * Persist only workspace fields that intentionally differ from the user
+ * defaults. This keeps future user-level changes inherited by workspaces the
+ * user has not customized.
+ */
+function projectOverrides(config, userConfig) {
+  return Object.fromEntries(Object.entries(config).filter(([key, value]) => (
+    JSON.stringify(value) !== JSON.stringify(userConfig[key])
+  )));
+}
+
 function durableSubagentsInstalled() {
   return hasAvailableSubagentExtension(extensionHostSnapshot().extensions);
 }
 
 async function subagentSettings(cwd = process.cwd()) {
-  const models = await availableModels(cwd);
-  const current = await modelInfo(cwd);
+  const [models, current, worktrees] = await Promise.all([
+    availableModels(cwd),
+    modelInfo(cwd),
+    listManagedWorktrees({ workspace: cwd }),
+  ]);
+  const user = normalizeConfig(getSubagentConfig('user'));
+  const projectOverridesValue = getSubagentConfig('project', cwd);
   return {
     installed: durableSubagentsInstalled(),
     userPath: 'SQLite · studio.subagents.user',
     projectPath: 'SQLite · studio.subagents.projects[workspace]',
     projectRoot: cwd ? path.resolve(cwd) : '',
     projectRootExists: Boolean(cwd),
-    user: normalizeConfig(getSubagentConfig('user')),
-    project: normalizeConfig(getSubagentConfig('project', cwd)),
+    user,
+    project: normalizeConfig({ ...user, ...projectOverridesValue }),
     models: models.models.map((model) => ({
       modelRef: model.id,
       provider: model.provider,
@@ -130,6 +71,31 @@ async function subagentSettings(cwd = process.cwd()) {
     })),
     currentModel: current.modelRef,
     thinkingLevels: THINKING_LEVELS,
+    worktrees,
+  };
+}
+
+async function subagentBudgetSnapshot(parentConversationId) {
+  const row = getStudioDatabase().getConversation(String(parentConversationId || ''));
+  const numericId = Number(row?.id);
+  if (!Number.isSafeInteger(numericId) || numericId <= 0) {
+    throw new Error('父会话标识无效');
+  }
+  const runtime = await getDurableRuntime();
+  const protocol = createProtocol(runtime.durable);
+  const registry = await runtime.harness.snapshot(
+    protocol.Subagents,
+    numericId,
+    runtime.context,
+  ) || emptyRegistry();
+  const user = normalizeConfig(getSubagentConfig('user'));
+  const merged = normalizeConfig({
+    ...user,
+    ...getSubagentConfig('project', row.workspace),
+  });
+  return {
+    parentConversationId: row.publicId,
+    ...evaluateSubagentBudget(merged, subagentUsage(registry)),
   };
 }
 
@@ -139,7 +105,12 @@ function saveSubagentSettings(cwd, scope, input) {
     throw new Error('当前工作区无效');
   }
   const next = normalizeConfig(input);
-  setSubagentConfig(scope, cwd, next);
+  if (scope === 'project') {
+    const user = normalizeConfig(getSubagentConfig('user'));
+    setSubagentConfig(scope, cwd, projectOverrides(next, user));
+  } else {
+    setSubagentConfig(scope, cwd, next);
+  }
   return subagentSettings(cwd);
 }
 
@@ -149,6 +120,8 @@ module.exports = {
   durableSubagentsInstalled,
   hasAvailableSubagentExtension,
   normalizeConfig,
+  projectOverrides,
   saveSubagentSettings,
+  subagentBudgetSnapshot,
   subagentSettings,
 };

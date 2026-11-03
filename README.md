@@ -2,7 +2,7 @@
 
 **基于 Pi Durable 的原生 macOS 桌面 Agent 工作台。** 会话、模型、凭据、MCP、技能与扩展由 Pi Studio 独立管理；应用不读取，也不修改 Pi CLI 自己的配置。
 
-[![CI](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml) [![release](https://img.shields.io/badge/release-v0.0.8-111111?style=flat-square)](https://github.com/huangrx6/pi-studio/releases/latest) [![license](https://img.shields.io/badge/license-MIT-111111?style=flat-square)](LICENSE)
+[![CI](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml) [![release](https://img.shields.io/badge/release-v0.0.9-111111?style=flat-square)](https://github.com/huangrx6/pi-studio/releases/latest) [![license](https://img.shields.io/badge/license-MIT-111111?style=flat-square)](LICENSE)
 
 [下载 macOS 版](https://github.com/huangrx6/pi-studio/releases/latest) · [产品主页](https://huangrx6.github.io/pi-studio/) · [完整手册](https://huangrx6.github.io/pi-studio/guide.html) · [资源作用域](docs/resources.md) · [问题反馈](https://github.com/huangrx6/pi-studio/issues)
 
@@ -10,7 +10,7 @@
 
 Pi Studio 把 Pi Durable 的持久化 Agent 能力带进桌面窗口。每个会话和子智能体都由同一个 Durable Harness 执行；Studio 负责工作区、模型目录、编码提示、工具权限、附件和原生交互。
 
-- **唯一执行引擎是 Pi Durable 1.4。** 对话、任务、流式事件、分叉、恢复和 owned child conversations 都走 Durable Runtime。
+- **唯一执行引擎是 Pi Durable 1.5。** 对话、任务、流式事件、分叉、恢复和 owned child conversations 都走 Durable Runtime。
 - **Studio 拥有自己的数据。** 应用使用 `pi-studio.sqlite` 保存 Durable 的 `durable_*` 表，以及 Studio 的工作区、会话投影、模型、凭据、MCP、扩展和设置记录。
 - **临时聊天不落盘。** 临时会话复用 Durable 执行能力，但使用独立的 `MemoryStorage`，退出后不会留下对话、附件或工作区记录。
 - **编码 Harness 可检查、可配置。** Studio 默认启用完整编码基线，并把八个 Prompt 部分、实际工具说明、项目指令和自定义补充组成可管理的 profile。
@@ -64,6 +64,8 @@ Studio 只有一种持久会话，不需要在创建前选择“普通对话”�
 
 新对话默认模型和模型级 thinking 强度保存在 Studio 内。当前会话可以随时切换模型与 thinking；正在运行的请求不会被改写，新配置从下一次请求开始生效。
 
+模型同题双跑从输入框的 `⋯` 或 `Cmd/Ctrl+K` 动作面板进入，不新增侧边栏或一级 Tab。Studio 从当前会话分叉两次，用相同上下文分别请求两个模型，并把主内容区替换成双栏结果；每条分支都在独立的托管 worktree 中执行。完成后可以应用一个分支，或永久丢弃不再需要的分支。
+
 ### 可配置编码 Harness
 
 Pi Durable 提供可组合的 Agent Runtime，Studio 负责构建面向编码任务的系统提示。默认 `Studio 编码基线` profile 包含八个可独立开关的部分：
@@ -100,13 +102,15 @@ Studio 扩展分为两种能力：
 
 所有跨资源的 scope、冲突优先级、存储、信任边界和刷新时机统一见[资源作用域、优先级与刷新](docs/resources.md)。工作区资源按精确 `cwd` 匹配；只有项目 `AGENTS.md` 会从最近的 `.git` / `.pi-studio` 边界逐级加载。
 
-模型、凭据、MCP、技能和扩展状态都不会回写 Pi CLI 配置，也不会读取 `~/.pi`。MCP 支持 stdio 与 HTTP，配置保存在 Studio SQLite；Studio 导入的 Skill 正文保存在应用用户目录或当前项目的 `.pi-studio/skills`，SQLite 只额外保存项目信任指纹。
+模型、凭据、MCP、技能和扩展状态都不会回写 Pi CLI 配置，也不会读取 `~/.pi`。MCP 支持 stdio 与 HTTP，配置保存在 Studio SQLite；Studio 导入的 Skill 正文保存在应用用户目录或当前项目的 `.pi-studio/skills`，SQLite 只额外保存项目信任指纹和技能源目录。
+
+Skill Hub 当前提供本地目录与静态 registry JSON 两种适配器。列表展示完整描述、来源、版本、自动或显式调用方式、资源数量与预计系统提示 Token；安装前进入隔离区，校验 `SKILL.md`、完整文件图和 SHA-256，再原子切换到用户级或指定工作区。删除一个源只删除目录登记，已经安装的 Skill 继续保留。打包与 registry 格式见[技能中心规范](docs/skill-hub.md)。
 
 Skill 遵循 Agent Skills 的按需加载方式：递归发现 `SKILL.md`，系统提示只包含 `name`、`description` 和绝对路径；模型通过本次开放的 `read` 或 `bash` 工具读取正文。Studio 同时读取通用 `<home>/.agents/skills` 与 `<workspace>/.agents/skills`，项目技能优先于用户技能。`disable-model-invocation: true` 的技能只允许通过 `/skill:<name>` 显式调用。项目 Skill 先验证完整目录，再要求用户信任；隐藏文件也参与指纹，内容或链接变化会立即让旧信任失效。元数据缓存避免在每个模型循环轮次重复读取大型附件。
 
 MCP 默认使用 `deferred` 和 Durable 官方 `tool_search`。模型先搜索工具元数据，命中的工具从下一次模型请求开始可用；已加载选择会保存在该会话分支中。MCP 发出 `tools/list_changed` 后，Studio 会刷新该 server 的 registry；配置改变时旧连接会进入退休态，等已经开始的工具调用结束后再关闭。远程 HTTP MCP 必须使用 HTTPS，只有本机回环地址允许明文 HTTP；stdio 子进程只继承 `PATH`、`HOME` 等运行所需环境，其他密钥必须通过 `${NAME}` 显式传入。
 
-当前 Studio 没有 codemode，因此 `deferred` 是 MCP 的合理默认，同时保留 `direct` 和 `hidden` 覆盖。HTTP 认证使用配置的 headers；MCP OAuth 登录、资源列表/读取工具、prompts、sampling 和 tasks 尚未接入。环境变量支持 `${NAME}` 引用，但不执行配置中的 `!command`。完整的应用级 scope、存储与热加载语义见[资源作用域](docs/resources.md#9-mcp)。
+当前 Studio 没有 codemode，因此 `deferred` 是 MCP 的合理默认，同时保留 `direct` 和 `hidden` 覆盖。HTTP 认证支持静态 headers，也支持从服务器详情页显式发起 MCP OAuth；客户端注册、PKCE、access/refresh token 以 Electron `safeStorage` envelope 保存在 Studio SQLite，退出登录会同时清除凭据并重连。资源列表/读取工具、prompts、sampling 和 tasks 尚未接入。环境变量支持 `${NAME}` 引用，但不执行配置中的 `!command`。完整的应用级 scope、存储与热加载语义见[资源作用域](docs/resources.md#9-mcp)。
 
 ### 子智能体
 
@@ -175,7 +179,7 @@ Electron preload / IPC
     └── Files, attachments, updater and menu bar
             │
             ▼
-Pi Durable 1.4 Harness
+Pi Durable 1.5 Harness
 ```
 
 `electron/services/durable-runtime.cjs` 是唯一共享运行时装配点。`electron/ipc/sessions.cjs` 把 Durable 的提交、分页、分叉、状态、模型和 thinking 映射成 renderer DTO；扩展与 MCP 在下一个请求边界热刷新。
@@ -257,7 +261,7 @@ pi-studio/
 
 ## 尚未完成
 
-- 模型提供方与 MCP 的 OAuth 登录界面（当前模型使用 API Key，HTTP MCP 使用 headers）。
+- 模型提供方的 OAuth 登录界面；当前模型来源使用 API Key，HTTP MCP 已支持 OAuth。
 - MCP resources/templates、prompts、sampling 与 tasks 的专用界面。
 - 插件市场与自动发现。
 - Windows / Linux 支持。

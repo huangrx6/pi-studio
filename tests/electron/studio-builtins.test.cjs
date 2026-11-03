@@ -18,7 +18,10 @@ const {
   normalizeManifest,
 } = require('../../electron/core/extension-manifest.cjs');
 const { setSubagentConfig } = require('../../electron/core/app-settings.cjs');
-const { closeStudioDatabase } = require('../../electron/core/studio-db.cjs');
+const {
+  closeStudioDatabase,
+  getStudioDatabase,
+} = require('../../electron/core/studio-db.cjs');
 
 function schemaFactory() {
   return new Proxy({}, {
@@ -281,6 +284,83 @@ test('a task-owned subagent is configured inside the creating transaction', asyn
   assert.equal(result.output[0].text, 'child result');
   const registry = documents.inspect({ kind: 'studio.subagents' }, 12);
   assert.equal(registry.agents['foreground-41'].lastStatus, 'completed');
+});
+
+test('subagent budget warns or blocks before a new child according to policy', async () => {
+  const configured = [];
+  const durable = fakeDurable(configured);
+  const workspace = path.join(temporary, 'budget-workspace');
+  fs.mkdirSync(workspace, { recursive: true });
+  const documents = fakeDocuments();
+  let created = 0;
+  const api = {
+    ...docApi(documents, 91),
+    taskId: 701,
+    models: { getModel: () => undefined },
+    agent: async () => ({
+      cwd: workspace,
+      tools: [{ name: 'read' }, { name: 'subagent' }],
+    }),
+    commit: async (callback) => callback({
+      doc: (token, id) => documents.doc(token, id),
+      entry: async () => ({
+        kind: 'pi.assistant',
+        model: [{ role: 'assistant', content: [{ type: 'text', text: 'done' }] }],
+      }),
+      scanConversations: async () => ({ items: [] }),
+      createConversation: async () => ({ id: 702 + created++ }),
+    }),
+    details: async () => {},
+    conversation: async () => ({
+      submit: async () => ({
+        id: 1,
+        wait: async () => ({ status: 'done', type: 'input', answer: 10 }),
+      }),
+    }),
+  };
+  const builtins = createStudioBuiltins({
+    durable,
+    piAi: {
+      Type: schemaFactory(),
+      getSupportedThinkingLevels: () => ['off', 'low', 'medium', 'high'],
+    },
+    codingTools: { name: 'coding-tools', tools: [] },
+    toolSearch: { name: 'tool-search', tools: [] },
+  });
+  const tool = builtins.get('builtin:studio-subagents')
+    .tools.find((item) => item.name === 'subagent');
+
+  setSubagentConfig('user', '', {
+    backgroundEnabled: true,
+    supervisorEnabled: false,
+    budgetTokens: 100,
+    budgetAction: 'warn',
+  });
+  await tool.execute({ task: 'First child.' }, api, {});
+  getStudioDatabase().recordMetricRequest({
+    requestId: 'budget-child-request',
+    conversationId: '702',
+    input: 100,
+    output: 20,
+    cost: 0,
+  });
+
+  api.taskId = 702;
+  await tool.execute({ task: 'Warning still allows another child.' }, api, {});
+  assert.equal(created, 2);
+
+  setSubagentConfig('user', '', {
+    backgroundEnabled: true,
+    supervisorEnabled: false,
+    budgetTokens: 100,
+    budgetAction: 'stop',
+  });
+  api.taskId = 703;
+  await assert.rejects(
+    tool.execute({ task: 'Stop must block a new child.' }, api, {}),
+    /预算已用尽/,
+  );
+  assert.equal(created, 2);
 });
 
 test('child tools preserve the parent model and nested callable boundaries', async () => {

@@ -11,6 +11,7 @@ const { METRICS_EXTENSION_ID } = require('./metrics-runtime.cjs');
 
 const DEFAULT_DAYS = 371;
 const MAX_DAYS = 3_660;
+const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function localDay(date) {
   return [
@@ -36,6 +37,41 @@ function rangeStart(days, now) {
   date.setHours(0, 0, 0, 0);
   date.setDate(date.getDate() - days + 1);
   return localDay(date);
+}
+
+/** A calendar day that survives a round trip, so malformed input never reaches SQL. */
+function validDay(value) {
+  if (typeof value !== 'string' || !DAY_PATTERN.test(value)) return null;
+  const date = dayStart(value);
+  return Number.isNaN(date.getTime()) || localDay(date) !== value ? null : value;
+}
+
+function spanDays(sinceDay, untilDay) {
+  if (!sinceDay || !untilDay) return null;
+  const start = dayStart(sinceDay).getTime();
+  const end = dayStart(untilDay).getTime();
+  return Math.round((end - start) / 86_400_000) + 1;
+}
+
+/**
+ * Resolve the requested usage window into inclusive local day bounds.
+ *
+ * `all` covers every stored day; explicit `sinceDay`/`untilDay` model a custom
+ * range (a single day is a valid range); otherwise `days` counts back from today.
+ */
+function resolveUsageWindow({ days, sinceDay, untilDay, all } = {}, now = Date.now()) {
+  const upper = validDay(untilDay);
+  const lower = validDay(sinceDay);
+  if (all === true && !lower) return { all: true, days: null, sinceDay: null, untilDay: upper };
+  if (lower) {
+    const until = upper && upper >= lower ? upper : lower;
+    return { all: false, days: spanDays(lower, until), sinceDay: lower, untilDay: until };
+  }
+  const requestedDays = Number(days);
+  const count = Number.isSafeInteger(requestedDays)
+    ? Math.max(7, Math.min(MAX_DAYS, requestedDays))
+    : DEFAULT_DAYS;
+  return { all: false, days: count, sinceDay: rangeStart(count, now), untilDay: upper };
 }
 
 function currentStreak(activeDays, now) {
@@ -69,33 +105,34 @@ function roundCost(value) {
   return Math.round((Number(value) || 0) * 1_000_000) / 1_000_000;
 }
 
+/** Provider and model display names for usage rows, resolved once per read. */
+function usageNaming(db) {
+  const providers = new Map(db.listProviders().map((entry) => [entry.id, entry.name]));
+  const catalog = db.listModels();
+  const names = new Map(
+    catalog.map((entry) => [`${entry.providerId}/${entry.modelId}`, entry.name]),
+  );
+  const describe = (entry) => ({
+    providerId: entry.providerId,
+    providerName: providers.get(entry.providerId) || entry.providerId,
+    modelId: entry.modelId,
+    displayName: names.get(`${entry.providerId}/${entry.modelId}`) || entry.modelId,
+  });
+  return { catalog, describe };
+}
+
 function usageAnalyticsSnapshot(options = {}) {
   const db = options.database || getStudioDatabase();
   const now = Number.isFinite(options.now) ? Number(options.now) : Date.now();
-  const requestedDays = Number(options.days);
-  const days = Number.isSafeInteger(requestedDays)
-    ? Math.max(7, Math.min(MAX_DAYS, requestedDays))
-    : DEFAULT_DAYS;
-  const sinceDay = rangeStart(days, now);
+  const window = resolveUsageWindow({ days: options.days }, now);
+  const days = window.days ?? DEFAULT_DAYS;
+  const sinceDay = window.sinceDay;
   const daily = db.usageDaily({ sinceDay });
   const range = db.usageTotals({ sinceDay });
   const allTime = db.usageTotals();
   const allDaily = db.usageDaily();
   const activeDates = new Set(allDaily.map((row) => row.day));
-  const providers = new Map(db.listProviders().map((entry) => [entry.id, entry.name]));
-  const modelCatalog = db.listModels();
-  const modelNames = new Map(
-    modelCatalog.map((entry) => [
-      `${entry.providerId}/${entry.modelId}`,
-      entry.name,
-    ]),
-  );
-  const modelIdentity = (entry) => ({
-    providerId: entry.providerId,
-    providerName: providers.get(entry.providerId) || entry.providerId,
-    modelId: entry.modelId,
-    displayName: modelNames.get(`${entry.providerId}/${entry.modelId}`) || entry.modelId,
-  });
+  const { catalog: modelCatalog, describe } = usageNaming(db);
   const historicalUsage = db.usageModels();
   const historicalKeys = new Set(
     historicalUsage.map((entry) => `${entry.providerId}/${entry.modelId}`),
@@ -106,7 +143,7 @@ function usageAnalyticsSnapshot(options = {}) {
     const inUse = historicalKeys.has(key);
     if (!entry.enabled && !inUse) continue;
     filterModels.set(key, {
-      ...modelIdentity(entry),
+      ...describe(entry),
       enabled: entry.enabled,
       inUse,
     });
@@ -115,10 +152,7 @@ function usageAnalyticsSnapshot(options = {}) {
     const key = `${entry.providerId}/${entry.modelId}`;
     if (filterModels.has(key)) continue;
     filterModels.set(key, {
-      providerId: entry.providerId,
-      providerName: providers.get(entry.providerId) || entry.providerId,
-      modelId: entry.modelId,
-      displayName: entry.modelId,
+      ...describe(entry),
       enabled: false,
       inUse: true,
     });
@@ -128,16 +162,10 @@ function usageAnalyticsSnapshot(options = {}) {
     || left.providerName.localeCompare(right.providerName, 'zh-CN')
     || left.displayName.localeCompare(right.displayName, 'zh-CN')
   ));
-  const modelUsage = db.usageModels({ sinceDay }).map((entry) => ({
-    ...entry,
-    providerName: providers.get(entry.providerId) || entry.providerId,
-    displayName: modelNames.get(`${entry.providerId}/${entry.modelId}`) || entry.modelId,
-    cost: roundCost(entry.cost),
-  }));
   const dailyModels = db.usageDailyModels({ sinceDay }).map((entry) => ({
     ...entry,
-    providerName: providers.get(entry.providerId) || entry.providerId,
-    displayName: modelNames.get(`${entry.providerId}/${entry.modelId}`) || entry.modelId,
+    providerName: describe(entry).providerName,
+    displayName: describe(entry).displayName,
     cost: roundCost(entry.cost),
   }));
   return {
@@ -161,7 +189,32 @@ function usageAnalyticsSnapshot(options = {}) {
     daily: daily.map((entry) => ({ ...entry, cost: roundCost(entry.cost) })),
     dailyModels,
     filterModels: filterModelList,
-    models: modelUsage,
+  };
+}
+
+/**
+ * Model mix for one window: the totals and the per-model split of the same days.
+ *
+ * The Settings page lets this window differ from the heatmap window, so the
+ * share denominator always comes back with the rows instead of being guessed
+ * from a range selected elsewhere.
+ */
+function usageModelMix(options = {}) {
+  const db = options.database || getStudioDatabase();
+  const now = Number.isFinite(options.now) ? Number(options.now) : Date.now();
+  const window = resolveUsageWindow(options, now);
+  const { describe } = usageNaming(db);
+  const totals = db.usageTotals(window);
+  const models = db.usageModels(window).map((entry) => ({
+    ...entry,
+    ...describe(entry),
+    cost: roundCost(entry.cost),
+  }));
+  return {
+    generatedAt: now,
+    window,
+    totals: { ...totals, cost: roundCost(totals.cost) },
+    models,
   };
 }
 
@@ -171,5 +224,7 @@ module.exports = {
   currentStreak,
   localDay,
   longestStreak,
+  resolveUsageWindow,
   usageAnalyticsSnapshot,
+  usageModelMix,
 };

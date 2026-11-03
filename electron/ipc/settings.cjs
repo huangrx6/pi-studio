@@ -8,9 +8,12 @@
 
 const os = require('node:os');
 const path = require('node:path');
-const { dialog, ipcMain, webContents } = require('electron');
+const { dialog, ipcMain, shell, webContents } = require('electron');
 const { DEFAULT_CWD } = require('../core/state.cjs');
-const { normalizeSecureHttpUrl } = require('../core/external-url.cjs');
+const {
+  normalizeExternalHttpUrl,
+  normalizeSecureHttpUrl,
+} = require('../core/external-url.cjs');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
 const {
   deleteHarnessProfile,
@@ -34,11 +37,20 @@ const {
 } = require('./sessions.cjs');
 const { settingsSnapshot } = require('../services/settings.cjs');
 const {
+  invalidateMcpConnection,
+  testMcpConnection,
+} = require('../services/mcp-runtime.cjs');
+const {
+  authorizeMcpServer,
+  clearMcpOAuth,
+} = require('../services/mcp-oauth.cjs');
+const {
   agentToolCatalog,
   saveInstalledToolSelection,
 } = require('../services/tool-selection.cjs');
 const {
   saveSubagentSettings,
+  subagentBudgetSnapshot,
   subagentSettings,
 } = require('../services/subagent-settings.cjs');
 const {
@@ -59,6 +71,28 @@ const {
   removeSkill,
   setSkillTrusted,
 } = require('../services/studio-skills.cjs');
+const {
+  disposePreparedSkill,
+  installPreparedSkill,
+  prepareSkillInstall,
+  pruneSkillPrepared,
+  removeSkillSource,
+  saveSkillSource,
+  setSkillSourceEnabled,
+  skillHubSnapshot,
+} = require('../services/skill-sources.cjs');
+const {
+  listSecrets,
+  removeSecret,
+  writeSecret,
+} = require('../services/secret-vault.cjs');
+const {
+  applyManagedWorktree,
+  cleanupManagedWorktrees,
+  discardManagedWorktree,
+  inspectManagedWorktree,
+  listManagedWorktrees,
+} = require('../services/managed-worktrees.cjs');
 
 function runtimeRefresh(reason, status = 'ready', message = '配置已热更新') {
   return {
@@ -244,6 +278,10 @@ function registerSettingsIpc() {
     subagentSettings(typeof cwd === 'string' ? cwd : DEFAULT_CWD)
   ));
 
+  ipcMain.handle('pi:subagent-budget', async (_event, { id, cwd } = {}) => (
+    subagentBudgetSnapshot(id, typeof cwd === 'string' ? cwd : DEFAULT_CWD)
+  ));
+
   ipcMain.handle('pi:save-subagent-settings', async (_event, { cwd, scope, settings } = {}) => {
     const snapshot = await saveSubagentSettings(
       typeof cwd === 'string' ? cwd : DEFAULT_CWD,
@@ -251,6 +289,34 @@ function registerSettingsIpc() {
       settings,
     );
     return { ...snapshot, runtimeRefresh: runtimeRefresh('子智能体配置') };
+  });
+
+  ipcMain.handle('pi:managed-worktrees', async (_event, { cwd, includeTerminal } = {}) => (
+    listManagedWorktrees({
+      workspace: typeof cwd === 'string' ? cwd : '',
+      includeTerminal: includeTerminal === true,
+    })
+  ));
+
+  ipcMain.handle('pi:managed-worktree', async (_event, id) => (
+    inspectManagedWorktree(String(id || ''))
+  ));
+
+  ipcMain.handle('pi:apply-managed-worktree', async (_event, id) => (
+    applyManagedWorktree(String(id || ''))
+  ));
+
+  ipcMain.handle('pi:discard-managed-worktree', async (_event, { id, force } = {}) => (
+    discardManagedWorktree(String(id || ''), { force: force === true })
+  ));
+
+  ipcMain.handle('pi:cleanup-managed-worktrees', async () => cleanupManagedWorktrees());
+
+  ipcMain.handle('pi:reveal-managed-worktree', async (_event, id) => {
+    const worktree = await inspectManagedWorktree(String(id || ''));
+    if (!worktree.directoryExists) throw new Error('托管工作树目录不存在');
+    shell.showItemInFolder(worktree.path);
+    return { ok: true };
   });
 
   ipcMain.handle('pi:harness-settings', async (_event, cwd) => (
@@ -312,6 +378,59 @@ function registerSettingsIpc() {
     };
   });
 
+  ipcMain.handle('pi:secrets-list', () => listSecrets());
+  ipcMain.handle('pi:secret-set', (_event, payload = {}) => writeSecret(payload));
+  ipcMain.handle('pi:secret-remove', (_event, name) => {
+    removeSecret(name);
+    return { ok: true };
+  });
+
+  ipcMain.handle('pi:test-mcp', async (_event, input = {}) => {
+    const db = getStudioDatabase();
+    const current = db.getMcpServer(input?.originalName || input?.name, { includeSecrets: true }) || {};
+    return testMcpConnection(normalizeMcpInput(input, current));
+  });
+
+  ipcMain.handle('pi:test-saved-mcp', async (_event, name) => {
+    const server = getStudioDatabase().getMcpServer(name, { includeSecrets: true });
+    if (!server) throw new Error('MCP 不存在');
+    return testMcpConnection(server);
+  });
+
+  ipcMain.handle('pi:mcp-oauth-start', async (_event, { name, cwd } = {}) => {
+    const db = getStudioDatabase();
+    const stored = db.getMcpServer(name, { includeSecrets: true });
+    if (!stored) throw new Error('MCP 不存在');
+    if (stored.transport !== 'http') throw new Error('只有 HTTP MCP 可以使用 OAuth');
+    const server = {
+      ...stored,
+      url: normalizeSecureHttpUrl(stored.url, {
+        label: `MCP「${stored.name}」地址`,
+      }),
+    };
+    const result = await authorizeMcpServer(server, async (url) => {
+      await shell.openExternal(normalizeExternalHttpUrl(url));
+    });
+    await invalidateMcpConnection(stored.name);
+    await refreshExtensionRuntime(
+      typeof cwd === 'string' ? cwd : DEFAULT_CWD,
+    );
+    return result;
+  });
+
+  ipcMain.handle('pi:mcp-oauth-logout', async (_event, { name, cwd } = {}) => {
+    const server = getStudioDatabase().getMcpServer(name, { includeSecrets: true });
+    if (!server) throw new Error('MCP 不存在');
+    clearMcpOAuth(normalizeSecureHttpUrl(server.url, {
+      label: `MCP「${server.name}」地址`,
+    }));
+    await invalidateMcpConnection(server.name);
+    await refreshExtensionRuntime(
+      typeof cwd === 'string' ? cwd : DEFAULT_CWD,
+    );
+    return { ok: true };
+  });
+
   ipcMain.handle('pi:add-mcp', async (_event, input) => {
     const db = getStudioDatabase();
     const current = db.getMcpServer(input?.originalName || input?.name, { includeSecrets: true }) || {};
@@ -369,6 +488,59 @@ function registerSettingsIpc() {
       '技能',
     );
   });
+
+  ipcMain.handle('pi:pick-skill-source-directory', async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
+    return result.canceled ? undefined : result.filePaths[0];
+  });
+
+  ipcMain.handle('pi:pick-skill-registry-file', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'Skill registry', extensions: ['json'] }],
+    });
+    return result.canceled ? undefined : result.filePaths[0];
+  });
+
+  ipcMain.handle('pi:skill-hub', async (_event, { refresh } = {}) => {
+    pruneSkillPrepared();
+    return skillHubSnapshot({ refresh: refresh === true });
+  });
+
+  ipcMain.handle('pi:add-skill-source', async (_event, input = {}) => {
+    pruneSkillPrepared();
+    return saveSkillSource(input);
+  });
+
+  ipcMain.handle('pi:set-skill-source-enabled', async (_event, { id, enabled } = {}) => (
+    setSkillSourceEnabled(id, enabled === true)
+  ));
+
+  ipcMain.handle('pi:remove-skill-source', async (_event, id) => {
+    removeSkillSource(id);
+    return { ok: true };
+  });
+
+  ipcMain.handle('pi:prepare-skill-install', async (_event, input = {}) => {
+    pruneSkillPrepared();
+    return prepareSkillInstall(input);
+  });
+
+  ipcMain.handle('pi:install-prepared-skill', async (_event, input = {}) => {
+    const installed = installPreparedSkill(input);
+    notifyExtensionsChanged();
+    return {
+      installed,
+      settings: await settingsWithRuntime(
+        typeof input.cwd === 'string' ? input.cwd : DEFAULT_CWD,
+        '技能',
+      ),
+    };
+  });
+
+  ipcMain.handle('pi:dispose-prepared-skill', async (_event, token) => (
+    disposePreparedSkill(token)
+  ));
 
   ipcMain.handle('pi:remove-skill', async (_event, skillPath, cwd) => {
     removeSkill(skillPath, typeof cwd === 'string' ? cwd : DEFAULT_CWD);

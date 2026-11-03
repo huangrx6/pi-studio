@@ -193,6 +193,8 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --transparent: transparent;
   --diff-change-bg: color-mix(in srgb, var(--text) 12%, transparent);
   --diff-empty-pattern: repeating-linear-gradient(135deg, var(--transparent) 0 5px, var(--border) 5px 6px);
+  /* 同样的斜纹，但底层不透明：行号列是 sticky 的，代码会从它下面滑过。 */
+  --diff-empty-gutter: repeating-linear-gradient(135deg, var(--surface) 0 5px, var(--border) 5px 6px);
   --image-dismiss-bg: #ffffff;
   --image-dismiss-fg: #202020;
   /* One hue; no independently tuned hover, border or focus colors. */

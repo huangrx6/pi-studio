@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AlertTriangle, FilePenLine, FileSearch, Globe2, Terminal, X } from 'lucide-react';
+import { AlertTriangle, FilePenLine, FileSearch, Globe2, ShieldAlert, Terminal, X } from 'lucide-react';
 import type {
   PermissionConfirmRequest,
   PermissionConfirmResponse,
@@ -31,7 +31,7 @@ export type ActionConfirmOptions = {
   tone?: 'default' | 'danger';
 };
 
-type ConfirmKind = 'command' | 'read' | 'file' | 'network' | 'tool';
+type ConfirmKind = 'command' | 'read' | 'file' | 'network' | 'sensitive' | 'tool';
 
 type ParsedConfirm = { kind: ConfirmKind; tool?: string; detail: string; explanation?: string; risk?: string };
 
@@ -40,10 +40,12 @@ const KIND_META: Record<ConfirmKind, { label: string; icon: ReactNode; acceptLab
   read: { label: '读取文件', icon: <FileSearch />, acceptLabel: '允许读取' },
   file: { label: '修改文件', icon: <FilePenLine />, acceptLabel: '允许写入' },
   network: { label: '访问网络', icon: <Globe2 />, acceptLabel: '允许访问' },
+  sensitive: { label: '发送敏感信息', icon: <ShieldAlert />, acceptLabel: '仍然发送' },
   tool: { label: '工具调用', icon: <Terminal />, acceptLabel: '允许' },
 };
 
 function kindForTool(tool: string, detail?: string): ConfirmKind {
+  if (tool === 'sensitive-input') return 'sensitive';
   if (tool === 'bash') return 'command';
   if (['read', 'ls', 'find', 'grep'].includes(tool)) return 'read';
   if (['write', 'edit'].includes(tool)) return 'file';

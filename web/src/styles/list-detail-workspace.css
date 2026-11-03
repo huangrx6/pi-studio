@@ -1,0 +1,8 @@
+.list-detail-workspace { container: list-detail / inline-size; display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
+.list-detail-layout { display: flex; flex: 1; min-width: 0; min-height: 0; }
+.list-detail-master { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.list-detail-pane { display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
+.has-detail .list-detail-master { flex: 0 0 340px; border-right: 1px solid var(--border); }
+@container list-detail (max-width: 900px) {
+  .has-detail .list-detail-master { display: none; }
+}

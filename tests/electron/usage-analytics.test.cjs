@@ -16,6 +16,7 @@ const {
   currentStreak,
   longestStreak,
   usageAnalyticsSnapshot,
+  usageModelMix,
 } = require('../../electron/services/usage-analytics.cjs');
 
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-usage-'));
@@ -321,12 +322,79 @@ test('separates models while keeping all-time and range totals', () => {
     ],
   );
   assert.deepEqual(
-    snapshot.models.map((model) => [model.modelId, model.displayName, model.totalTokens]),
+    usageModelMix({ days: 30, now: Date.parse('2026-10-30T18:00:00+08:00') }).models
+      .map((model) => [model.modelId, model.displayName, model.totalTokens]),
     [
       ['glm-5.3-flash', 'GLM-5.3 Flash', 280],
       ['deepseek-flash', 'DeepSeek V4.1 Flash', 230],
     ],
   );
+});
+
+test('model mix answers every window the settings page offers', () => {
+  const database = createStudioDatabase(path.join(temporary, 'model-mix.sqlite'));
+  database.upsertProvider({
+    id: 'mix-provider',
+    name: 'Mix Provider',
+    baseUrl: 'https://mix.example.test/v1',
+    api: 'openai-completions',
+    enabled: true,
+  });
+  database.upsertModel({
+    providerId: 'mix-provider',
+    modelId: 'mix-model',
+    name: 'Mix Model',
+    api: 'openai-completions',
+    enabled: true,
+  });
+  const record = (requestId, day, input) => database.recordUsageRequest({
+    requestId,
+    day,
+    at: Date.parse(`${day}T12:00:00+08:00`),
+    providerId: 'mix-provider',
+    modelId: 'mix-model',
+    input,
+    output: 0,
+  });
+  record('mix-old', '2025-01-04', 1_000);
+  record('mix-mid', '2026-10-15', 200);
+  record('mix-today', '2026-10-30', 30);
+  const now = Date.parse('2026-10-30T18:00:00+08:00');
+
+  const all = usageModelMix({ all: true, database, now });
+  assert.deepEqual(all.window, { all: true, days: null, sinceDay: null, untilDay: null });
+  assert.equal(all.totals.totalTokens, 1_230);
+  assert.equal(all.models.length, 1);
+  assert.equal(all.models[0].totalTokens, 1_230);
+  assert.equal(all.models[0].displayName, 'Mix Model');
+  assert.equal(all.models[0].requests, 3);
+
+  const today = usageModelMix({ database, now, sinceDay: '2026-10-30', untilDay: '2026-10-30' });
+  assert.deepEqual(today.window, {
+    all: false,
+    days: 1,
+    sinceDay: '2026-10-30',
+    untilDay: '2026-10-30',
+  });
+  assert.equal(today.totals.totalTokens, 30);
+  assert.equal(today.models[0].requests, 1);
+
+  const custom = usageModelMix({ database, now, sinceDay: '2026-10-01', untilDay: '2026-10-15' });
+  assert.deepEqual(custom.window, {
+    all: false,
+    days: 15,
+    sinceDay: '2026-10-01',
+    untilDay: '2026-10-15',
+  });
+  assert.equal(custom.totals.totalTokens, 200);
+  assert.equal(custom.models[0].requests, 1);
+
+  // A reversed or malformed range collapses onto a readable single-day window.
+  const messy = usageModelMix({ database, now, sinceDay: '2026-10-30', untilDay: '2026-02-30' });
+  assert.deepEqual(messy.window.sinceDay, '2026-10-30');
+  assert.equal(messy.window.days, 1);
+  assert.equal(messy.totals.totalTokens, 30);
+  database.close();
 });
 
 test('calculates current and longest local-day streaks', () => {

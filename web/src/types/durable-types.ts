@@ -55,6 +55,8 @@ export type ConversationPage = ConversationSummary & {
   page: {
     hasOlder: boolean;
     nextCursor?: ConversationPageCursor;
+    /** 按 entry id 定位的窗口是否真的含目标消息；未含表示还在更早的分页里。 */
+    reachedTarget?: boolean;
   };
   messageStart: number;
   running: boolean;
@@ -174,13 +176,15 @@ export type ConversationEvent =
       taskId: string;
       kind: string;
       message: string;
+      /** Pi Durable 1.5.0 的 `RunFailureReason`：model_error / no_model / aborted / … */
+      reason?: string;
+      detail?: string;
       running: boolean;
     }>
   | EventBase<'assistant.updated' | 'assistant.completed', { message: ChatMessage }>
   | EventBase<'transcript.appended', { messages: ChatMessage[] }>
   | EventBase<'request.trace', { trace: RequestTrace }>
   | EventBase<'inbox.updated', { items: unknown[] }>
-  | EventBase<'submission.updated', { record: { id: string; status: string; reason?: string; detail?: unknown } }>
   | EventBase<'agent.updated', { agent: Record<string, unknown> }>
   | EventBase<'usage.updated', { usage: unknown }>
   | EventBase<'retry.updated', { active: boolean; attempt: number; at?: number; errorMessage?: string }>

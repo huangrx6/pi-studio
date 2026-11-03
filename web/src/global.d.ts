@@ -12,8 +12,18 @@
 export {};
 import type { ChatAttachment, ChatMessage, ComposerAttachment, ComposerCommand, ComposerFile, TurnDiff, UploadedAttachment } from './types/chat-types';
 import type { ConcreteThinkingLevel, ModelCatalog, ModelSelection, ThinkingLevel } from './types/model-types';
+import type {
+  ModelComparisonInput,
+  ModelComparisonAdoptInput,
+  ModelComparisonAdoptResult,
+  ModelComparisonDiscardInput,
+  ModelComparisonDiscardResult,
+  ModelComparisonSnapshot,
+  ModelComparisonSnapshotInput,
+  ModelComparisonStartResult,
+} from './types/comparison-types';
 import type { AgentToolCatalog, AgentToolSelection } from './types/agent-tool-types';
-import type { SubagentChild, SubagentConfig, SubagentSettingsSnapshot, SubagentTranscript } from './types/subagent-types';
+import type { ManagedWorktree, SubagentBudgetSnapshot, SubagentChild, SubagentConfig, SubagentSettingsSnapshot, SubagentTranscript } from './types/subagent-types';
 import type {
   HarnessProfileDraft,
   HarnessSettingsSnapshot,
@@ -36,7 +46,7 @@ import type {
 import type { BackgroundMedia } from './lib/preferences';
 import type { UpdateSnapshot } from './types/update-types';
 import type { RuntimeRefreshSnapshot } from './types/runtime-types';
-import type { UsageAnalyticsSnapshot } from './types/usage-types';
+import type { UsageAnalyticsSnapshot, UsageModelMix } from './types/usage-types';
 import type {
   ExtensionCommandResult,
   ExtensionDataViewEvent,
@@ -58,6 +68,89 @@ import type {
   PermissionPolicyState,
   PermissionScope,
 } from './types/permission-types';
+
+export type McpConnectionTestResult = {
+  ok: boolean;
+  durationMs: number;
+  instructions: string;
+  capabilities: { tools: boolean; resources: boolean; prompts: boolean };
+  tools: Array<{
+    name: string;
+    title: string;
+    description: string;
+    argumentCount: number;
+    requiredCount: number;
+    exposure: string;
+  }>;
+  resources: Array<{ uri: string; name: string; mimeType: string }>;
+  prompts: Array<{ name: string; description: string }>;
+  stderr: string;
+};
+
+export type SkillSource = {
+  id: string;
+  name: string;
+  type: 'directory' | 'registry';
+  location: string;
+  enabled: boolean;
+  lastSyncedAt?: number;
+  itemCount: number;
+  lastError: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type SkillCatalogItem = {
+  id: string;
+  listingId: string;
+  sourceId: string;
+  sourceName: string;
+  sourceType: 'directory' | 'registry';
+  name: string;
+  description: string;
+  version: string;
+  invocation: 'automatic' | 'explicit';
+  repository: string;
+  homepage: string;
+  resourceCount?: number;
+  totalBytes?: number;
+  promptTokens: number;
+  installed: boolean;
+  installedVersion?: string;
+  installedPath?: string;
+  updateAvailable: boolean;
+};
+
+export type SkillHubSnapshot = {
+  refreshedAt: number;
+  sources: SkillSource[];
+  catalogs: Array<{
+    source: SkillSource;
+    items: SkillCatalogItem[];
+    diagnostics: Array<{ path: string; message: string }>;
+  }>;
+};
+
+export type SkillInstallPreview = {
+  token: string;
+  sourceId: string;
+  listingId: string;
+  sourceName: string;
+  sourceType: 'directory' | 'registry';
+  scope: 'user' | 'project';
+  requiresTrust: boolean;
+  canUpdate: boolean;
+  installedVersion: string;
+  name: string;
+  description: string;
+  version: string;
+  invocation: 'automatic' | 'explicit';
+  resourceCount: number;
+  totalBytes: number;
+  promptTokens: number;
+  files: Array<{ path: string; size: number }>;
+  sha256: string;
+};
 
 /** 侧边栏里的会话摘要（不含消息正文）。 */
 interface PiSessionSummary {
@@ -157,10 +250,12 @@ interface SettingsSnapshot {
     timeoutSeconds: number;
     envKeys: string[];
     headerKeys: string[];
+    oauthConnected: boolean;
     connected: boolean;
     toolCount: number;
     error: string;
     stderr: string;
+    tools: Array<{ name: string; originalName: string; description: string; exposure: 'direct' | 'deferred' | 'hidden' }>;
   }>;
   /** 已安装技能。 */
   skills: Array<{
@@ -171,6 +266,10 @@ interface SettingsSnapshot {
     scope: 'user' | 'project';
     origin: 'studio' | 'agents';
     bytes: number;
+    version: string;
+    promptTokens: number;
+    resourceCount: number;
+    totalBytes: number;
     fingerprint: string;
     trusted: boolean;
     trustChanged: boolean;
@@ -179,6 +278,7 @@ interface SettingsSnapshot {
     warnings: string[];
   }>;
   skillErrors: Array<{ path: string; message: string }>;
+  skillSources: SkillSource[];
   /** 已安装扩展。 */
   extensions: ExtensionHostSnapshot['extensions'];
   officialExtensions: import('./types/extension-types').OfficialExtensionCatalogItem[];
@@ -294,6 +394,8 @@ declare global {
         id: string;
         limit?: number;
         cursor?: ConversationPageCursor;
+        /** 目标 entry id：一直向后加载到包含这条消息为止（上限 2000 条）。 */
+        untilSourceIndex?: number;
       }): Promise<ConversationPage | undefined>;
       /** 获取完整提问大纲；仅用于导航，不参与消息窗口渲染。 */
       conversationOutline(id: string): Promise<ConversationOutline | undefined>;
@@ -306,6 +408,14 @@ declare global {
       conversationSubmit(payload: ConversationSubmitInput): Promise<ConversationSubmitResult>;
       /** 原位编辑一条用户消息，并重新生成该分支。 */
       conversationEdit(payload: ConversationEditInput): Promise<ConversationEditResult>;
+      /** 从同一父会话分叉两次，用相同输入并行请求两个模型。 */
+      conversationCompareStart(payload: ModelComparisonInput): Promise<ModelComparisonStartResult>;
+      /** 轮询两个普通会话分支的运行状态、结果与用量。 */
+      conversationCompareSnapshot(payload: ModelComparisonSnapshotInput): Promise<ModelComparisonSnapshot>;
+      /** 应用选中分支的隔离改动，并把该会话移回原工作区。 */
+      conversationCompareAdopt(payload: ModelComparisonAdoptInput): Promise<ModelComparisonAdoptResult>;
+      /** 永久删除一个不再需要的对比分支及其托管工作树。 */
+      conversationCompareDiscard(payload: ModelComparisonDiscardInput): Promise<ModelComparisonDiscardResult>;
       /** 热切换模型与 thinking；繁忙时只影响下一请求。 */
       conversationConfigure(payload: {
         id: string;
@@ -313,6 +423,8 @@ declare global {
         thinkingLevel?: ThinkingLevel;
       }): Promise<ModelSelection>;
       conversationInterrupt(id: string): Promise<{ ok: boolean }>;
+      /** 手动压缩上下文：空闲时立即应用，运行中在下一个边界应用，不中断当前回合。 */
+      conversationCompact(payload: { id: string; instructions?: string }): Promise<{ ok: boolean; taskId: string }>;
       conversationAction(payload: {
         kind: 'workspace' | 'session';
         id: string;
@@ -346,6 +458,7 @@ declare global {
       subagentTranscript(payload: { sessionId: string; childKey: string; limit?: number; cursor?: string }): Promise<SubagentTranscript>;
       /** 永久删除当前父会话中的一个子智能体及其独立上下文。 */
       deleteSubagent(payload: { sessionId: string; childKey: string }): Promise<{ ok: boolean; name: string; deletedConversations: number }>;
+      replySubagentSupervisor(payload: { sessionId: string; childKey: string; requestId: string; message: string }): Promise<{ ok: boolean; requestId: string; childKey: string; reporterTaskId: string }>;
       // ---- 聊天发送 ----
       // ---- 文件浏览 ----
       /** 列出工作区某目录下的条目。 */
@@ -400,8 +513,12 @@ declare global {
       // ---- 模型 ----
       /** 读取模型目录、启用列表与当前选择。 */
       models(cwd?: string): Promise<ModelCatalog>;
+      /** 当前模型的上下文窗口与自动压缩阈值（只读）。 */
+      contextPolicy(payload?: { modelRef?: string }): Promise<{ modelRef: string; contextWindow: number; autoCompactPercent: number; compactAtTokens: number | null }>;
       /** Read aggregate token usage from Studio SQLite for the last N local days. */
       usageSummary(payload?: { days?: number }): Promise<UsageAnalyticsSnapshot>;
+      /** Read the model mix for an explicit window: every stored day, a N-day window, or an inclusive local-day range. */
+      usageModels(payload?: { all?: boolean; days?: number; sinceDay?: string; untilDay?: string }): Promise<UsageModelMix>;
       /** 读取某来源下可选模型及启用状态。 */
       providerModels(providerId: string): Promise<{ models: Array<{ id: string; model: string; name: string; enabled: boolean; contextWindow?: number; maxTokens?: number; supportsImages?: boolean; reasoning?: boolean; thinkingLevels?: ConcreteThinkingLevel[]; origin: 'builtin' | 'configured' | 'override'; deletable: boolean }> }>;
       /** 从来源的 /models 接口读取模型，不保存到 Pi 配置。 */
@@ -472,8 +589,15 @@ declare global {
       }): Promise<HarnessSettingsSnapshot>;
       /** 读取 Studio 子智能体的模型、thinking 与工具权限。 */
       subagentSettings(cwd?: string): Promise<SubagentSettingsSnapshot>;
+      subagentBudget(payload: { id: string; cwd?: string }): Promise<SubagentBudgetSnapshot>;
       /** 保存一个范围的模型、thinking 与子智能体工具白名单。 */
       saveSubagentSettings(payload: { cwd: string; scope: 'user' | 'project'; settings: SubagentConfig }): Promise<SubagentSettingsSnapshot>;
+      managedWorktrees(payload?: { cwd?: string; includeTerminal?: boolean }): Promise<ManagedWorktree[]>;
+      managedWorktree(id: string): Promise<ManagedWorktree & { patch: string }>;
+      applyManagedWorktree(id: string): Promise<{ ok: boolean; changedFiles: number; removed?: boolean; cleanupError?: string }>;
+      discardManagedWorktree(payload: { id: string; force?: boolean }): Promise<{ ok: boolean; alreadyTerminal?: boolean }>;
+      cleanupManagedWorktrees(): Promise<{ removed: number; failures: string[] }>;
+      revealManagedWorktree(id: string): Promise<{ ok: boolean }>;
       /** 保存某来源的 API Key。 */
       setKey(payload: { providerId: string; apiKey: string }): Promise<any>;
       /** 保存来源配置（baseUrl、API 类型、首个模型、可选 API Key）。 */
@@ -482,6 +606,11 @@ declare global {
       setProviderEnabled(payload: { providerId: string; enabled: boolean; cwd?: string }): Promise<SettingsSnapshot>;
       /** 永久删除来源连接、模型配置和已保存凭据。 */
       removeProvider(payload: { providerId: string; cwd?: string }): Promise<SettingsSnapshot>;
+      /** Renderer-visible names only; secret values never cross IPC. */
+      listSecrets(): Promise<Array<{ name: string; updatedAt: number }>>;
+      /** Store or replace one safeStorage-encrypted test credential. */
+      setSecret(payload: { name: string; value: string }): Promise<{ name: string; updatedAt: number }>;
+      removeSecret(name: string): Promise<{ ok: boolean }>;
       /** 读取 MCP 服务器配置详情。 */
       mcpConfig(name: string): Promise<{
         name: string;
@@ -500,6 +629,10 @@ declare global {
         timeoutSeconds: number;
         enabled: boolean;
       }>;
+      testMcp(input: Record<string, unknown>): Promise<McpConnectionTestResult>;
+      testSavedMcp(name: string): Promise<McpConnectionTestResult>;
+      startMcpOAuth(name: string, cwd?: string): Promise<{ ok: boolean; serverUrl: string; authorizedAt: number }>;
+      logoutMcpOAuth(name: string, cwd?: string): Promise<{ ok: boolean }>;
       /** 保存 MCP 服务器；originalName 用于编辑时重命名。 */
       addMcp(payload: {
         name: string;
@@ -525,6 +658,35 @@ declare global {
       removeMcp(name: string, cwd?: string): Promise<any>;
       /** 添加技能（scope 决定用户级还是工作区级）。 */
       addSkill(payload: { scope: string; cwd?: string }): Promise<any>;
+      pickSkillSourceDirectory(): Promise<string | undefined>;
+      pickSkillRegistryFile(): Promise<string | undefined>;
+      skillHub(payload?: { refresh?: boolean }): Promise<SkillHubSnapshot>;
+      addSkillSource(payload: {
+        id?: string;
+        name?: string;
+        type: 'directory' | 'registry';
+        location: string;
+        enabled?: boolean;
+      }): Promise<SkillSource>;
+      setSkillSourceEnabled(payload: { id: string; enabled: boolean }): Promise<SkillSource>;
+      removeSkillSource(id: string): Promise<{ ok: boolean }>;
+      prepareSkillInstall(payload: {
+        sourceId: string;
+        listingId: string;
+        scope: 'user' | 'project';
+        cwd?: string;
+      }): Promise<SkillInstallPreview>;
+      installPreparedSkill(payload: { token: string; cwd?: string }): Promise<{
+        installed: {
+          name: string;
+          version: string;
+          scope: 'user' | 'project';
+          path: string;
+          baseDir: string;
+        };
+        settings: SettingsSnapshot;
+      }>;
+      disposePreparedSkill(token: string): Promise<{ ok: boolean }>;
       /** 删除技能目录。 */
       removeSkill(path: string, cwd?: string): Promise<any>;
       /** 信任或撤销当前工作区中的项目技能。 */

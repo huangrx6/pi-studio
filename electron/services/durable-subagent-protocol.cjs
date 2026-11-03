@@ -8,6 +8,11 @@
  * flows can derive their true parent without trusting the child model.
  */
 
+const {
+  completeManagedWorktree,
+  reactivateManagedWorktree,
+} = require('./managed-worktrees.cjs');
+
 const contracts = new WeakMap();
 const MAX_REPORTED_ANSWERS = 64;
 const MAX_SUPERVISOR_REQUESTS = 200;
@@ -26,6 +31,8 @@ function emptyChildContext() {
     name: '',
     anchorTaskId: 0,
     workspace: '',
+    worktreeId: '',
+    isolation: 'workspace',
     supervisorEnabled: false,
     createdAt: 0,
   };
@@ -101,7 +108,7 @@ function createProtocol(durable) {
     initial: () => ({ phase: 'deliver' }),
     phases: {
       deliver: async (reporter, runtime, context) => {
-        const { name, conversationId, message, followUp } = reporter.input;
+        const { name, conversationId, message, followUp, worktreeId } = reporter.input;
         const child = await runtime.conversation(conversationId, context);
         let report;
         let answerId;
@@ -110,6 +117,7 @@ function createProtocol(durable) {
           report = `[subagent ${name} is unavailable] The child conversation no longer exists.`;
         } else {
           try {
+            await reactivateManagedWorktree(worktreeId);
             const submission = await child.submit({
               type: 'input',
               content: message,
@@ -136,6 +144,26 @@ function createProtocol(durable) {
             }
           } catch (error) {
             report = `[subagent ${name} failed: ${error instanceof Error ? error.message : String(error)}]`;
+          }
+        }
+
+        if (worktreeId) {
+          const state = await runtime.snapshot(Subagents, runtime.conversationId, context);
+          const waitingForReply = Object.values(state?.supervisorRequests || {}).some((request) => (
+            request.childConversationId === conversationId && request.status === 'pending'
+          ));
+          const hasOtherReporter = Object.values(state?.reporters || {}).some((registration) => (
+            registration.name === name && registration.active && registration.taskId !== reporter.id
+          ));
+          // A completed model turn can still be waiting for a supervisor or a
+          // queued follow-up. Keep its cwd alive until that work has settled.
+          if (!waitingForReply && !hasOtherReporter) {
+            await completeManagedWorktree(worktreeId, {
+              status: outcome === 'completed' ? 'finished' : 'failed',
+              error: outcome === 'completed' ? '' : report,
+            }).catch((error) => {
+              console.warn('Unable to settle managed worktree:', error);
+            });
           }
         }
 
@@ -232,7 +260,98 @@ function createProtocol(durable) {
   return contract;
 }
 
+function pruneReporterRegistrations(state, maximum = 256) {
+  const terminal = Object.entries(state.reporters || {})
+    .filter(([, reporter]) => reporter?.active !== true)
+    .sort((left, right) => (
+      Number(right[1]?.endedAt || right[1]?.createdAt || 0)
+      - Number(left[1]?.endedAt || left[1]?.createdAt || 0)
+    ));
+  for (const [requestKey] of terminal.slice(maximum)) {
+    delete state.reporters[requestKey];
+  }
+}
+
+
+async function createReporter({
+  tx,
+  durable,
+  parentConversationId,
+  requestKey,
+  name,
+  conversationId,
+  message,
+  followUp,
+  now,
+  maximum,
+  worktreeId = '',
+}) {
+  const protocol = createProtocol(durable);
+  const registry = await tx.doc(protocol.Subagents, parentConversationId);
+  const existing = (Object.hasOwn(registry.reporters, requestKey) ? registry.reporters[requestKey] : undefined);
+  if (existing) return existing;
+  if (Object.values(registry.reporters).filter((item) => item?.active === true).length >= maximum) {
+    throw new Error(`后台子智能体已达到并发上限 ${maximum}`);
+  }
+  const taskId = await tx.createTask(protocol.Reporter, {
+    name,
+    conversationId,
+    message,
+    followUp: Boolean(followUp),
+    requestKey,
+    ...(worktreeId ? { worktreeId } : {}),
+  }, { ownership: { kind: 'conversation' }, background: true });
+  const record = {
+    taskId,
+    requestKey,
+    name,
+    active: true,
+    status: 'running',
+    createdAt: now,
+    updatedAt: now,
+  };
+  registry.reporters[requestKey] = record;
+  pruneReporterRegistrations(registry);
+  const agent = (Object.hasOwn(registry.agents, name) ? registry.agents[name] : undefined);
+  if (agent) {
+    agent.lastReporterTaskId = taskId;
+    agent.updatedAt = now;
+  }
+  return record;
+}
+
+/** Check and mark the reply in the same commit that creates its reporter. */
+async function queueSupervisorReply({ tx, durable, parentConversationId, replyTo, message, now, maximum, childConversationId }) {
+  const protocol = createProtocol(durable);
+  const registry = await tx.doc(protocol.Subagents, parentConversationId);
+  const current = Object.hasOwn(registry.supervisorRequests, replyTo) ? registry.supervisorRequests[replyTo] : undefined;
+  if (!current || (childConversationId !== undefined && current.childConversationId !== childConversationId)) {
+    throw new Error('监督请求不存在或不属于这个子智能体');
+  }
+  const agent = Object.hasOwn(registry.agents, current.childName) ? registry.agents[current.childName] : undefined;
+  if (!agent || agent.conversationId !== current.childConversationId) throw new Error('监督请求对应的子智能体已失效');
+  if (current.status === 'replied' && current.reply !== message) throw new Error('这个监督请求已经用其他内容回复');
+  const requestKey = `supervisor-reply:${replyTo}`;
+  // Even if the bounded reporter index has been pruned, never send the same reply twice.
+  if (current.status === 'replied') return { taskId: current.reporterTaskId || registry.reporters[requestKey]?.taskId || 0 };
+  const reporter = await createReporter({
+    tx, durable, parentConversationId, requestKey, name: current.childName,
+    conversationId: current.childConversationId,
+    message: [`[supervisor reply to ${current.childName}]`, message,
+      'Continue the task using this decision. Ask again only if a different decision is required.'].join('\n'),
+    followUp: true, now, maximum,
+    worktreeId: agent.worktreeId || '',
+  });
+  current.status = 'replied';
+  current.reply = message;
+  current.reporterTaskId = reporter.taskId;
+  current.updatedAt = now;
+  return reporter;
+}
+
 module.exports = {
+  createReporter,
+  queueSupervisorReply,
   createProtocol,
   emptyChildContext,
   emptyRegistry,

@@ -9,6 +9,7 @@
 const { ipcMain, webContents } = require('electron');
 const {
   abortConversation,
+  compactConversation,
   composerResources,
   configureConversation,
   conversationAction,
@@ -41,12 +42,19 @@ const { normalizeContentList } = require('../services/studio-extension-ui.cjs');
 const {
   deleteSubagentChild,
   listSubagentChildren,
+  replySubagentSupervisor,
   subagentTranscript,
 } = require('../services/durable-subagents.cjs');
 const {
   getDurableRuntime,
   reconcileRuntimeForWorkspace,
 } = require('../services/durable-runtime.cjs');
+const {
+  adoptModelComparisonBranch,
+  discardModelComparisonBranch,
+  modelComparisonSnapshot,
+  startModelComparison,
+} = require('../services/model-comparison.cjs');
 const { publishMenuBarEvent } = require('../menu-bar-events.cjs');
 
 // `run_end` is also emitted for a user-requested abort. Keep a short-lived
@@ -322,8 +330,32 @@ function registerConversationIpc() {
     notifyConversationList();
     return result;
   });
+  ipcMain.handle('pi:conversation-compare-start', async (_event, input) => {
+    const result = await startModelComparison(input || {});
+    notifyConversationList();
+    return result;
+  });
+  ipcMain.handle('pi:conversation-compare-snapshot', async (_event, input) => (
+    modelComparisonSnapshot(input || {})
+  ));
+  ipcMain.handle('pi:conversation-compare-adopt', async (_event, input) => {
+    const result = await adoptModelComparisonBranch(input || {});
+    notifyConversationList();
+    return result;
+  });
+  ipcMain.handle('pi:conversation-compare-discard', async (_event, input) => {
+    const result = await discardModelComparisonBranch(input || {});
+    notifyConversationList();
+    return result;
+  });
 
   ipcMain.handle('pi:conversation-configure', async (_event, input) => configureConversation(input || {}));
+  ipcMain.handle('pi:conversation-compact', async (_event, { id, instructions } = {}) => {
+    if (typeof id !== 'string' || !id) throw new Error('会话参数无效');
+    const result = await compactConversation(id, instructions);
+    notifyConversationList();
+    return result;
+  });
   ipcMain.handle('pi:conversation-interrupt', async (_event, { id } = {}) => {
     if (typeof id !== 'string' || !id) throw new Error('会话参数无效');
     cancelledRunIds.add(id);
@@ -358,6 +390,16 @@ function registerConversationIpc() {
   ));
   ipcMain.handle('pi:conversation-subagent-delete', async (_event, payload = {}) => {
     const result = await deleteSubagentChild(payload.sessionId, payload.childKey);
+    notifyConversationList();
+    return result;
+  });
+  ipcMain.handle('pi:conversation-subagent-reply', async (_event, payload = {}) => {
+    const result = await replySubagentSupervisor(
+      payload.sessionId,
+      payload.childKey,
+      payload.requestId,
+      payload.message,
+    );
     notifyConversationList();
     return result;
   });

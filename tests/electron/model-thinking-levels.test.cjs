@@ -26,6 +26,26 @@ test('thinking levels normalize vendor aliases into Pi order', () => {
   assert.deepEqual(effectiveThinkingLevels(['high'], false), []);
 });
 
+test('thinking level objects tolerate capability flags and effort keys', () => {
+  // OpenAI-compatible catalogs (e.g. opencode) declare `{ supported: true }`,
+  // a boolean flag that must never be iterated as a level list.
+  assert.deepEqual(normalizeThinkingLevels({ supported: true }), []);
+  assert.deepEqual(normalizeThinkingLevels({ supported: true, effort: ['low', 'high', 'max'] }), [
+    'low',
+    'high',
+    'max',
+  ]);
+  assert.deepEqual(normalizeThinkingLevels({ effort: 'none, medium' }), ['off', 'medium']);
+  assert.deepEqual(normalizeThinkingLevels({ supported: ['low', 'high'] }), ['low', 'high']);
+  assert.deepEqual(normalizeThinkingLevels({ levels: 5 }), []);
+  assert.deepEqual(normalizeThinkingLevels(3), []);
+  assert.deepEqual(normalizeThinkingLevels(true), []);
+  assert.deepEqual(
+    effectiveThinkingLevels({ supported: true }, true),
+    ['off', 'minimal', 'low', 'medium', 'high'],
+  );
+});
+
 test('thinking capability maps preserve provider values and expose only selected levels', async () => {
   const { getSupportedThinkingLevels } = await import('@earendil-works/pi-ai');
   const map = thinkingLevelMapForLevels(['off', 'low', 'high', 'max'], {

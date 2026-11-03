@@ -1,0 +1,376 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { createZipArchive, sha256 } = require('../../electron/core/extension-archive.cjs');
+const { installElectronSafeStorage } = require('./helpers/electron-safe-storage.cjs');
+
+installElectronSafeStorage(test);
+
+const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-skill-hub-'));
+process.env.PI_STUDIO_USER_DATA = path.join(temporary, 'user-data');
+process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
+
+const {
+  closeStudioDatabase,
+} = require('../../electron/core/studio-db.cjs');
+const {
+  installPreparedSkill,
+  prepareSkillInstall,
+  refreshSkillCatalog,
+  saveSkillSource,
+  skillHubSnapshot,
+  setSkillSourceEnabled,
+  __test,
+} = require('../../electron/services/skill-sources.cjs');
+
+test.after(() => {
+  closeStudioDatabase();
+  fs.rmSync(temporary, { recursive: true, force: true });
+});
+
+test('catalog refresh removes vanished entries and disabled sources cannot be installed', async () => {
+  const root = path.join(temporary, 'cache-source');
+  const skill = path.join(root, 'cache-demo');
+  writeSkill(skill, 'cache-demo', '1.0.0', 'Cache fixture.');
+  const source = saveSkillSource({ type: 'directory', location: root });
+  await refreshSkillCatalog();
+  fs.rmSync(skill, { recursive: true });
+  await refreshSkillCatalog();
+  const cached = await skillHubSnapshot();
+  assert.equal(cached.catalogs.find((catalog) => catalog.source.id === source.id).items.length, 0);
+  await assert.rejects(prepareSkillInstall({ sourceId: source.id, listingId: 'directory:cache-demo', scope: 'user' }), /刷新/);
+  writeSkill(skill, 'cache-demo', '1.0.0', 'Cache fixture.');
+  await refreshSkillCatalog();
+  setSkillSourceEnabled(source.id, false);
+  assert.equal((await skillHubSnapshot()).catalogs.find((catalog) => catalog.source.id === source.id).items.length, 0);
+  await assert.rejects(prepareSkillInstall({ sourceId: source.id, listingId: 'directory:cache-demo', scope: 'user' }), /停用/);
+});
+
+test('prepared project installs stay bound to the reviewed workspace', async () => {
+  const root = path.join(temporary, 'bound-source');
+  writeSkill(path.join(root, 'bound-demo'), 'bound-demo', '1.0.0', 'Bound fixture.');
+  const source = saveSkillSource({ type: 'directory', location: root });
+  await refreshSkillCatalog();
+  const cwd = path.join(temporary, 'bound-workspace');
+  const other = path.join(temporary, 'other-workspace');
+  fs.mkdirSync(cwd); fs.mkdirSync(other);
+  const preview = await prepareSkillInstall({ sourceId: source.id, listingId: 'directory:bound-demo', scope: 'project', cwd });
+  assert.throws(() => installPreparedSkill({ token: preview.token, cwd: other }), /预览不一致/);
+  assert.equal(fs.existsSync(path.join(other, '.pi-studio')), false);
+  assert.ok(installPreparedSkill({ token: preview.token }).baseDir.startsWith(cwd));
+});
+
+test('downloads enforce the byte limit while streaming even without Content-Length', async () => {
+  let cancelled = false;
+  const response = new Response(new ReadableStream({
+    pull(controller) { controller.enqueue(new Uint8Array(8)); },
+    cancel() { cancelled = true; },
+  }));
+  await assert.rejects(__test.readLimitedResponse(response, 'fixture', 12), /超过 12/);
+  assert.equal(cancelled, true);
+});
+
+test('HTTP loopback registries resolve relative packages against the final redirect URL', async (t) => {
+  const original = global.fetch;
+  t.after(() => { global.fetch = original; });
+  global.fetch = async (url) => url.endsWith('/start')
+    ? new Response(null, { status: 302, headers: { location: '/catalog/skills.json' } })
+    : Response.json({ schemaVersion: 1, skills: [{
+        name: 'remote-demo', description: 'remote', version: '1.0.0',
+        download: './package.zip', sha256: 'a'.repeat(64),
+      }] });
+  const source = saveSkillSource({ type: 'registry', location: 'http://127.0.0.1:12345/start' });
+  const entries = await __test.readRegistry(source);
+  assert.equal(entries[0].download, 'http://127.0.0.1:12345/catalog/package.zip');
+  setSkillSourceEnabled(source.id, false);
+});
+
+function writeSkill(root, name, version, description) {
+  fs.mkdirSync(path.join(root, 'references'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'SKILL.md'), [
+    '---',
+    `name: ${name}`,
+    `description: ${description}`,
+    'metadata:',
+    `  version: ${version}`,
+    '---',
+    '',
+    `Use the ${name} workflow.`,
+    '',
+  ].join('\n'));
+  fs.writeFileSync(path.join(root, 'references', 'guide.md'), `${version}\n`);
+}
+
+test('directory and registry skill sources share preview, install, and update flow', async () => {
+  const directorySource = path.join(temporary, 'directory-source');
+  writeSkill(path.join(directorySource, 'directory-demo'), 'directory-demo', '1.0.0', 'A directory skill.');
+  const source = saveSkillSource({
+    name: 'Team skills',
+    type: 'directory',
+    location: directorySource,
+  });
+  let hub = await refreshSkillCatalog();
+  let item = hub.catalogs.find((catalog) => catalog.source.id === source.id).items.find((entry) => entry.name === 'directory-demo');
+  assert.equal(item.sourceName, 'Team skills');
+  assert.equal(item.version, '1.0.0');
+  assert.equal(item.promptTokens > 0, true);
+  assert.equal(item.resourceCount, 1);
+
+  let preview = await prepareSkillInstall({
+    sourceId: source.id,
+    listingId: item.listingId,
+    scope: 'user',
+  });
+  assert.equal(preview.canUpdate, false);
+  assert.deepEqual(
+    preview.files.map((file) => file.path).sort(),
+    ['SKILL.md', 'references/guide.md'].sort(),
+  );
+  const installed = installPreparedSkill({ token: preview.token });
+  assert.equal(installed.version, '1.0.0');
+  assert.match(fs.readFileSync(installed.path, 'utf8'), /Use the directory-demo workflow/);
+
+  writeSkill(path.join(directorySource, 'directory-demo'), 'directory-demo', '1.1.0', 'An updated directory skill.');
+  hub = await refreshSkillCatalog();
+  item = hub.catalogs.find((catalog) => catalog.source.id === source.id).items.find((entry) => entry.name === 'directory-demo');
+  assert.equal(item.updateAvailable, true);
+  preview = await prepareSkillInstall({
+    sourceId: source.id,
+    listingId: item.listingId,
+    scope: 'user',
+  });
+  assert.equal(preview.canUpdate, true);
+  const updated = installPreparedSkill({ token: preview.token });
+  assert.equal(updated.version, '1.1.0');
+  assert.match(fs.readFileSync(updated.path, 'utf8'), /An updated directory skill/);
+
+  const registryArchive = createZipArchive([
+    {
+      path: 'registry-demo/SKILL.md',
+      content: [
+        '---',
+        'name: registry-demo',
+        'description: A registry skill.',
+        'metadata:',
+        '  version: 2.0.0',
+        '---',
+        '',
+        'Use the registry workflow.',
+        '',
+      ].join('\n'),
+    },
+    {
+      path: 'registry-demo/references/guide.md',
+      content: 'registry reference\n',
+    },
+  ]);
+  const registryDirectory = path.join(temporary, 'registry');
+  fs.mkdirSync(registryDirectory, { recursive: true });
+  fs.writeFileSync(path.join(registryDirectory, 'registry-demo.zip'), registryArchive);
+  fs.writeFileSync(path.join(registryDirectory, 'skills.json'), JSON.stringify({
+    schemaVersion: 1,
+    name: 'Fixture registry',
+    skills: [{
+      name: 'registry-demo',
+      description: 'A registry skill.',
+      version: '2.0.0',
+      invocation: 'automatic',
+      download: 'registry-demo.zip',
+      sha256: sha256(registryArchive),
+      resourceCount: 1,
+    }],
+  }));
+  saveSkillSource({
+    name: 'Fixture registry',
+    type: 'registry',
+    location: path.join(registryDirectory, 'skills.json'),
+  });
+  hub = await skillHubSnapshot({ refresh: true });
+  const registryCatalog = hub.catalogs.find((catalog) => catalog.source.name === 'Fixture registry');
+  const registryItem = registryCatalog.items[0];
+  preview = await prepareSkillInstall({
+    sourceId: registryItem.sourceId,
+    listingId: registryItem.listingId,
+    scope: 'user',
+  });
+  assert.match(preview.sha256, /^[a-f0-9]{64}$/);
+  const registryInstalled = installPreparedSkill({ token: preview.token });
+  assert.equal(registryInstalled.version, '2.0.0');
+  assert.match(fs.readFileSync(registryInstalled.path, 'utf8'), /Use the registry workflow/);
+});
+
+test('project skill installation requires and uses an explicit workspace', async () => {
+  const sourceRoot = path.join(temporary, 'project-source');
+  writeSkill(path.join(sourceRoot, 'project-demo'), 'project-demo', '1.0.0', 'A project skill.');
+  const source = saveSkillSource({
+    name: 'Project source',
+    type: 'directory',
+    location: sourceRoot,
+  });
+  const hub = await refreshSkillCatalog();
+  const item = hub.catalogs
+    .find((catalog) => catalog.source.id === source.id)
+    .items.find((entry) => entry.name === 'project-demo');
+  await assert.rejects(
+    prepareSkillInstall({ sourceId: source.id, listingId: item.listingId, scope: 'project' }),
+    /选择工作区/,
+  );
+  const workspace = path.join(temporary, 'selected-workspace');
+  fs.mkdirSync(workspace);
+  const preview = await prepareSkillInstall({
+    sourceId: source.id,
+    listingId: item.listingId,
+    scope: 'project',
+    cwd: workspace,
+  });
+  assert.equal(preview.requiresTrust, true);
+  const installed = installPreparedSkill({ token: preview.token, cwd: workspace });
+  assert.equal(
+    installed.baseDir,
+    path.join(workspace, '.pi-studio', 'skills', 'project-demo'),
+  );
+});
+
+test('registry integrity, archive format, traversal and same-name ownership fail safely', async () => {
+  const registryDirectory = path.join(temporary, 'hostile-registry');
+  fs.mkdirSync(registryDirectory, { recursive: true });
+  const skillMarkdown = (name) => [
+    '---',
+    `name: ${name}`,
+    'description: Hostile fixture.',
+    '---',
+    '',
+    'Never execute untrusted content during install.',
+    '',
+  ].join('\n');
+  const notZip = Buffer.from('this is not a zip archive');
+  fs.writeFileSync(path.join(registryDirectory, 'not-zip.zip'), notZip);
+  const validArchive = createZipArchive([{
+    path: 'integrity-demo/SKILL.md',
+    content: skillMarkdown('integrity-demo'),
+  }]);
+  fs.writeFileSync(path.join(registryDirectory, 'integrity-demo.zip'), validArchive);
+
+  const safePrefix = createZipArchive([{
+    path: 'safe/..x/SKILL.md',
+    content: skillMarkdown('traversal-demo'),
+  }]);
+  const hostileArchive = Buffer.from(safePrefix);
+  const hostileName = Buffer.from('safe/..x/SKILL.md');
+  const traversalName = Buffer.from('safe/../SKILL.md');
+  let offset = 0;
+  while ((offset = hostileArchive.indexOf(hostileName, offset)) >= 0) {
+    traversalName.copy(hostileArchive, offset);
+    offset += traversalName.length;
+  }
+  fs.writeFileSync(path.join(registryDirectory, 'traversal.zip'), hostileArchive);
+
+  fs.writeFileSync(path.join(registryDirectory, 'skills.json'), JSON.stringify({
+    schemaVersion: 1,
+    name: 'Hostile fixture',
+    skills: [
+      {
+        name: 'integrity-demo',
+        description: 'Integrity mismatch.',
+        version: '1.0.0',
+        download: 'integrity-demo.zip',
+        sha256: '0'.repeat(64),
+      },
+      {
+        name: 'not-zip',
+        description: 'Not a zip.',
+        version: '1.0.0',
+        download: 'not-zip.zip',
+        sha256: sha256(notZip),
+      },
+      {
+        name: 'traversal-demo',
+        description: 'Traversal attempt.',
+        version: '1.0.0',
+        download: 'traversal.zip',
+        sha256: sha256(hostileArchive),
+      },
+    ],
+  }));
+  const registrySource = saveSkillSource({
+    name: 'Hostile registry',
+    type: 'registry',
+    location: path.join(registryDirectory, 'skills.json'),
+  });
+  const hub = await refreshSkillCatalog();
+  const items = hub.catalogs
+    .find((catalog) => catalog.source.id === registrySource.id)
+    .items;
+  const byName = new Map(items.map((item) => [item.name, item]));
+  await assert.rejects(
+    prepareSkillInstall({
+      sourceId: registrySource.id,
+      listingId: byName.get('integrity-demo').listingId,
+      scope: 'user',
+    }),
+    /完整性校验失败/,
+  );
+  await assert.rejects(
+    prepareSkillInstall({
+      sourceId: registrySource.id,
+      listingId: byName.get('not-zip').listingId,
+      scope: 'user',
+    }),
+    /ZIP|压缩包|zip/i,
+  );
+  await assert.rejects(
+    prepareSkillInstall({
+      sourceId: registrySource.id,
+      listingId: byName.get('traversal-demo').listingId,
+      scope: 'user',
+    }),
+    /\.\.|越界|路径/,
+  );
+  assert.throws(
+    () => saveSkillSource({
+      name: 'Duplicate registry',
+      type: 'registry',
+      location: path.join(registryDirectory, 'skills.json'),
+    }),
+    /已经添加/,
+  );
+
+  const firstSource = path.join(temporary, 'same-name-a');
+  const secondSource = path.join(temporary, 'same-name-b');
+  writeSkill(path.join(firstSource, 'shared-name'), 'shared-name', '1.0.0', 'First owner.');
+  writeSkill(path.join(secondSource, 'shared-name'), 'shared-name', '2.0.0', 'Second owner.');
+  const first = saveSkillSource({
+    name: 'Same-name A',
+    type: 'directory',
+    location: firstSource,
+  });
+  const second = saveSkillSource({
+    name: 'Same-name B',
+    type: 'directory',
+    location: secondSource,
+  });
+  const next = await refreshSkillCatalog();
+  const firstItem = next.catalogs
+    .find((catalog) => catalog.source.id === first.id)
+    .items[0];
+  const secondItem = next.catalogs
+    .find((catalog) => catalog.source.id === second.id)
+    .items[0];
+  const firstPreview = await prepareSkillInstall({
+    sourceId: first.id,
+    listingId: firstItem.listingId,
+    scope: 'user',
+  });
+  installPreparedSkill({ token: firstPreview.token });
+  const secondPreview = await prepareSkillInstall({
+    sourceId: second.id,
+    listingId: secondItem.listingId,
+    scope: 'user',
+  });
+  assert.throws(
+    () => installPreparedSkill({ token: secondPreview.token }),
+    /另一个技能源管理/,
+  );
+});

@@ -7,6 +7,8 @@
  * iteration while the goal remains active.
  */
 
+const toolSchema = require('./tool-schema.cjs');
+
 const LONG_TASK_DOC_KIND = 'studio.long-task';
 const LONG_TASK_SCHEMA_VERSION = 2;
 const LONG_TASK_EXTENSION_NAME = 'studio-long-task';
@@ -302,8 +304,9 @@ function longTaskPrompt(state) {
   ].filter(Boolean).join('\n\n');
 }
 
-function createLongTaskExtension(durable, piAi) {
-  const { defineExtension, defineTool, Type } = { ...durable, Type: piAi.Type };
+function createLongTaskExtension(durable) {
+  const { defineExtension, defineTool } = durable;
+  const Type = toolSchema;
   const { LongTask } = createLongTaskContract(durable);
   const action = Type.Union([
     Type.Literal('progress'),

@@ -92,8 +92,8 @@ function normalizeRelativeFileSet(files) {
   return normalized;
 }
 
-function stripSingleWrapperDirectory(files) {
-  if (files.has('pi-studio.extension.json')) return files;
+function stripSingleWrapperDirectory(files, wrapperFile = 'pi-studio.extension.json') {
+  if (files.has(wrapperFile)) return files;
   const roots = new Set();
   for (const name of files.keys()) roots.add(name.split('/')[0]);
   if (roots.size !== 1) return files;
@@ -102,8 +102,8 @@ function stripSingleWrapperDirectory(files) {
   if (!wrapped) return files;
   const stripped = new Map();
   for (const [name, file] of files) stripped.set(name.slice(root.length + 1), file);
-  if (!stripped.has('pi-studio.extension.json')) {
-    throw new Error('扩展包缺少 pi-studio.extension.json');
+  if (!stripped.has(wrapperFile)) {
+    throw new Error(`压缩包缺少 ${wrapperFile}`);
   }
   return normalizedFileMap(stripped);
 }
@@ -238,7 +238,7 @@ function inspectZipEntries(archive, options = {}) {
   }
   if (cursor !== centralOffset + centralSize) throw new Error('ZIP 中央目录长度不一致');
   assertNoFileDirectoryConflicts(files);
-  return stripSingleWrapperDirectory(files);
+  return stripSingleWrapperDirectory(files, options.wrapperFile);
 }
 
 function extractZipArchive(archive, destination, options = {}) {

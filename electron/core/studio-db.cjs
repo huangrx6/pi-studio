@@ -21,7 +21,7 @@ const {
 } = require('./thinking-levels.cjs');
 
 const DATABASE_NAME = 'pi-studio.sqlite';
-const SCHEMA_VERSION = 14;
+const SCHEMA_VERSION = 17;
 const USAGE_REQUEST_LEDGER_LIMIT = 8_192;
 const USAGE_REQUEST_PRUNE_BATCH = 256;
 const METRIC_REQUEST_HISTORY_LIMIT = 8;
@@ -182,6 +182,25 @@ function normalizeMetricRequestRow(row) {
   };
 }
 
+function managedWorktreeRow(row) {
+  if (!row) return undefined;
+  return {
+    id: row.id,
+    parentConversationId: row.parent_conversation_id,
+    childConversationId: row.child_conversation_id,
+    name: row.name,
+    workspace: row.workspace,
+    repositoryRoot: row.repository_root,
+    path: row.path,
+    baseCommit: row.base_commit,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    finishedAt: row.finished_at === null ? undefined : row.finished_at,
+    error: row.error || '',
+  };
+}
+
 class StudioDatabase {
   constructor(filename) {
     fs.mkdirSync(path.dirname(filename), { recursive: true });
@@ -272,6 +291,65 @@ class StudioDatabase {
           value TEXT NOT NULL,
           updated_at INTEGER NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS secret_values (
+          name TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS mcp_oauth_states (
+          server_url TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS managed_worktrees (
+          id TEXT PRIMARY KEY,
+          parent_conversation_id TEXT NOT NULL,
+          child_conversation_id TEXT NOT NULL DEFAULT '',
+          name TEXT NOT NULL,
+          workspace TEXT NOT NULL,
+          repository_root TEXT NOT NULL,
+          path TEXT NOT NULL UNIQUE,
+          base_commit TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (
+            status IN ('active', 'finished', 'applied', 'discarded', 'removed', 'failed')
+          ),
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          finished_at INTEGER,
+          error TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS managed_worktrees_status_idx
+          ON managed_worktrees(status, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS managed_worktrees_parent_idx
+          ON managed_worktrees(parent_conversation_id, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS skill_sources (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL CHECK (type IN ('directory', 'registry')),
+          location TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          last_synced_at INTEGER,
+          item_count INTEGER NOT NULL DEFAULT 0,
+          last_error TEXT NOT NULL DEFAULT '',
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS skill_installations (
+          path TEXT PRIMARY KEY,
+          source_id TEXT NOT NULL,
+          listing_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          version TEXT NOT NULL DEFAULT '0.0.0',
+          sha256 TEXT NOT NULL,
+          installed_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS skill_installations_source_idx
+          ON skill_installations(source_id, listing_id);
 
         CREATE TABLE IF NOT EXISTS turn_diffs (
           conversation_id TEXT NOT NULL,
@@ -504,6 +582,25 @@ class StudioDatabase {
           DROP TABLE usage_requests;
         `);
       }
+      // v17: request history is capped at eight UI rows. Keep the minimal
+      // accounting projection separately so totals and replay deduplication
+      // survive that cap. Already-pruned historical requests cannot be rebuilt.
+      if (current < 17) {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS conversation_metric_ledger (
+            request_id TEXT PRIMARY KEY,
+            conversation_id TEXT NOT NULL,
+            tokens INTEGER NOT NULL,
+            cost REAL NOT NULL
+          );
+          CREATE INDEX IF NOT EXISTS conversation_metric_ledger_conversation_idx
+            ON conversation_metric_ledger(conversation_id);
+          INSERT OR IGNORE INTO conversation_metric_ledger
+            SELECT request_id, conversation_id,
+              input_tokens + output_tokens + cache_read_tokens + cache_write_tokens, cost
+            FROM conversation_metric_requests;
+        `);
+      }
       this.pruneUsageRequestLedger();
 
       const secretRows = this.db.prepare('SELECT name, env, headers FROM mcp_servers').all();
@@ -602,6 +699,248 @@ class StudioDatabase {
   getSettings() {
     const rows = this.db.prepare('SELECT key, value FROM settings ORDER BY key').all();
     return Object.fromEntries(rows.map((row) => [row.key, json(row.value, null)]));
+  }
+
+  listSecretNames() {
+    return this.db.prepare('SELECT name, updated_at FROM secret_values ORDER BY name')
+      .all()
+      .map((row) => ({ name: row.name, updatedAt: row.updated_at }));
+  }
+
+  readSecretValues() {
+    const rows = this.db.prepare('SELECT name, value FROM secret_values ORDER BY name').all();
+    return Object.fromEntries(rows.flatMap((row) => {
+      const value = decryptValue(json(row.value, undefined));
+      return typeof value === 'string' ? [[row.name, value]] : [];
+    }));
+  }
+
+  writeSecretValue(name, value) {
+    const at = Date.now();
+    this.db.prepare(`
+      INSERT INTO secret_values(name, value, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(name) DO UPDATE SET
+        value = excluded.value,
+        updated_at = excluded.updated_at
+    `).run(name, encode(encryptValue(value)), at);
+    return { name, updatedAt: at };
+  }
+
+  deleteSecretValue(name) {
+    this.db.prepare('DELETE FROM secret_values WHERE name = ?').run(name);
+  }
+
+  readMcpOAuthState(serverUrl) {
+    const row = this.db.prepare('SELECT value FROM mcp_oauth_states WHERE server_url = ?')
+      .get(serverUrl);
+    return row ? decryptValue(json(row.value, undefined)) : undefined;
+  }
+
+  writeMcpOAuthState(serverUrl, value) {
+    const at = Date.now();
+    this.db.prepare(`
+      INSERT INTO mcp_oauth_states(server_url, value, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(server_url) DO UPDATE SET
+        value = excluded.value,
+        updated_at = excluded.updated_at
+    `).run(serverUrl, encode(encryptValue(value)), at);
+  }
+
+  deleteMcpOAuthState(serverUrl) {
+    this.db.prepare('DELETE FROM mcp_oauth_states WHERE server_url = ?').run(serverUrl);
+  }
+
+  listManagedWorktrees({ includeTerminal = false } = {}) {
+    const rows = this.db.prepare(`
+      SELECT * FROM managed_worktrees
+      ${includeTerminal ? '' : "WHERE status IN ('active', 'finished', 'failed')"}
+      ORDER BY created_at DESC
+    `).all();
+    return rows.map(managedWorktreeRow);
+  }
+
+  getManagedWorktree(id) {
+    return managedWorktreeRow(this.db.prepare('SELECT * FROM managed_worktrees WHERE id = ?').get(id));
+  }
+
+  insertManagedWorktree(input) {
+    const at = Date.now();
+    this.db.prepare(`
+      INSERT INTO managed_worktrees(
+        id, parent_conversation_id, child_conversation_id, name, workspace,
+        repository_root, path, base_commit, status, created_at, updated_at,
+        finished_at, error
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      input.id,
+      input.parentConversationId,
+      input.childConversationId || '',
+      input.name,
+      input.workspace,
+      input.repositoryRoot,
+      input.path,
+      input.baseCommit,
+      input.status || 'active',
+      at,
+      at,
+      input.finishedAt || null,
+      input.error || '',
+    );
+    return this.getManagedWorktree(input.id);
+  }
+
+  updateManagedWorktree(id, patch = {}) {
+    const current = this.getManagedWorktree(id);
+    if (!current) throw new Error('托管工作树不存在');
+    const status = ['active', 'finished', 'applied', 'discarded', 'removed', 'failed']
+      .includes(patch.status) ? patch.status : current.status;
+    const finishedAt = patch.finishedAt === undefined
+      ? current.finishedAt ?? null
+      : patch.finishedAt;
+    this.db.prepare(`
+      UPDATE managed_worktrees
+      SET child_conversation_id = ?, status = ?, updated_at = ?, finished_at = ?, error = ?
+      WHERE id = ?
+    `).run(
+      patch.childConversationId ?? current.childConversationId,
+      status,
+      Date.now(),
+      finishedAt,
+      String(patch.error ?? current.error ?? '').slice(0, 4_000),
+      id,
+    );
+    return this.getManagedWorktree(id);
+  }
+
+  removeManagedWorktree(id) {
+    this.db.prepare('DELETE FROM managed_worktrees WHERE id = ?').run(id);
+  }
+
+  listSkillSources() {
+    return this.db.prepare('SELECT * FROM skill_sources ORDER BY created_at ASC, name ASC')
+      .all()
+      .map((row) => ({
+        id: row.id,
+        name: row.name,
+        type: row.type,
+        location: row.location,
+        enabled: Boolean(row.enabled),
+        lastSyncedAt: row.last_synced_at ?? undefined,
+        itemCount: Number(row.item_count) || 0,
+        lastError: row.last_error || '',
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }));
+  }
+
+  upsertSkillSource(input) {
+    const at = Date.now();
+    const current = this.db.prepare('SELECT * FROM skill_sources WHERE id = ?').get(input.id);
+    this.db.prepare(`
+      INSERT INTO skill_sources(
+        id, name, type, location, enabled, last_synced_at, item_count,
+        last_error, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        name = excluded.name,
+        type = excluded.type,
+        location = excluded.location,
+        enabled = excluded.enabled,
+        last_synced_at = excluded.last_synced_at,
+        item_count = excluded.item_count,
+        last_error = excluded.last_error,
+        updated_at = excluded.updated_at
+    `).run(
+      input.id,
+      input.name,
+      input.type,
+      input.location,
+      input.enabled === false ? 0 : 1,
+      input.lastSyncedAt ?? current?.last_synced_at ?? null,
+      Number(input.itemCount ?? current?.item_count) || 0,
+      String(input.lastError ?? current?.last_error ?? '').slice(0, 4_000),
+      current?.created_at || at,
+      at,
+    );
+    return this.listSkillSources().find((item) => item.id === input.id);
+  }
+
+  setSkillSourceStatus(id, patch = {}) {
+    const current = this.db.prepare('SELECT * FROM skill_sources WHERE id = ?').get(id);
+    if (!current) throw new Error('技能源不存在');
+    this.db.prepare(`
+      UPDATE skill_sources
+      SET last_synced_at = ?, item_count = ?, last_error = ?, updated_at = ?
+      WHERE id = ?
+    `).run(
+      patch.lastSyncedAt ?? current.last_synced_at ?? null,
+      Number(patch.itemCount ?? current.item_count) || 0,
+      String(patch.lastError ?? current.last_error ?? '').slice(0, 4_000),
+      Date.now(),
+      id,
+    );
+    return this.listSkillSources().find((item) => item.id === id);
+  }
+
+  setSkillSourceEnabled(id, enabled) {
+    const current = this.db.prepare('SELECT id FROM skill_sources WHERE id = ?').get(id);
+    if (!current) throw new Error('技能源不存在');
+    this.db.prepare('UPDATE skill_sources SET enabled = ?, updated_at = ? WHERE id = ?')
+      .run(enabled ? 1 : 0, Date.now(), id);
+    return this.listSkillSources().find((item) => item.id === id);
+  }
+
+  removeSkillSource(id) {
+    this.db.prepare('DELETE FROM skill_sources WHERE id = ?').run(id);
+  }
+
+  listSkillInstallations() {
+    return this.db.prepare('SELECT * FROM skill_installations ORDER BY installed_at DESC')
+      .all()
+      .map((row) => ({
+        path: row.path,
+        sourceId: row.source_id,
+        listingId: row.listing_id,
+        name: row.name,
+        version: row.version,
+        sha256: row.sha256,
+        installedAt: row.installed_at,
+      }));
+  }
+
+  getSkillInstallation(pathValue) {
+    return this.listSkillInstallations().find((item) => item.path === path.resolve(pathValue));
+  }
+
+  upsertSkillInstallation(input) {
+    const at = Date.now();
+    const pathValue = path.resolve(input.path);
+    this.db.prepare(`
+      INSERT INTO skill_installations(
+        path, source_id, listing_id, name, version, sha256, installed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(path) DO UPDATE SET
+        source_id = excluded.source_id,
+        listing_id = excluded.listing_id,
+        name = excluded.name,
+        version = excluded.version,
+        sha256 = excluded.sha256,
+        installed_at = excluded.installed_at
+    `).run(
+      pathValue,
+      input.sourceId,
+      input.listingId,
+      input.name,
+      input.version || '0.0.0',
+      input.sha256,
+      at,
+    );
+    return this.getSkillInstallation(pathValue);
+  }
+
+  removeSkillInstallation(pathValue) {
+    this.db.prepare('DELETE FROM skill_installations WHERE path = ?')
+      .run(path.resolve(pathValue));
   }
 
   listWorkspaces() {
@@ -779,6 +1118,9 @@ class StudioDatabase {
       ).run(current.id, current.publicId);
       this.db.prepare(
         'DELETE FROM conversation_metric_requests WHERE conversation_id = ? OR conversation_id = ?',
+      ).run(current.id, current.publicId);
+      this.db.prepare(
+        'DELETE FROM conversation_metric_ledger WHERE conversation_id = ? OR conversation_id = ?',
       ).run(current.id, current.publicId);
       this.db.prepare(
         'DELETE FROM conversation_request_traces WHERE conversation_id = ?',
@@ -962,6 +1304,10 @@ class StudioDatabase {
       `).run(encodedStudioIds);
       this.db.prepare(`
         DELETE FROM conversation_metric_requests
+        WHERE conversation_id IN (SELECT value FROM json_each(?))
+      `).run(encodedStudioIds);
+      this.db.prepare(`
+        DELETE FROM conversation_metric_ledger
         WHERE conversation_id IN (SELECT value FROM json_each(?))
       `).run(encodedStudioIds);
       this.db.prepare(`
@@ -1310,6 +1656,16 @@ class StudioDatabase {
       ? Number(input.ttftMs)
       : null;
     return this.transaction(() => {
+      const accounted = this.db.prepare(`
+        INSERT OR IGNORE INTO conversation_metric_ledger(request_id, conversation_id, tokens, cost)
+        VALUES (?, ?, ?, ?)
+      `).run(
+        requestId.slice(0, 320), conversation,
+        tokenCount(input.input) + tokenCount(input.output)
+          + tokenCount(input.cacheRead) + tokenCount(input.cacheWrite),
+        usageCost(input.cost),
+      );
+      if (Number(accounted.changes) === 0) return false;
       const inserted = this.db.prepare(`
         INSERT OR IGNORE INTO conversation_metric_requests(
           request_id, conversation_id, started_at, finished_at, status,
@@ -1365,6 +1721,26 @@ class StudioDatabase {
           LIMIT ?
         `).all(safeLimit);
     return rows.map(normalizeMetricRequestRow);
+  }
+
+  metricTotalsForConversation(conversationId) {
+    const id = this.getConversation(String(conversationId || ''))?.id || String(conversationId || '');
+    if (!/^\d+$/.test(id)) {
+      return { requests: 0, tokens: 0, cost: 0 };
+    }
+    const row = this.db.prepare(`
+      SELECT
+        COUNT(*) AS requests,
+        COALESCE(SUM(tokens), 0) AS tokens,
+        COALESCE(SUM(cost), 0) AS cost
+      FROM conversation_metric_ledger
+      WHERE conversation_id = ?
+    `).get(id);
+    return {
+      requests: Number(row?.requests) || 0,
+      tokens: Number(row?.tokens) || 0,
+      cost: usageCost(row?.cost),
+    };
   }
 
   /**
@@ -1428,99 +1804,71 @@ class StudioDatabase {
     });
   }
 
-  usageTotals({ sinceDay } = {}) {
-    const row = sinceDay
-      ? this.db.prepare(`
-          SELECT
-            COALESCE(SUM(input_tokens), 0) AS input_tokens,
-            COALESCE(SUM(output_tokens), 0) AS output_tokens,
-            COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
-            COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens,
-            COALESCE(SUM(cost), 0) AS cost,
-            COALESCE(SUM(requests), 0) AS requests,
-            COUNT(DISTINCT day) AS active_days
-          FROM usage_daily WHERE day >= ?
-        `).get(sinceDay)
-      : this.db.prepare(`
-          SELECT
-            COALESCE(SUM(input_tokens), 0) AS input_tokens,
-            COALESCE(SUM(output_tokens), 0) AS output_tokens,
-            COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
-            COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens,
-            COALESCE(SUM(cost), 0) AS cost,
-            COALESCE(SUM(requests), 0) AS requests,
-            COUNT(DISTINCT day) AS active_days
-          FROM usage_daily
-        `).get();
+  /** Day bounds for the usage projections; both ends are inclusive local days. */
+  usageDayFilter({ sinceDay, untilDay } = {}) {
+    const clauses = [];
+    const params = [];
+    if (sinceDay) { clauses.push('day >= ?'); params.push(sinceDay); }
+    if (untilDay) { clauses.push('day <= ?'); params.push(untilDay); }
+    return { where: clauses.length ? `WHERE ${clauses.join(' AND ')}` : '', params };
+  }
+
+  usageTotals({ sinceDay, untilDay } = {}) {
+    const { where, params } = this.usageDayFilter({ sinceDay, untilDay });
+    const row = this.db.prepare(`
+      SELECT
+        COALESCE(SUM(input_tokens), 0) AS input_tokens,
+        COALESCE(SUM(output_tokens), 0) AS output_tokens,
+        COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
+        COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens,
+        COALESCE(SUM(cost), 0) AS cost,
+        COALESCE(SUM(requests), 0) AS requests,
+        COUNT(DISTINCT day) AS active_days
+      FROM usage_daily
+      ${where}
+    `).get(...params);
     return {
       ...normalizeUsageRow(row),
       activeDays: tokenCount(row?.active_days),
     };
   }
 
-  usageDaily({ sinceDay } = {}) {
-    const rows = sinceDay
-      ? this.db.prepare(`
-          SELECT
-            day,
-            SUM(input_tokens) AS input_tokens,
-            SUM(output_tokens) AS output_tokens,
-            SUM(cache_read_tokens) AS cache_read_tokens,
-            SUM(cache_write_tokens) AS cache_write_tokens,
-            SUM(cost) AS cost,
-            SUM(requests) AS requests
-          FROM usage_daily
-          WHERE day >= ?
-          GROUP BY day
-          ORDER BY day ASC
-        `).all(sinceDay)
-      : this.db.prepare(`
-          SELECT
-            day,
-            SUM(input_tokens) AS input_tokens,
-            SUM(output_tokens) AS output_tokens,
-            SUM(cache_read_tokens) AS cache_read_tokens,
-            SUM(cache_write_tokens) AS cache_write_tokens,
-            SUM(cost) AS cost,
-            SUM(requests) AS requests
-          FROM usage_daily
-          GROUP BY day
-          ORDER BY day ASC
-        `).all();
+  usageDaily({ sinceDay, untilDay } = {}) {
+    const { where, params } = this.usageDayFilter({ sinceDay, untilDay });
+    const rows = this.db.prepare(`
+      SELECT
+        day,
+        SUM(input_tokens) AS input_tokens,
+        SUM(output_tokens) AS output_tokens,
+        SUM(cache_read_tokens) AS cache_read_tokens,
+        SUM(cache_write_tokens) AS cache_write_tokens,
+        SUM(cost) AS cost,
+        SUM(requests) AS requests
+      FROM usage_daily
+      ${where}
+      GROUP BY day
+      ORDER BY day ASC
+    `).all(...params);
     return rows.map((row) => ({ day: row.day, ...normalizeUsageRow(row) }));
   }
 
-  usageModels({ sinceDay } = {}) {
-    const rows = sinceDay
-      ? this.db.prepare(`
-          SELECT
-            provider_id,
-            model_id,
-            SUM(input_tokens) AS input_tokens,
-            SUM(output_tokens) AS output_tokens,
-            SUM(cache_read_tokens) AS cache_read_tokens,
-            SUM(cache_write_tokens) AS cache_write_tokens,
-            SUM(cost) AS cost,
-            SUM(requests) AS requests
-          FROM usage_daily
-          WHERE day >= ?
-          GROUP BY provider_id, model_id
-          ORDER BY input_tokens + output_tokens + cache_read_tokens + cache_write_tokens DESC
-        `).all(sinceDay)
-      : this.db.prepare(`
-          SELECT
-            provider_id,
-            model_id,
-            SUM(input_tokens) AS input_tokens,
-            SUM(output_tokens) AS output_tokens,
-            SUM(cache_read_tokens) AS cache_read_tokens,
-            SUM(cache_write_tokens) AS cache_write_tokens,
-            SUM(cost) AS cost,
-            SUM(requests) AS requests
-          FROM usage_daily
-          GROUP BY provider_id, model_id
-          ORDER BY input_tokens + output_tokens + cache_read_tokens + cache_write_tokens DESC
-        `).all();
+  usageModels({ sinceDay, untilDay } = {}) {
+    const { where, params } = this.usageDayFilter({ sinceDay, untilDay });
+    const rows = this.db.prepare(`
+      SELECT
+        provider_id,
+        model_id,
+        SUM(input_tokens) AS input_tokens,
+        SUM(output_tokens) AS output_tokens,
+        SUM(cache_read_tokens) AS cache_read_tokens,
+        SUM(cache_write_tokens) AS cache_write_tokens,
+        SUM(cost) AS cost,
+        SUM(requests) AS requests
+      FROM usage_daily
+      ${where}
+      GROUP BY provider_id, model_id
+      ORDER BY input_tokens + output_tokens + cache_read_tokens + cache_write_tokens DESC
+    `).all(...params);
     return rows.map((row) => ({
       providerId: row.provider_id,
       modelId: row.model_id,
@@ -1528,7 +1876,8 @@ class StudioDatabase {
     }));
   }
 
-  usageDailyModels({ sinceDay } = {}) {
+  usageDailyModels({ sinceDay, untilDay } = {}) {
+    const { where, params } = this.usageDayFilter({ sinceDay, untilDay });
     const rows = this.db.prepare(`
       SELECT
         day,
@@ -1541,10 +1890,10 @@ class StudioDatabase {
         SUM(cost) AS cost,
         SUM(requests) AS requests
       FROM usage_daily
-      WHERE day >= ?
+      ${where}
       GROUP BY day, provider_id, model_id
       ORDER BY day ASC, provider_id ASC, model_id ASC
-    `).all(sinceDay || '0000-00-00');
+    `).all(...params);
     return rows.map((row) => ({
       day: row.day,
       providerId: row.provider_id,

@@ -8,6 +8,8 @@
 
 const { ipcMain } = require('electron');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
+const { getRuntimePolicy } = require('../core/app-settings.cjs');
+const { autoCompactReserveTokens } = require('../core/context-policy.cjs');
 const {
   getStudioModelsRuntime,
   rebuildStudioModels,
@@ -109,6 +111,27 @@ function registerModelsIpc() {
           deletable: model.source !== 'builtin',
         };
       }).sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)),
+    };
+  });
+
+  ipcMain.handle('pi:context-policy', async (_event, { modelRef } = {}) => {
+    const ref = typeof modelRef === 'string' ? modelRef.trim() : '';
+    const slash = ref.indexOf('/');
+    const providerId = slash > 0 ? ref.slice(0, slash) : '';
+    const modelId = slash > 0 ? ref.slice(slash + 1) : '';
+    const model = providerId && modelId
+      ? getStudioDatabase().getModel(providerId, modelId)
+      : undefined;
+    const policy = getRuntimePolicy().compaction;
+    const contextWindow = Math.max(0, Number(model?.contextWindow) || 0);
+    return {
+      modelRef: ref,
+      contextWindow,
+      autoCompactPercent: policy.autoCompactPercent,
+      // 当前模型实际生效的自动压缩阈值；未知窗口或阈值关闭时为 null。
+      compactAtTokens: contextWindow > 0 && policy.enabled && policy.autoCompactPercent > 0
+        ? contextWindow - autoCompactReserveTokens(contextWindow, policy.autoCompactPercent)
+        : null,
     };
   });
 

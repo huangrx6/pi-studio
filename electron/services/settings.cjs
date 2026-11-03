@@ -84,13 +84,24 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
       timeoutSeconds: server.timeoutSeconds,
       envKeys: server.envKeys,
       headerKeys: server.headerKeys,
+      oauthConnected: server.transport === 'http'
+        && Boolean(db.readMcpOAuthState(server.url)?.tokens?.access_token),
       connected: mcpRuntime.servers.find((item) => item.name === server.name)?.connected || false,
       toolCount: mcpRuntime.servers.find((item) => item.name === server.name)?.toolCount || 0,
       error: mcpRuntime.errors.find((item) => item.server === server.name)?.message || '',
       stderr: mcpRuntime.servers.find((item) => item.name === server.name)?.stderr || '',
+      tools: mcpRuntime.tools
+        .filter((tool) => tool.server === server.name)
+        .map((tool) => ({
+          name: tool.name,
+          originalName: tool.originalName,
+          description: tool.description,
+          exposure: tool.exposure,
+        })),
     })),
     skills: skills.skills,
     skillErrors: skills.errors,
+    skillSources: db.listSkillSources(),
     extensions: extensionRuntime.extensions,
     officialExtensions: officialExtensionsSnapshot().extensions,
     extensionErrors: extensionRuntime.errors,

@@ -151,6 +151,7 @@ test('runtime policy normalizes nested Durable settings and clamps unsafe values
       reserveTokens: 1,
       keepRecentTokens: -20,
       backgroundTokens: 999_999,
+      autoCompactPercent: 200,
     },
     toolExecution: 'parallel',
     afterFailedRun: 'continue',
@@ -173,6 +174,8 @@ test('runtime policy normalizes nested Durable settings and clamps unsafe values
     reserveTokens: 1_024,
     keepRecentTokens: 0,
     backgroundTokens: 262_144,
+    // 超过 95% 的比例夹到上限，0 仍然表示关闭。
+    autoCompactPercent: 95,
   });
   assert.equal(normalized.toolExecution, 'parallel');
   assert.equal(normalized.afterFailedRun, 'continue');

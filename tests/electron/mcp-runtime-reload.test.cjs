@@ -22,12 +22,18 @@ const {
   closeMcpRuntime,
   mcpSnapshot,
   reloadMcpServers,
+  testMcpConnection,
   toolName,
 } = require('../../electron/services/mcp-runtime.cjs');
 
 const serverFile = path.join(temporary, 'mcp-server.mjs');
 fs.writeFileSync(serverFile, String.raw`
 import readline from 'node:readline';
+
+if (process.argv.includes('-slim')) {
+  process.stderr.write('Unknown arguments: -slim\n');
+  process.exit(2);
+}
 
 let listCount = 0;
 let announced = false;
@@ -161,6 +167,52 @@ test('MCP tools/list_changed refreshes only the connected catalog and clears sta
   assert.match(server.stderr, /\[redacted\]/);
   assert.doesNotMatch(server.stderr, /must-not-reach-child/);
   assert.match(server.stderr, /fixture private env missing/);
+});
+
+test('saved MCP connections expose a test result with tools and actionable stderr', async () => {
+  const tested = await testMcpConnection({
+    name: 'connection-test',
+    transport: 'stdio',
+    command: process.execPath,
+    args: [serverFile],
+    cwd: temporary,
+    url: '',
+    description: 'Connection test fixture',
+    env: { TOKEN: 'connection-secret' },
+    headers: {},
+    exposure: 'deferred',
+    toolExposure: {},
+    timeoutSeconds: 5,
+    enabled: true,
+  });
+  assert.equal(tested.ok, true);
+  assert.equal(tested.capabilities.tools, true);
+  assert.equal(tested.capabilities.resources, false);
+  assert.equal(tested.capabilities.prompts, false);
+  assert.equal(tested.tools.length, 1);
+  assert.equal(tested.tools[0].name, 'old_tool');
+  assert.equal(tested.tools[0].argumentCount, 0);
+  assert.doesNotMatch(tested.stderr, /connection-secret/);
+  assert.match(tested.stderr, /\[redacted\]/);
+
+  await assert.rejects(
+    testMcpConnection({
+      name: 'bad-arguments',
+      transport: 'stdio',
+      command: process.execPath,
+      args: [serverFile, '-slim'],
+      cwd: temporary,
+      url: '',
+      description: 'Invalid argument fixture',
+      env: {},
+      headers: {},
+      exposure: 'deferred',
+      toolExposure: {},
+      timeoutSeconds: 5,
+      enabled: true,
+    }),
+    /Unknown arguments: -slim/,
+  );
 });
 
 test('MCP child environments inherit runtime essentials and only explicit configuration', () => {

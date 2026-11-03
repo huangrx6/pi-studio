@@ -16,6 +16,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
 const { normalizeSecureHttpUrl } = require('../core/external-url.cjs');
+const { runtimeOAuthProvider } = require('./mcp-oauth.cjs');
 
 const RUNTIME_PREFIX = 'studio-mcp:';
 const CATALOG_RUNTIME = 'studio-mcp-catalog';
@@ -242,10 +243,16 @@ async function createClient(server, Mcp) {
     requestTimeoutMs: timeoutMs,
     roots: [{ uri: pathToFileURL(cwd).href, name: path.basename(cwd) || cwd }],
   });
+  const oauth = server.transport === 'http'
+    ? await import('@earendil-works/pi-mcp/oauth')
+    : undefined;
   const transport = server.transport === 'http'
     ? new Mcp.StreamableHttpTransport({
         url: server.url,
         headers,
+        authProvider: oauth.adaptOAuthProvider(
+          await runtimeOAuthProvider(server.url),
+        ),
       })
     : new Mcp.StdioTransport({
         command: expandHome(server.command),
@@ -341,11 +348,12 @@ function mcpToolRegistration(entry, rawTool, registeredName, exposure, durable, 
     description: rawTool.description?.trim()
       || rawTool.title
       || `MCP tool ${rawTool.name} from server ${server.name}`,
-    parameters: piAi.Type.Unsafe({
+    // MCP 服务器给的就是 JSON Schema，原样交给 defineTool。
+    parameters: {
       ...(rawTool.inputSchema || {}),
       type: rawTool.inputSchema?.type || 'object',
       properties: rawTool.inputSchema?.properties || {},
-    }),
+    },
     ...(exposure === 'deferred' ? { deferred: true } : {}),
     ...(exposure === 'hidden' ? { callers: ['tools'] } : {}),
     async execute(args, api, context) {
@@ -798,6 +806,17 @@ function mcpSnapshot() {
   };
 }
 
+async function invalidateMcpConnection(serverName) {
+  const current = state;
+  const entry = current?.entries.get(serverName);
+  if (!current || !entry) return false;
+  current.entries.delete(serverName);
+  clearReconnect(current, serverName);
+  await retireEntry(current, entry);
+  current.refreshedAt = Date.now();
+  return true;
+}
+
 function disposeMcpState(current) {
   if (!current) return Promise.resolve();
   if (current.closePromise) return current.closePromise;
@@ -837,12 +856,70 @@ async function closeMcpRuntime() {
   }
 }
 
+async function testMcpConnection(server) {
+  const Mcp = await import('@earendil-works/pi-mcp');
+  const tested = server.transport === 'http'
+    ? {
+        ...server,
+        url: normalizeSecureHttpUrl(server.url, { label: `MCP「${server.name}」地址` }),
+      }
+    : server;
+  const startedAt = Date.now();
+  const { client, transport, diagnostics } = await createClient(tested, Mcp);
+  try {
+    const timeoutMs = Math.max(1, Number(tested.timeoutSeconds) || 60) * 1_000;
+    const tools = client.serverCapabilities?.tools
+      ? await client.listTools({ timeoutMs })
+      : [];
+    const resources = client.serverCapabilities?.resources
+      ? await client.listResources({ timeoutMs })
+      : [];
+    return {
+      ok: true,
+      durationMs: Date.now() - startedAt,
+      instructions: String(client.instructions || '').trim().slice(0, 2_000),
+      capabilities: {
+        tools: Boolean(client.serverCapabilities?.tools),
+        resources: Boolean(client.serverCapabilities?.resources),
+        // pi-mcp exposes tools and resources; prompts remain intentionally unintegrated.
+        prompts: false,
+      },
+      tools: tools.map(tool => ({
+        name: String(tool.name || '').slice(0, 200),
+        title: String(tool.title || '').slice(0, 240),
+        description: String(tool.description || '').slice(0, 1_000),
+        argumentCount: Object.keys(tool.inputSchema?.properties || {}).length,
+        requiredCount: Array.isArray(tool.inputSchema?.required) ? tool.inputSchema.required.length : 0,
+        exposure: toolExposureFor(tested, tool.name),
+      })),
+      resources: resources.map(resource => ({
+        uri: String(resource.uri || '').slice(0, 1_000),
+        name: String(resource.name || '').slice(0, 240),
+        mimeType: String(resource.mimeType || '').slice(0, 200),
+      })),
+      prompts: [],
+      stderr: diagnostics(),
+    };
+  } catch (error) {
+    throw failureWithDiagnostics(
+      error,
+      transport,
+      tested,
+      [...Object.values(tested.env || {}), ...Object.values(tested.headers || {})],
+    );
+  } finally {
+    await closeClientResources(client, transport);
+  }
+}
+
 module.exports = {
   CATALOG_RUNTIME,
   closeMcpRuntime,
+  invalidateMcpConnection,
   mcpSnapshot,
   reloadMcpServers,
   runtimeName,
+  testMcpConnection,
   toolExposureFor,
   toolName,
   __test: {

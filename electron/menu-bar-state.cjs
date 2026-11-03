@@ -40,6 +40,9 @@ function createMenuBarState({ now = () => Date.now(), recentLimit = DEFAULT_RECE
       startedAt: existing?.startedAt || now(),
     };
     running.set(input.id, session);
+    // A session that runs again supersedes its earlier completion: keeping both
+    // would show the same conversation as "running" and "finished" at once.
+    recent = recent.filter(item => item.id !== session.id);
     return { ...session };
   }
 
@@ -82,12 +85,15 @@ function createMenuBarState({ now = () => Date.now(), recentLimit = DEFAULT_RECE
   }
 
   function snapshot(extra = {}) {
+    // Guard the projection as well: a late completion event must never leave a
+    // record in "recent" for a session that is running again.
+    const visibleRecent = recent.filter(item => !running.has(item.id));
     return {
       running: [...running.values()]
         .sort((a, b) => a.startedAt - b.startedAt)
         .map(item => ({ ...item })),
-      recent: recent.map(item => ({ ...item })),
-      unreadCount: recent.filter(item => item.unread).length,
+      recent: visibleRecent.map(item => ({ ...item })),
+      unreadCount: visibleRecent.filter(item => item.unread).length,
       ...extra,
     };
   }
@@ -98,7 +104,10 @@ function createMenuBarState({ now = () => Date.now(), recentLimit = DEFAULT_RECE
 /** Keep the popover compact when idle; only the list scrolls when busy. */
 function menuBarPopoverHeight({ running = [], recent = [] } = {}) {
   const sections = Number(running.length > 0) + Number(recent.length > 0);
-  return Math.max(196, Math.min(440, 156 + sections * 28
+  // 168 covers the chrome (header, summary, footer, panel and shell insets);
+  // every section adds its heading and every card adds a row. The rows are sized
+  // for the longest detail line, so a freshly finished session never clips.
+  return Math.max(196, Math.min(440, 168 + sections * 28
     + (sections > 1 ? 8 : 0) + (running.length + recent.length) * 56));
 }
 

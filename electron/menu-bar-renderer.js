@@ -3,6 +3,7 @@ const runningList = document.querySelector('#running-list');
 const recentList = document.querySelector('#recent-list');
 const summary = document.querySelector('#summary');
 const runningCount = document.querySelector('#running-count');
+const recentCount = document.querySelector('#recent-count');
 
 const clearRecent = document.querySelector('#clear-recent');
 
@@ -21,12 +22,40 @@ function workspaceName(cwd) {
   return cwd.split(/[\\/]/).filter(Boolean).at(-1) || cwd;
 }
 
-function elapsed(startedAt) {
-  const seconds = Math.max(0, Math.floor((Date.now() - Number(startedAt || Date.now())) / 1000));
+function elapsed(startedAt, endedAt) {
+  const seconds = Math.max(0, Math.floor((Number(endedAt || Date.now()) - Number(startedAt || Date.now())) / 1000));
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m`;
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+function runningDetail(item) {
+  return `${workspaceName(item.cwd)} · 已运行 ${elapsed(item.startedAt)}`;
+}
+
+function recentStatus(item) {
+  return item.status === 'error' ? '需要查看' : item.status === 'cancelled' ? '已取消' : '已完成';
+}
+
+function recentDetail(item) {
+  const used = elapsed(item.startedAt, item.completedAt);
+  return `${workspaceName(item.cwd)} · ${recentStatus(item)} · ${relativeTime(item.completedAt)} · 用时 ${used}`;
+}
+
+/** One line that never claims a session is both running and finished. */
+function summaryText(running, recent) {
+  const errors = recent.filter(item => item.status === 'error').length;
+  if (running.length) {
+    const parts = [`${running.length} 个会话运行中`];
+    if (errors) parts.push(`${errors} 个异常待查看`);
+    else if (recent.length) parts.push(`${recent.length} 个刚结束`);
+    else parts.push('关闭窗口后仍会继续');
+    return parts.join(' · ');
+  }
+  if (errors) return `${errors} 个会话异常，点击查看详情`;
+  if (recent.length) return recent.length === 1 ? '后台会话已结束，点击查看结果' : `${recent.length} 个后台会话已结束`;
+  return '暂无后台会话，可回到应用开始对话';
 }
 
 function relativeTime(timestamp) {
@@ -80,14 +109,13 @@ function card(item, kind) {
   title.textContent = item.title || '会话';
   const detail = document.createElement('small');
   detail.dataset.cwd = item.cwd || '';
+  detail.dataset.startedAt = String(item.startedAt || Date.now());
   if (kind === 'running') {
-    detail.dataset.startedAt = String(item.startedAt || Date.now());
-    detail.textContent = `${workspaceName(item.cwd)} · 已运行 ${elapsed(item.startedAt)}`;
+    detail.textContent = runningDetail(item);
   } else {
-    const status = item.status === 'error' ? '需要查看' : item.status === 'cancelled' ? '已取消' : '已完成';
     detail.dataset.completedAt = String(item.completedAt || Date.now());
-    detail.dataset.status = status;
-    detail.textContent = `${workspaceName(item.cwd)} · ${status} · ${relativeTime(item.completedAt)}`;
+    detail.dataset.status = item.status === 'error' || item.status === 'cancelled' ? item.status : 'success';
+    detail.textContent = recentDetail(item);
   }
   copy.append(title, detail);
 
@@ -111,12 +139,9 @@ function render() {
   applyAppearance(currentState);
   const running = Array.isArray(currentState.running) ? currentState.running : [];
   const recent = Array.isArray(currentState.recent) ? currentState.recent : [];
-  const errors = recent.filter(item => item.status === 'error').length;
   runningCount.textContent = String(running.length);
-  summary.textContent = running.length
-    ? `${running.length} 个会话运行中${errors ? ` · ${errors} 个异常待查看` : ' · 关闭窗口后仍会继续'}`
-    : errors ? `${errors} 个会话异常，点击查看详情`
-    : recent.length ? '后台会话已结束，点击查看结果' : '暂无后台会话，可回到应用开始对话';
+  recentCount.textContent = String(recent.length);
+  summary.textContent = summaryText(running, recent);
   document.querySelector('#running-section').hidden = running.length === 0;
   document.querySelector('#recent-section').hidden = recent.length === 0;
   runningList.replaceChildren(...running.map(item => card(item, 'running')));
@@ -125,11 +150,16 @@ function render() {
 }
 
 function updateElapsed() {
-  for (const node of document.querySelectorAll('[data-started-at]')) {
-    node.textContent = `${workspaceName(node.dataset.cwd)} · 已运行 ${elapsed(node.dataset.startedAt)}`;
+  for (const node of document.querySelectorAll('[data-started-at]:not([data-completed-at])')) {
+    node.textContent = runningDetail({ cwd: node.dataset.cwd, startedAt: node.dataset.startedAt });
   }
   for (const node of document.querySelectorAll('[data-completed-at]')) {
-    node.textContent = `${workspaceName(node.dataset.cwd)} · ${node.dataset.status || '已完成'} · ${relativeTime(node.dataset.completedAt)}`;
+    node.textContent = recentDetail({
+      cwd: node.dataset.cwd,
+      status: node.dataset.status,
+      startedAt: node.dataset.startedAt,
+      completedAt: node.dataset.completedAt,
+    });
   }
 }
 

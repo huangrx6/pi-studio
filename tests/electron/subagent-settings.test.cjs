@@ -17,7 +17,7 @@ const {
   getSubagentConfig,
   setSubagentConfig,
 } = require('../../electron/core/app-settings.cjs');
-const { closeStudioDatabase } = require('../../electron/core/studio-db.cjs');
+const { closeStudioDatabase, getStudioDatabase } = require('../../electron/core/studio-db.cjs');
 
 test.after(() => {
   closeStudioDatabase();
@@ -43,6 +43,11 @@ test('subagent config accepts supported values and rejects contradictory limits'
     maxConcurrent: 4,
     maxSpawns: 32,
     waitTimeoutMs: 30_000,
+    worktreeIsolation: 'background',
+    worktreeLimit: 8,
+    budgetTokens: 0,
+    budgetCostUsd: 0,
+    budgetAction: 'warn',
   });
   assert.throws(
     () => normalizeConfig({ defaultThinking: 'high', maxThinking: 'low' }),
@@ -85,7 +90,9 @@ test('subagent defaults persist in Studio SQLite by user and workspace scope', a
   assert.equal(user.user.supervisorEnabled, true);
   assert.equal(user.user.maxConcurrent, 4);
 
+  const userSnapshot = await subagentSettings(workspace);
   const project = await saveSubagentSettings(workspace, 'project', {
+    ...userSnapshot.user,
     defaultModel: 'provider/project',
     defaultThinking: 'low',
   });
@@ -100,7 +107,47 @@ test('subagent defaults persist in Studio SQLite by user and workspace scope', a
     defaultThinking: 'xhigh',
     maxThinking: 'xhigh',
   });
-  assert.equal((await subagentSettings(workspace)).user.defaultThinking, 'xhigh');
+  const inherited = await subagentSettings(workspace);
+  assert.equal(inherited.user.defaultThinking, 'xhigh');
+  assert.equal(inherited.project.defaultThinking, 'low');
+  assert.equal(inherited.project.maxThinking, 'xhigh');
+});
+
+test('legacy full project snapshots stop freezing inherited user changes', async () => {
+  const workspace = path.join(temporary, 'legacy-workspace');
+  fs.mkdirSync(workspace);
+  const legacyUser = normalizeConfig({
+    defaultModel: 'provider/fast',
+    defaultThinking: 'medium',
+    maxThinking: 'high',
+    allowedTools: ['read'],
+  });
+  getStudioDatabase().setSetting('studio.subagents', {
+    user: legacyUser,
+    projects: {
+      [workspace]: {
+        ...legacyUser,
+        defaultModel: 'provider/project',
+        defaultThinking: 'low',
+      },
+    },
+  });
+
+  setSubagentConfig('user', '', {
+    ...legacyUser,
+    defaultThinking: 'xhigh',
+    maxThinking: 'xhigh',
+  });
+
+  const project = getSubagentConfig('project', workspace);
+  assert.equal(project.defaultModel, 'provider/project');
+  assert.equal(project.defaultThinking, 'low');
+  assert.equal(Object.hasOwn(project, 'maxThinking'), false);
+  assert.equal(Object.hasOwn(project, 'allowedTools'), false);
+  assert.equal(
+    getStudioDatabase().getSetting('studio.subagents', {}).version,
+    2,
+  );
 });
 
 test('subagent runtime controls are normalized and bounded', () => {
@@ -111,6 +158,11 @@ test('subagent runtime controls are normalized and bounded', () => {
     maxConcurrent: 6,
     maxSpawns: 12,
     waitTimeoutMs: 45_000,
+    worktreeIsolation: 'background',
+    worktreeLimit: 8,
+    budgetTokens: 0,
+    budgetCostUsd: 0,
+    budgetAction: 'warn',
   }), {
     defaultModel: '',
     defaultProvider: '',
@@ -123,6 +175,11 @@ test('subagent runtime controls are normalized and bounded', () => {
     maxConcurrent: 6,
     maxSpawns: 12,
     waitTimeoutMs: 45_000,
+    worktreeIsolation: 'background',
+    worktreeLimit: 8,
+    budgetTokens: 0,
+    budgetCostUsd: 0,
+    budgetAction: 'warn',
   });
   assert.throws(
     () => normalizeConfig({ maxConcurrent: 0 }),
@@ -139,4 +196,14 @@ test('project subagent settings reject a relative workspace', () => {
     () => saveSubagentSettings('relative/path', 'project', {}),
     /工作区无效/,
   );
+});
+
+test('explicit project overrides survive user defaults passing through the same value', () => {
+  const workspace = path.join(temporary, 'explicit-overrides');
+  setSubagentConfig('user', '', { maxConcurrent: 4 });
+  setSubagentConfig('project', workspace, { maxConcurrent: 6 });
+  setSubagentConfig('user', '', { maxConcurrent: 6 });
+  assert.equal(getSubagentConfig('project', workspace).maxConcurrent, 6);
+  setSubagentConfig('user', '', { maxConcurrent: 8 });
+  assert.equal(getSubagentConfig('project', workspace).maxConcurrent, 6);
 });

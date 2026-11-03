@@ -162,6 +162,25 @@ try {
 
     await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
     await assertRestored();
+
+    // Streaming scrolls the transcript continuously; that must not dismiss the
+    // row menu the user just opened. Scrolling the sidebar itself still does,
+    // because the fixed menu would detach from its trigger.
+    await runningShell.hover();
+    await page.getByRole('button', { name: '运行中会话的更多操作', exact: true }).click();
+    const rowMenu = page.locator('.sidebar-action-menu');
+    await rowMenu.waitFor();
+    await page.evaluate(() => {
+      document.querySelector('.chat-scroll')?.dispatchEvent(new Event('scroll'));
+      document.querySelector('.chat-column')?.dispatchEvent(new Event('scroll'));
+    });
+    await page.waitForTimeout(120);
+    assert.equal(await rowMenu.count(), 1, 'a transcript scroll must keep the row menu open');
+    await page.screenshot({ path: `${output}row-menu-during-stream.png`, animations: 'disabled' });
+    await page.evaluate(() => document.querySelector('.sidebar')?.dispatchEvent(new Event('scroll')));
+    await page.waitForTimeout(120);
+    assert.equal(await rowMenu.count(), 0, 'scrolling the sidebar must still close the row menu');
+
     assert.deepEqual(errors, []);
     console.log(`PASS: sidebar running state restored after click. Screenshots: ${output}`);
   } catch (error) {

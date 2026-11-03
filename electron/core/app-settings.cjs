@@ -8,6 +8,10 @@
 const path = require('node:path');
 const { getStudioDatabase } = require('./studio-db.cjs');
 const {
+  DEFAULT_AUTO_COMPACT_PERCENT,
+  normalizeAutoCompactPercent,
+} = require('./context-policy.cjs');
+const {
   globalInstructionFile,
   globalInstructionStatus,
 } = require('./studio-paths.cjs');
@@ -119,6 +123,7 @@ const RUNTIME_POLICY_DEFAULTS = Object.freeze({
     reserveTokens: 16_384,
     keepRecentTokens: 20_000,
     backgroundTokens: 32_768,
+    autoCompactPercent: DEFAULT_AUTO_COMPACT_PERCENT,
   }),
   toolExecution: 'parallel',
   afterFailedRun: 'keep',
@@ -259,6 +264,12 @@ function normalizeRuntimePolicy(value) {
         defaults.compaction.backgroundTokens,
         0,
         262_144,
+      ),
+      // 百分比阈值只影响“何时自动压缩”；下面的 token 字段仍决定摘要保留量。
+      autoCompactPercent: normalizeAutoCompactPercent(
+        compaction.autoCompactPercent === undefined
+          ? defaults.compaction.autoCompactPercent
+          : compaction.autoCompactPercent,
       ),
     },
     toolExecution: TOOL_EXECUTION_MODES.has(source.toolExecution)
@@ -672,15 +683,48 @@ function deleteWorkspaceScopedSettings(cwd, sessionIds = []) {
 function getSubagentConfig(scope = 'user', cwd = '') {
   const settings = getStudioDatabase().getSetting(KEYS.subagents, {});
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return {};
+  const user = settings.user && typeof settings.user === 'object' && !Array.isArray(settings.user)
+    ? settings.user
+    : {};
   if (scope === 'project') {
     const project = settings.projects && typeof settings.projects === 'object'
       ? settings.projects[cwd]
       : undefined;
-    return project && typeof project === 'object' && !Array.isArray(project) ? project : {};
+    if (!project || typeof project !== 'object' || Array.isArray(project)) return {};
+    if (Number(settings.version) >= 2) return project;
+    // Project settings are overrides. Older builds stored a normalized copy of
+    // every field, which silently froze workspace rows when the user defaults
+    // changed. Treat values equal to the user row as inherited overrides.
+    return Object.fromEntries(Object.entries(project).filter(([key, value]) => (
+      !Object.hasOwn(user, key)
+      || JSON.stringify(value) !== JSON.stringify(user[key])
+    )));
   }
-  return settings.user && typeof settings.user === 'object' && !Array.isArray(settings.user)
-    ? settings.user
-    : {};
+  return user;
+}
+
+function sameSettingValue(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+/**
+ * Project subagent rows store overrides only. Before the override format was
+ * introduced, saves copied the complete normalized user configuration, which
+ * made later user-level changes appear frozen. Only the first v2 write drops
+ * inherited fields from legacy full snapshots.
+ */
+function cleanInheritedSubagentOverrides(projects, previousUser) {
+  return Object.fromEntries(Object.entries(projects).map(([workspace, raw]) => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [workspace, raw];
+    const project = { ...raw };
+    for (const key of Object.keys(project)) {
+      if (!Object.hasOwn(previousUser, key)) continue;
+      if (sameSettingValue(project[key], previousUser[key])) {
+        delete project[key];
+      }
+    }
+    return [workspace, project];
+  }));
 }
 
 function setSubagentConfig(scope, cwd, value) {
@@ -697,8 +741,14 @@ function setSubagentConfig(scope, cwd, value) {
           : {},
       }
     : { user: {}, projects: {} };
+  // Migrate snapshots once. After v2, equality with a later user setting does
+  // not mean an explicit project override has become inherited.
+  if ((Number(next.version) || 0) < 2) {
+    next.projects = cleanInheritedSubagentOverrides(next.projects, next.user);
+  }
   if (scope === 'project') next.projects[cwd] = value;
   else next.user = value;
+  next.version = 2;
   db.setSetting(KEYS.subagents, next);
   return value;
 }

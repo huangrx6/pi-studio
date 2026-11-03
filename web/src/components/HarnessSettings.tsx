@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { SettingsDialog } from './SettingsDialog';
+import { SettingsPageHeader } from './SettingsPageHeader';
 import { Select } from './Select';
 import { useActionConfirmation } from './ConfirmDialog';
 import type {
@@ -367,21 +368,13 @@ export function HarnessSettings({
   }
 
   return <div className="settings-sections harness-settings">
+    <SettingsPageHeader
+      icon={<BrainCircuit />}
+      title="Harness 配置"
+      meta={<span className="count-badge">{snapshot.profiles.length}</span>}
+      description="管理模型的系统指令、项目上下文和工具策略。保存后从下一次请求开始生效。"
+    />
     <section className="settings-card harness-overview-card">
-      <div className="settings-card-head">
-        <div>
-          <h2>Harness 配置 <span className="count-badge">{snapshot.profiles.length}</span></h2>
-          <p>Studio 自己构建 System Prompt、项目上下文和工具策略，不依赖 Coding Agent SDK 的隐式默认值。保存后从下一条请求开始热加载。</p>
-        </div>
-      </div>
-      <div className="harness-runtime-line">
-        <span className={applied ? 'is-ready' : 'is-pending'}>
-          {applied ? <Check /> : <CircleAlert />}
-          {applied ? '当前范围正在使用' : '尚未应用到当前范围'}
-        </span>
-        <code>{snapshot.path}</code>
-        <span>SQLite 持久化 · 下一请求生效</span>
-      </div>
       <div className="harness-runtime-line harness-instruction-line">
         <span className={snapshot.globalInstructionsStatus === 'present'
           ? 'is-ready'
@@ -401,8 +394,8 @@ export function HarnessSettings({
       <div className="harness-profile-switcher">
         <div className="harness-profile-tabs-head">
           <div>
-            <strong>Profiles</strong>
-            <span>每个标签是一套独立配置，切换后只编辑当前 profile。</span>
+            <strong>配置方案</strong>
+            <span>选择要编辑的方案，保存后可应用到当前工作区或设为全局默认。</span>
           </div>
           <button type="button" className="settings-add-button" disabled={saving} onClick={() => setNewProfileOpen(true)}>
             <Plus />新建配置
@@ -512,7 +505,7 @@ export function HarnessSettings({
         </div>
 
           <div className="harness-section-heading">
-            <div><h3>Prompt Sections</h3><p>关闭一个 section 后，下一条请求不会再生成这段提示词。</p></div>
+            <div><h3>提示词组成</h3><p>选择模型需要的指令内容，下一次请求生效。</p></div>
           </div>
           <div className="harness-section-grid">
             {snapshot.sections.map((section) => {
@@ -657,8 +650,7 @@ export function HarnessSettings({
 
           <div className="harness-policy-note">
             <Info />
-            <span>运行策略是 Harness 级配置。Prompt profile 可以按全局或工作区选择；这些执行策略由 Durable 共享，因此保持全局，避免界面显示工作区隔离但底层实际共享。</span>
-            <code title={snapshot.runtimePolicyPath}>{snapshot.runtimePolicyPath}</code>
+            <span>运行策略对所有工作区生效。修改后将在下一次安全的请求边界应用，不会打断当前任务。</span>
           </div>
 
           <div className="harness-policy-grid">
@@ -787,10 +779,10 @@ export function HarnessSettings({
               </div>
             </section>
 
-            <section className="harness-policy-group">
-              <header><strong>上下文压缩</strong><span>接近上下文窗口时保留最近工作</span></header>
+            <section className="harness-policy-group is-wide">
+              <header><strong>上下文压缩</strong><span>按上下文窗口的使用比例决定何时压缩</span></header>
               <div className="harness-policy-row">
-                <span><strong>自动压缩</strong><small>关闭后仍可手动压缩</small></span>
+                <span><strong>自动压缩</strong><small>关闭后仍可在输入区手动压缩</small></span>
                 <button
                   type="button"
                   className={`switch ${policyDraft.compaction.enabled ? 'is-on' : ''}`}
@@ -808,25 +800,26 @@ export function HarnessSettings({
                   <span />
                 </button>
               </div>
-              <div className="harness-policy-fields is-three">
+              <div className="harness-policy-fields">
                 <label>
-                  <span>回答预留</span>
+                  <span>触发阈值</span>
                   <input
                     type="number"
-                    min={1_024}
-                    max={262_144}
-                    step={1_024}
-                    value={policyDraft.compaction.reserveTokens}
+                    min={0}
+                    max={95}
+                    step={5}
+                    aria-label="自动压缩触发阈值（百分比）"
+                    value={policyDraft.compaction.autoCompactPercent}
                     disabled={!policyDraft.compaction.enabled}
                     onChange={(event) => setPolicyDraft((current) => ({
                       ...current,
                       compaction: {
                         ...current.compaction,
-                        reserveTokens: Number(event.target.value),
+                        autoCompactPercent: Number(event.target.value),
                       },
                     }))}
                   />
-                  <small>tokens</small>
+                  <small>%：用到模型窗口的这个比例时压缩；0 表示只看下面的 token 阈值</small>
                 </label>
                 <label>
                   <span>保留最近</span>
@@ -845,28 +838,53 @@ export function HarnessSettings({
                       },
                     }))}
                   />
-                  <small>tokens</small>
-                </label>
-                <label>
-                  <span>后台提前量</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={262_144}
-                    step={1_024}
-                    value={policyDraft.compaction.backgroundTokens}
-                    disabled={!policyDraft.compaction.enabled}
-                    onChange={(event) => setPolicyDraft((current) => ({
-                      ...current,
-                      compaction: {
-                        ...current.compaction,
-                        backgroundTokens: Number(event.target.value),
-                      },
-                    }))}
-                  />
-                  <small>0 表示关闭后台压缩</small>
+                  <small>tokens：摘要后原样保留的最近上下文</small>
                 </label>
               </div>
+              {/* 比例阈值按每个模型自己的窗口换算；这里保留 token 字段作为回退。 */}
+              <details className="harness-policy-details">
+                <summary>按 token 细调</summary>
+                <div className="harness-policy-fields is-three">
+                  <label>
+                    <span>回答预留</span>
+                    <input
+                      type="number"
+                      min={1_024}
+                      max={262_144}
+                      step={1_024}
+                      value={policyDraft.compaction.reserveTokens}
+                      disabled={!policyDraft.compaction.enabled}
+                      onChange={(event) => setPolicyDraft((current) => ({
+                        ...current,
+                        compaction: {
+                          ...current.compaction,
+                          reserveTokens: Number(event.target.value),
+                        },
+                      }))}
+                    />
+                    <small>tokens：窗口未知的模型使用这个值</small>
+                  </label>
+                  <label>
+                    <span>后台提前量</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={262_144}
+                      step={1_024}
+                      value={policyDraft.compaction.backgroundTokens}
+                      disabled={!policyDraft.compaction.enabled}
+                      onChange={(event) => setPolicyDraft((current) => ({
+                        ...current,
+                        compaction: {
+                          ...current.compaction,
+                          backgroundTokens: Number(event.target.value),
+                        },
+                      }))}
+                    />
+                    <small>0 表示不提前后台压缩，只在阈值处暂停压缩</small>
+                  </label>
+                </div>
+              </details>
             </section>
 
             <section className="harness-policy-group is-wide">

@@ -59,6 +59,33 @@ test('model discovery uses declared reasoning levels and normalizes aliases', ()
   assert.deepEqual(models[0].thinkingLevels, ['off', 'low', 'high', 'xhigh', 'max']);
 });
 
+test('model discovery reads opencode-style capability objects', () => {
+  const models = normalizeDiscoveredModels({
+    object: 'list',
+    data: [
+      {
+        id: 'reasoner-with-effort',
+        name: 'Reasoner',
+        modalities: { input: ['text', 'image/png'], output: ['text'] },
+        capabilities: { tools: { supported: true }, reasoning: { supported: true, effort: ['low', 'high', 'max'] } },
+        limit: { context: 1000000, output: 384000 },
+      },
+      {
+        id: 'reasoner-flag-only',
+        capabilities: { reasoning: { supported: true } },
+      },
+    ],
+  });
+  assert.deepEqual(models.map((model) => model.id), ['reasoner-with-effort', 'reasoner-flag-only']);
+  assert.deepEqual(models[0].thinkingLevels, ['low', 'high', 'max']);
+  assert.equal(models[0].reasoning, true);
+  assert.equal(models[0].supportsImages, true);
+  assert.equal(models[0].contextWindow, 1000000);
+  assert.equal(models[0].maxTokens, 384000);
+  assert.deepEqual(models[1].thinkingLevels, ['off', 'minimal', 'low', 'medium', 'high']);
+  assert.equal(models[1].supportsImages, false);
+});
+
 test('model discovery recognizes OpenRouter reasoning support parameters', () => {
   const [model] = normalizeDiscoveredModels({
     data: [{

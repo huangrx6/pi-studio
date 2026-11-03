@@ -3,13 +3,18 @@ import {
   Bot,
   Check,
   CircleAlert,
+  FileDiff,
+  FolderGit2,
+  FolderOpen,
   FolderTree,
+  GitMerge,
   Info,
   Layers3,
   LoaderCircle,
   RotateCw,
   Save,
   Sparkles,
+  Trash2,
   Undo2,
   Wrench,
 } from 'lucide-react';
@@ -20,7 +25,9 @@ import type {
   SubagentThinking,
 } from '../types/subagent-types';
 import { Select } from './Select';
+import { SettingsPageHeader } from './SettingsPageHeader';
 import { runtimeRefreshFailure } from '../lib/runtime-refresh';
+import { useActionConfirmation } from './ConfirmDialog';
 
 const THINKING_LABEL: Record<Exclude<SubagentThinking, ''>, string> = {
   off: '关闭',
@@ -55,6 +62,11 @@ function emptyConfig(): SubagentConfig {
     maxConcurrent: 4,
     maxSpawns: 32,
     waitTimeoutMs: 30_000,
+    worktreeIsolation: 'background',
+    worktreeLimit: 8,
+    budgetTokens: 0,
+    budgetCostUsd: 0,
+    budgetAction: 'warn',
   };
 }
 
@@ -88,6 +100,22 @@ function sourceLabel(source: AgentToolSource): string {
   return source.label || '扩展';
 }
 
+function formatBytes(value?: number): string {
+  const bytes = Math.max(0, Number(value) || 0);
+  if (bytes < 1_024) return `${bytes} B`;
+  if (bytes < 1_024 * 1_024) return `${(bytes / 1_024).toFixed(bytes >= 10 * 1_024 ? 0 : 1)} KB`;
+  return `${(bytes / (1_024 * 1_024)).toFixed(bytes >= 10 * 1_024 * 1_024 ? 0 : 1)} MB`;
+}
+
+const WORKTREE_STATUS_LABEL = {
+  active: '运行中',
+  finished: '待处理',
+  failed: '执行失败',
+  applied: '已应用',
+  discarded: '已丢弃',
+  removed: '已清理',
+} as const;
+
 function matchesTool(pattern: string, name: string): boolean {
   if (pattern === '*' || pattern === name) return true;
   if (!pattern.includes('*')) return false;
@@ -117,6 +145,9 @@ export function SubagentSettings({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [worktreeBusy, setWorktreeBusy] = useState('');
+  const confirmation = useActionConfirmation();
+  const worktrees = Array.isArray(snapshot?.worktrees) ? snapshot.worktrees : [];
   const requestRef = useRef(0);
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
@@ -168,11 +199,7 @@ export function SubagentSettings({
 
   const savedDraft = snapshot ? configFor(snapshot, scope) : emptyConfig();
   const dirty = JSON.stringify(draft) !== JSON.stringify(savedDraft);
-  const path = snapshot
-    ? scope === 'user'
-      ? snapshot.userPath
-      : `${snapshot.projectPath} · ${snapshot.projectRoot}`
-    : '';
+
   const scopeLabel = scope === 'user' ? '所有工作区' : workspaceName || '指定工作区';
   const defaultModelOptions = useMemo(() => [
     { value: '', label: '跟随父智能体' },
@@ -269,6 +296,42 @@ export function SubagentSettings({
     }
   }
 
+  async function settleWorktree(id: string, action: 'apply' | 'discard' | 'cleanup') {
+    if (worktreeBusy) return;
+    const item = worktrees.find((worktree) => worktree.id === id);
+    const accepted = await confirmation.confirm(action === 'apply'
+      ? {
+          title: '应用工作树改动？',
+          description: `${item?.changedFiles ?? 0} 个文件会写入当前项目。应用前会先做 Git 冲突检查；不会改动你的暂存区。`,
+          confirmLabel: '应用改动',
+        }
+      : action === 'discard'
+        ? {
+            title: '丢弃这个工作树？',
+            description: '工作树目录及其未合并改动会永久删除。项目中的文件不会被修改。',
+            confirmLabel: '丢弃工作树',
+            tone: 'danger',
+          }
+        : {
+            title: '清理已结束工作树？',
+            description: '只清除已经应用、丢弃或移除的目录；待处理改动会保留。',
+            confirmLabel: '开始清理',
+          });
+    if (!accepted) return;
+    setWorktreeBusy(id || 'cleanup');
+    setError(null);
+    try {
+      if (action === 'apply') await window.piApi.applyManagedWorktree(id);
+      else if (action === 'discard') await window.piApi.discardManagedWorktree({ id });
+      else await window.piApi.cleanupManagedWorktrees();
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setWorktreeBusy('');
+    }
+  }
+
   if (loading && !snapshot) {
     return (
       <div className="settings-loading" role="status">
@@ -280,13 +343,11 @@ export function SubagentSettings({
 
   return (
     <div className="settings-sections subagent-settings">
-      <section className="settings-card subagent-overview">
-        <div className="subagent-overview-head">
-          <div className="subagent-overview-copy">
-            <span className="subagent-eyebrow"><Bot />多智能体协作</span>
-            <h2>子智能体</h2>
-            <p>为子智能体设置独立模型、思考强度和工具边界；每次启动都会继承当前 Harness 配置。</p>
-          </div>
+      <SettingsPageHeader
+        icon={<Bot />}
+        title="子智能体"
+        description="设置子智能体的模型、思考强度、工具与运行预算。新启动的任务会使用最新配置。"
+        actions={
           <div className="subagent-overview-actions">
             <span className={`subagent-status-pill is-${runtimeState}`}>
               {runtimeReady
@@ -307,13 +368,14 @@ export function SubagentSettings({
               <RotateCw className={loading ? 'spin' : ''} />
             </button>
           </div>
-        </div>
-
+        }
+      />
+      <section className="settings-card subagent-overview">
         <div className={`subagent-runtime-status is-${runtimeState}`}>
           <div>
-            <strong>{runtimeReady ? 'Durable 子智能体已就绪' : '子智能体功能尚未完全启用'}</strong>
+            {!runtimeReady && <strong>子智能体功能尚未完全启用</strong>}
             <span>{runtimeReady
-              ? '配置保存在 Studio SQLite，并从下一次启动的子智能体开始生效。'
+              ? '新任务会继承当前 Harness 配置，运行中的任务保持不变。'
               : '在智能体工具中开放 subagent 后即可使用；已保存的模型、thinking 和工具限制不会丢失。'}</span>
           </div>
           {snapshot?.installed && toolsReady === false && onOpenAgentTools && (
@@ -378,10 +440,7 @@ export function SubagentSettings({
               />
             </div>
           )}
-          <div className="subagent-config-path">
-            <span>保存位置</span>
-            <code title={path}>{path || '正在读取 Studio 配置…'}</code>
-          </div>
+
         </div>
       </section>
 
@@ -492,6 +551,90 @@ export function SubagentSettings({
             </div>
             <small>超时只结束本次等待，不会停止子智能体。</small>
           </label>
+          <div className="subagent-field">
+            <span className="subagent-label">工作树隔离</span>
+            <Select
+              label="子智能体工作树隔离方式"
+              value={draft.worktreeIsolation}
+              options={[
+                { value: 'background', label: '后台任务 · 推荐' },
+                { value: 'always', label: '所有子智能体' },
+                { value: 'off', label: '关闭 · 共享工作区' },
+              ]}
+              onChange={(value) => setDraft((current) => ({
+                ...current,
+                worktreeIsolation: value as SubagentConfig['worktreeIsolation'],
+              }))}
+            />
+            <small>隔离任务只修改 Studio 管理的 Git 工作树，结束前不接触项目文件。</small>
+          </div>
+          <label className={`subagent-field ${draft.worktreeIsolation === 'off' ? 'is-disabled' : ''}`}>
+            <span className="subagent-label">工作树保留上限</span>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              disabled={draft.worktreeIsolation === 'off'}
+              value={draft.worktreeLimit}
+              onChange={(event) => setDraft((current) => ({
+                ...current,
+                worktreeLimit: Number(event.target.value),
+              }))}
+            />
+            <small>达到上限后阻止新建隔离任务，直到合并或丢弃已有改动。</small>
+          </label>
+          <label className="subagent-field">
+            <span className="subagent-label">Token 预算</span>
+            <input
+              type="number"
+              min={0}
+              max={100_000_000}
+              step={1_000}
+              value={draft.budgetTokens}
+              placeholder="0 · 不限制"
+              onChange={(event) => setDraft((current) => ({
+                ...current,
+                budgetTokens: Number(event.target.value),
+              }))}
+            />
+            <small>按当前会话内所有子智能体的模型请求累计；0 表示不限制。</small>
+          </label>
+          <label className="subagent-field">
+            <span className="subagent-label">参考成本预算</span>
+            <div className="subagent-input-unit">
+              <input
+                type="number"
+                min={0}
+                max={100_000}
+                step={0.01}
+                value={draft.budgetCostUsd}
+                placeholder="0 · 不限制"
+                onChange={(event) => setDraft((current) => ({
+                  ...current,
+                  budgetCostUsd: Number(event.target.value),
+                }))}
+              />
+              <span>USD</span>
+            </div>
+            <small>来自模型返回的参考价格；没有返回价格时不会估算。</small>
+          </label>
+          <div className={`subagent-field ${draft.budgetTokens || draft.budgetCostUsd ? '' : 'is-disabled'}`}>
+            <span className="subagent-label">达到预算后</span>
+            <Select
+              label="子智能体预算超限策略"
+              value={draft.budgetAction}
+              options={[
+                { value: 'warn', label: '仅提醒' },
+                { value: 'stop', label: '阻止新任务' },
+              ]}
+              disabled={!draft.budgetTokens && !draft.budgetCostUsd}
+              onChange={(value) => setDraft((current) => ({
+                ...current,
+                budgetAction: value === 'stop' ? 'stop' : 'warn',
+              }))}
+            />
+            <small>不会中断正在执行的任务；策略在下一安全请求边界生效。</small>
+          </div>
         </div>
       </section>
 
@@ -544,6 +687,100 @@ export function SubagentSettings({
         <div className="subagent-resolution-note">
           <Info />
           <span>优先级：调用参数 → 指定工作区 → 所有工作区 → 父智能体</span>
+        </div>
+      </section>
+
+      <section className="settings-card subagent-section subagent-worktrees">
+        <div className="subagent-section-heading">
+          <span><FolderGit2 /></span>
+          <div>
+            <h2>隔离工作树</h2>
+            <p>在应用、丢弃或清理前，子智能体产生的文件改动会保留在 Studio 自己的目录中。</p>
+          </div>
+          <button
+            type="button"
+            className="settings-outline"
+            disabled={Boolean(worktreeBusy)}
+            onClick={() => void settleWorktree('', 'cleanup')}
+          >
+            <RotateCw className={worktreeBusy === 'cleanup' ? 'spin' : ''} />
+            清理已结束
+          </button>
+        </div>
+        <div className="subagent-worktree-summary">
+          <span><strong>{worktrees.filter((item) => item.status === 'active').length}</strong><small>运行中</small></span>
+          <span><strong>{worktrees.filter((item) => item.status === 'finished').length}</strong><small>待处理</small></span>
+          <span><strong>{formatBytes(worktrees.reduce((sum, item) => sum + item.sizeBytes, 0))}</strong><small>占用空间</small></span>
+          <span><strong>{worktrees.reduce((sum, item) => sum + (item.changedFiles || 0), 0)}</strong><small>变更文件</small></span>
+        </div>
+        <div className="subagent-worktree-list">
+          {worktrees.map((worktree) => (
+            <article className={`subagent-worktree-row is-${worktree.status}`} key={worktree.id}>
+              <span className="subagent-worktree-icon">
+                {worktree.status === 'active' ? <LoaderCircle className="spin" /> : worktree.status === 'failed' ? <CircleAlert /> : <FileDiff />}
+              </span>
+              <div className="subagent-worktree-copy">
+                <div>
+                  <strong>{worktree.name}</strong>
+                  <span className={`settings-badge is-${worktree.status}`}>{WORKTREE_STATUS_LABEL[worktree.status]}</span>
+                </div>
+                <code title={worktree.path}>{worktree.path}</code>
+                <small>
+                  {worktree.changedFiles || 0} 个文件 · {formatBytes(worktree.sizeBytes)}
+                  {worktree.totalAdded !== undefined ? ` · +${worktree.totalAdded} / −${worktree.totalRemoved || 0}` : ''}
+                  {worktree.error ? ` · ${worktree.error}` : ''}
+                </small>
+                {Boolean(worktree.files?.length) && (
+                  <details>
+                    <summary>查看改动文件</summary>
+                    <ul>
+                      {worktree.files!.slice(0, 80).map((file) => (
+                        <li key={`${file.status}:${file.path}`}>
+                          <span>{file.status === 'added' ? 'A' : file.status === 'deleted' ? 'D' : 'M'}</span>
+                          <code>{file.path}</code>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+              <div className="subagent-worktree-actions">
+                <button
+                  type="button"
+                  className="icon-button"
+                  disabled={!worktree.directoryExists}
+                  title="在 Finder 中显示"
+                  aria-label={`显示工作树 ${worktree.name}`}
+                  onClick={() => void window.piApi.revealManagedWorktree(worktree.id)}
+                >
+                  <FolderOpen />
+                </button>
+                <button
+                  type="button"
+                  className="settings-outline"
+                  disabled={worktree.status === 'active' || !worktree.directoryExists || Boolean(worktreeBusy)}
+                  onClick={() => void settleWorktree(worktree.id, 'apply')}
+                >
+                  <GitMerge />应用
+                </button>
+                <button
+                  type="button"
+                  className="icon-button is-danger"
+                  disabled={worktree.status === 'active' || Boolean(worktreeBusy)}
+                  title="丢弃工作树"
+                  aria-label={`丢弃工作树 ${worktree.name}`}
+                  onClick={() => void settleWorktree(worktree.id, 'discard')}
+                >
+                  <Trash2 />
+                </button>
+              </div>
+            </article>
+          ))}
+          {!worktrees.length && (
+            <div className="settings-empty">
+              当前工作区没有待处理工作树。后台子智能体有独立 Git 工作区时，会显示在这里。
+            </div>
+          )}
         </div>
       </section>
 
@@ -609,10 +846,11 @@ export function SubagentSettings({
       </section>
 
       {error && <div className="settings-error" role="alert">{error}</div>}
+      {confirmation.dialog}
       <div className="subagent-savebar">
         <div>
           <strong>{dirty ? `${scopeLabel}有未保存的更改` : '配置已同步'}</strong>
-          <span>{scopeLabel} · {path} · 下一次启动子智能体时生效</span>
+          <span>{scopeLabel} · 下一次启动子智能体时生效</span>
         </div>
         <button
           className="settings-outline"

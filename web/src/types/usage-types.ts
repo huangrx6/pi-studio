@@ -36,6 +36,21 @@ export type UsageFilterModel = UsageActiveModel & {
 
 export type UsageModelDay = UsageDay & UsageActiveModel;
 
+/** Inclusive local-day window resolved by the main process for one section. */
+export type UsageWindow = {
+  all: boolean;
+  days: number | null;
+  sinceDay: string | null;
+  untilDay: string | null;
+};
+
+export type UsageModelMix = {
+  generatedAt: number;
+  window: UsageWindow;
+  totals: UsageTotals;
+  models: UsageModel[];
+};
+
 export type UsageAnalyticsSnapshot = {
   generatedAt: number;
   days: number;
@@ -52,5 +67,4 @@ export type UsageAnalyticsSnapshot = {
   daily: UsageDay[];
   dailyModels: UsageModelDay[];
   filterModels: UsageFilterModel[];
-  models: UsageModel[];
 };

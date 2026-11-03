@@ -51,6 +51,7 @@ await page.addInitScript(() => {
           id: 'recent-a',
           title: '修复设置页面样式',
           cwd: '/workspace/pi-studio',
+          startedAt: Date.now() - 305_000,
           completedAt: Date.now() - 45_000,
           status: 'success',
           unread: true,
@@ -92,7 +93,12 @@ try {
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
   assert.equal(await page.locator('html').getAttribute('data-palette'), 'ocean');
   const panel = await page.locator('.popover-panel').boundingBox();
-  assert.ok(panel && panel.width === 504);
+  const shellBox = await page.locator('.popover-shell').boundingBox();
+  // The panel fills the popover window minus the 7px shell inset; deriving the
+  // expectation keeps this stable across engines that reserve scrollbar width.
+  assert.ok(panel && shellBox);
+  assert.equal(Math.round(panel.width), Math.round(shellBox.width - 14));
+  assert.equal(Math.round(panel.x - shellBox.x), 7);
   const brandMark = await page.locator('.brand-mark').boundingBox();
   const brandTitle = await page.locator('.brand-lockup strong').boundingBox();
   assert.ok(brandMark && brandTitle);
@@ -144,6 +150,7 @@ try {
       id: 'recent-only',
       title: '检查一条完成记录是否会被误判为溢出',
       cwd: '/workspace/pi-studio',
+      startedAt: Date.now() - 92_000,
       completedAt: Date.now(),
       status: 'success',
       unread: true,
@@ -202,7 +209,7 @@ try {
   assert.equal(await page.evaluate(() => window.__quitRequested), true);
   const crowded = {
     running: Array.from({ length: 12 }, (_, n) => ({ id: String(n), title: '验证长会话名称不会挤压状态与返回入口'.repeat(4), cwd: '/workspace/pi-studio', startedAt: Date.now() - 3_700_000 })),
-    recent: [{ id: 'failed', title: '检查模型连接', status: 'error', completedAt: Date.now() }],
+    recent: [{ id: 'failed', title: '检查模型连接', status: 'error', startedAt: Date.now() - 40_000, completedAt: Date.now() }],
     theme: 'light', palette: 'ocean',
   };
   await page.setViewportSize({ width: 520, height: menuBarPopoverHeight(crowded) });

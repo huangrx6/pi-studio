@@ -1,15 +1,19 @@
 import {
   defineExtension,
   defineTool,
-  Type,
 } from '@earendil-works/pi-durable';
 
+// 参数 schema 就是普通 JSON Schema，不需要 TypeBox 或任何 schema 库。
 const echo = defineTool({
   name: 'extension_echo',
   description: 'Echo text through a Studio extension tool.',
-  parameters: Type.Object({
-    text: Type.String({ maxLength: 4_000 }),
-  }),
+  parameters: {
+    type: 'object',
+    properties: {
+      text: { type: 'string', maxLength: 4_000 },
+    },
+    required: ['text'],
+  },
   replay: 'safe',
   async execute(args) {
     return {

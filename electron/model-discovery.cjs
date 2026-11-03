@@ -187,7 +187,7 @@ function normalizeDiscoveredModels(payload) {
         || item.vision
         || capabilities.vision
         || capabilities.image_input
-        || modalityList.some((value) => value === 'image' || value === 'vision'),
+        || modalityList.some((value) => value === 'image' || value === 'vision' || value.startsWith('image/')),
       ),
       reasoning,
       thinkingLevels: effectiveThinkingLevels(declaredThinkingLevels, reasoning),

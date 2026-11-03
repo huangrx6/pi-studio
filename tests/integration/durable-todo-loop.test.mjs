@@ -14,12 +14,12 @@ import { createToolSearchExtension } from '@earendil-works/pi-durable/tool-searc
 import { openNodeJsonlStorage } from '@earendil-works/pi-durable/storage/jsonl/node';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import {
-  Type,
   createModels,
   fauxAssistantMessage,
   fauxProvider,
   fauxToolCall,
 } from '@earendil-works/pi-ai';
+import toolSchema from '../../electron/services/tool-schema.cjs';
 
 const require = createRequire(import.meta.url);
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-todo-loop-'));
@@ -44,7 +44,7 @@ test('the todo tool result reaches the UI contract and its Durable document surv
   const durable = await import('@earendil-works/pi-durable');
   const builtins = createStudioBuiltins({
     durable,
-    piAi: { Type },
+    piAi: { Type: toolSchema },
     codingTools: defineExtension({ name: 'coding-tools', tools: [] }),
     toolSearch: createToolSearchExtension(),
     chordContext: BACKGROUND_CONTEXT,

@@ -190,16 +190,14 @@ export function ModelPicker({ selection, scope, disabled, hidden, loadCatalog, o
     return () => { window.removeEventListener('resize', update); window.removeEventListener('scroll', update, true); };
   }, [open, view]);
 
-  // 打开或切换视图后聚焦：模型页聚焦搜索框方便直接输入；
-  // 其他页优先当前勾选项，没有则第一个可用按钮。等一帧等浮层挂载。
-  useEffect(() => {
+  // DOM 提交后同步聚焦，避免动画帧回调在键盘导航开始后才把焦点抢回搜索框。
+  useLayoutEffect(() => {
     if (!open) return;
-    const frame = requestAnimationFrame(() => {
-      const panel = panelRef.current;
-      const target = view === 'models' ? panel?.querySelector<HTMLInputElement>('input') : panel?.querySelector<HTMLButtonElement>('[aria-checked="true"], button:not(:disabled)');
-      target?.focus();
-    });
-    return () => cancelAnimationFrame(frame);
+    const panel = panelRef.current;
+    const target = view === 'models'
+      ? panel?.querySelector<HTMLInputElement>('input')
+      : panel?.querySelector<HTMLButtonElement>('[aria-checked="true"], button:not(:disabled)');
+    target?.focus();
   }, [open, view]);
 
   /**

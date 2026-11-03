@@ -17,6 +17,15 @@ export type SubagentConfig = {
   maxConcurrent: number;
   maxSpawns: number;
   waitTimeoutMs: number;
+  /** off shares the parent tree; background isolates background children; always isolates every child. */
+  worktreeIsolation: 'off' | 'background' | 'always';
+  /** Maximum preserved worktrees in one Git repository before another child is blocked. */
+  worktreeLimit: number;
+  /** 0 disables the token budget. */
+  budgetTokens: number;
+  /** 0 disables the reference-cost budget. */
+  budgetCostUsd: number;
+  budgetAction: 'warn' | 'stop';
 };
 
 export type SubagentModelOption = {
@@ -38,7 +47,51 @@ export type SubagentSettingsSnapshot = {
   models: SubagentModelOption[];
   currentModel: string;
   thinkingLevels: Exclude<SubagentThinking, ''>[];
+  worktrees: ManagedWorktree[];
   runtimeRefresh?: RuntimeRefreshSnapshot;
+};
+
+export type SubagentBudgetSnapshot = {
+  parentConversationId: string;
+  tokens: number;
+  costUsd: number;
+  requests: number;
+  budgetTokens: number;
+  budgetCostUsd: number;
+  budgetAction: 'warn' | 'stop';
+  exceeded: boolean;
+};
+
+export type ManagedWorktree = {
+  id: string;
+  parentConversationId: string;
+  childConversationId: string;
+  name: string;
+  workspace: string;
+  repositoryRoot: string;
+  path: string;
+  baseCommit: string;
+  status: 'active' | 'finished' | 'applied' | 'discarded' | 'removed' | 'failed';
+  createdAt: number;
+  updatedAt: number;
+  finishedAt?: number;
+  error: string;
+  changed?: boolean;
+  changedFiles?: number;
+  files?: Array<{
+    path: string;
+    status: 'added' | 'modified' | 'deleted';
+    added: number;
+    removed: number;
+    binary: boolean;
+  }>;
+  totalAdded?: number;
+  totalRemoved?: number;
+  sizeBytes: number;
+  fileEntries: number;
+  sizeTruncated: boolean;
+  directoryExists: boolean;
+  inspectionError?: string;
 };
 
 export type SubagentStatus = 'pending' | 'running' | 'completed' | 'failed' | 'stopped' | 'paused' | 'waiting';
@@ -57,14 +110,19 @@ export type SubagentChild = {
   model: string;
   thinking: string;
   cwd: string;
+  isolation: 'workspace' | 'worktree';
+  worktreeId?: string;
   startedAt?: number;
   updatedAt?: number;
   durationMs?: number;
   tokens?: number;
+  referenceCostUsd?: number;
+  providerRequests?: number;
   toolCount?: number;
   turnCount?: number;
   currentTool?: string;
   supervisorPending?: number;
+  supervisorRequests?: Array<{ id: string; question: string; createdAt?: number }>;
   lastReporterId?: string;
   preview: string;
   error?: string;

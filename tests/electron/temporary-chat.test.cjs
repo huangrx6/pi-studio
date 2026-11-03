@@ -65,24 +65,6 @@ function createMockRuntime() {
         calls.push(['registry', 'create']);
         return { kind: 'empty-registry' };
       },
-      async watchEvents(_harness, id) {
-        const stream = {
-          id,
-          started: false,
-          stopped: false,
-          listeners: [],
-          async start(listener) {
-            this.started = true;
-            this.listeners.push(listener);
-          },
-          async stop() {
-            this.stopped = true;
-            calls.push(['stream', 'stop', id]);
-          },
-        };
-        streams.push(stream);
-        return stream;
-      },
     },
     harness: {
       async createConversation(options) {
@@ -108,6 +90,26 @@ function createMockRuntime() {
               async abort() {
                 this.aborted = true;
                 calls.push(['conversation', 'abort', id]);
+              },
+              // 1.5.0：实时状态来自会话视图的序列化 watch。
+              async watch() {
+                const stream = {
+                  id,
+                  value: { conversation: { id }, entries: [], docs: {} },
+                  started: false,
+                  stopped: false,
+                  listeners: [],
+                  start(listener) {
+                    this.started = true;
+                    this.listeners.push(listener);
+                  },
+                  async stop() {
+                    this.stopped = true;
+                    calls.push(['stream', 'stop', id]);
+                  },
+                };
+                streams.push(stream);
+                return stream;
               },
             };
             conversations.push(conversation);

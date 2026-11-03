@@ -198,13 +198,19 @@ Agent 扩展在入口模块中创建 Durable extension：
 import {
   defineExtension,
   defineTool,
-  Type,
 } from '@earendil-works/pi-durable';
 
 const checklist = defineTool({
   name: 'review_checklist',
   description: 'Read the repository review checklist.',
-  parameters: Type.Object({ path: Type.Optional(Type.String()) }),
+  // 参数 schema 就是普通 JSON Schema：不需要 TypeBox、pi-schema
+  // 或任何 schema 库，也不需要从包里导入构造器。
+  parameters: {
+    type: 'object',
+    properties: {
+      path: { type: 'string' },
+    },
+  },
   replay: 'safe',
   async execute(args, api, context) {
     const agent = await api.agent(context);
@@ -462,7 +468,8 @@ MCP 配置保存后立即重连或重建 registry；活动中的模型请求和�
 当前边界：
 
 - stdio 与 Streamable HTTP 已支持；legacy SSE 不支持。
-- HTTP 使用静态 headers；MCP OAuth 登录流程尚未接入。
+- HTTP 支持静态 headers 与显式发起的 MCP OAuth 登录。客户端注册、PKCE、access/refresh token 使用 Electron `safeStorage` envelope 保存在 Studio SQLite；退出登录会清除状态并重连。
+- 设置页可以在保存前测试连接，并展示耗时、工具清单与已脱敏诊断。每个工具显示 `direct`、`deferred` 或 `hidden` 暴露状态。
 - 工具结果中的文本、图片、内嵌文本/图片资源和 resource link 会转换；独立的 MCP resources/templates 列表与读取工具尚未注册。
 - prompts、sampling、tasks 和 MCP Apps UI 尚未暴露。
 

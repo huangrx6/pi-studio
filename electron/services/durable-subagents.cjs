@@ -13,10 +13,16 @@ const {
   scanEntries,
 } = require('./durable-conversations.cjs');
 const { getDurableRuntime } = require('./durable-runtime.cjs');
+const { modelUsageTotals } = require('../core/usage-totals.cjs');
+const { getSubagentConfig } = require('../core/app-settings.cjs');
 const {
   createProtocol,
+  queueSupervisorReply,
   emptyRegistry,
 } = require('./durable-subagent-protocol.cjs');
+const {
+  reconcileManagedWorktreesForChildren,
+} = require('./managed-worktrees.cjs');
 
 const MAX_CHILDREN = 100;
 const CONVERSATION_SCAN_PAGE = 200;
@@ -75,22 +81,6 @@ function taskError(task) {
   if (outcome?.status === 'aborted') return outcome.reason || '子智能体已停止';
   if (outcome?.status === 'orphaned') return outcome.reason || '子智能体定义已不可用';
   return undefined;
-}
-
-function usageTokens(messages) {
-  let total = 0;
-  let found = false;
-  for (const message of messages) {
-    const usage = message?.usage;
-    if (!usage || typeof usage !== 'object') continue;
-    for (const key of ['input', 'output', 'inputTokens', 'outputTokens', 'reasoning', 'reasoningTokens']) {
-      if (Number.isFinite(usage[key])) {
-        total += Number(usage[key]);
-        found = true;
-      }
-    }
-  }
-  return found ? total : undefined;
 }
 
 function childKey(conversationId) {
@@ -154,6 +144,14 @@ async function childDto(record, info, index, runtimeOverride, overrides = {}) {
   if (!conversation) return undefined;
   const runtime = runtimeOverride || await getDurableRuntime();
   const agent = await conversation.agent(runtime.context);
+  const protocol = createProtocol(runtime.durable);
+  const childContext = await runtime.harness.snapshot(
+    protocol.ChildContext,
+    conversation.id,
+    runtime.context,
+  );
+  const usage = await runtime.harness.snapshot(runtime.durable.UsageDoc, conversation.id, runtime.context);
+  const metricTotals = getStudioDatabase().metricTotalsForConversation(conversation.id);
   const messages = await fullDisplayMessages(conversation);
   const firstUser = messages.find((message) => message.role === 'user');
   const assistantMessages = messages.filter((message) => message.role === 'assistant');
@@ -172,6 +170,7 @@ async function childDto(record, info, index, runtimeOverride, overrides = {}) {
     : '';
   const startedAt = overrides.startedAt || task?.startedAt;
   const endedAt = overrides.endedAt || task?.endedAt;
+  const durableUsage = modelUsageTotals(usage);
   return {
     key: childKey(record.id),
     runId: String(overrides.runId || task?.id || record.id),
@@ -185,13 +184,20 @@ async function childDto(record, info, index, runtimeOverride, overrides = {}) {
     model,
     thinking: agent.thinkingLevel || '',
     cwd: agent.cwd || '',
+    isolation: childContext?.isolation === 'worktree' ? 'worktree' : 'workspace',
+    ...(childContext?.worktreeId ? { worktreeId: childContext.worktreeId } : {}),
     ...(startedAt ? { startedAt } : {}),
     updatedAt: endedAt || Date.now(),
     ...(startedAt && endedAt ? { durationMs: Math.max(0, endedAt - startedAt) } : {}),
-    ...(usageTokens(messages) !== undefined ? { tokens: usageTokens(messages) } : {}),
+    tokens: durableUsage.tokens ?? metricTotals.tokens,
+    ...(durableUsage.referenceCostUsd !== undefined || metricTotals.cost > 0
+      ? { referenceCostUsd: durableUsage.referenceCostUsd ?? metricTotals.cost }
+      : {}),
+    providerRequests: metricTotals.requests,
     toolCount: messages.filter((message) => message.role === 'toolResult').length,
     turnCount: assistantMessages.length,
     ...(overrides.supervisorPending ? { supervisorPending: overrides.supervisorPending } : {}),
+    supervisorRequests: overrides.supervisorRequests || [],
     ...(overrides.lastReporterId ? { lastReporterId: overrides.lastReporterId } : {}),
     preview: preview.slice(0, 2_000),
     ...(overrides.error || taskError(task)
@@ -241,6 +247,9 @@ async function listSubagentChildren(parentId) {
       liveRunning: Boolean(live?.run),
       cachedStatus: agent.lastStatus,
       supervisorPending: pending,
+      supervisorRequests: Object.values(registry.supervisorRequests)
+        .filter(request => request?.childConversationId === conversationId && request.status === 'pending')
+        .map(request => ({ id: request.requestId, question: request.question, createdAt: request.createdAt })),
     });
     if (!['pending', 'running', 'completed', 'failed', 'stopped', 'paused', 'waiting'].includes(status)) {
       status = 'pending';
@@ -302,10 +311,14 @@ async function listSubagentChildren(parentId) {
       seen.add(Number(record.id));
     }
   }
-  return children.sort((left, right) => (
+  const sorted = children.sort((left, right) => (
     Number(left.startedAt || 0) - Number(right.startedAt || 0)
     || Number(left.index) - Number(right.index)
   )).map((child, index) => ({ ...child, index }));
+  await reconcileManagedWorktreesForChildren(sorted).catch((error) => {
+    console.warn('Unable to reconcile managed worktrees:', error);
+  });
+  return sorted;
 }
 
 async function subagentTranscript(parentId, childKeyValue, options = {}) {
@@ -358,6 +371,7 @@ async function deleteSubagentChild(parentId, childKeyValue) {
   const childConversation = await openChildConversation(conversationId, runtime);
   if (!childConversation) throw new Error('子智能体会话不存在');
   await childConversation.abort(runtime.context, { background: true });
+  // Purging waits for all owned tasks to settle before removing worktrees.
   const removed = await purgeConversationData([conversationId]);
 
   await parent.commit(async (tx) => {
@@ -392,10 +406,45 @@ async function deleteSubagentChild(parentId, childKeyValue) {
   };
 }
 
+async function replySubagentSupervisor(parentId, childKeyValue, requestId, messageValue) {
+  const message = typeof messageValue === 'string' ? messageValue.trim() : '';
+  if (!message || message.length > 16_000) throw new Error('监督回复不能为空，且不能超过 16000 个字符');
+  if (typeof requestId !== 'string' || !requestId) throw new Error('监督请求标识无效');
+  const parent = await getConversationHandle(parentId);
+  if (!parent) throw new Error('父会话不存在');
+  const children = await listSubagentChildren(parentId);
+  const child = children.find((item) => item.key === childKeyValue);
+  if (!child) throw new Error('子智能体不属于当前会话');
+  const conversationId = Number(childKeyValue.slice('conversation:'.length));
+  if (!Number.isSafeInteger(conversationId) || conversationId <= 0) throw new Error('子智能体标识无效');
+  const runtime = await getDurableRuntime();
+  const agent = await parent.agent(runtime.context);
+  const project = getSubagentConfig('project', agent?.cwd || '');
+  const user = getSubagentConfig('user');
+  const maximum = Math.max(1, Math.min(16, Number(project?.maxConcurrent || user?.maxConcurrent || 4)));
+  const reporter = await parent.commit((tx) => queueSupervisorReply({
+    tx,
+    durable: runtime.durable,
+    parentConversationId: parent.id,
+    replyTo: requestId,
+    message,
+    now: Date.now(),
+    maximum,
+    childConversationId: conversationId,
+  }), runtime.context);
+  return {
+    ok: true,
+    requestId,
+    childKey: child.key,
+    reporterTaskId: String(reporter.taskId),
+  };
+}
+
 module.exports = {
   deleteSubagentChild,
   listSubagentChildren,
   openChildConversation,
+  replySubagentSupervisor,
   resolveSubagentStatus,
   subagentTranscript,
 };

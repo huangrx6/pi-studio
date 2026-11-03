@@ -70,6 +70,13 @@ function xml(value) {
     .replace(/'/g, '&apos;');
 }
 
+function skillPromptTokens(name, description, location) {
+  return Math.max(1, Math.ceil(Buffer.byteLength(
+    `<skill><name>${name}</name><description>${description}</description><location>${location}</location></skill>`,
+    'utf8',
+  ) / 4));
+}
+
 /**
  * Parse frontmatter with the same YAML implementation Pi uses. Invalid YAML
  * must fail the skill instead of producing a partially parsed instruction file.
@@ -228,12 +235,13 @@ function directoryStatSignature(root) {
   return hash.digest('hex');
 }
 
-function hashDirectoryFingerprint(root) {
+function hashDirectoryDetails(root) {
   const absoluteRoot = path.resolve(root);
   const realRoot = fs.realpathSync(absoluteRoot);
   const hash = crypto.createHash('sha256');
   let entries = 0;
   let totalBytes = 0;
+  let fileCount = 0;
   const activeDirectories = new Set();
   const visitedDirectories = new Set();
 
@@ -267,6 +275,7 @@ function hashDirectoryFingerprint(root) {
       if (totalBytes > MAX_FINGERPRINT_TOTAL_BYTES) {
         throw new Error(`技能目录总大小超过 ${MAX_FINGERPRINT_TOTAL_BYTES} 字节`);
       }
+      fileCount += 1;
       hash.update('file\0');
       const descriptor = fs.openSync(file, 'r');
       const buffer = Buffer.allocUnsafe(1024 * 1024);
@@ -320,7 +329,13 @@ function hashDirectoryFingerprint(root) {
   }
 
   visit(absoluteRoot, absoluteRoot, 0);
-  return hash.digest('hex');
+  return {
+    contentHash: hash.digest('hex'),
+    fileCount,
+    resourceCount: Math.max(0, fileCount - 1),
+    entryCount: entries,
+    totalBytes,
+  };
 }
 
 /**
@@ -329,18 +344,22 @@ function hashDirectoryFingerprint(root) {
  * any normal file, directory, permission, timestamp, or symlink change falls
  * back to a full content hash.
  */
-function directoryFingerprint(root) {
+function directoryDetails(root) {
   const realRoot = fs.realpathSync(path.resolve(root));
   const signature = directoryStatSignature(realRoot);
   const cached = fingerprintCache.get(realRoot);
-  if (cached?.signature === signature) return cached.contentHash;
-  const contentHash = hashDirectoryFingerprint(realRoot);
+  if (cached?.signature === signature) return cached;
+  const details = hashDirectoryDetails(realRoot);
   fingerprintCache.delete(realRoot);
-  fingerprintCache.set(realRoot, { signature, contentHash });
+  fingerprintCache.set(realRoot, { signature, ...details });
   while (fingerprintCache.size > MAX_FINGERPRINT_CACHE_ENTRIES) {
     fingerprintCache.delete(fingerprintCache.keys().next().value);
   }
-  return contentHash;
+  return details;
+}
+
+function directoryFingerprint(root) {
+  return directoryDetails(root).contentHash;
 }
 
 function trustForProjectSkill(cwd, baseDir, fingerprint) {
@@ -375,9 +394,17 @@ function skillFromFile(filePath, scope, cwd, origin, fingerprint) {
     baseDir,
   });
   if (!description) throw new Error('SKILL.md frontmatter 缺少 description');
+  const details = directoryDetails(baseDir);
   const projectFingerprint = scope === 'project'
-    ? fingerprint || directoryFingerprint(baseDir)
+    ? fingerprint || details.contentHash
     : '';
+  const metadata = parsed.fields.metadata && typeof parsed.fields.metadata === 'object'
+    ? parsed.fields.metadata
+    : {};
+  const rawVersion = metadata.version ?? parsed.fields.version;
+  const version = typeof rawVersion === 'string' && rawVersion.trim()
+    ? rawVersion.trim().slice(0, 120)
+    : '0.0.0';
   const trust = scope === 'user'
     ? { trusted: true, changed: false }
     : trustForProjectSkill(cwd, baseDir, projectFingerprint);
@@ -389,11 +416,15 @@ function skillFromFile(filePath, scope, cwd, origin, fingerprint) {
     scope,
     origin,
     bytes: stat.size,
+    version,
     fingerprint: projectFingerprint,
     trusted: trust.trusted,
     trustChanged: trust.changed,
     available: scope === 'user' || trust.trusted,
     disableModelInvocation: parsed.fields['disable-model-invocation'] === true,
+    promptTokens: skillPromptTokens(name, description, filePath),
+    resourceCount: details.resourceCount,
+    totalBytes: details.totalBytes,
     warnings,
   };
 }
@@ -472,6 +503,25 @@ function discoverRoot(root, scope, cwd, output, safetyRoot, origin) {
   }
 
   visit(root, 0);
+}
+
+function inspectSkillDirectory(root) {
+  const output = { candidates: [], diagnostics: [] };
+  const source = path.resolve(String(root || ''));
+  if (!fs.existsSync(source) || !fs.statSync(source).isDirectory()) {
+    throw new Error('技能源目录不存在');
+  }
+  discoverRoot(source, 'user', '', output, '', 'source');
+  return output;
+}
+
+function inspectSingleSkillDirectory(root) {
+  const source = path.resolve(String(root || ''));
+  const file = path.join(source, SKILL_FILE);
+  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
+    throw new Error('技能目录必须直接包含 SKILL.md');
+  }
+  return skillFromFile(file, 'user', '', 'source');
 }
 
 function discoverSkills(cwd) {
@@ -723,6 +773,7 @@ function removeSkill(skillFile, cwd) {
   if (stat.isSymbolicLink()) throw new Error('不能删除符号链接形式的技能');
   if (!fs.existsSync(resolved)) throw new Error('技能不存在');
   fs.rmSync(skillDirectory, { recursive: true, force: true });
+  getStudioDatabase().removeSkillInstallation(skillDirectory);
   if (
     cwd
     && projectSkillRoots(cwd).some((root) => containedBy(root, skillDirectory))
@@ -737,10 +788,13 @@ function removeSkill(skillFile, cwd) {
 
 module.exports = {
   composerSkills,
+  directoryDetails,
   directoryFingerprint,
   discoverSkills,
   expandSkillCommand,
   importSkill,
+  inspectSingleSkillDirectory,
+  inspectSkillDirectory,
   parseFrontmatter,
   projectSkillRoots,
   projectSkillsDirectory,

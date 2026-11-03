@@ -15,72 +15,11 @@ const {
   splitModelRef,
 } = require('./models.cjs');
 const { getDurableRuntime } = require('./durable-runtime.cjs');
+const durableView = require('./durable-view.cjs');
 
 const chats = new Map();
 let memoryRuntime;
 let memoryOpening;
-
-function cloneJson(value) {
-  return value === undefined ? undefined : structuredClone(value);
-}
-
-function appendAtPath(value, segments, delta) {
-  if (segments.length === 0 || typeof value !== 'object' || value === null) return value;
-  let current = value;
-  for (let index = 0; index < segments.length - 1; index += 1) {
-    const segment = segments[index];
-    if (current[segment] === undefined) {
-      current[segment] = typeof segments[index + 1] === 'number' ? [] : {};
-    }
-    current = current[segment];
-  }
-  const last = segments.at(-1);
-  current[last] = `${current[last] || ''}${delta}`;
-  return value;
-}
-
-function applyMessageChanges(message, changes) {
-  const next = {
-    ...message,
-    content: Array.isArray(message.content) ? cloneJson(message.content) : [],
-  };
-  for (const change of changes || []) {
-    if (
-      change.type === 'text_start'
-      || change.type === 'thinking_start'
-      || change.type === 'toolcall_start'
-      || change.type === 'block'
-    ) {
-      next.content[change.contentIndex] = cloneJson(change.block);
-      continue;
-    }
-    if (change.type === 'text_delta' || change.type === 'thinking_delta') {
-      const key = change.type === 'thinking_delta' ? 'thinking' : 'text';
-      const current = next.content[change.contentIndex] || { type: key, [key]: '' };
-      next.content[change.contentIndex] = {
-        ...current,
-        [key]: `${current[key] || ''}${change.delta}`,
-      };
-      continue;
-    }
-    if (change.type === 'toolcall_delta') {
-      const current = cloneJson(next.content[change.contentIndex] || {
-        type: 'toolCall',
-        arguments: {},
-      });
-      next.content[change.contentIndex] = appendAtPath(
-        current,
-        ['arguments', ...change.path],
-        change.delta,
-      );
-      continue;
-    }
-    if (change.type === 'message') {
-      next.content = cloneJson(change.message.content);
-    }
-  }
-  return next;
-}
 
 async function openMemoryRuntime() {
   if (memoryRuntime) return memoryRuntime;
@@ -237,47 +176,43 @@ async function temporaryPrompt(owner, payload, send) {
         ].join('\n'),
       },
     }, runtime.context);
-    const stream = await runtime.durable.watchEvents(
-      runtime.harness,
-      conversation.id,
-      runtime.context,
-    );
+    // 1.5.0：watchEvents() 已移除，临时聊天同样走会话视图 watch。
+    const watch = await conversation.watch(runtime.context);
+    const initial = durableView.liveFromView(watch.value);
     entry = {
       busy: false,
       cancelled: false,
       conversation,
       hadImages: false,
-      partial: undefined,
-      stream,
+      partial: initial.generation?.message,
+      live: initial,
+      entryIds: durableView.seedEntryIds(watch.value.entries),
+      stream: watch,
     };
     chats.set(key, entry);
-    stream.start(async (events) => {
-      for (const event of events) {
-        if (event.type === 'message_start' && event.message?.role === 'assistant') {
-          entry.partial = cloneJson(event.message);
-          continue;
-        }
-        if (event.type === 'message_update') {
-          entry.partial = applyMessageChanges(entry.partial || {
-            role: 'assistant',
-            content: [],
-            timestamp: Date.now(),
-            stopReason: 'pending',
-          }, event.changes);
-          const message = assistantMessage({ ...entry.partial, usage: event.usage });
-          if (message) send({ type: 'message', message: { ...message, streaming: true } });
-          continue;
-        }
-        if (event.type === 'message_end') {
-          const message = assistantMessage(event.entry?.model?.[0]);
-          entry.partial = undefined;
-          if (message) send({ type: 'message', message });
-          continue;
-        }
-        if (event.type === 'task_failed') {
-          send({ type: 'error', message: event.message });
-        }
+    watch.start(async (call) => {
+      // Durable 的失败会直接结束 watch，因此只有 value 调用会到达这里。
+      if (call.kind !== 'value') return;
+      const live = durableView.liveFromView(call.value);
+      for (const record of durableView.appendedEntries(entry.entryIds, call.value.entries)) {
+        const message = assistantMessage(record.model?.[0]);
+        if (!message) continue;
+        entry.partial = undefined;
+        send({ type: 'message', message });
       }
+      const streamed = live.generation?.message;
+      if (streamed && streamed !== entry.live?.generation?.message) {
+        entry.partial = streamed;
+        const message = assistantMessage(streamed);
+        if (message) send({ type: 'message', message: { ...message, streaming: true } });
+      }
+      if (live.runFailure && live.runFailure !== entry.live?.runFailure) {
+        send({
+          type: 'error',
+          message: live.runFailure.detail || live.runFailure.reason || '临时回复未完成',
+        });
+      }
+      entry.live = live;
     });
   } else {
     await entry.conversation.configure({

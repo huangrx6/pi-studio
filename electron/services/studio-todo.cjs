@@ -6,6 +6,8 @@
  * truth for later tool calls, restarts, forks, and context compaction.
  */
 
+const toolSchema = require('./tool-schema.cjs');
+
 const TODO_DOC_KIND = 'studio.todo';
 const TODO_SCHEMA_VERSION = 1;
 const MAX_TASKS = 100;
@@ -508,8 +510,9 @@ function planText(state) {
   return `进度 ${done}/${visible.length}${lines.length ? `\n${lines.join('\n')}` : ''}`;
 }
 
-function createStudioTodoExtension(durable, piAi) {
-  const { defineDoc, defineExtension, defineTool, Type } = { ...durable, Type: piAi.Type };
+function createStudioTodoExtension(durable) {
+  const { defineDoc, defineExtension, defineTool } = durable;
+  const Type = toolSchema;
   const Todos = defineDoc({
     kind: TODO_DOC_KIND,
     version: TODO_SCHEMA_VERSION,

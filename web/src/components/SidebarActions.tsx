@@ -53,15 +53,23 @@ export function SidebarActions({ kind, id, name, pinned, archived, sessionCount,
   // 菜单打开后聚焦第一项，并监听点击外部 / 尺寸或滚动变化来关闭。
   // scroll 用捕获阶段，才能覆盖侧边栏等嵌套滚动容器；菜单是 fixed 定位，
   // 滚动后会脱离触发按钮，直接关闭比重新计算位置更稳。
+  // 只认会移动触发按钮的滚动：流式输出时正文一直在滚，那不是关闭信号。
   useEffect(() => {
     if (!position) return;
     menu.current?.querySelector<HTMLButtonElement>('button')?.focus();
     const outside = (event: PointerEvent) => { if (!menu.current?.contains(event.target as Node) && !trigger.current?.contains(event.target as Node)) setPosition(null); };
     const close = () => setPosition(null);
+    const movesTrigger = (target: EventTarget | null) => {
+      const node = trigger.current;
+      if (!node) return true;
+      if (target === document || target === window) return true;
+      return target instanceof Node && target !== node && target.contains(node);
+    };
+    const onScroll = (event: Event) => { if (movesTrigger(event.target)) setPosition(null); };
     document.addEventListener('pointerdown', outside);
     window.addEventListener('resize', close);
-    window.addEventListener('scroll', close, true);
-    return () => { document.removeEventListener('pointerdown', outside); window.removeEventListener('resize', close); window.removeEventListener('scroll', close, true); };
+    window.addEventListener('scroll', onScroll, true);
+    return () => { document.removeEventListener('pointerdown', outside); window.removeEventListener('resize', close); window.removeEventListener('scroll', onScroll, true); };
   }, [position]);
 
   /**

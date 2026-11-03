@@ -20,11 +20,13 @@ const {
   getRuntimePolicy,
 } = require('../core/app-settings.cjs');
 const { getStudioModelsRuntime } = require('../core/studio-models.cjs');
+const durableView = require('./durable-view.cjs');
 const {
   getDurableRuntime,
   latestEntry,
   reconcileRuntimeForWorkspace,
 } = require('./durable-runtime.cjs');
+const { guardSensitiveInput } = require('./sensitive-input-guard.cjs');
 const {
   concreteThinkingLevel,
   enabledRuntimeModel,
@@ -72,6 +74,9 @@ const {
   validateLongTaskGoal,
 } = require('./studio-long-task.cjs');
 const { onRequestTrace } = require('./studio-request-trace.cjs');
+const {
+  discardManagedWorktreesForConversations,
+} = require('./managed-worktrees.cjs');
 
 const DEFAULT_PAGE_SIZE = 80;
 const MAX_PAGE_SIZE = 2_000;
@@ -80,7 +85,8 @@ const MAX_OUTLINE_ITEMS = 10_000;
 const MAX_OUTLINE_TEXT = 2_000;
 const MAX_TRACKED_CONVERSATION_COUNTS = 2_000;
 const BUSY_POLICIES = new Set(['steer', 'followUp', 'reject']);
-const ACTIVE_TASK_STATES = new Set(['running', 'ready', 'waiting', 'sleeping']);
+// 1.5.0 起待调度态叫 `pending`（1.4.0 叫 `ready`），其余不变。
+const ACTIVE_TASK_STATES = new Set(['running', 'pending', 'waiting', 'sleeping']);
 
 const watches = new Map();
 const subscribers = new Map();
@@ -365,6 +371,21 @@ function entryIsHidden(entryId, ranges) {
   return ranges.some((range) => id >= range.from && id <= range.through);
 }
 
+/**
+ * 一次历史扫描的停止条件。
+ *
+ * 普通分页只按消息条数停；指定了目标 entry id 时，必须先把它收进窗口，
+ * 否则调用方会拿到一个“不含目标”的窗口而误以为已经加载到目标。entry id 与消息
+ * 条数不是同一口径（隐藏条目、摘要条目、一条 entry 多条消息），两者不能互相估算。
+ *
+ * @returns {'complete' | 'limit' | 'continue' | 'exhausted'}
+ */
+function scanStopReason({ count, messageLimit, scanLimit, hasTarget, reachedTarget, hasMoreEntries }) {
+  if (count >= scanLimit) return 'limit';
+  if (count >= messageLimit && (!hasTarget || reachedTarget)) return 'complete';
+  return hasMoreEntries ? 'continue' : 'exhausted';
+}
+
 async function scanEntries(conversation, options = {}) {
   const runtime = await getDurableRuntime();
   const editRanges = await loadEditRanges(conversation);
@@ -381,13 +402,20 @@ async function scanEntries(conversation, options = {}) {
   if (decoded && decoded.order !== order) {
     throw new Error('历史分页方向与游标不一致');
   }
+  // `untilSourceIndex` 是一个 entry id：调用方要“加载到这条提问为止”。entry id 与
+  // 消息条数不是同一口径（隐藏条目、摘要条目、一条 entry 多条消息），所以按 id 继续
+  // 扫描，而不是用条数估算；上限仍受 MAX_PAGE_SIZE 约束。
+  const untilSourceIndex = Number(options.untilSourceIndex);
+  const hasTarget = Number.isSafeInteger(untilSourceIndex) && untilSourceIndex >= 0;
+  const scanLimit = hasTarget ? MAX_PAGE_SIZE : messageLimit;
+  let reachedTarget = !hasTarget;
   let cursor = decoded?.upstream;
   let skip = Math.max(0, Number(decoded?.skip) || 0);
   let nextCursor;
   let exhausted = false;
   let count = 0;
 
-  while (count < messageLimit) {
+  while (count < scanLimit && !(count >= messageLimit && reachedTarget)) {
     const page = await conversation.entries(
       { order },
       ENTRY_SCAN_PAGE_SIZE,
@@ -409,21 +437,44 @@ async function scanEntries(conversation, options = {}) {
       const available = entryMessages.slice(skip);
       consumedInPage += skip;
       skip = 0;
-      const take = available.slice(0, Math.max(0, messageLimit - count));
+      const take = available.slice(0, Math.max(0, scanLimit - count));
       if (take.length > 0) groups.push(take);
       count += take.length;
       consumedInPage += take.length;
-      if (count >= messageLimit) break;
+      if (hasTarget && !reachedTarget
+        && take.some((message) => typeof message.sourceIndex === 'number' && message.sourceIndex <= untilSourceIndex)) {
+        reachedTarget = true;
+      }
+      if (scanStopReason({
+        count,
+        messageLimit,
+        scanLimit,
+        hasTarget,
+        reachedTarget,
+        hasMoreEntries: true,
+      }) !== 'continue') break;
     }
 
     const pageHasUnconsumedMessages = consumedInPage < pageMessages;
-    if (count >= messageLimit && (pageHasUnconsumedMessages || page.next)) {
-      nextCursor = encodeCursor({
-        version: 2,
-        order,
-        upstream: cursor,
-        skip: consumedInPage,
-      });
+    const stop = scanStopReason({
+      count,
+      messageLimit,
+      scanLimit,
+      hasTarget,
+      reachedTarget,
+      hasMoreEntries: Boolean(page.next),
+    });
+    if (stop === 'complete' || stop === 'limit') {
+      if (pageHasUnconsumedMessages || page.next) {
+        nextCursor = encodeCursor({
+          version: 2,
+          order,
+          upstream: cursor,
+          skip: consumedInPage,
+        });
+      } else {
+        exhausted = true;
+      }
       break;
     }
     if (!page.next) {
@@ -437,9 +488,11 @@ async function scanEntries(conversation, options = {}) {
   const display = order === 'ascending'
     ? groups.flat()
     : [...groups].reverse().flat();
-  const messages = display.slice(0, messageLimit);
+  const messages = display.slice(0, scanLimit);
   return {
     messages,
+    // 目标在扫描上限内仍未出现时，调用方需要知道“还没到那条”。
+    reachedTarget: reachedTarget || !hasTarget,
     hasOlder: order === 'descending' && Boolean(nextCursor) && !exhausted,
     nextCursor: order === 'descending' ? nextCursor : undefined,
   };
@@ -521,15 +574,11 @@ async function conversationMessageSummary(conversation, options = {}) {
 
 async function temporarySnapshot(conversation) {
   const runtime = await getDurableRuntime();
-  const stream = await runtime.durable.watchEvents(
-    runtime.harness,
-    conversation.id,
-    runtime.context,
-  );
+  const watch = await conversation.watch(runtime.context);
   try {
-    return stream.snapshot;
+    return durableView.liveFromView(watch.value);
   } finally {
-    await stream.stop().catch(() => {});
+    await watch.stop().catch(() => {});
   }
 }
 
@@ -577,6 +626,7 @@ async function conversationPage(id, options = {}) {
     order: 'descending',
     messageLimit: options.limit,
     cursor: options.cursor,
+    untilSourceIndex: options.untilSourceIndex,
   });
   const agent = await conversation.agent((await getDurableRuntime()).context);
   const key = conversationKey(row);
@@ -600,6 +650,7 @@ async function conversationPage(id, options = {}) {
     page: {
       hasOlder: page.hasOlder,
       nextCursor: page.nextCursor,
+      reachedTarget: page.reachedTarget,
     },
     messageStart: page.messages[0]?.sourceIndex ?? 0,
   });
@@ -802,6 +853,7 @@ async function submitConversation(input = {}, options = {}) {
   if (!row || !conversation) throw new Error('会话不存在');
   const runtime = await getDurableRuntime();
   const displayText = String(input.text || '').trim();
+  await guardSensitiveInput({ sessionId: row.publicId, text: displayText });
   const longTask = await prepareLongTaskSubmission({
     row,
     conversation,
@@ -1115,6 +1167,25 @@ async function configureConversation({ id, modelRef, thinkingLevel } = {}) {
     }),
     pending: runningConversations.has(conversationKey(row)),
   };
+}
+
+/**
+ * Move only the Durable agent cwd. The Studio row keeps its original workspace
+ * so isolated comparison branches remain visible under the parent project.
+ * This helper is internal to the main process and is not exposed through IPC.
+ */
+async function configureConversationAgentCwd(id, cwd) {
+  const row = await getConversationRow(id);
+  const conversation = await getConversationHandle(id);
+  if (!row || !conversation) throw new Error('会话不存在');
+  if (typeof cwd !== 'string' || !path.isAbsolute(cwd)) {
+    throw new Error('托管工作目录无效');
+  }
+  const target = fs.realpathSync(path.resolve(cwd));
+  if (!fs.statSync(target).isDirectory()) throw new Error('托管工作目录无效');
+  const runtime = await getDurableRuntime();
+  await conversation.configure({ cwd: target }, runtime.context);
+  return { ok: true, cwd: target };
 }
 
 async function setLongTaskStatus(row, conversation, status) {
@@ -1431,6 +1502,23 @@ async function forkConversation(id, entryId) {
   return conversationDto(next);
 }
 
+/**
+ * 手动压缩：摘要任务按 Durable 规则提交，空闲时立即落地，忙碌时在下一个边界写入，
+ * 因此正在运行的回合不会被打断，摘要应用后自动继续。
+ */
+async function compactConversation(id, instructions) {
+  const row = await getConversationRow(id);
+  const conversation = await getConversationHandle(id);
+  if (!row || !conversation) throw new Error('会话不存在');
+  const runtime = await getDurableRuntime();
+  const text = typeof instructions === 'string' && instructions.trim()
+    ? instructions.trim().slice(0, 2_000)
+    : undefined;
+  const taskId = await conversation.compact(text, runtime.context);
+  await refreshRuntimeState();
+  return { ok: true, taskId: String(taskId) };
+}
+
 async function stopConversationWatches(id) {
   const key = String(id);
   subscribers.delete(key);
@@ -1505,7 +1593,12 @@ async function purgeConversationData(rootIds, options = {}) {
         console.warn('[pi-studio] unable to remove conversation attachments', error);
       }
     }
-    return { ...tree, attachmentsRemoved };
+    const managed = await discardManagedWorktreesForConversations(roots, { force: true });
+    return {
+      ...tree,
+      attachmentsRemoved,
+      managedWorktreesRemoved: managed.removed,
+    };
   }
   const runtime = await getDurableRuntime();
   const conversations = (await Promise.all(tree.conversationIds.map(async (id) => (
@@ -1536,6 +1629,10 @@ async function purgeConversationData(rootIds, options = {}) {
     throw new Error(`无法停止关联任务：${first instanceof Error ? first.message : String(first)}`);
   }
   await waitForConversationTasksToSettle(tree.conversationIds, tree.taskIds);
+  const managedWorktrees = await discardManagedWorktreesForConversations(
+    tree.conversationIds,
+    { force: true },
+  );
 
   const cleanupKeys = [...new Set([
     ...tree.conversationIds.map(String),
@@ -1561,7 +1658,11 @@ async function purgeConversationData(rootIds, options = {}) {
       console.warn('[pi-studio] unable to remove conversation attachments', error);
     }
   }
-  return { ...removed, attachmentsRemoved };
+  return {
+    ...removed,
+    attachmentsRemoved,
+    managedWorktreesRemoved: managedWorktrees.removed,
+  };
 }
 
 async function conversationAction(input = {}) {
@@ -1584,6 +1685,7 @@ async function conversationAction(input = {}) {
         deletedSessions: sessions.length,
         deletedArchivedSessions: archivedCount,
         deletedSubagents: Math.max(0, removed.conversationIds.length - sessions.length),
+        deletedWorktrees: removed.managedWorktreesRemoved || 0,
       };
     }
     else throw new Error('不支持的工作区操作');
@@ -1630,6 +1732,7 @@ async function conversationAction(input = {}) {
       deletedSessions: 1,
       deletedSubagents: Math.max(0, removed.conversationIds.length - 1),
       attachmentsRemoved: removed.attachmentsRemoved,
+      deletedWorktrees: removed.managedWorktreesRemoved || 0,
     };
   } else {
     throw new Error('不支持的会话操作');
@@ -1654,77 +1757,20 @@ function serializableTaskGraph(value) {
 
 async function taskGraph(id) {
   const runtime = await getDurableRuntime();
-  const graph = await runtime.harness.taskGraph(runtime.context);
+  // 1.5.0 移除了 Harness.taskGraph()，任务图现在是序列化 watch。
+  const graph = await runtime.harness.watchTaskGraph(runtime.context);
   try {
     return {
       conversationId: String(id),
       tasks: serializableTaskGraph(graph.value),
     };
   } finally {
-    graph.dispose?.();
+    await graph.stop().catch(() => {});
   }
 }
 
 function cloneJson(value) {
   return value === undefined ? undefined : structuredClone(value);
-}
-
-function appendAtPath(value, segments, delta) {
-  if (segments.length === 0 || typeof value !== 'object' || value === null) return value;
-  let current = value;
-  for (let index = 0; index < segments.length - 1; index += 1) {
-    const segment = segments[index];
-    if (current[segment] === undefined) {
-      current[segment] = typeof segments[index + 1] === 'number' ? [] : {};
-    }
-    current = current[segment];
-  }
-  const last = segments.at(-1);
-  current[last] = `${current[last] || ''}${delta}`;
-  return value;
-}
-
-function applyMessageChanges(message, changes) {
-  const next = {
-    ...message,
-    content: Array.isArray(message.content) ? cloneJson(message.content) : [],
-  };
-  for (const change of changes || []) {
-    if (
-      change.type === 'text_start'
-      || change.type === 'thinking_start'
-      || change.type === 'toolcall_start'
-      || change.type === 'block'
-    ) {
-      next.content[change.contentIndex] = cloneJson(change.block);
-      continue;
-    }
-    if (change.type === 'text_delta' || change.type === 'thinking_delta') {
-      const key = change.type === 'thinking_delta' ? 'thinking' : 'text';
-      const current = next.content[change.contentIndex] || { type: key, [key]: '' };
-      next.content[change.contentIndex] = {
-        ...current,
-        [key]: `${current[key] || ''}${change.delta}`,
-      };
-      continue;
-    }
-    if (change.type === 'toolcall_delta') {
-      const current = cloneJson(next.content[change.contentIndex] || {
-        type: 'toolCall',
-        arguments: {},
-      });
-      next.content[change.contentIndex] = appendAtPath(
-        current,
-        ['arguments', ...change.path],
-        change.delta,
-      );
-      continue;
-    }
-    if (change.type === 'message') {
-      next.content = cloneJson(change.message.content);
-    }
-  }
-  return next;
 }
 
 async function disposeWatch(key) {
@@ -1773,260 +1819,127 @@ async function finishRunDiff(entry, conversation, emit) {
   }
 }
 
-async function handleAgentEvent(event, entry, conversation, emit) {
+/**
+ * 把一次会话视图变更翻译成 Studio 的 IPC 事件。
+ *
+ * 顺序与 1.4.0 的事件流保持一致：先发 entry（对应 `message_end` /
+ * `entry_appended`），再发运行状态（对应 `run_end`），渲染层不会看到
+ * "运行已结束、消息才追加"的错序。
+ */
+async function applyView(view, entry, conversation, emit) {
   const key = conversationKey(conversation);
-  if (event.type === 'snapshot') {
-    entry.snapshot = event;
-    entry.partial = event.generation?.message;
-    entry.running = Boolean(event.run);
-    if (entry.running) {
-      entry.runStartedAt ||= Date.now();
-      runningConversations.add(key);
-      await beginRunDiff(entry, conversation, event.run?.inputs);
-    } else {
-      await refreshRuntimeState();
-    }
-    await emit({
-      type: 'snapshot',
-      conversationId: key,
-      revision: entry.revision,
-      payload: {
-        run: event.run,
-        running: runningConversations.has(key),
-        generation: entry.partial ? partialMessage(entry.partial) : undefined,
-        tools: event.tools,
-        nestedTools: event.nestedTools,
-        compactions: event.compactions,
-        compactionFailure: event.compactionFailure,
-        inbox: event.inbox,
-        agent: event.agent,
-        usage: event.usage,
-      },
-    });
-    return;
-  }
 
-  if (event.type === 'run_start') {
-    entry.running = true;
-    entry.runStartedAt ||= Date.now();
-    entry.snapshot = { ...entry.snapshot, run: { inputs: event.inputs } };
-    entry.longTaskContinuations = 0;
-    entry.longTaskStalledContinuations = 0;
-    entry.longTaskGuardTriggered = false;
-    runningConversations.add(key);
-    await beginRunDiff(entry, conversation, event.inputs);
-    await emit({
-      type: 'run.started',
-      conversationId: key,
-      revision: entry.revision,
-      payload: { inputs: event.inputs, running: true },
-    });
-    return;
-  }
-
-  if (event.type === 'run_end') {
-    const endedAt = Date.now();
-    const lastDurationMs = entry.runStartedAt === undefined
-      ? undefined
-      : Math.max(0, endedAt - entry.runStartedAt);
-    entry.running = false;
-    entry.runStartedAt = undefined;
-    entry.snapshot = {
-      ...entry.snapshot,
-      run: undefined,
-      generation: undefined,
-      tools: [],
-      nestedTools: [],
-    };
-    await refreshRuntimeState();
-    const running = runningConversations.has(key);
-    await finishRunDiff(entry, conversation, emit);
-    getStudioDatabase().updateConversation(key, {
-      updatedAt: endedAt,
-      ...(lastDurationMs === undefined ? {} : { lastDurationMs }),
-    });
-    await emit({
-      type: 'run.completed',
-      conversationId: key,
-      revision: entry.revision,
-      payload: { inputs: event.inputs, running },
-    });
-    return;
-  }
-
-  if (event.type === 'message_start') {
-    if (event.message.role === 'assistant') entry.partial = cloneJson(event.message);
-    return;
-  }
-
-  if (event.type === 'message_update') {
-    entry.partial = applyMessageChanges(entry.partial || {
-      role: 'assistant',
-      content: [],
-      timestamp: Date.now(),
-      stopReason: 'pending',
-    }, event.changes);
-    const message = partialMessage({ ...entry.partial, usage: event.usage });
-    if (message) {
-      await emit({
-        type: 'assistant.updated',
-        conversationId: key,
-        revision: entry.revision,
-        payload: { message: { ...message, streaming: true, sourceIndex: undefined } },
-      });
-    }
-    return;
-  }
-
-  if (event.type === 'message_end') {
-    const message = entryToMessages(event.entry)[0];
-    entry.partial = undefined;
-    if (message) {
-      await emit({
-        type: 'assistant.completed',
-        conversationId: key,
-        revision: entry.revision,
-        payload: { message },
-      });
-    }
-    return;
-  }
-
-  if (
-    event.type === 'tool_execution_start'
-    || event.type === 'tool_execution_update'
-    || event.type === 'tool_execution_end'
-  ) {
-    await emit({
-      type: event.type.replaceAll('_', '.'),
-      conversationId: key,
-      revision: entry.revision,
-      payload: event,
-    });
-    if (event.type === 'tool_execution_end' && event.entry) {
-      const messages = entryToMessages(event.entry);
-      if (messages.length > 0) {
-        await emit({
-          type: 'transcript.appended',
-          conversationId: key,
-          revision: entry.revision,
-          payload: { messages },
-        });
-      }
-    }
-    return;
-  }
-
-  if (event.type === 'inbox_update') {
-    await emit({
-      type: 'inbox.updated',
-      conversationId: key,
-      revision: entry.revision,
-      payload: { items: event.items },
-    });
-    return;
-  }
-
-  if (event.type === 'submission') {
-    await emit({
-      type: 'submission.updated',
-      conversationId: key,
-      revision: entry.revision,
-      payload: { record: event.record },
-    });
-    return;
-  }
-
-  if (event.type === 'agent_changed') {
-    await emit({
-      type: 'agent.updated',
-      conversationId: key,
-      revision: entry.revision,
-      payload: { agent: event.agent },
-    });
-    return;
-  }
-
-  if (event.type === 'usage_changed') {
-    await emit({
-      type: 'usage.updated',
-      conversationId: key,
-      revision: entry.revision,
-      payload: { usage: event.usage },
-    });
-    return;
-  }
-
-  if (event.type === 'entry_appended') {
-    const messages = entryToMessages(event.entry);
+  for (const record of durableView.appendedEntries(entry.entryIds, view.entries)) {
+    const messages = entryToMessages(record);
+    if (messages.length === 0) continue;
     if (messages.some((message) => (
       message.role === 'user' && isLongTaskContinuation(message.content)
     ))) {
       await guardLongTaskContinuation(entry, conversation);
     }
-    if (messages.length > 0) {
+    const assistant = messages.find((message) => message.role === 'assistant');
+    if (assistant) {
+      // 对应 1.4.0 的 `message_end`：流式消息落定成正式消息。
+      entry.partial = undefined;
       await emit({
-        type: 'transcript.appended',
+        type: 'assistant.completed',
         conversationId: key,
         revision: entry.revision,
-        payload: { messages },
+        payload: { message: assistant },
       });
+      continue;
     }
-    return;
-  }
-
-  if (event.type === 'auto_retry_start') {
     await emit({
-      type: 'retry.updated',
+      type: 'transcript.appended',
       conversationId: key,
       revision: entry.revision,
-      payload: {
-        active: true,
-        attempt: event.attempt,
-        at: event.at,
-        errorMessage: event.errorMessage,
-      },
+      payload: { messages },
     });
-    return;
   }
 
-  if (event.type === 'auto_retry_end') {
-    await emit({
-      type: 'retry.updated',
-      conversationId: key,
-      revision: entry.revision,
-      payload: { active: false, attempt: event.attempt },
-    });
-    return;
-  }
+  const previous = entry.snapshot;
+  const next = durableView.liveFromView(view);
+  entry.snapshot = next;
+  if (next.generation?.message) entry.partial = next.generation.message;
 
-  if (event.type === 'compaction_start' || event.type === 'compaction_end') {
-    await emit({
-      type: event.type.replaceAll('_', '.'),
-      conversationId: key,
-      revision: entry.revision,
-      payload: event,
-    });
-    return;
-  }
+  for (const change of durableView.diffLive(previous, next)) {
+    if (change.type === 'run.started') {
+      entry.running = true;
+      entry.runStartedAt ||= Date.now();
+      entry.longTaskContinuations = 0;
+      entry.longTaskStalledContinuations = 0;
+      entry.longTaskGuardTriggered = false;
+      runningConversations.add(key);
+      await beginRunDiff(entry, conversation, change.payload.inputs);
+      await emit({
+        type: 'run.started',
+        conversationId: key,
+        revision: entry.revision,
+        payload: { inputs: change.payload.inputs, running: true },
+      });
+      continue;
+    }
 
-  if (event.type === 'task_failed') {
-    entry.running = false;
-    await refreshRuntimeState();
-    getStudioDatabase().updateConversation(key, {
-      lastError: event.message,
-      updatedAt: Date.now(),
-    });
+    if (change.type === 'run.completed') {
+      const endedAt = Date.now();
+      const lastDurationMs = entry.runStartedAt === undefined
+        ? undefined
+        : Math.max(0, endedAt - entry.runStartedAt);
+      entry.running = false;
+      entry.runStartedAt = undefined;
+      entry.partial = undefined;
+      await refreshRuntimeState();
+      await finishRunDiff(entry, conversation, emit);
+      getStudioDatabase().updateConversation(key, {
+        updatedAt: endedAt,
+        ...(lastDurationMs === undefined ? {} : { lastDurationMs }),
+      });
+      await emit({
+        type: 'run.completed',
+        conversationId: key,
+        revision: entry.revision,
+        payload: {
+          inputs: change.payload.inputs,
+          running: runningConversations.has(key),
+        },
+      });
+      continue;
+    }
+
+    if (change.type === 'run.failed') {
+      entry.running = false;
+      await refreshRuntimeState();
+      getStudioDatabase().updateConversation(key, {
+        lastError: change.payload.message,
+        updatedAt: Date.now(),
+      });
+      await emit({
+        type: 'run.failed',
+        conversationId: key,
+        revision: entry.revision,
+        payload: { ...change.payload, running: runningConversations.has(key) },
+      });
+      continue;
+    }
+
+    if (change.type === 'assistant.updated') {
+      const message = partialMessage(change.payload.message);
+      if (message) {
+        await emit({
+          type: 'assistant.updated',
+          conversationId: key,
+          revision: entry.revision,
+          payload: { message: { ...message, streaming: true, sourceIndex: undefined } },
+        });
+      }
+      continue;
+    }
+
     await emit({
-      type: 'run.failed',
+      type: change.type,
       conversationId: key,
       revision: entry.revision,
-      payload: {
-        taskId: String(event.taskId),
-        kind: event.kind,
-        message: event.message,
-        running: runningConversations.has(key),
-      },
+      payload: change.payload,
     });
   }
 }
@@ -2040,18 +1953,18 @@ async function ensureWatch(id, emit) {
   const conversation = await getConversationHandle(row.id);
   if (!conversation) throw new Error('会话不存在');
   const runtime = await getDurableRuntime();
-  const stream = await runtime.durable.watchEvents(
-    runtime.harness,
-    conversation.id,
-    runtime.context,
-  );
+  // 1.5.0：watchEvents() 已移除，实时状态来自会话视图的序列化 watch。
+  const watch = await conversation.watch(runtime.context);
   const initialLongTask = await longTaskDto(row);
+  const snapshot = durableView.liveFromView(watch.value);
   const entry = {
     id: key,
-    stream,
-    snapshot: stream.snapshot,
-    partial: stream.snapshot?.generation?.message,
-    running: Boolean(stream.snapshot?.run),
+    conversation,
+    stream: watch,
+    snapshot,
+    partial: snapshot.generation?.message,
+    running: Boolean(snapshot.run),
+    entryIds: durableView.seedEntryIds(watch.value.entries),
     revision: 0,
     emit,
     diffKey: undefined,
@@ -2062,15 +1975,37 @@ async function ensureWatch(id, emit) {
     longTaskStalledContinuations: 0,
     longTaskLastIteration: initialLongTask?.iteration || 0,
     longTaskGuardTriggered: false,
-    runStartedAt: stream.snapshot?.run ? Date.now() : undefined,
+    runStartedAt: snapshot.run ? Date.now() : undefined,
   };
   watches.set(key, entry);
-  if (entry.running) runningConversations.add(key);
-  stream.start(async (events) => {
+  if (entry.running) {
+    runningConversations.add(key);
+    await beginRunDiff(entry, conversation, snapshot.run?.inputs);
+  } else {
+    await refreshRuntimeState();
+  }
+  await emit({
+    type: 'snapshot',
+    conversationId: key,
+    revision: entry.revision,
+    payload: {
+      run: snapshot.run,
+      running: runningConversations.has(key),
+      generation: entry.partial ? partialMessage(entry.partial) : undefined,
+      tools: snapshot.tools,
+      nestedTools: snapshot.nestedTools,
+      compactions: snapshot.compactions,
+      compactionFailure: snapshot.compactionFailure,
+      inbox: snapshot.inbox,
+      agent: snapshot.agent,
+      usage: snapshot.usage,
+    },
+  });
+  watch.start(async (call) => {
+    // Durable 的失败会直接结束 watch，因此只有 value 调用会到达这里。
+    if (call.kind !== 'value') return;
     entry.revision += 1;
-    for (const event of events) {
-      await handleAgentEvent(event, entry, row, emit);
-    }
+    await applyView(call.value, entry, row, emit);
     if (!entry.running && entry.closeWhenIdle && !subscribers.get(key)?.size) {
       await disposeWatch(key);
     }
@@ -2178,7 +2113,10 @@ async function closeConversationWatches() {
 
 module.exports = {
   abortConversation,
+  scanStopReason,
   closeConversationWatches,
+  compactConversation,
+  configureConversationAgentCwd,
   composerResources,
   configureConversation,
   conversationMessageSummary,

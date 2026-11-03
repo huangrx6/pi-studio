@@ -11,19 +11,21 @@ import {
   GitFork,
   Layers3,
   LoaderCircle,
+  MessageCircleReply,
   MessageSquare,
   Pause,
+  RefreshCw,
+  Search,
+  Send,
   ShieldCheck,
   Sparkles,
   Terminal,
   Trash2,
-  UserRound,
-  RefreshCw,
 } from 'lucide-react';
 import type { ChatMessage } from '../types/chat-types';
 import type { ModelSelection } from '../types/model-types';
 import type { StepCollapse, StepDisplay } from '../lib/preferences';
-import type { SubagentChild, SubagentTranscript } from '../types/subagent-types';
+import type { SubagentBudgetSnapshot, SubagentChild, SubagentTranscript } from '../types/subagent-types';
 import { AssistantTurnView, ChatMessageView } from './ChatMessage';
 
 const STATUS_LABEL: Record<SubagentChild['status'], string> = {
@@ -63,10 +65,7 @@ function duration(value?: number): string {
 
 function liveDuration(child: SubagentChild, now: number): number | undefined {
   if (typeof child.durationMs === 'number') return child.durationMs;
-  if (
-    child.startedAt
-    && ['running', 'pending', 'waiting'].includes(child.status)
-  ) {
+  if (child.startedAt && ['running', 'pending', 'waiting'].includes(child.status)) {
     return Math.max(0, now - child.startedAt);
   }
   return undefined;
@@ -88,172 +87,258 @@ function contextLabel(context?: SubagentChild['context']): string {
 function statusIcon(status: SubagentChild['status']) {
   if (status === 'running' || status === 'pending') return <LoaderCircle className="spin" />;
   if (status === 'waiting') return <MessageSquare />;
-  if (status === 'failed') return <CircleX />;
+  if (status === 'failed' || status === 'stopped') return <CircleX />;
   if (status === 'paused') return <Pause />;
-  if (status === 'stopped') return <CircleX />;
   return <CheckCircle2 />;
 }
 
-function AgentMetric({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
-  return <span className="agent-card-metric">{icon}<span>{label}</span><strong>{value}</strong></span>;
+function needsAttention(status: SubagentChild['status']): boolean {
+  return status === 'waiting' || status === 'failed' || status === 'paused';
 }
 
-function ChildCard({
+function isActive(status: SubagentChild['status']): boolean {
+  return status === 'running' || status === 'pending';
+}
+
+function ChildRow({
   child,
-  number,
   now,
   onOpen,
   onDelete,
+  onReply,
   deleting,
+  replying,
 }: {
   child: SubagentChild;
-  number: number;
   now: number;
   onOpen: () => void;
   onDelete: () => void;
+  onReply: (requestId: string, message: string) => Promise<void>;
   deleting: boolean;
+  replying: boolean;
 }) {
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const request = child.supervisorRequests?.[0];
   const disabled = !child.hasTranscript;
-  return <article className={`agent-child-card is-${child.status} ${disabled ? 'is-unavailable' : ''}`}>
-    <button
-      type="button"
-      className="agent-card-open"
-      disabled={disabled}
-      title={disabled ? '这个子智能体没有可安全读取的本地会话' : `打开 ${child.agent} 的只读上下文`}
-      onClick={onOpen}
-    >
-      <span className="agent-card-index">{String(number).padStart(2, '0')}</span>
-      <div className="agent-card-head">
-        <span className="agent-card-avatar"><Bot /></span>
-        <div className="agent-card-identity">
+
+  async function sendReply() {
+    const message = replyText.trim();
+    if (!request || !message || replying) return;
+    await onReply(request.id, message);
+    setReplyText('');
+    setReplyOpen(false);
+  }
+
+  return <article className={`agent-list-row is-${child.status}${disabled ? ' is-unavailable' : ''}`}>
+    <button type="button" className="agent-list-main" disabled={disabled} onClick={onOpen}>
+      <span className={`agent-list-state is-${child.status}`}>{statusIcon(child.status)}</span>
+      <span className="agent-list-copy">
+        <span className="agent-list-title">
           <strong>{child.name || child.agent}</strong>
-          <span className="agent-card-source">
-            {child.source === 'background' ? '后台' : '前台'} · {contextLabel(child.context)}
-            {child.supervisorPending ? ` · ${child.supervisorPending} 个监督请求` : ''}
-          </span>
-        </div>
-        <span className={`agent-status is-${child.status}`}>{statusIcon(child.status)}<span>{STATUS_LABEL[child.status]}</span></span>
-      </div>
-      <p className="agent-card-task">{child.task || '没有提供任务说明。'}</p>
-      {child.currentTool && <div className="agent-card-current"><Terminal /><span>{child.currentTool}</span></div>}
-      {child.error && <div className="agent-card-error">{child.error}</div>}
-      {!child.currentTool && child.preview && <p className="agent-card-preview">{child.preview}</p>}
-      <div className="agent-card-metrics">
-        <AgentMetric icon={<Cpu />} label="模型" value={child.model || '继承'} />
-        <AgentMetric icon={<Sparkles />} label="思考" value={thinkingLabel(child.thinking)} />
-        <AgentMetric icon={<Clock3 />} label="耗时" value={duration(liveDuration(child, now))} />
-        <AgentMetric icon={<Layers3 />} label="Token 数" value={tokenCount(child.tokens)} />
-        <AgentMetric icon={<Terminal />} label="工具" value={child.toolCount ?? '—'} />
-        <AgentMetric icon={<MessageSquare />} label="轮次" value={child.turnCount ?? '—'} />
-      </div>
+          <span>{child.currentTool || STATUS_LABEL[child.status]}</span>
+        </span>
+        <span className="agent-list-task">{request?.question || child.task || '没有提供任务说明。'}</span>
+        <span className="agent-list-facts">
+          <span>{child.model || '继承模型'}</span>
+          <span>{child.isolation === 'worktree' ? '隔离工作树' : '共享工作区'}</span>
+          <span>{duration(liveDuration(child, now))}</span>
+          <span>{tokenCount(child.tokens)} tok</span>
+          {child.referenceCostUsd !== undefined && (
+            <span>${child.referenceCostUsd.toFixed(child.referenceCostUsd < 1 ? 3 : 2)}</span>
+          )}
+        </span>
+      </span>
     </button>
-    <footer className="agent-card-action">
-      <span>{disabled ? '没有可读会话' : '查看上下文'}{!disabled && <ChevronRight />}</span>
+    <div className="agent-list-actions">
+      {request && (
+        <button type="button" className="agent-list-reply" disabled={replying} onClick={() => setReplyOpen(value => !value)}>
+          <MessageCircleReply />回复
+        </button>
+      )}
       <button
         type="button"
-        className="agent-card-delete"
+        className="agent-list-delete"
         disabled={deleting}
-        title="永久删除这个子智能体及其上下文"
         aria-label={`删除子智能体${child.name || child.agent}`}
+        title="删除子智能体及其上下文"
         onClick={onDelete}
       >
         {deleting ? <LoaderCircle className="spin" /> : <Trash2 />}
-        {deleting ? '删除中' : '删除'}
       </button>
-    </footer>
+    </div>
+    {replyOpen && request && (
+      <form
+        className="agent-supervisor-reply"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void sendReply().catch(() => setReplyOpen(true));
+        }}
+      >
+        <label>
+          <span>{request.question}</span>
+          <textarea
+            autoFocus
+            rows={2}
+            maxLength={16_000}
+            value={replyText}
+            placeholder="回复子智能体…"
+            onChange={event => setReplyText(event.target.value)}
+            onKeyDown={(event) => {
+              if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                event.preventDefault();
+                void sendReply().catch(() => setReplyOpen(true));
+              }
+            }}
+          />
+        </label>
+        <button type="submit" className="primary-button" disabled={!replyText.trim() || replying}>
+          {replying ? <LoaderCircle className="spin" /> : <Send />}发送
+        </button>
+      </form>
+    )}
   </article>;
 }
 
 export function SubagentOverview({
   children,
+  budget,
   selection,
   refreshing,
   onRefresh,
   onOpenChild,
   onDeleteChild,
+  onReplyChild,
   deletingChildKey,
+  replyingChildKey,
   onReturnMain,
 }: {
   children: SubagentChild[];
+  budget?: SubagentBudgetSnapshot | null;
   selection: ModelSelection;
   refreshing: boolean;
   onRefresh: () => void;
   onOpenChild: (child: SubagentChild) => void;
   onDeleteChild: (child: SubagentChild) => void;
+  onReplyChild: (child: SubagentChild, requestId: string, message: string) => Promise<void>;
   deletingChildKey?: string;
+  replyingChildKey?: string;
   onReturnMain: () => void;
 }) {
   const [now, setNow] = useState(Date.now());
-  const active = children.filter((child) => (
-    child.status === 'running' || child.status === 'pending' || child.status === 'waiting'
-  )).length;
-  const complete = children.filter((child) => child.status === 'completed').length;
-  const failed = children.filter((child) => child.status === 'failed').length;
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<'all' | 'attention' | 'active'>('all');
+  const active = children.filter(child => isActive(child.status)).length;
+  const complete = children.filter(child => child.status === 'completed').length;
+  const failed = children.filter(child => child.status === 'failed').length;
+  const attention = children.filter(child => needsAttention(child.status)).length;
   const totalTokens = children.reduce((sum, child) => sum + (child.tokens || 0), 0);
-  const totalTools = children.reduce((sum, child) => sum + (child.toolCount || 0), 0);
-  const totalDuration = children.reduce((sum, child) => sum + (liveDuration(child, now) || 0), 0);
+  const totalCost = children.reduce((sum, child) => sum + (child.referenceCostUsd || 0), 0);
+  const normalizedQuery = query.toLocaleLowerCase().trim();
+  const visible = children.filter((child) => {
+    if (filter === 'attention' && !needsAttention(child.status)) return false;
+    if (filter === 'active' && !isActive(child.status)) return false;
+    return !normalizedQuery || (
+      [child.name, child.agent, child.task, child.preview, child.model]
+        .join(' ')
+        .toLocaleLowerCase()
+        .includes(normalizedQuery)
+    );
+  });
+  const sections = [
+    { id: 'attention', label: '需要处理', children: visible.filter(child => needsAttention(child.status)) },
+    { id: 'active', label: '运行中', children: visible.filter(child => isActive(child.status)) },
+    { id: 'done', label: '已结束', children: visible.filter(child => child.status === 'completed' || child.status === 'stopped') },
+  ];
 
   useEffect(() => {
-    if (active === 0 && !children.some((child) => ['running', 'pending', 'waiting'].includes(child.status))) return;
+    if (active === 0) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(timer);
-  }, [active, children]);
+  }, [active]);
 
   return <div className="agent-overview">
     <header className="agent-overview-head">
       <div>
-        <span className="agent-overview-eyebrow">多智能体协作</span>
-        <h2>子智能体总览</h2>
-        <p>同一父会话里的子智能体会集中显示。打开会话会替换当前内容区，顶部“对话”标签和“返回主智能体”都能回到原位置。</p>
+        <h2>子智能体</h2>
+        <p>{active} 个运行中 · {complete} 个已完成{failed ? ` · ${failed} 个失败` : ''}</p>
       </div>
       <div className="agent-overview-actions">
         {active > 0 && <span className="agent-live-indicator"><i />实时更新</span>}
         <button type="button" className="agent-refresh" disabled={refreshing} onClick={onRefresh}>
-          <RefreshCw className={refreshing ? 'spin' : undefined} />
-          刷新
+          <RefreshCw className={refreshing ? 'spin' : undefined} /><span>刷新</span>
         </button>
       </div>
     </header>
 
-    <div className="agent-fleet-strip" aria-label="子智能体聚合状态">
-      <span className="is-active"><small>运行中</small><strong>{active}</strong></span>
-      <span><small>已完成</small><strong>{complete}</strong></span>
+    <div className={`agent-fleet-strip${totalCost > 0 || budget?.budgetCostUsd ? ' has-cost' : ''}`} aria-label="子智能体聚合状态">
+      <span className="is-active"><small>运行</small><strong>{active}</strong></span>
+      <span><small>完成</small><strong>{complete}</strong></span>
       <span className={failed ? 'is-error' : ''}><small>失败</small><strong>{failed}</strong></span>
-      <span><small>累计 Token</small><strong>{tokenCount(totalTokens)}</strong></span>
-      <span><small>工具调用</small><strong>{totalTools}</strong></span>
-      <span><small>累计耗时</small><strong>{duration(totalDuration)}</strong></span>
+      <span className={budget?.exceeded ? 'is-error' : ''}>
+        <small>Token</small>
+        <strong>{tokenCount(totalTokens)}{budget?.budgetTokens ? ` / ${tokenCount(budget.budgetTokens)}` : ''}</strong>
+      </span>
+      {(totalCost > 0 || Boolean(budget?.budgetCostUsd)) && <span className={budget?.exceeded ? 'is-error' : ''}>
+        <small>参考成本</small>
+        <strong>
+          ${totalCost.toFixed(totalCost < 1 ? 3 : 2)}
+          {budget?.budgetCostUsd ? ` / $${budget.budgetCostUsd.toFixed(2)}` : ''}
+        </strong>
+      </span>}
     </div>
+    {budget?.exceeded && (
+      <div className="agent-budget-alert">
+        <CircleX />
+        <span>
+          子智能体预算已用尽。
+          {budget.budgetAction === 'stop'
+            ? '新的子智能体请求会被阻止，可在设置中提高预算。'
+            : '当前仅提醒，新的子智能体请求仍可运行。'}
+        </span>
+      </div>
+    )}
 
-    <button type="button" className="agent-main-card" onClick={onReturnMain}>
-      <span className="agent-main-orb">π</span>
-      <div>
-        <span className="agent-card-source"><UserRound />父智能体· 主对话</span>
-        <strong>主智能体</strong>
-        <p>返回你正在进行的对话。父智能体负责拆分任务、等待子智能体，并汇总最终结果。</p>
-        <span className="agent-main-return"><ArrowLeft />返回主对话</span>
-      </div>
-      <div className="agent-main-meta">
-        <AgentMetric icon={<Cpu />} label="模型" value={selection.label || selection.modelRef || '—'} />
-        <AgentMetric icon={<Sparkles />} label="思考" value={thinkingLabel(selection.effectiveThinkingLevel)} />
-      </div>
+    <button type="button" className="agent-main-return" onClick={onReturnMain}>
+      <ArrowLeft />返回主对话<span>{selection.label || selection.modelRef}</span>
     </button>
 
-    {children.length > 0
-      ? <section className="agent-child-grid" aria-label="子智能体列表">
-        {children.map((child, index) => <ChildCard
-          key={child.key}
-          child={child}
-          number={index + 1}
-          now={now}
-          onOpen={() => onOpenChild(child)}
-          onDelete={() => onDeleteChild(child)}
-          deleting={deletingChildKey === child.key}
-        />)}
+    <div className="agent-list-tools">
+      <div className="agent-list-search">
+        <Search />
+        <input value={query} placeholder="搜索子智能体" aria-label="搜索子智能体" onChange={event => setQuery(event.target.value)} />
+      </div>
+      <div className="agent-list-filters" role="group" aria-label="筛选子智能体">
+        <button type="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>全部 {children.length}</button>
+        <button type="button" aria-pressed={filter === 'attention'} onClick={() => setFilter('attention')}>需处理 {attention}</button>
+        <button type="button" aria-pressed={filter === 'active'} onClick={() => setFilter('active')}>运行中 {active}</button>
+      </div>
+    </div>
+
+    {visible.length > 0
+      ? <section className="agent-list" aria-label="子智能体列表">
+        {sections.filter(section => section.children.length > 0).map(section => (
+          <div className="agent-list-section" key={section.id}>
+            <h3>{section.label}</h3>
+            {section.children.map(child => (
+              <ChildRow
+                key={child.key}
+                child={child}
+                now={now}
+                onOpen={() => onOpenChild(child)}
+                onDelete={() => onDeleteChild(child)}
+                onReply={(requestId, message) => onReplyChild(child, requestId, message)}
+                deleting={deletingChildKey === child.key}
+                replying={replyingChildKey === child.key}
+              />
+            ))}
+          </div>
+        ))}
       </section>
       : <div className="agent-overview-empty">
         <GitFork />
-        <strong>这次对话还没有子智能体</strong>
-        <span>父智能体调用 subagent 工具后，运行记录会自动出现在这里。</span>
+        <strong>{children.length ? '没有匹配的子智能体' : '这次对话还没有子智能体'}</strong>
+        <span>{children.length ? '调整筛选条件或搜索词。' : '父智能体调用 subagent 工具后，运行记录会自动出现在这里。'}</span>
       </div>}
   </div>;
 }
@@ -299,19 +384,22 @@ export function SubagentTranscriptView({
   const turns = transcriptTurns(transcript?.messages || []);
   const results = new Map(
     (transcript?.messages || [])
-      .filter((message) => message.role === 'toolResult' && message.toolCallId)
-      .map((message) => [message.toolCallId as string, message]),
+      .filter(message => message.role === 'toolResult' && message.toolCallId)
+      .map(message => [message.toolCallId as string, message]),
   );
   const busy = child.status === 'running' || child.status === 'pending';
+
   return <div className="agent-context-view">
     <div className="agent-context-toolbar">
-      <button type="button" className="agent-back-main" onClick={onBackMain}><ArrowLeft />返回主智能体</button>
-      <nav className="agent-context-breadcrumb" aria-label="Agent 上下文路径">
-        <button type="button" onClick={onOverview}>所有子智能体</button>
-        <ChevronRight />
-        <span>{child.name || child.agent} · {child.index + 1}</span>
-      </nav>
-      <button type="button" className="agent-context-overview" onClick={onOverview}><GitFork />总览</button>
+      <div className="agent-context-toolbar-inner">
+        <button type="button" className="agent-context-overview" onClick={onOverview}><ArrowLeft />返回列表</button>
+        <nav className="agent-context-breadcrumb" aria-label="Agent 上下文路径">
+          <span>子智能体</span>
+          <ChevronRight />
+          <strong>{child.name || child.agent} · {child.index + 1}</strong>
+        </nav>
+        <button type="button" className="agent-back-main" onClick={onBackMain}><MessageSquare />返回主智能体</button>
+      </div>
     </div>
 
     <div className="agent-context-scroll">
@@ -319,7 +407,7 @@ export function SubagentTranscriptView({
         <header className="agent-context-head">
           <span className="agent-context-avatar"><Bot /></span>
           <div>
-            <span className="agent-overview-eyebrow">子 AGENT 会话</span>
+            <span className="agent-overview-eyebrow">只读子会话</span>
             <h2>{child.name || child.agent}</h2>
             <p>{child.task || '这份子智能体会话没有可显示的任务说明。'}</p>
           </div>

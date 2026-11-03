@@ -63,9 +63,14 @@ await page.addInitScript(() => {
   window.__savedPastes = [];
   window.__openedFiles = [];
 
-  const historyPayload = (limit, cursor) => {
+  const historyPayload = (limit, cursor, untilSourceIndex) => {
     const end = cursor ? Number(cursor.replace('cursor-', '')) : totalMessages;
-    const start = Math.max(0, end - limit);
+    let start = Math.max(0, end - limit);
+    // 大纲跳转按 entry id（这里的 sourceIndex）连续加载到目标为止。
+    if (typeof untilSourceIndex === 'number') {
+      const target = allMessages.findIndex(message => message.sourceIndex === untilSourceIndex);
+      if (target >= 0) start = Math.min(start, target);
+    }
     return {
       ...sessionSummary,
       model,
@@ -103,10 +108,14 @@ await page.addInitScript(() => {
     composerResources: async () => ({ commands: [], skills: [] }),
     extensionsUi: async () => ({ items: [], errors: [], syncedAt: Date.now(), apiVersion: 1 }),
     modeGet: async () => ({ available: false, mode: 'smart' }),
-    conversationPage: async ({ limit = 200, cursor } = {}) => {
-      window.__historyCalls.push({ limit, cursor });
-      const payload = historyPayload(limit, cursor);
-      if (!cursor && limit <= 200) return payload;
+    conversationPage: async ({ limit = 200, cursor, untilSourceIndex } = {}) => {
+      window.__historyCalls.push({
+        limit,
+        cursor,
+        ...(untilSourceIndex === undefined ? {} : { untilSourceIndex }),
+      });
+      const payload = historyPayload(limit, cursor, untilSourceIndex);
+      if (!cursor && limit <= 200 && untilSourceIndex === undefined) return payload;
       return new Promise(resolve => {
         window.__resolveHistory = () => resolve(payload);
       });
@@ -216,7 +225,11 @@ try {
   assert.equal(await page.locator('.outline-tick').last().getAttribute('aria-label'), '跳转到第 225 条提问');
   await page.locator('.outline-tick').first().click();
   await page.waitForFunction(() => window.__historyCalls.length === 2);
-  assert.equal(await page.evaluate(() => window.__historyCalls.at(-1).limit), 450, 'jump should load from the target question');
+  assert.equal(
+    await page.evaluate(() => window.__historyCalls.at(-1).untilSourceIndex),
+    0,
+    'jump should ask for the target entry id instead of guessing a message count',
+  );
   await page.evaluate(() => window.__resolveHistory());
   await page.locator('#chat-turn-0').waitFor();
   await page.waitForFunction(() => {

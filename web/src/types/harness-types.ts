@@ -41,6 +41,8 @@ export type RuntimePolicy = {
     reserveTokens: number;
     keepRecentTokens: number;
     backgroundTokens: number;
+    /** 用到模型窗口的百分之多少时自动压缩；0 表示只用 token 阈值。 */
+    autoCompactPercent: number;
   };
   toolExecution: 'parallel' | 'sequential';
   afterFailedRun: 'keep' | 'continue' | 'withdraw';

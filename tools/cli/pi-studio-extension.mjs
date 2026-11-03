@@ -5,6 +5,7 @@ import path from 'node:path';
 import { generateKeyPairSync } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const {
@@ -120,11 +121,12 @@ function selectedScope(flags) {
   return flags.scope;
 }
 
-function validateCommand(positionals, flags) {
+async function validateCommand(positionals, flags) {
   const directory = path.resolve(requirePositional(positionals, 0, '扩展目录'));
   const scope = selectedScope(flags);
   const summary = validatedSummary(directory, scope);
   const signature = verifyExtensionDirectory(directory, { scope });
+  const runtime = await runtimeLoadCheck(directory, summary.manifest);
   const result = {
     valid: true,
     id: summary.manifest.id,
@@ -140,14 +142,50 @@ function validateCommand(positionals, flags) {
     permissions: summary.manifest.permissions,
     providerAccess: summary.manifest.providerAccess,
     runtime: summary.manifest.runtime,
+    runtimeLoadable: runtime.loadable,
+    runtimeError: runtime.error,
   };
+  if (!runtime.loadable) {
+    // 清单本身合法，但入口模块无法加载。给出可直接定位的失败，而不是
+    // 让扩展在装载时才崩。
+    print(flags.json ? result : [
+      `清单有效，但入口模块无法加载：${result.id}@${result.version}`,
+      `错误：${runtime.error}`,
+      '提示：参数 schema 直接写普通 JSON Schema，无需从任何包导入 schema 构造器。',
+    ].join('\n'), flags.json);
+    process.exitCode = 1;
+    return;
+  }
   print(flags.json ? result : [
     `有效扩展：${result.id}@${result.version}`,
     `文件：${result.files}`,
     `integrity：${result.integrity ? '已校验' : '未包含'}`,
     `signature：${result.signatureStatus === 'unsigned' ? '未签名' : `有效（${result.signatureKeyId}）`}`,
+    `入口模块：可加载`,
     `tree SHA-256：${result.treeSha256}`,
   ].join('\n'), flags.json);
+}
+
+/**
+ * 尝试加载扩展入口，验证它在真实运行前能解析所有 import。
+ * 只检查“能否加载”，不执行 activate/deactivate。
+ */
+async function runtimeLoadCheck(directory, manifest) {
+  const entry = manifest?.runtime?.durableEntry;
+  if (!entry) return { loadable: true, error: undefined };
+  const file = path.join(directory, ...String(entry).split('/'));
+  if (!fs.existsSync(file)) {
+    return { loadable: false, error: `入口文件不存在：${entry}` };
+  }
+  try {
+    await import(pathToFileURL(file).href);
+    return { loadable: true, error: undefined };
+  } catch (error) {
+    return {
+      loadable: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 function keygenCommand(positionals, flags) {
@@ -617,15 +655,19 @@ function initCommand(positionals, flags) {
     fs.writeFileSync(path.join(directory, 'extension.mjs'), `import {
   defineExtension,
   defineTool,
-  Type,
 } from '@earendil-works/pi-durable';
 
+// 参数 schema 是普通 JSON Schema，无需任何 schema 库。
 const echo = defineTool({
   name: 'extension_echo',
   description: ${JSON.stringify(`Echo text through ${name}.`)},
-  parameters: Type.Object({
-    text: Type.String({ maxLength: 4_000 }),
-  }),
+  parameters: {
+    type: 'object',
+    properties: {
+      text: { type: 'string', maxLength: 4_000 },
+    },
+    required: ['text'],
+  },
   replay: 'safe',
   async execute(args) {
     return {
@@ -693,14 +735,14 @@ ${agent ? '\nAgent extensions execute trusted Node code in the Pi Studio main pr
   return result;
 }
 
-function main() {
+async function main() {
   const { flags, positionals } = parseArgs(process.argv.slice(2));
   if (flags.help || positionals.length === 0 || positionals[0] === 'help') {
     process.stdout.write(usage());
     return;
   }
   const [command, ...rest] = positionals;
-  if (command === 'validate') validateCommand(rest, flags);
+  if (command === 'validate') await validateCommand(rest, flags);
   else if (command === 'keygen') keygenCommand(rest, flags);
   else if (command === 'sign') signCommand(rest, flags);
   else if (command === 'verify') verifyCommand(rest, flags);
@@ -715,7 +757,7 @@ function main() {
 }
 
 try {
-  main();
+  await main();
 } catch (error) {
   process.stderr.write(`错误：${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;

@@ -59,6 +59,7 @@
           <ul>
             <li data-search="工作区 临时对话 workspace cwd 归档"><a href="#workspaces">工作区与临时对话</a></li>
             <li data-search="会话 长期目标 对话 goal durable 生命周期"><a href="#conversations">会话与 /goal</a></li>
+            <li data-search="模型同题双跑 对比 fork worktree 动作面板"><a href="#model-comparison">模型同题双跑</a></li>
             <li data-search="子智能体 subagent 并行 supervisor 后台"><a href="#subagents">子智能体</a></li>
             <li data-search="文件 附件 引用 diff 变更 工作台 预览"><a href="#files-changes">文件、附件与差异</a></li>
             <li data-search="模型 提供方 API Key 模型发现 thinking 推理"><a href="#models">模型与推理</a></li>
@@ -123,14 +124,14 @@
             <code>main</code> 分支的产品边界和技术契约。
           </p>
           <dl class="article-meta">
-            <div><dt>Version</dt><dd>v0.0.8 · Stable</dd></div>
-            <div><dt>Runtime</dt><dd>Pi Durable 1.4</dd></div>
+            <div><dt>Version</dt><dd>v0.0.9 · Stable</dd></div>
+            <div><dt>Runtime</dt><dd>Pi Durable 1.5</dd></div>
             <div><dt>Ownership</dt><dd>Studio SQLite</dd></div>
             <div><dt>License</dt><dd>MIT · macOS</dd></div>
           </dl>
           <div class="status-note">
             <strong>版本说明</strong>
-            <p><code>v0.0.8</code> 修复升级后可能出现的 <code>pi:state</code> 缺失处理器问题，新增单实例启动、延迟窗口创建和明确的初始化失败提示。会话、任务与子智能体由 Durable 执行；模型、凭据、工作区、MCP、Skill 与扩展由 Pi Studio 自己的 SQLite 和受管目录保存。</p>
+            <p><code>v0.0.9</code> 同步 Pi Durable 1.5，新增 Skill Hub、加密凭据库、MCP OAuth、子智能体预算与隔离工作树、模型双跑对比，以及统一的列表/详情、设置页和会话动作交互。Durable 继续负责会话、任务与子智能体执行；Studio 只保存自己的投影、设置、资源信任和受管目录。</p>
           </div>
 
           <div class="chapter-index" aria-label="主要章节">
@@ -154,7 +155,7 @@
               凭据、系统提示、工具注册、资源信任、SQLite 投影与原生桌面交互。
             </p>
             <div class="feature-pairs">
-              <div class="feature-pair"><span>Runtime</span><strong>Pi Durable 1.4</strong><p>会话、任务、流式事件、工具调用、分叉、恢复和 owned child conversation。</p></div>
+              <div class="feature-pair"><span>Runtime</span><strong>Pi Durable 1.5</strong><p>会话、任务、流式事件、工具调用、分叉、恢复和 owned child conversation。</p></div>
               <div class="feature-pair"><span>Desktop</span><strong>Electron + React</strong><p>窗口、菜单栏、通知、更新、文件系统、附件和原生主题。</p></div>
               <div class="feature-pair"><span>Data</span><strong>Studio SQLite</strong><p>Studio 自己的设置、投影、凭据、扩展状态和项目资源信任。</p></div>
               <div class="feature-pair"><span>Harness</span><strong>Coding Context</strong><p>Prompt sections、AGENTS.md、Skill、工具说明、工作目录和自定义补充。</p></div>
@@ -233,7 +234,7 @@
                 <thead><tr><th>区域</th><th>用途</th><th>不会放置什么</th></tr></thead>
                 <tbody>
                   <tr><td>左侧栏</td><td>新会话、临时聊天、扩展入口、工作区、会话历史、设置</td><td>完整扩展详情或大段运行日志</td></tr>
-                  <tr><td>顶部会话 Tabs</td><td>对话、子智能体总览、扩展面板</td><td>不同工作区的会话混在一起</td></tr>
+                  <tr><td>顶部会话 Tabs</td><td>对话、子智能体总览、扩展面板三个一级视图</td><td>模型双跑等对话内临时视图</td></tr>
                   <tr><td>主内容区</td><td>消息、工具调用、thinking、结果、子智能体 transcript</td><td>扩展 summary、文件 diff 全文</td></tr>
                   <tr><td>右侧面板</td><td>工作区文件、预览、差异工作台</td><td>对话消息正文</td></tr>
                   <tr><td>输入框</td><td>工作区、类型、权限、模型、thinking、附件、队列</td><td>常驻的营销通知或临时 toast</td></tr>
@@ -241,7 +242,12 @@
                 </tbody>
               </table>
             </div>
-            <p>点击子智能体卡片会将主内容区替换为该子智能体会话，并提供明确的「返回主智能体」。扩展 Tab 集中展示声明式详情，支持全局或当前会话独立排序。</p>
+            <p>一级 Tabs 只表示当前会话的三个视图：对话、子智能体、扩展。没有子智能体或详情扩展时，对应 Tab 不出现。</p>
+            <ul>
+              <li>进入子智能体详情后，主内容区在「子智能体」Tab 内切换；返回列表和返回主对话是两个明确出口。</li>
+              <li>扩展详情在「扩展」Tab 内切换；footer 只显示摘要，完整内容进入扩展中心。</li>
+              <li>模型同题双跑从输入框的 <code>⋯</code> 或 <code>Cmd/Ctrl+K</code> 动作面板进入。它是一个对话内临时视图，主内容区替换为双栏结果，但「对话」Tab 始终保持选中，不会增加第四个一级 Tab。</li>
+            </ul>
           </div>
         </section>
 
@@ -317,6 +323,13 @@
             </div>
             <p>会话历史按页加载，右侧提问大纲基于完整会话。点击尚未加载的旧提问时，Studio 会补载并定位；主内容区不会一次性渲染全部历史。</p>
             <p>模型与 thinking 可以随时切换。当前请求保持已提交配置，切换从下一请求生效；运行中不需要禁用模型选择器。</p>
+            <h3 id="model-comparison">模型同题双跑</h3>
+            <p>双跑从当前会话分叉两次，把完全相同的问题、引用、附件和图片提交给两个不同模型；每个分支使用独立的托管 worktree，因此运行本身不会修改原工作区。</p>
+            <ul>
+              <li>入口属于「对话」动作，不属于侧边栏或一级 Tab。</li>
+              <li>完成一个分支后可以应用它的改动；不需要的分支会连同分支会话和托管 worktree 一起永久丢弃。</li>
+              <li>切到子智能体或扩展后，可以从同一动作面板恢复本会话上一次双跑结果，不需要重新创建 fork。</li>
+            </ul>
           </div>
         </section>
 
@@ -339,7 +352,7 @@
               <li>父会话取消或工具任务失败时，Durable ownership cascade 会终止 child。</li>
               <li>每个子智能体可以使用自己的模型与 thinking；未设置时继承父会话默认。</li>
             </ul>
-            <p>会话顶部的「子智能体」Tab 是聚合视图。点击卡片会把主内容区替换为该子智能体的 transcript；返回按钮始终回到原父会话，不会创建第二条主会话路径。</p>
+            <p>会话顶部的「子智能体」Tab 是聚合视图。列表按需处理、运行中和已结束分组；点击一行会把主内容区替换为该子智能体的 transcript，但始终停留在「子智能体」Tab。返回列表和返回主对话是两个明确出口。</p>
           </div>
         </section>
 
@@ -452,6 +465,7 @@
               </table>
             </div>
             <p>Durable 运行策略是全局资源，控制所有 Studio 会话的请求超时、重试、上下文压缩、工具并行、失败后排队输入、崩溃恢复和缓存。它不是工作区 Profile 的一部分。</p>
+            <p>上下文压缩按模型窗口的使用比例决定时机：设置里的“触发阈值”是一个百分比，Studio 会把它换算成每个模型自己的 token 阈值交给 Durable。达到后当前请求会先暂停，压缩完再自动继续；输入区左下角始终显示当前会话的占用百分比，点开可以手动压缩。</p>
           </div>
         </section>
 
@@ -560,7 +574,9 @@
               <li>stdio 只继承 PATH、HOME、临时目录、locale 与启动所需环境；其他密钥必须用 <code>${NAME}</code> 显式传入。</li>
               <li>配置变化会重连或重建 registry；旧 client 进入退休态，等活动工具调用结束后再关闭。</li>
               <li><code>tools/list_changed</code> 只刷新对应 server，下一次模型请求看到新目录。</li>
-              <li>当前未接入 MCP OAuth、独立 resources/templates 浏览器、prompts、sampling、tasks 与 MCP Apps UI。</li>
+              <li>HTTP 服务器详情页可以显式发起 MCP OAuth；客户端注册、PKCE、access/refresh token 使用 Electron <code>safeStorage</code> envelope 保存。</li>
+              <li>MCP 表单提供保存前测试连接、耗时、工具清单和已脱敏诊断；工具表同时显示 direct、deferred 或 hidden 暴露状态。</li>
+              <li>独立 resources/templates 浏览器、prompts、sampling、tasks 与 MCP Apps UI 尚未接入。</li>
             </ul>
           </div>
         </section>
@@ -603,9 +619,10 @@
           <div class="doc-copy">
             <figure class="figure">
               <img src="assets/screens/usage-light.png" alt="Pi Studio Token 使用量页面，展示按日期与模型筛选的热力图和模型统计" width="2880" height="1840" loading="lazy">
-              <figcaption><span>Usage</span><span>90 / 180 / 365 天 · 模型筛选 · 当前与已停用模型</span></figcaption>
+              <figcaption><span>Usage</span><span>热力图 90 / 180 / 365 天 · 模型筛选 · 模型分布独立时间范围</span></figcaption>
             </figure>
             <p>设置页可以查看全部模型或切换到某个当前启用模型。已停用但历史上使用过的模型仍保留在筛选器和统计中，避免重装或停用后丢失理解上下文。</p>
+            <p>模型分布有独立的时间范围：全部时间、今天、7 / 30 / 90 天、1 年，或自己选起止日期。它不会跟着热力图的天数变，占比始终按同一区间的 Token 总量计算。</p>
             <p>热力图使用主题强调色，按每天累计使用量分档。聚合表只保存日期、模型和累计值；不需要把一天中的每个请求都永久投影到 Studio SQLite。</p>
           </div>
         </section>
@@ -669,15 +686,18 @@
               <pre><code>import {
   defineExtension,
   defineTool,
-  Type,
 } from "@earendil-works/pi-durable";
 
 const checklist = defineTool({
   name: "review_checklist",
   description: "Read the repository review checklist.",
-  parameters: Type.Object({
-    path: Type.Optional(Type.String()),
-  }),
+  // 参数 schema 就是普通 JSON Schema：不需要 TypeBox、pi-schema 或任何 schema 库。
+  parameters: {
+    type: "object",
+    properties: {
+      path: { type: "string" },
+    },
+  },
   replay: "safe",
   async execute(args, api, context) {
     const agent = await api.agent(context);
@@ -831,7 +851,7 @@ Electron preload / IPC
   └─ file, attachment, updater, menu bar
   │
   ▼
-Pi Durable 1.4 Harness
+Pi Durable 1.5 Harness
   ├─ conversation / task / live event
   ├─ tools / hooks / sections / modelTools
   ├─ context compaction and tool scheduler
@@ -945,7 +965,7 @@ Model provider</code></pre>
               <li>SHA-256 不证明发布者身份；身份连续性依赖签名和首次公钥信任。</li>
               <li>Bash 静态分析无法覆盖所有动态 shell 语义、脚本和未知包装器。</li>
               <li>目前没有透明日志、Sigstore / DSSE 身份链或系统级进程沙箱。</li>
-              <li>MCP 使用静态 headers，没有 OAuth 登录界面。</li>
+              <li>MCP 可以使用静态 headers 或 OAuth；模型 provider 当前仍只使用 API Key。</li>
             </ul>
             <div class="callout danger">
               <strong>安装原则</strong>
@@ -1103,7 +1123,7 @@ pnpm release:dist
           </header>
           <div class="doc-copy">
             <ul>
-              <li>模型 provider 与 MCP 的 OAuth 登录尚未接入。</li>
+              <li>模型 provider 当前只使用 API Key；HTTP MCP 已支持 OAuth 登录与退出清理。</li>
               <li>MCP resources/templates、prompts、sampling、tasks 与 Apps UI 尚无完整产品界面。</li>
               <li>插件市场、自动发现和后台自动升级尚未完成；当前 registry 与安装器已经可用。</li>
               <li>Agent 扩展没有系统级沙箱，信任它等同于信任主进程 Node 代码。</li>

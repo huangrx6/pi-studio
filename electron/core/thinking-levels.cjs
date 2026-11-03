@@ -43,11 +43,34 @@ const LEVEL_ALIASES = Object.freeze({
   maximum: 'max',
 });
 
+/**
+ * Keys that vendors use for a declared level list. `supported` comes last
+ * because OpenAI-style payloads also use it as a plain boolean capability flag.
+ */
+const LEVEL_LIST_KEYS = Object.freeze([
+  'levels',
+  'supported_levels',
+  'supportedLevels',
+  'efforts',
+  'effort',
+  'values',
+  'enum',
+  'supported',
+]);
+
+function listValue(candidate) {
+  if (Array.isArray(candidate)) return candidate;
+  if (typeof candidate === 'string') return candidate.split(/[\s,|/]+/);
+  return undefined;
+}
+
 function levelList(value) {
-  if (Array.isArray(value)) return value;
-  if (typeof value === 'string') return value.split(/[\s,|/]+/);
-  if (value && typeof value === 'object') {
-    return value.levels || value.supported || value.supported_levels || value.values || value.enum;
+  const direct = listValue(value);
+  if (direct) return direct;
+  if (!value || typeof value !== 'object') return [];
+  for (const key of LEVEL_LIST_KEYS) {
+    const nested = listValue(value[key]);
+    if (nested) return nested;
   }
   return [];
 }

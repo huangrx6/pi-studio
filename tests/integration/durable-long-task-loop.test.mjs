@@ -11,7 +11,6 @@ import {
 import { openNodeJsonlStorage } from '@earendil-works/pi-durable/storage/jsonl/node';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import {
-  Type,
   createModels,
   fauxAssistantMessage,
   fauxProvider,
@@ -190,7 +189,7 @@ test('the long-task continuation guard stops repeated no-progress loops and reta
 
 test('an active long task continues across GenerationTask boundaries until it is completed', async () => {
   const durable = await import('@earendil-works/pi-durable');
-  const extension = createLongTaskExtension(durable, { Type });
+  const extension = createLongTaskExtension(durable);
   const longTaskTool = extension.tools.find((tool) => tool.name === 'long_task');
   assert.ok(longTaskTool);
   const { LongTask } = createLongTaskContract(durable);
@@ -274,7 +273,7 @@ test('an active long task continues across GenerationTask boundaries until it is
 
 test('a paused long task answers the current message without starting another goal iteration', async () => {
   const durable = await import('@earendil-works/pi-durable');
-  const extension = createLongTaskExtension(durable, { Type });
+  const extension = createLongTaskExtension(durable);
   const longTaskTool = extension.tools.find((tool) => tool.name === 'long_task');
   const { LongTask } = createLongTaskContract(durable);
   const registry = createRegistry();
@@ -346,7 +345,7 @@ test('a paused long task answers the current message without starting another go
 
 test('replacing a running goal stops the old continuation and starts only the new goal', async () => {
   const durable = await import('@earendil-works/pi-durable');
-  const extension = createLongTaskExtension(durable, { Type });
+  const extension = createLongTaskExtension(durable);
   const longTaskTool = extension.tools.find((tool) => tool.name === 'long_task');
   assert.ok(longTaskTool);
   const { LongTask } = createLongTaskContract(durable);
@@ -485,7 +484,7 @@ test('replacing a running goal stops the old continuation and starts only the ne
 
 test('a blocked long task waits for the user without starting another goal iteration', async () => {
   const durable = await import('@earendil-works/pi-durable');
-  const extension = createLongTaskExtension(durable, { Type });
+  const extension = createLongTaskExtension(durable);
   const longTaskTool = extension.tools.find((tool) => tool.name === 'long_task');
   assert.ok(longTaskTool);
   const { LongTask } = createLongTaskContract(durable);
@@ -569,7 +568,7 @@ test('a blocked long task waits for the user without starting another goal itera
 test('long-task state survives a Durable storage reopen', async () => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-long-task-'));
   const durable = await import('@earendil-works/pi-durable');
-  const extension = createLongTaskExtension(durable, { Type });
+  const extension = createLongTaskExtension(durable);
   const longTaskTool = extension.tools.find((tool) => tool.name === 'long_task');
   assert.ok(longTaskTool);
   const { LongTask } = createLongTaskContract(durable);

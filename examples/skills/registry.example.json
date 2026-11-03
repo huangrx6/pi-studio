@@ -1,0 +1,18 @@
+{
+  "$schema": "../../schemas/pi-studio.skill.registry.schema.json",
+  "schemaVersion": 1,
+  "name": "Pi Studio Example Skill Registry",
+  "updatedAt": "2026-11-03T00:00:00.000Z",
+  "skills": [
+    {
+      "name": "review-checklist",
+      "description": "Review a code change with a repeatable correctness, regression, and test checklist.",
+      "version": "1.0.0",
+      "invocation": "automatic",
+      "download": "https://github.com/example/skills/releases/download/review-checklist-v1.0.0/review-checklist.zip",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "repository": "https://github.com/example/skills",
+      "resourceCount": 2
+    }
+  ]
+}

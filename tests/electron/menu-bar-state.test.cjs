@@ -67,6 +67,33 @@ test('completion moves a session into recent results and preserves unread state'
   assert.equal(state.clearRecent(), false);
 });
 
+test('running a session again drops its earlier completion instead of listing it twice', () => {
+  let clock = 1_000;
+  const state = createMenuBarState({ now: () => clock });
+  state.start({ id: 'a', title: '优化方向', cwd: '/workspace/pi-studio' });
+  state.start({ id: 'b', title: '另一个任务', cwd: '/workspace/pi-studio' });
+  clock = 2_000;
+  state.finish({ id: 'a', status: 'success' });
+  clock = 3_000;
+  state.finish({ id: 'b', status: 'success' });
+  assert.deepEqual(state.snapshot().recent.map(item => item.id), ['b', 'a']);
+
+  // The same conversation starts another turn: it may only appear as running.
+  clock = 4_000;
+  state.start({ id: 'a', title: '优化方向', cwd: '/workspace/pi-studio' });
+  let snapshot = state.snapshot();
+  assert.deepEqual(snapshot.running.map(item => item.id), ['a']);
+  assert.deepEqual(snapshot.recent.map(item => item.id), ['b']);
+  assert.equal(snapshot.unreadCount, 1);
+
+  // Finishing again replaces the old record instead of stacking a second copy.
+  clock = 5_000;
+  assert.equal(state.finish({ id: 'a', status: 'success' }).completedAt, 5_000);
+  snapshot = state.snapshot();
+  assert.deepEqual(snapshot.recent.map(item => item.id), ['a', 'b']);
+  assert.equal(snapshot.unreadCount, 2);
+});
+
 test('cancelled sessions leave the running tray without creating unread results', () => {
   const state = createMenuBarState({ now: () => 42 });
   state.start({ id: 'a', title: 'Task' });
@@ -79,8 +106,9 @@ test('cancelled sessions leave the running tray without creating unread results'
 test('popover fits its rows and caps long lists without stretching the idle state', () => {
   const { menuBarPopoverHeight } = require('../../electron/menu-bar-state.cjs');
   assert.equal(menuBarPopoverHeight(), 196);
-  assert.equal(menuBarPopoverHeight({ running: [{}] }), 240);
-  assert.equal(menuBarPopoverHeight({ recent: [{}] }), 240);
-  assert.equal(menuBarPopoverHeight({ running: [{}, {}], recent: [{}] }), 388);
+  assert.equal(menuBarPopoverHeight({ running: [{}] }), 252);
+  assert.equal(menuBarPopoverHeight({ recent: [{}] }), 252);
+  // Two sections add the extra gap so the second heading is not clipped.
+  assert.equal(menuBarPopoverHeight({ running: [{}, {}], recent: [{}] }), 400);
   assert.equal(menuBarPopoverHeight({ running: Array(100).fill({}) }), 440);
 });

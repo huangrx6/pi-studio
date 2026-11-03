@@ -75,9 +75,12 @@ export function FileChangeSummary({ files, gitDiff, onOpenDiff, onOpenFile }: {
   files: FileChange[];
   gitDiff?: TurnDiff;
   onOpenDiff?: (file: TurnDiffFile | undefined, turn: TurnDiff) => void;
-  onOpenFile?: (path: string) => void;
+  /** 打开文件预览；返回 false 表示文件已不可读（被移动或删除）。 */
+  onOpenFile?: (path: string) => Promise<boolean> | boolean | void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  /** 已在磁盘上消失的文件：点过一次就记下来，不再反复失败。 */
+  const [missing, setMissing] = useState<Set<string>>(() => new Set());
   const display = mergeFiles(gitDiff, files);
   if (display.length === 0) return null;
   const complete = display.every((file) => file.complete);
@@ -86,6 +89,19 @@ export function FileChangeSummary({ files, gitDiff, onOpenDiff, onOpenFile }: {
   const removed = display.reduce((sum, file) => sum + file.removed, 0);
   const review: TurnDiff = { ...gitDiff, at: gitDiff?.at ?? 0, totalAdded: added, totalRemoved: removed, files: display.map(file => ({ ...file, status: file.status === 'written' ? 'modified' : file.status, completeCounts: file.complete })) };
   const visible = expanded ? display : display.slice(0, 4);
+  const missingCount = display.filter((file) => missing.has(file.path)).length;
+
+  /** 打开预览；文件已经不在了就把这一行标记为失效，而不是让错误弹到主界面。 */
+  async function openPreview(path: string) {
+    if (missing.has(path)) return;
+    let available = true;
+    try {
+      available = (await onOpenFile?.(path)) !== false;
+    } catch {
+      available = false;
+    }
+    if (!available) setMissing((current) => new Set(current).add(path));
+  }
 
   return <section className="file-change-summary" aria-label="本轮文件变更">
     <header>
@@ -99,26 +115,29 @@ export function FileChangeSummary({ files, gitDiff, onOpenDiff, onOpenFile }: {
 
     <div className="file-change-list">{visible.map((file) => {
       // 有补丁先看 diff；没有补丁但路径可读时，直接打开右侧文件预览。
+      const gone = missing.has(file.path);
       const canDiff = Boolean(file.patch && onOpenDiff);
       const canView = Boolean(onOpenFile && file.path.startsWith('/'));
-      const openable = canDiff || canView;
+      const openable = !gone && (canDiff || canView);
       return <button
         type="button"
-        className={`file-change-item ${openable ? 'is-openable' : ''}`}
+        className={`file-change-item ${openable ? 'is-openable' : ''} ${gone ? 'is-missing' : ''}`}
         key={file.path}
-        title={file.path}
+        title={gone ? `${file.path}\n文件已不在磁盘上（可能被移动或删除）` : file.path}
         disabled={!openable}
         onClick={() => {
           if (!openable) return;
-          if (!canDiff) { onOpenFile?.(file.path); return; }
+          if (!canDiff) { void openPreview(file.path); return; }
           onOpenDiff?.(review.files.find(item => item.path === file.path), review);
         }}
       >
         <FileText aria-hidden="true" />
         <span className="file-change-path">{file.label}</span>
-        {file.complete
-          ? counts(file.added, file.removed)
-          : <small>{statusLabel(file) || '已写入'}</small>}
+        {gone
+          ? <small className="file-change-missing">已移出磁盘</small>
+          : file.complete
+            ? counts(file.added, file.removed)
+            : <small>{statusLabel(file) || '已写入'}</small>}
         {openable && <ChevronRight className="file-change-open" aria-hidden="true" />}
       </button>;
     })}</div>
@@ -127,6 +146,10 @@ export function FileChangeSummary({ files, gitDiff, onOpenDiff, onOpenFile }: {
       {expanded ? '收起' : `全部 ${display.length} 个文件`}
       <ChevronDown aria-hidden="true" />
     </button>}
+
+    {missingCount > 0 && <p className="file-change-missing-note" role="status">
+      {missingCount} 个文件已不在磁盘上（可能被移动或删除），已从可打开列表中移除。
+    </p>}
 
     <p className="file-change-note">{gitDiff
       ? '基于本轮 Git 工作树快照；有补丁的文件点击查看 diff，其余文件点击预览。'
