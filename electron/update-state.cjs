@@ -59,15 +59,23 @@ function fieldsFromInfo(info = {}) {
       : undefined,
     releaseNotes: normalizeReleaseNotes(info.releaseNotes) || undefined,
     publishedAt: typeof info.releaseDate === 'string' ? info.releaseDate : undefined,
+    latestBuildId: typeof info.buildId === 'string' && info.buildId.trim()
+      ? info.buildId.trim()
+      : undefined,
   };
 }
 
-function initialUpdateState(currentVersion = '') {
+function initialUpdateState(currentVersion = '', currentBuildId) {
   return {
     currentVersion,
+    currentBuildId: typeof currentBuildId === 'string' && currentBuildId.trim()
+      ? currentBuildId.trim()
+      : undefined,
     state: 'idle',
     checkedAt: undefined,
     latestVersion: undefined,
+    latestBuildId: undefined,
+    updateKind: undefined,
     releaseName: undefined,
     releaseNotes: undefined,
     publishedAt: undefined,
@@ -111,6 +119,7 @@ function reduceUpdateState(current, event = {}) {
     return {
       ...base,
       ...fieldsFromInfo(event.info),
+      updateKind: event.updateKind === 'same-version' ? 'same-version' : 'version',
       state: 'available',
       checkedAt: Date.now(),
       progress: 0,
@@ -126,6 +135,8 @@ function reduceUpdateState(current, event = {}) {
       ...base,
       state: 'up-to-date',
       latestVersion: event.info?.version || base.currentVersion,
+      latestBuildId: undefined,
+      updateKind: undefined,
       checkedAt: Date.now(),
       progress: undefined,
       transferred: undefined,

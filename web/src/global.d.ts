@@ -47,6 +47,12 @@ import type { BackgroundMedia } from './shared/preferences';
 import type { FilePreviewResult } from './types/file-preview-types';
 import type { UpdateSnapshot } from './types/update-types';
 import type { RuntimeRefreshSnapshot } from './types/runtime-types';
+import type {
+  RuntimeServiceSnapshot,
+  RuntimeServiceStopResult,
+  TerminalEvent,
+  TerminalSessionSnapshot,
+} from './types/runtime-panel-types';
 import type { UsageAnalyticsSnapshot, UsageModelMix } from './types/usage-types';
 import type {
   ExtensionCommandResult,
@@ -489,6 +495,26 @@ declare global {
       openExternal(url: string): Promise<{ ok: boolean }>;
       /** 按偏好打开链接：external 走系统浏览器，window 走应用内子窗口。 */
       openLink(url: string, mode: 'external' | 'window'): Promise<{ ok: boolean }>;
+      /** 创建或重新连接当前窗口独占的 PTY 会话。 */
+      terminalCreate(payload: {
+        id: string;
+        cwd: string;
+        cols: number;
+        rows: number;
+      }): Promise<TerminalSessionSnapshot>;
+      terminalWrite(id: string, data: string): Promise<{ ok: boolean; status?: string }>;
+      terminalResize(id: string, cols: number, rows: number): Promise<{ ok: boolean; status?: string }>;
+      terminalClose(id: string): Promise<{ ok: boolean }>;
+      onTerminalEvent(listener: (event: TerminalEvent) => void): () => void;
+      /** 扫描 TCP 监听端口，并按当前任务/工作区标记归属依据。 */
+      runtimeServices(payload: { cwd?: string; roots?: string[] }): Promise<RuntimeServiceSnapshot>;
+      /** 终止已经通过主进程归属校验的任务服务。 */
+      runtimeServiceStop(payload: {
+        cwd?: string;
+        roots?: string[];
+        pid: number;
+        port: number;
+      }): Promise<RuntimeServiceStopResult>;
 
       // ---- 输入框辅助 ----
       /** 读取斜杠命令、提示词、技能等输入资源。 */

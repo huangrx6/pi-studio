@@ -15,6 +15,7 @@ import {
   MessageSquare,
   Pause,
   RefreshCw,
+  Rows3,
   Search,
   Send,
   ShieldCheck,
@@ -28,6 +29,8 @@ import type { StepCollapse, StepDisplay } from '../../shared/preferences';
 import type { SubagentBudgetSnapshot, SubagentChild, SubagentTranscript } from '../../types/subagent-types';
 import { AssistantTurnView, ChatMessageView } from '../conversation/ChatMessage';
 import { InfoHint } from '../../shared/InfoHint';
+
+export type SubagentOverviewMode = 'formation' | 'list';
 
 const STATUS_LABEL: Record<SubagentChild['status'], string> = {
   pending: '等待启动',
@@ -202,6 +205,74 @@ function ChildRow({
 }
 
 /**
+ * “编队”是现有扁平子智能体列表的空间投影，而不是另一套运行模型。
+ * Studio 明确禁止子智能体继续创建子智能体，因此主 Agent 到直接成员的
+ * 星形关系就是完整关系，不需要为了视觉效果虚构层级。
+ */
+function SubagentFormation({
+  children,
+  now,
+  selection,
+  onOpenChild,
+  onReturnMain,
+}: {
+  children: SubagentChild[];
+  now: number;
+  selection: ModelSelection;
+  onOpenChild: (child: SubagentChild) => void;
+  onReturnMain: () => void;
+}) {
+  return <section className="agent-formation" aria-label="子智能体编队">
+    <div className="agent-formation-root-slot">
+      <button
+        type="button"
+        className="agent-formation-root"
+        aria-label={`返回主对话，${selection.label || selection.modelRef || '当前对话'}`}
+        title="返回主对话"
+        onClick={onReturnMain}
+      >
+        <span className="agent-formation-root-icon"><Bot /></span>
+        <span className="agent-formation-root-copy">
+          <small>主智能体</small>
+          <strong>{selection.label || selection.modelRef || '当前对话'}</strong>
+        </span>
+        <ChevronRight className="agent-formation-root-open" aria-hidden="true" />
+      </button>
+    </div>
+    <div className="agent-formation-axis" aria-hidden="true" />
+    <div className="agent-formation-members">
+      {children.map((child) => {
+        const request = child.supervisorRequests?.[0];
+        const name = child.name || child.agent || `子智能体 ${child.index + 1}`;
+        const stateLabel = child.currentTool || STATUS_LABEL[child.status];
+        return <button
+          type="button"
+          className={`agent-formation-member is-${child.status}`}
+          key={child.key}
+          disabled={!child.hasTranscript}
+          aria-label={`打开${name}的执行记录，${STATUS_LABEL[child.status]}`}
+          onClick={() => onOpenChild(child)}
+        >
+          <span className="agent-formation-member-head">
+            <span className={`agent-formation-member-state is-${child.status}`}>{statusIcon(child.status)}</span>
+            <strong>{name}</strong>
+            <span className="agent-formation-member-status" title={stateLabel}>{stateLabel}</span>
+          </span>
+          <span className="agent-formation-member-task" title={request?.question || child.task}>{request?.question || child.task}</span>
+          <span className="agent-formation-member-facts">
+            <span>{duration(liveDuration(child, now))}</span>
+            <span>{tokenCount(child.tokens)} tok</span>
+            {child.referenceCostUsd !== undefined && (
+              <span>${child.referenceCostUsd.toFixed(child.referenceCostUsd < 1 ? 3 : 2)}</span>
+            )}
+          </span>
+        </button>;
+      })}
+    </div>
+  </section>;
+}
+
+/**
  * The parent conversation owns subagent creation. This read-only overview only
  * projects records produced when the parent invokes its subagent tool.
  */
@@ -217,6 +288,8 @@ export function SubagentOverview({
   deletingChildKey,
   replyingChildKey,
   onReturnMain,
+  mode = 'list',
+  onModeChange,
 }: {
   children: SubagentChild[];
   budget?: SubagentBudgetSnapshot | null;
@@ -229,6 +302,8 @@ export function SubagentOverview({
   deletingChildKey?: string;
   replyingChildKey?: string;
   onReturnMain: () => void;
+  mode?: SubagentOverviewMode;
+  onModeChange?: (mode: SubagentOverviewMode) => void;
 }) {
   const [now, setNow] = useState(Date.now());
   const [query, setQuery] = useState('');
@@ -255,6 +330,7 @@ export function SubagentOverview({
     { id: 'active', label: '运行中', children: visible.filter(child => isActive(child.status)) },
     { id: 'done', label: '已结束', children: visible.filter(child => child.status === 'completed' || child.status === 'stopped') },
   ];
+  const effectiveMode = mode === 'formation' && children.length > 1 ? 'formation' : 'list';
 
   useEffect(() => {
     if (active === 0) return;
@@ -266,6 +342,24 @@ export function SubagentOverview({
     <header className="agent-overview-head">
       <h2>子智能体</h2>
       <div className="agent-overview-actions">
+        {children.length > 1 && <div className="agent-overview-layout" role="group" aria-label="子智能体视图">
+          <button
+            type="button"
+            className={effectiveMode === 'formation' ? 'is-active' : ''}
+            aria-label="编队视图"
+            aria-pressed={effectiveMode === 'formation'}
+            title="编队视图"
+            onClick={() => onModeChange?.('formation')}
+          ><GitFork /></button>
+          <button
+            type="button"
+            className={effectiveMode === 'list' ? 'is-active' : ''}
+            aria-label="列表视图"
+            aria-pressed={effectiveMode === 'list'}
+            title="列表视图"
+            onClick={() => onModeChange?.('list')}
+          ><Rows3 /></button>
+        </div>}
         {active > 0 && <span className="agent-live-indicator" role="status" aria-label="状态实时更新" title="状态实时更新"><i /></span>}
         <button type="button" className="agent-refresh" aria-label="刷新子智能体" title="刷新" disabled={refreshing} onClick={onRefresh}>
           <RefreshCw className={refreshing ? 'spin' : undefined} />
@@ -301,9 +395,9 @@ export function SubagentOverview({
       </div>
     )}
 
-    <button type="button" className="agent-main-return" onClick={onReturnMain}>
+    {effectiveMode === 'list' && <button type="button" className="agent-main-return" onClick={onReturnMain}>
       <ArrowLeft />返回主对话<span>{selection.label || selection.modelRef}</span>
-    </button>
+    </button>}
 
     <div className="agent-list-tools">
       <div className="agent-list-search">
@@ -318,25 +412,33 @@ export function SubagentOverview({
     </div>
 
     {visible.length > 0
-      ? <section className="agent-list" aria-label="子智能体列表">
-        {sections.filter(section => section.children.length > 0).map(section => (
-          <div className="agent-list-section" key={section.id}>
-            <h3>{section.label}</h3>
-            {section.children.map(child => (
-              <ChildRow
-                key={child.key}
-                child={child}
-                now={now}
-                onOpen={() => onOpenChild(child)}
-                onDelete={() => onDeleteChild(child)}
-                onReply={(requestId, message) => onReplyChild(child, requestId, message)}
-                deleting={deletingChildKey === child.key}
-                replying={replyingChildKey === child.key}
-              />
-            ))}
-          </div>
-        ))}
-      </section>
+      ? effectiveMode === 'formation'
+        ? <SubagentFormation
+          children={visible}
+          now={now}
+          selection={selection}
+          onOpenChild={onOpenChild}
+          onReturnMain={onReturnMain}
+        />
+        : <section className="agent-list" aria-label="子智能体列表">
+          {sections.filter(section => section.children.length > 0).map(section => (
+            <div className="agent-list-section" key={section.id}>
+              <h3>{section.label}</h3>
+              {section.children.map(child => (
+                <ChildRow
+                  key={child.key}
+                  child={child}
+                  now={now}
+                  onOpen={() => onOpenChild(child)}
+                  onDelete={() => onDeleteChild(child)}
+                  onReply={(requestId, message) => onReplyChild(child, requestId, message)}
+                  deleting={deletingChildKey === child.key}
+                  replying={replyingChildKey === child.key}
+                />
+              ))}
+            </div>
+          ))}
+        </section>
       : <div className="agent-overview-empty">
         <GitFork />
         <strong>{children.length ? '没有匹配结果' : '这次对话还没有子智能体'}</strong>

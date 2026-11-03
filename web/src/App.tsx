@@ -14,9 +14,9 @@
  * 渲染进程本身不直接访问 Node / 文件系统。
  */
 
-import { Fragment, type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, type CSSProperties, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertTriangle, ArchiveRestore, ArrowUp, BarChart3, BookOpen, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Command, Cpu, ExternalLink, FileCode2, FileDiff, FileText, Folder, FolderOpen, Github, Info, Sparkles, UserRound,
+  Activity, AlertTriangle, ArchiveRestore, ArrowUp, BarChart3, BookOpen, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Command, Cpu, ExternalLink, FileCode2, FileDiff, FileText, Folder, FolderOpen, Github, Info, Sparkles, UserRound,
   AppWindow, Bot, Code2, Columns2, Compass, Eye, Film, Globe2, Image as ImageIcon, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageCirclePlus, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, PanelRightOpen, Pencil, Plus, Plug, RotateCw, Search, Settings, ShieldCheck, Square, SquarePen, Sun, Target, Terminal, Trash2, X,
   Wrench,
 } from 'lucide-react';
@@ -32,6 +32,7 @@ import { Select } from './shared/Select';
 import { FullPermissionDialog, ToolConfirmDialog, useActionConfirmation, type ConfirmRequest } from './shared/ConfirmDialog';
 import { DiffView } from './features/conversation/DiffView';
 import { TemporaryChat } from './features/conversation/TemporaryChat';
+import { RuntimeServicesPanel } from './features/runtime-services/RuntimeServicesPanel';
 import { ModelComparisonPanel } from './features/comparison/ModelComparisonPanel';
 import { destroyTemporary } from './features/conversation/temporary-chat-store';
 import {
@@ -77,7 +78,11 @@ import { HarnessSettings } from './features/harness/HarnessSettings';
 import { PermissionPolicySettings } from './features/permissions/PermissionPolicySettings';
 import { SkillHub } from './features/skills/SkillHub';
 import { SubagentSettings } from './features/subagents/SubagentSettings';
-import { SubagentOverview, SubagentTranscriptView } from './features/subagents/SubagentViews';
+import {
+  SubagentOverview,
+  SubagentTranscriptView,
+  type SubagentOverviewMode,
+} from './features/subagents/SubagentViews';
 import { UsageSettings } from './features/usage/UsageSettings';
 import { ArchivedConversationsSettings } from './features/archives/ArchivedConversationsSettings';
 import {
@@ -174,6 +179,11 @@ import type {
   ConversationSnapshot,
   ConversationSummary,
 } from './types/durable-types';
+
+const LazyTerminalPanel = lazy(async () => {
+  const module = await import('./features/terminal/TerminalPanel');
+  return { default: module.TerminalPanel };
+});
 
 // Keep navigation to the noun labels users need to scan; each page's controls
 // and layout carry the detail rather than repeating it as sidebar subtitles.
@@ -528,7 +538,7 @@ type StoredModelComparison = {
   initialThinkingLevel: ThinkingLevel;
 };
 type StoredModelComparisonMap = Record<string, StoredModelComparison>;
-type PanelTab = { id: string; kind: 'start' | 'files' | 'file' | 'diff' | 'changes' | 'temporary'; title: string; path?: string; source?: PanelFileSource; sessionId?: string; diff?: TurnDiffFile; review?: { sessionId: string; initial: TurnDiff; turns: TurnDiff[]; focusPath?: string } };
+type PanelTab = { id: string; kind: 'start' | 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services'; title: string; path?: string; source?: PanelFileSource; sessionId?: string; diff?: TurnDiffFile; review?: { sessionId: string; initial: TurnDiff; turns: TurnDiff[]; focusPath?: string } };
 type ComposerMenuState = { kind: 'slash' | 'file'; query: string; start: number; end: number };
 type AgentView =
   | { kind: 'conversation' }
@@ -806,6 +816,7 @@ export function App() {
   const [subagentChildren, setSubagentChildren] = useState<SubagentChild[]>([]);
   const [subagentBudget, setSubagentBudget] = useState<SubagentBudgetSnapshot | null>(null);
   const [subagentTranscript, setSubagentTranscript] = useState<SubagentTranscript | null>(null);
+  const [subagentOverviewMode, setSubagentOverviewMode] = useState<SubagentOverviewMode>('list');
   const [actionPaletteOpen, setActionPaletteOpen] = useState(false);
   const [actionCommands, setActionCommands] = useState<ComposerCommand[]>([]);
   const [actionResourcesLoading, setActionResourcesLoading] = useState(false);
@@ -4484,6 +4495,20 @@ export function App() {
     if (filesOpen) setPanelEntered(true); else openPanel();
   }
 
+  function openTerminalTab() {
+    const id = `terminal:${crypto.randomUUID()}`;
+    setPanelTabs(current => {
+      const ordinal = current.filter(tab => tab.kind === 'terminal').length + 1;
+      return [...current, {
+        id,
+        kind: 'terminal',
+        title: ordinal === 1 ? '终端' : `终端 ${ordinal}`,
+      }];
+    });
+    setActivePanelTabId(id);
+    if (filesOpen) setPanelEntered(true); else openPanel();
+  }
+
   function openStoredModelComparison(entry: StoredModelComparison) {
     rememberMainScrollPosition();
     setAgentView({
@@ -4539,6 +4564,14 @@ export function App() {
     }
     setActivePanelTabId('files');
     setFile(null);
+  }
+
+  function openServicesTab() {
+    if (!panelTabs.some((tab) => tab.kind === 'services')) {
+      setPanelTabs((current) => [...current, { id: 'services', kind: 'services', title: '运行服务' }]);
+    }
+    setActivePanelTabId('services');
+    if (filesOpen) setPanelEntered(true); else openPanel();
   }
 
   /** 读取文件并按路径缓存，重复打开时直接命中缓存。 */
@@ -4628,11 +4661,16 @@ export function App() {
     return loadFileToTab(target, accessSessionId, source);
   }
 
+  function disposePanelTab(tab: PanelTab) {
+    if (tab.kind === 'temporary') destroyTemporary(tab.id);
+    if (tab.kind === 'terminal') void window.piApi.terminalClose(tab.id).catch(() => {});
+  }
+
   /** 关闭标签；关闭最后一个标签时整个面板一起收起。 */
   function closePanelTab(id: string) {
     const index = panelTabs.findIndex((tab) => tab.id === id);
     if (index < 0) return;
-    if (panelTabs[index].kind === 'temporary') destroyTemporary(id);
+    disposePanelTab(panelTabs[index]);
     const next = panelTabs.filter((tab) => tab.id !== id);
     setPanelTabs(next);
     if (next.length === 0) { closePanel(); return; }
@@ -4834,6 +4872,8 @@ export function App() {
 
   function panelTabIcon(tab: PanelTab) {
     if (tab.kind === 'temporary') return <MessageCirclePlus />;
+    if (tab.kind === 'terminal') return <Terminal />;
+    if (tab.kind === 'services') return <Activity />;
     if (tab.kind === 'start') return <Compass />;
     if (tab.kind === 'files') return <Folder />;
     if (tab.kind === 'diff' || tab.kind === 'changes') return <FileDiff />;
@@ -4863,7 +4903,7 @@ export function App() {
     const index = panelTabs.findIndex(tab => tab.id === id);
     if (index < 0) return;
     const next = panelTabs.filter((tab, i) => scope === 'left' ? i >= index : scope === 'right' ? i <= index : scope === 'others' ? tab.id === id : false);
-    for (const tab of panelTabs) if (tab.kind === 'temporary' && !next.some(item => item.id === tab.id)) destroyTemporary(tab.id);
+    for (const tab of panelTabs) if (!next.some(item => item.id === tab.id)) disposePanelTab(tab);
     setPanelTabs(next);
     if (!next.length) { setActivePanelTabId(''); setFile(null); closePanel(); }
     else if (!next.some(tab => tab.id === activePanelTabId)) activatePanelTab(next.find(tab => tab.id === id) ?? next[0]);
@@ -5094,8 +5134,10 @@ export function App() {
   function renderPanelStart() {
     return <div className="panel-start">
       <div className="panel-start-tools">
-        <button className="panel-tool" onClick={openTemporaryChat}><span className="panel-tool-icon"><MessageCirclePlus /></span><span><strong>临时聊天</strong><small>关闭后清除</small></span><ChevronRight className="panel-tool-arrow" /></button>
-        <button className="panel-tool" onClick={openFilesTab}><span className="panel-tool-icon is-folder"><Folder /></span><span><strong>工作区文件</strong></span><ChevronRight className="panel-tool-arrow" /></button>
+        <button className="panel-tool" title="临时聊天，关闭后清除" onClick={openTemporaryChat}><span className="panel-tool-icon"><MessageCirclePlus /></span><strong>临时聊天</strong><ChevronRight className="panel-tool-arrow" /></button>
+        <button className="panel-tool" title="浏览工作区文件" onClick={openFilesTab}><span className="panel-tool-icon is-folder"><Folder /></span><strong>工作区文件</strong><ChevronRight className="panel-tool-arrow" /></button>
+        <button className="panel-tool" title="打开交互式终端" onClick={openTerminalTab}><span className="panel-tool-icon"><Terminal /></span><strong>终端</strong><ChevronRight className="panel-tool-arrow" /></button>
+        <button className="panel-tool" title="查看任务启动的服务和监听端口" onClick={openServicesTab}><span className="panel-tool-icon is-services"><Activity /></span><strong>运行服务</strong><ChevronRight className="panel-tool-arrow" /></button>
       </div>
     </div>;
   }
@@ -5103,6 +5145,14 @@ export function App() {
   function renderPanelContent() {
     if (!activePanelTab) return null;
     if (activePanelTab.kind === 'temporary') return <TemporaryChat key={activePanelTab.id} id={activePanelTab.id} selection={modelSelection} onManage={() => void openSettings('models')} />;
+    if (activePanelTab.kind === 'terminal') return <Suspense fallback={
+      <div className="panel-route-loading" role="status" aria-label="正在加载终端">
+        <LoaderCircle aria-hidden="true" />
+      </div>
+    }>
+      <LazyTerminalPanel key={activePanelTab.id} id={activePanelTab.id} cwd={session?.cwd || workspace} onNewTerminal={openTerminalTab} />
+    </Suspense>;
+    if (activePanelTab.kind === 'services') return <RuntimeServicesPanel cwd={session?.cwd} workspace={workspace} />;
     if (activePanelTab.kind === 'start') return renderPanelStart();
     if (activePanelTab.kind === 'files') return renderFileTree();
     if (activePanelTab.kind === 'changes' && activePanelTab.review) return <ChangesView key={`${activePanelTab.id}:${activePanelTab.review.initial.at}:${activePanelTab.review.focusPath}`} {...activePanelTab.review} onOpenFile={path => void openFile(path, activePanelTab.review!.sessionId, 'diff')} onOpenDiff={(file, at) => openDiffTab(file, at, activePanelTab.review!.sessionId)} />;
@@ -5195,12 +5245,16 @@ export function App() {
                 ? '重启并安装更新'
                 : updateSnapshot.state === 'downloading'
                   ? `正在下载 Pi Studio 更新，${Math.round(updateSnapshot.progress || 0)}%`
-                  : `Pi Studio ${updateSnapshot.latestVersion ? `v${updateSnapshot.latestVersion} ` : ''}可以更新`}
+                  : updateSnapshot.updateKind === 'same-version'
+                    ? `Pi Studio ${updateSnapshot.latestVersion ? `v${updateSnapshot.latestVersion} ` : ''}有新构建`
+                    : `Pi Studio ${updateSnapshot.latestVersion ? `v${updateSnapshot.latestVersion} ` : ''}可以更新`}
               title={updateSnapshot.state === 'downloaded'
                 ? `Pi Studio ${updateSnapshot.latestVersion ? `v${updateSnapshot.latestVersion} ` : ''}已下载，点击安装`
                 : updateSnapshot.state === 'downloading'
                   ? `正在下载 Pi Studio 更新 · ${Math.round(updateSnapshot.progress || 0)}%`
-                  : `发现 Pi Studio ${updateSnapshot.latestVersion ? `v${updateSnapshot.latestVersion}` : '新版本'}`}
+                  : updateSnapshot.updateKind === 'same-version'
+                    ? `发现 Pi Studio ${updateSnapshot.latestVersion ? `v${updateSnapshot.latestVersion}` : '当前版本'} 的新构建`
+                    : `发现 Pi Studio ${updateSnapshot.latestVersion ? `v${updateSnapshot.latestVersion}` : '新版本'}`}
               onClick={openUpdateDialog}
             >
               {updateSnapshot.state === 'downloading'
@@ -5639,6 +5693,8 @@ export function App() {
               deletingChildKey={subagentDeletingKey || undefined}
               replyingChildKey={subagentReplyingKey || undefined}
               onReturnMain={returnToMainAgent}
+              mode={subagentOverviewMode}
+              onModeChange={setSubagentOverviewMode}
             />}
             {agentView.child && (
               <SubagentTranscriptView
@@ -6463,7 +6519,9 @@ export function App() {
                     <span className="about-release-label">当前版本</span>
                     <strong>{updateSnapshot.currentVersion ? `v${updateSnapshot.currentVersion}` : 'DEV'}</strong>
                     <div className="about-release-status"><i />GitHub Releases</div>
-                    {updateSnapshot.state === 'available' && updateSnapshot.latestVersion && <p>新版本 v{updateSnapshot.latestVersion}</p>}
+                    {updateSnapshot.state === 'available' && updateSnapshot.latestVersion && <p>
+                      {updateSnapshot.updateKind === 'same-version' ? '同版本新构建' : '新版本'} v{updateSnapshot.latestVersion}
+                    </p>}
                     <button type="button" onClick={openUpdateDialog}>版本与更新 <ChevronRight /></button>
                   </aside>
                 </section>

@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, FilePenLine, FileSearch, Globe2, ShieldAlert, Terminal, X } from 'lucide-react';
 import type {
   PermissionConfirmRequest,
@@ -35,13 +36,13 @@ type ConfirmKind = 'command' | 'read' | 'file' | 'network' | 'sensitive' | 'tool
 
 type ParsedConfirm = { kind: ConfirmKind; tool?: string; detail: string; explanation?: string; risk?: string };
 
-const KIND_META: Record<ConfirmKind, { label: string; icon: ReactNode; acceptLabel: string }> = {
-  command: { label: '执行命令', icon: <Terminal />, acceptLabel: '允许执行' },
-  read: { label: '读取文件', icon: <FileSearch />, acceptLabel: '允许读取' },
-  file: { label: '修改文件', icon: <FilePenLine />, acceptLabel: '允许写入' },
-  network: { label: '访问网络', icon: <Globe2 />, acceptLabel: '允许访问' },
-  sensitive: { label: '发送敏感信息', icon: <ShieldAlert />, acceptLabel: '仍然发送' },
-  tool: { label: '工具调用', icon: <Terminal />, acceptLabel: '允许' },
+const KIND_META: Record<ConfirmKind, { icon: ReactNode; acceptLabel: string }> = {
+  command: { icon: <Terminal />, acceptLabel: '允许执行' },
+  read: { icon: <FileSearch />, acceptLabel: '允许读取' },
+  file: { icon: <FilePenLine />, acceptLabel: '允许写入' },
+  network: { icon: <Globe2 />, acceptLabel: '允许访问' },
+  sensitive: { icon: <ShieldAlert />, acceptLabel: '仍然发送' },
+  tool: { icon: <Terminal />, acceptLabel: '允许' },
 };
 
 function kindForTool(tool: string, detail?: string): ConfirmKind {
@@ -104,7 +105,19 @@ function CommandPreview({ command }: { command: string }) {
 }
 
 /** 弹窗外壳：Esc 关闭、点击遮罩关闭、打开时聚焦卡片。 */
-function ConfirmShell({ onCancel, label, children }: { onCancel: () => void; label: string; children: ReactNode }) {
+function ConfirmShell({
+  onCancel,
+  label,
+  cardClassName,
+  role = 'dialog',
+  children,
+}: {
+  onCancel: () => void;
+  label: string;
+  cardClassName?: string;
+  role?: 'dialog' | 'alertdialog';
+  children: ReactNode;
+}) {
   const cardRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     cardRef.current?.focus();
@@ -115,11 +128,18 @@ function ConfirmShell({ onCancel, label, children }: { onCancel: () => void; lab
     return () => window.removeEventListener('keydown', onKey);
   }, [onCancel]);
 
-  return <div className="confirm-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
-    <div className="confirm-card" role="dialog" aria-modal="true" aria-label={label} tabIndex={-1} ref={cardRef}>
+  return createPortal(<div className="confirm-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
+    <div
+      className={`confirm-card${cardClassName ? ` ${cardClassName}` : ''}`}
+      role={role}
+      aria-modal="true"
+      aria-label={label}
+      tabIndex={-1}
+      ref={cardRef}
+    >
       {children}
     </div>
-  </div>;
+  </div>, document.body);
 }
 
 /**
@@ -135,11 +155,15 @@ export function ActionConfirmDialog({
   onCancel,
   onConfirm,
 }: ActionConfirmOptions & { onCancel: () => void; onConfirm: () => void }) {
-  return <ConfirmShell label={title} onCancel={onCancel}>
+  return <ConfirmShell
+    label={title}
+    cardClassName="is-action"
+    role={tone === 'danger' ? 'alertdialog' : 'dialog'}
+    onCancel={onCancel}
+  >
     <header className="confirm-head">
       <span className={`confirm-icon ${tone === 'danger' ? 'is-danger' : 'is-tool'}`}><AlertTriangle /></span>
       <div className="confirm-heading">
-        <span className="confirm-eyebrow">{tone === 'danger' ? '不可逆操作' : '确认操作'}</span>
         <h2>{title}</h2>
       </div>
       <button type="button" className="confirm-close" aria-label="关闭确认" onClick={onCancel}><X /></button>
@@ -201,7 +225,6 @@ export function ToolConfirmDialog({ request, onRespond }: { request: ConfirmRequ
     <header className="confirm-head">
       <span className={`confirm-icon is-${parsed.kind}`}>{meta.icon}</span>
       <div className="confirm-heading">
-        <span className="confirm-eyebrow">{meta.label}</span>
         <h2>{request.title}</h2>
       </div>
       <button type="button" className="confirm-close" aria-label="关闭确认" onClick={() => respond(false)}><X /></button>
@@ -258,7 +281,6 @@ export function FullPermissionDialog({ acknowledged, onAcknowledgedChange, onCon
     <header className="confirm-head">
       <span className="confirm-icon is-danger"><AlertTriangle /></span>
       <div className="confirm-heading">
-        <span className="confirm-eyebrow">高级权限</span>
         <h2>确认启用完全权限？</h2>
       </div>
       <button type="button" className="confirm-close" aria-label="关闭确认" onClick={onCancel}><X /></button>

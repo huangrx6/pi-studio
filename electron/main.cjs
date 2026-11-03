@@ -24,6 +24,7 @@ const { closeDurableRuntime, initializeDurableRuntime } = require('./runtime/dur
 const { closeConversationWatches } = require('./runtime/conversations.cjs');
 const { shutdownTemporaryChats } = require('./services/temporary-chat.cjs');
 const { registerIpc } = require('./ipc/index.cjs');
+const { shutdownTerminalSessions } = require('./ipc/terminal.cjs');
 const { createWindow, showMainWindow, installMenu, watchSystemTheme } = require('./window.cjs');
 const { BACKGROUND_SCHEME } = require('./background-media.cjs');
 const { registerBackgroundProtocol } = require('./services/background.cjs');
@@ -77,6 +78,7 @@ if (primaryInstance) {
       [
         { label: 'conversation watches', run: closeConversationWatches, timeoutMs: 3_000 },
         { label: 'temporary chats', run: shutdownTemporaryChats, timeoutMs: 3_000 },
+        { label: 'terminal sessions', run: shutdownTerminalSessions, timeoutMs: 2_000 },
       ],
       [{ label: 'Durable runtime', run: closeDurableRuntime, timeoutMs: 8_000 }],
     ],

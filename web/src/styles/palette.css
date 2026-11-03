@@ -117,6 +117,24 @@
   --syntax-string: #3e662c;
   --syntax-number: #82551e;
   --syntax-function: #365a7d;
+  /* Terminal ANSI colors stay inside the theme source so xterm follows the
+  active light/dark palette instead of shipping its own hard-coded scheme. */
+  --terminal-ansi-black: #202020;
+  --terminal-ansi-red: #b12f36;
+  --terminal-ansi-green: #267044;
+  --terminal-ansi-yellow: #815c13;
+  --terminal-ansi-blue: #365a7d;
+  --terminal-ansi-magenta: #634b85;
+  --terminal-ansi-cyan: #2f6f72;
+  --terminal-ansi-white: #d6d6d6;
+  --terminal-ansi-bright-black: #6b6b6b;
+  --terminal-ansi-bright-red: #c2414a;
+  --terminal-ansi-bright-green: #33875a;
+  --terminal-ansi-bright-yellow: #9b7120;
+  --terminal-ansi-bright-blue: #4d7398;
+  --terminal-ansi-bright-magenta: #7b61a0;
+  --terminal-ansi-bright-cyan: #3d8487;
+  --terminal-ansi-bright-white: #f5f5f5;
 }
 
 /* 暗色主题：重定义页面、表面、文字、边框、语义状态、浮层与语法高亮。品牌
@@ -172,6 +190,22 @@
   --syntax-string: #b4d48f;
   --syntax-number: #dfbd88;
   --syntax-function: #a3c3df;
+  --terminal-ansi-black: #181818;
+  --terminal-ansi-red: #ff989e;
+  --terminal-ansi-green: #9dce8b;
+  --terminal-ansi-yellow: #e7c273;
+  --terminal-ansi-blue: #9ebfe2;
+  --terminal-ansi-magenta: #c7afe8;
+  --terminal-ansi-cyan: #8bc9cb;
+  --terminal-ansi-white: #d6d6d6;
+  --terminal-ansi-bright-black: #747474;
+  --terminal-ansi-bright-red: #ffb2b7;
+  --terminal-ansi-bright-green: #b9dfa9;
+  --terminal-ansi-bright-yellow: #f0d295;
+  --terminal-ansi-bright-blue: #bbd6ee;
+  --terminal-ansi-bright-magenta: #dac8f2;
+  --terminal-ansi-bright-cyan: #ade1e3;
+  --terminal-ansi-bright-white: #ffffff;
 }
 
 /* 配色方案：只替换品牌强调、交互表面、焦点与选区。页面中性表面和

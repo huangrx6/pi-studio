@@ -67,6 +67,17 @@ contextBridge.exposeInMainWorld('piApi', {
   revealFile: (payload) => ipcRenderer.invoke('pi:reveal-file', payload),
   openExternal: (url) => ipcRenderer.invoke('pi:open-external', url),
   openLink: (url, mode) => ipcRenderer.invoke('pi:open-link', { url, mode }),
+  terminalCreate: (payload) => ipcRenderer.invoke('pi:terminal-create', payload),
+  terminalWrite: (id, data) => ipcRenderer.invoke('pi:terminal-write', { id, data }),
+  terminalResize: (id, cols, rows) => ipcRenderer.invoke('pi:terminal-resize', { id, cols, rows }),
+  terminalClose: (id) => ipcRenderer.invoke('pi:terminal-close', id),
+  onTerminalEvent: (listener) => {
+    const handler = (_event, payload) => listener(payload);
+    ipcRenderer.on('pi:terminal-event', handler);
+    return () => ipcRenderer.removeListener('pi:terminal-event', handler);
+  },
+  runtimeServices: (payload) => ipcRenderer.invoke('pi:runtime-services', payload),
+  runtimeServiceStop: (payload) => ipcRenderer.invoke('pi:runtime-service-stop', payload),
   composerResources: (payload) => ipcRenderer.invoke('pi:conversation-resources', payload),
   searchFiles: (payload) => ipcRenderer.invoke('pi:search-files', payload),
   saveAttachment: (payload) => ipcRenderer.invoke('pi:save-attachment', payload),

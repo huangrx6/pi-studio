@@ -1,0 +1,100 @@
+.terminal-panel {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--surface);
+}
+.terminal-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--toolbar-height);
+  flex: none;
+  padding: 0 var(--space-2) 0 var(--space-3);
+  background: var(--surface-soft);
+}
+.terminal-toolbar > code {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--faint);
+  font: 10.5px var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.terminal-toolbar > button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  border-radius: var(--radius-control);
+  color: var(--faint);
+}
+.terminal-toolbar > button:hover { background: var(--surface-hover); color: var(--text); }
+.terminal-toolbar > button svg { width: 14px; height: 14px; }
+.terminal-live-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  color: var(--faint);
+  font-size: var(--text-xs);
+}
+.terminal-live-state i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--disabled-text);
+}
+.terminal-live-state.is-running i { background: var(--success); }
+.terminal-shell {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.terminal-shell svg { width: 13px; height: 13px; }
+.terminal-stage { position: relative; flex: 1; min-height: 0; }
+.terminal-host {
+  width: 100%;
+  height: 100%;
+  padding: 10px 12px;
+}
+.terminal-host .xterm { height: 100%; }
+.terminal-host .xterm-viewport { scrollbar-color: var(--scrollbar) transparent; }
+.terminal-error {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  display: grid;
+  width: min(340px, calc(100% - 40px));
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--error-border); /* taste-skill-ignore */
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  text-align: center;
+  transform: translate(-50%, -50%);
+}
+.terminal-error strong { color: var(--text); font-size: var(--text-base); }
+.terminal-error button {
+  justify-self: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.terminal-error button:hover { background: var(--surface-hover); }
+@media (max-width: 640px) {
+  .terminal-toolbar > code { display: none; }
+  .terminal-shell { margin-right: auto; }
+}

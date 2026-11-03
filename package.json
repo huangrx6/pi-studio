@@ -1,6 +1,6 @@
 {
   "name": "pi-studio",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "private": true,
   "type": "module",
   "description": "Pi Studio — a native desktop workspace built on Pi Durable.",
@@ -33,11 +33,14 @@
     "upgrade:check": "node tools/upgrades/check-durable.mjs",
     "release:cert": "bash tools/release/create-self-signed-macos-certificate.sh",
     "release:dist": "bash tools/release/build-signed-macos.sh",
+    "qa:docs": "node tools/qa/qa-docs.mjs",
     "qa:memory": "node tools/qa/qa-memory-smoke.mjs",
+    "qa:runtime-panel": "node tools/qa/qa-runtime-panel.mjs",
     "qa:startup": "node tools/qa/qa-packaged-startup.mjs",
     "start": "node tools/launch.mjs",
     "test": "node --test tests/electron/*.test.cjs tests/web/*.test.mjs tests/integration/*.test.cjs tests/integration/*.test.mjs",
-    "dist": "pnpm run build && electron-builder --mac --arm64 --x64 --publish never"
+    "dist": "pnpm run build && node tools/release/build-distribution.cjs",
+    "postinstall": "node tools/pty/ensure-executable.cjs"
   },
   "dependencies": {
     "@earendil-works/chord": "1.5.0",
@@ -45,8 +48,11 @@
     "@earendil-works/pi-durable": "1.5.0",
     "@earendil-works/pi-mcp": "1.5.0",
     "@earendil-works/pi-telemetry": "1.5.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "electron-updater": "^6.8.11",
     "lucide-react": "^0.468.0",
+    "node-pty": "^1.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
@@ -75,6 +81,9 @@
     "appId": "dev.pi.studio",
     "productName": "Pi Studio",
     "afterPack": "tools/release/electron-builder-after-pack.cjs",
+    "asarUnpack": [
+      "node_modules/node-pty/**"
+    ],
     "directories": {
       "output": "release"
     },

@@ -12,6 +12,11 @@ const { app, Notification } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { getWindow } = require('../core/state.cjs');
 const { initialUpdateState, reduceUpdateState } = require('../update-state.cjs');
+const {
+  attachBuildAwareUpdateCheck,
+  isSameVersionBuildUpdate,
+  readInstalledBuildIdentity,
+} = require('./update-identity.cjs');
 
 const STARTUP_CHECK_DELAY_MS = 25_000;
 const BACKGROUND_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
@@ -26,6 +31,7 @@ let startupTimer;
 let intervalTimer;
 let lastCheckAt = 0;
 let focusListener;
+let currentBuildId;
 const activeNotifications = new Set();
 const notifiedVersions = new Set();
 
@@ -95,11 +101,19 @@ function showNativeNotification(title, body, version) {
 function wireUpdaterEvents() {
   autoUpdater.on('checking-for-update', () => apply('checking'));
   autoUpdater.on('update-available', (info) => {
-    apply('available', { info });
+    const sameVersionBuild = isSameVersionBuildUpdate(info, app.getVersion(), currentBuildId);
+    apply('available', {
+      info,
+      updateKind: sameVersionBuild ? 'same-version' : 'version',
+    });
     showNativeNotification(
-      'Pi Studio 有新版本',
-      `v${info?.version || '新版本'} 已可用。点击查看更新内容。`,
-      info?.version,
+      sameVersionBuild ? 'Pi Studio 有新构建' : 'Pi Studio 有新版本',
+      sameVersionBuild
+        ? `v${info?.version || app.getVersion()} 已重新构建。点击查看并更新。`
+        : `v${info?.version || '新版本'} 已可用。点击查看更新内容。`,
+      sameVersionBuild
+        ? `build:${info?.version || app.getVersion()}:${info?.buildId || 'unknown'}`
+        : `version:${info?.version || 'unknown'}`,
     );
   });
   autoUpdater.on('update-not-available', (info) => apply('up-to-date', { info }));
@@ -143,7 +157,9 @@ function scheduleBackgroundChecks() {
 function initializeUpdater() {
   if (initialized) return snapshot();
   initialized = true;
-  updateState = initialUpdateState(app.getVersion());
+  const installedIdentity = readInstalledBuildIdentity(process.resourcesPath);
+  currentBuildId = installedIdentity.buildId;
+  updateState = initialUpdateState(app.getVersion(), currentBuildId);
 
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
@@ -157,6 +173,11 @@ function initializeUpdater() {
     error: (message) => console.error('[updater]', message),
   };
 
+  attachBuildAwareUpdateCheck(autoUpdater, {
+    currentVersion: app.getVersion(),
+    getCurrentBuildId: () => currentBuildId,
+    log: (message) => autoUpdater.logger.info(message),
+  });
   wireUpdaterEvents();
   lastCheckAt = Date.now();
   scheduleBackgroundChecks();
@@ -211,13 +232,27 @@ async function downloadUpdate() {
   if (updateState.state !== 'available') return snapshot();
 
   apply('downloading');
-  downloadingPromise = autoUpdater.downloadUpdate()
+  const previousDisableDifferentialDownload = autoUpdater.disableDifferentialDownload;
+  // Same-version Release assets keep their filenames, so the updater can pair a
+  // rebuilt package with the previous build's block map. A full download also
+  // guarantees every rebuild is installed from the exact artifact in its YAML.
+  autoUpdater.disableDifferentialDownload = updateState.updateKind === 'same-version';
+  let download;
+  try {
+    download = autoUpdater.downloadUpdate();
+  } catch (error) {
+    autoUpdater.disableDifferentialDownload = previousDisableDifferentialDownload;
+    apply('error', { error: errorText(error) });
+    return snapshot();
+  }
+  downloadingPromise = download
     .then(() => snapshot())
     .catch((error) => {
       if (updateState.state !== 'error') apply('error', { error: errorText(error) });
       return snapshot();
     })
     .finally(() => {
+      autoUpdater.disableDifferentialDownload = previousDisableDifferentialDownload;
       downloadingPromise = undefined;
     });
   return downloadingPromise;

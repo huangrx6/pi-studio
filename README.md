@@ -2,7 +2,7 @@
 
 **基于 Pi Durable 的原生 macOS 桌面 Agent 工作台。** 会话、模型、凭据、MCP、技能与扩展由 Pi Studio 独立管理；应用不读取，也不修改 Pi CLI 自己的配置。
 
-[![CI](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml) [![release](https://img.shields.io/badge/release-v0.0.11-111111?style=flat-square)](https://github.com/huangrx6/pi-studio/releases/latest) [![license](https://img.shields.io/badge/license-MIT-111111?style=flat-square)](LICENSE)
+[![CI](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/huangrx6/pi-studio/actions/workflows/ci.yml) [![release](https://img.shields.io/badge/release-v0.0.12-111111?style=flat-square)](https://github.com/huangrx6/pi-studio/releases/latest) [![license](https://img.shields.io/badge/license-MIT-111111?style=flat-square)](LICENSE)
 
 [下载 macOS 版](https://github.com/huangrx6/pi-studio/releases/latest) · [产品主页](https://huangrx6.github.io/pi-studio/) · [完整手册](https://huangrx6.github.io/pi-studio/guide.html) · [资源作用域](docs/resources.md) · [问题反馈](https://github.com/huangrx6/pi-studio/issues)
 
@@ -14,6 +14,7 @@ Pi Studio 把 Pi Durable 的持久化 Agent 能力带进桌面窗口。每个会
 - **Studio 拥有自己的数据。** 应用使用 `pi-studio.sqlite` 保存 Durable 的 `durable_*` 表，以及 Studio 的工作区、会话投影、模型、凭据、MCP、扩展和设置记录。
 - **临时聊天不落盘。** 临时会话复用 Durable 执行能力，但使用独立的 `MemoryStorage`，退出后不会留下对话、附件或工作区记录。
 - **编码 Harness 可检查、可配置。** Studio 默认启用完整编码基线，并把八个 Prompt 部分、实际工具说明、项目指令和自定义补充组成可管理的 profile。
+- **运行过程可见。** 右侧工作台提供可恢复的交互式 PTY 终端、TCP 监听端口扫描、进程归属依据和安全终止入口。
 
 ## 界面
 
@@ -124,7 +125,9 @@ Studio 的 `subagent` 工具通过 Durable 创建 owned child conversation。子
 
 关闭窗口后应用可继续驻留菜单栏，展示正在运行的会话；一轮结束后可弹出结果卡片并跳回对应会话。输入框左侧提供请求批准、帮我批准和完全权限三种工具策略。
 
-应用会检查 GitHub Releases。发现新版本后会在品牌入口、系统通知和菜单栏提示；下载完成后由用户选择立即重启，或留到下一次退出时安装。
+应用会检查 GitHub Releases。发现新版本或同一版本的新构建后，会在品牌入口、系统通知和菜单栏提示；下载完成后由用户选择立即重启，或留到下一次退出时安装。
+
+右侧工作台的终端以窗口为所有权边界，支持重连、回放、主题同步和最多 8 个并行 PTY；关闭终端 Tab 或窗口时会结束对应进程。运行服务页按当前任务、工作区和全部本机监听端口三种范围展示 TCP 服务，进程归属来自 Studio 后代关系与主进程登记工作区目录，不把“监听端口”直接等同于“Agent 启动”。只有 Studio 子进程或已登记工作区进程可以通过确认框终止，命令中的常见密钥格式会在进入 renderer 前脱敏。
 
 ### 性能
 
@@ -194,11 +197,13 @@ pnpm dev          # Vite + Electron 热更新
 pnpm test         # Node 契约、状态、Harness、扩展与任务测试
 pnpm build        # TypeScript 检查 + Vite 生产构建
 pnpm qa:memory    # 长会话、图片、子智能体、反复切换与退出回收
+pnpm qa:runtime-panel # 终端、端口归属、服务终止与 PTY 清理
+pnpm qa:docs      # 官网、手册、锚点、搜索、响应式与主题检查
 pnpm extension -- validate examples/extensions/agent-starter
 pnpm extension -- pack examples/extensions/agent-starter --out release
 ```
 
-测试覆盖会话分页与标题、Durable task、Harness profile 与项目指令、扩展 manifest/信任/路径边界、子智能体设置、文件差异、更新状态和 Electron import 完整性。视觉与真实窗口交互由 `tools/qa/qa-*.mjs` 单独运行，不与 `pnpm test` 混为一组。
+测试覆盖会话分页与标题、Durable task、Harness profile 与项目指令、扩展 manifest/信任/路径边界、子智能体设置、文件差异、终端所有权、运行服务归属、同版本更新状态和 Electron import 完整性。视觉与真实窗口交互由 `tools/qa/qa-*.mjs` 单独运行，不与 `pnpm test` 混为一组。
 
 ## 打包与发布
 
@@ -224,8 +229,10 @@ Pi Studio 使用 `electron-updater` 读取 GitHub 最新 Release。GitHub 不会
 | :-- | :-- |
 | `Pi-Studio-<版本>-<架构>.dmg` | 首次安装与手动下载 |
 | `Pi-Studio-<版本>-<架构>.zip` | macOS 自动更新 |
-| `latest-mac.yml` | 版本、下载地址与校验信息 |
+| `latest-mac.yml` | 版本、构建指纹、下载地址与校验信息 |
 | `*.blockmap` | 差分下载加速 |
+
+每次发行都会生成独立的 `buildId`，同时写入签名后的 `.app` 和 `latest-mac.yml`。因此即使以后重新发布同一语义版本，只要构建指纹不同，应用内更新仍会提示并继续使用标准的签名 ZIP 安装流程；同版本重构建会强制完整下载，避免复用旧 blockmap。macOS 原生 `CFBundleVersion` 也会随构建递增，避免 Squirrel.Mac 把同版本重构建误判为旧包。没有本地构建指纹的历史版本会在第一次遇到带指纹的同版本 Release 时更新一次。
 
 应用不会自动下载更新。macOS runner 会用稳定的自签名身份完整签署 `.app`，并在发布前验证 `.app` 与自动更新 ZIP 内的签名。只要后续 Release 复用同一证书，即可保持 Squirrel.Mac 的原地更新身份连续性。
 
@@ -240,7 +247,7 @@ pi-studio/
 │   ├── runtime/         # Durable 启动、内置能力注册与会话投影
 │   ├── capabilities/    # 每项 Agent 能力及其唯一公共入口
 │   ├── integrations/    # MCP 等外部系统适配
-│   ├── services/        # 更新、窗口、发行等通用应用服务
+│   ├── services/        # 更新、终端、运行服务与发行等应用服务
 │   ├── ipc/             # 按领域注册的 IPC
 │   ├── main.cjs         # 生命周期与模块装配
 │   └── window.cjs       # 窗口、菜单、主题
@@ -259,6 +266,8 @@ pi-studio/
 ├── tools/
 │   ├── cli/             # 扩展作者与维护 CLI
 │   ├── icons/           # 应用、菜单栏图标生成
+│   ├── pty/             # node-pty 原生 helper 安装与打包校验
+│   ├── release/         # 构建身份、签名、更新元数据与发布工具
 │   └── qa/              # 桌面截图、流式稳定与真实 Electron 内存检查
 ├── extensions/          # 随应用分发的官方扩展
 ├── assets/              # 图标与 README 横幅

@@ -4,6 +4,7 @@ allowBuilds:
   electron: true
   '@google/genai': true
   esbuild: true
+  node-pty: true
   protobufjs: true
 minimumReleaseAgeExclude:
   - '@earendil-works/chord@1.5.0'

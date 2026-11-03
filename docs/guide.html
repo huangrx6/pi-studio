@@ -50,7 +50,7 @@
           <ul>
             <li data-search="概览 简介 是什么 Pi Studio Durable 桌面 Agent"><a href="#overview">产品概览</a></li>
             <li data-search="快速开始 安装 下载 首次使用 模型 工作区"><a href="#quickstart">快速开始</a></li>
-            <li data-search="界面地图 侧栏 会话 子智能体 扩展 文件 输入框"><a href="#interface">界面地图</a></li>
+            <li data-search="界面地图 侧栏 会话 子智能体 扩展 文件 终端 运行服务 输入框"><a href="#interface">界面地图</a></li>
           </ul>
         </section>
 
@@ -63,7 +63,7 @@
             <li data-search="子智能体 subagent 并行 supervisor 后台"><a href="#subagents">子智能体</a></li>
             <li data-search="文件 附件 引用 diff 变更 工作台 预览"><a href="#files-changes">文件、附件与差异</a></li>
             <li data-search="模型 提供方 API Key 模型发现 thinking 推理"><a href="#models">模型与推理</a></li>
-            <li data-search="桌面 背景 主题 菜单栏 通知 更新"><a href="#desktop">桌面体验</a></li>
+            <li data-search="桌面 背景 主题 菜单栏 通知 更新 终端 PTY 端口 运行服务 进程"><a href="#desktop">桌面体验</a></li>
           </ul>
         </section>
 
@@ -124,14 +124,14 @@
             <code>main</code> 分支的产品边界和技术契约。
           </p>
           <dl class="article-meta">
-            <div><dt>Version</dt><dd>v0.0.11 · Stable</dd></div>
+            <div><dt>Version</dt><dd>v0.0.12 · Stable</dd></div>
             <div><dt>Runtime</dt><dd>Pi Durable 1.5</dd></div>
             <div><dt>Ownership</dt><dd>Studio SQLite</dd></div>
             <div><dt>License</dt><dd>MIT · macOS</dd></div>
           </dl>
           <div class="status-note">
             <strong>版本说明</strong>
-            <p><code>v0.0.11</code> 统一技能页搜索框的控件尺寸、字号与焦点状态，去掉内外层叠加的双重描边。Durable 继续负责会话、任务与子智能体执行；Studio 只保存自己的投影、设置、资源信任和受管目录。</p>
+            <p><code>v0.0.12</code> 增加窗口级交互式终端与任务监听端口视图，并让应用内更新识别同一语义版本的新构建。Durable 继续负责会话、任务与子智能体执行；Studio 只保存自己的投影、设置、资源信任和受管目录。</p>
           </div>
 
           <div class="chapter-index" aria-label="主要章节">
@@ -156,7 +156,7 @@
             </p>
             <div class="feature-pairs">
               <div class="feature-pair"><span>Runtime</span><strong>Pi Durable 1.5</strong><p>会话、任务、流式事件、工具调用、分叉、恢复和 owned child conversation。</p></div>
-              <div class="feature-pair"><span>Desktop</span><strong>Electron + React</strong><p>窗口、菜单栏、通知、更新、文件系统、附件和原生主题。</p></div>
+              <div class="feature-pair"><span>Desktop</span><strong>Electron + React</strong><p>窗口、菜单栏、通知、更新、文件系统、终端、运行服务、附件和原生主题。</p></div>
               <div class="feature-pair"><span>Data</span><strong>Studio SQLite</strong><p>Studio 自己的设置、投影、凭据、扩展状态和项目资源信任。</p></div>
               <div class="feature-pair"><span>Harness</span><strong>Coding Context</strong><p>Prompt sections、AGENTS.md、Skill、工具说明、工作目录和自定义补充。</p></div>
             </div>
@@ -236,7 +236,7 @@
                   <tr><td>左侧栏</td><td>新会话、临时聊天、扩展入口、工作区、会话历史、设置</td><td>完整扩展详情或大段运行日志</td></tr>
                   <tr><td>顶部会话 Tabs</td><td>对话、子智能体总览、扩展面板三个一级视图</td><td>模型双跑等对话内临时视图</td></tr>
                   <tr><td>主内容区</td><td>消息、工具调用、thinking、结果、子智能体 transcript</td><td>扩展 summary、文件 diff 全文</td></tr>
-                  <tr><td>右侧面板</td><td>工作区文件、预览、差异工作台</td><td>对话消息正文</td></tr>
+                  <tr><td>右侧面板</td><td>工作区文件、预览、差异、终端与运行服务</td><td>对话消息正文</td></tr>
                   <tr><td>输入框</td><td>工作区、类型、权限、模型、thinking、附件、队列</td><td>常驻的营销通知或临时 toast</td></tr>
                   <tr><td>会话 footer 扩展</td><td>一行实时指标、额度或运行摘要</td><td>可滚动长表、详情按钮或嵌套卡片</td></tr>
                 </tbody>
@@ -247,6 +247,7 @@
               <li>进入子智能体详情后，主内容区在「子智能体」Tab 内切换；返回列表和返回主对话是两个明确出口。</li>
               <li>扩展详情在「扩展」Tab 内切换；footer 只显示摘要，完整内容进入扩展中心。</li>
               <li>模型同题双跑从输入框的 <code>⋯</code> 或 <code>Cmd/Ctrl+K</code> 动作面板进入。它是一个对话内临时视图，主内容区替换为双栏结果，但「对话」Tab 始终保持选中，不会增加第四个一级 Tab。</li>
+              <li>终端和运行服务属于右侧工作台 Tab。关闭终端 Tab 会结束对应 PTY；短暂收起右侧面板只会卸载视图，重新打开时仍可恢复会话。</li>
             </ul>
           </div>
         </section>
@@ -631,17 +632,35 @@
           <header class="section-heading">
             <span class="section-kicker">16 / Desktop</span>
             <h2 id="desktop-title">桌面体验</h2>
-            <p>主题、背景、菜单栏、通知和更新都是 Studio 产品层能力，不进入模型上下文。</p>
+            <p>主题、背景、菜单栏、通知、更新、终端与运行服务都是 Studio 产品层能力，不进入模型上下文。</p>
           </header>
           <div class="doc-copy">
             <ul>
               <li>亮暗主题、四套全局强调色、圆角、字号和背景由统一设计令牌控制。</li>
               <li>背景支持静态图片、GIF、动态 WebP 与 MP4 / MOV / WebM；透明度、柔化和界面遮挡直接影响内容表面。</li>
               <li>关闭主窗口可以继续驻留菜单栏，显示运行中的会话与一轮完成通知。</li>
-              <li>应用会在启动、前台使用和重新聚焦时检查 GitHub Release。</li>
-              <li>下载完成后由用户选择立即重启安装，或保留到下一次退出。</li>
+              <li>应用会在启动、前台使用和重新聚焦时检查 GitHub Release；同一版本只要构建指纹不同，也会作为新构建提示。</li>
+              <li>下载完成后由用户选择立即重启安装，或保留到下一次退出；同版本重构建使用完整 ZIP，避免复用旧 blockmap。</li>
             </ul>
             <p>菜单栏和应用内通知只做入口，不复制完整对话。点击通知会回到对应会话；没有被启用的通知可以静默留在通知中心。</p>
+
+            <h3>交互式终端</h3>
+            <p>从右侧工作台打开终端时，Studio 在 Electron 主进程创建 PTY，renderer 只接收 JSON-safe 会话元数据和输出字符串。终端跟随当前主题与对话字号，切换 Tab 时由主进程保留输出并回放；最多同时打开 8 个窗口级 PTY。</p>
+            <ul>
+              <li>工作区可用时以工作区为起始目录；工作区已移动或不可用时回退到用户主目录。</li>
+              <li>关闭终端 Tab、关闭所属窗口或退出 Studio 会结束对应 PTY；仅收起右侧面板不会终止进程。</li>
+              <li>终端拥有当前用户 shell 的权限，不是文件工具边界或操作系统沙箱。</li>
+            </ul>
+
+            <h3>运行服务</h3>
+            <p>运行服务页每 2.5 秒扫描一次 TCP 监听端口，并默认只显示与当前任务或已登记工作区相关的服务。每行提供端口、进程、PID、运行时长、工作目录和归属依据，可复制 URL 或直接打开。</p>
+            <ul>
+              <li><strong>任务进程</strong>来自 Studio 主进程的后代关系；<strong>工作区</strong>表示进程工作目录位于已登记工作区。</li>
+              <li>“全部”会显示本机其他监听端口，但不会把它们伪装成 Agent 启动的服务。</li>
+              <li>终止前会列出受影响的端口并要求确认。Studio 只允许终止自己的子进程或主进程登记工作区内的进程，并拒绝终止 Studio 主进程。</li>
+              <li>命令会在进入 renderer 前去除常见 API Key、Token、Password 与发布凭据格式；操作权限仍以当前用户进程权限为上限。</li>
+              <li>扫描依赖 macOS <code>lsof</code> / <code>ps</code>、Linux <code>ss</code> / <code>ps</code> 或 Windows <code>netstat</code>。权限受限或系统隐藏的进程可能显示“进程信息不可读”，结果是可观察集合，不是主机安全审计。</li>
+            </ul>
           </div>
         </section>
 
@@ -848,6 +867,7 @@ Electron preload / IPC
   ├─ Studio SQLite settings / projections
   ├─ model catalog and safeStorage credentials
   ├─ Skill / MCP / extension registry
+  ├─ PTY sessions and runtime-service ownership
   └─ file, attachment, updater, menu bar
   │
   ▼
@@ -861,7 +881,7 @@ Pi Durable 1.5 Harness
 Model provider</code></pre>
             </figure>
             <p><code>electron/runtime/durable-runtime.cjs</code> 是唯一共享运行时装配点。<code>electron/ipc/sessions.cjs</code> 把 Durable 的提交、任务状态、实时事件、分页、分叉、模型与 thinking 切换映射成 renderer contract。</p>
-            <p>扩展、MCP、Skill 和 Harness 在下一请求边界热刷新；外部文件 handle、Durable task 对象、凭据明文和原始扩展实现都不能穿过 renderer 契约。</p>
+            <p>扩展、MCP、Skill 和 Harness 在下一请求边界热刷新；外部文件 handle、PTY handle、Durable task 对象、凭据明文和原始扩展实现都不能穿过 renderer 契约。终端事件按窗口和会话所有权路由，运行服务扫描与终止逻辑也留在主进程。</p>
           </div>
         </section>
 
@@ -951,20 +971,21 @@ Model provider</code></pre>
           <div class="doc-copy">
             <h3>已经实现</h3>
             <ul>
-              <li>renderer contract 仅接受 JSON-safe DTO；凭据、path handle 与 Durable object 留在主进程。</li>
+              <li>renderer contract 仅接受 JSON-safe DTO；凭据、path handle、PTY handle 与 Durable object 留在主进程。</li>
               <li>API Key、MCP env/header 使用 Electron safeStorage envelope。</li>
               <li>扩展入口 realpath containment、ZIP 路径与符号链接边界检查。</li>
               <li>manifest、contribution、UI content、action 和 dataView 严格清洗。</li>
               <li>远程扩展来源使用 HTTPS、外部 SHA-256 或固定 GitHub commit；可选 Ed25519 发布者签名。</li>
               <li>项目 Skill 与项目扩展使用内容指纹，变化后撤销旧信任。</li>
               <li>工具权限在每次 ToolTask 前读取，覆盖模型直接调用、MCP 与 nested tool。</li>
+              <li>运行服务的终止范围由主进程校验：只接受 Studio 子进程或 Studio SQLite 已登记工作区内的进程，不信任 renderer 自报的任意路径。</li>
             </ul>
             <h3>明确没有解决</h3>
             <ul>
               <li>Agent 扩展一旦被信任，就拥有 Electron 主进程 Node 权限。</li>
               <li>SHA-256 不证明发布者身份；身份连续性依赖签名和首次公钥信任。</li>
               <li>Bash 静态分析无法覆盖所有动态 shell 语义、脚本和未知包装器。</li>
-              <li>目前没有透明日志、Sigstore / DSSE 身份链或系统级进程沙箱。</li>
+              <li>目前没有透明日志、Sigstore / DSSE 身份链或系统级进程沙箱；交互式终端同样继承当前用户的 shell 权限。</li>
               <li>MCP 可以使用静态 headers 或 OAuth；模型 provider 当前仍只使用 API Key。</li>
             </ul>
             <div class="callout danger">
@@ -989,7 +1010,7 @@ Model provider</code></pre>
 │   ├── runtime/        # Durable 启动、内置注册与会话投影
 │   ├── capabilities/   # Agent 能力及其唯一公共入口
 │   ├── integrations/   # MCP 等外部系统适配
-│   ├── services/       # 更新、文件、发行等通用应用服务
+│   ├── services/       # 更新、终端、运行服务与发行等应用服务
 │   ├── ipc/            # typed preload / IPC boundary
 │   ├── main.cjs        # lifecycle and module assembly
 │   └── window.cjs      # native window / menu / theme
@@ -1006,6 +1027,8 @@ Model provider</code></pre>
 ├── tools/
 │   ├── cli/
 │   ├── icons/
+│   ├── pty/            # node-pty helper 安装与打包校验
+│   ├── release/        # 构建身份、签名、更新元数据与发布
 │   └── qa/
 ├── extensions/         # first-party extensions
 ├── examples/extensions/
@@ -1033,6 +1056,8 @@ pnpm dev
 pnpm test
 pnpm run build
 pnpm qa:memory
+pnpm qa:runtime-panel
+pnpm qa:docs
 pnpm run extension:schema
 git diff --check</code></pre>
             </figure>
@@ -1043,6 +1068,8 @@ git diff --check</code></pre>
                   <tr><td><code>pnpm dev</code></td><td>Vite + Electron 开发模式</td></tr>
                   <tr><td><code>pnpm test</code></td><td>主进程、renderer 纯函数与集成测试</td></tr>
                   <tr><td><code>pnpm run build</code></td><td>TypeScript 检查与 Vite 生产构建</td></tr>
+                  <tr><td><code>pnpm qa:runtime-panel</code></td><td>真实 Electron 中验证终端、端口归属、服务终止和 PTY 清理</td></tr>
+                  <tr><td><code>pnpm qa:docs</code></td><td>检查官网与手册的锚点、本地资源、搜索、响应式布局和主题</td></tr>
                   <tr><td><code>pnpm qa:memory</code></td><td>隔离 userData，检查长会话、图片、子智能体、反复切换和退出回收</td></tr>
                   <tr><td><code>pnpm extension -- validate …</code></td><td>校验扩展目录</td></tr>
                   <tr><td><code>pnpm extension -- pack …</code></td><td>生成确定性扩展包</td></tr>
@@ -1076,7 +1103,9 @@ pnpm release:dist
 # GitHub Actions release workflow:
 # - push v* tag, or manual dispatch
 # - verify tag == package.json version
+# - require existing rebuild tags to match the checked-out commit
 # - build arm64 + x64 DMG / ZIP / latest-mac.yml
+# - stamp one buildId into both .app and updater metadata
 # - require CSC_LINK / CSC_KEY_PASSWORD and verify every app signature
 # - publish GitHub Release</code></pre>
             </figure>
@@ -1085,6 +1114,9 @@ pnpm release:dist
               <li>ZIP、<code>latest-mac.yml</code> 与 blockmap 用于 electron-updater。</li>
               <li>Release 工作流必须使用仓库 secret <code>CSC_LINK</code> 与 <code>CSC_KEY_PASSWORD</code>，并校验 app 和更新 ZIP 内 app 的完整签名。</li>
               <li>首次生成证书可运行 <code>pnpm release:cert</code>；全部版本必须复用同一自签名身份。重新生成证书会让旧客户端失去 Squirrel.Mac 更新连续性。</li>
+              <li>每次构建都会生成新的 <code>buildId</code> 和递增的 <code>CFBundleVersion</code>。即使语义版本不变，客户端也能识别重新构建；同一版本更新会强制完整下载，避免旧 blockmap 与新包错配。</li>
+              <li>手动创建新版本时可以继续从 main 构建；重构建已有 tag 时必须从该 tag 运行，工作流会校验 tag 提交与当前检出提交一致，并再次校验 tag 与 <code>package.json</code> 版本一致。</li>
+              <li>Release workflow 允许覆盖同名资产，以便修复构建或重新发布同一 tag；发布前仍应确认签名证书、构建指纹和自动更新 ZIP 来自同一次构建。</li>
               <li><code>.github/workflows/pages.yml</code> 只发布 <code>docs/</code>；修改文档与截图后推送 main 即更新 GitHub Pages。</li>
               <li>发布前必须确认当前 main 的 Durable 架构与目标版本说明一致，不能复用旧 SDK 版本的 release notes。</li>
             </ul>

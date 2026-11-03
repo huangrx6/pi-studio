@@ -10,6 +10,8 @@
  *  - usage        本地 Token 用量与模型分布
  *  - settings     MCP、技能、扩展、包
  *  - updates      GitHub Release 检查、下载与安装
+ *  - terminal     每个窗口独占的交互式 PTY 会话
+ *  - runtime-services 只读监听端口与服务进程发现
  */
 
 const { registerSystemIpc } = require('./system.cjs');
@@ -23,6 +25,8 @@ const { registerModeIpc } = require('./mode.cjs');
 const { registerTemporaryChatIpc } = require('./temporary-chat.cjs');
 const { registerConfirmIpc } = require('./confirm.cjs');
 const { registerUpdatesIpc } = require('./updates.cjs');
+const { registerTerminalIpc } = require('./terminal.cjs');
+const { registerRuntimeServicesIpc } = require('./runtime-services.cjs');
 
 function registerIpc() {
   registerSystemIpc();
@@ -36,6 +40,8 @@ function registerIpc() {
   registerTemporaryChatIpc();
   registerConfirmIpc();
   registerUpdatesIpc();
+  registerTerminalIpc();
+  registerRuntimeServicesIpc();
 }
 
 module.exports = { registerIpc };

@@ -13,7 +13,7 @@
 
 | 扩展 | 层级 | 核心职责 | 主要保护与验证 | 当前边界 |
 | --- | --- | --- | --- | --- |
-| `builtin:durable-coding-tools` | system | 提供 Pi Durable 官方 `read`、`write`、`edit`、`bash` | 依赖权限守卫；工具身份不可被 `core`/`optional` 冲突静默覆盖；通过真实 Durable registry 测试 | 工具行为以 Pi Durable 1.4 为准 |
+| `builtin:durable-coding-tools` | system | 提供 Pi Durable 官方 `read`、`write`、`edit`、`bash` | 依赖权限守卫；工具身份不可被 `core`/`optional` 冲突静默覆盖；通过真实 Durable registry 测试 | 工具行为以 Pi Durable 1.5 为准 |
 | `builtin:studio-filesystem-tools` | system | 提供工作区内的 `ls`、`find`、`grep` | realpath containment；文件、总字节、结果数量和行长度上限；`grep` 正则进入可终止 Worker | 静态扫描不是内容索引，超限会明确截断 |
 | `builtin:studio-todo` | system | 提供会话级 `todo` 工具和输入框上方计划快照 | Durable conversation document；原子 `createMany`；单调 ID；状态、依赖与循环校验；工具重放幂等；重启和分叉后恢复 | 计划记录执行状态，不替代 Durable Task 的调度与崩溃恢复 |
 | `builtin:studio-harness` | system | 组合编码身份、规则、工具说明、`AGENTS.md`、Skill、工作区和附加指令 | profile 校验与版本化；下一请求边界热刷新；工具 guidance 跟随实际工具集 | 不能保证与 Pi Coding Agent SDK 的模型输出逐次一致 |

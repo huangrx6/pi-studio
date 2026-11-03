@@ -520,7 +520,7 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
       <div class="hero-top" data-reveal>
         <h1 class="wordmark">Pi Studio<sup>®</sup></h1>
         <div class="hero-aside">
-          <p>一个本地优先的桌面 Agent 工作台。把持久会话、按需长期目标、子智能体、编码 Harness、模型与扩展组织成一条可以检查、复用和继续扩展的工作流。</p>
+          <p>一个本地优先的桌面 Agent 工作台。把持久会话、按需长期目标、子智能体、编码 Harness、模型与扩展组织成一条可以检查、复用和继续扩展的工作流，并在同一窗口观察终端、进程与监听端口。</p>
           <span class="label">(Pi Durable · Local first · 2026)</span>
         </div>
       </div>
@@ -529,7 +529,7 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
         <div class="item"><span>Branch</span><strong>main · Durable</strong></div>
         <div class="item"><span>Platform</span><strong>macOS 13+</strong></div>
         <div class="item"><span>License</span><strong>MIT</strong></div>
-        <div class="item"><span>Engine</span><strong>Pi Durable 1.4</strong></div>
+        <div class="item"><span>Engine</span><strong>Pi Durable 1.5</strong></div>
         <a class="link-arrow cta" href="guide.html">阅读完整手册 <span class="ar">↗</span></a>
       </div>
 
@@ -553,14 +553,14 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
       <div class="stack" aria-hidden="true">
         <div class="stack-track">
           <span>Electron 45</span><span class="sep">/</span>
-          <span>Pi Durable 1.4</span><span class="sep">/</span>
+          <span>Pi Durable 1.5</span><span class="sep">/</span>
           <span>SQLite WAL</span><span class="sep">/</span>
           <span>React 18</span><span class="sep">/</span>
           <span>Vite 6</span><span class="sep">/</span>
           <span>TypeScript</span><span class="sep">/</span>
           <span>MIT License</span><span class="sep">/</span>
           <span>Electron 45</span><span class="sep">/</span>
-          <span>Pi Durable 1.4</span><span class="sep">/</span>
+          <span>Pi Durable 1.5</span><span class="sep">/</span>
           <span>SQLite WAL</span><span class="sep">/</span>
           <span>React 18</span><span class="sep">/</span>
           <span>Vite 6</span><span class="sep">/</span>
@@ -589,7 +589,7 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
       <div class="stats-in">
         <div class="stat" data-reveal>
           <div class="num">01<small>engine</small></div>
-          <div class="cap">唯一执行引擎 · Pi Durable 1.4</div>
+          <div class="cap">唯一执行引擎 · Pi Durable 1.5</div>
         </div>
         <div class="stat" data-reveal>
           <div class="num">08<small>prompt</small></div>
@@ -657,12 +657,12 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
         <article class="feat" data-reveal>
           <span class="idx">08 / DESKTOP</span>
           <h3>桌面工作台</h3>
-          <p>四套全局强调色、亮暗外观、图片 / 动态图片 / 视频背景，以及可驻留菜单栏的运行状态、完成通知与 Release 更新。</p>
+          <p>四套全局强调色、亮暗外观、图片 / 动态图片 / 视频背景，以及可驻留菜单栏的运行状态、完成通知与 Release 更新。应用内更新同时识别新版本和同一版本的新构建。</p>
         </article>
         <article class="feat" data-reveal>
-          <span class="idx">09 / RUNTIME</span>
-          <h3>热加载与内存</h3>
-          <p>配置在下一请求边界热刷新；流式更新按帧合并、历史自动分页，并为详情、文件、子智能体与工具目录设置缓存上限。</p>
+          <span class="idx">09 / OBSERVABILITY</span>
+          <h3>终端与运行服务</h3>
+          <p>右侧工作台提供可重连、可回放且跟随主题的 PTY 终端，并实时列出 TCP 监听端口。Studio 依据子进程关系与已登记工作区标注服务归属，只允许在确认后停止可证明属于任务或工作区的进程。</p>
         </article>
       </div>
     </div>
@@ -675,7 +675,7 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
         <div class="docs-copy" data-reveal>
           <span class="label"><span class="n">(04)</span> — 完整手册</span>
           <h2>从第一次对话，<br>读到一次请求如何执行。</h2>
-          <p>文档不再只是功能清单。它覆盖安装与工作区、模型与 thinking、Harness 与权限、Skill / MCP / 扩展、子智能体与 <code>/goal</code>，再进入 Durable Runtime、SQLite、热加载和安全边界。</p>
+          <p>文档不再只是功能清单。它覆盖安装与工作区、模型与 thinking、Harness 与权限、Skill / MCP / 扩展、子智能体与 <code>/goal</code>，再进入终端与运行服务、Durable Runtime、SQLite、热加载和安全边界。</p>
           <p>扩展作者可以直接找到 Manifest、Tool、Command、声明式 UI、签名、Registry、安装与回滚；贡献者可以找到目录结构、开发命令、QA 和发布流程。</p>
           <div class="docs-actions">
             <a class="primary" href="guide.html">打开文档中心 <span>↗</span></a>
@@ -727,8 +727,8 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
         <div class="step" data-reveal>
           <div class="bars" aria-hidden="true"><i></i><i></i><i></i><i class="on"></i></div>
           <span class="k">04</span>
-          <h3>审阅改动</h3>
-          <p>文件预览与变更摘要留在会话里，回滚或继续都有据可查。</p>
+          <h3>审阅与运行</h3>
+          <p>文件预览与变更摘要留在会话里；需要继续验证时直接打开终端，并从运行服务页查看任务启动的端口。</p>
         </div>
       </div>
     </div>
@@ -762,7 +762,7 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
         <div class="dl-intro" data-reveal>
           <span class="label"><span class="n">(07)</span> — 下载</span>
           <h2>拿走它，<br>直接用。</h2>
-          <p>DMG 由 GitHub Actions 在 macOS 上自动构建，Apple Silicon 与 Intel 各一份。v0.0.11 统一技能页搜索框的控件尺寸、字号和键盘焦点样式，去掉叠加描边，同时保留搜索、管理和刷新操作的紧凑布局，请从 latest Release 下载对应架构。</p>
+          <p>DMG 由 GitHub Actions 在 macOS 上自动构建，Apple Silicon 与 Intel 各一份。v0.0.12 新增交互式终端与运行服务视图，并让应用内更新识别同一版本的新构建，请从 latest Release 下载对应架构。</p>
         </div>
 
         <div class="dl-list" data-reveal>
@@ -801,7 +801,7 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
         <div class="share-copy" data-reveal>
           <span class="label"><span class="n">(08)</span> — 数据</span>
           <h2 style="margin-top:18px">没有云端，<br>只有 Studio SQLite</h2>
-          <p style="margin-top:18px">Pi Durable 1.4 是唯一执行引擎。Studio 在 <code>pi-studio.sqlite</code> 中持有 <code>durable_*</code> 表，以及自己的工作区、会话投影、模型、凭据、MCP、扩展与设置记录。</p>
+          <p style="margin-top:18px">Pi Durable 1.5 是唯一执行引擎。Studio 在 <code>pi-studio.sqlite</code> 中持有 <code>durable_*</code> 表，以及自己的工作区、会话投影、模型、凭据、MCP、扩展与设置记录。</p>
           <p>Studio 不读取或回写 Pi CLI 自己的配置。临时聊天只使用独立 <code>MemoryStorage</code>，关闭应用后不会占用磁盘历史。</p>
           <p><a href="guide.html#storage-scopes" style="border-bottom:1px solid currentColor">阅读数据作用域与刷新规则 ↗</a> · <a href="guide.html#extension-development" style="border-bottom:1px solid currentColor">扩展规范 ↗</a></p>
         </div>
@@ -897,7 +897,7 @@ footer { background: var(--ink); color: var(--paper); padding-top: 72px; }
       <span>© 2026 Pi Studio</span>
       <span>MIT License</span>
       <span>Styles derived from DeepSeek Harness (MIT)</span>
-      <span>Built with Pi Durable 1.4 · Electron</span>
+      <span>Built with Pi Durable 1.5 · Electron</span>
     </div>
   </div>
 </footer>

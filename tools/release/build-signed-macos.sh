@@ -26,6 +26,11 @@ keychain_dir=$(mktemp -d)
 keychain="$keychain_dir/pi-studio-signing.keychain-db"
 keychain_password=$(openssl rand -hex 32)
 previous_keychains=()
+build_id="${PI_STUDIO_BUILD_ID:-$(node tools/release/build-identity.cjs)}"
+build_number="${PI_STUDIO_BUILD_NUMBER:-$(date -u +%Y%m%d%H%M%S)}"
+export PI_STUDIO_BUILD_ID="$build_id"
+export PI_STUDIO_BUILD_NUMBER="$build_number"
+export BUILD_NUMBER="$build_number"
 
 while IFS= read -r keychain_entry; do
   previous_keychains+=("$keychain_entry")
@@ -62,6 +67,9 @@ pnpm run build
 env \
   -u CSC_LINK \
   -u CSC_KEY_PASSWORD \
+  PI_STUDIO_BUILD_ID="$build_id" \
+  PI_STUDIO_BUILD_NUMBER="$build_number" \
+  BUILD_NUMBER="$build_number" \
   PI_STUDIO_CODESIGN_IDENTITY="$identity" \
   PI_STUDIO_SIGNING_KEYCHAIN="$keychain" \
   CSC_IDENTITY_AUTO_DISCOVERY=false \
@@ -90,5 +98,7 @@ for arch in x64 arm64; do
   codesign --verify --deep --strict --verbose=2 "$extracted/Pi Studio.app"
   rm -rf "$extracted"
 done
+
+node tools/release/stamp-update-metadata.cjs
 
 echo "Verified signed macOS apps and updater archives for v$version."

@@ -26,6 +26,8 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -36,14 +38,23 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Check tag matches package.json version
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Check release tag matches package.json version
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
-          tag="${GITHUB_REF_NAME#v}"
+          tag="${RELEASE_TAG#v}"
           version=$(node -p "require('./package.json').version")
           if [ "$tag" != "$version" ]; then
             echo "::error::Tag v$tag does not match package.json version $version"
             exit 1
+          fi
+          git fetch --tags --force
+          if git rev-parse -q --verify "refs/tags/$RELEASE_TAG" >/dev/null; then
+            tag_commit=$(git rev-parse "$RELEASE_TAG^{commit}")
+            if [ "$tag_commit" != "$GITHUB_SHA" ]; then
+              echo "::error::Existing tag $RELEASE_TAG points to $tag_commit; run the workflow from that tag to rebuild it."
+              exit 1
+            fi
           fi
 
       - name: Install dependencies
@@ -126,4 +137,5 @@ jobs:
           draft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || false }}
           body_path: ${{ steps.release-notes.outputs.body_path }}
           generate_release_notes: ${{ steps.release-notes.outputs.body_path == '' }}
+          overwrite_files: true
           files: artifacts/*

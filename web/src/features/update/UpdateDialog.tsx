@@ -27,9 +27,17 @@ function formatBytes(value?: number): string {
   return `${(value / (1024 * 1024)).toFixed(value < 10 * 1024 * 1024 ? 1 : 0)} MB`;
 }
 
+function shortBuildId(value?: string): string {
+  return value ? value.slice(0, 12) : '';
+}
+
 function titleFor(snapshot: UpdateSnapshot): string {
   if (snapshot.state === 'checking') return '正在寻找新版本';
-  if (snapshot.state === 'available') return `Pi Studio ${snapshot.latestVersion || '新版本'} 已可用`;
+  if (snapshot.state === 'available') {
+    return snapshot.updateKind === 'same-version'
+      ? `Pi Studio ${snapshot.latestVersion || '当前版本'} 有新构建`
+      : `Pi Studio ${snapshot.latestVersion || '新版本'} 已可用`;
+  }
   if (snapshot.state === 'downloading') return '正在准备更新';
   if (snapshot.state === 'downloaded') return '更新已准备好';
   if (snapshot.state === 'up-to-date') return '你正在使用最新版本';
@@ -69,11 +77,13 @@ export function UpdateDialog({ snapshot, onClose, onCheck, onDownload, onInstall
   const latestLabel = snapshot.latestVersion ? `v${snapshot.latestVersion}` : '最新版本';
   const currentLabel = snapshot.currentVersion ? `v${snapshot.currentVersion}` : '当前版本';
   const published = shortDate(snapshot.publishedAt);
+  const latestBuild = shortBuildId(snapshot.latestBuildId);
+  const sameVersionBuild = snapshot.updateKind === 'same-version';
   const stateLabel = {
     idle: '准备检查',
     checking: '正在检查',
     'up-to-date': '已是最新',
-    available: '发现更新',
+    available: sameVersionBuild ? '同版本新构建' : '发现更新',
     downloading: '下载中',
     downloaded: '等待安装',
     error: '需要重试',
@@ -96,10 +106,15 @@ export function UpdateDialog({ snapshot, onClose, onCheck, onDownload, onInstall
         <span className="update-spark is-one" />
         <span className="update-spark is-two" />
       </div>
-      <div className="update-version-flow" aria-label={`${currentLabel} 到 ${latestLabel}`}>
-        <span>{currentLabel}</span>
+      <div
+        className="update-version-flow"
+        aria-label={sameVersionBuild
+          ? `${currentLabel} 更新到同版本新构建`
+          : `${currentLabel} 到 ${latestLabel}`}
+      >
+        <span>{sameVersionBuild ? '当前构建' : currentLabel}</span>
         <ArrowRight />
-        <strong>{latestLabel}</strong>
+        <strong>{sameVersionBuild ? `${latestLabel} · 新构建` : latestLabel}</strong>
       </div>
       <span className={`update-status-pill is-${snapshot.state}`}>{stateLabel}</span>
     </div>
@@ -129,7 +144,10 @@ export function UpdateDialog({ snapshot, onClose, onCheck, onDownload, onInstall
 
       {(snapshot.state === 'available' || snapshot.state === 'downloaded') && <section className="update-notes">
         <div className="update-notes-head">
-          {(snapshot.releaseName || snapshot.releaseNotes || published) && <span><strong>本次更新</strong>{published && <small>{published}</small>}</span>}
+          {(snapshot.releaseName || snapshot.releaseNotes || published || latestBuild) && <span>
+            <strong>本次更新</strong>
+            {(published || latestBuild) && <small>{[published, latestBuild && `构建 ${latestBuild}`].filter(Boolean).join(' · ')}</small>}
+          </span>}
           {snapshot.releaseName && <span className="update-release-name">{snapshot.releaseName}</span>}
         </div>
         {snapshot.releaseNotes && <div className="update-notes-copy">{snapshot.releaseNotes}</div>}
