@@ -397,10 +397,12 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .context-usage-trigger.is-critical { color: var(--error); }
 .context-usage-trigger.is-critical .context-usage-ring-value { stroke: var(--error); }
 .context-usage-panel { position: absolute; z-index: 90; left: 0; bottom: calc(100% + 8px); width: 268px; padding: 12px; }
-.context-usage-panel .popover-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: 8px; }
+/* 面板自带 12px 内边距，标题行不能再吃一层 16px，否则标题比正文往右缩一截。 */
+.context-usage-panel .popover-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: 0; margin: 0 0 10px; padding: 0; }
+.context-usage-panel .popover-close { width: 22px; height: 22px; margin: -2px 0; }
 .context-usage-panel .popover-title { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
 .context-usage-panel .popover-title svg { width: 13px; height: 13px; }
-.context-usage-body { display: grid; gap: 5px; }
+.context-usage-body { display: grid; gap: 5px; min-width: 0; }
 .context-usage-body > strong { color: var(--text); font-size: 18px; font-weight: 620; font-variant-numeric: tabular-nums; }
 .context-usage-body > span { color: var(--muted); font-size: 11px; }
 .context-usage-actions { display: flex; align-items: center; gap: 6px; margin-top: 8px; }

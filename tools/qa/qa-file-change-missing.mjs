@@ -30,7 +30,7 @@ try {
     const cwd = '/workspace/pi-studio';
     const model = { modelRef: 'demo/model', label: 'Demo', thinkingLevel: 'default', thinkingLevels: ['default'], effectiveThinkingLevel: 'off' };
     const gone = '/workspace/pi-studio/.qa/probe-outline.mjs';
-    const kept = '/workspace/pi-studio/web/src/shared/runtime-refresh.ts';
+    const kept = '/workspace/pi-studio/web/src/lib/qa-kept.mjs';
     const messages = [
       { role: 'user', timestamp: 1, content: [{ type: 'text', text: '整理一下大纲回归脚本' }] },
       {
@@ -108,9 +108,9 @@ try {
   assert.equal(await page.evaluate(() => window.__openRequests.length), requestsAfterFirst, 'a missing row must not retry');
 
   // 3) 同一张汇总里其它文件仍然可以打开。
-  const keptRow = page.locator('.file-change-item').filter({ hasText: 'fresh.mjs' });
+  const keptRow = page.locator('.file-change-item').filter({ hasText: 'qa-kept.mjs' });
   await keptRow.click();
-  await page.waitForFunction(() => window.__openRequests.some((request) => request.path.endsWith('fresh.mjs')));
+  await page.waitForFunction(() => window.__openRequests.some((request) => request.path.endsWith('qa-kept.mjs')));
   await page.locator('.file-panel').waitFor();
   await page.screenshot({ path: `${output}missing-file.png`, animations: 'disabled' });
 

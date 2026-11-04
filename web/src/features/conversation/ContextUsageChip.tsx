@@ -117,7 +117,7 @@ export function ContextUsageChip({
       className="context-usage-panel"
       role="dialog"
       aria-label="上下文用量"
-      heading={<><Gauge />上下文<InfoHint align="end" label={compactionHint} /></>}
+      heading={<><Gauge />上下文<InfoHint label={compactionHint} /></>}
       onClose={() => setOpen(false)}
     >
       <div className="context-usage-body">

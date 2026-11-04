@@ -3446,10 +3446,23 @@ try {
     '/workspace/pi-studio/.agents/skills',
   );
   const hub = page.locator('.skill-hub-card');
+  // 搜索跨全部技能源；没有命中时给出可清除的空态。
   await hub.getByLabel('搜索技能源', { exact: true }).fill('missing-qa-skill');
   await hub.getByText('没有匹配“missing-qa-skill”的技能。', { exact: false }).waitFor();
   await hub.getByRole('button', { name: '清除搜索', exact: true }).click();
+  // 默认视图是“源总览”：一行一个源，技能不铺平；进入某个源才渲染卡片。
+  assert.equal(await hub.locator('.skill-hub-overview-row').count(), 1);
+  assert.equal(await hub.locator('.skill-hub-item').count(), 0);
+  assert.equal(await hub.locator('.skill-hub-source-tab').count(), 2);
+  await hub.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${output}22-skill-hub-overview.png`, clip: await hub.boundingBox() });
+  await hub.locator('.skill-hub-overview-row').first().click();
   assert.equal(await hub.locator('.skill-hub-item').count(), 2);
+  await hub.getByLabel('搜索技能源', { exact: true }).fill('review');
+  assert.equal(await hub.locator('.skill-hub-item').count(), 1);
+  await hub.getByRole('button', { name: '清除技能搜索', exact: true }).click();
+  assert.equal(await hub.locator('.skill-hub-item').count(), 2);
+  assert.match(await hub.locator('.skill-hub-detail-head').innerText(), /团队技能库/);
   await hub.scrollIntoViewIfNeeded();
   await capture('22-skill-hub-compact');
   await page.setViewportSize({ width: 1440, height: 920 });

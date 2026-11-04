@@ -154,8 +154,25 @@ try {
   const panel = page.getByRole('dialog', { name: '上下文用量', exact: true });
   await panel.waitFor();
   assert.match(await panel.innerText(), /72\.0k \/ 128k tokens/);
-  assert.match(await panel.innerText(), /自动压缩：用到 85%/);
-  assert.match(await panel.innerText(), /完成后自动继续/);
+  // 阈值说明挂在标题旁的信息提示里：先点开确认文案，再收起来看对齐。
+  const hint = panel.locator('.info-hint');
+  assert.match(await hint.getAttribute('aria-label'), /用到 85%/);
+  await hint.hover();
+  assert.match(await hint.locator('.info-hint-tooltip').innerText(), /完成后继续/);
+  // 标题行与正文必须共用同一条左边线：面板有自己的内边距，标题行不能再叠一层。
+  const edges = await panel.evaluate((element) => {
+    const box = (selector) => element.querySelector(selector)?.getBoundingClientRect();
+    const heading = element.querySelector('.popover-title')?.getBoundingClientRect();
+    const body = box('.context-usage-body > strong');
+    const close = box('.popover-close');
+    return {
+      titleLeft: Math.round(heading.left - element.getBoundingClientRect().left),
+      bodyLeft: Math.round(body.left - element.getBoundingClientRect().left),
+      closeRight: Math.round(element.getBoundingClientRect().right - close.right),
+    };
+  });
+  assert.ok(Math.abs(edges.titleLeft - edges.bodyLeft) <= 1, `popover title aligns with its body (${edges.titleLeft} vs ${edges.bodyLeft})`);
+  assert.ok(Math.abs(edges.closeRight - edges.bodyLeft) <= 2, `popover close button aligns with the body edge (${edges.closeRight} vs ${edges.bodyLeft})`);
   await page.screenshot({ path: `${output}context-usage.png`, animations: 'disabled' });
   await page.getByRole('button', { name: '立即压缩', exact: true }).click();
   await page.waitForFunction(() => window.compacted === true);

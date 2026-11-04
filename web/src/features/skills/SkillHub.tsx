@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
+  ChevronRight,
   Download,
   FileCode2,
   Folder,
   FolderSearch,
   Globe2,
+  Layers3,
   LoaderCircle,
   Plus,
   RefreshCw,
@@ -34,6 +36,9 @@ import {
   SettingsResourceCardIcon,
   SettingsResourceCardMain,
 } from '../../shared/SettingsResourceCard';
+
+/** 一个源里可能有上百个技能：先渲染一页，其余按需展开。 */
+const SKILL_PAGE_SIZE = 24;
 
 type WorkspaceOption = { cwd: string; name: string };
 type InstallResult = Awaited<ReturnType<typeof window.piApi.installPreparedSkill>>;
@@ -66,6 +71,10 @@ export function SkillHub({
   const [managerOpen, setManagerOpen] = useState(false);
   const [selected, setSelected] = useState<SkillCatalogItem | null>(null);
   const [sourceBusyId, setSourceBusyId] = useState('');
+  /** 左侧源导航选中的源；'all' 是源总览。 */
+  const [activeSource, setActiveSource] = useState('all');
+  /** 单个源按需渲染的卡片数：一个源可能有上百个技能。 */
+  const [visibleCount, setVisibleCount] = useState(SKILL_PAGE_SIZE);
 
   async function load(refresh = false) {
     setLoading(true);
@@ -83,18 +92,38 @@ export function SkillHub({
     void load(false);
   }, []);
 
-  const catalogs = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase();
-    if (!snapshot || !needle) return snapshot?.catalogs || [];
-    return snapshot.catalogs.map((catalog) => ({
-      ...catalog,
-      items: catalog.items.filter((item) => (
-        `${item.name} ${item.description} ${item.sourceName}`.toLocaleLowerCase().includes(needle)
-      )),
-    })).filter((catalog) => catalog.items.length > 0 || catalog.diagnostics.length > 0);
-  }, [query, snapshot]);
-  const matched = catalogs.reduce((count, catalog) => count + catalog.items.length, 0);
-  const total = snapshot?.catalogs.reduce((count, catalog) => count + catalog.items.length, 0) || 0;
+  const needle = query.trim().toLocaleLowerCase();
+  const catalogs = useMemo(() => snapshot?.catalogs || [], [snapshot]);
+  const total = catalogs.reduce((count, catalog) => count + catalog.items.length, 0);
+  /** 搜索永远跨全部技能源，不受左侧选中项限制。 */
+  const matches = useMemo(() => (needle
+    ? catalogs.flatMap((catalog) => catalog.items.filter((item) => (
+      `${item.name} ${item.description} ${item.sourceName}`.toLocaleLowerCase().includes(needle)
+    )))
+    : []), [catalogs, needle]);
+  /** 导航与总览都以 sources 为准：停用或读取失败的源也要能看见、能重新启用。 */
+  const sourceRows = useMemo(() => (snapshot?.sources || []).map((source) => {
+    const catalog = catalogs.find((entry) => entry.source.id === source.id);
+    return {
+      source,
+      items: catalog?.items || [],
+      diagnostics: catalog?.diagnostics || [],
+      count: catalog ? catalog.items.length : source.itemCount,
+    };
+  }), [catalogs, snapshot]);
+  const activeRow = activeSource === 'all'
+    ? undefined
+    : sourceRows.find((row) => row.source.id === activeSource);
+
+  useEffect(() => {
+    if (activeSource !== 'all' && snapshot && !snapshot.sources.some((source) => source.id === activeSource)) {
+      setActiveSource('all');
+    }
+  }, [activeSource, snapshot]);
+
+  useEffect(() => {
+    setVisibleCount(SKILL_PAGE_SIZE);
+  }, [activeSource, needle]);
 
   async function toggleSource(source: SkillSource, enabled: boolean) {
     setSourceBusyId(source.id);
@@ -123,10 +152,38 @@ export function SkillHub({
     }
   }
 
+  /** 一张技能卡：搜索结果与单个源共用。 */
+  function renderGrid(items: SkillCatalogItem[]) {
+    return <div className="skill-hub-grid">
+      {items.map((item) => <SettingsResourceCard className="skill-hub-item" key={item.id}>
+        <SettingsResourceCardMain className="skill-hub-item-main" onClick={() => setSelected(item)} ariaLabel={`查看技能 ${item.name}`}>
+          <SettingsResourceCardIcon className="skill-hub-item-icon"><FileCode2 /></SettingsResourceCardIcon>
+          <SettingsResourceCardBody className="skill-hub-item-body">
+            <span className="skill-hub-item-title"><strong>{item.name}</strong><small>v{item.version}</small></span>
+            <p>{item.description}</p>
+            <span className="skill-hub-item-meta">
+              <span>{invocationLabel(item.invocation)}</span>
+              {item.resourceCount != null && <span>{item.resourceCount} 个资源</span>}
+              <span>~{item.promptTokens} tokens/请求</span>
+            </span>
+          </SettingsResourceCardBody>
+        </SettingsResourceCardMain>
+        <SettingsResourceCardFooter className="skill-hub-item-footer">
+          <span className={`skill-hub-state ${item.updateAvailable ? 'is-update' : item.installed ? 'is-installed' : ''}`}>
+            {item.updateAvailable ? `可更新 · ${item.installedVersion} → ${item.version}` : item.installed ? `已安装 · v${item.installedVersion}` : '可安装'}
+          </span>
+          <button type="button" className="settings-text-button" onClick={() => setSelected(item)}>
+            {item.updateAvailable ? '查看更新' : item.installed ? '查看详情' : '预览安装'}
+          </button>
+        </SettingsResourceCardFooter>
+      </SettingsResourceCard>)}
+    </div>;
+  }
+
   return <section className="settings-card skill-hub-card">
     <div className="settings-card-head skill-hub-head">
       <div>
-        <h2>技能源 <span className="count-badge">{query.trim() ? `${matched} / ${total}` : total}</span></h2>
+        <h2>技能源 <span className="count-badge">{needle ? `${matches.length} / ${total}` : total}</span></h2>
       </div>
       <div className="skill-hub-actions">
         <div className="skill-hub-search">
@@ -149,53 +206,97 @@ export function SkillHub({
     </div>
 
     {error && <div className="settings-error skill-hub-error" role="alert">{error}</div>}
-    {loading && !snapshot ? <div className="settings-loading" role="status"><LoaderCircle className="spin" />正在读取技能源…</div>
+    {loading && !snapshot ? <div className="skill-hub-loading" role="status"><LoaderCircle className="spin" />正在读取技能源…</div>
       : !snapshot?.sources.length ? <div className="skill-hub-empty">
         <span><Globe2 /></span>
         <div><strong>还没有技能源</strong></div>
         <button type="button" className="settings-add-button" onClick={() => setManagerOpen(true)}><Plus />添加技能源</button>
       </div>
-      : query.trim() && matched === 0 ? <div className="settings-empty settings-empty--small" role="status">
-        没有匹配“{query.trim()}”的技能。<button type="button" className="settings-text-button" onClick={() => setQuery('')}>清除搜索</button>
-      </div> : <div className="skill-hub-catalogs">
-        {catalogs.map((catalog) => <section className="skill-hub-source" key={catalog.source.id}>
-          <header className="skill-hub-source-head">
-            <span className="skill-hub-source-icon">{catalog.source.type === 'directory' ? <Folder /> : <Globe2 />}</span>
-            <div>
-              <strong>{catalog.source.name}</strong>
-              <span>{sourceTypeLabel(catalog.source)} · {catalog.items.length} 个技能</span>
-            </div>
-            <code title={catalog.source.location}>{catalog.source.location}</code>
-          </header>
-          {catalog.diagnostics.length > 0 && <div className="skill-hub-diagnostics">
-            {catalog.diagnostics.map((item, index) => <div key={`${item.path}:${index}`}><code>{item.path}</code><span>{item.message}</span></div>)}
-          </div>}
-          {catalog.items.length > 0 && <div className="skill-hub-grid">
-            {catalog.items.map((item) => <SettingsResourceCard className="skill-hub-item" key={item.id}>
-              <SettingsResourceCardMain className="skill-hub-item-main" onClick={() => setSelected(item)} ariaLabel={`查看技能 ${item.name}`}>
-                <SettingsResourceCardIcon className="skill-hub-item-icon"><FileCode2 /></SettingsResourceCardIcon>
-                <SettingsResourceCardBody className="skill-hub-item-body">
-                  <span className="skill-hub-item-title"><strong>{item.name}</strong><small>v{item.version}</small></span>
-                  <p>{item.description}</p>
-                  <span className="skill-hub-item-meta">
-                    <span>{invocationLabel(item.invocation)}</span>
-                    {item.resourceCount != null && <span>{item.resourceCount} 个资源</span>}
-                    <span>~{item.promptTokens} tokens/请求</span>
+      : <div className="skill-hub-body">
+        {/* 源多时先按源收敛：左边选源，右边只看一个源的内容。 */}
+        <nav className="skill-hub-sources" aria-label="技能源列表">
+          <button
+            type="button"
+            className="skill-hub-source-tab"
+            aria-current={activeSource === 'all' ? 'true' : undefined}
+            onClick={() => setActiveSource('all')}
+          >
+            <span className="skill-hub-source-tab-icon"><Layers3 /></span>
+            <span className="skill-hub-source-tab-name">全部技能</span>
+            <span className="skill-hub-source-tab-count">{total}</span>
+          </button>
+          {sourceRows.map((row) => <button
+            type="button"
+            key={row.source.id}
+            className="skill-hub-source-tab"
+            title={row.source.lastError || row.source.location}
+            aria-current={activeSource === row.source.id ? 'true' : undefined}
+            data-disabled={row.source.enabled ? undefined : 'true'}
+            onClick={() => setActiveSource(row.source.id)}
+          >
+            <span className="skill-hub-source-tab-icon">{row.source.type === 'directory' ? <Folder /> : <Globe2 />}</span>
+            <span className="skill-hub-source-tab-name">{row.source.name}</span>
+            <span className="skill-hub-source-tab-count">{row.count}</span>
+            {row.source.lastError ? <i className="skill-hub-source-tab-alert" aria-label="读取失败" /> : null}
+          </button>)}
+        </nav>
+
+        <div className="skill-hub-content">
+          {needle ? (matches.length > 0
+            ? <>
+              <p className="skill-hub-scope-note" role="status">在全部技能源中搜索“{query.trim()}” · {matches.length} 个匹配</p>
+              {renderGrid(matches)}
+            </>
+            : <div className="settings-empty settings-empty--small" role="status">
+              没有匹配“{query.trim()}”的技能。<button type="button" className="settings-text-button" onClick={() => setQuery('')}>清除搜索</button>
+            </div>)
+            : activeRow
+              ? <>
+                <header className="skill-hub-detail-head">
+                  <span className="skill-hub-source-icon">{activeRow.source.type === 'directory' ? <Folder /> : <Globe2 />}</span>
+                  <div>
+                    <strong>{activeRow.source.name}</strong>
+                    <span>{sourceTypeLabel(activeRow.source)} · {activeRow.count} 个技能
+                      {activeRow.items.some((item) => item.installed) ? ` · ${activeRow.items.filter((item) => item.installed).length} 个已安装` : ''}
+                      {activeRow.source.enabled ? '' : ' · 已停用'}
+                    </span>
+                  </div>
+                  <code title={activeRow.source.location}>{activeRow.source.location}</code>
+                </header>
+                {activeRow.diagnostics.length > 0 && <div className="skill-hub-diagnostics">
+                  {activeRow.diagnostics.map((item, index) => <div key={`${item.path}:${index}`}><code>{item.path}</code><span>{item.message}</span></div>)}
+                </div>}
+                {activeRow.source.lastError && activeRow.items.length === 0 && <div className="settings-empty settings-empty--small" role="alert">{activeRow.source.lastError}</div>}
+                {activeRow.items.length > 0
+                  ? renderGrid(activeRow.items.slice(0, visibleCount))
+                  : <div className="settings-empty settings-empty--small">这个源没有可安装技能。</div>}
+                {activeRow.items.length > visibleCount && <button
+                  type="button"
+                  className="skill-hub-more"
+                  onClick={() => setVisibleCount((count) => count + SKILL_PAGE_SIZE)}
+                >显示更多（还有 {activeRow.items.length - visibleCount} 个）</button>}
+              </>
+              : <div className="skill-hub-overview">
+                {sourceRows.map((row) => <button
+                  type="button"
+                  className="skill-hub-overview-row"
+                  key={row.source.id}
+                  onClick={() => setActiveSource(row.source.id)}
+                >
+                  <span className="skill-hub-source-icon">{row.source.type === 'directory' ? <Folder /> : <Globe2 />}</span>
+                  <span className="skill-hub-overview-copy">
+                    <strong>{row.source.name}</strong>
+                    <small>{sourceTypeLabel(row.source)} · {row.count} 个技能{row.source.enabled ? '' : ' · 已停用'}</small>
+                    {row.items.length > 0 && <span className="skill-hub-overview-samples">
+                      {row.items.slice(0, 3).map((item) => item.name).join(' · ')}{row.items.length > 3 ? ' …' : ''}
+                    </span>}
                   </span>
-                </SettingsResourceCardBody>
-              </SettingsResourceCardMain>
-              <SettingsResourceCardFooter className="skill-hub-item-footer">
-                <span className={`skill-hub-state ${item.updateAvailable ? 'is-update' : item.installed ? 'is-installed' : ''}`}>
-                  {item.updateAvailable ? `可更新 · ${item.installedVersion} → ${item.version}` : item.installed ? `已安装 · v${item.installedVersion}` : '可安装'}
-                </span>
-                <button type="button" className="settings-text-button" onClick={() => setSelected(item)}>
-                  {item.updateAvailable ? '查看更新' : item.installed ? '查看详情' : '预览安装'}
-                </button>
-              </SettingsResourceCardFooter>
-            </SettingsResourceCard>)}
-          </div>}
-          {catalog.items.length === 0 && catalog.diagnostics.length === 0 && <div className="settings-empty settings-empty--small">这个源没有可安装技能。</div>}
-        </section>)}
+                  {row.source.lastError
+                    ? <span className="skill-hub-overview-error">读取失败</span>
+                    : <ChevronRight aria-hidden="true" />}
+                </button>)}
+              </div>}
+        </div>
       </div>}
 
     {snapshot?.sources.some((source) => source.lastError) && <div className="skill-hub-source-errors">
@@ -462,7 +563,7 @@ function SkillInstallPreviewDialog({
     </header>
     <div className="skill-install-body">
       {error && <div className="settings-error" role="alert">{error}</div>}
-      {loading ? <div className="settings-loading" role="status"><LoaderCircle className="spin" />正在准备技能预览…</div>
+      {loading ? <div className="skill-hub-loading" role="status"><LoaderCircle className="spin" />正在准备技能预览…</div>
         : preview && <>
           <section className="skill-install-overview">
             <div><span>来源</span><strong>{preview.sourceName}</strong></div>
