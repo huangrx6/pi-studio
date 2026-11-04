@@ -2473,9 +2473,36 @@ Agent-shared directories are separate at both user and project scope. */
   --yarl__toolbar_padding: 0;
   --yarl__counter_filter: none;
   --yarl__slide_title_color: var(--image-preview-title-fg);
+  --yarl__slide_captions_container_background: none;
+  --yarl__slide_captions_container_padding: 0;
   --yarl__slide_title_font_size: var(--text-lg);
   --yarl__slide_title_font_weight: 600;
   --yarl__slide_description_color: var(--image-preview-muted-fg);
+}
+/* hiddenInset 的交通灯占据左上角；标题居中放在两侧控件之间，不再压在红灯下面。 */
+.studio-lightbox .yarl__slide_title_container {
+  top: var(--studio-lightbox-top-inset);
+  left: 96px;
+  right: 96px;
+  text-align: center;
+}
+.studio-lightbox .yarl__slide_title {
+  display: inline-block;
+  max-width: min(56ch, 100%);
+  margin-inline: auto;
+  padding: 5px 12px;
+  border: 1px solid var(--background-border);
+  border-radius: var(--radius-round);
+  background: var(--overlay-surface);
+  color: var(--image-preview-title-fg);
+  font-size: var(--text-sm);
+  font-weight: 550;
+  text-align: center;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.studio-lightbox .yarl__slide_description_container {
+  bottom: 12px;
 }
 .studio-lightbox .yarl__container {
   background: var(--image-preview-scrim);
@@ -4311,8 +4338,22 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .agent-supervisor-reply .primary-button { min-height: 34px; gap: 5px; padding-inline: 10px; }
 .agent-supervisor-reply .primary-button svg { width: var(--icon-sm); height: var(--icon-sm); }
 .agent-context-view { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
-.agent-context-toolbar { min-height: 42px; padding: 0 var(--session-gutter); border-bottom: 1px solid var(--border); background: var(--surface); }
-.agent-context-toolbar-inner { display: grid; grid-template-columns: minmax(118px, 1fr) auto minmax(118px, 1fr); align-items: center; gap: var(--space-3); width: min(var(--content), calc(100% - var(--dsh-scrollbar-width))); min-height: 42px; margin-inline: auto; }
+/* The toolbar is a floating bar on the same track as the page body: it keeps the
+   window tabs breathing room above and never spans wider than the content. */
+.agent-context-toolbar { padding: var(--space-4) var(--session-gutter) 0; background: var(--bg); }
+.agent-context-toolbar-inner {
+  display: grid;
+  grid-template-columns: minmax(118px, 1fr) auto minmax(118px, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  width: min(var(--content), calc(100% - var(--dsh-scrollbar-width)));
+  min-height: 44px;
+  margin-inline: auto;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
 .agent-back-main,
 .agent-context-overview { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 7px; border: 0; border-radius: var(--radius-control); background: var(--transparent); color: var(--muted); font-size: var(--text-xs); }
 .agent-back-main { justify-self: end; }
@@ -4325,9 +4366,16 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .agent-context-breadcrumb > svg { width: var(--icon-xs); height: var(--icon-xs); flex: none; }
 .agent-context-breadcrumb span { flex: none; }
 .agent-context-breadcrumb strong { overflow: hidden; color: var(--text); font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
-.agent-context-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-6) var(--session-gutter) var(--space-8); scrollbar-gutter: stable; }
+.agent-context-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-5) var(--session-gutter) var(--space-8);
+  scrollbar-gutter: stable;
+  scroll-padding-block: var(--space-4);
+}
 .agent-context-column { width: min(var(--content), 100%); margin-inline: auto; }
-.agent-context-head { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: start; gap: var(--space-3); padding-bottom: var(--space-4); }
+.agent-context-head { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: start; gap: var(--space-3); padding-bottom: var(--space-3); }
 .agent-context-head > div { min-width: 0; }
 .agent-context-head h2 { font-size: 20px; }
 .agent-context-state { display: flex; align-items: center; gap: 8px; }
@@ -4345,11 +4393,40 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 }
 .agent-readonly-status svg { width: var(--icon-xs); height: var(--icon-xs); }
 .agent-context-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--border); }
-.agent-context-meta > span { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 2px 7px; min-width: 0; padding: 10px 12px; background: var(--surface); }
+.agent-context-meta > span { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 2px 7px; min-width: 0; padding: 11px 14px; background: var(--surface); }
 .agent-context-meta svg { width: var(--icon-sm); height: var(--icon-sm); grid-row: 1 / 3; align-self: center; color: var(--icon); }
 .agent-context-meta small { color: var(--faint); font-size: 9.5px; }
 .agent-context-meta strong { overflow: hidden; color: var(--text); font-size: 10.5px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
-.agent-transcript { gap: var(--space-6); padding: 0; }
+/* Keep the transcript off the meta card: a divider plus real whitespace above,
+   and the same rhythm between turns. */
+.agent-context-alert {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding: 10px 12px;
+  border: 1px solid var(--error-border);
+  border-radius: var(--radius-card);
+  background: var(--error-soft);
+  color: var(--error);
+}
+.agent-context-alert > svg { width: var(--icon-sm); height: var(--icon-sm); margin-top: 2px; }
+.agent-context-alert strong { font-size: var(--text-xs); font-weight: 600; }
+.agent-context-alert p { margin: 3px 0 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.6; overflow-wrap: anywhere; }
+.agent-context-foot {
+  margin: var(--space-6) 0 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--divider);
+  color: var(--faint);
+  font-size: 10.5px;
+  text-align: center;
+}
+.agent-transcript {
+  gap: var(--space-6);
+  margin-top: var(--space-6);
+  padding: var(--space-6) 0 0;
+  border-top: 1px solid var(--divider);
+}
 .agent-transcript-window { display: flex; align-items: center; gap: 6px; margin-bottom: var(--space-4); padding: 7px 9px; border-radius: var(--radius-control); background: var(--surface-soft); color: var(--faint); font-size: 10.5px; }
 .agent-transcript-window svg { width: var(--icon-sm); height: var(--icon-sm); }
 .agent-transcript-loading,

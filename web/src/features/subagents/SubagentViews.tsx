@@ -461,6 +461,13 @@ export function SubagentTranscriptView({
           <span><Terminal /><small>工具</small><strong>{child.toolCount ?? '—'}</strong></span>
           <span><MessageSquare /><small>Token 数</small><strong>{tokenCount(child.tokens)}</strong></span>
         </div>
+        {child.error && !loading && <div className="agent-context-alert" role="status">
+          <CircleX />
+          <div>
+            <strong>这次运行没有完成</strong>
+            <p>{child.error}</p>
+          </div>
+        </div>}
         {loading && <div className="agent-transcript-loading" role="status"><LoaderCircle className="spin" /><span>正在读取子智能体会话…</span></div>}
         {error && <div className="agent-transcript-error"><CircleX /><strong>无法打开这个上下文</strong><p>{error}</p></div>}
         {!loading && !error && transcript?.hasMore && <div className="agent-transcript-window"><Layers3 /><span>只显示最近 {transcript.messages.length} / {transcript.totalMessages} 条消息</span></div>}
@@ -487,6 +494,9 @@ export function SubagentTranscriptView({
           <MessageSquare />
           <strong>这份会话还没有消息</strong>
         </div>}
+        {!loading && !error && transcript && turns.length > 0 && <p className="agent-context-foot">
+          只读记录 · 这里不会向子智能体发送消息，也不会改变父智能体的工作
+        </p>}
       </div>
     </div>
   </div>;
