@@ -135,7 +135,7 @@ export function ConversationExtensionHub({
   }
 
   return <div className="conversation-extension-hub">
-    <header className="extension-hub-head">
+    <header className="session-view-head extension-hub-head">
       <h2>会话扩展</h2>
       <div className="extension-hub-tools">
         <div className="extension-hub-scope" role="group" aria-label="扩展排序范围">

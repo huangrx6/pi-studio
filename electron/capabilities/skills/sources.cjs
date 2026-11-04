@@ -19,6 +19,7 @@ const {
   sha256,
 } = require('../../core/extension-archive.cjs');
 const { normalizeSecureHttpUrl } = require('../../core/external-url.cjs');
+const { githubRepository, createGithubSourceAdapter } = require('./github-source.cjs');
 const {
   getStudioDatabase,
 } = require('../../core/studio-db.cjs');
@@ -50,6 +51,19 @@ const refreshes = new Map();
 const prepared = new Map();
 
 const isRemote = (location) => /^https?:\/\//i.test(location);
+const github = createGithubSourceAdapter(async (url, label, maximum) => {
+  // Repository archives can take longer than a small JSON registry to transfer.
+  const { response } = await fetchHttps(url, label, 60_000);
+  if (response.status === 403 || response.status === 429) {
+    await response.body?.cancel();
+    throw new Error('GitHub 请求受限，请稍后重试');
+  }
+  if (response.status === 404) {
+    await response.body?.cancel();
+    throw new Error('找不到 GitHub 仓库；请确认地址正确且仓库公开可访问');
+  }
+  return readLimitedResponse(response, label, maximum);
+});
 
 function invalidateCatalog(id) {
   catalogsBySource.delete(id);
@@ -78,6 +92,11 @@ function sourceId(type, location) {
 function normalizeLocation(type, rawLocation) {
   const value = String(rawLocation || '').trim();
   if (!value) throw new Error('请填写技能源地址');
+  if (type === 'github') {
+    const repository = githubRepository(value);
+    if (!repository) throw new Error('请填写 GitHub 仓库首页地址，例如 https://github.com/anthropics/skills');
+    return repository.location;
+  }
   if (type === 'directory') {
     const directory = path.resolve(expandHome(value));
     if (!fs.existsSync(directory) || !fs.statSync(directory).isDirectory()) {
@@ -101,33 +120,60 @@ function listSkillSources() {
   return getStudioDatabase().listSkillSources();
 }
 
-function saveSkillSource(input = {}) {
-  const type = input.type === 'directory' ? 'directory' : input.type === 'registry' ? 'registry' : '';
-  if (!type) throw new Error('请选择目录或 registry JSON 源');
+function sourceDefinition(input = {}) {
+  // A pasted repository URL takes precedence over the selected form type.
+  const type = githubRepository(input.location) ? 'github' : input.type;
+  if (!['directory', 'registry', 'github'].includes(type)) throw new Error('请选择有效的技能源类型');
   const location = normalizeLocation(type, input.location);
   if (type === 'registry' && !isRemote(location) && !fs.existsSync(location)) {
     throw new Error('registry JSON 文件不存在');
   }
   const duplicate = listSkillSources().find((source) => (
-    source.type === type
-    && source.location === location
+    (githubRepository(source.location)
+      ? type === 'github' && githubRepository(source.location).location === location
+      : source.type === type && source.location === location)
     && source.id !== input.id
   ));
   if (duplicate) throw new Error(`这个技能源已经添加为「${duplicate.name}」`);
-  const fallbackName = type === 'directory'
+  const fallbackName = type === 'github' ? new URL(location).pathname.slice(1) : type === 'directory'
     ? path.basename(location)
     : isRemote(location)
       ? path.basename(new URL(location).pathname || 'registry.json')
       : path.basename(location, path.extname(location));
   const name = String(input.name || fallbackName || '技能源').trim().slice(0, 120);
   const id = input.id || sourceId(type, location);
-  invalidateCatalog(id);
-  return getStudioDatabase().upsertSkillSource({
+  return {
     id,
     name,
     type,
     location,
     enabled: input.enabled !== false,
+  };
+}
+
+function saveSkillSource(input = {}) {
+  const definition = sourceDefinition(input);
+  invalidateCatalog(definition.id);
+  return getStudioDatabase().upsertSkillSource(definition);
+}
+
+async function readSource(source) {
+  // Also recognizes repository URLs saved by older versions as registry sources.
+  if (githubRepository(source.location)) return github.read(source);
+  return source.type === 'directory'
+    ? directoryEntries(source)
+    : { entries: await readRegistry(source), diagnostics: [] };
+}
+
+async function addSkillSource(input = {}) {
+  const definition = sourceDefinition(input);
+  const result = await readSource(definition);
+  // Validate before persistence. Recheck duplicates after I/O, so simultaneous
+  // submissions cannot overwrite one another or leave a failed source behind.
+  const source = saveSkillSource(input);
+  catalogsBySource.set(source.id, result);
+  return getStudioDatabase().setSkillSourceStatus(source.id, {
+    lastSyncedAt: Date.now(), itemCount: result.entries.length, lastError: '',
   });
 }
 
@@ -158,12 +204,12 @@ async function readLimitedResponse(response, label, maximum = MAX_REGISTRY_BYTES
   return Buffer.concat(chunks, size);
 }
 
-async function fetchHttps(url, label) {
+async function fetchHttps(url, label, timeoutMs = 15_000) {
   let current = normalizeSecureHttpUrl(url, { label });
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
     const response = await fetch(current, {
       redirect: 'manual',
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(timeoutMs),
       headers: { Accept: 'application/json, application/zip, application/octet-stream' },
     });
     if (response.status >= 300 && response.status < 400) {
@@ -309,9 +355,7 @@ async function refreshSkillCatalog() {
     refreshes.set(source.id, generation);
     const current = () => refreshes.get(source.id) === generation;
     try {
-      const result = source.type === 'directory'
-        ? directoryEntries(source)
-        : { entries: await readRegistry(source), diagnostics: [] };
+      const result = await readSource(source);
       // Editing/removing a source or starting a newer refresh invalidates this
       // request. Its delayed response must not repopulate the old catalog.
       if (!current()) return;
@@ -426,7 +470,9 @@ async function prepareSkillInstall({ sourceId: requestedSourceId, listingId, sco
   fs.mkdirSync(staging, { recursive: true, mode: 0o700 });
   const contentRoot = path.join(staging, 'content');
   try {
-    if (source.type === 'directory') {
+    if (githubRepository(source.location)) {
+      await github.stage(source, item, contentRoot, walkFiles);
+    } else if (source.type === 'directory') {
       walkFiles(item.sourcePath);
       fs.cpSync(item.sourcePath, contentRoot, {
         recursive: true,
@@ -605,6 +651,7 @@ function pruneSkillPrepared() {
 }
 
 module.exports = {
+  addSkillSource,
   disposePreparedSkill,
   installPreparedSkill,
   listSkillSources,

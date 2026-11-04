@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus, RotateCw, Terminal as TerminalIcon } from 'lucide-react';
+import { Plus, RotateCw, Terminal as TerminalIcon, TriangleAlert } from 'lucide-react';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal, type ITheme } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
@@ -9,6 +9,12 @@ import './terminal-panel.css';
 
 const MAX_PENDING_EVENTS = 256;
 const MAX_PENDING_CHARS = 1_000_000;
+
+function terminalFontFamily() {
+  // Symbols precede the generic monospace fallback, which otherwise swallows
+  // private-use Nerd Font characters as missing-glyph boxes on macOS.
+  return `"Studio Terminal Symbols", ${token('--mono')}`;
+}
 
 function token(name: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -57,6 +63,7 @@ export function TerminalPanel({
   const [shell, setShell] = useState('');
   const [workingDirectory, setWorkingDirectory] = useState(cwd);
   const [error, setError] = useState<string | null>(null);
+  const [fontWarning, setFontWarning] = useState(false);
   const [retryRevision, setRetryRevision] = useState(0);
 
   useEffect(() => {
@@ -72,7 +79,7 @@ export function TerminalPanel({
       convertEol: false,
       cursorBlink: true,
       cursorStyle: 'bar',
-      fontFamily: token('--mono'),
+      fontFamily: terminalFontFamily(),
       fontSize: Math.max(11, Math.min(16, Number.parseFloat(token('--chat-font-size')) || 12)),
       lineHeight: 1.25,
       scrollback: 8_000,
@@ -101,6 +108,18 @@ export function TerminalPanel({
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(fitTerminal);
     };
+    // The bundled face works offline. Repaint after it loads: xterm may have
+    // already painted shell output using the system fallback on first open.
+    void document.fonts.load('14px "Studio Terminal Symbols"', '\uf07b\uf15b\ue0b0\udb80\udf7b').then(() => {
+      if (disposed) return;
+      term.options.fontFamily = terminalFontFamily();
+      term.refresh(0, term.rows - 1);
+      setFontWarning(false);
+      scheduleFit();
+    }).catch(() => {
+      // A missing optional symbol face must not block a working shell.
+      if (!disposed) setFontWarning(true);
+    });
     fitTerminal();
 
     const applyEvent = (event: TerminalEvent) => {
@@ -137,6 +156,7 @@ export function TerminalPanel({
     resizeObserver.observe(host);
     const appearanceObserver = new MutationObserver(() => {
       term.options.theme = terminalTheme();
+      term.options.fontFamily = terminalFontFamily();
       term.options.fontSize = Math.max(11, Math.min(16, Number.parseFloat(token('--chat-font-size')) || 12));
       scheduleFit();
     });
@@ -193,6 +213,7 @@ export function TerminalPanel({
       </span>
       <span className="terminal-shell"><TerminalIcon aria-hidden="true" />{shell || 'shell'}</span>
       <code title={workingDirectory}>{workingDirectory}</code>
+      {fontWarning && <span className="terminal-font-warning" role="status" aria-label="图标字体加载失败，请重新连接终端" title="图标字体加载失败，请重新连接终端"><TriangleAlert aria-hidden /></span>}
       <button type="button" aria-label="新建终端" title="新建终端" onClick={onNewTerminal}><Plus /></button>
       <button type="button" aria-label="重新连接终端" title="重新连接" onClick={() => setRetryRevision((value) => value + 1)}><RotateCw /></button>
     </header>

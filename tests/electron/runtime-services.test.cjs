@@ -47,12 +47,13 @@ test('lsof listener parsing handles localhost, wildcard and IPv6 listeners', () 
 
 test('process table parsing retains lineage, elapsed time and redacts credentials', () => {
   const parsed = parseProcessTable([
-    '100 1 01:02:03 /Applications/Pi Studio --token=secret-value',
-    '200 100 2-01:00:04 node server.js --api-key abc123',
+    '100 1 501 01:02:03 /Applications/Pi Studio --token=secret-value',
+    '200 100 501 2-01:00:04 node server.js --api-key abc123',
     'not a process row',
   ].join('\n'), 10_000_000);
   assert.equal(parseElapsedSeconds('2-01:00:04'), 176_404);
   assert.equal(parsed.get(100).ppid, 1);
+  assert.equal(parsed.get(100).uid, 501);
   assert.equal(parsed.get(100).elapsedSeconds, 3_723);
   assert.doesNotMatch(parsed.get(100).command, /secret-value/);
   assert.doesNotMatch(parsed.get(200).command, /abc123/);
@@ -107,9 +108,9 @@ test('scanner distinguishes task-owned listeners and marks newly observed ports'
     if (file === 'lsof' && args.includes('-FpcPn')) return listenerOutput;
     if (file === 'ps') {
       return [
-        '100 1 10:00 /Applications/Pi Studio',
-        '200 100 00:30 node server.js',
-        '300 1 01:00 OtherApp',
+        '100 1 501 10:00 /Applications/Pi Studio',
+        '200 100 501 00:30 node server.js',
+        '300 1 501 01:00 OtherApp',
       ].join('\n');
     }
     if (file === 'lsof' && args.includes('-d')) {
@@ -123,6 +124,7 @@ test('scanner distinguishes task-owned listeners and marks newly observed ports'
     execute,
     platform: 'darwin',
     processId: 100,
+    userId: 501,
     now: () => now,
     stopProcess: async (pid) => {
       terminated.push(pid);
@@ -139,7 +141,7 @@ test('scanner distinguishes task-owned listeners and marks newly observed ports'
   assert.equal(first.services[0].isNew, false);
   assert.equal(first.services[0].url, 'http://127.0.0.1:3000');
   assert.deepEqual(
-    await scanner.stop({ cwd: workspace, pid: 200, port: 3000 }),
+    await scanner.stop({ pid: 200, port: 3000, startedAt: first.services[0].startedAt }),
     { ok: true, pid: 200, port: 3000, affectedPorts: [3000], forced: false },
   );
   assert.deepEqual(terminated, [200]);
@@ -175,6 +177,46 @@ test('redactCommand removes common shell and API credentials', () => {
   );
   assert.doesNotMatch(command, /plain-token|hunter2|ghp_abcdefghijk|sk-livevalue123/);
   assert.match(command, /\[redacted]/);
+});
+
+test('local services can be stopped without granting control over system, other-user or Studio helper processes', async () => {
+  let output = [
+    '50 1 501 20:00 terminal',
+    '100 50 501 10:00 /Applications/Pi Studio',
+    '200 100 501 01:00 Electron --type=renderer',
+    '300 1 501 01:00 node local-server.js',
+    '400 1 502 01:00 node other-user.js',
+    '500 1 0 01:00 system-service',
+  ].join('\n');
+  const stopped = [];
+  const scanner = createRuntimeServiceScanner({
+    processId: 100,
+    userId: 501,
+    platform: 'darwin',
+    now: () => 1_000_000,
+    execute: async (file, args) => {
+      if (file === 'ps') return output;
+      if (args.includes('-d')) return '';
+      return [50, 100, 200, 300, 400, 500, 600].map((pid) => `p${pid}\ncnode\nn127.0.0.1:${pid + 3000}`).join('\n');
+    },
+    stopProcess: async (pid) => { stopped.push(pid); },
+  });
+  const snapshot = await scanner.scan();
+  for (const service of snapshot.services) {
+    assert.equal(service.canStop, service.pid === 300);
+    if (service.pid !== 300) {
+      assert.ok(service.stopBlockedReason);
+      await assert.rejects(scanner.stop({ pid: service.pid, port: service.port, startedAt: service.startedAt ?? 0 }));
+    }
+  }
+  const local = snapshot.services.find((service) => service.pid === 300);
+  assert.equal(local.ownership, 'other');
+  await scanner.stop(local);
+  assert.deepEqual(stopped, [300]);
+  await assert.rejects(scanner.stop({ pid: 300, port: 3300 }), /身份已过期/);
+  output = output.replace('300 1 501 01:00', '300 1 501 00:01');
+  await assert.rejects(scanner.stop(local), /监听进程已经变化/);
+  assert.deepEqual(stopped, [300], 'a recycled PID must not be stopped');
 });
 
 test('terminateProcess uses a bounded graceful stop before forcing the process', async () => {

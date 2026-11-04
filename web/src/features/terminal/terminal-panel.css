@@ -1,3 +1,12 @@
+@font-face {
+  font-family: "Studio Terminal Symbols";
+  src: url('./fonts/SymbolsNerdFontMono-Regular.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range: U+E000-F8FF, U+F0000-FFFFD, U+100000-10FFFD, U+23FB-23FE, U+2B58;
+}
+
 .terminal-panel {
   display: flex;
   flex: 1;
@@ -13,14 +22,15 @@
   min-height: var(--toolbar-height);
   flex: none;
   padding: 0 var(--space-2) 0 var(--space-3);
-  background: var(--surface-soft);
+  background: var(--surface);
+  border-bottom: 1px solid var(--divider);
 }
 .terminal-toolbar > code {
   min-width: 0;
   flex: 1;
   overflow: hidden;
   color: var(--faint);
-  font: 10.5px var(--mono);
+  font: 11px var(--mono);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -35,6 +45,8 @@
 }
 .terminal-toolbar > button:hover { background: var(--surface-hover); color: var(--text); }
 .terminal-toolbar > button svg { width: 14px; height: 14px; }
+.terminal-font-warning { display: inline-flex; color: var(--warning); }
+.terminal-font-warning svg { width: 14px; height: 14px; }
 .terminal-live-state {
   display: inline-flex;
   align-items: center;

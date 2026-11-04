@@ -97,7 +97,7 @@ export type McpConnectionTestResult = {
 export type SkillSource = {
   id: string;
   name: string;
-  type: 'directory' | 'registry';
+  type: 'directory' | 'registry' | 'github';
   location: string;
   enabled: boolean;
   lastSyncedAt?: number;
@@ -112,7 +112,7 @@ export type SkillCatalogItem = {
   listingId: string;
   sourceId: string;
   sourceName: string;
-  sourceType: 'directory' | 'registry';
+  sourceType: 'directory' | 'registry' | 'github';
   name: string;
   description: string;
   version: string;
@@ -143,7 +143,7 @@ export type SkillInstallPreview = {
   sourceId: string;
   listingId: string;
   sourceName: string;
-  sourceType: 'directory' | 'registry';
+  sourceType: 'directory' | 'registry' | 'github';
   scope: 'user' | 'project';
   requiresTrust: boolean;
   canUpdate: boolean;
@@ -510,12 +510,11 @@ declare global {
       onTerminalEvent(listener: (event: TerminalEvent) => void): () => void;
       /** 扫描 TCP 监听端口，并按当前任务/工作区标记归属依据。 */
       runtimeServices(payload: { cwd?: string; roots?: string[] }): Promise<RuntimeServiceSnapshot>;
-      /** 终止已经通过主进程归属校验的任务服务。 */
+      /** 终止已经通过主进程身份与操作系统用户校验的服务。 */
       runtimeServiceStop(payload: {
-        cwd?: string;
-        roots?: string[];
         pid: number;
         port: number;
+        startedAt: number;
       }): Promise<RuntimeServiceStopResult>;
 
       // ---- 输入框辅助 ----
@@ -693,7 +692,7 @@ declare global {
       addSkillSource(payload: {
         id?: string;
         name?: string;
-        type: 'directory' | 'registry';
+        type: 'directory' | 'registry' | 'github';
         location: string;
         enabled?: boolean;
       }): Promise<SkillSource>;

@@ -339,20 +339,9 @@ export function SubagentOverview({
   }, [active]);
 
   return <div className="agent-overview">
-    <header className="agent-overview-head">
-      <div className="agent-overview-heading">
-        <h2>子智能体</h2>
-        <button
-          type="button"
-          className="agent-overview-return"
-          aria-label="返回对话"
-          title={`返回主对话 · ${selection.label || selection.modelRef || '当前对话'}`}
-          onClick={onReturnMain}
-        >
-          <ArrowLeft />
-          <span>返回对话</span>
-        </button>
-      </div>
+    <header className="session-view-head agent-overview-head">
+      {/* The conversation tabs own navigation; this row only holds view controls. */}
+      <h2>子智能体</h2>
       <div className="agent-overview-actions">
         {children.length > 1 && <div className="agent-overview-layout" role="group" aria-label="子智能体视图">
           <button
@@ -449,7 +438,7 @@ export function SubagentOverview({
           ))}
         </section>
       : <div className={`agent-overview-empty${children.length ? ' is-filtered' : ' is-initial'}`} role="status">
-        <span className="agent-overview-empty-icon"><GitFork /></span>
+        <span className="agent-overview-empty-icon" aria-hidden="true"><GitFork /></span>
         <strong>{children.length ? '没有匹配结果' : '这次对话还没有子智能体'}</strong>
       </div>}
   </div>;

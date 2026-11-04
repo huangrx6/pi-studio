@@ -115,16 +115,17 @@ function redactCommand(command) {
 function parseProcessTable(raw, now = Date.now()) {
   const processes = new Map();
   for (const line of String(raw || '').split(/\r?\n/)) {
-    const match = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/.exec(line);
+    const match = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/.exec(line);
     if (!match) continue;
     const pid = Number(match[1]);
-    const elapsedSeconds = parseElapsedSeconds(match[3]);
+    const elapsedSeconds = parseElapsedSeconds(match[4]);
     processes.set(pid, {
       pid,
       ppid: Number(match[2]),
+      uid: Number(match[3]),
       elapsedSeconds,
       startedAt: elapsedSeconds === undefined ? undefined : now - elapsedSeconds * 1000,
-      command: redactCommand(match[4]).slice(0, 2_000),
+      command: redactCommand(match[5]).slice(0, 2_000),
     });
   }
   return processes;
@@ -305,10 +306,32 @@ function displayAddress(record) {
   return `${record.host}:${record.port}`;
 }
 
+function stopBlockedReason(pid, processes, studioPid, userId) {
+  if (pid <= 1) return '系统进程不可终止';
+  if (pid === studioPid) return '不能终止 Studio 主进程';
+  const info = processes.get(pid);
+  // Ownership answers where the process came from. Stop eligibility instead
+  // uses OS ownership, so an independently started local dev server is actionable.
+  if (!info || !Number.isFinite(info.startedAt)) return '无法核实进程身份';
+  if (info.uid === 0 || userId === undefined || info.uid !== userId) return '无权终止其他用户或系统的进程';
+  const ancestors = new Set();
+  let parent = processes.get(studioPid)?.ppid;
+  while (parent && !ancestors.has(parent)) {
+    ancestors.add(parent);
+    parent = processes.get(parent)?.ppid;
+  }
+  if (ancestors.has(pid)) return '不能终止启动 Studio 的进程';
+  if (descendantsOf(studioPid, processes).has(pid) && /(?:^|\s)--type=/.test(info.command)) {
+    return 'Studio 内部进程不可终止';
+  }
+  return '';
+}
+
 function createRuntimeServiceScanner(options = {}) {
   const execute = options.execute || executeFile;
   const platform = options.platform || process.platform;
   const studioPid = options.processId || process.pid;
+  const userId = options.userId ?? process.getuid?.();
   const now = options.now || Date.now;
   const stopProcess = options.stopProcess || ((pid) => terminateProcess(pid, { platform, execute }));
   const seen = new Map();
@@ -342,7 +365,7 @@ function createRuntimeServiceScanner(options = {}) {
     if (platform === 'darwin') {
       const [listenerResult, processResult] = await Promise.allSettled([
         execute('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN', '-FpcPn']),
-        execute('ps', ['-axo', 'pid=,ppid=,etime=,command=']),
+        execute('ps', ['-axo', 'pid=,ppid=,uid=,etime=,command=']),
       ]);
       if (listenerResult.status === 'rejected') {
         if (Number(listenerResult.reason?.code) !== 1) throw listenerResult.reason;
@@ -358,7 +381,7 @@ function createRuntimeServiceScanner(options = {}) {
     } else if (platform === 'linux') {
       const [listenerResult, processResult] = await Promise.allSettled([
         execute('ss', ['-H', '-ltnp']),
-        execute('ps', ['-axo', 'pid=,ppid=,etime=,command=']),
+        execute('ps', ['-axo', 'pid=,ppid=,uid=,etime=,command=']),
       ]);
       if (listenerResult.status === 'rejected') throw listenerResult.reason;
       listeners = parseSsListeners(listenerResult.value);
@@ -407,6 +430,7 @@ function createRuntimeServiceScanner(options = {}) {
       const key = `${record.pid}:${record.protocol}:${record.address}`;
       const wasSeen = seen.has(key);
       const firstObservedAt = seen.get(key) || scannedAt;
+      const stopReason = stopBlockedReason(record.pid, discovery.processTable, studioPid, userId);
       currentKeys.add(key);
       if (!wasSeen) seen.set(key, scannedAt);
       return {
@@ -424,6 +448,8 @@ function createRuntimeServiceScanner(options = {}) {
         elapsedSeconds: info?.elapsedSeconds,
         startedAt: info?.startedAt,
         ownership: ownership.kind,
+        canStop: !stopReason,
+        stopBlockedReason: stopReason,
         evidence: ownership.evidence,
         firstObservedAt,
         isNew: initialized && !wasSeen,
@@ -446,27 +472,23 @@ function createRuntimeServiceScanner(options = {}) {
     return { scannedAt, supported: true, warning: '', services, summary };
   }
 
-  async function stop({ pid, port, cwd, roots = [] } = {}) {
+  async function stop({ pid, port, startedAt } = {}) {
     if (!Number.isInteger(pid) || pid <= 1) throw new Error('终止服务的进程标识无效');
     if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error('终止服务的端口无效');
     if (pid === studioPid) throw new Error('不能终止 Studio 主进程');
+    if (!Number.isFinite(startedAt)) throw new Error('进程身份已过期，请刷新后重试');
 
     const discovery = await discover();
     if (discovery.supported === false) throw new Error(discovery.warning);
     const target = discovery.listeners.find((record) => record.pid === pid && record.port === port);
     if (!target) throw new Error('服务已结束，或监听端口已经变化');
 
-    const cwdByPid = await cwdMapFor([target]);
-    const ownership = classifyOwnership({
-      pid,
-      processInfo: discovery.processTable.get(pid),
-      processCwd: cwdByPid.get(pid),
-      descendantPids: descendantsOf(studioPid, discovery.processTable),
-      roots: normalizeRoots(cwd, roots),
-      studioPid,
-    });
-    if (ownership.kind !== 'agent' && ownership.kind !== 'workspace') {
-      throw new Error('只允许终止任务进程或当前工作区进程');
+    const reason = stopBlockedReason(pid, discovery.processTable, studioPid, userId);
+    if (reason) throw new Error(reason);
+    // ps elapsed time is rounded to seconds; allow that rounding, but reject a
+    // recycled PID even when the replacement has bound the same port.
+    if (Math.abs(discovery.processTable.get(pid).startedAt - startedAt) > 2_000) {
+      throw new Error('监听进程已经变化，请刷新后重新确认');
     }
 
     const affectedPorts = [...new Set(

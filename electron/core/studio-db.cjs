@@ -21,7 +21,7 @@ const {
 } = require('./thinking-levels.cjs');
 
 const DATABASE_NAME = 'pi-studio.sqlite';
-const SCHEMA_VERSION = 17;
+const SCHEMA_VERSION = 18;
 const USAGE_REQUEST_LEDGER_LIMIT = 8_192;
 const USAGE_REQUEST_PRUNE_BATCH = 256;
 const METRIC_REQUEST_HISTORY_LIMIT = 8;
@@ -602,6 +602,27 @@ class StudioDatabase {
         `);
       }
       this.pruneUsageRequestLedger();
+
+      if (current < 18) {
+        // Rebuild the CHECK constraint while preserving source IDs and install ownership.
+        this.db.exec(`
+          CREATE TABLE skill_sources_v18 (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            type TEXT NOT NULL CHECK (type IN ('directory', 'registry', 'github')),
+            location TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            last_synced_at INTEGER,
+            item_count INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT NOT NULL DEFAULT '',
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+          );
+          INSERT INTO skill_sources_v18 SELECT * FROM skill_sources;
+          DROP TABLE skill_sources;
+          ALTER TABLE skill_sources_v18 RENAME TO skill_sources;
+        `);
+      }
 
       const secretRows = this.db.prepare('SELECT name, env, headers FROM mcp_servers').all();
       const updateSecrets = this.db.prepare(

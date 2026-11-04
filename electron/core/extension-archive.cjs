@@ -238,7 +238,7 @@ function inspectZipEntries(archive, options = {}) {
   }
   if (cursor !== centralOffset + centralSize) throw new Error('ZIP 中央目录长度不一致');
   assertNoFileDirectoryConflicts(files);
-  return stripSingleWrapperDirectory(files, options.wrapperFile);
+  return options.stripWrapper === false ? files : stripSingleWrapperDirectory(files, options.wrapperFile);
 }
 
 function extractZipArchive(archive, destination, options = {}) {

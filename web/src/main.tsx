@@ -19,6 +19,7 @@ import './styles/dsh-scrollbar.css';
 import './styles/tokens.css';
 import './styles/palette.css';
 import './app.css';
+import './shell/session-view.css';
 import './shell/right-panel/right-panel.css';
 
 // 先应用主题与配色再 render，避免第一帧先按默认玉石青色绘制。

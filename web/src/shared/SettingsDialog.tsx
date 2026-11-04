@@ -33,6 +33,7 @@ export function SettingsDialog({
   hint,
   description,
   action,
+  busyAction = '正在保存…',
   busy,
   loading,
   unavailable,
@@ -49,6 +50,7 @@ export function SettingsDialog({
   hint?: string;
   description?: string;
   action: string;
+  busyAction?: string;
   busy: boolean;
   loading: boolean;
   unavailable?: boolean;
@@ -109,7 +111,7 @@ export function SettingsDialog({
       <footer className="dialog-footer">
         {footerHint && <div className="dialog-footer-hint" role="status" aria-live="polite">{footerHint}</div>}
         <button type="button" className="settings-outline" disabled={busy} onClick={onClose}>取消</button>
-        <button type="submit" className="settings-save" disabled={busy || loading || unavailable}>{busy && <LoaderCircle className="spin" />}{busy ? '正在保存…' : action}</button>
+        <button type="submit" className="settings-save" disabled={busy || loading || unavailable}>{busy && <LoaderCircle className="spin" />}{busy ? busyAction : action}</button>
       </footer>
     </form>
   </dialog>;

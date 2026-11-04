@@ -16,6 +16,9 @@ const {
   closeStudioDatabase,
 } = require('../../electron/core/studio-db.cjs');
 const {
+  addSkillSource,
+  listSkillSources,
+  removeSkillSource,
   installPreparedSkill,
   prepareSkillInstall,
   refreshSkillCatalog,
@@ -28,6 +31,101 @@ const {
 test.after(() => {
   closeStudioDatabase();
   fs.rmSync(temporary, { recursive: true, force: true });
+});
+
+test('GitHub sources discover nested and root skills and install the catalog commit', async (t) => {
+  const original = global.fetch;
+  const added = [];
+  t.after(() => { global.fetch = original; added.forEach(removeSkillSource); });
+  const commit = 'a'.repeat(40);
+  const skill = (name) => Buffer.from(`---\nname: ${name}\ndescription: GitHub fixture\n---\nUse this skill.\n`);
+  const archive = createZipArchive([
+    { path: 'repo/skills/nested/SKILL.md', content: skill('nested') },
+    { path: 'repo/skills/nested/scripts/run.sh', content: Buffer.from('echo fixture') },
+    { path: 'repo/top-level/SKILL.md', content: skill('top-level') },
+    { path: 'repo/broken/SKILL.md', content: Buffer.from('no metadata') },
+    { path: 'repo/README.md', content: Buffer.from('[External skill](https://example.com/SKILL.md)') },
+  ]);
+  const requests = [];
+  global.fetch = async (url) => {
+    requests.push(url);
+    if (url.endsWith('/commits/HEAD')) return Response.json({ sha: commit });
+    assert.ok(url.endsWith(`/zip/${commit}`));
+    return new Response(archive);
+  };
+  for (const location of ['https://github.com/anthropics/skills.git/', 'https://github.com/ComposioHQ/awesome-claude-skills']) {
+    // Wrong form type must not turn a repository into a JSON registry.
+    const source = await addSkillSource({ type: 'registry', location });
+    added.push(source.id);
+    assert.equal(source.type, 'github');
+    assert.equal(source.itemCount, 2);
+    assert.equal(source.lastError, '');
+    const snapshot = await skillHubSnapshot();
+    const catalog = snapshot.catalogs.find((row) => row.source.id === source.id);
+    assert.deepEqual(catalog.items.map((item) => item.name).sort(), ['nested', 'top-level']);
+    assert.equal(catalog.diagnostics.length, 1);
+    assert.ok(!catalog.diagnostics[0].path.includes(temporary));
+    const preview = await prepareSkillInstall({ sourceId: source.id, listingId: 'github:skills/nested', scope: 'user' });
+    assert.deepEqual(preview.files.map((file) => file.path).sort(), ['SKILL.md', 'scripts/run.sh']);
+    assert.match(preview.version, /^0\.0\.0\+[a-f0-9]{12}$/);
+    assert.ok(requests.at(-1).endsWith(`/zip/${commit}`));
+    const installed = installPreparedSkill({ token: preview.token });
+    assert.ok(fs.existsSync(path.join(installed.baseDir, 'scripts/run.sh')));
+    fs.rmSync(installed.baseDir, { recursive: true });
+    require('../../electron/core/studio-db.cjs').getStudioDatabase().removeSkillInstallation(installed.baseDir);
+    await assert.rejects(addSkillSource({ type: 'github', location: source.location.toUpperCase() }), /已经添加/);
+  }
+});
+
+test('failed source additions do not persist and can be retried', async (t) => {
+  const original = global.fetch;
+  t.after(() => { global.fetch = original; });
+  const before = listSkillSources();
+  const location = 'https://github.com/example/unavailable';
+  global.fetch = async () => new Response('', { status: 404 });
+  await assert.rejects(addSkillSource({ type: 'github', location }), /公开可访问/);
+  global.fetch = async () => new Response('', { status: 403 });
+  await assert.rejects(addSkillSource({ type: 'github', location }), /请求受限/);
+  global.fetch = async (url) => url.endsWith('/commits/HEAD')
+    ? Response.json({ sha: 'b'.repeat(40) })
+    : new Response(createZipArchive([{ path: 'repo/README.md', content: Buffer.from('Only links') }]));
+  await assert.rejects(addSkillSource({ type: 'github', location }), /没有可安装/);
+  assert.deepEqual(listSkillSources(), before);
+  global.fetch = async () => new Response('<html>not JSON</html>');
+  await assert.rejects(addSkillSource({ type: 'registry', location: 'https://example.com/catalog.json' }), /不是有效 JSON/);
+  assert.deepEqual(listSkillSources(), before);
+});
+
+test('v17 migration preserves source metadata and installation ownership', () => {
+  const { createStudioDatabase } = require('../../electron/core/studio-db.cjs');
+  const { DatabaseSync } = require('node:sqlite');
+  const filename = path.join(temporary, 'migration.sqlite');
+  const previous = createStudioDatabase(filename);
+  const source = previous.upsertSkillSource({ id: 'existing', type: 'registry', name: 'Existing', location: '/catalog.json', enabled: false, lastSyncedAt: 123, itemCount: 7, lastError: 'offline' });
+  previous.upsertSkillInstallation({ path: '/installed/demo', sourceId: source.id, listingId: 'registry:demo', name: 'demo', version: '1.0.0', sha256: 'a'.repeat(64) });
+  const installation = previous.getSkillInstallation('/installed/demo');
+  previous.close();
+  const old = new DatabaseSync(filename);
+  old.exec(`
+    ALTER TABLE skill_sources RENAME TO source_copy;
+    CREATE TABLE skill_sources (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL,
+      type TEXT NOT NULL CHECK (type IN ('directory', 'registry')),
+      location TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1,
+      last_synced_at INTEGER, item_count INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+    );
+    INSERT INTO skill_sources SELECT * FROM source_copy;
+    DROP TABLE source_copy;
+    PRAGMA user_version = 17;
+  `);
+  old.close();
+  const migrated = createStudioDatabase(filename);
+  try {
+    assert.deepEqual(migrated.listSkillSources(), [source]);
+    assert.deepEqual(migrated.getSkillInstallation('/installed/demo'), installation);
+    assert.equal(migrated.upsertSkillSource({ id: 'github', name: 'GitHub', type: 'github', location: 'https://github.com/anthropics/skills' }).type, 'github');
+  } finally { migrated.close(); }
 });
 
 test('catalog refresh removes vanished entries and disabled sources cannot be installed', async () => {

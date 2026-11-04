@@ -46,7 +46,7 @@ type Props = {
 };
 
 function sourceTypeLabel(source: Pick<SkillSource, 'type'>) {
-  return source.type === 'directory' ? '本地目录' : '技能目录（JSON）';
+  return source.type === 'github' ? 'GitHub 仓库' : source.type === 'directory' ? '本地目录' : '技能目录（JSON）';
 }
 
 function invocationLabel(value: SkillCatalogItem['invocation']) {
@@ -207,7 +207,10 @@ export function SkillHub({
       busyId={sourceBusyId}
       sourceError={error}
       onClose={() => setManagerOpen(false)}
-      onChange={() => load(true)}
+      onChange={async () => {
+        setSnapshot(await window.piApi.skillHub());
+        setError('');
+      }}
       onToggle={toggleSource}
       onRemove={removeSource}
     />}
@@ -243,7 +246,7 @@ function SkillSourceManager({
   onRemove: (source: SkillSource) => Promise<void>;
 }) {
   const [name, setName] = useState('');
-  const [type, setType] = useState<'directory' | 'registry'>('directory');
+  const [type, setType] = useState<SkillSource['type']>('github');
   const [location, setLocation] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -270,9 +273,9 @@ function SkillSourceManager({
         type,
         location: location.trim(),
       });
+      await onChange();
       setName('');
       setLocation('');
-      await onChange();
     } catch (addError) {
       setError(errorText(addError));
     } finally {
@@ -283,10 +286,11 @@ function SkillSourceManager({
   return <SettingsDialog
     title="管理技能源"
     action="添加源"
+    busyAction="正在添加…"
     busy={busy || Boolean(busyId)}
     loading={false}
     unavailable={!location.trim()}
-    error={error || sourceError}
+    error={error || (busy ? '' : sourceError)}
     onClose={onClose}
     onSubmit={() => void add()}
     showBackdrop={false}
@@ -297,12 +301,12 @@ function SkillSourceManager({
           label="技能源类型"
           value={type}
           onChange={(value) => {
-            setType(value as 'directory' | 'registry');
-            setLocation('');
+            setType(value as SkillSource['type']);
           }}
           options={[
-            { value: 'directory', label: '本地目录', description: '递归发现包含 SKILL.md 的技能目录' },
-            { value: 'registry', label: '技能目录（JSON）', description: '本地文件或 HTTPS 在线目录' },
+            { value: 'github', label: 'GitHub 仓库' },
+            { value: 'directory', label: '本地目录' },
+            { value: 'registry', label: '技能目录（JSON）' },
           ]}
         />
       </label>
@@ -311,10 +315,14 @@ function SkillSourceManager({
         <div className="skill-source-location">
           <input
             value={location}
-            onChange={(event) => setLocation(event.target.value)}
-            placeholder={type === 'directory' ? '/path/to/skills' : 'https://skills.internal/catalog.json'}
+            onChange={(event) => {
+              const value = event.target.value;
+              setLocation(value);
+              if (/^https:\/\/github\.com\/[^/]+\/[^/?#]+\/?(?:[?#].*)?$/i.test(value.trim())) setType('github');
+            }}
+            placeholder={type === 'github' ? 'https://github.com/anthropics/skills' : type === 'directory' ? '/path/to/skills' : 'https://skills.internal/catalog.json'}
           />
-          <button type="button" className="settings-outline" onClick={() => void pick()}><FolderSearch />选择</button>
+          {type !== 'github' && <button type="button" className="settings-outline" onClick={() => void pick()}><FolderSearch />选择</button>}
         </div>
       </label>
     </div>
@@ -326,6 +334,7 @@ function SkillSourceManager({
           <strong>{source.name}</strong>
           <small>{sourceTypeLabel(source)} · {source.itemCount} 个技能{source.lastSyncedAt ? ` · ${new Date(source.lastSyncedAt).toLocaleString()}` : ''}</small>
           <code title={source.location}>{source.location}</code>
+          {source.lastError && <small role="alert">{source.lastError}</small>}
         </span>
         <button
           type="button"

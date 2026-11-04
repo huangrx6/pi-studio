@@ -2314,6 +2314,12 @@ try {
   assert.equal(await extensionTab.locator('.tab-count').innerText(), '2');
   await extensionTab.click();
   await page.locator('.conversation-extension-hub').waitFor();
+  const extensionHeaderStyle = await page.locator('.extension-hub-head').evaluate((header) => {
+    const title = header.querySelector('h2');
+    const style = getComputedStyle(title);
+    return { height: header.getBoundingClientRect().height, fontSize: style.fontSize, lineHeight: style.lineHeight, fontWeight: style.fontWeight };
+  });
+  assert.equal(extensionHeaderStyle.height, 32);
   const extensionContentWidth = await page.locator('.conversation-extension-scroll > .chat-column').evaluate((column) => (
     column.getBoundingClientRect().width
   ));
@@ -2391,6 +2397,9 @@ try {
   });
   assert.deepEqual(extensionActionSize, { width: 16, height: 16 });
   await capture('04b-extension-hub');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await capture('04b-extension-hub-dark');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   const statusHubCard = page.locator('.extension-hub-card', { hasText: '运行状态' });
   assert.match(await statusHubCard.innerText(), /main · 2 files changed/);
   assert.match(await statusHubCard.innerText(), /42%/);
@@ -2420,6 +2429,11 @@ try {
   assert.match(await agentTab.locator('.agent-tab-count').getAttribute('aria-label'), /有任务正在运行/);
   await agentTab.click();
   await page.getByRole('heading', { name: '子智能体', exact: true }).waitFor();
+  const agentHeaderStyle = await page.locator('.agent-overview-head').evaluate((header) => {
+    const style = getComputedStyle(header.querySelector('h2'));
+    return { height: header.getBoundingClientRect().height, fontSize: style.fontSize, lineHeight: style.lineHeight, fontWeight: style.fontWeight };
+  });
+  assert.deepEqual(agentHeaderStyle, extensionHeaderStyle);
   assert.equal(await page.locator('.agent-overview-head > p').count(), 0);
   assert.equal(await page.getByRole('button', { name: '刷新子智能体', exact: true }).count(), 1);
   assert.equal(await page.locator('.agent-list-row').count(), 2);
@@ -2436,31 +2450,45 @@ try {
   assert.ok(agentOverviewWidths.every((width) => Math.abs(width - conversationContentWidth) <= 1));
   await capture('04c-subagent-overview');
 
-  // 没有子智能体时只保留标题和返回入口；统计、搜索和筛选不能制造一排空控件。
+  // Empty views use the conversation tabs for navigation, with a compact toolbar.
   await page.locator('.session-row').filter({ hasText: '优化文件预览和设置页面的排版' }).click();
   await page.getByRole('heading', { name: '优化文件预览和设置页面的排版', exact: true }).waitFor();
   await page.getByRole('tab', { name: /^子智能体/ }).click();
   const emptyAgentOverview = page.locator('.agent-overview');
   await emptyAgentOverview.locator('.agent-overview-empty.is-initial').waitFor();
   const emptyAgentLayout = await emptyAgentOverview.evaluate((overview) => {
-    const heading = overview.querySelector('.agent-overview-heading');
+    const heading = overview.querySelector('.agent-overview-head');
     const title = heading?.querySelector('h2')?.getBoundingClientRect();
-    const back = heading?.querySelector('.agent-overview-return')?.getBoundingClientRect();
+    const refresh = heading?.querySelector('.agent-refresh')?.getBoundingClientRect();
     const empty = overview.querySelector('.agent-overview-empty')?.getBoundingClientRect();
     return {
       titleCenter: title ? title.top + title.height / 2 : Number.NaN,
-      backCenter: back ? back.top + back.height / 2 : Number.NaN,
+      refreshCenter: refresh ? refresh.top + refresh.height / 2 : Number.NaN,
+      headerHeight: heading?.getBoundingClientRect().height,
+      titleSize: parseFloat(getComputedStyle(heading.querySelector('h2')).fontSize),
       emptyWidth: empty?.width || Number.POSITIVE_INFINITY,
       fleetStrip: Boolean(overview.querySelector('.agent-fleet-strip')),
       tools: Boolean(overview.querySelector('.agent-list-tools')),
     };
   });
-  assert.ok(Math.abs(emptyAgentLayout.titleCenter - emptyAgentLayout.backCenter) <= 1);
+  assert.ok(Math.abs(emptyAgentLayout.titleCenter - emptyAgentLayout.refreshCenter) <= 1);
+  assert.ok(emptyAgentLayout.headerHeight <= 32);
+  assert.ok(emptyAgentLayout.titleSize <= 14);
+  assert.equal(await emptyAgentOverview.getByRole('button', { name: '返回对话', exact: true }).count(), 0);
   assert.ok(emptyAgentLayout.emptyWidth <= 520);
   assert.equal(emptyAgentLayout.fleetStrip, false);
   assert.equal(emptyAgentLayout.tools, false);
   await capture('04c-subagent-empty');
-  await page.getByRole('button', { name: '返回对话', exact: true }).click();
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await capture('04c-subagent-empty-dark');
+  for (const width of [768, 390]) {
+    await page.setViewportSize({ width, height: 920 });
+    await capture(`04c-subagent-empty-${width}`);
+    assert.equal(await emptyAgentOverview.evaluate((node) => node.scrollWidth <= node.clientWidth), true);
+  }
+  await page.setViewportSize({ width: 1440, height: 920 });
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
   await page.locator('.messages').waitFor();
   await page.locator('.session-row').filter({ hasText: '统一工作台的组件与视觉规范' }).click();
   await page.getByRole('heading', { name: '统一工作台的组件与视觉规范', exact: true }).waitFor();
@@ -3461,6 +3489,33 @@ try {
   await sourceManager.getByRole('button', { name: '移除技能源 团队技能库', exact: true }).click();
   await sourceManager.getByRole('alert').filter({ hasText: '技能源正在刷新' }).waitFor();
   await capture('22-skill-source-manager');
+  // Hold the add request explicitly: pending and failed submissions must retain
+  // the user's fields, and a successful retry must clear them only at the end.
+  await page.evaluate(() => {
+    window.piApi.addSkillSource = (input) => new Promise((resolve, reject) => {
+      window.__qaSourceSubmission = { input, resolve, reject };
+    });
+  });
+  const sourceLocation = sourceManager.getByRole('textbox', { name: '位置', exact: true });
+  const sourceName = sourceManager.getByRole('textbox', { name: '显示名称', exact: true });
+  await sourceLocation.fill('https://github.com/anthropics/skills');
+  await sourceName.fill('Anthropic 官方 Skills');
+  await sourceManager.getByRole('button', { name: '添加源', exact: true }).click();
+  await sourceManager.getByRole('button', { name: '正在添加…', exact: true }).waitFor();
+  assert.equal(await sourceLocation.inputValue(), 'https://github.com/anthropics/skills');
+  assert.equal(await sourceName.inputValue(), 'Anthropic 官方 Skills');
+  assert.equal(await sourceLocation.isDisabled(), true);
+  assert.equal(await page.evaluate(() => window.__qaSourceSubmission.input.type), 'github');
+  await capture('22-skill-source-pending');
+  await page.evaluate(() => window.__qaSourceSubmission.reject(new Error('GitHub 请求受限，请稍后重试')));
+  await sourceManager.getByRole('alert').filter({ hasText: 'GitHub 请求受限' }).waitFor();
+  assert.equal(await sourceLocation.inputValue(), 'https://github.com/anthropics/skills');
+  assert.equal(await sourceName.inputValue(), 'Anthropic 官方 Skills');
+  assert.equal(await sourceLocation.isEnabled(), true);
+  await sourceManager.getByRole('button', { name: '添加源', exact: true }).click();
+  await page.evaluate(() => window.__qaSourceSubmission.resolve({ id: 'qa-github' }));
+  await page.waitForFunction(() => document.querySelector('.skill-source-location input')?.value === '');
+  assert.equal(await sourceName.inputValue(), '');
   await page.keyboard.press('Escape');
   const previewTrigger = hub.getByRole('button', { name: '查看技能 review-checklist', exact: true });
   await previewTrigger.click();

@@ -42,6 +42,8 @@ export type RuntimeService = {
   elapsedSeconds?: number;
   startedAt?: number;
   ownership: RuntimeServiceOwnership;
+  canStop: boolean;
+  stopBlockedReason: string;
   evidence: string[];
   firstObservedAt: number;
   isNew: boolean;

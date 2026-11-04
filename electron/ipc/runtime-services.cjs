@@ -23,8 +23,7 @@ function registerRuntimeServicesIpc() {
     return scanner.scan({ roots });
   });
   ipcMain.handle('pi:runtime-service-stop', (_event, payload = {}) => {
-    const roots = selectRegisteredRoots(requestedRoots(payload), registeredWorkspaceRoots());
-    return scanner.stop({ roots, pid: payload.pid, port: payload.port });
+    return scanner.stop({ pid: payload.pid, port: payload.port, startedAt: payload.startedAt });
   });
 }
 

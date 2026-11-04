@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   Check,
-  CircleStop,
   Copy,
   LoaderCircle,
   RefreshCw,
@@ -37,53 +36,41 @@ function freshLabel(timestamp: number, now: number) {
   return `${seconds} 秒前`;
 }
 
-function addressLabel(service: RuntimeService) {
-  if (service.scope === 'all') return '所有网卡';
-  if (service.host === '::1' || service.host.startsWith('127.')) return '本机';
-  return service.host;
-}
-
 function ServiceRow({
   service,
   copied,
   terminating,
   onCopy,
   onStop,
+  showOwnership,
 }: {
   service: RuntimeService;
   copied: boolean;
   terminating: boolean;
   onCopy: () => void;
-  onStop?: () => void;
+  onStop: () => void;
+  showOwnership: boolean;
 }) {
   const duration = relativeDuration(service.elapsedSeconds);
+  const details = [service.url, service.command, service.cwd, ...service.evidence].filter(Boolean).join('\n');
   return <article className={`runtime-service-row is-${service.ownership} ${terminating ? 'is-terminating' : ''}`}>
     <button
       type="button"
       className="runtime-service-open"
       aria-label={`在浏览器打开 ${service.url}`}
-      title={`打开 ${service.url}`}
+      title={details}
       onClick={() => void window.piApi.openExternal(service.url)}
     >
-      <span className="runtime-service-port">
-        <strong>{service.port}</strong>
-        <small>{addressLabel(service)}</small>
-      </span>
       <span className="runtime-service-main">
         <span className="runtime-service-title">
-          <strong>{service.processName}</strong>
-          <span className={`runtime-owner is-${service.ownership}`}>{OWNERSHIP_LABEL[service.ownership]}</span>
-          {service.isNew && <span className="runtime-new">刚出现</span>}
+          <strong className="runtime-service-port">{service.port}</strong>
+          <span className="runtime-service-name">{service.processName}</span>
         </span>
-        <code title={service.command || service.address}>{service.command || service.address}</code>
-        <span className="runtime-service-context" title={service.cwd}>
-          {service.evidence.join(' · ')}
-          {service.cwd && <span>{service.cwd.split('/').filter(Boolean).at(-1)}</span>}
+        <span className="runtime-service-context">
+          <span>PID {service.pid}</span>
+          {duration && <span>{duration}</span>}
+          {showOwnership && <span>{OWNERSHIP_LABEL[service.ownership]}</span>}
         </span>
-      </span>
-      <span className="runtime-service-facts">
-        <span>PID {service.pid}</span>
-        {duration && <span>{duration}</span>}
       </span>
     </button>
     <span className="runtime-service-actions">
@@ -96,16 +83,17 @@ function ServiceRow({
       >
         {copied ? <Check /> : <Copy />}
       </button>
-      {onStop && <button
+      <button
         type="button"
         className="runtime-service-stop"
         aria-label={`终止 ${service.processName}，PID ${service.pid}`}
-        title="终止服务"
-        disabled={terminating}
-        onClick={onStop}
+        title={service.canStop ? '终止服务' : service.stopBlockedReason}
+        aria-disabled={terminating || !service.canStop}
+        onClick={() => { if (service.canStop && !terminating) onStop(); }}
       >
-        {terminating ? <LoaderCircle className="spin" /> : <CircleStop />}
-      </button>}
+        {terminating && <LoaderCircle className="spin" />}
+        <span>{terminating ? '终止中' : '终止'}</span>
+      </button>
     </span>
   </article>;
 }
@@ -121,12 +109,14 @@ export function RuntimeServicesPanel({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stopError, setStopError] = useState<{ service: RuntimeService; message: string } | null>(null);
   const [view, setView] = useState<'task' | 'all'>('task');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [terminatingPid, setTerminatingPid] = useState<number | null>(null);
   const [clock, setClock] = useState(Date.now());
   const requestRef = useRef(0);
   const busyRef = useRef(false);
+  const stoppingRef = useRef(false);
   const actionConfirmation = useActionConfirmation();
   const roots = useMemo(() => [...new Set([cwd, workspace].filter(Boolean))] as string[], [cwd, workspace]);
 
@@ -194,6 +184,8 @@ export function RuntimeServicesPanel({
   }
 
   async function stopService(service: RuntimeService) {
+    if (stoppingRef.current || !service.canStop || service.startedAt === undefined) return;
+    stoppingRef.current = true;
     const affectedPorts = [...new Set(portsByPid.get(service.pid) || [service.port])]
       .sort((left, right) => left - right);
     const affectedText = affectedPorts.length > 1
@@ -201,25 +193,27 @@ export function RuntimeServicesPanel({
       : `将停止端口 ${service.port} 并断开它当前的连接。`;
     const accepted = await actionConfirmation.confirm({
       title: `终止 ${service.processName}？`,
-      description: `将结束 PID ${service.pid}。${affectedText}如果进程没有及时退出，Studio 会强制结束它。`,
+      description: `${service.ownership === 'other' ? '这是当前工作区以外的本机服务。' : ''}将结束 PID ${service.pid}。${affectedText}如果进程没有及时退出，Studio 会强制结束它。`,
       confirmLabel: '终止服务',
       tone: 'danger',
     });
-    if (!accepted) return;
+    if (!accepted) { stoppingRef.current = false; return; }
 
     setTerminatingPid(service.pid);
+    setStopError(null);
     try {
       await window.piApi.runtimeServiceStop({
-        cwd,
-        roots,
         pid: service.pid,
         port: service.port,
+        startedAt: service.startedAt,
       });
       setError(null);
       await scan(false);
     } catch (cause) {
-      setError(errorText(cause));
+      // Polling can recover a scan error, but must not erase a failed stop.
+      setStopError({ service, message: errorText(cause) });
     } finally {
+      stoppingRef.current = false;
       setTerminatingPid(null);
     }
   }
@@ -256,6 +250,11 @@ export function RuntimeServicesPanel({
       <span>{error}</span>
       <button type="button" onClick={() => void scan(false)}>重试</button>
     </div>}
+    {stopError && <div className="runtime-services-error" role="alert">
+      <span>{stopError.message}</span>
+      <button type="button" onClick={() => void stopService(stopError.service)}>重新终止</button>
+      <button type="button" onClick={() => setStopError(null)}>关闭</button>
+    </div>}
 
     <div className="runtime-services-list">
       {loading && visibleServices.length === 0 && <div className="runtime-services-skeletons" aria-label="正在扫描监听端口">
@@ -266,10 +265,9 @@ export function RuntimeServicesPanel({
         service={service}
         copied={copiedId === service.id}
         terminating={terminatingPid === service.pid}
+        showOwnership={view === 'all'}
         onCopy={() => void copyAddress(service)}
-        onStop={service.ownership === 'agent' || service.ownership === 'workspace'
-          ? () => void stopService(service)
-          : undefined}
+        onStop={() => void stopService(service)}
       />)}
       {!loading && visibleServices.length === 0 && snapshot?.supported !== false && <div className="runtime-services-empty">
         <Activity aria-hidden="true" />

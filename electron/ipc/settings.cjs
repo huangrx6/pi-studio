@@ -77,7 +77,7 @@ const {
   prepareSkillInstall,
   pruneSkillPrepared,
   removeSkillSource,
-  saveSkillSource,
+  addSkillSource,
   setSkillSourceEnabled,
   skillHubSnapshot,
 } = require('../capabilities/skills/index.cjs');
@@ -509,7 +509,7 @@ function registerSettingsIpc() {
 
   ipcMain.handle('pi:add-skill-source', async (_event, input = {}) => {
     pruneSkillPrepared();
-    return saveSkillSource(input);
+    return addSkillSource(input);
   });
 
   ipcMain.handle('pi:set-skill-source-enabled', async (_event, { id, enabled } = {}) => (
