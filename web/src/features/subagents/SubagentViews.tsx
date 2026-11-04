@@ -28,6 +28,7 @@ import type { ModelSelection } from '../../types/model-types';
 import type { StepCollapse, StepDisplay } from '../../shared/preferences';
 import type { SubagentBudgetSnapshot, SubagentChild, SubagentTranscript } from '../../types/subagent-types';
 import { AssistantTurnView, ChatMessageView } from '../conversation/ChatMessage';
+import { SubagentFlow } from './SubagentFlow';
 import { InfoHint } from '../../shared/InfoHint';
 
 export type SubagentOverviewMode = 'formation' | 'list';
@@ -205,74 +206,6 @@ function ChildRow({
 }
 
 /**
- * “编队”是现有扁平子智能体列表的空间投影，而不是另一套运行模型。
- * Studio 明确禁止子智能体继续创建子智能体，因此主 Agent 到直接成员的
- * 星形关系就是完整关系，不需要为了视觉效果虚构层级。
- */
-function SubagentFormation({
-  children,
-  now,
-  selection,
-  onOpenChild,
-  onReturnMain,
-}: {
-  children: SubagentChild[];
-  now: number;
-  selection: ModelSelection;
-  onOpenChild: (child: SubagentChild) => void;
-  onReturnMain: () => void;
-}) {
-  return <section className="agent-formation" aria-label="子智能体编队">
-    <div className="agent-formation-root-slot">
-      <button
-        type="button"
-        className="agent-formation-root"
-        aria-label={`返回主对话，${selection.label || selection.modelRef || '当前对话'}`}
-        title="返回主对话"
-        onClick={onReturnMain}
-      >
-        <span className="agent-formation-root-icon"><Bot /></span>
-        <span className="agent-formation-root-copy">
-          <small>主智能体</small>
-          <strong>{selection.label || selection.modelRef || '当前对话'}</strong>
-        </span>
-        <ChevronRight className="agent-formation-root-open" aria-hidden="true" />
-      </button>
-    </div>
-    <div className="agent-formation-axis" aria-hidden="true" />
-    <div className="agent-formation-members">
-      {children.map((child) => {
-        const request = child.supervisorRequests?.[0];
-        const name = child.name || child.agent || `子智能体 ${child.index + 1}`;
-        const stateLabel = child.currentTool || STATUS_LABEL[child.status];
-        return <button
-          type="button"
-          className={`agent-formation-member is-${child.status}`}
-          key={child.key}
-          disabled={!child.hasTranscript}
-          aria-label={`打开${name}的执行记录，${STATUS_LABEL[child.status]}`}
-          onClick={() => onOpenChild(child)}
-        >
-          <span className="agent-formation-member-head">
-            <span className={`agent-formation-member-state is-${child.status}`}>{statusIcon(child.status)}</span>
-            <strong>{name}</strong>
-            <span className="agent-formation-member-status" title={stateLabel}>{stateLabel}</span>
-          </span>
-          <span className="agent-formation-member-task" title={request?.question || child.task}>{request?.question || child.task}</span>
-          <span className="agent-formation-member-facts">
-            <span>{duration(liveDuration(child, now))}</span>
-            <span>{tokenCount(child.tokens)} tok</span>
-            {child.referenceCostUsd !== undefined && (
-              <span>${child.referenceCostUsd.toFixed(child.referenceCostUsd < 1 ? 3 : 2)}</span>
-            )}
-          </span>
-        </button>;
-      })}
-    </div>
-  </section>;
-}
-
-/**
  * The parent conversation owns subagent creation. This read-only overview only
  * projects records produced when the parent invokes its subagent tool.
  */
@@ -331,6 +264,9 @@ export function SubagentOverview({
     { id: 'done', label: '已结束', children: visible.filter(child => child.status === 'completed' || child.status === 'stopped') },
   ];
   const effectiveMode = mode === 'formation' && children.length > 1 ? 'formation' : 'list';
+  // The flow reads top to bottom in the same order as the list sections, so
+  // attention items stay first in both views.
+  const orderedVisible = sections.flatMap(section => section.children);
 
   useEffect(() => {
     if (active === 0) return;
@@ -347,9 +283,9 @@ export function SubagentOverview({
           <button
             type="button"
             className={effectiveMode === 'formation' ? 'is-active' : ''}
-            aria-label="编队视图"
+            aria-label="流程图视图"
             aria-pressed={effectiveMode === 'formation'}
-            title="编队视图"
+            title="流程图视图"
             onClick={() => onModeChange?.('formation')}
           ><GitFork /></button>
           <button
@@ -411,8 +347,8 @@ export function SubagentOverview({
 
     {visible.length > 0
       ? effectiveMode === 'formation'
-        ? <SubagentFormation
-          children={visible}
+        ? <SubagentFlow
+          children={orderedVisible}
           now={now}
           selection={selection}
           onOpenChild={onOpenChild}

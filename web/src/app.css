@@ -4004,7 +4004,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1px;
-  margin: 0 0 var(--space-4);
+  margin-block: 0 var(--space-4);
   overflow: hidden;
   border-radius: var(--radius-card);
   background: var(--border);
@@ -4132,7 +4132,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .agent-workspace { display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; background: var(--bg); }
 .agent-workspace > .agent-overview,
 .agent-workspace > .agent-context-view { flex: 1; min-width: 0; }
-.agent-list-tools { display: flex; align-items: center; gap: var(--space-2); margin: var(--space-3) 0 var(--space-2); }
+.agent-list-tools { display: flex; align-items: center; gap: var(--space-2); margin-block: var(--space-3) var(--space-2); }
 .agent-list-search { display: flex; align-items: center; gap: 7px; min-width: 150px; flex: 1; height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); }
 .agent-list-search:focus-within { border-color: var(--accent); }
 .agent-list-search svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--muted); }
@@ -4141,77 +4141,61 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .agent-list-filters button { min-height: 30px; padding: 0 8px; border-radius: var(--radius-control); color: var(--muted); font-size: var(--text-xs); white-space: nowrap; }
 .agent-list-filters button:hover { color: var(--text); }
 .agent-list-filters button[aria-pressed=\"true\"] { background: var(--surface-active); color: var(--text); }
-.agent-formation {
-  display: grid;
-  grid-template-columns: minmax(176px, 220px) 28px minmax(0, 1fr);
-  align-items: stretch;
-  margin: var(--space-3) 0 var(--space-2);
-}
-.agent-formation-root-slot { position: relative; align-self: center; }
-.agent-formation-root-slot::after {
-  position: absolute;
-  top: 50%;
-  left: 100%;
-  width: 14px;
-  border-top: 1px solid var(--border-strong);
-  content: '';
-}
-.agent-formation-root {
-  display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) 14px;
-  gap: 3px var(--space-2);
-  width: 100%;
-  min-height: 68px;
-  padding: var(--space-3);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-card);
+.agent-flow {
+  position: relative;
+  margin-block: var(--space-3) var(--space-2);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
   background: var(--surface);
-  color: var(--text);
-  text-align: left;
-  transition: border-color var(--transition), background var(--transition);
 }
-.agent-formation-root:hover {
-  border-color: var(--border-hover);
-  background: var(--surface-soft);
+.agent-flow .react-flow { background: var(--transparent); }
+.agent-flow .react-flow__attribution {
+  padding: 0 4px;
+  background: var(--transparent);
+  color: var(--faint);
+  font-size: 9px;
 }
-.agent-formation-root:focus-visible { outline: 0; border-color: var(--accent); box-shadow: var(--focus-ring); }
-.agent-formation-root-icon {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
+.agent-flow .react-flow__attribution a { color: var(--faint); }
+.agent-flow .react-flow__controls {
+  overflow: hidden;
+  border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  background: var(--surface-soft);
+  box-shadow: none;
+}
+.agent-flow .react-flow__controls-button {
+  width: 26px;
+  height: 26px;
+  border-bottom: 1px solid var(--divider);
+  background: var(--surface);
   color: var(--muted);
 }
-.agent-formation-root-icon svg { width: var(--icon-md); height: var(--icon-md); }
-.agent-formation-root-copy { display: grid; min-width: 0; align-content: center; gap: 2px; }
-.agent-formation-root-copy small { color: var(--faint); font-size: var(--text-xs); }
-.agent-formation-root-copy strong { overflow: hidden; color: var(--text); font-size: var(--text-sm); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.agent-formation-root-open { width: 14px; height: 14px; color: var(--faint); }
-.agent-formation-axis { position: relative; }
-.agent-formation-axis::before {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  border-left: 1px solid var(--border-strong);
-  content: '';
+.agent-flow .react-flow__controls-button:last-child { border-bottom: 0; }
+.agent-flow .react-flow__controls-button:hover { background: var(--surface-soft); color: var(--text); }
+.agent-flow .react-flow__controls-button svg { width: var(--icon-sm); height: var(--icon-sm); fill: currentColor; }
+.agent-flow .react-flow__edge .react-flow__edge-path {
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+  transition: stroke var(--transition);
 }
-.agent-formation-members {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-  align-content: center;
-  gap: var(--space-3);
+.agent-flow .react-flow__edge.is-active .react-flow__edge-path {
+  stroke: var(--accent);
+  stroke-dasharray: 6 6;
 }
-.agent-formation-member {
+.agent-flow .react-flow__edge.is-error .react-flow__edge-path { stroke: var(--error); }
+.agent-flow .react-flow__edge.is-attention .react-flow__edge-path { stroke: var(--warning); }
+.agent-flow .react-flow__handle {
+  width: 6px;
+  height: 6px;
+  border: 0;
+  background: var(--border-strong);
+}
+.agent-flow .react-flow__node { cursor: pointer; }
+.agent-flow-node {
   position: relative;
   display: grid;
-  min-width: 0;
-  min-height: 112px;
-  align-content: start;
-  gap: var(--space-2);
-  padding: var(--space-3);
+  box-sizing: border-box;
+  height: 100%;
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   background: var(--surface);
@@ -4219,67 +4203,60 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   text-align: left;
   transition: border-color var(--transition), background var(--transition);
 }
-.agent-formation-member::before {
-  position: absolute;
-  top: 50%;
-  right: 100%;
-  width: 14px;
-  border-top: 1px solid var(--border-strong);
-  content: '';
-}
-.agent-formation-member:hover:not(:disabled) { border-color: var(--border-hover); background: var(--surface-soft); }
-.agent-formation-member:focus-visible { outline: 0; border-color: var(--accent); box-shadow: var(--focus-ring); }
-.agent-formation-member:disabled { cursor: default; opacity: .62; }
-.agent-formation-member.is-running,
-.agent-formation-member.is-pending { border-color: var(--accent-border); }
-.agent-formation-member.is-running::before,
-.agent-formation-member.is-pending::before { border-color: var(--accent); }
-.agent-formation-member.is-waiting,
-.agent-formation-member.is-paused { border-color: var(--warning-border); }
-.agent-formation-member.is-waiting::before,
-.agent-formation-member.is-paused::before { border-color: var(--warning); }
-.agent-formation-member.is-failed { border-color: var(--error-border); }
-.agent-formation-member.is-failed::before { border-color: var(--error); }
-.agent-formation-member-head {
-  display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) auto;
+.agent-flow-node.is-root {
+  grid-template-columns: 32px minmax(0, 1fr) 14px;
   align-items: center;
-  gap: 7px;
-  min-width: 0;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-color: var(--border-strong);
 }
-.agent-formation-member-state {
+.agent-flow-node.is-root:hover { border-color: var(--accent-border); background: var(--surface-soft); }
+.agent-flow-avatar {
   display: grid;
-  width: 22px;
-  height: 22px;
+  width: 32px;
+  height: 32px;
   place-items: center;
-  color: var(--muted);
+  border-radius: var(--radius-control);
+  background: var(--accent-soft);
+  color: var(--accent-foreground);
 }
-.agent-formation-member-state svg { width: var(--icon-sm); height: var(--icon-sm); }
-.agent-formation-member-state.is-running,
-.agent-formation-member-state.is-pending { color: var(--accent); }
-.agent-formation-member-state.is-waiting,
-.agent-formation-member-state.is-paused { color: var(--warning); }
-.agent-formation-member-state.is-failed,
-.agent-formation-member-state.is-stopped { color: var(--error); }
-.agent-formation-member-state.is-completed { color: var(--success); }
-.agent-formation-member-head strong {
-  overflow: hidden;
-  color: var(--text);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.agent-flow-avatar svg { width: var(--icon-md); height: var(--icon-md); }
+.agent-flow-identity { display: grid; min-width: 0; gap: 2px; }
+.agent-flow-identity small { color: var(--faint); font-size: 10px; }
+.agent-flow-identity strong { overflow: hidden; font-size: var(--text-sm); font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+.agent-flow-open { width: var(--icon-sm); height: var(--icon-sm); color: var(--faint); }
+.agent-flow-node.is-member {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 6px;
+  padding: 10px 12px;
 }
-.agent-formation-member-status {
-  max-width: 100px;
+.agent-flow-node.is-member:hover { border-color: var(--border-hover); background: var(--surface-soft); }
+.agent-flow-node.is-running,
+.agent-flow-node.is-pending { border-color: var(--accent-border); }
+.agent-flow-node.is-waiting,
+.agent-flow-node.is-paused { border-color: var(--warning-border); }
+.agent-flow-node.is-failed { border-color: var(--error-border); }
+.agent-flow-head { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 6px; min-width: 0; }
+.agent-flow-status { display: grid; width: 16px; height: 16px; place-items: center; color: var(--muted); }
+.agent-flow-status svg { width: var(--icon-sm); height: var(--icon-sm); }
+.agent-flow-status.is-running,
+.agent-flow-status.is-pending { color: var(--accent); }
+.agent-flow-status.is-waiting,
+.agent-flow-status.is-paused { color: var(--warning); }
+.agent-flow-status.is-failed,
+.agent-flow-status.is-stopped { color: var(--error); }
+.agent-flow-status.is-completed { color: var(--success); }
+.agent-flow-head strong { overflow: hidden; font-size: var(--text-sm); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.agent-flow-state {
+  max-width: 92px;
   overflow: hidden;
   color: var(--faint);
   font-family: var(--mono);
-  font-size: var(--text-xs);
+  font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.agent-formation-member-task {
+.agent-flow-task {
   display: -webkit-box;
   overflow: hidden;
   color: var(--muted);
@@ -4289,15 +4266,16 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
-.agent-formation-member-facts {
+.agent-flow-facts {
   display: flex;
   min-width: 0;
   gap: 10px;
   color: var(--faint);
-  font-size: var(--text-xs);
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.agent-flow-error { overflow: hidden; color: var(--error); text-overflow: ellipsis; }
 .agent-list { border-top: 1px solid var(--divider); }
 .agent-list-section h3 { margin: var(--space-4) 0 4px; color: var(--faint); font-size: var(--text-xs); font-weight: 550; }
 .agent-list-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; border-bottom: 1px solid var(--divider); }
@@ -4386,12 +4364,6 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 @container (max-width: 620px) {
   .agent-overview-actions { width: auto; justify-content: flex-end; }
   .agent-fleet-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .agent-formation { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
-  .agent-formation-root-slot { width: min(320px, 100%); justify-self: center; }
-  .agent-formation-root-slot::after,
-  .agent-formation-axis,
-  .agent-formation-member::before { display: none; }
-  .agent-formation-members { grid-template-columns: minmax(0, 1fr); }
   .agent-context-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 900px) {
