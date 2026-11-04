@@ -39,3 +39,27 @@ test('turn diffs match by answer timestamp, and legacy end-of-run stamps fall ba
   assert.equal(findTurnDiff([diff(520)], {}), undefined);
   assert.equal(findTurnDiff(undefined, { from: 500, until: 900 }), undefined);
 });
+
+test('a whole-file write records its line count for the fallback label', async () => {
+  const { writtenLineCount } = await import('../../web/src/features/conversation/file-changes.ts');
+  assert.equal(writtenLineCount('a\nb\nc\n'), 3);
+  assert.equal(writtenLineCount('a\r\nb'), 2);
+  assert.equal(writtenLineCount(''), 0);
+
+  const write = call('w', 'write', 'notes.md');
+  write.arguments.content = 'one\ntwo\nthree\n';
+  const files = collectFileChanges([message([write])], new Map([result('w')]), '/project');
+  assert.equal(files.length, 1);
+  assert.equal(files[0].completeCounts, false);
+  assert.equal(files[0].lines, 3);
+});
+
+test('the last whole-file write wins when a path is written twice', () => {
+  const first = call('w1', 'write', 'notes.md');
+  first.arguments.content = 'a\nb\nc\n';
+  const second = call('w2', 'write', 'notes.md');
+  second.arguments.content = 'a\n';
+  const files = collectFileChanges([message([first, second])], new Map([result('w1'), result('w2')]), '/project');
+  assert.equal(files.length, 1);
+  assert.equal(files[0].lines, 1);
+});

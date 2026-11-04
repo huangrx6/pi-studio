@@ -72,6 +72,7 @@ export type ConversationPage = ConversationSummary & {
 export type ConversationSnapshot = ConversationSummary & {
   model: ModelSelection;
   requestTraces: RequestTrace[];
+  turnDiffs?: TurnDiff[];
   running: boolean;
   requestId: string;
   compacting: boolean;

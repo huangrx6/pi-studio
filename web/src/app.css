@@ -3432,6 +3432,22 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .file-change-item:first-child { border-top: 0; }
 .file-change-item > svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--faint); }
 .file-change-item > span.file-change-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px var(--mono); }
+/* Git 风格状态字符：A 新增、M 修改、D 删除、W 整文件写入。 */
+.file-change-mark {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  place-items: center;
+  border-radius: var(--radius-tag);
+  background: var(--surface-soft);
+  color: var(--faint);
+  font: 600 9.5px/1 var(--mono);
+}
+.file-change-mark.is-added { background: var(--success-soft); color: var(--success); }
+.file-change-mark.is-modified { background: var(--surface-soft); color: var(--muted); }
+.file-change-mark.is-deleted { background: var(--error-soft); color: var(--error); }
+.file-change-mark.is-written { background: var(--surface-soft); color: var(--faint); }
 .file-change-item > small { flex: none; color: var(--faint); font-size: 11px; }
 .file-change-item.is-openable:hover { background: var(--surface-soft); }
 .file-change-item:disabled { cursor: default; opacity: 1; }

@@ -584,6 +584,7 @@ async function conversationSnapshot(id) {
   return liveSnapshotDto(row, snapshot, {
     durableSessionId: String(row.id),
     model: await sessionModelInfo(agent),
+    turnDiffs: getStudioDatabase().readTurnDiffs(key),
     longTask: await longTaskDto(row),
     requestTraces: getStudioDatabase().listRequestTraces(key, {
       limit: REQUEST_TRACE_PAGE_LIMIT,

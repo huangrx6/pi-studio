@@ -7,7 +7,15 @@ export type FileChange = {
   added: number;
   removed: number;
   completeCounts: boolean;
+  /** Lines written by a whole-file `write`, used when no diff exists. */
+  lines?: number;
 };
+
+/** Line count of a whole-file write, ignoring a single trailing newline. */
+export function writtenLineCount(content: string): number {
+  if (!content) return 0;
+  return content.replace(/\r\n/g, '\n').replace(/\n$/, '').split('\n').length;
+}
 
 function normalizedPath(path: string) {
   const parts: string[] = [];
@@ -46,7 +54,13 @@ export function collectFileChanges(messages: ChatMessage[], results: Map<string,
         if (line.startsWith('+')) file.added++;
         if (line.startsWith('-')) file.removed++;
       }
-    } else file.completeCounts = false;
+    } else {
+      file.completeCounts = false;
+      if (call.name === 'write' && typeof call.arguments.content === 'string') {
+        // A whole-file write replaces the file: the last write wins.
+        file.lines = writtenLineCount(call.arguments.content);
+      }
+    }
     file.operations.push({ id: call.id, diff, content: call.name === 'write' && typeof call.arguments.content === 'string' ? call.arguments.content : undefined });
     files.set(path, file);
   }

@@ -2208,6 +2208,13 @@ export function App() {
         if (!disposed && Array.isArray(snapshot?.requestTraces)) {
           setRequestTraces(snapshot.requestTraces);
         }
+        // The turn diff can land after its event or be missed entirely; re-read
+        // the stored rows so the file summary shows git counts, not a fallback.
+        if (!disposed && Array.isArray(snapshot?.turnDiffs)) {
+          setSession((current) => current?.id === conversationId
+            ? { ...current, turnDiffs: snapshot.turnDiffs as TurnDiff[] }
+            : current);
+        }
         if (!disposed && snapshot?.longTask) {
           setSession((current) => current?.id === conversationId
             ? { ...current, longTask: snapshot.longTask }

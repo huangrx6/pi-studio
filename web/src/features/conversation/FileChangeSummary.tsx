@@ -10,7 +10,7 @@
  */
 
 import { useState } from 'react';
-import { AlertTriangle, ChevronDown, ChevronRight, FileDiff, FileText } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, FileDiff } from 'lucide-react';
 import type { TurnDiff, TurnDiffFile } from '../../types/chat-types';
 import type { FileChange } from './file-changes';
 import { InfoHint } from '../../shared/InfoHint';
@@ -22,9 +22,19 @@ type DisplayFile = {
   removed: number;
   complete: boolean;
   status: 'added' | 'modified' | 'deleted' | 'written';
+  /** Whole-file write length, available even when no diff exists. */
+  lines?: number;
   patch?: string;
   binary?: boolean;
   truncated?: boolean;
+};
+
+/** Git-style marker: A added, M modified, D deleted. */
+const STATUS_MARK: Record<DisplayFile['status'], string> = {
+  added: 'A',
+  modified: 'M',
+  deleted: 'D',
+  written: 'W',
 };
 
 function counts(added: number, removed: number) {
@@ -32,8 +42,8 @@ function counts(added: number, removed: number) {
 }
 
 function statusLabel(file: DisplayFile) {
-  if (file.status === 'added') return '新增';
-  if (file.status === 'deleted') return '删除';
+  if (file.status === 'deleted') return '已删除';
+  if (file.lines) return `/ ${file.lines} 行`;
   if (file.status === 'written') return '已写入';
   return '';
 }
@@ -66,6 +76,7 @@ function mergeFiles(git: TurnDiff | undefined, toolFiles: FileChange[]): Display
       removed: file.removed,
       complete: file.completeCounts,
       status: 'written',
+      lines: file.lines,
       patch: patch || undefined,
     });
   }
@@ -138,13 +149,13 @@ export function FileChangeSummary({ files, gitDiff, onOpenDiff, onOpenFile }: {
           onOpenDiff?.(review.files.find(item => item.path === file.path), review);
         }}
       >
-        <FileText aria-hidden="true" />
+        <span className={`file-change-mark is-${file.status}`} aria-hidden="true">{STATUS_MARK[file.status]}</span>
         <span className="file-change-path">{file.label}</span>
         {gone
           ? <small className="file-change-missing">已移出磁盘</small>
           : file.complete
             ? counts(file.added, file.removed)
-            : <small>{statusLabel(file) || '已写入'}</small>}
+            : <small>{statusLabel(file)}</small>}
         {openable && <ChevronRight className="file-change-open" aria-hidden="true" />}
       </button>;
     })}</div>
