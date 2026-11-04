@@ -369,17 +369,32 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-round);
   background: var(--surface-soft);
+  transition: border-color var(--transition), box-shadow var(--transition);
 }
-.browser-address:focus-within { border-color: var(--accent); }
+/* The pill owns the focus state; the bare input must not paint its own box. */
+.browser-address:focus-within {
+  border-color: var(--focus-color);
+  box-shadow: var(--focus-ring);
+}
 .browser-address svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--faint); }
-.browser-address input {
+/* Higher specificity than the global `input:not([type="checkbox"])` chrome,
+   which otherwise forces 36px height, an 8px radius and a square focus ring. */
+.browser-address input:not([type="checkbox"]) {
   width: 100%;
   min-width: 0;
+  height: 100%;
+  padding: 0;
   border: 0;
+  border-radius: 0;
   outline: 0;
   background: var(--transparent);
+  box-shadow: none;
   color: var(--text);
   font-size: var(--text-xs);
+}
+.browser-address input:not([type="checkbox"]):focus {
+  border-color: transparent;
+  box-shadow: none;
 }
 .browser-failure {
   margin: 0;

@@ -57,6 +57,27 @@ try {
   assert.match(String(attributes.prefs), /nodeIntegration=no/);
   assert.equal(attributes.popups, 'false');
 
+  // The pill owns the focus state: the bare input must not paint its own box.
+  await page.click('.browser-address input');
+  await page.waitForTimeout(400);
+  const focus = await page.evaluate(() => {
+    const form = document.querySelector('.browser-address');
+    const input = form.querySelector('input');
+    const formBox = getComputedStyle(form);
+    const inputBox = getComputedStyle(input);
+    return {
+      ring: formBox.boxShadow,
+      border: formBox.borderColor,
+      inputShadow: inputBox.boxShadow,
+      inputRadius: inputBox.borderRadius,
+      fitsHeight: input.getBoundingClientRect().height <= form.getBoundingClientRect().height,
+    };
+  });
+  assert.notEqual(focus.ring, 'none', 'the pill paints the focus ring');
+  assert.equal(focus.inputShadow, 'none', 'the inner input paints no ring');
+  assert.equal(focus.inputRadius, '0px', 'the inner input has no rounded box');
+  assert.equal(focus.fitsHeight, true, 'the input stays inside the pill');
+
   await page.fill('.browser-address input', `127.0.0.1:${port}`);
   await page.press('.browser-address input', 'Enter');
   await page.waitForFunction(async (expected) => {
