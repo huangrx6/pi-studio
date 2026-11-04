@@ -12,6 +12,8 @@ const { workspaceFile } = require('./workspace.cjs');
 
 const MAX_TEXT_BYTES = 1_500_000;
 const MAX_INLINE_MEDIA_BYTES = 12_000_000;
+// PDF 交给 Chromium 内置阅读器渲染，和内联媒体分开限额（文档通常更大）。
+const MAX_INLINE_DOCUMENT_BYTES = 32_000_000;
 
 const MIME_BY_EXTENSION = new Map([
   ['.md', 'text/markdown'],
@@ -103,6 +105,7 @@ function mimeTypeForPath(target) {
 }
 
 function previewKindForMime(mimeType) {
+  if (mimeType === 'application/pdf') return 'pdf';
   if (mimeType.startsWith('image/')) return 'image';
   if (mimeType.startsWith('audio/')) return 'audio';
   if (mimeType.startsWith('video/')) return 'video';
@@ -139,6 +142,21 @@ function readFilePreview(root, requested) {
     size: stat.size,
     mimeType,
   };
+
+  if (kind === 'pdf') {
+    if (stat.size > MAX_INLINE_DOCUMENT_BYTES) {
+      return {
+        ...base,
+        kind: 'binary',
+        unavailableReason: `文件超过 ${Math.round(MAX_INLINE_DOCUMENT_BYTES / 1_000_000)} MB 内嵌预览上限`,
+      };
+    }
+    return {
+      ...base,
+      kind,
+      dataUrl: `data:${mimeType};base64,${fs.readFileSync(target).toString('base64')}`,
+    };
+  }
 
   if (kind !== 'text') {
     if (stat.size > MAX_INLINE_MEDIA_BYTES) {
@@ -188,6 +206,7 @@ function readFilePreview(root, requested) {
 }
 
 module.exports = {
+  MAX_INLINE_DOCUMENT_BYTES,
   MAX_INLINE_MEDIA_BYTES,
   MAX_TEXT_BYTES,
   mimeTypeForPath,

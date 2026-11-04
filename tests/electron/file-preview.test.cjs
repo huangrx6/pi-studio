@@ -50,8 +50,11 @@ test('file preview clips large text and rejects binary or escaped paths', (t) =>
   assert.equal(unknownBinary.kind, 'binary');
   assert.equal(unknownBinary.unavailableReason, undefined);
   assert.equal(readFilePreview(directory, 'notes.custom').kind, 'text');
+  // PDF 交给内置阅读器渲染，不再是“不支持”的二进制。
   const pdf = readFilePreview(directory, 'guide.pdf');
-  assert.equal(pdf.kind, 'binary');
+  assert.equal(pdf.kind, 'pdf');
+  assert.equal(pdf.mimeType, 'application/pdf');
+  assert.match(pdf.dataUrl, /^data:application\/pdf;base64,/);
   assert.equal(pdf.unavailableReason, undefined);
   assert.throws(() => readFilePreview(directory, '../outside.txt'), /outside workspace/);
 });

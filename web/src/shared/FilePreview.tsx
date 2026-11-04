@@ -37,6 +37,8 @@ type PreviewFormat =
   | 'csv'
   | 'code'
   | 'text'
+  | 'html'
+  | 'pdf'
   | 'image'
   | 'audio'
   | 'video'
@@ -49,10 +51,13 @@ type Props = {
   emptyTitle?: string;
   emptyDescription?: string;
   onOpenExternal?: (file: FilePreviewResult) => void;
+  /** 调用方自带的工具栏动作（例如工作台的“文件操作”菜单）。 */
+  actions?: ReactNode;
 };
 
 function IconForFormat({ format }: { format: PreviewFormat }) {
-  if (format === 'markdown' || format === 'text') return <FileText />;
+  if (format === 'markdown' || format === 'text' || format === 'pdf') return <FileText />;
+  if (format === 'html') return <FileCode2 />;
   if (format === 'json') return <FileJson />;
   if (format === 'csv') return <FileSpreadsheet />;
   if (format === 'code') return <FileCode2 />;
@@ -199,6 +204,22 @@ function PreviewBody({
     </div>;
   }
 
+  if (format === 'pdf') {
+    // Chromium 自带 PDF 阅读器：data URL 在 iframe 里就能翻页、缩放。
+    return file.dataUrl
+      ? <div className="file-preview-document is-frame">
+        <iframe className="file-preview-frame" src={file.dataUrl} title={`${file.name} PDF 预览`} />
+      </div>
+      : <div className="file-preview-empty-inline"><FileText /><strong>没有可预览的内容</strong></div>;
+  }
+
+  if (format === 'html') {
+    // 空 sandbox 白名单：脚本、表单、同源读取全部禁用，只保留静态渲染。
+    return <div className="file-preview-document is-frame">
+      <iframe className="file-preview-frame" sandbox="" srcDoc={text} title={`${file.name} HTML 预览`} />
+    </div>;
+  }
+
   if (format === 'csv') {
     return <div className="file-preview-document is-table">
       <TablePreview text={text} delimiter={previewExtension(file.path) === 'tsv' ? '\t' : ','} />
@@ -228,6 +249,7 @@ export function FilePreview({
   emptyTitle = '选择一个文件',
   emptyDescription = '',
   onOpenExternal,
+  actions,
 }: Props) {
   const [mode, setMode] = useState<PreviewMode>('preview');
   const [copied, setCopied] = useState(false);
@@ -240,8 +262,10 @@ export function FilePreview({
   const format = file
     ? previewFormatForFile(file.path, file.mimeType, file.kind) as PreviewFormat
     : 'text';
-  const toggleable = format === 'markdown' || format === 'csv';
-  const copyable = Boolean(file?.text && file.kind !== 'binary' && format !== 'unsupported');
+  const toggleable = format === 'markdown' || format === 'csv' || format === 'html';
+  const copyable = Boolean(
+    file?.text && file.kind !== 'binary' && file.kind !== 'pdf' && format !== 'unsupported',
+  );
   const pathParts = splitPreviewPath(file?.path || '');
 
   async function copySource() {
@@ -281,7 +305,7 @@ export function FilePreview({
         {file && toggleable && <div className="file-preview-mode" role="group" aria-label="预览方式">
           <button
             type="button"
-            className={mode === 'preview' ? 'is-active' : ''}
+            className={`icon-button ${mode === 'preview' ? 'is-active' : ''}`}
             aria-label="预览渲染结果"
             aria-pressed={mode === 'preview'}
             title="渲染预览"
@@ -289,17 +313,18 @@ export function FilePreview({
           ><Eye /></button>
           <button
             type="button"
-            className={mode === 'source' ? 'is-active' : ''}
+            className={`icon-button ${mode === 'source' ? 'is-active' : ''}`}
             aria-label="查看文件源码"
             aria-pressed={mode === 'source'}
             title="查看源码"
             onClick={() => setMode('source')}
           ><Code2 /></button>
         </div>}
-        {copyable && <button type="button" className="file-preview-action" aria-label={copied ? '已复制文件内容' : '复制文件内容'} title="复制内容" onClick={() => void copySource()}>
+        {actions}
+        {copyable && <button type="button" className="icon-button" aria-label={copied ? '已复制文件内容' : '复制文件内容'} title="复制内容" onClick={() => void copySource()}>
           {copied ? <Check /> : <Copy />}
         </button>}
-        {file && file.kind === 'binary' && onOpenExternal && <button type="button" className="file-preview-action" aria-label="用系统应用打开文件" title="用系统应用打开" onClick={() => onOpenExternal(file)}>
+        {file && (file.kind === 'binary' || file.kind === 'pdf') && onOpenExternal && <button type="button" className="icon-button" aria-label="用系统应用打开文件" title="用系统应用打开" onClick={() => onOpenExternal(file)}>
           <ExternalLink />
         </button>}
       </div>

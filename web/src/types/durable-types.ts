@@ -55,8 +55,6 @@ export type ConversationPage = ConversationSummary & {
   page: {
     hasOlder: boolean;
     nextCursor?: ConversationPageCursor;
-    /** 按 entry id 定位的窗口是否真的含目标消息；未含表示还在更早的分页里。 */
-    reachedTarget?: boolean;
   };
   messageStart: number;
   running: boolean;

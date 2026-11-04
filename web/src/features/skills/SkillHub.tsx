@@ -46,6 +46,9 @@ type InstallResult = Awaited<ReturnType<typeof window.piApi.installPreparedSkill
 type Props = {
   workspace: string;
   workspaces: WorkspaceOption[];
+  /** 全局与共享技能的落盘目录，直接显示给用户，避免"按了就不知道装到哪"。 */
+  userSkillsPath: string;
+  sharedSkillsPath: string;
   onInstalled: (result: InstallResult) => void;
   onNotify: (message: string, tone?: 'success' | 'error' | 'info') => void;
 };
@@ -61,6 +64,8 @@ function invocationLabel(value: SkillCatalogItem['invocation']) {
 export function SkillHub({
   workspace,
   workspaces,
+  userSkillsPath,
+  sharedSkillsPath,
   onInstalled,
   onNotify,
 }: Props) {
@@ -319,6 +324,8 @@ export function SkillHub({
       item={selected}
       workspace={workspace}
       workspaces={workspaces}
+      userSkillsPath={userSkillsPath}
+      sharedSkillsPath={sharedSkillsPath}
       onClose={() => setSelected(null)}
       onInstalled={(result) => {
         onInstalled(result);
@@ -474,16 +481,20 @@ function SkillInstallPreviewDialog({
   item,
   workspace,
   workspaces,
+  userSkillsPath,
+  sharedSkillsPath,
   onClose,
   onInstalled,
 }: {
   item: SkillCatalogItem;
   workspace: string;
   workspaces: WorkspaceOption[];
+  userSkillsPath: string;
+  sharedSkillsPath: string;
   onClose: () => void;
   onInstalled: (result: InstallResult) => void;
 }) {
-  const [scope, setScope] = useState<'user' | 'project'>('user');
+  const [scope, setScope] = useState<SkillInstallPreview['scope']>('user');
   const [targetWorkspace, setTargetWorkspace] = useState(workspace || workspaces[0]?.cwd || '');
   const [preview, setPreview] = useState<SkillInstallPreview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -528,7 +539,7 @@ function SkillInstallPreviewDialog({
     };
   }, []);
 
-  function changeScope(next: 'user' | 'project') {
+  function changeScope(next: SkillInstallPreview['scope']) {
     if (installing || loading || next === scope || (next === 'project' && !targetWorkspace)) return;
     setScope(next);
     void prepare(next, targetWorkspace);
@@ -581,12 +592,18 @@ function SkillInstallPreviewDialog({
           <section className="skill-install-scope">
             <div className="skill-install-scope-heading">
               <strong>安装范围</strong>
-              <InfoHint align="end" label="全局技能写入 Studio 应用数据目录；项目技能写入所选工作区的 .pi-studio/skills，只对该工作区生效。" />
+              <InfoHint align="end" label="全局技能写入 Studio 应用数据目录；共享技能写入 ~/.agents/skills，与其它 Agent 工具共用；项目技能写入所选工作区的 .pi-studio/skills，只对该工作区生效。" />
             </div>
             <div className="skill-install-scope-options">
-              <button type="button" disabled={installing} aria-pressed={scope === 'user'} className={scope === 'user' ? 'is-active' : ''} onClick={() => changeScope('user')}>全局</button>
+              <button type="button" disabled={installing} aria-pressed={scope === 'user'} className={scope === 'user' ? 'is-active' : ''} onClick={() => changeScope('user')} title="Studio 应用数据目录，只对本应用生效">全局</button>
+              <button type="button" disabled={installing} aria-pressed={scope === 'shared'} className={scope === 'shared' ? 'is-active' : ''} onClick={() => changeScope('shared')} title="~/.agents/skills，与其它 Agent 工具共用">共享</button>
               <button type="button" disabled={installing || !workspaces.length} aria-pressed={scope === 'project'} className={scope === 'project' ? 'is-active' : ''} onClick={() => changeScope('project')}>项目</button>
             </div>
+            <code className="skill-install-scope-path">{
+              scope === 'project'
+                ? targetWorkspace
+                : scope === 'shared' ? sharedSkillsPath : userSkillsPath
+            }</code>
             {scope === 'project' && <Select
               disabled={installing}
               label="项目技能工作区"

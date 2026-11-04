@@ -31,6 +31,7 @@ const {
   inspectSingleSkillDirectory,
   inspectSkillDirectory,
   projectSkillsDirectory,
+  sharedUserSkillsDirectory,
   userSkillsDirectory,
 } = require('./instructions.cjs');
 
@@ -542,8 +543,16 @@ async function downloadArchive(item) {
   return archive;
 }
 
+/** 技能安装范围：Studio 应用目录、Agent 共享目录（~/.agents/skills）、项目目录。 */
+const INSTALL_SCOPES = ['user', 'shared', 'project'];
+
+function installRoot(scope, cwd) {
+  if (scope === 'project') return projectSkillsDirectory(cwd);
+  return scope === 'shared' ? sharedUserSkillsDirectory() : userSkillsDirectory();
+}
+
 async function prepareSkillInstall({ sourceId: requestedSourceId, listingId, scope, cwd } = {}) {
-  if (!['user', 'project'].includes(scope)) throw new Error('技能安装范围无效');
+  if (!INSTALL_SCOPES.includes(scope)) throw new Error('技能安装范围无效');
   if (scope === 'project' && (typeof cwd !== 'string' || !path.isAbsolute(cwd))) {
     throw new Error('项目技能需要选择工作区，且路径必须为绝对路径');
   }
@@ -598,7 +607,7 @@ async function prepareSkillInstall({ sourceId: requestedSourceId, listingId, sco
       files: walked.files.slice(0, ARCHIVE_LIMITS.maxEntries),
       sha256: directoryDetails(contentRoot).contentHash,
     });
-    const target = path.join(scope === 'project' ? projectSkillsDirectory(cwd) : userSkillsDirectory(), skill.name);
+    const target = path.join(installRoot(scope, cwd), skill.name);
     const owned = getStudioDatabase().getSkillInstallation(target);
     return {
       token,
@@ -634,9 +643,7 @@ function installPreparedSkill({ token, cwd } = {}) {
   if (!source?.enabled || source.type !== pending.source.type || source.location !== pending.source.location) {
     throw new Error('技能源已变化或停用，请重新预览');
   }
-  const root = pending.scope === 'project'
-    ? projectSkillsDirectory(pending.cwd)
-    : userSkillsDirectory();
+  const root = installRoot(pending.scope, pending.cwd);
   const target = path.join(root, pending.skill.name);
   const db = getStudioDatabase();
   const existing = db.listSkillInstallations().find((installation) => (

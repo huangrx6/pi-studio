@@ -33,7 +33,9 @@ const FORMAT_BY_EXTENSION = new Map([
   ['mov', 'video'],
   ['m4v', 'video'],
   ['ogv', 'video'],
-  ['pdf', 'unsupported'],
+  ['pdf', 'pdf'],
+  ['html', 'html'],
+  ['htm', 'html'],
   ['doc', 'unsupported'],
   ['docx', 'unsupported'],
   ['xls', 'unsupported'],
@@ -127,8 +129,8 @@ export function previewTypeLabel(filePath) {
 
 /** Resolve the visual mode used by the unified preview component. */
 export function previewFormatForFile(filePath, mimeType = '', kind = 'text') {
+  if (kind === 'image' || kind === 'audio' || kind === 'video' || kind === 'pdf') return kind;
   if (kind === 'binary') return 'unsupported';
-  if (kind === 'image' || kind === 'audio' || kind === 'video') return kind;
   const extensionFormat = FORMAT_BY_EXTENSION.get(previewExtension(filePath));
   if (extensionFormat) return extensionFormat;
   if (/markdown/i.test(mimeType)) return 'markdown';

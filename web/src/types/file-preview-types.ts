@@ -4,7 +4,7 @@ export type FilePreviewResult = {
   name: string;
   size: number;
   mimeType: string;
-  kind: 'text' | 'image' | 'audio' | 'video' | 'binary';
+  kind: 'text' | 'image' | 'audio' | 'video' | 'pdf' | 'binary';
   text?: string;
   dataUrl?: string;
   truncated?: boolean;
