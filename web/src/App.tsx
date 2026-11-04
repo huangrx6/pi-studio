@@ -42,6 +42,11 @@ import {
 import { completedTurnDuration } from './features/conversation/session-summary';
 import { placeRequestTraces } from './features/conversation/request-trace-turns';
 import { ChangesView } from './features/conversation/ChangesView';
+import {
+  ConversationViewSwitcher,
+  type ConversationView,
+  type ConversationViewOption,
+} from './features/conversation/ConversationViewSwitcher';
 import { ActionMenu } from './shared/ActionMenu';
 import { ConversationActionPalette } from './features/conversation/ConversationActionPalette';
 import { conversationActions, type ConversationAction } from './features/conversation/conversation-actions';
@@ -3136,6 +3141,35 @@ export function App() {
   const hasActiveSubagents = subagentChildren.some((child) => (
     child.status === 'running' || child.status === 'pending' || child.status === 'waiting'
   ));
+  const conversationViewOptions = useMemo<ConversationViewOption[]>(() => {
+    const options: ConversationViewOption[] = [
+      { kind: 'conversation', label: '对话' },
+      {
+        kind: 'agents',
+        label: '子智能体',
+        count: subagentChildren.length || undefined,
+        live: hasActiveSubagents,
+      },
+      {
+        kind: 'comparison',
+        label: '双跑',
+        count: activeSessionComparison?.result.branches.length || undefined,
+      },
+    ];
+    if (conversationDetailExtensionItems.length > 0) {
+      options.push({
+        kind: 'extensions',
+        label: '扩展',
+        count: conversationDetailExtensionItems.length,
+      });
+    }
+    return options;
+  }, [
+    activeSessionComparison,
+    conversationDetailExtensionItems.length,
+    hasActiveSubagents,
+    subagentChildren.length,
+  ]);
 
   useEffect(() => {
     if (!session?.id) return;
@@ -4558,6 +4592,18 @@ export function App() {
     if (filesOpen) closePanel();
   }
 
+  function switchConversationView(view: ConversationView) {
+    if (view === agentView.kind) {
+      if (agentView.kind === 'agents' && agentView.child) openAgentOverview();
+      else if (agentView.kind === 'extensions' && agentView.itemId) openConversationExtensionHub();
+      return;
+    }
+    if (view === 'conversation') returnToMainAgent();
+    else if (view === 'agents') openAgentOverview();
+    else if (view === 'comparison') openModelComparison();
+    else openConversationExtensionHub();
+  }
+
   function openFilesTab() {
     if (!panelTabs.some((tab) => tab.kind === 'files')) {
       setPanelTabs((current) => [...current, { id: 'files', kind: 'files', title: '文件' }]);
@@ -5439,6 +5485,11 @@ export function App() {
                 : (session?.title || 'Pi Studio')}</h1>
             {agentView.kind === 'conversation' && goalStatusLabel(session?.longTask) && <span className="chat-heading-kind"><Target aria-hidden="true" />{goalStatusLabel(session?.longTask)}</span>}
           </div>}
+          {!isNewConversation && <ConversationViewSwitcher
+            current={agentView.kind}
+            options={conversationViewOptions}
+            onSelect={switchConversationView}
+          />}
           <div className="chat-actions">
             <NotificationCenter
               items={notifications}
@@ -5448,42 +5499,6 @@ export function App() {
             {!filesOpen && <button className="icon-button" onClick={openPanel} aria-label="打开右侧面板" title="打开右侧面板"><PanelRight size={16} /></button>}
           </div>
         </header>
-        {!isNewConversation && <div className="chat-tabs">
-          <div className="chat-tab-list" role="tablist" aria-label="对话视图">
-            <button type="button" role="tab" aria-selected={agentView.kind === 'conversation'} className={`tab ${agentView.kind === 'conversation' ? 'is-active' : ''}`} onClick={returnToMainAgent}><MessageSquare /><span>对话</span></button>
-            <button type="button" role="tab" aria-selected={agentView.kind === 'agents'} className={`tab agent-tab ${agentView.kind === 'agents' ? 'is-active' : ''}`} onClick={openAgentOverview}>
-              <Bot />
-              <span className="tab-label">
-                子智能体
-                {subagentChildren.length > 0 && <span
-                  className={`tab-count agent-tab-count ${hasActiveSubagents ? 'is-live' : ''}`}
-                  aria-live="polite"
-                  aria-label={`${subagentChildren.length} 个子智能体${hasActiveSubagents ? '，有任务正在运行' : '，当前无任务运行'}`}
-                >{subagentChildren.length}</span>}
-              </span>
-            </button>
-            <button type="button" role="tab" aria-selected={agentView.kind === 'comparison'} className={`tab comparison-tab ${agentView.kind === 'comparison' ? 'is-active' : ''}`} onClick={openModelComparison}>
-              <Columns2 />
-              <span className="tab-label">
-                双跑
-                {activeSessionComparison && <span className="tab-count">{activeSessionComparison.result.branches.length}</span>}
-              </span>
-            </button>
-            {conversationDetailExtensionItems.length > 0 && <button
-              type="button"
-              role="tab"
-              aria-selected={agentView.kind === 'extensions'}
-              className={`tab extension-tab ${agentView.kind === 'extensions' ? 'is-active' : ''}`}
-              title="当前会话的扩展视图"
-              onClick={openConversationExtensionHub}
-            >
-              <Plug />
-              <span className="tab-label">扩展<span className="tab-count">{conversationDetailExtensionItems.length}</span></span>
-            </button>}
-          </div>
-        </div>}
-
-        {isNewConversation && <div className="chat-tabs is-placeholder" aria-hidden="true" />}
         {!isNewConversation && agentView.kind === 'conversation' && conversationHeaderExtensionItems.length > 0 && (
           <ConversationExtensionDock
             items={conversationHeaderExtensionItems as ExtensionUiItem[]}
@@ -6336,7 +6351,11 @@ export function App() {
                     className={`mcp-card ${server.enabled ? 'is-on' : ''}`}
                     key={server.name}
                   >
-                    <SettingsResourceCardMain className="mcp-card-main">
+                    <SettingsResourceCardMain
+                      className="mcp-card-main"
+                      ariaLabel={`查看 MCP ${server.name} 详情`}
+                      onClick={() => setMcpDetail(server)}
+                    >
                       <SettingsResourceCardIcon className="mcp-card-icon"><Plug /></SettingsResourceCardIcon>
                       <SettingsResourceCardBody>
                         <span className="settings-resource-card-heading">
@@ -6347,15 +6366,17 @@ export function App() {
                         <code className="mcp-card-target" title={server.target}>{server.target}</code>
                         <span className="mcp-card-meta"><span>{server.exposure === 'deferred' ? '按需搜索' : server.exposure === 'direct' ? '直接提供' : '隐藏工具'}</span><span>{server.connected ? `${server.toolCount} 个工具` : server.error || (server.enabled ? '等待连接' : '未连接')}</span></span>
                       </SettingsResourceCardBody>
+                      <ChevronRight />
                     </SettingsResourceCardMain>
                     <SettingsResourceCardFooter className="mcp-card-footer">
                       {(!server.enabled || !server.connected) && (
                         <span className="resource-status">{!server.enabled ? '已停用' : '连接异常'}</span>
                       )}
-                      <button className="settings-text-button" onClick={() => setMcpDetail(server)}>查看详情</button>
-                      <button className={`switch ${server.enabled ? 'is-on' : ''}`} role="switch" aria-checked={server.enabled} disabled={settingsBusy} onClick={() => void toggleMcp(server.name, !server.enabled)} aria-label={`${server.name} ${server.enabled ? '禁用' : '启用'}`}><span /></button>
-                      <button className="icon-button row-edit" aria-label={`编辑 ${server.name}`} title="编辑" onClick={() => void openEditor('mcp', server.name)}><Pencil /></button>
-                      <button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`删除 MCP ${server.name}`} title="删除" onClick={() => void deleteMcp(server.name)}><Trash2 /></button>
+                      <div className="row-actions mcp-card-actions">
+                        <button className={`switch ${server.enabled ? 'is-on' : ''}`} role="switch" aria-checked={server.enabled} disabled={settingsBusy} onClick={() => void toggleMcp(server.name, !server.enabled)} aria-label={`${server.name} ${server.enabled ? '禁用' : '启用'}`}><span /></button>
+                        <button className="icon-button row-edit" aria-label={`编辑 ${server.name}`} title="编辑" onClick={() => void openEditor('mcp', server.name)}><Pencil /></button>
+                        <button className="icon-button resource-delete" disabled={settingsBusy} aria-label={`删除 MCP ${server.name}`} title="删除" onClick={() => void deleteMcp(server.name)}><Trash2 /></button>
+                      </div>
                     </SettingsResourceCardFooter>
                   </SettingsResourceCard>)}
                   {settingsData.mcp.length === 0 && <div className="settings-empty">还没有 MCP 服务器</div>}

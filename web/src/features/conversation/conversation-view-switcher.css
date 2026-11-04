@@ -1,0 +1,180 @@
+.conversation-view-switcher {
+  position: relative;
+  flex: none;
+  -webkit-app-region: no-drag;
+}
+
+.conversation-view-switcher-trigger {
+  display: inline-flex;
+  height: 28px;
+  max-width: 150px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 7px 0 8px;
+  border: 1px solid var(--transparent);
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.conversation-view-switcher-trigger:hover,
+.conversation-view-switcher-trigger.is-open {
+  border-color: var(--border);
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.conversation-view-switcher-trigger:focus-visible {
+  border-color: var(--focus-color);
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.conversation-view-switcher-trigger > svg:first-child {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--accent);
+}
+
+.conversation-view-switcher-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conversation-view-switcher-chevron {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--faint);
+  transition: transform var(--transition);
+}
+
+.conversation-view-switcher-trigger.is-open .conversation-view-switcher-chevron {
+  transform: rotate(180deg);
+}
+
+.conversation-view-switcher-count,
+.conversation-view-menu-count {
+  display: inline-flex;
+  min-width: 17px;
+  height: 17px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 5px;
+  border-radius: var(--radius-round);
+  background: var(--surface-active);
+  color: var(--faint);
+  font: 600 10px/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.conversation-view-switcher-count.is-live,
+.conversation-view-menu-count.is-live {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.conversation-view-switcher-count i,
+.conversation-view-menu-count i {
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: var(--live-ring);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.conversation-view-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(250px, calc(100cqw - 24px));
+  max-width: calc(100vw - 16px);
+  padding: 5px;
+  -webkit-app-region: no-drag;
+}
+
+.conversation-view-menu [role="menuitemradio"] {
+  display: grid;
+  width: 100%;
+  min-height: 38px;
+  grid-template-columns: 24px minmax(0, 1fr) auto 14px;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px;
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  text-align: left;
+}
+
+.conversation-view-menu [role="menuitemradio"]:hover,
+.conversation-view-menu [role="menuitemradio"]:focus-visible {
+  background: var(--surface-hover);
+  color: var(--text);
+  outline: none;
+}
+
+.conversation-view-menu [role="menuitemradio"].is-current {
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.conversation-view-menu-icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: var(--radius-tag);
+  color: var(--faint);
+}
+
+.conversation-view-menu [role="menuitemradio"].is-current .conversation-view-menu-icon {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.conversation-view-menu-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.conversation-view-menu-label {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-view-menu [role="menuitemradio"].is-current .conversation-view-menu-label {
+  font-weight: 600;
+}
+
+.conversation-view-menu-count.is-empty {
+  min-width: 0;
+  padding: 0;
+  background: var(--transparent);
+}
+
+.conversation-view-menu-check {
+  width: 14px;
+  height: 14px;
+  color: var(--accent);
+  visibility: hidden;
+}
+
+.conversation-view-menu [role="menuitemradio"].is-current .conversation-view-menu-check {
+  visibility: visible;
+}
+
+@container main-pane (max-width: 560px) {
+  .conversation-view-switcher-trigger {
+    max-width: 132px;
+  }
+}

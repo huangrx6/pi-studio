@@ -2,8 +2,8 @@
  * 统一的自定义下拉选择器，替换原生 <select>（原生控件在各系统外观差异大）。
  *
  * 关键实现：
- * - 菜单通过 createPortal 渲染到最近的 <dialog>（没有则 body），避免被
- *   overflow 容器裁剪，也能留在原生 dialog 的顶层；
+ * - 菜单通过 createPortal 渲染到最近的 dialog 或模态遮罩层（没有则 body），
+ *   避免被 overflow 容器裁剪，同时保持在弹窗内容与遮罩之上；
  * - 用 useLayoutEffect 在 paint 前计算 fixed 坐标，空间不足时向上展开；
  * - 支持点击外部关闭、Esc 关闭并归还焦点、上下键/Home/End 在选项间移动；
  * - 自定义组件需要手动补齐 listbox / option 的 aria 关系。
@@ -178,9 +178,12 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
     items[next]?.focus();
   }
 
-  // 若选择器位于原生 <dialog> 内，挂到 dialog 上可留在顶层（否则会被 dialog 遮住）；
-  // 其余场景挂到 body。open 时 triggerRef 已存在，因此这里读取 ref 是安全的。
-  const portalTarget = triggerRef.current?.closest('dialog') ?? document.body;
+  // 原生 dialog 本身就是顶层容器；自定义 role="dialog" 则挂到它的遮罩父层，
+  // 既不会落到底层 z-index，也不会被卡片自身的 overflow 裁剪。
+  // open 时 triggerRef 已存在，因此这里读取 ref 是安全的。
+  const nativeDialog = triggerRef.current?.closest('dialog');
+  const modalDialog = triggerRef.current?.closest('[aria-modal="true"]');
+  const portalTarget = nativeDialog ?? modalDialog?.parentElement ?? document.body;
 
   return (
     <div className={`pi-select ${className}`}>

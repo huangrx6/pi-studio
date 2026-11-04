@@ -340,7 +340,19 @@ export function SubagentOverview({
 
   return <div className="agent-overview">
     <header className="agent-overview-head">
-      <h2>子智能体</h2>
+      <div className="agent-overview-heading">
+        <h2>子智能体</h2>
+        <button
+          type="button"
+          className="agent-overview-return"
+          aria-label="返回对话"
+          title={`返回主对话 · ${selection.label || selection.modelRef || '当前对话'}`}
+          onClick={onReturnMain}
+        >
+          <ArrowLeft />
+          <span>返回对话</span>
+        </button>
+      </div>
       <div className="agent-overview-actions">
         {children.length > 1 && <div className="agent-overview-layout" role="group" aria-label="子智能体视图">
           <button
@@ -367,49 +379,46 @@ export function SubagentOverview({
       </div>
     </header>
 
-    <div className={`agent-fleet-strip${totalCost > 0 || budget?.budgetCostUsd ? ' has-cost' : ''}`} aria-label="子智能体聚合状态">
-      <span className="is-active"><small>运行</small><strong>{active}</strong></span>
-      <span><small>完成</small><strong>{complete}</strong></span>
-      <span className={failed ? 'is-error' : ''}><small>失败</small><strong>{failed}</strong></span>
-      <span className={budget?.exceeded ? 'is-error' : ''}>
-        <small>Token</small>
-        <strong>{tokenCount(totalTokens)}{budget?.budgetTokens ? ` / ${tokenCount(budget.budgetTokens)}` : ''}</strong>
-      </span>
-      {(totalCost > 0 || Boolean(budget?.budgetCostUsd)) && <span className={budget?.exceeded ? 'is-error' : ''}>
-        <small>参考成本</small>
-        <strong>
-          ${totalCost.toFixed(totalCost < 1 ? 3 : 2)}
-          {budget?.budgetCostUsd ? ` / $${budget.budgetCostUsd.toFixed(2)}` : ''}
-        </strong>
-      </span>}
-    </div>
-    {budget?.exceeded && (
-      <div className="agent-budget-alert">
-        <CircleX />
-        <span>
-          子智能体预算已用尽。
-          {budget.budgetAction === 'stop'
-            ? '新的子智能体请求会被阻止，可在设置中提高预算。'
-            : '当前仅提醒，新的子智能体请求仍可运行。'}
+    {children.length > 0 && <>
+      <div className={`agent-fleet-strip${totalCost > 0 || budget?.budgetCostUsd ? ' has-cost' : ''}`} aria-label="子智能体聚合状态">
+        <span className="is-active"><small>运行</small><strong>{active}</strong></span>
+        <span><small>完成</small><strong>{complete}</strong></span>
+        <span className={failed ? 'is-error' : ''}><small>失败</small><strong>{failed}</strong></span>
+        <span className={budget?.exceeded ? 'is-error' : ''}>
+          <small>Token</small>
+          <strong>{tokenCount(totalTokens)}{budget?.budgetTokens ? ` / ${tokenCount(budget.budgetTokens)}` : ''}</strong>
         </span>
+        {(totalCost > 0 || Boolean(budget?.budgetCostUsd)) && <span className={budget?.exceeded ? 'is-error' : ''}>
+          <small>参考成本</small>
+          <strong>
+            ${totalCost.toFixed(totalCost < 1 ? 3 : 2)}
+            {budget?.budgetCostUsd ? ` / $${budget.budgetCostUsd.toFixed(2)}` : ''}
+          </strong>
+        </span>}
       </div>
-    )}
-
-    {effectiveMode === 'list' && <button type="button" className="agent-main-return" onClick={onReturnMain}>
-      <ArrowLeft />返回主对话<span>{selection.label || selection.modelRef}</span>
-    </button>}
-
-    <div className="agent-list-tools">
-      <div className="agent-list-search">
-        <Search />
-        <input value={query} placeholder="搜索子智能体" aria-label="搜索子智能体" onChange={event => setQuery(event.target.value)} />
+      {budget?.exceeded && (
+        <div className="agent-budget-alert">
+          <CircleX />
+          <span>
+            子智能体预算已用尽。
+            {budget.budgetAction === 'stop'
+              ? '新的子智能体请求会被阻止，可在设置中提高预算。'
+              : '当前仅提醒，新的子智能体请求仍可运行。'}
+          </span>
+        </div>
+      )}
+      <div className="agent-list-tools">
+        <div className="agent-list-search">
+          <Search />
+          <input value={query} placeholder="搜索子智能体" aria-label="搜索子智能体" onChange={event => setQuery(event.target.value)} />
+        </div>
+        <div className="agent-list-filters" role="group" aria-label="筛选子智能体">
+          <button type="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>全部 {children.length}</button>
+          <button type="button" aria-pressed={filter === 'attention'} onClick={() => setFilter('attention')}>需处理 {attention}</button>
+          <button type="button" aria-pressed={filter === 'active'} onClick={() => setFilter('active')}>运行中 {active}</button>
+        </div>
       </div>
-      <div className="agent-list-filters" role="group" aria-label="筛选子智能体">
-        <button type="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>全部 {children.length}</button>
-        <button type="button" aria-pressed={filter === 'attention'} onClick={() => setFilter('attention')}>需处理 {attention}</button>
-        <button type="button" aria-pressed={filter === 'active'} onClick={() => setFilter('active')}>运行中 {active}</button>
-      </div>
-    </div>
+    </>}
 
     {visible.length > 0
       ? effectiveMode === 'formation'
@@ -439,8 +448,8 @@ export function SubagentOverview({
             </div>
           ))}
         </section>
-      : <div className="agent-overview-empty">
-        <GitFork />
+      : <div className={`agent-overview-empty${children.length ? ' is-filtered' : ' is-initial'}`} role="status">
+        <span className="agent-overview-empty-icon"><GitFork /></span>
         <strong>{children.length ? '没有匹配结果' : '这次对话还没有子智能体'}</strong>
       </div>}
   </div>;
