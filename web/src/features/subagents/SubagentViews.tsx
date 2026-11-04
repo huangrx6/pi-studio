@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Bot,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   CircleX,
   Clock3,
@@ -418,6 +419,7 @@ export function SubagentTranscriptView({
   onOverview: () => void;
   onOpenFile: (path: string) => void;
 }) {
+  const [taskOpen, setTaskOpen] = useState(false);
   const turns = transcriptTurns(transcript?.messages || []);
   const results = new Map(
     (transcript?.messages || [])
@@ -425,6 +427,9 @@ export function SubagentTranscriptView({
       .map(message => [message.toolCallId as string, message]),
   );
   const busy = child.status === 'running' || child.status === 'pending';
+  // Three clamped lines hold roughly this much Chinese text; longer prompts get
+  // an explicit expand control instead of a wall of instructions.
+  const longTask = (child.task?.length ?? 0) > 180;
 
   return <div className="agent-context-view">
     <div className="agent-context-toolbar">
@@ -443,9 +448,22 @@ export function SubagentTranscriptView({
       <div className="agent-context-column">
         <header className="agent-context-head">
           <span className="agent-context-avatar"><Bot /></span>
-          <div>
+          <div className="agent-context-identity">
             <h2>{child.name || child.agent}</h2>
-            {child.task && <p>{child.task}</p>}
+            {child.task && <>
+              <p className={`agent-context-task${taskOpen ? ' is-open' : ''}`} title={longTask && !taskOpen ? child.task : undefined}>
+                {child.task}
+              </p>
+              {longTask && <button
+                type="button"
+                className="agent-context-task-toggle"
+                aria-expanded={taskOpen}
+                onClick={() => setTaskOpen((value) => !value)}
+              >
+                {taskOpen ? '收起指令' : '展开完整指令'}
+                <ChevronDown className={taskOpen ? 'is-open' : undefined} />
+              </button>}
+            </>}
           </div>
           <div className="agent-context-state">
             <span className={`agent-status is-${child.status}`}>{statusIcon(child.status)}<span>{STATUS_LABEL[child.status]}</span></span>

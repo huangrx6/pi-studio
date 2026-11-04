@@ -64,7 +64,7 @@ try {
       const { ConversationImageGallery } = await import('/src/features/conversation/ConversationImageGallery.tsx');
       const child = {
         key: 'conversation:1', index: 0, name: 'beijing-scout', agent: 'subagent', status: 'completed',
-        task: '上一次运行因基础设施错误（database is locked）中断，请重试并完成原任务：输出北京候选景点调研结果（中文 Markdown，1200 字以内紧凑表格），把完整结果作为回答正文返回。',
+        task: '你负责「北京好玩的地方」调研，产出一份可直接用于排行程的中文调研笔记。背景：用户要和家人一起出行（成人为主，能走中等强度路线），想了解北京值得玩的地方，之后会由主 Agent 综合出「一周旅游计划」。你只做北京部分，不要涉及新疆。工作方式：1. 先用 tool_search 搜索并加载 firecrawl 工具，用 firecrawl_search 核实关键事实：景点开放时间、是否需要提前实名预约、门票价格、地铁交通、近期是否有闭馆或限流。至少核实 5 个核心景点。2. 若网络工具不可用或结果不足，就基于你已有的可靠知识写，但必须显式标注「未联网核实」的条目。产出（写入文件）：在仓库根目录创建 旅行计划/北京调研.md。',
         model: 'deepseek/deepseek-flash', thinking: 'max', context: 'fresh', isolation: 'worktree',
         tokens: 192000, providerRequests: 24, turnCount: 2, toolCount: 15, durationMs: 105000, hasTranscript: true,
       };
@@ -123,6 +123,39 @@ try {
     layout.firstTurn.top - layout.transcript.top >= 12,
     `first message does not touch the divider (${layout.firstTurn.top - layout.transcript.top}px)`,
   );
+
+  const task = await page.evaluate(() => {
+    const paragraph = document.querySelector('.agent-context-task');
+    const toggle = document.querySelector('.agent-context-task-toggle');
+    if (!paragraph || !toggle) return null;
+    return {
+      clamped: paragraph.scrollHeight > paragraph.clientHeight + 1,
+      lines: Math.round(paragraph.clientHeight / parseFloat(getComputedStyle(paragraph).lineHeight)),
+      toggle: toggle.textContent.trim(),
+      expanded: toggle.getAttribute('aria-expanded'),
+    };
+  });
+  assert.ok(task, 'long instructions expose an expand control');
+  assert.equal(task.clamped, true, 'the instruction is clamped by default');
+  assert.ok(task.lines <= 3, `clamp keeps three lines (${task.lines})`);
+  assert.match(task.toggle, /展开完整指令/);
+
+  await page.click('.agent-context-task-toggle');
+  await page.waitForTimeout(200);
+  const expanded = await page.evaluate(() => {
+    const paragraph = document.querySelector('.agent-context-task');
+    const toggle = document.querySelector('.agent-context-task-toggle');
+    return {
+      clamped: paragraph.scrollHeight > paragraph.clientHeight + 1,
+      toggle: toggle.textContent.trim(),
+      expanded: toggle.getAttribute('aria-expanded'),
+    };
+  });
+  assert.equal(expanded.clamped, false, 'expanding shows the whole instruction');
+  assert.equal(expanded.expanded, 'true');
+  assert.match(expanded.toggle, /收起指令/);
+  await page.click('.agent-context-task-toggle');
+  await page.waitForTimeout(200);
 
   await page.screenshot({ path: `${output}transcript.png` });
 

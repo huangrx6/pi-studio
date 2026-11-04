@@ -4394,6 +4394,43 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .agent-context-head { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: start; gap: var(--space-3); padding-bottom: var(--space-3); }
 .agent-context-head > div { min-width: 0; }
 .agent-context-head h2 { font-size: 20px; }
+.agent-context-identity { display: grid; min-width: 0; justify-items: start; gap: 2px; }
+/* Long instructions clamp to three lines at the full column width instead of
+   squeezing into a narrow measure that leaves the right half of the header
+   empty; the toggle reveals the rest verbatim. */
+.agent-context-task {
+  display: -webkit-box;
+  max-width: 100%;
+  margin: 6px 0 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.agent-context-task.is-open {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+}
+.agent-context-task-toggle {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 4px;
+  justify-self: end;
+  padding: 0 2px;
+  margin-top: 4px;
+  border-radius: var(--radius-tag);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.agent-context-task-toggle:hover { color: var(--text); }
+.agent-context-task-toggle svg { width: var(--icon-sm); height: var(--icon-sm); transition: transform var(--transition); }
+.agent-context-task-toggle svg.is-open { transform: rotate(180deg); }
 .agent-context-state { display: flex; align-items: center; gap: 8px; }
 .agent-readonly-status {
   display: inline-flex;
@@ -4409,10 +4446,10 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 }
 .agent-readonly-status svg { width: var(--icon-xs); height: var(--icon-xs); }
 .agent-context-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--border); }
-.agent-context-meta > span { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 2px 7px; min-width: 0; padding: 11px 14px; background: var(--surface); }
-.agent-context-meta svg { width: var(--icon-sm); height: var(--icon-sm); grid-row: 1 / 3; align-self: center; color: var(--icon); }
-.agent-context-meta small { color: var(--faint); font-size: 9.5px; }
-.agent-context-meta strong { overflow: hidden; color: var(--text); font-size: 10.5px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.agent-context-meta > span { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 3px 8px; min-width: 0; padding: 13px 16px; background: var(--surface); }
+.agent-context-meta svg { width: var(--icon-md); height: var(--icon-md); grid-row: 1 / 3; align-self: center; color: var(--icon); }
+.agent-context-meta small { color: var(--faint); font-size: 10.5px; }
+.agent-context-meta strong { overflow: hidden; color: var(--text); font-size: 12.5px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
 /* Keep the transcript off the meta card: a divider plus real whitespace above,
    and the same rhythm between turns. */
 .agent-context-alert {
