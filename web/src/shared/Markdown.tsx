@@ -9,19 +9,28 @@
  *
  * 本组件是纯渲染，不直接发 IPC；链接打开偏好从 preferences 的模块级缓存读取。
  */
-import { memo } from 'react';
+import { memo, useContext } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 import { getActivePreferences } from './preferences';
 import { safeMarkdownImageSource } from './safe-url.js';
+import rehypeLocalPaths from './rehype-local-paths.mjs';
+import { MarkdownActions } from './markdown-actions';
+import { MarkdownPathLink } from './MarkdownPathLink';
 
 /**
  * 自定义渲染规则。放在模块作用域：ReactMarkdown 每次 render 都新建
  * components 会导致所有节点重挂载，流式输出时会明显掉帧。
  */
 const components: Components = {
-  a({ href, children, node: _node, ...props }) {
+  a({ href, children, node, ...props }) {
+    const actions = useContext(MarkdownActions);
+    // Local paths detected by rehypeLocalPaths carry dataPath instead of a URL.
+    const dataPath = (node?.properties as Record<string, unknown> | undefined)?.dataPath;
+    if (typeof dataPath === 'string') {
+      return <MarkdownPathLink path={dataPath}>{children}</MarkdownPathLink>;
+    }
     // node 是 react-markdown 的 AST 节点；解构出来是为了避免它被 ...props 透传到 DOM。
     return <a {...props} href={href} onClick={(event) => {
       // 页内锚点与无链接不拦截，保持默认滚动行为。
@@ -29,9 +38,11 @@ const components: Components = {
       // 先统一阻止默认导航：这是 Electron 窗口，相对链接或 file: 链接
       // 会把整个渲染进程导航走，模型输出又不可信，不能交给浏览器处理。
       event.preventDefault();
-      // http(s) 交给主进程，按偏好用系统浏览器或应用内窗口打开。
+      // http(s) 优先交给宿主：有内嵌浏览器面板时开在侧边栏，否则回落到
+      // 主进程按偏好打开系统浏览器或应用内窗口。
       if (/^https?:\/\//i.test(href)) {
-        void window.piApi.openLink(href, getActivePreferences().linkOpen);
+        if (actions.openLink) actions.openLink(href);
+        else void window.piApi.openLink(href, getActivePreferences().linkOpen);
       }
     }}>{children}</a>;
   },
@@ -53,7 +64,7 @@ const components: Components = {
  */
 export const Markdown = memo(function Markdown({ children }: { children: string }) {
   return <div className="markdown">
-    <ReactMarkdown components={components} remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]} skipHtml>
+    <ReactMarkdown components={components} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeLocalPaths, [rehypeHighlight, { detect: true, ignoreMissing: true }]]} skipHtml>
       {children}
     </ReactMarkdown>
   </div>;

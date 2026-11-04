@@ -344,3 +344,50 @@
   .panel-tool,
   .panel-tab-close { transition: none; }
 }
+
+/* 右侧内嵌浏览器：工具条 + 独立进程的 webview。 */
+.browser-panel { display: flex; flex: 1; min-height: 0; flex-direction: column; background: var(--bg); }
+.browser-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.browser-toolbar .icon-button { width: var(--control-sm); height: var(--control-sm); flex: none; }
+.browser-toolbar .icon-button svg { width: var(--icon-md); height: var(--icon-md); }
+.browser-toolbar .icon-button:disabled { opacity: .45; }
+.browser-address {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-round);
+  background: var(--surface-soft);
+}
+.browser-address:focus-within { border-color: var(--accent); }
+.browser-address svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--faint); }
+.browser-address input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: var(--transparent);
+  color: var(--text);
+  font-size: var(--text-xs);
+}
+.browser-failure {
+  margin: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--error-border);
+  background: var(--error-soft);
+  color: var(--error);
+  font-size: var(--text-xs);
+}
+.browser-stage { position: relative; flex: 1; min-height: 240px; background: var(--surface); }
+.browser-frame { display: flex; width: 100%; height: 100%; border: 0; }

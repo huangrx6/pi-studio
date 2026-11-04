@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Activity, Folder, FolderOpen, MessageCirclePlus, Terminal, type LucideIcon } from 'lucide-react';
+import { Activity, Folder, FolderOpen, Globe, MessageCirclePlus, Terminal, type LucideIcon } from 'lucide-react';
 
-export type RightPanelToolId = 'files' | 'terminal' | 'services' | 'temporary';
+export type RightPanelToolId = 'files' | 'terminal' | 'services' | 'browser' | 'temporary';
 
 export type RightPanelToolAction = {
   id: RightPanelToolId;
@@ -14,6 +14,7 @@ const TOOL_ICONS: Record<RightPanelToolId, LucideIcon> = {
   files: Folder,
   terminal: Terminal,
   services: Activity,
+  browser: Globe,
   temporary: MessageCirclePlus,
 };
 

@@ -28,6 +28,7 @@ const { shutdownTerminalSessions } = require('./ipc/terminal.cjs');
 const { createWindow, showMainWindow, installMenu, watchSystemTheme } = require('./window.cjs');
 const { BACKGROUND_SCHEME } = require('./background-media.cjs');
 const { registerBackgroundProtocol } = require('./services/background.cjs');
+const { installBrowserSessionGuards } = require('./services/browser-session.cjs');
 const {
   initializeMenuBar,
   registerMenuBarIpc,
@@ -96,6 +97,39 @@ if (primaryInstance) {
     if (startupGate?.requestReveal()) showMainWindow();
   });
 
+  // The right-panel browser embeds untrusted pages: deny popups, block
+  // non-http(s) navigation and keep those pages out of the app's session.
+  app.on('web-contents-created', (_event, contents) => {
+    if (contents.getType() !== 'webview') return;
+    contents.setWindowOpenHandler(({ url }) => {
+      try {
+        const target = new URL(url);
+        if (target.protocol === 'http:' || target.protocol === 'https:') {
+          void contents.loadURL(target.href);
+        }
+      } catch {
+        // Ignore malformed popup targets.
+      }
+      return { action: 'deny' };
+    });
+    const allowNavigation = (url) => {
+      if (url === 'about:blank') return true;
+      try {
+        const protocol = new URL(url).protocol;
+        return protocol === 'http:' || protocol === 'https:';
+      } catch {
+        return false;
+      }
+    };
+    contents.on('will-navigate', (event, url) => {
+      if (!allowNavigation(url)) event.preventDefault();
+    });
+    // Programmatic loads (loadURL) skip `will-navigate`; this catches them too.
+    contents.on('will-frame-navigate', (event) => {
+      if (!allowNavigation(event.url)) event.preventDefault();
+    });
+  });
+
   startupGate = createStartupGate({
     initialize: async () => {
       await app.whenReady();
@@ -112,6 +146,7 @@ if (primaryInstance) {
       // 系统外观变化时同步窗口底色
       watchSystemTheme();
       registerBackgroundProtocol();
+      installBrowserSessionGuards();
       installMenu({ onCheckForUpdates: openAndCheckForUpdates });
       createWindow();
       initializeMenuBar();

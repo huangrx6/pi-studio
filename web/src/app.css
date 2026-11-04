@@ -2363,6 +2363,20 @@ Agent-shared directories are separate at both user and project scope. */
 .markdown hr { margin: 20px 0; border: 0; border-top: 1px solid var(--border); }
 .markdown a { color: var(--accent-foreground); text-decoration: underline; text-underline-offset: 2px; }
 .markdown strong { font-weight: 650; }
+.markdown a.md-path-link {
+  display: inline;
+  padding: 0;
+  color: var(--link);
+  text-decoration: underline;
+  text-decoration-color: var(--link-decoration);
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.markdown a.md-path-link:hover { text-decoration-style: solid; }
+/* Inline code that turned into a path link keeps its code chrome. */
+.markdown a.md-path-link > code { color: inherit; }
+
 .markdown code { padding: 2px 5px; border-radius: var(--radius-tag); background: var(--surface-soft); font: .88em var(--mono); }
 .markdown pre { margin: 12px 0; padding: 13px 14px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); font: 11.5px/1.65 var(--mono); }
 .markdown pre code { padding: 0; border: 0; background: var(--transparent); font: inherit; }

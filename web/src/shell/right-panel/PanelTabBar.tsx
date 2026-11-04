@@ -5,6 +5,7 @@ import {
   FileDiff,
   FileText,
   Folder,
+  Globe,
   Maximize2,
   MessageCirclePlus,
   Minimize2,
@@ -19,7 +20,7 @@ import { usePanelTabScroll } from './usePanelTabScroll';
 
 export type PanelTabItem = {
   id: string;
-  kind: 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services';
+  kind: 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services' | 'browser';
   title: string;
 };
 
@@ -31,6 +32,7 @@ const TAB_ICONS: Record<PanelTabItem['kind'], LucideIcon> = {
   temporary: MessageCirclePlus,
   terminal: Terminal,
   services: Activity,
+  browser: Globe,
 };
 
 export function PanelTabBar<T extends PanelTabItem>({

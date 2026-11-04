@@ -62,8 +62,28 @@ function installRendererSecurity(win, rendererUrl) {
     }
     return { action: 'deny' };
   });
-  win.webContents.on('will-attach-webview', (event) => {
-    event.preventDefault();
+  /**
+   * Only the right-panel browser may attach a guest: it must use Studio's own
+   * partition, carry no preload and stay sandboxed with node disabled. Anything
+   * else (a future stray <webview> in extension UI, a model-driven URL) is
+   * refused before a guest process starts.
+   */
+  win.webContents.on('will-attach-webview', (event, webPreferences, params) => {
+    const src = String(params?.src || '');
+    const trusted = webPreferences?.partition === 'persist:pi-browser'
+      && !webPreferences?.preload
+      && !params?.preload
+      && webPreferences?.nodeIntegration !== true;
+    if (!trusted || !/^(https?:|about:blank$)/i.test(src)) {
+      event.preventDefault();
+      return;
+    }
+    delete webPreferences.preload;
+    delete params.preload;
+    webPreferences.nodeIntegration = false;
+    webPreferences.nodeIntegrationInSubFrames = false;
+    webPreferences.contextIsolation = true;
+    webPreferences.sandbox = true;
   });
 }
 
@@ -98,6 +118,9 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
+      // The right-panel browser hosts untrusted pages in its own process and
+      // partition; the renderer only gets navigation controls.
+      webviewTag: true,
     },
   });
 

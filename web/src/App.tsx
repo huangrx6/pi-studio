@@ -110,6 +110,8 @@ import { WorkspacePicker } from './shell/WorkspacePicker';
 import { SidebarActions, type SidebarAction } from './shell/SidebarActions';
 import { PanelTabBar } from './shell/right-panel/PanelTabBar';
 import { RightPanelStart, type RightPanelToolAction } from './shell/right-panel/RightPanelStart';
+import { BrowserPanel } from './shell/right-panel/BrowserPanel';
+import { MarkdownActions } from './shared/markdown-actions';
 import {
   concreteThinkingLevels,
   thinkingLabels,
@@ -532,7 +534,7 @@ type StoredModelComparison = {
   initialThinkingLevel: ThinkingLevel;
 };
 type StoredModelComparisonMap = Record<string, StoredModelComparison>;
-type PanelTab = { id: string; kind: 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services'; title: string; path?: string; source?: PanelFileSource; sessionId?: string; diff?: TurnDiffFile; review?: { sessionId: string; initial: TurnDiff; turns: TurnDiff[]; focusPath?: string } };
+type PanelTab = { id: string; kind: 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services' | 'browser'; title: string; path?: string; source?: PanelFileSource; sessionId?: string; diff?: TurnDiffFile; url?: string; review?: { sessionId: string; initial: TurnDiff; turns: TurnDiff[]; focusPath?: string } };
 type ComposerMenuState = { kind: 'slash' | 'file'; query: string; start: number; end: number };
 type AgentView =
   | { kind: 'conversation' }
@@ -4338,6 +4340,24 @@ export function App() {
     if (filesOpen) setPanelEntered(true); else openPanel();
   }
 
+  /**
+   * Open (or reuse) the in-app browser panel. A second call with a URL
+   * navigates the existing tab instead of stacking duplicates.
+   */
+  function openBrowserTab(url = '') {
+    const existing = panelTabs.find((tab) => tab.kind === 'browser');
+    if (existing) {
+      if (url) setPanelTabs((current) => current.map((tab) => tab.id === existing.id ? { ...tab, url } : tab));
+      setActivePanelTabId(existing.id);
+      if (filesOpen) setPanelEntered(true); else openPanel();
+      return;
+    }
+    const id = `browser:${crypto.randomUUID()}`;
+    setPanelTabs((current) => [...current, { id, kind: 'browser', title: '浏览器', url }]);
+    setActivePanelTabId(id);
+    if (filesOpen) setPanelEntered(true); else openPanel();
+  }
+
   function openStoredModelComparison(entry: StoredModelComparison) {
     rememberMainScrollPosition();
     setAgentView({
@@ -4739,10 +4759,20 @@ export function App() {
   const panelWorkspaceName = activeWorkspace?.name
     || panelWorkspace.split(/[\\/]/).filter(Boolean).at(-1)
     || '工具';
+  /** Latest browser opener, read through a ref so the context value stays stable. */
+  const markdownLinkRef = useRef<(url: string) => void>(() => {});
+  markdownLinkRef.current = (url: string) => openBrowserTab(url);
+  const markdownActionsValue = useMemo(() => ({
+    cwd: session?.cwd,
+    openFile: handleOpenFile,
+    openLink: (url: string) => markdownLinkRef.current(url),
+  }), [session?.cwd, handleOpenFile]);
+
   const panelToolActions: RightPanelToolAction[] = [
     { id: 'files', label: '工作区文件', disabled: !panelWorkspace, onSelect: openFilesTab },
     { id: 'terminal', label: '新建终端', disabled: !panelWorkspace, onSelect: openTerminalTab },
     { id: 'services', label: '运行服务', disabled: !panelWorkspace, onSelect: openServicesTab },
+    { id: 'browser', label: '浏览器', onSelect: () => openBrowserTab() },
     { id: 'temporary', label: '临时聊天', onSelect: openTemporaryChat },
   ];
 
@@ -5024,6 +5054,12 @@ export function App() {
       <LazyTerminalPanel key={activePanelTab.id} id={activePanelTab.id} cwd={session?.cwd || workspace} onNewTerminal={openTerminalTab} />
     </Suspense>;
     if (activePanelTab.kind === 'services') return <RuntimeServicesPanel cwd={session?.cwd} workspace={workspace} />;
+    if (activePanelTab.kind === 'browser') return <BrowserPanel
+      key={activePanelTab.id}
+      url={activePanelTab.url || ''}
+      onUrlChange={(next) => setPanelTabs((current) => current.map((tab) => tab.id === activePanelTab.id ? { ...tab, url: next } : tab))}
+      onClose={() => closePanelTab(activePanelTab.id)}
+    />;
     if (activePanelTab.kind === 'files') return renderFileTree();
     if (activePanelTab.kind === 'changes' && activePanelTab.review) return <ChangesView key={`${activePanelTab.id}:${activePanelTab.review.initial.at}:${activePanelTab.review.focusPath}`} {...activePanelTab.review} onOpenFile={path => void openFile(path, activePanelTab.review!.sessionId, 'diff')} onOpenDiff={(file, at) => openDiffTab(file, at, activePanelTab.review!.sessionId)} />;
     if (activePanelTab.kind === 'diff' && activePanelTab.diff) return <DiffView file={activePanelTab.diff} />;
@@ -5082,6 +5118,7 @@ export function App() {
   } as CSSProperties;
 
   return (
+    <MarkdownActions.Provider value={markdownActionsValue}>
     <div
       className={`app ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${filesOpen && panelFullscreen ? 'is-panel-fullscreen' : ''} ${preferences.backgroundMedia ? 'has-custom-background' : ''}`}
       style={backgroundStyle}
@@ -6859,6 +6896,7 @@ export function App() {
         </>
       )}
     </div>
+    </MarkdownActions.Provider>
   );
 }
 

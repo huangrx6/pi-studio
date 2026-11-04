@@ -2697,13 +2697,13 @@ try {
   assert.equal(await page.getByRole('tablist', { name: '右侧面板标签' }).count(), 0);
   assert.deepEqual(
     await page.locator('.panel-start-tools .panel-tool').allTextContents(),
-    ['工作区文件', '新建终端', '运行服务', '临时聊天'],
+    ['工作区文件', '新建终端', '运行服务', '浏览器', '临时聊天'],
   );
   await capture('05-panel-start');
   await page.getByRole('button', { name: /^工作区文件/ }).click();
   await page.getByRole('button', { name: '打开工具', exact: true }).click();
   const panelToolMenu = page.getByRole('menu');
-  assert.deepEqual(await panelToolMenu.getByRole('menuitem').allTextContents(), ['工作区文件', '新建终端', '运行服务', '临时聊天']);
+  assert.deepEqual(await panelToolMenu.getByRole('menuitem').allTextContents(), ['工作区文件', '新建终端', '运行服务', '浏览器', '临时聊天']);
   await page.keyboard.press('Escape');
   await panelToolMenu.waitFor({ state: 'detached' });
   await capture('05-files');
@@ -2790,7 +2790,7 @@ try {
   await page.getByRole('button', { name: '关闭 package.json', exact: true }).click();
   await page.getByRole('button', { name: '关闭 文件', exact: true }).click();
   assert.equal(await page.locator('.file-panel.is-open').count(), 1);
-  assert.equal(await page.locator('.panel-start-tools .panel-tool').count(), 4);
+  assert.equal(await page.locator('.panel-start-tools .panel-tool').count(), 5);
   await page.getByRole('button', { name: '收起右侧面板' }).click();
 
   // -------------------------------------------------------------------------
