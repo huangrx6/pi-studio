@@ -1,4 +1,4 @@
-import type { ChatMessage } from '../../types/chat-types';
+import type { ChatMessage, TurnDiff } from '../../types/chat-types';
 
 export type FileChange = {
   path: string;
@@ -51,4 +51,27 @@ export function collectFileChanges(messages: ChatMessage[], results: Map<string,
     files.set(path, file);
   }
   return [...files.values()];
+}
+
+/**
+ * 找回一轮对话的 turn diff。
+ *
+ * 写入侧把 diff.at 设为本轮最后一条助手消息的时间戳，正常情况是精确匹配；
+ * 旧版本保存的是「结束时刻」，比消息时间戳晚几十秒，所以再退化到时间窗口：
+ * 只要有 diff 落在 [本轮最后一条消息, 下一条用户消息) 之间，就属于这一轮。
+ * 用「下一条用户消息」做上界，避免把下一轮的 diff 挂到没有改动的这一轮上。
+ */
+export function findTurnDiff(
+  diffs: TurnDiff[] | undefined,
+  { from, until }: { from?: number; until?: number },
+): TurnDiff | undefined {
+  if (!Array.isArray(diffs) || diffs.length === 0) return undefined;
+  if (typeof from !== 'number' || !Number.isFinite(from)) return undefined;
+  const start = from;
+  const exact = diffs.find((diff) => diff.at === start);
+  if (exact) return exact;
+  const upper = typeof until === 'number' && Number.isFinite(until) ? until : Number.POSITIVE_INFINITY;
+  return diffs
+    .filter((diff) => diff.at > start && diff.at < upper)
+    .sort((left, right) => left.at - right.at)[0];
 }

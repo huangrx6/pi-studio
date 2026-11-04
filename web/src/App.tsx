@@ -137,7 +137,8 @@ import {
   resolveAutoFollow,
   shouldReleaseFollowOnWheel,
 } from './features/conversation/chat-scroll.mjs';
-import { HISTORY_PAGE_SIZE, resolveHistoryScroll } from './features/conversation/history-scroll.mjs';
+import { findTurnDiff } from './features/conversation/file-changes';
+import { loadFullTranscript } from './features/conversation/transcript-load.mjs';
 import { sampleOutlineIndices } from './features/conversation/outline-samples.mjs';
 import { outlineIndexAt, outlineIndexForMessages } from './features/conversation/outline-sync.mjs';
 import { errorText } from './shared/error-text';
@@ -409,22 +410,6 @@ function textOfBlocks(content: ChatMessage['content'], separator = '\n'): string
 }
 
 /** 独立大纲暂时不可用时，用当前已加载窗口生成可用的局部大纲。 */
-/** 合并两段 transcript：按 entry id 去重并保持升序（实时消息没有 id 时排在最后）。 */
-function mergeTranscriptMessages(older: ChatMessage[], current: ChatMessage[]): ChatMessage[] {
-  const merged = new Map<string, ChatMessage>();
-  for (const message of [...older, ...current]) {
-    const key = typeof message.sourceIndex === 'number'
-      ? `entry:${message.sourceIndex}:${message.role}:${message.toolCallId || ''}`
-      : `live:${message.role}:${message.timestamp}:${message.toolCallId || ''}`;
-    merged.set(key, message);
-  }
-  return [...merged.values()].sort((left, right) => (
-    (left.sourceIndex ?? Number.MAX_SAFE_INTEGER)
-    - (right.sourceIndex ?? Number.MAX_SAFE_INTEGER)
-    || (left.timestamp ?? 0) - (right.timestamp ?? 0)
-  ));
-}
-
 function outlineFromMessages(messages: ChatMessage[], messageStart = 0): OutlineData {
   const items = messages.flatMap((message, index): OutlineItem[] => {
     if (message.role !== 'user') return [];
@@ -521,7 +506,14 @@ function emptyModelSelection(): ModelSelection {
 
 // ---------- 视图辅助类型 ----------
 type DragItem = { kind: 'workspace' | 'session'; cwd: string; sessionId?: string };
-type PanelFile = { path: string; size: number; binary: boolean; text: string };
+type PanelFile = {
+  path: string;
+  size: number;
+  binary: boolean;
+  text: string;
+  /** 工作区文件带结构化预览（Markdown/JSON/CSV/PDF/HTML 等），由共享预览组件渲染。 */
+  preview?: FilePreviewResult;
+};
 type PanelFileSource = 'workspace' | 'attachment' | 'diff';
 type ModelComparisonContext = {
   parentId: string;
@@ -668,12 +660,6 @@ export function App() {
   const [workspaces, setWorkspaces] = useState<PiWorkspace[]>([]);
   const [stateLoading, setStateLoading] = useState(true);
   const [sessionLoading, setSessionLoading] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const historyAnchorRef = useRef<{ sessionId: string; bottomOffset: number } | null>(null);
-  const historyLoadingRef = useRef(false);
-  const historyRequestRef = useRef(0);
-  const historyArmedRef = useRef(true);
-  const historyUserScrollRef = useRef(false);
   const [preferences, setPreferences] = useState<Preferences>(() => loadPreferences());
   const [backgroundBusy, setBackgroundBusy] = useState(false);
   const [backgroundError, setBackgroundError] = useState<string | null>(null);
@@ -698,7 +684,6 @@ export function App() {
   const [outlineItems, setOutlineItems] = useState<OutlineItem[]>([]);
   const [outlineTotalMessages, setOutlineTotalMessages] = useState(0);
   const outlineRequestRef = useRef(0);
-  const pendingOutlineJumpRef = useRef<{ sessionId: string; sourceIndex: number; index: number } | null>(null);
   const [workspace, setWorkspace] = useState('');
   const [modelSelection, setModelSelection] = useState<ModelSelection>(emptyModelSelection);
   const [defaultModelSelection, setDefaultModelSelection] = useState<ModelSelection>(emptyModelSelection);
@@ -716,9 +701,6 @@ export function App() {
     title: string;
     longTask?: LongTaskState;
     turnDiffs?: TurnDiff[];
-    hasMore?: boolean;
-    pageCursor?: string;
-    messageStart?: number;
     totalMessages?: number;
   } | null>(null);
   const sessionRef = useRef(session);
@@ -839,13 +821,7 @@ export function App() {
     if (conversationDetailExtensionItems.some((item) => item.id === agentView.itemId)) return;
     setAgentView({ kind: 'extensions' });
   }, [agentView, conversationDetailExtensionItems]);
-  // 切换会话时取消旧分页请求，并重新允许一次顶部自动加载。
   useEffect(() => {
-    historyRequestRef.current += 1;
-    historyLoadingRef.current = false;
-    historyAnchorRef.current = null;
-    historyArmedRef.current = true;
-    setHistoryLoading(false);
     ++subagentRequestRef.current;
     setAgentView({ kind: 'conversation' });
     // openSession owns child-session hydration; clearing here would erase the
@@ -1028,7 +1004,6 @@ export function App() {
   const lastTranscriptScrollTopRef = useRef(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerHighlightRef = useRef<HTMLDivElement>(null);
-  const [composing, setComposing] = useState(false);
   const settingsContentRef = useRef<HTMLElement>(null);
   const settingsReturnFocusRef = useRef<HTMLElement | null>(null);
   const requestRef = useRef<string | null>(null);
@@ -2541,62 +2516,6 @@ export function App() {
     }
   }
 
-  /** 向前加载更早的历史；保持当前滚动位置不跳。 */
-  async function loadOlderHistory() {
-    if (!session || historyLoadingRef.current || !session.pageCursor) return;
-    const sessionId = session.id;
-    const loadGeneration = sessionLoadRef.current;
-    const requestId = ++historyRequestRef.current;
-    const node = scrollRef.current;
-    historyAnchorRef.current = node ? { sessionId, bottomOffset: node.scrollHeight - node.scrollTop } : null;
-    historyArmedRef.current = false;
-    historyLoadingRef.current = true;
-    setHistoryLoading(true);
-    try {
-      const detail = await window.piApi.conversationPage({
-        id: sessionId,
-        limit: HISTORY_PAGE_SIZE,
-        cursor: session.pageCursor,
-      });
-      if (requestId !== historyRequestRef.current || loadGeneration !== sessionLoadRef.current) return;
-      if (!detail) return;
-      setMessages((current) => mergeTranscriptMessages(detail.messages, current));
-      setSession((current) => current?.id === sessionId
-        ? {
-            ...current,
-            hasMore: detail.page.hasOlder,
-            pageCursor: detail.page.nextCursor,
-            messageStart: detail.messageStart,
-            totalMessages: outlineTotalMessages || undefined,
-          }
-        : current);
-    } catch (error) {
-      if (requestId === historyRequestRef.current && loadGeneration === sessionLoadRef.current) setError(errorText(error));
-    } finally {
-      if (requestId === historyRequestRef.current) {
-        historyLoadingRef.current = false;
-        setHistoryLoading(false);
-      }
-    }
-  }
-
-  useLayoutEffect(() => {
-    const anchor = historyAnchorRef.current;
-    if (!anchor || anchor.sessionId !== session?.id) return;
-    const node = scrollRef.current;
-    if (node) node.scrollTop = node.scrollHeight - anchor.bottomOffset;
-    historyAnchorRef.current = null;
-  }, [messages, session?.id]);
-
-  // 跨页跳转要等目标消息真正挂载后再测位置；auto 避免长距离平滑滚动途经大量内容。
-  useLayoutEffect(() => {
-    const pending = pendingOutlineJumpRef.current;
-    if (!pending || pending.sessionId !== session?.id) return;
-    const targetLoaded = messages.some((message) => message.sourceIndex === pending.sourceIndex);
-    if (!targetLoaded) return;
-    if (scrollToOutlineItem(pending.index, 'auto')) pendingOutlineJumpRef.current = null;
-  }, [messages, session?.id]);
-
   // ---------- 会话生命周期 ----------
 
   function currentComposerDraft(): ComposerDraft {
@@ -2667,7 +2586,6 @@ export function App() {
     setOutlineTotalMessages(0);
     setOutlineActive(0);
     setOutlineHover(null);
-    pendingOutlineJumpRef.current = null;
     setError(null);
     setWorkspace(cwd);
     const nextKey = composerDraftKeyForNew(cwd);
@@ -2705,7 +2623,6 @@ export function App() {
     setOutlineTotalMessages(0);
     setOutlineActive(0);
     setOutlineHover(null);
-    pendingOutlineJumpRef.current = null;
     setWorkspace(cwd);
     const nextKey = composerDraftKeyForNew(cwd);
     if (hasPending) {
@@ -2722,11 +2639,14 @@ export function App() {
     if (cwd) expandWorkspace(cwd);
   }
 
-  /** 悬停时预取会话详情，点击时通常已经命中主进程缓存。 */
+  /**
+   * 悬停时预热主进程缓存。只取最新一页：整段历史会在打开会话时一次读完，
+   * 预取没必要为了悬停就把几千条消息全扫一遍。
+   */
   function prefetchSession(id: string) {
     if (prefetchedSessionsRef.current.has(id)) return;
     prefetchedSessionsRef.current.add(id);
-    void window.piApi.conversationPage({ id, limit: HISTORY_PAGE_SIZE }).catch(() => {
+    void window.piApi.conversationPage({ id, limit: 200 }).catch(() => {
       /* prefetch is best effort */
     });
   }
@@ -2839,11 +2759,10 @@ export function App() {
     requestRef.current = '';
     const load = ++sessionLoadRef.current;
     const outlineRequest = ++outlineRequestRef.current;
-    pendingOutlineJumpRef.current = null;
     setSessionLoading(true);
     try {
       const [detail, outline, children] = await Promise.all([
-        window.piApi.conversationPage({ id: item.id, limit: HISTORY_PAGE_SIZE }),
+        loadFullTranscript(window.piApi.conversationPage, item.id),
         window.piApi.conversationOutline(item.id).catch(() => undefined),
         window.piApi.sessionSubagents(item.id).catch(() => [] as SubagentChild[]),
       ]);
@@ -2860,9 +2779,6 @@ export function App() {
         title: detail.title,
         longTask: detail.longTask,
         turnDiffs: detail.turnDiffs,
-        hasMore: detail.page.hasOlder,
-        pageCursor: detail.page.nextCursor,
-        messageStart: detail.messageStart,
         totalMessages: outline?.totalMessages,
       });
       if (detail.model) setModelSelection(detail.model);
@@ -2877,7 +2793,6 @@ export function App() {
       if (outlineRequest === outlineRequestRef.current) {
         applyOutline(outline ? { items: outline.items, totalMessages: outline.totalMessages } : undefined, detail.messages, detail.messageStart);
       }
-      setHistoryLoading(false);
       setWorkspace(detail.cwd);
       installComposerDraft(composerDraftKeyForSession(detail.id));
       expandWorkspace(detail.cwd);
@@ -3812,20 +3727,10 @@ export function App() {
       else pauseTranscriptFollow();
     }
     lastTranscriptScrollTopRef.current = nextTop;
-    const next = resolveHistoryScroll({
-      scrollTop: nextTop,
-      armed: historyArmedRef.current,
-      hasMore: Boolean(session?.hasMore),
-      loading: historyLoadingRef.current,
-      userInitiated: historyUserScrollRef.current,
-    });
-    historyUserScrollRef.current = false;
-    historyArmedRef.current = next.armed;
-    if (next.load) void loadOlderHistory();
     scheduleOutlineSync();
   }
 
-  function scrollToOutlineItem(index: number, behavior: ScrollBehavior = 'smooth') {
+  function scrollToOutlineItem(index: number, behavior?: ScrollBehavior) {
     const item = outlineItems[index];
     const container = scrollRef.current;
     const node = item ? document.getElementById(`chat-turn-${item.sourceIndex}`) : null;
@@ -3833,68 +3738,19 @@ export function App() {
     // 大纲跳转表示用户主动离开底部阅读，流式更新不能再把视图拉回最新消息。
     pauseTranscriptFollow();
     const delta = node.getBoundingClientRect().top - container.getBoundingClientRect().top;
-    container.scrollTo({ top: container.scrollTop + delta - 12, behavior });
+    // 近处平滑滚动；跨几百屏的远距离跳转直接落地，等动画走完反而更慢。
+    const distance = Math.abs(delta);
+    container.scrollTo({
+      top: container.scrollTop + delta - 12,
+      behavior: behavior ?? (distance > container.clientHeight * 3 ? 'auto' : 'smooth'),
+    });
     setOutlineActive(index);
     return true;
   }
 
-  /**
-   * 点击大纲：当前窗口已有节点就直接滚动；旧提问尚未加载时，只补载从目标
-   * 提问到最新消息所需的窗口，然后由 layout effect 在 DOM 提交后精确定位。
-   */
-  async function jumpToOutline(index: number) {
-    const item = outlineItems[index];
-    if (!item || !session) return;
-    if (scrollToOutlineItem(index)) return;
-
-    const sessionId = session.id;
-    const loadGeneration = sessionLoadRef.current;
-    const requestId = ++historyRequestRef.current;
-    pendingOutlineJumpRef.current = { sessionId, sourceIndex: item.sourceIndex, index };
-    historyAnchorRef.current = null;
-    historyArmedRef.current = false;
-    historyLoadingRef.current = true;
-    setHistoryLoading(true);
-    setOutlineActive(index);
-    try {
-      // 目标是 entry id，就让服务端一直加载到这条为止；用条数估算会在
-      // “entry id 比消息条数涨得快”的会话里少加载，导致点了没反应。
-      const detail = await window.piApi.conversationPage({
-        id: sessionId,
-        limit: HISTORY_PAGE_SIZE,
-        untilSourceIndex: item.sourceIndex,
-      });
-      if (requestId !== historyRequestRef.current || loadGeneration !== sessionLoadRef.current) return;
-      if (!detail) {
-        pendingOutlineJumpRef.current = null;
-        setError('这条提问对应的历史消息已经不可用。');
-        return;
-      }
-      // 合并而不是替换：已经读过的后续内容不该因为一次跳转被卸载。
-      setMessages((current) => mergeTranscriptMessages(detail.messages, current));
-      setSession((current) => current?.id === sessionId
-        ? {
-            ...current,
-            hasMore: detail.page.hasOlder,
-            pageCursor: detail.page.nextCursor,
-            messageStart: detail.messageStart,
-          }
-        : current);
-      if (detail.page.reachedTarget === false) {
-        // 超过单页上限：保留待跳转，等用户继续向上滚动加载完再定位。
-        showComposerFeedback('这段历史太久远，已加载最近 2000 条；继续向上滚动会自动定位到目标提问。');
-      }
-    } catch (error) {
-      if (requestId === historyRequestRef.current && loadGeneration === sessionLoadRef.current) {
-        pendingOutlineJumpRef.current = null;
-        setError(errorText(error));
-      }
-    } finally {
-      if (requestId === historyRequestRef.current) {
-        historyLoadingRef.current = false;
-        setHistoryLoading(false);
-      }
-    }
+  /** 点击大纲：整段历史都已加载，直接滚动到对应的提问。 */
+  function jumpToOutline(index: number) {
+    if (!scrollToOutlineItem(index)) showComposerFeedback('这条提问对应的历史消息已经不可用。');
   }
 
   // ---------- 发送与排队 ----------
@@ -4020,9 +3876,8 @@ export function App() {
       // 侧边栏刷新与读取历史互不依赖；刷新失败不能让一次成功的回复显示成错误。
       void loadState().catch(() => {});
       if (requestRef.current !== requestId) return;
-      const historyLimit = Math.max(HISTORY_PAGE_SIZE, messages.length + 10);
       const [saved, outline] = await Promise.all([
-        window.piApi.conversationPage({ id: submission.sessionId, limit: historyLimit }),
+        loadFullTranscript(window.piApi.conversationPage, submission.sessionId),
         refreshOutline(submission.sessionId),
       ]);
       if (requestRef.current !== requestId) return;
@@ -4033,9 +3888,6 @@ export function App() {
           title: saved.title,
           longTask: saved.longTask,
           turnDiffs: saved.turnDiffs,
-          hasMore: saved.page.hasOlder,
-          pageCursor: saved.page.nextCursor,
-          messageStart: saved.messageStart,
           totalMessages: outline?.totalMessages,
         });
         setMessages(saved.messages.map((message) => ({ ...message })));
@@ -4080,9 +3932,8 @@ export function App() {
       });
       void loadState().catch(() => {});
       if (requestRef.current !== requestId) return;
-      const historyLimit = Math.max(HISTORY_PAGE_SIZE, messages.length + 10);
       const [saved, outline] = await Promise.all([
-        window.piApi.conversationPage({ id: sessionId, limit: historyLimit }),
+        loadFullTranscript(window.piApi.conversationPage, sessionId),
         refreshOutline(sessionId),
       ]);
       if (requestRef.current !== requestId) return;
@@ -4093,9 +3944,6 @@ export function App() {
           title: saved.title,
           longTask: saved.longTask,
           turnDiffs: saved.turnDiffs,
-          hasMore: saved.page.hasOlder,
-          pageCursor: saved.page.nextCursor,
-          messageStart: saved.messageStart,
           totalMessages: outline?.totalMessages,
         });
         setMessages(saved.messages.map((message) => ({ ...message })));
@@ -4547,6 +4395,27 @@ export function App() {
   }
 
   /** 读取文件并按路径缓存，重复打开时直接命中缓存。 */
+  /**
+   * 工作区文件统一走结构化预览：文本、Markdown、JSON、CSV、图片、音视频、PDF、HTML
+   * 都由共享预览组件按类型渲染，工作台的“文件”标签不再只显示纯文本。
+   */
+  async function loadWorkspacePreview(root: string, target: string): Promise<PanelFile> {
+    try {
+      const preview = await window.piApi.filePreview(root, target);
+      const path = preview.path || target;
+      return {
+        path,
+        size: preview.size,
+        binary: preview.kind === 'binary',
+        text: preview.text || '',
+        preview: { ...preview, path },
+      };
+    } catch (error) {
+      // 预览服务拒绝（越界、无权限）时保留原有错误提示，不退化成"空文件"。
+      throw error;
+    }
+  }
+
   async function loadFileToTab(
     target: string,
     accessSessionId?: string,
@@ -4561,11 +4430,11 @@ export function App() {
     }
     setFileBusy(true);
     try {
-      const content = source === 'attachment'
+      const content: PanelFile = source === 'attachment'
         ? await window.piApi.attachmentFile({ path: target })
         : source === 'diff'
           ? await window.piApi.turnDiffAbsoluteFile({ sessionId: activeSessionId!, path: target })
-          : await window.piApi.file(root!, target);
+          : await loadWorkspacePreview(root!, target);
       const cacheKey = source === 'workspace'
         ? target
         : `${source}:${activeSessionId || 'draft'}:${target}`;
@@ -4779,6 +4648,17 @@ export function App() {
     else transcriptTurns.push({ kind: 'assistant', messages: [message] });
   }
   const lastAssistantTurnIndex = transcriptTurns.reduce((last, turn, index) => turn.kind === 'assistant' ? index : last, -1);
+  /** 每条 turn 之后最近的一条用户消息时间戳：turn diff 只可能落在它之前。 */
+  const nextUserTimestamps: number[] = new Array<number>(transcriptTurns.length).fill(Number.POSITIVE_INFINITY);
+  {
+    let nextUser = Number.POSITIVE_INFINITY;
+    for (let index = transcriptTurns.length - 1; index >= 0; index -= 1) {
+      nextUserTimestamps[index] = nextUser;
+      const turn = transcriptTurns[index];
+      const timestamp = turn.kind === 'user' ? turn.message.timestamp : undefined;
+      if (typeof timestamp === 'number' && Number.isFinite(timestamp)) nextUser = timestamp;
+    }
+  }
   // Every request trace goes to its own answer, to the unanswered message it served, or to the live tail.
   const requestPlacement = placeRequestTraces({ traces: requestTraces, turns: transcriptTurns, turnActive });
   const pendingAssistantVisible = transcriptTurns.at(-1)?.kind !== 'assistant'
@@ -5090,12 +4970,21 @@ export function App() {
     if (!file) return fileBusy
       ? <div className="panel-empty" role="status" aria-label="正在读取文件"><LoaderCircle className="spin" /><strong>正在读取文件</strong></div>
       : <div className="panel-empty"><FileText /><strong>在左侧选择文件</strong></div>;
-    const wrapLines = /\.(?:txt|log)$/i.test(file.path);
+    const preview: FilePreviewResult = file.preview ?? {
+      path: file.path,
+      name: file.path.split('/').pop() || file.path,
+      size: file.size,
+      mimeType: '',
+      kind: file.binary ? 'binary' : 'text',
+      text: file.text,
+    };
+    // 文件标签复用共享预览组件：Markdown/HTML 可切换渲染与源码，PDF 走内置阅读器。
     return <div className="panel-file-preview">
-      <div className="file-toolbar">
-        <span className="path-label" title={file.path}>{file.path}</span>
-        <small>{formatFileSize(file.size)}</small>
-        <div className="file-actions" ref={fileActionsRef}>
+      <FilePreview
+        file={preview}
+        loading={fileBusy}
+        onOpenExternal={() => void openFileWith()}
+        actions={<div className="file-actions" ref={fileActionsRef}>
           <button className="icon-button" aria-label="文件操作" title="文件操作" aria-expanded={fileMenuOpen} onClick={() => void showFileActions()}><MoreHorizontal /></button>
           {fileMenuOpen && <div className="file-actions-menu" role="menu">
             <div className="file-actions-label">打开方式</div>
@@ -5105,10 +4994,8 @@ export function App() {
             <div className="file-actions-sep" />
             <button className="file-action" role="menuitem" onClick={() => void revealCurrentFile()}><FolderOpen /><span>显示文件位置</span></button>
           </div>}
-        </div>
-      </div>
-      {file.binary ? <div className="file-empty"><FileText /><strong>无法预览此文件</strong></div> : <pre className={`file-code ${wrapLines ? 'is-wrapped' : ''}`}><code>{file.text.split('\n').map((line, index) => <span className="code-line" key={index}><span className="line-number" aria-hidden="true">{index + 1}</span><span>{line || ' '}</span></span>)}</code></pre>}
-      {fileBusy && <div className="file-loading" role="status"><LoaderCircle className="spin" />正在读取文件…</div>}
+        </div>}
+      />
     </div>;
   }
 
@@ -5478,7 +5365,6 @@ export function App() {
             if (!event.deltaY) return;
             if (nestedScrollableConsumesWheel(event.target, event.currentTarget, event.deltaY)) return;
             markUserScrollIntent();
-            historyUserScrollRef.current = true;
             if (shouldReleaseFollowOnWheel({ deltaX: event.deltaX, deltaY: event.deltaY, nestedScrollable: false })) {
               pauseTranscriptFollow();
             } else if (event.deltaY > 0 && isNearBottom(event.currentTarget)) {
@@ -5487,12 +5373,10 @@ export function App() {
           }}
           onTouchMove={() => {
             markUserScrollIntent();
-            historyUserScrollRef.current = true;
             pauseTranscriptFollow();
           }}
           onPointerDown={() => {
             markUserScrollIntent();
-            historyUserScrollRef.current = true;
             pauseTranscriptFollow();
           }}
           onPointerMove={event => {
@@ -5501,11 +5385,9 @@ export function App() {
           onKeyDown={event => {
             if (event.key === 'PageUp' || event.key === 'ArrowUp' || event.key === 'Home') {
               markUserScrollIntent();
-              historyUserScrollRef.current = true;
               pauseTranscriptFollow();
             } else if (event.key === 'PageDown' || event.key === 'ArrowDown' || event.key === 'End') {
               markUserScrollIntent();
-              historyUserScrollRef.current = true;
             }
           }}
           onScroll={handleTranscriptScroll}
@@ -5513,7 +5395,6 @@ export function App() {
           <div className="chat-column" ref={chatContentRef}>
             {messages.length > 0 && (
               <div className="messages">
-                {historyLoading && <div className="history-loading" role="status" aria-live="polite" aria-label="正在加载更早消息"><LoaderCircle className="spin" /></div>}
                 {transcriptTurns.map((turn, index) => turn.kind === 'user'
                   ? <Fragment key={`user-${turn.message.sourceIndex ?? turn.message.timestamp ?? index}`}>
                     <ChatMessageView
@@ -5526,7 +5407,7 @@ export function App() {
                     {requestPlacement.unansweredByUserTurn.has(index) && <AssistantTurnView messages={[]} toolResults={toolResultMap} requestTraces={requestPlacement.unansweredByUserTurn.get(index)} cwd={session?.cwd} busy={false} turnError={NO_ANSWER_TEXT} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={false} />}
                   </Fragment>
                   : <AssistantTurnView key={`assistant-${turn.messages[0]?.sourceIndex ?? turn.messages[0]?.timestamp ?? index}`} id={turn.messages[0]?.sourceIndex !== undefined ? `chat-assistant-turn-${turn.messages[0].sourceIndex}` : undefined} messages={turn.messages} toolResults={toolResultMap} requestTraces={requestPlacement.byAssistantTurn.get(index)} cwd={session?.cwd} busy={turnActive && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView}
-                    gitDiff={index === lastAssistantTurnIndex ? liveDiff ?? (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined) : (turn.messages.at(-1)?.timestamp ? session?.turnDiffs?.find((diff) => diff.at === turn.messages.at(-1)?.timestamp) : undefined)}
+                    gitDiff={index === lastAssistantTurnIndex && liveDiff ? liveDiff : findTurnDiff(session?.turnDiffs, { from: turn.messages.at(-1)?.timestamp, until: nextUserTimestamps[index] })}
                     onOpenDiff={handleOpenChanges} onOpenFile={handleOpenFile} />)}
                 {pendingAssistantVisible && (
                   <AssistantTurnView
@@ -5636,14 +5517,14 @@ export function App() {
                     aria-current={index === outlineActive ? 'location' : undefined}
                     title={item.text.slice(0, 100)}
                     onFocus={() => setOutlineHover(index)}
-                    onClick={() => void jumpToOutline(index)}
+                    onClick={() => jumpToOutline(index)}
                   ><span className="outline-line" /></button>
                   {outlineHover === index && <button
                     type="button"
                     className="outline-preview"
                     tabIndex={-1}
                     aria-label={`跳转到第 ${index + 1} 条提问：${item.text.slice(0, 100)}`}
-                    onClick={() => void jumpToOutline(index)}
+                    onClick={() => jumpToOutline(index)}
                   >
                     <span className="outline-preview-role">你 · {item.timestamp ? new Date(item.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}<span>{index + 1} / {outlineItems.length}</span></span>
                     <span className="outline-preview-text">{item.text}</span>
@@ -5772,7 +5653,7 @@ export function App() {
                   <button type="button" className="composer-attachment-remove" aria-label={`移除 ${attachment.name}`} onClick={(event) => { event.stopPropagation(); removeComposerAttachment(attachment.id); }} onKeyDown={(event) => event.stopPropagation()}><X /></button>
                 </div>)}
             </div>}
-            <div className={`composer-input ${composing ? 'is-composing' : ''}`}>
+            <div className="composer-input">
               <div className="composer-highlight" ref={composerHighlightRef} aria-hidden="true">
                 {composerSegments.map((segment, index) => segment.kind === 'text'
                   ? <span key={index}>{segment.text}</span>
@@ -5841,7 +5722,7 @@ export function App() {
               aria-label="发送给 Pi 的消息"
               aria-describedby={isNewConversation && !workspace ? 'workspace-selection-hint' : undefined}
               spellCheck={false}
-              className={`${queuedPrompts.length > 0 ? 'has-queued' : ''} ${composing ? 'is-composing' : ''}`.trim() || undefined}
+              className={queuedPrompts.length > 0 ? 'has-queued' : undefined}
               aria-expanded={Boolean(composerMenu)}
               placeholder={compaction.active
                 ? '正在压缩上下文，完成后自动继续…'
@@ -5860,8 +5741,6 @@ export function App() {
                   composerHighlightRef.current.scrollLeft = event.currentTarget.scrollLeft;
                 }
               }}
-              onCompositionStart={() => setComposing(true)}
-              onCompositionEnd={() => setComposing(false)}
             />
             </div>
             <div className="composer-bar">
@@ -6357,6 +6236,8 @@ export function App() {
                 <SkillHub
                   workspace={workspace}
                   workspaces={workspaces}
+                  userSkillsPath={settingsData.skillsPath}
+                  sharedSkillsPath={settingsData.agentsSkillsPath}
                   onInstalled={(result) => {
                     acceptRuntimeSnapshot(
                       result.settings as SettingsSnapshot,

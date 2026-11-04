@@ -1,5 +1,5 @@
 /**
- * Focused browser QA for transcript pagination and long-paste attachments.
+ * Focused browser QA for the one-pass transcript load and long-paste attachments.
  *
  * Run the Vite server first:
  *   pnpm run web
@@ -63,22 +63,14 @@ await page.addInitScript(() => {
   window.__savedPastes = [];
   window.__openedFiles = [];
 
-  const historyPayload = (limit, cursor, untilSourceIndex) => {
-    const end = cursor ? Number(cursor.replace('cursor-', '')) : totalMessages;
-    let start = Math.max(0, end - limit);
-    // 大纲跳转按 entry id（这里的 sourceIndex）连续加载到目标为止。
-    if (typeof untilSourceIndex === 'number') {
-      const target = allMessages.findIndex(message => message.sourceIndex === untilSourceIndex);
-      if (target >= 0) start = Math.min(start, target);
-    }
+  // 消息列表不再分页：一次调用就返回整段历史。
+  const historyPayload = () => {
+    const start = 0;
     return {
       ...sessionSummary,
       model,
-      messages: allMessages.slice(start, end),
-      page: {
-        hasOlder: start > 0,
-        nextCursor: start > 0 ? `cursor-${start}` : undefined,
-      },
+      messages: allMessages,
+      page: { hasOlder: false },
       messageStart: start,
       running: false,
       requestId: '',
@@ -108,17 +100,9 @@ await page.addInitScript(() => {
     composerResources: async () => ({ commands: [], skills: [] }),
     extensionsUi: async () => ({ items: [], errors: [], syncedAt: Date.now(), apiVersion: 1 }),
     modeGet: async () => ({ available: false, mode: 'smart' }),
-    conversationPage: async ({ limit = 200, cursor, untilSourceIndex } = {}) => {
-      window.__historyCalls.push({
-        limit,
-        cursor,
-        ...(untilSourceIndex === undefined ? {} : { untilSourceIndex }),
-      });
-      const payload = historyPayload(limit, cursor, untilSourceIndex);
-      if (!cursor && limit <= 200 && untilSourceIndex === undefined) return payload;
-      return new Promise(resolve => {
-        window.__resolveHistory = () => resolve(payload);
-      });
+    conversationPage: async ({ limit } = {}) => {
+      window.__historyCalls.push({ limit });
+      return historyPayload();
     },
     conversationOutline: async id => {
       window.__outlineCalls += 1;
@@ -217,20 +201,18 @@ try {
     await page.waitForFunction(() => window.__historyCalls.length === 1 && window.__outlineCalls === 1);
   }
 
-  // 内容窗口只取最近 200 条，右侧仍覆盖全部 225 个提问；最早提问可直接跨页跳转。
+  // 整段历史一次性载入：225 个提问全部在 DOM 里，大纲刻度覆盖首尾。
   await openHistorySession();
-  assert.equal(await page.locator('.message.user').count(), 100, 'content should stay in the 200-message window');
+  assert.equal(await page.locator('.message.user').count(), 225, 'the whole transcript is loaded at open');
+  assert.equal(await page.locator('.history-loading').count(), 0, 'no incremental loading placeholder');
   assert.equal(await page.locator('.outline-tick').count(), 12, 'outline should remain visually bounded');
   assert.equal(await page.locator('.outline-tick').first().getAttribute('aria-label'), '跳转到第 1 条提问');
   assert.equal(await page.locator('.outline-tick').last().getAttribute('aria-label'), '跳转到第 225 条提问');
+  await assertOutlineFits();
+  await page.screenshot({ path: `${output}outline-compact.png`, animations: 'disabled' });
+
+  // 点第一条刻度直接跳过去，不再触发任何历史请求。
   await page.locator('.outline-tick').first().click();
-  await page.waitForFunction(() => window.__historyCalls.length === 2);
-  assert.equal(
-    await page.evaluate(() => window.__historyCalls.at(-1).untilSourceIndex),
-    0,
-    'jump should ask for the target entry id instead of guessing a message count',
-  );
-  await page.evaluate(() => window.__resolveHistory());
   await page.locator('#chat-turn-0').waitFor();
   await page.waitForFunction(() => {
     const container = document.querySelector('.chat-scroll');
@@ -240,51 +222,14 @@ try {
     const targetRect = target.getBoundingClientRect();
     return targetRect.top >= containerRect.top - 1 && targetRect.top <= containerRect.top + 40;
   });
-  assert.equal(await page.locator('.message.user').count(), 225);
-  await page.screenshot({ path: `${output}outline-cross-page-jump.png`, animations: 'disabled' });
+  assert.equal(await page.evaluate(() => window.__historyCalls.length), 1, 'the jump reuses the loaded transcript');
+  await page.screenshot({ path: `${output}outline-jump.png`, animations: 'disabled' });
 
-  // 重新载入模拟，继续验证独立的历史向上分页。
-  await page.reload();
-  await page.locator('.chat-scroll').waitFor();
-  await page.waitForFunction(() => window.__historyCalls.length >= 1 && window.__outlineCalls >= 1);
-  assert.equal(await page.evaluate(() => window.__historyCalls.length), 1);
-  await assertOutlineFits();
-  await page.screenshot({ path: `${output}outline-compact.png`, animations: 'disabled' });
-
-  assert.equal(await page.getByText('加载更多', { exact: true }).count(), 0);
-  await scrollTranscript(100);
-  await page.waitForFunction(() => window.__historyCalls.length === 2);
-  await page.locator('.history-loading').waitFor();
-  assert.equal((await page.locator('.history-loading').innerText()).trim(), '');
-
+  // 顶部滚动不再请求历史：没有任何待加载的更早内容。
+  const historyCallsBeforeScroll = await page.evaluate(() => window.__historyCalls.length);
   await scrollTranscript(0);
-  await scrollTranscript(0);
-  await page.waitForTimeout(80);
-  assert.equal(await page.evaluate(() => window.__historyCalls.length), 2, 'in-flight top scrolling must not request twice');
-  await page.screenshot({ path: `${output}history-loading.png`, animations: 'disabled' });
-
-  await page.evaluate(() => window.__resolveHistory());
-  await page.locator('.history-loading').waitFor({ state: 'detached' });
-  await scrollTranscript(0);
-  await page.waitForTimeout(80);
-  assert.equal(await page.evaluate(() => window.__historyCalls.length), 2, 'disarmed top must not request again');
-
-  await scrollTranscript(600);
-  await scrollTranscript(100);
-  await page.waitForFunction(() => window.__historyCalls.length === 3);
-  // 第二轮仍按游标取前面 200 条，直到第三条页面覆盖剩余 50 条。
-  assert.deepEqual(
-    await page.evaluate(() => window.__historyCalls.at(-1)),
-    { limit: 200, cursor: 'cursor-50' },
-  );
-  await assertOutlineFits();
-  await page.evaluate(() => window.__resolveHistory());
-  await page.locator('.history-loading').waitFor({ state: 'detached' });
-  await assertOutlineFits();
-  await scrollTranscript(0);
-  await scrollTranscript(0);
-  await page.waitForTimeout(80);
-  assert.equal(await page.evaluate(() => window.__historyCalls.length), 3, 'finished history must stay settled at the top');
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => window.__historyCalls.length), historyCallsBeforeScroll);
 
   const composer = page.getByRole('textbox', { name: '发送给 Pi 的消息' });
   await composer.fill('typed-');
@@ -314,7 +259,7 @@ try {
   }
 
   assert.deepEqual(errors, []);
-  console.log('PASS: the full outline can jump across the 200-message window, history auto-loads once near the top, and oversized pasted batches stay isolated.');
+  console.log('PASS: the transcript loads in one pass, every outline tick jumps to its turn, and oversized pasted batches stay isolated.');
 } catch (error) {
   await page.screenshot({ path: `${output}failure.png`, animations: 'disabled' });
   throw error;

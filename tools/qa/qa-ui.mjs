@@ -37,7 +37,14 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 920 }, dev
 page.setDefaultTimeout(10000);
 // 收集页面未捕获异常，最后断言为空；避免“截图看着正常、控制台其实报错”。
 const errors = [];
-page.on('pageerror', (error) => errors.push(error.stack || error.message));
+// Chromium 内置 PDF 阅读器在 data: 文档里读 localStorage 会抛 SecurityError，
+// 那是浏览器自带页面的日志，与应用无关，单独放行。
+const IGNORED_PAGE_ERRORS = [/SecurityError: Failed to read the 'localStorage' property from 'Window'/];
+page.on('pageerror', (error) => {
+  const message = error.stack || error.message;
+  if (IGNORED_PAGE_ERRORS.some((pattern) => pattern.test(message))) return;
+  errors.push(message);
+});
 
 // ---------------------------------------------------------------------------
 // 2. 注入 PiAPI mock
@@ -293,6 +300,20 @@ await page.addInitScript(() => {
     'config.json': {
       text: '{"name":"code-review","version":"1.0.0","checks":["types","tests","errors"],"enabled":true}',
       mimeType: 'application/json',
+    },
+    'package.json': {
+      text: '{\n  "name": "pi-studio",\n  "version": "0.0.10",\n  "private": true\n}',
+      mimeType: 'application/json',
+    },
+    // HTML 预览用空 sandbox 渲染，脚本不执行。
+    'guide.html': {
+      text: '<h1>静态说明</h1><p>只渲染结构，不执行脚本。</p><script>window.bad = true</script>',
+      mimeType: 'text/html',
+    },
+    // 工作台文件预览：Markdown 同时提供渲染与源码两种查看方式。
+    'README.md': {
+      text: '# Pi Studio\n\n工作区文件预览。\n\n- Markdown 渲染\n- 源码切换\n',
+      mimeType: 'text/markdown',
     },
     'checks.csv': {
       text: '检查项,状态,负责人\n边界条件,通过,Lin\n错误处理,复核,Ada\n测试覆盖,通过,Mio',
@@ -1757,6 +1778,8 @@ await page.addInitScript(() => {
         ]
         : path ? [] : [
           { name: 'src', path: 'src', type: 'directory', size: 0 },
+          { name: 'README.md', path: 'README.md', type: 'file', size: 1800 },
+          { name: 'guide.html', path: 'guide.html', type: 'file', size: 420 },
           { name: 'package.json', path: 'package.json', type: 'file', size: 1397 },
           { name: 'a-long-filename-for-checking-file-list-truncation.tsx', path: 'long.tsx', type: 'file', size: 3800 },
         ],
@@ -1772,12 +1795,14 @@ await page.addInitScript(() => {
       const fixture = skillPreviewFiles[requestedPath];
       const name = requestedPath.split('/').pop();
       if (requestedPath === 'manual.pdf') {
+        // Chromium 内置 PDF 阅读器：渲染用 data URL，不再回退成“不支持”。
         return {
           path: requestedPath,
           name,
           size: 40960,
           mimeType: 'application/pdf',
-          kind: 'binary',
+          kind: 'pdf',
+          dataUrl: 'data:application/pdf;base64,JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCAzMDAgMjAwXSAvUmVzb3VyY2VzIDw8IC9Gb250IDw8IC9GMSA1IDAgUiA+PiA+PiAvQ29udGVudHMgNCAwIFIgPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA0NyA+PgpzdHJlYW0KQlQgL0YxIDE4IFRmIDMwIDEzMCBUZCAoUGkgU3R1ZGlvIFBERiBRQSkgVGogRVQKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8IC9UeXBlIC9Gb250IC9TdWJ0eXBlIC9UeXBlMSAvQmFzZUZvbnQgL0hlbHZldGljYSA+PgplbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTggMDAwMDAgbiAKMDAwMDAwMDExNSAwMDAwMCBuIAowMDAwMDAwMjQxIDAwMDAwIG4gCjAwMDAwMDAzMzggMDAwMDAgbiAKdHJhaWxlcgo8PCAvU2l6ZSA2IC9Sb290IDEgMCBSID4+CnN0YXJ0eHJlZgo0MDgKJSVFT0YK',
         };
       }
       if (!fixture) throw new Error('QA 未提供这个文件');
@@ -2682,8 +2707,31 @@ try {
   await page.keyboard.press('Escape');
   await panelToolMenu.waitFor({ state: 'detached' });
   await capture('05-files');
+  // 工作区文件也走共享预览：Markdown 默认渲染，可切到源码；JSON 直接高亮。
+  await page.getByRole('button', { name: 'README.md', exact: false }).click();
+  await page.locator('.panel-file-preview .file-preview-markdown h1').waitFor();
+  assert.equal(await page.locator('.panel-file-preview .file-preview-format').innerText(), 'MD');
+  await capture('06-file-preview-markdown');
+  await page.getByRole('button', { name: '查看文件源码', exact: true }).click();
+  await page.locator('.panel-file-preview .file-preview-code').getByText(/^# /).first().waitFor();
+  await capture('06-file-preview-markdown-source');
+  await page.getByRole('button', { name: '预览渲染结果', exact: true }).click();
+  await page.locator('.panel-file-preview .file-preview-markdown h1').waitFor();
+  // 打开文件会切到文件标签，回文件树再点下一个文件。
+  await page.locator('.panel-tab').filter({ hasText: '文件' }).first().click();
+  // HTML 以只读沙箱渲染：没有 allow-scripts，脚本不会执行。
+  await page.getByRole('button', { name: 'guide.html', exact: false }).click();
+  const htmlFrame = page.locator('.panel-file-preview iframe.file-preview-frame');
+  await htmlFrame.waitFor();
+  assert.equal(await htmlFrame.getAttribute('sandbox'), '');
+  assert.match(await htmlFrame.getAttribute('srcdoc'), /静态说明/);
+  assert.equal(await page.evaluate(() => window.bad === undefined), true, 'HTML 预览不执行脚本');
+  // 立刻关掉 HTML 标签，保持后面"窄边栏标签"用例的标签数量不变。
+  await page.getByRole('button', { name: '关闭 guide.html', exact: true }).click();
+  await page.locator('.panel-tab').filter({ hasText: '文件' }).first().click();
   await page.getByRole('button', { name: 'package.json', exact: false }).click();
-  await page.locator('.code-line').first().waitFor();
+  await page.locator('.panel-file-preview .file-preview-code').first().waitFor();
+  assert.equal(await page.locator('.panel-file-preview .file-preview-format').innerText(), 'JSON');
   await capture('06-file-preview');
 
   // 右栏缩窄后，标签仍保持当前项可见；被裁切的一侧用渐隐提示横向溢出。
@@ -2738,6 +2786,7 @@ try {
   await page.mouse.move(narrowResizeBox.x + narrowResizeBox.width / 2 - (originalPanelWidth - 320), narrowResizeBox.y + 40);
   await page.mouse.up();
   // 关闭最后一个工具标签后回到入口，边栏不应一起消失。
+  await page.getByRole('button', { name: '关闭 README.md', exact: true }).click();
   await page.getByRole('button', { name: '关闭 package.json', exact: true }).click();
   await page.getByRole('button', { name: '关闭 文件', exact: true }).click();
   assert.equal(await page.locator('.file-panel.is-open').count(), 1);
@@ -3541,6 +3590,18 @@ try {
   const skillPreview = page.locator('.skill-install-dialog');
   await skillPreview.getByRole('button', { name: '更新技能', exact: true }).waitFor();
   await page.waitForFunction(() => window.__qaPreparedSkills.size === 1);
+  // 安装范围有三个落点：Studio 应用目录、Agent 共享目录、项目目录。
+  const scopeButtons = skillPreview.locator('.skill-install-scope-options button');
+  assert.deepEqual(await scopeButtons.allInnerTexts(), ['全局', '共享', '项目']);
+  await skillPreview.getByRole('button', { name: '共享', exact: true }).click();
+  await page.waitForFunction(() => [...document.querySelectorAll('.skill-install-scope-options button')]
+    .some((node) => node.textContent === '共享' && node.getAttribute('aria-pressed') === 'true'));
+  assert.match(
+    await skillPreview.locator('.skill-install-scope-path').innerText(),
+    /\.agents\/skills$/,
+    '共享范围要显示 ~/.agents/skills',
+  );
+  await capture('22-skill-preview-shared');
   await skillPreview.getByRole('button', { name: '项目', exact: true }).click();
   await skillPreview.getByRole('button', { name: '项目技能工作区', exact: true }).waitFor();
   await capture('22-skill-preview');
@@ -3611,16 +3672,21 @@ try {
   await capture('23-skill-file-preview-compact');
   await page.setViewportSize({ width: 1440, height: 920 });
 
+  // PDF 直接用内置阅读器渲染，不再提示“暂不支持”。
   await skillDetail.getByRole('button', { name: /manual\.pdf/ }).click();
-  await skillDetail.getByText('暂不支持内嵌预览', { exact: false }).waitFor();
-  await skillDetail.getByRole('button', { name: '用系统应用打开', exact: true }).waitFor();
-  assert.equal(await skillDetail.locator('.file-preview-unsupported p').count(), 0);
+  await skillDetail.locator('iframe.file-preview-frame').waitFor();
+  assert.equal(await skillDetail.locator('.file-preview-format').innerText(), 'PDF');
+  assert.match(await skillDetail.locator('iframe.file-preview-frame').getAttribute('src'), /^data:application\/pdf;base64,/);
+  // 内置阅读器在独立 frame 里渲染，等它起来再截图。
+  await page.waitForFunction(() => [...document.querySelectorAll('iframe.file-preview-frame')]
+    .every((node) => node.getBoundingClientRect().height >= 200));
+  await page.waitForTimeout(1200);
   const filePreviewOverflow = await skillDetail.evaluate((element) => ({
     clientWidth: element.clientWidth,
     scrollWidth: element.scrollWidth,
   }));
   assert.ok(filePreviewOverflow.scrollWidth <= filePreviewOverflow.clientWidth + 2);
-  await capture('23-skill-file-preview-fallback');
+  await capture('23-skill-file-preview-pdf');
 
   await skillDetail.getByRole('button', { name: '关闭', exact: true }).click();
   await skillDetail.waitFor({ state: 'detached' });

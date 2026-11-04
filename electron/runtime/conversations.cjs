@@ -379,15 +379,11 @@ function entryIsHidden(entryId, ranges) {
 /**
  * 一次历史扫描的停止条件。
  *
- * 普通分页只按消息条数停；指定了目标 entry id 时，必须先把它收进窗口，
- * 否则调用方会拿到一个“不含目标”的窗口而误以为已经加载到目标。entry id 与消息
- * 条数不是同一口径（隐藏条目、摘要条目、一条 entry 多条消息），两者不能互相估算。
- *
  * @returns {'complete' | 'limit' | 'continue' | 'exhausted'}
  */
-function scanStopReason({ count, messageLimit, scanLimit, hasTarget, reachedTarget, hasMoreEntries }) {
-  if (count >= scanLimit) return 'limit';
-  if (count >= messageLimit && (!hasTarget || reachedTarget)) return 'complete';
+function scanStopReason({ count, messageLimit, hasMoreEntries }) {
+  // 扫描上限等于页大小：凑满一页就先停下，剩下的交给游标。
+  if (count >= messageLimit) return 'limit';
   return hasMoreEntries ? 'continue' : 'exhausted';
 }
 
@@ -407,20 +403,13 @@ async function scanEntries(conversation, options = {}) {
   if (decoded && decoded.order !== order) {
     throw new Error('历史分页方向与游标不一致');
   }
-  // `untilSourceIndex` 是一个 entry id：调用方要“加载到这条提问为止”。entry id 与
-  // 消息条数不是同一口径（隐藏条目、摘要条目、一条 entry 多条消息），所以按 id 继续
-  // 扫描，而不是用条数估算；上限仍受 MAX_PAGE_SIZE 约束。
-  const untilSourceIndex = Number(options.untilSourceIndex);
-  const hasTarget = Number.isSafeInteger(untilSourceIndex) && untilSourceIndex >= 0;
-  const scanLimit = hasTarget ? MAX_PAGE_SIZE : messageLimit;
-  let reachedTarget = !hasTarget;
   let cursor = decoded?.upstream;
   let skip = Math.max(0, Number(decoded?.skip) || 0);
   let nextCursor;
   let exhausted = false;
   let count = 0;
 
-  while (count < scanLimit && !(count >= messageLimit && reachedTarget)) {
+  while (count < messageLimit) {
     const page = await conversation.entries(
       { order },
       ENTRY_SCAN_PAGE_SIZE,
@@ -442,33 +431,15 @@ async function scanEntries(conversation, options = {}) {
       const available = entryMessages.slice(skip);
       consumedInPage += skip;
       skip = 0;
-      const take = available.slice(0, Math.max(0, scanLimit - count));
+      const take = available.slice(0, Math.max(0, messageLimit - count));
       if (take.length > 0) groups.push(take);
       count += take.length;
       consumedInPage += take.length;
-      if (hasTarget && !reachedTarget
-        && take.some((message) => typeof message.sourceIndex === 'number' && message.sourceIndex <= untilSourceIndex)) {
-        reachedTarget = true;
-      }
-      if (scanStopReason({
-        count,
-        messageLimit,
-        scanLimit,
-        hasTarget,
-        reachedTarget,
-        hasMoreEntries: true,
-      }) !== 'continue') break;
+      if (scanStopReason({ count, messageLimit, hasMoreEntries: true }) !== 'continue') break;
     }
 
     const pageHasUnconsumedMessages = consumedInPage < pageMessages;
-    const stop = scanStopReason({
-      count,
-      messageLimit,
-      scanLimit,
-      hasTarget,
-      reachedTarget,
-      hasMoreEntries: Boolean(page.next),
-    });
+    const stop = scanStopReason({ count, messageLimit, hasMoreEntries: Boolean(page.next) });
     if (stop === 'complete' || stop === 'limit') {
       if (pageHasUnconsumedMessages || page.next) {
         nextCursor = encodeCursor({
@@ -493,11 +464,9 @@ async function scanEntries(conversation, options = {}) {
   const display = order === 'ascending'
     ? groups.flat()
     : [...groups].reverse().flat();
-  const messages = display.slice(0, scanLimit);
+  const messages = display.slice(0, messageLimit);
   return {
     messages,
-    // 目标在扫描上限内仍未出现时，调用方需要知道“还没到那条”。
-    reachedTarget: reachedTarget || !hasTarget,
     hasOlder: order === 'descending' && Boolean(nextCursor) && !exhausted,
     nextCursor: order === 'descending' ? nextCursor : undefined,
   };
@@ -631,7 +600,6 @@ async function conversationPage(id, options = {}) {
     order: 'descending',
     messageLimit: options.limit,
     cursor: options.cursor,
-    untilSourceIndex: options.untilSourceIndex,
   });
   const agent = await conversation.agent((await getDurableRuntime()).context);
   const key = conversationKey(row);
@@ -655,7 +623,6 @@ async function conversationPage(id, options = {}) {
     page: {
       hasOlder: page.hasOlder,
       nextCursor: page.nextCursor,
-      reachedTarget: page.reachedTarget,
     },
     messageStart: page.messages[0]?.sourceIndex ?? 0,
   });
@@ -1808,9 +1775,13 @@ async function finishRunDiff(entry, conversation, emit) {
   try {
     const diff = await endTurn(token);
     if (!diff) return;
+    // at 必须与本轮最后一条助手消息的 timestamp 一致：渲染层按它匹配历史
+    // 轮次。用结束时刻会让已保存的 diff 永远匹配不上，卡片只能退回工具统计。
+    const at = Number.isFinite(entry.lastAssistantAt) ? entry.lastAssistantAt : Date.now();
+    entry.lastAssistantAt = undefined;
     const value = {
       ...diff,
-      at: Date.now(),
+      at,
     };
     saveTurnDiff(conversationKey(conversation), value);
     await emit({
@@ -1846,6 +1817,9 @@ async function applyView(view, entry, conversation, emit) {
     if (assistant) {
       // 对应 1.4.0 的 `message_end`：流式消息落定成正式消息。
       entry.partial = undefined;
+      // 记住本轮最后一条助手消息的时间戳：turn diff 用它作为 at，渲染层才能
+      // 用同一条消息的 timestamp 找回历史轮次的 diff。
+      if (Number.isFinite(assistant.timestamp)) entry.lastAssistantAt = assistant.timestamp;
       await emit({
         type: 'assistant.completed',
         conversationId: key,

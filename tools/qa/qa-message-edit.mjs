@@ -31,7 +31,7 @@ try {
       const React = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react.js')).default;
       const { createRoot } = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react-dom_client.js')).default;
       const { ChatMessageView } = await import('/src/features/conversation/ChatMessage.tsx');
-      const { splitComposerText } = await import('/src/lib/references.ts');
+      const { splitComposerText } = await import('/src/features/conversation/references.ts');
       const prompt = '/goal @"00 Inbox/"';
       let resolveEdit;
       const editPromise = new Promise((resolve) => { resolveEdit = resolve; });
@@ -92,13 +92,45 @@ try {
       borderWidth: style.borderWidth,
       boxShadow: style.boxShadow,
       prefixVisibility: prefix ? getComputedStyle(prefix).visibility : '',
+      color: style.color,
     };
   });
   assert.equal(tokenStyle.borderWidth, '0px');
   assert.equal(tokenStyle.boxShadow, 'none');
   assert.equal(tokenStyle.background, 'rgba(0, 0, 0, 0)');
   assert.equal(tokenStyle.prefixVisibility, 'hidden');
+  // 输入法组合期间高亮层必须继续显示：整层隐藏会让 token 的颜色每个词闪一下。
+  const composingStyle = await page.locator('.composer-input').evaluate((node) => {
+    node.classList.add('is-composing');
+    const token = node.querySelector('.composer-token');
+    const highlight = node.querySelector('.composer-highlight');
+    const result = {
+      visibility: getComputedStyle(highlight).visibility,
+      color: getComputedStyle(token).color,
+    };
+    node.classList.remove('is-composing');
+    return result;
+  });
+  assert.equal(composingStyle.visibility, 'visible', 'the highlight layer stays visible while composing');
+  assert.equal(composingStyle.color, tokenStyle.color, 'tokens keep their colour while composing');
   await page.screenshot({ path: output + 'composer-light.png', animations: 'disabled' });
+
+  // 引用徽章要贴着正文基线，而不是浮在文字上方。
+  const chipAlignment = await page.locator('.message.user .user-text').evaluate((root) => {
+    const chip = root.querySelector('.ref-chip');
+    const rect = chip.getBoundingClientRect();
+    // 零高的 inline-block 底边正好落在基线上，用来量出正文的基线位置。
+    const probe = document.createElement('span');
+    probe.style.cssText = 'display:inline-block;width:0;height:0;line-height:0;vertical-align:baseline';
+    chip.after(probe);
+    const baseline = probe.getBoundingClientRect().bottom;
+    probe.remove();
+    return { offset: (rect.top + rect.height / 2) - baseline, height: rect.height };
+  });
+  assert.ok(
+    Math.abs(chipAlignment.offset) <= 4.5,
+    `引用徽章与正文基线对齐（偏差 ${chipAlignment.offset.toFixed(2)}px）`,
+  );
 
   const user = page.locator('.message.user');
   await user.hover();

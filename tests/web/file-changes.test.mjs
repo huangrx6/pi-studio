@@ -22,3 +22,20 @@ test('unified diff headers are excluded but plus-prefixed source lines still cou
   const files = collectFileChanges([message([call('a','edit','a.ts')])],new Map([result('a',{patch:'--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n---value\n+++value'})]));
   assert.equal(files[0].added,1); assert.equal(files[0].removed,1);
 });
+
+test('turn diffs match by answer timestamp, and legacy end-of-run stamps fall back to the turn window', async () => {
+  const { findTurnDiff } = await import('../../web/src/features/conversation/file-changes.ts');
+  const diff = (at) => ({ at, files: [], totalAdded: 0, totalRemoved: 0 });
+
+  // 新数据：diff.at 就是本轮最后一条助手消息的 timestamp。
+  assert.equal(findTurnDiff([diff(500)], { from: 500, until: 900 })?.at, 500);
+  // 旧数据：at 比消息晚几十秒，但仍在「下一条用户消息」之前。
+  assert.equal(findTurnDiff([diff(530)], { from: 500, until: 900 })?.at, 530);
+  // 下一轮的 diff 不能挂到这一轮上。
+  assert.equal(findTurnDiff([diff(950)], { from: 500, until: 900 }), undefined);
+  // 同一窗口内取最早的一条。
+  assert.equal(findTurnDiff([diff(560), diff(520)], { from: 500, until: 900 })?.at, 520);
+  // 缺少时间戳或没有 diff 时不匹配。
+  assert.equal(findTurnDiff([diff(520)], {}), undefined);
+  assert.equal(findTurnDiff(undefined, { from: 500, until: 900 }), undefined);
+});

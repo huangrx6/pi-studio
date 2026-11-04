@@ -87,6 +87,7 @@ try {
       usage: {},
       agent: { cwd, name: 'Outline QA' },
     });
+    window.__outlineItems = outlineItems;
     window.__outlineRequests = [];
     const pageFor = ({ limit = 200, cursor, untilSourceIndex } = {}) => {
       window.__outlineRequests.push({ limit, cursor, untilSourceIndex });
@@ -153,21 +154,25 @@ try {
   await page.waitForTimeout(400);
   await page.locator('.outline-tick').first().waitFor();
 
-  const loadedBefore = await page.locator('.message.user').count();
-  assert.ok(loadedBefore < TURNS, `only the newest window is loaded at first (${loadedBefore}/${TURNS})`);
+  // 消息列表不再分页：打开会话就读完整段历史，大纲跳转不需要再补载。
+  assert.equal(await page.locator('.message.user').count(), TURNS, 'the whole transcript is loaded at open');
+  assert.equal(await page.locator('.history-loading').count(), 0, 'no incremental loading placeholder exists any more');
+  // 打开会话（含侧边栏预取）就取完整段历史，不再按窗口补页。
+  const historyRequests = await page.evaluate(() => window.__outlineRequests.length);
+  assert.ok(historyRequests >= 1 && historyRequests <= 2, `the transcript loads in one go (${historyRequests} requests)`);
 
   // The rail is a compact turn navigator: rows keep a stable, short pitch and
-  // the whole 44x28 hit area remains clickable.
+  // the whole 44px wide hit area remains clickable.
   const tickGeometry = await page.locator('.outline-tick').evaluateAll((nodes) => nodes.map((node) => {
     const box = node.getBoundingClientRect();
     return { top: Math.round(box.top), width: Math.round(box.width), height: Math.round(box.height) };
   }));
   const tickTops = tickGeometry.map(({ top }) => top);
   assert.deepEqual(tickTops, [...tickTops].sort((left, right) => left - right), 'ticks follow conversation order');
-  assert.ok(tickGeometry.every(({ width, height }) => width >= 44 && height >= 28), 'ticks use a full-size click target');
+  assert.ok(tickGeometry.every(({ width, height }) => width >= 44 && height >= 8 && height <= 12), `ticks keep a 10px click row: ${JSON.stringify(tickGeometry[0])}`);
   assert.ok(
-    tickTops.slice(1).every((top, index) => top - tickTops[index] === 28),
-    `ticks should use a compact 28px pitch: ${tickTops.join(', ')}`,
+    tickTops.slice(1).every((top, index) => Math.abs(top - tickTops[index] - 10) <= 1),
+    `ticks should use a compact 10px pitch: ${tickTops.join(', ')}`,
   );
 
   // Scrolling up with the wheel moves the active tick along the rail.
@@ -198,30 +203,52 @@ try {
   });
   assert.ok(target.offset >= 0 && target.offset < 120, `jumped target sits at the top of the viewport (${target.offset}px)`);
   assert.match(target.text, /第 1 个问题/);
-  const requests = await page.evaluate(() => window.__outlineRequests);
-  assert.equal(requests.some((item) => item.untilSourceIndex === 1), true, 'the jump asks for the target entry id');
   assert.equal(
-    await page.locator('.message.user').count(),
-    TURNS,
-    'the whole transcript is loaded after the jump, without dropping already seen messages',
+    await page.evaluate(() => window.__outlineRequests.length),
+    historyRequests,
+    'the jump never triggers another history request',
   );
   assert.equal(await page.locator('.outline-tick.is-active').getAttribute('aria-label'), '跳转到第 1 条提问');
 
-  // A loaded target uses native smooth scrolling rather than an instant jump.
-  await page.evaluate(() => {
-    const scroll = document.querySelector('.chat-scroll');
-    window.__outlineScrollSamples = [];
-    const startedAt = performance.now();
-    const sample = () => {
-      window.__outlineScrollSamples.push(Math.round(scroll.scrollTop));
-      if (performance.now() - startedAt < 800) requestAnimationFrame(sample);
-    };
-    requestAnimationFrame(sample);
-  });
+  // 直接点第一条刻度的细线（不经过预览卡）同样要跳到目标。
   await page.locator('.outline-tick').last().click();
-  await page.waitForTimeout(850);
-  const scrollSamples = await page.evaluate(() => window.__outlineScrollSamples);
-  assert.ok(new Set(scrollSamples).size >= 4, `outline jump should animate through intermediate positions: ${scrollSamples.join(', ')}`);
+  await page.waitForTimeout(400);
+  await page.locator('.outline-tick').first().click();
+  await page.waitForTimeout(700);
+  const railJump = await page.evaluate(() => {
+    const node = document.getElementById('chat-turn-1');
+    const view = document.querySelector('.chat-scroll').getBoundingClientRect();
+    return node ? Math.round(node.getBoundingClientRect().top - view.top) : -1;
+  });
+  assert.ok(railJump >= 0 && railJump < 120, `clicking the rail itself also lands on the target (${railJump}px)`);
+
+  // 每一个刻度都必须真的跳到自己的提问：这是用户直接反馈的问题。
+  const items = await page.evaluate(() => window.__outlineItems);
+  const tickCount = await page.locator('.outline-tick').count();
+  // 轨道只画采样后的刻度，所以按 aria-label 里的提问序号找真正的目标。
+  const tickTargets = await page.locator('.outline-tick').evaluateAll((nodes) => nodes.map((node) => (
+    Number((node.getAttribute('aria-label') || '').replace(/\D+/g, '')) - 1
+  )));
+  for (let index = 0; index < tickCount; index += 1) {
+    await page.locator('.outline-tick').nth(index).click();
+    await page.waitForTimeout(650);
+    const landed = await page.evaluate((target) => {
+      const node = document.getElementById(`chat-turn-${target.sourceIndex}`);
+      const container = document.querySelector('.chat-scroll');
+      const view = container.getBoundingClientRect();
+      return {
+        offset: node ? Math.round(node.getBoundingClientRect().top - view.top) : -1,
+        atBottom: Math.round(container.scrollTop) >= Math.round(container.scrollHeight - container.clientHeight) - 1,
+        viewport: Math.round(view.height),
+      };
+    }, items[tickTargets[index]]);
+    // 最后一条提问无法再往上滚，允许它落在视口内而不是贴顶。
+    const reachable = landed.atBottom
+      ? landed.offset >= 0 && landed.offset < landed.viewport
+      : landed.offset >= 0 && landed.offset < 140;
+    assert.ok(reachable, `tick ${index + 1} jumps to its own question (${landed.offset}px from the top)`);
+  }
+
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await page.locator('.outline-tick').nth(1).hover();
   await page.locator('.outline-preview').waitFor();
@@ -229,7 +256,7 @@ try {
   await page.screenshot({ path: `${output}jumped.png`, animations: 'disabled' });
 
   assert.deepEqual(errors, []);
-  console.log(`PASS: outline jumps by entry id through paged history and the rail follows scrolling. Screenshots: ${output}`);
+  console.log(`PASS: the whole transcript loads at open, outline ticks keep a 10px pitch, and every tick jumps to its turn. Screenshots: ${output}`);
 } finally {
   await browser.close();
 }
