@@ -145,6 +145,28 @@ function compactFooterDuration(milliseconds) {
   return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
 }
 
+/**
+ * 缓存命中率：缓存读占整段输入的比重。
+ *
+ * 输入的三个来源是「未命中 + 缓存读 + 缓存写」，所以分母用三者之和，
+ * 这样同一轮里既刷新缓存又复用缓存时也不会超过 100%。
+ */
+function cacheHitRatio(totalInput, cacheRead, cacheWrite) {
+  const total = nonNegative(totalInput);
+  // 这个来源根本没上报缓存用量时给「—」，而不是谎报 0%。
+  if (total <= 0 || nonNegative(cacheRead) + nonNegative(cacheWrite) <= 0) return undefined;
+  return Math.min(1, Math.max(0, nonNegative(cacheRead) / total));
+}
+
+function compactPercent(ratio) {
+  if (!Number.isFinite(ratio)) return { value: '—', unit: '' };
+  const percent = ratio * 100;
+  // 只在真正命中全部输入时才显示 100，避免四舍五入虚报。
+  if (percent >= 99.95) return { value: '100', unit: '%' };
+  if (percent === 0) return { value: '0', unit: '%' };
+  return { value: decimal(percent, 1), unit: '%' };
+}
+
 function compactCost(value) {
   const amount = nonNegative(value);
   if (amount === 0) return '$0';
@@ -977,6 +999,9 @@ class MetricsRuntime {
         );
         run.output = Math.max(run.output, usageDelta.output);
         run.cost = Math.max(run.cost, usageDelta.cost);
+        // 缓存读/写同样要跟上流式用量，否则缓存命中率只有等落库后才算得出来。
+        run.cacheRead = Math.max(nonNegative(run.cacheRead), usageDelta.cacheRead);
+        run.cacheWrite = Math.max(nonNegative(run.cacheWrite), usageDelta.cacheWrite);
       }
       this.markChanged(session);
     }
@@ -992,6 +1017,8 @@ class MetricsRuntime {
     );
     run.output = Math.max(run.output, usageDelta.output);
     run.cost = Math.max(run.cost, usageDelta.cost);
+    run.cacheRead = Math.max(nonNegative(run.cacheRead), nonNegative(usageDelta.cacheRead));
+    run.cacheWrite = Math.max(nonNegative(run.cacheWrite), nonNegative(usageDelta.cacheWrite));
     run.status = status;
     run.finishedAt = this.clock();
     session.running = false;
@@ -1118,8 +1145,14 @@ class MetricsRuntime {
     const inputMetric = compactCount(input);
     const outputMetric = compactCount(output);
     const costMetric = compactCost(cost);
-    const inputDetail = run && (run.cacheRead || run.cacheWrite)
-      ? `缓存读 ${compactCount(run.cacheRead)} · 写 ${compactCount(run.cacheWrite)}`
+    const cacheReadTokens = run?.cacheRead || 0;
+    const cacheWriteTokens = run?.cacheWrite || 0;
+    // 输入总量 = 未命中 + 缓存读 + 缓存写，未命中部分反推即可。
+    const uncachedTokens = Math.max(0, input - cacheReadTokens - cacheWriteTokens);
+    const hitRatio = run ? cacheHitRatio(input, cacheReadTokens, cacheWriteTokens) : undefined;
+    const hitMetric = compactPercent(hitRatio);
+    const inputDetail = run && (cacheReadTokens || cacheWriteTokens)
+      ? `未命中 ${compactCount(uncachedTokens)} · 写 ${compactCount(cacheWriteTokens)}`
       : '累计输入 token';
 
     const tasks = [...session.activeTasks.values()]
@@ -1144,6 +1177,9 @@ class MetricsRuntime {
       const itemTtft = compactDuration(item.ttftMs);
       const itemDuration = compactDuration(item.durationMs || 0);
       const completed = item.status === 'done';
+      const itemHit = (item.cacheRead || item.cacheWrite)
+        ? compactPercent(cacheHitRatio(item.input, item.cacheRead, item.cacheWrite))
+        : undefined;
       return {
         id: `recent-${index + 1}`,
         label: `${clockLabel(item.finishedAt || item.startedAt)} · ${completed ? '完成' : '失败'}`,
@@ -1152,6 +1188,7 @@ class MetricsRuntime {
           `TTFT ${itemTtft.value} ${itemTtft.unit}`,
           `耗时 ${itemDuration.value} ${itemDuration.unit}`,
           `Token ${compactCount(item.input)} / ${compactCount(item.output)}`,
+          ...(itemHit ? [`命中 ${itemHit.value}${itemHit.unit}`] : []),
           compactCost(item.cost),
         ].join(' · '),
         status: completed ? 'success' : 'error',
@@ -1203,6 +1240,16 @@ class MetricsRuntime {
           label: '成本',
           value: costMetric,
           detail: session.running ? '本轮累计' : '最近一轮',
+        },
+        {
+          id: 'cache-hit-rate',
+          label: '缓存命中率',
+          value: hitMetric.value,
+          unit: hitMetric.unit,
+          detail: run && (cacheReadTokens || cacheWriteTokens)
+            ? `缓存读 ${compactCount(cacheReadTokens)} · 写 ${compactCount(cacheWriteTokens)}`
+            : '该来源未上报缓存用量',
+          tone: hitRatio === undefined ? 'neutral' : hitRatio >= 0.5 ? 'success' : 'neutral',
         },
       ],
     }, {

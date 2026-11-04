@@ -127,6 +127,10 @@ test('uses content-free Pi telemetry and preserves the completed run', async () 
   assert.equal(metric(content, 'input-tokens').value, '125');
   assert.equal(metric(content, 'output-tokens').value, '40');
   assert.equal(metric(content, 'cost').value, '$0.002');
+  // 遥测里的缓存读 20 / 输入 125 = 16%。
+  assert.equal(metric(content, 'cache-hit-rate').value, '16');
+  assert.equal(metric(content, 'cache-hit-rate').unit, '%');
+  assert.equal(metric(content, 'input-tokens').detail, '未命中 100 · 写 5');
   assert.ok(flatten(content).some((value) => value === '本轮完成'));
   assert.ok(flatten(content).some((value) => value === '最近一轮已结束'));
 
@@ -144,6 +148,27 @@ test('uses content-free Pi telemetry and preserves the completed run', async () 
   await waitFor(() => events.length > 0);
   unsubscribe();
   assert.equal(runtime.diagnostics().dataSourceSubscriptions, 0);
+});
+
+test('a source without cache telemetry reports an unknown hit rate instead of 0%', () => {
+  const runtime = createMetricsRuntime();
+  runtime.recordConversationEvent({ type: 'run.started', conversationId: '31' });
+  runtime.recordConversationEvent({
+    type: 'usage.updated',
+    conversationId: '31',
+    payload: {
+      usage: {
+        models: {
+          'faux/faux-1': { input: 80, output: 12, cost: { total: 0.001 } },
+        },
+      },
+    },
+  });
+
+  const content = runtime.provider.read({ sessionId: '31' });
+  assert.equal(metric(content, 'cache-hit-rate').value, '—');
+  assert.equal(metric(content, 'cache-hit-rate').detail, '该来源未上报缓存用量');
+  assert.equal(metric(content, 'input-tokens').detail, '累计输入 token');
 });
 
 test('uses reference counted providers and releases every window subscription', async () => {
@@ -198,12 +223,17 @@ test('running usage updates expose tokens and cost before completion', () => {
   assert.equal(metric(live, 'input-tokens').value, '125');
   assert.equal(metric(live, 'output-tokens').value, '40');
   assert.equal(metric(live, 'cost').value, '$0.002');
+  // 缓存读 20 / 输入 125 = 16%；明细里给未命中与缓存写。
+  assert.equal(metric(live, 'cache-hit-rate').value, '16');
+  assert.equal(metric(live, 'cache-hit-rate').unit, '%');
+  assert.equal(metric(live, 'input-tokens').detail, '未命中 100 · 写 5');
 
   runtime.recordConversationEvent({ type: 'run.completed', conversationId: '21' });
   const completed = runtime.provider.read({ sessionId: '21' });
   assert.equal(metric(completed, 'input-tokens').value, '125');
   assert.equal(metric(completed, 'output-tokens').value, '40');
   assert.equal(metric(completed, 'cost').value, '$0.002');
+  assert.equal(metric(completed, 'cache-hit-rate').value, '16');
 });
 
 test('maps a public session UUID to the numeric Durable conversation ID', async () => {
