@@ -131,7 +131,7 @@
           </dl>
           <div class="status-note">
             <strong>版本说明</strong>
-            <p><code>v0.0.10</code> 同版本重建保留了清晰的会话视图入口，并收紧了右侧工作台、菜单栏任务中心、子智能体、MCP、选择器与确认框的交互层级。终端继续加载与 Terminal.app 一致的登录 shell 环境；Durable 负责会话、任务与子智能体执行，Studio 只保存自己的投影、设置、资源信任和受管目录。</p>
+            <p><code>v0.0.10</code> 的这次重建补齐了会话可靠性与日常细节：历史一次性载入不再漏掉第一条消息，回合差异按回答时间对齐所以行数完整，后台子智能体回传带上真实回答并停止多余的一轮，图片超出视觉接口限制时自动切段重发，剪贴板改用 Electron 45 的 ClipboardItem 接口，图片复制与「连图带文」复制恢复可用。图标收敛为六档尺寸与两种按钮盒子，文本选区、实时指标里的缓存命中率和文件预览中的 PDF 也都补齐了。终端继续加载与 Terminal.app 一致的登录 shell 环境；Durable 负责会话、任务与子智能体执行，Studio 只保存自己的投影、设置、资源信任和受管目录。</p>
           </div>
 
           <div class="chapter-index" aria-label="主要章节">
@@ -322,7 +322,7 @@
                 </tbody>
               </table>
             </div>
-            <p>会话历史按页加载，右侧提问大纲基于完整会话。点击尚未加载的旧提问时，Studio 会补载并定位；主内容区不会一次性渲染全部历史。</p>
+            <p>打开会话时主进程按页把整段历史读完，renderer 拿到一份完整记录：滚到最顶部就能看到第一条用户消息，大纲、搜索和跳转都作用在同一份数据上。代价是极长会话会一次性渲染全部消息，因此单页上限 2000 条、最多 64 页；子智能体 transcript 仍然只按窗口读取。</p>
             <p>模型与 thinking 可以随时切换。当前请求保持已提交配置，切换从下一请求生效；运行中不需要禁用模型选择器。</p>
             <h3 id="model-comparison">模型同题双跑</h3>
             <p>双跑从当前会话分叉两次，把完全相同的问题、引用、附件和图片提交给两个不同模型；每个分支使用独立的托管 worktree，因此运行本身不会修改原工作区。</p>
@@ -366,7 +366,7 @@
           <div class="doc-copy">
             <ul>
               <li>输入框支持图片、文本附件、<code>@</code> 文件/目录和拖放。</li>
-              <li>右侧文件面板支持目录浏览、文本预览、代码高亮、换行与最近文件缓存。</li>
+              <li>右侧文件面板支持目录浏览、文本预览、代码高亮、换行与最近文件缓存；PDF 交给 Chromium 内置阅读器渲染（单文件上限 32MB）。</li>
               <li>差异工作台按会话回合聚合 Git 变更，可以查看文件级 patch、展开全部、自动布局和跳到文件。</li>
               <li>文件预览、diff 与附件都只向 renderer 传递结构化 DTO，不暴露主进程路径对象或凭据。</li>
               <li>不在 Git 仓库或没有补丁时，Studio 会退化为只读文件预览，不伪造 diff。</li>
@@ -880,7 +880,7 @@ Pi Durable 1.5 Harness
   ▼
 Model provider</code></pre>
             </figure>
-            <p><code>electron/runtime/durable-runtime.cjs</code> 是唯一共享运行时装配点。<code>electron/ipc/sessions.cjs</code> 把 Durable 的提交、任务状态、实时事件、分页、分叉、模型与 thinking 切换映射成 renderer contract。</p>
+            <p><code>electron/runtime/durable-runtime.cjs</code> 是唯一共享运行时装配点。<code>electron/ipc/sessions.cjs</code> 把 Durable 的提交、任务状态、实时事件、历史读取、分叉、模型与 thinking 切换映射成 renderer contract。</p>
             <p>扩展、MCP、Skill 和 Harness 在下一请求边界热刷新；外部文件 handle、PTY handle、Durable task 对象、凭据明文和原始扩展实现都不能穿过 renderer 契约。终端事件按窗口和会话所有权路由，运行服务扫描与终止逻辑也留在主进程。</p>
           </div>
         </section>

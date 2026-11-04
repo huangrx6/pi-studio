@@ -55,7 +55,7 @@ Studio 只有一种持久会话，不需要在创建前选择“普通对话”�
 
 长期目标沿用输入框内建命令：`/goal <目标>` 设置或替换目标，单独输入 `/goal` 查看，`/goal edit <目标>` 修改，另支持 `pause`、`resume`、`complete` 与 `clear`。目标最多 4,000 个字符；替换、提前完成或清除时会先停止旧执行，再在同一 Durable document 上提交新状态，避免旧目标在下一个 GenerationTask 边界继续续跑。
 
-会话历史按页加载，右侧大纲始终基于完整会话；向上滚动接近顶部时才继续补载。多工作区切换、文件树、可调宽预览、按回合汇总的 Git 差异、`@` 文件引用和附件上传都在同一桌面界面中完成。
+打开会话时一次性读完整个 transcript，滚动到顶部就能看到第一条消息，右侧大纲、搜索和跳转都作用在同一份数据上；只有子智能体 transcript 仍按窗口读取。多工作区切换、文件树、可调宽预览、按回合汇总的 Git 差异、`@` 文件引用和附件上传都在同一桌面界面中完成。文件预览支持 Markdown、代码高亮、JSON、CSV、图片、音视频，以及交给 Chromium 内置阅读器的 PDF。
 
 临时聊天使用独立的内存 Durable Runtime，可选工作区并支持文字、图片、流式回复和停止。关闭或退出后不会写入 Studio SQLite、工作区附件目录或会话历史。
 
@@ -105,7 +105,7 @@ Studio 扩展分为两种能力：
 
 模型、凭据、MCP、技能和扩展状态都不会回写 Pi CLI 配置，也不会读取 `~/.pi`。MCP 支持 stdio 与 HTTP，配置保存在 Studio SQLite；Studio 导入的 Skill 正文保存在应用用户目录或当前项目的 `.pi-studio/skills`，SQLite 只额外保存项目信任指纹和技能源目录。
 
-Skill Hub 当前提供本地目录与静态 registry JSON 两种适配器。列表展示完整描述、来源、版本、自动或显式调用方式、资源数量与预计系统提示 Token；安装前进入隔离区，校验 `SKILL.md`、完整文件图和 SHA-256，再原子切换到用户级或指定工作区。删除一个源只删除目录登记，已经安装的 Skill 继续保留。打包与 registry 格式见[技能中心规范](docs/skill-hub.md)。
+Skill Hub 当前提供本地目录与静态 registry JSON 两种适配器。列表展示完整描述、来源、版本、自动或显式调用方式、资源数量与预计系统提示 Token；安装前进入隔离区，校验 `SKILL.md`、完整文件图和 SHA-256，再原子切换到 Studio 用户目录、Agent 共享目录（`~/.agents/skills`）或指定工作区。删除一个源只删除目录登记，已经安装的 Skill 继续保留。打包与 registry 格式见[技能中心规范](docs/skill-hub.md)。
 
 Skill 遵循 Agent Skills 的按需加载方式：递归发现 `SKILL.md`，系统提示只包含 `name`、`description` 和绝对路径；模型通过本次开放的 `read` 或 `bash` 工具读取正文。Studio 同时读取通用 `<home>/.agents/skills` 与 `<workspace>/.agents/skills`，项目技能优先于用户技能。`disable-model-invocation: true` 的技能只允许通过 `/skill:<name>` 显式调用。项目 Skill 先验证完整目录，再要求用户信任；隐藏文件也参与指纹，内容或链接变化会立即让旧信任失效。元数据缓存避免在每个模型循环轮次重复读取大型附件。
 
@@ -131,7 +131,7 @@ Studio 的 `subagent` 工具通过 Durable 创建 owned child conversation。子
 
 ### 性能
 
-流式文本按帧合并，历史和子智能体 transcript 都有窗口上限；完成的思考与工具步骤支持折叠。对话详情、文件预览、工具目录和子智能体数据都有独立缓存边界，长时间使用时不会无限累积浏览器侧状态。
+流式文本按帧合并，子智能体 transcript 保持窗口上限；完成的思考与工具步骤支持折叠，正在输出的思考正文只在读者贴着底部时跟随最新内容。对话详情、文件预览、工具目录和子智能体数据都有独立缓存边界，长时间使用时不会无限累积浏览器侧状态。
 
 ## 数据边界
 
@@ -185,7 +185,7 @@ Electron preload / IPC
 Pi Durable 1.5 Harness
 ```
 
-`electron/runtime/durable-runtime.cjs` 是唯一共享运行时装配点。`electron/ipc/sessions.cjs` 把 Durable 的提交、分页、分叉、状态、模型和 thinking 映射成 renderer DTO；扩展与 MCP 在下一个请求边界热刷新。
+`electron/runtime/durable-runtime.cjs` 是唯一共享运行时装配点。`electron/ipc/sessions.cjs` 把 Durable 的提交、历史读取、分叉、状态、模型和 thinking 映射成 renderer DTO；扩展与 MCP 在下一个请求边界热刷新。
 
 ## 本地开发
 
@@ -203,7 +203,7 @@ pnpm extension -- validate examples/extensions/agent-starter
 pnpm extension -- pack examples/extensions/agent-starter --out release
 ```
 
-测试覆盖会话分页与标题、Durable task、Harness profile 与项目指令、扩展 manifest/信任/路径边界、子智能体设置、文件差异、终端所有权、运行服务归属、同版本更新状态和 Electron import 完整性。视觉与真实窗口交互由 `tools/qa/qa-*.mjs` 单独运行，不与 `pnpm test` 混为一组。
+测试覆盖会话历史载入与标题、Durable task、Harness profile 与项目指令、扩展 manifest/信任/路径边界、子智能体设置与回传、文件差异与回合差异对齐、剪贴板、图片适配、指标、终端所有权、运行服务归属、同版本更新状态和 Electron import 完整性。视觉与真实窗口交互由 `tools/qa/qa-*.mjs` 单独运行，不与 `pnpm test` 混为一组。
 
 ## 打包与发布
 
