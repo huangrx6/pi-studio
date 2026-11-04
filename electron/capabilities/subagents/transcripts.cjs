@@ -44,6 +44,10 @@ async function getRuntime() {
   return getDurableRuntime();
 }
 
+function studioDatabase() {
+  return require('../../core/studio-db.cjs').getStudioDatabase();
+}
+
 function messageText(message) {
   return (message?.content || [])
     .filter((block) => block?.type === 'text')
@@ -167,7 +171,7 @@ async function childDto(record, info, index, runtimeOverride, overrides = {}) {
     runtime.context,
   );
   const usage = await runtime.harness.snapshot(runtime.durable.UsageDoc, conversation.id, runtime.context);
-  const metricTotals = getStudioDatabase().metricTotalsForConversation(conversation.id);
+  const metricTotals = studioDatabase().metricTotalsForConversation(conversation.id);
   const messages = await fullDisplayMessages(conversation);
   const firstUser = messages.find((message) => message.role === 'user');
   const assistantMessages = messages.filter((message) => message.role === 'assistant');

@@ -2887,9 +2887,11 @@ export function App() {
       ) return;
       setSubagentChildren((current) => mergeSubagentChildren(current, Array.isArray(children) ? children : []));
       setSubagentBudget(budget);
-    } catch {
+    } catch (error) {
       // Automatic refresh is best effort and must not cover the active transcript
-      // with a transport error while a Durable run is still settling.
+      // with a transport error while a Durable run is still settling, but a
+      // failure must stay diagnosable instead of silently emptying the list.
+      console.warn('Unable to load subagent children:', error);
     } finally {
       if (showSpinner && request === subagentListRequestRef.current) setSubagentRefreshing(false);
     }

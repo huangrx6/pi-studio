@@ -209,7 +209,9 @@ class StudioDatabase {
     this.db = new DatabaseSync(filename, { timeout: 5_000 });
     this.db.exec('PRAGMA journal_mode = WAL');
     this.db.exec('PRAGMA synchronous = NORMAL');
-    this.db.exec('PRAGMA busy_timeout = 5000');
+    // Durable storage shares this file with a 15s timeout; Studio writes must
+    // wait at least as long so a long Durable commit does not fail them.
+    this.db.exec('PRAGMA busy_timeout = 15000');
     this.migrate();
   }
 
