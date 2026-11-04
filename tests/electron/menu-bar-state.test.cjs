@@ -58,10 +58,14 @@ test('completion moves a session into recent results and preserves unread state'
   assert.equal(snapshot.recent[1].status, 'error');
   assert.equal(snapshot.unreadCount, 2);
 
-  assert.equal(state.markSeen(), true);
+  assert.equal(state.markSeen('c'), true);
   snapshot = state.snapshot();
-  assert.equal(snapshot.unreadCount, 0);
-  assert.equal(state.markSeen(), false);
+  assert.equal(snapshot.unreadCount, 1);
+  assert.equal(snapshot.recent.find(item => item.id === 'c').unread, false);
+  assert.equal(snapshot.recent.find(item => item.id === 'b').unread, true);
+  assert.equal(state.markSeen('c'), false);
+  assert.equal(state.markSeen('b'), true);
+  assert.equal(state.snapshot().unreadCount, 0);
   assert.equal(state.clearRecent(), true);
   assert.deepEqual(state.snapshot().recent, []);
   assert.equal(state.clearRecent(), false);
@@ -103,12 +107,28 @@ test('cancelled sessions leave the running tray without creating unread results'
   assert.equal(state.snapshot().unreadCount, 0);
 });
 
+test('attention is projected separately and clears without ending the run', () => {
+  const state = createMenuBarState({ now: () => 42 });
+  state.start({ id: 'a', title: 'Task', requestId: 'run-1' });
+  assert.equal(state.setAttention({ id: 'a', kind: 'approval', label: '确认写入文件' }), true);
+  let snapshot = state.snapshot();
+  assert.equal(snapshot.running.length, 1);
+  assert.equal(snapshot.attention.length, 1);
+  assert.equal(snapshot.attention[0].attention.label, '确认写入文件');
+  assert.equal(state.clearAttention('a'), true);
+  snapshot = state.snapshot();
+  assert.equal(snapshot.running.length, 1);
+  assert.deepEqual(snapshot.attention, []);
+  assert.equal(state.clearAttention('a'), false);
+});
+
 test('popover fits its rows and caps long lists without stretching the idle state', () => {
   const { menuBarPopoverHeight } = require('../../electron/menu-bar-state.cjs');
-  assert.equal(menuBarPopoverHeight(), 196);
-  assert.equal(menuBarPopoverHeight({ running: [{}] }), 252);
-  assert.equal(menuBarPopoverHeight({ recent: [{}] }), 252);
-  // Two sections add the extra gap so the second heading is not clipped.
-  assert.equal(menuBarPopoverHeight({ running: [{}, {}], recent: [{}] }), 400);
-  assert.equal(menuBarPopoverHeight({ running: Array(100).fill({}) }), 440);
+  assert.equal(menuBarPopoverHeight(), 148);
+  assert.equal(menuBarPopoverHeight({ running: [{}] }), 198);
+  assert.equal(menuBarPopoverHeight({ recent: [{}] }), 198);
+  assert.equal(menuBarPopoverHeight({ attention: [{ id: 'a' }], running: [{ id: 'a' }] }), 198);
+  // Two sections add only one inter-section gap; the middle remains compact.
+  assert.equal(menuBarPopoverHeight({ running: [{}, {}], recent: [{}] }), 336);
+  assert.equal(menuBarPopoverHeight({ running: Array(100).fill({}) }), 480);
 });

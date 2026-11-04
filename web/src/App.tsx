@@ -16,8 +16,8 @@
 
 import { Fragment, type CSSProperties, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  Activity, AlertTriangle, ArchiveRestore, ArrowUp, BarChart3, BookOpen, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Command, Cpu, ExternalLink, FileCode2, FileDiff, FileText, Folder, FolderOpen, Github, Info, Sparkles, UserRound,
-  AppWindow, Bot, Code2, Columns2, Compass, Eye, Film, Globe2, Image as ImageIcon, Keyboard, Layers3, LayoutGrid, LoaderCircle, Maximize2, MessageCirclePlus, MessageSquare, Minimize2, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, PanelRightOpen, Pencil, Plus, Plug, RotateCw, Search, Settings, ShieldCheck, Square, SquarePen, Sun, Target, Terminal, Trash2, X,
+  AlertTriangle, ArchiveRestore, ArrowUp, BarChart3, BookOpen, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronsDown, ChevronsUp, Command, Cpu, ExternalLink, FileCode2, FileText, Folder, FolderOpen, Github, Info, Sparkles, UserRound,
+  AppWindow, Bot, Code2, Columns2, Eye, Film, Globe2, Image as ImageIcon, Keyboard, Layers3, LayoutGrid, LoaderCircle, MessageCirclePlus, MessageSquare, Monitor, Moon, MoreHorizontal, PanelLeft, PanelRight, PanelRightOpen, Pencil, Plus, Plug, RotateCw, Search, Settings, ShieldCheck, Square, SquarePen, Sun, Target, Trash2, X,
   Wrench,
 } from 'lucide-react';
 import appIcon from '../../assets/icon.png';
@@ -42,11 +42,6 @@ import {
 import { completedTurnDuration } from './features/conversation/session-summary';
 import { placeRequestTraces } from './features/conversation/request-trace-turns';
 import { ChangesView } from './features/conversation/ChangesView';
-import {
-  ConversationViewSwitcher,
-  type ConversationView,
-  type ConversationViewOption,
-} from './features/conversation/ConversationViewSwitcher';
 import { ActionMenu } from './shared/ActionMenu';
 import { ConversationActionPalette } from './features/conversation/ConversationActionPalette';
 import { conversationActions, type ConversationAction } from './features/conversation/conversation-actions';
@@ -113,6 +108,8 @@ import { ContextUsageChip, type ContextPolicy } from './features/conversation/Co
 import { contextUsage } from './features/conversation/context-usage';
 import { WorkspacePicker } from './shell/WorkspacePicker';
 import { SidebarActions, type SidebarAction } from './shell/SidebarActions';
+import { PanelTabBar } from './shell/right-panel/PanelTabBar';
+import { RightPanelStart, type RightPanelToolAction } from './shell/right-panel/RightPanelStart';
 import {
   concreteThinkingLevels,
   thinkingLabels,
@@ -543,7 +540,7 @@ type StoredModelComparison = {
   initialThinkingLevel: ThinkingLevel;
 };
 type StoredModelComparisonMap = Record<string, StoredModelComparison>;
-type PanelTab = { id: string; kind: 'start' | 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services'; title: string; path?: string; source?: PanelFileSource; sessionId?: string; diff?: TurnDiffFile; review?: { sessionId: string; initial: TurnDiff; turns: TurnDiff[]; focusPath?: string } };
+type PanelTab = { id: string; kind: 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services'; title: string; path?: string; source?: PanelFileSource; sessionId?: string; diff?: TurnDiffFile; review?: { sessionId: string; initial: TurnDiff; turns: TurnDiff[]; focusPath?: string } };
 type ComposerMenuState = { kind: 'slash' | 'file'; query: string; start: number; end: number };
 type AgentView =
   | { kind: 'conversation' }
@@ -989,14 +986,11 @@ export function App() {
   const [entries, setEntries] = useState<Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }>>([]);
   const [file, setFile] = useState<PanelFile | null>(null);
   const [openFiles, setOpenFiles] = useState<Record<string, PanelFile>>({});
-  const [panelTabs, setPanelTabs] = useState<PanelTab[]>([{ id: 'start', kind: 'start', title: '开始' }]);
+  const [panelTabs, setPanelTabs] = useState<PanelTab[]>([]);
   const [liveDiff, setLiveDiff] = useState<TurnDiff | null>(null);
   const [tabMenu, setTabMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const closeTabMenu = useCallback(() => setTabMenu(null), []);
-  const [activePanelTabId, setActivePanelTabId] = useState('start');
-  const [tabDropTarget, setTabDropTarget] = useState<string | null>(null);
-  const panelTabsRef = useRef<HTMLDivElement>(null);
-  const tabDragRef = useRef<string | null>(null);
+  const [activePanelTabId, setActivePanelTabId] = useState('');
   const [panelFullscreen, setPanelFullscreen] = useState(false);
   const [panelWidth, setPanelWidth] = useState(() => readStored<number>('pi-studio:panel-width', 700));
   const [panelResizing, setPanelResizing] = useState(false);
@@ -2103,6 +2097,12 @@ export function App() {
   // 扩展请求工具确认时，渲染进程负责显示统一样式的弹窗。
   useEffect(() => window.piApi.onConfirmRequest((request) => setConfirmRequest(request)), []);
 
+  // Viewing one finished conversation acknowledges only that result. Opening
+  // the application itself must not clear completion marks for other sessions.
+  useEffect(() => {
+    if (session?.id && !turnActive) window.piApi.markMenuBarSessionSeen?.(session.id);
+  }, [session?.id, turnActive]);
+
   useEffect(() => window.piApi.onOpenSettings(() => { void openSettings(); }), [workspace]);
   useEffect(() => window.piApi.onOpenMain(() => { setSettingsOpen(false); }), []);
   useEffect(() => window.piApi.onOpenSession((target) => {
@@ -2426,32 +2426,6 @@ export function App() {
   useEffect(() => {
     if (filesOpen && workspace) void loadTree('');
   }, [filesOpen, workspace]);
-
-  useEffect(() => {
-    const root = panelTabsRef.current;
-    if (!root) return;
-    const active = root.querySelector<HTMLElement>('.panel-tab.is-active');
-    if (!active) return;
-    const rootRect = root.getBoundingClientRect();
-    const activeRect = active.getBoundingClientRect();
-    const left = activeRect.left - rootRect.left + root.scrollLeft;
-    const right = left + activeRect.width;
-    if (left < root.scrollLeft) root.scrollTo({ left, behavior: 'smooth' });
-    else if (right > root.scrollLeft + root.clientWidth) root.scrollTo({ left: right - root.clientWidth, behavior: 'smooth' });
-  }, [activePanelTabId, panelTabs.length, filesOpen, panelSplit]);
-
-  useEffect(() => {
-    const root = panelTabsRef.current;
-    if (!root) return;
-    const onWheel = (event: WheelEvent) => {
-      if (root.scrollWidth <= root.clientWidth) return;
-      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-      event.preventDefault();
-      root.scrollLeft += event.deltaY;
-    };
-    root.addEventListener('wheel', onWheel, { passive: false });
-    return () => root.removeEventListener('wheel', onWheel);
-  }, [filesOpen, panelTabs.length]);
 
   // ---------- 派生数据 ----------
 
@@ -3141,35 +3115,6 @@ export function App() {
   const hasActiveSubagents = subagentChildren.some((child) => (
     child.status === 'running' || child.status === 'pending' || child.status === 'waiting'
   ));
-  const conversationViewOptions = useMemo<ConversationViewOption[]>(() => {
-    const options: ConversationViewOption[] = [
-      { kind: 'conversation', label: '对话' },
-      {
-        kind: 'agents',
-        label: '子智能体',
-        count: subagentChildren.length || undefined,
-        live: hasActiveSubagents,
-      },
-      {
-        kind: 'comparison',
-        label: '双跑',
-        count: activeSessionComparison?.result.branches.length || undefined,
-      },
-    ];
-    if (conversationDetailExtensionItems.length > 0) {
-      options.push({
-        kind: 'extensions',
-        label: '扩展',
-        count: conversationDetailExtensionItems.length,
-      });
-    }
-    return options;
-  }, [
-    activeSessionComparison,
-    conversationDetailExtensionItems.length,
-    hasActiveSubagents,
-    subagentChildren.length,
-  ]);
 
   useEffect(() => {
     if (!session?.id) return;
@@ -4498,9 +4443,6 @@ export function App() {
       window.clearTimeout(panelCloseTimerRef.current);
       panelCloseTimerRef.current = null;
     }
-    if (panelTabs.length === 0) {
-      setPanelTabs(current => current.length ? current : [{ id: 'start', kind: 'start', title: '开始' }]);
-    }
     setPanelEntered(false);
     setFilesOpen(true);
     requestAnimationFrame(() => requestAnimationFrame(() => setPanelEntered(true)));
@@ -4518,10 +4460,6 @@ export function App() {
     }, 280);
   }
 
-  function openStartTab() {
-    setPanelTabs(current => current.some(tab => tab.kind === 'start') ? current : [...current, { id: 'start', kind: 'start', title: '开始' }]);
-    setActivePanelTabId('start');
-  }
   function openTemporaryChat() {
     const id = crypto.randomUUID();
     setPanelTabs(current => [...current, { id, kind: 'temporary', title: '临时聊天' }]);
@@ -4590,18 +4528,6 @@ export function App() {
       },
     });
     if (filesOpen) closePanel();
-  }
-
-  function switchConversationView(view: ConversationView) {
-    if (view === agentView.kind) {
-      if (agentView.kind === 'agents' && agentView.child) openAgentOverview();
-      else if (agentView.kind === 'extensions' && agentView.itemId) openConversationExtensionHub();
-      return;
-    }
-    if (view === 'conversation') returnToMainAgent();
-    else if (view === 'agents') openAgentOverview();
-    else if (view === 'comparison') openModelComparison();
-    else openConversationExtensionHub();
   }
 
   function openFilesTab() {
@@ -4712,14 +4638,19 @@ export function App() {
     if (tab.kind === 'terminal') void window.piApi.terminalClose(tab.id).catch(() => {});
   }
 
-  /** 关闭标签；关闭最后一个标签时整个面板一起收起。 */
+  /** 关闭标签；关闭最后一个标签后回到工具入口，面板保持可用。 */
   function closePanelTab(id: string) {
     const index = panelTabs.findIndex((tab) => tab.id === id);
     if (index < 0) return;
     disposePanelTab(panelTabs[index]);
     const next = panelTabs.filter((tab) => tab.id !== id);
     setPanelTabs(next);
-    if (next.length === 0) { closePanel(); return; }
+    if (next.length === 0) {
+      setActivePanelTabId('');
+      setFile(null);
+      setPanelSplit(false);
+      return;
+    }
     if (activePanelTabId === id) {
       const target = next[Math.min(index, next.length - 1)];
       activatePanelTab(target);
@@ -4915,16 +4846,16 @@ export function App() {
           : false
   )) || Boolean(editor?.kind === 'skill' && resourceScope === 'project' && !skillWorkspace);
   const activePanelTab = panelTabs.find((tab) => tab.id === activePanelTabId) ?? panelTabs[0];
-
-  function panelTabIcon(tab: PanelTab) {
-    if (tab.kind === 'temporary') return <MessageCirclePlus />;
-    if (tab.kind === 'terminal') return <Terminal />;
-    if (tab.kind === 'services') return <Activity />;
-    if (tab.kind === 'start') return <Compass />;
-    if (tab.kind === 'files') return <Folder />;
-    if (tab.kind === 'diff' || tab.kind === 'changes') return <FileDiff />;
-    return <FileText />;
-  }
+  const panelWorkspace = session?.cwd || workspace;
+  const panelWorkspaceName = activeWorkspace?.name
+    || panelWorkspace.split(/[\\/]/).filter(Boolean).at(-1)
+    || '工具';
+  const panelToolActions: RightPanelToolAction[] = [
+    { id: 'files', label: '工作区文件', disabled: !panelWorkspace, onSelect: openFilesTab },
+    { id: 'terminal', label: '新建终端', disabled: !panelWorkspace, onSelect: openTerminalTab },
+    { id: 'services', label: '运行服务', disabled: !panelWorkspace, onSelect: openServicesTab },
+    { id: 'temporary', label: '临时聊天', onSelect: openTemporaryChat },
+  ];
 
   /** 打开文件 diff 标签页；已存在时直接激活。 */
   function openDiffTab(file: TurnDiffFile, at: number, sessionId = session?.id) {
@@ -4951,7 +4882,11 @@ export function App() {
     const next = panelTabs.filter((tab, i) => scope === 'left' ? i >= index : scope === 'right' ? i <= index : scope === 'others' ? tab.id === id : false);
     for (const tab of panelTabs) if (!next.some(item => item.id === tab.id)) disposePanelTab(tab);
     setPanelTabs(next);
-    if (!next.length) { setActivePanelTabId(''); setFile(null); closePanel(); }
+    if (!next.length) {
+      setActivePanelTabId('');
+      setFile(null);
+      setPanelSplit(false);
+    }
     else if (!next.some(tab => tab.id === activePanelTabId)) activatePanelTab(next.find(tab => tab.id === id) ?? next[0]);
   }
 
@@ -5177,19 +5112,13 @@ export function App() {
     </div>;
   }
 
-  function renderPanelStart() {
-    return <div className="panel-start">
-      <div className="panel-start-tools">
-        <button className="panel-tool" title="临时聊天，关闭后清除" onClick={openTemporaryChat}><span className="panel-tool-icon"><MessageCirclePlus /></span><strong>临时聊天</strong><ChevronRight className="panel-tool-arrow" /></button>
-        <button className="panel-tool" title="浏览工作区文件" onClick={openFilesTab}><span className="panel-tool-icon is-folder"><Folder /></span><strong>工作区文件</strong><ChevronRight className="panel-tool-arrow" /></button>
-        <button className="panel-tool" title="打开交互式终端" onClick={openTerminalTab}><span className="panel-tool-icon"><Terminal /></span><strong>终端</strong><ChevronRight className="panel-tool-arrow" /></button>
-        <button className="panel-tool" title="查看任务启动的服务和监听端口" onClick={openServicesTab}><span className="panel-tool-icon is-services"><Activity /></span><strong>运行服务</strong><ChevronRight className="panel-tool-arrow" /></button>
-      </div>
-    </div>;
-  }
-
   function renderPanelContent() {
-    if (!activePanelTab) return null;
+    if (!activePanelTab) return <RightPanelStart
+      workspace={workspace}
+      cwd={session?.cwd}
+      actions={panelToolActions}
+      onChooseWorkspace={chooseFile}
+    />;
     if (activePanelTab.kind === 'temporary') return <TemporaryChat key={activePanelTab.id} id={activePanelTab.id} selection={modelSelection} onManage={() => void openSettings('models')} />;
     if (activePanelTab.kind === 'terminal') return <Suspense fallback={
       <div className="panel-route-loading" role="status" aria-label="正在加载终端">
@@ -5199,7 +5128,6 @@ export function App() {
       <LazyTerminalPanel key={activePanelTab.id} id={activePanelTab.id} cwd={session?.cwd || workspace} onNewTerminal={openTerminalTab} />
     </Suspense>;
     if (activePanelTab.kind === 'services') return <RuntimeServicesPanel cwd={session?.cwd} workspace={workspace} />;
-    if (activePanelTab.kind === 'start') return renderPanelStart();
     if (activePanelTab.kind === 'files') return renderFileTree();
     if (activePanelTab.kind === 'changes' && activePanelTab.review) return <ChangesView key={`${activePanelTab.id}:${activePanelTab.review.initial.at}:${activePanelTab.review.focusPath}`} {...activePanelTab.review} onOpenFile={path => void openFile(path, activePanelTab.review!.sessionId, 'diff')} onOpenDiff={(file, at) => openDiffTab(file, at, activePanelTab.review!.sessionId)} />;
     if (activePanelTab.kind === 'diff' && activePanelTab.diff) return <DiffView file={activePanelTab.diff} />;
@@ -5485,11 +5413,6 @@ export function App() {
                 : (session?.title || 'Pi Studio')}</h1>
             {agentView.kind === 'conversation' && goalStatusLabel(session?.longTask) && <span className="chat-heading-kind"><Target aria-hidden="true" />{goalStatusLabel(session?.longTask)}</span>}
           </div>}
-          {!isNewConversation && <ConversationViewSwitcher
-            current={agentView.kind}
-            options={conversationViewOptions}
-            onSelect={switchConversationView}
-          />}
           <div className="chat-actions">
             <NotificationCenter
               items={notifications}
@@ -5499,6 +5422,42 @@ export function App() {
             {!filesOpen && <button className="icon-button" onClick={openPanel} aria-label="打开右侧面板" title="打开右侧面板"><PanelRight size={16} /></button>}
           </div>
         </header>
+        {!isNewConversation && <div className="chat-tabs">
+          <div className="chat-tab-list" role="tablist" aria-label="对话视图">
+            <button type="button" role="tab" aria-selected={agentView.kind === 'conversation'} className={`tab ${agentView.kind === 'conversation' ? 'is-active' : ''}`} onClick={returnToMainAgent}><MessageSquare /><span>对话</span></button>
+            <button type="button" role="tab" aria-selected={agentView.kind === 'agents'} className={`tab agent-tab ${agentView.kind === 'agents' ? 'is-active' : ''}`} onClick={openAgentOverview}>
+              <Bot />
+              <span className="tab-label">
+                子智能体
+                {subagentChildren.length > 0 && <span
+                  className={`tab-count agent-tab-count ${hasActiveSubagents ? 'is-live' : ''}`}
+                  aria-live="polite"
+                  aria-label={`${subagentChildren.length} 个子智能体${hasActiveSubagents ? '，有任务正在运行' : '，当前无任务运行'}`}
+                >{subagentChildren.length}</span>}
+              </span>
+            </button>
+            <button type="button" role="tab" aria-selected={agentView.kind === 'comparison'} className={`tab comparison-tab ${agentView.kind === 'comparison' ? 'is-active' : ''}`} onClick={openModelComparison}>
+              <Columns2 />
+              <span className="tab-label">
+                双跑
+                {activeSessionComparison && <span className="tab-count">{activeSessionComparison.result.branches.length}</span>}
+              </span>
+            </button>
+            {conversationDetailExtensionItems.length > 0 && <button
+              type="button"
+              role="tab"
+              aria-selected={agentView.kind === 'extensions'}
+              className={`tab extension-tab ${agentView.kind === 'extensions' ? 'is-active' : ''}`}
+              title="当前会话的扩展视图"
+              onClick={openConversationExtensionHub}
+            >
+              <Plug />
+              <span className="tab-label">扩展<span className="tab-count">{conversationDetailExtensionItems.length}</span></span>
+            </button>}
+          </div>
+        </div>}
+
+        {isNewConversation && <div className="chat-tabs is-placeholder" aria-hidden="true" />}
         {!isNewConversation && agentView.kind === 'conversation' && conversationHeaderExtensionItems.length > 0 && (
           <ConversationExtensionDock
             items={conversationHeaderExtensionItems as ExtensionUiItem[]}
@@ -6967,53 +6926,27 @@ export function App() {
             onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); resizePanel(panelWidth + (event.key === 'ArrowLeft' ? 40 : -40)); } }}
           />}
           <div className="file-panel-inner">
-          <div className="panel-tabbar">
-            <div className="panel-tabs" ref={panelTabsRef} role="tablist" aria-label="右侧面板标签">
-              {panelTabs.map((tab) => <div
-                key={tab.id}
-                role="tab"
-                tabIndex={activePanelTabId === tab.id ? 0 : -1}
-                aria-selected={activePanelTabId === tab.id}
-                className={`panel-tab ${activePanelTabId === tab.id ? 'is-active' : ''} ${tabDragRef.current === tab.id ? 'is-dragging' : ''} ${tabDropTarget === tab.id ? 'tab-drop-before' : ''}`}
-                draggable
-                onClick={() => activatePanelTab(tab)}
-                onContextMenu={event => { event.preventDefault(); setTabMenu({ id: tab.id, x: event.clientX, y: event.clientY }); }}
-                onKeyDown={(event) => { if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setTabMenu({ id: tab.id, x: rect.left, y: rect.bottom }); } else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activatePanelTab(tab); } }}
-                onDragStart={(event) => {
-                  tabDragRef.current = tab.id;
-                  event.dataTransfer.effectAllowed = 'move';
-                  event.dataTransfer.setData('text/plain', tab.id);
-                  makeDragPreview(event, tab.title, '标签');
-                }}
-                onDragOver={(event) => {
-                  if (!tabDragRef.current || tabDragRef.current === tab.id) return;
-                  event.preventDefault();
-                  event.dataTransfer.dropEffect = 'move';
-                  setTabDropTarget(tab.id);
-                }}
-                onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setTabDropTarget(null); }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  if (tabDragRef.current) reorderPanelTabs(tabDragRef.current, tab.id);
-                  tabDragRef.current = null;
-                  setTabDropTarget(null);
-                  dragPreviewRef.current?.remove();
-                  dragPreviewRef.current = null;
-                }}
-                onDragEnd={() => { tabDragRef.current = null; setTabDropTarget(null); dragPreviewRef.current?.remove(); dragPreviewRef.current = null; }}
-              >
-                <span className={`panel-tab-icon is-${tab.kind}`}>{panelTabIcon(tab)}</span>
-                <span className="panel-tab-label">{tab.title}</span>
-                <button className="panel-tab-close" draggable={false} aria-label={`关闭 ${tab.title}`} onDragStart={(event) => event.preventDefault()} onClick={(event) => { event.stopPropagation(); closePanelTab(tab.id); }}><X /></button>
-              </div>)}
-              <button className="panel-tab-add" title="新标签页" aria-label="新标签页" onClick={openStartTab}><Plus /></button>
-            </div>
-            <div className="panel-tools">
-              <button className={`icon-button ${panelSplit ? 'is-active' : ''}`} aria-label={panelSplit ? '退出分栏' : '分栏'} title={panelSplit ? '退出分栏' : '分栏'} onClick={() => setPanelSplit((value) => !value)}><Columns2 /></button>
-              <button className="icon-button" aria-label={panelFullscreen ? '退出全屏' : '全屏'} title={panelFullscreen ? '退出全屏' : '应用内全屏'} onClick={() => setPanelFullscreen((value) => !value)}>{panelFullscreen ? <Minimize2 /> : <Maximize2 />}</button>
-              <button className="icon-button" aria-label="收起右侧面板" title="收起右侧面板" onClick={closePanel}><PanelRight /></button>
-            </div>
-          </div>
+          <PanelTabBar
+            tabs={panelTabs}
+            activeId={activePanelTabId}
+            workspaceName={panelWorkspaceName}
+            fullscreen={panelFullscreen}
+            split={panelSplit}
+            resizing={panelResizing}
+            toolActions={panelToolActions}
+            onActivate={activatePanelTab}
+            onClose={closePanelTab}
+            onReorder={reorderPanelTabs}
+            onContextMenu={(id, x, y) => setTabMenu({ id, x, y })}
+            onToggleSplit={() => setPanelSplit((value) => !value)}
+            onToggleFullscreen={() => setPanelFullscreen((value) => !value)}
+            onCollapse={closePanel}
+            onMakeDragPreview={(event, title) => makeDragPreview(event, title, '标签')}
+            onClearDragPreview={() => {
+              dragPreviewRef.current?.remove();
+              dragPreviewRef.current = null;
+            }}
+          />
           <div className={`panel-body ${panelSplit ? 'is-split' : ''}`}>
             {panelSplit ? <>
               <div className="panel-split-tree">{renderFileTree()}</div>

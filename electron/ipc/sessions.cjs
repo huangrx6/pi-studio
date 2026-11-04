@@ -62,6 +62,27 @@ const { publishMenuBarEvent } = require('../menu-bar-events.cjs');
 // cancellation from a completed answer without changing Durable's event ABI.
 const cancelledRunIds = new Set();
 
+/** Interrupt one Durable run and keep every presentation surface in sync. */
+async function interruptConversation(id) {
+  if (typeof id !== 'string' || !id) throw new Error('会话参数无效');
+  cancelledRunIds.add(id);
+  try {
+    const result = await abortConversation(id);
+    if (result.wasRunning) {
+      publishMenuBarEvent({ type: 'finished', id, status: 'cancelled' });
+      const cleanup = setTimeout(() => cancelledRunIds.delete(id), 15_000);
+      cleanup.unref?.();
+    } else {
+      cancelledRunIds.delete(id);
+    }
+    notifyConversationList();
+    return result;
+  } catch (error) {
+    cancelledRunIds.delete(id);
+    throw error;
+  }
+}
+
 function closeExtensionDataViews(extensionId) {
   return closeExtensionDataViewServices(extensionId);
 }
@@ -357,25 +378,7 @@ function registerConversationIpc() {
     return result;
   });
   ipcMain.handle('pi:conversation-interrupt', async (_event, { id } = {}) => {
-    if (typeof id !== 'string' || !id) throw new Error('会话参数无效');
-    cancelledRunIds.add(id);
-    try {
-      const result = await abortConversation(id);
-      if (result.wasRunning) {
-        // Hide the running item immediately. If the stream event arrives later,
-        // the marker above prevents it from being reported as a completion.
-        publishMenuBarEvent({ type: 'finished', id, status: 'cancelled' });
-        const cleanup = setTimeout(() => cancelledRunIds.delete(id), 15_000);
-        cleanup.unref?.();
-      } else {
-        cancelledRunIds.delete(id);
-      }
-      notifyConversationList();
-      return result;
-    } catch (error) {
-      cancelledRunIds.delete(id);
-      throw error;
-    }
+    return interruptConversation(id);
   });
   ipcMain.handle('pi:conversation-action', async (_event, input) => {
     const result = await conversationAction(input || {});
@@ -418,6 +421,7 @@ module.exports = {
   closeAllExtensionDataViews,
   closeExtensionDataViews,
   contentFreeConversationMetricsEvent,
+  interruptConversation,
   registerConversationIpc,
   registerExtensionDataViewIpc,
 };

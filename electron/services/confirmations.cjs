@@ -9,6 +9,7 @@
 
 const { randomUUID } = require('node:crypto');
 const { getWindow } = require('../core/state.cjs');
+const { publishMenuBarEvent } = require('../menu-bar-events.cjs');
 
 /** 用户长时间不处理时按拒绝处理，避免工具调用永久挂起。 */
 const CONFIRM_TIMEOUT_MS = 10 * 60 * 1000;
@@ -88,6 +89,14 @@ function pump() {
   active.timer = setTimeout(() => settle(active.id, { accepted: false, timedOut: true }), CONFIRM_TIMEOUT_MS);
   active.onClosed = () => settle(active.id, { accepted: false, windowClosed: true });
   win.once('closed', active.onClosed);
+  if (active.sessionId) {
+    publishMenuBarEvent({
+      type: 'attention',
+      id: active.sessionId,
+      kind: 'approval',
+      label: active.title || '等待授权',
+    });
+  }
   win.webContents.send('pi:confirm-request', {
     id: active.id,
     sessionId: active.sessionId,
@@ -109,6 +118,7 @@ function settle(id, result) {
   active = null;
   clearTimeout(current.timer);
   try { current.win.removeListener('closed', current.onClosed); } catch { /* 窗口已销毁 */ }
+  if (current.sessionId) publishMenuBarEvent({ type: 'attention-cleared', id: current.sessionId });
   current.resolve(typeof result === 'boolean' ? { accepted: result } : result);
   pump();
 }

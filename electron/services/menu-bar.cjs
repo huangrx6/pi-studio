@@ -9,8 +9,10 @@ const path = require('node:path');
 const {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
   Menu,
+  Notification,
   Tray,
   nativeImage,
   nativeTheme,
@@ -35,8 +37,9 @@ const { playCompletionSound } = require('../completion-sound.cjs');
 const { themeBackground } = require('../theme.cjs');
 const { showMainWindow } = require('../window.cjs');
 const { openAndCheckForUpdates } = require('./updater.cjs');
+const { interruptConversation } = require('../ipc/sessions.cjs');
 
-const POPOVER_WIDTH = 520;
+const POPOVER_WIDTH = 360;
 const COMPLETION_CHIME_GAP = 800;
 const TRAY_CLICK_GUARD_DURATION = 180;
 const state = createMenuBarState();
@@ -89,9 +92,21 @@ function refreshTray() {
   if (!tray || tray.isDestroyed()) return;
   const current = snapshot();
   const runningCount = current.running.length;
-  const title = runningCount > 0 ? String(runningCount) : current.unreadCount > 0 ? '✓' : '';
+  const attentionCount = current.attention.length;
+  const unreadErrorCount = current.recent.filter(item => item.unread && item.status === 'error').length;
+  const title = attentionCount > 0 || unreadErrorCount > 0
+    ? '!'
+    : runningCount > 0
+      ? String(runningCount)
+      : current.unreadCount > 0
+        ? '•'
+        : '';
   if (process.platform === 'darwin') tray.setTitle(title, { fontType: 'monospacedDigit' });
-  if (runningCount > 0) {
+  if (attentionCount > 0) {
+    tray.setToolTip(`${attentionCount} 个 Pi 会话需要处理`);
+  } else if (unreadErrorCount > 0) {
+    tray.setToolTip(`${unreadErrorCount} 个 Pi 会话异常待查看`);
+  } else if (runningCount > 0) {
     const names = current.running.slice(0, 2).map(item => item.title).join(' · ');
     tray.setToolTip(`${runningCount} 个 Pi 会话正在运行${names ? `\n${names}` : ''}`);
   } else if (current.recent.some(item => item.unread)) {
@@ -221,9 +236,9 @@ function createTray() {
     const menu = Menu.buildFromTemplate([
       { label: '打开 Pi Studio', click: () => openMenuBarMain() },
       { label: '设置…', click: () => openMenuBarSettings() },
-      { label: '检查更新…', click: () => { hideMenuBarPopover(); openAndCheckForUpdates(); } },
+      { label: '检查更新…', click: () => checkMenuBarUpdates() },
       { type: 'separator' },
-      { label: '退出 Pi Studio', click: () => app.quit() },
+      { label: '退出 Pi Studio', click: () => { void requestMenuBarQuit(); } },
     ]);
     tray.popUpContextMenu(menu);
   });
@@ -241,22 +256,18 @@ function sendToMain(channel, payload) {
 }
 
 function openMenuBarMain() {
-  state.markSeen();
   hideMenuBarPopover();
   sendToMain('pi:open-main');
-  refreshTray();
 }
 
 function openMenuBarSettings() {
-  state.markSeen();
   hideMenuBarPopover();
   sendToMain('pi:open-settings');
-  refreshTray();
 }
 
 function openMenuBarSession(input = {}) {
   if (typeof input.id !== 'string' || !input.id) return;
-  state.markSeen();
+  state.markSeen(input.id);
   hideMenuBarPopover();
   sendToMain('pi:open-session', {
     id: input.id,
@@ -264,6 +275,56 @@ function openMenuBarSession(input = {}) {
     title: typeof input.title === 'string' ? input.title : '会话',
   });
   refreshTray();
+}
+
+function checkMenuBarUpdates() {
+  hideMenuBarPopover();
+  openAndCheckForUpdates();
+}
+
+async function stopMenuBarSession(input = {}) {
+  if (typeof input.id !== 'string' || !input.id) throw new Error('会话参数无效');
+  const running = state.snapshot().running.find(item => item.id === input.id);
+  if (!running) return { ok: false, reason: 'not-running' };
+  if (input.requestId && running.requestId && input.requestId !== running.requestId) {
+    return { ok: false, reason: 'stale-run' };
+  }
+  const result = await interruptConversation(input.id);
+  refreshTray();
+  return { ok: Boolean(result?.wasRunning), reason: result?.wasRunning ? undefined : 'not-running' };
+}
+
+async function requestMenuBarQuit() {
+  const running = state.snapshot().running;
+  if (running.length > 0) {
+    hideMenuBarPopover();
+    const result = await dialog.showMessageBox({
+      type: 'warning',
+      title: '退出 Pi Studio？',
+      message: `${running.length} 个会话仍在运行`,
+      detail: '退出应用会停止这些运行。',
+      buttons: ['继续运行', '退出'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    if (result.response !== 1) return { quit: false };
+  }
+  app.quit();
+  return { quit: true };
+}
+
+function showCompletionNotification(completed) {
+  if (!Notification.isSupported()) return false;
+  const failed = completed.status === 'error';
+  const notification = new Notification({
+    title: failed ? 'Pi Studio 任务需要查看' : 'Pi Studio 任务已完成',
+    body: completed.title,
+    silent: true,
+  });
+  notification.on('click', () => openMenuBarSession(completed));
+  notification.show();
+  return true;
 }
 
 function menuBarSettings() {
@@ -293,6 +354,11 @@ function initializeMenuBar() {
     if (event.type === 'started') menuBarSessionStarted(event);
     else if (event.type === 'title') menuBarSessionTitle(event.id, event.title);
     else if (event.type === 'finished') menuBarSessionFinished(event);
+    else if (event.type === 'attention') {
+      if (state.setAttention(event)) refreshTray();
+    } else if (event.type === 'attention-cleared') {
+      if (state.clearAttention(event.id)) refreshTray();
+    }
     else if (event.type === 'appearance') refreshMenuBarAppearance();
   });
   if (menuBarEnabled()) createTray();
@@ -327,26 +393,15 @@ function menuBarSessionFinished(input) {
     refreshTray();
     return;
   }
-  refreshTray();
-  if (app.isQuitting) return;
-  playCompletionChime();
-  if (!menuBarEnabled()) {
-    state.markSeen();
-    refreshTray();
-    return;
-  }
+  if (app.isQuitting) { refreshTray(); return; }
   const main = getWindow();
   if (!shouldPresentBackgroundNotification(main)) {
-    state.markSeen();
     refreshTray();
     return;
   }
+  playCompletionChime();
+  showCompletionNotification(completed);
   refreshTray();
-  if (process.platform === 'darwin') app.dock?.bounce('informational');
-  // The popover must become focused for the native blur event to dismiss it
-  // when the user clicks anywhere else. The automatic completion notification
-  // stays separate from the completion sound so foreground work is audible too.
-  void showMenuBarPopover();
 }
 
 function clearMenuBarRecent() {
@@ -366,8 +421,14 @@ function registerMenuBarIpc() {
   ipcMain.handle('pi:menu-bar-state', () => menuBarSnapshot());
   ipcMain.on('pi:menu-bar-open-main', () => openMenuBarMain());
   ipcMain.on('pi:menu-bar-open-session', (_event, session) => openMenuBarSession(session));
+  ipcMain.on('pi:menu-bar-session-seen', (_event, id) => {
+    if (state.markSeen(id)) refreshTray();
+  });
   ipcMain.on('pi:menu-bar-clear-recent', () => clearMenuBarRecent());
-  ipcMain.on('pi:menu-bar-quit', () => app.quit());
+  ipcMain.handle('pi:menu-bar-stop-session', (_event, session) => stopMenuBarSession(session));
+  ipcMain.on('pi:menu-bar-open-settings', () => openMenuBarSettings());
+  ipcMain.on('pi:menu-bar-check-updates', () => checkMenuBarUpdates());
+  ipcMain.on('pi:menu-bar-quit', () => { void requestMenuBarQuit(); });
   ipcMain.on('pi:menu-bar-hide', () => hideMenuBarPopover());
 }
 
@@ -383,6 +444,8 @@ module.exports = {
   openMenuBarMain,
   openMenuBarSettings,
   openMenuBarSession,
+  stopMenuBarSession,
+  requestMenuBarQuit,
   clearMenuBarRecent,
   menuBarSessionStarted,
   menuBarSessionTitle,

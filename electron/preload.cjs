@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('piApi', {
   installUpdate: () => ipcRenderer.invoke('pi:install-update'),
   menuBarSettings: () => ipcRenderer.invoke('pi:menu-bar-settings'),
   setMenuBarVisible: (enabled) => ipcRenderer.invoke('pi:menu-bar-set-visible', enabled),
+  markMenuBarSessionSeen: (id) => ipcRenderer.send('pi:menu-bar-session-seen', id),
   chooseBackgroundMedia: (payload) => ipcRenderer.invoke('pi:background-media-choose', payload),
   removeBackgroundMedia: (url) => ipcRenderer.invoke('pi:background-media-remove', url),
   modeGet: (payload) => ipcRenderer.invoke('pi:mode-get', payload),

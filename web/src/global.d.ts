@@ -346,6 +346,8 @@ declare global {
       menuBarSettings(): Promise<MenuBarSettings>;
       /** Show or remove the native menu-bar status item. */
       setMenuBarVisible(enabled: boolean): Promise<MenuBarSettings>;
+      /** Mark one completed result as seen after its conversation is actually visible. */
+      markMenuBarSessionSeen?(id: string): void;
       /** 打开系统文件选择器，并把图片或视频复制到应用私有背景目录。 */
       chooseBackgroundMedia(payload?: { replaceUrl?: string }): Promise<BackgroundMedia | null>;
       /** 删除应用私有背景目录中的媒体文件；无效地址会被安全忽略。 */

@@ -2008,34 +2008,6 @@ async function selectModel(name) {
   await page.locator('.model-popover').waitFor({ state: 'detached' });
 }
 
-const conversationViewTrigger = () => page.locator('.conversation-view-switcher-trigger');
-const conversationViewMenu = () => page.getByRole('menu', { name: '会话视图', exact: true });
-
-async function openConversationViews() {
-  const menu = conversationViewMenu();
-  if (await menu.count() === 0) await conversationViewTrigger().click();
-  await menu.waitFor();
-  await page.waitForFunction(() => (
-    document.activeElement?.getAttribute('role') === 'menuitemradio'
-    && Boolean(document.activeElement?.closest('[aria-label="会话视图"]'))
-  ));
-  return menu;
-}
-
-async function selectConversationView(name) {
-  const menu = await openConversationViews();
-  await menu.getByRole('menuitemradio', {
-    name: new RegExp(`^${name}(?:[，,]|$)`),
-  }).click();
-  await menu.waitFor({ state: 'detached' });
-}
-
-async function waitForConversationViewTriggerFocus() {
-  await page.waitForFunction(() => (
-    document.activeElement?.classList.contains('conversation-view-switcher-trigger')
-  ));
-}
-
 // 点击设置页左侧的某个分页。
 async function openSettingsSection(name) {
   await page.locator('.settings-nav-row', { hasText: name }).click();
@@ -2049,7 +2021,7 @@ try {
   await page.getByRole('textbox', { name: '发送给 Pi 的消息' }).waitFor();
   assert.equal(await page.getByText('今天，想做点什么？', { exact: true }).count(), 0);
   // 全新启动时不应出现会话相关的容器，空态应保持干净。
-  assert.equal(await page.locator('.workspace-chip, .conversation-view-switcher, .chat-scroll').count(), 0);
+  assert.equal(await page.locator('.workspace-chip, .chat-tabs:not(.is-placeholder), .chat-scroll').count(), 0);
   // 没有更新时不占品牌行空间；发现更新后，入口与上方侧栏开关使用相同尺寸和右边线。
   assert.equal(await page.locator('.brand-update').count(), 0);
   await page.evaluate(() => window.__setUpdateState('available'));
@@ -2330,55 +2302,17 @@ try {
   }, opensBeforeRetry);
   assert.match(await footerExtensionDock.innerText(), /157 tok\/s · TTFT 3\.75 s/);
 
-  // 会话视图使用标题行的单一菜单入口：不再保留含义混杂的永久 Tab 行。
-  assert.equal(await page.locator('.chat-tabs').count(), 0);
-  const viewTrigger = conversationViewTrigger();
-  assert.equal(await viewTrigger.getAttribute('aria-haspopup'), 'menu');
-  assert.equal(await viewTrigger.getAttribute('aria-expanded'), 'false');
-  assert.match(await viewTrigger.getAttribute('aria-label'), /切换会话视图，当前为对话$/);
-  await viewTrigger.click();
-  const viewMenu = await openConversationViews();
-  const viewItems = viewMenu.getByRole('menuitemradio');
-  assert.equal(await viewItems.count(), 4);
-  assert.equal(await viewMenu.locator('.conversation-view-menu-icon svg').count(), 4);
-  assert.deepEqual(
-    await viewItems.evaluateAll((items) => items.map((item) => item.getAttribute('aria-label'))),
-    ['对话', '子智能体，2 个，正在运行', '双跑', '扩展，2 项'],
-  );
-  assert.equal(
-    await viewMenu.getByRole('menuitemradio', { name: /^扩展/ })
-      .locator('.conversation-view-menu-count').innerText(),
-    '2',
-  );
-  await page.waitForFunction(() => (
-    document.activeElement?.getAttribute('role') === 'menuitemradio'
-    && document.activeElement?.getAttribute('aria-checked') === 'true'
-  ));
-  await page.keyboard.press('End');
-  assert.match(await page.locator(':focus').getAttribute('aria-label'), /^扩展/);
-  await page.keyboard.press('Home');
-  assert.match(await page.locator(':focus').getAttribute('aria-label'), /^对话$/);
-  await page.keyboard.press('Tab');
-  await viewMenu.waitFor({ state: 'detached' });
-  assert.equal(
-    await page.evaluate(() => document.activeElement?.classList.contains('notification-trigger')),
-    true,
-  );
-  await viewTrigger.click();
-  const keyboardReopenedMenu = await openConversationViews();
-  await capture('04a-conversation-view-menu');
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
-  await capture('04a-conversation-view-menu-dark');
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
-  await page.keyboard.press('Escape');
-  await keyboardReopenedMenu.waitFor({ state: 'detached' });
-  await waitForConversationViewTriggerFocus();
-  await viewTrigger.click();
-  const reopenedViewMenu = await openConversationViews();
-  await reopenedViewMenu.getByRole('menuitemradio', { name: /^扩展/ }).click();
-  await reopenedViewMenu.waitFor({ state: 'detached' });
-  await waitForConversationViewTriggerFocus();
-  assert.match(await viewTrigger.getAttribute('aria-label'), /当前为扩展，2 项$/);
+  const conversationTabs = page.getByRole('tablist', { name: '对话视图' }).getByRole('tab');
+  assert.equal(await conversationTabs.count(), 4);
+  assert.equal(await page.locator('.chat-tab-list .tab > svg').count(), 4);
+  assert.match(await conversationTabs.nth(0).innerText(), /^对话$/);
+  assert.match(await conversationTabs.nth(1).innerText(), /^子智能体\s*2/);
+  assert.match(await conversationTabs.nth(2).innerText(), /^双跑$/);
+  assert.match(await conversationTabs.nth(3).innerText(), /^扩展\s*2/);
+  assert.equal(await page.locator('.chat-tabs-note').count(), 0);
+  const extensionTab = page.getByRole('tab', { name: /^扩展/ });
+  assert.equal(await extensionTab.locator('.tab-count').innerText(), '2');
+  await extensionTab.click();
   await page.locator('.conversation-extension-hub').waitFor();
   const extensionContentWidth = await page.locator('.conversation-extension-scroll > .chat-column').evaluate((column) => (
     column.getBoundingClientRect().width
@@ -2479,19 +2413,13 @@ try {
   await extensionDialog.waitFor({ state: 'detached' });
   await page.locator('.conversation-extension-hub').waitFor();
 
-  // 子智能体始终可从会话视图菜单进入；运行状态只通过计数和状态点提示。
-  const agentMenu = await openConversationViews();
-  const agentViewItem = agentMenu.getByRole('menuitemradio', { name: /^子智能体/ });
-  assert.equal(await agentViewItem.locator('.conversation-view-menu-count').innerText(), '2');
-  assert.match(
-    await agentViewItem.locator('.conversation-view-menu-count').getAttribute('class'),
-    /\bis-live\b/,
-  );
-  assert.match(await agentViewItem.getAttribute('aria-label'), /正在运行/);
-  await agentViewItem.click();
-  await agentMenu.waitFor({ state: 'detached' });
+  // 子智能体只有一个聚合 Tab；总览可进入只读上下文，并有明确路径回到主智能体。
+  const agentTab = page.getByRole('tab', { name: /^子智能体/ });
+  assert.equal(await agentTab.locator('.tab-count').innerText(), '2');
+  assert.match(await agentTab.locator('.agent-tab-count').getAttribute('class'), /\bis-live\b/);
+  assert.match(await agentTab.locator('.agent-tab-count').getAttribute('aria-label'), /有任务正在运行/);
+  await agentTab.click();
   await page.getByRole('heading', { name: '子智能体', exact: true }).waitFor();
-  assert.match(await page.locator('.conversation-view-switcher-trigger').getAttribute('aria-label'), /当前为子智能体/);
   assert.equal(await page.locator('.agent-overview-head > p').count(), 0);
   assert.equal(await page.getByRole('button', { name: '刷新子智能体', exact: true }).count(), 1);
   assert.equal(await page.locator('.agent-list-row').count(), 2);
@@ -2511,7 +2439,7 @@ try {
   // 没有子智能体时只保留标题和返回入口；统计、搜索和筛选不能制造一排空控件。
   await page.locator('.session-row').filter({ hasText: '优化文件预览和设置页面的排版' }).click();
   await page.getByRole('heading', { name: '优化文件预览和设置页面的排版', exact: true }).waitFor();
-  await selectConversationView('子智能体');
+  await page.getByRole('tab', { name: /^子智能体/ }).click();
   const emptyAgentOverview = page.locator('.agent-overview');
   await emptyAgentOverview.locator('.agent-overview-empty.is-initial').waitFor();
   const emptyAgentLayout = await emptyAgentOverview.evaluate((overview) => {
@@ -2536,7 +2464,7 @@ try {
   await page.locator('.messages').waitFor();
   await page.locator('.session-row').filter({ hasText: '统一工作台的组件与视觉规范' }).click();
   await page.getByRole('heading', { name: '统一工作台的组件与视觉规范', exact: true }).waitFor();
-  await selectConversationView('子智能体');
+  await page.getByRole('tab', { name: /^子智能体/ }).click();
   await page.locator('.agent-list-row').first().waitFor();
 
   await page.locator('.agent-list-row.is-running .agent-list-main').click();
@@ -2557,7 +2485,7 @@ try {
   await page.locator('.chat-scroll').waitFor();
   await page.locator('.messages').waitFor();
 
-  await selectConversationView('对话');
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
   await page.locator('.messages').waitFor();
 
   // 同题双跑从统一动作面板进入，不新增固定侧边栏入口。
@@ -2602,17 +2530,10 @@ try {
   await comparison.waitFor();
   assert.equal(await page.locator('.file-panel').count(), 0);
   assert.equal(await page.locator('.main .model-comparison').count(), 1);
-  const comparisonViewTrigger = conversationViewTrigger();
-  assert.match(await comparisonViewTrigger.getAttribute('aria-label'), /当前为双跑/);
-  const comparisonViewMenu = await openConversationViews();
-  assert.equal(
-    await comparisonViewMenu.getByRole('menuitemradio', { name: /^双跑/ }).getAttribute('aria-checked'),
-    'true',
-  );
-  assert.equal(await comparisonViewMenu.getByRole('menuitemradio', { name: /^子智能体/ }).count(), 1);
-  await page.keyboard.press('Escape');
-  await comparisonViewMenu.waitFor({ state: 'detached' });
-  await waitForConversationViewTriggerFocus();
+  const comparisonTab = page.getByRole('tab', { name: /^双跑/ });
+  assert.equal(await comparisonTab.count(), 1);
+  assert.equal(await comparisonTab.getAttribute('aria-selected'), 'true');
+  assert.equal(await page.getByRole('tab', { name: /^子智能体/ }).count(), 1);
   assert.equal(await comparison.locator('.comparison-head').count(), 0);
   assert.equal(await comparison.locator('.comparison-intro').count(), 0);
   const comparisonHelp = comparison.locator('.comparison-start-hint');
@@ -2675,61 +2596,36 @@ try {
   await page.setViewportSize({ width: 980, height: 720 });
   await capture('04e-model-comparison-compact');
   assert.equal(await page.locator('.comparison-results').evaluate((node) => getComputedStyle(node).gridTemplateColumns.split(' ').length), 1);
-  const compactViewMenu = await openConversationViews();
-  const compactMenuBounds = await compactViewMenu.boundingBox();
-  const compactMainBounds = await page.locator('.main').boundingBox();
-  assert.ok(
-    compactMenuBounds
-    && compactMainBounds
-    && compactMenuBounds.x >= compactMainBounds.x
-    && compactMenuBounds.x + compactMenuBounds.width <= compactMainBounds.x + compactMainBounds.width,
-  );
-  await capture('04e-model-comparison-compact-menu');
-  await page.keyboard.press('Escape');
-  await compactViewMenu.waitFor({ state: 'detached' });
   await page.setViewportSize({ width: 1440, height: 920 });
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await capture('04f-model-comparison-dark');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
 
   // 双跑是会话的稳定一级入口，不依赖命令面板恢复。
-  await selectConversationView('子智能体');
+  await page.getByRole('tab', { name: /^子智能体/ }).click();
   await page.locator('.agent-overview').waitFor();
-  await selectConversationView('双跑');
+  await comparisonTab.click();
   await comparison.waitFor();
   await page.waitForFunction(() => (
     document.querySelectorAll('.comparison-result').length === 2
     && [...document.querySelectorAll('.comparison-result-status')]
       .every((node) => node.textContent?.includes('已完成'))
   ));
-  assert.match(await conversationViewTrigger().getAttribute('aria-label'), /当前为双跑，2 个分支/);
+  assert.equal(await comparisonTab.getAttribute('aria-selected'), 'true');
 
   // 打开分支后，一级双跑入口仍保留；可随时回到本次对比总览和另一个分支。
   await comparison.getByRole('button', { name: '应用并打开', exact: true }).first().click();
   await comparison.waitFor({ state: 'detached' });
   await page.locator('.messages').waitFor();
-  const branchViewMenu = await openConversationViews();
-  assert.equal(await branchViewMenu.getByRole('menuitemradio', { name: /^双跑/ }).count(), 1);
-  assert.equal(
-    await branchViewMenu.getByRole('menuitemradio', { name: /^子智能体/ })
-      .locator('.conversation-view-menu-count:not(.is-empty)').count(),
-    0,
-  );
-  await page.keyboard.press('Escape');
-  await branchViewMenu.waitFor({ state: 'detached' });
+  assert.equal(await comparisonTab.count(), 1);
+  assert.equal(await page.getByRole('tab', { name: /^子智能体/ }).locator('.tab-count').count(), 0);
   assert.match(await page.locator('.chat-heading h1').innerText(), /^对比 ·/);
   await capture('04i-model-comparison-branch-entry');
-  await selectConversationView('双跑');
+  await comparisonTab.click();
   await comparison.waitFor();
   assert.equal(await page.locator('.comparison-result').count(), 2);
-  const restoredComparisonMenu = await openConversationViews();
-  assert.equal(
-    await restoredComparisonMenu.getByRole('menuitemradio', { name: /^双跑/ }).getAttribute('aria-checked'),
-    'true',
-  );
-  await page.keyboard.press('Escape');
-  await restoredComparisonMenu.waitFor({ state: 'detached' });
-  await selectConversationView('对话');
+  assert.equal(await comparisonTab.getAttribute('aria-selected'), 'true');
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
   await comparison.waitFor({ state: 'detached' });
   await page.locator('.messages').waitFor();
 
@@ -2743,12 +2639,81 @@ try {
 
   // 打开文件查看器，读取根目录列表，再点开 package.json 预览代码。
   await page.getByRole('button', { name: '打开右侧面板', exact: true }).click();
-  // 面板默认停在「开始」页，先切到文件标签再等文件列表。
+  await page.waitForFunction(() => document.querySelector('.file-panel')?.getBoundingClientRect().width >= 600);
+  // 没有工具标签时直接显示轻量入口；初始页本身不占一个标签。
+  assert.equal(await page.getByRole('tablist', { name: '右侧面板标签' }).count(), 0);
+  assert.deepEqual(
+    await page.locator('.panel-start-tools .panel-tool').allTextContents(),
+    ['工作区文件', '新建终端', '运行服务', '临时聊天'],
+  );
+  await capture('05-panel-start');
   await page.getByRole('button', { name: /^工作区文件/ }).click();
+  await page.getByRole('button', { name: '打开工具', exact: true }).click();
+  const panelToolMenu = page.getByRole('menu');
+  assert.deepEqual(await panelToolMenu.getByRole('menuitem').allTextContents(), ['工作区文件', '新建终端', '运行服务', '临时聊天']);
+  await page.keyboard.press('Escape');
+  await panelToolMenu.waitFor({ state: 'detached' });
   await capture('05-files');
   await page.getByRole('button', { name: 'package.json', exact: false }).click();
   await page.locator('.code-line').first().waitFor();
   await capture('06-file-preview');
+
+  // 右栏缩窄后，标签仍保持当前项可见；被裁切的一侧用渐隐提示横向溢出。
+  const panelTabs = page.locator('.panel-tabs');
+  const panelResizeHandle = page.locator('.panel-resize-handle');
+  const originalPanelWidth = await page.locator('.file-panel').evaluate((panel) => panel.getBoundingClientRect().width);
+  const resizeBox = await panelResizeHandle.boundingBox();
+  assert.ok(resizeBox);
+  await page.mouse.move(resizeBox.x + resizeBox.width / 2, resizeBox.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(resizeBox.x + resizeBox.width / 2 + originalPanelWidth - 320, resizeBox.y + 40);
+  await page.mouse.up();
+  await page.waitForFunction(() => document.querySelector('.panel-tabs')?.dataset.overflowStart === 'true');
+  await page.waitForFunction(() => {
+    const tabs = document.querySelector('.panel-tabs');
+    if (!tabs) return false;
+    const tabsLeft = tabs.getBoundingClientRect().left;
+    return [...tabs.querySelectorAll('.panel-tab:not(.is-active)')].some((tab) => {
+      const tabBox = tab.getBoundingClientRect();
+      return Math.min(tabBox.right, tabsLeft + 32) - tabsLeft >= 32;
+    });
+  });
+  const narrowTabs = await panelTabs.evaluate((tabs) => {
+    const active = tabs.querySelector('.panel-tab.is-active');
+    const tabsBox = tabs.getBoundingClientRect();
+    const activeBox = active?.getBoundingClientRect();
+    const style = getComputedStyle(tabs);
+    return {
+      maskImage: style.maskImage || style.webkitMaskImage,
+      activeVisible: Boolean(activeBox
+        && activeBox.left >= tabsBox.left - 1
+        && activeBox.right <= tabsBox.right + 1),
+      previousVisible: [...tabs.querySelectorAll('.panel-tab:not(.is-active)')].some((tab) => {
+        const tabBox = tab.getBoundingClientRect();
+        return tabBox.left < tabsBox.left && tabBox.right > tabsBox.left + 1;
+      }),
+      previousLabelVisible: [...tabs.querySelectorAll('.panel-tab:not(.is-active) .panel-tab-label')].some((label) => {
+        const labelBox = label.getBoundingClientRect();
+        return labelBox.left < tabsBox.right && labelBox.right > tabsBox.left + 24;
+      }),
+    };
+  });
+  assert.equal(narrowTabs.activeVisible, true);
+  assert.equal(narrowTabs.previousVisible, true);
+  assert.equal(narrowTabs.previousLabelVisible, true);
+  assert.match(narrowTabs.maskImage, /linear-gradient/);
+  await capture('05a-narrow-panel-tabs');
+  const narrowResizeBox = await panelResizeHandle.boundingBox();
+  assert.ok(narrowResizeBox);
+  await page.mouse.move(narrowResizeBox.x + narrowResizeBox.width / 2, narrowResizeBox.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(narrowResizeBox.x + narrowResizeBox.width / 2 - (originalPanelWidth - 320), narrowResizeBox.y + 40);
+  await page.mouse.up();
+  // 关闭最后一个工具标签后回到入口，边栏不应一起消失。
+  await page.getByRole('button', { name: '关闭 package.json', exact: true }).click();
+  await page.getByRole('button', { name: '关闭 文件', exact: true }).click();
+  assert.equal(await page.locator('.file-panel.is-open').count(), 1);
+  assert.equal(await page.locator('.panel-start-tools .panel-tool').count(), 4);
   await page.getByRole('button', { name: '收起右侧面板' }).click();
 
   // -------------------------------------------------------------------------
@@ -3768,7 +3733,7 @@ try {
   // 从新对话发送第一条消息：应切换到会话视图。
   await page.getByRole('textbox', { name: '发送给 Pi 的消息' }).fill('验证从新对话进入问答');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
-  await page.locator('.conversation-view-switcher').waitFor();
+  await page.locator('.chat-tabs').waitFor();
   assert.equal(await page.locator('.workspace-chip').count(), 0);
   await page.locator('.chat-scroll').getByText('验证从新对话进入问答', { exact: true }).waitFor();
   // 新会话发完第一条消息后必须出现在侧边栏，否则用户离开就找不到入口。
@@ -3797,7 +3762,7 @@ try {
   // 点击“新会话”应回到空态，且不残留会话标签。
   await page.getByRole('button', { name: '新会话', exact: true }).first().click();
   await page.getByRole('textbox', { name: '发送给 Pi 的消息' }).waitFor();
-  assert.equal(await page.locator('.conversation-view-switcher').count(), 0);
+  assert.equal(await page.locator('.chat-tabs:not(.is-placeholder)').count(), 0);
 
   // 新会话不需要预选“长期任务”；/goal 会在第一次设置目标时按需创建普通会话并启用目标能力。
   await composerInput.fill('/goal 从新会话直接启动目标');

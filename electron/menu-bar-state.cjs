@@ -38,6 +38,7 @@ function createMenuBarState({ now = () => Date.now(), recentLimit = DEFAULT_RECE
       cwd: typeof input.cwd === 'string' ? input.cwd : '',
       requestId: typeof input.requestId === 'string' ? input.requestId : '',
       startedAt: existing?.startedAt || now(),
+      attention: undefined,
     };
     running.set(input.id, session);
     // A session that runs again supersedes its earlier completion: keeping both
@@ -68,14 +69,28 @@ function createMenuBarState({ now = () => Date.now(), recentLimit = DEFAULT_RECE
     return { ...completed };
   }
 
-  function markSeen() {
-    let changed = false;
-    recent = recent.map((item) => {
-      if (!item.unread) return item;
-      changed = true;
-      return { ...item, unread: false };
-    });
-    return changed;
+  function setAttention(input = {}) {
+    const session = running.get(input.id);
+    if (!session) return false;
+    session.attention = {
+      kind: input.kind === 'input' ? 'input' : 'approval',
+      label: cleanTitle(input.label, input.kind === 'input' ? '等待输入' : '等待授权'),
+    };
+    return true;
+  }
+
+  function clearAttention(id) {
+    const session = running.get(id);
+    if (!session?.attention) return false;
+    session.attention = undefined;
+    return true;
+  }
+
+  function markSeen(id) {
+    const index = recent.findIndex(item => item.id === id && item.unread);
+    if (index < 0) return false;
+    recent = recent.map((item, itemIndex) => itemIndex === index ? { ...item, unread: false } : item);
+    return true;
   }
 
   function clearRecent() {
@@ -92,23 +107,29 @@ function createMenuBarState({ now = () => Date.now(), recentLimit = DEFAULT_RECE
       running: [...running.values()]
         .sort((a, b) => a.startedAt - b.startedAt)
         .map(item => ({ ...item })),
+      attention: [...running.values()]
+        .filter(item => item.attention)
+        .sort((a, b) => a.startedAt - b.startedAt)
+        .map(item => ({ ...item })),
       recent: visibleRecent.map(item => ({ ...item })),
       unreadCount: visibleRecent.filter(item => item.unread).length,
       ...extra,
     };
   }
 
-  return { start, updateTitle, finish, markSeen, clearRecent, snapshot };
+  return { start, updateTitle, finish, setAttention, clearAttention, markSeen, clearRecent, snapshot };
 }
 
 /** Keep the popover compact when idle; only the list scrolls when busy. */
-function menuBarPopoverHeight({ running = [], recent = [] } = {}) {
-  const sections = Number(running.length > 0) + Number(recent.length > 0);
-  // 168 covers the chrome (header, summary, footer, panel and shell insets);
-  // every section adds its heading and every card adds a row. The rows are sized
-  // for the longest detail line, so a freshly finished session never clips.
-  return Math.max(196, Math.min(440, 168 + sections * 28
-    + (sections > 1 ? 8 : 0) + (running.length + recent.length) * 56));
+function menuBarPopoverHeight({ attention = [], running = [], recent = [] } = {}) {
+  const attentionIds = new Set(attention.map(item => item.id));
+  const visibleRunning = running.filter(item => !attentionIds.has(item.id));
+  const groups = [attention, visibleRunning, recent].filter(items => items.length > 0);
+  const rows = groups.reduce((total, items) => total + items.length, 0);
+  if (rows === 0) return 148;
+  // Header and footer stay fixed; section headings and rows determine only the
+  // scrollable middle. Long queues cap before they can cover the desktop.
+  return Math.min(480, 120 + groups.length * 24 + Math.max(0, groups.length - 1) * 6 + rows * 54);
 }
 
 module.exports = { menuBarPopoverHeight, createMenuBarState, cleanTitle, shouldPresentBackgroundNotification };

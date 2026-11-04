@@ -1,14 +1,16 @@
 const api = window.piMenuBarApi;
+const attentionList = document.querySelector('#attention-list');
 const runningList = document.querySelector('#running-list');
 const recentList = document.querySelector('#recent-list');
-const summary = document.querySelector('#summary');
-const runningCount = document.querySelector('#running-count');
-const recentCount = document.querySelector('#recent-count');
-
+const empty = document.querySelector('#empty');
+const status = document.querySelector('#status');
+const more = document.querySelector('#more');
+const moreMenu = document.querySelector('#more-menu');
 const clearRecent = document.querySelector('#clear-recent');
 
 const DEFAULT_RADII = { tag: 4, control: 8, card: 12, panel: 16, round: 999 };
 let currentState = {
+  attention: [],
   running: [],
   recent: [],
   unreadCount: 0,
@@ -24,38 +26,10 @@ function workspaceName(cwd) {
 
 function elapsed(startedAt, endedAt) {
   const seconds = Math.max(0, Math.floor((Number(endedAt || Date.now()) - Number(startedAt || Date.now())) / 1000));
-  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 60) return `${seconds} 秒`;
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
-}
-
-function runningDetail(item) {
-  return `${workspaceName(item.cwd)} · 已运行 ${elapsed(item.startedAt)}`;
-}
-
-function recentStatus(item) {
-  return item.status === 'error' ? '需要查看' : item.status === 'cancelled' ? '已取消' : '已完成';
-}
-
-function recentDetail(item) {
-  const used = elapsed(item.startedAt, item.completedAt);
-  return `${workspaceName(item.cwd)} · ${recentStatus(item)} · ${relativeTime(item.completedAt)} · 用时 ${used}`;
-}
-
-/** One line that never claims a session is both running and finished. */
-function summaryText(running, recent) {
-  const errors = recent.filter(item => item.status === 'error').length;
-  if (running.length) {
-    const parts = [`${running.length} 个会话运行中`];
-    if (errors) parts.push(`${errors} 个异常待查看`);
-    else if (recent.length) parts.push(`${recent.length} 个刚结束`);
-    else parts.push('关闭窗口后仍会继续');
-    return parts.join(' · ');
-  }
-  if (errors) return `${errors} 个会话异常，点击查看详情`;
-  if (recent.length) return recent.length === 1 ? '后台会话已结束，点击查看结果' : `${recent.length} 个后台会话已结束`;
-  return '暂无后台会话，可回到应用开始对话';
+  if (minutes < 60) return `${minutes} 分钟`;
+  return `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分`;
 }
 
 function relativeTime(timestamp) {
@@ -76,106 +50,177 @@ function applyAppearance({ theme, palette, radii } = {}) {
   const values = radii && typeof radii === 'object' ? { ...DEFAULT_RADII, ...radii } : DEFAULT_RADII;
   for (const key of ['tag', 'control', 'card', 'panel', 'round']) {
     const value = Number(values[key]);
-    if (Number.isFinite(value)) {
-      document.documentElement.style.setProperty(`--radius-${key}`, `${Math.max(0, value)}px`);
-    }
+    if (Number.isFinite(value)) document.documentElement.style.setProperty(`--radius-${key}`, `${Math.max(0, value)}px`);
   }
 }
 
-function card(item, kind) {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = `session-card is-${kind === 'running' ? 'running' : item.status || 'success'}`;
-  button.title = item.title;
-  button.addEventListener('click', () => api.openSession({
-    id: item.id,
-    cwd: item.cwd,
-    title: item.title,
-  }));
+function icon(kind, item) {
+  const paths = kind === 'attention'
+    ? '<circle cx="12" cy="12" r="9"/><path d="M12 7v6m0 3h.01"/>'
+    : kind === 'running'
+      ? '<path d="M20 12a8 8 0 1 1-8-8"/>'
+      : item.status === 'error'
+        ? '<circle cx="12" cy="12" r="9"/><path d="M12 7v6m0 3h.01"/>'
+        : item.status === 'cancelled'
+          ? '<path d="m7 7 10 10M17 7 7 17"/>'
+          : '<path d="m5 12 4 4L19 6"/>';
+  const node = document.createElement('span');
+  node.className = 'status-icon';
+  node.setAttribute('aria-hidden', 'true');
+  node.innerHTML = `<svg viewBox="0 0 24 24">${paths}</svg>`;
+  return node;
+}
 
-  const orb = document.createElement('span');
-  orb.className = 'status-orb';
-  orb.setAttribute('aria-hidden', 'true');
-  // Fixed local paths only; session content is always inserted with textContent.
-  const paths = kind === 'running' ? '<path d="M20 12a8 8 0 1 1-8-8"/>'
-    : item.status === 'error' ? '<circle cx="12" cy="12" r="9"/><path d="M12 7v6m0 3h.01"/>'
-    : item.status === 'cancelled' ? '<path d="m7 7 10 10M17 7 7 17"/>'
-    : '<path d="m5 12 4 4L19 6"/>';
-  orb.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+function detail(item, kind) {
+  const workspace = workspaceName(item.cwd);
+  if (kind === 'attention') return `${workspace} · ${item.attention?.label || '等待处理'}`;
+  if (kind === 'running') return `${workspace} · 运行 ${elapsed(item.startedAt)}`;
+  const state = item.status === 'error' ? '需要查看' : item.status === 'cancelled' ? '已停止' : '已完成';
+  return `${workspace} · ${state} · ${relativeTime(item.completedAt)}`;
+}
+
+function sessionRow(item, kind) {
+  const row = document.createElement('article');
+  row.className = `session-row is-${kind === 'recent' ? item.status || 'success' : kind}`;
+
+  const open = document.createElement('button');
+  open.type = 'button';
+  open.className = 'session-open';
+  open.title = item.title;
+  open.setAttribute('aria-label', `打开会话：${item.title}`);
+  open.addEventListener('click', () => api.openSession({ id: item.id, cwd: item.cwd, title: item.title }));
 
   const copy = document.createElement('span');
   copy.className = 'session-copy';
   const title = document.createElement('strong');
   title.textContent = item.title || '会话';
-  const detail = document.createElement('small');
-  detail.dataset.cwd = item.cwd || '';
-  detail.dataset.startedAt = String(item.startedAt || Date.now());
-  if (kind === 'running') {
-    detail.textContent = runningDetail(item);
-  } else {
-    detail.dataset.completedAt = String(item.completedAt || Date.now());
-    detail.dataset.status = item.status === 'error' || item.status === 'cancelled' ? item.status : 'success';
-    detail.textContent = recentDetail(item);
+  const meta = document.createElement('small');
+  meta.dataset.kind = kind;
+  meta.dataset.cwd = item.cwd || '';
+  meta.dataset.startedAt = String(item.startedAt || Date.now());
+  meta.dataset.status = item.status || '';
+  meta.dataset.completedAt = String(item.completedAt || '');
+  meta.dataset.attentionLabel = item.attention?.label || '';
+  meta.textContent = detail(item, kind);
+  copy.append(title, meta);
+  open.append(icon(kind, item), copy);
+  row.append(open);
+
+  if (kind === 'running' || kind === 'attention') {
+    const stop = document.createElement('button');
+    stop.type = 'button';
+    stop.className = 'session-stop';
+    stop.title = '停止本轮运行';
+    stop.setAttribute('aria-label', `停止本轮运行：${item.title}`);
+    stop.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1"/></svg>';
+    stop.addEventListener('click', async () => {
+      if (stop.disabled) return;
+      stop.disabled = true;
+      stop.classList.add('is-busy');
+      stop.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-8-8"/></svg>';
+      status.textContent = `正在停止 ${item.title}`;
+      try {
+        const result = await api.stopSession({ id: item.id, requestId: item.requestId });
+        if (!result?.ok) throw new Error(result?.reason === 'stale-run' ? '该会话已经开始了新一轮运行' : '任务已经结束');
+        status.textContent = `${item.title} 已停止`;
+      } catch (error) {
+        stop.disabled = false;
+        stop.classList.remove('is-busy');
+        stop.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1"/></svg>';
+        status.textContent = error instanceof Error ? error.message : '停止失败，请重试';
+      }
+    });
+    row.append(stop);
   }
-  copy.append(title, detail);
 
-  const action = document.createElement('span');
-  action.className = 'session-action';
-  action.setAttribute('aria-hidden', 'true');
-  action.textContent = '›';
-
-  button.append(orb, copy);
-  if (kind !== 'running' && item.unread) {
+  if (kind === 'recent' && item.unread) {
     const unread = document.createElement('i');
     unread.className = 'unread-dot';
-    unread.setAttribute('aria-label', '新完成');
-    button.append(unread);
+    unread.setAttribute('aria-label', '未查看');
+    row.append(unread);
   }
-  button.append(action);
-  return button;
+  return row;
 }
 
 function render() {
   applyAppearance(currentState);
-  const running = Array.isArray(currentState.running) ? currentState.running : [];
+  const attention = Array.isArray(currentState.attention) ? currentState.attention : [];
+  const attentionIds = new Set(attention.map(item => item.id));
+  const running = (Array.isArray(currentState.running) ? currentState.running : [])
+    .filter(item => !attentionIds.has(item.id));
   const recent = Array.isArray(currentState.recent) ? currentState.recent : [];
-  runningCount.textContent = String(running.length);
-  recentCount.textContent = String(recent.length);
-  summary.textContent = summaryText(running, recent);
+
+  document.querySelector('#attention-section').hidden = attention.length === 0;
   document.querySelector('#running-section').hidden = running.length === 0;
   document.querySelector('#recent-section').hidden = recent.length === 0;
-  runningList.replaceChildren(...running.map(item => card(item, 'running')));
-  recentList.replaceChildren(...recent.map(item => card(item, 'recent')));
+  empty.hidden = attention.length + running.length + recent.length > 0;
+  attentionList.replaceChildren(...attention.map(item => sessionRow(item, 'attention')));
+  runningList.replaceChildren(...running.map(item => sessionRow(item, 'running')));
+  recentList.replaceChildren(...recent.map(item => sessionRow(item, 'recent')));
   clearRecent.disabled = recent.length === 0;
 }
 
-function updateElapsed() {
-  for (const node of document.querySelectorAll('[data-started-at]:not([data-completed-at])')) {
-    node.textContent = runningDetail({ cwd: node.dataset.cwd, startedAt: node.dataset.startedAt });
-  }
-  for (const node of document.querySelectorAll('[data-completed-at]')) {
-    node.textContent = recentDetail({
-      cwd: node.dataset.cwd,
-      status: node.dataset.status,
-      startedAt: node.dataset.startedAt,
-      completedAt: node.dataset.completedAt,
-    });
-  }
+function closeMoreMenu({ restoreFocus = false } = {}) {
+  moreMenu.hidden = true;
+  more.setAttribute('aria-expanded', 'false');
+  if (restoreFocus) more.focus();
 }
 
-document.querySelector('#quit').addEventListener('click', () => api.quit());
-document.querySelector('#close').addEventListener('click', () => api.hide());
+function toggleMoreMenu() {
+  const opening = moreMenu.hidden;
+  if (!opening) {
+    closeMoreMenu({ restoreFocus: true });
+    return;
+  }
+  moreMenu.hidden = false;
+  more.setAttribute('aria-expanded', 'true');
+  requestAnimationFrame(() => moreMenu.querySelector('button:not(:disabled)')?.focus());
+}
+
+more.addEventListener('click', toggleMoreMenu);
+document.querySelector('#settings').addEventListener('click', () => {
+  closeMoreMenu();
+  api.openSettings();
+});
+document.querySelector('#check-updates').addEventListener('click', () => {
+  closeMoreMenu();
+  api.checkUpdates();
+});
+clearRecent.addEventListener('click', () => {
+  api.clearRecent();
+  closeMoreMenu();
+});
+document.querySelector('#quit').addEventListener('click', () => {
+  closeMoreMenu();
+  api.quit();
+});
 document.querySelector('#open-main').addEventListener('click', () => api.openMain());
-clearRecent.addEventListener('click', () => api.clearRecent());
+
+document.addEventListener('pointerdown', (event) => {
+  if (!event.target.closest('.more-anchor')) closeMoreMenu();
+});
 window.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') api.hide();
+  if (event.key !== 'Escape') return;
+  if (!moreMenu.hidden) closeMoreMenu({ restoreFocus: true });
+  else api.hide();
 });
 
 api.onState((next) => {
   currentState = next;
   render();
 });
-setInterval(updateElapsed, 1000);
+
+setInterval(() => {
+  for (const meta of document.querySelectorAll('.session-copy small')) {
+    meta.textContent = detail({
+      cwd: meta.dataset.cwd,
+      startedAt: meta.dataset.startedAt,
+      completedAt: meta.dataset.completedAt,
+      status: meta.dataset.status,
+      attention: { label: meta.dataset.attentionLabel },
+    }, meta.dataset.kind);
+  }
+}, 1_000);
 
 api.state().then((next) => {
   currentState = next || currentState;

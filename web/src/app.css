@@ -141,9 +141,10 @@ overflow:auto），底部账号行因此始终贴底。折叠态后来被改成�
 .is-sidebar-collapsed .sidebar-bottom { margin-top: auto; }
 
 /* Conversation */
-/* main 是纵向 flex 列：header 固定高度，chat-scroll 独占剩余空间并成为消息
-滚动容器，composer-dock 留在普通文档流中。会话视图入口位于 header 内，因此
-不再额外占用一整行永久 Tab；右侧大纲仍绝对定位于消息视口之外。 */
+/* main 是纵向 flex 列：header 与 tabs 固定高度（flex:none），chat-scroll 独占
+剩余空间并成为唯一的消息滚动容器（flex:1 + min-height:0 + overflow-y:auto），
+composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不会被输入框遮住。
+右侧会话大纲绝对定位于 main 的滚动视口之外，z-index 9；窄于 1100px 时整体隐藏。 */
 
 .main { flex: 1; min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column; background: var(--surface); container-type: inline-size; container-name: main-pane; }
 .chat-header, .file-panel-head { height: var(--header-height); flex: none; display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-4); padding: 36px var(--space-6) var(--space-3); -webkit-app-region: drag; }
@@ -215,6 +216,40 @@ overflow:auto），底部账号行因此始终贴底。折叠态后来被改成�
 .notification-empty { display: grid; place-items: center; min-height: 168px; padding: var(--space-6); color: var(--faint); text-align: center; }
 .notification-empty > svg { width: 20px; height: 20px; margin-bottom: 8px; }
 .notification-empty strong { color: var(--muted); font-size: var(--text-sm); font-weight: 600; }
+.chat-tabs { height: var(--toolbar-height); min-width: 0; flex: none; display: flex; align-items: stretch; gap: var(--space-4); padding: 0 var(--space-6); overflow: hidden; border-bottom: 1px solid var(--border); }
+.chat-tab-list { display: flex; min-width: 0; align-items: stretch; gap: var(--space-4); overflow-x: auto; scrollbar-width: none; }
+.chat-tab-list::-webkit-scrollbar { display: none; }
+.tab { position: relative; display: inline-flex; flex: none; align-items: center; gap: 6px; padding: 0 var(--space-1); border: 0; background: var(--transparent); font-size: var(--text-base); color: var(--muted); white-space: nowrap; }
+.chat-tab-list .tab > svg { width: 14px; height: 14px; flex: none; color: var(--faint); transition: color var(--transition); }
+.chat-tab-list .tab:hover > svg,
+.chat-tab-list .tab.is-active > svg { color: var(--accent); }
+.tab-label { display: inline-flex; align-items: center; gap: 5px; }
+.tab-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-round);
+  background: var(--accent-soft);
+  color: var(--accent-foreground);
+  font: 600 10px/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.agent-tab-count { color: var(--faint); background: var(--surface-active); }
+.agent-tab-count.is-live {
+  background: var(--button-bg);
+  color: var(--on-button);
+  animation: agent-tab-count-live 1.9s ease-in-out infinite;
+}
+@keyframes agent-tab-count-live {
+  0%, 100% { box-shadow: 0 0 0 0 var(--transparent); transform: scale(1); }
+  50% { box-shadow: 0 0 0 3px var(--accent-soft); transform: scale(1.06); }
+}
+.tab > i { width: 5px; height: 5px; flex: none; border-radius: 50%; background: var(--live); box-shadow: var(--live-ring); animation: pulse 1.5s ease-in-out infinite; }
+.tab.is-active { color: var(--text); font-weight: 550; }
+.tab.is-active::after { position: absolute; content: ''; height: 2px; bottom: -1px; left: 0; right: 0; border-radius: var(--radius-tag); background: var(--accent); }
 .chat-scroll {
   flex: 1;
   min-height: 0;
@@ -1691,6 +1726,7 @@ auto 贴边。header 是窗口拖拽区，内部按钮依赖全局 no-drag 保�
 .chat-heading { flex: 1; }
 .chat-heading h1 { font-size: var(--text-base); font-weight: 600; }
 .chat-meta { margin-top: 1px; }
+.chat-tabs { height: var(--toolbar-height); }
 .is-empty-header .sidebar-toggle { margin-right: 2px; }
 .is-empty-header .chat-actions { margin-left: auto; }
 .is-new-conversation .chat-header { height: 48px; padding-top: 6px; padding-bottom: 4px; }
@@ -1746,6 +1782,8 @@ just-dropped 只有一次短动画，不改变最终布局。 */
 /* The center pane is independently resizable because either side panel can consume
  * width. Layout decisions therefore follow the pane, not only the application window. */
 @container main-pane (max-width: 660px) {
+  .chat-tabs { gap: var(--space-3); padding-inline: var(--space-4); }
+  .chat-tab-list { gap: var(--space-3); }
   .chat-scroll,
   .conversation-extension-scroll,
   .agent-overview,
@@ -1974,28 +2012,9 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 
 .app.is-panel-fullscreen .sidebar,
 .app.is-panel-fullscreen .main { display: none; }
-.file-panel { width: var(--panel-w); padding: 0; background: var(--surface); border-left: 1px solid var(--border); }
+.file-panel { width: var(--panel-w); padding: 0; background: var(--surface); border-left: 1px solid var(--border); container-type: inline-size; container-name: file-panel; }
 .file-panel.is-split:not(.is-fullscreen) { width: min(760px, 64vw); }
 .file-panel.is-fullscreen { width: 100%; flex: 1; border-left: 0; }
-.panel-tabbar { display: flex; align-items: center; gap: var(--space-2); height: 48px; flex: none; padding: 0 var(--space-2) 0 var(--space-3); border-bottom: 1px solid var(--border); background: var(--surface-soft); -webkit-app-region: drag; }
-.file-panel.is-fullscreen .panel-tabbar { padding-left: 92px; }
-.panel-tabbar button, .panel-tab { -webkit-app-region: no-drag; }
-.panel-tabs { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 1; overflow: auto; }
-.panel-tab { display: flex; align-items: center; gap: 6px; height: 32px; min-width: 0; max-width: 190px; padding: 0 6px 0 9px; border-radius: var(--radius-tag); color: var(--muted); font-size: var(--text-sm); text-align: left; cursor: default; }
-.panel-tab:hover { background: var(--surface-hover); color: var(--text); }
-.panel-tab.is-active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-card); }
-.panel-tab > svg { width: 14px; height: 14px; flex: none; color: var(--faint); }
-.panel-tab > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.panel-tab-close { display: grid; place-items: center; width: 18px; height: 18px; flex: none; padding: 0; border-radius: var(--radius-tag); color: var(--faint); opacity: 0; }
-.panel-tab:hover .panel-tab-close, .panel-tab.is-active .panel-tab-close, .panel-tab-close:focus-visible { opacity: 1; }
-.panel-tab-close:hover { background: var(--surface-active); color: var(--text); }
-.panel-tab-close svg { width: 12px; height: 12px; }
-.panel-tab-add { display: grid; place-items: center; width: 26px; height: 26px; flex: none; padding: 0; border-radius: var(--radius-tag); color: var(--faint); }
-.panel-tab-add:hover { background: var(--surface-hover); color: var(--text); }
-.panel-tab-add svg { width: 14px; height: 14px; }
-.panel-tools { display: flex; gap: 2px; flex: none; }
-.panel-tools .icon-button { width: 28px; height: 28px; }
-.panel-tools .icon-button.is-active { color: var(--accent); background: var(--accent-soft); }
 .panel-body { display: flex; flex: 1; min-height: 0; }
 .panel-body.is-split { display: grid; grid-template-columns: minmax(220px, .9fr) minmax(0, 1.4fr); }
 .panel-file-browser, .panel-file-preview { display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; }
@@ -2006,27 +2025,11 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .panel-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: 48px var(--space-5); text-align: center; color: var(--faint); font-size: var(--text-sm); }
 .panel-empty > svg { width: 30px; height: 30px; opacity: .7; margin-bottom: var(--space-2); }
 .panel-empty strong { color: var(--muted); font-size: var(--text-base); font-weight: 500; }
-.panel-start { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: flex-start; padding: var(--space-5) var(--space-6); }
-.panel-start-mark { display: grid; place-items: center; width: 56px; height: 56px; margin-bottom: 34px; border: 1px solid var(--border); border-radius: 50%; color: var(--faint); background: var(--surface); }
-.panel-start-mark svg { width: 25px; height: 25px; stroke-width: 1.25; }
-.panel-start-tools { display: flex; width: min(100%, 460px); overflow: hidden; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
-.panel-tool { display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: 54px; padding: 0 14px; border: 0; border-bottom: 1px solid var(--divider); border-radius: 0; background: var(--surface); text-align: left; }
-.panel-tool:last-child { border-bottom: 0; }
-.panel-tool:hover:not(:disabled) { background: var(--surface-hover); }
-.panel-tool:disabled { opacity: .55; }
-.panel-tool-icon { display: grid; place-items: center; width: 18px; height: 18px; flex: none; color: var(--icon); }
-.panel-tool-icon.is-folder { color: var(--icon); }
-.panel-tool-icon.is-services { color: var(--icon); }
-.panel-tool-icon svg { width: 16px; height: 16px; stroke-width: 1.6; }
-.panel-tool strong { min-width: 0; flex: 1; overflow: hidden; font-size: var(--text-md); font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
-.panel-tool-arrow { width: 14px; height: 14px; margin-left: auto; color: var(--faint); transition: transform var(--transition), color var(--transition); }
-.panel-tool:hover .panel-tool-arrow { color: var(--muted); transform: translateX(2px); }
 .panel-route-loading { display: grid; flex: 1; min-height: 0; place-items: center; color: var(--faint); }
 .panel-route-loading svg { width: 18px; height: 18px; animation: panel-route-spin .8s linear infinite; }
 @keyframes panel-route-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .panel-route-loading svg { animation: none; } }
 @media (max-width: 900px) { .file-panel.is-split:not(.is-fullscreen) { width: 100%; } .panel-body.is-split { grid-template-columns: minmax(160px, .85fr) minmax(0, 1.15fr); } }
-@media (max-width: 620px) { .panel-start { padding: var(--space-4); } }
 
 /* Provider marks: native brand glyphs when available, neutral fallback otherwise. */
 /* 供应商标记优先使用品牌图形，缺失时回退到首字母；尺寸由组件传入的
@@ -2061,10 +2064,7 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 /* 这一层把右栏所有表面统一成与对话区相同的 surface 层级，并去掉早期标签栏
 的嵌套底色和阴影；active 标签改用柔和表面，不再额外描边。 */
 
-.file-panel, .panel-tabbar, .panel-start, .panel-file-browser, .panel-file-preview { background: var(--surface); }
-.panel-tabbar { background: var(--surface); }
-.panel-tab.is-active { background: var(--surface-soft); box-shadow: none; }
-.panel-start { padding-top: 24px; }
+.file-panel, .panel-file-browser, .panel-file-preview { background: var(--surface); }
 .file-code { background: var(--surface); }
 
 /* Slide the workbench in and out from the right edge. */
@@ -2081,30 +2081,6 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .file-panel.is-fullscreen .file-panel-inner { width: 100%; min-width: 100%; }
 @media (max-width: 1100px) { .file-panel { position: absolute; top: 0; right: 0; bottom: 0; } }
 
-/* DSH-like tab strip: inset rounded rail, quiet tabs, colored file marks. */
-/* 标签栏做成内嵌圆角轨道：这是中间版本，随后扁平化区块会取消外边距、圆角和
-底色，只保留底部分隔线。标签分隔线用伪元素实现，active 标签会同时隐藏左右
-相邻分隔线，避免出现双线。 */
-
-.panel-tabbar { height: 46px; margin: 8px 10px 0; padding: 0 6px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-soft); }
-.file-panel.is-fullscreen .panel-tabbar { margin-left: 92px; }
-.panel-tabs { gap: 1px; scrollbar-width: none; }
-.panel-tabs::-webkit-scrollbar { display: none; width: 0; height: 0; }
-.panel-tab { position: relative; height: 32px; max-width: 220px; padding: 0 5px 0 6px; gap: 6px; border-radius: var(--radius-tag); }
-.panel-tab + .panel-tab::before { content: ''; position: absolute; left: -1px; top: 7px; bottom: 7px; width: 1px; background: var(--border); }
-.panel-tab.is-active::before, .panel-tab.is-active + .panel-tab::before { opacity: 0; }
-.panel-tab-icon { display: grid; place-items: center; width: 22px; height: 22px; flex: none; border-radius: var(--radius-tag); color: var(--faint); }
-.panel-tab-icon svg { width: 14px; height: 14px; }
-.panel-tab-icon.is-file { color: var(--icon); background: var(--surface-soft); }
-.panel-tab-icon.is-files { color: var(--icon); background: var(--surface-soft); }
-.panel-tab-icon.is-start { color: var(--muted); background: var(--transparent); }
-.panel-tab-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.panel-tab.is-active { background: var(--surface); box-shadow: var(--shadow-card); }
-.panel-tab.is-active .panel-tab-icon.is-start { color: var(--text); }
-.panel-tab-close { margin-left: 1px; opacity: 0; }
-.panel-tab:hover .panel-tab-close, .panel-tab.is-active .panel-tab-close, .panel-tab-close:focus-visible { opacity: .85; }
-.panel-tools { gap: 1px; }
-
 /* File actions: open with an installed app or reveal in Finder. */
 /* 文件工具栏右侧的打开方式与在 Finder 中显示菜单，绝对定位在按钮下方，
 z-index 40，宽度和最大高度都受限并可内部滚动；每个操作行用 18px 图标加
@@ -2120,43 +2096,6 @@ z-index 40，宽度和最大高度都受限并可内部滚动；每个操作行�
 .file-action > img { object-fit: contain; }
 .file-action > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-actions-sep { height: 1px; margin: 4px 6px; background: var(--border); }
-
-.panel-tab { flex: none; }
-
-/* Tabs keep a stable width and can be dragged into a new order. */
-/* 为拖拽排序准备：标签固定 150px 宽、不可伸缩，拖动中的标签降到 0.38 透明度，
-落点用 2px 竖线（z-index 4）表示插入位置。这里只覆盖标签尺寸，后续扁平化
-区块会把宽度改成 140 并去掉分隔线。 */
-
-.panel-tab { flex: 0 0 150px; width: 150px; min-width: 150px; max-width: 150px; }
-.panel-tab-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.panel-tab-close { position: relative; z-index: 2; }
-.panel-tab.is-dragging { opacity: .38; }
-.panel-tab.tab-drop-before::after { content: ''; position: absolute; z-index: 4; top: 5px; bottom: 5px; left: -2px; width: 2px; border-radius: var(--radius-tag); background: var(--accent); box-shadow: var(--shadow-card); }
-
-/* Flatten the tab rail: one row, one active pill, no nested chrome. */
-/* 标签栏最终形态：44px 高、通栏、无外边距和圆角，只保留一条底部分隔线；
-active 标签使用柔和强调色底而非卡片阴影，图标底色全部去掉。固定 140px 宽让
-标签顺序在拖拽时保持稳定。 */
-
-.panel-tabbar { height: 44px; margin: 0; padding: 0 10px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: var(--surface); }
-.file-panel.is-fullscreen .panel-tabbar { margin-left: 0; padding-left: 92px; }
-.panel-tabs { gap: 2px; }
-.panel-tab { flex: 0 0 140px; width: 140px; min-width: 140px; max-width: 140px; height: 30px; padding: 0 7px; gap: 7px; border-radius: var(--radius-tag); color: var(--muted); background: var(--transparent); box-shadow: none; }
-.panel-tab:hover { background: var(--surface-soft); color: var(--text); }
-.panel-tab.is-active { background: var(--accent-soft); color: var(--text); box-shadow: none; }
-.panel-tab + .panel-tab::before { display: none; }
-.panel-tab-icon { width: 16px; height: 16px; border-radius: 0; background: var(--transparent); color: var(--faint); }
-.panel-tab-icon svg { width: 14px; height: 14px; }
-.panel-tab-icon.is-file { color: var(--icon); background: var(--transparent); }
-.panel-tab-icon.is-files { color: var(--icon); background: var(--transparent); }
-.panel-tab-icon.is-start { color: var(--faint); background: var(--transparent); }
-.panel-tab.is-active .panel-tab-icon.is-start { color: var(--muted); }
-.panel-tab-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.panel-tab-close { margin-left: 0; }
-.panel-tab-add { width: 28px; height: 28px; background: var(--transparent); border-radius: var(--radius-tag); }
-.panel-tab-add:hover { background: var(--surface-soft); }
-.panel-tools { gap: 0; }
 
 /* Resource cards for MCP and global skills. */
 /* MCP 与全局技能共用的资源卡片：双列网格，卡片有最小高度和 hover 抬升；描述用
@@ -2360,18 +2299,13 @@ active 标签使用柔和强调色底而非卡片阴影，图标底色全部去�
 /* 标签栏支持滚轮横向滚动：去掉底部分隔线，让 tabs 自己把 overscroll 限制在
 容器内，避免滚动传给页面。文件工具栏的顶部边框也在这里去掉。 */
 
-.panel-tabbar { border-bottom: 0; padding-bottom: 0; }
 .panel-body .file-toolbar { border-top: 0; }
-.panel-tabs { overscroll-behavior-x: contain; }
 
 /* Match the sidebar toggle's icon scale and loosen the right-side tool spacing. */
 /* 统一面板工具按钮与侧栏开关的图标尺寸为 16px，并把工具组间距放宽到 8px；
 这些细调只影响观感，不改变点击区域。 */
 
 .sidebar-top-toggle svg { width: 16px; height: 16px; }
-.panel-tools { gap: 8px; }
-.panel-tools .icon-button { width: 28px; height: 28px; }
-.panel-tools .icon-button svg { width: 16px; height: 16px; }
 
 /* Skills stay grouped by their real discovery source: Studio-owned and
 Agent-shared directories are separate at both user and project scope. */
@@ -3638,9 +3572,10 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .sidebar-top-toggle { top: calc((var(--header-height) - 28px)/2); }
 .brand { height: var(--toolbar-height); margin: 0 -12px; padding: 0 16px; border-bottom: 1px solid var(--divider); }
 .brand .brand-mark { width: 26px; height: 26px; }
-.chat-header { position: relative; z-index: 20; border-bottom: 1px solid var(--divider); }
+.chat-header { border-bottom: 0; }
 .panel-tabbar { border-bottom: 0; }
-.changes-toolbar { height: var(--toolbar-height); min-height: var(--toolbar-height); max-height: var(--toolbar-height); flex: none; }
+.chat-tabs, .changes-toolbar { height: var(--toolbar-height); min-height: var(--toolbar-height); max-height: var(--toolbar-height); flex: none; }
+.chat-tabs { border-bottom-color: var(--divider); }
 .changes-view { container-type: inline-size; }
 .changes-toolbar { flex-wrap: nowrap; padding: 0 10px; gap: 6px; }
 .changes-round { border-radius: 14px; padding: 2px 9px 2px 4px; min-width: 0; }
