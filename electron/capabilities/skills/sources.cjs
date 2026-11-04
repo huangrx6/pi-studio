@@ -19,7 +19,9 @@ const {
   sha256,
 } = require('../../core/extension-archive.cjs');
 const { normalizeSecureHttpUrl } = require('../../core/external-url.cjs');
+const { systemFetch } = require('../../core/http-fetch.cjs');
 const { githubRepository, createGithubSourceAdapter } = require('./github-source.cjs');
+const { createLinkedSourceAdapter } = require('./linked-source.cjs');
 const {
   getStudioDatabase,
 } = require('../../core/studio-db.cjs');
@@ -35,8 +37,8 @@ const {
 const SKILL_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SHA256 = /^[a-f0-9]{64}$/;
 const PREPARED_TTL_MS = 30 * 60_000;
-const MAX_REGISTRY_BYTES = 3 * 1024 * 1024;
-const MAX_REGISTRY_SKILLS = 500;
+const MAX_REGISTRY_BYTES = 8 * 1024 * 1024;
+const MAX_REGISTRY_SKILLS = 20_000;
 const MAX_REDIRECTS = 4;
 const ARCHIVE_LIMITS = {
   ...DEFAULT_ARCHIVE_LIMITS,
@@ -63,6 +65,22 @@ const github = createGithubSourceAdapter(async (url, label, maximum) => {
     throw new Error('找不到 GitHub 仓库；请确认地址正确且仓库公开可访问');
   }
   return readLimitedResponse(response, label, maximum);
+});
+
+const linked = createLinkedSourceAdapter({
+  readUrl: async (url, label, maximum) => {
+    const { response } = await fetchHttps(url, label, 30_000);
+    return readLimitedResponse(response, label, maximum);
+  },
+  readJson: async (url, label) => {
+    const { response } = await fetchHttps(url, label, 15_000);
+    const bytes = await readLimitedResponse(response, label, 2 * 1024 * 1024);
+    try {
+      return JSON.parse(bytes.toString('utf8'));
+    } catch {
+      throw new Error(`${label}不是有效 JSON`);
+    }
+  },
 });
 
 function invalidateCatalog(id) {
@@ -162,7 +180,7 @@ async function readSource(source) {
   if (githubRepository(source.location)) return github.read(source);
   return source.type === 'directory'
     ? directoryEntries(source)
-    : { entries: await readRegistry(source), diagnostics: [] };
+    : readRegistry(source);
 }
 
 async function addSkillSource(input = {}) {
@@ -188,18 +206,33 @@ function removeSkillSource(id) {
 }
 
 async function readLimitedResponse(response, label, maximum = MAX_REGISTRY_BYTES) {
-  if (!response.ok) throw new Error(`${label}请求失败（HTTP ${response.status}）`);
+  if (!response.ok) {
+    await response.body?.cancel?.();
+    throw new Error(`${label}请求失败（HTTP ${response.status}）`);
+  }
   const declared = Number(response.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > maximum) {
-    await response.body?.cancel();
+    await response.body?.cancel?.();
     throw new Error(`${label}超过 ${maximum} 字节`);
+  }
+  // Electron 的 net.fetch 返回 Web Stream，没有异步迭代器，用 reader 逐块读。
+  const reader = typeof response.body?.getReader === 'function' ? response.body.getReader() : null;
+  if (!reader) {
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > maximum) throw new Error(`${label}超过 ${maximum} 字节`);
+    return buffer;
   }
   const chunks = [];
   let size = 0;
-  for await (const chunk of response.body || []) {
-    size += chunk.length;
-    if (size > maximum) throw new Error(`${label}超过 ${maximum} 字节`);
-    chunks.push(Buffer.from(chunk));
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > maximum) {
+      await reader.cancel();
+      throw new Error(`${label}超过 ${maximum} 字节`);
+    }
+    chunks.push(Buffer.from(value));
   }
   return Buffer.concat(chunks, size);
 }
@@ -207,7 +240,7 @@ async function readLimitedResponse(response, label, maximum = MAX_REGISTRY_BYTES
 async function fetchHttps(url, label, timeoutMs = 15_000) {
   let current = normalizeSecureHttpUrl(url, { label });
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
-    const response = await fetch(current, {
+    const response = await systemFetch(current, {
       redirect: 'manual',
       signal: AbortSignal.timeout(timeoutMs),
       headers: { Accept: 'application/json, application/zip, application/octet-stream' },
@@ -246,7 +279,14 @@ async function readRegistry(source) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new Error('技能 registry 根节点必须是对象');
   }
-  if (data.schemaVersion !== 1) throw new Error('技能 registry 仅支持 schemaVersion: 1');
+  // schemaVersion 1 是带 sha256 的压缩包清单；没有版本号或 2 是只有地址的链接清单。
+  if (data.schemaVersion === 1) return { entries: parseArchiveRegistry(data, registryLocation), diagnostics: [] };
+  if (data.schemaVersion === 2 || data.schemaVersion === undefined) return parseLinkedRegistry(data);
+  throw new Error(`技能 registry 仅支持 schemaVersion 1 或 2，当前为 ${String(data.schemaVersion)}`);
+}
+
+/** schemaVersion 1：每个技能自带压缩包地址与 sha256，安装前必须校验。 */
+function parseArchiveRegistry(data, registryLocation) {
   if (!Array.isArray(data.skills)) throw new Error('技能 registry 缺少 skills 数组');
   if (data.skills.length > MAX_REGISTRY_SKILLS) {
     throw new Error(`技能 registry 最多包含 ${MAX_REGISTRY_SKILLS} 个技能`);
@@ -290,6 +330,55 @@ async function readRegistry(source) {
       ) / 4)),
     };
   });
+}
+
+/**
+ * 链接清单：条目只有名称、说明和地址（例如 openclaw 那类索引站导出的 JSON）。
+ * 这类清单动辄几千条且由第三方生成，所以单条无效只记一条诊断，不让整份清单失败。
+ */
+function parseLinkedRegistry(data) {
+  if (!Array.isArray(data.skills)) throw new Error('技能 registry 缺少 skills 数组');
+  if (data.skills.length > MAX_REGISTRY_SKILLS) {
+    throw new Error(`技能 registry 最多包含 ${MAX_REGISTRY_SKILLS} 个技能`);
+  }
+  const entries = [];
+  const diagnostics = [];
+  const seen = new Set();
+  data.skills.forEach((entry, index) => {
+    const name = entry && typeof entry === 'object' ? String(entry.name || '').trim() : '';
+    const skip = (message) => diagnostics.push({ path: `skills[${index}]${name ? `（${name}）` : ''}`, message });
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return skip('条目必须是对象');
+    if (!SKILL_NAME.test(name)) return skip('名称无效，只能是小写字母、数字和连字符');
+    if (seen.has(name)) return skip('名称重复，已跳过');
+    const description = String(entry.description || entry.description_zh || '').trim();
+    if (!description) return skip('缺少 description');
+    const rawLink = String(entry.url || entry.homepage || '').trim();
+    if (!rawLink) return skip('缺少 url');
+    let link;
+    try {
+      link = normalizeSecureHttpUrl(rawLink, { label: `技能 ${name} 的地址` });
+    } catch (error) {
+      return skip(errorMessage(error));
+    }
+    seen.add(name);
+    entries.push({
+      id: `registry:${name}`,
+      name,
+      description: description.slice(0, 4_000),
+      version: String(entry.version || '').trim().slice(0, 40),
+      invocation: entry.invocation === 'explicit' ? 'explicit' : 'automatic',
+      repository: typeof entry.repository === 'string' ? entry.repository.slice(0, 2_000) : '',
+      homepage: link,
+      // 链接型条目没有压缩包和 sha256，安装时按 link 取回内容。
+      link,
+      promptTokens: Math.max(1, Math.ceil(Buffer.byteLength(
+        `<skill><name>${name}</name><description>${description}</description><location>registry:${name}</location></skill>`,
+        'utf8',
+      ) / 4)),
+    });
+    return undefined;
+  });
+  return { entries, diagnostics };
 }
 
 function directoryEntries(source) {
@@ -472,6 +561,8 @@ async function prepareSkillInstall({ sourceId: requestedSourceId, listingId, sco
   try {
     if (githubRepository(source.location)) {
       await github.stage(source, item, contentRoot, walkFiles);
+    } else if (item.link) {
+      await linked.stage(item, contentRoot);
     } else if (source.type === 'directory') {
       walkFiles(item.sourcePath);
       fs.cpSync(item.sourcePath, contentRoot, {
@@ -498,7 +589,7 @@ async function prepareSkillInstall({ sourceId: requestedSourceId, listingId, sco
       skill: {
         name: skill.name,
         description: skill.description,
-        version: item.version,
+        version: item.version || skill.version || '0.0.0',
         invocation: item.invocation,
         resourceCount: Math.max(0, walked.files.length - 1),
         totalBytes: walked.bytes,

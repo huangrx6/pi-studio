@@ -31,6 +31,7 @@
 .skill-hub-empty svg { width: 17px; height: 17px; }
 .skill-hub-empty > div { min-width: 0; flex: 1; }
 .skill-hub-empty strong { color: var(--text); font-size: var(--text-sm); }
+.skill-source-hint { display: block; margin-top: 6px; color: var(--faint); font-size: var(--text-xs); line-height: 1.5; }
 .skill-hub-loading { display: flex; align-items: center; justify-content: center; gap: var(--space-2); padding: 40px 0; color: var(--muted); font-size: var(--text-sm); }
 .skill-hub-loading svg { width: 16px; height: 16px; }
 /* 技能源多、单个源技能多：左选源，右看一个源，避免一条长列表铺满整页。 */

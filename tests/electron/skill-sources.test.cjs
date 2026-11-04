@@ -180,7 +180,7 @@ test('HTTP loopback registries resolve relative packages against the final redir
         download: './package.zip', sha256: 'a'.repeat(64),
       }] });
   const source = saveSkillSource({ type: 'registry', location: 'http://127.0.0.1:12345/start' });
-  const entries = await __test.readRegistry(source);
+  const { entries } = await __test.readRegistry(source);
   assert.equal(entries[0].download, 'http://127.0.0.1:12345/catalog/package.zip');
   setSkillSourceEnabled(source.id, false);
 });

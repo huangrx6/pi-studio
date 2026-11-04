@@ -1,8 +1,9 @@
 # Skill Hub
 
-Pi Studio exposes two skill source adapters: a local directory and a static
-registry JSON document. Both use the same discovery, quarantine preview,
-integrity verification, atomic install, and update flow.
+Pi Studio exposes three skill source adapters: a local directory, a GitHub
+repository, and a static registry JSON document. All of them share the same
+discovery, quarantine preview, integrity verification, atomic install, and
+update flow.
 
 ## Source layout
 
@@ -38,6 +39,46 @@ inside one wrapper directory.
 `download` accepts HTTPS or a path relative to the registry JSON. HTTP is only
 accepted for loopback development. The declared digest is mandatory and is
 checked before the ZIP is extracted.
+
+### Link catalogs
+
+A registry without `schemaVersion`, or with `schemaVersion: 2`, is a *link
+catalog*: every entry publishes only a name, a description, and a URL. This is
+the shape most third-party indexes export. Its schema is
+[`pi-studio.skill.registry.v2.schema.json`](../schemas/pi-studio.skill.registry.v2.schema.json).
+
+```json
+{
+  "skills": [
+    {
+      "name": "review-checklist",
+      "description": "Review a change with a repeatable checklist.",
+      "url": "https://github.com/example/skills/tree/main/skills/review-checklist/SKILL.md"
+    }
+  ]
+}
+```
+
+Link catalogs trade integrity for reach: there is no digest to verify, so the
+installed content is hashed at install time and any later edit shows up as a
+content change. Entries are validated one by one — a bad or duplicate name
+becomes a diagnostic on the source instead of failing the whole catalog — which
+matters for the multi-thousand-entry indexes these sites publish.
+
+For a GitHub link, Studio reads `SKILL.md` from `raw.githubusercontent.com` and
+then tries to pull the sibling files of the same directory through the GitHub
+contents API, so `references/` and `scripts/` arrive with the skill. When that
+listing is unavailable (rate limit, private repository), the install falls back
+to the single `SKILL.md` and the preview lists exactly what was fetched. A link
+that returns 404 reports `链接可能已失效` instead of a network stack trace.
+
+## System proxy and VPN
+
+Remote sources and GitHub archives are fetched through Electron's `net.fetch`,
+which uses Chromium's network stack and therefore honours the operating system
+proxy and PAC settings. Node's own `fetch` ignores them, which is why a VPN that
+only configures a system proxy used to leave GitHub downloads timing out while
+the rest of the application worked.
 
 ## Discovery and installation
 

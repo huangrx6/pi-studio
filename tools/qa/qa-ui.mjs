@@ -3502,6 +3502,12 @@ try {
   await sourceManager.getByRole('button', { name: '移除技能源 团队技能库', exact: true }).click();
   await sourceManager.getByRole('alert').filter({ hasText: '技能源正在刷新' }).waitFor();
   await capture('22-skill-source-manager');
+  // 技能目录（JSON）支持两种清单形状，提示必须写清楚，且不能挤坏表单。
+  await sourceManager.getByRole('button', { name: '技能源类型', exact: true }).click();
+  await page.getByRole('option', { name: '技能目录（JSON）', exact: true }).click();
+  await sourceManager.getByText(/带 sha256 的压缩包清单/).waitFor();
+  assert.match(await sourceManager.locator('.skill-source-hint').innerText(), /链接清单/);
+  await capture('22-skill-source-registry');
   // Hold the add request explicitly: pending and failed submissions must retain
   // the user's fields, and a successful retry must clear them only at the end.
   await page.evaluate(() => {

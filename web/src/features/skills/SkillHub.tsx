@@ -159,7 +159,7 @@ export function SkillHub({
         <SettingsResourceCardMain className="skill-hub-item-main" onClick={() => setSelected(item)} ariaLabel={`查看技能 ${item.name}`}>
           <SettingsResourceCardIcon className="skill-hub-item-icon"><FileCode2 /></SettingsResourceCardIcon>
           <SettingsResourceCardBody className="skill-hub-item-body">
-            <span className="skill-hub-item-title"><strong>{item.name}</strong><small>v{item.version}</small></span>
+            <span className="skill-hub-item-title"><strong>{item.name}</strong>{item.version ? <small>v{item.version}</small> : null}</span>
             <p>{item.description}</p>
             <span className="skill-hub-item-meta">
               <span>{invocationLabel(item.invocation)}</span>
@@ -411,10 +411,11 @@ function SkillSourceManager({
           ]}
         />
       </label>
-      <label>显示名称<input value={name} onChange={(event) => setName(event.target.value)} placeholder="可选" /></label>
+      <label>显示名称<input value={name} aria-label="显示名称" onChange={(event) => setName(event.target.value)} placeholder="可选" /></label>
       <label className="field-wide">位置
         <div className="skill-source-location">
           <input
+            aria-label="位置"
             value={location}
             onChange={(event) => {
               const value = event.target.value;
@@ -426,6 +427,10 @@ function SkillSourceManager({
           {type !== 'github' && <button type="button" className="settings-outline" onClick={() => void pick()}><FolderSearch />选择</button>}
         </div>
       </label>
+      {/* 说明放在 label 外面，否则会被算进“位置”输入框的无障碍名字。 */}
+      {type === 'registry' && <small className="skill-source-hint">
+        支持两种 JSON：带 sha256 的压缩包清单（schemaVersion 1），以及只有名称、说明和地址的链接清单（无版本号或 schemaVersion 2）。
+      </small>}
     </div>
     <div className="skill-source-existing">
       <header><strong>已添加</strong><span>{snapshot?.sources.length || 0} 个</span></header>
@@ -557,7 +562,7 @@ function SkillInstallPreviewDialog({
     <header className="detail-header">
       <div className="detail-heading">
         <span className="detail-icon is-skill"><Download /></span>
-        <div><h2>{item.name}</h2><p>{item.sourceName} · v{item.version}</p></div>
+        <div><h2>{item.name}</h2><p>{item.sourceName}{item.version ? ` · v${item.version}` : ' · 链接型技能'}</p></div>
       </div>
       <button type="button" className="icon-button" aria-label="关闭技能预览" disabled={installing} onClick={onClose}><X /></button>
     </header>
@@ -567,7 +572,7 @@ function SkillInstallPreviewDialog({
         : preview && <>
           <section className="skill-install-overview">
             <div><span>来源</span><strong>{preview.sourceName}</strong></div>
-            <div><span>版本</span><strong>v{preview.version}</strong></div>
+            <div><span>版本</span><strong>{preview.version ? `v${preview.version}` : '未声明'}</strong></div>
             <div><span>调用</span><strong>{invocationLabel(preview.invocation)}</strong></div>
             <div><span>提示词</span><strong>~{preview.promptTokens} tokens/请求</strong></div>
             <div><span>资源</span><strong>{preview.resourceCount} 个 · {formatFileSize(preview.totalBytes)}</strong></div>

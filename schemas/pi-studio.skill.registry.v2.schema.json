@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pi.studio/schemas/pi-studio.skill.registry.v2.schema.json",
+  "title": "Pi Studio Skill Link Catalog",
+  "description": "A catalog of Agent Skill links. Entries publish an address instead of a verified ZIP, so integrity is established at install time.",
+  "type": "object",
+  "required": ["skills"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 2 },
+    "name": { "type": "string", "maxLength": 120 },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "total": { "type": "integer", "minimum": 0 },
+    "skills": {
+      "type": "array",
+      "maxItems": 20000,
+      "items": { "$ref": "#/$defs/skill" }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "skill": {
+      "type": "object",
+      "required": ["name", "description", "url"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+          "description": "Skill directory name; must match the SKILL.md frontmatter name."
+        },
+        "description": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "url": {
+          "type": "string",
+          "pattern": "^https://",
+          "maxLength": 2000,
+          "description": "HTTPS address of SKILL.md. GitHub tree and blob links are read through raw.githubusercontent.com."
+        },
+        "version": { "type": "string", "maxLength": 40 },
+        "invocation": { "enum": ["automatic", "explicit"] },
+        "repository": { "type": "string", "maxLength": 2000 },
+        "homepage": { "type": "string", "maxLength": 2000 }
+      },
+      "additionalProperties": true
+    }
+  }
+}
