@@ -85,6 +85,7 @@ contextBridge.exposeInMainWorld('piApi', {
   pickAttachments: (payload) => ipcRenderer.invoke('pi:pick-attachments', payload),
   saveUpload: (payload) => ipcRenderer.invoke('pi:save-upload', payload),
   copyImage: (payload) => ipcRenderer.invoke('pi:copy-image', payload),
+  copyRichText: (payload) => ipcRenderer.invoke('pi:copy-rich-text', payload),
   chooseWorkspace: () => ipcRenderer.invoke('pi:choose-workspace'),
   models: (cwd) => ipcRenderer.invoke('pi:models', cwd),
   contextPolicy: (payload) => ipcRenderer.invoke('pi:context-policy', payload),

@@ -144,7 +144,8 @@ export type SkillInstallPreview = {
   listingId: string;
   sourceName: string;
   sourceType: 'directory' | 'registry' | 'github';
-  scope: 'user' | 'project';
+  /** user = Studio 应用目录，shared = ~/.agents/skills，project = 工作区 .pi-studio/skills。 */
+  scope: 'user' | 'shared' | 'project';
   requiresTrust: boolean;
   canUpdate: boolean;
   installedVersion: string;
@@ -402,7 +403,6 @@ declare global {
         limit?: number;
         cursor?: ConversationPageCursor;
         /** 目标 entry id：一直向后加载到包含这条消息为止（上限 2000 条）。 */
-        untilSourceIndex?: number;
       }): Promise<ConversationPage | undefined>;
       /** 获取完整提问大纲；仅用于导航，不参与消息窗口渲染。 */
       conversationOutline(id: string): Promise<ConversationOutline | undefined>;
@@ -535,6 +535,8 @@ declare global {
       saveUpload(payload: { sessionId?: string; name: string; mime: string; data: string }): Promise<UploadedAttachment>;
       /** 把受支持的内联图片 data URI 写入系统剪贴板。 */
       copyImage(payload: { src: string }): Promise<{ ok: boolean }>;
+      /** 把消息正文与内联图片一起写入剪贴板：text 给纯文本输入框，html 保留图片。 */
+      copyRichText(payload: { text: string; html: string }): Promise<{ ok: boolean }>;
       /** 打开系统目录选择器，返回所选工作区路径。 */
       chooseWorkspace(): Promise<string | undefined>;
 
@@ -701,14 +703,14 @@ declare global {
       prepareSkillInstall(payload: {
         sourceId: string;
         listingId: string;
-        scope: 'user' | 'project';
+        scope: 'user' | 'shared' | 'project';
         cwd?: string;
       }): Promise<SkillInstallPreview>;
       installPreparedSkill(payload: { token: string; cwd?: string }): Promise<{
         installed: {
           name: string;
           version: string;
-          scope: 'user' | 'project';
+          scope: 'user' | 'shared' | 'project';
           path: string;
           baseDir: string;
         };

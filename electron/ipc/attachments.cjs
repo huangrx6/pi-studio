@@ -11,6 +11,7 @@ const {
   readAttachmentFile,
 } = require('../services/attachments.cjs');
 const { copyImageToClipboard } = require('../services/image-clipboard.cjs');
+const { copyTextAndHtml } = require('../services/rich-clipboard.cjs');
 const { getWindow } = require('../core/state.cjs');
 
 function assertMainWindow(event) {
@@ -48,7 +49,13 @@ function registerAttachmentsIpc() {
   // 把消息或输入框中的内联图片写入系统剪贴板
   ipcMain.handle('pi:copy-image', async (event, payload) => {
     assertMainWindow(event);
-    return copyImageToClipboard(payload?.src);
+    return await copyImageToClipboard(payload?.src);
+  });
+
+  // 复制消息：正文与图片以纯文本 + 富文本两种形式同时写入剪贴板
+  ipcMain.handle('pi:copy-rich-text', async (event, payload) => {
+    assertMainWindow(event);
+    return await copyTextAndHtml(payload || {});
   });
 }
 
