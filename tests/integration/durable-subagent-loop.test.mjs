@@ -83,11 +83,13 @@ test('a foreground subagent returns its child answer through the real Durable to
     chordContext: BACKGROUND_CONTEXT,
   });
   const subagents = builtins.get('builtin:studio-subagents');
+  const subagentChannel = builtins.get('builtin:studio-subagent-channel');
   const subagentTool = subagents.tools.find((tool) => tool.name === 'subagent');
   assert.ok(subagentTool);
 
   const registry = createRegistry();
   registry.install(subagents);
+  registry.install(subagentChannel);
   const models = createModels();
   models.setProvider(faux.provider);
   const harness = await Harness.open(
@@ -100,7 +102,7 @@ test('a foreground subagent returns its child answer through the real Durable to
     const conversation = await harness.root(BACKGROUND_CONTEXT, {
       agent: {
         model: { provider: 'faux', modelId: 'faux-1' },
-        extensions: [subagents],
+        extensions: [subagents, subagentChannel],
         tools: [subagentTool],
       },
     });
@@ -241,6 +243,95 @@ test('an isolated subagent writes in Studio userData without changing the projec
     assert.equal(worktrees[0].status, 'finished');
     assert.equal(fs.readFileSync(path.join(worktrees[0].path, 'isolated.txt'), 'utf8'), 'inside worktree\n');
     await discardManagedWorktree(worktrees[0].id);
+  } finally {
+    await harness.close(BACKGROUND_CONTEXT);
+  }
+});
+
+test('a background subagent report carries the child answer instead of "without a text answer"', async () => {
+  setSubagentConfig('user', '', {
+    defaultModel: '',
+    defaultThinking: '',
+    maxThinking: '',
+    defaultMode: 'background',
+    backgroundEnabled: true,
+    supervisorEnabled: false,
+    allowedTools: [],
+  });
+
+  const durable = await import('@earendil-works/pi-durable');
+  const builtins = createStudioBuiltins({
+    durable,
+    piAi: { Type: toolSchema, getSupportedThinkingLevels: () => ['off'] },
+    codingTools: defineExtension({ name: 'coding-tools', tools: [] }),
+    toolSearch: createToolSearchExtension(),
+    chordContext: BACKGROUND_CONTEXT,
+  });
+  const subagents = builtins.get('builtin:studio-subagents');
+  const subagentChannel = builtins.get('builtin:studio-subagent-channel');
+  const subagentTool = subagents.tools.find((tool) => tool.name === 'subagent');
+  const { createProtocol } = { createProtocol: require('../../electron/capabilities/subagents/index.cjs').createProtocol };
+
+  const faux = fauxProvider({
+    provider: 'faux',
+    models: [{ id: 'faux-1', name: 'Subagent background probe' }],
+  });
+  faux.setResponses([
+    () => fauxAssistantMessage(
+      fauxToolCall('subagent', {
+        action: 'spawn',
+        name: 'bg-1',
+        task: 'Answer with the background child result.',
+      }, { id: 'call-spawn' }),
+      { stopReason: 'toolUse' },
+    ),
+    () => fauxAssistantMessage('background child answer'),
+    () => fauxAssistantMessage('parent acknowledged'),
+  ]);
+
+  const registry = createRegistry();
+  registry.install(subagents);
+  registry.install(subagentChannel);
+  const models = createModels();
+  models.setProvider(faux.provider);
+  const harness = await Harness.open(
+    new MemoryStorage(),
+    { models, registry },
+    BACKGROUND_CONTEXT,
+  );
+
+  try {
+    const conversation = await harness.root(BACKGROUND_CONTEXT, {
+      agent: {
+        model: { provider: 'faux', modelId: 'faux-1' },
+        extensions: [subagents, subagentChannel],
+        tools: [subagentTool],
+      },
+    });
+    const parentId = conversation.id;
+    const protocol = createProtocol(durable);
+    const submission = await conversation.submit({ type: 'input', content: 'Spawn a background child.' }, BACKGROUND_CONTEXT);
+    assert.equal((await submission.wait(BACKGROUND_CONTEXT)).status, 'done');
+
+    const deadline = Date.now() + 10_000;
+    let reporterId;
+    while (Date.now() < deadline) {
+      const state = await harness.snapshot(protocol.Subagents, parentId, BACKGROUND_CONTEXT);
+      reporterId = state?.agents?.['bg-1']?.lastReporterTaskId;
+      if (reporterId) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    assert.ok(reporterId, 'the spawn registers a reporter task');
+    await harness.waitForTask(reporterId, BACKGROUND_CONTEXT);
+
+    const settled = await harness.snapshot(protocol.Subagents, parentId, BACKGROUND_CONTEXT);
+    const agent = settled.agents['bg-1'];
+    // 子会话里的捕获任务把最终回答落进 ChildContext，reporter 正是从这里回读。
+    const childContext = await harness.snapshot(protocol.ChildContext, agent.conversationId, BACKGROUND_CONTEXT);
+    assert.equal(childContext.lastAnswer, 'background child answer');
+    assert.equal(agent.lastStatus, 'completed');
+    assert.match(agent.lastReport, /\[subagent bg-1 answered\]/);
+    assert.match(agent.lastReport, /background child answer/);
   } finally {
     await harness.close(BACKGROUND_CONTEXT);
   }

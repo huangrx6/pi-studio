@@ -26,7 +26,7 @@ id: 'studio-subagent-channel',
     description: '仅由 Studio 子智能体使用的父级联系通道；父智能体默认看不到这个 child 工具。',
     runtimeName: 'studio-subagent-channel',
     runtimeNames: ['studio-subagent-channel'],
-    permissions: ['agent.tools'],
+    permissions: ['agent.tools', 'agent.tasks', 'agent.hooks'],
     requires: ['builtin:studio-permissions'],
     contributes: {
       tools: [{ name: 'contact_supervisor', description: '向创建此子智能体的主智能体发起异步确认请求。' }],

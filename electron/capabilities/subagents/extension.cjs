@@ -328,6 +328,27 @@ function createSubagentChannelExtension(durable, piAi) {
   const protocol = createProtocol(durable);
   return defineExtension({
     name: 'studio-subagent-channel',
+    tasks: [protocol.AnswerCapture],
+    hooks: [
+      durable.hook(durable.GenerationTask, {
+        /**
+         * 子会话回答结束时，在子会话作用域内把最终正文写进 ChildContext。
+         * reporter 跑在父会话，读不到子会话条目，只能靠这里落盘再回读。
+         */
+        async afterRun(run, api, context) {
+          try {
+            const child = await api.snapshot(protocol.ChildContext, api.conversationId, context);
+            if (!child?.parentConversationId) return undefined;
+            return {
+              tasks: [durable.runEndTask(protocol.AnswerCapture, { answer: String(run.answer) })],
+            };
+          } catch (error) {
+            console.warn('[pi-studio] subagent answer capture hook failed', error);
+            return undefined;
+          }
+        },
+      }),
+    ],
     tools: [
       defineTool({
         name: 'contact_supervisor',
@@ -486,10 +507,14 @@ function createSubagentExtension(durable, piAi, chordContext) {
                   request?.childConversationId === agent.conversationId
                   && request.status === 'pending'
                 )).length;
+              const summary = typeof agent.lastReport === 'string'
+                ? agent.lastReport.replace(/\s+/g, ' ').trim().slice(0, 160)
+                : '';
               lines.push(
                 `${agent.name}: ${live?.run ? 'running' : agent.lastStatus || 'idle'}`
                 + ` (${agent.mode || 'background'}, conversation ${agent.conversationId}`
-                + `${pending ? `, ${pending} supervisor pending` : ''})`,
+                + `${pending ? `, ${pending} supervisor pending` : ''})`
+                + `${summary ? `\n  最近回传：${summary}` : ''}`,
               );
             }
             return {
@@ -985,6 +1010,12 @@ function createSubagentExtension(durable, piAi, chordContext) {
           const waitContext = chordContext?.withAbortSignal
             ? chordContext.withAbortSignal(timeout.signal, context)
             : context;
+          // 先登记「父智能体正在等」：reporter 收尾时据此跳过多余的 follow-up。
+          await api.commit(async (tx) => {
+            const registry = await tx.doc(protocol.Subagents, parentConversationId);
+            const agent = registryAgent(registry, reporter.name);
+            if (agent) agent.waitingSince = api.now();
+          }, context);
           let timedOut = false;
           try {
             await api.waitForTask(reporter.taskId, waitContext);
@@ -996,18 +1027,29 @@ function createSubagentExtension(durable, piAi, chordContext) {
             clearTimeout(timer);
           }
           const task = await api.getTask(reporter.taskId, context);
+          const settledState = await api.snapshot(protocol.Subagents, parentConversationId, context);
+          const agent = registryAgent(settledState, reporter.name);
+          await api.commit(async (tx) => {
+            const registry = await tx.doc(protocol.Subagents, parentConversationId);
+            const current = registryAgent(registry, reporter.name);
+            if (current) delete current.waitingSince;
+          }, context).catch(() => {});
+          const report = typeof agent?.lastReport === 'string' ? agent.lastReport.trim() : '';
+          const status = task?.state?.status || 'terminal';
+          const body = timedOut
+            ? `${reporter.name} 仍在运行；本次等待在 ${timeoutMs}ms 后结束，child 未被停止。`
+            : report
+              ? `${reporter.name} 已结束（${status}）。\n\n${report}`
+              : `${reporter.name} 的这次运行已结束（${status}）。`;
           return {
-            output: [{
-              type: 'text',
-              text: timedOut
-                ? `${reporter.name} 仍在运行；本次等待在 ${timeoutMs}ms 后结束，child 未被停止。`
-                : `${reporter.name} 的这次运行已结束（${task?.state?.status || 'terminal'}）。`,
-            }],
+            output: [{ type: 'text', text: body }],
             details: {
               name: reporter.name,
               reporterTaskId: String(reporter.taskId),
               timedOut,
               terminal: Boolean(task && task.state?.status === 'terminal'),
+              report: report || undefined,
+              status: agent?.lastStatus || undefined,
             },
           };
         },

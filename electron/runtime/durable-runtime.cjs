@@ -150,6 +150,9 @@ async function createRuntime() {
 
   const storage = await durableSqlite.openNodeSqliteStorage(databasePath(), {
     prefix: DURABLE_PREFIX,
+    // 并行子智能体各自提交时，5s 的默认等待偶尔会直接抛 "database is locked"，
+    // 一次就被记成子智能体失败。放宽到 15s，让写锁排队而不是失败。
+    busyTimeoutMs: 15_000,
   });
   const shellEnv = sanitizedShellEnv();
   const reports = [];

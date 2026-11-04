@@ -16,6 +16,12 @@ const {
 const contracts = new WeakMap();
 const MAX_REPORTED_ANSWERS = 64;
 const MAX_SUPERVISOR_REQUESTS = 200;
+/** 回传正文上限：卡片和 follow-up 消息都不该被一份长报告撑爆。 */
+const MAX_REPORT_CHARS = 8_000;
+/** 子智能体最终回答的落盘上限，供 reporter 回读。 */
+const MAX_LAST_ANSWER_CHARS = 8_000;
+/** 父智能体正在 bg_wait 时，reporter 不再额外插一条 follow-up。 */
+const WAIT_WINDOW_MS = 30 * 60_000;
 
 function emptyRegistry() {
   return {
@@ -35,6 +41,9 @@ function emptyChildContext() {
     isolation: 'workspace',
     supervisorEnabled: false,
     createdAt: 0,
+    /** 子智能体本轮结束时的正文回答，由 AnswerCapture 任务在子会话内写入。 */
+    lastAnswer: '',
+    lastAnswerAt: 0,
   };
 }
 
@@ -102,6 +111,43 @@ function createProtocol(durable) {
     }), context),
   });
 
+  /**
+   * 在子会话内部把本轮最终回答写进 ChildContext。
+   *
+   * 为什么需要它：reporter 跑在父会话里，`runtime.entry()` 只能看到自己会话的
+   * 条目，读不到子会话的回答，于是回传永远是「completed without a text answer」。
+   * 这个任务由 afterRun 钩子在子会话里请求，读写都在子会话作用域内。
+   */
+  const AnswerCapture = durable.defineTask({
+    name: 'studio.subagent-answer',
+    version: 1,
+    initial: () => ({ phase: 'capture' }),
+    phases: {
+      capture: async (task, runtime, context) => {
+        const answerId = Number(task.input?.answer);
+        const entry = Number.isSafeInteger(answerId)
+          ? await runtime.entry(answerId, context)
+          : undefined;
+        const text = textOfEntry(entry).slice(0, MAX_LAST_ANSWER_CHARS);
+        return runtime.commit(async (tx) => {
+          if (text) {
+            const child = await tx.doc(ChildContext, runtime.conversationId);
+            child.lastAnswer = text;
+            child.lastAnswerAt = runtime.now();
+          }
+          return {
+            status: 'terminal',
+            outcome: { status: 'completed', result: null },
+          };
+        }, context);
+      },
+    },
+    abort: (_task, runtime, context) => runtime.commit(() => ({
+      status: 'terminal',
+      outcome: { status: 'aborted' },
+    }), context),
+  });
+
   const Reporter = durable.defineTask({
     name: 'studio.subagent-reporter',
     version: 1,
@@ -129,8 +175,13 @@ function createProtocol(durable) {
               outcome = 'completed';
               if (settled.type === 'input') {
                 answerId = settled.answer;
+                // reporter 在父会话里跑，读不到子会话的 answer 条目；等子会话
+                // 收尾（AnswerCapture 写入 ChildContext）后再取正文。
+                await child.waitForIdle(context).catch(() => {});
+                const childContext = await runtime.snapshot(ChildContext, conversationId, context);
+                const captured = String(childContext?.lastAnswer || '').trim();
                 const answer = await runtime.entry(settled.answer, context);
-                const text = textOfEntry(answer);
+                const text = textOfEntry(answer) || captured;
                 report = text
                   ? `[subagent ${name} answered]\n${text}`
                   : `[subagent ${name} completed without a text answer]`;
@@ -182,6 +233,12 @@ function createProtocol(durable) {
             agent.lastStatus = outcome;
             agent.updatedAt = runtime.now();
             agent.lastReporterTaskId = reporter.id;
+            // 回传内容同样落在注册表里：bg_wait / status 直接读它，父智能体
+            // 不必再靠轮询状态或翻子会话文件来还原结果。
+            if (report) {
+              agent.lastReport = report.slice(0, MAX_REPORT_CHARS);
+              agent.lastReportAt = runtime.now();
+            }
             if (report && (report.includes('failed:') || report.includes('failed]'))) {
               agent.lastError = report.slice(0, 2_000);
             } else {
@@ -198,17 +255,28 @@ function createProtocol(durable) {
         }, context);
       },
       report: async (reporter, runtime, context) => {
-        const { requestKey } = reporter.input;
+        const { requestKey, name } = reporter.input;
         const report = reporter.state.checkpoint.report;
         if (report !== undefined) {
-          const main = await runtime.conversation(runtime.conversationId, context);
-          if (main) {
-            await main.submit({
-              type: 'input',
-              content: report,
-              whenBusy: 'followUp',
-              requestId: `subagent-report:${reporter.id}`,
-            }, context);
+          // 父智能体正在 bg_wait 时，它已经从 lastReport 拿到同一段正文；
+          // 再插一条 follow-up 只会让它在本轮结束后又被迫多跑一轮。
+          const waitingState = await runtime.snapshot(Subagents, runtime.conversationId, context);
+          const waitingAgent = Object.hasOwn(waitingState?.agents || {}, name)
+            ? waitingState.agents[name]
+            : undefined;
+          // 读注册表用 snapshot：只读的 commit 会写出一条空提交，落库时直接报错。
+          const parentWaiting = Boolean(waitingAgent?.waitingSince)
+            && runtime.now() - Number(waitingAgent.waitingSince) <= WAIT_WINDOW_MS;
+          if (!parentWaiting) {
+            const main = await runtime.conversation(runtime.conversationId, context);
+            if (main) {
+              await main.submit({
+                type: 'input',
+                content: report,
+                whenBusy: 'followUp',
+                requestId: `subagent-report:${reporter.id}`,
+              }, context);
+            }
           }
         }
         return runtime.commit(async (tx) => {
@@ -248,9 +316,13 @@ function createProtocol(durable) {
 
   const contract = {
     Anchor,
+    AnswerCapture,
     ChildContext,
     Reporter,
     Subagents,
+    MAX_LAST_ANSWER_CHARS,
+    MAX_REPORT_CHARS,
+    WAIT_WINDOW_MS,
     emptyChildContext,
     emptyRegistry,
     pruneSupervisorRequests,
