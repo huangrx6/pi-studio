@@ -22,6 +22,8 @@ import type { ChatMessage, ContentBlock, RequestTrace, ToolCallBlock, TurnDiff, 
 import type { StepCollapse, StepDisplay } from '../../shared/preferences';
 import { AttachmentIcon, attachmentVisual } from '../../shared/AttachmentIcon';
 import { ConversationImageGallery, type ConversationImage } from './ConversationImageGallery';
+import { isNearBottom, resolveLiveFollow } from './chat-scroll.mjs';
+import { messageClipboardHtml } from './message-copy';
 import { ActivityRequest } from './ModelRequestTrace';
 import { Markdown } from '../../shared/Markdown';
 import { collectFileChanges } from './file-changes';
@@ -194,12 +196,18 @@ function ActivityThinking({ block, defaultOpen = false }: { block: Extract<Conte
 
 /**
  * 正在推理的思考行。与「决策」行共用同一套行结构（图标 | 标题 | 预览 | 状态 | 箭头），
- * 状态位换成转圈；正文随流式增量更新，超出上限后跟随最新内容。推理结束后变成可折叠的「决策」行。
+ * 状态位换成转圈；正文随流式增量更新。
+ *
+ * 跟随策略：只有读者还贴在正文底部时才自动显示最新增量。一旦上滚（或拖滚动条
+ * 离开底部），后续 token 不得再把视线拽回底部——之前的实现每个增量都强制
+ * scrollTop = scrollHeight，导致「想上读就来回跳动」。
  */
 function LiveThinking({ block }: { block: Extract<ContentBlock, { type: 'thinking' }> }) {
   const body = useRef<HTMLDivElement>(null);
+  const following = useRef(true);
   useLayoutEffect(() => {
-    if (body.current) body.current.scrollTop = body.current.scrollHeight;
+    const node = body.current;
+    if (node && following.current) node.scrollTop = node.scrollHeight;
   }, [block.thinking]);
   return <div className="activity-thinking is-live activity-disclosure" aria-busy="true">
     <div className="activity-disclosure-summary">
@@ -208,7 +216,17 @@ function LiveThinking({ block }: { block: Extract<ContentBlock, { type: 'thinkin
       <span className="activity-thinking-preview activity-disclosure-preview">推理中</span>
       <LoaderCircle className="spin activity-thinking-spinner" aria-hidden="true" />
     </div>
-    <div ref={body} className="activity-thinking-body activity-disclosure-body">
+    <div
+      ref={body}
+      className="activity-thinking-body activity-disclosure-body"
+      onWheel={(event) => {
+        if (event.deltaY < 0) following.current = resolveLiveFollow({ wheelUp: true });
+      }}
+      onTouchMove={() => { following.current = false; }}
+      onScroll={(event) => {
+        following.current = resolveLiveFollow({ nearBottom: isNearBottom(event.currentTarget) });
+      }}
+    >
       {block.redacted ? <p className="activity-thinking-note">模型未提供推理正文。</p> : <Markdown>{block.thinking}</Markdown>}
     </div>
   </div>;
@@ -280,14 +298,25 @@ async function writeClipboard(text: string): Promise<boolean> {
   }
 }
 
+/** 富文本剪贴板：正文 + 内联图片；主进程不可用时退回纯文本。 */
+async function writeRichClipboard(text: string, html: string): Promise<boolean> {
+  try {
+    await window.piApi.copyRichText({ text, html });
+    return true;
+  } catch {
+    return writeClipboard(text);
+  }
+}
+
 /** 复制按钮：点击后短暂切换成对勾，避免额外弹提示。 */
-function CopyButton({ text, label }: { text: string; label: string }) {
+function CopyButton({ text, images, label }: { text: string; images?: readonly string[]; label: string }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
   async function copy() {
-    if (!text.trim()) return;
-    if (!(await writeClipboard(text))) return;
+    const html = images && images.length > 0 ? messageClipboardHtml({ text, images }) : '';
+    if (!text.trim() && !html) return;
+    if (!(html ? await writeRichClipboard(text, html) : await writeClipboard(text))) return;
     setCopied(true);
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setCopied(false), 1600);
@@ -302,17 +331,19 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 }
 
 /** 消息下方的悬浮操作行：复制、编辑与时间；没有内容时整行隐藏。 */
-function MessageActions({ text, time, label, align = 'start', onEdit, editDisabled = false }: {
+function MessageActions({ text, images, time, label, align = 'start', onEdit, editDisabled = false }: {
   text: string;
+  images?: readonly string[];
   time?: number;
   label: string;
   align?: 'start' | 'end';
   onEdit?: () => void;
   editDisabled?: boolean;
 }) {
-  if (!text.trim() && !time) return null;
+  const hasImages = Boolean(images && images.length > 0);
+  if (!text.trim() && !hasImages && !time) return null;
   return <div className={`message-actions is-${align}`}>
-    {text.trim() && <CopyButton text={text} label={label} />}
+    {(text.trim() || hasImages) && <CopyButton text={text} images={images} label={label} />}
     {onEdit && <button
       type="button"
       className="message-action"
@@ -650,6 +681,7 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
   // 兜底：同一组件被误用于其他角色时不渲染，避免出现空气泡。
   if (message.role !== 'user') return null;
   const text = textBlocks(message.content);
+  const messageImages = imagesFromBlocks(message.content).map((image) => image.src);
   // 历史里技能命令已被展开成 <skill> 块；复制时还原成用户实际输入的命令形式。
   const copyText = splitMessageText(text)
     .map((segment) => segment.kind === 'text'
@@ -659,8 +691,7 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
         : segment.reference.token)
     .join('')
     .trim();
-  const imageCount = message.content.filter((block) => block.type === 'image').length;
-  const preservedCount = imageCount + (message.attachments?.length ?? 0);
+  const preservedCount = messageImages.length + (message.attachments?.length ?? 0);
   const canEdit = Boolean(onEdit && Number.isSafeInteger(message.sourceIndex));
 
   function resizeEdit() {
@@ -761,9 +792,10 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
       </div>;
     })}
   </div>}
-  {/* 用户消息同样在悬浮时显示复制、编辑与发送时间。 */}
+  {/* 用户消息同样在悬浮时显示复制、编辑与发送时间；复制时带上消息里的图片。 */}
   {!editing && <MessageActions
     text={copyText}
+    images={messageImages}
     time={message.timestamp}
     label="复制消息"
     align="end"

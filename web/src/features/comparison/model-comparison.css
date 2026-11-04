@@ -158,8 +158,7 @@
 }
 
 .comparison-unavailable > svg {
-  width: 18px;
-  height: 18px;
+  width: var(--icon-md); height: var(--icon-md);
   color: var(--warning);
 }
 
@@ -221,8 +220,7 @@
 }
 
 .comparison-run-summary > span svg {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm); height: var(--icon-sm);
 }
 
 .comparison-run-summary p {
@@ -307,8 +305,7 @@
 
 .comparison-result-status svg,
 .comparison-worktree svg {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm); height: var(--icon-sm);
   stroke-width: 1.8;
 }
 
@@ -472,8 +469,7 @@
 }
 
 .comparison-result-actions :is(.secondary-button, .comparison-discard) svg {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm); height: var(--icon-sm);
   flex: none;
 }
 

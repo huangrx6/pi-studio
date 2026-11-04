@@ -40,6 +40,22 @@ export function shouldReleaseFollowOnWheel({ deltaX, deltaY, nestedScrollable })
 }
 
 /**
+ * A live panel (the streaming thinking body) follows its newest line only while
+ * the reader stays at that bottom edge.
+ *
+ * An upward wheel is an immediate release, because the next token arrives before
+ * the browser has even applied the scroll; a scroll that leaves the bottom
+ * (scrollbar drag) releases too. Coming back to the bottom re-arms following.
+ *
+ * @param {{ nearBottom?: boolean, wheelUp?: boolean }} input
+ * @returns {boolean}
+ */
+export function resolveLiveFollow({ nearBottom = false, wheelUp = false }) {
+  if (wheelUp) return false;
+  return nearBottom;
+}
+
+/**
  * Programmatic scrolling is trusted too, so only an explicit user gesture may
  * change follow mode. A no-op gesture leaves the current mode intact.
  *

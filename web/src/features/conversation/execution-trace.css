@@ -162,7 +162,7 @@
   padding: 2px 6px;
   border-radius: var(--radius-tag);
 }
-.turn-trace .activity-tool-status > svg { display: block; width: 10px; height: 10px; flex: none; }
+.turn-trace .activity-tool-status > svg { display: block; width: var(--icon-2xs); height: var(--icon-2xs); flex: none; }
 .turn-trace .activity-tool.is-running .activity-tool-status { color: var(--accent-foreground); background: var(--accent-soft); }
 .turn-trace .activity-tool.is-error .activity-tool-status { color: var(--error); background: var(--error-soft); }
 .turn-trace .activity-request-metrics { padding: 0; }
@@ -186,7 +186,8 @@
 .turn-trace .activity-thinking-body {
   max-height: 280px;
   overflow: auto;
-  overscroll-behavior: contain;
+  /* 滚到顶/底后把滚轮继续交给对话，否则读者会卡在这块正文里出不去。 */
+  overscroll-behavior: auto;
 }
 .turn-trace .activity-thinking-body .markdown {
   color: var(--muted);
@@ -317,7 +318,7 @@
   font-variant-numeric: tabular-nums;
 }
 .run-live-status > .run-live-icon { display: grid; flex: none; }
-.run-live-status > .run-live-icon > svg { width: 12px; height: 12px; color: var(--accent); }
+.run-live-status > .run-live-icon > svg { width: var(--icon-xs); height: var(--icon-xs); color: var(--accent); }
 .run-live-status > span { white-space: nowrap; }
 .run-live-status > span:last-child { margin-left: auto; color: var(--faint); }
 

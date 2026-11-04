@@ -5,7 +5,7 @@
 .conversation-action-palette h2 { margin: 0; font-size: var(--text-md); font-weight: 600; }
 .conversation-action-search { display: flex; align-items: center; gap: 10px; margin: 0 16px 8px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--faint); transition: border-color var(--transition), background var(--transition); }
 .conversation-action-search:hover { border-color: var(--border-hover); }
-.conversation-action-search > svg { flex: none; width: 16px; height: 16px; color: currentColor; }
+.conversation-action-search > svg { flex: none; width: var(--icon-md); height: var(--icon-md); color: currentColor; }
 .conversation-action-palette .conversation-action-search input,
 .conversation-action-palette .conversation-action-search input:focus { width: 100%; min-width: 0; height: 38px; padding: 0; border: 0; border-radius: 0; outline: 0; background: transparent; color: var(--text); box-shadow: none; font-size: var(--text-base); }
 .conversation-action-search:focus-within { border-color: var(--focus-color); outline: 0; box-shadow: none; }
@@ -16,7 +16,7 @@
 .conversation-action-row > span { min-width: 0; }
 .conversation-action-row strong { display: block; font-size: var(--text-base); font-weight: 500; }
 .conversation-action-row small { display: block; margin-top: 3px; color: var(--muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
-.conversation-action-row > svg { flex: none; width: 14px; height: 14px; color: var(--muted); }
+.conversation-action-row > svg { flex: none; width: var(--icon-sm); height: var(--icon-sm); color: var(--muted); }
 .conversation-action-row[aria-disabled="true"] { cursor: default; color: var(--muted); }
 .conversation-action-row[aria-disabled="true"] > svg { visibility: hidden; }
 .conversation-action-palette footer { display: flex; justify-content: space-between; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: var(--text-xs); }
@@ -25,4 +25,4 @@
 .conversation-action-error { color: var(--error); }
 .composer-more-button { display: grid; place-items: center; flex: none; width: var(--control-sm); height: var(--control-sm); border-radius: var(--radius-control); color: var(--muted); }
 .composer-more-button:hover { background: var(--surface-hover); color: var(--text); }
-.composer-more-button svg { width: 16px; height: 16px; }
+.composer-more-button svg { width: var(--icon-md); height: var(--icon-md); }

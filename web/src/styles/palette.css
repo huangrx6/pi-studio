@@ -206,6 +206,8 @@
   --terminal-ansi-bright-magenta: #dac8f2;
   --terminal-ansi-bright-cyan: #ade1e3;
   --terminal-ansi-bright-white: #ffffff;
+  /* 深色底上同一个占比太淡，选区需要更多强调色才看得见。 */
+  --selection: color-mix(in srgb, var(--theme-accent) 44%, var(--surface));
 }
 
 /* 配色方案：只替换品牌强调、交互表面、焦点与选区。页面中性表面和
@@ -241,7 +243,9 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --button-hover: var(--theme-accent);
   --focus-color: var(--theme-accent);
   --focus-halo: var(--theme-accent);
-  --selection: var(--selected-bg);
+  /* 选区跟随当前 palette 的强调色混合。纯 selected-bg 灰在深色底上几乎看不出，
+  选中文字很难辨认；浅色 30%、深色 44% 让两种底都明显可见。 */
+  --selection: color-mix(in srgb, var(--theme-accent) 30%, var(--surface));
   --selection-text: var(--text);
   --brand: var(--text);
   --on-brand: var(--bg);

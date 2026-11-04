@@ -131,8 +131,7 @@
 }
 
 .panel-tab-icon svg {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm); height: var(--icon-sm);
   stroke-width: 1.6;
 }
 
@@ -173,8 +172,7 @@
 }
 
 .panel-tab-close svg {
-  width: 12px;
-  height: 12px;
+  width: var(--icon-xs); height: var(--icon-xs);
 }
 
 .panel-tab.is-dragging { opacity: .38; }
@@ -191,26 +189,12 @@
   background: var(--accent);
 }
 
+/* 工具栏图标按钮走共享 .icon-button 几何（28 盒 / sm 图标），这里只控制间距。 */
 .panel-tools {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 0;
-}
-
-.panel-tools .icon-button {
-  width: 28px;
-  height: 28px;
-}
-
-.panel-tools .icon-button svg {
-  width: 15px;
-  height: 15px;
-}
-
-.panel-tools .icon-button.is-active {
-  background: var(--surface-hover);
-  color: var(--text);
+  gap: 2px;
 }
 
 .panel-tool-menu-anchor { position: relative; }
@@ -308,8 +292,7 @@
 }
 
 .panel-tool-icon svg {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-md); height: var(--icon-md);
   stroke-width: 1.6;
 }
 
@@ -354,7 +337,7 @@
 }
 
 .panel-workspace-prompt:hover { background: var(--surface-hover); color: var(--text); }
-.panel-workspace-prompt svg { width: 16px; height: 16px; }
+.panel-workspace-prompt svg { width: var(--icon-md); height: var(--icon-md); }
 
 @media (prefers-reduced-motion: reduce) {
   .panel-tab,

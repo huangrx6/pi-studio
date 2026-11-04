@@ -5,6 +5,7 @@ import {
   distanceFromBottom,
   isNearBottom,
   resolveAutoFollow,
+  resolveLiveFollow,
   shouldReleaseFollowOnWheel,
 } from '../../web/src/features/conversation/chat-scroll.mjs';
 
@@ -55,4 +56,15 @@ test('a small upward move releases immediately while downward intent can re-arm'
     userInitiated: true,
     movedTowardStart: false,
   }), true);
+});
+
+test('a streaming thinking panel follows tokens only while the reader stays at its bottom', () => {
+  // 贴底时继续跟随最新增量。
+  assert.equal(resolveLiveFollow({ nearBottom: true }), true);
+  // 上滚立即释放：下一个增量不得把视线拽回底部。
+  assert.equal(resolveLiveFollow({ nearBottom: true, wheelUp: true }), false);
+  // 正文滚动离开底部（含拖动滚动条）同样释放。
+  assert.equal(resolveLiveFollow({ nearBottom: false }), false);
+  // 自己滚回底部后恢复跟随。
+  assert.equal(resolveLiveFollow({ nearBottom: true, wheelUp: false }), true);
 });

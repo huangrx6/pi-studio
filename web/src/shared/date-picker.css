@@ -111,8 +111,7 @@
 }
 
 .pi-date-nav svg {
-  width: 15px;
-  height: 15px;
+  width: var(--icon-md); height: var(--icon-md);
 }
 
 .pi-date-month {

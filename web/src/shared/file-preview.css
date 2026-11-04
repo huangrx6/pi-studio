@@ -41,8 +41,7 @@
 
 .file-preview-icon svg,
 .file-row .file-kind-icon svg {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm); height: var(--icon-sm);
 }
 
 .file-preview-identity > div {
@@ -69,17 +68,19 @@
   font: var(--text-xs) var(--mono);
 }
 
+/* 工具栏动作与页头一致：所有图标按钮都是共享 .icon-button（28 盒 / sm 图标），
+这里只排布间距；元信息文字使用字号令牌，不再写 9.5/10.5px。 */
 .file-preview-actions {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1);
 }
 
 .file-preview-format,
 .file-preview-size {
   color: var(--faint);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -93,44 +94,23 @@
   border-radius: var(--radius-tag);
   background: var(--surface-soft);
   color: var(--muted);
-  font: 9.5px var(--mono);
+  font: var(--text-xs) var(--mono);
 }
 
+/* 分段控件与图标按钮同盒同档，只有“当前项”抬起一层。 */
 .file-preview-mode {
   display: inline-flex;
-  height: 28px;
   align-items: center;
+  gap: 2px;
   padding: 2px;
   border-radius: var(--radius-control);
   background: var(--surface-soft);
 }
 
-.file-preview-mode button,
-.file-preview-action {
-  display: grid;
-  width: 24px;
-  height: 24px;
-  place-items: center;
-  border-radius: var(--radius-tag);
-  color: var(--faint);
-}
-
-.file-preview-mode button:hover,
-.file-preview-action:hover {
-  background: var(--surface-hover);
-  color: var(--text);
-}
-
-.file-preview-mode button.is-active {
+.file-preview-mode .icon-button.is-active {
   background: var(--surface);
   color: var(--text);
   box-shadow: var(--shadow-card);
-}
-
-.file-preview-mode svg,
-.file-preview-action svg {
-  width: 13px;
-  height: 13px;
 }
 
 .file-preview-banner {
@@ -146,8 +126,7 @@
 }
 
 .file-preview-banner svg {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm); height: var(--icon-sm);
   flex: none;
 }
 
@@ -340,8 +319,7 @@
 }
 
 .file-preview-inline-note svg {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm); height: var(--icon-sm);
   flex: none;
 }
 
@@ -442,8 +420,7 @@
 
 .file-preview-empty > span svg,
 .file-preview-unsupported > span svg {
-  width: 20px;
-  height: 20px;
+  width: var(--icon-lg); height: var(--icon-lg);
 }
 
 .file-preview-empty strong,
@@ -473,8 +450,7 @@
 
 .file-preview-unsupported .settings-outline svg,
 .file-preview-empty-inline > svg {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm); height: var(--icon-sm);
 }
 
 .file-preview-loading {
@@ -493,8 +469,7 @@
 }
 
 .file-preview-loading svg {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm); height: var(--icon-sm);
 }
 
 .file-row .file-kind-icon {
@@ -525,3 +500,7 @@
     padding: 16px 14px 32px;
   }
 }
+
+/* HTML 与 PDF 都交给内置渲染器：整块文档区占满面板，滚动留在 iframe 里。 */
+.file-preview-document.is-frame { height: 100%; min-height: 0; padding: 0; overflow: hidden; }
+.file-preview-frame { display: block; width: 100%; height: 100%; min-height: 320px; border: 0; background: var(--surface); }

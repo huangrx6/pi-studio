@@ -153,6 +153,16 @@ for (const paletteName of ['lime', 'ocean', 'amber', 'berry']) {
         ['--syntax-function', '--code-bg'],
         ['--selection-text', '--selection'],
       ];
+      // 选区还必须和它所在的页面底有明显差别：只满足文字对比度不够，
+      // 背景本身看不出来时选中范围就辨认不出来。
+      const selectionVsSurface = (() => {
+        const values = [luminance(t['--selection']), luminance(t['--surface'])].sort((a, b) => b - a);
+        return (values[0] + 0.05) / (values[1] + 0.05);
+      })();
+      assert.ok(
+        selectionVsSurface >= 1.3,
+        `${mode} ${paletteName} selection/surface contrast ${selectionVsSurface.toFixed(2)}`,
+      );
       for (const [fg, bg] of pairs) {
         const values = [luminance(t[fg]), luminance(t[bg])].sort((a, b) => b - a);
         const ratio = (values[0] + 0.05) / (values[1] + 0.05);

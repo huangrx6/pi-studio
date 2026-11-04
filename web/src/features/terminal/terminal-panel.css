@@ -44,9 +44,9 @@
   color: var(--faint);
 }
 .terminal-toolbar > button:hover { background: var(--surface-hover); color: var(--text); }
-.terminal-toolbar > button svg { width: 14px; height: 14px; }
+.terminal-toolbar > button svg { width: var(--icon-sm); height: var(--icon-sm); }
 .terminal-font-warning { display: inline-flex; color: var(--warning); }
-.terminal-font-warning svg { width: 14px; height: 14px; }
+.terminal-font-warning svg { width: var(--icon-sm); height: var(--icon-sm); }
 .terminal-live-state {
   display: inline-flex;
   align-items: center;
@@ -70,7 +70,7 @@
   color: var(--muted);
   font-size: var(--text-xs);
 }
-.terminal-shell svg { width: 13px; height: 13px; }
+.terminal-shell svg { width: var(--icon-sm); height: var(--icon-sm); }
 .terminal-stage { position: relative; flex: 1; min-height: 0; }
 .terminal-host {
   width: 100%;

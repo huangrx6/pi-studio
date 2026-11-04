@@ -93,8 +93,7 @@
 }
 
 .permission-policy button svg {
-  width: 15px;
-  height: 15px;
+  width: var(--icon-md); height: var(--icon-md);
 }
 
 .permission-policy input {
@@ -228,8 +227,7 @@
 }
 
 .permission-policy-chain-part > svg {
-  width: 12px;
-  height: 12px;
+  width: var(--icon-xs); height: var(--icon-xs);
   flex: none;
   color: var(--faint);
 }
@@ -380,8 +378,7 @@
 }
 
 .permission-preset-icon > svg {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-md); height: var(--icon-md);
 }
 
 .permission-preset.is-active .permission-preset-icon {
@@ -403,8 +400,7 @@
 }
 
 .permission-preset-check > svg {
-  width: 15px;
-  height: 15px;
+  width: var(--icon-md); height: var(--icon-md);
 }
 
 .permission-preset.is-sensitive .permission-preset-check {
@@ -445,8 +441,7 @@
 }
 
 .permission-policy-count > svg {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm); height: var(--icon-sm);
   color: var(--icon);
 }
 
@@ -464,8 +459,7 @@
 }
 
 .permission-policy-empty > svg {
-  width: 18px;
-  height: 18px;
+  width: var(--icon-md); height: var(--icon-md);
   flex: none;
 }
 
@@ -628,8 +622,7 @@
 }
 
 .permission-policy-section-icon > svg {
-  width: 15px;
-  height: 15px;
+  width: var(--icon-md); height: var(--icon-md);
 }
 
 .permission-preview-form {
@@ -814,8 +807,7 @@
 }
 
 .confirm-risk svg {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm); height: var(--icon-sm);
   flex: none;
   margin-top: 1px;
 }
