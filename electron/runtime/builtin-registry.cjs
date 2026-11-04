@@ -6,6 +6,7 @@ const capabilityModules = Object.freeze([
   require('../capabilities/harness/index.cjs'),
   require('../capabilities/tool-search/index.cjs'),
   require('../capabilities/skills/index.cjs'),
+  require('../capabilities/image-fit/index.cjs'),
   require('../capabilities/request-trace/index.cjs'),
   require('../capabilities/permissions/index.cjs'),
   require('../capabilities/subagents/index.cjs'),

@@ -58,6 +58,7 @@ Runtime directory scanning is intentionally unsupported. Explicit imports make p
 | Todo | Planning state | Tool task and projection | `electron/capabilities/todo/` |
 | Long task | Continuation policy | Generation task | `electron/capabilities/long-task/` |
 | Request trace | Observation | Section and generation hook | `electron/capabilities/request-trace/` |
+| Image fit | Request image guard | Generation hook | `electron/capabilities/image-fit/` |
 | Subagents | Orchestration | Tool task, owned conversation, background task | `electron/capabilities/subagents/` |
 | Metrics | Observation and UI projection | Telemetry plus extension data source | `electron/capabilities/metrics/` |
 | MCP | External tool source and adapter | Tool registration and section | `electron/integrations/mcp/` |
