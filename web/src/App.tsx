@@ -112,6 +112,8 @@ import { PanelTabBar } from './shell/right-panel/PanelTabBar';
 import { RightPanelStart, type RightPanelToolAction } from './shell/right-panel/RightPanelStart';
 import { BrowserPanel } from './shell/right-panel/BrowserPanel';
 import { MarkdownActions } from './shared/markdown-actions';
+import { DEFAULT_SHORTCUTS, matchesShortcut, normalizeShortcuts, isTextEntry } from './shared/shortcuts.mjs';
+import { ShortcutSettings } from './shell/ShortcutSettings';
 import {
   concreteThinkingLevels,
   thinkingLabels,
@@ -194,6 +196,7 @@ const LazyTerminalPanel = lazy(async () => {
 // and layout carry the detail rather than repeating it as sidebar subtitles.
 const settingsPages = [
   { id: 'general', label: '通用', icon: Settings },
+  { id: 'shortcuts', label: '快捷键', icon: Keyboard },
   { id: 'models', label: '模型配置', icon: Cpu },
   { id: 'usage', label: '使用量', icon: BarChart3 },
   { id: 'archives', label: '归档会话', icon: ArchiveRestore },
@@ -2926,17 +2929,78 @@ export function App() {
     void refreshSubagentChildren(true);
   }
 
+  /**
+   * Every configurable binding goes through one handler so the settings page can
+   * rebind it. Bindings always carry a modifier, so typing in the composer is
+   * unaffected; while a dialog is open the shell stays quiet.
+   */
+  const shortcuts = useMemo<Record<string, string>>(
+    () => normalizeShortcuts(preferences.shortcuts) as Record<string, string>,
+    [preferences.shortcuts],
+  );
+  const shortcutSessions = useMemo(
+    () => visibleWorkspaces.flatMap((item) => item.sessions),
+    [visibleWorkspaces],
+  );
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'k' || event.isComposing || event.repeat) return;
-      if (settingsOpen || document.querySelector('dialog[open]')) return;
-      event.preventDefault();
-      setActionPaletteOpen(true);
-      setComposerMenu(null);
+      if (event.defaultPrevented || event.isComposing || event.repeat) return;
+      if (document.querySelector('dialog[open]')) return;
+      if (settingsOpen && !matchesShortcut(event, shortcuts.settings)) return;
+      const run = (id: string) => {
+        event.preventDefault();
+        setComposerMenu(null);
+        switch (id) {
+          case 'palette':
+            setActionPaletteOpen(true);
+            return;
+          case 'settings':
+            void openSettings();
+            return;
+          case 'toggleSidebar':
+            setSidebarCollapsed((value) => !value);
+            return;
+          case 'togglePanel':
+            if (filesOpen) closePanel(); else openPanel();
+            return;
+          case 'newChat':
+            void startSession();
+            return;
+          case 'openBrowser':
+            openBrowserTab();
+            return;
+          case 'openTerminal':
+            openTerminalTab();
+            return;
+          case 'stopGeneration':
+            if (turnActive) void stopGeneration();
+            return;
+          case 'nextSession':
+          case 'prevSession': {
+            const index = shortcutSessions.findIndex((entry) => entry.id === session?.id);
+            const delta = id === 'nextSession' ? 1 : -1;
+            const target = shortcutSessions[index < 0
+              ? (delta > 0 ? 0 : shortcutSessions.length - 1)
+              : (index + delta + shortcutSessions.length) % shortcutSessions.length];
+            if (target) void openSession(target);
+            return;
+          }
+          default:
+        }
+      };
+      for (const id of Object.keys(shortcuts)) {
+        if (matchesShortcut(event, shortcuts[id])) {
+          // Bare typing never matches (bindings require a modifier), so only
+          // text-entry shortcuts such as Mod+K need the guard.
+          if (isTextEntry(event.target) && !event.metaKey && !event.ctrlKey) return;
+          run(id);
+          return;
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [settingsOpen]);
+  }, [shortcuts, settingsOpen, filesOpen, turnActive, shortcutSessions, session?.id]);
 
   useEffect(() => { setActionPaletteOpen(false); }, [session?.id, workspace, settingsOpen]);
 
@@ -5999,6 +6063,7 @@ export function App() {
           <section className="settings-content" ref={settingsContentRef}>
             {settingsError && <div className="settings-error" role="alert">{settingsError}</div>}
             {!settingsData && !settingsError && settingsTab !== 'general' && settingsTab !== 'usage' && settingsTab !== 'archives' && settingsTab !== 'permissions' && settingsTab !== 'subagents' && <div className="settings-loading" role="status"><LoaderCircle className="spin" />正在加载设置…</div>}
+            {settingsTab === 'shortcuts' && <ShortcutSettings preferences={preferences} onChange={updatePreference} />}
             {settingsTab === 'general' && (
               <div className="settings-sections general-settings">
                 <SettingsPageHeader icon={<Settings />} title="通用" />

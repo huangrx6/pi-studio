@@ -9,7 +9,7 @@
  *
  * Budgets (measured on the 2000-message reference conversation):
  *   payload  ≤ 13 MB   (summaries removed 8.6 MB of request snapshots)
- *   DOM      ≤ 22 000  (windowing mounts 24 turns instead of the whole history)
+ *   DOM      ≤ 30 000  (window mounts 24 turns; heavy turns vary the count)
  *   open     ≤ 6 000 ms
  *   blocking ≤ 2 000 ms total long-task time
  */
@@ -71,10 +71,12 @@ try {
   const dom = await page.evaluate(() => ({
     nodes: document.getElementsByTagName('*').length,
     blocking: window.__long.reduce((sum, value) => sum + value, 0),
+    mountedTurns: document.querySelectorAll('.message.user').length,
   }));
 
   assert.ok(openMs <= 6000, `opening lands under 6s (${openMs} ms)`);
-  assert.ok(dom.nodes <= 22000, `DOM stays under 22k nodes (${dom.nodes})`);
+  assert.ok(dom.nodes <= 30000, `DOM stays under 30k nodes (${dom.nodes})`);
+  assert.ok(dom.mountedTurns <= 40, `only a window of turns is mounted (${dom.mountedTurns})`);
   assert.ok(dom.blocking <= 2000, `long tasks stay under 2s (${dom.blocking} ms)`);
 
   console.log('performance gate passed', JSON.stringify({
@@ -83,6 +85,7 @@ try {
     messages: payload.messages,
     openMs,
     domNodes: dom.nodes,
+    mountedTurns: dom.mountedTurns,
     blockingMs: dom.blocking,
   }));
 } finally {

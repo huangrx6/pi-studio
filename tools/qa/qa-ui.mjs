@@ -2800,12 +2800,12 @@ try {
   await page.locator('.bottom-row').click();
   assert.deepEqual(
     await page.locator('.settings-nav-row').allTextContents(),
-    ['通用', '模型配置', '使用量', '归档会话', '智能体工具', '权限策略', 'Harness 配置', '子智能体', 'MCP 服务器', '技能', '扩展', '关于'],
+    ['通用', '快捷键', '模型配置', '使用量', '归档会话', '智能体工具', '权限策略', 'Harness 配置', '子智能体', 'MCP 服务器', '技能', '扩展', '关于'],
   );
   // Escape has no application-level settings shortcut; only a focused dialog can close with it.
   await page.keyboard.press('Escape');
   assert.equal(await page.locator('.settings-overlay').count(), 1);
-  for (const [index, tab] of ['模型配置', '使用量', '归档会话', '智能体工具', '权限策略', 'Harness 配置', '子智能体', 'MCP 服务器', '技能', '扩展', '关于'].entries()) {
+  for (const [index, tab] of ['快捷键', '模型配置', '使用量', '归档会话', '智能体工具', '权限策略', 'Harness 配置', '子智能体', 'MCP 服务器', '技能', '扩展', '关于'].entries()) {
     await openSettingsSection(tab);
     await capture(`${String(index + 7).padStart(2, '0')}-settings-${index}`);
   }

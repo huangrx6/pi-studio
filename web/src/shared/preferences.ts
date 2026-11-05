@@ -37,6 +37,8 @@ export type BackgroundMedia = {
   bytes: number;
 };
 
+import { DEFAULT_SHORTCUTS, normalizeShortcuts } from './shortcuts.mjs';
+
 /** 用户可调整的全部偏好。 */
 export type Preferences = {
   /** 主题偏好。 */
@@ -63,6 +65,8 @@ export type Preferences = {
   backgroundBlur: number;
   /** 主界面外壳底漆的遮挡强度，0–100%；卡片和控件层级随主题统一派生。 */
   backgroundSurfaceOpacity: number;
+  /** 可配置的快捷键：动作 id → 规范化的按键组合。 */
+  shortcuts: Record<string, string>;
 };
 
 /** localStorage 键名；改动会导致旧用户偏好失效，需谨慎。 */
@@ -82,6 +86,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   backgroundOpacity: 68,
   backgroundBlur: 0,
   backgroundSurfaceOpacity: 88,
+  shortcuts: { ...DEFAULT_SHORTCUTS },
 };
 
 function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
@@ -148,6 +153,7 @@ export function loadPreferences(): Preferences {
       backgroundOpacity: clampNumber(stored.backgroundOpacity, DEFAULT_PREFERENCES.backgroundOpacity, 0, 100),
       backgroundBlur: clampNumber(stored.backgroundBlur, DEFAULT_PREFERENCES.backgroundBlur, 0, 100),
       backgroundSurfaceOpacity: clampNumber(stored.backgroundSurfaceOpacity, DEFAULT_PREFERENCES.backgroundSurfaceOpacity, 0, 100),
+      shortcuts: normalizeShortcuts(stored.shortcuts),
     };
   } catch {
     // 返回副本，避免调用方原地修改污染共享的默认值。

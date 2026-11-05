@@ -91,7 +91,13 @@ overflow:auto），底部账号行因此始终贴底。折叠态后来被改成�
 通过全局 no-drag 规则恢复点击；顶栏开关与拖拽落点线分别用 5/3 的层级压在内容上。 */
 
 .sidebar, .settings-nav { width: var(--sidebar-w); flex: none; min-height: 0; display: flex; flex-direction: column; padding: var(--space-10) var(--space-3) var(--space-3); background: var(--sidebar-bg); border-right: 1px solid var(--border); }
-.sidebar { position: relative; transition: width var(--transition); }
+.sidebar {
+  position: relative;
+  transition: width var(--transition);
+  /* Width animations reflowed the whole document; containment keeps the work
+     inside the two panels instead of the 20k-node transcript. */
+  contain: layout paint;
+}
 .sidebar-drag { position: absolute; top: 0; left: 0; width: 100%; height: 36px; -webkit-app-region: drag; }
 .brand { position: relative; height: 44px; display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-1); flex: none; }
 .brand-name { font-size: var(--text-lg); font-weight: 650; letter-spacing: -.4px; white-space: nowrap; }
@@ -148,7 +154,8 @@ overflow:auto），底部账号行因此始终贴底。折叠态后来被改成�
 composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不会被输入框遮住。
 右侧会话大纲绝对定位于 main 的滚动视口之外，z-index 9；窄于 1100px 时整体隐藏。 */
 
-.main { flex: 1; min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column; background: var(--surface); container-type: inline-size; container-name: main-pane; }
+.main {
+  contain: layout paint; flex: 1; min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column; background: var(--surface); container-type: inline-size; container-name: main-pane; }
 .chat-header, .file-panel-head { height: var(--header-height); flex: none; display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-4); padding: 36px var(--space-6) var(--space-3); -webkit-app-region: drag; }
 .chat-heading { min-width: 0; display: flex; align-items: center; gap: 8px; }
 .chat-heading h1 { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-md); font-weight: 600; letter-spacing: -.2px; }
@@ -6332,3 +6339,26 @@ button.settings-resource-card-main:disabled { cursor: default; }
   .archive-session-card .settings-resource-card-footer > div,
   .archive-session-card .settings-resource-card-footer > button { flex: 1; }
 }
+
+/* 快捷键设置：动作列表 + 可录制的按键胶囊。 */
+.shortcut-settings .settings-card-hint { margin: 4px 0 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.6; }
+.shortcut-conflict { margin: 0 0 var(--space-3); padding: 8px 12px; border: 1px solid var(--error-border); border-radius: var(--radius-control); background: var(--error-soft); color: var(--error); font-size: var(--text-xs); }
+.shortcut-list { display: grid; gap: 1px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--border); }
+.shortcut-row { display: flex; align-items: center; gap: var(--space-3); min-height: 48px; padding: 8px 14px; background: var(--surface); }
+.shortcut-label { display: grid; min-width: 0; gap: 2px; flex: 1; }
+.shortcut-label strong { color: var(--text); font-size: var(--text-sm); font-weight: 550; }
+.shortcut-label small { color: var(--faint); font-size: 10.5px; }
+.shortcut-key {
+  min-width: 92px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+  color: var(--text);
+  font: 550 11.5px var(--mono);
+  text-align: center;
+}
+.shortcut-key:hover { border-color: var(--border-hover); background: var(--surface-hover); }
+.shortcut-key.is-custom { color: var(--accent-foreground); border-color: var(--accent-border); }
+.shortcut-key.is-recording { border-color: var(--focus-color); box-shadow: var(--focus-ring); color: var(--muted); }
