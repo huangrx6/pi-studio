@@ -997,6 +997,19 @@ export function App() {
   const [mcpTesting, setMcpTesting] = useState(false);
   const fileActionsRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  /**
+   * The transcript mounts a window of turns instead of the whole history: a
+   * 2000-message conversation produced 56k DOM nodes and a 2.4s render. The
+   * window grows when the reader approaches the top, so scrolling back still
+   * reaches the first message.
+   */
+  const [turnWindowFromState, setTurnWindowFromState] = useState<number | null>(null);
+  /** Outline target that needs the window to grow before it can be scrolled to. */
+  const [pendingOutlineJump, setPendingOutlineJump] = useState<number | null>(null);
+  const windowAnchorRef = useRef<{ top: number; height: number } | null>(null);
+  /** Per-conversation default window start, captured when history arrives. */
+  const windowBaseRef = useRef<{ session: string; from: number } | null>(null);
+  const topSentinelRef = useRef<HTMLDivElement | null>(null);
   const chatContentRef = useRef<HTMLDivElement>(null);
   const outlineSyncRef = useRef<number | null>(null);
   const followBottomRef = useRef(true);
@@ -2791,7 +2804,7 @@ export function App() {
         totalMessages: outline?.totalMessages,
       });
       if (detail.model) setModelSelection(detail.model);
-      setMessages(detail.messages.map((message) => ({ ...message })));
+      setMessages(detail.messages);
       setRequestTraces(Array.isArray(detail.requestTraces) ? detail.requestTraces : []);
       // 子智能体查询失败不应阻止主会话打开；该查询在调用处按空列表降级。
       setSubagentChildren(Array.isArray(children) ? children : []);
@@ -3759,9 +3772,26 @@ export function App() {
     return true;
   }
 
-  /** 点击大纲：整段历史都已加载，直接滚动到对应的提问。 */
+  /** 点击大纲：目标可能在可视窗口之外，先扩窗再滚动。 */
   function jumpToOutline(index: number) {
-    if (!scrollToOutlineItem(index)) showComposerFeedback('这条提问对应的历史消息已经不可用。');
+    const item = outlineItems[index];
+    const targetIndex = item
+      ? transcriptTurns.findIndex((turn) => turn.kind === 'user' && turn.message.sourceIndex === item.sourceIndex)
+      : -1;
+    if (targetIndex >= 0 && targetIndex < turnWindowFrom) {
+      // Mount the target first; the scroll runs after React commits the window.
+      windowAnchorRef.current = null;
+      setTurnWindowFromState(Math.min(turnWindowFrom, targetIndex));
+      setPendingOutlineJump(index);
+      return;
+    }
+    // Outline jumps are deliberate: land instantly, then re-align once the
+    // freshly mounted neighbours have laid out.
+    if (!scrollToOutlineItem(index, 'auto')) {
+      showComposerFeedback('这条提问对应的历史消息已经不可用。');
+      return;
+    }
+    requestAnimationFrame(() => { scrollToOutlineItem(index, 'auto'); });
   }
 
   // ---------- 发送与排队 ----------
@@ -4666,30 +4696,114 @@ export function App() {
     images: item.attachments.filter((attachment) => attachment.kind === 'image').length,
     files: item.attachments.filter((attachment) => attachment.kind === 'file').length,
   }));
-  const toolResultMap = new Map(messages.filter((message) => message.role === 'toolResult' && message.toolCallId).map((message) => [message.toolCallId as string, message]));
+  /**
+   * Derived transcript data is memoised on the message array: streaming flushes
+   * once per frame, and re-walking two thousand messages each time was pure
+   * repeat work. `messages` is replaced by identity on every real update, so
+   * the cache invalidates exactly when the content changes.
+   */
+  const toolResultMap = useMemo(
+    () => new Map(messages.filter((message) => message.role === 'toolResult' && message.toolCallId).map((message) => [message.toolCallId as string, message])),
+    [messages],
+  );
   /** 把消息序列折叠成「用户提问 + 助手多步回复」的轮次，工具结果挂到对应轮次。 */
-  const transcriptTurns: Array<{ kind: 'user'; message: ChatMessage } | { kind: 'assistant'; messages: ChatMessage[] }> = [];
-  for (const message of messages) {
-    if (message.role === 'toolResult') continue;
-    if (message.role === 'user') { transcriptTurns.push({ kind: 'user', message }); continue; }
-    const last = transcriptTurns[transcriptTurns.length - 1];
-    if (last?.kind === 'assistant') last.messages.push(message);
-    else transcriptTurns.push({ kind: 'assistant', messages: [message] });
+  const transcriptTurns = useMemo(() => {
+    const turns: Array<{ kind: 'user'; message: ChatMessage } | { kind: 'assistant'; messages: ChatMessage[] }> = [];
+    for (const message of messages) {
+      if (message.role === 'toolResult') continue;
+      if (message.role === 'user') { turns.push({ kind: 'user', message }); continue; }
+      const last = turns[turns.length - 1];
+      if (last?.kind === 'assistant') last.messages.push(message);
+      else turns.push({ kind: 'assistant', messages: [message] });
+    }
+    return turns;
+  }, [messages]);
+  const TURN_WINDOW_INITIAL = 24;
+  const TURN_WINDOW_STEP = 24;
+  const windowSession = session?.id ?? '';
+  // The window start is pinned once per conversation and only ever moves up.
+  // Appending a message must not unmount the reader's current turn, so the
+  // window grows with the transcript instead of sliding.
+  if (transcriptTurns.length > 0 && windowBaseRef.current?.session !== windowSession) {
+    windowBaseRef.current = { session: windowSession, from: Math.max(0, transcriptTurns.length - TURN_WINDOW_INITIAL) };
   }
-  const lastAssistantTurnIndex = transcriptTurns.reduce((last, turn, index) => turn.kind === 'assistant' ? index : last, -1);
+  const turnWindowFrom = Math.max(0, Math.min(
+    turnWindowFromState ?? windowBaseRef.current?.from ?? 0,
+    transcriptTurns.length,
+  ));
+  const visibleTurns = turnWindowFrom > 0 ? transcriptTurns.slice(turnWindowFrom) : transcriptTurns;
+  useEffect(() => {
+    windowBaseRef.current = null;
+    setTurnWindowFromState(null);
+    setPendingOutlineJump(null);
+  }, [windowSession]);
+
+  /** Growing the window prepends turns; keep the reader's place. */
+  useLayoutEffect(() => {
+    const anchor = windowAnchorRef.current;
+    const container = scrollRef.current;
+    if (!anchor || !container) return;
+    windowAnchorRef.current = null;
+    container.scrollTop += container.scrollHeight - anchor.height;
+  }, [turnWindowFrom]);
+
+  /** After the window grows, scroll to the pending outline target and re-align. */
+  useLayoutEffect(() => {
+    if (pendingOutlineJump === null) return undefined;
+    const index = pendingOutlineJump;
+    let frame = 0;
+    let attempt = 0;
+    const step = () => {
+      frame = requestAnimationFrame(() => {
+        // Instant, not smooth: a repeated smooth animation measures its own
+        // in-flight position and compounds the overshoot.
+        scrollToOutlineItem(index, 'auto');
+        attempt += 1;
+        if (attempt < 3) step();
+        // Clear only after the last pass: clearing inside the effect made the
+        // StrictMode double-invoke return early and skip the scroll entirely.
+        else setPendingOutlineJump(null);
+      });
+    };
+    step();
+    return () => { if (frame) cancelAnimationFrame(frame); };
+  }, [pendingOutlineJump]);
+
+  /** Watch the sentinel above the mounted turns and extend the window. */
+  useEffect(() => {
+    const sentinel = topSentinelRef.current;
+    const root = scrollRef.current;
+    if (!sentinel || !root || turnWindowFrom === 0) return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      windowAnchorRef.current = { top: root.scrollTop, height: root.scrollHeight };
+      setTurnWindowFromState(Math.max(0, turnWindowFrom - TURN_WINDOW_STEP));
+    }, { root, rootMargin: '800px 0px 0px 0px' });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [turnWindowFrom, windowSession]);
+
+  const lastAssistantTurnIndex = useMemo(
+    () => transcriptTurns.reduce((last, turn, index) => turn.kind === 'assistant' ? index : last, -1),
+    [transcriptTurns],
+  );
   /** 每条 turn 之后最近的一条用户消息时间戳：turn diff 只可能落在它之前。 */
-  const nextUserTimestamps: number[] = new Array<number>(transcriptTurns.length).fill(Number.POSITIVE_INFINITY);
-  {
+  const nextUserTimestamps = useMemo(() => {
+    const timestamps: number[] = new Array<number>(transcriptTurns.length).fill(Number.POSITIVE_INFINITY);
     let nextUser = Number.POSITIVE_INFINITY;
     for (let index = transcriptTurns.length - 1; index >= 0; index -= 1) {
-      nextUserTimestamps[index] = nextUser;
+      timestamps[index] = nextUser;
       const turn = transcriptTurns[index];
       const timestamp = turn.kind === 'user' ? turn.message.timestamp : undefined;
       if (typeof timestamp === 'number' && Number.isFinite(timestamp)) nextUser = timestamp;
     }
-  }
+    return timestamps;
+  }, [transcriptTurns]);
   // Every request trace goes to its own answer, to the unanswered message it served, or to the live tail.
-  const requestPlacement = placeRequestTraces({ traces: requestTraces, turns: transcriptTurns, turnActive });
+  const requestPlacement = useMemo(
+    () => placeRequestTraces({ traces: requestTraces, turns: transcriptTurns, turnActive }),
+    [requestTraces, transcriptTurns, turnActive],
+  );
   const pendingAssistantVisible = transcriptTurns.at(-1)?.kind !== 'assistant'
     && (turnActive || requestPlacement.pending.length > 0);
   const pendingTurnError = !turnActive && requestPlacement.pending.length > 0
@@ -5441,20 +5555,38 @@ export function App() {
           <div className="chat-column" ref={chatContentRef}>
             {messages.length > 0 && (
               <div className="messages">
-                {transcriptTurns.map((turn, index) => turn.kind === 'user'
-                  ? <Fragment key={`user-${turn.message.sourceIndex ?? turn.message.timestamp ?? index}`}>
-                    <ChatMessageView
-                      id={`chat-turn-${turn.message.sourceIndex ?? `pending-${turn.message.timestamp ?? index}`}`}
-                      message={turn.message}
-                      onOpenFile={handleOpenAttachment}
-                      onEdit={handleEditMessage}
-                      editDisabled={turnActive || compaction.active}
-                    />
-                    {requestPlacement.unansweredByUserTurn.has(index) && <AssistantTurnView messages={[]} toolResults={toolResultMap} requestTraces={requestPlacement.unansweredByUserTurn.get(index)} cwd={session?.cwd} busy={false} turnError={NO_ANSWER_TEXT} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={false} />}
-                  </Fragment>
-                  : <AssistantTurnView key={`assistant-${turn.messages[0]?.sourceIndex ?? turn.messages[0]?.timestamp ?? index}`} id={turn.messages[0]?.sourceIndex !== undefined ? `chat-assistant-turn-${turn.messages[0].sourceIndex}` : undefined} messages={turn.messages} toolResults={toolResultMap} requestTraces={requestPlacement.byAssistantTurn.get(index)} cwd={session?.cwd} busy={turnActive && index === transcriptTurns.length - 1} retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={preferences.showCodeView}
+                {turnWindowFrom > 0 && <div ref={topSentinelRef} className="transcript-window-sentinel" aria-hidden="true" />}
+                {visibleTurns.map((turn, offset) => {
+                  const index = offset + turnWindowFrom;
+                  if (turn.kind === 'user') {
+                    return <Fragment key={`user-${turn.message.sourceIndex ?? turn.message.timestamp ?? index}`}>
+                      <ChatMessageView
+                        id={`chat-turn-${turn.message.sourceIndex ?? `pending-${turn.message.timestamp ?? index}`}`}
+                        message={turn.message}
+                        onOpenFile={handleOpenAttachment}
+                        onEdit={handleEditMessage}
+                        editDisabled={turnActive || compaction.active}
+                      />
+                      {requestPlacement.unansweredByUserTurn.has(index) && <AssistantTurnView messages={[]} toolResults={toolResultMap} requestTraces={requestPlacement.unansweredByUserTurn.get(index)} cwd={session?.cwd} busy={false} turnError={NO_ANSWER_TEXT} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={false} />}
+                    </Fragment>;
+                  }
+                  return <AssistantTurnView
+                    key={`assistant-${turn.messages[0]?.sourceIndex ?? turn.messages[0]?.timestamp ?? index}`}
+                    id={turn.messages[0]?.sourceIndex !== undefined ? `chat-assistant-turn-${turn.messages[0].sourceIndex}` : undefined}
+                    messages={turn.messages}
+                    toolResults={toolResultMap}
+                    requestTraces={requestPlacement.byAssistantTurn.get(index)}
+                    cwd={session?.cwd}
+                    busy={turnActive && index === transcriptTurns.length - 1}
+                    retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined}
+                    stepDisplay={preferences.stepDisplay}
+                    stepCollapse={preferences.stepCollapse}
+                    showCodeView={preferences.showCodeView}
                     gitDiff={index === lastAssistantTurnIndex && liveDiff ? liveDiff : findTurnDiff(session?.turnDiffs, { from: turn.messages.at(-1)?.timestamp, until: nextUserTimestamps[index] })}
-                    onOpenDiff={handleOpenChanges} onOpenFile={handleOpenFile} />)}
+                    onOpenDiff={handleOpenChanges}
+                    onOpenFile={handleOpenFile}
+                  />;
+                })}
                 {pendingAssistantVisible && (
                   <AssistantTurnView
                     key={`assistant-pending-${requestPlacement.pending[0]?.id || messages.length}`}

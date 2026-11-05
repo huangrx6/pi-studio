@@ -275,6 +275,8 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .suggestion span { grid-column: 2; color: var(--faint); font-size: var(--text-sm); }
 .suggestion:hover { border-color: var(--border-hover); background: var(--surface-hover); box-shadow: var(--shadow-card); }
 .messages { display: flex; flex-direction: column; gap: var(--space-8); padding: var(--space-2) 0; }
+/* 转录窗口的顶部哨兵：不可见，只用来在读者接近顶部时继续挂载更早的轮次。 */
+.transcript-window-sentinel { width: 100%; height: 1px; flex: none; }
 .message { display: flex; flex-direction: column; }
 .message.user { align-items: flex-end; }
 

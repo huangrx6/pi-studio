@@ -154,8 +154,10 @@ try {
   await page.waitForTimeout(400);
   await page.locator('.outline-tick').first().waitFor();
 
-  // 消息列表不再分页：打开会话就读完整段历史，大纲跳转不需要再补载。
-  assert.equal(await page.locator('.message.user').count(), TURNS, 'the whole transcript is loaded at open');
+  // 数据一次性读全（大纲条目齐全），但 DOM 只挂载最近一窗：这是两件事。
+  const mountedTurns = await page.locator('.message.user').count();
+  assert.ok(mountedTurns > 0 && mountedTurns < TURNS, `only a window of turns is mounted (${mountedTurns}/${TURNS})`);
+  assert.ok(await page.locator('.outline-tick').count() >= 2, 'the outline rail still samples the whole history');
   assert.equal(await page.locator('.history-loading').count(), 0, 'no incremental loading placeholder exists any more');
   // 打开会话（含侧边栏预取）就取完整段历史，不再按窗口补页。
   const historyRequests = await page.evaluate(() => window.__outlineRequests.length);

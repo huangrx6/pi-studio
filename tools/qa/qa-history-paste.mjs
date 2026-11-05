@@ -201,9 +201,10 @@ try {
     await page.waitForFunction(() => window.__historyCalls.length === 1 && window.__outlineCalls === 1);
   }
 
-  // 整段历史一次性载入：225 个提问全部在 DOM 里，大纲刻度覆盖首尾。
+  // 整段历史一次性载入，但 DOM 只挂载最近一窗；大纲仍覆盖首尾。
   await openHistorySession();
-  assert.equal(await page.locator('.message.user').count(), 225, 'the whole transcript is loaded at open');
+  const mountedTurns = await page.locator('.message.user').count();
+  assert.ok(mountedTurns > 0 && mountedTurns < 225, `only a window of turns is mounted (${mountedTurns}/225)`);
   assert.equal(await page.locator('.history-loading').count(), 0, 'no incremental loading placeholder');
   assert.equal(await page.locator('.outline-tick').count(), 12, 'outline should remain visually bounded');
   assert.equal(await page.locator('.outline-tick').first().getAttribute('aria-label'), '跳转到第 1 条提问');
