@@ -1007,6 +1007,18 @@ export function App() {
    * reaches the first message.
    */
   const [turnWindowFromState, setTurnWindowFromState] = useState<number | null>(null);
+  /**
+   * Switching back to a conversation within a minute reuses the last payload
+   * instead of re-reading ~10 MB over IPC. Entries expire quickly and are
+   * dropped for a session that is still running, so the cache can never hide a
+   * fresher transcript for long.
+   */
+  const transcriptCacheRef = useRef(new Map<string, {
+    at: number;
+    detail: ConversationPage;
+    outline?: OutlineData;
+    children: SubagentChild[];
+  }>());
   /** Outline target that needs the window to grow before it can be scrolled to. */
   const [pendingOutlineJump, setPendingOutlineJump] = useState<number | null>(null);
   const windowAnchorRef = useRef<{ top: number; height: number } | null>(null);
@@ -2784,13 +2796,17 @@ export function App() {
     requestRef.current = '';
     const load = ++sessionLoadRef.current;
     const outlineRequest = ++outlineRequestRef.current;
-    setSessionLoading(true);
+    const cached = transcriptCacheRef.current.get(item.id);
+    const cacheFresh = cached && Date.now() - cached.at < 60_000;
+    setSessionLoading(!cacheFresh);
     try {
-      const [detail, outline, children] = await Promise.all([
-        loadFullTranscript(window.piApi.conversationPage, item.id),
-        window.piApi.conversationOutline(item.id).catch(() => undefined),
-        window.piApi.sessionSubagents(item.id).catch(() => [] as SubagentChild[]),
-      ]);
+      const [detail, outline, children] = cacheFresh
+        ? [cached.detail, cached.outline, cached.children]
+        : await Promise.all([
+          loadFullTranscript(window.piApi.conversationPage, item.id),
+          window.piApi.conversationOutline(item.id).catch(() => undefined),
+          window.piApi.sessionSubagents(item.id).catch(() => [] as SubagentChild[]),
+        ]);
       if (load !== sessionLoadRef.current) return;
       if (!detail) {
         // 侧边栏里的旧条目可能已经被删除或移动；刷新列表，避免用户停在一个空入口。
@@ -2827,6 +2843,13 @@ export function App() {
       setBusy(Boolean(detail.running));
       setCompaction({ active: Boolean(detail.compacting) });
       setRetryInfo(null);
+      if (!detail.running) {
+        transcriptCacheRef.current.delete(item.id);
+        transcriptCacheRef.current.set(item.id, { at: Date.now(), detail, outline, children });
+        while (transcriptCacheRef.current.size > 3) {
+          transcriptCacheRef.current.delete(transcriptCacheRef.current.keys().next().value as string);
+        }
+      }
     } catch (error) {
       if (load === sessionLoadRef.current) {
         setError(errorText(error));
