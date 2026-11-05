@@ -446,31 +446,30 @@ export function SubagentTranscriptView({
 
     <div className="agent-context-scroll">
       <div className="agent-context-column">
+        {/* One compact row: small mark, name, then the state chips on the right. */}
         <header className="agent-context-head">
           <span className="agent-context-avatar"><Bot /></span>
-          <div className="agent-context-identity">
-            <h2>{child.name || child.agent}</h2>
-            {child.task && <>
-              <p className={`agent-context-task${taskOpen ? ' is-open' : ''}`} title={longTask && !taskOpen ? child.task : undefined}>
-                {child.task}
-              </p>
-              {longTask && <button
-                type="button"
-                className="agent-context-task-toggle"
-                aria-expanded={taskOpen}
-                onClick={() => setTaskOpen((value) => !value)}
-              >
-                {taskOpen ? '收起指令' : '展开完整指令'}
-                <ChevronDown className={taskOpen ? 'is-open' : undefined} />
-              </button>}
-            </>}
-          </div>
+          <h2>{child.name || child.agent}</h2>
           <div className="agent-context-state">
             <span className={`agent-status is-${child.status}`}>{statusIcon(child.status)}<span>{STATUS_LABEL[child.status]}</span></span>
             <span className="agent-readonly-status"><ShieldCheck /><span>只读</span></span>
             <InfoHint align="end" label="只读上下文：不会向子智能体发送消息，也不会改变父智能体的工作。" />
           </div>
         </header>
+        {child.task && <div className="agent-context-brief">
+          <p className={`agent-context-task${taskOpen ? ' is-open' : ''}`} title={longTask && !taskOpen ? child.task : undefined}>
+            {child.task}
+          </p>
+          {longTask && <button
+            type="button"
+            className="agent-context-task-toggle"
+            aria-expanded={taskOpen}
+            onClick={() => setTaskOpen((value) => !value)}
+          >
+            {taskOpen ? '收起指令' : '展开完整指令'}
+            <ChevronDown className={taskOpen ? 'is-open' : undefined} />
+          </button>}
+        </div>}
         <div className="agent-context-meta">
           <span><Cpu /><small>模型</small><strong>{child.model || '继承父智能体'}</strong></span>
           <span><Sparkles /><small>思考强度</small><strong>{thinkingLabel(child.thinking)}</strong></span>

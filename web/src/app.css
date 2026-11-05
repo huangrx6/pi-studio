@@ -4133,8 +4133,8 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .agent-card-avatar,
 .agent-context-avatar { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-soft); color: var(--muted); }
 .agent-card-avatar svg { width: var(--icon-md); height: var(--icon-md); }
-.agent-context-avatar { width: 42px; height: 42px; }
-.agent-context-avatar svg { width: var(--icon-lg); height: var(--icon-lg); }
+.agent-context-avatar { width: 30px; height: 30px; }
+.agent-context-avatar svg { width: var(--icon-md); height: var(--icon-md); }
 .agent-card-identity { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 2px; }
 .agent-card-identity > strong { overflow: hidden; color: var(--text); font-size: var(--text-base); font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
 .agent-card-identity .agent-card-source { margin-top: 1px; }
@@ -4419,10 +4419,22 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   scroll-padding-block: var(--space-4);
 }
 .agent-context-column { width: min(var(--content), 100%); margin-inline: auto; }
-.agent-context-head { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: start; gap: var(--space-3); padding-bottom: var(--space-3); }
+/* One compact row: the mark sits inline with the name and the chips align right. */
+.agent-context-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
 .agent-context-head > div { min-width: 0; }
 .agent-context-head h2 { font-size: 20px; }
-.agent-context-identity { display: grid; min-width: 0; justify-items: start; gap: 2px; }
+/* The brief reads at the full content width instead of hiding in the name column. */
+.agent-context-brief {
+  display: grid;
+  min-width: 0;
+  margin-top: var(--space-3);
+  padding-bottom: var(--space-1);
+}
 /* Long instructions clamp to three lines at the full column width instead of
    squeezing into a narrow measure that leaves the right half of the header
    empty; the toggle reveals the rest verbatim. */
@@ -4473,7 +4485,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   white-space: nowrap;
 }
 .agent-readonly-status svg { width: var(--icon-xs); height: var(--icon-xs); }
-.agent-context-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--border); }
+.agent-context-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin-top: var(--space-3); overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--border); }
 .agent-context-meta > span { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 3px 8px; min-width: 0; padding: 13px 16px; background: var(--surface); }
 .agent-context-meta svg { width: var(--icon-md); height: var(--icon-md); grid-row: 1 / 3; align-self: center; color: var(--icon); }
 .agent-context-meta small { color: var(--faint); font-size: 10.5px; }

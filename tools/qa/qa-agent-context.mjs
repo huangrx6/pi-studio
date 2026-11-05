@@ -106,6 +106,10 @@ try {
       meta: rect('.agent-context-meta'),
       transcript: rect('.agent-transcript'),
       firstTurn: rect('.agent-transcript .user-bubble'),
+      avatar: rect('.agent-context-avatar'),
+      title: rect('.agent-context-head h2'),
+      state: rect('.agent-context-state'),
+      brief: rect('.agent-context-brief'),
     };
   })()`);
 
@@ -113,6 +117,12 @@ try {
   assert.equal(layout.toolbarInner.right, layout.column.right, 'toolbar shares the body track');
   assert.ok(layout.toolbarInner.top >= 12, `toolbar keeps clear of the window tabs (${layout.toolbarInner.top})`);
   assert.ok(layout.toolbarInner.bottom > layout.toolbarInner.top + 32, 'toolbar keeps a full control height');
+  assert.ok(layout.avatar.right - layout.avatar.left <= 32, `the mark stays small (${layout.avatar.right - layout.avatar.left}px)`);
+  assert.ok(layout.avatar.top >= layout.title.top - 4 && layout.avatar.bottom <= layout.title.bottom + 4, 'the mark sits on the title row');
+  assert.ok(layout.title.right < layout.state.left, 'state chips stay right of the title on the same row');
+  assert.equal(layout.brief.left, layout.column.left, 'the brief spans the full content width');
+  assert.equal(layout.brief.right, layout.column.right, 'the brief spans the full content width');
+  assert.ok(layout.brief.top > layout.title.bottom, 'the brief sits under the title row');
   assert.equal(layout.head.left, layout.meta.left, 'header and meta share the track');
   assert.equal(layout.head.right, layout.meta.right, 'header and meta share the track');
   assert.ok(
