@@ -588,6 +588,7 @@ async function conversationSnapshot(id) {
     longTask: await longTaskDto(row),
     requestTraces: getStudioDatabase().listRequestTraces(key, {
       limit: REQUEST_TRACE_PAGE_LIMIT,
+      summary: true,
     }),
   });
 }
@@ -620,6 +621,7 @@ async function conversationPage(id, options = {}) {
     longTask: await longTaskDto(row),
     requestTraces: getStudioDatabase().listRequestTraces(key, {
       limit: REQUEST_TRACE_PAGE_LIMIT,
+      summary: true,
     }),
     page: {
       hasOlder: page.hasOlder,
@@ -627,6 +629,17 @@ async function conversationPage(id, options = {}) {
     },
     messageStart: page.messages[0]?.sourceIndex ?? 0,
   });
+}
+
+/**
+ * Full request snapshot for one trace. The conversation page now carries
+ * summaries, so the inspector pulls its body only when the user opens it.
+ */
+async function conversationRequestTrace(id, requestId) {
+  const row = await getConversationRow(id);
+  if (!row) return undefined;
+  const trace = getStudioDatabase().getRequestTrace(conversationKey(row), requestId);
+  return trace || undefined;
 }
 
 async function outline(id) {
@@ -2102,6 +2115,7 @@ module.exports = {
   conversationMessageSummary,
   conversationAction,
   conversationPage,
+  conversationRequestTrace,
   conversationSnapshot,
   createConversation,
   editConversation,

@@ -27,6 +27,25 @@ const USAGE_REQUEST_PRUNE_BATCH = 256;
 const METRIC_REQUEST_HISTORY_LIMIT = 8;
 const REQUEST_TRACE_HISTORY_LIMIT = 48;
 
+/** Strip the heavy arrays, keep everything the trace header needs. */
+function requestTraceSummary(trace) {
+  const { messages, tools, ...rest } = trace;
+  return {
+    ...rest,
+    snapshot: 'deferred',
+    stats: {
+      ...(trace.stats || {}),
+      // The inspector still reports the size it will reveal.
+      estimatedChars: trace.stats?.estimatedChars || 0,
+    },
+    toolCount: Array.isArray(tools) ? tools.length : 0,
+    // Placement matches a trace to its user turn; the body is not shipped.
+    userTimestamp: [...(Array.isArray(messages) ? messages : [])]
+      .reverse()
+      .find((message) => message?.role === 'user' && Number.isFinite(message.timestamp))?.timestamp,
+  };
+}
+
 function json(value, fallback) {
   if (value === undefined || value === null || value === '') return fallback;
   try {
@@ -1620,7 +1639,12 @@ class StudioDatabase {
     return true;
   }
 
-  listRequestTraces(conversationId, { limit = REQUEST_TRACE_HISTORY_LIMIT } = {}) {
+  /**
+   * Summaries are what a conversation page ships: the trace body (messages and
+   * tool schemas) is up to 512k characters each, and sixteen of them were 8.6 MB
+   * of a 20 MB page. The detail read below serves the one the user opens.
+   */
+  listRequestTraces(conversationId, { limit = REQUEST_TRACE_HISTORY_LIMIT, summary = true } = {}) {
     const key = typeof conversationId === 'string' || typeof conversationId === 'number'
       ? String(conversationId)
       : '';
@@ -1637,7 +1661,24 @@ class StudioDatabase {
     `).all(key, safeLimit)
       .map((row) => json(row.payload, undefined))
       .filter((trace) => trace && typeof trace === 'object' && !Array.isArray(trace))
+      .map((trace) => (summary ? requestTraceSummary(trace) : trace))
       .reverse();
+  }
+
+  /** Full snapshot for one request; undefined when it was never captured. */
+  getRequestTrace(conversationId, requestId) {
+    const key = typeof conversationId === 'string' || typeof conversationId === 'number'
+      ? String(conversationId)
+      : '';
+    const id = typeof requestId === 'string' ? requestId.trim() : '';
+    if (!key || !id) return undefined;
+    const row = this.db.prepare(`
+      SELECT payload
+      FROM conversation_request_traces
+      WHERE conversation_id = ? AND request_id = ?
+    `).get(key, id.slice(0, 320));
+    const trace = row ? json(row.payload, undefined) : undefined;
+    return trace && typeof trace === 'object' && !Array.isArray(trace) ? trace : undefined;
   }
 
   saveTurnDiff(conversationId, diff) {

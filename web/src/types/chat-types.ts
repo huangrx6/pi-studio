@@ -214,8 +214,14 @@ export type RequestTrace = {
   createdAt: number;
   model?: { provider: string; modelId: string };
   thinkingLevel?: string;
-  messages: RequestTraceMessage[];
-  tools: RequestTraceTool[];
+  /** Absent in summaries; `snapshot: 'deferred'` means fetch() the detail. */
+  messages?: RequestTraceMessage[];
+  tools?: RequestTraceTool[];
+  snapshot?: 'deferred';
+  /** Latest user timestamp inside the request, kept on summaries for placement. */
+  userTimestamp?: number;
+  /** Tool count kept on summaries so the inspector can label the tab. */
+  toolCount?: number;
   stats: {
     messageCount: number;
     systemChars: number;

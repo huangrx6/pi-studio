@@ -10,7 +10,7 @@
  */
 
 export {};
-import type { ChatAttachment, ChatMessage, ComposerAttachment, ComposerCommand, ComposerFile, TurnDiff, UploadedAttachment } from './types/chat-types';
+import type { ChatAttachment, ChatMessage, ComposerAttachment, ComposerCommand, ComposerFile, RequestTrace, TurnDiff, UploadedAttachment } from './types/chat-types';
 import type { ConcreteThinkingLevel, ModelCatalog, ModelSelection, ThinkingLevel } from './types/model-types';
 import type {
   ModelComparisonInput,
@@ -406,6 +406,8 @@ declare global {
       }): Promise<ConversationPage | undefined>;
       /** 获取完整提问大纲；仅用于导航，不参与消息窗口渲染。 */
       conversationOutline(id: string): Promise<ConversationOutline | undefined>;
+      /** Full request snapshot; the page only carries summaries. */
+      conversationRequestTrace(id: string, requestId: string): Promise<RequestTrace | undefined>;
       /** 获取会话当前运行、压缩和任务快照。 */
       conversationSnapshot(id: string): Promise<ConversationSnapshot | undefined>;
       /** 订阅一条会话；返回与事件流同一一致性边界的初始快照。 */

@@ -4,8 +4,13 @@ export type RequestTraceTurn =
   | { kind: 'user'; message: Pick<ChatMessage, 'timestamp'> }
   | { kind: 'assistant'; messages: Array<Pick<ChatMessage, 'timestamp' | 'taskId'>> };
 
-/** Timestamp of the newest user message inside a captured provider request. */
-function latestUserTimestamp(trace: Pick<RequestTrace, 'messages'>): number | undefined {
+/**
+ * Timestamp of the newest user message inside a captured provider request.
+ * Summaries carry it directly; full snapshots derive it from the messages.
+ */
+function latestUserTimestamp(trace: Pick<RequestTrace, 'messages' | 'userTimestamp'>): number | undefined {
+  if (Number.isFinite(trace.userTimestamp)) return trace.userTimestamp;
+  if (!Array.isArray(trace.messages)) return undefined;
   return [...trace.messages].reverse().find((message) => (
     message.role === 'user' && Number.isFinite(message.timestamp)
   ))?.timestamp;

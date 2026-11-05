@@ -81,26 +81,28 @@ const PAGE_SIZE = 16;
 type InspectorTab = 'system' | 'context' | 'tools';
 
 function RequestInspector({ trace }: { trace: RequestTrace }) {
+  const messages = trace.messages ?? [];
+  const toolsAll = trace.tools ?? [];
   const [tab, setTab] = useState<InspectorTab>('context');
   const [query, setQuery] = useState('');
   // null means the newest page. Older context remains accessible in chronological order.
   const [page, setPage] = useState<number | null>(null);
-  const system = useMemo(() => trace.messages.filter(message => message.role === 'system'), [trace.messages]);
-  const context = useMemo(() => trace.messages.filter(message => message.role !== 'system'), [trace.messages]);
-  const messages = tab === 'system' ? system : context;
+  const system = useMemo(() => messages.filter(message => message.role === 'system'), [messages]);
+  const context = useMemo(() => messages.filter(message => message.role !== 'system'), [messages]);
+  const page_messages = tab === 'system' ? system : context;
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
-    if (!needle) return messages;
-    return messages.filter(message => requestRoleLabel(message.role).includes(needle)
+    if (!needle) return page_messages;
+    return page_messages.filter(message => requestRoleLabel(message.role).includes(needle)
       || message.content.some(block => `${block.type === 'toolCall' ? block.name : block.type === 'image' ? block.mimeType : ''} ${requestBlockValue(block)}`.toLocaleLowerCase().includes(needle)));
-  }, [messages, query]);
-  const tools = useMemo(() => trace.tools.filter(tool => `${tool.name} ${tool.description}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())), [trace.tools, query]);
+  }, [page_messages, query]);
+  const tools = useMemo(() => toolsAll.filter(tool => `${tool.name} ${tool.description}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())), [trace.tools, query]);
   const total = tab === 'tools' ? tools.length : filtered.length;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.min(page ?? (tab === 'context' ? pages - 1 : 0), pages - 1);
   const start = currentPage * PAGE_SIZE;
   const changeTab = (value: InspectorTab) => { setTab(value); setQuery(''); setPage(null); };
-  const counts = { system: system.length, context: context.length, tools: trace.tools.length };
+  const counts = { system: system.length, context: context.length, tools: toolsAll.length };
   return <div className="request-inspector">
     <div className="request-inspector-toolbar">
       <div className="request-inspector-tabs" aria-label="请求内容">
@@ -134,7 +136,7 @@ function RequestInspector({ trace }: { trace: RequestTrace }) {
   </div>;
 }
 
-function RequestTool({ tool }: { tool: RequestTrace['tools'][number] }) {
+function RequestTool({ tool }: { tool: NonNullable<RequestTrace['tools']>[number] }) {
   const [open, setOpen] = useState(false);
   return <details className="request-tool" open={open} onToggle={event => setOpen(event.currentTarget.open)}>
     <summary><span>{tool.name}</span><span>{tool.description}</span><ChevronDown /></summary>
@@ -144,7 +146,18 @@ function RequestTool({ tool }: { tool: RequestTrace['tools'][number] }) {
 
 export function ActivityRequest({ trace, stepDisplay }: { trace: RequestTrace; stepDisplay: StepDisplay }) {
   const [open, setOpen] = useState(stepDisplay === 'detailed');
+  const [detail, setDetail] = useState<RequestTrace | null>(null);
+  const [detailError, setDetailError] = useState('');
   useEffect(() => { setOpen(stepDisplay === 'detailed'); }, [stepDisplay]);
+  const deferred = trace.snapshot === 'deferred' || !Array.isArray(trace.messages);
+  useEffect(() => {
+    if (!open || !deferred || detail) return;
+    let disposed = false;
+    void window.piApi.conversationRequestTrace(trace.conversationId, trace.requestId)
+      .then((full) => { if (!disposed && full) setDetail(full); })
+      .catch(() => { if (!disposed) setDetailError('无法读取这次请求的快照'); });
+    return () => { disposed = true; };
+  }, [open, deferred, detail, trace.conversationId, trace.requestId]);
   const model = trace.model ? `${trace.model.provider}/${trace.model.modelId}` : '模型参数未记录';
   return <details className="activity-request activity-disclosure" open={open} onToggle={event => setOpen(event.currentTarget.open)}>
     <summary className="activity-disclosure-summary">
@@ -154,6 +167,10 @@ export function ActivityRequest({ trace, stepDisplay }: { trace: RequestTrace; s
       <span className="activity-request-metrics activity-disclosure-meta">{trace.stats.messageCount} 条消息{trace.thinkingLevel ? ` · ${trace.thinkingLevel}` : ''}{trace.attempt > 1 ? ` · 重试 ${trace.attempt}` : ''}</span>
       <ChevronDown className="activity-request-chevron activity-disclosure-chevron" />
     </summary>
-    {open && <div className="activity-request-body activity-disclosure-body"><RequestInspector trace={trace} /></div>}
+    {open && <div className="activity-request-body activity-disclosure-body">
+      {detailError && <p className="request-inspector-empty" role="status">{detailError}</p>}
+      {!detail && !detailError && deferred ? <p className="request-inspector-empty" role="status">正在读取请求快照…</p> : null}
+      {(detail || !deferred) && <RequestInspector trace={detail ?? trace} />}
+    </div>}
   </details>;
 }
