@@ -25,6 +25,15 @@ function memoryDatabase() {
     getSetting(key, fallback) {
       return values.has(key) ? structuredClone(values.get(key)) : fallback;
     },
+    getSettingWithRecovery(key, fallback, normalize) {
+      if (!values.has(key)) return structuredClone(normalize(fallback));
+      const stored = values.get(key);
+      const normalized = normalize(structuredClone(stored));
+      if (JSON.stringify(stored) !== JSON.stringify(normalized)) {
+        values.set(key, structuredClone(normalized));
+      }
+      return structuredClone(normalized);
+    },
     setSetting(key, value) {
       values.set(key, structuredClone(value));
       return value;

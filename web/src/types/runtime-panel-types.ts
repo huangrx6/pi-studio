@@ -1,5 +1,12 @@
 export type TerminalSessionStatus = 'running' | 'exited';
 
+export type TerminalReplay = {
+  cols: number;
+  rows: number;
+  steps: ({ type: 'data'; data: string } | { type: 'resize'; cols: number; rows: number })[];
+  truncated: boolean;
+};
+
 export type TerminalSessionSnapshot = {
   id: string;
   title: string;
@@ -10,8 +17,7 @@ export type TerminalSessionSnapshot = {
   exitedAt?: number;
   exitCode?: number;
   sequence: number;
-  output?: string;
-  atBottom?: boolean;
+  replay?: TerminalReplay;
   createdNow?: boolean;
 };
 

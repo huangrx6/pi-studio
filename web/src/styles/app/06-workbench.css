@@ -1,0 +1,180 @@
+/* Split from the legacy app.css entry. Import order is part of the cascade. */
+
+/* Settings only manages availability; model switching belongs to the conversation picker. */
+/* 设置页只负责启用/禁用模型，不提供切换当前模型的能力；因此卡片禁用 hover
+位移和阴影，主区域光标保持默认，真正的模型切换在对话输入区的选择器里。 */
+
+/* Right panel: persistent tabs, app-local fullscreen and split browsing. */
+/* 右栏是可停靠、可全屏、可分栏的工作台：全屏时 app 隐藏侧栏和主对话区，
+面板自身铺满；分栏时左侧文件树加右侧预览，宽度上限 760 或 64vw。所有滚动都
+下沉到 file-tree/file-code，标签栏与工具栏固定。 */
+
+.app.is-panel-fullscreen .sidebar,
+.app.is-panel-fullscreen .main { display: none; }
+.file-panel { width: var(--panel-w); padding: 0; background: var(--surface); border-left: 1px solid var(--border); container-type: inline-size; container-name: file-panel; }
+.file-panel.is-split:not(.is-fullscreen) { width: min(760px, 64vw); }
+.file-panel.is-fullscreen { width: 100%; flex: 1; border-left: 0; }
+.panel-body { display: flex; flex: 1; min-height: 0; }
+.panel-body.is-split { display: grid; grid-template-columns: minmax(220px, .9fr) minmax(0, 1.4fr); }
+.panel-file-browser, .panel-file-preview { display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; }
+.panel-split-tree { min-width: 0; min-height: 0; border-right: 1px solid var(--border); }
+.panel-split-tree .panel-file-browser { height: 100%; }
+.panel-split-main { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.panel-split-main .panel-file-preview, .panel-split-main .panel-start { flex: 1; }
+.panel-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: 48px var(--space-5); text-align: center; color: var(--faint); font-size: var(--text-sm); }
+.panel-empty > svg { width: var(--icon-xl); height: var(--icon-xl); opacity: .7; margin-bottom: var(--space-2); }
+.panel-empty strong { color: var(--muted); font-size: var(--text-base); font-weight: var(--weight-medium); }
+.panel-route-loading { display: grid; flex: 1; min-height: 0; place-items: center; color: var(--faint); }
+.panel-route-loading svg { width: var(--icon-md); height: var(--icon-md); animation: panel-route-spin .8s linear infinite; }
+@keyframes panel-route-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .panel-route-loading svg { animation: none; } }
+@media (max-width: 900px) { .file-panel.is-split:not(.is-fullscreen) { width: 100%; } .panel-body.is-split { grid-template-columns: minmax(160px, .85fr) minmax(0, 1.15fr); } }
+
+/* Provider marks: native brand glyphs when available, neutral fallback otherwise. */
+/* 供应商标记优先使用品牌图形，缺失时回退到首字母；尺寸由组件传入的
+--provider-icon-size 控制，这里只负责居中、裁切和边框。各 is-* 色相类最终被
+统一成中性图标色，避免第三方品牌色干扰界面。 */
+
+.provider-icon { --provider-icon-optical-x: 0%; --provider-icon-optical-y: 0%; position: relative; display: inline-block; flex: none; overflow: hidden; border: 1px solid var(--transparent); border-radius: calc(var(--provider-icon-size) * .28); background: var(--surface-soft); color: var(--icon); }
+.provider-icon > svg { position: absolute; top: 50%; left: 50%; width: 58%; height: 58%; fill: currentColor; transform: translate(-50%, -50%) translate(var(--provider-icon-optical-x), var(--provider-icon-optical-y)); }
+.provider-icon > .provider-code-mark { width: 68%; height: 68%; overflow: visible; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.provider-icon > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.provider-icon-letter {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  font-size: calc(var(--provider-icon-size) * .3);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  text-align: center;
+}
+.provider-icon.is-blue { color: var(--icon); background: var(--surface-soft); border-color: var(--border); }
+.provider-icon.is-warm { color: var(--icon); background: var(--surface-soft); border-color: var(--border-strong); }
+.provider-icon.is-green { color: var(--icon); background: var(--surface-soft); border-color: var(--border-strong); }
+.provider-icon.is-clay { color: var(--icon); background: var(--surface-soft); border-color: var(--border-strong); }
+.provider-icon.is-violet { color: var(--icon); background: var(--surface-soft); border-color: var(--border); }
+.provider-icon.is-sky { color: var(--icon); background: var(--surface-soft); border-color: var(--border); }
+.provider-icon.is-neutral { color: var(--icon); background: var(--surface-soft); border-color: var(--border); }
+
+/* Right panel is a plain white work surface, matching the conversation area. */
+/* 这一层把右栏所有表面统一成与对话区相同的 surface 层级，并去掉早期标签栏
+的嵌套底色和阴影；active 标签改用柔和表面，不再额外描边。 */
+
+.file-panel, .panel-file-browser, .panel-file-preview { background: var(--surface); }
+.file-code { background: var(--surface); }
+
+/* Slide the workbench in and out from the right edge. */
+/* 右栏开关用宽度、位移和透明度做抽屉动画：关闭时宽度为 0 并向右偏移，打开时
+恢复 --panel-w；file-panel-inner 固定 min-width，保证动画期间内容不被挤压重排，
+只是被外层裁切。≤1100px 时改为绝对定位抽屉。 */
+
+.file-panel { width: 0; opacity: 0; overflow: hidden; transform: translateX(18px); transition: width .28s cubic-bezier(.22,.8,.2,1), opacity .2s ease, transform .28s cubic-bezier(.22,.8,.2,1); }
+.file-panel.is-open { width: var(--panel-w); opacity: 1; transform: translateX(0); }
+.file-panel.is-open.is-split:not(.is-fullscreen) { width: min(760px, 64vw); }
+.file-panel.is-open.is-fullscreen { width: 100%; }
+.file-panel-inner { display: flex; flex-direction: column; width: var(--panel-w); min-width: var(--panel-w); height: 100%; }
+.file-panel.is-split:not(.is-fullscreen) .file-panel-inner { width: min(760px, 64vw); min-width: min(760px, 64vw); }
+.file-panel.is-fullscreen .file-panel-inner { width: 100%; min-width: 100%; }
+@media (max-width: 1100px) { .file-panel { position: absolute; top: 0; right: 0; bottom: 0; } }
+
+/* File actions: open with an installed app or reveal in Finder. */
+/* 文件工具栏右侧的打开方式与在 Finder 中显示菜单，绝对定位在按钮下方，
+z-index 40，宽度和最大高度都受限并可内部滚动；每个操作行用 18px 图标加
+省略号文本，分隔线不参与点击。 */
+
+.file-toolbar { position: relative; }
+.file-actions { position: relative; flex: none; }
+.file-actions-menu { position: absolute; top: calc(100% + 5px); right: 0; z-index: 40; width: 238px; max-height: 330px; overflow-y: auto; padding: 5px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-popover); }
+.file-actions-label { padding: 5px 8px 6px; color: var(--faint); font-size: var(--text-xs); letter-spacing: .08em; text-transform: uppercase; }
+.file-action { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 30px; padding: 4px 8px; border-radius: var(--radius-tag); color: var(--muted); text-align: left; font-size: var(--text-sm); }
+.file-action:hover { background: var(--surface-hover); color: var(--text); }
+.file-action > svg, .file-action > img { width: var(--icon-md); height: var(--icon-md); flex: none; border-radius: var(--radius-tag); }
+.file-action > img { object-fit: contain; }
+.file-action > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-actions-sep { height: 1px; margin: 4px 6px; background: var(--border); }
+
+/* Resource cards for MCP and global skills. */
+/* MCP 与全局技能共用的资源卡片：双列网格，卡片有最小高度和 hover 抬升；描述用
+-webkit-line-clamp 截断，目标地址用等宽字体单行省略。≤900px 改为单列，卡片内
+开关靠 margin-left:auto 贴右。 */
+.muted-inline, .detail-error-text { color: var(--muted); font-size: var(--text-xs); }
+.detail-error-text { color: var(--error); overflow-wrap: anywhere; }
+.settings-text-button { height: 28px; padding: 0 7px; border-radius: var(--radius-tag); color: var(--muted); font-size: var(--text-xs); }
+.settings-text-button:hover { background: var(--surface-soft); color: var(--text); }
+.settings-text-button.is-danger { color: var(--error); }
+.settings-text-button.is-danger:hover { background: var(--error-soft); }
+
+/* Read-only detail dialogs. */
+/* 只读详情对话框用 fixed 覆盖层加自有卡片，不复用原生 dialog 的默认样式；
+层级 90，后面又被提到 200 以压过设置层。技能详情是特例：固定高度、左右两栏
+（文件树 290px 加预览），只有两栏内部各自滚动。 */
+
+.detail-overlay { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; border: 0; color: var(--text); z-index: 90; display: flex; align-items: center; justify-content: center; padding: var(--space-6); background: transparent; }
+.detail-dialog { display: flex; flex-direction: column; width: min(600px, 92vw); max-height: min(720px, 88vh); overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-dialog); }
+.detail-dialog--small { width: min(520px, 92vw); }
+.detail-header { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-5) var(--space-5) var(--space-4); border-bottom: 1px solid var(--border); }
+.detail-heading { display: flex; align-items: flex-start; gap: var(--space-3); min-width: 0; flex: 1; }
+.detail-icon { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: var(--radius-control); color: var(--icon); background: var(--surface-soft); }
+.detail-icon.is-skill { color: var(--icon); background: var(--surface-soft); }
+.detail-icon svg { width: var(--icon-md); height: var(--icon-md); }
+.detail-heading h2 { margin: 0; font-size: var(--text-lg); font-weight: var(--weight-semibold); }
+.detail-heading p { margin: 4px 0 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-normal); }
+.detail-header > .icon-button { flex: none; }
+.detail-body { padding: var(--space-5); overflow: auto; }
+.detail-list { margin: 0; }
+.detail-list > div { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: var(--space-3); padding: 9px 0; border-top: 1px solid var(--border); font-size: var(--text-sm); }
+.detail-list > div:first-child { border-top: 0; }
+.detail-list dt { color: var(--faint); }
+.detail-list dd { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+.detail-list code { font: var(--text-xs) var(--mono); color: var(--text); }
+.detail-list .mcp-stderr {
+  max-height: 220px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+  color: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.detail-footer { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-5); border-top: 1px solid var(--border); }
+.detail-footer > span { flex: 1; }
+.detail-footer .settings-outline { display: inline-flex; align-items: center; gap: 5px; }
+.detail-footer svg { width: var(--icon-sm); height: var(--icon-sm); }
+.detail-error { margin: var(--space-3) var(--space-5) 0; padding: 8px 10px; border-radius: var(--radius-tag); background: var(--error-soft); color: var(--error); font-size: var(--text-sm); }
+.detail-code { flex: 1; margin: 0; padding: 16px; overflow: auto; color: var(--text); background: var(--surface); font: var(--text-sm)/var(--leading-relaxed) var(--mono); white-space: pre; }
+
+.detail-dialog { padding: 0; margin: auto; }
+.detail-dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
+
+.detail-overlay { z-index: 200; }
+.detail-overlay:not([open]) { display: none; }
+.detail-overlay::backdrop { background: transparent; }
+
+/* Tabs flow horizontally by wheel; no rail divider, just breathing room. */
+/* 标签栏支持滚轮横向滚动：去掉底部分隔线，让 tabs 自己把 overscroll 限制在
+容器内，避免滚动传给页面。文件工具栏的顶部边框也在这里去掉。 */
+
+.panel-body .file-toolbar { border-top: 0; }
+
+/* Match the sidebar toggle's icon scale and loosen the right-side tool spacing. */
+/* 统一面板工具按钮与侧栏开关的图标尺寸为 16px，并把工具组间距放宽到 8px；
+这些细调只影响观感，不改变点击区域。 */
+
+.sidebar-top-toggle svg { width: var(--icon-md); height: var(--icon-md); }
+
+/* Skills stay grouped by their real discovery source: Studio-owned and
+Agent-shared directories are separate at both user and project scope. */
+
+/* Give the conversation header the same breathing room as the sidebar toggle line. */
+/* 第三次调整对话头：高度 60px、上内边距 16px，让标题与侧栏开关、macOS 窗口
+控制按钮处在同一视觉线上；操作组垂直居中，空会话也沿用同一高度。 */
+
+.chat-header { height: 60px; padding: 16px var(--space-6) 6px; justify-content: flex-start; }
+.is-new-conversation .chat-header { height: 60px; padding: 16px var(--space-6) 6px; }
+.chat-actions { margin-left: auto; align-self: center; }

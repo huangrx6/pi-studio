@@ -7,6 +7,7 @@ import {
   moveComposerDraft,
   readComposerDraft,
   saveComposerDraft,
+  subscribeComposerDraftStore,
 } from '../../web/src/features/conversation/composer-drafts.ts';
 
 const image = {
@@ -71,4 +72,33 @@ test('empty ordinary drafts are not retained in memory', () => {
   const key = composerDraftKeyForSession('session-a');
   saveComposerDraft(drafts, key, { text: '', attachments: [] });
   assert.equal(drafts.has(key), false);
+});
+
+test('draft subscribers receive save and clear changes until unsubscribed', () => {
+  const drafts = new Map();
+  const key = composerDraftKeyForSession('session-a');
+  let changes = 0;
+  const unsubscribe = subscribeComposerDraftStore(drafts, () => { changes += 1; });
+
+  saveComposerDraft(drafts, key, { text: 'persist me', attachments: [] });
+  assert.equal(changes, 1);
+  clearComposerDraft(drafts, key);
+  assert.equal(changes, 2);
+
+  unsubscribe();
+  saveComposerDraft(drafts, key, { text: 'not reported', attachments: [] });
+  assert.equal(changes, 2);
+});
+
+test('saving an empty draft removes the stored value', () => {
+  const drafts = new Map();
+  const key = composerDraftKeyForSession('session-a');
+  let changes = 0;
+  const unsubscribe = subscribeComposerDraftStore(drafts, () => { changes += 1; });
+
+  saveComposerDraft(drafts, key, { text: 'temporary', attachments: [] });
+  saveComposerDraft(drafts, key, { text: '', attachments: [] });
+  assert.equal(drafts.has(key), false);
+  assert.equal(changes, 2);
+  unsubscribe();
 });

@@ -1,3 +1,4 @@
+import { useSettingsDraftGuard } from '../../shared/SettingsDraftGuard';
 import { useEffect, useState } from 'react';
 import { Copy, KeyRound, LoaderCircle, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { useActionConfirmation } from '../../shared/ConfirmDialog';
@@ -22,6 +23,8 @@ export function SecretVaultSettings() {
   const replacing = items.some((item) => item.name === name.trim().toUpperCase());
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+
+  useSettingsDraftGuard({ label: '凭据输入', dirty: Boolean(name || value) });
 
   async function load() {
     try {

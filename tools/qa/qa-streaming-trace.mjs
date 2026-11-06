@@ -46,10 +46,10 @@ try {
     }
     createRoot(document.getElementById('fixture')).render(React.createElement(Fixture));
     </script></body></html>` }));
-  await page.goto('http://127.0.0.1:5180/popover-preview', { waitUntil: 'domcontentloaded' });
+  await page.goto(new URL('popover-preview', process.env.PREVIEW_URL || 'http://127.0.0.1:5180/').href, { waitUntil: 'domcontentloaded' });
   await page.locator('.activity-thinking.is-live').waitFor();
   await page.locator('.activity-sequence').waitFor();
-  assert.equal(await page.locator('.activity-sequence .activity-thinking').getAttribute('open'), null);
+  assert.equal(await page.locator('.activity-sequence .activity-thinking:not(.is-live)').getAttribute('open'), null);
   await page.locator('.activity-thinking.is-live').getByText('思考中',{exact:true}).waitFor();
   await page.locator('.activity-thinking.is-live').getByText('推理中',{exact:true}).waitFor();
   await page.evaluate(() => window.tick());
@@ -78,7 +78,6 @@ try {
       summary: center('summary'),
       icon: center('.activity-tool-icon'),
       name: center('.activity-tool-name'),
-      status: center('.activity-tool-status'),
       chevron: center('.activity-tool-chevron'),
     };
   }));
@@ -91,8 +90,8 @@ try {
   await page.evaluate(() => window.tool());
   await page.locator('.run-live-status').getByText('正在执行',{exact:true}).waitFor();
   await page.locator('.assistant-response').getByText('接下来检查构建结果。',{exact:true}).waitFor();
-  await page.locator('.turn-trace-body > .activity-tool.is-running .activity-tool-summary').filter({hasText:'pnpm run build'}).waitFor();
-  const currentToolVerticalAlignment = await page.locator('.turn-trace-body > .activity-tool.is-running').evaluate(tool => {
+  await page.locator('.turn-trace-body .activity-tool.is-running .activity-tool-summary').filter({hasText:'pnpm run build'}).waitFor();
+  const currentToolVerticalAlignment = await page.locator('.turn-trace-body .activity-tool.is-running').evaluate(tool => {
     const center = selector => {
       const rect = tool.querySelector(selector).getBoundingClientRect();
       return rect.top + rect.height / 2;

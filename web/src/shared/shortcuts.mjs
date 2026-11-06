@@ -64,9 +64,13 @@ function hasMod(event, platform) {
 
 /** Build a canonical combo from a KeyboardEvent; '' when unusable. */
 export function comboFromEvent(event, platform) {
-  if (!event) return '';
+  if (!event || event.isComposing || event.keyCode === 229) return '';
+  // The grammar cannot encode the secondary platform modifier or AltGraph.
+  // Reject these rather than silently recording a different combination.
+  if (event.getModifierState?.('AltGraph')) return '';
+  if (resolvePlatform(platform) === 'mac' ? event.ctrlKey : event.metaKey) return '';
   const key = normalizeKey(event.key);
-  if (!key || key === 'Control' || key === 'Meta' || key === 'Alt' || key === 'Shift') return '';
+  if (!key || key === '+' || key === 'Control' || key === 'Meta' || key === 'Alt' || key === 'Shift') return '';
   const parts = [];
   if (hasMod(event, platform)) parts.push('Mod');
   if (event.altKey) parts.push('Alt');

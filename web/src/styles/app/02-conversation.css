@@ -1,0 +1,246 @@
+/* Split from the legacy app.css entry. Import order is part of the cascade. */
+
+
+/* Conversation */
+/* main 是纵向 flex 列：header 与 tabs 固定高度（flex:none），chat-scroll 独占
+剩余空间并成为唯一的消息滚动容器（flex:1 + min-height:0 + overflow-y:auto），
+composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不会被输入框遮住。
+右侧会话大纲绝对定位于 main 的滚动视口之外，z-index 9；窄于 1100px 时整体隐藏。 */
+
+.main {
+  contain: layout paint; flex: 1; min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column; background: var(--surface); container-type: inline-size; container-name: main-pane; }
+.chat-header, .file-panel-head { height: var(--header-height); flex: none; display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-4); padding: 36px var(--space-6) var(--space-3); -webkit-app-region: drag; }
+.chat-heading { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.chat-heading h1 { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-md); font-weight: var(--weight-semibold); letter-spacing: -.2px; }
+.chat-meta { display: flex; align-items: center; gap: var(--space-2); margin-top: 2px; color: var(--faint); font-size: var(--text-xs); }
+.workspace-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-actions { display: flex; gap: var(--space-1); flex: none; }
+
+.chat-tabs { height: var(--toolbar-height); min-width: 0; flex: none; display: flex; align-items: stretch; gap: var(--space-4); padding: 0 var(--space-6); overflow: hidden; border-bottom: 1px solid var(--border); }
+.chat-tab-list { display: flex; min-width: 0; align-items: stretch; gap: var(--space-4); overflow-x: auto; scrollbar-width: none; }
+.chat-tab-list::-webkit-scrollbar { display: none; }
+.tab { position: relative; display: inline-flex; flex: none; align-items: center; gap: 6px; padding: 0 var(--space-1); border: 0; background: var(--transparent); font-size: var(--text-base); color: var(--muted); white-space: nowrap; }
+.chat-tab-list .tab > svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--faint); transition: color var(--transition); }
+.chat-tab-list .tab:hover > svg,
+.chat-tab-list .tab.is-active > svg { color: var(--accent); }
+.tab-label { display: inline-flex; align-items: center; gap: 5px; }
+.tab-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-round);
+  background: var(--accent-soft);
+  color: var(--accent-foreground);
+  font: var(--weight-semibold) var(--text-xs)/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.agent-tab-count { color: var(--faint); background: var(--surface-active); }
+.agent-tab-count.is-live {
+  background: var(--button-bg);
+  color: var(--on-button);
+  animation: agent-tab-count-live 1.9s ease-in-out infinite;
+}
+@keyframes agent-tab-count-live {
+  0%, 100% { box-shadow: 0 0 0 0 var(--transparent); transform: scale(1); }
+  50% { box-shadow: 0 0 0 3px var(--accent-soft); transform: scale(1.06); }
+}
+.tab > i { width: 5px; height: 5px; flex: none; border-radius: 50%; background: var(--live); box-shadow: var(--live-ring); animation: pulse 1.5s ease-in-out infinite; }
+.tab.is-active { color: var(--text); font-weight: var(--weight-medium); }
+.tab.is-active::after { position: absolute; content: ''; height: 2px; bottom: -1px; left: 0; right: 0; border-radius: var(--radius-tag); background: var(--accent); }
+.chat-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-behavior: auto;
+  scrollbar-gutter: stable;
+  contain: layout paint;
+  padding: var(--space-8) var(--session-gutter) var(--space-6);
+}
+.chat-column { width: min(var(--content), 100%); min-height: 100%; margin: 0 auto; display: flex; flex-direction: column; }
+.hero { flex: 1; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: var(--space-6) 0; text-align: center; }
+.hero-mark { width: 64px; height: 64px; margin-bottom: var(--space-4); }
+.hero-eyebrow { font-size: var(--text-sm); color: var(--faint); letter-spacing: 1px; margin-bottom: var(--space-2); }
+.hero h1 { margin: 0; font-size: clamp(var(--text-title), 2vw, var(--text-display)); font-weight: var(--weight-semibold); letter-spacing: -.8px; line-height: var(--leading-normal); }
+.hero > p { margin: var(--space-3) 0 0; color: var(--muted); font-size: var(--text-base); }
+.suggestions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); width: 100%; max-width: 630px; margin: var(--space-8) 0 var(--space-4); }
+.suggestion { display: grid; grid-template-columns: 24px 1fr; gap: 4px var(--space-2); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); text-align: left; }
+.suggestion > svg { color: var(--accent); margin-top: 2px; }
+.suggestion strong { font-size: var(--text-base); font-weight: var(--weight-medium); }
+.suggestion span { grid-column: 2; color: var(--faint); font-size: var(--text-sm); }
+.suggestion:hover { border-color: var(--border-hover); background: var(--surface-hover); box-shadow: var(--shadow-card); }
+.messages { display: flex; flex-direction: column; gap: var(--space-8); padding: var(--space-2) 0; }
+/* 转录窗口的顶部哨兵：不可见，只用来在读者接近顶部时继续挂载更早的轮次。 */
+.transcript-window-sentinel { width: 100%; height: 1px; flex: none; }
+.message { display: flex; flex-direction: column; }
+.message.user { align-items: flex-end; }
+
+/* 消息悬浮操作：复制与时间，只在悬浮或键盘聚焦时出现。 */
+.message-actions { display: flex; align-items: center; gap: 2px; min-height: 24px; margin-top: 2px; opacity: 0; transition: opacity var(--transition); }
+.message-actions.is-end { justify-content: flex-end; }
+.assistant-turn:hover .message-actions, .assistant-turn:focus-within .message-actions,
+.message.user:hover .message-actions, .message.user:focus-within .message-actions { opacity: 1; }
+.message-action { display: grid; place-items: center; width: var(--icon-button-compact); height: var(--icon-button-compact); padding: 0; border-radius: var(--radius-tag); color: var(--faint); }
+.message-action:hover { background: var(--surface-hover); color: var(--text); }
+.message-action:disabled { color: var(--disabled-text); background: transparent; cursor: not-allowed; }
+.message-action.is-copied { color: var(--success); }
+.message-action svg { width: var(--icon-xs); height: var(--icon-xs); }
+.message-action-time { padding: 0 4px; color: var(--faint); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.user-bubble { max-width: 85%; padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-panel) var(--radius-panel) var(--radius-tag) var(--radius-panel); background: var(--surface-soft); font-size: var(--text-md); line-height: var(--chat-line-height); white-space: pre-wrap; overflow-wrap: anywhere; }
+.message-edit { width: min(85%, 760px); overflow: hidden; border: 1px solid var(--border-strong); border-radius: var(--radius-panel); background: var(--surface); }
+.message-edit:focus-within { border-color: var(--focus-color); box-shadow: var(--focus-ring); }
+.message-edit-body { padding: var(--space-3) var(--space-4) 0; }
+.message-edit textarea { display: block; width: 100%; min-height: 84px; max-height: 320px; resize: none; padding: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--text-md); line-height: var(--leading-relaxed); }
+.message-edit-preserved { margin-top: 6px; color: var(--faint); font-size: var(--text-xs); }
+.message-edit-error { margin-top: 8px; color: var(--error); font-size: var(--text-sm); line-height: var(--leading-normal); }
+.message-edit-actions { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-2) var(--space-3) var(--space-3); }
+.message-edit-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 62px; height: var(--control-sm); padding: 0 var(--space-3); border-radius: var(--radius-control); font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.message-edit-actions button:disabled { cursor: not-allowed; opacity: .58; }
+.message-edit-cancel { border: 1px solid var(--border); background: var(--surface); color: var(--muted); }
+.message-edit-cancel:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
+.message-edit-send { border: 1px solid var(--button-bg); background: var(--button-bg); color: var(--on-button); }
+.message-edit-send:hover:not(:disabled) { border-color: var(--button-hover); background: var(--button-hover); }
+.message-edit-send svg { width: var(--icon-sm); height: var(--icon-sm); }
+.assistant-text { max-width: 100%; font-size: var(--text-md); line-height: var(--chat-line-height); white-space: pre-wrap; overflow-wrap: anywhere; }
+.caret { display: inline-block; width: 2px; height: 16px; margin-left: 3px; vertical-align: -2px; background: var(--accent); animation: blink 1s steps(2) infinite; }
+.caret.hidden { display: none; }
+@keyframes blink { 50% { opacity: 0; } }
+.thinking { display: flex; align-items: center; gap: 6px; color: var(--faint); font-size: var(--text-sm); }
+.thinking span { width: 4px; height: 4px; border-radius: 50%; background: var(--accent); animation: pulse 1s infinite ease-in-out; }
+.thinking span:nth-child(2) { animation-delay: .15s; }
+.thinking span:nth-child(3) { animation-delay: .3s; margin-right: 6px; }
+@keyframes pulse { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+.settings-error { padding: var(--space-3) var(--space-4); border: 1px solid var(--error-border); border-radius: var(--radius-control); background: var(--error-soft); color: var(--error); font-size: var(--text-base); overflow-wrap: anywhere; }
+
+/* Composer stays in layout so messages are never hidden underneath it. */
+/* 输入区 dock 固定在当前列底部，z-index 10，不覆盖消息；composer 自身限宽
+--content 并居中，textarea 有 76–200px 的高度区间和内部滚动，避免长文本把
+主列撑开。模型弹层与命令/文件选择器都锚定在 composer 上方（bottom 为
+100% 加偏移），z-index 40；空间不足时通过 is-below 翻到下方。附件条横向滚动
+但隐藏滚动条，关闭按钮绝对定位在缩略图右上角。 */
+
+.composer-dock { flex: none; padding: var(--space-3) var(--session-gutter) var(--space-4); background: var(--bg); z-index: 10; }
+.composer { max-width: var(--content); margin: 0 auto; border: 1px solid var(--border-strong); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-composer); transition: border-color var(--transition), box-shadow var(--transition); }
+.composer-feedback {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) 24px;
+  align-items: start;
+  gap: var(--space-2);
+  width: min(var(--content), calc(100% - 2px));
+  margin: 0 auto var(--space-2);
+  padding: 9px 10px 9px 11px;
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-control);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  box-shadow: var(--shadow-thumb);
+}
+.composer-feedback.is-info {
+  border-color: var(--border);
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+.composer-feedback > svg { width: var(--icon-md); height: var(--icon-md); margin-top: 1px; }
+.composer-feedback > span { min-width: 0; overflow-wrap: anywhere; }
+.composer-feedback-dismiss { display: grid; place-items: center; width: 24px; height: 24px; margin: -3px -4px -3px 0; padding: 0; border-radius: var(--radius-tag); color: currentColor; opacity: .72; }
+.composer-feedback-dismiss:hover { background: var(--surface-hover); opacity: 1; }
+.composer-feedback-dismiss:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; opacity: 1; }
+.composer-feedback-dismiss svg { width: var(--icon-sm); height: var(--icon-sm); }
+/* 只有真正编辑消息时才强调整只 composer；点工作区或类型不应把整个输入框点亮。 */
+.composer:has(.composer-input textarea:focus) { border-color: var(--focus-color); box-shadow: var(--focus-ring), var(--shadow-composer); }
+.composer textarea { display: block; width: 100%; min-height: 76px; max-height: 200px; resize: none; padding: var(--space-4) var(--space-4) var(--space-2); border: 0; border-radius: var(--radius-panel); outline: 0; background: var(--transparent); font-size: var(--text-md); line-height: var(--leading-relaxed); }
+
+/* 输入框内联高亮：textarea 负责编辑，底层 div 负责显示彩色 token（DSH 同款观感）。 */
+.composer-input { position: relative; }
+.composer-highlight { position: absolute; inset: 0; z-index: 0; overflow: hidden; padding: var(--space-4) var(--space-4) var(--space-2); color: var(--text); font-size: var(--text-md); line-height: var(--leading-relaxed); white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; pointer-events: none; }
+.composer textarea { position: relative; z-index: 1; color: var(--transparent); -webkit-text-fill-color: var(--transparent); caret-color: var(--text); }
+.composer textarea::placeholder { color: var(--faint); -webkit-text-fill-color: var(--faint); }
+/* 输入法组合期间也保留高亮层：高亮层本来就跟着受控值更新，隐藏整层会让
+ * token 的颜色在每个词提交时闪一下。textarea 保持透明，文字只由高亮层显示。
+ */
+/* Keep the marker in layout so the transparent textarea and highlight layer
+ * share exact glyph positions, while presenting only the readable token. */
+.composer-token {
+  background: none;
+  color: var(--accent);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.composer-token-prefix { visibility: hidden; }
+.composer-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2) var(--space-3) var(--space-3); }
+.composer-left, .composer-right { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.composer-left.is-new-conversation { flex: 1; }
+
+/* 输入框左侧的权限模式：贴齐附件按钮，保持低存在感；只在扩展可用时渲染。 */
+.composer-mode { display: flex; align-items: center; min-width: 0; height: var(--control-sm); padding: 0 2px; border-radius: var(--radius-control); color: var(--muted); transition: background var(--transition), color var(--transition); }
+.composer-mode:hover, .composer-mode:has(.pi-select-trigger.is-open), .composer-mode:has(.pi-select-trigger:focus-visible) { background: var(--surface-soft); color: var(--text); }
+.composer-mode .pi-select { width: auto; }
+.composer-mode .pi-select-trigger { width: auto; height: var(--control-sm); padding: 0 3px 0 5px; border: 0; background: none; color: inherit; font-size: var(--text-sm); gap: 3px; }
+.composer-mode .pi-select-trigger:hover:not(:disabled) { background: none; color: inherit; }
+.composer-mode .pi-select-trigger.is-open, .composer-mode .pi-select-trigger:focus-visible { border-color: var(--transparent); box-shadow: none; outline: none; }
+.composer-mode .pi-select-chevron { width: 12px; height: 12px; }
+.composer-right { margin-left: auto; }
+/* 上下文用量：和权限模式同一行的低干扰读数，点开是只读说明与手动压缩。 */
+.context-usage { position: relative; display: flex; align-items: center; min-width: 0; }
+.context-usage-trigger { display: flex; align-items: center; gap: 5px; height: var(--control-sm); padding: 0 7px 0 5px; border: 0; border-radius: var(--radius-control); background: none; color: var(--muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.context-usage-trigger:hover, .context-usage-trigger.is-open { background: var(--surface-soft); color: var(--text); }
+.context-usage-trigger:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 1px; }
+.context-usage-ring { width: 14px; height: 14px; flex: none; transform: rotate(-90deg); }
+.context-usage-ring-track { fill: none; stroke: var(--border-strong); stroke-width: 2; }
+.context-usage-ring-value { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; transition: stroke-dasharray var(--transition); }
+.context-usage-trigger.is-warning { color: var(--warning); }
+.context-usage-trigger.is-warning .context-usage-ring-value { stroke: var(--warning); }
+.context-usage-trigger.is-critical { color: var(--error); }
+.context-usage-trigger.is-critical .context-usage-ring-value { stroke: var(--error); }
+.context-usage-panel { position: absolute; z-index: 90; left: 0; bottom: calc(100% + 8px); width: 268px; padding: 12px; }
+/* 面板自带 12px 内边距，标题行不能再吃一层 16px，否则标题比正文往右缩一截。 */
+.context-usage-panel .popover-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: 0; margin: 0 0 10px; padding: 0; }
+.context-usage-panel .popover-close { width: 22px; height: 22px; margin: -2px 0; }
+.context-usage-panel .popover-title { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--text-xs); letter-spacing: .04em; text-transform: uppercase; }
+.context-usage-panel .popover-title svg { width: var(--icon-sm); height: var(--icon-sm); }
+.context-usage-body { display: grid; gap: 5px; min-width: 0; }
+.context-usage-body > strong { color: var(--text); font-size: var(--text-lg); font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; }
+.context-usage-body > span { color: var(--muted); font-size: var(--text-xs); }
+.context-usage-actions { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.context-usage-actions .settings-outline, .context-usage-actions .text-button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; font-size: var(--text-xs); }
+.context-usage-actions svg { width: var(--icon-sm); height: var(--icon-sm); }
+.workspace-chip, .model-label { display: flex; align-items: center; gap: var(--space-2); height: var(--control-sm); padding: 0 var(--space-2); border-radius: var(--radius-control); color: var(--muted); font-size: var(--text-sm); min-width: 0; }
+.workspace-chip { max-width: 220px; }
+.workspace-chip > span, .model-label > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.workspace-chip > svg:last-child, .model-label > svg { width: var(--icon-xs); height: var(--icon-xs); color: var(--faint); }
+.workspace-chip:hover, .model-label:hover, .model-label.is-active { background: var(--surface-soft); color: var(--text); }
+.model-label { max-width: min(360px, 52vw); gap: 6px; }
+.model-label.is-pending { background: var(--accent-soft); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent-border); }
+.model-label > .model-pending-label { flex: none; overflow: visible; padding: 2px 5px; border: 1px solid var(--accent-border); border-radius: var(--radius-round); color: var(--accent-foreground); font-size: var(--text-xs); line-height: var(--leading-tight); }
+.model-label > .thinking-label { flex: none; color: var(--faint); }
+.model-label > svg { flex: none; transition: transform var(--transition); }
+.model-label > svg.is-open { transform: rotate(180deg); }
+.send-button { display: grid; place-items: center; width: var(--control-sm); height: var(--control-sm); flex: none; border-radius: var(--radius-control); background: var(--button-bg); color: var(--on-button); }
+.send-button:hover:not(:disabled) { background: var(--accent-hover); }
+.send-button:disabled { background: var(--surface-hover); color: var(--disabled-text); opacity: 1; }
+.send-button.is-stop { border: 1px solid var(--border-strong); background: var(--surface-active); color: var(--text); }
+.send-button.is-stop:hover:not(:disabled) { border-color: var(--error-border); background: var(--error-soft); color: var(--error); }
+.send-button.is-stop svg { width: var(--icon-sm); height: var(--icon-sm); }
+.send-button.is-stop .spin { color: inherit; }
+.composer-hint { max-width: var(--content); margin: var(--space-2) auto 0; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); color: var(--faint); font-size: var(--text-xs); }
+.composer-hint > span { display: flex; align-items: center; gap: var(--space-2); }
+.hint-divider { color: var(--faint); }
+/* 模型选择弹层：锚定在输入区模型按钮上方，z-index 40，宽度 340px 并限制在
+视口内；空间不足时 is-below 翻到触发器下方。头部搜索栏固定，model-list 独立
+滚动并使用 scrollbar-gutter 预留滚动条宽度，避免列表在过滤时左右抖动。 */
+
+/* Empty conversations center the same composer; messages move it to the bottom. */
+/* 空会话复用同一个 composer，只是通过 margin-block:auto 把它推到主列中部，
+并用更大的下内边距制造落地感；发送首条消息后该状态类移除，消息流接管滚动。
+is-new-conversation 下隐藏标题、压缩 header；空会话通常没有可滚动内容，所以
+这种居中是布局行为而不是滚动定位。 */
+
+.is-new-conversation .chat-header { align-items: center; }
+.is-new-conversation .chat-heading h1 { color: var(--faint); font-weight: var(--weight-medium); }
+.is-new-conversation .composer-dock { margin-block: auto; padding-top: 24px; padding-bottom: clamp(40px, 12vh, 120px); }
+.new-conversation-error { max-width: var(--content); margin: 16px auto 0; }

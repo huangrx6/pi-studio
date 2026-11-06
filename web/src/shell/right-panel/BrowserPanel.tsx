@@ -11,7 +11,7 @@ import { ArrowLeft, ArrowRight, ExternalLink, Globe, RotateCw, X } from 'lucide-
 import { normalizeBrowserTarget } from './browser-target.mjs';
 
 type WebviewElement = HTMLElement & {
-  loadURL(url: string): void;
+  loadURL(url: string): Promise<void>;
   reload(): void;
   goBack(): void;
   goForward(): void;
@@ -37,6 +37,12 @@ export function BrowserPanel({ url, onUrlChange, onClose }: {
   const [failed, setFailed] = useState('');
   const [nav, setNav] = useState({ back: false, forward: false });
   const [ready, setReady] = useState(false);
+  const readyRef = useRef(false);
+  const currentRef = useRef(url);
+  const onUrlChangeRef = useRef(onUrlChange);
+  onUrlChangeRef.current = onUrlChange;
+  // React must not reassign src after every guest navigation/redirect.
+  const initialSrc = useRef(url || 'about:blank');
 
   const syncNav = useCallback(() => {
     const view = viewRef.current;
@@ -52,21 +58,24 @@ export function BrowserPanel({ url, onUrlChange, onClose }: {
     const view = viewRef.current;
     if (!view) return () => {};
     const handleNavigate = (event: unknown) => {
-      const next = (event as { url?: string }).url;
+      const detail = event as { url?: string; isMainFrame?: boolean };
+      if (detail.isMainFrame === false) return;
+      const next = detail.url;
       if (typeof next !== 'string' || !next) return;
+      currentRef.current = next;
       setCurrent(next);
       setAddress(next);
       setFailed('');
-      onUrlChange?.(next);
+      onUrlChangeRef.current?.(next);
       syncNav();
     };
-    const handleReady = () => { setReady(true); };
+    const handleReady = () => { readyRef.current = true; setReady(true); syncNav(); };
     view.addEventListener('dom-ready', handleReady);
-    const handleStart = () => { setLoading(true); };
+    const handleStart = () => { setLoading(true); setFailed(''); };
     const handleStop = () => { setLoading(false); syncNav(); };
     const handleFail = (event: unknown) => {
-      const detail = event as { errorDescription?: string; isMainFrame?: boolean };
-      if (detail.isMainFrame === false) return;
+      const detail = event as { errorDescription?: string; errorCode?: number; isMainFrame?: boolean };
+      if (detail.isMainFrame === false || detail.errorCode === -3) return;
       setFailed(detail.errorDescription || '页面加载失败');
     };
     view.addEventListener('did-navigate', handleNavigate);
@@ -82,38 +91,38 @@ export function BrowserPanel({ url, onUrlChange, onClose }: {
       view.removeEventListener('did-fail-load', handleFail);
       view.removeEventListener('dom-ready', handleReady);
     };
-  }, [onUrlChange, syncNav]);
+  }, [syncNav]);
 
   /**
    * Electron refuses `loadURL` until the element is attached and `dom-ready`
    * has fired. Fall back to the `src` attribute (which navigates on attach)
    * so a link click that arrives before the panel settles still lands.
    */
-  function navigate(target: string) {
+  const navigate = useCallback((target: string) => {
     const view = viewRef.current;
     if (!view) return;
     if (!/^(https?:\/\/|about:blank$)/i.test(target)) {
       setFailed('只支持 http(s) 链接');
       return;
     }
-    if (!ready) {
+    if (!readyRef.current) {
       view.setAttribute('src', target);
       return;
     }
     try {
-      view.loadURL(target);
+      // did-fail-load owns the visible error. Consume the Promise rejection too,
+      // including ERR_ABORTED when a newer navigation supersedes this one.
+      void view.loadURL(target).catch(() => {});
     } catch {
       view.setAttribute('src', target);
     }
-  }
+  }, []);
 
   useEffect(() => {
     // A new target from outside the panel (a link click) navigates the view.
-    if (!url || url === current) return;
+    if (!url || url === currentRef.current) return;
     navigate(url);
-    // navigate reads the latest refs and readiness; url/current drive the call.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, current, ready]);
+  }, [url, navigate]);
 
   function submit() {
     const target = normalizeBrowserTarget(address);
@@ -147,6 +156,7 @@ export function BrowserPanel({ url, onUrlChange, onClose }: {
       <button
         type="button"
         className={`icon-button ${loading ? 'is-busy' : ''}`}
+        disabled={!ready}
         aria-label="刷新"
         title="刷新"
         onClick={() => viewRef.current?.reload()}
@@ -178,7 +188,7 @@ export function BrowserPanel({ url, onUrlChange, onClose }: {
     <div className="browser-stage">
       <Webview
         ref={viewRef}
-        src={url || 'about:blank'}
+        src={initialSrc.current}
         partition="persist:pi-browser"
         webpreferences="contextIsolation=yes,sandbox=yes,nodeIntegration=no,plugins=no"
         allowpopups="false"

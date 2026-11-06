@@ -1,0 +1,14 @@
+.conversation-error { position: relative; margin-top: var(--space-4); padding: var(--space-3) var(--space-4); border-left: 2px solid var(--error); background: var(--error-soft); color: var(--error); font-size: var(--text-base); line-height: var(--leading-body); overflow-wrap: anywhere; }
+.conversation-error > p { margin: 0; white-space: pre-wrap; }
+.conversation-error-details { margin-top: var(--space-2); }
+.conversation-error-details > summary { width: fit-content; cursor: pointer; font-size: var(--text-sm); }
+.conversation-error-details > pre { margin: var(--space-2) 0 0; max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: var(--text-xs)/var(--leading-body) var(--mono); }
+.conversation-error-action { margin-top: var(--space-2); padding: 0; border: 0; background: transparent; color: inherit; font: inherit; font-size: var(--text-sm); font-weight: var(--weight-semibold); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.conversation-error-action:hover:not(:disabled) { text-decoration-thickness: 2px; }
+.conversation-error-action:disabled { cursor: progress; opacity: .65; }
+.conversation-error .error-card-close { position: absolute; top: var(--space-2); right: var(--space-2); display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border-radius: var(--radius-tag); color: var(--error); }
+.conversation-error .error-card-close:hover { background: var(--surface-hover); }
+.conversation-error .error-card-close svg { width: var(--icon-sm); height: var(--icon-sm); }
+.conversation-error :is(button, summary):focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
+
+.conversation-error.has-dismiss { padding-right: 44px; }

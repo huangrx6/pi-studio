@@ -56,6 +56,57 @@ function attachmentRoot() {
   return path.join(app.getPath('userData'), 'attachments');
 }
 
+function lstatIfPresent(target) {
+  try {
+    return fs.lstatSync(target);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return undefined;
+    throw error;
+  }
+}
+
+function assertManagedDirectory(target, label) {
+  const stat = lstatIfPresent(target);
+  if (!stat || stat.isSymbolicLink() || !stat.isDirectory()) {
+    throw new Error(`${label}不是受管理的普通目录`);
+  }
+  return fs.realpathSync(target);
+}
+
+function managedAttachmentRoot({ create = false } = {}) {
+  const root = attachmentRoot();
+  let stat = lstatIfPresent(root);
+  if (!stat) {
+    if (!create) return undefined;
+    fs.mkdirSync(root, { recursive: true, mode: 0o700 });
+    stat = lstatIfPresent(root);
+  }
+  if (!stat || stat.isSymbolicLink() || !stat.isDirectory()) {
+    throw new Error('Studio 附件根目录不是受管理的普通目录');
+  }
+  return assertManagedDirectory(root, 'Studio 附件根目录');
+}
+
+function managedSessionDirectory(sessionId, { create = false } = {}) {
+  const root = managedAttachmentRoot({ create });
+  if (!root) return undefined;
+  const target = path.join(root, safeSessionDirectoryName(sessionId));
+  let stat = lstatIfPresent(target);
+  if (!stat) {
+    if (!create) return undefined;
+    fs.mkdirSync(target, { mode: 0o700 });
+    stat = lstatIfPresent(target);
+  }
+  if (!stat || stat.isSymbolicLink() || !stat.isDirectory()) {
+    throw new Error('Studio 会话附件目录不是受管理的普通目录');
+  }
+  const canonical = assertManagedDirectory(target, 'Studio 会话附件目录');
+  if (path.dirname(canonical) !== root) {
+    throw new Error('Studio 会话附件目录超出附件根目录');
+  }
+  return canonical;
+}
+
 /**
  * Resolve a file under the Studio attachment root.
  *
@@ -66,7 +117,10 @@ function resolveAttachmentPath(root, requested) {
   if (typeof requested !== 'string' || !path.isAbsolute(requested)) {
     throw new Error('需要附件绝对路径');
   }
-  const canonicalRoot = fs.realpathSync(root);
+  const canonicalRoot = assertManagedDirectory(root, 'Studio 附件根目录');
+  if (path.resolve(root) !== canonicalRoot && fs.lstatSync(root).isSymbolicLink()) {
+    throw new Error('Studio 附件根目录不能是符号链接');
+  }
   const target = fs.realpathSync(requested);
   if (target !== canonicalRoot && !target.startsWith(canonicalRoot + path.sep)) {
     throw new Error('文件不在 Studio 附件目录中');
@@ -90,15 +144,47 @@ function safeSessionDirectoryName(sessionId) {
 
 /**
  * 把文件写入附件目录，返回落盘路径。
- * 文件名带时间戳前缀，避免同名覆盖。
+ * 随机 UUID 与独占创建共同保证同名附件绝不会互相覆盖。
  */
 function writeAttachment(sessionId, name, buffer) {
-  const dir = path.join(attachmentRoot(), safeSessionDirectoryName(sessionId));
-  fs.mkdirSync(dir, { recursive: true });
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const target = path.join(dir, `${stamp}-${safeAttachmentName(name)}`);
-  fs.writeFileSync(target, buffer);
-  return target;
+  const dir = managedSessionDirectory(sessionId, { create: true });
+  const target = path.join(dir, `${randomUUID()}-${safeAttachmentName(name)}`);
+  let descriptor;
+  let created = false;
+  try {
+    descriptor = fs.openSync(target, 'wx', 0o600);
+    created = true;
+    fs.writeFileSync(descriptor, buffer);
+    fs.fsyncSync(descriptor);
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+  } catch (error) {
+    if (descriptor !== undefined) {
+      try { fs.closeSync(descriptor); } catch { /* retain the write error */ }
+      descriptor = undefined;
+    }
+    if (created) {
+      try { fs.unlinkSync(target); } catch { /* retain the write error */ }
+    }
+    throw error;
+  } finally {
+    if (descriptor !== undefined) {
+      try { fs.closeSync(descriptor); } catch { /* prefer the write error */ }
+    }
+  }
+  try {
+    const canonical = fs.realpathSync(target);
+    const stat = fs.lstatSync(canonical);
+    if (path.dirname(canonical) !== dir || !stat.isFile() || stat.isSymbolicLink()) {
+      throw new Error('Studio 附件写入后超出受管理目录');
+    }
+    return canonical;
+  } catch (error) {
+    if (created) {
+      try { fs.unlinkSync(target); } catch { /* retain the boundary error */ }
+    }
+    throw error;
+  }
 }
 
 /** 组装附件元信息（行数只对文本文件有意义）。 */
@@ -201,14 +287,62 @@ async function attachmentContext(paths) {
 
 /** Remove only the session-owned attachment directory below Studio userData. */
 function removeAttachmentDirectory(sessionId) {
+  const rawSession = typeof sessionId === 'string' ? sessionId.trim() : '';
+  if (!rawSession || !/^[A-Za-z0-9-]{1,80}$/.test(rawSession)) return false;
   const safeSession = safeSessionDirectoryName(sessionId);
-  const root = attachmentRoot();
-  const target = path.join(root, safeSession);
-  const relative = path.relative(root, target);
-  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return false;
-  if (!fs.existsSync(target)) return false;
-  fs.rmSync(target, { recursive: true, force: true });
+  let root;
+  let target;
+  try {
+    root = managedAttachmentRoot();
+    if (!root) return false;
+    target = path.join(root, safeSession);
+    const stat = lstatIfPresent(target);
+    if (!stat || stat.isSymbolicLink() || !stat.isDirectory()) return false;
+    const canonical = fs.realpathSync(target);
+    if (path.dirname(canonical) !== root) return false;
+    target = canonical;
+  } catch {
+    return false;
+  }
+  fs.rmSync(target, { recursive: true });
   return true;
+}
+
+/**
+ * Remove session directories that no longer belong to a Studio conversation.
+ *
+ * Cleanup runs before the first renderer is created. Only direct, ordinary
+ * service-named directories are eligible; `draft`, active conversation IDs and
+ * every non-directory entry stay untouched.
+ */
+function cleanupOrphanedAttachmentDirectories(activeSessionIds = []) {
+  const root = managedAttachmentRoot();
+  if (!root) return { removed: 0, failed: 0 };
+  const protectedNames = new Set(['draft']);
+  for (const value of activeSessionIds) {
+    if (typeof value !== 'string' && typeof value !== 'number') continue;
+    const raw = String(value).trim();
+    if (raw) protectedNames.add(safeSessionDirectoryName(raw));
+  }
+
+  let removed = 0;
+  let failed = 0;
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (protectedNames.has(entry.name) || !entry.isDirectory() || entry.isSymbolicLink()) continue;
+    if (safeSessionDirectoryName(entry.name) !== entry.name) continue;
+    const target = path.join(root, entry.name);
+    try {
+      const stat = lstatIfPresent(target);
+      if (!stat || stat.isSymbolicLink() || !stat.isDirectory()) continue;
+      const canonical = fs.realpathSync(target);
+      if (path.dirname(canonical) !== root) continue;
+      fs.rmSync(canonical, { recursive: true });
+      removed += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+  return { removed, failed };
 }
 
 module.exports = {
@@ -220,5 +354,6 @@ module.exports = {
   resolveAttachmentFile,
   attachmentContext,
   removeAttachmentDirectory,
+  cleanupOrphanedAttachmentDirectories,
   ATTACHMENT_MIME,
 };

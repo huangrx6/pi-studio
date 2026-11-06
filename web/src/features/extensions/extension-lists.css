@@ -1,0 +1,50 @@
+.extension-list-section,
+.installed-extension-section { display: flex; flex-direction: column; gap: var(--space-3); }
+.builtin-extension-section { padding-top: var(--space-3); border-top: 1px solid var(--divider); }
+.builtin-extension-summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); cursor: pointer; list-style: none; }
+.builtin-extension-summary::-webkit-details-marker { display: none; }
+.builtin-extension-summary-main { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text); }
+.builtin-extension-summary-main > svg { width: var(--icon-sm); height: var(--icon-sm); color: var(--muted); transition: transform 120ms ease; }
+.builtin-extension-section[open] .builtin-extension-summary-main > svg { transform: rotate(90deg); }
+.builtin-extension-summary strong { font-size: var(--text-base); font-weight: var(--weight-semibold); }
+.builtin-extension-summary small { color: var(--faint); font-size: var(--text-xs); line-height: var(--leading-normal); }
+.builtin-extension-summary:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; border-radius: var(--radius-sm); }
+.extension-list-heading { display: flex; align-items: center; gap: var(--space-2); }
+.extension-list-heading h2 { margin: 0; color: var(--text); font-size: var(--text-base); font-weight: var(--weight-semibold); }
+.extension-list-heading > svg { width: var(--icon-sm); height: var(--icon-sm); color: var(--muted); }
+.extension-list,
+.installed-extension-grid { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.extension-list-row { display: flex; align-items: flex-start; gap: var(--space-4); min-width: 0; padding: var(--space-4) 0; border-bottom: 1px solid var(--divider); }
+.extension-list-row:last-child { border-bottom: 0; }
+.extension-list-row.is-compact { align-items: center; padding: var(--space-3) 0; }
+.extension-list-row.is-compact .extension-list-title h3 { font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.extension-list-row.is-compact .extension-list-meta { margin-top: 2px; }
+.extension-list-main { flex: 1; min-width: 0; }
+.extension-list-title { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: var(--space-2); row-gap: 3px; }
+.extension-list-title h3 { min-width: 0; margin: 0; color: var(--text); font-size: var(--text-base); line-height: var(--leading-normal); font-weight: var(--weight-semibold); overflow-wrap: anywhere; }
+.extension-list-version,
+.extension-list-state { color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-normal); white-space: nowrap; }
+.extension-list-state.is-pending { color: var(--warning); }
+.extension-list-state.is-error { color: var(--error); }
+.extension-list-meta,
+.extension-list-description,
+.extension-list-access { margin: 4px 0 0; overflow-wrap: anywhere; line-height: var(--leading-body); font-size: var(--text-xs); }
+.extension-list-meta { color: var(--muted); }
+.extension-list-description { color: var(--text); font-size: var(--text-sm); }
+.extension-list-access { color: var(--muted); font-size: var(--text-sm); }
+.extension-list-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-2); flex: 0 0 auto; max-width: 100%; padding-top: 2px; }
+.extension-list-actions > button:not(.switch) { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: 32px; white-space: nowrap; }
+.extension-list-actions > button > svg { width: var(--icon-sm); height: var(--icon-sm); }
+.extension-list-actions .extension-list-remove { color: var(--muted); }
+.extension-list-actions .extension-list-remove:hover:not(:disabled) { color: var(--error); }
+.extension-list-auto { display: flex; align-items: center; gap: var(--space-2); color: var(--muted); font-size: var(--text-xs); white-space: nowrap; }
+.extension-list-notice { margin: var(--space-2) 0 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-body); overflow-wrap: anywhere; }
+.extension-list-notice.is-warning { color: var(--warning); }
+.extension-list-notice.is-error { color: var(--error); }
+.extension-list-notice strong { font-weight: var(--weight-semibold); }
+.extension-list-errors { display: flex; flex-direction: column; gap: var(--space-2); }
+@media (max-width: 1100px) {
+  .extension-list-row { flex-wrap: wrap; gap: var(--space-2); }
+  .extension-list-main { flex-basis: 100%; }
+  .extension-list-actions { justify-content: flex-start; }
+}

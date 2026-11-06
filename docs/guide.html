@@ -124,14 +124,14 @@
             <code>main</code> 分支的产品边界和技术契约。
           </p>
           <dl class="article-meta">
-            <div><dt>Version</dt><dd>v0.0.10 · Stable</dd></div>
+            <div><dt>Version</dt><dd>v0.0.11 · Stable</dd></div>
             <div><dt>Runtime</dt><dd>Pi Durable 1.5</dd></div>
             <div><dt>Ownership</dt><dd>Studio SQLite</dd></div>
             <div><dt>License</dt><dd>MIT · macOS</dd></div>
           </dl>
           <div class="status-note">
             <strong>版本说明</strong>
-            <p><code>v0.0.10</code> 的这次重建补齐了会话可靠性与日常细节：历史一次性载入不再漏掉第一条消息，回合差异按回答时间对齐所以行数完整，后台子智能体回传带上真实回答并停止多余的一轮，图片超出视觉接口限制时自动切段重发，剪贴板改用 Electron 45 的 ClipboardItem 接口，图片复制与「连图带文」复制恢复可用。图标收敛为六档尺寸与两种按钮盒子，文本选区、实时指标里的缓存命中率和文件预览中的 PDF 也都补齐了。终端继续加载与 Terminal.app 一致的登录 shell 环境；Durable 负责会话、任务与子智能体执行，Studio 只保存自己的投影、设置、资源信任和受管目录。</p>
+            <p><code>v0.0.11</code> 集中完成了一轮体验与可靠性收敛：13 个设置页面共用统一页头、页面框架和字号层级，并加入分组导航、搜索、按需加载与离页草稿保护；会话输入、侧栏、右侧工作台、资源编辑和异步状态补上范围隔离、失败恢复与只读重试边界。模型、MCP、技能、扩展、权限、Harness、子智能体、使用量和终端页面继续保持同一套设置节奏，同时完善了长任务、文件预览、运行服务和安装事务的后台恢复。Durable 负责会话、任务与子智能体执行，Studio 只保存自己的投影、设置、资源信任和受管目录。</p>
           </div>
 
           <div class="chapter-index" aria-label="主要章节">

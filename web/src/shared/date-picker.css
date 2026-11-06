@@ -117,7 +117,7 @@
 .pi-date-month {
   color: var(--text);
   font-size: var(--text-base);
-  font-weight: 620;
+  font-weight: var(--weight-semibold);
   letter-spacing: -.01em;
   text-align: center;
 }
@@ -167,7 +167,7 @@
   background: var(--surface-active);
   box-shadow: inset 0 -2px 0 var(--accent);
   color: var(--text);
-  font-weight: 620;
+  font-weight: var(--weight-semibold);
 }
 
 .pi-date-day:disabled {
@@ -201,7 +201,7 @@
 
 .pi-date-footer-action.is-primary {
   color: var(--accent);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .pi-date-footer-action:disabled {

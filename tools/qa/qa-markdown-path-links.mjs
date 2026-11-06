@@ -24,7 +24,12 @@ try {
   const page = await browser.newPage({ viewport: { width: 1000, height: 700 }, deviceScaleFactor: 2 });
   page.setDefaultTimeout(12000);
   const errors = [];
+  const loadedModules = new Set();
   page.on('pageerror', (error) => errors.push(error.message));
+  page.on('request', (request) => {
+    const url = request.url();
+    if (url.includes('/src/shared/markdown-highlighter.ts')) loadedModules.add('highlighter');
+  });
 
   await page.route('**/markdown-paths', (route) => route.fulfill({
     contentType: 'text/html',
@@ -69,7 +74,19 @@ try {
 
   await page.goto('http://127.0.0.1:5180/markdown-paths');
   await page.waitForFunction(() => window.__ready === true, null, { timeout: 20000 });
-  await page.waitForTimeout(400);
+  // The renderer is a deferred chunk. Wait for its real output instead of
+  // relying on a machine-dependent fixed delay; rendering continues to show the
+  // plain source while that local module is loading.
+  await page.locator('a.md-path-link').first().waitFor({ timeout: 20000 });
+  await page.locator('.markdown pre code').waitFor({ timeout: 20000 });
+  await page.waitForFunction(() => Boolean(document.querySelector('.markdown pre code.hljs')), null, { timeout: 20000 }).catch(async (error) => {
+    const debug = await page.evaluate(() => ({
+      codeClasses: [...document.querySelectorAll('.markdown pre code')].map((node) => node.className),
+      source: document.querySelector('.markdown')?.textContent?.slice(-80),
+    }));
+    throw new Error(`${error.message}; highlight debug: ${JSON.stringify(debug)}`);
+  });
+  assert.equal(loadedModules.has('highlighter'), true, 'fenced code loads the deferred highlighter');
 
   const links = await page.evaluate(() => [...document.querySelectorAll('a.md-path-link')].map((link) => ({
     text: link.textContent,
@@ -97,7 +114,7 @@ try {
 
   await page.screenshot({ path: `${output}links.png` });
   assert.deepEqual(errors, [], `no page errors: ${errors.join(' | ')}`);
-  console.log('markdown path links QA passed', JSON.stringify(links, null, 1));
+  console.log('markdown path links QA passed', JSON.stringify({ links, loadedModules: [...loadedModules] }, null, 1));
 } finally {
   await browser.close();
 }

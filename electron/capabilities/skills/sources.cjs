@@ -13,6 +13,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { cleanupCommittedSkillDirectory, retryCommittedSkillCleanup } = require('./cleanup.cjs');
 const {
   DEFAULT_ARCHIVE_LIMITS,
   extractZipArchive,
@@ -687,21 +688,24 @@ function installPreparedSkill({ token, cwd } = {}) {
     }
     let installation;
     try {
-      installation = db.upsertSkillInstallation({
+      installation = db.transaction(() => db.upsertSkillInstallation({
         path: target,
         sourceId: pending.source.id,
         listingId: pending.item.id,
         name: pending.skill.name,
         version: pending.skill.version,
         sha256: pending.sha256,
-      });
+      }));
     } catch (error) {
       fs.rmSync(target, { recursive: true, force: true });
       if (movedExisting && fs.existsSync(backup)) fs.renameSync(backup, target);
       throw error;
     }
-    if (movedExisting) fs.rmSync(backup, { recursive: true, force: true });
-    cleanupPrepared(token);
+    // Installation and its SQLite receipt have committed. Consume the token
+    // before best-effort housekeeping so cleanup cannot cause a duplicate install.
+    prepared.delete(token);
+    if (movedExisting) cleanupCommittedSkillDirectory(backup);
+    cleanupCommittedSkillDirectory(path.dirname(pending.contentRoot));
     return {
       name: pending.skill.name,
       version: pending.skill.version,
@@ -729,6 +733,7 @@ async function skillHubSnapshot({ refresh = false } = {}) {
 }
 
 function pruneSkillPrepared() {
+  retryCommittedSkillCleanup();
   const now = Date.now();
   for (const [token, value] of prepared) {
     if (value.expiresAt < now) cleanupPrepared(token);

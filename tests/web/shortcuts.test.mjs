@@ -84,3 +84,14 @@ test('detects conflicts against the other actions', () => {
   assert.equal(shortcutConflict(DEFAULT_SHORTCUTS, 'togglePanel', 'Mod+J'), undefined);
   assert.equal(shortcutConflict(DEFAULT_SHORTCUTS, 'togglePanel', 'Mod+Alt+9'), undefined);
 });
+
+test('composition and combinations the grammar cannot represent never become bindings', () => {
+  for (const props of [{ isComposing: true }, { keyCode: 229 }, { getModifierState: key => key === 'AltGraph' }]) {
+    const event = keyEvent('j', { ctrlKey: true, ...props });
+    assert.equal(comboFromEvent(event, 'other'), '');
+    assert.equal(matchesShortcut(event, 'Mod+J', 'other'), false);
+  }
+  assert.equal(comboFromEvent(keyEvent('j', { ctrlKey: true, metaKey: true }), 'mac'), '');
+  assert.equal(comboFromEvent(keyEvent('j', { ctrlKey: true, metaKey: true }), 'other'), '');
+  assert.equal(comboFromEvent(keyEvent('+', { ctrlKey: true }), 'other'), '');
+});

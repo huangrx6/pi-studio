@@ -11,8 +11,36 @@ const {
   getStudioModelsRuntime,
   providerBaseUrl,
 } = require('../core/studio-models.cjs');
+const { THINKING_LEVELS } = require('../core/thinking-levels.cjs');
 
 const DEFAULT_CWD = process.cwd();
+const MODEL_DEFAULT_REF_KEY = 'studio.models.defaultModelRef';
+const MODEL_THINKING_BY_MODEL_KEY = 'studio.models.thinkingByModel';
+const MODEL_DEFAULT_THINKING_LEVEL_KEY = 'studio.models.defaultThinkingLevel';
+const THINKING_LEVEL_SET = new Set(THINKING_LEVELS);
+const MODEL_REF_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\/\S{1,155}$/;
+
+function normalizeModelRefPreference(value) {
+  if (typeof value !== 'string') return '';
+  const modelRef = value.trim();
+  return MODEL_REF_PATTERN.test(modelRef) ? modelRef : '';
+}
+
+function normalizeThinkingByModel(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([rawModelRef, rawLevel]) => {
+      const modelRef = normalizeModelRefPreference(rawModelRef);
+      return modelRef && typeof rawLevel === 'string' && THINKING_LEVEL_SET.has(rawLevel)
+        ? [[modelRef, rawLevel]]
+        : [];
+    }),
+  );
+}
+
+function normalizeDefaultThinkingLevel(value) {
+  return value === 'default' || THINKING_LEVEL_SET.has(value) ? value : 'default';
+}
 
 function splitModelRef(modelRef) {
   if (typeof modelRef !== 'string') return undefined;
@@ -64,8 +92,16 @@ function preferredLevel(model, getSupportedThinkingLevels, preference) {
 function thinkingOptions(model, preference, runtime) {
   const levels = model ? runtime.getSupportedThinkingLevels(model) : [];
   const db = getStudioDatabase();
-  const perModel = db.getSetting('studio.models.thinkingByModel', {}) || {};
-  const globalPreference = db.getSetting('studio.models.defaultThinkingLevel', 'default');
+  const perModel = db.getSettingWithRecovery(
+    MODEL_THINKING_BY_MODEL_KEY,
+    {},
+    normalizeThinkingByModel,
+  );
+  const globalPreference = db.getSettingWithRecovery(
+    MODEL_DEFAULT_THINKING_LEVEL_KEY,
+    'default',
+    normalizeDefaultThinkingLevel,
+  );
   const requested = preference === undefined
     ? perModel[modelRefFor(model)] ?? globalPreference
     : preference;
@@ -112,15 +148,24 @@ function throwSync(message) {
 function defaultModelRef(runtime) {
   const db = getStudioDatabase();
   const models = runtime?.models || runtime;
-  const configured = db.getSetting('studio.models.defaultModelRef', '');
+  const configured = db.getSettingWithRecovery(
+    MODEL_DEFAULT_REF_KEY,
+    '',
+    normalizeModelRefPreference,
+  );
   const configuredRef = splitModelRef(configured);
   if (configuredRef && runtimeModelFor(models, configuredRef) && enabledDatabaseModel(configuredRef)) {
     return configured;
   }
   const first = db.listEnabledModels()[0];
   const ref = first ? `${first.providerId}/${first.modelId}` : '';
-  if (ref) db.setSetting('studio.models.defaultModelRef', ref);
-  else if (configured) db.deleteSetting('studio.models.defaultModelRef');
+  try {
+    if (ref) db.setSetting(MODEL_DEFAULT_REF_KEY, ref);
+    else if (configured) db.deleteSetting(MODEL_DEFAULT_REF_KEY);
+  } catch {
+    // The catalog projection remains usable even when a best-effort default
+    // preference repair cannot be written.
+  }
   return ref;
 }
 
@@ -129,7 +174,7 @@ function persistDefaultModel(runtime, modelRef) {
   const model = enabledRuntimeModel(models, modelRef);
   if (!model) throw new Error('模型已不存在，请刷新后重试');
   const canonicalRef = modelRefFor(model);
-  getStudioDatabase().setSetting('studio.models.defaultModelRef', canonicalRef);
+  getStudioDatabase().setSetting(MODEL_DEFAULT_REF_KEY, canonicalRef);
   return {
     ...modelInfoFor(model, DEFAULT_CWD, undefined, canonicalRef, runtime),
     source: 'default',
@@ -143,7 +188,7 @@ function persistDefaultThinkingLevel(runtime, level) {
   if (!model) throw new Error('当前默认模型不存在');
   validateThinkingLevel(model, level, runtime);
   getStudioDatabase().setSetting(
-    'studio.models.defaultThinkingLevel',
+    MODEL_DEFAULT_THINKING_LEVEL_KEY,
     level === 'default' ? 'default' : concreteThinkingLevel(model, level, runtime),
   );
   return {

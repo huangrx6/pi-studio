@@ -17,7 +17,7 @@
  * 图片以 data URI 内联渲染，不再额外请求主进程。
  */
 import { memo, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, CircleAlert, CircleCheck, CircleX, Copy, FileText, Image as ImageIcon, LoaderCircle, PanelRightOpen, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
+import { Check, ChevronDown, CircleAlert, CircleX, Copy, FileText, Image as ImageIcon, LoaderCircle, PanelRightOpen, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
 import type { ChatMessage, ContentBlock, RequestTrace, ToolCallBlock, TurnDiff, TurnDiffFile } from '../../types/chat-types';
 import type { StepCollapse, StepDisplay } from '../../shared/preferences';
 import { AttachmentIcon, attachmentVisual } from '../../shared/AttachmentIcon';
@@ -30,6 +30,8 @@ import { collectFileChanges } from './file-changes';
 import { FileChangeSummary } from './FileChangeSummary';
 import { splitMessageText, type Reference } from './references';
 import './execution-trace.css';
+import { ConversationError } from './ConversationError';
+import { isComposingKey } from '../../shared/keyboard-navigation';
 
 /** 拼出消息里的全部文本块（用换行分隔）；用户正文和工具结果共用这一逻辑。 */
 function textBlocks(blocks: ContentBlock[]): string {
@@ -123,7 +125,8 @@ function ActivityTool({ call, result, busy, defaultOpen = false }: { call: ToolC
   const failed = Boolean(result?.isError);
   const done = Boolean(result);
   const summary = toolSummary(call);
-  const resultText = result ? textBlocks(result.content) : '';
+  // Closed rows need only their summary; large outputs are joined on demand.
+  const resultText = open && result ? textBlocks(result.content) : '';
   const resultImages = result ? imagesFromBlocks(result.content) : [];
   return <>
   <details
@@ -131,21 +134,21 @@ function ActivityTool({ call, result, busy, defaultOpen = false }: { call: ToolC
     open={open}
     onToggle={(event) => setOpen(event.currentTarget.open)}
   >
-    <summary className="activity-disclosure-summary">
+    <summary className="activity-disclosure-summary" aria-description={done && !failed ? '已完成' : undefined}>
       <span className="activity-tool-icon activity-disclosure-icon"><ToolIcon name={call.name} /></span>
-      <span className="activity-tool-name activity-disclosure-title">{call.name}</span>
+      <span className="activity-tool-name activity-disclosure-title" title={call.name}>{call.name}</span>
       {summary && <span className="activity-tool-summary activity-disclosure-preview">{summary}</span>}
-      <span className="activity-tool-status">{failed ? <><CircleX />失败</> : done ? <><CircleCheck />完成</> : busy ? <><LoaderCircle className="spin" />执行中</> : <><CircleAlert />未完成</>}</span>
+      {(!done || failed) && <span className="activity-tool-status">{failed ? <><CircleX />失败</> : busy ? <><LoaderCircle className="spin" />执行中</> : <><CircleAlert />未完成</>}</span>}
       <ChevronDown className="activity-tool-chevron activity-disclosure-chevron" />
     </summary>
-    <div className="activity-tool-body activity-disclosure-body">
+    {open && <div className="activity-tool-body activity-disclosure-body">
       <div className="activity-tool-label">参数</div>
       <pre className="activity-tool-code">{JSON.stringify(call.arguments, null, 2)}</pre>
       {result && <>
-        <div className="activity-tool-label">结果</div>
-        {resultText && <pre className={`activity-tool-code ${failed ? 'is-error' : ''}`}>{resultText}</pre>}
+        {resultText && <><div className="activity-tool-label">结果</div>
+          <pre className={`activity-tool-code ${failed ? 'is-error' : ''}`}>{resultText}</pre></>}
       </>}
-    </div>
+    </div>}
   </details>
   {resultImages.length > 0 && <ToolResultImages callId={call.id} images={resultImages} />}
   </>;
@@ -187,10 +190,10 @@ function ActivityThinking({ block, defaultOpen = false }: { block: Extract<Conte
     <summary className="activity-disclosure-summary">
       <span className="activity-thinking-icon activity-disclosure-icon" aria-hidden="true"><Sparkles /></span>
       <span className="activity-thinking-label activity-disclosure-title">决策</span>
-      {preview && <span className="activity-thinking-preview activity-disclosure-preview">{preview}</span>}
+      {!open && preview && <span className="activity-thinking-preview activity-disclosure-preview">{preview}</span>}
       <ChevronDown className="activity-thinking-chevron activity-disclosure-chevron" />
     </summary>
-    {!block.redacted && block.thinking && <div className="activity-thinking-body activity-disclosure-body"><Markdown>{block.thinking}</Markdown></div>}
+    {open && !block.redacted && block.thinking && <div className="activity-thinking-body activity-disclosure-body"><Markdown>{block.thinking}</Markdown></div>}
   </details>;
 }
 
@@ -232,34 +235,9 @@ function LiveThinking({ block }: { block: Extract<ContentBlock, { type: 'thinkin
   </div>;
 }
 
-/**
- * 请求失败卡片。
- *
- * 额外从错误文本里提取 HTTP 状态码（4xx/5xx），据此给出可操作的中文提示：
- * 401/403 多半是密钥或来源配置问题，5xx 是服务端临时故障，其他 4xx 是请求参数问题。
- * 提取不到状态码时给通用重试建议。错误原文保留在 pre 里，方便排查。
- */
+/** History retains the actual failure without repeating labels or suggesting an automatic replay. */
 function AssistantError({ message }: { message: string }) {
-  const code = message.match(/(?:^|\s)([45]\d{2})(?=\s|:|$)/)?.[1];
-  const hint = code === '401' || code === '403'
-    ? '认证未通过，请检查此来源的密钥、环境变量和服务地址是否匹配。'
-    : code?.startsWith('5')
-    ? '模型服务暂时不可用，可以稍后重新发送。'
-    : code?.startsWith('4')
-      ? '请求没有被模型服务接受，请检查模型、凭据或参数后重试。'
-      : '可以重新发送；如果持续出现，请检查网络和模型服务状态。';
-  return <div className="assistant-error">
-    <div className="assistant-error-head">
-      <span className="assistant-error-mark"><CircleAlert /></span>
-      <div className="assistant-error-copy">
-        <span className="assistant-error-kicker">REQUEST FAILED</span>
-        <strong>模型请求没有完成</strong>
-      </div>
-      {code && <code className="assistant-error-code">{code}</code>}
-    </div>
-    <pre className="assistant-error-message">{message}</pre>
-    <div className="assistant-error-foot">{hint}</div>
-  </div>;
+  return <ConversationError className="assistant-error" message={message} announce={false} />;
 }
 
 /**
@@ -384,8 +362,12 @@ function TurnTrace({ live, active, policy, phase, steps, requests, errors, child
   errors: number; children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(policy !== 'after-answer' || live);
+  // Defer historical trace contents until first opened. Keep visited children
+  // mounted so closing the group never resets their individual disclosure state.
+  const [visited, setVisited] = useState(open);
   const bodyId = useId();
   const header = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (open) setVisited(true); }, [open]);
   useEffect(() => {
     if (policy === 'after-answer') setOpen(live);
     else if (policy === 'keep-open') setOpen(true);
@@ -407,8 +389,8 @@ function TurnTrace({ live, active, policy, phase, steps, requests, errors, child
       {active && <LoaderCircle className="spin" />}
     </button>
     <div id={bodyId} hidden={!open} className="turn-trace-body">
-      {children}
-      {steps + requests > 6 && <button type="button" className="turn-trace-collapse" onClick={collapseFromBottom}>
+      {(open || visited) && children}
+      {(open || visited) && steps + requests > 6 && <button type="button" className="turn-trace-collapse" onClick={collapseFromBottom}>
         <ChevronDown />收起执行轨迹
       </button>}
     </div>
@@ -754,6 +736,7 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
             requestAnimationFrame(resizeEdit);
           }}
           onKeyDown={(event) => {
+            if (isComposingKey(event.nativeEvent)) return;
             if (event.key === 'Escape') {
               event.preventDefault();
               cancelEdit();

@@ -14,6 +14,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { PopoverSurface } from './PopoverSurface';
+import { isComposingKey, menuFocusIndex } from './keyboard-navigation';
 
 /** 一个选项；description 作为次要说明展示在标签下方，也参与视觉分组。 */
 export type SelectOption = { value: string; label: string; description?: string; disabled?: boolean };
@@ -118,7 +119,7 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
   useEffect(() => {
     if (!open) return;
     const onEscapeCapture = (event: globalThis.KeyboardEvent): void => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || isComposingKey(event)) return;
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
@@ -133,7 +134,7 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
   useEffect(() => {
     if (!open) return;
     const frame = requestAnimationFrame(() => {
-      const active = menuRef.current?.querySelector<HTMLButtonElement>('[data-selected="true"]');
+      const active = menuRef.current?.querySelector<HTMLButtonElement>('[data-selected="true"]:not(:disabled)');
       (active ?? menuRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)'))?.focus();
     });
     return () => cancelAnimationFrame(frame);
@@ -144,7 +145,7 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
    * 避免焦点落到已卸载的 portal 节点上。
    */
   function choose(next: SelectOption): void {
-    if (next.disabled) return;
+    if (disabled || next.disabled) return;
     onChange(next.value);
     setOpen(false);
     triggerRef.current?.focus();
@@ -153,8 +154,8 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
   // 触发按钮键盘：下箭头/Enter/空格打开菜单。preventDefault 阻止按钮的原生
   // click 激活再触发一次 onClick，导致刚打开又被切换关闭。
   function onTriggerKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>): void {
-    if (disabled) return;
-    if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+    if (disabled || isComposingKey(event.nativeEvent)) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       setOpen(true);
     }
@@ -163,6 +164,13 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
   // 菜单键盘：Esc 关闭并把焦点还给触发按钮（stopPropagation 防止外层 dialog 一起关闭）；
   // 上下箭头在可用项之间移动，index 为 -1（焦点不在选项上）时落到第一项。
   function onMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
+    if (isComposingKey(event.nativeEvent)) return;
+    if (event.key === 'Tab') {
+      // Continue the native tab order from the owning control, not the body portal.
+      triggerRef.current?.focus({ preventScroll: true });
+      setOpen(false);
+      return;
+    }
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
@@ -170,13 +178,15 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
       triggerRef.current?.focus();
       return;
     }
-    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-    event.preventDefault();
     const items = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])];
     const index = items.indexOf(document.activeElement as HTMLButtonElement);
-    const next = event.key === 'ArrowDown' ? Math.min(items.length - 1, index + 1) : Math.max(0, index - 1);
+    const next = menuFocusIndex(event.key, index, items.length);
+    if (next === null) return;
+    event.preventDefault();
     items[next]?.focus();
   }
+
+  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
 
   // 原生 dialog 本身就是顶层容器；自定义 role="dialog" 则挂到它的遮罩父层，
   // 既不会落到底层 z-index，也不会被卡片自身的 overflow 裁剪。
@@ -199,6 +209,10 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
         aria-controls={open ? listId : undefined}
         onClick={() => setOpen((current) => !current)}
         onKeyDown={onTriggerKeyDown}
+        onBlur={(event) => {
+          const next = event.relatedTarget as Node | null;
+          if (next && !menuRef.current?.contains(next)) setOpen(false);
+        }}
       >
         {leadingIcon && <span className="pi-select-leading" aria-hidden="true">{leadingIcon}</span>}
         <span className={selected ? 'pi-select-value' : 'pi-select-placeholder'}>{selected?.label ?? placeholder}</span>
@@ -214,6 +228,10 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
           aria-label={label}
           style={{ left: placement.left, width: placement.width, top: placement.top, bottom: placement.bottom }}
           onKeyDown={onMenuKeyDown}
+          onBlurCapture={(event) => {
+            const next = event.relatedTarget as Node | null;
+            if (next && !menuRef.current?.contains(next) && !triggerRef.current?.contains(next)) setOpen(false);
+          }}
         >
           {/* data-selected 供“打开菜单时聚焦已选项”查询，不能只依赖 aria-selected。 */}
           {options.map((option) => (
@@ -221,6 +239,7 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
               key={option.value}
               type="button"
               role="option"
+              tabIndex={-1}
               aria-selected={option.value === value}
               data-selected={option.value === value}
               className={`pi-select-option ${option.value === value ? 'is-selected' : ''}`}

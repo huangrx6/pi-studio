@@ -16,7 +16,7 @@
   color: var(--text);
   font-family: var(--font);
   font-size: var(--text-base);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   line-height: 20px;
   letter-spacing: normal;
 }

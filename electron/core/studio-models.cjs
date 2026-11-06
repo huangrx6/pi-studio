@@ -36,26 +36,37 @@ const API_FACTORIES = Object.freeze({
 
 let current;
 let initialization;
+let latestBuild;
+let buildGeneration = 0;
 let revision = 0;
 const lockTails = new Map();
+const credentialGenerations = new Map();
 
 function importCached(specifier) {
   return import(specifier);
 }
 
-function createCredentialStore(db) {
-  async function enqueue(providerId, task) {
-    const previous = lockTails.get(providerId) || Promise.resolve();
-    const run = previous.catch(() => {}).then(task);
-    const tail = run.catch(() => {});
-    lockTails.set(providerId, tail);
-    try {
-      return await run;
-    } finally {
-      if (lockTails.get(providerId) === tail) lockTails.delete(providerId);
-    }
+// Shared by credential refresh and atomic provider/configuration saves. Keep
+// the lock outside a runtime instance: rebuilding Models must not split queues.
+async function withProviderCredentialLock(providerId, task) {
+  const previous = lockTails.get(providerId) || Promise.resolve();
+  const run = previous.catch(() => {}).then(task);
+  const tail = run.catch(() => {});
+  lockTails.set(providerId, tail);
+  try {
+    return await run;
+  } finally {
+    if (lockTails.get(providerId) === tail) lockTails.delete(providerId);
   }
+}
 
+// Call only after a provider deletion commits, while holding its credential
+// lock. Operations queued before deletion must not attach to a recreated ID.
+function invalidateProviderCredentials(providerId) {
+  credentialGenerations.set(providerId, (credentialGenerations.get(providerId) || 0) + 1);
+}
+
+function createCredentialStore(db) {
   return {
     async read(providerId, options) {
       options?.signal?.throwIfAborted();
@@ -68,19 +79,28 @@ function createCredentialStore(db) {
       });
     },
     modify(providerId, callback, options) {
-      return enqueue(providerId, async () => {
+      const generation = credentialGenerations.get(providerId) || 0;
+      const checkProvider = () => {
+        if (!db.getProvider(providerId)) throw new Error('模型来源不存在，凭据未写入。');
+        if (generation !== (credentialGenerations.get(providerId) || 0)) throw new Error('模型来源已变化，凭据未写入。');
+      };
+      return withProviderCredentialLock(providerId, async () => {
         options?.signal?.throwIfAborted();
+        checkProvider();
         const currentCredential = db.readCredential(providerId);
         const next = await callback(currentCredential);
         options?.signal?.throwIfAborted();
+        checkProvider();
         if (next === undefined) return currentCredential;
         db.writeCredential(providerId, next);
         return next;
       });
     },
     delete(providerId, options) {
-      return enqueue(providerId, async () => {
+      const generation = credentialGenerations.get(providerId) || 0;
+      return withProviderCredentialLock(providerId, async () => {
         options?.signal?.throwIfAborted();
+        if (generation !== (credentialGenerations.get(providerId) || 0)) throw new Error('模型来源已变化，凭据未清除。');
         db.deleteCredential(providerId);
       });
     },
@@ -306,22 +326,45 @@ async function buildRuntime(db) {
   };
 }
 
-async function initializeStudioModels() {
-  if (current?.db?.isOpen()) return current;
-  if (current) current = undefined;
-  initialization ??= buildRuntime(getStudioDatabase()).then((runtime) => {
+function buildAndPublishRuntime() {
+  const generation = ++buildGeneration;
+  const superseded = () => {
+    if (latestBuild) return latestBuild;
+    throw new Error('模型运行时已关闭，请重新读取。');
+  };
+  const pending = (async () => {
+    let runtime;
+    try {
+      runtime = await buildRuntime(getStudioDatabase());
+    } catch (error) {
+      if (generation !== buildGeneration) return superseded();
+      throw error;
+    }
+    // API imports can complete out of order. Only the latest requested catalog
+    // may publish; older callers follow that result, including its failure.
+    if (generation !== buildGeneration) return superseded();
     current = runtime;
     revision += 1;
     return runtime;
-  }).finally(() => {
-    initialization = undefined;
-  });
-  return initialization;
+  })();
+  latestBuild = pending;
+  initialization = pending;
+  const clearPending = () => { if (initialization === pending) initialization = undefined; };
+  void pending.then(clearPending, clearPending);
+  return pending;
+}
+
+async function initializeStudioModels() {
+  if (current?.db?.isOpen()) return current;
+  if (current) current = undefined;
+  return initialization || buildAndPublishRuntime();
 }
 
 function closeStudioModelsRuntime() {
+  buildGeneration += 1;
   current = undefined;
   initialization = undefined;
+  latestBuild = undefined;
 }
 
 async function getStudioModelsRuntime() {
@@ -341,9 +384,7 @@ async function getCredentialStore() {
 }
 
 async function rebuildStudioModels() {
-  current = await buildRuntime(getStudioDatabase());
-  revision += 1;
-  return current.models;
+  return (await buildAndPublishRuntime()).models;
 }
 
 function studioModelsRevision() {
@@ -368,8 +409,10 @@ module.exports = {
   getStudioModelsRuntime,
   getStudioModelsRuntimeSync,
   initializeStudioModels,
+  invalidateProviderCredentials,
   providerBaseUrl,
   rebuildStudioModels,
   retireAutoSeededCatalog,
   studioModelsRevision,
+  withProviderCredentialLock,
 };

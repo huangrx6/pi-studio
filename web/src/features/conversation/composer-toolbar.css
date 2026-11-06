@@ -1,0 +1,14 @@
+.composer .composer-toolbar { align-items: center; row-gap: var(--space-2); }
+.composer-toolbar .composer-more-button { display: inline-flex; align-items: center; justify-content: center; width: var(--control-sm); }
+.composer-toolbar .composer-left,
+.composer-toolbar .composer-right { flex-wrap: wrap; }
+.composer-toolbar .composer-right { margin-left: auto; }
+.composer-toolbar .composer-context-group { flex-wrap: wrap; }
+.composer-toolbar button:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
+
+@container main-pane (max-width: 660px) {
+  .composer-toolbar .composer-left,
+  .composer-toolbar .composer-right { width: 100%; }
+  .composer-toolbar .composer-right { justify-content: flex-end; }
+  .composer-toolbar .composer-more-button { margin-right: auto; }
+}

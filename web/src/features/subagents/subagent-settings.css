@@ -1,0 +1,87 @@
+.subagent-settings { display: flex; flex-direction: column; gap: 28px; padding-bottom: var(--space-3); }
+.subagent-settings > .settings-page-header { margin-bottom: 0; }
+.subagent-settings-fields { display: flex; flex-direction: column; gap: 32px; min-width: 0; padding: 0; margin: 0; border: 0; }
+.subagent-overview-actions { display: flex; align-items: center; gap: var(--space-2); }
+.subagent-runtime-status { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; color: var(--muted); }
+.subagent-runtime-status strong { font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.subagent-section-label strong { font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.subagent-scope-grid { display: flex; gap: 4px; margin-top: 12px; }
+.subagent-scope-grid > button { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 6px 12px; border-radius: var(--radius-control); color: var(--muted); }
+.subagent-scope-grid > button.is-active { background: var(--accent-soft); color: var(--accent-foreground); }
+.subagent-scope-grid > button:hover:not(:disabled) { background: var(--surface-hover); }
+.subagent-scope-grid strong { font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.subagent-scope-grid > button > svg { width: 14px; height: 14px; }
+.subagent-workspace-target { display: grid; grid-template-columns: minmax(100px, .8fr) minmax(0, 1.2fr); align-items: center; gap: 16px; margin-top: 16px; font-size: var(--text-sm); }
+.subagent-workspace-target > div { min-width: 0; }
+.subagent-section { min-width: 0; }
+.subagent-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.subagent-section-heading h2 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--text-md); font-weight: var(--weight-semibold); }
+.subagent-section-heading > button { flex: none; }
+.subagent-section-heading > button svg { width: var(--icon-sm); height: var(--icon-sm); }
+.subagent-control-grid, .subagent-field-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 16px; }
+.subagent-field-grid { margin-top: 20px; }
+.subagent-advanced { margin-top: 24px; border-top: 1px solid var(--divider); border-bottom: 1px solid var(--divider); }
+.subagent-advanced > summary { display: flex; min-height: 58px; align-items: center; justify-content: space-between; gap: 16px; list-style: none; cursor: pointer; }
+.subagent-advanced > summary::-webkit-details-marker { display: none; }
+.subagent-advanced > summary:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; border-radius: var(--radius-sm); }
+.subagent-advanced > summary > span { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.subagent-advanced > summary strong { color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.subagent-advanced > summary small { color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-normal); overflow-wrap: anywhere; }
+.subagent-advanced-chevron { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--faint); transition: transform var(--transition); }
+.subagent-advanced[open] .subagent-advanced-chevron { transform: rotate(90deg); }
+.subagent-advanced > .subagent-field-grid { padding-bottom: 18px; margin-top: 2px; }
+.subagent-control, .subagent-field { display: flex; min-width: 0; flex-direction: column; gap: 8px; }
+.subagent-control.is-disabled, .subagent-field.is-disabled { opacity: .6; }
+.subagent-label { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-normal); }
+.subagent-toggle-row { display: flex; align-items: center; min-height: var(--control); }
+.subagent-toggle-row > input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.subagent-field > input, .subagent-field > .pi-select { width: 100%; }
+.subagent-input-unit { position: relative; }
+.subagent-input-unit > input { width: 100%; padding-right: 44px; }
+.subagent-input-unit > span { position: absolute; top: 50%; right: 12px; color: var(--faint); font-size: var(--text-xs); transform: translateY(-50%); pointer-events: none; }
+.subagent-tool-summary { margin-bottom: 12px; color: var(--muted); font-size: var(--text-xs); }
+.subagent-tool-summary strong { font-weight: var(--weight-regular); }
+.subagent-tool-list { display: flex; flex-direction: column; }
+.subagent-tool-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-width: 0; padding: 12px 0; border-bottom: 1px solid var(--divider); cursor: pointer; }
+.subagent-tool-row > input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.subagent-tool-check { display: none; }
+.subagent-tool-copy { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.subagent-tool-copy strong { overflow-wrap: anywhere; font: var(--weight-medium) var(--text-sm) var(--mono); }
+.subagent-tool-copy small { color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-normal); overflow-wrap: anywhere; }
+.subagent-tool-source { max-width: 120px; color: var(--faint); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.subagent-worktree-list { display: flex; flex-direction: column; }
+.subagent-worktree-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--divider); }
+.subagent-worktree-copy { display: flex; min-width: 0; flex-direction: column; gap: 6px; }
+.subagent-worktree-copy > div:first-child { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.subagent-worktree-copy strong { font-size: var(--text-sm); font-weight: var(--weight-medium); overflow-wrap: anywhere; }
+.subagent-worktree-copy > code { color: var(--muted); font: var(--text-xs) var(--mono); overflow-wrap: anywhere; }
+.subagent-worktree-copy > small { color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-normal); overflow-wrap: anywhere; }
+.subagent-worktree-copy details { color: var(--muted); font-size: var(--text-xs); }
+.subagent-worktree-copy summary { cursor: pointer; width: fit-content; }
+.subagent-worktree-copy ul { display: flex; max-height: 240px; flex-direction: column; gap: 4px; margin: 8px 0 0; padding: 0; overflow: auto; list-style: none; }
+.subagent-worktree-copy li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 6px; }
+.subagent-worktree-copy li > code { overflow-wrap: anywhere; }
+.subagent-worktree-actions { display: flex; align-items: center; gap: 8px; }
+.subagent-worktree-actions > .settings-outline { display: inline-flex; align-items: center; gap: 6px; min-height: var(--control-sm); }
+.subagent-worktree-actions svg { width: var(--icon-sm); height: var(--icon-sm); }
+.subagent-savebar { display: flex; align-items: center; gap: 12px; padding-top: 20px; border-top: 1px solid var(--divider); }
+.subagent-savebar > div { min-width: 0; flex: 1; }
+.subagent-savebar strong { font-size: var(--text-xs); font-weight: var(--weight-regular); color: var(--muted); }
+.subagent-savebar > button { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.subagent-savebar > button svg { width: var(--icon-sm); height: var(--icon-sm); }
+.subagent-feedback { margin: 0; font-size: var(--text-sm); color: var(--muted); }
+.subagent-settings > .settings-error { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.subagent-settings .settings-empty { padding: 16px 0; text-align: left; }
+@container settings (max-width: 640px) {
+  .subagent-control-grid, .subagent-field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .subagent-worktree-row { grid-template-columns: minmax(0, 1fr); }
+  .subagent-worktree-actions { justify-content: flex-end; }
+}
+@media (max-width: 800px) {
+  .subagent-control-grid, .subagent-field-grid, .subagent-workspace-target { grid-template-columns: minmax(0, 1fr); }
+  .subagent-runtime-status, .subagent-section-heading { align-items: flex-start; flex-wrap: wrap; }
+  .subagent-worktree-row { grid-template-columns: minmax(0, 1fr); }
+  .subagent-worktree-actions { justify-content: flex-end; }
+  .subagent-savebar { flex-wrap: wrap; }
+  .subagent-savebar > div { flex-basis: 100%; }
+}

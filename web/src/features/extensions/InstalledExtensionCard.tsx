@@ -1,103 +1,54 @@
-import { AlertTriangle, ChevronRight, Clock3, Plug, Trash2 } from 'lucide-react';
 import type { ExtensionHostItem } from '../../types/extension-types';
-import {
-  extensionContributionCount,
-  extensionScopeLabel,
-  extensionStateLabel,
-  extensionStateTone,
-  extensionTierLabel,
-} from './extension-presentation';
-import {
-  SettingsResourceCard,
-  SettingsResourceCardBody,
-  SettingsResourceCardFooter,
-  SettingsResourceCardIcon,
-  SettingsResourceCardMain,
-} from '../../shared/SettingsResourceCard';
+import { extensionScopeLabel, extensionStateLabel, extensionStateTone } from './extension-presentation';
+import './extension-lists.css';
 
-export function InstalledExtensionCard({
-  item,
-  busy,
-  onOpenDetail,
-  onToggle,
-  onDelete,
-}: {
+export function InstalledExtensionCard({ item, busy, compact = false, onOpenDetail, onToggle, onDelete }: {
   item: ExtensionHostItem;
   busy: boolean;
+  compact?: boolean;
   onOpenDetail: (item: ExtensionHostItem) => void;
   onToggle: (item: ExtensionHostItem, enabled: boolean) => void;
   onDelete: (id: string, name: string) => void;
 }) {
   const stateTone = extensionStateTone(item);
-  const contributions = extensionContributionCount(item);
   const publisher = item.installation?.publisher || item.manifest?.publisher || item.manifest?.author;
+  const meta = item.scope === 'builtin'
+    ? 'Pi Studio 内置'
+    : `${publisher || '未注明发布者'} · ${extensionScopeLabel(item.scope)} · ${item.trusted ? '已信任' : '未信任'}`;
+  const permissions = item.manifest?.permissions || [];
+  const access = [
+    item.manifest?.runtime?.durableEntry ? '主进程 Node 代码' : '',
+    permissions.includes('network') ? '网络访问' : '',
+    permissions.includes('provider.credentials') ? '读取模型凭证' : '',
+    permissions.includes('agent.hooks') ? '工具钩子' : '',
+    permissions.includes('agent.tasks') ? '持久任务' : '',
+    permissions.includes('agent.tools') ? '智能体工具' : '',
+  ].filter(Boolean);
 
-  return <SettingsResourceCard className="extension-card installed-extension-card">
-    <SettingsResourceCardMain className="installed-extension-main">
-      <SettingsResourceCardIcon className="extension-card-icon"><Plug /></SettingsResourceCardIcon>
-      <SettingsResourceCardBody>
-        <span className="settings-resource-card-heading">
-          <span className="extension-card-title installed-extension-title">
-            <strong>{item.name}</strong>
-            <code>v{item.version}</code>
-          </span>
-          {stateTone !== 'ready' && (
-            <span className={`extension-card-state is-${stateTone}`}>
-              {stateTone === 'pending' ? <Clock3 /> : <AlertTriangle />}
-              {extensionStateLabel(item)}
-            </span>
-          )}
-        </span>
-        <span className="extension-card-meta">
-          {publisher || '未注明发布者'} · {extensionScopeLabel(item.scope)}
-        </span>
-        {item.manifest?.description && <p>{item.manifest.description}</p>}
-        <span className="extension-card-capabilities">
-          <span>{extensionTierLabel(item.tier)}</span>
-          <span>{contributions > 0 ? `${contributions} 项能力` : '无界面能力'}</span>
-          {item.runtimeNames.length > 0 && <span>{item.runtimeNames[0]}</span>}
-        </span>
-        {item.blockedReason && <span className="installed-extension-blocked" role="status">
-          <AlertTriangle />
-          <span>{item.blockedReason}</span>
-        </span>}
-      </SettingsResourceCardBody>
-    </SettingsResourceCardMain>
-
-    <SettingsResourceCardFooter className="extension-card-footer">
-      <span
-        className="resource-status extension-card-footer-meta"
-        title={item.installation?.source || item.source}
-      >{item.id}</span>
-      <div>
-        {item.scope !== 'builtin' && <button
-          type="button"
-          className="icon-button resource-delete installed-extension-delete"
-          aria-label={`卸载 ${item.name}`}
-          title={item.canRemove ? '卸载扩展' : item.removeBlockedReason}
-          disabled={busy || !item.canRemove}
-          onClick={() => onDelete(item.id, item.name)}
-        ><Trash2 /></button>}
-        <button
-          type="button"
-          className="settings-text-button installed-extension-detail"
-          aria-label={`查看 ${item.name} 详情`}
-          onClick={() => onOpenDetail(item)}
-        >
-          详情
-          <ChevronRight />
-        </button>
-        <button
-          type="button"
-          className={`switch ${item.enabled ? 'is-on' : ''}`}
-          role="switch"
-          aria-checked={item.enabled}
-          aria-label={`${item.enabled ? '停用' : '启用'} ${item.name}`}
-          title={item.enabled && !item.canDisable ? item.disableBlockedReason : undefined}
-          disabled={busy || (item.enabled && !item.canDisable)}
-          onClick={() => onToggle(item, !item.enabled)}
-        ><span /></button>
+  return <article className={`extension-list-row installed-extension-row${compact ? ' is-compact' : ''}`} aria-label={item.name}>
+    <div className="extension-list-main">
+      <div className="extension-list-title">
+        <h3>{item.name}</h3><span className="extension-list-version">v{item.version}</span>
+        {stateTone !== 'ready' && <span className={`extension-list-state is-${stateTone}`}>{extensionStateLabel(item)}</span>}
       </div>
-    </SettingsResourceCardFooter>
-  </SettingsResourceCard>;
+      <p className="extension-list-meta">{meta}</p>
+      {!compact && item.manifest?.description && <p className="extension-list-description">{item.manifest.description}</p>}
+      {!compact && access.length > 0 && <p className="extension-list-access">{access.join(' · ')}</p>}
+      {item.blockedReason && <p className="extension-list-notice is-error" role="status">{item.blockedReason}</p>}
+    </div>
+    <div className="extension-list-actions">
+      <button type="button" className="settings-text-button" aria-label={`查看 ${item.name} 详情`} onClick={() => onOpenDetail(item)}>详情</button>
+      {item.scope !== 'builtin' && <button
+        type="button" className="settings-text-button extension-list-remove"
+        aria-label={`卸载 ${item.name}`} title={item.canRemove ? '卸载扩展' : item.removeBlockedReason}
+        disabled={busy || !item.canRemove} onClick={() => onDelete(item.id, item.name)}
+      >卸载</button>}
+      <button
+        type="button" className={`switch ${item.enabled ? 'is-on' : ''}`} role="switch" aria-checked={item.enabled}
+        aria-label={`${item.enabled ? '停用' : '启用'} ${item.name}`}
+        title={item.enabled && !item.canDisable ? item.disableBlockedReason : undefined}
+        disabled={busy || (item.enabled && !item.canDisable)} onClick={() => onToggle(item, !item.enabled)}
+      ><span /></button>
+    </div>
+  </article>;
 }

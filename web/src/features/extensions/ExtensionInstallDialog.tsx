@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Check,
@@ -10,11 +10,14 @@ import {
 } from 'lucide-react';
 import type {
   ExtensionInstallPreview,
+  ExtensionInstallResult,
   ExtensionInstallScope,
   ExtensionPermission,
 } from '../../types/extension-types';
 import { InfoHint } from '../../shared/InfoHint';
 import { SettingsDialog } from '../../shared/SettingsDialog';
+import { createExtensionInstallSession, extensionInstallOwnerKey, type InstallSessionState } from './extension-install-session';
+import './extension-install.css';
 
 const PERMISSION_LABELS: Record<ExtensionPermission, string> = {
   'agent.tools': '向智能体提供工具',
@@ -38,10 +41,6 @@ const SOURCE_KIND_LABELS: Record<string, string> = {
   registry: 'Registry',
   official: 'Pi Studio 官方目录',
 };
-
-function errorText(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
 
 function fileName(value: string) {
   return value.split(/[\\/]/).filter(Boolean).pop() || value;
@@ -69,70 +68,44 @@ export function ExtensionInstallDialog({
   registryUrl: string;
   initialPreview?: ExtensionInstallPreview | null;
   onClose: () => void;
-  onInstalled: (result: {
-    installed: {
-      id: string;
-      version: string;
-      activeCodePath: string;
-      dataPath: string;
-      contentChanged: boolean;
-      trustRevoked: boolean;
-    };
-    settings: unknown;
-  }) => void;
+  onInstalled: (result: ExtensionInstallResult) => void | Promise<void>;
 }) {
-  const [scope, setScope] = useState<ExtensionInstallScope>('user');
+  const [scope, setScope] = useState<ExtensionInstallScope>(initialPreview?.scope || 'user');
   const [sourceMode, setSourceMode] = useState<'local' | 'remote'>('local');
-  const [source, setSource] = useState('');
   const [remoteSource, setRemoteSource] = useState('');
   const [registry, setRegistry] = useState(registryUrl);
-  const [preview, setPreview] = useState<ExtensionInstallPreview | null>(initialPreview || null);
-  const [accepted, setAccepted] = useState(Boolean(
-    initialPreview
-    && !initialPreview.executable
-    && !initialPreview.executableExpansion
-    && initialPreview.addedPermissions.length === 0
-    && initialPreview.addedProviderAccess.length === 0
-    && initialPreview.addedRequirements.length === 0
-    && !initialPreview.requiresPublisherTrust,
-  ));
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const disposedTokens = useRef(new Set<string>());
-  const latestPreviewTokenRef = useRef<string | undefined>(preview?.token);
-  const unmountDisposeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function disposeToken(token: string | undefined) {
-    if (!token || disposedTokens.current.has(token)) return;
-    disposedTokens.current.add(token);
-    void window.piApi.disposeExtensionInstall(token);
-  }
-
+  const [accepted, setAccepted] = useState(false);
+  const [inputError, setInputError] = useState<string | null>(null);
+  const contextKey = extensionInstallOwnerKey(cwd, initialPreview);
+  const propsRef = useRef({ contextKey, onInstalled, onClose });
+  propsRef.current = { contextKey, onInstalled, onClose };
+  const [sessionState, setSessionState] = useState<InstallSessionState>({
+    owner: contextKey, preview: initialPreview || null, source: '', phase: null, error: null, committed: false,
+  });
+  const sessionRef = useRef<ReturnType<typeof createExtensionInstallSession> | null>(null);
+  if (!sessionRef.current) sessionRef.current = createExtensionInstallSession({
+    api: window.piApi, cwd, initialPreview,
+    isContextCurrent: key => propsRef.current.contextKey === key,
+    onChange: setSessionState,
+    onInstalled: result => propsRef.current.onInstalled(result),
+    onClose: () => propsRef.current.onClose(),
+  });
+  const session = sessionRef.current;
+  const preview = sessionState.owner === contextKey ? sessionState.preview : null;
+  const source = sessionState.owner === contextKey ? sessionState.source : '';
+  const busy = sessionState.phase !== null;
+  const error = inputError || sessionState.error;
+  const committed = sessionState.committed && sessionState.owner === contextKey;
   useEffect(() => {
-    setRegistry(registryUrl);
-  }, [registryUrl]);
-
-  useEffect(() => {
-    latestPreviewTokenRef.current = preview?.token;
-  }, [preview?.token]);
-
-  // React StrictMode 会在开发期模拟一次卸载再挂载。直接按 preview token
-  // 清理副作用会把仍然有效的预览令牌一并销毁；延迟到微任务后仅清理真正
-  // 卸载时留下的令牌，并在模拟重挂载时取消这次清理。
-  useEffect(() => {
-    if (unmountDisposeTimerRef.current !== null) {
-      clearTimeout(unmountDisposeTimerRef.current);
-      unmountDisposeTimerRef.current = null;
-    }
-    return () => {
-      const token = latestPreviewTokenRef.current;
-      if (!token || disposedTokens.current.has(token)) return;
-      unmountDisposeTimerRef.current = setTimeout(() => {
-        unmountDisposeTimerRef.current = null;
-        disposeToken(token);
-      }, 0);
-    };
-  }, []);
+    session.activate();
+    session.setContext(cwd, initialPreview);
+    setScope(initialPreview?.scope || 'user');
+    setRemoteSource('');
+    setInputError(null);
+    return () => session.deactivate();
+  }, [contextKey, session]);
+  useEffect(() => { setRegistry(registryUrl); }, [registryUrl]);
+  useEffect(() => { setAccepted(false); setInputError(null); }, [preview?.token]);
 
   const addedPermissions = preview?.addedPermissions || [];
   const addedProviderAccess = preview?.addedProviderAccess || [];
@@ -165,116 +138,35 @@ export function ExtensionInstallDialog({
         : null
     : null;
 
-  const action = useMemo(() => {
-    if (!preview) return '校验并预览';
-    if (preview.upgrade) return `升级到 v${preview.version}`;
-    if (preview.alreadyInstalled) return '完成完整性检查';
-    return `安装 v${preview.version}`;
-  }, [preview]);
-
-  function close() {
-    if (busy) return;
-    disposeToken(preview?.token);
-    onClose();
+  const action = committed ? '刷新安装结果' : !preview ? '校验并预览'
+    : preview.upgrade ? `升级到 v${preview.version}`
+      : preview.alreadyInstalled ? '完成完整性检查' : `安装 v${preview.version}`;
+  function prepare() {
+    if (!activeSource) { setInputError(sourceMode === 'local' ? '请选择扩展目录或安装包' : '请输入扩展来源'); return; }
+    setInputError(null);
+    void session.prepare({ source: activeSource, scope, registryUrl: registry.trim() });
   }
-
-  async function pick(kind: 'directory' | 'package') {
-    setError(null);
-    try {
-      const selected = await window.piApi.pickExtensionSource(kind);
-      if (selected) setSource(selected);
-    } catch (reason) {
-      setError(errorText(reason));
-    }
-  }
-
-  async function prepare() {
-    if (!activeSource) {
-      setError(sourceMode === 'local' ? '请选择扩展目录或安装包' : '请输入扩展来源');
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      if (preview?.token && !disposedTokens.current.has(preview.token)) {
-        disposedTokens.current.add(preview.token);
-        await window.piApi.disposeExtensionInstall(preview.token);
-      }
-      const next = await window.piApi.prepareExtensionInstall({
-        source: activeSource,
-        scope,
-        cwd,
-        registryUrl: registry.trim(),
-      });
-      setPreview(next);
-      setAccepted(
-        !next.executable
-        && !next.executableExpansion
-        && next.addedPermissions.length === 0
-        && next.addedProviderAccess.length === 0
-        && next.addedRequirements.length === 0
-        && !next.requiresPublisherTrust,
-      );
-    } catch (reason) {
-      setError(errorText(reason));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function install() {
-    if (!preview || !canSubmitPreview) return;
-    const token = preview.token;
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await window.piApi.installExtension({
-        token,
-        scope,
-        cwd,
-        acceptedPermissions: addedPermissions,
-        acceptedProviderAccess: addedProviderAccess,
-        acceptedRequirements: (preview.addedRequirements || []).length > 0
-          ? accepted
-          : true,
-        acceptedExecution: consentRequired ? accepted : true,
-        acceptedPublisherKey: preview.requiresPublisherTrust ? accepted : true,
-      });
-      disposedTokens.current.add(token);
-      setPreview(null);
-      onInstalled(result);
-      onClose();
-    } catch (reason) {
-      setError(errorText(reason));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function back() {
-    if (busy) return;
-    disposeToken(preview?.token);
-    setPreview(null);
-    setAccepted(false);
-    setError(null);
-  }
+  function back() { session.back(); setAccepted(false); setInputError(null); }
 
   return <SettingsDialog
-    title={preview ? '确认扩展安装' : '安装扩展'}
+    title={committed ? '扩展已安装' : preview ? '确认扩展安装' : '安装扩展'}
+    closeLabel={committed ? '关闭' : '取消'}
     hint={preview
-      ? '来源已在隔离目录完成格式、完整性与兼容性校验；确认后才会切换活动版本。'
+      ? '来源已在临时校验目录完成格式、完整性与兼容性校验；确认后才会切换活动版本。这不是操作系统沙箱。'
       : '支持本地目录、带完整性清单的扩展包、GitHub Release 或 Registry；安装不会执行 postinstall 脚本。'}
     action={action}
     busy={busy}
+    fieldsDisabled={committed}
+    busyAction={sessionState.phase === 'pick' ? '正在选择…' : sessionState.phase === 'prepare' ? '正在校验…' : sessionState.phase === 'apply' ? '正在刷新…' : '正在安装…'}
     loading={false}
-    unavailable={Boolean(preview && !canSubmitPreview)}
+    unavailable={Boolean(!committed && preview && !canSubmitPreview)}
     error={error}
     autoFocusFirstField={!preview}
     showBackdrop={false}
     scrollResetKey={preview ? preview.token : `${sourceMode}:${scope}`}
-    footerHint={footerHint}
-    onClose={close}
-    onSubmit={() => void (preview ? install() : prepare())}
+    footerHint={committed ? '安装已完成，重试只刷新设置，不会再次安装。' : footerHint}
+    onClose={() => session.close()}
+    onSubmit={() => { setInputError(null); void (committed ? session.retryApply() : preview ? session.install(accepted) : prepare()); }}
   >
     {!preview ? <div className="extension-install-form">
       <div className="extension-install-section">
@@ -309,29 +201,27 @@ export function ExtensionInstallDialog({
           <span className="field-label">安装来源</span>
           <InfoHint align="end" label="开发目录必须包含 pi-studio.extension.json；安装包必须是 .pi-extension.zip，并会逐文件校验摘要。" />
         </div>
-        <div className="extension-source-tabs" role="tablist" aria-label="扩展安装来源">
+        <div className="extension-source-tabs" role="group" aria-label="扩展安装来源">
           <button
             type="button"
-            role="tab"
-            aria-selected={sourceMode === 'local'}
+            aria-pressed={sourceMode === 'local'}
             aria-controls="extension-local-source-panel"
             className={sourceMode === 'local' ? 'is-active' : ''}
             onClick={() => {
               setSourceMode('local');
-              setError(null);
+              setInputError(null);
             }}
           >
             <FileArchive />本地文件
           </button>
           <button
             type="button"
-            role="tab"
-            aria-selected={sourceMode === 'remote'}
+            aria-pressed={sourceMode === 'remote'}
             aria-controls="extension-remote-source-panel"
             className={sourceMode === 'remote' ? 'is-active' : ''}
             onClick={() => {
               setSourceMode('remote');
-              setError(null);
+              setInputError(null);
             }}
           >
             <Globe2 />网络与 Registry
@@ -341,14 +231,13 @@ export function ExtensionInstallDialog({
         {sourceMode === 'local' ? <div
           id="extension-local-source-panel"
           className="extension-local-source"
-          role="tabpanel"
         >
           <button
             type="button"
             className="extension-source-picker"
             aria-label="选择扩展开发目录"
             title="目录必须包含 pi-studio.extension.json"
-            onClick={() => void pick('directory')}
+            onClick={() => { setInputError(null); void session.pick('directory'); }}
           >
             <FolderOpen />
             <span><strong>开发目录</strong></span>
@@ -358,7 +247,7 @@ export function ExtensionInstallDialog({
             className="extension-source-picker"
             aria-label="选择扩展安装包"
             title="选择 .pi-extension.zip"
-            onClick={() => void pick('package')}
+            onClick={() => { setInputError(null); void session.pick('package'); }}
           >
             <FileArchive />
             <span><strong>安装包</strong></span>
@@ -366,12 +255,11 @@ export function ExtensionInstallDialog({
           {source && <div className="extension-selected-source">
             <PackageCheck />
             <span><strong>{fileName(source)}</strong><small title={source}>{source}</small></span>
-            <button type="button" className="settings-text-button" onClick={() => setSource('')}>更换</button>
+            <button type="button" className="settings-text-button" onClick={() => session.clearSource()}>更换</button>
           </div>}
         </div> : <div
           id="extension-remote-source-panel"
           className="extension-remote-source"
-          role="tabpanel"
         >
           <div className="extension-remote-field">
             <div className="extension-field-label-row">
@@ -403,7 +291,6 @@ export function ExtensionInstallDialog({
       </div>
     </div> : <div className="extension-preview">
       <header className="extension-preview-head">
-        <span className="extension-preview-icon"><PackageCheck /></span>
         <div>
           <div className="extension-preview-title">
             <h3>{preview.name}</h3>
@@ -421,14 +308,12 @@ export function ExtensionInstallDialog({
         <div><dt>来源</dt><dd>{SOURCE_KIND_LABELS[preview.sourceKind] || preview.sourceKind}</dd></div>
         <div><dt>类型</dt><dd>{extensionKind(preview)}</dd></div>
         <div><dt>执行方式</dt><dd>{preview.executable ? '受信任的主进程 Node 代码' : '仅声明式数据'}</dd></div>
-        <div><dt>当前版本</dt><dd>{preview.installedVersion ? `v${preview.installedVersion}` : '未安装'}</dd></div>
+        {!committed && <div><dt>当前版本</dt><dd>{preview.installedVersion ? `v${preview.installedVersion}` : '未安装'}</dd></div>}
         <div className="is-wide">
           <dt>已解析来源</dt>
-          <dd title={preview.resolvedRef || preview.source}>
-            {SOURCE_KIND_LABELS[preview.sourceKind] || preview.sourceKind}
-            {preview.resolvedRef ? ` · ${preview.resolvedRef}` : preview.source ? ` · ${preview.source}` : ''}
-          </dd>
+          <dd>{preview.source}</dd>
         </div>
+        {preview.resolvedRef && <div><dt>固定引用</dt><dd>{preview.resolvedRef}</dd></div>}
       </dl>
 
       <section className="extension-permission-preview">
@@ -470,7 +355,7 @@ export function ExtensionInstallDialog({
         </div>)}
       </section>}
 
-      {addedProviderAccess.length > 0 && <section className="extension-permission-preview">
+      {preview.providerAccess.length > 0 && <section className="extension-permission-preview">
         <div className="extension-preview-section-head">
           <div>
             <h4>模型来源凭证访问</h4>
@@ -479,7 +364,7 @@ export function ExtensionInstallDialog({
           <span>{addedProviderAccess.length} 个新增</span>
         </div>
         <div className="extension-provider-access-list">
-          {addedProviderAccess.map((providerId) => <code key={providerId}>{providerId}</code>)}
+          {preview.providerAccess.map((providerId) => <code key={providerId}>{providerId}{addedProviderAccess.includes(providerId) ? '（新增）' : '（继续使用）'}</code>)}
         </div>
       </section>}
 
@@ -509,13 +394,15 @@ export function ExtensionInstallDialog({
               ? `签名与 manifest 一致，公钥指纹已由你在本机信任。`
               : preview.publisherTrust === 'untrusted'
                 ? `签名自洽，但公钥尚未在本机受信任。确认后会把 ${preview.signaturePublisher || preview.publisher} 与此指纹绑定。`
-                : 'SHA-256 仍可防止内容损坏或被替换，但不能证明发布者身份。registry 发布者应提供 Ed25519 公钥。'}
+                : 'SHA-256 用于核对内容一致性，不能证明发布者身份。registry 发布者应提供 Ed25519 公钥。'}
           </p>
           {preview.signatureKeyId && <code title={preview.signatureKeyId}>{preview.signatureKeyId}</code>}
         </div>
       </section>
 
-      <section className="extension-integrity">
+      <details className="extension-integrity">
+        <summary>技术信息与完整性校验</summary>
+        <div><span>扩展 ID</span><code>{preview.id}</code></div>
         <div>
           <span>包 SHA-256</span>
           <code title={preview.archiveSha256 || undefined}>{preview.archiveSha256 || '本地目录未提供外部包摘要'}</code>
@@ -525,9 +412,9 @@ export function ExtensionInstallDialog({
           <code title={preview.treeSha256}>{preview.treeSha256}</code>
         </div>
         <p>SHA-256 只证明下载内容与安装状态或 Registry 元数据一致，不代表发布者签名或身份认证。</p>
-      </section>
+      </details>
 
-      {consentRequired && <label className="extension-consent">
+      {!committed && consentRequired && <label className="extension-consent">
         <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
         <span>
           <strong>我了解并接受这些能力</strong>
@@ -538,15 +425,15 @@ export function ExtensionInstallDialog({
         </span>
       </label>}
 
-      {scope === 'project' && <p className="extension-project-trust-note">
+      {preview.scope === 'project' && <p className="extension-project-trust-note">
         {preview.alreadyInstalled
           ? '当前内容与已安装版本完全一致，现有项目信任状态保持不变。'
           : '安装、升级或回滚到新内容后都会撤销旧信任；回到设置页重新审查并信任后才会加载可执行代码。'}
       </p>}
 
-      <button type="button" className="settings-text-button extension-preview-back" disabled={busy} onClick={back}>
+      {!committed && <button type="button" className="settings-text-button extension-preview-back" disabled={busy} onClick={back}>
         返回修改来源
-      </button>
+      </button>}
     </div>}
   </SettingsDialog>;
 }

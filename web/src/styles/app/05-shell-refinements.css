@@ -1,0 +1,268 @@
+/* Split from the legacy app.css entry. Import order is part of the cascade. */
+
+
+/* Quiet controls: blue is reserved for state and small accents. */
+/* 从这里开始进入第二次外观覆写层：同一批选择器在前面已有基础规则，这里通过
+后置声明改掉按钮、发送键、设置项和对话框按钮的观感。英文标题沿用历史措辞，
+不代表当前主题色；实际颜色仍全部来自 palette.css。文件后段的组件主题映射
+还会再覆盖一次，因此排查最终样式时要以文件末尾为准。 */
+
+.settings-nav-head { height: 40px; }
+.settings-content { padding: 28px var(--space-8) var(--space-8); }
+.settings-save { border-color: var(--border-strong); background: var(--surface); color: var(--text); font-weight: var(--weight-medium); }
+.settings-save:hover:not(:disabled) { border-color: var(--border-hover); background: var(--surface-soft); color: var(--text); box-shadow: none; }
+.settings-save:disabled { background: var(--surface-soft); color: var(--faint); }
+.settings-add-button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 30px; flex: none; padding: 0 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--transparent); color: var(--muted); font-size: var(--text-sm); white-space: nowrap; }
+.settings-add-button:hover { border-color: var(--border-hover); background: var(--surface-soft); color: var(--text); }
+.settings-add-button svg { width: var(--icon-sm); height: var(--icon-sm); }
+.row-actions .settings-outline.row-action { height: 30px; padding: 0 8px; border-color: var(--transparent); background: var(--transparent); color: var(--muted); font-size: var(--text-sm); }
+.row-actions .settings-outline.row-action:hover { border-color: var(--border); background: var(--surface-soft); color: var(--text); }
+.nav-row.is-active, .settings-nav-row.is-active { background: var(--accent-soft); color: var(--text); }
+.nav-row.is-active > svg, .settings-nav-row.is-active > svg { color: var(--accent); }
+.send-button { background: var(--text); }
+.send-button:hover:not(:disabled) { background: var(--surface-active); }
+.dialog-footer .settings-save { border-color: var(--text); background: var(--text); color: var(--on-button); }
+.dialog-footer .settings-save:hover:not(:disabled) { background: var(--surface-active); border-color: var(--border-hover); color: var(--disabled-text); }
+
+.resource-delete { width: 28px; height: 28px; color: var(--faint); }
+.resource-delete:hover:not(:disabled) { color: var(--error); background: var(--error-soft); }
+
+.dialog-footer .settings-save { border-color: var(--border-strong); background: var(--surface); color: var(--text); font-weight: var(--weight-semibold); }
+.dialog-footer .settings-save:hover:not(:disabled) { border-color: var(--border-hover); background: var(--surface-soft); color: var(--text); }
+
+/* One shared dropdown control. Native <select> is intentionally never rendered. */
+/* 下拉控件完全自绘；触发器高度固定走 --control，菜单用 position:fixed 加
+z-index 200，避免被设置卡片或对话框的 overflow 裁剪，定位由脚本计算。选项
+支持描述行和禁用态，选中态只改文字色，不改变背景层级。 */
+
+.pi-select { position: relative; min-width: 0; width: 100%; }
+.pi-select-trigger { width: 100%; height: var(--control); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0 var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--text); font-size: var(--text-base); text-align: left; }
+.pi-select-trigger:hover:not(:disabled) { border-color: var(--border-hover); }
+.pi-select-trigger.is-open, .pi-select-trigger:focus-visible { border-color: var(--focus-color); box-shadow: var(--focus-ring); outline: none; }
+.pi-select-trigger:disabled { background: var(--surface-soft); color: var(--faint); cursor: not-allowed; }
+.pi-select-leading { display: grid; place-items: center; flex: none; color: var(--faint); }
+.pi-select-leading svg { width: var(--icon-sm); height: var(--icon-sm); }
+.pi-select-value, .pi-select-placeholder { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pi-select-placeholder { color: var(--faint); }
+.pi-select-chevron { width: 14px; height: 14px; flex: none; color: var(--faint); transition: transform var(--transition); }
+.pi-select-trigger.is-open .pi-select-chevron { transform: rotate(180deg); }
+.pi-select-menu { position: fixed; z-index: 200; max-height: 260px; overflow-y: auto; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-popover); }
+.pi-select-option { width: 100%; min-height: 34px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 6px var(--space-2); border-radius: var(--radius-sm); color: var(--text); text-align: left; font-size: var(--text-base); }
+.pi-select-option:hover:not(:disabled), .pi-select-option:focus-visible { background: var(--surface-soft); outline: none; }
+.pi-select-option.is-selected { color: var(--accent-foreground); }
+.pi-select-option > span { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pi-select-option-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pi-select-option small { color: var(--faint); font-size: var(--text-xs); }
+.pi-select-option > svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; }
+.pi-select-option:disabled { opacity: .45; cursor: not-allowed; }
+
+.settings-form-grid > .settings-field { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; color: var(--muted); font-size: var(--text-sm); }
+.settings-form-grid > .settings-field > span { color: var(--muted); font-size: var(--text-sm); }
+
+.row-edit { width: 28px; height: 28px; color: var(--faint); }
+.row-edit:hover { color: var(--text); background: var(--surface-soft); }
+
+/* DSH-like compact conversation header: sidebar toggle lives in the main header. */
+/* 这一层把对话头统一为 48px 并调整对齐方式，同时统一文件面板头的内边距；
+侧栏开关放在主 header 左侧，标题 flex:1 吃掉中间空间，右侧操作靠 margin-left
+auto 贴边。header 是窗口拖拽区，内部按钮依赖全局 no-drag 保持可点。 */
+
+.chat-header { height: var(--header-height); align-items: center; padding: 6px var(--space-6) 4px; }
+.sidebar-toggle { width: 28px; height: 28px; flex: none; }
+.chat-heading { flex: 1; }
+.chat-heading h1 { font-size: var(--text-base); font-weight: var(--weight-semibold); }
+.chat-meta { margin-top: 1px; }
+.chat-tabs { height: var(--toolbar-height); }
+.is-empty-header .sidebar-toggle { margin-right: 2px; }
+.is-empty-header .chat-actions { margin-left: auto; }
+.is-new-conversation .chat-header { height: 48px; padding-top: 6px; padding-bottom: 4px; }
+.is-new-conversation .chat-heading { display: none; }
+.is-new-conversation .composer-dock { padding-top: 10px; }
+
+/* Sidebar ordering and expansion */
+/* 拖拽排序相关的视觉全部是临时态：draggable 行用 grab/grabbing 光标，拖动中的
+行降到 0.3 透明度，drop-before 用 z-index 3 的 2px 横线标记插入点。
+drag-preview 固定在视口外并用 pointer-events:none，避免跟随光标时拦截事件；
+just-dropped 只有一次短动画，不改变最终布局。 */
+
+.workspace-row[draggable="true"], .session-row[draggable="true"] { cursor: grab; }
+.workspace-row[draggable="true"]:active, .session-row[draggable="true"]:active { cursor: grabbing; }
+.workspace-row, .session-row { position: relative; transition: background var(--transition), opacity var(--transition), color var(--transition); }
+.workspace-row.drop-before, .session-row.drop-before { background: var(--surface); }
+.workspace-row.drop-before::before, .session-row.drop-before::before { position: absolute; z-index: 3; content: ''; left: 6px; right: 6px; top: -3px; height: 2px; border-radius: var(--radius-tag); background: var(--accent); box-shadow: var(--live-ring); transform-origin: left; animation: drop-line .16s ease-out; }
+.workspace-row.is-dragging, .session-row.is-dragging { opacity: .3; }
+.workspace-row.is-dragging > *, .session-row.is-dragging > * { opacity: .75; }
+.workspace-row.just-dropped, .session-row.just-dropped { animation: row-settle .22s ease-out; }
+.drag-preview { position: fixed; top: 0; left: 0; z-index: -1; display: flex; align-items: center; gap: 7px; max-width: 250px; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); box-shadow: var(--shadow-popover); color: var(--text); font: var(--text-sm)/var(--leading-tight) var(--font); transform: translate(-200%, -200%); pointer-events: none; }
+.drag-preview-kind { flex: none; padding-right: 7px; border-right: 1px solid var(--border); color: var(--faint); font-size: var(--text-xs); letter-spacing: .08em; }
+.drag-preview-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@keyframes drop-line { from { opacity: 0; transform: scaleX(.4); } to { opacity: 1; transform: scaleX(1); } }
+@keyframes row-settle { from { opacity: .55; transform: translateY(-2px); } to { opacity: 1; transform: translateY(0); } }
+
+.file-panel-head { height: var(--header-height); align-items: center; padding: 6px var(--space-4) 4px; }
+
+/* Editorial welcome above the composer: one short line, one display line. */
+/* 欢迎区是编辑器风格的排版层：短眉题、衬线大标题和一行说明，宽度与 composer
+对齐。标题使用 clamp 随视口缩放，窄屏时字号收敛；这里只做视觉，不参与工作区
+选择逻辑。 */
+
+
+.composer-context-group { display: flex; align-items: center; gap: 1px; min-width: 0; min-height: var(--control-sm); }
+.workspace-choice { display: flex; align-items: center; flex: 0 1 auto; gap: 1px; width: auto; max-width: min(250px, 30vw); min-width: 0; height: var(--control-sm); padding: 0 2px; border: 0; border-radius: var(--radius-control); background: var(--transparent); transition: background var(--transition); }
+.workspace-choice.has-selection { background: var(--transparent); }
+.workspace-choice:hover, .workspace-choice:has(.pi-select-trigger.is-open), .workspace-choice:has(.pi-select-trigger:focus-visible) { background: var(--surface-soft); }
+.workspace-choice .pi-select { min-width: 0; }
+.workspace-choice .pi-select-trigger { width: auto; max-width: 190px; height: var(--control-sm); padding: 0 3px 0 6px; border: 0; background: var(--transparent); gap: 4px; color: var(--muted); font-size: var(--text-sm); }
+.workspace-choice .pi-select-trigger:hover:not(:disabled) { background: var(--transparent); color: var(--text); }
+.workspace-choice .pi-select-trigger.is-open, .workspace-choice .pi-select-trigger:focus-visible { box-shadow: none; outline: none; }
+.workspace-choice:focus-within { border-color: var(--transparent); }
+.workspace-choice:has(.pi-select-trigger:focus-visible),
+.composer-mode:has(.pi-select-trigger:focus-visible) { box-shadow: inset 0 0 0 1px var(--border-strong); }
+.workspace-choice-clear { display: grid; place-items: center; width: 22px; height: 22px; flex: none; border-radius: var(--radius-tag); color: var(--faint); }
+.workspace-choice-clear svg { width: var(--icon-xs); height: var(--icon-xs); }
+.workspace-choice-clear:hover { color: var(--text); }
+.workspace-choice-menu { min-width: min(360px, calc(100vw - 32px)); max-width: calc(100vw - 32px); }
+.workspace-choice-menu .pi-select-option { padding: 9px 10px; }
+.workspace-choice-menu .pi-select-option small { overflow-wrap: anywhere; font-size: var(--text-xs); }
+
+/* The center pane is independently resizable because either side panel can consume
+ * width. Layout decisions therefore follow the pane, not only the application window. */
+@container main-pane (max-width: 660px) {
+  .chat-tabs { gap: var(--space-3); padding-inline: var(--space-4); }
+  .chat-tab-list { gap: var(--space-3); }
+  .chat-scroll,
+  .conversation-extension-scroll,
+  .agent-overview,
+  .agent-context-toolbar,
+  .agent-context-scroll,
+  .model-comparison,
+  .composer-dock { padding-inline: var(--space-4); }
+  .composer-bar { align-items: stretch; flex-direction: column; flex-wrap: nowrap; gap: 6px; }
+  .composer-left,
+  .composer-right { width: 100%; }
+  .composer-left { flex: none; }
+  .composer-context-group { min-width: 0; flex: 1; }
+  .composer-right { justify-content: flex-end; }
+  .workspace-choice { max-width: min(270px, 56cqw); }
+  .model-label { max-width: min(330px, 70cqw); }
+  .temporary-scroll { padding-inline: var(--space-4); }
+  .temporary-composer-dock { padding-inline: var(--space-4); }
+}
+
+@container main-pane (max-width: 460px) {
+  .composer-context-group { flex-wrap: wrap; row-gap: 2px; }
+  .workspace-choice { max-width: 100%; }
+  .workspace-choice .pi-select-trigger { max-width: min(210px, 56cqw); }
+  .composer-mode { max-width: 100%; }
+  .composer-mode .pi-select-trigger { max-width: min(210px, 54cqw); }
+  .model-label { max-width: min(260px, 60cqw); }
+  .model-label > .thinking-label { display: none; }
+  .temporary-empty { padding-inline: 0; }
+}
+
+/* Collapsed means hidden: no leftover 72px rail. */
+/* 折叠不再保留窄轨道：sidebar 直接 display:none，主 header 左侧留 92px 给
+macOS 窗口控制按钮。早前 72px 轨道的规则仍在文件里但已被这条覆盖，属于历史
+残留；侧栏展开按钮在这个状态下接管入口。 */
+
+.is-sidebar-collapsed .sidebar { display: none; }
+.is-sidebar-collapsed .chat-header { padding-left: 92px; }
+.sidebar-expand { width: 28px; height: 28px; margin-right: 2px; }
+
+/* Sidebar toggle sits on the native window-control line; header actions stay right. */
+/* 侧栏开关绝对定位在侧栏右上角，与原生窗口控制线对齐，z-index 5 保证在品牌区
+和拖拽区之上；对话 header 的操作组始终靠右。后续还有两处 top 微调，最终值由
+最后一次同选择器声明决定。 */
+
+.sidebar { position: relative; }
+.sidebar-top-toggle { position: absolute; top: 10px; right: 12px; z-index: 5; width: 28px; height: 28px; }
+.chat-actions { margin-left: auto; }
+
+/* Global scrollbar policy: no vertical bar; a slim, quiet horizontal bar. */
+/* 这里是工作台自己的滚动条覆盖策略，优先于 styles/dsh-scrollbar.css 的通用
+策略：所有元素纵向滚动条宽度归零（内容仍可滚动，只是不显示轨道），横向保留
+10px 细条，轨道用表面令牌、滑块用滚动条令牌并留 44px 最小长度。面板标签栏和
+附件条另外单独隐藏滚动条。因为选择器带 body 前缀，特异性高于通用伪元素规则，
+调整时注意不要误伤面板内部的独立滚动。 */
+
+* { scrollbar-width: auto; -ms-overflow-style: auto; scrollbar-gutter: auto; }
+body *::-webkit-scrollbar { width: 0; height: 10px; background: var(--transparent); }
+body *::-webkit-scrollbar:vertical { display: none; width: 0; }
+body *::-webkit-scrollbar:horizontal { display: block; height: 10px; }
+body *::-webkit-scrollbar-track { background: var(--transparent); }
+body *::-webkit-scrollbar-track:horizontal { background: var(--surface-soft); border-radius: var(--radius-round); }
+body *::-webkit-scrollbar-thumb { min-width: 44px; border: 2px solid var(--transparent); border-radius: var(--radius-round); background: var(--scrollbar); background-clip: padding-box; }
+body *::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); background-clip: padding-box; }
+body *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+body *::-webkit-scrollbar-corner { background: var(--transparent); }
+
+/* Quiet sidebar skeleton while Pi session directories are being indexed. */
+/* 索引会话目录时的占位骨架：只用渐变扫光和错峰延迟营造加载感，不改变侧栏的
+实际尺寸；骨架行高与真实工作区/会话行接近，避免加载完成时跳动。sr-only 提供
+只给读屏器的文本，视觉上完全移出布局。 */
+
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.workspace-skeleton { padding: var(--space-2) var(--space-3) var(--space-4); }
+.skeleton-group { animation: skeleton-in .42s ease both; }
+.skeleton-group + .skeleton-group { margin-top: var(--space-4); }
+.skeleton-workspace-head { display: flex; align-items: center; gap: var(--space-3); height: 32px; }
+.skeleton-icon { width: 16px; height: 16px; flex: none; border-radius: var(--radius-tag); }
+.skeleton-line { height: 8px; border-radius: var(--radius-round); }
+.skeleton-chevron { width: 10px; height: 10px; margin-left: auto; border-radius: var(--radius-tag); opacity: .7; }
+.skeleton-sessions { display: flex; flex-direction: column; gap: 18px; margin: 7px 0 0 19px; padding: 2px 0 2px var(--space-3); border-left: 1px solid var(--border); }
+.skeleton-session-line { height: 7px; border-radius: var(--radius-round); }
+.skeleton-icon, .skeleton-line, .skeleton-chevron, .skeleton-session-line {
+  background: var(--skeleton-gradient);
+  background-size: 220% 100%;
+  animation: skeleton-shimmer 1.9s ease-in-out infinite;
+}
+.skeleton-group:nth-child(2) .skeleton-icon,
+.skeleton-group:nth-child(2) .skeleton-line,
+.skeleton-group:nth-child(2) .skeleton-chevron,
+.skeleton-group:nth-child(2) .skeleton-session-line { animation-delay: .12s; }
+.skeleton-group:nth-child(3) .skeleton-icon,
+.skeleton-group:nth-child(3) .skeleton-line,
+.skeleton-group:nth-child(3) .skeleton-chevron,
+.skeleton-group:nth-child(3) .skeleton-session-line { animation-delay: .24s; }
+@keyframes skeleton-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+@keyframes skeleton-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Settings back action lives at the top, before the section title. */
+/* 设置页顶部返回按钮最初做成描边按钮，后来在底部设置页脚区块被改成与侧栏
+底栏一致的透明整行样式；两处同名规则以靠后的为准。 */
+
+.settings-back-button { display: flex; align-items: center; gap: var(--space-2); width: 100%; height: 34px; padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--muted); text-align: left; font-size: var(--text-sm); box-shadow: var(--shadow-card); }
+.settings-back-button:hover { border-color: var(--border-strong); color: var(--text); background: var(--surface-soft); }
+.settings-back-button svg { width: var(--icon-sm); height: var(--icon-sm); }
+.settings-nav-head { margin-top: var(--space-4); }
+
+/* Selected models read as objects, not a settings list. */
+/* 已启用模型先尝试卡片式展示，随后被改成通栏列表，最后在“已启用模型”区块
+又改回自适应网格；网格、头像尺寸、hover 位移和删除按钮透明度都被后续规则
+覆盖。这里保留的是迭代过程，读最终效果请跳到后面的覆写块。 */
+
+/* All settings pages share one content column. */
+/* 所有设置页共用同一条内容列，卡片宽度只受 --settings-content 约束。 */
+
+.settings-sections, .settings-card { width: 100%; }
+
+/* Selected models sit on the same full-width rhythm as the source rows below. */
+/* 第二次调整模型卡片：从双列卡片改成整行条目，与下方来源行共用 86–88px 的
+高度节奏；删除按钮默认隐藏、hover 或聚焦时出现，触屏不依赖 hover。 */
+
+.settings-nav-bottom { margin-top: auto; padding-top: var(--space-3); border-top: 1px solid var(--border); }
+.settings-nav-head { margin-top: 0; }
+
+/* Enabled models: responsive cards, grouped by provider when requested. */
+/* 这是模型卡片当前生效的最终形态：auto-fill 网格、最小 240px 列宽、纵向卡片，
+900/760 断点继续压缩列数。标签色被统一成中性表面色，只用文字权重区分模型
+能力，不再使用装饰性色相。 */
+
+/* The settings footer matches the quiet bottom nav row of the workspace. */
+/* 设置底栏与工作区侧栏底栏保持同一节奏：透明整行、40px 行高、hover 才出现
+背景。这组规则覆盖了前面的描边返回按钮，是最终外观。 */
+
+.settings-nav-bottom { margin-top: auto; padding: var(--space-2) 0 0; border-top: 1px solid var(--border); }
+.settings-back-button { width: 100%; height: var(--row-height); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--transparent); box-shadow: none; color: var(--muted); font-size: var(--text-base); font-weight: var(--weight-regular); }
+.settings-back-button:hover { border: 0; background: var(--surface-hover); color: var(--text); }
+.settings-back-button svg { width: var(--icon-md); height: var(--icon-md); }

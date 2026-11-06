@@ -1,24 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Bell, CheckCheck, CircleAlert, CircleCheck, Info, Trash2, TriangleAlert, X } from 'lucide-react';
+import { errorText } from '../shared/error-text';
 import {
-  Bell,
-  CheckCheck,
-  CircleAlert,
-  CircleCheck,
-  Info,
-  Trash2,
-  TriangleAlert,
-} from 'lucide-react';
+  notificationMessagePresentation,
+  type AppNotification,
+  type NotificationTone,
+} from './notification-state';
+import './notification-center.css';
 
-export type NotificationTone = 'info' | 'success' | 'warning' | 'error';
-
-export type AppNotification = {
-  id: string;
-  title: string;
-  message: string;
-  tone: NotificationTone;
-  createdAt: number;
-  read: boolean;
-};
+export type {
+  AppNotification,
+  AppNotificationAction,
+  NotificationTone,
+} from './notification-state';
 
 function NotificationIcon({ tone }: { tone: NotificationTone }) {
   if (tone === 'success') return <CircleCheck />;
@@ -39,74 +34,237 @@ export function NotificationCenter({
   items,
   onMarkAllRead,
   onClear,
+  onOpenSession,
+  onRunAction,
 }: {
   items: AppNotification[];
   onMarkAllRead: () => void;
   onClear: () => void;
+  onOpenSession?: (id: string) => Promise<void>;
+  onRunAction?: (item: AppNotification) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ left: 12, top: 52 });
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  const [runningActionId, setRunningActionId] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const mountedRef = useRef(false);
+  const pendingRef = useRef(false);
+  const itemsRef = useRef(items);
+  const openRef = useRef(open);
+  const panelId = useId();
+  const headingId = useId();
   const unread = items.filter((item) => !item.read).length;
+  itemsRef.current = items;
+  openRef.current = open;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    setErrors((current) => {
+      const remaining = Object.fromEntries(Object.entries(current).filter(([id]) => items.some((item) => item.id === id)));
+      return Object.keys(remaining).length === Object.keys(current).length ? current : remaining;
+    });
+  }, [items]);
+
+  function close(restoreFocus = false) {
+    setOpen(false);
+    if (restoreFocus) triggerRef.current?.focus({ preventScroll: true });
+  }
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const placePanel = () => {
+      const anchor = triggerRef.current?.getBoundingClientRect();
+      const panel = panelRef.current?.getBoundingClientRect();
+      if (!anchor || !panel) return;
+      setPosition({
+        left: Math.max(12, Math.min(anchor.right - panel.width, innerWidth - panel.width - 12)),
+        top: Math.max(12, Math.min(anchor.bottom + 8, innerHeight - panel.height - 12)),
+      });
+    };
+    placePanel();
+    headingRef.current?.focus({ preventScroll: true });
+    const observer = new ResizeObserver(placePanel);
+    if (panelRef.current) observer.observe(panelRef.current);
+    window.addEventListener('resize', placePanel);
+    return () => { observer.disconnect(); window.removeEventListener('resize', placePanel); };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
-    const close = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    window.addEventListener('pointerdown', close);
-    window.addEventListener('keydown', escape);
+    const isInside = (target: EventTarget | null) => target instanceof Node
+      && (rootRef.current?.contains(target) || panelRef.current?.contains(target));
+    const outside = (event: PointerEvent) => { if (!isInside(event.target)) close(); };
+    // A non-modal popup must not stay above a newly focused settings page.
+    const focusOutside = (event: FocusEvent) => { if (!isInside(event.target)) close(); };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('focusin', focusOutside);
     return () => {
-      window.removeEventListener('pointerdown', close);
-      window.removeEventListener('keydown', escape);
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('focusin', focusOutside);
     };
   }, [open]);
 
   function toggle() {
-    setOpen((current) => {
-      const next = !current;
-      if (next && unread > 0) onMarkAllRead();
-      return next;
-    });
+    if (open) { close(true); return; }
+    if (unread > 0) onMarkAllRead();
+    setOpen(true);
+  }
+
+  async function openSession(item: AppNotification) {
+    if (!item.sessionId || !onOpenSession || pendingRef.current) return;
+    pendingRef.current = true;
+    setOpeningId(item.id);
+    setErrors((current) => { const next = { ...current }; delete next[item.id]; return next; });
+    try {
+      await onOpenSession(item.sessionId);
+      if (!mountedRef.current) return;
+      // Successful navigation may already focus the new conversation. Only
+      // recover the bell when focus would otherwise disappear with this panel.
+      const restore = Boolean(panelRef.current?.contains(document.activeElement));
+      if (openRef.current) close(restore);
+    } catch (cause) {
+      if (mountedRef.current && itemsRef.current.some((candidate) => candidate.id === item.id)) {
+        setErrors((current) => ({ ...current, [item.id]: errorText(cause) }));
+      }
+    } finally {
+      pendingRef.current = false;
+      if (mountedRef.current) setOpeningId(null);
+    }
+  }
+
+  async function runAction(item: AppNotification) {
+    if (!item.action || !onRunAction || pendingRef.current) return;
+    pendingRef.current = true;
+    setRunningActionId(item.id);
+    setErrors((current) => { const next = { ...current }; delete next[item.id]; return next; });
+    try {
+      await onRunAction(item);
+      if (!mountedRef.current || !openRef.current) return;
+      // Success normally removes this item. Keep keyboard focus in the open
+      // notification panel instead of dropping it to the document body.
+      headingRef.current?.focus({ preventScroll: true });
+    } catch (cause) {
+      if (mountedRef.current && itemsRef.current.some((candidate) => candidate.id === item.id)) {
+        setErrors((current) => ({ ...current, [item.id]: errorText(cause) }));
+      }
+    } finally {
+      pendingRef.current = false;
+      if (mountedRef.current) setRunningActionId(null);
+    }
+  }
+
+  function markAllRead() {
+    onMarkAllRead();
+    headingRef.current?.focus({ preventScroll: true });
+  }
+
+  function clearAll() {
+    onClear();
+    headingRef.current?.focus({ preventScroll: true });
   }
 
   return <div className="notification-center" ref={rootRef}>
     <button
+      ref={triggerRef}
       type="button"
       className={`icon-button notification-trigger ${unread ? 'has-unread' : ''} ${open ? 'is-active' : ''}`}
       aria-label={unread ? `通知，${unread} 条未读` : '通知'}
       aria-haspopup="dialog"
       aria-expanded={open}
+      aria-controls={open ? panelId : undefined}
       title="通知"
       onClick={toggle}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && open && !event.nativeEvent.isComposing) {
+          event.preventDefault(); event.stopPropagation(); close(true);
+        }
+      }}
     >
-      <Bell size={16} />
-      {unread > 0 && <span className="notification-count">{unread > 99 ? '99+' : unread}</span>}
+      <Bell aria-hidden="true" />
+      {unread > 0 && <span className="notification-count" aria-hidden="true">{unread}</span>}
     </button>
-    {open && <section className="notification-panel" role="dialog" aria-label="通知中心">
+    {open && createPortal(<section
+      id={panelId}
+      ref={panelRef}
+      className="notification-panel"
+      role="dialog"
+      aria-label="通知中心"
+      style={position}
+      onKeyDown={(event) => {
+        if (event.nativeEvent.isComposing) return;
+        if (event.key === 'Escape') {
+          event.preventDefault(); event.stopPropagation(); close(true); return;
+        }
+        if (event.key !== 'Tab') return;
+        const buttons = [...panelRef.current!.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+        const active = document.activeElement;
+        const first = buttons[0];
+        const last = buttons.at(-1);
+        if (event.shiftKey && (active === first || active === headingRef.current)) {
+          event.preventDefault(); event.stopPropagation(); close(true);
+        } else if (!event.shiftKey && (active === last || !first)) {
+          event.stopPropagation();
+          close(true);
+          // Allow native Tab to continue after the trigger, not at body end.
+        } else if (!event.shiftKey && active === headingRef.current) {
+          event.preventDefault(); first?.focus();
+        }
+      }}
+    >
       <header className="notification-panel-head">
-        <span><strong>通知</strong>{items.length > 0 && <small>{items.length} 条消息</small>}</span>
+        <h2 id={headingId} ref={headingRef} tabIndex={-1}>通知</h2>
         <div>
-          {unread > 0 && <button type="button" title="全部标为已读" aria-label="全部标为已读" onClick={onMarkAllRead}><CheckCheck /></button>}
-          {items.length > 0 && <button type="button" title="清空通知" aria-label="清空通知" onClick={onClear}><Trash2 /></button>}
+          {unread > 0 && <button type="button" title="全部标为已读" aria-label="全部标为已读" onClick={markAllRead}><CheckCheck aria-hidden="true" /></button>}
+          {items.length > 0 && <button type="button" title="清空通知" aria-label="清空通知" onClick={clearAll}><Trash2 aria-hidden="true" /></button>}
+          <button type="button" title="关闭通知" aria-label="关闭通知" onClick={() => close(true)}><X aria-hidden="true" /></button>
         </div>
       </header>
       <div className="notification-list">
         {items.length === 0
-          ? <div className="notification-empty">
-            <Bell />
-            <strong>暂无通知</strong>
-          </div>
-          : items.map((item) => <article className={`notification-item is-${item.tone} ${item.read ? '' : 'is-unread'}`} key={item.id}>
-            <span className="notification-item-icon"><NotificationIcon tone={item.tone} /></span>
-            <span className="notification-item-copy">
-              <span><strong>{item.title}</strong><time>{notificationTime(item.createdAt)}</time></span>
-              <p>{item.message}</p>
-            </span>
-          </article>)}
+          ? <p className="notification-empty">暂无通知</p>
+          : items.map((item) => {
+            const message = notificationMessagePresentation(item.message);
+            return <article
+              className={`notification-item is-${item.tone} ${item.read ? '' : 'is-unread'}`}
+              key={item.id}
+              aria-busy={openingId === item.id || runningActionId === item.id || undefined}
+            >
+              <span className="notification-item-icon" aria-hidden="true"><NotificationIcon tone={item.tone} /></span>
+              <div className="notification-item-copy">
+                <div className="notification-item-heading"><strong>{item.title}</strong><time>{notificationTime(item.updatedAt ?? item.createdAt)}</time></div>
+                <p className="notification-item-message">{message.summary}</p>
+                {message.details && <details className="notification-item-details">
+                  <summary>查看详情</summary>
+                  <pre>{message.details}</pre>
+                </details>}
+                {item.action && onRunAction && <button
+                  type="button"
+                  className="notification-session-link"
+                  aria-disabled={openingId !== null || runningActionId !== null}
+                  onClick={() => void runAction(item)}
+                >{runningActionId === item.id ? item.action.pendingLabel : item.action.label}</button>}
+                {item.sessionId && onOpenSession && !item.action?.hideSessionLink && <button
+                  type="button"
+                  className="notification-session-link"
+                  // Keep focus on the launching action while awaiting navigation;
+                  // pendingRef guards clicks instead of disabling the focused DOM node.
+                  aria-disabled={openingId !== null || runningActionId !== null}
+                  onClick={() => void openSession(item)}
+                >{openingId === item.id ? '正在打开…' : '查看会话'}</button>}
+                {errors[item.id] && <p className="notification-item-error" role="alert">{errors[item.id]}</p>}
+              </div>
+            </article>;
+          })}
       </div>
-    </section>}
+    </section>, document.body)}
   </div>;
 }

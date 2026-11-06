@@ -1,0 +1,7 @@
+.provider-editor-fields { align-items: start; }
+.provider-editor-fields .provider-editor-note { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-body); overflow-wrap: anywhere; }
+.provider-editor-advanced { min-width: 0; border-top: 1px solid var(--divider); padding-top: var(--space-4); }
+.provider-editor-advanced > summary { cursor: pointer; color: var(--text); font-size: var(--text-sm); }
+.provider-editor-advanced > summary > span { margin-left: var(--space-3); color: var(--muted); font-size: var(--text-xs); }
+.provider-editor-advanced > summary:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 4px; border-radius: var(--radius-control); }
+.provider-editor-advanced[open] > summary { margin-bottom: var(--space-4); }

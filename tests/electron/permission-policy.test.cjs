@@ -32,7 +32,9 @@ const {
   evaluateToolCall,
   previewToolCall,
   rememberApproval,
+  resetPolicy,
   writeMode,
+  writePolicy,
 } = require('../../electron/capabilities/permissions/index.cjs');
 const { createStudioBuiltins } = require('../../electron/runtime/builtin-registry.cjs');
 
@@ -45,6 +47,13 @@ function call(name, args = {}) {
 
 function policy(mode, additions = {}) {
   return normalizePolicy({ ...defaultPolicy(mode), ...additions });
+}
+
+function writeRawSetting(key, value) {
+  getStudioDatabase().db.prepare(`
+    INSERT INTO settings(key, value, updated_at) VALUES (?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+  `).run(key, value, Date.now());
 }
 
 test.after(() => {
@@ -484,6 +493,269 @@ test('malformed persisted values normalize to a safe policy', () => {
   assert.equal(normalized.preset, 'smart');
   assert.deepEqual(normalized.tools, { read: 'allow' });
   assert.deepEqual(normalized.rules, []);
+});
+
+test('permission maps reject prototype-sensitive keys without changing prototypes', () => {
+  const normalized = normalizePolicyStore({
+    user: normalizePolicy({
+      preset: 'smart',
+      tools: {
+        __proto__: 'allow',
+        constructor: 'deny',
+        read: 'allow',
+      },
+    }),
+    workspaces: {
+      constructor: normalizePolicy({ preset: 'full' }),
+    },
+    sessions: Object.fromEntries([
+      ['__proto__', normalizePolicy({ preset: 'full' })],
+      ['constructor', normalizePolicy({ preset: 'full' })],
+      ['prototype', normalizePolicy({ preset: 'full' })],
+      ['session-valid', normalizePolicy({ preset: 'ask' })],
+    ]),
+  });
+
+  assert.deepEqual(normalized.user.tools, { read: 'allow' });
+  assert.deepEqual(normalized.workspaces, {});
+  assert.deepEqual(Object.keys(normalized.sessions), ['session-valid']);
+  assert.equal(Object.getPrototypeOf(normalized.sessions), Object.prototype);
+  assert.equal(normalized.sessions.preset, undefined);
+  assert.equal(JSON.parse(JSON.stringify(normalized)).sessions.preset, undefined);
+});
+
+test('policy mutations and previews require an explicit valid scope without changing storage', async () => {
+  const db = getStudioDatabase();
+  const before = JSON.stringify(db.getSettings());
+  const candidate = policy('full');
+
+  assert.throws(
+    () => writePolicy({ cwd: workspace, policy: candidate }),
+    /明确的作用域/,
+  );
+  assert.throws(
+    () => writePolicy({ scope: 'workspace ', cwd: workspace, policy: candidate }),
+    /无效的权限作用域/,
+  );
+  assert.throws(
+    () => resetPolicy({ cwd: workspace }),
+    /明确的作用域/,
+  );
+  assert.throws(
+    () => resetPolicy({ scope: 'sessions', sessionId: 'session-a' }),
+    /无效的权限作用域/,
+  );
+  assert.throws(
+    () => writeMode('full', {
+      scope: 'workspace ',
+      cwd: workspace,
+      sessionId: 'session-a',
+    }),
+    /无效的权限作用域/,
+  );
+  await assert.rejects(
+    previewToolCall({ cwd: workspace, policy: candidate, call: call('read') }),
+    /明确的作用域/,
+  );
+  await assert.rejects(
+    previewToolCall({
+      scope: 'sessions',
+      cwd: workspace,
+      policy: candidate,
+      call: call('read'),
+    }),
+    /无效的权限作用域/,
+  );
+
+  assert.equal(JSON.stringify(db.getSettings()), before);
+});
+
+test('writeMode retains the user-scope compatibility for an omitted scope', () => {
+  writeMode('full');
+  try {
+    assert.equal(getPermissionPolicyStore().user.preset, 'full');
+  } finally {
+    writeMode('smart');
+  }
+});
+
+test('the core permission mode setter rejects explicit unknown scopes and canonicalizes workspaces', () => {
+  const before = JSON.stringify(getPermissionPolicyStore());
+  assert.throws(
+    () => setPermissionMode('full', { scope: 'sessions', cwd: workspace }),
+    /作用域/,
+  );
+  assert.equal(JSON.stringify(getPermissionPolicyStore()), before);
+
+  const variant = `${workspace}${path.sep}missing${path.sep}..${path.sep}`;
+  setPermissionMode('full', { scope: 'workspace', cwd: variant });
+  const store = getPermissionPolicyStore();
+  assert.equal(store.workspaces[workspace].preset, 'full');
+  assert.equal(Object.hasOwn(store.workspaces, variant), false);
+  resetPolicy({ scope: 'workspace', cwd: workspace });
+});
+
+test('workspace policy paths resolve to one canonical key for writes, mode, reset and approvals', () => {
+  const variants = [
+    `${workspace}${path.sep}`,
+    `${workspace}${path.sep}.${path.sep}`,
+    `${workspace}${path.sep}missing${path.sep}..${path.sep}`,
+  ];
+
+  for (const cwd of variants) {
+    writePolicy({ scope: 'workspace', cwd, policy: policy('full') });
+    let store = getPermissionPolicyStore();
+    assert.equal(store.workspaces[workspace].preset, 'full');
+    assert.equal(Object.hasOwn(store.workspaces, cwd), cwd === workspace);
+    resetPolicy({ scope: 'workspace', cwd });
+    store = getPermissionPolicyStore();
+    assert.equal(Object.hasOwn(store.workspaces, workspace), false);
+  }
+
+  writeMode('full', { scope: 'workspace', cwd: variants[2] });
+  assert.equal(getPermissionPolicyStore().workspaces[workspace].preset, 'full');
+  resetPolicy({ scope: 'workspace', cwd: variants[1] });
+  assert.equal(Object.hasOwn(getPermissionPolicyStore().workspaces, workspace), false);
+
+  rememberApproval({
+    scope: 'workspace',
+    cwd: variants[0],
+    call: call('read', { path: 'README.md' }),
+    label: '读取说明',
+  });
+  const approvalStore = getPermissionPolicyStore();
+  assert.equal(
+    approvalStore.workspaces[workspace].rules.some((rule) => rule.label === '读取说明'),
+    true,
+  );
+  resetPolicy({ scope: 'workspace', cwd: variants[2] });
+  assert.equal(Object.hasOwn(getPermissionPolicyStore().workspaces, workspace), false);
+});
+
+test('relative workspace paths are rejected before policy, mode, reset or approval writes', async () => {
+  const db = getStudioDatabase();
+  const before = JSON.stringify(db.getSettings());
+  const relativeWorkspace = path.join('relative', 'workspace');
+
+  assert.throws(
+    () => writePolicy({
+      scope: 'workspace',
+      cwd: relativeWorkspace,
+      policy: policy('full'),
+    }),
+    /绝对工作区路径/,
+  );
+  assert.throws(
+    () => writeMode('full', { scope: 'workspace', cwd: relativeWorkspace }),
+    /绝对工作区路径/,
+  );
+  assert.throws(
+    () => resetPolicy({ scope: 'workspace', cwd: relativeWorkspace }),
+    /绝对工作区路径/,
+  );
+  assert.throws(
+    () => rememberApproval({
+      scope: 'workspace',
+      cwd: relativeWorkspace,
+      call: call('read', { path: 'README.md' }),
+    }),
+    /绝对工作区路径/,
+  );
+  await assert.rejects(
+    previewToolCall({
+      scope: 'workspace',
+      cwd: relativeWorkspace,
+      policy: policy('full'),
+      call: call('read'),
+    }),
+    /绝对工作区路径/,
+  );
+
+  assert.equal(JSON.stringify(db.getSettings()), before);
+});
+
+test('session scope rejects reserved and overlong IDs while accepting the exact limit', () => {
+  const db = getStudioDatabase();
+  const before = JSON.stringify(db.getSettings());
+
+  for (const sessionId of ['__proto__', 'prototype', 'constructor', 's'.repeat(257)]) {
+    assert.throws(
+      () => writeMode('full', {
+        scope: 'session',
+        cwd: workspace,
+        sessionId,
+      }),
+      /有效会话 ID/,
+    );
+    assert.throws(
+      () => writePolicy({
+        scope: 'session',
+        cwd: workspace,
+        sessionId,
+        policy: policy('full'),
+      }),
+      /有效会话 ID/,
+    );
+  }
+  assert.equal(JSON.stringify(db.getSettings()), before);
+
+  const boundedSessionId = 's'.repeat(256);
+  writeMode('ask', {
+    scope: 'session',
+    cwd: workspace,
+    sessionId: boundedSessionId,
+  });
+  assert.equal(getPermissionPolicyStore().sessions[boundedSessionId].preset, 'ask');
+  resetPolicy({ scope: 'session', sessionId: boundedSessionId });
+  assert.equal(Object.hasOwn(getPermissionPolicyStore().sessions, boundedSessionId), false);
+});
+
+test('permission recovery inside an outer transaction commits without touching conversation, drafts or queue', () => {
+  const db = getStudioDatabase();
+  const conversation = db.insertConversation({
+    id: 'transaction-recovery-session',
+    workspace,
+    kind: 'durable',
+    title: 'transaction recovery',
+  });
+  const conversationBefore = structuredClone(db.listConversations());
+  const drafts = new Map([
+    [`session:${conversation.publicId}`, { text: '未发送草稿', attachments: [] }],
+  ]);
+  const queue = [{
+    sessionId: conversation.publicId,
+    text: '下一条消息',
+    mode: 'automatic',
+  }];
+  const draftsBefore = JSON.stringify([...drafts]);
+  const queueBefore = JSON.stringify(queue);
+
+  db.setSetting('studio.permissions.mode', 'full');
+  writeRawSetting('studio.permissions.policy', '{"user":');
+  let repaired;
+  assert.doesNotThrow(() => {
+    db.transaction(() => {
+      repaired = getPermissionPolicyStore();
+      db.setSetting('studio.test.outerTransactionCommitted', { committed: true });
+    });
+  });
+
+  assert.equal(repaired.user.preset, 'full');
+  assert.equal(
+    JSON.parse(db.db.prepare(
+      "SELECT value FROM settings WHERE key = 'studio.permissions.policy'",
+    ).get().value).user.preset,
+    'full',
+  );
+  assert.deepEqual(
+    db.getSetting('studio.test.outerTransactionCommitted'),
+    { committed: true },
+  );
+  assert.deepEqual(db.listConversations(), conversationBefore);
+  assert.equal(JSON.stringify([...drafts]), draftsBefore);
+  assert.equal(JSON.stringify(queue), queueBefore);
+
+  writeMode('smart');
 });
 
 test('legacy mode migrates and policy scopes remain hot-readable', () => {

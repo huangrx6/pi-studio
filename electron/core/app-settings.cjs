@@ -21,6 +21,10 @@ const {
   normalizePolicyStore: normalizePermissionStore,
   presetDefault: permissionPresetDefault,
 } = require('./permission-policy.cjs');
+const {
+  THINKING_LEVELS: SUBAGENT_THINKING_LEVELS,
+  normalizeConfig: normalizeSubagentConfig,
+} = require('./subagent-config.cjs');
 
 const KEYS = Object.freeze({
   theme: 'studio.app.theme',
@@ -140,16 +144,60 @@ const MAX_SESSION_POLICY_ID = 256;
 const MAX_EXTENSION_ORDER = 256;
 const MAX_EXTENSION_SESSION_ORDERS = 512;
 const EXTENSION_ORDER_ID = /^(?:builtin|user|project):[a-z0-9][a-z0-9._-]{1,63}$/;
+const RESERVED_OBJECT_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const SUBAGENT_MODEL_REF = /^[A-Za-z0-9][A-Za-z0-9._-]*\/.+$/;
+const SUBAGENT_TOOL_NAME = /^[A-Za-z0-9_.:-]{1,120}$/;
+const SUBAGENT_INTEGER_BOUNDS = Object.freeze({
+  maxConcurrent: [1, 16],
+  maxSpawns: [1, 100],
+  waitTimeoutMs: [1_000, 600_000],
+  worktreeLimit: [1, 50],
+  budgetTokens: [0, 100_000_000],
+});
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function readSettingWithRecovery(key, fallback, normalize) {
+  return getStudioDatabase().getSettingWithRecovery(key, fallback, normalize);
+}
+
+function normalizeTheme(value) {
+  return THEMES.has(value) ? value : 'light';
+}
+
+function normalizePalette(value) {
+  return PALETTES.has(value) ? value : 'lime';
+}
+
+function normalizeMenuBarEnabled(value) {
+  return typeof value === 'boolean' ? value : true;
+}
+
+function canonicalWorkspaceKey(value) {
+  const workspace = typeof value === 'string' ? value.trim() : '';
+  return workspace && path.isAbsolute(workspace) ? path.resolve(workspace) : workspace;
+}
+
+function absoluteScopedEntries(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([cwd, selected]) => (
+      !RESERVED_OBJECT_KEYS.has(cwd)
+      && typeof cwd === 'string'
+      && path.isAbsolute(cwd)
+        ? [[canonicalWorkspaceKey(cwd), selected]]
+        : []
+    )),
+  );
 }
 
 function normalizeHarnessSections(value, fallback = DEFAULT_HARNESS_SECTIONS) {
   const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   return Object.fromEntries(HARNESS_SECTION_IDS.map((id) => [
     id,
-    source[id] === undefined ? fallback[id] !== false : source[id] === true,
+    typeof source[id] === 'boolean' ? source[id] : fallback[id] !== false,
   ]));
 }
 
@@ -158,7 +206,11 @@ function normalizeToolGuidance(value) {
   return Object.fromEntries(Object.entries(value)
     .flatMap(([name, guidance]) => {
       const clean = typeof guidance === 'string' ? guidance.trim().slice(0, 1_200) : '';
-      return TOOL_GUIDANCE_NAME.test(name) && clean ? [[name, clean]] : [];
+      return (
+        !RESERVED_OBJECT_KEYS.has(name)
+        && TOOL_GUIDANCE_NAME.test(name)
+        && clean
+      ) ? [[name, clean]] : [];
     })
     .slice(0, MAX_TOOL_GUIDANCE_ENTRIES));
 }
@@ -203,10 +255,8 @@ function normalizeHarnessProfile(value, fallback) {
 }
 
 function boundedInteger(value, fallback, minimum, maximum) {
-  const number = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(number)
-    ? Math.max(minimum, Math.min(maximum, Math.trunc(number)))
-    : fallback;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.max(minimum, Math.min(maximum, Math.trunc(value)));
 }
 
 function normalizeRuntimePolicy(value) {
@@ -266,11 +316,10 @@ function normalizeRuntimePolicy(value) {
         262_144,
       ),
       // 百分比阈值只影响“何时自动压缩”；下面的 token 字段仍决定摘要保留量。
-      autoCompactPercent: normalizeAutoCompactPercent(
-        compaction.autoCompactPercent === undefined
-          ? defaults.compaction.autoCompactPercent
-          : compaction.autoCompactPercent,
-      ),
+      autoCompactPercent: typeof compaction.autoCompactPercent === 'number'
+        && Number.isFinite(compaction.autoCompactPercent)
+        ? normalizeAutoCompactPercent(compaction.autoCompactPercent)
+        : defaults.compaction.autoCompactPercent,
     },
     toolExecution: TOOL_EXECUTION_MODES.has(source.toolExecution)
       ? source.toolExecution
@@ -309,8 +358,10 @@ function normalizeRuntimePolicy(value) {
 }
 
 function getRuntimePolicy() {
-  return normalizeRuntimePolicy(
-    getStudioDatabase().getSetting(KEYS.runtimePolicy, RUNTIME_POLICY_DEFAULTS),
+  return readSettingWithRecovery(
+    KEYS.runtimePolicy,
+    RUNTIME_POLICY_DEFAULTS,
+    normalizeRuntimePolicy,
   );
 }
 
@@ -345,7 +396,12 @@ function normalizeConversationExtensionUiPreferences(value) {
   for (const [rawSessionId, rawOrder] of rawSessions) {
     if (Object.keys(sessionOrders).length >= MAX_EXTENSION_SESSION_ORDERS) break;
     const sessionId = typeof rawSessionId === 'string' ? rawSessionId.trim() : '';
-    if (!sessionId || sessionId.length > MAX_SESSION_POLICY_ID || !Array.isArray(rawOrder)) continue;
+    if (
+      !sessionId
+      || RESERVED_OBJECT_KEYS.has(sessionId)
+      || sessionId.length > MAX_SESSION_POLICY_ID
+      || !Array.isArray(rawOrder)
+    ) continue;
     const order = normalizeExtensionOrder(rawOrder);
     if (order.length > 0) sessionOrders[sessionId] = order;
   }
@@ -358,8 +414,10 @@ function normalizeConversationExtensionUiPreferences(value) {
 }
 
 function getConversationExtensionUiPreferences() {
-  return normalizeConversationExtensionUiPreferences(
-    getStudioDatabase().getSetting(KEYS.conversationExtensionUi, {}),
+  return readSettingWithRecovery(
+    KEYS.conversationExtensionUi,
+    {},
+    normalizeConversationExtensionUiPreferences,
   );
 }
 
@@ -379,7 +437,12 @@ function saveConversationExtensionUiPreferences(input = {}) {
     next.globalOrder = normalizeExtensionOrder(source.globalOrder);
   }
   const sessionId = typeof source.sessionId === 'string' ? source.sessionId.trim() : '';
-  if (sessionId && sessionId.length <= MAX_SESSION_POLICY_ID && Object.hasOwn(source, 'sessionOrder')) {
+  if (
+    sessionId
+    && !RESERVED_OBJECT_KEYS.has(sessionId)
+    && sessionId.length <= MAX_SESSION_POLICY_ID
+    && Object.hasOwn(source, 'sessionOrder')
+  ) {
     if (source.sessionOrder === null) {
       delete next.sessionOrders[sessionId];
     } else {
@@ -436,6 +499,8 @@ function normalizeHarnessStore(value) {
       if (
         typeof cwd === 'string'
         && cwd
+        && !RESERVED_OBJECT_KEYS.has(cwd)
+        && path.isAbsolute(cwd)
         && typeof profileId === 'string'
         && Object.hasOwn(profiles, profileId)
       ) {
@@ -456,13 +521,11 @@ function normalizeHarnessStore(value) {
 }
 
 function getTheme() {
-  const value = getStudioDatabase().getSetting(KEYS.theme, 'light');
-  return THEMES.has(value) ? value : 'light';
+  return readSettingWithRecovery(KEYS.theme, 'light', normalizeTheme);
 }
 
 function getPalette() {
-  const value = getStudioDatabase().getSetting(KEYS.palette, 'lime');
-  return PALETTES.has(value) ? value : 'lime';
+  return readSettingWithRecovery(KEYS.palette, 'lime', normalizePalette);
 }
 
 function normalizeRadiusStyle(value, fallback = DEFAULT_RADIUS_STYLE) {
@@ -470,8 +533,10 @@ function normalizeRadiusStyle(value, fallback = DEFAULT_RADIUS_STYLE) {
 }
 
 function getRadiusStyle() {
-  return normalizeRadiusStyle(
-    getStudioDatabase().getSetting(KEYS.radiusStyle, DEFAULT_RADIUS_STYLE),
+  return readSettingWithRecovery(
+    KEYS.radiusStyle,
+    DEFAULT_RADIUS_STYLE,
+    normalizeRadiusStyle,
   );
 }
 
@@ -480,7 +545,73 @@ function getRadiusPreset(style = getRadiusStyle()) {
 }
 
 function getMenuBarEnabled() {
-  return getStudioDatabase().getSetting(KEYS.menuBarEnabled, true) !== false;
+  return readSettingWithRecovery(
+    KEYS.menuBarEnabled,
+    true,
+    normalizeMenuBarEnabled,
+  );
+}
+
+function safePermissionTools(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(([name]) => !RESERVED_OBJECT_KEYS.has(name)),
+  );
+}
+
+function normalizePermissionPolicySource(value, fallbackPreset) {
+  const source = value && typeof value === 'object' && !Array.isArray(value)
+    ? value
+    : {};
+  return {
+    preset: PERMISSION_MODES.has(source.preset) ? source.preset : fallbackPreset,
+    default: source.default,
+    tools: safePermissionTools(source.tools),
+    rules: source.rules,
+  };
+}
+
+function normalizePermissionScopeMap(value, fallbackPreset, scope) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([id, policy]) => {
+      const validId = scope === 'workspace'
+        ? path.isAbsolute(id)
+        : id.trim() && id.length <= MAX_SESSION_POLICY_ID;
+      const normalizedId = scope === 'workspace' ? path.resolve(id) : id.trim();
+      return !RESERVED_OBJECT_KEYS.has(id) && validId
+        ? [[normalizedId, normalizePermissionPolicySource(policy, fallbackPreset)]]
+        : [];
+    }),
+  );
+}
+
+function assertSafePermissionPolicy(value) {
+  const tools = value && typeof value === 'object' && !Array.isArray(value)
+    ? value.tools
+    : undefined;
+  if (tools && typeof tools === 'object' && !Array.isArray(tools)) {
+    if (Object.keys(tools).some((key) => RESERVED_OBJECT_KEYS.has(key))) {
+      throw new Error('工具权限不能使用原型敏感名称');
+    }
+  }
+}
+
+function assertSafePermissionStore(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+  assertSafePermissionPolicy(value.user);
+  for (const [scope, map] of [
+    ['workspace', value.workspaces],
+    ['session', value.sessions],
+  ]) {
+    if (!map || typeof map !== 'object' || Array.isArray(map)) continue;
+    for (const [id, policy] of Object.entries(map)) {
+      if (RESERVED_OBJECT_KEYS.has(id)) {
+        throw new Error(`权限 ${scope} 范围不能使用原型敏感名称`);
+      }
+      assertSafePermissionPolicy(policy);
+    }
+  }
 }
 
 function getPermissionMode() {
@@ -489,21 +620,52 @@ function getPermissionMode() {
 
 function getPermissionPolicyStore() {
   const db = getStudioDatabase();
-  const legacy = db.getSetting(KEYS.permissionMode, 'smart');
-  const fallbackMode = PERMISSION_MODES.has(legacy) ? legacy : 'smart';
-  const stored = db.getSetting(KEYS.permissionPolicy, undefined);
-  const source = stored && typeof stored === 'object' && !Array.isArray(stored)
-    ? stored
-    : {};
-  return normalizePermissionStore({
-    version: 1,
-    user: source.user || defaultPermissionPolicy(fallbackMode),
-    workspaces: source.workspaces || {},
-    sessions: source.sessions || {},
-  });
+  const legacyMode = db.getSettingWithRecovery(
+    KEYS.permissionMode,
+    'smart',
+    (value) => (PERMISSION_MODES.has(value) ? value : 'smart'),
+  );
+  const rawPolicy = db.getSetting(KEYS.permissionPolicy, undefined);
+  const policyMode = rawPolicy
+    && typeof rawPolicy === 'object'
+    && !Array.isArray(rawPolicy)
+    && rawPolicy.user
+    && typeof rawPolicy.user === 'object'
+    && !Array.isArray(rawPolicy.user)
+    && PERMISSION_MODES.has(rawPolicy.user.preset)
+    ? rawPolicy.user.preset
+    : '';
+  const fallbackMode = policyMode || legacyMode;
+  const store = db.getSettingWithRecovery(
+    KEYS.permissionPolicy,
+    undefined,
+    (value) => {
+      const source = value && typeof value === 'object' && !Array.isArray(value)
+        ? value
+        : {};
+      return normalizePermissionStore({
+        version: 1,
+        user: normalizePermissionPolicySource(
+          source.user || defaultPermissionPolicy(fallbackMode),
+          fallbackMode,
+        ),
+        workspaces: normalizePermissionScopeMap(source.workspaces, 'smart', 'workspace'),
+        sessions: normalizePermissionScopeMap(source.sessions, 'smart', 'session'),
+      });
+    },
+  );
+  if (store.user.preset !== legacyMode) {
+    try {
+      db.setSetting(KEYS.permissionMode, store.user.preset);
+    } catch {
+      // The policy remains authoritative for this read even if legacy mirrors lag.
+    }
+  }
+  return store;
 }
 
 function savePermissionPolicyStore(value) {
+  assertSafePermissionStore(value);
   const next = normalizePermissionStore(value, { strict: true });
   getStudioDatabase().setSetting(KEYS.permissionPolicy, next);
   return next;
@@ -519,25 +681,47 @@ function canonicalPermissionSessionId(value) {
   }
 }
 
+function normalizeWorkspaceScope(cwd, required = false) {
+  const workspace = typeof cwd === 'string' ? cwd.trim() : '';
+  if (!workspace) {
+    if (required) throw new Error('工作区权限范围需要绝对工作区路径');
+    return '';
+  }
+  if (!path.isAbsolute(workspace)) {
+    throw new Error('工作区权限范围需要绝对工作区路径');
+  }
+  return path.resolve(workspace);
+}
+
 function assertWorkspaceScope(cwd) {
   if (!cwd || !path.isAbsolute(cwd)) throw new Error('工作区权限范围需要绝对工作区路径');
+  return path.resolve(cwd);
 }
 
 function assertSessionScope(sessionId) {
-  if (!sessionId || sessionId.length > MAX_SESSION_POLICY_ID) {
+  if (
+    !sessionId
+    || RESERVED_OBJECT_KEYS.has(sessionId)
+    || sessionId.length > MAX_SESSION_POLICY_ID
+  ) {
     throw new Error('会话权限范围需要有效会话 ID');
   }
 }
 
 function setPermissionMode(mode, options = {}) {
   if (!PERMISSION_MODES.has(mode)) throw new Error('无效的权限模式');
-  const scope = options.scope === 'workspace' || options.scope === 'session'
-    ? options.scope
-    : 'user';
-  const cwd = typeof options.cwd === 'string' ? options.cwd.trim() : '';
+  if (
+    options.scope !== undefined
+    && options.scope !== 'user'
+    && options.scope !== 'workspace'
+    && options.scope !== 'session'
+  ) {
+    throw new Error('无效的权限作用域');
+  }
+  const scope = options.scope ?? 'user';
+  const cwd = normalizeWorkspaceScope(options.cwd, scope === 'workspace');
   const sessionId = canonicalPermissionSessionId(options.sessionId);
   const store = getPermissionPolicyStore();
-  if (scope === 'workspace') assertWorkspaceScope(cwd);
   if (scope === 'session') assertSessionScope(sessionId);
   const current = scope === 'workspace'
     ? store.workspaces[cwd] || store.user
@@ -563,8 +747,7 @@ function setPermissionPolicy({ scope = 'user', cwd = '', sessionId = '', policy 
   const store = getPermissionPolicyStore();
   const normalized = normalizePermissionPolicy(policy, { strict: true });
   if (scope === 'workspace') {
-    assertWorkspaceScope(cwd);
-    store.workspaces[cwd] = normalized;
+    store.workspaces[assertWorkspaceScope(cwd)] = normalized;
   } else if (scope === 'session') {
     const id = canonicalPermissionSessionId(sessionId);
     assertSessionScope(id);
@@ -582,8 +765,7 @@ function setPermissionPolicy({ scope = 'user', cwd = '', sessionId = '', policy 
 function resetPermissionPolicy({ scope = 'user', cwd = '', sessionId = '' } = {}) {
   const store = getPermissionPolicyStore();
   if (scope === 'workspace') {
-    assertWorkspaceScope(cwd);
-    delete store.workspaces[cwd];
+    delete store.workspaces[assertWorkspaceScope(cwd)];
   } else if (scope === 'session') {
     const id = canonicalPermissionSessionId(sessionId);
     assertSessionScope(id);
@@ -600,7 +782,11 @@ function resetPermissionPolicy({ scope = 'user', cwd = '', sessionId = '' } = {}
 
 function deletePermissionSessionPolicy(sessionId) {
   const id = canonicalPermissionSessionId(sessionId);
-  if (!id || id.length > MAX_SESSION_POLICY_ID) return false;
+  if (
+    !id
+    || id.length > MAX_SESSION_POLICY_ID
+    || RESERVED_OBJECT_KEYS.has(id)
+  ) return false;
   const store = getPermissionPolicyStore();
   if (!Object.hasOwn(store.sessions, id)) return false;
   delete store.sessions[id];
@@ -609,8 +795,12 @@ function deletePermissionSessionPolicy(sessionId) {
 }
 
 function deletePermissionPoliciesForWorkspace(cwd, sessionIds = []) {
-  const workspace = typeof cwd === 'string' ? cwd.trim() : '';
-  if (!workspace || !path.isAbsolute(workspace)) return false;
+  let workspace;
+  try {
+    workspace = normalizeWorkspaceScope(cwd, true);
+  } catch {
+    return false;
+  }
   const store = getPermissionPolicyStore();
   let changed = false;
   if (Object.hasOwn(store.workspaces, workspace)) {
@@ -619,7 +809,12 @@ function deletePermissionPoliciesForWorkspace(cwd, sessionIds = []) {
   }
   for (const sessionId of sessionIds) {
     const id = canonicalPermissionSessionId(sessionId);
-    if (!id || id.length > MAX_SESSION_POLICY_ID || !Object.hasOwn(store.sessions, id)) continue;
+    if (
+      !id
+      || id.length > MAX_SESSION_POLICY_ID
+      || RESERVED_OBJECT_KEYS.has(id)
+      || !Object.hasOwn(store.sessions, id)
+    ) continue;
     delete store.sessions[id];
     changed = true;
   }
@@ -633,33 +828,28 @@ function deletePermissionPoliciesForWorkspace(cwd, sessionIds = []) {
  * left untouched; this clears only host-owned overrides and trust state.
  */
 function deleteWorkspaceScopedSettings(cwd, sessionIds = []) {
-  const workspace = typeof cwd === 'string' ? cwd.trim() : '';
-  if (!workspace || !path.isAbsolute(workspace)) {
-    throw new Error('工作区路径无效');
-  }
+  const workspace = normalizeWorkspaceScope(cwd, true);
   const db = getStudioDatabase();
   return db.transaction(() => {
     const permissionStore = getPermissionPolicyStore();
     delete permissionStore.workspaces[workspace];
     for (const value of sessionIds) {
       const id = canonicalPermissionSessionId(value);
-      if (id && id.length <= MAX_SESSION_POLICY_ID) delete permissionStore.sessions[id];
+      if (
+        id
+        && id.length <= MAX_SESSION_POLICY_ID
+        && !RESERVED_OBJECT_KEYS.has(id)
+      ) delete permissionStore.sessions[id];
     }
     db.setSetting(KEYS.permissionPolicy, permissionStore);
 
-    const subagentSettings = db.getSetting(KEYS.subagents, {});
-    if (subagentSettings && typeof subagentSettings === 'object' && !Array.isArray(subagentSettings)) {
-      const next = {
-        ...subagentSettings,
-        projects: subagentSettings.projects
-          && typeof subagentSettings.projects === 'object'
-          && !Array.isArray(subagentSettings.projects)
-          ? { ...subagentSettings.projects }
-          : {},
-      };
-      delete next.projects[workspace];
-      db.setSetting(KEYS.subagents, next);
-    }
+    const subagentSettings = getSubagentStore();
+    const nextSubagentSettings = {
+      ...subagentSettings,
+      projects: { ...subagentSettings.projects },
+    };
+    delete nextSubagentSettings.projects[workspace];
+    db.setSetting(KEYS.subagents, nextSubagentSettings);
 
     const harnessStore = getHarnessStore();
     delete harnessStore.workspaceProfiles[workspace];
@@ -681,14 +871,15 @@ function deleteWorkspaceScopedSettings(cwd, sessionIds = []) {
 }
 
 function getSubagentConfig(scope = 'user', cwd = '') {
-  const settings = getStudioDatabase().getSetting(KEYS.subagents, {});
+  const settings = getSubagentStore();
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return {};
   const user = settings.user && typeof settings.user === 'object' && !Array.isArray(settings.user)
     ? settings.user
     : {};
   if (scope === 'project') {
+    const workspace = canonicalWorkspaceKey(cwd);
     const project = settings.projects && typeof settings.projects === 'object'
-      ? settings.projects[cwd]
+      ? settings.projects[workspace]
       : undefined;
     if (!project || typeof project !== 'object' || Array.isArray(project)) return {};
     if (Number(settings.version) >= 2) return project;
@@ -701,6 +892,159 @@ function getSubagentConfig(scope = 'user', cwd = '') {
     )));
   }
   return user;
+}
+
+function reconcileSubagentThinking(config) {
+  const output = { ...config };
+  const defaultRank = SUBAGENT_THINKING_LEVELS.indexOf(output.defaultThinking);
+  const maximumRank = SUBAGENT_THINKING_LEVELS.indexOf(output.maxThinking);
+  if (defaultRank > maximumRank && defaultRank >= 0 && maximumRank >= 0) {
+    output.defaultThinking = output.maxThinking;
+  }
+  return output;
+}
+
+function validSubagentInteger(value, [minimum, maximum]) {
+  return typeof value === 'number'
+    && Number.isSafeInteger(value)
+    && value >= minimum
+    && value <= maximum;
+}
+
+function normalizeSubagentOverridesV2(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const source = value;
+  const picked = {};
+  if (typeof source.defaultModel === 'string') {
+    const model = source.defaultModel.trim();
+    if (!model || SUBAGENT_MODEL_REF.test(model)) picked.defaultModel = model;
+  }
+  for (const key of ['defaultThinking', 'maxThinking']) {
+    if (
+      typeof source[key] === 'string'
+      && (source[key] === '' || SUBAGENT_THINKING_LEVELS.includes(source[key]))
+    ) {
+      picked[key] = source[key];
+    }
+  }
+  if (Array.isArray(source.allowedTools)) {
+    picked.allowedTools = [...new Set(source.allowedTools
+      .filter((name) => typeof name === 'string')
+      .map((name) => name.trim())
+      .filter((name) => SUBAGENT_TOOL_NAME.test(name)))]
+      .slice(0, 256);
+  }
+  for (const key of ['backgroundEnabled', 'supervisorEnabled']) {
+    if (typeof source[key] === 'boolean') picked[key] = source[key];
+  }
+  if (source.defaultMode === 'foreground' || source.defaultMode === 'background') {
+    picked.defaultMode = source.defaultMode;
+  }
+  for (const [key, bounds] of Object.entries(SUBAGENT_INTEGER_BOUNDS)) {
+    if (validSubagentInteger(source[key], bounds)) picked[key] = source[key];
+  }
+  if (
+    typeof source.worktreeIsolation === 'string'
+    && ['off', 'background', 'always'].includes(source.worktreeIsolation)
+  ) {
+    picked.worktreeIsolation = source.worktreeIsolation;
+  }
+  if (
+    typeof source.budgetCostUsd === 'number'
+    && Number.isFinite(source.budgetCostUsd)
+    && source.budgetCostUsd >= 0
+    && source.budgetCostUsd <= 100_000
+  ) {
+    picked.budgetCostUsd = source.budgetCostUsd;
+  }
+  if (source.budgetAction === 'warn' || source.budgetAction === 'stop') {
+    picked.budgetAction = source.budgetAction;
+  }
+
+  const normalized = normalizeSubagentConfig(picked, { strict: false });
+  const output = Object.fromEntries(
+    Object.keys(picked).map((key) => [key, normalized[key]]),
+  );
+  if (
+    Object.hasOwn(picked, 'defaultModel')
+    && Object.hasOwn(source, 'defaultProvider')
+    && typeof source.defaultProvider === 'string'
+    && source.defaultProvider === normalized.defaultProvider
+  ) {
+    output.defaultProvider = normalized.defaultProvider;
+  }
+  return reconcileSubagentThinking(output);
+}
+
+function normalizeSubagentOverridesLegacy(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return reconcileSubagentThinking(
+    normalizeSubagentConfig(value, { strict: false }),
+  );
+}
+
+function normalizeSubagentOverridesV2ForUser(value, user) {
+  const overrides = normalizeSubagentOverridesV2(value);
+  if (overrides.defaultThinking && overrides.maxThinking) {
+    return reconcileSubagentThinking(overrides);
+  }
+  const effectiveDefault = Object.hasOwn(overrides, 'defaultThinking')
+    ? overrides.defaultThinking
+    : user.defaultThinking || '';
+  const effectiveMaximum = Object.hasOwn(overrides, 'maxThinking')
+    ? overrides.maxThinking
+    : user.maxThinking || '';
+  const defaultRank = SUBAGENT_THINKING_LEVELS.indexOf(effectiveDefault);
+  const maximumRank = SUBAGENT_THINKING_LEVELS.indexOf(effectiveMaximum);
+  if (defaultRank > maximumRank && defaultRank >= 0 && maximumRank >= 0) {
+    if (Object.hasOwn(overrides, 'defaultThinking')) delete overrides.defaultThinking;
+    else if (Object.hasOwn(overrides, 'maxThinking')) delete overrides.maxThinking;
+  }
+  return overrides;
+}
+
+function normalizeSubagentStore(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value)
+    ? value
+    : {};
+  const version = Number(source.version) >= 2 ? 2 : 1;
+  const user = source.user
+    && typeof source.user === 'object'
+    && !Array.isArray(source.user)
+    && Object.keys(source.user).length > 0
+    ? reconcileSubagentThinking(
+        normalizeSubagentConfig(source.user, { strict: false }),
+      )
+    : {};
+  const rawProjects = source.projects
+    && typeof source.projects === 'object'
+    && !Array.isArray(source.projects)
+    ? source.projects
+    : {};
+  const projects = Object.fromEntries(
+    Object.entries(rawProjects).flatMap(([cwd, overrides]) => {
+      if (
+        RESERVED_OBJECT_KEYS.has(cwd)
+        || typeof cwd !== 'string'
+        || !path.isAbsolute(cwd)
+      ) return [];
+      return [[
+        path.resolve(cwd),
+        version >= 2
+          ? normalizeSubagentOverridesV2ForUser(overrides, user)
+          : normalizeSubagentOverridesLegacy(overrides),
+      ]];
+    }),
+  );
+  return { version, user, projects };
+}
+
+function getSubagentStore() {
+  return readSettingWithRecovery(
+    KEYS.subagents,
+    { version: 1, user: {}, projects: {} },
+    normalizeSubagentStore,
+  );
 }
 
 function sameSettingValue(left, right) {
@@ -728,25 +1072,24 @@ function cleanInheritedSubagentOverrides(projects, previousUser) {
 }
 
 function setSubagentConfig(scope, cwd, value) {
+  if (scope !== 'user' && scope !== 'project') throw new Error('设置范围无效');
+  const workspace = scope === 'project' ? canonicalWorkspaceKey(cwd) : '';
+  if (scope === 'project' && (!workspace || !path.isAbsolute(workspace))) {
+    throw new Error('工作区路径无效');
+  }
   const db = getStudioDatabase();
-  const settings = db.getSetting(KEYS.subagents, {});
-  const next = settings && typeof settings === 'object' && !Array.isArray(settings)
-    ? {
-        ...settings,
-        projects: settings.projects && typeof settings.projects === 'object'
-          ? { ...settings.projects }
-          : {},
-        user: settings.user && typeof settings.user === 'object'
-          ? { ...settings.user }
-          : {},
-      }
-    : { user: {}, projects: {} };
+  const settings = getSubagentStore();
+  const next = {
+    ...settings,
+    projects: { ...settings.projects },
+    user: { ...settings.user },
+  };
   // Migrate snapshots once. After v2, equality with a later user setting does
   // not mean an explicit project override has become inherited.
   if ((Number(next.version) || 0) < 2) {
     next.projects = cleanInheritedSubagentOverrides(next.projects, next.user);
   }
-  if (scope === 'project') next.projects[cwd] = value;
+  if (scope === 'project') next.projects[workspace] = value;
   else next.user = value;
   next.version = 2;
   db.setSetting(KEYS.subagents, next);
@@ -754,16 +1097,29 @@ function setSubagentConfig(scope, cwd, value) {
 }
 
 function getHarnessStore() {
-  return normalizeHarnessStore(getStudioDatabase().getSetting(KEYS.harness, defaultHarnessStore()));
+  return readSettingWithRecovery(
+    KEYS.harness,
+    defaultHarnessStore(),
+    (value) => {
+      const source = value && typeof value === 'object' && !Array.isArray(value)
+        ? value
+        : {};
+      return normalizeHarnessStore({
+        ...source,
+        workspaceProfiles: absoluteScopedEntries(source.workspaceProfiles),
+      });
+    },
+  );
 }
 
 function harnessProfileIdForWorkspace(store, cwd) {
+  const workspace = canonicalWorkspaceKey(cwd);
   if (
-    cwd
-    && store.workspaceProfiles[cwd]
-    && Object.hasOwn(store.profiles, store.workspaceProfiles[cwd])
+    workspace
+    && store.workspaceProfiles[workspace]
+    && Object.hasOwn(store.profiles, store.workspaceProfiles[workspace])
   ) {
-    return store.workspaceProfiles[cwd];
+    return store.workspaceProfiles[workspace];
   }
   return store.activeProfileId;
 }
@@ -775,12 +1131,13 @@ function getHarnessProfile(cwd = '') {
 
 function getHarnessSettings(cwd = '') {
   const store = getHarnessStore();
+  const workspace = canonicalWorkspaceKey(cwd);
   const activeProfileId = harnessProfileIdForWorkspace(store, cwd);
   return {
     version: store.version,
     activeProfileId,
     globalProfileId: store.activeProfileId,
-    workspaceProfileId: cwd ? store.workspaceProfiles[cwd] || '' : '',
+    workspaceProfileId: workspace ? store.workspaceProfiles[workspace] || '' : '',
     sections: clone(HARNESS_SECTIONS),
     profiles: Object.values(store.profiles)
       .sort((left, right) => Number(right.builtin) - Number(left.builtin) || left.name.localeCompare(right.name))
@@ -833,16 +1190,29 @@ function selectHarnessProfile(payload = {}) {
   const input = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
   const id = typeof input.id === 'string' ? input.id : '';
   const store = getHarnessStore();
+  if (
+    input.scope !== undefined
+    && !['global', 'workspace', 'inherit'].includes(input.scope)
+  ) {
+    throw new Error('Harness 应用范围无效');
+  }
+  const explicitWorkspace = input.scope === 'workspace' || input.scope === 'inherit';
+  const requestedCwd = typeof input.cwd === 'string' ? input.cwd.trim() : '';
+  if (explicitWorkspace && (!requestedCwd || !path.isAbsolute(requestedCwd))) {
+    throw new Error('Harness 工作区范围需要绝对工作区路径');
+  }
+  const workspace = requestedCwd && path.isAbsolute(requestedCwd)
+    ? path.resolve(requestedCwd)
+    : '';
   if (input.scope === 'inherit') {
-    if (!input.cwd) throw new Error('跟随全局需要指定工作区');
-    delete store.workspaceProfiles[input.cwd];
+    delete store.workspaceProfiles[workspace];
     getStudioDatabase().setSetting(KEYS.harness, store);
-    return getHarnessSettings(input.cwd);
+    return getHarnessSettings(workspace);
   }
   if (!HARNESS_PROFILE_ID.test(id) || !Object.hasOwn(store.profiles, id)) {
     throw new Error('Harness profile 不存在');
   }
-  const cwd = typeof input.cwd === 'string' && input.scope !== 'global' ? input.cwd : '';
+  const cwd = input.scope === 'global' ? '' : workspace;
   if (cwd) store.workspaceProfiles[cwd] = id;
   else store.activeProfileId = id;
   getStudioDatabase().setSetting(KEYS.harness, store);
@@ -884,13 +1254,18 @@ function deleteHarnessProfile(payload = {}) {
 }
 
 function getExtensionRegistryUrl() {
-  const value = getStudioDatabase().getSetting(KEYS.extensionRegistryUrl);
-  if (typeof value !== 'string' || !value.trim()) return '';
-  try {
-    return normalizeExtensionRegistryUrl(value);
-  } catch {
-    return '';
-  }
+  return readSettingWithRecovery(
+    KEYS.extensionRegistryUrl,
+    '',
+    (value) => {
+      if (typeof value !== 'string' || !value.trim()) return '';
+      try {
+        return normalizeExtensionRegistryUrl(value);
+      } catch {
+        return '';
+      }
+    },
+  );
 }
 
 function normalizeExtensionRegistryUrl(value) {

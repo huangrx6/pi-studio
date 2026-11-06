@@ -51,7 +51,7 @@ try {
     </script></body></html>`,
   }));
 
-  await page.goto('http://127.0.0.1:5180/popover-preview', { waitUntil: 'domcontentloaded' });
+  await page.goto(new URL('popover-preview', process.env.PREVIEW_URL || 'http://127.0.0.1:5180/').href, { waitUntil: 'domcontentloaded' });
   const body = page.locator('.activity-thinking.is-live .activity-thinking-body');
   await body.waitFor();
 

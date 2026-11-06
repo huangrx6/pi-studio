@@ -341,7 +341,11 @@ function registerConversationIpc() {
         publishMenuBarEvent({ type: 'title', id, title });
       },
     });
-    notifyConversationList();
+    try {
+      notifyConversationList();
+    } catch {
+      result.postCommitError ||= '消息已提交，但会话列表暂时无法刷新。';
+    }
     return result;
   });
 

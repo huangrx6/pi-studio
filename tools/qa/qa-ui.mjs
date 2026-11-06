@@ -274,6 +274,7 @@ await page.addInitScript(() => {
       executableExpansion: false,
     },
   ];
+  const extensionInstallReceipts = new Map();
   const extensionInstallQa = {
     preparedTokens: [],
     installedTokens: [],
@@ -1479,7 +1480,7 @@ await page.addInitScript(() => {
       }
       const provider = snapshot.providers.find((item) => item.id === providerId);
       if (provider) provider.models += discovered.length;
-      return cloneSnapshot();
+      return { committed: true, projection: { status: 'ready', value: { settings: cloneSnapshot(), models: { models, current: model.modelRef, enabled: snapshot.enabledModels, selection: model } } } };
     },
     // 切换模型：更新内存与 localStorage，保证 reload 后仍选中同一模型。
     setModel: async (id) => {
@@ -1590,13 +1591,13 @@ await page.addInitScript(() => {
     mcpConfig: async (name) => structuredClone(mcpConfigs[name]),
     setEnabledModels: async ({ models: enabled }) => {
       snapshot.enabledModels = enabled;
-      return cloneSnapshot();
+      return { committed: true, projection: { status: 'ready', value: { settings: cloneSnapshot(), models: { models, current: model.modelRef, enabled: snapshot.enabledModels, selection: model } } } };
     },
     setProviderEnabled: async ({ providerId, enabled }) => {
       const provider = snapshot.providers.find((item) => item.id === providerId);
       if (!provider) throw new Error('模型来源不存在');
       provider.enabled = enabled;
-      return cloneSnapshot();
+      return { committed: true, projection: { status: 'ready', value: { settings: cloneSnapshot(), models: { models, current: model.modelRef, enabled: snapshot.enabledModels, selection: model } } } };
     },
     removeProvider: async ({ providerId }) => {
       const index = snapshot.providers.findIndex((item) => item.id === providerId);
@@ -1604,13 +1605,13 @@ await page.addInitScript(() => {
       snapshot.customModels = snapshot.customModels.filter((item) => item.providerId !== providerId);
       snapshot.enabledModels = snapshot.enabledModels.filter((id) => !id.startsWith(`${providerId}/`));
       delete providerConfigs[providerId];
-      return cloneSnapshot();
+      return { committed: true, projection: { status: 'ready', value: { settings: cloneSnapshot(), models: { models, current: model.modelRef, enabled: snapshot.enabledModels, selection: model } } } };
     },
     setMcpEnabled: async ({ name, enabled }) => {
       snapshot.mcp.find((item) => item.name === name).enabled = enabled;
-      return cloneSnapshot();
+      return { committed: true, projection: { status: 'ready', value: cloneSnapshot() } };
     },
-    setKey: async () => cloneSnapshot(),
+    setKey: async () => ({ committed: true, projection: { status: 'ready', value: { settings: cloneSnapshot(), models: { models, current: model.modelRef, enabled: snapshot.enabledModels, selection: model } } } }),
     // 新增/编辑自定义模型：editing 时按 providerId + modelId 原地替换，否则追加。
     addCustomModel: async (input) => {
       const index = snapshot.customModels.findIndex((item) => item.providerId === input.providerId && item.modelId === input.modelId);
@@ -1618,13 +1619,13 @@ await page.addInitScript(() => {
       else snapshot.customModels.push({ ...input, origin: 'configured' });
       const provider = snapshot.providers.find((item) => item.id === input.providerId);
       if (provider && !input.editing) provider.models += 1;
-      return cloneSnapshot();
+      return { committed: true, projection: { status: 'ready', value: { settings: cloneSnapshot(), models: { models, current: model.modelRef, enabled: snapshot.enabledModels, selection: model } } } };
     },
     removeCustomModel: async ({ providerId, modelId }) => {
       const index = snapshot.customModels.findIndex((item) => item.providerId === providerId && item.modelId === modelId);
       if (index >= 0) snapshot.customModels.splice(index, 1);
       snapshot.enabledModels = snapshot.enabledModels.filter((id) => id !== `${providerId}/${modelId}`);
-      return cloneSnapshot();
+      return { committed: true, projection: { status: 'ready', value: { settings: cloneSnapshot(), models: { models, current: model.modelRef, enabled: snapshot.enabledModels, selection: model } } } };
     },
     // 新增/编辑来源：同步更新 providerConfigs；新建时再补一张来源卡片。
     addProvider: async (input) => {
@@ -1644,11 +1645,14 @@ await page.addInitScript(() => {
         const provider = snapshot.providers.find((item) => item.id === input.providerId);
         if (provider) { provider.name = input.name; provider.modelsUrl = input.modelsUrl || ''; }
       }
-      return {
+      return { committed: true, projection: { status: 'ready', value: {
         settings: cloneSnapshot(),
         models: { models, current: model.modelRef, enabled: snapshot.enabledModels, selection: model },
-      };
+      } } };
     },
+    refreshModels: async () => ({ settings: cloneSnapshot(), models: { models, current: model.modelRef, enabled: snapshot.enabledModels, selection: model } }),
+    refreshMcp: async () => cloneSnapshot(),
+    removeMcp: async name => { snapshot.mcp = snapshot.mcp.filter(item => item.name !== name); delete mcpConfigs[name]; return { committed: true, projection: { status: 'ready', value: cloneSnapshot() } }; },
     // 新增/编辑 MCP：重名报错、按 originalName 替换、改名时迁移 configs。
     addMcp: async (input) => {
       if (input.name !== input.originalName && snapshot.mcp.some((item) => item.name === input.name)) throw new Error('同名 MCP 已存在');
@@ -1665,17 +1669,18 @@ await page.addInitScript(() => {
       else snapshot.mcp.push(server);
       if (input.originalName && input.originalName !== input.name) delete mcpConfigs[input.originalName];
       mcpConfigs[input.name] = input;
-      return cloneSnapshot();
+      return { committed: true, projection: { status: 'ready', value: cloneSnapshot() } };
     },
     addSkill: async (input) => {
       skillQa.added.push(structuredClone(input));
-      return cloneSnapshot();
+      return { committed: true, projection: { status: 'ready', value: cloneSnapshot() } };
     },
+    refreshSkills: async () => cloneSnapshot(),
     addExtension: async () => undefined,
     removeSkill: async (path, cwd) => {
       skillQa.removed.push({ path, cwd });
       snapshot.skills = snapshot.skills.filter((skill) => skill.path !== path);
-      return cloneSnapshot();
+      return { committed: true, projection: { status: 'ready', value: cloneSnapshot() } };
     },
     removeExtension: async ({ id }) => {
       snapshot.extensions = snapshot.extensions.filter((item) => item.id !== id);
@@ -1732,18 +1737,15 @@ await page.addInitScript(() => {
     },
     installExtension: async ({ token }) => {
       extensionInstallQa.installedTokens.push(token);
-      return {
-        installed: {
-          id: 'quota-status',
-          version: '0.1.0',
-          activeCodePath: '',
-          dataPath: '',
-          contentChanged: false,
-          trustRevoked: false,
-        },
-        settings: cloneSnapshot(),
-      };
+      const result = { committed: true, installed: { id: 'quota-status', version: '0.1.0', contentChanged: false, trustRevoked: false }, projection: { status: 'ready', value: cloneSnapshot() }, recoveryToken: `qa-recovery-${token}` };
+      extensionInstallReceipts.set(result.recoveryToken, result);
+      return result;
     },
+    refreshExtensionInstall: async token => {
+      const receipt = extensionInstallReceipts.get(token); if (!receipt) throw new Error('QA install recovery receipt missing');
+      return { ...receipt, projection: { status: 'ready', value: cloneSnapshot() } };
+    },
+    disposeExtensionInstallRecovery: async token => { extensionInstallReceipts.delete(token); },
     disposeExtensionInstall: async (token) => {
       extensionInstallQa.disposedTokens.push(token);
     },
@@ -2824,27 +2826,27 @@ try {
   const retiredUsageFilter = usageModelFilters.getByRole('button', { name: /^Retired Reasoner/ });
   assert.match(await retiredUsageFilter.innerText(), /已停用/);
   await retiredUsageFilter.click();
-  await page.getByRole('grid', { name: /Retired Reasoner，365 天 Token 使用量/ }).waitFor();
+  await page.getByRole('group', { name: /Retired Reasoner，365 天 Token 使用量/ }).waitFor();
   const deepSeekUsageFilter = usageModelFilters.getByRole('button', { name: /^DeepSeek V4\.1 Flash/ });
   await deepSeekUsageFilter.click();
   assert.equal(await deepSeekUsageFilter.getAttribute('aria-pressed'), 'true');
-  await page.getByRole('grid', { name: /DeepSeek V4\.1 Flash，365 天 Token 使用量/ }).waitFor();
+  await page.getByRole('group', { name: /DeepSeek V4\.1 Flash，365 天 Token 使用量/ }).waitFor();
   await usageHeatmapRanges.getByRole('button', { name: '90 天', exact: true }).click();
-  await page.getByRole('grid', { name: /DeepSeek V4\.1 Flash，90 天 Token 使用量/ }).waitFor();
+  await page.getByRole('group', { name: /DeepSeek V4\.1 Flash，90 天 Token 使用量/ }).waitFor();
   const usage90Cell = await page.locator('.usage-heat-cell:not(.is-outside)').first().evaluate((element) => {
     const box = element.getBoundingClientRect();
     return { width: box.width, height: box.height };
   });
   assert.ok(usage90Cell.width >= 23 && usage90Cell.height === usage90Cell.width);
   await usageHeatmapRanges.getByRole('button', { name: '180 天', exact: true }).click();
-  await page.getByRole('grid', { name: /DeepSeek V4\.1 Flash，180 天 Token 使用量/ }).waitFor();
+  await page.getByRole('group', { name: /DeepSeek V4\.1 Flash，180 天 Token 使用量/ }).waitFor();
   const usage180Cell = await page.locator('.usage-heat-cell:not(.is-outside)').first().evaluate((element) => {
     const box = element.getBoundingClientRect();
     return { width: box.width, height: box.height };
   });
   assert.ok(usage180Cell.width >= 18 && usage180Cell.height === usage180Cell.width);
   await usageHeatmapRanges.getByRole('button', { name: '1 年', exact: true }).click();
-  await page.getByRole('grid', { name: /DeepSeek V4\.1 Flash，365 天 Token 使用量/ }).waitFor();
+  await page.getByRole('group', { name: /DeepSeek V4\.1 Flash，365 天 Token 使用量/ }).waitFor();
   const usageYear = await page.locator('.usage-heatmap-card').evaluate((card) => {
     const grid = card.querySelector('.usage-heatmap-grid')?.getBoundingClientRect();
     const box = card.getBoundingClientRect();
@@ -2898,18 +2900,18 @@ try {
   await page.getByRole('dialog', { name: '选择模型分布起始日期' }).getByRole('button', { name: '取消' }).click();
   await usageMixRanges.getByRole('button', { name: '全部时间', exact: true }).click();
   await page.waitForFunction(() => document.querySelectorAll('.usage-model-row').length === 4);
-  await page.getByRole('grid', { name: /DeepSeek V4\.1 Flash，365 天 Token 使用量/ }).waitFor();
+  await page.getByRole('group', { name: /DeepSeek V4\.1 Flash，365 天 Token 使用量/ }).waitFor();
 
   // 7.0 通用设置：四套全局配色使用同一组页面表面与语义状态色；
-  // 切换卡片会同步根节点、按钮实际颜色和本地持久化数据。
+  // 切换单选项会同步根节点、色块实际颜色和本地持久化数据。
   await openSettingsSection('通用');
   const paletteChoices = page.getByRole('radiogroup', { name: '全局配色方案' });
   await paletteChoices.waitFor();
   assert.equal(await paletteChoices.getByRole('radio').count(), 4);
-  await paletteChoices.getByRole('radio', { name: /^海蓝/ }).click();
+  await paletteChoices.locator('[data-palette-choice="ocean"]').click();
   await page.waitForFunction(() => document.documentElement.dataset.palette === 'ocean');
-  assert.equal(await paletteChoices.getByRole('radio', { name: /^海蓝/ }).getAttribute('aria-checked'), 'true');
-  const oceanPaletteColors = await paletteChoices.getByRole('radio', { name: /^海蓝/ }).locator('.palette-preview-actions b').evaluate((element) => {
+  assert.equal(await paletteChoices.getByRole('radio', { name: /^海蓝/ }).isChecked(), true);
+  const oceanPaletteColors = await paletteChoices.locator('[data-palette-choice="ocean"] .general-palette-swatch').evaluate((element) => {
     const probe = document.createElement('span');
     probe.style.backgroundColor = 'var(--accent)';
     document.body.append(probe);
@@ -2923,13 +2925,13 @@ try {
 
   await page.getByRole('button', { name: '深色', exact: true }).click();
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
-  await paletteChoices.getByRole('radio', { name: /^莓果/ }).click();
+  await paletteChoices.locator('[data-palette-choice="berry"]').click();
   await page.waitForFunction(() => document.documentElement.dataset.palette === 'berry');
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('pi-studio:preferences') || '{}').palette), 'berry');
   await capture('11b-general-palette-dark');
 
   await page.getByRole('button', { name: '浅色', exact: true }).click();
-  await paletteChoices.getByRole('radio', { name: /^玉石/ }).click();
+  await paletteChoices.locator('[data-palette-choice="lime"]').click();
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'light' && document.documentElement.dataset.palette === 'lime');
 
   await openSettingsSection('权限策略');
@@ -3096,11 +3098,11 @@ try {
   await harnessTabs.first().click();
   await harnessTabs.nth(1).click();
   assert.equal(await harnessTabs.nth(1).getAttribute('aria-selected'), 'true');
-  const applyHarness = page.locator('.harness-editor-head').getByRole('button', { name: '应用到工作区', exact: true });
+  const applyHarness = page.locator('.harness-editor-context').getByRole('button', { name: '应用到工作区', exact: true });
   assert.equal(await applyHarness.isEnabled(), true);
   await applyHarness.click();
   await page.getByRole('status').filter({ hasText: '已应用到当前工作区' }).waitFor();
-  assert.equal(await page.locator('.harness-editor-head').getByRole('button', { name: '已应用', exact: true }).isDisabled(), true);
+  assert.equal(await page.locator('.harness-editor-context').getByRole('button', { name: '已应用', exact: true }).isDisabled(), true);
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
 
   // 7.1.2 子智能体：全局默认与指定工作区的覆盖必须明确区分，保存使用所选工作区。
@@ -3463,7 +3465,7 @@ try {
   await openSettingsSection('使用量');
   await page.getByRole('heading', { name: 'Token 使用量', exact: true }).waitFor();
   await page.getByRole('group', { name: '热力图日期范围', exact: true }).getByRole('button', { name: '1 年', exact: true }).click();
-  await page.getByRole('grid', { name: /365 天 Token 使用量/ }).waitFor();
+  await page.getByRole('group', { name: /365 天 Token 使用量/ }).waitFor();
   const compactUsageOverflow = await page.locator('.usage-heatmap-scroll').evaluate((element) => ({
     clientWidth: element.clientWidth,
     scrollWidth: element.scrollWidth,
@@ -3884,7 +3886,7 @@ try {
   await page.locator('.session-row', { hasText: '优化文件预览和设置页面的排版' }).click();
   const longTaskDock = page.locator('.long-task-dock');
   await longTaskDock.waitFor();
-  assert.match(await longTaskDock.innerText(), /目标执行中/);
+  assert.match(await longTaskDock.innerText(), /等待继续/);
   const composerInput = page.getByRole('textbox', { name: '发送给 Pi 的消息' });
   await composerInput.fill('/goal');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
@@ -3908,7 +3910,7 @@ try {
   await composerInput.fill('/goal 从新会话直接启动目标');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   await page.locator('.long-task-dock').filter({ hasText: '从新会话直接启动目标' }).waitFor();
-  await page.locator('.chat-heading-kind').filter({ hasText: '目标执行中' }).waitFor();
+  assert.equal(await page.locator('.chat-heading-kind').count(), 0, 'goal state has one primary location in the task dock');
   assert.equal(await page.locator('.session-kind-badge').count(), 0);
   await capture('29b-goal-from-new-session');
   await composerInput.fill('/goal complete 新会话目标流程验证完成');

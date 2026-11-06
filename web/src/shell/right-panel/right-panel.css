@@ -35,7 +35,7 @@
   overflow: hidden;
   color: var(--muted);
   font-size: var(--text-sm);
-  font-weight: 550;
+  font-weight: var(--weight-medium);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -225,27 +225,26 @@
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding: clamp(24px, 8vh, 64px) 16px 24px;
+  padding: clamp(24px, 6vh, 48px) 16px 24px;
   background: var(--surface);
 }
 
 .panel-start-tools {
   display: grid;
   width: 100%;
-  max-width: 360px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  max-width: 340px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-1);
 }
 
 .panel-start-tools .panel-tool {
-  min-height: 56px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  background: var(--surface-raised);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 0;
+  background: var(--transparent);
 }
 
 .panel-start-tools .panel-tool:hover:not(:disabled) {
-  border-color: var(--border-hover);
   background: var(--surface-hover);
 }
 
@@ -265,6 +264,7 @@
   background: var(--transparent);
   color: var(--text);
   text-align: left;
+  transition: background var(--transition), color var(--transition), outline-color var(--transition);
 }
 
 .panel-tool:hover:not(:disabled),
@@ -301,7 +301,7 @@
   flex: 1;
   overflow: hidden;
   font-size: var(--text-sm);
-  font-weight: 450;
+  font-weight: var(--weight-medium);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -322,14 +322,15 @@
 .panel-workspace-prompt {
   display: flex;
   width: 100%;
-  max-width: 360px;
+  max-width: 340px;
   min-height: 40px;
   align-items: center;
   gap: 10px;
   margin-bottom: 8px;
   padding: 0 10px;
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-control);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
   background: var(--transparent);
   color: var(--muted);
   font-size: var(--text-md);
@@ -342,7 +343,9 @@
 @media (prefers-reduced-motion: reduce) {
   .panel-tab,
   .panel-tool,
+  .panel-start-tools .panel-tool,
   .panel-tab-close { transition: none; }
+
 }
 
 /* 右侧内嵌浏览器：工具条 + 独立进程的 webview。 */

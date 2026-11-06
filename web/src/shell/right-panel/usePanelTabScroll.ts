@@ -69,7 +69,9 @@ export function usePanelTabScroll({ activeId, tabCount, resizing, split }: Panel
     const root = rootRef.current;
     if (!root) return;
     let frame: number | null = null;
-    const schedule = () => {
+    let revealAfterResize = false;
+    const schedule = (reveal = false) => {
+      revealAfterResize ||= reveal;
       if (frame !== null) return;
       frame = requestAnimationFrame(() => {
         frame = null;
@@ -78,17 +80,19 @@ export function usePanelTabScroll({ activeId, tabCount, resizing, split }: Panel
         // A ResizeObserver callback may run just after pointer-up, when the
         // React resizing flag is already false. Size changes still need an
         // immediate correction so the active tab cannot be clipped.
-        if (active) revealTab(active, 'auto');
+        if (active && revealAfterResize) revealTab(active, 'auto');
+        revealAfterResize = false;
       });
     };
-    const observer = new ResizeObserver(schedule);
+    const observer = new ResizeObserver(() => schedule(true));
+    const onScroll = () => schedule();
     observer.observe(root);
-    root.addEventListener('scroll', schedule, { passive: true });
-    schedule();
+    root.addEventListener('scroll', onScroll, { passive: true });
+    schedule(true);
     return () => {
       if (frame !== null) cancelAnimationFrame(frame);
       observer.disconnect();
-      root.removeEventListener('scroll', schedule);
+      root.removeEventListener('scroll', onScroll);
     };
   }, [revealTab, updateMetrics]);
 

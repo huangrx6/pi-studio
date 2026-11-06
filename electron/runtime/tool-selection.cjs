@@ -38,10 +38,13 @@ function normalizeNames(input, strict = false) {
     if (strict) throw new Error('智能体工具列表格式无效');
     return [...DEFAULT_AGENT_TOOLS];
   }
-  if (input.length > MAX_AGENT_TOOLS) throw new Error(`智能体工具最多允许 ${MAX_AGENT_TOOLS} 项`);
+  if (strict && input.length > MAX_AGENT_TOOLS) {
+    throw new Error(`智能体工具最多允许 ${MAX_AGENT_TOOLS} 项`);
+  }
   const seen = new Set();
   const names = [];
   for (const raw of input) {
+    if (names.length >= MAX_AGENT_TOOLS) break;
     const name = typeof raw === 'string' ? raw.trim() : '';
     if (!isValidToolName(name)) {
       if (strict) throw new Error(`智能体工具名称无效：${String(raw)}`);
@@ -60,7 +63,13 @@ function normalizeSources(input, enabled) {
   const text = (value, limit = 2048) => typeof value === 'string' ? value.trim().slice(0, limit) : '';
   const result = {};
   for (const [name, value] of Object.entries(input)) {
-    if (!allowed.has(name) || !value || typeof value !== 'object' || Array.isArray(value)) continue;
+    if (
+      RESERVED.has(name)
+      || !allowed.has(name)
+      || !value
+      || typeof value !== 'object'
+      || Array.isArray(value)
+    ) continue;
     const source = text(value.source, 256);
     if (!source) continue;
     result[name] = {
@@ -84,31 +93,51 @@ function normalizeSelection(input, strict = false) {
   };
 }
 
+function normalizeSelectionVersion(value) {
+  return Number.isSafeInteger(value) && value >= 1 ? value : 1;
+}
+
 function readAgentToolSelection(db = getStudioDatabase()) {
-  const stored = db.getSetting(SETTING_KEY, undefined);
-  if (stored === undefined) {
-    db.setSetting(SETTING_VERSION_KEY, SETTING_VERSION);
-    return normalizeSelection({ enabled: DEFAULT_AGENT_TOOLS, sources: {} });
-  }
-  const selection = normalizeSelection(stored);
-  const version = Number(db.getSetting(SETTING_VERSION_KEY, 1)) || 1;
+  const selectionExists = Object.hasOwn(db.getSettings(), SETTING_KEY);
+  const selection = db.getSettingWithRecovery(
+    SETTING_KEY,
+    undefined,
+    normalizeSelection,
+  );
+  if (!selectionExists) return selection;
+  const version = db.getSettingWithRecovery(
+    SETTING_VERSION_KEY,
+    1,
+    normalizeSelectionVersion,
+  );
   if (version < SETTING_VERSION) {
     if (version < 2 && !selection.enabled.some((name) => name.startsWith('mcp__'))) {
-      selection.enabled.push('mcp__*');
+      if (selection.enabled.length < MAX_AGENT_TOOLS) selection.enabled.push('mcp__*');
     }
     if (version < 3 && !selection.enabled.some((pattern) => matches(pattern, 'todo'))) {
-      selection.enabled.push('todo');
+      if (selection.enabled.length < MAX_AGENT_TOOLS) selection.enabled.push('todo');
     }
-    db.setSetting(SETTING_KEY, selection);
-    db.setSetting(SETTING_VERSION_KEY, SETTING_VERSION);
+    const migrated = normalizeSelection(selection);
+    try {
+      db.transaction(() => {
+        db.setSetting(SETTING_KEY, migrated);
+        db.setSetting(SETTING_VERSION_KEY, SETTING_VERSION);
+      });
+    } catch {
+      // Migration still yields a safe in-memory selection when either repair
+      // write fails. The next read retries the idempotent migration.
+    }
+    return migrated;
   }
   return selection;
 }
 
 function saveInstalledToolSelection(input, db = getStudioDatabase()) {
   const next = normalizeSelection(input, true);
-  db.setSetting(SETTING_KEY, next);
-  db.setSetting(SETTING_VERSION_KEY, SETTING_VERSION);
+  db.transaction(() => {
+    db.setSetting(SETTING_KEY, next);
+    db.setSetting(SETTING_VERSION_KEY, SETTING_VERSION);
+  });
   return next;
 }
 

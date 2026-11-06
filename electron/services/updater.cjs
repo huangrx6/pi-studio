@@ -34,6 +34,7 @@ let focusListener;
 let currentBuildId;
 const activeNotifications = new Set();
 const notifiedVersions = new Set();
+const downloadedUiTargets = new Set();
 
 function errorText(error) {
   if (error instanceof Error && error.message) return error.message;
@@ -120,11 +121,16 @@ function wireUpdaterEvents() {
   autoUpdater.on('download-progress', (progress) => apply('progress', { progress }));
   autoUpdater.on('update-downloaded', (info) => {
     apply('downloaded', { info });
+    const target = JSON.stringify([updateState.latestVersion || updateState.currentVersion, updateState.latestBuildId || '']);
+    // Duplicate completion events may refresh the snapshot, but must not bring
+    // a dismissed window back. Explicit menu and notification clicks still open it.
+    if (downloadedUiTargets.has(target)) return;
+    downloadedUiTargets.add(target);
     notifyUpdateUi();
     showNativeNotification(
       'Pi Studio 更新已准备好',
       '重启并安装，或在下次退出 Pi Studio 时自动安装。',
-      `downloaded:${info?.version || updateState.latestVersion || 'unknown'}`,
+      `downloaded:${target}`,
     );
   });
   autoUpdater.on('error', (error) => {

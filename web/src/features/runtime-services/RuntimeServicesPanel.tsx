@@ -40,6 +40,7 @@ function ServiceRow({
   service,
   copied,
   terminating,
+  stopBusy,
   onCopy,
   onStop,
   showOwnership,
@@ -47,10 +48,12 @@ function ServiceRow({
   service: RuntimeService;
   copied: boolean;
   terminating: boolean;
+  stopBusy: boolean;
   onCopy: () => void;
   onStop: () => void;
   showOwnership: boolean;
 }) {
+  const canStop = service.canStop && service.startedAt !== undefined;
   const duration = relativeDuration(service.elapsedSeconds);
   const details = [service.url, service.command, service.cwd, ...service.evidence].filter(Boolean).join('\n');
   return <article className={`runtime-service-row is-${service.ownership} ${terminating ? 'is-terminating' : ''}`}>
@@ -87,9 +90,9 @@ function ServiceRow({
         type="button"
         className="runtime-service-stop"
         aria-label={`终止 ${service.processName}，PID ${service.pid}`}
-        title={service.canStop ? '终止服务' : service.stopBlockedReason}
-        aria-disabled={terminating || !service.canStop}
-        onClick={() => { if (service.canStop && !terminating) onStop(); }}
+        title={canStop ? '终止服务' : service.stopBlockedReason || '缺少进程启动时间，无法安全终止'}
+        aria-disabled={stopBusy || !canStop}
+        onClick={() => { if (canStop && !stopBusy) onStop(); }}
       >
         {terminating && <LoaderCircle className="spin" />}
         <span>{terminating ? '终止中' : '终止'}</span>
@@ -98,45 +101,59 @@ function ServiceRow({
   </article>;
 }
 
-export function RuntimeServicesPanel({
-  cwd,
-  workspace,
-}: {
-  cwd?: string;
-  workspace?: string;
-}) {
+type Props = { cwd?: string; workspace?: string };
+
+export function RuntimeServicesPanel(props: Props) {
+  // A workspace switch starts a fresh projection and confirmation lifetime.
+  // In-flight work from an old root cannot delay or populate the new root.
+  return <RuntimeServicesScope key={JSON.stringify([props.cwd || '', props.workspace || ''])} {...props} />;
+}
+
+function RuntimeServicesScope({ cwd, workspace }: Props) {
   const [snapshot, setSnapshot] = useState<RuntimeServiceSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [stopBusy, setStopBusy] = useState(false);
   const [stopError, setStopError] = useState<{ service: RuntimeService; message: string } | null>(null);
   const [view, setView] = useState<'task' | 'all'>('task');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [terminatingPid, setTerminatingPid] = useState<number | null>(null);
   const [clock, setClock] = useState(Date.now());
   const requestRef = useRef(0);
+  const mountedRef = useRef(false);
+  const copyRequestRef = useRef(0);
+  const copyTimerRef = useRef<number | undefined>();
   const busyRef = useRef(false);
   const stoppingRef = useRef(false);
   const actionConfirmation = useActionConfirmation();
   const roots = useMemo(() => [...new Set([cwd, workspace].filter(Boolean))] as string[], [cwd, workspace]);
 
-  const scan = useCallback(async (initial = false) => {
-    if (busyRef.current) return;
+  const scan = useCallback(async (initial = false, replace = false) => {
+    if (!mountedRef.current) return;
+    if (replace) {
+      // A completed stop invalidates pre-stop data even if the window became
+      // hidden; the next visible scan must not wait behind that obsolete read.
+      requestRef.current += 1;
+      busyRef.current = false;
+    }
+    if (document.hidden || busyRef.current) return;
     busyRef.current = true;
     const request = ++requestRef.current;
     if (initial) setLoading(true);
     else setRefreshing(true);
     try {
       const next = await window.piApi.runtimeServices({ cwd, roots });
-      if (request !== requestRef.current) return;
+      if (!mountedRef.current || request !== requestRef.current) return;
       setSnapshot(next);
       setError(null);
       setClock(Date.now());
     } catch (cause) {
-      if (request === requestRef.current) setError(errorText(cause));
+      if (mountedRef.current && request === requestRef.current) setError(errorText(cause));
     } finally {
-      busyRef.current = false;
-      if (request === requestRef.current) {
+      if (mountedRef.current && request === requestRef.current) {
+        busyRef.current = false;
         setLoading(false);
         setRefreshing(false);
       }
@@ -144,13 +161,28 @@ export function RuntimeServicesPanel({
   }, [cwd, roots]);
 
   useEffect(() => {
-    void scan(true);
-    const refresh = window.setInterval(() => void scan(false), 2_500);
-    const tick = window.setInterval(() => setClock(Date.now()), 1_000);
+    mountedRef.current = true;
+    let refresh: number | undefined;
+    let tick: number | undefined;
+    const clearTimers = () => { window.clearInterval(refresh); window.clearInterval(tick); };
+    const onVisibility = () => {
+      clearTimers();
+      if (document.hidden) return;
+      setClock(Date.now());
+      void scan(false);
+      refresh = window.setInterval(() => void scan(false), 2_500);
+      tick = window.setInterval(() => setClock(Date.now()), 1_000);
+    };
+    onVisibility();
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
+      mountedRef.current = false;
       requestRef.current += 1;
-      window.clearInterval(refresh);
-      window.clearInterval(tick);
+      busyRef.current = false;
+      copyRequestRef.current += 1;
+      window.clearTimeout(copyTimerRef.current);
+      clearTimers();
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [scan]);
 
@@ -174,18 +206,23 @@ export function RuntimeServicesPanel({
   }, [services]);
 
   async function copyAddress(service: RuntimeService) {
+    const request = ++copyRequestRef.current;
     try {
       await navigator.clipboard.writeText(service.url);
+      if (!mountedRef.current || request !== copyRequestRef.current) return;
+      window.clearTimeout(copyTimerRef.current);
+      setActionError(null);
       setCopiedId(service.id);
-      window.setTimeout(() => setCopiedId((current) => current === service.id ? null : current), 1_400);
+      copyTimerRef.current = window.setTimeout(() => setCopiedId(null), 1_400);
     } catch {
-      setError('复制失败，请检查剪贴板权限');
+      if (mountedRef.current && request === copyRequestRef.current) setActionError('复制失败，请检查剪贴板权限');
     }
   }
 
   async function stopService(service: RuntimeService) {
-    if (stoppingRef.current || !service.canStop || service.startedAt === undefined) return;
+    if (!mountedRef.current || stoppingRef.current || !service.canStop || service.startedAt === undefined) return;
     stoppingRef.current = true;
+    setStopBusy(true);
     const affectedPorts = [...new Set(portsByPid.get(service.pid) || [service.port])]
       .sort((left, right) => left - right);
     const affectedText = affectedPorts.length > 1
@@ -197,7 +234,8 @@ export function RuntimeServicesPanel({
       confirmLabel: '终止服务',
       tone: 'danger',
     });
-    if (!accepted) { stoppingRef.current = false; return; }
+    if (!mountedRef.current) return;
+    if (!accepted) { stoppingRef.current = false; setStopBusy(false); return; }
 
     setTerminatingPid(service.pid);
     setStopError(null);
@@ -207,23 +245,27 @@ export function RuntimeServicesPanel({
         port: service.port,
         startedAt: service.startedAt,
       });
+      if (!mountedRef.current) return;
       setError(null);
-      await scan(false);
+      await scan(false, true);
     } catch (cause) {
       // Polling can recover a scan error, but must not erase a failed stop.
-      setStopError({ service, message: errorText(cause) });
+      if (mountedRef.current) setStopError({ service, message: errorText(cause) });
     } finally {
-      stoppingRef.current = false;
-      setTerminatingPid(null);
+      if (mountedRef.current) {
+        stoppingRef.current = false;
+        setStopBusy(false);
+        setTerminatingPid(null);
+      }
     }
   }
 
   return <>
     <section className="runtime-services-panel" aria-label="运行服务">
     <header className="runtime-services-toolbar">
-      <span className="runtime-services-live" role="status">
+      <span className={`runtime-services-live ${error ? 'is-stale' : ''}`}>
         <i aria-hidden="true" />
-        {snapshot ? freshLabel(snapshot.scannedAt, clock) : '正在扫描'}
+        {refreshing || loading ? '正在扫描' : error ? '扫描失败' : snapshot ? freshLabel(snapshot.scannedAt, clock) : '等待扫描'}
       </span>
       <div className="runtime-services-scope" role="group" aria-label="服务范围">
         <button type="button" aria-pressed={view === 'task'} onClick={() => setView('task')}>
@@ -238,7 +280,7 @@ export function RuntimeServicesPanel({
         className="runtime-services-refresh"
         aria-label="刷新运行服务"
         title="刷新"
-        disabled={refreshing}
+        disabled={refreshing || loading}
         onClick={() => void scan(false)}
       >
         <RefreshCw className={refreshing ? 'spin' : undefined} />
@@ -247,12 +289,13 @@ export function RuntimeServicesPanel({
 
     {snapshot?.warning && <div className="runtime-services-notice">{snapshot.warning}</div>}
     {error && <div className="runtime-services-error" role="alert">
-      <span>{error}</span>
+      <span>{error}{snapshot && <small>以下显示上次扫描结果</small>}</span>
       <button type="button" onClick={() => void scan(false)}>重试</button>
     </div>}
+    {actionError && <div className="runtime-services-error" role="alert"><span>{actionError}</span><button type="button" onClick={() => setActionError(null)}>关闭</button></div>}
     {stopError && <div className="runtime-services-error" role="alert">
       <span>{stopError.message}</span>
-      <button type="button" onClick={() => void stopService(stopError.service)}>重新终止</button>
+      <button type="button" disabled={stopBusy} onClick={() => void stopService(stopError.service)}>重新终止</button>
       <button type="button" onClick={() => setStopError(null)}>关闭</button>
     </div>}
 
@@ -265,11 +308,12 @@ export function RuntimeServicesPanel({
         service={service}
         copied={copiedId === service.id}
         terminating={terminatingPid === service.pid}
+        stopBusy={stopBusy}
         showOwnership={view === 'all'}
         onCopy={() => void copyAddress(service)}
         onStop={() => void stopService(service)}
       />)}
-      {!loading && visibleServices.length === 0 && snapshot?.supported !== false && <div className="runtime-services-empty">
+      {!loading && !error && snapshot && visibleServices.length === 0 && snapshot.supported !== false && <div className="runtime-services-empty">
         <Activity aria-hidden="true" />
         <strong>{view === 'task' ? '当前任务还没有监听服务' : '没有发现监听端口'}</strong>
         {view === 'task' && allCount > 0 && <button type="button" onClick={() => setView('all')}>查看本机其他服务</button>}

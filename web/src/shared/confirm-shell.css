@@ -1,0 +1,4 @@
+/* Retain the existing confirmation surface while native dialog owns modality. */
+dialog.confirm-native-dialog { width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; border: 0; color: var(--text); }
+dialog.confirm-native-dialog:not([open]) { display: none; }
+dialog.confirm-native-dialog::backdrop { background: transparent; }

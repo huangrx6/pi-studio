@@ -23,3 +23,11 @@ test('sources and their skills are layered instead of one flat list', () => {
   assert.match(source, /SKILL_PAGE_SIZE/);
   assert.match(css, /\.skill-hub-body\s*\{[^}]*grid-template-columns/);
 });
+
+test('empty source setup keeps one action and omits search, management and refresh', () => {
+  assert.match(source, /const hasSources = Boolean\(snapshot\?\.sources\.length\)/);
+  assert.match(source, /\(hasSources \|\| error\) && <div className="skill-hub-actions">/);
+  assert.match(source, /\{hasSources && <div className="skill-hub-search">/);
+  assert.match(source, /\{hasSources && <button type="button" className="settings-outline" onClick=\{\(\) => setManagerOpen\(true\)\}>/);
+  assert.match(source, /<h2>技能源 \{total > 0 &&/);
+});

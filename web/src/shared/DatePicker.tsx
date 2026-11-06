@@ -31,6 +31,7 @@ import {
   todayIsoDay,
 } from './date-picker.mjs';
 import { PopoverSurface } from './PopoverSurface';
+import { isComposingKey } from './keyboard-navigation';
 import './date-picker.css';
 
 type DatePickerProps = {
@@ -86,7 +87,7 @@ export function DatePicker({
   const canGoPrevious = !min || monthEnd(previousMonth) >= min;
   const canGoNext = !max || nextMonth <= max;
   const todayDisabled = isPickerDayDisabled(today, min, max);
-  const tabStopDay = currentValue && isSamePickerMonth(currentValue, visibleMonth)
+  const tabStopDay = currentValue && !isPickerDayDisabled(currentValue, min, max) && isSamePickerMonth(currentValue, visibleMonth)
     ? currentValue
     : days.find((day) => (
       day.startsWith(currentMonthKey)
@@ -128,7 +129,7 @@ export function DatePicker({
     }
     const frame = requestAnimationFrame(() => {
       const preferred = popoverRef.current?.querySelector<HTMLButtonElement>(
-        `[data-date="${tabStopDay}"]`,
+        `[data-date="${tabStopDay}"]:not(:disabled)`,
       );
       (preferred ?? popoverRef.current?.querySelector<HTMLButtonElement>(
         '.pi-date-day:not(:disabled)',
@@ -153,7 +154,7 @@ export function DatePicker({
   useEffect(() => {
     if (!open) return;
     const onEscapeCapture = (event: globalThis.KeyboardEvent): void => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || isComposingKey(event)) return;
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
@@ -176,7 +177,7 @@ export function DatePicker({
   }
 
   function choose(day: string): void {
-    if (isPickerDayDisabled(day, min, max)) return;
+    if (disabled || isPickerDayDisabled(day, min, max)) return;
     onChange(day);
     closePicker();
   }
@@ -198,6 +199,7 @@ export function DatePicker({
   }
 
   function onCalendarKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
+    if (isComposingKey(event.nativeEvent)) return;
     const target = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-date]');
     const day = target?.dataset.date;
     if (!day) return;
@@ -219,6 +221,8 @@ export function DatePicker({
     moveFocus(next);
   }
 
+  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
+
   const portalTarget = triggerRef.current?.closest('dialog') ?? document.body;
 
   return <div className={`pi-date-picker ${className}`}>
@@ -231,8 +235,12 @@ export function DatePicker({
       aria-haspopup="dialog"
       aria-expanded={open}
       onClick={openPicker}
+      onBlur={(event) => {
+          const next = event.relatedTarget as Node | null;
+          if (next && !popoverRef.current?.contains(next)) setOpen(false);
+        }}
       onKeyDown={(event) => {
-        if (event.key !== 'ArrowDown') return;
+        if (disabled || event.key !== 'ArrowDown' || isComposingKey(event.nativeEvent)) return;
         event.preventDefault();
         if (!open) {
           setVisibleMonth(monthStart(currentValue || min || max));
@@ -250,6 +258,10 @@ export function DatePicker({
       <PopoverSurface
         ref={popoverRef}
         className="pi-date-popover"
+        onBlurCapture={(event) => {
+          const next = event.relatedTarget as Node | null;
+          if (next && !popoverRef.current?.contains(next) && !triggerRef.current?.contains(next)) setOpen(false);
+        }}
         role="dialog"
         aria-modal="false"
         aria-label={`选择${label}`}

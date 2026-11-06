@@ -1,14 +1,16 @@
-.skill-hub-card { display: grid; gap: var(--space-4); }
-.skill-hub-head { margin-bottom: 0; }
+.skill-hub-card { display: grid; min-width: 0; gap: var(--space-4); }
+.skill-hub-card .skill-hub-head { min-width: 0; margin-bottom: 0; }
 .skill-hub-head > div:first-child { min-width: 0; }
-.skill-hub-actions { display: flex; flex: none; align-items: center; gap: var(--space-2); }
+.skill-hub-actions { display: flex; flex: 0 1 auto; min-width: 0; max-width: 100%; align-items: center; gap: var(--space-2); }
 .skill-hub-actions .settings-outline { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .skill-hub-actions svg { width: var(--icon-sm); height: var(--icon-sm); }
 .skill-hub-search {
   display: flex;
   width: 240px;
+  min-width: 0;
+  max-width: 100%;
   height: var(--control);
-  flex: none;
+  flex: 0 1 240px;
   align-items: center;
   gap: var(--space-2);
   padding: 0 10px;
@@ -31,7 +33,7 @@
 .skill-hub-empty svg { width: var(--icon-md); height: var(--icon-md); }
 .skill-hub-empty > div { min-width: 0; flex: 1; }
 .skill-hub-empty strong { color: var(--text); font-size: var(--text-sm); }
-.skill-source-hint { display: block; margin-top: 6px; color: var(--faint); font-size: var(--text-xs); line-height: 1.5; }
+.skill-source-hint { display: block; margin-top: 6px; color: var(--faint); font-size: var(--text-xs); line-height: var(--leading-normal); }
 .skill-hub-loading { display: flex; align-items: center; justify-content: center; gap: var(--space-2); padding: 40px 0; color: var(--muted); font-size: var(--text-sm); }
 .skill-hub-loading svg { width: var(--icon-md); height: var(--icon-md); }
 /* 技能源多、单个源技能多：左选源，右看一个源，避免一条长列表铺满整页。 */
@@ -84,7 +86,7 @@
 .skill-hub-item-title { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
 .skill-hub-item-title strong { overflow: hidden; color: var(--text); font-size: var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
 .skill-hub-item-title small { color: var(--faint); font: var(--text-xs) var(--mono); }
-.skill-hub-item-body p { display: -webkit-box; margin: 0; overflow: hidden; color: var(--muted); font-size: var(--text-xs); line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.skill-hub-item-body p { display: -webkit-box; margin: 0; overflow: hidden; color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-normal); -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .skill-hub-item-meta { display: flex; flex-wrap: wrap; gap: 5px 10px; color: var(--faint); font-size: var(--text-xs); }
 .skill-hub-item-meta span { white-space: nowrap; }
 .skill-hub-item-footer { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3) var(--space-3); }
@@ -117,8 +119,8 @@
 .skill-install-overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--space-2); }
 .skill-install-overview > div { display: grid; min-width: 0; gap: 3px; padding: var(--space-2) var(--space-3); border-radius: var(--radius-control); background: var(--surface-soft); }
 .skill-install-overview span { color: var(--faint); font-size: var(--text-xs); }
-.skill-install-overview strong { overflow: hidden; color: var(--text); font-size: var(--text-xs); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.skill-install-description { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: 1.6; }
+.skill-install-overview strong { overflow: hidden; color: var(--text); font-size: var(--text-xs); font-weight: var(--weight-semibold); text-overflow: ellipsis; white-space: nowrap; }
+.skill-install-description { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-body); }
 .skill-install-scope, .skill-install-files { display: grid; gap: var(--space-2); padding: var(--space-3); border-radius: var(--radius-control); background: var(--surface-soft); }
 .skill-install-scope > div:first-child { display: flex; justify-content: space-between; gap: var(--space-3); }
 .skill-install-scope > .skill-install-scope-heading { align-items: center; justify-content: flex-start; gap: 5px; }
@@ -126,19 +128,20 @@
 .skill-install-files header span { color: var(--muted); font-size: var(--text-xs); }
 .skill-install-scope-options { display: inline-flex; width: fit-content; padding: 2px; border-radius: var(--radius-control); background: var(--surface); }
 .skill-install-scope-options button { min-width: 72px; min-height: 28px; border-radius: calc(var(--radius-control) - 2px); color: var(--muted); font-size: var(--text-xs); }
-.skill-install-scope-options button.is-active { background: var(--selected-bg); color: var(--text); font-weight: 600; }
+.skill-install-scope-options button.is-active { background: var(--selected-bg); color: var(--text); font-weight: var(--weight-semibold); }
 .skill-install-scope-path { min-width: 0; overflow-wrap: anywhere; color: var(--faint); font: var(--text-xs) var(--mono); }
 .skill-install-files header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .skill-install-files > div { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding-top: 6px; border-top: 1px solid var(--divider); }
 .skill-install-files code { min-width: 0; overflow-wrap: anywhere; color: var(--text); font: var(--text-xs) var(--mono); }
 .skill-install-files span { flex: none; color: var(--faint); font-size: var(--text-xs); }
-.skill-install-note { display: flex; align-items: center; gap: 7px; padding: 9px 11px; border-radius: var(--radius-control); background: var(--accent-soft); color: var(--accent); font-size: var(--text-xs); }
+.skill-install-note { display: flex; align-items: center; gap: 7px; padding: 9px 11px; border-radius: var(--radius-control); background: var(--accent-soft); color: var(--text); font-size: var(--text-xs); }
 .skill-install-note svg { width: var(--icon-md); height: var(--icon-md); flex: none; }
 .detail-footer .settings-save { display: inline-flex; align-items: center; gap: 6px; }
 @media (max-width: 900px) {
-  .skill-hub-head { align-items: stretch; flex-direction: column; }
+  .skill-hub-card .skill-hub-head { align-items: stretch; flex-direction: column; flex-wrap: nowrap; }
+  .skill-hub-head > div:first-child { flex: 0 0 auto; }
   .skill-hub-actions { flex-wrap: wrap; }
-  .skill-hub-search { width: min(260px, 100%); }
+  .skill-hub-search { width: 100%; flex-basis: 100%; }
   .skill-hub-grid { grid-template-columns: 1fr; }
   .skill-install-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

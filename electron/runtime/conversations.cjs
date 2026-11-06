@@ -26,6 +26,9 @@ const {
   latestEntry,
   reconcileRuntimeForWorkspace,
 } = require('./durable-runtime.cjs');
+const {
+  trackConversationStream,
+} = require('./conversation-stream-lifecycle.cjs');
 const { guardSensitiveInput } = require('../services/sensitive-input-guard.cjs');
 const {
   concreteThinkingLevel,
@@ -871,11 +874,12 @@ async function submitConversation(input = {}, options = {}) {
   const requestId = typeof input.requestId === 'string' && input.requestId
     ? input.requestId
     : randomUUID();
+  const whenBusy = options.edit ? 'reject' : busyPolicy(input.whenBusy);
   const submission = await conversation.submit({
     type: 'input',
     content,
     requestId,
-    whenBusy: options.edit ? 'reject' : busyPolicy(input.whenBusy),
+    whenBusy,
     entry: {
       kind: 'studio.user',
       data: {
@@ -884,8 +888,26 @@ async function submitConversation(input = {}, options = {}) {
       },
     },
   }, runtime.context);
-  options.onAdmitted?.();
-  const record = await submission.status(runtime.context);
+  try {
+    options.onAdmitted?.();
+  } catch {
+    // Admission is already a Durable fact. Presentation callbacks cannot
+    // turn the accepted submission into a retryable renderer failure.
+  }
+
+  let postCommitError = '';
+  let status = 'unknown';
+  try {
+    const record = await submission.status(runtime.context);
+    if (['queued', 'placed', 'done', 'unanswered'].includes(record?.status)) {
+      status = record.status;
+    } else {
+      postCommitError = '消息已提交，但会话状态暂时无法确认。';
+    }
+  } catch {
+    postCommitError = '消息已提交，但会话状态暂时无法读取。';
+  }
+
   const repairingFallbackTitle = row.titleSource === 'auto-fallback';
   const needsInitialTitle = row.title === '新会话';
   const shouldGenerateTitle = (
@@ -894,23 +916,27 @@ async function submitConversation(input = {}, options = {}) {
     (needsInitialTitle || repairingFallbackTitle)
     && Boolean(displayText)
   );
-  const titleQuestion = repairingFallbackTitle
-    ? (await firstUserQuestion(conversation) || displayText)
-    : displayText;
   const nextTitle = needsInitialTitle ? temporaryTitle(displayText) : row.title;
-  getStudioDatabase().updateConversation(row.id, {
-    ...(options.edit ? {} : { title: nextTitle }),
-    ...(options.edit ? {} : {
-      titleSource: shouldGenerateTitle ? 'auto-pending' : row.titleSource,
-    }),
-    lastRequestId: requestId,
-    updatedAt: Date.now(),
-  });
+  try {
+    getStudioDatabase().updateConversation(row.id, {
+      ...(options.edit ? {} : { title: nextTitle }),
+      ...(options.edit ? {} : {
+        titleSource: shouldGenerateTitle ? 'auto-pending' : row.titleSource,
+      }),
+      lastRequestId: requestId,
+      updatedAt: Date.now(),
+    });
+  } catch {
+    postCommitError ||= '消息已提交，但会话摘要暂时无法更新。';
+  }
   if (shouldGenerateTitle) {
     void (async () => {
       const db = getStudioDatabase();
       let generated = '';
       try {
+        const titleQuestion = repairingFallbackTitle
+          ? (await firstUserQuestion(conversation) || displayText)
+          : displayText;
         const modelRuntime = await getStudioModelsRuntime();
         generated = await generateConversationTitleAfterIdle({
           conversation,
@@ -961,8 +987,10 @@ async function submitConversation(input = {}, options = {}) {
     conversationId: conversationKey(row),
     submissionId: String(submission.id),
     requestId,
-    status: record.status,
-    whenBusy: options.edit ? 'reject' : busyPolicy(input.whenBusy),
+    admitted: true,
+    status,
+    whenBusy,
+    ...(postCommitError ? { postCommitError } : {}),
   };
 }
 
@@ -2002,6 +2030,22 @@ async function ensureWatch(id, emit) {
     if (!entry.running && entry.closeWhenIdle && !subscribers.get(key)?.size) {
       await disposeWatch(key);
     }
+  });
+  void trackConversationStream({
+    key,
+    entry,
+    watches,
+    onUnexpectedEnd: (reason) => {
+      entry.revision += 1;
+      void emit({
+        type: 'stream.closed',
+        conversationId: key,
+        revision: entry.revision,
+        payload: { reason },
+      }).catch((error) => {
+        console.warn('[pi-studio] unable to publish conversation stream closure', error);
+      });
+    },
   });
   return entry;
 }

@@ -682,13 +682,35 @@ test('Agent tool wildcards select MCP namespaces and legacy selections gain new 
     ['studio.agent.tools', ['read', 'write']],
     ['studio.agent.tools.version', 1],
   ]);
+  let transactionSnapshot;
   const db = {
     getSetting(key, fallback) {
       return values.has(key) ? values.get(key) : fallback;
     },
+    getSettingWithRecovery(key, fallback, normalize) {
+      const stored = values.has(key) ? values.get(key) : fallback;
+      const normalized = normalize(stored);
+      if (values.has(key) && JSON.stringify(stored) !== JSON.stringify(normalized)) {
+        values.set(key, normalized);
+      }
+      return normalized;
+    },
+    getSettings() {
+      return Object.fromEntries(values);
+    },
     setSetting(key, value) {
       values.set(key, value);
       return value;
+    },
+    transaction(callback) {
+      transactionSnapshot = new Map(values);
+      try {
+        return callback();
+      } catch (error) {
+        values.clear();
+        for (const [key, value] of transactionSnapshot) values.set(key, value);
+        throw error;
+      }
     },
   };
   const selection = readAgentToolSelection(db);

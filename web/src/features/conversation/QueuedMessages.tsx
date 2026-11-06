@@ -24,9 +24,16 @@ export type QueuedPreview = {
   images: number;
   /** 普通文件数量。 */
   files: number;
+  /** An automatic send was rejected; the row stays at this position. */
+  error?: string;
+  /** Durable admission is in flight; the row identity and content stay locked. */
+  admissionPending?: boolean;
 };
 
 type QueuedMessagesProps = {
+  /** While a turn is active the actions insert; while idle they start sending. */
+  canSteer?: boolean;
+  sendDisabled?: boolean;
   /** 当前排队项，顺序即发送顺序。 */
   items: QueuedPreview[];
   /** 编辑：App 会把它移出队列并放回输入框。 */
@@ -50,21 +57,25 @@ type QueuedMessagesProps = {
  * 没有排队项时直接返回 null（此时才不占位）；
  * draggingId 仅用于给正在拖动的行加高亮，不参与排序计算。
  */
-export function QueuedMessages({ items, onEdit, onDelete, onSendNow, onSendAll, onReorder }: QueuedMessagesProps) {
+export function QueuedMessages({ items, canSteer = false, sendDisabled = false, onEdit, onDelete, onSendNow, onSendAll, onReorder }: QueuedMessagesProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   if (items.length === 0) return null;
   return <div className="queued-panel" aria-label="排队消息">
     <div className="queued-panel-head">
       <span className="queued-panel-title"><Clock3 />排队消息<b>{items.length}</b></span>
-      <button type="button" className="queued-send-all" onClick={onSendAll}>插话发送全部</button>
+      <button type="button" className="queued-send-all" disabled={sendDisabled} title={sendDisabled ? '当前会话暂时不能发送，排队消息已保留' : undefined} onClick={onSendAll}>{canSteer ? '插话发送全部' : '发送全部'}</button>
     </div>
     <div className="queued-list">
-      {items.map((item) => <div
-        className={`queued-item ${draggingId === item.id ? 'is-dragging' : ''}`}
+      {items.map((item) => {
+        const itemAdmissionPending = Boolean(item.admissionPending);
+        const itemSendDisabled = sendDisabled || itemAdmissionPending;
+        return <div
+        className={`queued-item ${draggingId === item.id ? 'is-dragging' : ''} ${item.error ? 'is-error' : ''} ${item.admissionPending ? 'is-sending' : ''}`}
         key={item.id}
         // 用原生 HTML5 拖拽；把 id 写入 dataTransfer，drop 时读取，
         // 这样即使 drag 状态丢失也能确定来源（draggingId 只作兜底）。
-        draggable
+        draggable={!itemAdmissionPending}
+        aria-busy={item.admissionPending || undefined}
         onDragStart={(event) => { setDraggingId(item.id); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', item.id); }}
         onDragEnd={() => setDraggingId(null)}
         onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; }}
@@ -73,15 +84,19 @@ export function QueuedMessages({ items, onEdit, onDelete, onSendNow, onSendAll, 
         <span className="queued-grip" title="拖动调整顺序"><GripVertical /></span>
         <span className="queued-copy">
           <span className="queued-text">{item.text}</span>
+          {item.admissionPending
+            ? <span className="queued-state">正在确认消息是否已发送…</span>
+            : item.error && <span className="queued-error">{item.error}</span>}
           {/* 附件计数用「图片 · 文件」组合，只有存在附件时才显示 */}
           {(item.images > 0 || item.files > 0) && <span className="queued-meta">{item.images > 0 ? `${item.images} 张图片` : ''}{item.images > 0 && item.files > 0 ? ' · ' : ''}{item.files > 0 ? `${item.files} 个文件` : ''}</span>}
         </span>
         <span className="queued-actions">
-          <button type="button" title="立即插话发送" aria-label="立即插话发送" onClick={() => onSendNow(item.id)}><ArrowUp /></button>
-          <button type="button" title="编辑；再次排队时放回原位置" aria-label="编辑排队消息" onClick={() => onEdit(item.id)}><Pencil /></button>
-          <button type="button" title="删除排队消息" aria-label="删除排队消息" onClick={() => onDelete(item.id)}><Trash2 /></button>
+          <button type="button" disabled={itemSendDisabled} title={itemAdmissionPending ? '正在确认本条消息是否已发送' : canSteer ? '立即插话发送' : '立即发送'} aria-label={canSteer ? '立即插话发送' : '立即发送'} onClick={() => onSendNow(item.id)}><ArrowUp /></button>
+          <button type="button" disabled={itemAdmissionPending} title={itemAdmissionPending ? '正在确认本条消息是否已发送' : '编辑；再次排队时放回原位置'} aria-label="编辑排队消息" onClick={() => onEdit(item.id)}><Pencil /></button>
+          <button type="button" disabled={itemAdmissionPending} title={itemAdmissionPending ? '正在确认本条消息是否已发送' : '删除排队消息'} aria-label="删除排队消息" onClick={() => onDelete(item.id)}><Trash2 /></button>
         </span>
-      </div>)}
+      </div>;
+      })}
     </div>
   </div>;
 }

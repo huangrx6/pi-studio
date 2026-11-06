@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
 import {
   Activity,
   Columns2,
@@ -17,11 +17,13 @@ import {
 } from 'lucide-react';
 import { RightPanelToolList, type RightPanelToolAction } from './RightPanelStart';
 import { usePanelTabScroll } from './usePanelTabScroll';
+import { isComposingKey, menuFocusIndex } from '../../shared/keyboard-navigation';
 
 export type PanelTabItem = {
   id: string;
   kind: 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services' | 'browser';
   title: string;
+  tooltip?: string;
 };
 
 const TAB_ICONS: Record<PanelTabItem['kind'], LucideIcon> = {
@@ -74,22 +76,30 @@ export function PanelTabBar<T extends PanelTabItem>({
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const toolTrigger = useRef<HTMLButtonElement>(null);
+  const focusLast = useRef(false);
+  const menuId = useId();
+  const closeToolMenu = (restore = false) => {
+    setToolMenuOpen(false);
+    if (restore && menuRef.current?.contains(document.activeElement)) toolTrigger.current?.focus({ preventScroll: true });
+  };
+  useLayoutEffect(() => {
+    if (!toolMenuOpen) return;
+    const items = menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)');
+    (focusLast.current ? items?.[items.length - 1] : items?.[0])?.focus({ preventScroll: true });
+  }, [toolMenuOpen]);
   const { rootRef, revealTab } = usePanelTabScroll({ activeId, tabCount: tabs.length, resizing, split });
 
   useEffect(() => {
     if (!toolMenuOpen) return;
-    const close = (event: PointerEvent) => {
+    const outside = (event: Event) => {
       if (!menuRef.current?.contains(event.target as Node)) setToolMenuOpen(false);
     };
-    const escape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') setToolMenuOpen(false);
-    };
-    document.addEventListener('pointerdown', close);
-    document.addEventListener('keydown', escape);
-    requestAnimationFrame(() => menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')?.focus());
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('focusin', outside);
     return () => {
-      document.removeEventListener('pointerdown', close);
-      document.removeEventListener('keydown', escape);
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('focusin', outside);
     };
   }, [toolMenuOpen]);
 
@@ -100,6 +110,7 @@ export function PanelTabBar<T extends PanelTabItem>({
   };
 
   const onTabKeyDown = (event: KeyboardEvent<HTMLDivElement>, tab: T, index: number) => {
+    if (event.target !== event.currentTarget || isComposingKey(event.nativeEvent)) return;
     if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
       event.preventDefault();
       const rect = event.currentTarget.getBoundingClientRect();
@@ -156,7 +167,7 @@ export function PanelTabBar<T extends PanelTabItem>({
           role="tab"
           tabIndex={activeId === tab.id ? 0 : -1}
           aria-selected={activeId === tab.id}
-          title={tab.title}
+          title={tab.tooltip || tab.title}
           className={`panel-tab ${activeId === tab.id ? 'is-active' : ''} ${draggingId === tab.id ? 'is-dragging' : ''} ${dropTarget === tab.id ? 'tab-drop-before' : ''}`}
           draggable
           onClick={() => onActivate(tab)}
@@ -206,21 +217,38 @@ export function PanelTabBar<T extends PanelTabItem>({
     <div className="panel-tools">
       <div className="panel-tool-menu-anchor" ref={menuRef}>
         <button
+          ref={toolTrigger}
           className={`icon-button panel-tab-add ${toolMenuOpen ? 'is-active' : ''}`}
           type="button"
           aria-label="打开工具"
           title="打开工具"
           aria-haspopup="menu"
           aria-expanded={toolMenuOpen}
-          onClick={() => setToolMenuOpen((value) => !value)}
+          aria-controls={toolMenuOpen ? menuId : undefined}
+          onClick={() => { focusLast.current = false; setToolMenuOpen((value) => !value); }}
+          onKeyDown={event => {
+            if (isComposingKey(event.nativeEvent)) return;
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              event.preventDefault(); focusLast.current = event.key === 'ArrowUp'; setToolMenuOpen(true);
+            }
+            if (event.key === 'Escape' && toolMenuOpen) { event.preventDefault(); event.stopPropagation(); closeToolMenu(true); }
+          }}
         ><Plus /></button>
-        {toolMenuOpen && <div className="panel-tool-menu">
+        {toolMenuOpen && <div className="panel-tool-menu" id={menuId} onKeyDown={event => {
+          if (isComposingKey(event.nativeEvent)) return;
+          if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeToolMenu(true); return; }
+          if (event.key === 'Tab') { event.stopPropagation(); closeToolMenu(true); return; }
+          const items = [...menuRef.current!.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')];
+          const index = menuFocusIndex(event.key, items.indexOf(document.activeElement as HTMLButtonElement), items.length, true);
+          if (index === null) return;
+          event.preventDefault(); items[index]?.focus({ preventScroll: true });
+        }}>
           <RightPanelToolList
             menu
             actions={toolActions.map((action) => ({
               ...action,
               onSelect: () => {
-                setToolMenuOpen(false);
+                closeToolMenu(true);
                 action.onSelect();
               },
             }))}

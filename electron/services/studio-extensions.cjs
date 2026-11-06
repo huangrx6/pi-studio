@@ -94,8 +94,10 @@ function extensionDistributionService() {
       officialRoot: officialExtensionsRoot(),
       normalizeManifest,
       dependencyResolver: (id) => Boolean(getStudioDatabase().getExtension(id)),
+      isExtensionInstalled: (id) => Boolean(getStudioDatabase().getExtension(id)),
       allowInsecureLocalhost: true,
     });
+    distribution.recoverPendingUninstalls();
   }
   return distribution;
 }
@@ -260,7 +262,7 @@ function candidateManifests(root, scope) {
     return [];
   }
   return entries
-    .filter((entry) => entry.isDirectory())
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.uninstall-'))
     .map((entry) => path.join(root, entry.name, MANIFEST_NAME))
     .filter((manifest) => fs.existsSync(manifest))
     .sort((left, right) => left.localeCompare(right))
@@ -271,6 +273,12 @@ function scanStudioExtensions(cwd) {
   const manifests = [];
   const errors = [];
   const installs = extensionDistributionService();
+  for (const error of installs.recoverPendingUninstalls()) {
+    errors.push({
+      path: error.path,
+      message: error.message,
+    });
+  }
   const roots = [
     { root: userExtensionsDirectory(), scope: 'user', trusted: true },
     ...(cwd ? [{ root: projectExtensionsDirectory(cwd), scope: 'project', trusted: false }] : []),
@@ -1368,13 +1376,23 @@ async function removeStudioExtension(id, cwd, options = {}) {
       cwd,
       preserveData: options.preserveData !== false,
       force: false,
+      commit: () => getStudioDatabase().transaction(() => getStudioDatabase().removeExtension(id)),
     });
-    getStudioDatabase().removeExtension(id);
     return removed;
   }
   const extensionDirectory = path.dirname(assertManagedPath(row.source, row.scope, cwd));
-  getStudioDatabase().removeExtension(id);
-  fs.rmSync(extensionDirectory, { recursive: true, force: true });
+  // Workspace aliases may be symlinks; resolve that explicit scope once, while
+  // preserving every managed child component for the no-symlink validation.
+  const scopeDirectory = path.resolve(row.scope === 'project' ? cwd : app.getPath('userData'));
+  const boundary = fs.realpathSync(scopeDirectory);
+  installs.removeUnmanagedExtension(row.manifest.id, {
+    stableId: id,
+    target: path.resolve(boundary, path.relative(scopeDirectory, extensionDirectory)),
+    boundary,
+    scope: row.scope,
+    cwd,
+    commit: () => getStudioDatabase().transaction(() => getStudioDatabase().removeExtension(id)),
+  });
   return { removed: true };
 }
 

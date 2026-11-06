@@ -27,6 +27,7 @@ const MAX_PATTERN_LENGTH = 200;
 const MAX_RULE_LABEL = 120;
 const TOOL_PATTERN = /^[A-Za-z0-9_.:*-]{1,160}$/;
 const RULE_ID = /^[A-Za-z0-9_.:-]{1,80}$/;
+const RESERVED_OBJECT_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 const SHELL_CONTROL = new Set([';', '&&', '||', '|', '&', '\n']);
 const SHELL_REDIRECT = new Set(['>', '>>', '>|', '&>', '&>>', '<>']);
 const SHELL_WRAPPERS = new Set([
@@ -69,7 +70,7 @@ function defaultPolicy(mode = 'smart') {
 function normalizeToolPattern(value) {
   if (typeof value !== 'string') return '';
   const pattern = value.trim();
-  if (!TOOL_PATTERN.test(pattern)) return '';
+  if (!TOOL_PATTERN.test(pattern) || RESERVED_OBJECT_KEYS.has(pattern)) return '';
   // A wildcard is allowed, arbitrary regex syntax is not.
   if (/[^A-Za-z0-9_.:*-]/.test(pattern)) return '';
   return pattern;
@@ -171,7 +172,12 @@ function normalizePolicy(value, options = {}) {
       if (strict) throw new Error(`无效的工具权限：${rawPattern}`);
       continue;
     }
-    tools[pattern] = rawDecision;
+    Object.defineProperty(tools, pattern, {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: rawDecision,
+    });
   }
   if (strict && source.rules !== undefined && !Array.isArray(source.rules)) {
     throw new Error('权限规则必须是数组');
@@ -203,7 +209,11 @@ function normalizePolicyStore(value, options = {}) {
     source.workspaces && typeof source.workspaces === 'object' && !Array.isArray(source.workspaces)
       ? source.workspaces
       : {},
-  ).filter(([cwd]) => typeof cwd === 'string' && cwd.trim());
+  ).filter(([cwd]) => (
+    typeof cwd === 'string'
+    && cwd.trim()
+    && !RESERVED_OBJECT_KEYS.has(cwd)
+  ));
   for (const [cwd, policy] of workspaceEntries.slice(-MAX_WORKSPACE_POLICIES)) {
     try {
       workspaces[cwd] = normalizePolicy(policy, { strict });
@@ -216,7 +226,12 @@ function normalizePolicyStore(value, options = {}) {
     source.sessions && typeof source.sessions === 'object' && !Array.isArray(source.sessions)
       ? source.sessions
       : {},
-  ).filter(([sessionId]) => typeof sessionId === 'string' && sessionId.trim());
+  ).filter(([sessionId]) => (
+    typeof sessionId === 'string'
+    && sessionId.trim()
+    && sessionId.length <= 256
+    && !RESERVED_OBJECT_KEYS.has(sessionId)
+  ));
   for (const [sessionId, policy] of sessionEntries.slice(-MAX_SESSION_POLICIES)) {
     try {
       sessions[sessionId] = normalizePolicy(policy, { strict });

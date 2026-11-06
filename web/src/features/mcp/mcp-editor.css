@@ -1,0 +1,33 @@
+.mcp-editor-fields { align-items: start; }
+.mcp-editor-note { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-body); overflow-wrap: anywhere; }
+.mcp-editor-secret-clear { display: flex; align-items: flex-start; gap: var(--space-2); color: var(--text); font-size: var(--text-xs); line-height: var(--leading-body); }
+.mcp-editor-fields .mcp-editor-secret-clear input { flex: none; width: 14px; height: 14px; margin-top: 2px; }
+.mcp-editor-fields .mcp-editor-clear-note { color: var(--warning); font-size: var(--text-xs); line-height: var(--leading-body); }
+.mcp-editor-advanced { min-width: 0; border-top: 1px solid var(--divider); padding-top: var(--space-4); }
+.mcp-editor-advanced > summary,
+.mcp-editor-test-result summary { cursor: pointer; color: var(--text); font-size: var(--text-sm); }
+.mcp-editor-advanced > summary > span { margin-left: var(--space-3); color: var(--muted); font-size: var(--text-xs); }
+.mcp-editor-advanced > summary:focus-visible,
+.mcp-editor-test-result summary:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 4px; border-radius: var(--radius-control); }
+.mcp-editor-advanced[open] > summary { margin-bottom: var(--space-4); }
+.mcp-editor-test { display: grid; min-width: 0; gap: var(--space-3); padding-top: var(--space-4); border-top: 1px solid var(--divider); }
+.mcp-editor-test-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.mcp-editor-test-actions > button { display: inline-flex; align-items: center; gap: 6px; }
+.mcp-editor-test-actions svg { width: var(--icon-sm); height: var(--icon-sm); }
+.mcp-editor-test-actions > span,
+.mcp-editor-test-result { color: var(--muted); font-size: var(--text-xs); }
+.mcp-editor-test-result { display: grid; gap: var(--space-3); min-width: 0; }
+.mcp-editor-test-summary { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: baseline; }
+.mcp-editor-test-summary strong { color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.mcp-editor-test-summary[data-state="error"] strong { color: var(--error); }
+.mcp-editor-test-result p { margin: 0; line-height: var(--leading-body); white-space: pre-wrap; overflow-wrap: anywhere; }
+.mcp-editor-test-tools { display: grid; max-height: 260px; overflow-y: auto; margin-top: var(--space-3); }
+.mcp-editor-test-tools > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); padding: var(--space-3) 0; border-top: 1px solid var(--divider); }
+.mcp-editor-test-tools code { color: var(--text); font: var(--text-xs)/var(--leading-body) var(--mono); overflow-wrap: anywhere; }
+.mcp-editor-test-tools p { grid-column: 1 / -1; }
+.mcp-editor-test-result pre { max-height: 240px; overflow: auto; margin: var(--space-3) 0 0; font: var(--text-xs)/var(--leading-body) var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.mcp-editor-test-tools > div > span { overflow-wrap: anywhere; }
+@media (max-width: 520px) {
+  .mcp-editor-test-tools > div { grid-template-columns: minmax(0, 1fr); }
+}

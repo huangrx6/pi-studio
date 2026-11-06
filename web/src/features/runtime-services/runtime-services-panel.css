@@ -87,7 +87,7 @@
 .runtime-services-error button {
   flex: none;
   color: inherit;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 .runtime-services-list {
   min-height: 0;
@@ -126,7 +126,7 @@
   color: var(--text);
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   line-height: 20px;
 }
 .runtime-service-main {
@@ -145,7 +145,7 @@
   overflow: hidden;
   color: var(--text);
   font-size: var(--text-sm);
-  font-weight: 450;
+  font-weight: var(--weight-medium);
   line-height: 20px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -214,7 +214,7 @@
   text-align: center;
 }
 .runtime-services-empty > svg { width: var(--icon-lg); height: var(--icon-lg); }
-.runtime-services-empty strong { color: var(--muted); font-size: var(--text-base); font-weight: 500; }
+.runtime-services-empty strong { color: var(--muted); font-size: var(--text-base); font-weight: var(--weight-medium); }
 .runtime-services-empty button {
   min-height: 30px;
   padding: 0 10px;
@@ -243,3 +243,9 @@
 @media (prefers-reduced-motion: reduce) {
   .runtime-services-skeletons span { animation: none; }
 }
+
+.runtime-services-live.is-stale i { background: var(--warning); }
+.runtime-services-error { flex-wrap: wrap; overflow-wrap: anywhere; }
+.runtime-services-error span { flex: 1 1 140px; }
+.runtime-services-error small { display: block; margin-top: 4px; font-size: inherit; }
+.runtime-services-error button:disabled { opacity: .55; cursor: not-allowed; }

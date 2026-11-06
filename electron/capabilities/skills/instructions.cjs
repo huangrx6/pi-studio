@@ -15,6 +15,7 @@ const path = require('node:path');
 const { parse: parseYaml } = require('yaml');
 const { getStudioDatabase } = require('../../core/studio-db.cjs');
 const { userDataDirectory } = require('../../core/studio-paths.cjs');
+const { cleanupCommittedSkillDirectory, retryCommittedSkillCleanup } = require('./cleanup.cjs');
 
 const SKILL_FILE = 'SKILL.md';
 const MAX_SKILL_BYTES = 2 * 1024 * 1024;
@@ -525,6 +526,7 @@ function inspectSingleSkillDirectory(root) {
 }
 
 function discoverSkills(cwd) {
+  retryCommittedSkillCleanup();
   const realCwd = typeof cwd === 'string' && cwd ? path.resolve(cwd) : '';
   let realWorkspace = '';
   if (realCwd) {
@@ -703,13 +705,14 @@ function setSkillTrusted(skillPath, cwd, trusted) {
   const skill = discoverSkills(workspace).skills.find((item) => item.path === resolved);
   if (!skill) throw new Error('技能不存在');
   if (trusted) {
-    return getStudioDatabase().setProjectResourceTrust({
+    const db = getStudioDatabase();
+    return db.transaction(() => db.setProjectResourceTrust({
       workspace,
       kind: 'skill',
       resourcePath: skill.baseDir,
       contentHash: directoryFingerprint(skill.baseDir),
       trusted: true,
-    });
+    }));
   }
   getStudioDatabase().removeProjectResourceTrust(workspace, 'skill', skill.baseDir);
   return undefined;
@@ -772,18 +775,24 @@ function removeSkill(skillFile, cwd) {
   const stat = fs.lstatSync(skillDirectory);
   if (stat.isSymbolicLink()) throw new Error('不能删除符号链接形式的技能');
   if (!fs.existsSync(resolved)) throw new Error('技能不存在');
-  fs.rmSync(skillDirectory, { recursive: true, force: true });
-  getStudioDatabase().removeSkillInstallation(skillDirectory);
-  if (
-    cwd
-    && projectSkillRoots(cwd).some((root) => containedBy(root, skillDirectory))
-  ) {
-    getStudioDatabase().removeProjectResourceTrust(
-      path.resolve(cwd),
-      'skill',
-      skillDirectory,
-    );
+  const removed = path.join(path.dirname(skillDirectory), `.${path.basename(skillDirectory)}.${crypto.randomUUID()}.removed`);
+  const db = getStudioDatabase();
+  fs.renameSync(skillDirectory, removed);
+  try {
+    db.transaction(() => {
+      db.removeSkillInstallation(skillDirectory);
+      if (cwd && projectSkillRoots(cwd).some((root) => containedBy(root, skillDirectory))) {
+        db.removeProjectResourceTrust(path.resolve(cwd), 'skill', skillDirectory);
+      }
+    });
+  } catch (error) {
+    try { fs.renameSync(removed, skillDirectory); }
+    catch { throw new Error(`技能删除未完成，原文件保留在 ${removed}，请恢复到 ${skillDirectory}。`); }
+    throw error;
   }
+  // The hidden tombstone no longer participates in discovery. Cleanup failure
+  // after the metadata commit must not encourage a second destructive request.
+  cleanupCommittedSkillDirectory(removed);
 }
 
 module.exports = {

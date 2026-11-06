@@ -109,6 +109,7 @@ await page.addInitScript(() => {
   window.__createdWorkspaces = [];  // createConversation 收到的 cwd
   window.__createdKinds = [];       // 新会话不得再提交类型字段
   window.__sidebarActions = [];     // conversationAction 的调用历史
+  window.__appearanceCalls = 0;     // setAppearance IPC 次数
   // window.__nativeTheme / __promptFailure / __chosenWorkspace / __copiedSessionId
   // 会在后续步骤中动态赋值，分别模拟原生主题、发送失败、文件夹选择与剪贴板。
 
@@ -196,6 +197,7 @@ await page.addInitScript(() => {
     },
     // 记录 renderer 请求的主题、配色和圆角，断言原生外观收到同一选择。
     setAppearance: async (theme, palette, radiusStyle) => {
+      window.__appearanceCalls += 1;
       window.__nativeTheme = theme;
       window.__nativePalette = palette;
       window.__nativeRadiusStyle = radiusStyle;
@@ -305,11 +307,11 @@ async function capture(name) {
   assert.deepEqual(overflow, []);
 }
 
-// 打开设置并切换到“界面模式”分页。
+// 打开设置并切换到通用外观分组。
 async function openAppearanceSettings() {
   await page.locator('.bottom-row').click();
   await page.getByRole('button', { name: '通用', exact: true }).click();
-  await page.getByRole('heading', { name: '界面模式', exact: true }).waitFor();
+  await page.getByRole('heading', { name: '外观', exact: true }).waitFor();
 }
 
 // 点击主题单选项，并等待 <html data-theme> 真正切换。
@@ -318,17 +320,20 @@ async function setTheme(name, mode) {
   await page.waitForFunction((expected) => document.documentElement.dataset.theme === expected, mode);
 }
 
-// 点击全局配色卡片，并等待根节点的 data-palette 同步更新。
+// 点击配色单选项的标签，并等待根节点的 data-palette 同步更新。
 async function setPalette(name, id) {
-  await page.getByRole('radio', { name: new RegExp(`^${name}`) }).click();
+  await page.locator(`[data-palette-choice="${id}"]`).click();
+  assert.equal(await page.getByRole('radio', { name: new RegExp(`^${name}`) }).isChecked(), true);
   await page.waitForFunction((expected) => document.documentElement.dataset.palette === expected, id);
   await page.waitForFunction((expected) => window.__nativePalette === expected, id);
 }
 
-// 确保工作区展开后打开第一个会话（有会话行时直接点，否则先展开工作区）。
-async function openFirstSession() {
-  if (!await page.locator('.session-row').count()) await page.locator('.workspace-row').first().click();
-  await page.locator('.session-row').first().click();
+// 展开目标工作区并打开第一个真实会话；另一个工作区的空入口不能参与选择。
+async function openFirstSession(cwd) {
+  const group = page.locator(`.workspace[data-workspace-cwd="${cwd}"]`);
+  const workspaceRow = group.locator('.workspace-row');
+  if (await workspaceRow.getAttribute('aria-expanded') === 'false') await workspaceRow.click();
+  await group.locator('.session-row:not(.empty)').first().click();
 }
 
 // 鼠标悬停到某一行并点击其行内操作按钮（例如“更多操作”）。
@@ -344,9 +349,11 @@ try {
   await page.goto(process.env.PREVIEW_URL || 'http://127.0.0.1:5180');
   await page.locator('.composer textarea').waitFor();
   const workspacePicker = page.getByRole('button', { name: '新对话工作区', exact: true });
-  assert.equal(await workspacePicker.innerText(), '选择工作区');
+  const setupWorkspace = page.getByRole('button', { name: '选择工作区', exact: true });
+  await setupWorkspace.waitFor();
+  assert.equal(await workspacePicker.count(), 0);
   assert.equal(await page.locator('.conversation-kind-switch').count(), 0);
-  assert.match(await page.locator('#workspace-selection-hint').innerText(), /先选择一个工作区，再开始对话/);
+  assert.match(await page.locator('#workspace-selection-hint').innerText(), /选择工作区后才能发送第一条消息/);
 
   // 没有工作区时可以先输入草稿，但发送按钮必须禁用；按 Enter 不能创建会话。
   await page.getByRole('textbox', { name: '发送给 Pi 的消息' }).fill('保留这份草稿');
@@ -359,8 +366,9 @@ try {
   // 5. 工作区选择：已知工作区、草稿保留与发送失败
   // -------------------------------------------------------------------------
   // 选择列表里的 pi-studio 后发送按钮应启用；取消选择后回到未选状态。
-  await workspacePicker.click();
-  await page.getByRole('option', { name: 'pi-studio /workspace/pi-studio', exact: true }).click();
+  await page.locator('.workspace-row').filter({ hasText: 'pi-studio' }).click();
+  await workspacePicker.waitFor();
+  assert.equal(await workspacePicker.innerText(), 'pi-studio');
   await page.waitForFunction(() => {
     const button = document.querySelector('.send-button[aria-label="发送消息"]');
     return button && !button.disabled;
@@ -369,13 +377,15 @@ try {
   await page.getByRole('button', { name: '取消选择工作区' }).click();
   await openAppearanceSettings();
   await page.locator('.settings-back-button').click();
-  assert.equal(await workspacePicker.innerText(), '选择工作区');
+  await setupWorkspace.waitFor();
+  assert.equal(await workspacePicker.count(), 0);
 
   // 切换到另一个工作区，之前输入的草稿必须保留。
-  await workspacePicker.click();
-  await page.getByRole('option', { name: 'another-project /workspace/another-project', exact: true }).click();
+  await page.locator('.workspace-row').filter({ hasText: 'another-project' }).click();
+  await workspacePicker.waitFor();
   assert.equal(await page.getByRole('textbox', { name: '发送给 Pi 的消息' }).inputValue(), '保留这份草稿');
-  assert.match(await page.locator('#workspace-selection-hint').innerText(), /从一个念头开始/);
+  assert.equal(await page.locator('#workspace-selection-hint').count(), 0, 'workspace hint disappears once the required setup is complete');
+  assert.equal(await page.locator('.new-conversation-setup').count(), 0, 'completed setup actions are removed from the welcome state');
 
   // 发送失败（IPC 抛错）时展示错误提示；此时 createConversation 已被调用一次，
   // 目标工作区就是 another-project；随后点击“新会话”不应重复创建。
@@ -415,13 +425,25 @@ try {
   // 7. 主题切换：亮色 / 暗色全页面截图
   // -------------------------------------------------------------------------
   await openAppearanceSettings();
+  const appearanceCallsBeforeFontSize = await page.evaluate(() => window.__appearanceCalls);
+  await page.getByRole('button', { name: '字号大小', exact: true }).click();
+  await page.getByRole('option', { name: '16 px', exact: true }).click();
+  await page.waitForFunction(() => document.documentElement.style.getPropertyValue('--chat-font-size') === '16px');
+  assert.equal(
+    await page.evaluate(() => window.__appearanceCalls),
+    appearanceCallsBeforeFontSize,
+    'reading preferences stay in renderer and do not repeat native appearance IPC',
+  );
+  await page.getByRole('button', { name: '字号大小', exact: true }).click();
+  await page.getByRole('option', { name: '14 px', exact: true }).click();
+  await page.waitForFunction(() => document.documentElement.style.getPropertyValue('--chat-font-size') === '14px');
   for (const [mode, label] of [['light', '浅色'], ['dark', '深色']]) {
     // setTheme 同时断言原生窗口收到同一个主题值（__nativeTheme）。
     await setTheme(label, mode);
     assert.equal(await page.evaluate(() => window.__nativeTheme), mode);
     await capture(`${mode}-settings`);
     await setPalette('海蓝', 'ocean');
-    assert.equal(await page.getByRole('radio', { name: /^海蓝/ }).getAttribute('aria-checked'), 'true');
+    assert.equal(await page.getByRole('radio', { name: /^海蓝/ }).isChecked(), true);
     assert.equal(await page.evaluate(() => window.__nativePalette), 'ocean');
     await capture(`${mode}-palette-ocean`);
     for (const [name, id] of [['琥珀', 'amber'], ['莓果', 'berry'], ['玉石', 'lime']]) {
@@ -431,27 +453,18 @@ try {
         return ['--theme-accent', '--accent', '--accent-border', '--button-bg', '--button-hover', '--focus-color'].map(token);
       });
       assert.equal(new Set(roles).size, 1, `${mode}/${id}: solid accents must agree`);
-      const swatches = await page.locator(`[data-palette-choice="${id}"]`).evaluate(el =>
-        ['.palette-preview-rail i', '.palette-preview-heading', '.palette-preview-actions b']
-          .map(selector => getComputedStyle(el.querySelector(selector)).backgroundColor));
-      assert.equal(new Set(swatches).size, 1, `${mode}/${id}: preview should show one accent`);
-      await page.waitForFunction(() => {
-        const style = selector => getComputedStyle(document.querySelector(selector));
-        const painted = [style('.theme-choice.is-active').borderTopColor,
-          style('.theme-choice.is-active svg').color,
-          style('.palette-choice.is-active').borderTopColor,
-          style('.palette-choice-check:not(:empty)').backgroundColor];
-        return new Set(painted).size === 1;
+      const swatchColors = await page.locator(`[data-palette-choice="${id}"] .general-palette-swatch`).evaluate(el => {
+        const probe = document.createElement('span');
+        probe.style.backgroundColor = 'var(--accent)';
+        document.body.append(probe);
+        const expected = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return { actual: getComputedStyle(el).backgroundColor, expected };
       });
-      const disabledRange = page.locator('.settings-range-control.is-disabled').first();
-      if (await disabledRange.count()) {
-        const disabled = await disabledRange.evaluate(el => {
-          const style = getComputedStyle(el);
-          return { opacity: style.opacity, accent: style.getPropertyValue('--accent').trim(), expected: style.getPropertyValue('--disabled-text').trim() };
-        });
-        assert.equal(disabled.opacity, '1');
-        assert.equal(disabled.accent, disabled.expected);
-      }
+      assert.equal(swatchColors.actual, swatchColors.expected, `${mode}/${id}: swatch represents the selected accent`);
+      assert.equal(await page.locator('.general-palette-option input:checked').count(), 1, 'one palette is selected');
+      assert.equal(await page.locator('.general-theme-options button[aria-pressed="true"]').innerText(), label);
+      assert.equal(await page.locator('.general-background-settings').count(), 0, 'unused background adjustments stay hidden');
       await capture(`${mode}-palette-${id}`);
     }
     await setPalette('玉石', 'lime');
@@ -464,26 +477,39 @@ try {
     await capture(`${mode}-dialog`);
     await page.keyboard.press('Escape');
     await page.locator('.settings-back-button').click();
+    await page.locator('.settings-overlay').waitFor({ state: 'detached' });
 
     // 欢迎页的模型选择器、工作区菜单与模型/推理菜单。
+    await page.locator('.workspace-row').filter({ hasText: 'pi-studio' }).click();
+    await workspacePicker.waitFor();
     await capture(`${mode}-new-chat`);
+    await page.waitForFunction(() => {
+      const value = document.querySelector('.workspace-choice .pi-select-value');
+      return value?.textContent?.trim() === 'pi-studio';
+    });
     assert.equal(await page.locator('.conversation-kind-switch').count(), 0);
     await workspacePicker.click();
     await capture(`${mode}-workspace-menu`);
     await page.keyboard.press('Escape');
+    await page.waitForFunction(() => {
+      const selector = document.querySelector('button[aria-label="新对话默认模型"], button[aria-label="当前会话模型"]');
+      return selector instanceof HTMLButtonElement && !selector.disabled;
+    });
     await page.getByRole('button', { name: /^(?:新对话默认模型|当前会话模型)$/ }).click();
     await capture(`${mode}-menu`);
     await page.keyboard.press('Escape');
 
     // 会话页：markdown、思考块展开、滚动到底部的错误气泡。
-    await openFirstSession();
+    await openFirstSession('/workspace/pi-studio');
     await page.locator('.assistant-response').first().waitFor();
     await capture(`${mode}-conversation`);
     const trace = page.locator('.turn-trace-toggle').first();
     if (await trace.getAttribute('aria-expanded') === 'false') await trace.click();
-    await page.locator('.activity-thinking > summary').first().click();
+  const completedThinking = page.locator('details.activity-thinking').first();
+  await completedThinking.waitFor();
+  if (await completedThinking.getAttribute('open') === null) await completedThinking.locator(':scope > summary').click();
     // 展开后思考预览行应隐藏，避免内容重复。
-    assert.equal(await page.locator('.activity-thinking-preview').first().isVisible(), false);
+  await completedThinking.locator(':scope > summary .activity-thinking-preview').waitFor({ state: 'detached' });
     await capture(`${mode}-thinking-expanded`);
     await page.locator('.chat-scroll').evaluate((element) => { element.scrollTop = element.scrollHeight; });
     await capture(`${mode}-error`);
@@ -526,7 +552,7 @@ try {
   // -------------------------------------------------------------------------
   // 打开带历史错误（.assistant-error）的会话，再触发一次发送失败：
   // 新错误必须显示在 composer 的 alert 里，而不是被历史错误吸收。
-  await openFirstSession();
+  await openFirstSession('/workspace/pi-studio');
   await page.locator('.assistant-error').waitFor();
   await page.evaluate(() => { window.__promptFailure = '无法读取环境变量 EXAMPLE_API_KEY，请重新保存凭据。'; });
   await page.getByRole('textbox', { name: '发送给 Pi 的消息' }).fill('再试一次');
@@ -567,15 +593,16 @@ try {
   assert.equal(await page.locator('.session-kind-badge').count(), 0);
   assert.ok(alignmentMetrics.conversation.time && alignmentMetrics.goal.time);
   assert.ok(
-    Math.abs(alignmentMetrics.conversation.time.x - alignmentMetrics.goal.time.x) < 0.5,
+    Math.abs(alignmentMetrics.conversation.time.right - alignmentMetrics.goal.time.right) < 0.5,
     `time columns differ: ${JSON.stringify(alignmentMetrics)}`,
   );
   assert.equal(await goalShell.locator('.session-time').innerText(), '1h6m');
   await capture('sidebar-session-alignment');
 
-  // 目标存在时只在标题旁显示动态状态；会话本身仍是普通会话。
+  // 目标状态集中在输入区任务栏；标题不再重复相同状态。
   await goalShell.locator('.session-row').click();
-  await page.locator('.chat-heading-kind').filter({ hasText: '目标执行中' }).waitFor();
+  await page.locator('.long-task-dock').filter({ hasText: '等待继续' }).waitFor();
+  assert.equal(await page.locator('.chat-heading-kind').count(), 0);
   await capture('goal-conversation');
   await conversationShell.locator('.session-row').click();
   await page.getByRole('heading', { name: '全局主题预览', exact: true }).waitFor();
@@ -686,4 +713,7 @@ try {
   // 整个流程中浏览器不能有未捕获异常。
   assert.deepEqual(errors, []);
   console.log(`Theme UI checks passed. Screenshots: ${output}`);
+} catch (error) {
+  await page.screenshot({ path: `${output}qa-theme-failure.png`, animations: 'disabled' }).catch(() => {});
+  throw error;
 } finally { await browser.close(); }

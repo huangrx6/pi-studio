@@ -89,3 +89,37 @@ export function compactTokens(value: number): string {
   }
   return String(tokens);
 }
+
+export type ContextPolicy = {
+  modelRef: string;
+  contextWindow: number;
+  autoCompactPercent: number;
+  compactAtTokens: number | null;
+};
+
+const nonnegative = (value: number) => Number.isFinite(value) ? Math.max(0, value) : 0;
+
+/** Display the same denominator in the ring, percentage and token count. */
+export function contextUsagePresentation(usage: ContextUsage | null, policy: ContextPolicy | null) {
+  const window = nonnegative(policy ? policy.contextWindow : usage?.contextWindow ?? 0);
+  const used = nonnegative(usage?.usedTokens ?? 0);
+  const known = Boolean(usage) && window > 0;
+  const percent = known ? Math.min(100, Math.round(used / window * 100)) : 0;
+  const compactAt = policy?.compactAtTokens;
+  const activeThreshold = window > 0 && typeof compactAt === 'number' && Number.isFinite(compactAt) && compactAt > 0;
+  const effectivePercent = activeThreshold ? compactAt / window * 100 : 0;
+  const actualPercent = known ? used / window * 100 : 0;
+  const tone = !known || !activeThreshold ? 'neutral'
+    : used >= compactAt ? 'critical'
+      : actualPercent >= Math.max(0, effectivePercent - 10) ? 'warning' : 'neutral';
+  const label = !usage ? '上下文用量尚未统计'
+    : known ? `上下文估算已用 ${percent}%` : `上下文估算已用 ${compactTokens(used)} tokens`;
+  const detail = known
+    ? `${compactTokens(used)} / ${compactTokens(window)} tokens · 估算剩余 ${compactTokens(Math.max(0, window - used))}`
+    : usage ? `已用约 ${compactTokens(used)} tokens · 窗口未知` : '尚无上下文读数';
+  const compactionHint = !policy ? '自动压缩策略尚未读取。'
+    : activeThreshold ? `约用到 ${compactTokens(compactAt)} tokens（窗口的 ${Math.round(effectivePercent)}%）时自动压缩；压缩期间当前请求暂停，完成后继续。`
+      : policy.autoCompactPercent === 0 || window > 0 ? '自动按比例压缩未启用。'
+        : '当前模型窗口未知，无法计算按比例压缩阈值；实际压缩以运行时配置为准。';
+  return { known, used, percent, tone, label, detail, compactionHint };
+}

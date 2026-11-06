@@ -5,27 +5,74 @@ const { scanSensitiveInput, sensitiveLabels } = require('../core/sensitive-input
 const { requestPolicyConfirmation } = require('./confirmations.cjs');
 
 const SETTING_KEY = 'studio.sensitive-input-exemptions';
-const MAX_SESSION_EXEMPTIONS = 64;
+const MAX_SESSION_IDS = 64;
+const MAX_FINGERPRINTS_PER_SESSION = 64;
+const RESERVED_OBJECT_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const SAFE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/;
+const SHA_256 = /^[a-f0-9]{64}$/;
+
+function normalizeSessionId(value) {
+  if (typeof value !== 'string') return '';
+  const sessionId = value.trim();
+  return SAFE_SESSION_ID.test(sessionId) && !RESERVED_OBJECT_KEYS.has(sessionId)
+    ? sessionId
+    : '';
+}
+
+function normalizeFingerprints(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  for (const raw of value) {
+    const fingerprint = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+    if (!SHA_256.test(fingerprint)) continue;
+    if (seen.has(fingerprint)) seen.delete(fingerprint);
+    seen.add(fingerprint);
+    if (seen.size > MAX_FINGERPRINTS_PER_SESSION) {
+      seen.delete(seen.values().next().value);
+    }
+  }
+  return [...seen];
+}
+
+function normalizeExemptions(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const entries = Object.entries(value).flatMap(([rawSessionId, rawFingerprints]) => {
+    const sessionId = normalizeSessionId(rawSessionId);
+    if (!sessionId) return [];
+    const fingerprints = normalizeFingerprints(rawFingerprints);
+    return fingerprints.length > 0 ? [[sessionId, fingerprints]] : [];
+  });
+  return Object.fromEntries(entries.slice(-MAX_SESSION_IDS));
+}
 
 function readExemptions() {
-  const stored = getStudioDatabase().getSetting(SETTING_KEY, {});
-  return stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+  return getStudioDatabase().getSettingWithRecovery(
+    SETTING_KEY,
+    {},
+    normalizeExemptions,
+  );
 }
 
 function sessionExemptions(sessionId) {
-  const values = readExemptions()[sessionId];
-  return Array.isArray(values)
-    ? values.filter(value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value))
-    : [];
+  const id = normalizeSessionId(sessionId);
+  return id ? [...(readExemptions()[id] || [])] : [];
 }
 
 function rememberSessionExemptions(sessionId, fingerprints) {
+  const id = normalizeSessionId(sessionId);
+  if (!id) throw new Error('敏感输入豁免需要有效会话 ID');
   const store = readExemptions();
-  const next = [...new Set([...sessionExemptions(sessionId), ...fingerprints])].slice(-MAX_SESSION_EXEMPTIONS);
+  const current = store[id] || [];
+  const additions = normalizeFingerprints(fingerprints);
+  if (additions.length === 0) return [...current];
+  const next = normalizeFingerprints([...current, ...additions]);
   const sessions = Object.entries(store)
-    .filter(([id, values]) => id !== sessionId && Array.isArray(values) && values.length > 0)
+    .filter(([existingId, values]) => existingId !== id && values.length > 0)
     .slice(-63);
-  getStudioDatabase().setSetting(SETTING_KEY, { ...Object.fromEntries(sessions), [sessionId]: next });
+  getStudioDatabase().setSetting(SETTING_KEY, {
+    ...Object.fromEntries(sessions),
+    [id]: next,
+  });
   return next;
 }
 

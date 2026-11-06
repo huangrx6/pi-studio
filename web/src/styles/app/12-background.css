@@ -1,0 +1,239 @@
+/* Split from the legacy app.css entry. Import order is part of the cascade. */
+
+
+/* Custom workspace background.
+ * The media layer sits below the two shell columns. The shell wash is the only layer
+ * whose total coverage follows the user-controlled slider; cards, controls and their
+ * states use fixed role-specific glass surfaces from palette.css so transparency never
+ * compounds independently from component to component.
+ */
+.app { position: relative; }
+.background-layer { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: var(--bg); }
+.background-layer-media {
+  position: absolute;
+  inset: calc(-2px - var(--background-media-blur, 0px));
+  width: calc(100% + var(--background-media-blur, 0px) + var(--background-media-blur, 0px) + 4px);
+  height: calc(100% + var(--background-media-blur, 0px) + var(--background-media-blur, 0px) + 4px);
+  object-fit: cover;
+  object-position: center center;
+  opacity: var(--background-media-opacity, 68%);
+  filter: blur(var(--background-media-blur, 0));
+  transform: translateZ(0);
+}
+.background-layer-soften { position: absolute; inset: 0; background: var(--bg); opacity: .04; }
+.app > .sidebar,
+.app > .main { z-index: 1; }
+.app.has-custom-background > .background-layer { visibility: visible !important; }
+.app.has-custom-background > .sidebar,
+.app.has-custom-background > .main,
+.app.has-custom-background .settings-nav,
+.app.has-custom-background .settings-content { position: relative; isolation: isolate; background: var(--transparent); backdrop-filter: blur(18px) saturate(1.08); -webkit-backdrop-filter: blur(18px) saturate(1.08); }
+.app.has-custom-background > .sidebar::before,
+.app.has-custom-background > .main::before,
+.app.has-custom-background .settings-nav::before,
+.app.has-custom-background .settings-content::before { position: absolute; inset: 0; z-index: -1; content: ''; pointer-events: none; background: var(--background-shell-wash); opacity: var(--background-surface-opacity); }
+.app.has-custom-background > .sidebar::before,
+.app.has-custom-background .settings-nav::before { background: var(--background-sidebar-wash); }
+.app.has-custom-background .settings-overlay { background: var(--transparent); }
+.app.has-custom-background .composer-dock { background: var(--transparent); }
+
+/* Cards and persistent work surfaces share one glass layer. They do not add another
+ * backdrop blur; the shell already softens the media, which keeps long pages cheap. */
+
+/* Full work panes need a quieter but more legible glass layer than inset cards. */
+.app.has-custom-background :is(
+  .file-panel,
+  .file-toolbar,
+  .file-code,
+  .panel-tabbar,
+  .changes-view,
+  .diff-view,
+  .temporary-chat,
+  .agent-context-view,
+  .agent-context-toolbar
+) {
+  background: var(--background-card-strong-surface);
+  border-color: var(--background-border);
+}
+.app.has-custom-background .settings-page-frame {
+  background: var(--background-card-strong-surface);
+  border-color: var(--background-border);
+}
+
+/* Controls sit above cards with one shared surface. Semantic editor rows and small
+ * badges use the softer layer so nested transparency never becomes opaque blocks. */
+
+.app.has-custom-background :is(.workspace-choice, .composer-mode) .pi-select-trigger {
+  background: var(--transparent);
+  border-color: var(--transparent);
+}
+
+.app.has-custom-background :is(
+  .settings-content input:not([type="checkbox"]),
+  .settings-content select,
+  .dialog-body input:not([type="checkbox"]),
+  .dialog-body select,
+  .dialog-body textarea,
+  .workspace-search,
+  .settings-search,
+  .search-field
+) {
+  background: var(--background-control-surface);
+  border-color: var(--background-border-strong);
+}
+
+.app.has-custom-background .composer textarea,
+.app.has-custom-background .composer-highlight {
+  background: var(--transparent);
+}
+
+/* Hover and selection are neutral glass states shared by every control. Accent moves
+ * to the icon, check mark and border instead of painting a second opaque rectangle. */
+
+.app.has-custom-background :is(.workspace-choice, .composer-mode):is(
+  :hover,
+  :has(.pi-select-trigger.is-open),
+  :has(.pi-select-trigger:focus-visible)
+) {
+  background: var(--background-hover-surface);
+}
+
+.app.has-custom-background :is(.workspace-choice, .composer-mode):has(.pi-select-trigger:focus-visible) {
+  box-shadow: inset 0 0 0 1px var(--background-border-strong);
+}
+
+.app.has-custom-background :is(
+  .nav-row,
+  .settings-nav-row,
+  .session-row,
+  .panel-tab,
+  .model-option
+).is-active,
+.app.has-custom-background .model-option.is-selected {
+  background: var(--background-selected-surface);
+  border-color: var(--accent-border);
+}
+
+
+.app.has-custom-background :is(
+  .model-capability-options > label
+).is-selected {
+  background: var(--background-accent-surface);
+  border-color: var(--accent-border);
+}
+
+/* Menus, dialogs and detail layers stay nearly opaque. They float above arbitrary
+ * media and must remain readable even when the shell wash is intentionally low. */
+.app.has-custom-background :is(
+  .model-popover,
+  .composer-picker,
+  .detail-dialog,
+  .settings-dialog,
+  .pi-select-menu,
+  .file-actions-menu,
+  .sidebar-action-menu,
+  .popover-surface,
+  .confirm-card,
+  .extension-custom-card,
+  .action-menu,
+  .changes-jump
+) {
+  background: var(--overlay-surface);
+  border-color: var(--background-border-strong);
+  backdrop-filter: blur(22px) saturate(1.08);
+  -webkit-backdrop-filter: blur(22px) saturate(1.08);
+}
+
+/* Shared media preview and errors; the appearance feature owns its layout. */
+.background-media-preview { position: relative; width: 100%; aspect-ratio: 16 / 9; min-height: 156px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-soft); }
+.background-media-preview-content { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center center; }
+.background-media-preview-kind { position: absolute; right: var(--space-2); bottom: var(--space-2); padding: 3px 7px; border: 1px solid var(--border); border-radius: var(--radius-round); background: var(--overlay-surface); color: var(--muted); font-size: var(--text-xs); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.background-setting-error { padding: 8px 10px; border: 1px solid var(--error-border); border-radius: var(--radius-control); background: var(--error-soft); color: var(--error); font-size: var(--text-xs); line-height: var(--leading-normal); }
+.settings-range-control {
+  display: block;
+  padding: 12px 13px 11px;
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+  cursor: pointer;
+  transition: background var(--transition), box-shadow var(--transition);
+}
+.settings-range-control:hover:not(.is-disabled) { background: var(--surface-hover); }
+.settings-range-control:focus-within:not(.is-disabled) { box-shadow: var(--focus-ring); }
+.settings-range-control.is-disabled {
+  --accent: var(--disabled-text);
+  --accent-border: var(--border-strong);
+  --accent-foreground: var(--disabled-text);
+  cursor: not-allowed;
+}
+.settings-range-control.is-disabled .settings-range-copy strong { color: var(--disabled-text); }
+.settings-range-copy { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
+.settings-range-copy strong { color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.settings-range-copy output {
+  min-width: 50px;
+  padding: 4px 8px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-round);
+  background: var(--accent-soft);
+  color: var(--accent-foreground);
+  font: var(--weight-semibold) var(--text-xs)/1 var(--mono);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.settings-range-control input[type="range"] {
+  width: 100%;
+  height: 22px;
+  margin: 7px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--transparent);
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+.settings-range-control input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-round);
+  background: linear-gradient(90deg, var(--accent) 0 var(--range-progress), var(--surface-active) var(--range-progress) 100%);
+}
+.settings-range-control input[type="range"]::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border: 3px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-border), var(--shadow-thumb);
+  appearance: none;
+  -webkit-appearance: none;
+  transition: box-shadow var(--transition), transform var(--transition);
+}
+.settings-range-control input[type="range"]:hover::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 0 0 1px var(--accent-border), var(--shadow-thumb);
+  transform: scale(1.04);
+}
+.settings-range-control input[type="range"]:active::-webkit-slider-thumb { transform: scale(.94); }
+.settings-range-control input[type="range"]::-moz-range-track {
+  height: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-round);
+  background: var(--surface-active);
+}
+.settings-range-control input[type="range"]::-moz-range-progress { height: 4px; border-radius: var(--radius-round); background: var(--accent); }
+.settings-range-control input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 3px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-border), var(--shadow-thumb);
+}
+.settings-range-control input[type="range"]:focus { box-shadow: none; }
+.settings-range-control input[type="range"]:focus-visible { outline: none; }
+.settings-range-control input[type="range"]:disabled { cursor: not-allowed; }
+
+@media (max-width: 900px) {
+  .background-media-preview { min-height: 190px; }
+}

@@ -1,0 +1,7 @@
+/* Gaps occupy real scroll space without adding focusable or accessible rows.
+   Virtual groups also reserve their complete height while React replaces gaps,
+   so intermediate DOM removal cannot clamp the scroll root back to zero. */
+.sidebar-session-gap { pointer-events: none; flex: none; }
+.sessions.is-virtualized > .session-row-shell { height: var(--control); }
+.workspace-list:has(.sessions.is-virtualized) { overflow-anchor: none; }
+.sidebar-row-shell[data-transferring-focus="true"] > .sidebar-row-actions { opacity: 1; visibility: visible; }

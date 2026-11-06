@@ -30,6 +30,10 @@ const {
 
 const MODES = Object.freeze([...PERMISSION_MODES]);
 const DEFAULT_MODE = 'smart';
+const POLICY_SCOPES = new Set(['user', 'workspace', 'session']);
+const APPROVAL_SCOPES = new Set(['session', 'workspace', 'always']);
+const MAX_SESSION_POLICY_ID = 256;
+const RESERVED_RECORD_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 const MODE_CATALOG = Object.freeze([
   {
     id: 'ask',
@@ -51,14 +55,54 @@ const MODE_CATALOG = Object.freeze([
   },
 ]);
 
-function cleanContext(input = {}) {
+function contextInput(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+function normalizeWorkspacePath(value) {
+  const cwd = typeof value === 'string' ? value.trim() : '';
+  return cwd && path.isAbsolute(cwd) ? path.resolve(cwd) : cwd;
+}
+
+function cleanScope(value, { required = false } = {}) {
+  if (value === undefined) {
+    if (required) throw new Error('权限策略需要明确的作用域');
+    return 'user';
+  }
+  if (!POLICY_SCOPES.has(value)) throw new Error('无效的权限作用域');
+  return value;
+}
+
+function cleanSessionId(value) {
+  const sessionId = canonicalPermissionSessionId(value);
+  if (
+    sessionId
+    && (sessionId.length > MAX_SESSION_POLICY_ID || RESERVED_RECORD_KEYS.has(sessionId))
+  ) {
+    throw new Error('会话权限范围需要有效会话 ID');
+  }
+  return sessionId;
+}
+
+function requireScopeTarget(context, label = '权限策略') {
+  if (context.scope === 'workspace') {
+    if (!context.cwd || !path.isAbsolute(context.cwd)) {
+      throw new Error(`${label}的工作区范围需要绝对工作区路径`);
+    }
+  } else if (context.scope === 'session' && !context.sessionId) {
+    throw new Error(`${label}的会话范围需要有效会话 ID`);
+  }
+}
+
+function cleanContext(input = {}, options = {}) {
+  const source = contextInput(input);
   return {
-    cwd: typeof input.cwd === 'string' ? input.cwd.trim() : '',
+    cwd: normalizeWorkspacePath(source.cwd),
     // The renderer uses public UUIDs while Durable hooks receive numeric IDs.
     // Permission policies always use the public UUID as the stable session key.
-    sessionId: canonicalPermissionSessionId(input.sessionId),
-    scope: input.scope === 'workspace' || input.scope === 'session' ? input.scope : 'user',
-    homeDir: typeof input.homeDir === 'string' ? input.homeDir : '',
+    sessionId: cleanSessionId(source.sessionId),
+    scope: cleanScope(source.scope, { required: options.requireScope === true }),
+    homeDir: typeof source.homeDir === 'string' ? source.homeDir : '',
   };
 }
 
@@ -67,9 +111,11 @@ function conversationWorkspace(sessionId) {
   return getStudioDatabase().getConversation(sessionId)?.workspace || '';
 }
 
-function resolveContext(input = {}) {
-  const context = cleanContext(input);
-  if (!context.cwd && context.sessionId) context.cwd = conversationWorkspace(context.sessionId);
+function resolveContext(input = {}, options = {}) {
+  const context = cleanContext(input, options);
+  if (!context.cwd && context.sessionId) {
+    context.cwd = normalizeWorkspacePath(conversationWorkspace(context.sessionId));
+  }
   return context;
 }
 
@@ -129,16 +175,9 @@ function readMode(input = {}) {
 }
 
 function writePolicy(payload = {}) {
-  const input = payload && typeof payload === 'object' && !Array.isArray(payload)
-    ? payload
-    : {};
-  const context = cleanContext(input);
-  if (context.scope === 'workspace' && !context.cwd) {
-    throw new Error('工作区权限策略需要工作区路径');
-  }
-  if (context.scope === 'session' && !context.sessionId) {
-    throw new Error('会话权限策略需要会话 ID');
-  }
+  const input = contextInput(payload);
+  const context = cleanContext(input, { requireScope: true });
+  requireScopeTarget(context);
   setStoredPermissionPolicy({
     scope: context.scope,
     cwd: context.cwd,
@@ -150,19 +189,17 @@ function writePolicy(payload = {}) {
 
 function writeMode(mode, options = {}) {
   if (!MODES.includes(mode)) throw new Error('无效的权限模式');
-  const input = options && typeof options === 'object' && !Array.isArray(options)
-    ? options
-    : {};
+  const input = contextInput(options);
   const context = cleanContext(input);
+  requireScopeTarget(context);
   setPermissionMode(mode, context);
   return policyState(context);
 }
 
 function resetPolicy(payload = {}) {
-  const input = payload && typeof payload === 'object' && !Array.isArray(payload)
-    ? payload
-    : {};
-  const context = cleanContext(input);
+  const input = contextInput(payload);
+  const context = cleanContext(input, { requireScope: true });
+  requireScopeTarget(context);
   resetStoredPermissionPolicy({
     scope: context.scope,
     cwd: context.cwd,
@@ -247,14 +284,9 @@ async function evaluateToolCall(input = {}) {
  * boundary checks as the live hook. This function never persists the draft.
  */
 async function previewToolCall(input = {}) {
-  const context = resolveContext(input);
-  const scope = ['workspace', 'session'].includes(input.scope) ? input.scope : 'user';
-  if (scope === 'workspace' && !context.cwd) {
-    throw new Error('预览工作区策略需要工作区路径');
-  }
-  if (scope === 'session' && !context.sessionId) {
-    throw new Error('预览会话策略需要会话 ID');
-  }
+  const context = resolveContext(input, { requireScope: true });
+  requireScopeTarget(context, '预览策略');
+  const scope = context.scope;
   const policy = normalizePolicy(input.policy, { strict: true });
   const { layers } = policyLayers(context, {
     draft: { scope, policy },
@@ -263,20 +295,23 @@ async function previewToolCall(input = {}) {
 }
 
 function rememberApproval(payload = {}) {
-  const input = payload && typeof payload === 'object' && !Array.isArray(payload)
-    ? payload
-    : {};
-  const requested = input.remember || input.scope;
-  if (!['session', 'workspace', 'always'].includes(requested)) {
+  const input = contextInput(payload);
+  if (input.remember !== undefined && !APPROVAL_SCOPES.has(input.remember)) {
     throw new Error('无效的批准范围');
   }
-  const context = resolveContext(input);
+  if (input.scope !== undefined && !APPROVAL_SCOPES.has(input.scope)) {
+    throw new Error('无效的批准范围');
+  }
+  const requested = input.remember || input.scope;
+  if (!APPROVAL_SCOPES.has(requested)) {
+    throw new Error('无效的批准范围');
+  }
+  const scope = requested === 'always' ? 'user' : requested;
+  const context = resolveContext({ ...input, scope }, { requireScope: true });
   if (!approvalScopesFor(input.call, context).includes(requested)) {
     throw new Error('这个工具调用不支持所选批准范围');
   }
-  const scope = requested === 'always' ? 'user' : requested;
-  if (scope === 'workspace' && !context.cwd) throw new Error('工作区批准需要工作区路径');
-  if (scope === 'session' && !context.sessionId) throw new Error('会话批准需要会话 ID');
+  requireScopeTarget(context, '批准规则');
   const store = getPermissionPolicyStore();
   const current = scope === 'workspace'
     ? store.workspaces[context.cwd] || store.user

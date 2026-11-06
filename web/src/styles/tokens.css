@@ -41,17 +41,20 @@
   --control-sm: 32px;
   --control: 36px;
   --row-height: 40px;
-  /* 字号：xs 11、sm 12、base 13、md 14、lg 16、title 24。base 是全局正文基准，
+  /* 字号：xs 11、sm 12、base 14、md 15、lg 17、title 24。base 是全局正文基准，
   md 用于对话正文和输入框，title 目前只作为保留档位；对话字号可由用户偏好在
   运行时覆盖，不写在这里。
    */
 
   --text-xs: 11px;
   --text-sm: 12px;
-  --text-base: 13px;
-  --text-md: 14px;
-  --text-lg: 16px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
   --text-title: 24px;
+  --text-display: 28px;
+  --text-hero: 40px;
   /* 图标：只有六档，按“图标所在的位置”选，而不是按单个页面的喜好。
     2xs 10 只用于胶囊/标签内部的小字形；xs 12 用于密集行内按钮（消息操作、
     行内清除）；sm 14 是按钮和工具栏图标的默认档；md 16 是全局默认，用于
@@ -72,9 +75,22 @@
   --icon-button-compact: 24px;
   /* 聊天正文使用比通用正文更紧凑但仍有足够呼吸的固定比例；字号偏好变化时
   行高会随字号一起缩放，避免大字号下过挤或小字号下过松。 */
-  --chat-line-height: 1.7;
+  /* 字重：页面只使用四档，避免同一层级在不同页面出现细微粗细差。 */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 650;
+  /* 行高：正文、说明和标题分别使用固定语义档位。 */
+  --leading-tight: 1.3;
+  --leading-normal: 1.5;
+  --leading-body: 1.6;
+  --leading-relaxed: 1.7;
+  --chat-line-height: var(--leading-relaxed);
   --sidebar-w: 280px;
-  --panel-w: 430px;
+  /* The workbench should support code and file inspection without taking over
+     the conversation. Users can still resize it from the splitter; this is
+     the comfortable default for the common two-column layout. */
+  --panel-w: 390px;
   --content: 860px;
   /* 会话一级视图共用同一组内容宽度和左右留白；窗口或主面板变窄时只改
   gutter，所有视图随之同步收缩。 */

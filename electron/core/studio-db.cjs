@@ -231,11 +231,54 @@ class StudioDatabase {
     // Durable storage shares this file with a 15s timeout; Studio writes must
     // wait at least as long so a long Durable commit does not fail them.
     this.db.exec('PRAGMA busy_timeout = 15000');
-    this.migrate();
+    const currentVersion = Number(this.db.prepare('PRAGMA user_version').get().user_version) || 0;
+    const hasExistingSchema = Boolean(this.db.prepare(`
+      SELECT 1 AS found FROM sqlite_master
+      WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+      LIMIT 1
+    `).get());
+    try {
+      if ((currentVersion > 0 || hasExistingSchema) && currentVersion < SCHEMA_VERSION) {
+        this.migrationBackupPath = this.backupBeforeMigration(currentVersion);
+      }
+      this.migrate(currentVersion);
+    } catch (error) {
+      try { this.db.close(); } catch { /* preserve the migration/snapshot error */ }
+      throw error;
+    }
   }
 
-  migrate() {
-    const current = Number(this.db.prepare('PRAGMA user_version').get().user_version) || 0;
+  backupBeforeMigration(current) {
+    const backup = `${this.filename}.migration-backup-v${current}-to-v${SCHEMA_VERSION}.sqlite`;
+    const verify = () => {
+      if (!fs.existsSync(backup)) return false;
+      let copy;
+      try {
+        copy = new DatabaseSync(backup, { readOnly: true });
+        const integrity = copy.prepare('PRAGMA quick_check').get().quick_check;
+        const version = Number(copy.prepare('PRAGMA user_version').get().user_version) || 0;
+        return integrity === 'ok' && version === current;
+      } catch {
+        return false;
+      } finally {
+        try { copy?.close(); } catch { /* retain the validation failure */ }
+      }
+    };
+    if (!verify()) {
+      try { fs.rmSync(backup, { force: true }); } catch { /* VACUUM INTO reports the usable error */ }
+      this.db.prepare('VACUUM INTO ?').run(backup);
+      try { fs.chmodSync(backup, 0o600); } catch { /* best effort on non-POSIX filesystems */ }
+      if (!verify()) {
+        throw new Error(`数据库升级快照校验失败：${backup}`);
+      }
+    }
+    return backup;
+  }
+
+  migrate(currentVersion) {
+    const current = Number.isSafeInteger(currentVersion)
+      ? currentVersion
+      : Number(this.db.prepare('PRAGMA user_version').get().user_version) || 0;
     if (current >= SCHEMA_VERSION) return;
     this.transaction(() => {
       this.db.exec(`
@@ -723,6 +766,34 @@ class StudioDatabase {
   getSetting(key, fallback) {
     const row = this.db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
     return row ? json(row.value, fallback) : fallback;
+  }
+
+  getSettingWithRecovery(key, fallback, normalize) {
+    const row = this.db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+    if (!row) return normalize(fallback);
+
+    let value = fallback;
+    let parsed = true;
+    try {
+      value = JSON.parse(row.value);
+    } catch {
+      parsed = false;
+    }
+    const normalized = normalize(value);
+    const encoded = encode(normalized);
+    if (parsed && encoded === row.value) return normalized;
+
+    try {
+      // Keep the recovery read non-throwing and compare-and-set so a concurrent
+      // writer that already replaced this row is never overwritten by stale data.
+      this.db.prepare(`
+        UPDATE settings SET value = ?, updated_at = ?
+        WHERE key = ? AND value = ?
+      `).run(encoded, Date.now(), key, row.value);
+    } catch {
+      // The caller still receives a safe normalized value when repair cannot write.
+    }
+    return normalized;
   }
 
   setSetting(key, value) {
@@ -1516,7 +1587,7 @@ class StudioDatabase {
 
   setEnabledModels(modelRefs) {
     const enabled = new Set(Array.isArray(modelRefs) ? modelRefs.filter((value) => typeof value === 'string') : []);
-    this.transaction(() => {
+    return this.transaction(() => {
       const rows = this.db.prepare('SELECT provider_id, model_id FROM model_catalog').all();
       const update = this.db.prepare(`
         UPDATE model_catalog SET enabled = ?, updated_at = ?
@@ -1526,8 +1597,8 @@ class StudioDatabase {
       for (const row of rows) {
         update.run(enabled.has(`${row.provider_id}/${row.model_id}`) ? 1 : 0, at, row.provider_id, row.model_id);
       }
+      return this.listEnabledModels();
     });
-    return this.listEnabledModels();
   }
 
   setProviderEnabled(providerId, enabled) {
@@ -2024,23 +2095,27 @@ class StudioDatabase {
   }
 
   setExtensionEnabled(id, enabled) {
-    this.db.prepare('UPDATE studio_extensions SET enabled = ?, updated_at = ? WHERE id = ?')
-      .run(enabled ? 1 : 0, Date.now(), id);
-    return this.getExtension(id);
+    return this.transaction(() => {
+      this.db.prepare('UPDATE studio_extensions SET enabled = ?, updated_at = ? WHERE id = ?')
+        .run(enabled ? 1 : 0, Date.now(), id);
+      return this.getExtension(id);
+    });
   }
 
   setExtensionTrusted(id, trusted, contentHash) {
-    this.db.prepare(`
-      UPDATE studio_extensions
-      SET trusted = ?, content_hash = ?, updated_at = ?
-      WHERE id = ?
-    `).run(
-      trusted ? 1 : 0,
-      typeof contentHash === 'string' ? contentHash : '',
-      Date.now(),
-      id,
-    );
-    return this.getExtension(id);
+    return this.transaction(() => {
+      this.db.prepare(`
+        UPDATE studio_extensions
+        SET trusted = ?, content_hash = ?, updated_at = ?
+        WHERE id = ?
+      `).run(
+        trusted ? 1 : 0,
+        typeof contentHash === 'string' ? contentHash : '',
+        Date.now(),
+        id,
+      );
+      return this.getExtension(id);
+    });
   }
 
   removeExtension(id) {

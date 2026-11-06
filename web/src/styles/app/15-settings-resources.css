@@ -1,0 +1,219 @@
+/* Split from the legacy app.css entry. Import order is part of the cascade. */
+
+/* Unified settings resource cards.
+ * Every repeatable resource in Settings uses one surface and one internal rhythm.
+ * Hover only strengthens the outline and adds the quiet card shadow; it never
+ * replaces the surface with a grey state. */
+.settings-resource-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
+}
+.settings-resource-card:hover {
+  border-color: var(--border-strong);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  transform: translateY(-1px);
+}
+.settings-resource-card.is-selected { border-color: var(--accent-border); }
+.settings-resource-card.is-expanded { border-color: var(--border-strong); box-shadow: none; }
+.settings-resource-card.is-disabled { border-style: dashed; background: var(--surface); }
+.settings-resource-card.is-command { background: var(--surface); }
+.settings-resource-card.is-untrusted { border-style: dashed; }
+
+.settings-resource-card-main {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 0;
+  border-radius: 0;
+  background: var(--transparent);
+  color: var(--text);
+  text-align: left;
+}
+button.settings-resource-card-main { cursor: pointer; }
+button.settings-resource-card-main:disabled { cursor: default; }
+.settings-resource-card-main:focus-visible { outline: 0; box-shadow: inset var(--focus-ring); }
+.settings-resource-card-main > svg:last-child {
+  width: var(--icon-md); height: var(--icon-md);
+  flex: none;
+  margin-top: 8px;
+  color: var(--faint);
+}
+.settings-resource-card-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: var(--radius-control);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.settings-resource-card-icon > svg,
+.settings-resource-card-icon .provider-icon > svg,
+.settings-resource-card-icon .provider-icon > img {
+  width: var(--icon-md); height: var(--icon-md);
+}
+.settings-resource-card-icon .provider-icon > .provider-icon-letter {
+  width: 100%;
+  height: 100%;
+  font-size: var(--text-xs);
+}
+.settings-resource-card-icon .provider-icon {
+  border: 0;
+  background: var(--transparent);
+}
+.settings-resource-card-body {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  align-self: stretch;
+  gap: 5px;
+}
+.settings-resource-card-heading {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.settings-resource-card-body strong,
+.settings-resource-card-heading strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-resource-card-body p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.settings-resource-card-body > small,
+.settings-resource-card-body code {
+  overflow: hidden;
+  color: var(--faint);
+  font: var(--text-xs)/var(--leading-normal) var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-resource-card-body > small { margin-top: 2px; }
+
+.settings-resource-card-footer {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) 7px;
+}
+.settings-resource-card-footer > :first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-resource-card-footer > :first-child:not(.resource-status) { flex: 1; }
+.settings-resource-card-footer .resource-status { flex: 1; }
+.settings-resource-card-footer > div {
+  display: flex;
+  min-width: 0;
+  margin-left: auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.settings-resource-card-footer button { flex: none; }
+.settings-resource-card-footer .settings-text-button,
+.settings-resource-card-footer .settings-outline { white-space: nowrap; }
+.settings-resource-card-footer .switch {
+  justify-content: flex-start;
+  width: 38px;
+  height: 22px;
+  padding: 3px;
+}
+.settings-resource-card-footer .switch > span {
+  width: 16px;
+  height: 16px;
+}
+.settings-resource-card-footer .switch.is-on > span { transform: translateX(16px); }
+
+.publisher-trust-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.settings-resource-card-footer .resource-status {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 22px;
+  flex: none;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-tag);
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+  text-align: left;
+}
+.settings-resource-card-footer .resource-status.is-on {
+  border-color: var(--success-border);
+  background: var(--success-soft);
+  color: var(--success);
+}
+.settings-resource-card-footer .resource-status.is-pending {
+  border-color: var(--warning-border);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.publisher-trust-publisher { padding: 0; }
+.publisher-trust-publisher > header { padding: 11px var(--space-3) 8px; border-bottom: 0; }
+.publisher-trust-key { padding-inline: var(--space-3); }
+
+.app.has-custom-background .settings-resource-card,
+.app.has-custom-background .settings-resource-card:hover,
+.app.has-custom-background .settings-resource-card.is-selected,
+.app.has-custom-background .settings-resource-card.is-disabled,
+.app.has-custom-background .settings-resource-card.is-command {
+  background: var(--background-card-surface);
+  border-color: var(--background-border);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.app.has-custom-background .settings-resource-card.is-selected,
+.app.has-custom-background .settings-resource-card:hover {
+  border-color: var(--background-border-strong);
+}
+
+@media (max-width: 900px) {
+  .publisher-trust-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-resource-card-main { min-height: 0; }
+}

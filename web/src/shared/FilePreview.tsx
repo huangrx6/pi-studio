@@ -6,15 +6,8 @@ import {
   Copy,
   ExternalLink,
   Eye,
-  FileArchive,
-  FileCode2,
-  FileJson,
-  FileSpreadsheet,
   FileText,
-  Image as ImageIcon,
   LoaderCircle,
-  Music2,
-  Video,
 } from 'lucide-react';
 import {
   markdownCodeFence,
@@ -29,23 +22,12 @@ import {
 import type { FilePreviewResult } from '../types/file-preview-types';
 import { Markdown } from './Markdown';
 import { formatFileSize } from './filesize';
+import { FileFormatIcon, type FilePreviewFormat } from './FileKindIcon';
 import './file-preview.css';
 
-type PreviewFormat =
-  | 'markdown'
-  | 'json'
-  | 'csv'
-  | 'code'
-  | 'text'
-  | 'html'
-  | 'pdf'
-  | 'image'
-  | 'audio'
-  | 'video'
-  | 'unsupported';
 type PreviewMode = 'preview' | 'source';
 
-type Props = {
+export type FilePreviewProps = {
   file: FilePreviewResult | null;
   loading?: boolean;
   emptyTitle?: string;
@@ -54,24 +36,6 @@ type Props = {
   /** 调用方自带的工具栏动作（例如工作台的“文件操作”菜单）。 */
   actions?: ReactNode;
 };
-
-function IconForFormat({ format }: { format: PreviewFormat }) {
-  if (format === 'markdown' || format === 'text' || format === 'pdf') return <FileText />;
-  if (format === 'html') return <FileCode2 />;
-  if (format === 'json') return <FileJson />;
-  if (format === 'csv') return <FileSpreadsheet />;
-  if (format === 'code') return <FileCode2 />;
-  if (format === 'image') return <ImageIcon />;
-  if (format === 'audio') return <Music2 />;
-  if (format === 'video') return <Video />;
-  return <FileArchive />;
-}
-
-/** Reuse the same file-type marks in tree rows and preview headers. */
-export function FileKindIcon({ path, className = '' }: { path: string; className?: string }) {
-  const format = previewFormatForFile(path) as PreviewFormat;
-  return <span className={className} aria-hidden="true"><IconForFormat format={format} /></span>;
-}
 
 function SourceCode({
   text,
@@ -83,8 +47,8 @@ function SourceCode({
   plain?: boolean;
 }) {
   const fenced = useMemo(
-    () => markdownCodeFence(text, language),
-    [language, text],
+    () => plain ? '' : markdownCodeFence(text, language),
+    [language, plain, text],
   );
   if (plain) {
     return <div className="file-preview-code file-preview-plain-code"><pre><code>{text}</code></pre></div>;
@@ -106,7 +70,7 @@ function TablePreview({
   const headers: string[] = table.headers;
   const rows: string[][] = table.rows;
   if (!headers.length) {
-    return <div className="file-preview-empty-inline"><FileSpreadsheet /><strong>表格没有可显示的内容</strong></div>;
+    return <div className="file-preview-empty-inline"><FileFormatIcon format="csv" /><strong>表格没有可显示的内容</strong></div>;
   }
   return <div className="file-preview-table-wrap">
     {table.clippedColumns && <div className="file-preview-inline-note">仅显示前 24 列。</div>}
@@ -142,7 +106,7 @@ function MediaPreview({
 
   if (!file.dataUrl) {
     return <div className="file-preview-empty-inline">
-      <IconForFormat format={format} />
+      <FileFormatIcon format={format} />
       <strong>没有可预览的内容</strong>
     </div>;
   }
@@ -154,7 +118,7 @@ function MediaPreview({
   }
   if (format === 'audio') {
     return <div className="file-preview-media is-compact">
-      <span className="file-preview-media-mark"><Music2 /></span>
+      <span className="file-preview-media-mark"><FileFormatIcon format="audio" /></span>
       <div><strong>{file.name}</strong><span>{file.mimeType}</span></div>
       <audio controls src={file.dataUrl} onError={() => setFailed(true)}>当前环境不支持音频播放。</audio>
     </div>;
@@ -171,17 +135,17 @@ function PreviewBody({
   onOpenExternal,
 }: {
   file: FilePreviewResult;
-  format: PreviewFormat;
+  format: FilePreviewFormat;
   mode: PreviewMode;
   onOpenExternal?: (file: FilePreviewResult) => void;
 }) {
   const text = file.text || '';
-  const json = useMemo(() => prettyJson(text), [text]);
+  const json = useMemo(() => format === 'json' ? prettyJson(text) : null, [format, text]);
   const language = previewLanguageForFile(file.path);
 
   if (file.kind === 'binary' || format === 'unsupported') {
     return <div className="file-preview-unsupported">
-      <span><IconForFormat format={format} /></span>
+      <span><FileFormatIcon format={format} /></span>
       <strong>{previewTypeLabel(file.path)} 暂不支持内嵌预览</strong>
       {file.unavailableReason && <p>{file.unavailableReason}</p>}
       {onOpenExternal && <button type="button" className="settings-outline" onClick={() => onOpenExternal(file)}>
@@ -195,7 +159,7 @@ function PreviewBody({
   }
 
   if (mode === 'source') {
-    return <SourceCode text={format === 'json' && json.ok ? json.text : text} language={language} plain={format === 'text'} />;
+    return <SourceCode text={json?.ok ? json.text : text} language={language} plain={format === 'text'} />;
   }
 
   if (format === 'markdown') {
@@ -226,7 +190,7 @@ function PreviewBody({
     </div>;
   }
 
-  if (format === 'json') {
+  if (format === 'json' && json) {
     return <div className="file-preview-code-stack">
       {!json.ok && <div className="file-preview-inline-note is-warning"><AlertTriangle />JSON 格式有误，已按原文显示：{json.error}</div>}
       <SourceCode text={json.text} language="json" />
@@ -250,7 +214,7 @@ export function FilePreview({
   emptyDescription = '',
   onOpenExternal,
   actions,
-}: Props) {
+}: FilePreviewProps) {
   const [mode, setMode] = useState<PreviewMode>('preview');
   const [copied, setCopied] = useState(false);
 
@@ -260,7 +224,7 @@ export function FilePreview({
   }, [file?.path]);
 
   const format = file
-    ? previewFormatForFile(file.path, file.mimeType, file.kind) as PreviewFormat
+    ? previewFormatForFile(file.path, file.mimeType, file.kind) as FilePreviewFormat
     : 'text';
   const toggleable = format === 'markdown' || format === 'csv' || format === 'html';
   const copyable = Boolean(
@@ -282,7 +246,7 @@ export function FilePreview({
   let body: ReactNode;
   if (!file) {
     body = <div className="file-preview-empty">
-      <span><FileCode2 /></span>
+      <span><FileFormatIcon format="code" /></span>
       <strong>{emptyTitle}</strong>
       {emptyDescription && <p>{emptyDescription}</p>}
     </div>;
@@ -293,10 +257,10 @@ export function FilePreview({
   return <div className="file-preview-pane">
     <header className="file-preview-toolbar">
       <div className="file-preview-identity">
-        <span className="file-preview-icon"><IconForFormat format={format} /></span>
+        <span className="file-preview-icon"><FileFormatIcon format={format} /></span>
         <div>
           <strong title={pathParts.name}>{file?.name || emptyTitle}</strong>
-          {file && <span title={file.path}>{pathParts.directory || '技能根目录'}</span>}
+          {file && <span title={file.path}>{pathParts.directory || '根目录'}</span>}
         </div>
       </div>
       <div className="file-preview-actions">

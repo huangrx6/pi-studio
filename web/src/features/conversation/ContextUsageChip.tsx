@@ -5,22 +5,17 @@
  * 模型窗口和自动压缩阈值（`pi:context-policy`）。因此这里不产生新的状态来源，
  * 也不重复 Durable 的压缩判断：真正的压缩发生在 Durable，界面只展示与手动触发。
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Gauge, LoaderCircle, Minimize2, Settings2 } from 'lucide-react';
 import type { ContextUsage } from './context-usage';
 import { compactTokens } from './context-usage';
+import { contextUsagePresentation, type ContextPolicy } from './context-usage';
+export type { ContextPolicy } from './context-usage';
 import { InfoHint } from '../../shared/InfoHint';
 import { PopoverSurface } from '../../shared/PopoverSurface';
 
 const RING_RADIUS = 7;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
-
-export type ContextPolicy = {
-  modelRef: string;
-  contextWindow: number;
-  autoCompactPercent: number;
-  compactAtTokens: number | null;
-};
 
 export function ContextUsageChip({
   usage,
@@ -41,53 +36,31 @@ export function ContextUsageChip({
   const host = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
 
+  const panel = useRef<HTMLDivElement>(null);
+  const heading = useRef<HTMLSpanElement>(null);
+  const panelId = useId();
+  const headingId = useId();
+  function close(restore = false) {
+    setOpen(false);
+    if (restore && host.current?.contains(document.activeElement)) trigger.current?.focus({ preventScroll: true });
+  }
+  useLayoutEffect(() => {
+    if (open) heading.current?.focus({ preventScroll: true });
+  }, [open]);
   useEffect(() => {
     if (!open) return;
-    const outside = (event: PointerEvent) => {
+    const outside = (event: Event) => {
       if (!host.current?.contains(event.target as Node)) setOpen(false);
     };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      setOpen(false);
-      trigger.current?.focus();
-    };
     document.addEventListener('pointerdown', outside);
-    document.addEventListener('keydown', escape);
+    document.addEventListener('focusin', outside);
     return () => {
       document.removeEventListener('pointerdown', outside);
-      document.removeEventListener('keydown', escape);
+      document.removeEventListener('focusin', outside);
     };
   }, [open]);
 
-  const percent = usage?.percent ?? 0;
-  const window = policy?.contextWindow || usage?.contextWindow || 0;
-  const threshold = policy?.autoCompactPercent ?? 0;
-  // 阈值前 10 个百分点开始提醒；达到阈值用危险色，和压缩行为对齐。
-  const tone = !usage || !threshold || window <= 0
-    ? 'neutral'
-    : percent >= threshold
-      ? 'critical'
-      : percent >= Math.max(0, threshold - 10)
-        ? 'warning'
-        : 'neutral';
-  const known = Boolean(usage) && window > 0;
-  const remaining = known ? Math.max(0, window - (usage?.usedTokens || 0)) : 0;
-  // 窗口未知时不给百分比，避免把“不知道”显示成 0%。
-  const label = !usage
-    ? '上下文用量尚未统计'
-    : known
-      ? `上下文已用 ${percent}%`
-      : `上下文已用 ${compactTokens(usage.usedTokens)} tokens`;
-  const detail = usage && window > 0
-    ? `${compactTokens(usage.usedTokens)} / ${compactTokens(window)} tokens · 剩余 ${compactTokens(remaining)}`
-    : usage
-      ? `已用 ${compactTokens(usage.usedTokens)} tokens`
-      : '尚无上下文读数';
-  const compactionHint = policy?.compactAtTokens
-    ? `用到 ${threshold}%（约 ${compactTokens(policy.compactAtTokens)} tokens）时自动压缩；压缩期间当前请求暂停，完成后继续。`
-    : threshold && window > 0
-      ? `阈值 ${threshold}%；该模型未配置窗口，暂不生效。`
-      : '自动压缩已关闭。';
+  const { known, used, percent, tone, label, detail, compactionHint } = contextUsagePresentation(usage, policy);
 
   return <div className="context-usage" ref={host}>
     <button
@@ -97,8 +70,14 @@ export function ContextUsageChip({
       aria-label={label}
       aria-haspopup="dialog"
       aria-expanded={open}
+      aria-controls={open ? panelId : undefined}
       title={usage ? `${label}：${detail}` : label}
       onClick={() => setOpen((value) => !value)}
+      onKeyDown={(event) => {
+        if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+        if (event.key === 'ArrowDown') { event.preventDefault(); setOpen(true); }
+        if (event.key === 'Escape' && open) { event.preventDefault(); event.stopPropagation(); close(true); }
+      }}
     >
       <svg className="context-usage-ring" viewBox="0 0 18 18" aria-hidden="true">
         <circle className="context-usage-ring-track" cx="9" cy="9" r={RING_RADIUS} />
@@ -114,21 +93,42 @@ export function ContextUsageChip({
     </button>
 
     {open && <PopoverSurface
+      ref={panel}
+      id={panelId}
       className="context-usage-panel"
       role="dialog"
-      aria-label="上下文用量"
-      heading={<><Gauge />上下文<InfoHint label={compactionHint} /></>}
-      onClose={() => setOpen(false)}
+      aria-labelledby={headingId}
+      heading={<><Gauge /><span id={headingId} ref={heading} tabIndex={-1}>上下文用量</span><InfoHint label={compactionHint} /></>}
+      closeLabel="关闭上下文用量"
+      onClose={() => close(true)}
+      onKeyDown={(event) => {
+        if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+        if (event.key === 'Escape') {
+          event.preventDefault(); event.stopPropagation(); close(true); return;
+        }
+        if (event.key !== 'Tab') return;
+        const buttons = [...panel.current!.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+        const active = document.activeElement;
+        if (event.shiftKey && (active === heading.current || active === buttons[0])) {
+          event.preventDefault(); event.stopPropagation(); close(true);
+        } else if (!event.shiftKey && active === buttons.at(-1)) {
+          event.stopPropagation(); close(true);
+          // Native Tab continues after the trigger; the popover is non-modal.
+        } else if (!event.shiftKey && active === heading.current) {
+          event.preventDefault(); buttons[0]?.focus();
+        }
+      }}
     >
       <div className="context-usage-body">
-        <strong>{known ? `${percent}%` : usage ? compactTokens(usage.usedTokens) : '暂无读数'}</strong>
+        <strong>{known ? `${percent}%` : usage ? compactTokens(used) : '暂无读数'}</strong>
         <span>{detail}</span>
+        {usage && <span>最近一次请求的估算，之后新增内容尚未计入。</span>}
         <div className="context-usage-actions">
           <button
             type="button"
             className="settings-outline"
             disabled={compacting || disabled}
-            onClick={() => { setOpen(false); onCompact(); }}
+            onClick={() => { close(true); onCompact(); }}
           >
             {compacting ? <LoaderCircle className="spin" /> : <Minimize2 />}
             立即压缩

@@ -1,5 +1,7 @@
 import type { ChatMessage } from '../../types/chat-types';
 import type { ModelSelection } from '../../types/model-types';
+import { errorText } from '../../shared/error-text';
+import { temporaryChatCanSubmit } from './temporary-chat-input';
 export type TemporaryImage = { id: string; name: string; data: string; mimeType: string };
 export type TemporaryState = { messages: ChatMessage[]; draft: string; images: TemporaryImage[]; selection: ModelSelection; busy: boolean; error: string; run: number };
 // Deliberately no localStorage, IndexedDB, attachment upload or session persistence.
@@ -41,7 +43,14 @@ export function destroyTemporary(id: string) {
   chats.delete(id); listeners.delete(id); void window.piApi.temporaryClose(id).catch(() => {});
 }
 export async function sendTemporary(id: string) {
-  const state = chats.get(id); if (!state || state.busy || (!state.draft.trim() && !state.images.length)) return;
+  const state = chats.get(id);
+  if (!state || !temporaryChatCanSubmit({
+    draft: state.draft,
+    imageCount: state.images.length,
+    modelRef: state.selection.modelRef,
+    unavailable: state.selection.unavailable,
+    busy: state.busy,
+  })) return;
   const run = state.run+1, stamp = -Date.now();
   const message: ChatMessage = { role: 'user', timestamp: stamp, content: [{ type: 'text', text: state.draft }, ...state.images.map(image => ({ type: 'image' as const, data: image.data, mimeType: image.mimeType }))] };
   updateTemporary(id, { busy: true, error: '', draft: '', images: [], run, messages: [...state.messages, message] });
@@ -49,6 +58,6 @@ export async function sendTemporary(id: string) {
   catch (error) {
     const current = chats.get(id); if (!current || current.run !== run) return;
     const accepted = !current.messages.some(item => item.timestamp === stamp);
-    updateTemporary(id, { error: error instanceof Error ? error.message : String(error), ...(!accepted ? { messages: current.messages.filter(item => item.timestamp !== stamp), draft: current.draft || state.draft, images: current.images.length ? current.images : state.images } : {}) });
+    updateTemporary(id, { error: errorText(error), ...(!accepted ? { messages: current.messages.filter(item => item.timestamp !== stamp), draft: current.draft || state.draft, images: current.images.length ? current.images : state.images } : {}) });
   } finally { if (chats.get(id)?.run === run) updateTemporary(id, { busy: false }); }
 }

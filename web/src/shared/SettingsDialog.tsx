@@ -12,6 +12,7 @@ import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { LoaderCircle, X } from 'lucide-react';
 import { InfoHint } from './InfoHint';
 import { useModalDialog } from './useModalDialog';
+import './settings-dialog.css';
 
 /**
  * @param title 弹框标题（同时作为 aria-labelledby）
@@ -33,6 +34,7 @@ export function SettingsDialog({
   hint,
   description,
   action,
+  closeLabel = '取消',
   busyAction = '正在保存…',
   busy,
   loading,
@@ -45,11 +47,13 @@ export function SettingsDialog({
   scrollResetKey,
   footerHint,
   showBackdrop = true,
+  fieldsDisabled = false,
 }: {
   title: string;
   hint?: string;
   description?: string;
   action: string;
+  closeLabel?: string;
   busyAction?: string;
   busy: boolean;
   loading: boolean;
@@ -62,6 +66,8 @@ export function SettingsDialog({
   scrollResetKey?: unknown;
   footerHint?: ReactNode;
   showBackdrop?: boolean;
+  /** A committed write may need only a projection retry; its inputs are read-only. */
+  fieldsDisabled?: boolean;
 }) {
   const { dialogRef, onKeyDown } = useModalDialog();
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -105,12 +111,12 @@ export function SettingsDialog({
       </header>
       <div className="dialog-body" ref={bodyRef}>
         {/* loading 时不渲染 children：部分字段可能依赖异步配置，提前挂载会闪空值。 */}
-        {loading ? <div className="dialog-loading" role="status"><LoaderCircle className="spin" />正在读取配置…</div> : <fieldset disabled={busy}>{children}</fieldset>}
+        {loading ? <div className="dialog-loading" role="status"><LoaderCircle className="spin" />正在读取配置…</div> : <fieldset disabled={busy || fieldsDisabled}>{children}</fieldset>}
       </div>
       {error && <div className="dialog-error" role="alert">{error}</div>}
       <footer className="dialog-footer">
         {footerHint && <div className="dialog-footer-hint" role="status" aria-live="polite">{footerHint}</div>}
-        <button type="button" className="settings-outline" disabled={busy} onClick={onClose}>取消</button>
+        <button type="button" className="settings-outline" disabled={busy} onClick={onClose}>{closeLabel}</button>
         <button type="submit" className="settings-save" disabled={busy || loading || unavailable}>{busy && <LoaderCircle className="spin" />}{busy ? busyAction : action}</button>
       </footer>
     </form>

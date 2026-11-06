@@ -6,6 +6,11 @@ export type ComposerDraft = {
 };
 
 export type ComposerDraftStore = Map<string, ComposerDraft>;
+const listeners = new WeakMap<ComposerDraftStore, Set<() => void>>();
+
+function notify(store: ComposerDraftStore): void {
+  for (const listener of listeners.get(store) || []) listener();
+}
 
 export function composerDraftKeyForSession(sessionId: string): string {
   return `session:${sessionId}`;
@@ -35,10 +40,12 @@ export function saveComposerDraft(
   draft: ComposerDraft,
 ): void {
   if (!draft.text && draft.attachments.length === 0) {
-    store.delete(key);
+    const changed = store.delete(key);
+    if (changed) notify(store);
     return;
   }
   store.set(key, { ...draft, attachments: [...draft.attachments] });
+  notify(store);
 }
 
 export function moveComposerDraft(
@@ -52,5 +59,21 @@ export function moveComposerDraft(
 }
 
 export function clearComposerDraft(store: ComposerDraftStore, key: string): void {
-  store.delete(key);
+  if (store.delete(key)) notify(store);
+}
+
+export function subscribeComposerDraftStore(
+  store: ComposerDraftStore,
+  listener: () => void,
+): () => void {
+  let current = listeners.get(store);
+  if (!current) {
+    current = new Set();
+    listeners.set(store, current);
+  }
+  current.add(listener);
+  return () => {
+    current?.delete(listener);
+    if (current?.size === 0) listeners.delete(store);
+  };
 }

@@ -11,9 +11,16 @@ test('production renderer CSP enables only the capabilities Pi Studio uses', () 
   assert.match(policy, /default-src 'none'/);
   assert.match(policy, /script-src 'self'/);
   assert.doesNotMatch(policy, /unsafe-eval/);
+  assert.doesNotMatch(policy.split('; ').find(directive => directive.startsWith('script-src ')), /nonce-|unsafe-inline/);
   assert.match(policy, /object-src 'none'/);
   assert.match(policy, /frame-ancestors 'none'/);
   assert.match(policy, /img-src [^;]*pi-media:[^;]*https:[^;]*http:/);
+});
+
+test('development renderer permits the marked Vite preamble without permitting arbitrary inline scripts', () => {
+  const scriptPolicy = rendererContentSecurityPolicy({ dev: true }).split('; ').find(directive => directive.startsWith('script-src '));
+  assert.match(scriptPolicy, /'nonce-pi-studio-dev'/);
+  assert.doesNotMatch(scriptPolicy, /unsafe-inline/);
 });
 
 test('renderer navigation is limited to the app URL', () => {

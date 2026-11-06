@@ -21,7 +21,6 @@ import {
   XCircle,
 } from 'lucide-react';
 import type {
-  ExtensionCommandResult,
   ExtensionContent,
   ExtensionDataViewSnapshot,
   ExtensionMetric,
@@ -34,6 +33,18 @@ import type {
   ExtensionUiSnapshot,
 } from '../../types/extension-types';
 import { presentExtensionDataViewError } from './extension-data-view-error';
+import {
+  acceptsExtensionDataViewSnapshot,
+  extensionDataViewRequestKey,
+  type OwnedExtensionDataViewSnapshot,
+} from './extension-data-view-state';
+import {
+  activateExtensionSlotAction,
+  advanceExtensionSlotOwner,
+  extensionSlotOwnerKey,
+  type ExtensionSlotActionEffects,
+  type ExtensionSlotOwner,
+} from './extension-slot-actions';
 import { useExtensionUiSnapshot } from './use-extension-ui';
 
 export type ExtensionNotice = { message: string; tone?: ExtensionTone };
@@ -66,7 +77,16 @@ type ContentProps = {
 };
 
 const MAX_RENDER_DEPTH = 8;
-const MAX_ACTION_CHAIN = 4;
+
+type ExtensionDialogState = {
+  item: ExtensionUiItem;
+  owner: ExtensionSlotOwner;
+};
+
+type ExtensionActiveActionState = {
+  buttonId: string;
+  owner: ExtensionSlotOwner;
+};
 
 function toneIcon(tone: ExtensionTone) {
   if (tone === 'success') return <CheckCircle2 />;
@@ -188,7 +208,22 @@ function LiveDataErrorNotice({
   </div>;
 }
 
-function LiveDataView({
+type LiveDataViewProps = Omit<ContentProps, 'blocks'> & {
+  block: Extract<ExtensionContent, { kind: 'dataView' }>;
+  depth: number;
+};
+
+function LiveDataView(props: LiveDataViewProps) {
+  const requestKey = extensionDataViewRequestKey(
+    props.block.sourceId,
+    props.cwd,
+    props.sessionId,
+    props.modelRef,
+  );
+  return <LiveDataViewConnection key={requestKey} {...props} />;
+}
+
+function LiveDataViewConnection({
   block,
   busyButton,
   onAction,
@@ -197,48 +232,36 @@ function LiveDataView({
   sessionId,
   modelRef,
   compact = false,
-}: Omit<ContentProps, 'blocks'> & {
-  block: Extract<ExtensionContent, { kind: 'dataView' }>;
-  depth: number;
-}) {
-  const [snapshot, setSnapshot] = useState<ExtensionDataViewSnapshot | null>(null);
+}: LiveDataViewProps) {
+  const [ownedSnapshot, setOwnedSnapshot] = useState<OwnedExtensionDataViewSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retryKey, setRetryKey] = useState(0);
-  const requestContext = JSON.stringify([block.sourceId, cwd || '', sessionId || '', modelRef || '']);
-  const lastContext = useRef<string | null>(null);
-  const lastRetryKey = useRef(retryKey);
-  const snapshotRef = useRef<ExtensionDataViewSnapshot | null>(null);
+  const snapshotRef = useRef<OwnedExtensionDataViewSnapshot | null>(null);
   const hasVisibleData = useRef(false);
+  const snapshot = ownedSnapshot?.snapshot ?? null;
 
   useEffect(() => {
     let disposed = false;
     let subscriptionId = '';
-    const isRetry = lastContext.current === requestContext && lastRetryKey.current !== retryKey;
-    lastContext.current = requestContext;
-    lastRetryKey.current = retryKey;
-    if (!isRetry) {
-      snapshotRef.current = null;
-      hasVisibleData.current = false;
-      setSnapshot(null);
-    }
-    setLoading(!isRetry || !hasVisibleData.current);
+    setLoading(!hasVisibleData.current);
     setError('');
-    const accept = (next: ExtensionDataViewSnapshot) => {
+    const accept = (next: ExtensionDataViewSnapshot, sourceSubscriptionId: string) => {
       if (next.sourceId !== block.sourceId) return;
       const current = snapshotRef.current;
-      if (current && current.revision > next.revision) return;
-      if (!(next.error && current)) {
-        snapshotRef.current = next;
+      if (!acceptsExtensionDataViewSnapshot(current, sourceSubscriptionId, next)) return;
+      if (!(next.error && current?.snapshot)) {
+        const owned = { subscriptionId: sourceSubscriptionId, snapshot: next };
+        snapshotRef.current = owned;
         hasVisibleData.current = !next.error && next.content.length > 0;
-        setSnapshot(next);
+        setOwnedSnapshot(owned);
       }
       setError(next.error || '');
       setLoading(false);
     };
     const off = window.piApi.onExtensionDataView((event) => {
       if (!subscriptionId || event.subscriptionId !== subscriptionId) return;
-      accept(event.snapshot);
+      accept(event.snapshot, event.subscriptionId);
     });
     void window.piApi.openExtensionDataView({
       sourceId: block.sourceId,
@@ -251,7 +274,7 @@ function LiveDataView({
         void window.piApi.closeExtensionDataView(subscriptionId);
         return;
       }
-      accept(opened.snapshot);
+      accept(opened.snapshot, opened.subscriptionId);
     }).catch((reason) => {
       if (disposed) return;
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -262,7 +285,7 @@ function LiveDataView({
       off();
       if (subscriptionId) void window.piApi.closeExtensionDataView(subscriptionId);
     };
-  }, [block.sourceId, cwd, modelRef, requestContext, retryKey, sessionId]);
+  }, [block.sourceId, cwd, modelRef, retryKey, sessionId]);
 
   if (error) {
     const presentation = presentExtensionDataViewError(error);
@@ -576,14 +599,32 @@ export function ExtensionSlot({
   presentation = 'cards',
 }: ExtensionSlotProps) {
   const loadedSnapshot = useExtensionUiSnapshot(cwd, !snapshot);
-  const [dialog, setDialog] = useState<ExtensionUiItem | null>(null);
-  const [activeAction, setActiveAction] = useState<string | null>(null);
   const surface = snapshot ?? loadedSnapshot;
+  const surfaceRef = useRef(surface);
+  surfaceRef.current = surface;
+  const ownerRef = useRef<ExtensionSlotOwner>({ key: '', generation: 0 });
+  ownerRef.current = advanceExtensionSlotOwner(
+    ownerRef.current,
+    extensionSlotOwnerKey(slot, cwd, sessionId, modelRef),
+  );
+  const owner = ownerRef.current;
+  const [dialogState, setDialogState] = useState<ExtensionDialogState | null>(null);
+  const [activeActionState, setActiveActionState] = useState<ExtensionActiveActionState | null>(null);
+  const activeActionLockRef = useRef<ExtensionActiveActionState | null>(null);
+  if (activeActionLockRef.current?.owner !== owner) activeActionLockRef.current = null;
+  const dialog = dialogState?.owner === owner ? dialogState.item : null;
+  const activeAction = activeActionState?.owner === owner ? activeActionState.buttonId : null;
+
+  useEffect(() => {
+    setDialogState((current) => current?.owner === owner ? current : null);
+    setActiveActionState((current) => current?.owner === owner ? current : null);
+    if (activeActionLockRef.current?.owner !== owner) activeActionLockRef.current = null;
+  }, [owner]);
 
   useEffect(() => {
     if (!dialog) return;
     const close = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setDialog(null);
+      if (event.key === 'Escape') setDialogState(null);
     };
     window.addEventListener('keydown', close);
     return () => window.removeEventListener('keydown', close);
@@ -594,16 +635,16 @@ export function ExtensionSlot({
     const openPanel = (event: Event) => {
       const panelId = (event as CustomEvent<{ panelId?: unknown }>).detail?.panelId;
       if (typeof panelId !== 'string' || !panelId) return;
-      const target = surface.items.find((item) => item.id === panelId);
+      const target = surfaceRef.current.items.find((item) => item.id === panelId);
       if (target) {
-        setDialog(target);
+        setDialogState({ item: target, owner: ownerRef.current });
         return;
       }
       onNotify?.({ message: '这个扩展面板当前不可用。', tone: 'warning' });
     };
     window.addEventListener('pi-studio:open-extension-panel', openPanel);
     return () => window.removeEventListener('pi-studio:open-extension-panel', openPanel);
-  }, [hostGlobalPanels, onNotify, surface]);
+  }, [hostGlobalPanels, onNotify, owner]);
 
   const items = useMemo(
     () => surface.items
@@ -615,72 +656,33 @@ export function ExtensionSlot({
     [selectedItemId, slot, surface],
   );
 
-  async function runCommand(commandId: string, actionDepth = 0): Promise<void> {
-    const result: ExtensionCommandResult = await window.piApi.runExtensionCommand({
-      commandId,
-      sessionId,
-      cwd,
-    });
-    if (result.action) {
-      if (actionDepth >= MAX_ACTION_CHAIN) {
-        throw new Error('扩展操作链过深，已停止继续执行');
-      }
-      await applyAction(result.action, actionDepth + 1);
-      return;
-    }
-    if (result.promptText) onSendPrompt?.(result.promptText, Boolean(result.submit));
-    if (result.settingsPage) onOpenSettings?.(result.settingsPage);
-    if (result.panelId) {
-      const target = surface.items.find((item) => item.id === result.panelId);
-      if (target) setDialog(target);
-      else onNotify?.({ message: '扩展要打开的面板当前不可用。', tone: 'warning' });
-    }
-    if (result.message) onNotify?.({ message: result.message });
-  }
-
-  async function applyAction(action: ExtensionUiAction, actionDepth = 0): Promise<void> {
-    if (action.kind === 'openSettings') {
-      onOpenSettings?.(action.panel);
-      return;
-    }
-    if (action.kind === 'openPanel') {
-      const target = surface.items.find((item) => item.id === action.panelId);
-      if (target) setDialog(target);
-      else onNotify?.({ message: '这个扩展面板当前不可用。', tone: 'warning' });
-      return;
-    }
-    if (action.kind === 'sendPrompt') {
-      onSendPrompt?.(action.text, Boolean(action.submit));
-      return;
-    }
-    if (action.kind === 'copyText') {
-      await navigator.clipboard.writeText(action.text);
-      onNotify?.({ message: '已复制到剪贴板。', tone: 'success' });
-      return;
-    }
-    if (action.kind === 'openUrl') {
-      await window.piApi.openExternal(action.url);
-      return;
-    }
-    if (action.kind === 'runCommand') {
-      await runCommand(action.commandId, actionDepth);
-      return;
-    }
-    throw new Error('扩展返回了不受支持的操作');
-  }
-
   async function activate(buttonId: string, action: ExtensionUiAction) {
-    if (activeAction) return;
-    setActiveAction(buttonId);
+    if (activeActionLockRef.current) return;
+    const actionOwner = ownerRef.current;
+    const active = { buttonId, owner: actionOwner };
+    activeActionLockRef.current = active;
+    setActiveActionState(active);
+    const isCurrentOwner = () => ownerRef.current === actionOwner;
+    const effects: ExtensionSlotActionEffects = {
+      runCommand: (commandId) => window.piApi.runExtensionCommand({ commandId, sessionId, cwd }),
+      openSettings: (page) => onOpenSettings?.(page),
+      openPanel: (panelId) => {
+        const target = surfaceRef.current.items.find((item) => item.id === panelId);
+        if (target) setDialogState({ item: target, owner: actionOwner });
+        else onNotify?.({ message: '这个扩展面板当前不可用。', tone: 'warning' });
+      },
+      sendPrompt: (text, submit) => onSendPrompt?.(text, submit),
+      copyText: (text) => navigator.clipboard.writeText(text),
+      openUrl: async (url) => {
+        await window.piApi.openExternal(url);
+      },
+      notify: (message, tone) => onNotify?.({ message, tone }),
+    };
     try {
-      await applyAction(action);
-    } catch (error) {
-      onNotify?.({
-        message: error instanceof Error ? error.message : String(error),
-        tone: 'error',
-      });
+      await activateExtensionSlotAction(action, isCurrentOwner, effects);
     } finally {
-      setActiveAction(null);
+      if (activeActionLockRef.current === active) activeActionLockRef.current = null;
+      setActiveActionState((current) => current === active ? null : current);
     }
   }
 
@@ -753,7 +755,7 @@ export function ExtensionSlot({
       </article>)}
     </section>}
     {dialog && <div className="extension-panel-overlay" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) setDialog(null);
+      if (event.target === event.currentTarget) setDialogState(null);
     }}>
       <section className="extension-panel-dialog" role="dialog" aria-modal="true" aria-label={dialog.title}>
         <header className="extension-panel-dialog-head">
@@ -762,7 +764,7 @@ export function ExtensionSlot({
             <h2>{dialog.title}</h2>
             {dialog.description && <p>{dialog.description}</p>}
           </div>
-          <button type="button" className="extension-panel-close" aria-label="关闭扩展面板" onClick={() => setDialog(null)}><X /></button>
+          <button type="button" className="extension-panel-close" aria-label="关闭扩展面板" onClick={() => setDialogState(null)}><X /></button>
         </header>
         <div className="extension-panel-dialog-body">
           <ContentBlocks
@@ -773,7 +775,7 @@ export function ExtensionSlot({
         </div>
         <footer className="extension-panel-dialog-foot">
           <span>{dialog.id}</span>
-          <button type="button" onClick={() => setDialog(null)}><Check />完成</button>
+          <button type="button" onClick={() => setDialogState(null)}><Check />完成</button>
         </footer>
       </section>
     </div>}

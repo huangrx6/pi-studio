@@ -36,6 +36,8 @@ const {
   closeExtensionDataViews,
 } = require('./sessions.cjs');
 const { settingsSnapshot } = require('../services/settings.cjs');
+const { createExtensionInstallRecovery } = require('../services/extension-install-recovery.cjs');
+const { createExtensionMutationRecovery } = require('../services/extension-mutation-recovery.cjs');
 const {
   invalidateMcpConnection,
   testMcpConnection,
@@ -115,15 +117,16 @@ function notifyExtensionsChanged() {
   }
 }
 
-function revokeProjectExtensionTrust(scope, id, contentChanged) {
-  if (scope !== 'project' || !contentChanged) return false;
-  const stableId = stableExtensionId('project', id);
-  const current = getStudioDatabase().getExtension(stableId);
-  if (!current?.trusted) return false;
-  // A content switch invalidates consent for the old code. This automatic
-  // revocation must not be blocked by active dependents: the refresh below
-  // makes those dependents unavailable until the new content is reviewed.
-  getStudioDatabase().setExtensionTrusted(stableId, false, '');
+function revokeInstalledProjectTrust({ scope, installed, trustBaseline }) {
+  if (scope !== 'project' || !installed.contentChanged || !trustBaseline?.trusted) return false;
+  const id = stableExtensionId(scope, installed.id);
+  const current = getStudioDatabase().getExtension(id);
+  if (!current) return false;
+  // A previous attempt may have committed the revoke before its follow-up read
+  // failed. Do not write again, and never revoke a later explicit trust grant.
+  if (!current.trusted) return true;
+  if (current.contentHash !== trustBaseline.contentHash) return false;
+  getStudioDatabase().setExtensionTrusted(id, false, '');
   return true;
 }
 
@@ -143,6 +146,52 @@ async function settingsWithRuntime(cwd, reason) {
         errors: [error instanceof Error ? error.message : String(error)],
       },
     };
+  }
+}
+
+// Credential changes must retire the old authenticated connection before a
+// read-only recovery can publish fresh state. Keep failed invalidations pending.
+const pendingMcpOAuthInvalidations = new Map();
+
+async function readMcpSettingsWithRuntime(cwd) {
+  try {
+    for (const [name, revision] of pendingMcpOAuthInvalidations) {
+      await invalidateMcpConnection(name);
+      if (pendingMcpOAuthInvalidations.get(name) === revision) pendingMcpOAuthInvalidations.delete(name);
+    }
+    const snapshot = await settingsWithRuntime(cwd, 'MCP 配置');
+    if (snapshot.runtimeRefresh?.status === 'error' || snapshot.runtimeRefresh?.failedSessions > 0) {
+      throw new Error('MCP runtime projection requires refresh');
+    }
+    return snapshot;
+  } catch {
+    throw new Error('MCP 刷新未完成，请稍后重试。');
+  }
+}
+
+async function committedMcpProjection(cwd) {
+  try {
+    return { committed: true, projection: { status: 'ready', value: await readMcpSettingsWithRuntime(cwd) } };
+  } catch {
+    return { committed: true, projection: { status: 'error', message: 'MCP 配置已保存，但运行时与列表刷新未完成。请重试刷新。' } };
+  }
+}
+
+async function readSkillSettingsWithRuntime(cwd) {
+  try {
+    notifyExtensionsChanged();
+    await refreshExtensionRuntime(cwd);
+    return { ...await settingsSnapshot(cwd), runtimeRefresh: runtimeRefresh('技能') };
+  } catch {
+    throw new Error('技能运行时与列表刷新未完成，请重试刷新。');
+  }
+}
+
+async function committedSkillProjection(cwd) {
+  try {
+    return { committed: true, projection: { status: 'ready', value: await readSkillSettingsWithRuntime(cwd) } };
+  } catch {
+    return { committed: true, projection: { status: 'error', message: '技能更改已保存，但运行时与列表刷新未完成。请重试刷新。' } };
   }
 }
 
@@ -246,6 +295,50 @@ function normalizeMcpInput(input = {}, current = {}) {
 }
 
 function registerSettingsIpc() {
+  let mutationRecovery;
+  function extensionMutationRecovery() {
+    mutationRecovery ??= createExtensionMutationRecovery({
+      revokeTrust: revokeInstalledProjectTrust,
+      closeViews: record => closeExtensionDataViews(record.id),
+      readSettings: async record => {
+        const snapshot = await settingsWithRuntime(record.cwd, '扩展更改');
+        if (snapshot.runtimeRefresh?.status === 'error' || snapshot.runtimeRefresh?.failedSessions > 0) {
+          throw new Error('Extension runtime projection requires recovery');
+        }
+        return snapshot;
+      },
+    });
+    return mutationRecovery;
+  }
+  const mutationOwners = new WeakSet();
+  function mutationOwner(sender) {
+    if (sender.isDestroyed()) throw new Error('扩展更改窗口已关闭。');
+    if (!mutationOwners.has(sender)) {
+      mutationOwners.add(sender);
+      sender.once('destroyed', () => mutationRecovery?.closeOwner(sender.id));
+    }
+    return sender.id;
+  }
+  const installRecovery = createExtensionInstallRecovery({
+    revokeTrust: revokeInstalledProjectTrust,
+    closeViews: record => closeExtensionDataViews(`${record.scope}:${record.installed.id}`),
+    readSettings: async record => {
+      const snapshot = await settingsWithRuntime(record.cwd, '扩展安装');
+      if (snapshot.runtimeRefresh?.status === 'error' || snapshot.runtimeRefresh?.failedSessions > 0) {
+        throw new Error('Extension runtime projection requires recovery');
+      }
+      return snapshot;
+    },
+  });
+  const installOwners = new WeakSet();
+  function installOwner(sender) {
+    if (sender.isDestroyed()) throw new Error('扩展安装窗口已关闭。');
+    if (!installOwners.has(sender)) {
+      installOwners.add(sender);
+      sender.once('destroyed', () => installRecovery.closeOwner(sender.id));
+    }
+    return sender.id;
+  }
   ipcMain.handle('pi:settings', async (_event, cwd) => {
     const workspace = typeof cwd === 'string' ? cwd : DEFAULT_CWD;
     await reconcileRuntimeForWorkspace(workspace);
@@ -330,7 +423,10 @@ function registerSettingsIpc() {
   });
 
   ipcMain.handle('pi:select-harness-profile', async (_event, payload = {}) => {
-    const cwd = typeof payload.cwd === 'string' ? payload.cwd : DEFAULT_CWD;
+    if (!['global', 'workspace', 'inherit'].includes(payload.scope)) {
+      throw new Error('Harness 应用范围无效');
+    }
+    const cwd = typeof payload.cwd === 'string' ? payload.cwd : '';
     const harness = selectHarnessProfile({ ...payload, cwd });
     return { ...harness, runtimeRefresh: runtimeRefresh('编码 Harness') };
   });
@@ -408,71 +504,73 @@ function registerSettingsIpc() {
         label: `MCP「${stored.name}」地址`,
       }),
     };
-    const result = await authorizeMcpServer(server, async (url) => {
-      await shell.openExternal(normalizeExternalHttpUrl(url));
-    });
-    await invalidateMcpConnection(stored.name);
-    await refreshExtensionRuntime(
-      typeof cwd === 'string' ? cwd : DEFAULT_CWD,
-    );
-    return result;
+    try {
+      await authorizeMcpServer(server, async (url) => {
+        await shell.openExternal(normalizeExternalHttpUrl(url));
+      });
+    } catch {
+      throw new Error('OAuth 授权未完成，请检查连接后重试。');
+    }
+    pendingMcpOAuthInvalidations.set(stored.name, Symbol());
+    return committedMcpProjection(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
   });
 
   ipcMain.handle('pi:mcp-oauth-logout', async (_event, { name, cwd } = {}) => {
     const server = getStudioDatabase().getMcpServer(name, { includeSecrets: true });
     if (!server) throw new Error('MCP 不存在');
-    clearMcpOAuth(normalizeSecureHttpUrl(server.url, {
-      label: `MCP「${server.name}」地址`,
-    }));
-    await invalidateMcpConnection(server.name);
-    await refreshExtensionRuntime(
-      typeof cwd === 'string' ? cwd : DEFAULT_CWD,
-    );
-    return { ok: true };
+    if (server.transport !== 'http') throw new Error('只有 HTTP MCP 可以使用 OAuth');
+    const url = normalizeSecureHttpUrl(server.url, { label: `MCP「${server.name}」地址` });
+    try { clearMcpOAuth(url); } catch {
+      throw new Error('OAuth 凭据未能清除，请重试。');
+    }
+    pendingMcpOAuthInvalidations.set(server.name, Symbol());
+    return committedMcpProjection(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
   });
 
   ipcMain.handle('pi:add-mcp', async (_event, input) => {
     const db = getStudioDatabase();
-    const current = db.getMcpServer(input?.originalName || input?.name, { includeSecrets: true }) || {};
-    const next = normalizeMcpInput(input, current);
-    const normalizedName = next.name.replace(/[^A-Za-z0-9_]/g, '_');
-    const collision = db.listMcpServers().find((server) => (
-      server.name !== input?.originalName
-      && server.name !== next.name
-      && server.name.replace(/[^A-Za-z0-9_]/g, '_') === normalizedName
-    ));
-    if (collision) {
-      throw new Error(`MCP 名称「${next.name}」与「${collision.name}」会映射到同一工具命名空间，请换一个名称`);
-    }
-    db.upsertMcpServer(next);
-    if (input?.originalName && input.originalName !== next.name) {
-      db.removeMcpServer(input.originalName);
-    }
-    return settingsWithRuntime(
-      typeof input?.cwd === 'string' ? input.cwd : DEFAULT_CWD,
-      'MCP 配置',
-    );
+    db.transaction(() => {
+      const current = db.getMcpServer(input?.originalName || input?.name, { includeSecrets: true }) || {};
+      const next = normalizeMcpInput(input, current);
+      if (input?.originalName && input.originalName !== next.name && db.getMcpServer(next.name)) {
+        throw new Error('目标 MCP 名称已被使用，请换一个名称。');
+      }
+      const normalizedName = next.name.replace(/[^A-Za-z0-9_]/g, '_');
+      const collision = db.listMcpServers().find((server) => (
+        server.name !== input?.originalName
+        && server.name !== next.name
+        && server.name.replace(/[^A-Za-z0-9_]/g, '_') === normalizedName
+      ));
+      if (collision) {
+        throw new Error(`MCP 名称「${next.name}」与「${collision.name}」会映射到同一工具命名空间，请换一个名称`);
+      }
+      db.upsertMcpServer(next);
+      if (input?.originalName && input.originalName !== next.name) db.removeMcpServer(input.originalName);
+    });
+    return committedMcpProjection(typeof input?.cwd === 'string' ? input.cwd : DEFAULT_CWD);
   });
 
   ipcMain.handle('pi:remove-mcp', async (_event, name, cwd) => {
     const db = getStudioDatabase();
-    if (!db.getMcpServer(name)) throw new Error('MCP 不存在');
-    db.removeMcpServer(name);
-    return settingsWithRuntime(
-      typeof cwd === 'string' ? cwd : DEFAULT_CWD,
-      'MCP 配置',
-    );
+    db.transaction(() => {
+      if (!db.getMcpServer(name)) throw new Error('MCP 不存在');
+      db.removeMcpServer(name);
+    });
+    return committedMcpProjection(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
   });
 
   ipcMain.handle('pi:set-mcp-enabled', async (_event, { name, enabled, cwd } = {}) => {
     const db = getStudioDatabase();
-    if (!db.getMcpServer(name) || typeof enabled !== 'boolean') throw new Error('参数无效');
-    db.setMcpEnabled(name, enabled);
-    return settingsWithRuntime(
-      typeof cwd === 'string' ? cwd : DEFAULT_CWD,
-      'MCP 配置',
-    );
+    db.transaction(() => {
+      if (!db.getMcpServer(name) || typeof enabled !== 'boolean') throw new Error('参数无效');
+      db.setMcpEnabled(name, enabled);
+    });
+    return committedMcpProjection(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
   });
+
+  ipcMain.handle('pi:mcp-refresh', (_event, cwd) => (
+    readMcpSettingsWithRuntime(typeof cwd === 'string' ? cwd : DEFAULT_CWD)
+  ));
 
   ipcMain.handle('pi:add-skill', async (_event, { scope, cwd } = {}) => {
     const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
@@ -482,12 +580,12 @@ function registerSettingsIpc() {
       scope === 'project' ? 'project' : 'user',
       typeof cwd === 'string' ? cwd : DEFAULT_CWD,
     );
-    notifyExtensionsChanged();
-    return settingsWithRuntime(
-      typeof cwd === 'string' ? cwd : DEFAULT_CWD,
-      '技能',
-    );
+    return committedSkillProjection(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
   });
+
+  ipcMain.handle('pi:skills-refresh', (_event, cwd) => (
+    readSkillSettingsWithRuntime(typeof cwd === 'string' ? cwd : DEFAULT_CWD)
+  ));
 
   ipcMain.handle('pi:pick-skill-source-directory', async () => {
     const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
@@ -528,13 +626,9 @@ function registerSettingsIpc() {
 
   ipcMain.handle('pi:install-prepared-skill', async (_event, input = {}) => {
     const installed = installPreparedSkill(input);
-    notifyExtensionsChanged();
     return {
       installed,
-      settings: await settingsWithRuntime(
-        typeof input.cwd === 'string' ? input.cwd : DEFAULT_CWD,
-        '技能',
-      ),
+      ...await committedSkillProjection(typeof input.cwd === 'string' ? input.cwd : DEFAULT_CWD),
     };
   });
 
@@ -544,18 +638,13 @@ function registerSettingsIpc() {
 
   ipcMain.handle('pi:remove-skill', async (_event, skillPath, cwd) => {
     removeSkill(skillPath, typeof cwd === 'string' ? cwd : DEFAULT_CWD);
-    notifyExtensionsChanged();
-    return settingsWithRuntime(
-      typeof cwd === 'string' ? cwd : DEFAULT_CWD,
-      '技能',
-    );
+    return committedSkillProjection(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
   });
 
   ipcMain.handle('pi:skill-trust', async (_event, { path: skillPath, trusted, cwd } = {}) => {
     const workspace = typeof cwd === 'string' ? cwd : DEFAULT_CWD;
     setSkillTrusted(skillPath, workspace, trusted === true);
-    notifyExtensionsChanged();
-    return settingsWithRuntime(workspace, '项目技能信任');
+    return committedSkillProjection(workspace);
   });
 
   ipcMain.handle('pi:add-extension', async (_event, { scope, cwd } = {}) => {
@@ -641,40 +730,39 @@ function registerSettingsIpc() {
     return setOfficialExtensionAutoUpdate(id, enabled === true);
   });
 
-  ipcMain.handle('pi:extension-install', async (_event, payload = {}) => {
+  ipcMain.handle('pi:extension-install', async (event, payload = {}) => {
     const workspace = typeof payload.cwd === 'string' ? payload.cwd : DEFAULT_CWD;
     const scope = payload.scope === 'project' ? 'project' : 'user';
-    const installed = await extensionDistributionService().installPrepared(payload.token, {
-      scope,
-      cwd: workspace,
-      acceptedPermissions: Array.isArray(payload.acceptedPermissions)
-        ? payload.acceptedPermissions.filter((item) => typeof item === 'string')
-        : [],
-      acceptedProviderAccess: Array.isArray(payload.acceptedProviderAccess)
-        ? payload.acceptedProviderAccess.filter((item) => typeof item === 'string')
-        : [],
-      acceptedRequirements: payload.acceptedRequirements === true,
-      acceptedExecution: payload.acceptedExecution === true,
-      acceptedPublisherKey: payload.acceptedPublisherKey === true,
-      trusted: scope === 'user',
+    const ownerId = installOwner(event.sender);
+    // Capture old consent before committing. If this read fails, no installation
+    // has occurred; later recovery can distinguish old trust from a new grant.
+    const trustBaselines = scope === 'project' ? new Map(getStudioDatabase().listExtensions()
+      .filter(row => row.scope === 'project')
+      .map(row => [row.id, { trusted: row.trusted, contentHash: row.contentHash }])) : undefined;
+    return installRecovery.install({ ownerId, scope, cwd: workspace, trustBaselines,
+      install: () => extensionDistributionService().installPrepared(payload.token, {
+        scope,
+        cwd: workspace,
+        acceptedPermissions: Array.isArray(payload.acceptedPermissions)
+          ? payload.acceptedPermissions.filter((item) => typeof item === 'string')
+          : [],
+        acceptedProviderAccess: Array.isArray(payload.acceptedProviderAccess)
+          ? payload.acceptedProviderAccess.filter((item) => typeof item === 'string')
+          : [],
+        acceptedRequirements: payload.acceptedRequirements === true,
+        acceptedExecution: payload.acceptedExecution === true,
+        acceptedPublisherKey: payload.acceptedPublisherKey === true,
+        trusted: scope === 'user',
+      }),
     });
-    const trustRevoked = revokeProjectExtensionTrust(
-      scope,
-      installed.id,
-      installed.contentChanged,
-    );
-    await closeExtensionDataViews(`${scope}:${installed.id}`);
-    return {
-      installed: {
-        id: installed.id,
-        version: installed.version,
-        activeCodePath: installed.activeCodePath,
-        dataPath: installed.dataPath,
-        contentChanged: installed.contentChanged,
-        trustRevoked,
-      },
-      settings: await settingsWithRuntime(workspace, '扩展安装'),
-    };
+  });
+
+  ipcMain.handle('pi:extension-install-refresh', (event, { token } = {}) => (
+    installRecovery.refresh(event.sender.id, token)
+  ));
+
+  ipcMain.handle('pi:extension-install-recovery-dispose', (event, { token } = {}) => {
+    installRecovery.dispose(event.sender.id, token);
   });
 
   ipcMain.handle('pi:extension-dispose', async (_event, { token } = {}) => {
@@ -683,34 +771,29 @@ function registerSettingsIpc() {
     }
   });
 
-  ipcMain.handle('pi:extension-rollback', async (_event, payload = {}) => {
+  ipcMain.handle('pi:extension-mutation-refresh', (event, { token } = {}) => (
+    extensionMutationRecovery().refresh(event.sender.id, token)
+  ));
+
+  ipcMain.handle('pi:extension-mutation-recovery-dispose', (event, { token } = {}) => {
+    extensionMutationRecovery().dispose(event.sender.id, token);
+  });
+
+  ipcMain.handle('pi:extension-rollback', async (event, payload = {}) => {
     const workspace = typeof payload.cwd === 'string' ? payload.cwd : DEFAULT_CWD;
     const scope = payload.scope === 'project' ? 'project' : 'user';
     const id = typeof payload.id === 'string'
       ? payload.id.replace(/^(?:user|project):/, '')
       : '';
     if (!id) throw new Error('扩展 ID 无效');
-    const installed = await extensionDistributionService().rollback(id, {
-      scope,
-      cwd: workspace,
+    const stableId = stableExtensionId(scope, id);
+    const previous = scope === 'project' ? getStudioDatabase().getExtension(stableId) : undefined;
+    const trustBaseline = previous ? { trusted: previous.trusted, contentHash: previous.contentHash } : undefined;
+    return extensionMutationRecovery().mutate({
+      ownerId: mutationOwner(event.sender), action: 'rollback', id: stableId, scope, cwd: workspace,
+      trustBaseline, needsCloseViews: true,
+      mutate: () => extensionDistributionService().rollback(id, { scope, cwd: workspace }),
     });
-    const trustRevoked = revokeProjectExtensionTrust(
-      scope,
-      installed.id,
-      installed.contentChanged,
-    );
-    await closeExtensionDataViews(`${scope}:${installed.id}`);
-    return {
-      installed: {
-        id: installed.id,
-        version: installed.version,
-        activeCodePath: installed.activeCodePath,
-        dataPath: installed.dataPath,
-        contentChanged: installed.contentChanged,
-        trustRevoked,
-      },
-      settings: await settingsWithRuntime(workspace, '扩展回滚'),
-    };
   });
 
   ipcMain.handle('pi:extension-registry-set', async (_event, { url } = {}) => ({
@@ -739,25 +822,28 @@ function registerSettingsIpc() {
     return refreshExtensionRuntime(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
   });
 
-  ipcMain.handle('pi:extensions-enable', async (_event, { id, enabled, cwd } = {}) => {
+  ipcMain.handle('pi:extensions-enable', async (event, { id, enabled, cwd } = {}) => {
     const workspace = typeof cwd === 'string' ? cwd : DEFAULT_CWD;
-    setStudioExtensionEnabled(id, enabled, workspace);
-    if (!enabled) await closeExtensionDataViews(id);
-    return settingsWithRuntime(workspace, '扩展启停');
+    return extensionMutationRecovery().mutate({
+      ownerId: mutationOwner(event.sender), action: 'enable', id, cwd: workspace, needsCloseViews: !enabled,
+      mutate: () => setStudioExtensionEnabled(id, enabled, workspace),
+    });
   });
 
-  ipcMain.handle('pi:extensions-trust', async (_event, { id, trusted, cwd } = {}) => {
+  ipcMain.handle('pi:extensions-trust', async (event, { id, trusted, cwd } = {}) => {
     const workspace = typeof cwd === 'string' ? cwd : DEFAULT_CWD;
-    setStudioExtensionTrusted(id, trusted, workspace);
-    if (!trusted) await closeExtensionDataViews(id);
-    return settingsWithRuntime(workspace, '扩展信任');
+    return extensionMutationRecovery().mutate({
+      ownerId: mutationOwner(event.sender), action: 'trust', id, cwd: workspace, needsCloseViews: !trusted,
+      mutate: () => setStudioExtensionTrusted(id, trusted, workspace),
+    });
   });
 
-  ipcMain.handle('pi:remove-extension', async (_event, { id, cwd } = {}) => {
+  ipcMain.handle('pi:remove-extension', async (event, { id, cwd } = {}) => {
     const workspace = typeof cwd === 'string' ? cwd : DEFAULT_CWD;
-    await removeStudioExtension(id, workspace);
-    await closeExtensionDataViews(id);
-    return settingsWithRuntime(workspace, '扩展卸载');
+    return extensionMutationRecovery().mutate({
+      ownerId: mutationOwner(event.sender), action: 'remove', id, cwd: workspace, needsCloseViews: true,
+      mutate: () => removeStudioExtension(id, workspace),
+    });
   });
 }
 

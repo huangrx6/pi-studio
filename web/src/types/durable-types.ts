@@ -109,8 +109,11 @@ export type ConversationSubmitResult = {
   conversationId: string;
   submissionId: string;
   requestId: string;
-  status: 'queued' | 'placed' | 'done' | 'unanswered';
+  admitted: true;
+  status: 'queued' | 'placed' | 'done' | 'unanswered' | 'unknown';
   whenBusy: 'steer' | 'followUp' | 'reject';
+  /** The Durable input is committed; only the Studio projection needs refresh. */
+  postCommitError?: string;
 };
 
 export type ConversationEditInput = {
@@ -187,6 +190,9 @@ export type ConversationEvent =
   | EventBase<'agent.updated', { agent: Record<string, unknown> }>
   | EventBase<'usage.updated', { usage: unknown }>
   | EventBase<'retry.updated', { active: boolean; attempt: number; at?: number; errorMessage?: string }>
+  | EventBase<'stream.closed', {
+      reason: 'aborted' | 'ended' | 'listener_error' | 'failed';
+    }>
   | EventBase<'compaction.started' | 'compaction.completed', Record<string, unknown>>
   | EventBase<'turn.diff', { diff: TurnDiff }>
   | EventBase<

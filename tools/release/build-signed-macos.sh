@@ -1,6 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+package_mode='release'
+node_arch="$(node -p 'process.arch')"
+arches=('--arm64' '--x64')
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --current)
+      case "$node_arch" in
+        arm64|x64) arches=("--$node_arch") ;;
+        *) echo "Unsupported Node architecture for macOS packaging: $node_arch" >&2; exit 1 ;;
+      esac
+      ;;
+    --dir)
+      package_mode='dir'
+      ;;
+    --help|-h)
+      echo "Usage: $0 [--current] [--dir]"
+      echo "  --current  build only the host architecture"
+      echo "  --dir      create an unpacked .app without DMG or ZIP archives"
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
 identity="${PI_STUDIO_CODESIGN_IDENTITY:-Pi Studio Self Signed}"
 certificate="${PI_STUDIO_SIGNING_CERTIFICATE:-.release-signing/pi-studio-self-signed.p12}"
 password_file="${PI_STUDIO_SIGNING_PASSWORD_FILE:-.release-signing/pi-studio-self-signed-password.txt}"
@@ -64,6 +93,12 @@ if ! security find-certificate -c "$identity" "$keychain" >/dev/null; then
 fi
 
 pnpm run build
+builder_args=(exec electron-builder --mac)
+builder_args+=("${arches[@]}")
+builder_args+=(--publish never)
+if [[ "$package_mode" == 'dir' ]]; then
+  builder_args+=(--dir)
+fi
 env \
   -u CSC_LINK \
   -u CSC_KEY_PASSWORD \
@@ -73,11 +108,15 @@ env \
   PI_STUDIO_CODESIGN_IDENTITY="$identity" \
   PI_STUDIO_SIGNING_KEYCHAIN="$keychain" \
   CSC_IDENTITY_AUTO_DISCOVERY=false \
-  pnpm exec electron-builder --mac --arm64 --x64 --publish never
+  pnpm "${builder_args[@]}"
 
 version=$(node -p "require('./package.json').version")
 
-for app in "release/mac/Pi Studio.app" "release/mac-arm64/Pi Studio.app"; do
+apps=()
+if [[ " ${arches[*]} " == *' --arm64 '* ]]; then apps+=("release/mac-arm64/Pi Studio.app"); fi
+if [[ " ${arches[*]} " == *' --x64 '* ]]; then apps+=("release/mac/Pi Studio.app"); fi
+
+for app in "${apps[@]}"; do
   if [[ ! -d "$app" ]]; then
     echo "Expected packaged app was not found: $app" >&2
     exit 1
@@ -91,7 +130,13 @@ for app in "release/mac/Pi Studio.app" "release/mac-arm64/Pi Studio.app"; do
   fi
 done
 
-for arch in x64 arm64; do
+if [[ "$package_mode" == 'dir' ]]; then
+  echo "Verified unpacked macOS app for v$version: ${apps[*]}"
+  exit 0
+fi
+
+for arch in arm64 x64; do
+  if [[ " ${arches[*]} " != *" --$arch "* ]]; then continue; fi
   archive="release/Pi-Studio-${version}-${arch}.zip"
   extracted=$(mktemp -d)
   ditto -x -k "$archive" "$extracted"

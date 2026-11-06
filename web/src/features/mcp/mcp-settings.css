@@ -1,0 +1,24 @@
+.mcp-server-list { list-style: none; margin: 0; padding: 0; }
+.mcp-server-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 20px; padding: 20px 0; border-bottom: 1px solid var(--border); }
+.mcp-server-row:first-child { padding-top: 8px; }
+.mcp-server-copy { min-width: 0; flex: 1 1 280px; display: grid; gap: 7px; }
+.mcp-server-open { display: flex; align-items: baseline; gap: 8px; justify-self: start; max-width: 100%; padding: 0; text-align: left; color: var(--text); }
+.mcp-server-open strong { min-width: 0; overflow-wrap: anywhere; font-size: var(--text-base); font-weight: var(--weight-semibold); }
+.mcp-server-open svg { width: var(--icon-xs); height: var(--icon-xs); flex: none; color: var(--faint); align-self: center; }
+.mcp-server-open:hover svg { color: var(--text); }
+.mcp-server-description { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-relaxed); overflow-wrap: anywhere; }
+.mcp-server-target { display: block; overflow: hidden; color: var(--faint); font: var(--text-xs)/var(--leading-body) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.mcp-server-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-body); }
+.mcp-server-row[data-state="error"] .mcp-server-state { color: var(--error); }
+.mcp-server-row[data-state="connected"] .mcp-server-state { color: var(--success); }
+.mcp-server-row[data-state="disabled"] .mcp-server-state { color: var(--faint); }
+.mcp-server-actions { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+.mcp-server-actions .switch { flex: none; }
+.mcp-server-error { min-width: 0; font-size: var(--text-xs); line-height: var(--leading-body); color: var(--error); }
+.mcp-server-error summary { width: fit-content; cursor: pointer; }
+.mcp-server-error pre { max-height: 180px; overflow: auto; margin: 8px 0 0; padding: 8px 10px; border-radius: var(--radius-control); background: var(--surface-soft); color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; font: var(--text-xs)/var(--leading-body) var(--mono); }
+.mcp-server-open:focus-visible,
+.mcp-server-actions button:focus-visible,
+.mcp-server-error summary:focus-visible,
+.mcp-server-error pre:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; border-radius: var(--radius-control); }
+.mcp-settings-empty { margin: 0; padding: 24px 0; color: var(--muted); font-size: var(--text-sm); }

@@ -1,14 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useSettingsDraftGuard } from '../../shared/SettingsDraftGuard';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
-  ArrowUpRight,
+  ChevronRight,
   Check,
   CircleAlert,
   LoaderCircle,
   Package,
-  Plus,
-  RefreshCw,
-  RotateCcw,
-  Save,
   Search,
   Terminal,
   Trash2,
@@ -18,13 +15,9 @@ import {
 import { DetailDialog } from '../../shared/DetailDialog';
 import { InfoHint } from '../../shared/InfoHint';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
-import {
-  SettingsResourceCard,
-  SettingsResourceCardBody,
-  SettingsResourceCardFooter,
-  SettingsResourceCardIcon,
-  SettingsResourceCardMain,
-} from '../../shared/SettingsResourceCard';
+import { patternMatches, sameToolNames, selectionFromSources, toggleToolSelection } from './agent-tool-selection';
+import './agent-tools-settings.css';
+import { toolWrites } from './agent-tool-writes';
 import type {
   AgentToolCatalog,
   AgentToolCommand,
@@ -33,6 +26,7 @@ import type {
   AgentToolSource,
 } from '../../types/agent-tool-types';
 import { runtimeRefreshFailure } from '../../shared/runtime-refresh';
+import { isComposingKey } from '../../shared/keyboard-navigation';
 
 const RECOMMENDED_TOOLS = ['read', 'write', 'edit', 'bash', 'grep', 'find', 'ls', 'tool_search', 'mcp__*'];
 const KNOWN_DESCRIPTIONS: Record<string, string> = {
@@ -97,16 +91,6 @@ function exposureLabel(exposure: string): string {
   return exposure || '标准';
 }
 
-function patternMatches(pattern: string, name: string): boolean {
-  if (pattern === name || pattern === '*') return true;
-  if (!pattern.includes('*')) return false;
-  const expression = pattern
-    .split('*')
-    .map((part) => part.replace(/[|\\{}()[\]^$+?.]/g, '\\$&'))
-    .join('.*');
-  return new RegExp(`^${expression}$`).test(name);
-}
-
 function toolSource(selection: AgentToolSelection, name: string): AgentToolSource {
   const stored = selection.sources[name];
   return {
@@ -126,32 +110,6 @@ function toolSource(selection: AgentToolSelection, name: string): AgentToolSourc
   };
 }
 
-function selectionFromSources(enabled: string[], sources: Record<string, AgentToolInfo['source']>, previous: AgentToolSelection): AgentToolSelection {
-  return {
-    enabled,
-    sources: Object.fromEntries(enabled.map((name) => {
-      const source = sources[name];
-      if (source) {
-        return [name, {
-          source: source.source,
-          label: source.label,
-          scope: source.scope,
-          path: source.path,
-          baseDir: source.baseDir,
-        }];
-      }
-      const stored = previous.sources[name];
-      return [name, stored || {
-        source: 'manual',
-        label: '手动添加',
-        scope: 'manual',
-        path: '',
-        baseDir: '',
-      }];
-    })),
-  };
-}
-
 export function AgentToolsSettings({ cwd, initialSelection, onSaved }: {
   cwd: string;
   initialSelection: AgentToolSelection;
@@ -161,38 +119,62 @@ export function AgentToolsSettings({ cwd, initialSelection, onSaved }: {
   const [draft, setDraft] = useState(initialSelection);
   const [catalog, setCatalog] = useState<AgentToolCatalog | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const writeState = useSyncExternalStore(toolWrites.subscribe, toolWrites.getSnapshot);
+  const saving = writeState.pending;
   const [error, setError] = useState<string | null>(null);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [notice, setNotice] = useState('');
   const [query, setQuery] = useState('');
   const [customName, setCustomName] = useState('');
   const [activeSourceKey, setActiveSourceKey] = useState('');
   const [detail, setDetail] = useState<AgentToolDetail | null>(null);
   const requestRef = useRef(0);
+  const contextRef = useRef(cwd);
+  contextRef.current = cwd;
+  const lifecycleRef = useRef(0);
+  const selectionRef = useRef(initialSelection);
+
 
   const loadCatalog = useCallback(async (refresh = false) => {
     const request = ++requestRef.current;
     setLoading(true);
-    setError(null);
+    setCatalogError(null);
+    const lifecycle = lifecycleRef.current;
+    const current = () => request === requestRef.current && lifecycle === lifecycleRef.current && cwd === contextRef.current;
     try {
       const result = await window.piApi.agentToolCatalog({ cwd, refresh });
-      if (request === requestRef.current) setCatalog(result);
+      if (current()) setCatalog(result);
     } catch (cause) {
-      if (request === requestRef.current) setError(cause instanceof Error ? cause.message : String(cause));
+      if (current()) setCatalogError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      if (request === requestRef.current) setLoading(false);
+      if (current()) setLoading(false);
     }
   }, [cwd]);
 
   useEffect(() => {
+    const previous = selectionRef.current;
     setSelection(initialSelection);
-    setDraft(initialSelection);
+    setDraft(current => JSON.stringify(current) === JSON.stringify(previous) ? initialSelection : current);
+    selectionRef.current = initialSelection;
   }, [initialSelection]);
 
   useEffect(() => {
     // Settings is often opened immediately after an extension change, so start
     // from the current runtime instead of a stale in-memory discovery session.
+    setCatalog(null);
+    setDetail(null);
+    setError(null);
+    setNotice('');
     void loadCatalog(true);
+    return () => { requestRef.current += 1; lifecycleRef.current += 1; };
   }, [loadCatalog]);
+
+  useEffect(() => {
+    if (!writeState.failure) return;
+    setDraft(writeState.failure.draft);
+    setError(writeState.failure.message);
+    setNotice('');
+  }, [writeState.failure, cwd]);
 
   const catalogSources = useMemo(
     () => Object.fromEntries((catalog?.tools || []).map((tool) => [tool.name, tool.source])),
@@ -200,12 +182,10 @@ export function AgentToolsSettings({ cwd, initialSelection, onSaved }: {
   );
   const availableNames = useMemo(() => new Set((catalog?.tools || []).map((tool) => tool.name)), [catalog]);
   const dirty = JSON.stringify(draft) !== JSON.stringify(selection);
-  const wildcardRules = draft.enabled.filter((name) => name.includes('*') && name !== '*');
-  const unavailable = draft.enabled.filter((name) => {
-    if (name === '*') return false;
-    if (name.includes('*')) return !(catalog?.tools || []).some((tool) => patternMatches(name, tool.name));
-    return !availableNames.has(name);
-  });
+  useSettingsDraftGuard({ label: '工具选择', dirty, saving });
+  const wildcardRules = draft.enabled.filter((name) => name.includes('*'));
+  const recommendedSelected = sameToolNames(draft.enabled, RECOMMENDED_TOOLS);
+  const unavailable = catalog ? draft.enabled.filter(name => !name.includes('*') && !availableNames.has(name)) : [];
   const groups = useMemo<AgentToolGroupItem[]>(() => {
     const needle = query.trim().toLowerCase();
     const matches = (name: string, description: string, source: AgentToolSource) => (
@@ -258,29 +238,22 @@ export function AgentToolsSettings({ cwd, initialSelection, onSaved }: {
   const detailEnabled = detailIsTool && selectionEnables(detail.item.name);
 
   function updateEnabled(next: string[]) {
+    if (toolWrites.getSnapshot().pending) return;
+    toolWrites.clearFailure();
+    setError(null);
+    setNotice('');
     setDraft((current) => selectionFromSources(next, catalogSources, current));
   }
 
   function toggle(name: string, checked: boolean) {
-    if (checked) {
-      if (selectionEnables(name)) return;
-      updateEnabled([...draft.enabled.filter((item) => item !== '*'), name]);
-      return;
-    }
-    const matchingRules = draft.enabled.filter((item) => item.includes('*') && patternMatches(item, name));
-    if (matchingRules.length === 0) {
-      updateEnabled(draft.enabled.filter((item) => item !== name));
-      return;
-    }
-    const expanded = draft.enabled
-      .filter((item) => !matchingRules.includes(item))
-      .concat((catalog?.tools || [])
-        .map((tool) => tool.name)
-        .filter((toolName) => toolName !== name && matchingRules.some((rule) => patternMatches(rule, toolName))));
-    updateEnabled(expanded);
+    if (toolWrites.getSnapshot().pending) return;
+    const expandsWildcard = !checked && draft.enabled.some(rule => rule.includes('*') && patternMatches(rule, name));
+    updateEnabled(toggleToolSelection(draft.enabled, (catalog?.tools || []).map(tool => tool.name), name, checked));
+    if (expandsWildcard) setNotice('已将匹配的通配规则展开为当前检测到的其他工具；保存后，新出现的匹配工具将不再自动允许。');
   }
 
   function addCustomTool() {
+    if (toolWrites.getSnapshot().pending) return;
     const name = customName.trim();
     if (!/^[A-Za-z0-9_.:*\-]+$/.test(name) || ['__proto__', 'prototype', 'constructor'].includes(name)) {
       setError('工具名或通配符只能包含字母、数字、点、横线、下划线、冒号或星号。');
@@ -298,25 +271,30 @@ export function AgentToolsSettings({ cwd, initialSelection, onSaved }: {
   }
 
   function resetRecommended() {
-    setDraft(selectionFromSources(RECOMMENDED_TOOLS, catalogSources, draft));
+    updateEnabled(RECOMMENDED_TOOLS);
   }
 
   async function save() {
-    setSaving(true);
+    if (toolWrites.getSnapshot().pending || !dirty) return;
+    const lifecycle = lifecycleRef.current;
+    const current = () => lifecycle === lifecycleRef.current && cwd === contextRef.current;
     setError(null);
+    setNotice('');
     try {
-      const snapshot = await window.piApi.setAgentTools({ tools: draft, cwd });
+      const snapshot = await toolWrites.run(draft, () => window.piApi.setAgentTools({ tools: draft, cwd }));
+      // The saved selection is global even if this editor has since closed.
+      onSaved(snapshot);
       const refreshFailure = runtimeRefreshFailure(snapshot.runtimeRefresh);
-      if (refreshFailure) setError(refreshFailure);
+      if (refreshFailure) toolWrites.reportSavedWarning(snapshot.agentTools, refreshFailure);
+      if (!current()) return;
       setSelection(snapshot.agentTools);
       setDraft(snapshot.agentTools);
-      onSaved(snapshot);
-      // The whitelist can change which extension tools are discoverable.
+      selectionRef.current = snapshot.agentTools;
+      if (refreshFailure) setError(refreshFailure);
+      else setNotice(snapshot.runtimeRefresh?.pendingSessions ? '配置已保存，运行中的会话将在本轮结束后应用。' : '配置已保存。');
       void loadCatalog(true);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setSaving(false);
+      if (current()) setError(cause instanceof Error ? cause.message : String(cause));
     }
   }
 
@@ -339,169 +317,59 @@ export function AgentToolsSettings({ cwd, initialSelection, onSaved }: {
   }
 
   return <div className="settings-sections agent-tools-settings">
-    <SettingsPageHeader
-      icon={<Wrench />}
-      title="智能体工具"
-      meta={<>
-        <span className="count-badge">{draft.enabled.length}</span>
-        <InfoHint label="保存后热更新已打开的会话；正在回答的会话在本轮结束后应用。来源扩展变化时，已允许工具可能暂时不可用。" />
-      </>}
-      actions={<button type="button" className="settings-add-button" disabled={loading} onClick={() => void loadCatalog(true)}>
-        {loading ? <LoaderCircle className="spin" /> : <RefreshCw />}
-        刷新目录
-      </button>}
-    />
-    <section className="settings-card">
-      <div className="agent-tool-summary">
-        <span><Wrench />{draft.enabled.length} 个已允许</span>
-        <span><Package />{catalog?.tools.length ?? 0} 个已检测到</span>
-        <span><Terminal />{catalog?.commands.length ?? 0} 个扩展命令</span>
+    <SettingsPageHeader icon={<Wrench />} title="智能体工具" actions={<button type="button" className="settings-outline" disabled={loading || saving} onClick={() => void loadCatalog(true)}>{loading && <LoaderCircle className="spin" />}刷新目录</button>} />
+    <div className="agent-tool-save-bar">
+      <div><p>全局配置 · 保存后应用于所有工作区。</p><span role="status">{saving ? '正在保存…' : dirty ? '有未保存的更改' : '与已保存配置一致'}</span></div>
+      <div className="agent-tool-toolbar-actions">
+        <button type="button" className="settings-text-button" disabled={saving || !dirty} onClick={() => { toolWrites.clearFailure(); setDraft(selection); setError(null); setNotice(''); }}>撤销更改</button>
+        <button type="button" className="settings-outline" disabled={saving || recommendedSelected} title={recommendedSelected ? '当前已是推荐配置' : undefined} onClick={resetRecommended}>恢复推荐配置</button>
+        <button type="button" className="settings-save" disabled={saving || !dirty} onClick={() => void save()}>{saving ? '正在保存…' : '保存更改'}</button>
       </div>
-    </section>
-
-    {(catalog?.errors.length || catalog?.warnings.length) ? <section className="settings-card agent-tool-diagnostics">
-      <div className="settings-card-head"><div><h2>扩展诊断</h2></div></div>
-      {[...(catalog?.errors || []), ...(catalog?.warnings || [])].map((item, index) => (
-        <div className="agent-tool-diagnostic" key={`${item.path}-${index}`}>
-          <CircleAlert />
-          <div><strong>{item.path || '扩展加载'}</strong><span>{item.message}</span></div>
-        </div>
-      ))}
-    </section> : null}
-
-    {wildcardRules.length > 0 && <section className="settings-card">
-      <div className="settings-card-head"><div><h2>批量工具规则 <span className="count-badge">{wildcardRules.length}</span><InfoHint label="通配符会覆盖来源中后续出现的匹配工具。" /></h2></div></div>
-      <div className="agent-tool-unavailable-list">
-        {wildcardRules.map((name) => <div className="agent-tool-unavailable" key={name}>
-          <Wrench />
-          <div><code>{name}</code>{KNOWN_DESCRIPTIONS[name] && <span>{KNOWN_DESCRIPTIONS[name]}</span>}</div>
-          <button className="icon-button resource-delete" aria-label={`移除工具规则 ${name}`} title="移除规则" onClick={() => updateEnabled(draft.enabled.filter((item) => item !== name))}><Trash2 /></button>
-        </div>)}
-      </div>
+    </div>
+    {error && <div className="settings-error" role="alert">{error}</div>}
+    {notice && <p className="agent-tool-notice" role="status">{notice}</p>}
+    {(catalog?.errors.length || catalog?.warnings.length) ? <details className="agent-tool-diagnostics">
+      <summary>扩展诊断 · {(catalog?.errors.length || 0) + (catalog?.warnings.length || 0)} 项</summary>
+      {[...(catalog?.errors || []), ...(catalog?.warnings || [])].map((item, index) => <div className="agent-tool-diagnostic" key={`${item.path}-${index}`}><code>{item.path || '扩展加载'}</code><p>{item.message}</p></div>)}
+    </details> : null}
+    {wildcardRules.length > 0 && <section className="agent-tool-section" aria-label="批量工具规则">
+      <h2>批量工具规则 <InfoHint label="通配符也允许以后出现的匹配工具。停用其中一个工具，会把该规则展开成当前检测到的其他工具。" /></h2>
+      <ul className="agent-tool-rule-list">{wildcardRules.map(name => <li key={name}>
+        <div><code>{name}</code><p>{name === '*' ? '允许所有当前和未来检测到的工具' : KNOWN_DESCRIPTIONS[name] || '允许所有匹配此名称的工具'}{catalog && <span> · 当前匹配 {catalog.tools.filter(tool => patternMatches(name, tool.name)).length} 个</span>}</p></div>
+        <button type="button" className="icon-button" disabled={saving} aria-label={`移除工具规则 ${name}`} title="移除规则" onClick={() => updateEnabled(draft.enabled.filter(item => item !== name))}><Trash2 /></button>
+      </li>)}</ul>
     </section>}
-
-    {unavailable.length > 0 && <section className="settings-card">
-      <div className="settings-card-head"><div><h2>当前不可用 <span className="count-badge">{unavailable.length}</span></h2></div></div>
-      <div className="agent-tool-unavailable-list">
-        {unavailable.map((name) => {
-          const source = toolSource(draft, name);
-          return <div className="agent-tool-unavailable" key={name}>
-            <CircleAlert />
-            <div><code>{name}</code><span>{source.label} · {source.source}</span></div>
-            <button className="icon-button resource-delete" aria-label={`移除不可用工具 ${name}`} title="从白名单移除" onClick={() => toggle(name, false)}><Trash2 /></button>
-          </div>;
-        })}
-      </div>
+    {unavailable.length > 0 && <section className="agent-tool-section" aria-label="当前未检测到的工具">
+      <h2>当前未检测到 <InfoHint label="这些名称仍保留在配置中，工具重新出现后会被允许。" /></h2>
+      <ul className="agent-tool-rule-list">{unavailable.map(name => {
+        const source = toolSource(draft, name);
+        return <li key={name}><div><code>{name}</code><p>{source.label} · {source.source}</p></div><button type="button" className="icon-button" disabled={saving} aria-label={`移除不可用工具 ${name}`} title="从配置移除" onClick={() => toggle(name, false)}><Trash2 /></button></li>;
+      })}</ul>
     </section>}
-
-    <section className="settings-card agent-tool-catalog-card">
-      <div className="agent-tool-toolbar">
-        <div className="agent-tool-search-wrap">
-          <Search className="agent-tool-search-icon" aria-hidden="true" />
-          <input className="agent-tool-search" aria-label="搜索智能体工具" placeholder="搜索工具或来源…" value={query} onChange={(event) => setQuery(event.target.value)} />
-          {query && <button className="agent-tool-search-clear" aria-label="清除工具搜索" title="清除搜索" onClick={() => setQuery('')}><X /></button>}
-        </div>
-        <div className="agent-tool-toolbar-actions">
-          <button className="settings-outline" disabled={saving || !dirty} onClick={resetRecommended}><RotateCcw />恢复核心工具</button>
-          <button className="settings-save" disabled={saving || !dirty} onClick={() => void save()}>{saving ? <LoaderCircle className="spin" /> : <Save />}{saving ? '正在保存…' : '保存更改'}</button>
-        </div>
-      </div>
-      {error && <div className="settings-error agent-tool-inline-error" role="alert">{error}</div>}
-      {loading && !catalog ? <div className="settings-loading" role="status"><LoaderCircle className="spin" />正在扫描可用工具…</div> : <div className="agent-tool-groups">
+    <section className="agent-tool-section" aria-label="工具目录">
+      <div className="agent-tool-catalog-heading"><h2>工具目录</h2>{catalog && <span>{catalog.tools.length} 个工具 · {catalog.commands.length} 个扩展命令</span>}</div>
+      <div className="agent-tool-search-wrap"><Search aria-hidden="true" /><input className="agent-tool-search" aria-label="搜索智能体工具" placeholder="搜索工具、命令或来源…" value={query} onChange={event => setQuery(event.target.value)} />{query && <button type="button" aria-label="清除工具搜索" title="清除搜索" onClick={() => setQuery('')}><X /></button>}</div>
+      {catalogError && <div className="agent-tool-catalog-error"><p role="alert">{catalogError}</p><button type="button" className="settings-text-button" disabled={loading || saving} onClick={() => void loadCatalog(true)}>重新加载工具目录</button>{catalog && <small>显示上次成功读取的目录。</small>}</div>}
+      {loading && !catalog ? <p className="agent-tool-loading" role="status"><LoaderCircle className="spin" />正在读取工具目录…</p> : <div className="agent-tool-groups">
         {groups.length > 0 && <>
-          <div className="agent-tool-tabs" role="tablist" aria-label="工具来源">
-            {groups.map((group, index) => {
-              const active = group.key === activeGroup?.key;
-              return <button
-                id={`agent-tool-tab-${index}`}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                aria-controls="agent-tool-source-panel"
-                tabIndex={active ? 0 : -1}
-                className={`agent-tool-tab ${active ? 'is-active' : ''}`}
-                key={group.key}
-                onClick={() => setActiveSourceKey(group.key)}
-                onKeyDown={(event) => onSourceTabKeyDown(event, index)}
-              >
-                <span className="agent-tool-tab-icon">{group.source.kind === 'core' ? <Wrench /> : <Package />}</span>
-                <span className="agent-tool-tab-copy"><strong>{group.source.label}</strong></span>
-                <span className="agent-tool-tab-count" title={`${group.tools.length} 个工具，${group.commands.length} 个命令`}>{group.tools.length + group.commands.length}</span>
-              </button>;
-            })}
-          </div>
-          {activeGroup && <section id="agent-tool-source-panel" role="tabpanel" aria-labelledby={`agent-tool-tab-${groups.indexOf(activeGroup)}`} className="agent-tool-source-panel">
-            <header className="agent-tool-source-panel-head">
-              <div><strong>{activeGroup.source.label}</strong><span>{SOURCE_KIND_LABEL[activeGroup.source.kind]} · {scopeLabel(activeGroup.source.scope)} · {activeGroup.tools.length} 个工具{activeGroup.commands.length ? ` · ${activeGroup.commands.length} 个命令` : ''}</span></div>
-              {(activeGroup.source.path || activeGroup.source.source) && <code title={activeGroup.source.path || activeGroup.source.source}>{activeGroup.source.path || activeGroup.source.source}</code>}
-            </header>
-            <div className="agent-tool-card-grid">
-              {activeGroup.tools.map((tool) => {
-                const isEnabled = selectionEnables(tool.name);
-                return <SettingsResourceCard
-                  className={`agent-tool-card ${isEnabled ? 'is-enabled' : ''}`}
-                  key={tool.name}
-                >
-                  <SettingsResourceCardMain
-                    className="agent-tool-card-main"
-                    ariaLabel={`查看工具 ${tool.name} 详情`}
-                    onClick={() => setDetail({ kind: 'tool', item: tool })}
-                  >
-                    <SettingsResourceCardIcon className="agent-tool-card-icon"><Terminal /></SettingsResourceCardIcon>
-                    <SettingsResourceCardBody>
-                      <span className="settings-resource-card-heading">
-                        <span className="agent-tool-card-name"><code>{tool.name}</code></span>
-                        <span className="agent-tool-card-type">{exposureLabel(tool.exposure)}</span>
-                      </span>
-                      {(KNOWN_DESCRIPTIONS[tool.name] || tool.description) && (
-                        <span className="agent-tool-card-description">{KNOWN_DESCRIPTIONS[tool.name] || tool.description}</span>
-                      )}
-                    </SettingsResourceCardBody>
-                    <ArrowUpRight className="settings-resource-card-disclosure" aria-hidden="true" />
-                  </SettingsResourceCardMain>
-                  <SettingsResourceCardFooter className="agent-tool-card-footer">
-                    <div>
-                      <button
-                        className={`switch agent-tool-card-toggle ${isEnabled ? 'is-on' : ''}`}
-                        type="button"
-                        role="switch"
-                        aria-checked={isEnabled}
-                        aria-label={`${isEnabled ? '禁用' : '允许'}工具 ${tool.name}`}
-                        onClick={() => toggle(tool.name, !isEnabled)}
-                      ><span /></button>
-                    </div>
-                  </SettingsResourceCardFooter>
-                </SettingsResourceCard>;
+          <div className="agent-tool-tabs" role="tablist" aria-label="工具来源">{groups.map((group, index) => {
+            const active = group.key === activeGroup?.key;
+            return <button id={`agent-tool-tab-${index}`} type="button" role="tab" aria-selected={active} aria-controls="agent-tool-source-panel" tabIndex={active ? 0 : -1} key={group.key} onClick={() => setActiveSourceKey(group.key)} onKeyDown={event => onSourceTabKeyDown(event, index)}>{group.source.label}<span>{group.tools.length + group.commands.length}</span></button>;
+          })}</div>
+          {activeGroup && <section id="agent-tool-source-panel" role="tabpanel" aria-labelledby={`agent-tool-tab-${groups.indexOf(activeGroup)}`}>
+            <div className="agent-tool-source-meta"><span>{SOURCE_KIND_LABEL[activeGroup.source.kind]} · {scopeLabel(activeGroup.source.scope)}</span>{(activeGroup.source.path || activeGroup.source.source) && <details><summary>来源位置</summary><code>{activeGroup.source.path || activeGroup.source.source}</code></details>}</div>
+            <ul className="agent-tool-list">
+              {activeGroup.tools.map(tool => {
+                const enabled = selectionEnables(tool.name);
+                return <li className="agent-tool-row" key={tool.name}><div><button type="button" className="agent-tool-open" aria-label={`查看工具 ${tool.name} 详情`} onClick={() => setDetail({ kind: 'tool', item: tool })}><code>{tool.name}</code><ChevronRight /></button><p>{KNOWN_DESCRIPTIONS[tool.name] || tool.description}</p><small>{exposureLabel(tool.exposure)}</small></div><button className={`switch ${enabled ? 'is-on' : ''}`} type="button" role="switch" aria-checked={enabled} disabled={saving || loading} aria-label={`${enabled ? '禁用' : '允许'}工具 ${tool.name}`} onClick={() => toggle(tool.name, !enabled)}><span /></button></li>;
               })}
-              {activeGroup.commands.map((command) => <SettingsResourceCard
-                className="agent-tool-card is-command"
-                key={`${activeGroup.source.key}:${command.name}`}
-              >
-                <SettingsResourceCardMain
-                  className="agent-tool-card-main"
-                  ariaLabel={`查看扩展命令 ${command.name} 详情`}
-                  onClick={() => setDetail({ kind: 'command', item: command })}
-                >
-                  <SettingsResourceCardIcon className="agent-tool-card-icon"><Terminal /></SettingsResourceCardIcon>
-                  <SettingsResourceCardBody>
-                    <span className="settings-resource-card-heading">
-                      <span className="agent-tool-card-name"><code>/{command.name}</code></span>
-                      <span className="agent-tool-card-type">扩展命令</span>
-                    </span>
-                    {command.description && <span className="agent-tool-card-description">{command.description}</span>}
-                  </SettingsResourceCardBody>
-                  <ArrowUpRight className="settings-resource-card-disclosure" aria-hidden="true" />
-                </SettingsResourceCardMain>
-              </SettingsResourceCard>)}
-            </div>
+              {activeGroup.commands.map(command => <li className="agent-tool-row" key={`command:${command.name}`}><div><button type="button" className="agent-tool-open" aria-label={`查看扩展命令 ${command.name} 详情`} onClick={() => setDetail({ kind: 'command', item: command })}><code>/{command.name}</code><ChevronRight /></button><p>{command.description}</p><small>扩展命令 · 随扩展启停</small></div></li>)}
+            </ul>
           </section>}
         </>}
-        {!groups.length && <div className="settings-empty">{query ? '没有匹配的工具。' : '当前工作区没有检测到可配置工具。'}</div>}
+        {!groups.length && catalog && <p className="agent-tool-empty">{query ? '没有匹配的工具或命令。' : '当前工作区没有检测到可配置工具。'}</p>}
       </div>}
-      <div className="agent-tool-custom">
-        <div className="agent-tool-custom-heading"><strong>手动添加</strong><InfoHint label="可以提前写入尚未加载的工具名或通配符；工具实际出现后由 SDK 启用。" /></div>
-        <div className="agent-tool-custom-control"><input value={customName} placeholder="例如 mcp__docs__* 或 mcp__docs__search" onChange={(event) => setCustomName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') addCustomTool(); }} /><button className="settings-outline" disabled={!customName.trim()} onClick={addCustomTool}><Plus />添加</button></div>
-      </div>
+      <div className="agent-tool-custom"><div><label htmlFor="agent-tool-custom-name">手动添加</label><InfoHint label="可以提前保存尚未加载的工具名或通配符；工具出现后会被允许。" /></div><div className="agent-tool-custom-control"><input id="agent-tool-custom-name" value={customName} disabled={saving} placeholder="例如 mcp__docs__*" onChange={event => setCustomName(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !isComposingKey(event.nativeEvent)) addCustomTool(); }} /><button type="button" className="settings-outline" disabled={saving || !customName.trim()} onClick={addCustomTool}>添加</button></div></div>
     </section>
 
     {detail && <DetailDialog className="agent-tool-detail-dialog" onClose={() => setDetail(null)}>
@@ -533,7 +401,7 @@ export function AgentToolsSettings({ cwd, initialSelection, onSaved }: {
       <footer className="detail-footer">
         <span />
         <button className="settings-outline" onClick={() => setDetail(null)}>关闭</button>
-        {detail.kind === 'tool' && <button className="settings-save" onClick={() => toggle(detail.item.name, !detailEnabled)}>{detailEnabled ? <X /> : <Check />}{detailEnabled ? '从草稿移除' : '加入草稿'}</button>}
+        {detail.kind === 'tool' && <button className="settings-save" disabled={saving || loading} onClick={() => toggle(detail.item.name, !detailEnabled)}>{detailEnabled ? <X /> : <Check />}{detailEnabled ? '从草稿移除' : '加入草稿'}</button>}
       </footer>
     </DetailDialog>}
   </div>;

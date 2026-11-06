@@ -2,7 +2,7 @@
 .conversation-action-palette[open] { display: flex; flex-direction: column; }
 .conversation-action-palette::backdrop { background: var(--transparent); }
 .conversation-action-palette header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 8px; }
-.conversation-action-palette h2 { margin: 0; font-size: var(--text-md); font-weight: 600; }
+.conversation-action-palette h2 { margin: 0; font-size: var(--text-md); font-weight: var(--weight-semibold); }
 .conversation-action-search { display: flex; align-items: center; gap: 10px; margin: 0 16px 8px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--faint); transition: border-color var(--transition), background var(--transition); }
 .conversation-action-search:hover { border-color: var(--border-hover); }
 .conversation-action-search > svg { flex: none; width: var(--icon-md); height: var(--icon-md); color: currentColor; }
@@ -14,7 +14,7 @@
 .conversation-action-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 10px 8px; border-radius: var(--radius-control); text-align: left; }
 .conversation-action-row[aria-selected="true"] { background: var(--surface-active); }
 .conversation-action-row > span { min-width: 0; }
-.conversation-action-row strong { display: block; font-size: var(--text-base); font-weight: 500; }
+.conversation-action-row strong { display: block; font-size: var(--text-base); font-weight: var(--weight-medium); }
 .conversation-action-row small { display: block; margin-top: 3px; color: var(--muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
 .conversation-action-row > svg { flex: none; width: var(--icon-sm); height: var(--icon-sm); color: var(--muted); }
 .conversation-action-row[aria-disabled="true"] { cursor: default; color: var(--muted); }

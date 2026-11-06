@@ -1,3 +1,13 @@
+import type { SettingsSnapshot } from '../global.d';
+import type { MutationProjection } from './mutation-types';
+
+export type ExtensionMutationResult = {
+  committed: true;
+  recoveryToken: string;
+  projection: MutationProjection<SettingsSnapshot>;
+  installed?: { id: string; version: string; contentChanged: boolean; trustRevoked: boolean };
+};
+
 /**
  * Stable renderer contract for Studio extensions.
  *
@@ -594,4 +604,17 @@ export interface ExtensionCommandResult {
   submit?: boolean;
   panelId?: ExtensionContributionId;
   settingsPage?: ExtensionSettingsPage;
+}
+
+/** No code/storage paths or executable extension objects cross this boundary. */
+export interface ExtensionInstallResult {
+  committed: true;
+  installed: {
+    id: string;
+    version: string;
+    contentChanged: boolean;
+    trustRevoked: boolean;
+  };
+  projection: MutationProjection<SettingsSnapshot>;
+  recoveryToken: string;
 }

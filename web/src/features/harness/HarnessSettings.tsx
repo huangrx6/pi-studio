@@ -1,403 +1,192 @@
+import { useSettingsDraftGuard } from '../../shared/SettingsDraftGuard';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import {
-  BrainCircuit,
-  Check,
-  ChevronRight,
-  CircleAlert,
-  FileCode2,
-  Info,
-  LoaderCircle,
-  Plus,
-  RotateCcw,
-  Save,
-  Sparkles,
-  Trash2,
-  Workflow,
-  Wrench,
-  X,
-} from 'lucide-react';
+import { Check, ChevronRight, Code2, LoaderCircle, MoreHorizontal, Plus, RotateCcw, Save, Trash2, X } from 'lucide-react';
+import { ActionMenu } from '../../shared/ActionMenu';
 import { SettingsDialog } from '../../shared/SettingsDialog';
 import { InfoHint } from '../../shared/InfoHint';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
 import { Select } from '../../shared/Select';
 import { useActionConfirmation } from '../../shared/ConfirmDialog';
-import type {
-  HarnessProfile,
-  HarnessSectionId,
-  HarnessSettingsSnapshot,
-  RuntimePolicy,
-} from '../../types/harness-types';
+import { errorText } from '../../shared/error-text';
+import type { HarnessProfile, HarnessSectionId, HarnessSettingsSnapshot, RuntimePolicy } from '../../types/harness-types';
 import { runtimeRefreshFailure } from '../../shared/runtime-refresh';
+import { cloneHarnessProfile as cloneProfile, cloneRuntimePolicy, createHarnessRequestOwner, createHarnessWriteQueue, guidanceDraft, type GuidanceRow } from './harness-state';
+import './harness-settings.css';
 
-const SECTION_ICONS = {
-  preamble: BrainCircuit,
-  tools: Wrench,
-  rules: FileCode2,
-  repositoryDocs: FileCode2,
-  projectContext: Workflow,
-  skills: Sparkles,
-  cwd: Workflow,
-  addendum: Info,
-} satisfies Record<HarnessSectionId, typeof BrainCircuit>;
+function slugify(value: string): string { return value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^[^a-z0-9]+/, '').slice(0, 64); }
+class HarnessReloadError extends Error {}
+const harnessWrites = createHarnessWriteQueue();
 
-function cloneProfile(profile: HarnessProfile): HarnessProfile {
-  return {
-    ...profile,
-    sections: { ...profile.sections },
-    sectionOverrides: { ...profile.sectionOverrides },
-    toolGuidance: { ...profile.toolGuidance },
-  };
-}
-
-function cloneRuntimePolicy(policy: RuntimePolicy): RuntimePolicy {
-  return {
-    ...policy,
-    retry: { ...policy.retry },
-    compaction: { ...policy.compaction },
-  };
-}
-
-function slugify(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/^[^a-z0-9]+/, '')
-    .slice(0, 64);
-}
-
-function profileSignature(profile: HarnessProfile): string {
-  return JSON.stringify(profile);
-}
-
-export function HarnessSettings({
-  cwd,
-  initial,
-  enabledTools,
-  onUpdated,
-}: {
-  cwd: string;
-  initial: HarnessSettingsSnapshot;
-  enabledTools: string[];
-  onUpdated?: (snapshot: HarnessSettingsSnapshot) => void;
-}) {
+export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd: string; initial: HarnessSettingsSnapshot; enabledTools: string[]; onUpdated?: (snapshot: HarnessSettingsSnapshot) => void }) {
   const actionConfirmation = useActionConfirmation();
   const [snapshot, setSnapshot] = useState(initial);
   const [selectedId, setSelectedId] = useState(initial.activeProfile.id);
   const [draft, setDraft] = useState(() => cloneProfile(initial.activeProfile));
+  const guidanceId = useRef(0);
+  const rowsFor = (profile: HarnessProfile) => Object.entries(profile.toolGuidance).map(([name, guidance]) => ({ key: ++guidanceId.current, name, guidance }));
+  const [guidanceRows, setGuidanceRows] = useState<GuidanceRow[]>(() => rowsFor(initial.activeProfile));
   const [policyDraft, setPolicyDraft] = useState(() => cloneRuntimePolicy(initial.runtimePolicy));
   const [scope, setScope] = useState<'workspace' | 'global'>(cwd ? 'workspace' : 'global');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [readyScope, setReadyScope] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [policySaving, setPolicySaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [newProfileOpen, setNewProfileOpen] = useState(false);
   const [newProfile, setNewProfile] = useState({ name: '', id: '' });
-  const requestRef = useRef(0);
-
-  const selectedStored = snapshot.profiles.find((profile) => profile.id === selectedId)
-    || snapshot.profiles.find((profile) => profile.id === snapshot.activeProfileId)
-    || snapshot.profiles[0];
-  const dirty = Boolean(selectedStored && profileSignature(draft) !== profileSignature(selectedStored));
+  const [profileMenu, setProfileMenu] = useState<{ x: number; y: number } | null>(null);
+  const owner = useRef(createHarnessRequestOwner(cwd)).current;
+  owner.setScope(cwd);
+  const mutationLock = useRef(false);
+  const updated = useRef(onUpdated); updated.current = onUpdated;
+  const guidance = useMemo(() => guidanceDraft(guidanceRows), [guidanceRows]);
+  const effectiveDraft = useMemo(() => ({ ...draft, toolGuidance: guidance.value }), [draft, guidance.value]);
+  const selectedStored = snapshot.profiles.find((profile) => profile.id === selectedId) || snapshot.profiles.find((profile) => profile.id === snapshot.activeProfileId) || snapshot.profiles[0];
+  const dirty = Boolean(guidance.error || selectedStored && JSON.stringify(effectiveDraft) !== JSON.stringify(selectedStored));
   const policyDirty = JSON.stringify(policyDraft) !== JSON.stringify(snapshot.runtimePolicy);
-  const activeForScope = scope === 'global'
-    ? snapshot.globalProfileId
-    : cwd
-      ? snapshot.workspaceProfileId || snapshot.globalProfileId
-      : snapshot.globalProfileId;
+  useSettingsDraftGuard({ label: 'Harness 配置', dirty });
+  useSettingsDraftGuard({ label: '全局运行策略', dirty: policyDirty });
+  const activeForScope = scope === 'global' ? snapshot.globalProfileId : snapshot.workspaceProfileId || snapshot.globalProfileId;
   const applied = activeForScope === selectedId;
-  const toolSuggestions = useMemo(
-    () => enabledTools.filter((name) => name !== '*').sort((left, right) => left.localeCompare(right)),
-    [enabledTools],
-  );
+  const blocked = loading || readyScope !== cwd || Boolean(loadError) || saving || policySaving;
+  const toolSuggestions = useMemo(() => enabledTools.filter((name) => name !== '*').sort((a, b) => a.localeCompare(b)), [enabledTools]);
 
-  useEffect(() => {
-    setScope(cwd ? 'workspace' : 'global');
-  }, [cwd]);
-
-  useEffect(() => {
-    const request = ++requestRef.current;
-    setLoading(true);
-    setError(null);
-    void window.piApi.harnessSettings(cwd)
-      .then((next) => {
-        if (request !== requestRef.current) return;
-        setSnapshot(next);
-        setSelectedId(next.activeProfile.id);
-        setDraft(cloneProfile(next.activeProfile));
-        setPolicyDraft(cloneRuntimePolicy(next.runtimePolicy));
-        onUpdated?.(next);
-      })
-      .catch((cause) => {
-        if (request === requestRef.current) setError(cause instanceof Error ? cause.message : String(cause));
-      })
-      .finally(() => {
-        if (request === requestRef.current) setLoading(false);
-      });
-  }, [cwd]);
-
-  function acceptSnapshot(next: HarnessSettingsSnapshot, profileId = selectedId) {
-    const refreshFailure = runtimeRefreshFailure(next.runtimeRefresh);
-    if (refreshFailure) setError(refreshFailure);
+  function installProfile(profile: HarnessProfile) { setSelectedId(profile.id); setDraft(cloneProfile(profile)); setGuidanceRows(rowsFor(profile)); }
+  function acceptSnapshot(next: HarnessSettingsSnapshot, profileId: string, updateProfile: boolean, updatePolicy: boolean) {
     setSnapshot(next);
-    const profile = next.profiles.find((item) => item.id === profileId)
-      || next.profiles.find((item) => item.id === next.activeProfileId)
-      || next.profiles[0];
-    if (profile) {
-      setSelectedId(profile.id);
-      setDraft(cloneProfile(profile));
+    if (updateProfile) {
+      const profile = next.profiles.find((item) => item.id === profileId) || next.activeProfile;
+      installProfile(profile);
     }
-    setPolicyDraft(cloneRuntimePolicy(next.runtimePolicy));
-    onUpdated?.(next);
+    if (updatePolicy) setPolicyDraft(cloneRuntimePolicy(next.runtimePolicy));
+    updated.current?.(next);
   }
+  async function reload(preserveDrafts: boolean) {
+    if (mutationLock.current) return;
+    const ticket = owner.begin();
+    setLoading(true); setLoadError(null); setError(null); setMessage(null);
+    try {
+      await harnessWrites.wait();
+      if (!owner.current(ticket)) return;
+      const next = await window.piApi.harnessSettings(cwd);
+      if (!owner.current(ticket)) return;
+      acceptSnapshot(next, preserveDrafts ? selectedId : next.activeProfile.id, !preserveDrafts, !preserveDrafts);
+      setReadyScope(cwd);
+    } catch (cause) { if (owner.current(ticket)) setLoadError(errorText(cause)); }
+    finally { if (owner.current(ticket)) setLoading(false); }
+  }
+  useEffect(() => {
+    owner.activate(); mutationLock.current = false;
+    setScope(cwd ? 'workspace' : 'global'); setSaving(false); setPolicySaving(false);
+    setNewProfileOpen(false); setProfileMenu(null); setReadyScope(null);
+    void reload(false);
+    return () => owner.dispose();
+  }, [cwd]);
 
+  async function mutate(kind: 'profile' | 'policy', operation: () => Promise<HarnessSettingsSnapshot>, profileId: string, updateProfile: boolean, success: string) {
+    if (blocked || mutationLock.current) return false;
+    mutationLock.current = true;
+    const ticket = owner.begin();
+    if (kind === 'policy') setPolicySaving(true); else setSaving(true);
+    setError(null); setMessage(null);
+    try {
+      const next = await harnessWrites.run(operation);
+      if (!owner.current(ticket)) return false;
+      acceptSnapshot(next, profileId, updateProfile, kind === 'policy');
+      const refreshFailure = runtimeRefreshFailure(next.runtimeRefresh);
+      if (refreshFailure) setError(refreshFailure); else setMessage(success);
+      return true;
+    } catch (cause) {
+      if (owner.current(ticket)) {
+        if (cause instanceof HarnessReloadError) setLoadError(cause.message);
+        else setError(errorText(cause));
+      }
+      return false;
+    } finally {
+      if (owner.current(ticket)) { mutationLock.current = false; setSaving(false); setPolicySaving(false); }
+    }
+  }
   async function selectProfile(profile: HarnessProfile): Promise<boolean> {
+    if (blocked) return false;
     if (profile.id === selectedId) return true;
+    const ticket = owner.begin();
     if (dirty) {
-      const accepted = await actionConfirmation.confirm({
-        title: '丢弃未保存的 Harness 更改？',
-        description: '切换配置会使用已保存版本重新填充编辑器，尚未保存的 section、指令和工具 guidance 将丢失。',
-        confirmLabel: '丢弃并切换',
-        tone: 'danger',
-      });
-      if (!accepted) return false;
+      const accepted = await actionConfirmation.confirm({ title: '丢弃未保存的 Harness 更改？', description: '切换配置会使用已保存版本重新填充编辑器，未保存的提示词、工具说明和附加指令将丢失。全局运行策略草稿会保留。', confirmLabel: '丢弃并切换', tone: 'danger' });
+      if (!accepted || !owner.current(ticket)) return false;
     }
-    setSelectedId(profile.id);
-    setDraft(cloneProfile(profile));
-    setError(null);
-    setMessage(null);
-    return true;
+    installProfile(profile); setError(null); setMessage(null); return true;
   }
-
   function handleProfileTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
-    let nextIndex: number | null = null;
-    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-      nextIndex = (index + 1) % snapshot.profiles.length;
-    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-      nextIndex = (index - 1 + snapshot.profiles.length) % snapshot.profiles.length;
-    } else if (event.key === 'Home') {
-      nextIndex = 0;
-    } else if (event.key === 'End') {
-      nextIndex = snapshot.profiles.length - 1;
-    }
-    if (nextIndex === null) return;
-    event.preventDefault();
-    const profile = snapshot.profiles[nextIndex];
-    void selectProfile(profile).then((changed) => {
-      if (!changed) return;
-      requestAnimationFrame(() => {
-        document.getElementById(`harness-profile-tab-${profile.id}`)?.focus();
-      });
-    });
+    if (event.nativeEvent.isComposing || blocked) return;
+    const size = snapshot.profiles.length;
+    const next = ['ArrowRight', 'ArrowDown'].includes(event.key) ? (index + 1) % size : ['ArrowLeft', 'ArrowUp'].includes(event.key) ? (index - 1 + size) % size : event.key === 'Home' ? 0 : event.key === 'End' ? size - 1 : -1;
+    if (next < 0) return;
+    event.preventDefault(); const profile = snapshot.profiles[next];
+    void selectProfile(profile).then((changed) => { if (changed) requestAnimationFrame(() => document.getElementById(`harness-profile-tab-${profile.id}`)?.focus()); });
   }
-
-  function updateSection(id: HarnessSectionId, enabled: boolean) {
-    setDraft((current) => ({
-      ...current,
-      sections: { ...current.sections, [id]: enabled },
-    }));
-  }
-
+  function updateSection(id: HarnessSectionId, enabled: boolean) { setDraft((current) => ({ ...current, sections: { ...current.sections, [id]: enabled } })); }
   function updateSectionOverride(id: HarnessSectionId, value: string) {
-    setDraft((current) => {
-      const sectionOverrides = { ...current.sectionOverrides };
-      if (value) sectionOverrides[id] = value;
-      else delete sectionOverrides[id];
-      return { ...current, sectionOverrides };
-    });
+    setDraft((current) => { const sectionOverrides = { ...current.sectionOverrides }; if (value) sectionOverrides[id] = value; else delete sectionOverrides[id]; return { ...current, sectionOverrides }; });
   }
-
-  function updateGuidance(previousName: string, name: string, guidance: string) {
-    setDraft((current) => {
-      const toolGuidance = { ...current.toolGuidance };
-      if (previousName && previousName !== name) delete toolGuidance[previousName];
-      if (name.trim() && guidance.trim()) toolGuidance[name.trim()] = guidance;
-      else if (name.trim()) delete toolGuidance[name.trim()];
-      return { ...current, toolGuidance };
-    });
-  }
-
   function addGuidance() {
-    let index = 1;
-    let name = 'new-tool';
-    while (Object.hasOwn(draft.toolGuidance, name)) {
-      index += 1;
-      name = `new-tool-${index}`;
-    }
-    setDraft((current) => ({
-      ...current,
-      toolGuidance: { ...current.toolGuidance, [name]: '' },
-    }));
+    let index = 1; let name = 'new-tool';
+    while (guidanceRows.some((row) => row.name === name)) name = `new-tool-${++index}`;
+    setGuidanceRows((current) => [...current, { key: ++guidanceId.current, name, guidance: '' }]);
   }
-
-  function removeGuidance(name: string) {
-    setDraft((current) => {
-      const toolGuidance = { ...current.toolGuidance };
-      delete toolGuidance[name];
-      return { ...current, toolGuidance };
-    });
-  }
-
   async function saveProfile() {
-    setSaving(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const next = await window.piApi.saveHarnessProfile({ cwd, profile: draft });
-      acceptSnapshot(next, draft.id);
-      setMessage('配置已保存。下一条请求会使用新的 Harness。');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setSaving(false);
-    }
+    if (!dirty || guidance.error || !draft.name.trim()) return;
+    await mutate('profile', () => window.piApi.saveHarnessProfile({ cwd, profile: effectiveDraft }), draft.id, true, '配置已保存。');
   }
-
   async function applyProfile() {
-    setSaving(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const next = await window.piApi.selectHarnessProfile({
-        cwd,
-        id: selectedId,
-        scope,
-      });
-      acceptSnapshot(next, selectedId);
-      setMessage(scope === 'global'
-        ? '已设为所有工作区的默认 Harness。'
-        : '已应用到当前工作区。');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setSaving(false);
-    }
+    if (dirty || applied) return;
+    await mutate('profile', async () => {
+      const next = await window.piApi.selectHarnessProfile({ cwd, id: selectedId, scope });
+      if (scope !== 'global' || !cwd) return next;
+      try { return { ...await window.piApi.harnessSettings(cwd), runtimeRefresh: next.runtimeRefresh }; }
+      catch (cause) { throw new HarnessReloadError(`全局默认已保存，但当前工作区配置刷新失败：${errorText(cause)}`); }
+    }, selectedId, false, scope === 'global' ? '已设为全局默认；已有工作区覆盖保持不变。' : '已应用到当前工作区；下一条请求生效。');
   }
-
   async function savePolicy() {
-    setPolicySaving(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const next = await window.piApi.saveRuntimePolicy({ cwd, policy: policyDraft });
-      acceptSnapshot(next, selectedId);
-      setMessage('Durable 运行策略已保存；下一条请求或工具轮次会读取新设置。');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setPolicySaving(false);
-    }
+    if (!policyDirty) return;
+    await mutate('policy', () => window.piApi.saveRuntimePolicy({ cwd, policy: policyDraft }), selectedId, false, '全局运行策略已保存；运行时将在安全边界读取新设置。');
   }
-
   async function resetProfile() {
-    if (!selectedStored) return;
-    const accepted = await actionConfirmation.confirm({
-      title: '恢复 Studio 编码基线？',
-      description: `“${selectedStored.name}”当前的 section 开关、覆盖内容、工具 guidance 和附加指令会被基线配置替换。`,
-      confirmLabel: '恢复基线',
-    });
-    if (!accepted) return;
-    setSaving(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const next = await window.piApi.resetHarnessProfile({ cwd, id: selectedId });
-      acceptSnapshot(next, selectedId);
-      setMessage('已恢复基线配置。');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setSaving(false);
-    }
+    if (!selectedStored || blocked) return;
+    const ticket = owner.begin();
+    const accepted = await actionConfirmation.confirm({ title: '恢复 Studio 编码基线？', description: `“${selectedStored.name}”的提示词开关、覆盖内容、工具说明和附加指令会被基线替换，并保存到此配置。`, confirmLabel: '恢复基线' });
+    if (accepted && owner.current(ticket)) await mutate('profile', () => window.piApi.resetHarnessProfile({ cwd, id: selectedId }), selectedId, true, '已恢复并保存基线配置。');
   }
-
   async function deleteProfile() {
-    if (!selectedStored || selectedStored.builtin) return;
-    const accepted = await actionConfirmation.confirm({
-      title: '删除 Harness 配置？',
-      description: `“${selectedStored.name}”会从当前 Harness 列表删除；引用它的工作区将恢复继承全局默认。`,
-      confirmLabel: '删除配置',
-      tone: 'danger',
-    });
-    if (!accepted) return;
-    setSaving(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const next = await window.piApi.deleteHarnessProfile({ cwd, id: selectedId });
-      acceptSnapshot(next, next.activeProfileId);
-      setMessage('配置已删除。');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setSaving(false);
-    }
+    if (!selectedStored || selectedStored.builtin || blocked) return;
+    const ticket = owner.begin();
+    const accepted = await actionConfirmation.confirm({ title: '删除 Harness 配置？', description: `“${selectedStored.name}”会被删除；引用它的工作区将恢复继承全局默认。`, confirmLabel: '删除配置', tone: 'danger' });
+    if (accepted && owner.current(ticket)) await mutate('profile', () => window.piApi.deleteHarnessProfile({ cwd, id: selectedId }), '', true, '配置已删除。');
   }
-
   async function createProfile() {
     const id = slugify(newProfile.id || newProfile.name);
-    if (!/^[a-z0-9][a-z0-9._-]{1,63}$/.test(id) || ['constructor', 'prototype'].includes(id)) {
-      setError('Harness ID 需要 2–64 个小写字母、数字、点、横线或下划线。');
-      return;
-    }
-    if (!newProfile.name.trim()) {
-      setError('请填写 Harness 名称。');
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const next = await window.piApi.saveHarnessProfile({
-        cwd,
-        profile: {
-          ...draft,
-          id,
-          name: newProfile.name.trim(),
-          builtin: false,
-        },
-      });
-      acceptSnapshot(next, id);
-      setNewProfileOpen(false);
-      setNewProfile({ name: '', id: '' });
-      setMessage('新 Harness 已创建。');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setSaving(false);
-    }
+    if (!/^[a-z0-9][a-z0-9._-]{1,63}$/.test(id) || ['constructor', 'prototype'].includes(id)) { setError('Harness ID 需要 2–64 个小写字母、数字、点、横线或下划线。'); return; }
+    if (snapshot.profiles.some((profile) => profile.id === id)) { setError('这个配置 ID 已存在，请使用其他 ID。'); return; }
+    if (!newProfile.name.trim()) { setError('请填写 Harness 名称。'); return; }
+    if (guidance.error) { setError(guidance.error); return; }
+    const saved = await mutate('profile', () => window.piApi.saveHarnessProfile({ cwd, profile: { ...effectiveDraft, id, name: newProfile.name.trim(), builtin: false } }), id, true, '新配置已创建，尚未更改应用范围。');
+    if (saved) { setNewProfileOpen(false); setNewProfile({ name: '', id: '' }); }
   }
 
   return <div className="settings-sections harness-settings">
     <SettingsPageHeader
-      icon={<BrainCircuit />}
+      icon={<Code2 />}
       title="Harness 配置"
-      meta={<span className="count-badge">{snapshot.profiles.length}</span>}
     />
-    <section className="settings-card harness-overview-card">
-      <div className="harness-runtime-line harness-instruction-line">
-        <span className={snapshot.globalInstructionsStatus === 'present'
-          ? 'is-ready'
-          : snapshot.globalInstructionsStatus === 'unreadable'
-            ? 'is-pending'
-            : undefined}
-        >
-          {snapshot.globalInstructionsStatus === 'present' ? <Check /> : <FileCode2 />}
-          {snapshot.globalInstructionsStatus === 'present'
-            ? '全局指令已配置'
-            : snapshot.globalInstructionsStatus === 'unreadable'
-              ? '全局指令无法读取'
-              : '未配置全局指令'}
-        </span>
-        <code title={snapshot.globalInstructionsPath}>{snapshot.globalInstructionsPath}</code>
-      </div>
+    <section className="harness-overview">
       <div className="harness-profile-switcher">
         <div className="harness-profile-tabs-head">
           <div>
-            <strong>配置方案</strong>
+            <h2>配置方案</h2>
           </div>
-          <button type="button" className="settings-add-button" disabled={saving} onClick={() => setNewProfileOpen(true)}>
-            <Plus />新建配置
+          <button type="button" className="settings-add-button" disabled={blocked} onClick={() => setNewProfileOpen(true)}>
+            新建配置
           </button>
         </div>
         <div className="harness-profile-tabs" role="tablist" aria-label="Harness Profile">
@@ -416,6 +205,8 @@ export function HarnessSettings({
               role="tab"
               id={`harness-profile-tab-${profile.id}`}
               key={profile.id}
+              disabled={blocked}
+              title={[profile.id, usageLabel].filter(Boolean).join(" · ")}
               aria-selected={profile.id === selectedId}
               aria-controls="harness-profile-panel"
               tabIndex={profile.id === selectedId ? 0 : -1}
@@ -423,86 +214,107 @@ export function HarnessSettings({
               onClick={() => void selectProfile(profile)}
               onKeyDown={(event) => handleProfileTabKeyDown(event, index)}
             >
-              <span className="harness-profile-tab-icon"><BrainCircuit /></span>
               <span className="harness-profile-tab-copy">
                 <strong>{profile.name}</strong>
-                <code>{profile.id}</code>
               </span>
-              <span className="harness-profile-tab-meta">
-                {profile.builtin && <em>基线</em>}
-                {usageLabel && <i title={usageLabel} aria-label={usageLabel} />}
-              </span>
+
             </button>;
           })}
         </div>
       </div>
+      <details className="harness-global-instructions">
+        <summary>
+          <span className={`harness-global-instructions-status ${snapshot.globalInstructionsStatus === 'present'
+            ? 'is-ready'
+            : snapshot.globalInstructionsStatus === 'unreadable'
+              ? 'is-pending'
+              : ''}`}
+          >
+            <span>全局指令</span>
+            <strong>
+              {snapshot.globalInstructionsStatus === 'present'
+                ? '已配置'
+                : snapshot.globalInstructionsStatus === 'unreadable'
+                  ? '无法读取'
+                  : '未配置'}
+            </strong>
+          </span>
+          <span className="harness-global-instructions-action">查看路径<ChevronRight /></span>
+        </summary>
+        <div className="harness-global-instructions-path">
+          <span>文件</span>
+          <code>{snapshot.globalInstructionsPath}</code>
+        </div>
+      </details>
     </section>
 
-    {(error || message) && <div className={`harness-notice ${error ? 'is-error' : 'is-success'}`} role={error ? 'alert' : 'status'}>
-      {error ? <CircleAlert /> : <Check />}
-      <span>{error || message}</span>
-    </div>}
+    {loadError && <div className="harness-load-error"><p role="alert">{loadError}</p><button type="button" className="settings-text-button" disabled={loading} onClick={() => void reload(readyScope === cwd)}>重新加载 Harness 配置</button></div>}
+    {!newProfileOpen && (error || message) && <p className={`harness-notice ${error ? 'is-error' : ''}`} role={error ? 'alert' : 'status'}>{error || message}</p>}
+    {loading && <p className="harness-loading" role="status"><LoaderCircle className="spin" />正在刷新 Harness 配置…</p>}
 
-    <div className={loading ? 'harness-loading is-visible' : 'harness-loading'} role="status">
-      <LoaderCircle className="spin" />正在刷新 Harness 配置
-    </div>
-
-    <div
+    <fieldset
+      disabled={blocked}
       className="harness-editor"
       id="harness-profile-panel"
       role="tabpanel"
       aria-labelledby={`harness-profile-tab-${selectedId}`}
     >
-      <section className="settings-card">
+      <section className="harness-block">
         <div className="harness-editor-head">
           <div className="harness-editor-identity">
-            <span>
-              {draft.builtin ? 'Studio 基线' : '自定义 Harness'}
-              {dirty && <em>未保存</em>}
-            </span>
+            <span className={`harness-editor-status ${dirty ? 'is-dirty' : ''}`}>{dirty ? '未保存修改' : '已保存'}</span>
             <input
               aria-label="Harness 名称"
               value={draft.name}
               onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
             />
-            <code>{draft.id}</code>
           </div>
           <div className="harness-editor-actions">
-            <div className="harness-editor-action-group is-secondary">
-              {!selectedStored?.builtin && <button type="button" className="settings-text-button is-danger" disabled={saving} onClick={() => void deleteProfile()}><Trash2 />删除</button>}
-              <button type="button" className="settings-text-button" disabled={saving} onClick={() => void resetProfile()}><RotateCcw />恢复基线</button>
-              <button type="button" className="settings-outline" disabled={!dirty || saving} onClick={() => selectedStored && setDraft(cloneProfile(selectedStored))}>撤销</button>
-            </div>
+            <button
+              type="button"
+              className="icon-button harness-profile-more"
+              aria-label="更多配置操作"
+              title="更多配置操作"
+              disabled={saving}
+              onClick={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                setProfileMenu({ x: rect.right - 224, y: rect.bottom + 4 });
+              }}
+            >
+              <MoreHorizontal />
+            </button>
+            <button type="button" className="settings-outline" disabled={!dirty || saving} onClick={() => selectedStored && installProfile(selectedStored)}>撤销</button>
             <div className="harness-editor-action-group is-primary">
-              <button type="button" className="settings-save" disabled={!dirty || saving || !draft.name.trim()} onClick={() => void saveProfile()}>
+              <button type="button" className="settings-save" disabled={!dirty || saving || Boolean(guidance.error) || !draft.name.trim()} onClick={() => void saveProfile()}>
                 {saving ? <LoaderCircle className="spin" /> : <Save />}保存配置
-              </button>
-              <button
-                type="button"
-                className={`settings-outline harness-apply-button ${applied ? 'is-applied' : ''}`}
-                disabled={saving || applied || dirty}
-                onClick={() => void applyProfile()}
-              >
-                {saving ? <LoaderCircle className="spin" /> : <Check />}
-                {dirty ? '先保存' : applied ? '已应用' : scope === 'global' ? '设为全局默认' : '应用到工作区'}
               </button>
             </div>
           </div>
         </div>
         <div className="harness-editor-context">
-          <div>
-            <span className={applied ? 'is-ready' : 'is-pending'}>
-              {applied ? <Check /> : <CircleAlert />}
-              {dirty ? '有未保存的更改' : applied ? '当前范围正在使用' : '配置已保存但尚未应用'}
-              <InfoHint label={dirty
-                ? '保存后可应用；保存与选择分开，不会影响其他配置。'
-                : '工作区配置优先于全局默认；下一条请求生效。'}
-              />
-            </span>
+          <div className="harness-editor-context-copy">
+            <strong>应用范围</strong>
+            <p>
+              {scope === 'global'
+                ? '设为全局默认；已有工作区覆盖保持不变。'
+                : '只影响当前工作区，并优先于全局默认。'}
+            </p>
           </div>
-          <div className="settings-scope-tabs" role="tablist" aria-label="Harness 应用范围">
-            <button type="button" role="tab" aria-selected={scope === 'workspace'} className={scope === 'workspace' ? 'is-active' : ''} disabled={!cwd} onClick={() => setScope('workspace')}>当前工作区</button>
-            <button type="button" role="tab" aria-selected={scope === 'global'} className={scope === 'global' ? 'is-active' : ''} onClick={() => setScope('global')}>全局默认</button>
+          <div className="harness-editor-context-actions">
+            <div className="settings-scope-tabs" role="tablist" aria-label="Harness 应用范围">
+              <button type="button" role="tab" aria-selected={scope === 'workspace'} className={scope === 'workspace' ? 'is-active' : ''} disabled={!cwd} onClick={() => setScope('workspace')}>当前工作区</button>
+              <button type="button" role="tab" aria-selected={scope === 'global'} className={scope === 'global' ? 'is-active' : ''} onClick={() => setScope('global')}>全局默认</button>
+            </div>
+            <button
+              type="button"
+              className={`settings-outline harness-apply-button ${applied ? 'is-applied' : ''}`}
+              disabled={saving || applied || dirty}
+              title={dirty ? '请先保存配置' : undefined}
+              onClick={() => void applyProfile()}
+            >
+              {saving ? <LoaderCircle className="spin" /> : <Check />}
+              {applied ? '已应用' : scope === 'global' ? '设为全局默认' : '应用到工作区'}
+            </button>
           </div>
         </div>
 
@@ -511,22 +323,21 @@ export function HarnessSettings({
           </div>
           <div className="harness-section-grid">
             {snapshot.sections.map((section) => {
-              const Icon = SECTION_ICONS[section.id];
               const enabled = draft.sections[section.id] !== false;
               return <button
                 type="button"
                 key={section.id}
                 className={`harness-section-card ${enabled ? 'is-enabled' : ''}`}
-                aria-pressed={enabled}
+                role="switch"
+                aria-checked={enabled}
                 aria-label={`${section.label}：${section.description}`}
                 title={section.description}
                 onClick={() => updateSection(section.id, !enabled)}
               >
-                <span className="harness-section-icon"><Icon /></span>
                 <span>
                   <strong>{section.label}</strong>
                 </span>
-                <span className="harness-section-state">{enabled ? <Check /> : <X />}</span>
+                <span className={`switch ${enabled ? 'is-on' : ''}`} aria-hidden="true"><span /></span>
               </button>;
             })}
           </div>
@@ -537,12 +348,10 @@ export function HarnessSettings({
             {snapshot.sections.map((section) => {
               const enabled = draft.sections[section.id] !== false;
               const value = draft.sectionOverrides[section.id] || '';
-              const Icon = SECTION_ICONS[section.id];
               const state = !enabled ? '已关闭' : value.trim() ? '已覆盖' : '';
               return <details className={`harness-section-override ${!enabled ? 'is-disabled' : ''}`} key={section.id}>
                 <summary>
                   <span className="harness-section-override-main">
-                    <span className="harness-section-override-icon"><Icon /></span>
                     <span className="harness-section-override-copy">
                       <strong>{section.label}</strong>
                       {state && <small className={!enabled ? 'is-off' : 'is-overridden'}>{state}</small>}
@@ -576,20 +385,20 @@ export function HarnessSettings({
           </div>
         </section>
 
-        <section className="settings-card">
-          <div className="settings-card-head">
+        <section className="harness-block">
+          <div className="harness-block-head">
             <div><h2>工具策略 <InfoHint label="自定义说明优先于内置策略，并且只应用于当前开放的 Tool。" /></h2></div>
             <button type="button" className="settings-outline" onClick={addGuidance}><Plus />添加工具说明</button>
           </div>
           <div className="harness-tool-guidance-list">
-            {Object.entries(draft.toolGuidance).map(([name, guidance]) => (
-              <div className="harness-tool-guidance-row" key={name}>
+            {guidanceRows.map((row) => (
+              <div className="harness-tool-guidance-row" key={row.key} data-guidance-key={row.key}>
                 <label>
                   <span>工具</span>
                   <input
                     list="harness-tool-suggestions"
-                    value={name}
-                    onChange={(event) => updateGuidance(name, event.target.value, guidance)}
+                    value={row.name}
+                    onChange={(event) => setGuidanceRows((current) => current.map((item) => item.key === row.key ? { ...item, name: event.target.value } : item))}
                     placeholder="edit"
                   />
                 </label>
@@ -597,12 +406,12 @@ export function HarnessSettings({
                   <span>补充说明</span>
                   <textarea
                     rows={2}
-                    value={guidance}
-                    onChange={(event) => updateGuidance(name, name, event.target.value)}
+                    value={row.guidance}
+                    onChange={(event) => setGuidanceRows((current) => current.map((item) => item.key === row.key ? { ...item, guidance: event.target.value } : item))}
                     placeholder="例如：修改后优先运行该模块最相关的测试。"
                   />
                 </label>
-                <button type="button" className="icon-button" aria-label={`删除 ${name} 的工具说明`} title="删除" onClick={() => removeGuidance(name)}>
+                <button type="button" className="icon-button" aria-label={`删除 ${row.name || "未命名工具"} 的工具说明`} title="删除" onClick={() => setGuidanceRows((current) => current.filter((item) => item.key !== row.key))}>
                   <Trash2 />
                 </button>
               </div>
@@ -610,19 +419,34 @@ export function HarnessSettings({
             <datalist id="harness-tool-suggestions">
               {toolSuggestions.map((name) => <option value={name} key={name} />)}
             </datalist>
-            {Object.keys(draft.toolGuidance).length === 0 && <div className="harness-guidance-empty"><Wrench /><span><strong>沿用内置工具策略</strong></span></div>}
+            {guidanceRows.length === 0 && <p className="harness-guidance-empty">沿用内置工具策略</p>}
+            {guidance.error && <p className="harness-guidance-error" role="alert">{guidance.error}</p>}
           </div>
         </section>
 
-        {/*
-          Runtime policy is global rather than part of the selected Harness profile.
-          It is applied at the next safe request boundary, so this detail lives in
-          the heading tooltip instead of a permanent explanatory banner.
-        */}
-        <section className="settings-card harness-policy-card">
-          <div className="settings-card-head harness-policy-head">
+        <section className="harness-block">
+          <div className="harness-block-head">
+            <div><h2>附加指令 <InfoHint label="追加在项目指令和其他提示词组成之后。" /></h2></div>
+            <span className="harness-char-count">{draft.customInstructions.length.toLocaleString()} / 65,536</span>
+          </div>
+          <textarea
+            className="harness-instructions"
+            aria-label="Harness 附加指令"
+            rows={7}
+            maxLength={65_536}
+            value={draft.customInstructions}
+            onChange={(event) => setDraft((current) => ({ ...current, customInstructions: event.target.value }))}
+          />
+        </section>
+
+    </fieldset>
+
+    <fieldset className="harness-policy-editor" disabled={blocked}>
+        <section className="harness-block harness-policy-block">
+          <div className="harness-block-head harness-policy-head">
             <div>
-              <h2>Durable 运行策略 <span className="settings-scope-badge">全局</span><InfoHint label="控制重试、上下文压缩、工具调度和故障恢复；正在执行的任务阶段不会被打断。" /></h2>
+              <h2>全局运行策略 <InfoHint label="控制重试、上下文压缩、工具调度和故障恢复；正在执行的任务阶段不会被打断。" /></h2>
+              <p className="harness-scope-description">独立保存，不随上方配置方案切换。</p>
             </div>
             <div className="harness-policy-actions">
               <button
@@ -968,22 +792,18 @@ export function HarnessSettings({
           </div>
         </section>
 
-        <section className="settings-card">
-          <div className="settings-card-head">
-            <div><h2>附加指令 <InfoHint label="追加在项目指令和其他提示词组成之后。" /></h2></div>
-            <span className="harness-char-count">{draft.customInstructions.length.toLocaleString()} / 65,536</span>
-          </div>
-          <textarea
-            className="harness-instructions"
-            aria-label="Harness 附加指令"
-            rows={7}
-            maxLength={65_536}
-            value={draft.customInstructions}
-            onChange={(event) => setDraft((current) => ({ ...current, customInstructions: event.target.value }))}
-          />
-        </section>
+    </fieldset>
 
-    </div>
+    {profileMenu && <ActionMenu
+      {...profileMenu}
+      onClose={() => setProfileMenu(null)}
+      items={[
+        ...(!selectedStored?.builtin
+          ? [{ label: '删除配置', run: () => void deleteProfile(), disabled: saving }]
+          : []),
+        { label: '恢复 Studio 编码基线', run: () => void resetProfile(), disabled: saving },
+      ]}
+    />}
 
     {newProfileOpen && <SettingsDialog
       title="新建 Harness 配置"

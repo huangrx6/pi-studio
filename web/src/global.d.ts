@@ -10,6 +10,8 @@
  */
 
 export {};
+import type { CommittedProjection, MutationProjection } from './types/mutation-types';
+import type { ExtensionInstallResult, ExtensionMutationResult } from './types/extension-types';
 import type { ChatAttachment, ChatMessage, ComposerAttachment, ComposerCommand, ComposerFile, RequestTrace, TurnDiff, UploadedAttachment } from './types/chat-types';
 import type { ConcreteThinkingLevel, ModelCatalog, ModelSelection, ThinkingLevel } from './types/model-types';
 import type {
@@ -240,7 +242,7 @@ interface PiSessionOutline {
 }
 
 /** 设置面板一次性读取的快照，覆盖模型、来源、MCP、技能、扩展等配置。 */
-interface SettingsSnapshot {
+export interface SettingsSnapshot {
   /** 用户手动添加的模型。 */
   customModels: Array<{ providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean; thinkingLevels?: ConcreteThinkingLevel[]; enabled?: boolean; origin?: 'configured' | 'override' }>;
   /** 模型来源列表。 */
@@ -312,6 +314,12 @@ interface SettingsSnapshot {
   model: ModelSelection;
   /** 保存配置后，主进程热更新会话运行时的结果。 */
   runtimeRefresh?: RuntimeRefreshSnapshot;
+}
+
+/** Refreshed catalog and settings from the same explicit workspace request. */
+export interface ModelResourceSnapshot {
+  settings: SettingsSnapshot;
+  models: ModelCatalog;
 }
 
 /** Native menu-bar integration exposed by the main process. */
@@ -556,7 +564,7 @@ declare global {
       /** 从来源的 /models 接口读取模型，不保存到 Pi 配置。 */
       discoverProviderModels(providerId: string): Promise<{ endpoint: string; models: Array<{ id: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean; thinkingLevels: ConcreteThinkingLevel[] }> }>;
       /** 把发现的模型合并到来源，已有模型保持不变。 */
-      importProviderModels(payload: { providerId: string; models: Array<{ id: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean; thinkingLevels?: ConcreteThinkingLevel[] }>; cwd?: string }): Promise<SettingsSnapshot>;
+      importProviderModels(payload: { providerId: string; models: Array<{ id: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean; thinkingLevels?: ConcreteThinkingLevel[] }>; cwd?: string }): Promise<CommittedProjection<ModelResourceSnapshot>>;
       /** 读取来源的 baseUrl、API 类型与图标。 */
       providerConfig(providerId: string): Promise<{ providerId: string; name: string; baseUrl: string; api: string; icon: string; modelsUrl: string; builtin: boolean; enabled: boolean }>;
       /** 切换模型，返回新的选择快照。 */
@@ -568,11 +576,11 @@ declare global {
       /** 设置 Studio 新对话的默认推理等级。 */
       setDefaultThinkingLevel(payload: { level: ThinkingLevel; cwd?: string }): Promise<ModelSelection>;
       /** 设置启用的模型 id 列表。 */
-      setEnabledModels(payload: { models: string[]; cwd?: string }): Promise<SettingsSnapshot>;
+      setEnabledModels(payload: { models: string[]; cwd?: string }): Promise<CommittedProjection<ModelResourceSnapshot>>;
       /** 添加或编辑自定义模型，成功后返回最新设置快照。 */
-      addCustomModel(payload: { providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages?: boolean; reasoning?: boolean; thinkingLevels?: ConcreteThinkingLevel[]; editing?: boolean; origin?: 'builtin' | 'configured' | 'override'; cwd?: string }): Promise<SettingsSnapshot>;
+      addCustomModel(payload: { providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages?: boolean; reasoning?: boolean; thinkingLevels?: ConcreteThinkingLevel[]; editing?: boolean; origin?: 'builtin' | 'configured' | 'override'; cwd?: string }): Promise<CommittedProjection<ModelResourceSnapshot>>;
       /** 删除自定义模型。 */
-      removeCustomModel(payload: { providerId: string; modelId: string; cwd?: string }): Promise<SettingsSnapshot>;
+      removeCustomModel(payload: { providerId: string; modelId: string; cwd?: string }): Promise<CommittedProjection<ModelResourceSnapshot>>;
 
       // ---- 设置：MCP / 技能 / 扩展 / 包 ----
       /** 读取完整设置快照。 */
@@ -631,13 +639,15 @@ declare global {
       cleanupManagedWorktrees(): Promise<{ removed: number; failures: string[] }>;
       revealManagedWorktree(id: string): Promise<{ ok: boolean }>;
       /** 保存某来源的 API Key。 */
-      setKey(payload: { providerId: string; apiKey: string }): Promise<any>;
+      setKey(payload: { providerId: string; apiKey: string; cwd?: string }): Promise<CommittedProjection<ModelResourceSnapshot>>;
       /** 保存来源配置（baseUrl、API 类型、首个模型、可选 API Key）。 */
-      addProvider(payload: { providerId: string; name: string; baseUrl: string; api: string; apiKey?: string; icon?: string; modelsUrl?: string; editing?: boolean; cwd?: string }): Promise<{ settings: SettingsSnapshot; models: ModelCatalog }>;
+      addProvider(payload: { providerId: string; name: string; baseUrl: string; api: string; apiKey?: string; icon?: string; modelsUrl?: string; editing?: boolean; cwd?: string }): Promise<CommittedProjection<ModelResourceSnapshot>>;
+      /** Retry runtime/catalog refresh without writing provider metadata or credentials. */
+      refreshModels(cwd?: string): Promise<ModelResourceSnapshot>;
       /** 启用或停用一个模型来源；停用后其模型不会进入新的模型目录。 */
-      setProviderEnabled(payload: { providerId: string; enabled: boolean; cwd?: string }): Promise<SettingsSnapshot>;
+      setProviderEnabled(payload: { providerId: string; enabled: boolean; cwd?: string }): Promise<CommittedProjection<ModelResourceSnapshot>>;
       /** 永久删除来源连接、模型配置和已保存凭据。 */
-      removeProvider(payload: { providerId: string; cwd?: string }): Promise<SettingsSnapshot>;
+      removeProvider(payload: { providerId: string; cwd?: string }): Promise<CommittedProjection<ModelResourceSnapshot>>;
       /** Renderer-visible names only; secret values never cross IPC. */
       listSecrets(): Promise<Array<{ name: string; updatedAt: number }>>;
       /** Store or replace one safeStorage-encrypted test credential. */
@@ -663,8 +673,8 @@ declare global {
       }>;
       testMcp(input: Record<string, unknown>): Promise<McpConnectionTestResult>;
       testSavedMcp(name: string): Promise<McpConnectionTestResult>;
-      startMcpOAuth(name: string, cwd?: string): Promise<{ ok: boolean; serverUrl: string; authorizedAt: number }>;
-      logoutMcpOAuth(name: string, cwd?: string): Promise<{ ok: boolean }>;
+      startMcpOAuth(name: string, cwd?: string): Promise<CommittedProjection<SettingsSnapshot>>;
+      logoutMcpOAuth(name: string, cwd?: string): Promise<CommittedProjection<SettingsSnapshot>>;
       /** 保存 MCP 服务器；originalName 用于编辑时重命名。 */
       addMcp(payload: {
         name: string;
@@ -683,13 +693,16 @@ declare global {
         timeoutSeconds?: number;
         originalName?: string;
         cwd?: string;
-      }): Promise<SettingsSnapshot>;
+      }): Promise<CommittedProjection<SettingsSnapshot>>;
       /** 启用/停用 MCP 服务器。 */
-      setMcpEnabled(payload: { name: string; enabled: boolean; cwd?: string }): Promise<any>;
+      setMcpEnabled(payload: { name: string; enabled: boolean; cwd?: string }): Promise<CommittedProjection<SettingsSnapshot>>;
+      /** 只重建 MCP 运行时并读取状态，不重复保存或删除配置。 */
+      refreshMcp(cwd?: string): Promise<SettingsSnapshot>;
       /** 删除 MCP 服务器。 */
-      removeMcp(name: string, cwd?: string): Promise<any>;
+      removeMcp(name: string, cwd?: string): Promise<CommittedProjection<SettingsSnapshot>>;
       /** 添加技能（scope 决定用户级还是工作区级）。 */
-      addSkill(payload: { scope: string; cwd?: string }): Promise<any>;
+      addSkill(payload: { scope: 'user' | 'project'; cwd?: string }): Promise<CommittedProjection<SettingsSnapshot> | undefined>;
+      refreshSkills(cwd?: string): Promise<SettingsSnapshot>;
       pickSkillSourceDirectory(): Promise<string | undefined>;
       pickSkillRegistryFile(): Promise<string | undefined>;
       skillHub(payload?: { refresh?: boolean }): Promise<SkillHubSnapshot>;
@@ -709,6 +722,7 @@ declare global {
         cwd?: string;
       }): Promise<SkillInstallPreview>;
       installPreparedSkill(payload: { token: string; cwd?: string }): Promise<{
+        committed: true;
         installed: {
           name: string;
           version: string;
@@ -716,13 +730,13 @@ declare global {
           path: string;
           baseDir: string;
         };
-        settings: SettingsSnapshot;
+        projection: MutationProjection<SettingsSnapshot>;
       }>;
       disposePreparedSkill(token: string): Promise<{ ok: boolean }>;
       /** 删除技能目录。 */
-      removeSkill(path: string, cwd?: string): Promise<any>;
+      removeSkill(path: string, cwd?: string): Promise<CommittedProjection<SettingsSnapshot>>;
       /** 信任或撤销当前工作区中的项目技能。 */
-      setSkillTrusted(payload: { path: string; trusted: boolean; cwd?: string }): Promise<SettingsSnapshot>;
+      setSkillTrusted(payload: { path: string; trusted: boolean; cwd?: string }): Promise<CommittedProjection<SettingsSnapshot>>;
       /** 添加扩展。 */
       addExtension(payload: { scope: string; cwd?: string }): Promise<any>;
       /** 打开系统选择器，返回扩展目录或 `.pi-extension.zip` 的本地路径。 */
@@ -762,35 +776,16 @@ declare global {
         acceptedRequirements?: boolean;
         acceptedExecution?: boolean;
         acceptedPublisherKey?: boolean;
-      }): Promise<{
-        installed: {
-          id: string;
-          version: string;
-          activeCodePath: string;
-          dataPath: string;
-          contentChanged: boolean;
-          trustRevoked: boolean;
-        };
-        settings: SettingsSnapshot;
-      }>;
+      }): Promise<ExtensionInstallResult>;
+      /** Continue only the unfinished post-install phases owned by this window. */
+      refreshExtensionInstall(token: string): Promise<ExtensionInstallResult>;
+      disposeExtensionInstallRecovery(token: string): Promise<void>;
       /** 丢弃未提交的安装预览与 quarantine 文件。 */
       disposeExtensionInstall(token: string): Promise<void>;
       /** 切换到一个已保留的历史版本，无需重新下载。 */
-      rollbackExtension(payload: {
-        id: string;
-        scope: ExtensionInstallScope;
-        cwd?: string;
-      }): Promise<{
-        installed: {
-          id: string;
-          version: string;
-          activeCodePath: string;
-          dataPath: string;
-          contentChanged: boolean;
-          trustRevoked: boolean;
-        };
-        settings: SettingsSnapshot;
-      }>;
+      rollbackExtension(payload: { id: string; scope: ExtensionInstallScope; cwd?: string }): Promise<ExtensionMutationResult>;
+      refreshExtensionMutation(token: string): Promise<ExtensionMutationResult>;
+      disposeExtensionMutationRecovery(token: string): Promise<void>;
       extensionPublisherTrust(): Promise<import('./types/extension-types').ExtensionPublisherTrustSnapshot>;
       revokeExtensionPublisherKey(payload: {
         publisher: string;
@@ -799,15 +794,15 @@ declare global {
       /** 保存 registry 地址；仅接受 HTTPS 与本机回环 HTTP。 */
       setExtensionRegistryUrl(url: string): Promise<{ extensionRegistryUrl: string }>;
       /** 删除扩展。 */
-      removeExtension(payload: { id: string; cwd?: string }): Promise<any>;
+      removeExtension(payload: { id: string; cwd?: string }): Promise<ExtensionMutationResult>;
       /** 读取扩展宿主与声明式 UI contribution 快照。 */
       extensionsSnapshot(cwd?: string): Promise<ExtensionHostSnapshot>;
       /** 重新扫描并热加载用户、项目与 MCP 扩展。 */
       reloadExtensions(cwd?: string): Promise<{ status: string; refreshedAt: number; studio: ExtensionHostSnapshot }>;
       /** 启用或停用一个扩展；下一请求生效。 */
-      setExtensionEnabled(payload: { id: string; enabled: boolean; cwd?: string }): Promise<SettingsSnapshot>;
+      setExtensionEnabled(payload: { id: string; enabled: boolean; cwd?: string }): Promise<ExtensionMutationResult>;
       /** 信任或撤销一个项目扩展。 */
-      setExtensionTrusted(payload: { id: string; trusted: boolean; cwd?: string }): Promise<SettingsSnapshot>;
+      setExtensionTrusted(payload: { id: string; trusted: boolean; cwd?: string }): Promise<ExtensionMutationResult>;
       /** 读取 JSON-safe 的声明式 UI contribution 快照。 */
       extensionsUi(cwd?: string): Promise<ExtensionUiSnapshot>;
       /** 打开一个有引用计数和生命周期清理保证的实时扩展数据视图。 */

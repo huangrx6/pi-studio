@@ -6,6 +6,8 @@ import { ComposerFeedback } from './ComposerFeedback';
 import { ModelPicker } from '../models/ModelPicker';
 import type { ModelSelection, ThinkingLevel } from '../../types/model-types';
 import { peekTemporary, sendTemporary, subscribeTemporary, temporaryState, updateTemporary, type TemporaryImage } from './temporary-chat-store';
+import { temporaryChatCanSubmit, temporaryChatEnterAction } from './temporary-chat-input';
+import { errorText } from '../../shared/error-text';
 
 /**
  * Temporary conversations stay in the renderer store and deliberately bypass
@@ -33,7 +35,7 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
     const request = ++modelRequest.current;
     void window.piApi.temporaryModel()
       .then(next => { if (request === modelRequest.current) updateTemporary(id, { selection: next }); })
-      .catch(error => { if (request === modelRequest.current) updateTemporary(id, { error: String(error) }); })
+      .catch(error => { if (request === modelRequest.current) updateTemporary(id, { error: errorText(error) }); })
       .finally(() => { initializingModel.current = false; });
   }, [id, state.selection.modelRef]);
   useEffect(() => { if (following.current && scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight; }, [state.messages, state.busy]);
@@ -41,6 +43,9 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
     if (picking.current) return;
     picking.current = true;
     try {
+      if (!state.selection.modelRef || state.selection.unavailable) {
+        throw new Error('请先选择可用模型，再添加图片。');
+      }
       if (files.length > 0 && state.selection.supportsImages === false) {
         throw new Error(`${state.selection.label || '当前模型'} 不支持图片输入。请切换到支持图片的模型后再添加图片。`);
       }
@@ -55,7 +60,7 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
       }
       const latest = peekTemporary(id); if (!latest) return;
       updateTemporary(id, { images: [...latest.images,...images], error: '' });
-    } catch (err) { updateTemporary(id, { error: String(err instanceof Error ? err.message : err) }); }
+    } catch (err) { updateTemporary(id, { error: errorText(err) }); }
     finally { picking.current = false; }
   }
   async function chooseModel(modelRef: string, thinkingLevel?: ThinkingLevel) {
@@ -75,12 +80,21 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
       await window.piApi.temporaryStop(id);
       updateTemporary(id, { busy: false, error: '' });
     } catch (error) {
-      updateTemporary(id, { error: String(error) });
+      updateTemporary(id, { error: errorText(error) });
     } finally {
       setStopping(false);
     }
   }
   const lastMessage = state.messages.at(-1);
+  const hasUsableModel = Boolean(state.selection.modelRef) && !state.selection.unavailable;
+  const submissionState = {
+    draft: state.draft,
+    imageCount: state.images.length,
+    modelRef: state.selection.modelRef,
+    unavailable: state.selection.unavailable,
+    busy: state.busy,
+  };
+  const canSubmit = temporaryChatCanSubmit(submissionState);
   return <section className="temporary-chat" aria-label="临时聊天" onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }} onDrop={event => { if (event.dataTransfer.files.length) { event.preventDefault(); void addImages([...event.dataTransfer.files]); } }}>
     <div className="temporary-scroll" ref={scroll} onWheel={event => { if (event.deltaY < 0) following.current = false; }} onScroll={() => { const node = scroll.current; if (node) following.current = node.scrollHeight-node.scrollTop-node.clientHeight < 60; }}>
       <div className="chat-column">
@@ -108,24 +122,58 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
     </div>
     <div className="temporary-composer-dock">
       {state.error && <ComposerFeedback message={state.error} onDismiss={() => updateTemporary(id, { error: '' })} />}
-      <div className="composer temporary-composer" onPaste={event => { const images = [...event.clipboardData.files].filter(file => file.type.startsWith('image/')); if (images.length) { event.preventDefault(); void addImages(images); } }}>
+      <div className="composer temporary-composer" onPaste={event => {
+        const images = [...event.clipboardData.files].filter(file => file.type.startsWith('image/'));
+        if (!images.length) return;
+        event.preventDefault();
+        const text = event.clipboardData.getData('text');
+        const target = event.target;
+        if (text && target instanceof HTMLTextAreaElement) {
+          const start = target.selectionStart;
+          const end = target.selectionEnd;
+          target.setRangeText(text, start, end, 'end');
+          updateTemporary(id, { draft: target.value });
+          requestAnimationFrame(() => {
+            target.focus();
+            target.setSelectionRange(start + text.length, start + text.length);
+          });
+        }
+        // Image clipboard data can also carry useful text. Keep both instead of
+        // replacing copied prose with the image attachment.
+        void addImages(images);
+      }}>
         {state.images.length > 0 && <div className="composer-attachments temporary-attachments">{state.images.map((image, index) => <ComposerImageAttachment
           key={image.id}
           images={images}
           index={index}
           onRemove={() => updateTemporary(id, { images: state.images.filter(item => item.id !== image.id) })}
         />)}</div>}
-        <textarea className="temporary-textarea" aria-label="临时聊天消息" placeholder="输入消息…" value={state.draft} onChange={event => updateTemporary(id, { draft: event.target.value })} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); following.current = true; void sendTemporary(id); } }} />
+        <textarea className="temporary-textarea" aria-label="临时聊天消息" placeholder="输入消息…" value={state.draft} onChange={event => updateTemporary(id, { draft: event.target.value })} onKeyDown={event => {
+          const action = temporaryChatEnterAction({
+            ...submissionState,
+            draft: event.currentTarget.value,
+            key: event.key,
+            shiftKey: event.shiftKey,
+            altKey: event.altKey,
+            isComposing: event.nativeEvent.isComposing,
+            keyCode: event.nativeEvent.keyCode,
+          });
+          if (action === 'send') {
+            event.preventDefault();
+            following.current = true;
+            void sendTemporary(id);
+          }
+        }} />
         <div className="composer-bar">
           <div className="composer-left">
             <input ref={upload} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden onChange={event => { if (event.target.files) void addImages([...event.target.files]); event.target.value = ''; }} />
-            <button type="button" className="composer-attach-button" title={state.selection.supportsImages === false ? '当前模型不支持图片' : '添加图片'} aria-label="临时聊天添加图片" onClick={() => upload.current?.click()}><ImagePlus /></button>
+            <button type="button" className="composer-attach-button" disabled={state.busy || !hasUsableModel} title={!hasUsableModel ? '选择可用模型后再添加图片' : state.selection.supportsImages === false ? '当前模型不支持图片' : '添加图片'} aria-label="临时聊天添加图片" onClick={() => upload.current?.click()}><ImagePlus /></button>
           </div>
           <div className="composer-right">
-            <ModelPicker selection={state.selection} scope="session" disabled={state.busy || !state.selection.modelRef} hidden={false} loadCatalog={() => window.piApi.models()} onSelectModel={modelRef => chooseModel(modelRef)} onSelectThinking={level => chooseModel(state.selection.modelRef, level)} onManage={onManage} />
+            <ModelPicker selection={state.selection} scope="session" contextKey={`temporary:${id}`} disabled={state.busy} hidden={false} loadCatalog={() => window.piApi.models()} onSelectModel={modelRef => chooseModel(modelRef)} onSelectThinking={level => chooseModel(state.selection.modelRef, level)} onManage={onManage} />
             {state.busy
               ? <button type="button" className="send-button is-stop" disabled={stopping} aria-label={stopping ? '正在停止临时回复' : '停止临时回复'} title={stopping ? '正在停止临时回复' : '停止临时回复'} onClick={() => void stop()}>{stopping ? <LoaderCircle className="spin" aria-hidden="true" /> : <Square fill="currentColor" aria-hidden="true" />}</button>
-              : <button type="button" className="send-button" aria-label="发送临时消息" disabled={!state.draft.trim() && !state.images.length} onClick={() => { following.current = true; void sendTemporary(id); }}><ArrowUp /></button>}
+              : <button type="button" className="send-button" aria-label="发送临时消息" title={!hasUsableModel ? '选择可用模型后才能发送' : undefined} disabled={!canSubmit} onClick={() => { following.current = true; void sendTemporary(id); }}><ArrowUp /></button>}
           </div>
         </div>
       </div>

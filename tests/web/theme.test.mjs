@@ -124,6 +124,31 @@ test('all referenced design tokens resolve', () => {
   assert.deepEqual([...used].filter((key) => !declared.has(key)), []);
 });
 
+// 字体层级只允许使用 tokens.css 声明的字号和字重；页面 CSS 不能再悄悄引入
+// 9.5px、550 之类局部档位，避免设置页和工作区出现难以察觉的视觉跳变。
+test('all page typography consumes shared size and weight tokens', () => {
+  for (const file of sourceFiles.filter((item) => item.endsWith('.css') && !item.endsWith('/tokens.css'))) {
+    postcss.parse(fs.readFileSync(file, 'utf8')).walkDecls((decl) => {
+      // @font-face descriptors define a font resource and its variable weight
+      // range; they are not page typography declarations.
+      if (decl.parent?.type === 'atrule' && decl.parent.name === 'font-face') return;
+      if (decl.prop === 'font-size') {
+        const sharedSize = decl.value.replace(/var\(--chat-font-size(?:,\s*[^)]+)?\)/g, 'var(--chat-font-size)');
+        assert.doesNotMatch(sharedSize, /\b\d+(?:\.5)?px\b/, `${file}: ${decl.prop}: ${decl.value}`);
+      }
+      if (decl.prop === 'font-weight') {
+        assert.match(decl.value, /^var\(--weight-(?:regular|medium|semibold|bold)\)$/, `${file}: ${decl.prop}: ${decl.value}`);
+      }
+      if (decl.prop === 'font') {
+        // The optional line-height may still use a control-specific px value;
+        // only the font-size position must come from a shared token.
+        const withoutPixelLineHeight = decl.value.replace(/\/\s*\d+(?:\.\d+)?px\b/g, '/');
+        assert.doesNotMatch(withoutPixelLineHeight, /\b(?:400|450|500|550|600|620|650|700)\b|\b\d+(?:\.5)?px(?:\/|\s)/, `${file}: ${decl.prop}: ${decl.value}`);
+      }
+    });
+  }
+});
+
 // 两种主题分别检查：
 // 1. 页面级背景（--bg / --surface / --sidebar-bg）必须是中性色（R=G=B），
 //    避免整页被品牌色染色；

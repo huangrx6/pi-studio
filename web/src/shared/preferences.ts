@@ -39,6 +39,8 @@ export type BackgroundMedia = {
 
 import { DEFAULT_SHORTCUTS, normalizeShortcuts } from './shortcuts.mjs';
 
+export type KeyValueStorage = Pick<Storage, 'getItem' | 'setItem'>;
+
 /** 用户可调整的全部偏好。 */
 export type Preferences = {
   /** 主题偏好。 */
@@ -89,10 +91,28 @@ export const DEFAULT_PREFERENCES: Preferences = {
   shortcuts: { ...DEFAULT_SHORTCUTS },
 };
 
-function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return fallback;
-  return Math.min(max, Math.max(min, Math.round(number)));
+const THEMES = new Set<ThemePreference>(['light', 'dark', 'system']);
+const STEP_DISPLAYS = new Set<StepDisplay>(['compact', 'standard', 'detailed']);
+const STEP_COLLAPSES = new Set<StepCollapse>(['after-answer', 'keep-open', 'manual']);
+const LINK_PREFERENCES = new Set<LinkPreference>(['external', 'window']);
+const RADIUS_STYLES = new Set<RadiusStyle>(['square', 'compact', 'standard', 'soft']);
+const MAX_MEDIA_FIELD_LENGTH = 4_096;
+
+function cloneDefaults(): Preferences {
+  return {
+    ...DEFAULT_PREFERENCES,
+    shortcuts: { ...DEFAULT_SHORTCUTS },
+  };
+}
+
+function clampNumber(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
 }
 
 function normalizePalette(value: unknown): PalettePreference {
@@ -102,20 +122,97 @@ function normalizePalette(value: unknown): PalettePreference {
 }
 
 function normalizeBackgroundMedia(value: unknown): BackgroundMedia | null {
-  if (!value || typeof value !== 'object') return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const media = value as Partial<BackgroundMedia>;
   if (media.kind !== 'image' && media.kind !== 'video') return null;
-  if (typeof media.url !== 'string' || !media.url.startsWith('pi-media://background/')) return null;
-  if (typeof media.name !== 'string' || !media.name.trim()) return null;
-  if (typeof media.mime !== 'string' || !media.mime.trim()) return null;
-  const bytes = Number(media.bytes);
+  const url = typeof media.url === 'string' ? media.url.trim() : '';
+  const name = typeof media.name === 'string' ? media.name.trim() : '';
+  const mime = typeof media.mime === 'string' ? media.mime.trim() : '';
+  if (
+    !url
+    || url.length > MAX_MEDIA_FIELD_LENGTH
+    || !url.startsWith('pi-media://background/')
+    || !name
+    || name.length > MAX_MEDIA_FIELD_LENGTH
+    || !mime
+    || mime.length > MAX_MEDIA_FIELD_LENGTH
+  ) return null;
+  const bytes = typeof media.bytes === 'number'
+    && Number.isSafeInteger(media.bytes)
+    && media.bytes >= 0
+    ? media.bytes
+    : 0;
   return {
     kind: media.kind,
-    url: media.url,
-    name: media.name,
-    mime: media.mime,
-    bytes: Number.isFinite(bytes) && bytes >= 0 ? bytes : 0,
+    url,
+    name,
+    mime,
+    bytes,
   };
+}
+
+/** Validate every persisted field and return a fresh JSON-safe preference object. */
+export function normalizePreferences(value: unknown): Preferences {
+  const source = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Partial<Preferences>
+    : {};
+  return {
+    theme: THEMES.has(source.theme as ThemePreference)
+      ? source.theme as ThemePreference
+      : DEFAULT_PREFERENCES.theme,
+    palette: normalizePalette(source.palette),
+    fontSize: clampNumber(
+      source.fontSize,
+      DEFAULT_PREFERENCES.fontSize,
+      12,
+      17,
+    ),
+    stepDisplay: STEP_DISPLAYS.has(source.stepDisplay as StepDisplay)
+      ? source.stepDisplay as StepDisplay
+      : DEFAULT_PREFERENCES.stepDisplay,
+    stepCollapse: STEP_COLLAPSES.has(source.stepCollapse as StepCollapse)
+      ? source.stepCollapse as StepCollapse
+      : DEFAULT_PREFERENCES.stepCollapse,
+    showCodeView: typeof source.showCodeView === 'boolean'
+      ? source.showCodeView
+      : DEFAULT_PREFERENCES.showCodeView,
+    linkOpen: LINK_PREFERENCES.has(source.linkOpen as LinkPreference)
+      ? source.linkOpen as LinkPreference
+      : DEFAULT_PREFERENCES.linkOpen,
+    radiusStyle: RADIUS_STYLES.has(source.radiusStyle as RadiusStyle)
+      ? source.radiusStyle as RadiusStyle
+      : DEFAULT_PREFERENCES.radiusStyle,
+    backgroundMedia: normalizeBackgroundMedia(source.backgroundMedia),
+    backgroundOpacity: clampNumber(
+      source.backgroundOpacity,
+      DEFAULT_PREFERENCES.backgroundOpacity,
+      0,
+      100,
+    ),
+    backgroundBlur: clampNumber(
+      source.backgroundBlur,
+      DEFAULT_PREFERENCES.backgroundBlur,
+      0,
+      100,
+    ),
+    backgroundSurfaceOpacity: clampNumber(
+      source.backgroundSurfaceOpacity,
+      DEFAULT_PREFERENCES.backgroundSurfaceOpacity,
+      0,
+      100,
+    ),
+    shortcuts: normalizeShortcuts(source.shortcuts) as Record<string, string>,
+  };
+}
+
+function browserStorage(): KeyValueStorage | null {
+  try {
+    return typeof globalThis.localStorage === 'undefined'
+      ? null
+      : globalThis.localStorage;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -136,29 +233,35 @@ let activePreferences = DEFAULT_PREFERENCES;
 /**
  * 从 localStorage 读取偏好，并与默认值合并。
  *
- * 这里刻意做了两层容错：JSON 解析失败（存储损坏）返回默认值；fontSize 用
- * Number() 归一化，非法值回落到默认字号，避免把 NaN 写进 CSS 变量。
- * 注意 store 中多余的键会被保留，方便回滚版本时仍能读到旧字段。
+ * 每个字段都经过类型与取值校验。读取到非法 JSON 或需要纠正的值时，会把
+ * 规范化结果最佳努力写回一次；缺失、合法且规范的值不会产生写操作。
  */
-export function loadPreferences(): Preferences {
+export function loadPreferences(
+  storage: KeyValueStorage | null = browserStorage(),
+): Preferences {
+  if (!storage) return cloneDefaults();
+  let raw: string | null;
   try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    const stored = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-    return {
-      ...DEFAULT_PREFERENCES,
-      ...stored,
-      palette: normalizePalette(stored.palette),
-      fontSize: clampNumber(stored.fontSize, DEFAULT_PREFERENCES.fontSize, 12, 17),
-      backgroundMedia: normalizeBackgroundMedia(stored.backgroundMedia),
-      backgroundOpacity: clampNumber(stored.backgroundOpacity, DEFAULT_PREFERENCES.backgroundOpacity, 0, 100),
-      backgroundBlur: clampNumber(stored.backgroundBlur, DEFAULT_PREFERENCES.backgroundBlur, 0, 100),
-      backgroundSurfaceOpacity: clampNumber(stored.backgroundSurfaceOpacity, DEFAULT_PREFERENCES.backgroundSurfaceOpacity, 0, 100),
-      shortcuts: normalizeShortcuts(stored.shortcuts),
-    };
+    raw = storage.getItem(STORAGE_KEY);
   } catch {
-    // 返回副本，避免调用方原地修改污染共享的默认值。
-    return { ...DEFAULT_PREFERENCES };
+    return cloneDefaults();
   }
+  if (raw === null) return cloneDefaults();
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    parsed = undefined;
+  }
+  const normalized = normalizePreferences(parsed);
+  const canonical = JSON.stringify(normalized);
+  if (canonical !== raw) {
+    try { storage.setItem(STORAGE_KEY, canonical); } catch {
+      // Corrupt storage still degrades safely when the browser refuses writes.
+    }
+  }
+  return normalized;
 }
 
 /**
@@ -166,13 +269,21 @@ export function loadPreferences(): Preferences {
  * 隐私模式或存储配额不足时 localStorage 会抛错，这里静默忽略：
  * 偏好只在本次会话生效，不影响主流程。
  */
-export function savePreferences(preferences: Preferences): void {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences)); } catch { /* 存储不可用（隐私模式或配额不足）时静默忽略 */ }
+export function savePreferences(
+  preferences: Preferences,
+  storage: KeyValueStorage | null = browserStorage(),
+): void {
+  if (!storage) return;
+  try {
+    storage.setItem(STORAGE_KEY, JSON.stringify(normalizePreferences(preferences)));
+  } catch {
+    // 存储不可用（隐私模式或配额不足）时，偏好仅在当前会话生效。
+  }
 }
 
 /** 更新模块级偏好缓存；应在每次偏好变化且保存后调用。 */
 export function setActivePreferences(preferences: Preferences): void {
-  activePreferences = preferences;
+  activePreferences = normalizePreferences(preferences);
 }
 
 /** 读取模块级偏好缓存，供 Markdown 等非 React 上下文使用。 */

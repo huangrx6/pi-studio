@@ -36,6 +36,7 @@ const {
 
 const INSTALL_STATE_VERSION = 1;
 const REGISTRY_SCHEMA_VERSION = 1;
+const UNINSTALL_JOURNAL_VERSION = 1;
 const PREPARED_TTL_MS = 30 * 60 * 1_000;
 const MAX_REDIRECTS = 5;
 const MAX_REGISTRY_BYTES = 3 * 1024 * 1024;
@@ -240,6 +241,240 @@ function assertManagedPathInside(base, target, label) {
   }
 }
 
+function pathIdentity(stat) {
+  if (!stat) return undefined;
+  return {
+    dev: stat.dev,
+    ino: stat.ino,
+    kind: stat.isDirectory() ? 'directory' : stat.isFile() ? 'file' : 'special',
+  };
+}
+
+function samePathIdentity(left, right) {
+  return Boolean(
+    left
+    && right
+    && left.dev === right.dev
+    && left.ino === right.ino
+    && left.kind === right.kind,
+  );
+}
+
+// Keep the original objects until the synchronous metadata commit succeeds.
+// Tombstones stay beside their source so every rename is on the same volume.
+// A caller may persist the plans before staging so another process can recover
+// after a crash; this helper itself remains usable without a journal.
+function removeManagedExtensionPaths(entries, commit = () => {}, options = {}) {
+  const stat = (target) => {
+    try { return fs.lstatSync(target); } catch (error) {
+      if (error.code === 'ENOENT') return undefined;
+      throw error;
+    }
+  };
+  const same = (left, right) => left && right && left.dev === right.dev && left.ino === right.ino;
+  const inspect = (entry) => {
+    const boundary = path.resolve(entry.boundary);
+    const target = path.resolve(entry.target);
+    const relative = path.relative(boundary, target);
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw distributionError('UNSAFE_MANAGED_PATH', '卸载路径必须位于受管目录内');
+    }
+    let cursor = boundary;
+    const boundaryStat = stat(boundary);
+    if (!boundaryStat?.isDirectory() || boundaryStat.isSymbolicLink()) {
+      throw distributionError('UNSAFE_MANAGED_PATH', '卸载边界不是安全目录');
+    }
+    const parts = relative.split(path.sep);
+    for (const segment of parts.slice(0, -1)) {
+      cursor = path.join(cursor, segment);
+      const current = stat(cursor);
+      if (!current?.isDirectory() || current.isSymbolicLink()) {
+        throw distributionError('UNSAFE_MANAGED_PATH', '卸载路径不能包含符号链接或缺失的父目录');
+      }
+    }
+    const targetStat = stat(target);
+    if (targetStat?.isSymbolicLink() || (targetStat && !targetStat.isDirectory() && !targetStat.isFile())) {
+      throw distributionError('UNSAFE_MANAGED_PATH', '卸载目标不能是符号链接或特殊文件');
+    }
+    return { boundary, target, boundaryStat, parentStat: stat(path.dirname(target)), targetStat };
+  };
+  const plans = entries.map(inspect);
+  for (const plan of plans) {
+    if (!plan.targetStat) continue;
+    plan.tombstone = path.join(path.dirname(plan.target), `.uninstall-${crypto.randomUUID()}`);
+    if (stat(plan.tombstone)) throw distributionError('UNSAFE_MANAGED_PATH', '卸载暂存路径已存在');
+  }
+  if (plans.some((plan) => plan.targetStat)) {
+    options.beforeStage?.(plans.filter((plan) => plan.targetStat).map((plan) => ({
+      boundary: plan.boundary,
+      target: plan.target,
+      tombstone: plan.tombstone,
+      identity: pathIdentity(plan.targetStat),
+    })));
+  }
+  const staged = [];
+  const assertParent = (plan) => {
+    const current = inspect({ boundary: plan.boundary, target: plan.tombstone || plan.target });
+    if (!same(current.boundaryStat, plan.boundaryStat) || !same(current.parentStat, plan.parentStat)) {
+      throw distributionError('UNSAFE_MANAGED_PATH', '卸载期间受管目录已被替换');
+    }
+  };
+  try {
+    for (const plan of plans) {
+      assertParent(plan);
+      const current = stat(plan.target);
+      if (!plan.targetStat && !current) continue;
+      if (!same(current, plan.targetStat)) {
+        throw distributionError('UNSAFE_MANAGED_PATH', '卸载期间目标已被替换');
+      }
+      fs.renameSync(plan.target, plan.tombstone);
+      staged.push(plan);
+      if (!same(stat(plan.tombstone), plan.targetStat)) {
+        throw distributionError('UNSAFE_MANAGED_PATH', '卸载暂存目标已被替换');
+      }
+    }
+    // Only internal synchronous DB transactions may be supplied here. No IPC,
+    // runtime refresh or other postcommit operation belongs in this callback.
+    commit();
+  } catch (error) {
+    const recoveryErrors = [];
+    for (const plan of staged.reverse()) {
+      try {
+        assertParent(plan);
+        if (!same(stat(plan.tombstone), plan.targetStat) || stat(plan.target)) {
+          throw distributionError('UNSAFE_MANAGED_PATH', '原路径或卸载暂存已被替换，未覆盖用户文件');
+        }
+        fs.renameSync(plan.tombstone, plan.target);
+      } catch (recoveryError) {
+        recoveryErrors.push(recoveryError instanceof Error ? recoveryError.message : String(recoveryError));
+      }
+    }
+    if (recoveryErrors.length) {
+      throw distributionError('TRANSACTION_RECOVERY_FAILED', '扩展卸载未完成，部分原始文件保留在隐藏暂存目录；请检查受管目录', {
+        operation: error instanceof Error ? error.message : String(error), recoveryErrors,
+      });
+    }
+    options.afterRollback?.();
+    throw error;
+  }
+  const cleanupErrors = [];
+  for (const plan of staged) {
+    try {
+      assertParent(plan);
+      if (same(stat(plan.tombstone), plan.targetStat)) fs.rmSync(plan.tombstone, { recursive: true, force: true });
+    } catch (error) {
+      // The metadata commit has completed. Leave this owned tombstone for
+      // explicit maintenance; never retry deletion against the original path.
+      cleanupErrors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  return { cleanupErrors };
+}
+
+/**
+ * Resume a persisted uninstall after the previous process exited.
+ *
+ * `rollback` restores every owned tombstone before metadata was committed;
+ * `cleanup` only removes exact identities recorded by the interrupted process.
+ * A replacement at either the original or hidden path is preserved and
+ * reported, so restart recovery never converts user files into deletion.
+ */
+function recoverManagedExtensionPaths(entries, mode) {
+  if (mode !== 'rollback' && mode !== 'cleanup') {
+    throw distributionError('INVALID_UNINSTALL_JOURNAL', '卸载恢复模式无效');
+  }
+  if (!Array.isArray(entries) || entries.length === 0 || entries.length > 8) {
+    throw distributionError('INVALID_UNINSTALL_JOURNAL', '卸载恢复记录条目数量无效');
+  }
+  const stat = (target) => {
+    try { return fs.lstatSync(target); } catch (error) {
+      if (error.code === 'ENOENT') return undefined;
+      throw error;
+    }
+  };
+  const inspect = (entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw distributionError('INVALID_UNINSTALL_JOURNAL', '卸载恢复记录条目无效');
+    }
+    if (!path.isAbsolute(entry.boundary) || !path.isAbsolute(entry.target) || !path.isAbsolute(entry.tombstone)) {
+      throw distributionError('INVALID_UNINSTALL_JOURNAL', '卸载恢复路径必须是绝对路径');
+    }
+    const boundary = path.resolve(entry.boundary);
+    const target = path.resolve(entry.target);
+    const tombstone = path.resolve(entry.tombstone);
+    if (path.dirname(target) !== path.dirname(tombstone)) {
+      throw distributionError('INVALID_UNINSTALL_JOURNAL', '卸载暂存必须与原路径位于同一目录');
+    }
+    if (!/^\.uninstall-[0-9a-f-]{36}$/.test(path.basename(tombstone))) {
+      throw distributionError('INVALID_UNINSTALL_JOURNAL', '卸载暂存路径名称无效');
+    }
+    const relative = path.relative(boundary, target);
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw distributionError('UNSAFE_MANAGED_PATH', '恢复路径越过了受管目录');
+    }
+    const boundaryStat = stat(boundary);
+    if (!boundaryStat?.isDirectory() || boundaryStat.isSymbolicLink()) {
+      throw distributionError('UNSAFE_MANAGED_PATH', '恢复边界不是安全目录');
+    }
+    let cursor = boundary;
+    for (const segment of relative.split(path.sep).slice(0, -1)) {
+      cursor = path.join(cursor, segment);
+      const current = stat(cursor);
+      if (!current?.isDirectory() || current.isSymbolicLink()) {
+        throw distributionError('UNSAFE_MANAGED_PATH', '恢复路径不能包含符号链接或缺失的父目录');
+      }
+    }
+    if (
+      !entry.identity
+      || !Number.isFinite(entry.identity.dev)
+      || !Number.isFinite(entry.identity.ino)
+      || !['file', 'directory'].includes(entry.identity.kind)
+    ) {
+      throw distributionError('INVALID_UNINSTALL_JOURNAL', '卸载恢复目标身份无效');
+    }
+    return { boundary, target, tombstone, identity: entry.identity };
+  };
+  const plans = entries.map(inspect);
+  const errors = [];
+  for (const plan of plans) {
+    try {
+      const target = stat(plan.target);
+      const tombstone = stat(plan.tombstone);
+      if (target?.isSymbolicLink() || tombstone?.isSymbolicLink()) {
+        throw distributionError('UNSAFE_MANAGED_PATH', '恢复路径不能是符号链接');
+      }
+      if (mode === 'cleanup') {
+        if (!tombstone) continue;
+        if (!samePathIdentity(pathIdentity(tombstone), plan.identity)) {
+          throw distributionError('UNSAFE_MANAGED_PATH', '卸载暂存已被替换，保留用户文件');
+        }
+        fs.rmSync(plan.tombstone, { recursive: true, force: true });
+        continue;
+      }
+      if (tombstone) {
+        if (!samePathIdentity(pathIdentity(tombstone), plan.identity)) {
+          throw distributionError('UNSAFE_MANAGED_PATH', '卸载暂存已被替换，保留用户文件');
+        }
+        if (target) {
+          throw distributionError('UNSAFE_MANAGED_PATH', '原路径已有文件，未覆盖用户文件');
+        }
+        fs.renameSync(plan.tombstone, plan.target);
+      } else if (!target || !samePathIdentity(pathIdentity(target), plan.identity)) {
+        throw distributionError('UNSAFE_MANAGED_PATH', '原始文件与卸载暂存均不存在或已被替换');
+      }
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  if (errors.length > 0) {
+    throw distributionError(
+      'UNINSTALL_RECOVERY_FAILED',
+      '扩展卸载恢复未完成；已保留可用文件和隐藏暂存，请检查受管目录',
+      { recoveryErrors: errors },
+    );
+  }
+}
+
 function atomicWriteFile(file, content, mode = 0o600) {
   ensurePrivateDirectory(path.dirname(file));
   const temporary = `${file}.${process.pid}.${crypto.randomUUID()}.tmp`;
@@ -320,7 +555,13 @@ async function withInstallLock(lockPath, callback) {
   try {
     return await callback();
   } finally {
-    fs.rmSync(lockPath, { recursive: true, force: true });
+    try {
+      fs.rmSync(lockPath, { recursive: true, force: true });
+    } catch {
+      // Lock cleanup must not disguise a committed operation as a failed write,
+      // or replace the original failure. A leftover lock follows the existing
+      // stale-lock timeout above; do not repeat the mutation to clean it up.
+    }
   }
 }
 
@@ -604,6 +845,9 @@ class ExtensionDistributionService {
       : 32;
     this.normalizeManifest = options.normalizeManifest;
     this.dependencyResolver = options.dependencyResolver;
+    this.isExtensionInstalled = typeof options.isExtensionInstalled === 'function'
+      ? options.isExtensionInstalled
+      : undefined;
     this.trustStore = options.trustStore || new ExtensionTrustStore({
       userDataPath: this.userDataPath,
     });
@@ -613,6 +857,7 @@ class ExtensionDistributionService {
     this.quarantineRoot = path.join(this.userDataPath, 'extension-cache', 'quarantine');
     this.stateRoot = path.join(this.userDataPath, 'extension-state');
     this.dataRoot = path.join(this.userDataPath, 'extension-data');
+    this.uninstallRecoveryErrors = [];
   }
 
   scopeKey(scope, cwd) {
@@ -670,6 +915,149 @@ class ExtensionDistributionService {
       path.join(this.dataRoot, this.scopeKey(scope, cwd), id),
       this.userDataPath,
     );
+  }
+
+  uninstallJournalRoot() {
+    return ensureContainedDirectory(
+      path.join(this.stateRoot, '.uninstall-journal'),
+      this.userDataPath,
+    );
+  }
+
+  readUninstallJournal(file) {
+    const raw = readJsonFile(file, '扩展卸载恢复记录');
+    if (!raw || raw.schemaVersion !== UNINSTALL_JOURNAL_VERSION) {
+      throw distributionError('INVALID_UNINSTALL_JOURNAL', '扩展卸载恢复记录版本无效');
+    }
+    if (
+      typeof raw.stableId !== 'string'
+      || !/^(?:user|project):[a-z0-9][a-z0-9._-]{1,63}$/.test(raw.stableId)
+      || typeof raw.id !== 'string'
+      || !SAFE_ID.test(raw.id)
+      || typeof raw.durableCommit !== 'boolean'
+      || !Number.isFinite(raw.createdAt)
+      || raw.createdAt <= 0
+    ) {
+      throw distributionError('INVALID_UNINSTALL_JOURNAL', '扩展卸载恢复记录内容无效');
+    }
+    const [scope, manifestId] = raw.stableId.split(':');
+    if (
+      raw.scope !== scope
+      || raw.id !== manifestId
+      || (scope === 'project' && (typeof raw.cwd !== 'string' || !path.isAbsolute(raw.cwd)))
+    ) {
+      throw distributionError('INVALID_UNINSTALL_JOURNAL', '扩展卸载恢复记录范围无效');
+    }
+    return raw;
+  }
+
+  recoverPendingUninstalls() {
+    this.uninstallRecoveryErrors = [];
+    let directory;
+    let names;
+    try {
+      directory = this.uninstallJournalRoot();
+      names = fs.readdirSync(directory, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && /^[0-9a-f-]{36}\.json$/.test(entry.name))
+        .map((entry) => entry.name)
+        .sort();
+    } catch (error) {
+      this.uninstallRecoveryErrors.push({
+        path: directory || path.join(this.stateRoot, '.uninstall-journal'),
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return [...this.uninstallRecoveryErrors];
+    }
+    for (const name of names) {
+      const file = path.join(directory, name);
+      try {
+        const record = this.readUninstallJournal(file);
+        let rollback = !record.durableCommit;
+        if (record.durableCommit) {
+          if (!this.isExtensionInstalled) {
+            throw distributionError(
+              'UNINSTALL_RECOVERY_UNAVAILABLE',
+              '无法确认扩展卸载提交状态，暂不恢复受管目录',
+            );
+          }
+          rollback = this.isExtensionInstalled(record.stableId) === true;
+        }
+        recoverManagedExtensionPaths(record.entries, rollback ? 'rollback' : 'cleanup');
+        fs.rmSync(file, { force: true });
+      } catch (error) {
+        this.uninstallRecoveryErrors.push({
+          path: file,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    return [...this.uninstallRecoveryErrors];
+  }
+
+  removeManagedPathsForUninstall(options) {
+    const {
+      id,
+      stableId,
+      entries,
+      commit,
+      scope,
+      cwd,
+    } = options;
+    assertSafeExtensionId(id);
+    if (typeof stableId !== 'string' || !/^(?:user|project):[a-z0-9][a-z0-9._-]{1,63}$/.test(stableId)) {
+      throw distributionError('INVALID_EXTENSION_ID', '扩展稳定标识无效');
+    }
+    const journalDirectory = this.uninstallJournalRoot();
+    const journalFile = path.join(journalDirectory, `${crypto.randomUUID()}.json`);
+    let journalWritten = false;
+    let outcome;
+    try {
+      outcome = removeManagedExtensionPaths(entries, commit, {
+        beforeStage: (plans) => {
+          atomicWriteJson(journalFile, {
+            schemaVersion: UNINSTALL_JOURNAL_VERSION,
+            id,
+            stableId,
+            scope,
+            cwd,
+            durableCommit: typeof commit === 'function',
+            createdAt: this.now(),
+            entries: plans,
+          });
+          journalWritten = true;
+        },
+        afterRollback: () => {
+          if (journalWritten) {
+            try { fs.rmSync(journalFile, { force: true }); } catch { /* retain for next recovery */ }
+          }
+        },
+      });
+    } catch (error) {
+      throw error;
+    }
+    if (journalWritten && outcome.cleanupErrors.length === 0) {
+      try { fs.rmSync(journalFile, { force: true }); } catch { /* retain for next recovery */ }
+    }
+    return outcome;
+  }
+
+  removeUnmanagedExtension(id, options = {}) {
+    const {
+      stableId,
+      target,
+      boundary,
+      scope,
+      cwd,
+      commit,
+    } = options;
+    return this.removeManagedPathsForUninstall({
+      id,
+      stableId,
+      scope,
+      cwd,
+      commit,
+      entries: [{ target, boundary }],
+    });
   }
 
   /**
@@ -2113,14 +2501,24 @@ class ExtensionDistributionService {
       if (fs.existsSync(codeDirectory)) {
         ensureContainedDirectory(codeDirectory, workspaceBoundary);
       }
-      fs.rmSync(codeDirectory, { recursive: true, force: true });
-      fs.rmSync(this.stateFile(scope, cwd, id), { force: true });
-      if (!preserveData) fs.rmSync(state.dataPath, { recursive: true, force: true });
-      return {
+      const result = {
         removed: true,
         dataPreserved: preserveData && fs.existsSync(state.dataPath),
         dataPath: state.dataPath,
       };
+      this.removeManagedPathsForUninstall({
+        id,
+        stableId,
+        scope,
+        cwd,
+        commit: options.commit,
+        entries: [
+          { target: codeDirectory, boundary: workspaceBoundary },
+          { target: this.stateFile(scope, cwd, id), boundary: this.userDataPath },
+          ...(!preserveData ? [{ target: state.dataPath, boundary: this.userDataPath }] : []),
+        ],
+      });
+      return result;
     });
   }
 
@@ -2239,6 +2637,7 @@ module.exports = {
   INSTALL_STATE_VERSION,
   REGISTRY_SCHEMA_VERSION,
   createExtensionDistributionService,
+  removeManagedExtensionPaths,
   EXTENSION_METADATA_KEYS,
   parseChecksumFile,
   selectRegistryVersion,

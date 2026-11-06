@@ -1,0 +1,10 @@
+.sidebar-search-panel { display: grid; gap: var(--space-2); flex: none; margin-bottom: var(--space-3); }
+.sidebar-search-panel .workspace-search { margin: 0; padding-inline: var(--space-2); }
+.sidebar-search-panel .workspace-search > svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; }
+.sidebar-search-panel .workspace-search input { min-width: 0; }
+.sidebar-search-panel input::-webkit-search-cancel-button { display: none; }
+.sidebar-search-panel .workspace-search .icon-button { width: 24px; height: 24px; flex: none; }
+.sidebar-search-panel .pi-select { width: 100%; }
+.is-sidebar-collapsed .sidebar-search-panel { display: none; }
+.sidebar-empty-reset { display: block; margin-top: var(--space-2); padding-block: var(--space-1); color: var(--accent-foreground); font-size: var(--text-sm); }
+.sidebar-empty-reset:hover { text-decoration: underline; }

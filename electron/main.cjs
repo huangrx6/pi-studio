@@ -20,8 +20,10 @@ const { installApplicationShutdown } = require('./core/app-lifecycle.cjs');
 const { installSingleInstanceGuard } = require('./core/single-instance.cjs');
 const { createStartupGate } = require('./core/startup-gate.cjs');
 const { initializeStudioModels } = require('./core/studio-models.cjs');
+const { getStudioDatabase } = require('./core/studio-db.cjs');
 const { closeDurableRuntime, initializeDurableRuntime } = require('./runtime/durable-runtime.cjs');
 const { closeConversationWatches } = require('./runtime/conversations.cjs');
+const { cleanupOrphanedAttachmentDirectories } = require('./services/attachments.cjs');
 const { shutdownTemporaryChats } = require('./services/temporary-chat.cjs');
 const { registerIpc } = require('./ipc/index.cjs');
 const { shutdownTerminalSessions } = require('./ipc/terminal.cjs');
@@ -139,6 +141,19 @@ if (primaryInstance) {
       }
       // Database and credential paths depend on app.getPath('userData').
       await initializeStudioModels();
+      try {
+        const conversations = getStudioDatabase().listConversations({ includeArchived: true });
+        const cleanup = cleanupOrphanedAttachmentDirectories(
+          conversations.flatMap((conversation) => [conversation.id, conversation.publicId]),
+        );
+        if (cleanup.failed > 0) {
+          console.warn(`[pi-studio] ${cleanup.failed} orphaned attachment directories could not be cleaned`);
+        }
+      } catch (error) {
+        // Attachment cleanup is best effort and must not make saved chat data
+        // or an otherwise healthy startup unavailable.
+        console.warn('[pi-studio] attachment cleanup skipped', error);
+      }
       await initializeDurableRuntime();
     },
     ready: () => {

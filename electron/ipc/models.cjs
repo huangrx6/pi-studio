@@ -13,6 +13,8 @@ const { autoCompactReserveTokens } = require('../core/context-policy.cjs');
 const {
   getStudioModelsRuntime,
   rebuildStudioModels,
+  withProviderCredentialLock,
+  invalidateProviderCredentials,
 } = require('../core/studio-models.cjs');
 const {
   availableModels,
@@ -57,11 +59,6 @@ async function setDefaultThinkingLevel(level) {
   return persistDefaultThinkingLevel(runtime, level);
 }
 
-async function rebuildAndSnapshot(cwd = DEFAULT_CWD) {
-  await rebuildStudioModels();
-  return settingsSnapshot(cwd);
-}
-
 async function rebuildAndRefresh(cwd = DEFAULT_CWD) {
   await rebuildStudioModels();
   return {
@@ -70,8 +67,29 @@ async function rebuildAndRefresh(cwd = DEFAULT_CWD) {
   };
 }
 
+const MODEL_REFRESH_ERROR = '模型运行时或设置列表刷新失败，请重试刷新。';
+
+async function refreshModelsProjection(cwd) {
+  try {
+    return await rebuildAndRefresh(cwd);
+  } catch {
+    // Runtime/provider errors can contain connection details. Never return the
+    // raw cause, credentials, or a failed projection as though the write failed.
+    throw new Error(MODEL_REFRESH_ERROR);
+  }
+}
+
+async function committedModelsProjection(cwd) {
+  try {
+    return { committed: true, projection: { status: 'ready', value: await refreshModelsProjection(cwd) } };
+  } catch {
+    return { committed: true, projection: { status: 'error', message: MODEL_REFRESH_ERROR } };
+  }
+}
+
 function registerModelsIpc() {
   ipcMain.handle('pi:models', async () => availableModels());
+  ipcMain.handle('pi:models-refresh', async (_event, cwd) => refreshModelsProjection(cwd));
   ipcMain.handle('pi:set-model', async (_event, modelRef) => setDefaultModel(modelRef));
   ipcMain.handle('pi:set-default-model', async (_event, modelRef) => setDefaultModel(modelRef));
   ipcMain.handle('pi:set-thinking-level', async (_event, { level } = {}) => setDefaultThinkingLevel(level));
@@ -153,41 +171,56 @@ function registerModelsIpc() {
   ipcMain.handle('pi:add-provider', async (_event, input = {}) => {
     const id = providerIdOf(input.providerId);
     const db = getStudioDatabase();
-    const existing = db.getProvider(id);
-    const api = typeof input.api === 'string' && input.api ? input.api : existing?.api || 'openai-completions';
     const baseUrl = normalizeUrl(input.baseUrl, 'Base URL');
-    db.upsertProvider({
-      id,
-      name: String(input.name || existing?.name || id).trim(),
-      baseUrl,
-      api,
-      icon: String(input.icon || existing?.icon || ''),
-      modelsUrl: normalizeUrl(input.modelsUrl),
-      builtin: existing?.builtin ?? false,
-      enabled: input.enabled ?? existing?.enabled ?? true,
-    });
-    if (typeof input.apiKey === 'string' && input.apiKey.trim()) {
-      const runtime = await getStudioModelsRuntime();
-      await runtime.credentials.modify(id, () => ({ type: 'api_key', key: input.apiKey.trim() }));
+    const modelsUrl = normalizeUrl(input.modelsUrl);
+    const apiKey = typeof input.apiKey === 'string' ? input.apiKey.trim() : '';
+    try {
+      await withProviderCredentialLock(id, () => db.transaction(() => {
+        const existing = db.getProvider(id);
+        const api = typeof input.api === 'string' && input.api ? input.api : existing?.api || 'openai-completions';
+        db.upsertProvider({
+          id,
+          name: String(input.name || existing?.name || id).trim(),
+          baseUrl,
+          api,
+          icon: String(input.icon || existing?.icon || ''),
+          modelsUrl,
+          builtin: existing?.builtin ?? false,
+          enabled: input.enabled ?? existing?.enabled ?? true,
+        });
+        // Both rows share one synchronous SQLite transaction. Encryption failure
+        // rolls back the provider too; empty input intentionally retains its key.
+        if (apiKey) db.writeCredential(id, { type: 'api_key', key: apiKey });
+      }));
+    } catch (error) {
+      throw new Error(error?.code === 'SECURE_STORAGE_UNAVAILABLE'
+        ? '系统安全存储不可用，模型来源与凭据均未更改。'
+        : '模型来源保存失败，配置与凭据均未更改。请重试。');
     }
-    return rebuildAndRefresh(input.cwd);
+    return committedModelsProjection(input.cwd);
   });
 
   ipcMain.handle('pi:set-provider-enabled', async (_event, { providerId, enabled, cwd } = {}) => {
     const id = providerIdOf(providerId);
     const db = getStudioDatabase();
     if (!db.getProvider(id)) throw new Error('模型来源不存在');
-    db.setProviderEnabled(id, enabled !== false);
-    return rebuildAndSnapshot(cwd);
+    try { db.transaction(() => db.setProviderEnabled(id, enabled !== false)); }
+    catch { throw new Error('模型来源启停失败，配置未更改。请重试。'); }
+    return committedModelsProjection(cwd);
   });
 
   ipcMain.handle('pi:remove-provider', async (_event, { providerId, cwd } = {}) => {
     const id = providerIdOf(providerId);
     const db = getStudioDatabase();
-    const provider = db.getProvider(id);
-    if (!provider) return rebuildAndSnapshot(cwd);
-    db.deleteProvider(id);
-    return rebuildAndSnapshot(cwd);
+    try {
+      // deleteProvider owns its synchronous transaction. Queue it behind an
+      // in-flight credential refresh; later modify calls check provider existence.
+      await withProviderCredentialLock(id, () => {
+        db.deleteProvider(id);
+        invalidateProviderCredentials(id);
+      });
+    } catch { throw new Error('模型来源删除失败，配置与凭据均未更改。请重试。'); }
+    return committedModelsProjection(cwd);
   });
 
   ipcMain.handle('pi:add-custom-model', async (_event, input = {}) => {
@@ -203,37 +236,46 @@ function registerModelsIpc() {
       input.thinkingLevels ?? existing?.thinkingLevels,
       reasoning,
     );
-    db.upsertModel({
-      providerId,
-      modelId,
-      name: String(input.name || existing?.name || modelId).trim(),
-      api: input.api || existing?.api || provider.api,
-      contextWindow: Number(input.contextWindow) || existing?.contextWindow,
-      maxTokens: Number(input.maxTokens) || existing?.maxTokens,
-      supportsImages: input.supportsImages ?? existing?.supportsImages ?? false,
-      reasoning,
-      thinkingLevels,
-      metadataSource: 'manual',
-      enabled: input.enabled ?? existing?.enabled ?? true,
-      source: existing?.source === 'builtin' ? 'override' : existing?.source || 'custom',
-    });
-    return rebuildAndSnapshot(input.cwd);
+    try {
+      db.transaction(() => db.upsertModel({
+        providerId,
+        modelId,
+        name: String(input.name || existing?.name || modelId).trim(),
+        api: input.api || existing?.api || provider.api,
+        contextWindow: Number(input.contextWindow) || existing?.contextWindow,
+        maxTokens: Number(input.maxTokens) || existing?.maxTokens,
+        supportsImages: input.supportsImages ?? existing?.supportsImages ?? false,
+        reasoning,
+        thinkingLevels,
+        metadataSource: 'manual',
+        enabled: input.enabled ?? existing?.enabled ?? true,
+        source: existing?.source === 'builtin' ? 'override' : existing?.source || 'custom',
+      }));
+    } catch {
+      throw new Error('模型保存失败，配置未更改。请重试。');
+    }
+    return committedModelsProjection(input.cwd);
   });
 
   ipcMain.handle('pi:remove-custom-model', async (_event, { providerId, modelId, cwd } = {}) => {
     const db = getStudioDatabase();
-    const model = db.getModel(providerId, modelId);
-    if (!model) return rebuildAndSnapshot(cwd);
-    if (model.source === 'builtin') db.upsertModel({ ...model, enabled: false });
-    else db.deleteModel(providerId, modelId);
-    return rebuildAndSnapshot(cwd);
+    try {
+      db.transaction(() => {
+        const model = db.getModel(providerId, modelId);
+        if (!model) return;
+        if (model.source === 'builtin') db.upsertModel({ ...model, enabled: false });
+        else db.deleteModel(providerId, modelId);
+      });
+    } catch { throw new Error('模型移除失败，配置未更改。请重试。'); }
+    return committedModelsProjection(cwd);
   });
 
   ipcMain.handle('pi:set-enabled-models', async (_event, { models, cwd } = {}) => {
     const refs = models;
     if (!Array.isArray(refs)) throw new Error('模型列表无效');
-    getStudioDatabase().setEnabledModels(refs);
-    return rebuildAndSnapshot(cwd);
+    try { getStudioDatabase().setEnabledModels(refs); }
+    catch { throw new Error('模型启停失败，配置未更改。请重试。'); }
+    return committedModelsProjection(cwd);
   });
 
   ipcMain.handle('pi:discover-provider-models', async (_event, { providerId } = {}) => {
@@ -267,49 +309,67 @@ function registerModelsIpc() {
     if (!provider) throw new Error('模型来源不存在');
     if (!Array.isArray(models)) throw new Error('模型列表无效');
     const db = getStudioDatabase();
-    for (const item of models) {
-      const modelId = typeof item?.id === 'string' ? item.id.trim() : '';
-      if (!modelId) continue;
-      const existing = db.getModel(providerId, modelId);
-      const reasoning = item.reasoning ?? existing?.reasoning ?? false;
-      db.upsertModel({
-        providerId,
-        modelId,
-        name: String(item.name || existing?.name || modelId),
-        api: item.api || existing?.api || provider.api,
-        contextWindow: item.contextWindow ?? existing?.contextWindow,
-        maxTokens: item.maxTokens ?? existing?.maxTokens,
-        supportsImages: item.supportsImages ?? existing?.supportsImages ?? false,
-        reasoning,
-        thinkingLevels: effectiveThinkingLevels(
-          item.thinkingLevels ?? existing?.thinkingLevels,
-          reasoning,
-        ),
-        metadataSource: 'resolved',
-        // The renderer only submits models explicitly selected by the user.
-        // Newly imported models therefore enter the picker immediately;
-        // re-importing an existing row keeps its current enabled state.
-        enabled: existing?.enabled ?? true,
-        source: existing?.source === 'builtin' ? 'builtin' : existing?.source || 'custom',
+    try {
+      db.transaction(() => {
+        for (const item of models) {
+          const modelId = typeof item?.id === 'string' ? item.id.trim() : '';
+          if (!modelId) continue;
+          const existing = db.getModel(providerId, modelId);
+          const reasoning = item.reasoning ?? existing?.reasoning ?? false;
+          db.upsertModel({
+            providerId,
+            modelId,
+            name: String(item.name || existing?.name || modelId),
+            api: item.api || existing?.api || provider.api,
+            contextWindow: item.contextWindow ?? existing?.contextWindow,
+            maxTokens: item.maxTokens ?? existing?.maxTokens,
+            supportsImages: item.supportsImages ?? existing?.supportsImages ?? false,
+            reasoning,
+            thinkingLevels: effectiveThinkingLevels(
+              item.thinkingLevels ?? existing?.thinkingLevels,
+              reasoning,
+            ),
+            metadataSource: 'resolved',
+            // The renderer only submits models explicitly selected by the user.
+            // Newly imported models therefore enter the picker immediately;
+            // re-importing an existing row keeps its current enabled state.
+            enabled: existing?.enabled ?? true,
+            source: existing?.source === 'builtin' ? 'builtin' : existing?.source || 'custom',
+          });
+        }
       });
-    }
-    return rebuildAndSnapshot(cwd);
+    } catch { throw new Error('模型导入失败，所选模型均未更改。请重试。'); }
+    return committedModelsProjection(cwd);
   });
 
-  ipcMain.handle('pi:set-key', async (_event, { providerId, apiKey } = {}) => {
+  ipcMain.handle('pi:set-key', async (_event, { providerId, apiKey, cwd } = {}) => {
     const id = providerIdOf(providerId);
     if (!getStudioDatabase().getProvider(id)) throw new Error('模型来源不存在');
     const value = typeof apiKey === 'string' ? apiKey.trim() : '';
     if (!value) throw new Error('API Key 不能为空');
-    const runtime = await getStudioModelsRuntime();
-    await runtime.credentials.modify(id, () => ({ type: 'api_key', key: value }));
-    return rebuildAndRefresh();
+    try {
+      const runtime = await getStudioModelsRuntime();
+      await runtime.credentials.modify(id, () => ({ type: 'api_key', key: value }));
+    } catch (error) {
+      // Only fixed ownership errors may cross IPC. Storage/runtime causes can
+      // contain credentials; neither failure has committed a credential change.
+      const message = error?.message;
+      if (message === '模型来源不存在，凭据未写入。' || message === '模型来源已变化，凭据未写入。') throw new Error(message);
+      throw new Error('凭据保存失败，凭据未更改。请重试。');
+    }
+    return committedModelsProjection(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
   });
 
-  ipcMain.handle('pi:delete-key', async (_event, { providerId } = {}) => {
-    const runtime = await getStudioModelsRuntime();
-    await runtime.credentials.delete(providerId);
-    return rebuildAndRefresh();
+  ipcMain.handle('pi:delete-key', async (_event, { providerId, cwd } = {}) => {
+    const id = providerIdOf(providerId);
+    try {
+      const runtime = await getStudioModelsRuntime();
+      await runtime.credentials.delete(id);
+    } catch (error) {
+      if (error?.message === '模型来源已变化，凭据未清除。') throw new Error(error.message);
+      throw new Error('凭据清除失败，凭据未更改。请重试。');
+    }
+    return committedModelsProjection(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
   });
 }
 

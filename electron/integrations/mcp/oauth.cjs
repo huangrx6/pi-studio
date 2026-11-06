@@ -139,11 +139,12 @@ async function authorizeMcpServer(server, openExternal) {
     pending.catch(() => {});
     await openExternal(authorizationUrl.toString());
     const response = await pending;
-    await oauth.authorizeMcp(provider, {
+    const result = await oauth.authorizeMcp(provider, {
       serverUrl: server.url,
       authorizationCode: response.code,
       ...(response.iss ? { iss: response.iss } : {}),
     });
+    if (result !== 'AUTHORIZED') throw new Error('OAuth 授权未完成');
     return {
       ok: true,
       serverUrl: server.url,
@@ -151,9 +152,9 @@ async function authorizeMcpServer(server, openExternal) {
     };
   } finally {
     await Promise.allSettled([
-      callback.close(),
-      typeof client.close === 'function' ? client.close() : Promise.resolve(),
-      typeof transport.close === 'function' ? transport.close() : Promise.resolve(),
+      Promise.resolve().then(() => callback.close()),
+      Promise.resolve().then(() => { if (typeof client.close === 'function') return client.close(); }),
+      Promise.resolve().then(() => { if (typeof transport.close === 'function') return transport.close(); }),
     ]);
   }
 }

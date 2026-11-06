@@ -40,6 +40,32 @@ export function shouldReleaseFollowOnWheel({ deltaX, deltaY, nestedScrollable })
 }
 
 /**
+ * A wheel event can bubble out of an overflowing code block or tool result.
+ * While that inner element can still scroll in the requested direction, the
+ * transcript itself must remain pinned.
+ *
+ * @param {EventTarget | null} target
+ * @param {HTMLElement | null} viewport
+ * @param {number} deltaY
+ * @returns {boolean}
+ */
+export function nestedScrollableConsumesWheel(target, viewport, deltaY) {
+  if (!viewport || !(target instanceof Element) || !deltaY) return false;
+  let node = target instanceof HTMLElement ? target : target.parentElement;
+  while (node && node !== viewport) {
+    if (node.scrollHeight > node.clientHeight + 1) {
+      const overflowY = window.getComputedStyle(node).overflowY;
+      if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') {
+        if (deltaY < 0 && node.scrollTop > 1) return true;
+        if (deltaY > 0 && node.scrollTop + node.clientHeight < node.scrollHeight - 1) return true;
+      }
+    }
+    node = node.parentElement;
+  }
+  return false;
+}
+
+/**
  * A live panel (the streaming thinking body) follows its newest line only while
  * the reader stays at that bottom edge.
  *

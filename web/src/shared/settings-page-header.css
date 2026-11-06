@@ -1,0 +1,93 @@
+/* Page chrome owns its layout directly, without the settings-card surface or
+ * custom-background card overlays. Actual forms keep their own card styling. */
+.settings-page-header {
+  display: flex;
+  width: 100%;
+  max-width: var(--settings-content);
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  margin: 0 auto var(--space-5);
+  padding-block: var(--space-2);
+}
+
+/* These page layouts already provide spacing between their direct children. */
+:is(.extensions-settings, .subagent-settings, .permission-policy, .usage-settings) > .settings-page-header {
+  margin-bottom: 0;
+}
+
+.settings-page-header-copy {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.settings-page-header-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.settings-page-header-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-control);
+  background: var(--accent-soft);
+  color: var(--accent-foreground);
+}
+
+.settings-page-header-icon svg {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  stroke-width: 1.8;
+}
+
+.settings-page-header-title > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.settings-page-header h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-title);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-normal);
+  letter-spacing: -.02em;
+  overflow-wrap: anywhere;
+}
+
+.settings-page-header-actions {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.settings-page-header-actions > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.settings-page-header-actions button:not(.icon-button) {
+  min-height: var(--control);
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.settings-page-header-actions svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}

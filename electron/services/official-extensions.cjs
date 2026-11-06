@@ -7,6 +7,8 @@ const { compareSemver } = require('../core/extension-semver.cjs');
 
 const SETTINGS_KEY = 'studio.officialExtensions';
 const PREFERENCES_VERSION = 1;
+const SAFE_EXTENSION_ID = /^[a-z0-9][a-z0-9._-]{1,63}$/;
+const RESERVED_OBJECT_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
 function stringListDiff(previousValues, nextValues) {
   const previous = new Set(previousValues || []);
@@ -34,10 +36,16 @@ function normalizePreferences(value) {
   const source = value && typeof value === 'object' && !Array.isArray(value)
     ? value
     : {};
+  const autoUpdateSource = source.autoUpdate
+    && typeof source.autoUpdate === 'object'
+    && !Array.isArray(source.autoUpdate)
+    ? source.autoUpdate
+    : {};
   const autoUpdate = {};
-  for (const [id, enabled] of Object.entries(source.autoUpdate || {})) {
+  for (const [id, enabled] of Object.entries(autoUpdateSource)) {
     if (
-      /^[a-z0-9][a-z0-9._-]{1,63}$/.test(id)
+      SAFE_EXTENSION_ID.test(id)
+      && !RESERVED_OBJECT_KEYS.has(id)
       && typeof enabled === 'boolean'
     ) {
       autoUpdate[id] = enabled;
@@ -99,7 +107,11 @@ class OfficialExtensionService {
   }
 
   preferences() {
-    return normalizePreferences(this.database.getSetting(SETTINGS_KEY, undefined));
+    return this.database.getSettingWithRecovery(
+      SETTINGS_KEY,
+      undefined,
+      normalizePreferences,
+    );
   }
 
   savePreferences(preferences) {

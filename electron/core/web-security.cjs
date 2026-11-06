@@ -6,7 +6,8 @@
  */
 
 function rendererContentSecurityPolicy({ dev = false } = {}) {
-  const scriptSources = dev ? "'self' 'unsafe-eval'" : "'self'";
+  // Vite marks its local React Refresh preamble with this development-only nonce.
+  const scriptSources = dev ? "'self' 'unsafe-eval' 'nonce-pi-studio-dev'" : "'self'";
   const connectSources = dev
     ? "'self' http://127.0.0.1:5180 ws://127.0.0.1:5180"
     : "'self'";

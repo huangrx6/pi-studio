@@ -149,11 +149,15 @@ await page.addInitScript(() => {
 async function openGeneralSettings() {
   if (!await page.locator('.settings-overlay').count()) await page.locator('.bottom-row').click();
   await page.getByRole('button', { name: '通用', exact: true }).click();
-  await page.getByRole('heading', { name: '背景与动态氛围', exact: true }).waitFor();
+  await page.getByRole('heading', { name: '外观', exact: true }).waitFor();
+  const adjustments = page.locator('.general-background-settings details');
+  if (await adjustments.count() && await adjustments.getAttribute('open') === null) {
+    await adjustments.locator('summary').click();
+  }
 }
 
 async function assertNoHorizontalOverflow() {
-  const overflow = await page.locator('.settings-content, .background-settings-card, .background-settings-layout')
+  const overflow = await page.locator('.settings-content, .general-settings-section, .general-background-adjustments')
     .evaluateAll((elements) => elements
       .filter((element) => element.clientWidth && element.scrollWidth > element.clientWidth + 2)
       .map((element) => element.className));
@@ -179,13 +183,7 @@ try {
   await page.goto(process.env.PREVIEW_URL || 'http://127.0.0.1:5180/');
   await page.locator('.bottom-row').waitFor();
   await openGeneralSettings();
-  await page.getByRole('heading', { name: '背景与动态氛围', exact: true }).scrollIntoViewIfNeeded();
-  for (const id of ['background-opacity', 'background-blur', 'background-surface']) {
-    const slider = page.locator(`#${id}`);
-    assert.equal(await slider.isDisabled(), true);
-    assert.equal(await slider.getAttribute('min'), '0');
-    assert.equal(await slider.getAttribute('max'), '100');
-  }
+  assert.equal(await page.locator('.general-background-settings, .background-media-preview, .settings-range-control').count(), 0, 'unused background controls are not displayed');
   await page.screenshot({ path: `${output}light-empty.png`, animations: 'disabled' });
 
   await page.evaluate(() => {
@@ -204,6 +202,13 @@ try {
     return image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0;
   });
 
+  await page.locator('.general-background-settings summary').click();
+  for (const id of ['background-opacity', 'background-blur', 'background-surface']) {
+    const slider = page.locator(`#${id}`);
+    assert.equal(await slider.isEnabled(), true);
+    assert.equal(await slider.getAttribute('min'), '0');
+    assert.equal(await slider.getAttribute('max'), '100');
+  }
   await page.locator('#background-opacity').fill('0');
   await page.waitForFunction(() => {
     const media = document.querySelector('.background-layer-media');
@@ -262,19 +267,23 @@ try {
   assert.ok(layerFrame.left <= 0 && layerFrame.top <= 0, 'background media must cover the top-left viewport edge');
   assert.ok(layerFrame.right >= layerFrame.viewportWidth, 'background media must cover the right viewport edge');
   assert.ok(layerFrame.bottom >= layerFrame.viewportHeight, 'background media must cover the bottom viewport edge');
-  const cardAlpha = await backgroundAlpha(page.locator('.settings-card').first());
-  assert.ok(cardAlpha > 0.62 && cardAlpha < 0.75, `settings cards should use the shared glass layer, got ${cardAlpha}`);
+  assert.equal(await backgroundAlpha(page.locator('.settings-page-header')), 0, 'page titles do not add a card surface');
+  assert.equal(await backgroundAlpha(page.locator('.general-settings-section').first()), 0, 'appearance rows use the settings surface');
   const selectedAlpha = await backgroundAlpha(page.locator('.settings-nav-row.is-active'));
   assert.ok(selectedAlpha > 0.32 && selectedAlpha < 0.7, `selected rows should remain distinct without becoming opaque, got ${selectedAlpha}`);
-  const selectedChoiceAlpha = await backgroundAlpha(page.locator('.theme-choice.is-active'));
-  assert.ok(selectedChoiceAlpha > 0 && selectedChoiceAlpha < 0.22, `selected choice cards should use the light state layer, got ${selectedChoiceAlpha}`);
-  await page.locator('.theme-choice:not(.is-active)').first().hover();
+  const themeStates = await page.locator('.general-theme-options').evaluate(element => {
+    const active = element.querySelector('button[aria-pressed="true"]');
+    const inactive = element.querySelector('button[aria-pressed="false"]');
+    return { active: getComputedStyle(active).backgroundColor, inactive: getComputedStyle(inactive).backgroundColor };
+  });
+  assert.notEqual(themeStates.active, themeStates.inactive, 'the chosen theme is visibly distinct');
+  const inactiveTheme = page.locator('.general-theme-options button[aria-pressed="false"]').first();
+  await inactiveTheme.hover();
   await page.waitForTimeout(220);
-  const hoverAlpha = await backgroundAlpha(page.locator('.theme-choice:not(.is-active)').first());
-  assert.ok(hoverAlpha > 0 && hoverAlpha < 0.22, `hover should be a light state layer, got ${hoverAlpha}`);
+  assert.notEqual(await inactiveTheme.evaluate(element => getComputedStyle(element).backgroundColor), themeStates.inactive, 'theme hover gives visible feedback');
   await assertNoHorizontalOverflow();
   await page.screenshot({ path: `${output}light-image.png`, animations: 'disabled' });
-  await page.locator('.background-settings-card').screenshot({ path: `${output}light-background-card.png`, animations: 'disabled' });
+  await page.locator('.general-background-settings').screenshot({ path: `${output}light-background-controls.png`, animations: 'disabled' });
 
   await page.getByRole('button', { name: '返回对话' }).click();
   await page.locator('.settings-overlay').waitFor({ state: 'detached' });

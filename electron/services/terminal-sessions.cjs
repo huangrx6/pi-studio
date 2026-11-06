@@ -11,6 +11,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { createTerminalReplay } = require('./terminal-replay.cjs');
 
 const MAX_SESSIONS_PER_RENDERER = 8;
 const MAX_OUTPUT_CHARS = 1_000_000;
@@ -74,11 +75,6 @@ function shellArgsForPlatform(shell, platform = process.platform) {
   return LOGIN_SHELLS.has(executable) ? ['-l'] : [];
 }
 
-function appendBounded(current, chunk, limit = MAX_OUTPUT_CHARS) {
-  const next = `${current}${chunk}`;
-  return next.length > limit ? next.slice(next.length - limit) : next;
-}
-
 function sessionDto(session, includeOutput = false) {
   return {
     id: session.id,
@@ -90,7 +86,7 @@ function sessionDto(session, includeOutput = false) {
     exitedAt: session.exitedAt,
     exitCode: session.exitCode,
     sequence: session.sequence,
-    ...(includeOutput ? { output: session.output, atBottom: true } : {}),
+    ...(includeOutput ? { replay: session.replay.snapshot() } : {}),
   };
 }
 
@@ -183,13 +179,15 @@ function createTerminalSessionManager(options = {}) {
     const shellArgs = shellArgsForPlatform(shell, platform);
     const workingDirectory = normalizeCwd(cwd);
     const title = path.basename(shell).replace(/\.exe$/i, '') || 'shell';
+    const initialCols = clampDimension(cols, 90, 20, 500);
+    const initialRows = clampDimension(rows, 24, 5, 300);
     // A GUI-launched app inherits a minimal launchd environment. Starting the
     // user's login shell lets ~/.zprofile run `brew shellenv` before ~/.zshrc
     // resolves Homebrew tools, matching Terminal.app instead of only /usr/bin.
     const ptyProcess = spawnPty(shell, shellArgs, {
       name: 'xterm-256color',
-      cols: clampDimension(cols, 90, 20, 500),
-      rows: clampDimension(rows, 24, 5, 300),
+      cols: initialCols,
+      rows: initialRows,
       cwd: workingDirectory,
       env: {
         ...environment,
@@ -208,7 +206,7 @@ function createTerminalSessionManager(options = {}) {
       createdAt: now(),
       exitedAt: undefined,
       exitCode: undefined,
-      output: '',
+      replay: createTerminalReplay({ cols: initialCols, rows: initialRows, maxChars: maxOutputChars }),
       sequence: 0,
       ptyProcess,
     };
@@ -216,7 +214,7 @@ function createTerminalSessionManager(options = {}) {
 
     ptyProcess.onData((data) => {
       if (sessions.get(id) !== session) return;
-      session.output = appendBounded(session.output, String(data), maxOutputChars);
+      session.replay.append(String(data));
       session.sequence += 1;
       emit(session, { id, type: 'data', data: String(data), sequence: session.sequence });
     });
@@ -228,7 +226,9 @@ function createTerminalSessionManager(options = {}) {
       emit(session, { id, type: 'exit', exitCode, signal, status: 'exited' });
     });
 
-    return { ...sessionDto(session, false), createdNow: true };
+    // Even the first attach needs its PTY's initial geometry: the renderer may
+    // have been resized while this IPC response was in flight.
+    return { ...sessionDto(session, true), createdNow: true };
   }
 
   function write({ ownerId, id, data } = {}) {
@@ -244,10 +244,10 @@ function createTerminalSessionManager(options = {}) {
     const session = sessions.get(id);
     assertOwner(session, ownerId);
     if (session.status !== 'running') return { ok: false, status: session.status };
-    session.ptyProcess.resize(
-      clampDimension(cols, 90, 20, 500),
-      clampDimension(rows, 24, 5, 300),
-    );
+    const nextCols = clampDimension(cols, 90, 20, 500);
+    const nextRows = clampDimension(rows, 24, 5, 300);
+    session.ptyProcess.resize(nextCols, nextRows);
+    session.replay.resize(nextCols, nextRows);
     return { ok: true };
   }
 
@@ -291,7 +291,6 @@ function createTerminalSessionManager(options = {}) {
 module.exports = {
   MAX_OUTPUT_CHARS,
   MAX_SESSIONS_PER_RENDERER,
-  appendBounded,
   createTerminalSessionManager,
   normalizeCwd,
   shellArgsForPlatform,

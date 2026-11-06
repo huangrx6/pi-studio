@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { pollServiceCount } from './service-count-polling';
 import { Activity, Folder, FolderOpen, Globe, MessageCirclePlus, Terminal, type LucideIcon } from 'lucide-react';
 
 export type RightPanelToolId = 'files' | 'terminal' | 'services' | 'browser' | 'temporary';
@@ -35,6 +36,7 @@ export function RightPanelToolList({
         type="button"
         className="panel-tool"
         role={menu ? 'menuitem' : undefined}
+        tabIndex={menu ? -1 : undefined}
         disabled={action.disabled}
         onClick={action.onSelect}
       >
@@ -64,17 +66,21 @@ export function RightPanelStart({
       setServiceCount(0);
       return;
     }
-    let disposed = false;
+    setServiceCount(0);
     const roots = [...new Set([cwd, workspace].filter(Boolean))] as string[];
-    const refresh = () => void window.piApi.runtimeServices({ cwd, roots })
-      .then((snapshot) => { if (!disposed) setServiceCount(snapshot.summary.related); })
-      .catch(() => { if (!disposed) setServiceCount(0); });
-    refresh();
-    const timer = window.setInterval(refresh, 5_000);
-    return () => {
-      disposed = true;
-      window.clearInterval(timer);
-    };
+    return pollServiceCount(
+      async () => (await window.piApi.runtimeServices({ cwd, roots })).summary.related,
+      setServiceCount,
+      {
+        isVisible: () => !document.hidden,
+        onVisibilityChange: (callback) => {
+          document.addEventListener('visibilitychange', callback);
+          return () => document.removeEventListener('visibilitychange', callback);
+        },
+        schedule: (callback, delay) => window.setTimeout(callback, delay),
+        cancel: (id) => window.clearTimeout(id),
+      },
+    );
   }, [cwd, workspace]);
 
   return <div className="panel-start">

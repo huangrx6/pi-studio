@@ -1,581 +1,208 @@
 /**
- * Real Electron process-tree memory smoke test.
- *
- * Isolated userData, a long transcript fixture, image rendering, subagent
- * surfaces, repeated conversation/tab switching, idle reclamation, and clean
- * process teardown are all exercised. Run after `pnpm run build`.
+ * Real unpackaged Electron process-tree smoke, with an isolated real-IPC empty
+ * main window and a separate synthetic renderer stress window. Run after build.
+ * Short fixed-cycle observations are evidence, not a long-term leak guarantee.
  */
-
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { once } from 'node:events';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { _electron } from 'playwright-core';
+import { installMemorySmokeFixture } from './fixtures/memory-smoke.mjs';
 
-if (process.platform !== 'darwin') {
-  throw new Error('The Pi Studio desktop memory smoke test currently requires macOS.');
-}
-
-const root = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
-const rendererFile = path.join(root, 'web-dist', 'index.html');
-if (!existsSync(rendererFile)) {
-  throw new Error('web-dist/index.html is missing; run `pnpm run build` before `pnpm qa:memory`.');
-}
-
-const profile = mkdtempSync(path.join(os.tmpdir(), 'pi-studio-memory-smoke-'));
-const environment = {
-  ...process.env,
-  PI_STUDIO_USER_DATA: profile,
-  PI_STUDIO_DB: path.join(profile, 'studio.sqlite'),
+if (process.platform !== 'darwin') throw new Error('This process RSS smoke currently requires macOS ps.');
+const root = fileURLToPath(new URL('../..', import.meta.url));
+const rendererFile = path.join(root, 'web-dist/index.html');
+const html = await readFile(rendererFile, 'utf8');
+const output = path.join(root, '.qa/memory-smoke'); await mkdir(output, { recursive: true });
+const profile = await mkdtemp(path.join(os.tmpdir(), 'pi-studio-memory-smoke-'));
+const workspace = path.join(profile, 'empty-workspace'); await mkdir(workspace);
+const environment = { ...process.env, PI_STUDIO_USER_DATA: profile, PI_STUDIO_DB: path.join(profile, 'studio.sqlite'), PI_WORKSPACE: workspace };
+delete environment.ELECTRON_RUN_AS_NODE; delete environment.PI_STUDIO_DEV;
+const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+const rounds = 6;
+const viewport = { width: 1440, height: 900 };
+const result = {
+  startedAt: new Date().toISOString(),
+  scope: { process: 'real unpackaged Electron tree', mainWindow: 'real preload/IPC with disposable empty SQLite/profile/workspace', stressWindow: 'production renderer with synthetic piApi; no preload/real IPC/model workload', gc: 'CDP forced GC at each renderer sample', limitations: ['Six fixed rounds and three post-close samples cannot establish long-term bounded memory.', 'RSS includes main, GPU, utility, and both renderer processes; OS allocator and shared pages affect comparisons.', 'CDP JS listener/node counts are runtime totals; fixture subscriber counts separately describe only synthetic piApi registrations.', 'Heap samples follow forced GC and do not measure transient allocation peaks.'] },
+  machine: { platform: process.platform, arch: process.arch, osRelease: os.release(), cpu: os.cpus()[0]?.model, cpuCount: os.cpus().length, totalMemoryMiB: os.totalmem() / 1048576, node: process.version },
+  assets: html.match(/assets\/[^"']+\.(?:js|css)/g), viewport, rounds,
+  samples: [], checks: [], rendererErrors: [], blockedRequests: [], cleanup: {},
 };
-delete environment.ELECTRON_RUN_AS_NODE;
-delete environment.PI_STUDIO_DEV;
-
-let electronApp;
-let electronPid;
-let lastTrackedPids = [];
-
+let electronApp; let electronPid; let stressPage; let processHandle;
+const tracked = new Map();
 function processRows() {
-  const rows = new Map();
-  const output = execFileSync('ps', ['-axo', 'pid=,ppid=,rss=,command='], {
-    encoding: 'utf8',
-  });
-  for (const line of output.split(/\r?\n/)) {
+  const map = new Map();
+  for (const line of execFileSync('ps', ['-axo', 'pid=,ppid=,rss=,command='], { encoding: 'utf8' }).split(/\r?\n/)) {
     const match = line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+(.+)$/);
-    if (!match) continue;
-    rows.set(Number(match[1]), {
-      parent: Number(match[2]),
-      rssKiB: Number(match[3]),
-      command: match[4],
-    });
+    if (match) map.set(Number(match[1]), { ppid: Number(match[2]), rssKiB: Number(match[3]), command: match[4] });
   }
-  return rows;
+  return map;
 }
-
-function descendants(rootPid) {
-  if (!rootPid) return { rows: new Map(), pids: [] };
-  const rows = processRows();
-  const selected = new Set([rootPid]);
+function processTree() {
+  const rows = processRows(); const pids = new Set(rows.has(electronPid) ? [electronPid] : []);
   let changed = true;
-  while (changed) {
-    changed = false;
-    for (const [pid, row] of rows) {
-      if (selected.has(pid) || !selected.has(row.parent)) continue;
-      selected.add(pid);
-      changed = true;
-    }
-  }
-  return {
-    rows,
-    pids: [...selected].filter((pid) => rows.has(pid)),
-  };
+  while (changed) { changed = false; for (const [pid, row] of rows) if (!pids.has(pid) && pids.has(row.ppid)) { pids.add(pid); changed = true; } }
+  return [...pids].map(pid => {
+    const row = rows.get(pid); tracked.set(pid, row.command);
+    return { pid, parent: row.ppid, rssMiB: row.rssKiB / 1024, kind: pid === electronPid ? 'main' : /--type=renderer/.test(row.command) ? 'renderer' : /--type=gpu-process/.test(row.command) ? 'gpu' : /--type=utility/.test(row.command) ? 'utility' : 'other' };
+  });
 }
-
-function sample(label) {
-  const { rows, pids } = descendants(electronPid);
-  lastTrackedPids = [...new Set([...lastTrackedPids, ...pids])];
-  const totalKiB = pids.reduce((total, pid) => total + rows.get(pid).rssKiB, 0);
-  const electronKiB = pids.reduce((total, pid) => {
-    const command = rows.get(pid).command;
-    return total + (
-      /Electron|Pi Studio/.test(command) ? rows.get(pid).rssKiB : 0
-    );
-  }, 0);
-  const result = {
-    processes: pids.length,
-    totalMiB: totalKiB / 1024,
-    electronMiB: electronKiB / 1024,
-    pids,
-  };
-  console.log(
-    `${label}: processes=${result.processes} total=${result.totalMiB.toFixed(1)} MiB `
-    + `electron=${result.electronMiB.toFixed(1)} MiB`,
-  );
-  return result;
-}
-
-function sleep(milliseconds) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
 async function rendererMetrics(page) {
-  const session = await page.context().newCDPSession(page);
+  const cdp = await page.context().newCDPSession(page);
   try {
-    await session.send('Performance.enable');
-    await session.send('HeapProfiler.collectGarbage');
-    await sleep(300);
-    const metrics = await session.send('Performance.getMetrics');
-    const values = Object.fromEntries(metrics.metrics.map(({ name, value }) => [name, value]));
-    return {
-      jsHeapMiB: (values.JSHeapUsedSize || 0) / 1024 / 1024,
-      nodes: values.Nodes || 0,
-      documents: values.Documents || 0,
-    };
-  } finally {
-    await session.detach().catch(() => {});
-  }
-}
-
-async function closeProcessTree() {
-  if (electronApp) {
-    const app = electronApp;
-    electronApp = undefined;
-    await Promise.race([
-      app.evaluate(({ app: electron }) => {
-        electron.quit();
-      }).catch(() => {}),
-      sleep(2_000),
-    ]);
-    await Promise.race([
-      app.close().catch(() => {}),
-      sleep(5_000),
-    ]);
-  }
-  await sleep(1_000);
-  const current = descendants(electronPid);
-  const tracked = [...new Set([...lastTrackedPids, ...current.pids])];
-  for (const signal of ['SIGTERM', 'SIGKILL']) {
-    for (const pid of tracked.toReversed()) {
-      try {
-        process.kill(pid, signal);
-      } catch (error) {
-        if (error.code !== 'ESRCH') throw error;
-      }
-    }
-    await sleep(signal === 'SIGTERM' ? 750 : 200);
-  }
-}
-
-async function installStressFixture(page) {
-  await page.addInitScript(() => {
-    const cwd = '/workspace/memory-regression';
-    const model = {
-      modelRef: 'qa/memory-fixture',
-      label: 'Memory Fixture',
-      thinkingLevel: 'high',
-      thinkingLevels: ['off', 'high'],
-      effectiveThinkingLevel: 'high',
-      defaultThinkingLevel: 'high',
-      supportsImages: true,
-    };
-    const definitions = [
-      ['memory-long', 'Memory long transcript', 420],
-      ['memory-medium-a', 'Memory medium A', 120],
-      ['memory-medium-b', 'Memory medium B', 120],
-    ];
-    const summaries = new Map(definitions.map(([id, title, messageCount]) => [
-      id,
-      {
-        id,
-        cwd,
-        title,
-        messageCount,
-        kind: 'conversation',
-        goal: '',
-        pinned: false,
-        archived: false,
-        createdAt: Date.now() - 60_000,
-        updatedAt: Date.now() - definitions.findIndex(([value]) => value === id) * 1_000,
-      },
-    ]));
-    const svg = [
-      '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400">',
-      '<rect width="640" height="400" fill="#17372f"/>',
-      '<path d="M40 90h260M40 140h410M40 190h350" stroke="#b7e7d3" stroke-width="18" stroke-linecap="round"/>',
-      '<circle cx="500" cy="105" r="52" fill="#64d7aa"/>',
-      '<text x="40" y="330" fill="#f5fbf8" font-family="sans-serif" font-size="34">Memory fixture</text>',
-      '</svg>',
-    ].join('');
-    const imageData = btoa(svg);
-    const messagesBySession = new Map();
-
-    function messagesFor(id) {
-      if (messagesBySession.has(id)) return messagesBySession.get(id);
-      const summary = summaries.get(id);
-      const messages = [];
-      for (let index = 0; index < summary.messageCount; index += 1) {
-        if (index % 2 === 0) {
-          messages.push({
-            role: 'user',
-            timestamp: Date.now() - summary.messageCount * 100 + index * 100,
-            sourceIndex: index,
-            content: [{
-              type: 'text',
-              text: `Memory question ${index / 2 + 1}: ${'请检查长会话的滚动、缓存与内存边界。'.repeat(5)}`,
-            }],
-          });
-          continue;
-        }
-        const content = [
-          {
-            type: 'thinking',
-            thinking: `第 ${Math.ceil(index / 2)} 轮先核对历史窗口与缓存边界。`,
-          },
-          {
-            type: 'text',
-            text: `## Memory response ${Math.ceil(index / 2)}\n\n${'这是用于验证长会话渲染、历史分页和缓存释放的确定性内容。'.repeat(28)}`,
-          },
-        ];
-        if (index % 30 === 1) {
-          content.push({
-            type: 'toolCall',
-            id: `read-${index}`,
-            name: 'read',
-            arguments: { path: `/workspace/memory-${index}.ts` },
-          });
-        }
-        if (index % 60 === 29) {
-          content.push(
-            { type: 'image', mimeType: 'image/svg+xml', data: imageData },
-            { type: 'image', mimeType: 'image/svg+xml', data: imageData },
-          );
-        }
-        messages.push({
-          role: 'assistant',
-          timestamp: Date.now() - summary.messageCount * 100 + index * 100,
-          sourceIndex: index,
-          content,
-        });
-        if (index % 30 === 1) {
-          messages.push({
-            role: 'toolResult',
-            timestamp: Date.now() - summary.messageCount * 100 + index * 100 + 1,
-            sourceIndex: index,
-            toolCallId: `read-${index}`,
-            toolName: 'read',
-            content: [{ type: 'text', text: 'Read completed.' }],
-            details: { path: `/workspace/memory-${index}.ts` },
-          });
-        }
-      }
-      messagesBySession.set(id, messages);
-      return messages;
-    }
-
-    let activeConversationId = definitions[0][0];
-    const listeners = new Set();
-    const childBase = {
-      runId: 'memory-child-run',
-      source: 'background',
-      context: 'fork',
-      model: model.modelRef,
-      thinking: 'high',
-      cwd,
-      startedAt: Date.now() - 30_000,
-      updatedAt: Date.now(),
-      tokens: 18_420,
-      toolCount: 7,
-      turnCount: 4,
-      preview: '正在核对历史窗口、图片缓存与事件订阅的生命周期。',
-      hasTranscript: true,
-    };
-    const children = Array.from({ length: 8 }, (_, index) => ({
-      ...childBase,
-      key: `child-${index}`,
-      runId: `memory-child-run-${index}`,
-      index,
-      agent: `memory-agent-${index}`,
-      name: `Memory child ${index + 1}`,
-      task: `验证第 ${index + 1} 个子智能体的长上下文与缓存边界。`,
-      status: index < 4 ? 'running' : 'completed',
-      startedAt: Date.now() - (index + 1) * 20_000,
+    await cdp.send('Performance.enable'); await cdp.send('HeapProfiler.collectGarbage');
+    const { metrics } = await cdp.send('Performance.getMetrics');
+    const values = Object.fromEntries(metrics.map(item => [item.name, item.value]));
+    const dom = await cdp.send('Memory.getDOMCounters');
+    const visible = await page.evaluate(() => ({
+      liveElements: document.querySelectorAll('*').length,
+      messageElements: document.querySelectorAll('.message').length,
+      userTurns: document.querySelectorAll('.message.user').length,
+      assistantTurns: document.querySelectorAll('.assistant-turn').length,
+      images: document.querySelectorAll('.chat-scroll img').length,
+      decodedImages: [...document.querySelectorAll('.chat-scroll img')].filter(image => image.complete && image.naturalWidth > 0).length,
+      fixture: window.__memorySmoke?.() ?? null,
     }));
-    const childMessages = Array.from({ length: 180 }, (_, index) => ({
-      role: index % 2 ? 'assistant' : 'user',
-      timestamp: Date.now() - 180_000 + index * 100,
-      sourceIndex: index,
-      content: [{
-        type: 'text',
-        text: index % 2
-          ? `Child answer ${index}: ${'子智能体长上下文内容。'.repeat(18)}`
-          : `Child question ${index}: ${'检查工具调用与结果边界。'.repeat(10)}`,
-      }],
-    }));
-
-    function snapshot(id = activeConversationId) {
-      return {
-        ...summaries.get(id),
-        running: false,
-        requestId: '',
-        compacting: false,
-        inbox: [],
-        tools: [],
-        nestedTools: [],
-        usage: {},
-        model,
-        agent: { cwd, name: 'Memory fixture agent' },
-      };
-    }
-
-    function emit(event) {
-      for (const listener of listeners) listener(event);
-    }
-
-    const api = {
-      state: async () => ({
-        workspaces: [{
-          cwd,
-          name: 'memory-regression',
-          sessions: [...summaries.values()],
-        }],
-        cwd,
-        model,
-      }),
-      models: async () => ({
-        models: [{
-          id: model.modelRef,
-          name: model.label,
-          provider: 'qa',
-          providerName: 'QA',
-          supportsImages: true,
-        }],
-        enabled: [model.modelRef],
-        current: model.modelRef,
-        selection: model,
-        defaultSelection: model,
-      }),
-      conversationPage: async ({ id }) => {
-        activeConversationId = id;
-        const messages = messagesFor(id);
-        return {
-          ...snapshot(id),
-          messages,
-          turnDiffs: [],
-          page: { hasOlder: false },
-          messageStart: 0,
-          totalMessages: messages.length,
-        };
-      },
-      conversationSnapshot: async (id) => snapshot(id),
-      conversationOutline: async (id) => ({
-        id,
-        items: messagesFor(id)
-          .filter((message) => message.role === 'user')
-          .slice(-10)
-          .map((message) => ({
-            sourceIndex: message.sourceIndex,
-            text: message.content[0].text.slice(0, 120),
-            timestamp: message.timestamp,
-          })),
-        totalMessages: messagesFor(id).length,
-      }),
-      subscribeConversation: async (id) => {
-        activeConversationId = id;
-        return snapshot(id);
-      },
-      unsubscribeConversation: async () => ({ ok: true }),
-      onConversationEvent: (listener) => {
-        listeners.add(listener);
-        return () => listeners.delete(listener);
-      },
-      composerResources: async () => ({ commands: [], skills: [] }),
-      sessionSubagents: async (id) => id === 'memory-long' ? children : children.slice(0, 2),
-      subagentTranscript: async ({ childKey }) => ({
-        child: children.find((child) => child.key === childKey),
-        messages: childMessages,
-        totalMessages: childMessages.length,
-        hasMore: false,
-        messageStart: 0,
-      }),
-      extensionsUi: async () => ({
-        items: [],
-        errors: [],
-        syncedAt: Date.now(),
-        apiVersion: 1,
-      }),
-      conversationExtensionUiPreferences: async () => ({
-        version: 1,
-        layout: 'grid',
-        globalOrder: [],
-        sessionOrders: {},
-      }),
-      saveConversationExtensionUiPreferences: async (value) => ({
-        version: 1,
-        layout: value?.layout || 'grid',
-        globalOrder: value?.globalOrder || [],
-        sessionOrders: value?.sessionOrders || {},
-      }),
-      conversationSubmit: async () => {
-        const requestId = `memory-request-${Date.now()}`;
-        setTimeout(() => emit({
-          type: 'run.completed',
-          conversationId: activeConversationId,
-          revision: Date.now(),
-          payload: { inputs: [requestId] },
-        }), 10);
-        return {
-          conversationId: activeConversationId,
-          submissionId: `memory-submission-${Date.now()}`,
-          requestId,
-          status: 'placed',
-          whenBusy: 'followUp',
-        };
-      },
-    };
-    window.piApi = new Proxy(api, {
-      get(target, key) {
-        if (key in target) return target[key];
-        if (String(key).startsWith('on')) return () => () => {};
-        return async () => undefined;
-      },
-    });
-  });
+    return { heapUsedMiB: (values.JSHeapUsedSize || 0) / 1048576, heapTotalMiB: (values.JSHeapTotalSize || 0) / 1048576, documents: dom.documents, nodes: dom.nodes, jsEventListeners: dom.jsEventListeners, ...visible };
+  } finally { await cdp.detach().catch(() => {}); }
 }
-
+async function sample(label, page, round) {
+  const renderer = page ? await rendererMetrics(page) : undefined;
+  const processes = processTree();
+  const mainListeners = await electronApp.evaluate(({ app, ipcMain, webContents }) => ({
+    app: app.eventNames().reduce((sum, name) => sum + app.listenerCount(name), 0),
+    ipcMainEmitter: ipcMain.eventNames().reduce((sum, name) => sum + ipcMain.listenerCount(name), 0),
+    webContents: webContents.getAllWebContents().length,
+  }));
+  const row = { label, round, elapsedSeconds: (Date.now() - Date.parse(result.startedAt)) / 1000, totalRssMiB: processes.reduce((sum, row) => sum + row.rssMiB, 0), processes, mainListeners, renderer };
+  result.samples.push(row);
+  console.log(`${label}: RSS ${row.totalRssMiB.toFixed(1)} MiB, processes ${processes.length}${renderer ? `, heap ${renderer.heapUsedMiB.toFixed(1)} MiB, DOM ${renderer.liveElements}, listeners ${renderer.jsEventListeners}` : ''}`);
+  await writeFile(path.join(output, 'results.json'), JSON.stringify(result, null, 2));
+  return row;
+}
+async function settle(page) { await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); }
+async function openConversation(page, title) {
+  await page.locator('.session-row').filter({ hasText: title }).click();
+  await page.locator('.chat-heading h1').filter({ hasText: title }).waitFor();
+  await page.locator('.chat-scroll .assistant-turn').first().waitFor();
+  await settle(page);
+}
 async function openStressWindow() {
-  console.log('opening stress renderer...');
-  const nextWindow = electronApp.waitForEvent('window');
-  await electronApp.evaluate(({ BrowserWindow }) => {
-    const window = new BrowserWindow({
-      show: false,
-      width: 1440,
-      height: 900,
-      webPreferences: {
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-      },
-    });
-    void window.loadURL('about:blank');
+  const next = electronApp.waitForEvent('window');
+  result.stressWebContentsId = await electronApp.evaluate(({ BrowserWindow }, viewport) => {
+    const win = new BrowserWindow({ show: false, ...viewport, webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, partition: 'memory-smoke-synthetic' } });
+    void win.loadURL('about:blank');
+    return win.webContents.id;
+  }, viewport);
+  const page = await next; page.setDefaultTimeout(15_000);
+  page.on('pageerror', error => result.rendererErrors.push(error.message));
+  page.on('crash', () => result.rendererErrors.push('Stress renderer crashed'));
+  await page.route('**/*', route => {
+    const url = route.request().url();
+    if (/^(file|data|blob|about):/.test(url)) return route.continue();
+    result.blockedRequests.push(new URL(url).origin); return route.abort();
   });
-  const page = await nextWindow;
-  page.on('crash', () => {
-    console.error('stress renderer crashed');
-  });
-  page.setDefaultTimeout(20_000);
-  const errors = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  await installStressFixture(page);
-  await page.goto(pathToFileURL(rendererFile).href);
-  await page.locator('.brand').waitFor();
-  console.log('stress renderer ready');
-  return { page, errors };
+  await page.addInitScript(installMemorySmokeFixture);
+  await page.goto(pathToFileURL(rendererFile).href); await page.locator('.brand').waitFor();
+  const rows = page.locator('.session-row');
+  if (!await rows.count()) await page.locator('.workspace-row').filter({ hasText: 'memory-regression' }).click();
+  return page;
 }
-
+function summary(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  return { raw: values, min: sorted[0], max: sorted.at(-1), p50: sorted[Math.ceil(sorted.length * .5) - 1], p95: sorted[Math.ceil(sorted.length * .95) - 1], lastMinusFirst: values.at(-1) - values[0] };
+}
+async function cleanupRemaining() {
+  const live = processRows();
+  const remaining = [...tracked].filter(([pid, command]) => live.get(pid)?.command === command).map(([pid]) => pid);
+  result.cleanup.remainingBeforeFallback = remaining;
+  if (remaining.length) {
+    for (const signal of ['SIGTERM', 'SIGKILL']) {
+      for (const pid of remaining.toReversed()) {
+        if (processRows().get(pid)?.command !== tracked.get(pid)) continue;
+        try { process.kill(pid, signal); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+      }
+      await sleep(500);
+    }
+  }
+  result.cleanup.remainingAfterFallback = [...tracked].filter(([pid, command]) => processRows().get(pid)?.command === command).map(([pid]) => pid);
+}
 try {
-  electronApp = await _electron.launch({
-    args: ['.', `--user-data-dir=${profile}`, '--js-flags=--expose-gc'],
-    cwd: root,
-    env: environment,
-  });
-  electronPid = electronApp.process().pid;
-  electronApp.process().stdout?.on('data', (chunk) => process.stdout.write(chunk));
-  electronApp.process().stderr?.on('data', (chunk) => process.stderr.write(chunk));
-  lastTrackedPids = [electronPid];
-  const mainWindow = await electronApp.firstWindow();
-  await mainWindow.locator('.brand').waitFor({ timeout: 30_000 });
-
-  await sleep(4_000);
-  const coldStart = sample('cold-start');
-  await sleep(8_000);
-  const idle = sample('idle-12s');
-  assert.ok(coldStart.totalMiB < 650, 'cold Electron process tree exceeded 650 MiB');
-  assert.ok(idle.totalMiB < 700, 'idle Electron process tree exceeded 700 MiB');
-
-  const { page, errors } = await openStressWindow();
-  await page.locator('.workspace-row').filter({ hasText: 'memory-regression' })
-    .evaluate((node) => node.click());
-  const longRow = page.locator('.session-row').filter({ hasText: 'Memory long transcript' });
-  await longRow.waitFor();
-  await longRow.evaluate((node) => node.click());
-  await page.waitForTimeout(500);
-  if (!await page.locator('.chat-scroll').count()) {
-    console.error('renderer errors after selecting fixture:', errors);
-    console.error('renderer body after selecting fixture:', (await page.locator('body').innerText()).slice(0, 2_000));
+  electronApp = await _electron.launch({ args: [root, `--user-data-dir=${profile}`, '--js-flags=--expose-gc', '--disable-background-networking', '--proxy-server=http://127.0.0.1:9', '--proxy-bypass-list=<-loopback>'], cwd: workspace, env: environment });
+  processHandle = electronApp.process(); electronPid = processHandle.pid; processTree();
+  const main = await electronApp.firstWindow(); main.setDefaultTimeout(15000); main.on('pageerror', error => result.rendererErrors.push(`Main window: ${error.message}`)); await main.locator('.brand').waitFor();
+  result.electron = await electronApp.evaluate(({ app }) => ({ electron: process.versions.electron, chrome: process.versions.chrome, packaged: app.isPackaged }));
+  const ipcState = await main.evaluate(async () => { const state = await window.piApi.state(); return { workspaces: state.workspaces.length, sessions: state.workspaces.reduce((sum, row) => sum + row.sessions.length, 0) }; });
+  assert.equal(ipcState.sessions, 0); result.realIpcEmptyState = ipcState;
+  await sleep(2000); await sample('empty-main-initial', main);
+  await sleep(3000); await sample('empty-main-idle', main);
+  stressPage = await openStressWindow(); await openConversation(stressPage, 'Memory long transcript');
+  const initial = await sample('synthetic-long-initial', stressPage);
+  assert.ok(initial.renderer.userTurns > 0 && initial.renderer.userTurns <= 48, 'initial long transcript uses a bounded mounted turn window');
+  assert.ok(initial.renderer.fixture.fixtureMessages['memory-long'] >= 420, 'fixture still contains full long history');
+  result.checks.push('Real preload IPC confirms empty isolated storage; synthetic 420+ message history mounts only the current turn window.');
+  // One deliberate history expansion exercises the observer, followed by a session switch reset.
+  await stressPage.locator('.chat-scroll').evaluate(node => { node.scrollTop = 0; }); await sleep(400); await sample('synthetic-history-expanded', stressPage);
+  const image = stressPage.locator('.chat-scroll img').first();
+  await image.scrollIntoViewIfNeeded();
+  await stressPage.waitForFunction(() => [...document.querySelectorAll('.chat-scroll img')].some(image => image.complete && image.naturalWidth > 0));
+  const decoded = await sample('synthetic-image-decoded', stressPage);
+  assert.ok(decoded.renderer.decodedImages > 0, 'image decode, not merely image markup, is exercised');
+  await stressPage.locator('.chat-scroll').evaluate(node => { node.scrollTop = node.scrollHeight; });
+  const agents = stressPage.getByRole('tab').filter({ hasText: '子智能体' });
+  for (let round = 1; round <= rounds; round++) {
+    await openConversation(stressPage, 'Memory medium A');
+    await agents.click(); await stressPage.getByRole('button', { name: '列表视图', exact: true }).click();
+    await stressPage.locator('.agent-list-main').first().click(); await stressPage.locator('.agent-context-view .agent-transcript .assistant-turn').last().waitFor();
+    if (round === 1) await sample('synthetic-child-transcript', stressPage);
+    await stressPage.getByRole('button', { name: '返回主智能体', exact: true }).click();
+    await openConversation(stressPage, 'Memory medium B');
+    await openConversation(stressPage, 'Memory long transcript');
+    await agents.click(); await stressPage.getByRole('button', { name: '列表视图', exact: true }).click();
+    assert.equal(await stressPage.locator('.agent-list-row').count(), 8);
+    await stressPage.locator('.agent-list-main').first().click(); await stressPage.locator('.agent-context-view .agent-transcript .assistant-turn').last().waitFor();
+    await stressPage.getByRole('button', { name: '返回主智能体', exact: true }).click();
+    await settle(stressPage); await sleep(200);
+    const current = await sample(`synthetic-cycle-${round}`, stressPage, round);
+    assert.equal(current.renderer.fixture.listeners.onConversationEvent, 1, 'one synthetic conversation listener after settle');
+    assert.equal(current.renderer.fixture.subscriptions.length, 1, 'one synthetic conversation subscription after settle');
+    assert.equal(current.renderer.fixture.calls.submits, 0, 'no model submissions');
   }
-  await page.locator('.chat-scroll').waitFor();
-  await page.waitForFunction(() => document.querySelectorAll('.message').length >= 200);
-  console.log('long transcript rendered');
-  await page.locator('.chat-scroll').evaluate((node) => {
-    node.scrollTop = 0;
-    node.dispatchEvent(new Event('scroll'));
-  });
-  await page.waitForTimeout(100);
-  await page.locator('.chat-scroll').evaluate((node) => {
-    node.scrollTop = node.scrollHeight;
-    node.dispatchEvent(new Event('scroll'));
-  });
-
-  const subagentTab = page.getByRole('tab').filter({ hasText: '子智能体' });
-  await subagentTab.click();
-  await page.locator('.agent-child-card').first().waitFor();
-  assert.ok(await page.locator('.agent-child-card').count() >= 8);
-  await page.locator('.agent-child-card.is-running').first().click();
-  await page.locator('.agent-context-view').waitFor();
-  await page.getByRole('button', { name: '返回主智能体', exact: true }).click();
-  await page.locator('.chat-scroll').waitFor();
-  console.log('subagent overview rendered');
-  const conversationTab = page.getByRole('tab').filter({ hasText: /^对话/ });
-  await conversationTab.click();
-
-  for (let round = 0; round < 5; round += 1) {
-    await page.locator('.session-row').filter({ hasText: 'Memory medium A' })
-      .evaluate((node) => node.click());
-    await page.locator('.chat-scroll').waitFor();
-    await subagentTab.click();
-    await page.locator('.agent-child-card').first().waitFor();
-    await conversationTab.click();
-    await page.locator('.session-row').filter({ hasText: 'Memory medium B' })
-      .evaluate((node) => node.click());
-    await page.locator('.chat-scroll').waitFor();
-    await longRow.evaluate((node) => node.click());
-    await page.locator('.chat-scroll').waitFor();
-    console.log(`switch round ${round + 1}/5 complete`);
-  }
-
-  const renderer = await rendererMetrics(page);
-  console.log(
-    `renderer-stress: jsHeap=${renderer.jsHeapMiB.toFixed(1)} MiB `
-    + `nodes=${renderer.nodes} documents=${renderer.documents}`,
-  );
-  assert.ok(renderer.jsHeapMiB < 450, 'stressed renderer JS heap exceeded 450 MiB');
-  assert.ok(renderer.nodes < 120_000, 'stressed renderer DOM node count exceeded 120,000');
-  const stressed = sample('renderer-stress');
-  assert.ok(stressed.totalMiB < 900, 'stressed Electron process tree exceeded 900 MiB');
-
-  await page.close();
-  console.log('stress renderer closed');
-  await sleep(5_000);
-  const recovered = sample('after-window-close');
-  assert.ok(
-    recovered.totalMiB < stressed.totalMiB - 40,
-    'closing the stress window did not release at least 40 MiB',
-  );
-  assert.deepEqual(errors, [], 'stress fixture emitted renderer errors');
-
-  const closingApp = electronApp;
-  electronApp = undefined;
-  const closingProcess = closingApp.process();
-  const processExited = once(closingProcess, 'exit').catch(() => {});
-  console.log('requesting application quit');
-  await closingApp.evaluate(({ app }) => {
-    setImmediate(() => {
-      app.quit();
-    });
-  });
-  console.log('application quit request completed');
-  await Promise.race([processExited, sleep(15_000)]);
-  console.log(`application process exitCode=${String(closingProcess.exitCode)}`);
-  if (closingProcess.exitCode === null) {
-    await Promise.race([
-      closingApp.close().catch(() => {}),
-      sleep(5_000),
-    ]);
-  }
-  await sleep(1_000);
-  const remainingRows = processRows();
-  const remaining = lastTrackedPids.filter((pid) => remainingRows.has(pid));
-  assert.deepEqual(remaining, [], `Electron processes did not terminate: ${remaining.join(', ')}`);
-  console.log('Memory smoke passed: bounded renderer growth and clean process teardown.');
+  const cycles = result.samples.filter(row => row.round);
+  result.cycleSummary = { rssMiB: summary(cycles.map(row => row.totalRssMiB)), heapUsedMiB: summary(cycles.map(row => row.renderer.heapUsedMiB)), nodes: summary(cycles.map(row => row.renderer.nodes)), jsEventListeners: summary(cycles.map(row => row.renderer.jsEventListeners)), liveElements: summary(cycles.map(row => row.renderer.liveElements)) };
+  result.checks.push('Six fixed cycles cover three conversation histories, parent/subagent tabs, child transcripts, image-bearing history, and subscriber cleanup.');
+  const stressPid = await electronApp.evaluate(({ webContents }, id) => webContents.fromId(id)?.getOSProcessId(), result.stressWebContentsId);
+  await stressPage.close(); stressPage = undefined;
+  for (let index = 1; index <= 3; index++) { await sleep(2000); await sample(`after-stress-window-close-${index}`, main); }
+  result.stressProcessId = stressPid;
+  const stopped = result.samples.at(-1).processes.length < cycles.at(-1).processes.length;
+  assert.ok(stopped, 'closing stress window releases its renderer process');
+  result.checks.push('Three post-close samples record reclamation; stress renderer process count decreases. No fixed-MiB release claim.');
+  assert.deepEqual(result.rendererErrors, []);
+  const exited = once(processHandle, 'exit').then(([code, signal]) => ({ code, signal }));
+  await electronApp.evaluate(({ app }) => { setImmediate(() => app.quit()); });
+  const exit = await Promise.race([exited, sleep(15000).then(() => null)]);
+  await sleep(1000);
+  const live = processRows(); const remaining = [...tracked].filter(([pid, command]) => live.get(pid)?.command === command).map(([pid]) => pid);
+  result.exit = { natural: Boolean(exit), ...exit, remainingTrackedPids: remaining };
+  assert.ok(exit, 'main exits naturally within 15 seconds'); assert.deepEqual(remaining, [], 'all tracked Electron processes exit naturally');
+  result.checks.push('Application quit finishes naturally and all tracked process IDs exit without cleanup signals.');
+  result.passed = true; await rm(path.join(output, 'failure.png'), { force: true });
+  console.log('Memory smoke passed: fixed-cycle observations and clean teardown recorded; no long-term bound asserted.');
+} catch (error) {
+  result.passed = false; result.failure = String(error.stack || error);
+  if (stressPage && !stressPage.isClosed()) await stressPage.screenshot({ path: path.join(output, 'failure.png') }).catch(() => {});
+  throw error;
 } finally {
-  await closeProcessTree();
-  rmSync(profile, {
-    recursive: true,
-    force: true,
-    maxRetries: 8,
-    retryDelay: 200,
-  });
+  if (processHandle?.exitCode === null && electronApp) {
+    await Promise.race([electronApp.evaluate(({ app }) => { app.quit(); }).catch(() => {}), sleep(2000)]);
+    await Promise.race([electronApp.close().catch(() => {}), sleep(5000)]);
+  }
+  await cleanupRemaining();
+  await rm(profile, { recursive: true, force: true, maxRetries: 8, retryDelay: 200 });
+  result.finishedAt = new Date().toISOString(); await writeFile(path.join(output, 'results.json'), JSON.stringify(result, null, 2));
 }

@@ -1,6 +1,6 @@
 export type ComposerSubmitAction = 'send' | 'steer' | 'queue' | 'none';
 
-type ComposerEnterInput = {
+export type ComposerEnterInput = {
   key: string;
   shiftKey: boolean;
   metaKey: boolean;
@@ -9,6 +9,24 @@ type ComposerEnterInput = {
   isComposing: boolean;
   busy: boolean;
 };
+
+export type ComposerKeyAction = ComposerSubmitAction | 'previous' | 'next' | 'select' | 'close' | 'wait';
+
+/** Candidate navigation must not steal IME keys or modified text-entry shortcuts. */
+export function composerKeyAction(input: ComposerEnterInput & { menuOpen: boolean; optionCount: number; pending?: boolean }): ComposerKeyAction {
+  if (input.isComposing) return 'none';
+  const modified = input.metaKey || input.ctrlKey || input.altKey || input.shiftKey;
+  if (input.menuOpen && !modified) {
+    if (input.key === 'Escape') return 'close';
+    if (input.optionCount > 0) {
+      if (input.key === 'ArrowUp') return 'previous';
+      if (input.key === 'ArrowDown') return 'next';
+      if (input.key === 'Enter' || input.key === 'Tab') return 'select';
+    }
+    if (input.key === 'Enter' && input.pending) return 'wait';
+  }
+  return composerSubmitAction(input);
+}
 
 /**
  * Keep the composer keyboard contract deterministic:

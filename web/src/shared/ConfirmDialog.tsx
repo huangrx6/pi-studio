@@ -19,6 +19,8 @@ import type {
   PermissionRememberScope,
 } from '../types/permission-types';
 import { Select } from './Select';
+import { useModalDialog } from './useModalDialog';
+import './confirm-shell.css';
 import '../features/permissions/permission-policy.css';
 
 export type ConfirmRequest = PermissionConfirmRequest;
@@ -119,27 +121,27 @@ function ConfirmShell({
   children: ReactNode;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    cardRef.current?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.preventDefault(); onCancel(); }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onCancel]);
+  const { dialogRef, onKeyDown } = useModalDialog();
+  useEffect(() => { cardRef.current?.focus({ preventScroll: true }); }, []);
 
-  return createPortal(<div className="confirm-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
+  return createPortal(<dialog
+    ref={dialogRef}
+    className="confirm-overlay confirm-native-dialog"
+    role={role}
+    aria-modal="true"
+    aria-label={label}
+    onKeyDown={onKeyDown}
+    onCancel={(event) => { event.preventDefault(); onCancel(); }}
+    onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}
+  >
     <div
       className={`confirm-card${cardClassName ? ` ${cardClassName}` : ''}`}
-      role={role}
-      aria-modal="true"
-      aria-label={label}
       tabIndex={-1}
       ref={cardRef}
     >
       {children}
     </div>
-  </div>, document.body);
+  </dialog>, document.body);
 }
 
 /**
@@ -191,8 +193,13 @@ export function useActionConfirmation() {
     setRequest(next);
   }), []);
 
+  useEffect(() => () => {
+    pending.current?.resolve(false);
+    pending.current = null;
+  }, []);
+
   function settle(accepted: boolean) {
-    request?.resolve(accepted);
+    pending.current?.resolve(accepted);
     pending.current = null;
     setRequest(null);
   }

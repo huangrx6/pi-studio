@@ -31,6 +31,7 @@ import type { SubagentBudgetSnapshot, SubagentChild, SubagentTranscript } from '
 import { AssistantTurnView, ChatMessageView } from '../conversation/ChatMessage';
 import { SubagentFlow } from './SubagentFlow';
 import { InfoHint } from '../../shared/InfoHint';
+import { isComposingKey } from '../../shared/keyboard-navigation';
 
 export type SubagentOverviewMode = 'formation' | 'list';
 
@@ -191,6 +192,7 @@ function ChildRow({
             placeholder="回复子智能体…"
             onChange={event => setReplyText(event.target.value)}
             onKeyDown={(event) => {
+              if (isComposingKey(event.nativeEvent)) return;
               if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
                 event.preventDefault();
                 void sendReply().catch(() => setReplyOpen(true));

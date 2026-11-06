@@ -1,0 +1,100 @@
+.settings-nav.settings-navigation {
+  overflow: hidden;
+}
+
+.settings-navigation > .settings-nav-head,
+.settings-navigation > .settings-nav-bottom {
+  flex-shrink: 0;
+}
+
+.settings-navigation .settings-navigation-search {
+  gap: var(--space-1);
+  margin: var(--space-3) 0 var(--space-2);
+  padding-inline: var(--space-2);
+  -webkit-app-region: no-drag;
+}
+
+.settings-navigation-search > svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.settings-navigation-search input[type="search"] {
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: var(--transparent);
+  font-size: var(--text-sm);
+}
+
+.settings-navigation-search input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+
+.settings-navigation .settings-navigation-pages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-2) var(--space-1);
+  -webkit-app-region: no-drag;
+}
+
+.settings-navigation .settings-nav-group + .settings-nav-group {
+  margin-top: var(--space-4);
+}
+
+.settings-navigation .nav-section-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 var(--space-3) var(--space-1);
+  color: var(--faint);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: .04em;
+}
+
+.settings-navigation .nav-section-label::after {
+  height: 1px;
+  flex: 1;
+  content: '';
+  background: var(--divider);
+}
+
+.settings-navigation .settings-nav-row {
+  min-width: 0;
+  min-height: 36px;
+  font-size: var(--text-sm);
+  letter-spacing: 0;
+}
+
+.settings-navigation .settings-nav-row > svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  color: var(--faint);
+  stroke-width: 1.8;
+}
+
+.settings-navigation .settings-nav-row.is-active {
+  box-shadow: inset 2px 0 0 var(--accent);
+  font-weight: var(--weight-semibold);
+}
+
+.settings-navigation .settings-nav-row > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.settings-navigation .settings-navigation-empty {
+  margin: var(--space-3) var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.settings-navigation .settings-nav-row:focus-visible,
+.settings-navigation .settings-back-button:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: -2px;
+}

@@ -1,0 +1,63 @@
+.general-settings {
+  width: 100%;
+  min-width: 0;
+}
+.general-page-summary { color: var(--muted); font-size: var(--text-sm); }
+.general-settings-section { padding-block: var(--space-5); }
+.general-settings-section + .general-settings-section { border-top: 1px solid var(--divider); }
+.general-settings-section h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+.general-settings-section h2 small {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-regular);
+}
+.general-section-icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  border-radius: var(--radius-control);
+  background: var(--accent-soft);
+  color: var(--accent-foreground);
+}
+.general-section-icon svg { width: var(--icon-md); height: var(--icon-md); }
+.general-setting-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3) var(--space-5); min-height: 56px; padding-block: var(--space-2); }
+.general-setting-label { color: var(--text); font-size: var(--text-base); }
+.general-setting-control { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-2); max-width: 100%; margin-left: auto; }
+.general-setting-control .pi-select { width: 164px; }
+.general-theme-options { display: flex; flex-wrap: wrap; padding: 3px; gap: 3px; border-radius: var(--radius-control); background: var(--surface-soft); }
+.general-theme-options button { display: inline-flex; align-items: center; gap: 5px; min-height: var(--control); padding-inline: var(--space-3); border: 0; border-radius: var(--radius-tag); background: transparent; color: var(--muted); font-size: var(--text-sm); }
+.general-theme-options button svg { width: var(--icon-sm); height: var(--icon-sm); }
+.general-theme-options button:hover { background: var(--surface-hover); }
+.general-theme-options button[aria-pressed="true"] { background: var(--surface-active); color: var(--text); font-weight: var(--weight-semibold); }
+.general-theme-options button[aria-pressed="true"] svg { color: var(--accent); }
+.general-palette-options { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.general-palette-option { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: var(--control); padding: var(--space-2); border-radius: var(--radius-control); color: var(--muted); cursor: pointer; font-size: var(--text-sm); }
+.general-palette-option input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.general-palette-option:has(input:checked) { background: var(--selected-bg); color: var(--text); font-weight: var(--weight-semibold); }
+.general-palette-option:has(input:focus-visible) { outline: 2px solid var(--focus-color); outline-offset: 2px; }
+.general-palette-option:hover { background: var(--surface-hover); }
+.general-palette-swatch { width: 12px; height: 12px; flex: none; border-radius: var(--radius-round); background: var(--general-swatch); }
+.general-palette-option[data-palette-choice="lime"] { --general-swatch: var(--scheme-lime); }
+.general-palette-option[data-palette-choice="ocean"] { --general-swatch: var(--scheme-ocean); }
+.general-palette-option[data-palette-choice="amber"] { --general-swatch: var(--scheme-amber); }
+.general-palette-option[data-palette-choice="berry"] { --general-swatch: var(--scheme-berry); }
+.general-background-name { margin: var(--space-2) 0; color: var(--muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.general-background-settings summary { width: fit-content; padding-block: var(--space-2); cursor: pointer; color: var(--muted); font-size: var(--text-sm); }
+.general-background-adjustments { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-5); padding-block: var(--space-3); align-items: center; }
+@media (max-width: 1100px) {
+  .general-background-adjustments { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .general-settings-section h2 small { display: none; }
+}

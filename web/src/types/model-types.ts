@@ -12,6 +12,19 @@ export type ConcreteThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high
 /** 推理等级。'default' 表示跟随 Pi 配置，不是具体等级。 */
 export type ThinkingLevel = 'default' | ConcreteThinkingLevel;
 
+/** 模型状态装载前的占位快照；新对话和当前会话各自持有一份。 */
+export function createEmptyModelSelection(): ModelSelection {
+  return {
+    modelRef: '',
+    label: '',
+    thinkingLevel: 'default',
+    thinkingLevels: ['default'],
+    effectiveThinkingLevel: 'off',
+    defaultThinkingLevel: 'off',
+    supportsImages: false,
+  };
+}
+
 /** 始终按强度从低到高展示，避免不同来源的顺序跳来跳去。 */
 export const concreteThinkingLevels: readonly ConcreteThinkingLevel[] = [
   'off',

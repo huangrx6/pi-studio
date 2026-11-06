@@ -1,0 +1,151 @@
+/* Split from the legacy app.css entry. Import order is part of the cascade. */
+
+/* ==========================================================================
+ * Pi Studio Web 工作台主样式表
+ *
+ * 职责：定义 Electron 窗口内整个 Web UI 的结构与外观，包括应用外壳、侧边栏、
+ * 对话头与消息流、输入区与模型选择器、右侧文件面板、设置页、各类对话框、
+ * 浮层以及响应式断点。对应组件分布在 App.tsx、shell/、features/ 与 shared/。
+ *
+ * 组织方式：
+ *   1. 顶部是全局 reset、表单控件、按钮与图标的基础规则；
+ *   2. 中段按功能区块排列（Sidebar / Conversation / Composer / File panel /
+ *      Settings / Model picker / Dialogs 等），每个区块先写结构尺寸，再写交互态；
+ *   3. 文件后半段是多轮迭代追加的覆写层，同一选择器会重复出现，靠源代码顺序
+ *      与特异性覆盖前文；看到重复规则时应以最后生效的为准。本文件的注释会标出
+ *      这类覆写关系，阅读时不要按出现顺序误判最终值。
+ *
+ * 令牌来源：颜色全部来自 styles/palette.css 的语义令牌；间距、圆角、字号、
+ * 控件高度与布局宽度来自 styles/tokens.css。本文件不写颜色字面量，也不直接
+ * 定义主题色；滚动条基础策略另见 styles/dsh-scrollbar.css。
+ *
+ * 约束：本文件是纯样式层，不参与业务状态；新增注释时不得改变声明顺序、
+ * 选择器或优先级，否则会改变层叠结果。
+ * ========================================================================== */
+
+* { box-sizing: border-box; }
+html, body, #root { width: 100%; height: 100%; margin: 0; }
+body { font: var(--text-base)/var(--leading-body) var(--font); color: var(--text); background: var(--bg); -webkit-font-smoothing: antialiased; overflow: hidden; --dsh-scrollbar-thumb: var(--scrollbar); --dsh-scrollbar-thumb-hover: var(--scrollbar-hover); --dsh-scrollbar-width: 6px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { border: 0; background: var(--transparent); cursor: pointer; transition: background var(--transition), color var(--transition), border-color var(--transition), box-shadow var(--transition); }
+button:disabled { cursor: not-allowed; opacity: .48; }
+button, input, select, textarea, summary { -webkit-app-region: no-drag; }
+button:focus-visible, summary:focus-visible, input[type="checkbox"]:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; }
+input:not([type="checkbox"]), select { min-width: 0; height: var(--control); padding: 0 var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); font-size: var(--text-base); outline: none; transition: border-color var(--transition), box-shadow var(--transition); }
+input:not([type="checkbox"]):focus, select:focus { border-color: var(--focus-color); box-shadow: var(--focus-ring); }
+input::placeholder, textarea::placeholder { color: var(--faint); }
+input[type="checkbox"] { position: relative; display: inline-grid; place-items: center; width: 16px; height: 16px; margin: 0; flex: none; appearance: none; border: 1px solid var(--border-strong); border-radius: var(--radius-tag); background: var(--surface); cursor: pointer; transition: border-color var(--transition), background var(--transition); }
+input[type="checkbox"]::after { width: 4px; height: 8px; border-right: 2px solid var(--on-button); border-bottom: 2px solid var(--on-button); content: ''; opacity: 0; transform: rotate(45deg) translate(-1px, -1px) scale(.7); transition: opacity var(--transition), transform var(--transition); }
+input[type="checkbox"]:checked { border-color: var(--button-bg); background: var(--button-bg); }
+input[type="checkbox"]:checked::after { opacity: 1; transform: rotate(45deg) translate(-1px, -1px) scale(1); }
+input[type="checkbox"]:disabled { cursor: not-allowed; opacity: .48; }
+select { cursor: pointer; }
+svg.lucide { width: var(--icon-md); height: var(--icon-md); stroke-width: 1.75; flex: none; }
+::selection { background: var(--selection); color: var(--selection-text); }
+kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
+.spin { color: var(--loading); animation: rotate 1s linear infinite; }
+.settings-save .spin { color: var(--on-button); }
+.settings-save:disabled .spin { color: var(--disabled-text); }
+@keyframes rotate { to { transform: rotate(360deg); } }
+
+/* Shell and shared controls */
+/* 应用外壳是全窗口 flex 容器：高度锁定 100dvh 并隐藏自身溢出，纵向滚动
+必须交给内部区块（chat-scroll、settings-content 等）各自承担，外层永不滚动。
+isolation 建立独立层叠上下文，配合下面的 :has 规则在设置全屏时隐藏其余兄弟
+节点。按钮、输入框和图标尺寸统一走共享控件令牌，保证各面板手感一致。 */
+
+.app { display: flex; height: 100dvh; overflow: hidden; isolation: isolate; }
+.app:has(.settings-overlay) > :is(.background-layer, .sidebar, .main) { visibility: hidden; }
+.icon-button { display: inline-grid; place-items: center; width: var(--icon-button); height: var(--icon-button); flex: none; padding: 0; border-radius: var(--radius-control); color: var(--icon); }
+/* 图标按钮的图标一律 sm：不再让各面板自己把盒子改成 24/29/32 或把图标改成 13/15。 */
+.icon-button svg { width: var(--icon-sm); height: var(--icon-sm); }
+.icon-button:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
+.icon-button.is-active { color: var(--accent); background: var(--accent-soft); }
+.icon-button:disabled { color: var(--disabled-text); background: transparent; }
+.icon-button:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 1px; }
+.primary-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: var(--control); flex: none; padding: 0 var(--space-3); border: 1px solid var(--button-bg); border-radius: var(--radius-control); background: var(--button-bg); color: var(--on-button); font-size: var(--text-sm); font-weight: var(--weight-semibold); white-space: nowrap; }
+.primary-button:hover:not(:disabled) { border-color: var(--accent-hover); background: var(--accent-hover); }
+.primary-button:disabled { border-color: var(--border); background: var(--surface-soft); color: var(--faint); }
+.primary-button svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; }
+.secondary-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: var(--control); flex: none; padding: 0 var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--muted); font-size: var(--text-sm); font-weight: var(--weight-medium); white-space: nowrap; }
+.secondary-button:hover:not(:disabled) { border-color: var(--border-hover); background: var(--surface-soft); color: var(--text); }
+.secondary-button:disabled { border-color: var(--border); background: var(--surface-soft); color: var(--faint); }
+.secondary-button > :is(svg, span) { flex: none; }
+.secondary-button svg { width: var(--icon-sm); height: var(--icon-sm); }
+.brand-mark { width: 32px; height: 32px; display: block; object-fit: contain; flex: none; }
+.settings-save, .settings-outline, .settings-mini-button { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); height: var(--control); flex: none; padding: 0 var(--space-3); border: 1px solid var(--transparent); border-radius: var(--radius-control); font-size: var(--text-base); font-weight: var(--weight-medium); white-space: nowrap; }
+.settings-save { background: var(--button-bg); color: var(--on-button); }
+.settings-save:hover:not(:disabled) { background: var(--accent-hover); box-shadow: var(--shadow-card); }
+.settings-save:disabled { background: var(--surface-active); color: var(--faint); opacity: 1; }
+.settings-outline { border-color: var(--border-strong); background: var(--surface); color: var(--muted); }
+.settings-outline:hover:not(:disabled) { border-color: var(--border-hover); background: var(--surface-soft); color: var(--text); }
+.settings-mini-button { height: var(--control-sm); color: var(--muted); font-size: var(--text-sm); }
+.settings-mini-button:hover:not(:disabled) { background: var(--error-soft); color: var(--error); }
+.preview-badge { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: var(--radius-sm); font-size: var(--text-xs); color: var(--faint); background: var(--surface-soft); white-space: nowrap; }
+.state-dot { display: inline-block; width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--success); }
+.state-dot.is-busy { background: var(--accent); animation: pulse 1.5s ease-in-out infinite; }
+
+/* Sidebar */
+/* 侧栏宽度由 --sidebar-w 决定，默认 280，1200/760 断点降到 252/212；它是
+flex:none 的纵向列，唯一滚动容器是 workspace-list（flex:1 + min-height:0 +
+overflow:auto），底部账号行因此始终贴底。折叠态后来被改成完全隐藏，早先的
+72px 图标轨道规则已经失效，不要据此推断布局。顶栏是可拖拽窗口区域，按钮
+通过全局 no-drag 规则恢复点击；顶栏开关与拖拽落点线分别用 5/3 的层级压在内容上。 */
+
+.sidebar, .settings-nav { width: var(--sidebar-w); flex: none; min-height: 0; display: flex; flex-direction: column; padding: var(--space-10) var(--space-3) var(--space-3); background: var(--sidebar-bg); border-right: 1px solid var(--border); }
+.sidebar {
+  position: relative;
+  transition: width var(--transition);
+  /* Width animations reflowed the whole document; containment keeps the work
+     inside the two panels instead of the 20k-node transcript. */
+  contain: layout paint;
+}
+.sidebar-drag { position: absolute; top: 0; left: 0; width: 100%; height: 36px; -webkit-app-region: drag; }
+.brand { position: relative; height: 44px; display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-1); flex: none; }
+.brand-name { font-size: var(--text-lg); font-weight: var(--weight-bold); letter-spacing: -.4px; white-space: nowrap; }
+.brand .collapse { margin-left: auto; }
+.new-chat { height: var(--row-height); display: flex; align-items: center; justify-content: center; gap: var(--space-2); flex: none; margin-top: var(--space-4); border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); box-shadow: var(--shadow-card); font-size: var(--text-base); font-weight: var(--weight-medium); }
+.new-chat:hover { border-color: var(--border-hover); background: var(--surface-hover); color: var(--accent-foreground); }
+.nav { display: flex; flex-direction: column; gap: var(--space-1); margin-top: var(--space-4); }
+.nav-row, .settings-nav-row { width: 100%; min-height: var(--row-height); display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-3); border-radius: var(--radius-control); color: var(--muted); text-align: left; font-size: var(--text-base); }
+.nav-row:hover:not(:disabled), .settings-nav-row:hover { background: var(--surface-hover); color: var(--text); }
+.nav-row.is-active, .settings-nav-row.is-active { background: var(--accent-soft); color: var(--accent-foreground); font-weight: var(--weight-medium); }
+.nav-row small { margin-left: auto; font-size: var(--text-xs); white-space: nowrap; }
+.workspace-head { min-height: 28px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin: var(--space-6) var(--space-2) var(--space-2); color: var(--faint); font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.workspace-head > span { min-width: 0; min-height: 28px; display: flex; align-items: center; overflow: hidden; line-height: 28px; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-head > div { min-height: 28px; display: flex; align-items: center; flex: none; }
+.workspace-list { flex: 1; min-height: 0; overflow: auto; padding-bottom: var(--space-3); }
+.workspace { margin-bottom: var(--space-1); }
+.workspace-row { width: 100%; height: var(--row-height); display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border-radius: var(--radius-control); color: var(--muted); text-align: left; }
+.workspace-row:hover { background: var(--surface-hover); }
+.workspace-row.is-active { color: var(--text); font-weight: var(--weight-medium); }
+.workspace-row.is-active > svg:first-child { color: var(--accent); }
+.workspace-row > span, .session-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-row > .workspace-label { min-width: 0; }
+.workspace-row .chevron { width: 12px; height: 12px; opacity: .65; transition: transform var(--transition); }
+.workspace-row .chevron:not(.open) { transform: rotate(-90deg); }
+.sessions { margin: 2px 0 var(--space-2) 19px; padding: 0 0 0 var(--space-2); border-left: 1px solid var(--border-strong); }
+.session-row { display: flex; align-items: center; gap: var(--space-2); width: 100%; height: var(--control); padding: 0 var(--space-2); border-radius: var(--radius-control); color: var(--muted); text-align: left; font-size: var(--text-sm); }
+.session-row:hover { background: var(--surface-hover); color: var(--text); }
+.session-row.is-active { background: var(--selected-bg); color: var(--text); box-shadow: none; }
+.session-row.empty { color: var(--faint); }
+.session-meta { display: flex; align-items: center; justify-content: flex-end; flex: none; }
+.session-time { max-width: 54px; overflow: hidden; color: var(--faint); font-size: var(--text-xs); font-variant-numeric: tabular-nums; line-height: 16px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.session-running { display: grid; width: 20px; height: 16px; place-items: center; color: var(--accent); }
+.session-running svg { width: var(--icon-sm); height: var(--icon-sm); }
+.sidebar-bottom { border-top: 1px solid var(--border); padding-top: var(--space-2); }
+.bottom-row { display: flex; align-items: center; gap: var(--space-3); width: 100%; height: var(--row-height); padding: 0 var(--space-3); border-radius: var(--radius-control); color: var(--muted); }
+.bottom-row:hover { background: var(--surface-hover); }
+.status { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--faint); font-size: var(--text-xs); white-space: nowrap; }
+.status i { width: 5px; height: 5px; background: var(--success); border-radius: 50%; }
+.workspace-search, .settings-search, .search-field { display: flex; align-items: center; gap: var(--space-2); height: var(--control); flex: none; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); padding: 0 var(--space-3); color: var(--faint); }
+.workspace-search { margin-bottom: var(--space-2); }
+.workspace-search input, .settings-search input, .search-field input { width: 100%; height: 100%; padding: 0; border: 0; box-shadow: none !important; background: var(--transparent); }
+.workspace-search:focus-within, .settings-search:focus-within, .search-field:focus-within { border-color: var(--focus-color); box-shadow: var(--focus-ring), var(--shadow-composer); }
+.sidebar-empty { padding: var(--space-3) var(--space-2); color: var(--faint); font-size: var(--text-xs); line-height: var(--leading-normal); }
+.is-sidebar-collapsed .sidebar { width: 72px; padding-inline: var(--space-2); }
+.is-sidebar-collapsed .brand { height: 80px; flex-direction: column; padding: 0; }
+.is-sidebar-collapsed .brand .collapse { margin: 0; }
+.is-sidebar-collapsed .brand-name, .is-sidebar-collapsed .new-chat span, .is-sidebar-collapsed .nav-row span, .is-sidebar-collapsed .nav-row small, .is-sidebar-collapsed .workspace-head, .is-sidebar-collapsed .workspace-list, .is-sidebar-collapsed .workspace-search, .is-sidebar-collapsed .bottom-row > span { display: none; }
+.is-sidebar-collapsed .nav-row, .is-sidebar-collapsed .bottom-row { justify-content: center; padding: 0; }
+.is-sidebar-collapsed .sidebar-bottom { margin-top: auto; }

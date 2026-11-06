@@ -45,7 +45,7 @@
 .comparison-field-label {
   color: var(--muted);
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .comparison-prompt textarea {
@@ -62,7 +62,7 @@
   box-shadow: none;
   font: inherit;
   font-size: var(--text-base);
-  line-height: 1.65;
+  line-height: var(--leading-relaxed);
   transition: border-color var(--transition), background var(--transition);
 }
 
@@ -81,7 +81,7 @@
 .comparison-error {
   margin: 8px 0 0;
   font-size: var(--text-xs);
-  line-height: 1.5;
+  line-height: var(--leading-normal);
 }
 
 .comparison-input-note {
@@ -121,7 +121,7 @@
 
 .comparison-side-head strong {
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .comparison-side-label {
@@ -133,8 +133,8 @@
   border-radius: var(--radius-tag);
   background: var(--selected-bg);
   color: var(--accent);
-  font-size: 10px;
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
   line-height: 1;
 }
 
@@ -215,7 +215,7 @@
   gap: 6px;
   color: var(--muted);
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   white-space: nowrap;
 }
 
@@ -276,7 +276,7 @@
 .comparison-result-identity strong {
   overflow: hidden;
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -300,7 +300,7 @@
   flex: none;
   color: var(--muted);
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .comparison-result-status svg,
@@ -341,7 +341,7 @@
 .comparison-metrics dt {
   color: var(--faint);
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .comparison-metrics dd {
@@ -365,7 +365,7 @@
 
 .comparison-answer .markdown {
   font-size: var(--text-sm);
-  line-height: 1.75;
+  line-height: var(--leading-relaxed);
 }
 
 .comparison-answer .markdown h1,
@@ -380,7 +380,7 @@
   margin: 0;
   color: var(--text);
   font-size: var(--text-sm);
-  line-height: 1.7;
+  line-height: var(--leading-relaxed);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
@@ -406,7 +406,7 @@
 .comparison-worktree span {
   color: var(--text);
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .comparison-worktree small {

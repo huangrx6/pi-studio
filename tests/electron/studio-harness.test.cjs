@@ -100,6 +100,42 @@ test('custom profiles persist, validate section switches, and can be workspace s
   assert.equal(inherited.activeProfileId, inherited.globalProfileId);
 });
 
+test('Harness selection rejects invalid scopes and unsafe workspace paths', () => {
+  const workspace = path.join(temporary, 'scope-workspace');
+  fs.mkdirSync(workspace);
+  saveHarnessProfile({
+    profile: {
+      id: 'scope-profile',
+      name: 'Scope profile',
+    },
+  });
+
+  assert.throws(
+    () => selectHarnessProfile({ id: 'scope-profile', scope: 'session', cwd: workspace }),
+    /应用范围无效/,
+  );
+  assert.throws(
+    () => selectHarnessProfile({ id: 'scope-profile', scope: 'workspace' }),
+    /绝对工作区路径/,
+  );
+  assert.throws(
+    () => selectHarnessProfile({ id: 'scope-profile', scope: 'inherit', cwd: 'relative' }),
+    /绝对工作区路径/,
+  );
+
+  const selected = selectHarnessProfile({
+    id: 'scope-profile',
+    scope: 'workspace',
+    cwd: path.join(workspace, '.', '..', path.basename(workspace), `${path.sep}`),
+  });
+  assert.equal(selected.workspaceProfileId, 'scope-profile');
+  assert.equal(
+    selectHarnessProfile({ id: 'scope-profile', scope: 'inherit', cwd: `${workspace}${path.sep}` })
+      .workspaceProfileId,
+    '',
+  );
+});
+
 test('profiles are versioned and prototype-sensitive ids are rejected', () => {
   const normalized = normalizeHarnessStore({
     activeProfileId: 'constructor',

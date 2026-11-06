@@ -48,7 +48,7 @@
   box-shadow: var(--shadow-dialog);
   color: var(--text);
   font-size: var(--text-xs);
-  line-height: 1.55;
+  line-height: var(--leading-normal);
   text-align: left;
   white-space: normal;
   pointer-events: none;

@@ -1,0 +1,35 @@
+/* Split from the legacy app.css entry. Import order is part of the cascade. */
+
+
+/* File browser and preview */
+/* 右栏宽度由 --panel-w 决定（默认 430，1200 断点 320），面板本身是纵向 flex；
+file-tree 与 file-code 分别承担目录和代码的滚动，文件头与工具栏固定不滚。
+代码行号列使用 sticky 定位贴在左侧，需要不透明背景才能遮住横向滚过的代码。
+≤1100px 时面板改为绝对定位抽屉并出现遮罩，层级为 20/19。 */
+
+.file-panel-backdrop { display: none; }
+.file-panel { position: relative; width: var(--panel-w); flex: none; min-height: 0; display: flex; flex-direction: column; background: var(--surface); border-left: 1px solid var(--border); }
+.file-panel-head { padding-inline: var(--space-4); }
+.file-panel-head > div { min-width: 0; }
+.file-panel-head strong { display: block; font-size: var(--text-md); font-weight: var(--weight-semibold); }
+.file-panel-head span { display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--faint); font-size: var(--text-xs); }
+.file-toolbar { height: var(--toolbar-height); display: flex; align-items: center; gap: var(--space-2); flex: none; padding: 0 var(--space-3); border-block: 1px solid var(--border); background: var(--surface); }
+.path-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--text-sm); }
+.file-toolbar small { color: var(--faint); font-size: var(--text-xs); }
+.file-tree { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-2); }
+.file-row { display: flex; align-items: center; gap: var(--space-2); width: 100%; height: var(--control); padding: 0 var(--space-2); border-radius: var(--radius-control); text-align: left; color: var(--muted); }
+.file-row:hover { background: var(--surface-hover); color: var(--text); }
+.file-row svg { color: var(--icon); }
+.file-row.is-directory > svg:first-child { color: var(--icon); }
+.file-row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-row small { color: var(--faint); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.file-row .chevron-left { width: 12px; height: 12px; transform: rotate(-90deg); }
+.file-code { flex: 1; min-height: 0; margin: 0; overflow: auto; padding: var(--space-4) 0; color: var(--muted); font: var(--text-sm)/var(--leading-relaxed) var(--mono); background: var(--surface); tab-size: 2; }
+.code-line { display: flex; width: max-content; min-width: 100%; padding-right: var(--space-4); }
+.line-number { position: sticky; left: 0; min-width: 46px; padding-right: var(--space-3); margin-right: var(--space-3); border-right: 1px solid var(--border); background: var(--border); color: var(--faint); text-align: right; user-select: none; }
+.file-code.is-wrapped .code-line { width: 100%; min-width: 100%; align-items: flex-start; }
+.file-code.is-wrapped .code-line > span:last-child { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.file-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: 64px var(--space-4); text-align: center; color: var(--faint); font-size: var(--text-sm); }
+.file-empty > svg { width: var(--icon-xl); height: var(--icon-xl); margin-bottom: var(--space-2); stroke-width: 1.25; opacity: .7; }
+.file-empty strong { color: var(--muted); font-size: var(--text-base); font-weight: var(--weight-medium); }
+.file-loading { position: absolute; inset: 128px 0 0; display: flex; align-items: center; justify-content: center; gap: var(--space-2); background: var(--overlay-surface); color: var(--loading); font-size: var(--text-sm); }

@@ -207,3 +207,17 @@ test('explicit project overrides survive user defaults passing through the same 
   setSubagentConfig('user', '', { maxConcurrent: 8 });
   assert.equal(getSubagentConfig('project', workspace).maxConcurrent, 6);
 });
+
+test('workspace subagent writes use one canonical key and reject unknown scopes', () => {
+  const workspace = path.join(temporary, 'canonical-workspace');
+  const variant = `${workspace}${path.sep}missing${path.sep}..${path.sep}`;
+  setSubagentConfig('project', variant, { maxConcurrent: 6 });
+  assert.equal(getSubagentConfig('project', `${workspace}${path.sep}`).maxConcurrent, 6);
+  const stored = getStudioDatabase().getSetting('studio.subagents', {});
+  assert.equal(Object.hasOwn(stored.projects, workspace), true);
+  assert.equal(Object.hasOwn(stored.projects, variant), false);
+  assert.throws(
+    () => setSubagentConfig('session', workspace, { maxConcurrent: 4 }),
+    /设置范围无效/,
+  );
+});

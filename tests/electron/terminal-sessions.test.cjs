@@ -4,7 +4,6 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const {
-  appendBounded,
   createTerminalSessionManager,
   shellArgsForPlatform,
 } = require('../../electron/services/terminal-sessions.cjs');
@@ -74,13 +73,15 @@ test('terminal sessions keep a bounded replay buffer and sequenced events', () =
   const created = manager.create({ ownerId: 7, id: 'terminal:one', cwd, cols: 80, rows: 20 });
   assert.equal(created.createdNow, true);
   assert.equal(created.cwd, cwd);
+  assert.deepEqual(created.replay, { cols: 80, rows: 20, steps: [], truncated: false });
   assert.equal(processes.length, 1);
   assert.deepEqual(spawns[0].args, ['-l']);
 
   processes[0].emitData('abcdef');
   processes[0].emitData('ghijkl');
   const snapshot = manager.create({ ownerId: 7, id: 'terminal:one', cwd, cols: 80, rows: 20 });
-  assert.equal(snapshot.output, 'efghijkl');
+  assert.equal(snapshot.replay.steps.filter(step => step.type === 'data').map(step => step.data).join(''), 'efghijkl');
+  assert.equal(snapshot.replay.truncated, true);
   assert.equal(snapshot.sequence, 2);
   assert.deepEqual(events.map((event) => event.payload.sequence), [1, 2]);
   assert.equal(events[0].channel, 'pi:terminal-event');
@@ -123,6 +124,25 @@ test('terminal sessions reject cross-window access and enforce the session cap',
   assert.throws(() => capped.create({ ownerId: 1, id: 'two', cwd }), /最多同时打开 1 个终端/);
 });
 
+test('reattaching journals intervening geometry without rewriting already returned snapshots', () => {
+  const { cwd, manager, processes } = fixture();
+  manager.create({ ownerId: 7, id: 'one', cwd, cols: 36, rows: 39 });
+  processes[0].emitData('A');
+  manager.resize({ ownerId: 7, id: 'one', cols: 55, rows: 33 });
+  processes[0].emitData('B');
+  const attached = manager.create({ ownerId: 7, id: 'one', cwd: '/ignored-new-cwd', cols: 60, rows: 30 });
+  assert.deepEqual(attached.replay, {
+    cols: 36, rows: 39, truncated: false,
+    steps: [{ type: 'data', data: 'A' }, { type: 'resize', cols: 55, rows: 33 }, { type: 'data', data: 'B' }, { type: 'resize', cols: 60, rows: 30 }],
+  });
+  assert.equal(attached.cwd, cwd); assert.equal(attached.sequence, 2);
+  processes[0].emitData('C');
+  assert.equal(attached.replay.steps.length, 4);
+  assert.equal('output' in attached, false);
+  assert.equal(processes.length, 1);
+  manager.closeOwner(7); fs.rmSync(cwd, { recursive: true, force: true });
+});
+
 test('closing an owner kills every PTY it owns', () => {
   const { cwd, manager, processes } = fixture();
   manager.create({ ownerId: 7, id: 'terminal:one', cwd });
@@ -130,10 +150,6 @@ test('closing an owner kills every PTY it owns', () => {
   manager.closeOwner(7);
   assert.ok(processes.every((processInfo) => processInfo.killed));
   assert.deepEqual(manager.snapshot(), []);
-});
-
-test('appendBounded keeps only the newest output', () => {
-  assert.equal(appendBounded('abcdef', 'ghij', 6), 'efghij');
 });
 
 test('POSIX terminals use a login shell while Windows and unknown shells do not', () => {
