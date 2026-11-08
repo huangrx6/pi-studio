@@ -348,7 +348,8 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .is-openable:hover .attachment-open-cue, .is-openable:focus-visible .attachment-open-cue { color: var(--accent-foreground); opacity: 1; transform: translateX(1px); }
 
 .file-panel.is-open:not(.is-fullscreen), .file-panel.is-open.is-split:not(.is-fullscreen) { width: min(var(--panel-w, 700px), calc(100vw - 48px)); }
-.file-panel:not(.is-fullscreen) .file-panel-inner, .file-panel.is-split:not(.is-fullscreen) .file-panel-inner { width: 100%; min-width: 0; }
+.file-panel:not(.is-fullscreen) .file-panel-inner { width: var(--panel-w, 700px); min-width: var(--panel-w, 700px); }
+.file-panel.is-split:not(.is-fullscreen) .file-panel-inner { width: min(760px, 64vw); min-width: min(760px, 64vw); }
 .file-panel.is-resizing { transition: none; user-select: none; }
 .panel-resize-handle { position: absolute; left: 0; top: 0; bottom: 0; width: 7px; z-index: 60; cursor: col-resize; touch-action: none; }
 .panel-resize-handle::after { content: ""; position: absolute; inset: 0 auto 0 0; width: 2px; }

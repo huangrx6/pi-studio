@@ -160,12 +160,15 @@ just-dropped 只有一次短动画，不改变最终布局。 */
   .temporary-empty { padding-inline: 0; }
 }
 
-/* Collapsed means hidden: no leftover 72px rail. */
-/* 折叠不再保留窄轨道：sidebar 直接 display:none，主 header 左侧留 92px 给
-macOS 窗口控制按钮。早前 72px 轨道的规则仍在文件里但已被这条覆盖，属于历史
-残留；侧栏展开按钮在这个状态下接管入口。 */
+/* Collapsed means a zero-width rail, so the layout can ease into the new width. */
+/* 折叠态保留一个零宽、可过渡的布局轨道，避免 display:none 让左栏瞬间消失；
+主 header 左侧仍留出 macOS 窗口控制按钮的安全区，展开按钮在这里接管入口。 */
 
-.is-sidebar-collapsed .sidebar { display: none; }
+.is-sidebar-collapsed .sidebar {
+  width: 0;
+  padding-inline: 0;
+  border-right-color: var(--transparent);
+}
 .is-sidebar-collapsed .chat-header { padding-left: 92px; }
 .sidebar-expand { width: 28px; height: 28px; margin-right: 2px; }
 

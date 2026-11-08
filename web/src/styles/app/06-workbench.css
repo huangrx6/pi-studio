@@ -11,7 +11,7 @@
 
 .app.is-panel-fullscreen .sidebar,
 .app.is-panel-fullscreen .main { display: none; }
-.file-panel { width: var(--panel-w); padding: 0; background: var(--surface); border-left: 1px solid var(--border); container-type: inline-size; container-name: file-panel; }
+.file-panel { width: var(--panel-w); padding: 0; background: var(--surface); border-left: 1px solid var(--border); }
 .file-panel.is-split:not(.is-fullscreen) { width: min(760px, 64vw); }
 .file-panel.is-fullscreen { width: 100%; flex: 1; border-left: 0; }
 .panel-body { display: flex; flex: 1; min-height: 0; }
@@ -67,11 +67,10 @@
 .file-code { background: var(--surface); }
 
 /* Slide the workbench in and out from the right edge. */
-/* 右栏开关用宽度、位移和透明度做抽屉动画：关闭时宽度为 0 并向右偏移，打开时
-恢复 --panel-w；file-panel-inner 固定 min-width，保证动画期间内容不被挤压重排，
-只是被外层裁切。≤1100px 时改为绝对定位抽屉。 */
+/* 右栏开关用同一套宽度、位移和透明度节奏：内部保持目标宽度，动画期间只由
+外层裁切，避免标签、树和预览随着外层宽度反复重排。≤1100px 时仍是绝对定位抽屉。 */
 
-.file-panel { width: 0; opacity: 0; overflow: hidden; transform: translateX(18px); transition: width .28s cubic-bezier(.22,.8,.2,1), opacity .2s ease, transform .28s cubic-bezier(.22,.8,.2,1); }
+.file-panel { width: 0; opacity: 0; overflow: hidden; transform: translateX(18px); transition: width var(--shell-transition), opacity var(--shell-transition), transform var(--shell-transition); will-change: width, transform, opacity; }
 .file-panel.is-open { width: var(--panel-w); opacity: 1; transform: translateX(0); }
 .file-panel.is-open.is-split:not(.is-fullscreen) { width: min(760px, 64vw); }
 .file-panel.is-open.is-fullscreen { width: 100%; }

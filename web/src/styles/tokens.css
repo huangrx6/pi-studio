@@ -103,12 +103,14 @@
   --background-media-blur: 0px;
   /* 通用滑杆由 React 内联覆盖为实际百分比；默认值供静态主题检查与首帧降级。 */
   --range-progress: 0%;
-  /* 动效与字体：transition 统一 160ms ease，交互快慢一致；减少动效偏好下 app.css
+  /* 动效与字体：常规控件 transition 统一 160ms ease；侧栏与工作台使用稍长的
+  专用过渡，给窗口级布局变化留出舒适的缓入缓出节奏。减少动效偏好下 app.css
   会全局关闭 transition 与 animation。font 是界面统一使用的系统无衬线栈，
   display-font 只用于新对话欢迎语，mono 用于代码、路径和快捷键。
    */
 
   --transition: 160ms ease;
+  --shell-transition: 300ms cubic-bezier(.22, .8, .2, 1);
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --display-font: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "Times New Roman", serif;
   --mono: "SF Mono", "JetBrains Mono", "Fira Code", Consolas, monospace;

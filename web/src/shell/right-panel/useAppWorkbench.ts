@@ -122,7 +122,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
       setFilesOpen(false);
       setPanelFullscreen(false);
       panelCloseTimerRef.current = null;
-    }, 280);
+    }, 300);
   }
 
   function openTemporaryChat() {

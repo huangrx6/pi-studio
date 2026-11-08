@@ -150,6 +150,7 @@
 .background-media-preview-kind { position: absolute; right: var(--space-2); bottom: var(--space-2); padding: 3px 7px; border: 1px solid var(--border); border-radius: var(--radius-round); background: var(--overlay-surface); color: var(--muted); font-size: var(--text-xs); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .background-setting-error { padding: 8px 10px; border: 1px solid var(--error-border); border-radius: var(--radius-control); background: var(--error-soft); color: var(--error); font-size: var(--text-xs); line-height: var(--leading-normal); }
 .settings-range-control {
+  position: relative;
   display: block;
   padding: 12px 13px 11px;
   border-radius: var(--radius-control);
@@ -158,7 +159,8 @@
   transition: background var(--transition), box-shadow var(--transition);
 }
 .settings-range-control:hover:not(.is-disabled) { background: var(--surface-hover); }
-.settings-range-control:focus-within:not(.is-disabled) { box-shadow: var(--focus-ring); }
+/* Keep the outer focus ring above adjacent controls when rows touch. */
+.settings-range-control:focus-within:not(.is-disabled) { z-index: 1; box-shadow: var(--focus-ring); }
 .settings-range-control.is-disabled {
   --accent: var(--disabled-text);
   --accent-border: var(--border-strong);

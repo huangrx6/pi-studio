@@ -95,7 +95,9 @@ overflow:auto），底部账号行因此始终贴底。折叠态后来被改成�
 .sidebar, .settings-nav { width: var(--sidebar-w); flex: none; min-height: 0; display: flex; flex-direction: column; padding: var(--space-10) var(--space-3) var(--space-3); background: var(--sidebar-bg); border-right: 1px solid var(--border); }
 .sidebar {
   position: relative;
-  transition: width var(--transition);
+  overflow: hidden;
+  transition: width var(--shell-transition), padding-inline var(--shell-transition), border-color var(--shell-transition);
+  will-change: width;
   /* Width animations reflowed the whole document; containment keeps the work
      inside the two panels instead of the 20k-node transcript. */
   contain: layout paint;
@@ -143,9 +145,4 @@ overflow:auto），底部账号行因此始终贴底。折叠态后来被改成�
 .workspace-search input, .settings-search input, .search-field input { width: 100%; height: 100%; padding: 0; border: 0; box-shadow: none !important; background: var(--transparent); }
 .workspace-search:focus-within, .settings-search:focus-within, .search-field:focus-within { border-color: var(--focus-color); box-shadow: var(--focus-ring), var(--shadow-composer); }
 .sidebar-empty { padding: var(--space-3) var(--space-2); color: var(--faint); font-size: var(--text-xs); line-height: var(--leading-normal); }
-.is-sidebar-collapsed .sidebar { width: 72px; padding-inline: var(--space-2); }
-.is-sidebar-collapsed .brand { height: 80px; flex-direction: column; padding: 0; }
-.is-sidebar-collapsed .brand .collapse { margin: 0; }
-.is-sidebar-collapsed .brand-name, .is-sidebar-collapsed .new-chat span, .is-sidebar-collapsed .nav-row span, .is-sidebar-collapsed .nav-row small, .is-sidebar-collapsed .workspace-head, .is-sidebar-collapsed .workspace-list, .is-sidebar-collapsed .workspace-search, .is-sidebar-collapsed .bottom-row > span { display: none; }
-.is-sidebar-collapsed .nav-row, .is-sidebar-collapsed .bottom-row { justify-content: center; padding: 0; }
-.is-sidebar-collapsed .sidebar-bottom { margin-top: auto; }
+.is-sidebar-collapsed .sidebar { width: 0; padding-inline: 0; border-right-color: var(--transparent); }
