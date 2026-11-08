@@ -277,7 +277,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     if (tab.kind === 'terminal') void window.piApi.terminalClose(tab.id).catch(() => {});
   }
 
-  /** 关闭标签；关闭最后一个标签后回到工具入口，面板保持可用。 */
+  /** 关闭标签；最后一个标签关闭后直接收起工作台。 */
   function closePanelTab(id: string) {
     const current = panelTabsRef.current;
     const index = current.findIndex((tab) => tab.id === id);
@@ -289,6 +289,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
       setActivePanelTabId('');
       setFile(null);
       setPanelSplit(false);
+      if (typeof closePanel === 'function') closePanel();
       return;
     }
     if (activePanelTabIdRef.current === id) {
@@ -338,6 +339,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
       setActivePanelTabId('');
       setFile(null);
       setPanelSplit(false);
+      if (typeof closePanel === 'function') closePanel();
     }
     else if (!next.some(tab => tab.id === activePanelTabIdRef.current)) activatePanelTab(next.find(tab => tab.id === id) ?? next[0]);
   }

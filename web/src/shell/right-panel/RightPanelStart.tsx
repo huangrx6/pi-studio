@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { pollServiceCount } from './service-count-polling';
-import { Activity, Folder, FolderOpen, Globe, MessageCirclePlus, Terminal, type LucideIcon } from 'lucide-react';
+import { Activity, ChevronRight, Folder, FolderOpen, Globe, MessageCirclePlus, PanelRight, Terminal, type LucideIcon } from 'lucide-react';
 
 export type RightPanelToolId = 'files' | 'terminal' | 'services' | 'browser' | 'temporary';
 
 export type RightPanelToolAction = {
   id: RightPanelToolId;
   label: string;
+  description?: string;
   disabled?: boolean;
   onSelect: () => void;
 };
@@ -35,14 +36,19 @@ export function RightPanelToolList({
         key={action.id}
         type="button"
         className="panel-tool"
+        aria-label={action.label}
         role={menu ? 'menuitem' : undefined}
         tabIndex={menu ? -1 : undefined}
         disabled={action.disabled}
         onClick={action.onSelect}
       >
         <span className="panel-tool-icon"><Icon aria-hidden /></span>
-        <span className="panel-tool-label">{action.label}</span>
+        <span className="panel-tool-copy">
+          <span className="panel-tool-label">{action.label}</span>
+          {action.description && <span className="panel-tool-description">{action.description}</span>}
+        </span>
         {action.id === 'services' && Boolean(serviceCount) && <span className="panel-tool-count" aria-label={`${serviceCount} 个运行服务`}>{serviceCount}</span>}
+        {!menu && <ChevronRight className="panel-tool-arrow" aria-hidden />}
       </button>;
     })}
   </div>;
@@ -84,6 +90,14 @@ export function RightPanelStart({
   }, [cwd, workspace]);
 
   return <div className="panel-start">
+    <div className="panel-start-intro">
+      <span className="panel-start-mark"><PanelRight aria-hidden /></span>
+      <div>
+        <strong>工作台</strong>
+        <span>{workspace || cwd ? '快速打开当前工作区的工具' : '打开工作区后开始使用工具'}</span>
+      </div>
+    </div>
+    <span className="panel-start-section-label">快速访问</span>
     {!workspace && !cwd && <button type="button" className="panel-workspace-prompt" onClick={onChooseWorkspace}>
       <FolderOpen aria-hidden />
       <span>选择工作区</span>

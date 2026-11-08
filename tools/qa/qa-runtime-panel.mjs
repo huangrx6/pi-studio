@@ -97,7 +97,7 @@ try {
   await page.waitForFunction(() => (document.querySelector('.file-panel')?.getBoundingClientRect().width || 0) > 300);
   const toolAlignment = await page.locator('.panel-tool').evaluateAll((buttons) => buttons.map((button) => {
     const icon = button.querySelector('.panel-tool-icon')?.getBoundingClientRect();
-    const label = button.querySelector('.panel-tool-label')?.getBoundingClientRect();
+    const label = button.querySelector('.panel-tool-copy')?.getBoundingClientRect();
     return {
       iconCenter: icon ? icon.top + icon.height / 2 : Number.NaN,
       labelCenter: label ? label.top + label.height / 2 : Number.NaN,

@@ -112,11 +112,11 @@ export function WorkbenchPane({
 
   const panelWorkspace = session?.cwd || workspace;
   const toolActions: RightPanelToolAction[] = [
-    { id: 'files', label: '工作区文件', disabled: !panelWorkspace, onSelect: openFilesTab },
-    { id: 'terminal', label: '新建终端', disabled: !panelWorkspace, onSelect: openTerminalTab },
-    { id: 'services', label: '运行服务', disabled: !panelWorkspace, onSelect: openServicesTab },
-    { id: 'browser', label: '浏览器', onSelect: () => openBrowserTab() },
-    { id: 'temporary', label: '临时聊天', onSelect: openTemporaryChat },
+    { id: 'files', label: '工作区文件', description: '浏览和预览项目文件', disabled: !panelWorkspace, onSelect: openFilesTab },
+    { id: 'terminal', label: '新建终端', description: '在当前工作区运行命令', disabled: !panelWorkspace, onSelect: openTerminalTab },
+    { id: 'services', label: '运行服务', description: '查看正在运行的服务', disabled: !panelWorkspace, onSelect: openServicesTab },
+    { id: 'browser', label: '浏览器', description: '打开网页并保留在工作台', onSelect: () => openBrowserTab() },
+    { id: 'temporary', label: '临时聊天', description: '开始一个独立的临时会话', onSelect: openTemporaryChat },
   ];
 
   function renderFileTree() {

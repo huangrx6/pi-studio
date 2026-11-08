@@ -2337,6 +2337,11 @@ try {
   assert.match(await conversationTabs.nth(2).innerText(), /^双跑$/);
   assert.match(await conversationTabs.nth(3).innerText(), /^扩展\s*2/);
   assert.equal(await page.locator('.chat-tabs-note').count(), 0);
+  const traceButton = page.getByRole('button', { name: '打开会话轨迹' });
+  await traceButton.click();
+  await page.getByRole('dialog', { name: '会话轨迹' }).waitFor();
+  assert.match(await page.getByRole('dialog', { name: '会话轨迹' }).innerText(), /步骤|模型请求|工具执行/);
+  await page.getByRole('button', { name: '关闭会话轨迹' }).click();
   const extensionTab = page.getByRole('tab', { name: /^扩展/ });
   assert.equal(await extensionTab.locator('.tab-count').innerText(), '2');
   await extensionTab.click();
@@ -2698,7 +2703,7 @@ try {
   // 没有工具标签时直接显示轻量入口；初始页本身不占一个标签。
   assert.equal(await page.getByRole('tablist', { name: '右侧面板标签' }).count(), 0);
   assert.deepEqual(
-    await page.locator('.panel-start-tools .panel-tool').allTextContents(),
+    await page.locator('.panel-start-tools .panel-tool-label').allTextContents(),
     ['工作区文件', '新建终端', '运行服务', '浏览器', '临时聊天'],
   );
   await capture('05-panel-start');
@@ -2787,13 +2792,11 @@ try {
   await page.mouse.down();
   await page.mouse.move(narrowResizeBox.x + narrowResizeBox.width / 2 - (originalPanelWidth - 320), narrowResizeBox.y + 40);
   await page.mouse.up();
-  // 关闭最后一个工具标签后回到入口，边栏不应一起消失。
+  // 关闭最后一个工具标签后直接收起右侧工作台。
   await page.getByRole('button', { name: '关闭 README.md', exact: true }).click();
   await page.getByRole('button', { name: '关闭 package.json', exact: true }).click();
   await page.getByRole('button', { name: '关闭 文件', exact: true }).click();
-  assert.equal(await page.locator('.file-panel.is-open').count(), 1);
-  assert.equal(await page.locator('.panel-start-tools .panel-tool').count(), 5);
-  await page.getByRole('button', { name: '收起右侧面板' }).click();
+  await page.locator('.file-panel').waitFor({ state: 'detached' });
 
   // -------------------------------------------------------------------------
   // 7. 设置页

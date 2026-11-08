@@ -1,4 +1,4 @@
-import { Fragment, lazy, Suspense, type ComponentProps } from 'react';
+import { Fragment, lazy, Suspense, useMemo, type ComponentProps } from 'react';
 import { ChevronLeft, LoaderCircle } from 'lucide-react';
 import { AssistantTurnView, ChatMessageView } from '../features/conversation/ChatMessage';
 import { ComposerDock } from '../features/conversation/ComposerDock';
@@ -33,6 +33,8 @@ import type {
 } from '../types/extension-types';
 import type { StoredModelComparisonMap } from '../shared/stored-ui-state';
 import { ConversationHeader } from './ConversationHeader';
+import type { ConversationTraceSummary, ConversationTraceItem } from './ConversationTraceMenu';
+import type { ChatMessage, RequestTrace, ToolCallBlock } from '../types/chat-types';
 import {
   isNearBottom,
   nestedScrollableConsumesWheel,
@@ -101,6 +103,76 @@ type HeaderState = {
   openModelComparison: () => void;
   openConversationExtensionHub: () => void;
 };
+
+function compactTraceText(value: unknown, limit = 120): string {
+  if (typeof value !== 'string') return '';
+  return value.replace(/\s+/g, ' ').trim().slice(0, limit);
+}
+
+function toolPreview(call: ToolCallBlock): string {
+  const args = call.arguments ?? {};
+  for (const value of [args.command, args.path, args.file_path, args.query, args.pattern, args.url, args.name]) {
+    if (typeof value === 'string' && value.trim()) return compactTraceText(value);
+  }
+  return '';
+}
+
+function toolDetail(call: ToolCallBlock): string {
+  try { return JSON.stringify(call.arguments ?? {}, null, 2); } catch { return ''; }
+}
+
+function traceItemFromRequest(trace: RequestTrace, status: ConversationTraceItem['status']): ConversationTraceItem {
+  const model = trace.model ? `${trace.model.provider}/${trace.model.modelId}` : '模型请求';
+  return { id: `request:${trace.id}`, kind: 'model', preview: model, label: '模型调用', detail: `消息 ${trace.stats.messageCount} 条 · 预计 ${trace.stats.estimatedChars} 字符`, status, at: trace.createdAt };
+}
+
+function buildTraceSummary(input: {
+  turns: ReturnType<typeof useTranscriptNavigation>['transcriptTurns'];
+  toolResults: Map<string, ChatMessage>;
+  requestPlacement: ReturnType<typeof useTranscriptNavigation>['requestPlacement'];
+  turnActive: boolean;
+}): ConversationTraceSummary {
+  const items: ConversationTraceItem[] = [];
+  const requests = [...input.requestPlacement.byAssistantTurn.values(), ...input.requestPlacement.unansweredByUserTurn.values(), input.requestPlacement.pending]
+    .flat()
+    .sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id));
+  const latestRequestId = requests.at(-1)?.id;
+  requests.forEach(trace => items.push(traceItemFromRequest(trace, input.turnActive && trace.id === latestRequestId ? 'running' : 'done')));
+  input.turns.forEach((turn, turnIndex) => {
+    if (turn.kind !== 'assistant') return;
+    turn.messages.forEach((message, messageIndex) => message.content.forEach((block, blockIndex) => {
+      if (block.type === 'thinking') {
+        items.push({
+          id: `decision:${turnIndex}:${messageIndex}:${blockIndex}`,
+          kind: 'decision',
+          label: '决策',
+          preview: compactTraceText(block.thinking) || '模型思考',
+          detail: block.redacted ? '模型未提供推理正文。' : block.thinking,
+          status: input.turnActive && turnIndex === input.turns.length - 1 ? 'running' : 'done',
+          at: message.timestamp,
+        });
+      }
+      if (block.type === 'toolCall') {
+        const result = input.toolResults.get(block.id);
+        items.push({
+          id: `tool:${block.id}`,
+          kind: 'tool',
+          label: block.namespace ? `${block.namespace}/${block.name}` : block.name,
+          preview: toolPreview(block),
+          detail: toolDetail(block),
+          status: result?.isError ? 'error' : !result && input.turnActive ? 'running' : 'done',
+          at: message.timestamp,
+        });
+      }
+    }));
+  });
+  items.sort((left, right) => (left.at ?? 0) - (right.at ?? 0) || left.id.localeCompare(right.id));
+  const errors = items.filter(item => item.status === 'error').length;
+  const tools = items.filter(item => item.kind === 'tool').length;
+  const requestCount = items.filter(item => item.kind === 'model').length;
+  const state = items.length === 0 ? 'idle' : input.turnActive ? 'running' : errors > 0 ? 'error' : 'done';
+  return { steps: items.length, requests: requestCount, tools, errors, state, items };
+}
 
 type ExtensionWorkspaceState = {
   headerItems: ExtensionUiItem[];
@@ -209,6 +281,12 @@ export function ConversationWorkspace({
     handleTranscriptScroll,
     jumpToOutline,
   } = transcript;
+  const traceSummary = useMemo(() => buildTraceSummary({
+    turns: transcriptTurns,
+    toolResults: toolResultMap,
+    requestPlacement,
+    turnActive,
+  }), [transcriptTurns, toolResultMap, requestPlacement, turnActive]);
 
   function renderModelComparisonWorkspace() {
     if (agentView.kind !== 'comparison') return null;
@@ -289,6 +367,7 @@ export function ConversationWorkspace({
         onOpenAgentOverview={header.openAgentOverview}
         onOpenModelComparison={header.openModelComparison}
         onOpenConversationExtensionHub={header.openConversationExtensionHub}
+        traceSummary={traceSummary}
       />
       {!isNewConversation && agentView.kind === 'conversation' && extensions.headerItems.length > 0 && (
         <ConversationExtensionDock

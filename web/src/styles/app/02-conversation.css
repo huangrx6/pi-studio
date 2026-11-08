@@ -50,6 +50,64 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .tab > i { width: 5px; height: 5px; flex: none; border-radius: 50%; background: var(--live); box-shadow: var(--live-ring); animation: pulse 1.5s ease-in-out infinite; }
 .tab.is-active { color: var(--text); font-weight: var(--weight-medium); }
 .tab.is-active::after { position: absolute; content: ''; height: 2px; bottom: -1px; left: 0; right: 0; border-radius: var(--radius-tag); background: var(--accent); }
+.conversation-trace-anchor { position: relative; display: flex; align-items: stretch; flex: none; }
+.conversation-trace-tab { -webkit-app-region: no-drag; cursor: pointer; }
+.conversation-trace-tab.is-open { color: var(--text); }
+.conversation-trace-tab.is-open > svg { color: var(--accent); }
+.conversation-trace-popover {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 9px);
+  left: 0;
+  display: grid;
+  gap: var(--space-3);
+  width: min(460px, calc(100cqw - 32px));
+  max-height: min(620px, calc(100vh - 150px));
+  padding: var(--space-4);
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-popover);
+  color: var(--text);
+  -webkit-app-region: no-drag;
+}
+.conversation-trace-popover-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.conversation-trace-popover-head > div { display: grid; gap: 2px; min-width: 0; }
+.conversation-trace-popover-head strong { font-size: var(--text-base); font-weight: var(--weight-semibold); }
+.conversation-trace-popover-head span { color: var(--faint); font-size: var(--text-xs); }
+.conversation-trace-popover-head .icon-button { width: 24px; height: 24px; flex: none; margin: -3px -4px 0 0; }
+.conversation-trace-overview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--border); }
+.conversation-trace-overview > div { display: grid; gap: 2px; min-width: 0; padding: 9px 10px; background: var(--surface-soft); }
+.conversation-trace-overview strong { font-size: var(--text-lg); line-height: 1; font-variant-numeric: tabular-nums; }
+.conversation-trace-overview span { overflow: hidden; color: var(--faint); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.conversation-trace-overview .has-error strong { color: var(--error); }
+.conversation-trace-state { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--text-xs); }
+.conversation-trace-state > svg { width: 9px; height: 9px; fill: currentColor; stroke-width: 0; }
+.conversation-trace-state.is-running { color: var(--accent-foreground); }
+.conversation-trace-state.is-error { color: var(--error); }
+.conversation-trace-state.is-done { color: var(--success); }
+.conversation-trace-list { display: grid; gap: 1px; min-width: 0; border-top: 1px solid var(--border); }
+.conversation-trace-item { min-width: 0; border-bottom: 1px solid var(--border); }
+.conversation-trace-item > summary { display: grid; grid-template-columns: 18px minmax(0, 1fr) 18px 16px; align-items: center; gap: 8px; min-height: 42px; list-style: none; cursor: pointer; }
+.conversation-trace-item > summary::-webkit-details-marker { display: none; }
+.conversation-trace-item > summary:hover .conversation-trace-item-main strong { color: var(--text); }
+.conversation-trace-item:focus-within > summary { outline: 2px solid var(--focus-color); outline-offset: 2px; border-radius: var(--radius-tag); }
+.conversation-trace-item-icon, .conversation-trace-item-status { display: grid; place-items: center; color: var(--faint); }
+.conversation-trace-item-icon svg { width: var(--icon-sm); height: var(--icon-sm); }
+.conversation-trace-item-main { display: grid; min-width: 0; gap: 2px; }
+.conversation-trace-item-main strong, .conversation-trace-item-main span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-trace-item-main strong { color: var(--muted); font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.conversation-trace-item-main span { color: var(--faint); font: var(--text-xs)/var(--leading-normal) var(--mono); }
+.conversation-trace-item-status svg { width: var(--icon-xs); height: var(--icon-xs); }
+.conversation-trace-item.is-running .conversation-trace-item-status { color: var(--accent); }
+.conversation-trace-item.is-error .conversation-trace-item-status { color: var(--error); }
+.conversation-trace-item.is-done .conversation-trace-item-status { color: var(--success); }
+.conversation-trace-item-chevron { width: var(--icon-xs); height: var(--icon-xs); color: var(--faint); transition: transform var(--transition); }
+.conversation-trace-item[open] .conversation-trace-item-chevron { transform: rotate(180deg); }
+.conversation-trace-item pre { max-height: 180px; margin: 0 0 10px 26px; padding: 9px 10px; overflow: auto; border-radius: var(--radius-control); background: var(--surface-soft); color: var(--muted); font: var(--text-xs)/var(--leading-body) var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.conversation-trace-empty { display: flex; align-items: center; gap: 8px; padding: 18px 4px; color: var(--faint); font-size: var(--text-xs); }
+.conversation-trace-empty svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; }
 .chat-scroll {
   flex: 1;
   min-height: 0;

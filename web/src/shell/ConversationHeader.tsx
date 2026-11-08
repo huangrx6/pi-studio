@@ -5,6 +5,7 @@ import {
   NotificationCenter,
   type AppNotification,
 } from './NotificationCenter';
+import { ConversationTraceMenu, type ConversationTraceSummary } from './ConversationTraceMenu';
 
 type ConversationHeaderProps = {
   sidebarCollapsed: boolean;
@@ -27,6 +28,7 @@ type ConversationHeaderProps = {
   onOpenAgentOverview: () => void;
   onOpenModelComparison: () => void;
   onOpenConversationExtensionHub: () => void;
+  traceSummary: ConversationTraceSummary;
 };
 
 export function ConversationHeader({
@@ -50,6 +52,7 @@ export function ConversationHeader({
   onOpenAgentOverview,
   onOpenModelComparison,
   onOpenConversationExtensionHub,
+  traceSummary,
 }: ConversationHeaderProps) {
   return (
     <>
@@ -101,6 +104,7 @@ export function ConversationHeader({
             <Plug />
             <span className="tab-label">扩展<span className="tab-count">{extensionCount}</span></span>
           </button>}
+          <ConversationTraceMenu summary={traceSummary} />
         </div>
       </div>}
       {isNewConversation && <div className="chat-tabs is-placeholder" aria-hidden="true" />}
