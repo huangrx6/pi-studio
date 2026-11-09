@@ -281,6 +281,7 @@ export function useConversationController(foundation: AppFoundation) {
     rememberMainScrollPosition,
     returnToMainAgent,
     openModelComparison,
+    openTrace,
   } = useConversationViewState({
     scrollRef,
     session,
@@ -916,6 +917,7 @@ export function useConversationController(foundation: AppFoundation) {
     rememberMainScrollPosition,
     returnToMainAgent,
     openModelComparison,
+    openTrace,
     conversationExtensionSurface,
     conversationExtensionUiPreferences,
     conversationExtensionOrderScope,

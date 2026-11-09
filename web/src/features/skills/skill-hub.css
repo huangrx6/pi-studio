@@ -1,4 +1,4 @@
-.skill-hub-card { display: grid; min-width: 0; gap: var(--space-4); }
+.skill-hub-card { display: grid; min-width: 0; gap: var(--space-4); padding: var(--space-5); }
 .skill-hub-card .skill-hub-head { min-width: 0; margin-bottom: 0; }
 .skill-hub-head > div:first-child { min-width: 0; }
 .skill-hub-actions { display: flex; flex: 0 1 auto; min-width: 0; max-width: 100%; align-items: center; gap: var(--space-2); }
@@ -34,7 +34,15 @@
 .skill-hub-empty > div { min-width: 0; flex: 1; }
 .skill-hub-empty strong { color: var(--text); font-size: var(--text-sm); }
 .skill-source-hint { display: block; margin-top: 6px; color: var(--faint); font-size: var(--text-xs); line-height: var(--leading-normal); }
-.skill-hub-loading { display: flex; align-items: center; justify-content: center; gap: var(--space-2); padding: 40px 0; color: var(--muted); font-size: var(--text-sm); }
+.skill-hub-loading {
+  display: flex;
+  min-height: 112px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
 .skill-hub-loading svg { width: var(--icon-md); height: var(--icon-md); }
 /* 技能源多、单个源技能多：左选源，右看一个源，避免一条长列表铺满整页。 */
 .skill-hub-body { display: grid; grid-template-columns: minmax(0, 208px) minmax(0, 1fr); align-items: start; gap: var(--space-4); }

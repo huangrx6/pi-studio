@@ -198,6 +198,7 @@ export function App() {
     activeSessionComparison,
     returnToMainAgent,
     openModelComparison,
+    openTrace,
     conversationExtensionSurface,
     conversationExtensionUiPreferences,
     conversationExtensionOrderScope,
@@ -385,6 +386,7 @@ export function App() {
           openAgentOverview: subagentWorkspace.openAgentOverview,
           openModelComparison,
           openConversationExtensionHub,
+          openTrace,
         }}
         actions={{
           openAttachment: handleOpenAttachment,

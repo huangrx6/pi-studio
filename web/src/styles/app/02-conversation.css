@@ -25,6 +25,38 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .chat-tab-list .tab.is-active > svg { color: var(--accent); }
 .conversation-trace-tab > svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--faint); transition: color var(--transition); }
 .conversation-trace-tab:hover > svg { color: var(--accent); }
+.conversation-trace-page {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  background: var(--bg);
+}
+.conversation-trace-page-inner {
+  width: min(var(--content), calc(100% - 2 * var(--session-gutter)));
+  margin: 0 auto;
+  padding: var(--space-8) 0 var(--space-10);
+}
+.conversation-trace-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6);
+  margin-bottom: var(--space-6);
+}
+.conversation-trace-page-kicker { display: inline-flex; align-items: center; gap: 6px; color: var(--accent-foreground); font-size: var(--text-xs); font-weight: var(--weight-medium); }
+.conversation-trace-page-kicker svg { width: var(--icon-sm); height: var(--icon-sm); }
+.conversation-trace-page-head h2 { margin: 7px 0 3px; font-size: var(--text-xl); font-weight: var(--weight-semibold); letter-spacing: -.25px; }
+.conversation-trace-page-head p { margin: 0; color: var(--faint); font-size: var(--text-sm); }
+.conversation-trace-page-head .conversation-trace-state { margin-top: 5px; }
+.conversation-trace-page .conversation-trace-overview { margin-bottom: var(--space-5); }
+.conversation-trace-page .conversation-trace-list { border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--border); }
+.conversation-trace-page .conversation-trace-item { padding-inline: var(--space-3); background: var(--surface-soft); }
+.conversation-trace-page .conversation-trace-item:first-child { border-radius: var(--radius-card) var(--radius-card) 0 0; }
+.conversation-trace-page .conversation-trace-item:last-child { border-bottom: 0; border-radius: 0 0 var(--radius-card) var(--radius-card); }
+.conversation-trace-page .conversation-trace-item > summary { min-height: 52px; }
+.conversation-trace-page .conversation-trace-item pre { margin-right: 0; }
 .tab-label { display: inline-flex; align-items: center; gap: 5px; }
 .tab-count {
   display: inline-grid;
@@ -52,33 +84,7 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .tab > i { width: 5px; height: 5px; flex: none; border-radius: 50%; background: var(--live); box-shadow: var(--live-ring); animation: pulse 1.5s ease-in-out infinite; }
 .tab.is-active { color: var(--text); font-weight: var(--weight-medium); }
 .tab.is-active::after { position: absolute; content: ''; height: 2px; bottom: -1px; left: 0; right: 0; border-radius: var(--radius-tag); background: var(--accent); }
-.conversation-trace-anchor { position: relative; display: flex; align-items: stretch; flex: none; }
 .conversation-trace-tab { -webkit-app-region: no-drag; cursor: pointer; }
-.conversation-trace-tab.is-open { color: var(--text); }
-.conversation-trace-tab.is-open > svg { color: var(--accent); }
-.conversation-trace-popover {
-  position: absolute;
-  z-index: 80;
-  top: calc(100% + 9px);
-  left: 0;
-  display: grid;
-  gap: var(--space-3);
-  width: min(460px, calc(100cqw - 32px));
-  max-height: min(620px, calc(100vh - 150px));
-  padding: var(--space-4);
-  overflow: auto;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-card);
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-popover);
-  color: var(--text);
-  -webkit-app-region: no-drag;
-}
-.conversation-trace-popover-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
-.conversation-trace-popover-head > div { display: grid; gap: 2px; min-width: 0; }
-.conversation-trace-popover-head strong { font-size: var(--text-base); font-weight: var(--weight-semibold); }
-.conversation-trace-popover-head span { color: var(--faint); font-size: var(--text-xs); }
-.conversation-trace-popover-head .icon-button { width: 24px; height: 24px; flex: none; margin: -3px -4px 0 0; }
 .conversation-trace-overview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--border); }
 .conversation-trace-overview > div { display: grid; gap: 2px; min-width: 0; padding: 9px 10px; background: var(--surface-soft); }
 .conversation-trace-overview strong { font-size: var(--text-lg); line-height: 1; font-variant-numeric: tabular-nums; }

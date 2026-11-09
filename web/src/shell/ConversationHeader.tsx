@@ -5,14 +5,14 @@ import {
   NotificationCenter,
   type AppNotification,
 } from './NotificationCenter';
-import { ConversationTraceMenu, type ConversationTraceSummary } from './ConversationTraceMenu';
+import { ConversationTraceTab, type ConversationTraceSummary } from './ConversationTraceMenu';
 
 type ConversationHeaderProps = {
   sidebarCollapsed: boolean;
   onExpandSidebar: () => void;
   isNewConversation: boolean;
   title: string;
-  agentKind: 'conversation' | 'agents' | 'comparison' | 'extensions';
+  agentKind: 'conversation' | 'agents' | 'comparison' | 'extensions' | 'trace';
   subagentCount: number;
   hasActiveSubagents: boolean;
   comparisonBranchCount: number;
@@ -28,6 +28,7 @@ type ConversationHeaderProps = {
   onOpenAgentOverview: () => void;
   onOpenModelComparison: () => void;
   onOpenConversationExtensionHub: () => void;
+  onOpenTrace: () => void;
   traceSummary: ConversationTraceSummary;
 };
 
@@ -52,6 +53,7 @@ export function ConversationHeader({
   onOpenAgentOverview,
   onOpenModelComparison,
   onOpenConversationExtensionHub,
+  onOpenTrace,
   traceSummary,
 }: ConversationHeaderProps) {
   return (
@@ -104,8 +106,8 @@ export function ConversationHeader({
             <Plug />
             <span className="tab-label">扩展<span className="tab-count">{extensionCount}</span></span>
           </button>}
+          <ConversationTraceTab summary={traceSummary} active={agentKind === 'trace'} onOpen={onOpenTrace} />
         </div>
-        <ConversationTraceMenu summary={traceSummary} />
       </div>}
       {isNewConversation && <div className="chat-tabs is-placeholder" aria-hidden="true" />}
     </>

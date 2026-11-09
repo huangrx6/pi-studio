@@ -48,11 +48,22 @@
   .panel-tabbar,
   .changes-view,
   .diff-view,
-  .temporary-chat,
-  .agent-context-view,
-  .agent-context-toolbar
-) {
+  .temporary-chat
+ ) {
   background: var(--background-card-strong-surface);
+  border-color: var(--background-border);
+}
+.app.has-custom-background :is(
+  .agent-workspace,
+  .agent-overview,
+  .agent-context-view,
+  .agent-context-toolbar,
+  .conversation-extension-scroll,
+  .model-comparison-workspace,
+  .model-comparison,
+  .conversation-trace-page
+) {
+  background: var(--transparent);
   border-color: var(--background-border);
 }
 .app.has-custom-background .settings-page-frame {

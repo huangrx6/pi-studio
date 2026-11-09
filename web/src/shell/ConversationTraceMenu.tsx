@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
-import { Activity, AlertCircle, Check, ChevronDown, Circle, LoaderCircle, Send, Terminal, Wrench, X } from 'lucide-react';
+import { Activity, AlertCircle, Check, ChevronDown, Circle, LoaderCircle, Send, Terminal, Wrench } from 'lucide-react';
 
 export type ConversationTraceItem = {
   id: string;
@@ -20,7 +19,7 @@ export type ConversationTraceSummary = {
   items: ConversationTraceItem[];
 };
 
-type ConversationTraceMenuProps = {
+type ConversationTraceProps = {
   summary: ConversationTraceSummary;
 };
 
@@ -43,56 +42,38 @@ function StatusIcon({ status }: { status: ConversationTraceItem['status'] }) {
   return <Check aria-hidden="true" />;
 }
 
-export function ConversationTraceMenu({ summary }: ConversationTraceMenuProps) {
-  const [open, setOpen] = useState(false);
-  const anchorRef = useRef<HTMLDivElement>(null);
+export function ConversationTraceTab({ summary, active, onOpen }: ConversationTraceProps & { active: boolean; onOpen: () => void }) {
+  return <button
+    type="button"
+    role="tab"
+    aria-selected={active}
+    className={`tab conversation-trace-tab ${active ? 'is-active' : ''}`}
+    aria-label="打开会话轨迹页面"
+    onClick={onOpen}
+  >
+    <Activity aria-hidden="true" />
+    <span>轨迹</span>
+    {summary.steps > 0 && <span className="tab-count">{summary.steps}</span>}
+  </button>;
+}
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const close = (event: PointerEvent) => {
-      if (!anchorRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener('pointerdown', close);
-    return () => document.removeEventListener('pointerdown', close);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const close = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('keydown', close);
-    return () => document.removeEventListener('keydown', close);
-  }, [open]);
-
-  return <div className="conversation-trace-anchor" ref={anchorRef}>
-    <button
-      type="button"
-      className={`tab conversation-trace-tab ${open ? 'is-open' : ''}`}
-      aria-expanded={open}
-      aria-haspopup="dialog"
-      aria-label="打开会话轨迹"
-      onClick={() => setOpen(value => !value)}
-    >
-      <Activity aria-hidden="true" />
-      <span>轨迹</span>
-      {summary.steps > 0 && <span className="tab-count">{summary.steps}</span>}
-    </button>
-    {open && <section className="conversation-trace-popover" role="dialog" aria-label="会话轨迹">
-      <div className="conversation-trace-popover-head">
+export function ConversationTracePage({ summary }: ConversationTraceProps) {
+  return <div className="conversation-trace-page" role="tabpanel" aria-label="会话轨迹">
+    <div className="conversation-trace-page-inner">
+      <header className="conversation-trace-page-head">
         <div>
-          <strong>会话轨迹</strong>
-          <span>按需查看当前会话的处理过程</span>
+          <div className="conversation-trace-page-kicker"><Activity aria-hidden="true" /><span>当前会话</span></div>
+          <h2>会话轨迹</h2>
+          <p>按时间查看模型请求、决策和工具执行状态。</p>
         </div>
-        <button type="button" className="icon-button" aria-label="关闭会话轨迹" title="关闭" onClick={() => setOpen(false)}><X /></button>
-      </div>
+        <div className={`conversation-trace-state is-${summary.state}`}><Circle aria-hidden="true" /><span>{stateLabel(summary.state)}</span></div>
+      </header>
       <div className="conversation-trace-overview" aria-label="轨迹统计">
         <div><strong>{summary.steps}</strong><span>步骤</span></div>
         <div><strong>{summary.requests}</strong><span>模型请求</span></div>
         <div><strong>{summary.tools}</strong><span>工具执行</span></div>
         <div className={summary.errors > 0 ? 'has-error' : ''}><strong>{summary.errors}</strong><span>异常</span></div>
       </div>
-      <div className={`conversation-trace-state is-${summary.state}`}><Circle aria-hidden="true" /><span>{stateLabel(summary.state)}</span></div>
       {summary.items.length > 0
         ? <div className="conversation-trace-list" aria-label="最近轨迹">
           {summary.items.map(item => <details className={`conversation-trace-item is-${item.status}`} key={item.id}>
@@ -106,6 +87,6 @@ export function ConversationTraceMenu({ summary }: ConversationTraceMenuProps) {
           </details>)}
         </div>
         : <div className="conversation-trace-empty"><Wrench aria-hidden="true" /><span>发送消息后，这里会显示模型、决策和工具步骤。</span></div>}
-    </section>}
+    </div>
   </div>;
 }

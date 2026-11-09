@@ -18,6 +18,10 @@
 .settings-nav-foot kbd { margin-left: auto; }
 .settings-content { flex: 1; min-width: 0; overflow-y: auto; padding: 44px var(--space-8) var(--space-8); }
 .settings-sections, .settings-card, .settings-error, .settings-loading { max-width: var(--settings-content); margin-inline: auto; }
+.settings-sections {
+  display: grid;
+  gap: var(--space-5);
+}
 .settings-card { padding: var(--space-5); margin-bottom: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
 .settings-card-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3) var(--space-4); margin-bottom: var(--space-5); }
 .settings-card-head > div:first-child { flex: 1 1 240px; min-width: 0; }
@@ -42,6 +46,7 @@
   max-width: none;
   margin-inline: 0;
 }
+.settings-page-frame > .settings-sections { width: 100%; }
 .settings-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin-bottom: 0; }
 .settings-form-grid > label { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; color: var(--muted); font-size: var(--text-sm); }
 .settings-form-grid input, .settings-form-grid select { width: 100%; }

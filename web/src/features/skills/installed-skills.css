@@ -1,10 +1,11 @@
-.installed-skills { min-width: 0; padding-top: 24px; }
+.installed-skills { min-width: 0; }
 .installed-skills-heading { display: flex; align-items: baseline; gap: 10px; }
 .installed-skills-heading h2 { margin: 0; font-size: var(--text-lg); font-weight: var(--weight-semibold); }
 .installed-skills-heading > span { color: var(--faint); font-size: var(--text-xs); }
-.installed-skills-guidance { margin: 8px 0 24px; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-relaxed); }
-.installed-skill-group + .installed-skill-group { margin-top: 28px; }
-.installed-skill-group-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 12px; }
+.installed-skills-guidance { margin: 6px 0 16px; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-relaxed); }
+.installed-skill-group { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
+.installed-skill-group + .installed-skill-group { margin-top: 14px; }
+.installed-skill-group-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 12px; padding: 13px 16px; border-bottom: 1px solid var(--divider); background: var(--surface-soft); }
 .installed-skill-group-heading h3 { margin: 0; font-size: var(--text-sm); font-weight: var(--weight-semibold); }
 .installed-skill-group-heading > span { min-width: 0; color: var(--faint); font-size: var(--text-xs); overflow-wrap: anywhere; }
 .installed-skills-directories { margin-top: 18px; color: var(--muted); font-size: var(--text-xs); }
@@ -15,7 +16,9 @@
 .installed-skills-directories dd { margin: 0; }
 .installed-skills-directories code { color: var(--faint); font: var(--text-xs)/var(--leading-body) var(--mono); overflow-wrap: anywhere; }
 .installed-skill-list { list-style: none; margin: 0; padding: 0; }
-.installed-skill-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 20px; padding: 16px 0; border-bottom: 1px solid var(--border); }
+.installed-skill-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 20px; padding: 14px 16px; border-bottom: 1px solid var(--divider); transition: background var(--transition); }
+.installed-skill-row:last-child { border-bottom: 0; }
+.installed-skill-row:hover { background: var(--surface-hover); }
 .installed-skill-copy { display: grid; gap: 6px; min-width: 0; flex: 1 1 280px; }
 .installed-skill-open { display: flex; align-items: baseline; gap: 8px; justify-self: start; max-width: 100%; padding: 0; text-align: left; color: var(--text); }
 .installed-skill-open strong { min-width: 0; overflow-wrap: anywhere; font-size: var(--text-base); font-weight: var(--weight-medium); }
@@ -36,11 +39,11 @@
 .installed-skill-row[data-availability="unavailable"] .installed-skill-status { color: var(--warning); }
 .installed-skill-actions { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
 .installed-skill-actions .settings-text-button { white-space: nowrap; }
-.installed-skills-empty { margin: 0; padding: 14px 0; color: var(--faint); font-size: var(--text-sm); }
-.installed-skill-diagnostics { margin-top: 28px; }
+.installed-skills-empty { margin: 0; padding: 20px 16px; border: 1px dashed var(--border); border-radius: var(--radius-control); color: var(--faint); background: var(--surface-soft); font-size: var(--text-sm); }
+.installed-skill-diagnostics { margin-top: 16px; padding: 14px 16px; border: 1px solid var(--warning-border); border-radius: var(--radius-control); background: var(--warning-soft); }
 .installed-skill-diagnostics h3 { margin: 0; color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
 .installed-skill-diagnostics ul { list-style: none; margin: 8px 0 0; padding: 0; }
-.installed-skill-diagnostics li { padding: 10px 0; border-top: 1px solid var(--border); }
+.installed-skill-diagnostics li { padding: 10px 0; border-top: 1px solid var(--divider); }
 .installed-skill-diagnostics code { color: var(--muted); font: var(--text-xs)/var(--leading-body) var(--mono); overflow-wrap: anywhere; }
 .installed-skill-diagnostics p { margin: 4px 0 0; color: var(--warning); font-size: var(--text-sm); line-height: var(--leading-body); white-space: pre-wrap; overflow-wrap: anywhere; }
 .installed-skill-open:focus-visible,

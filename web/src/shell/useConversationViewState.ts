@@ -125,6 +125,13 @@ export function useConversationViewState({
     if (filesOpen) closePanel();
   }
 
+  function openTrace() {
+    if (!session?.id) return;
+    rememberMainScrollPosition();
+    setAgentView({ kind: 'trace' });
+    if (filesOpen) closePanel();
+  }
+
   return {
     comparisonByParent,
     setComparisonByParent,
@@ -132,5 +139,6 @@ export function useConversationViewState({
     rememberMainScrollPosition,
     returnToMainAgent,
     openModelComparison,
+    openTrace,
   };
 }

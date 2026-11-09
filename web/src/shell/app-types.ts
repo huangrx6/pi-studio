@@ -134,4 +134,5 @@ export type AgentView =
   | { kind: 'conversation' }
   | { kind: 'extensions'; itemId?: string }
   | { kind: 'agents'; child?: SubagentChild }
-  | { kind: 'comparison'; comparison: ModelComparisonContext };
+  | { kind: 'comparison'; comparison: ModelComparisonContext }
+  | { kind: 'trace' };

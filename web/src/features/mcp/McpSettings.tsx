@@ -16,11 +16,13 @@ export type McpSettingsServer = {
   error: string;
 };
 
-export function McpSettings<T extends McpSettingsServer>({ servers, busy, recoveryPending = false, onAdd, onOpen, onEdit, onToggle, onDelete }: {
+export function McpSettings<T extends McpSettingsServer>({ servers, busy, recoveryPending = false, refreshBusy = false, onAdd, onRefresh, onOpen, onEdit, onToggle, onDelete }: {
   servers: readonly T[];
   busy: boolean;
   recoveryPending?: boolean;
+  refreshBusy?: boolean;
   onAdd: () => void;
+  onRefresh: () => void;
   onOpen: (server: T) => void;
   onEdit: (name: string) => void;
   onToggle: (name: string, enabled: boolean) => void;
@@ -29,7 +31,10 @@ export function McpSettings<T extends McpSettingsServer>({ servers, busy, recove
   return <div className="settings-sections mcp-settings">
     <SettingsPageHeader icon={<Plug />} title="MCP 服务器"
       meta={servers.length ? <><span>{servers.length} 个服务器</span><InfoHint label="默认通过 tool_search 按需发现工具；连接变更从下一次请求开始生效。" /></> : undefined}
-      actions={<button type="button" className="settings-add-button" disabled={busy} aria-label="添加 MCP 服务器" onClick={onAdd}><Plus />添加服务器</button>} />
+      actions={<>
+        <button type="button" className="settings-outline" disabled={busy || refreshBusy || recoveryPending} aria-label="刷新 MCP 服务器状态" onClick={onRefresh}><span className={`mcp-refresh-glyph ${refreshBusy ? 'spin' : ''}`} aria-hidden="true">↻</span>{refreshBusy ? '正在刷新…' : '刷新状态'}</button>
+        <button type="button" className="settings-add-button" disabled={busy || refreshBusy} aria-label="添加 MCP 服务器" onClick={onAdd}><Plus />添加服务器</button>
+      </>} />
     {servers.length ? <ul className="mcp-server-list" aria-label="MCP 服务器">
       {servers.map(server => {
         const status = mcpConnectionStatus(server);

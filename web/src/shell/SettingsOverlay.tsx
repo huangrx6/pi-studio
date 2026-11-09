@@ -453,7 +453,9 @@ export function SettingsOverlay({
               servers={data.mcp}
               busy={resourceBusy}
               recoveryPending={mcp.recoveryPending}
+              refreshBusy={notices.mcpRefreshBusy}
               onAdd={() => void controller.openEditor('mcp')}
+              onRefresh={() => void controller.refreshSavedMcpConfiguration()}
               onOpen={mcp.openDetail}
               onEdit={(name) => void controller.openEditor('mcp', name)}
               onToggle={(name, enabled) => void controller.toggleMcp(name, enabled)}

@@ -13,6 +13,8 @@
   padding-block: var(--space-2);
 }
 
+.settings-sections > .settings-page-header { margin-bottom: 0; }
+
 /* These page layouts already provide spacing between their direct children. */
 :is(.extensions-settings, .subagent-settings, .permission-policy, .usage-settings) > .settings-page-header {
   margin-bottom: 0;

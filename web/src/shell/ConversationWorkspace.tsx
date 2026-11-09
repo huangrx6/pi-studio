@@ -33,6 +33,7 @@ import type {
 } from '../types/extension-types';
 import type { StoredModelComparisonMap } from '../shared/stored-ui-state';
 import { ConversationHeader } from './ConversationHeader';
+import { ConversationTracePage } from './ConversationTraceMenu';
 import type { ConversationTraceSummary, ConversationTraceItem } from './ConversationTraceMenu';
 import type { ChatMessage, RequestTrace, ToolCallBlock } from '../types/chat-types';
 import {
@@ -102,6 +103,7 @@ type HeaderState = {
   openAgentOverview: () => void;
   openModelComparison: () => void;
   openConversationExtensionHub: () => void;
+  openTrace: () => void;
 };
 
 function compactTraceText(value: unknown, limit = 120): string {
@@ -373,6 +375,7 @@ export function ConversationWorkspace({
         onOpenAgentOverview={header.openAgentOverview}
         onOpenModelComparison={header.openModelComparison}
         onOpenConversationExtensionHub={header.openConversationExtensionHub}
+        onOpenTrace={header.openTrace}
         traceSummary={traceSummary}
       />
       {!isNewConversation && agentView.kind === 'conversation' && extensions.headerItems.length > 0 && (
@@ -540,6 +543,8 @@ export function ConversationWorkspace({
       </div>}
 
       {!isNewConversation && agentView.kind === 'comparison' && renderModelComparisonWorkspace()}
+
+      {!isNewConversation && agentView.kind === 'trace' && <ConversationTracePage summary={traceSummary} />}
 
       {!settingsOpen && !filesOpen && !isNewConversation && agentView.kind === 'conversation' && outline.items.length > 1 && (
         <ConversationOutline
