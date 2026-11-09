@@ -8,6 +8,7 @@ import {
   SHORTCUT_ACTIONS,
   comboFromEvent,
   formatShortcut,
+  formatShortcutParts,
   normalizeShortcuts,
   shortcutConflict,
 } from '../shared/shortcuts.mjs';
@@ -133,7 +134,13 @@ export function ShortcutSettings({ preferences, onChange }: {
               setStatus(`正在录制「${action.label}」，请按下新组合。`);
             }}
           >
-            {isRecording ? '按下新组合…' : formatShortcut(combo)}
+            {isRecording
+              ? '按下新组合…'
+              : <span className="shortcut-keys" aria-hidden="true">
+                  {formatShortcutParts(combo).map((part, index, all) => (
+                    <kbd key={`${part}-${index}`} className={index === all.length - 1 ? 'is-key' : 'is-mod'}>{part}</kbd>
+                  ))}
+                </span>}
           </button>
         </div>;
       })}

@@ -769,7 +769,7 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
         onClick={() => { if (openable) onOpenFile?.(attachment.path); }}
         onKeyDown={(event) => { if (openable && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onOpenFile?.(attachment.path); } }}>
         <AttachmentIcon name={attachment.name} mime={attachment.mime} />
-        <span className="attachment-main"><strong>{attachment.name}</strong><span>{formatBytes(attachment.bytes)}{attachment.lines ? ` · ${attachment.lines.toLocaleString('zh-CN')} 行` : ''}</span></span>
+        <span className="attachment-main"><strong title={attachment.name}>{attachment.name}</strong><span>{formatBytes(attachment.bytes)}{attachment.lines ? ` · ${attachment.lines.toLocaleString('zh-CN')} 行` : ''}</span></span>
         <span className={`attachment-kind ${visual.tone}`}>{visual.label.toUpperCase()}</span>
         {openable && <span className="attachment-open-cue" aria-hidden="true"><PanelRightOpen /></span>}
       </div>;

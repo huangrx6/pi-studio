@@ -255,3 +255,19 @@ test('startup cleanup removes only inactive managed session directories', () => 
     fs.rmSync(outside, { recursive: true, force: true });
   }
 });
+
+test('long-message attachments keep a short name and report their real size', async () => {
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-attachments-'));
+  try {
+    const api = loadAttachments(userData, { now: Date.UTC(2026, 10, 9, 11, 16, 45) });
+    const saved = await api.saveAttachment({ sessionId: 'session-a', text: 'hello\nworld' });
+    assert.equal(saved.name, 'long-message-20261109-1116.txt');
+    assert.equal(saved.bytes, 11);
+    assert.equal(saved.lines, 2);
+    assert.equal(api.attachmentSize(saved.path), 11);
+    assert.equal(api.attachmentSize(path.join(userData, 'attachments', 'session-a', 'missing.txt')), 0);
+    assert.equal(api.attachmentSize('../outside.txt'), 0);
+  } finally {
+    fs.rmSync(userData, { recursive: true, force: true });
+  }
+});

@@ -1,0 +1,71 @@
+/* 设置页数字步进器：外框 1px 实线、圆角 10、加减按钮 36 宽、数值区最小 64。
+ * 只消费语义令牌，设置面里会映射成同一套黑白灰。 */
+
+.settings-stepper {
+  display: inline-flex;
+  height: 36px;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.settings-stepper-step {
+  display: grid;
+  width: 36px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: var(--transparent);
+  color: var(--muted);
+  font-size: var(--icon-md);
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+
+.settings-stepper-step:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.settings-stepper-step:disabled {
+  color: var(--disabled-text);
+  cursor: not-allowed;
+}
+
+.settings-stepper-value,
+.settings-stepper-input {
+  min-width: 64px;
+  padding: 0 10px;
+  border: 0;
+  background: var(--transparent);
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.settings-stepper-value {
+  height: 100%;
+  cursor: text;
+}
+
+.settings-stepper-input {
+  height: 100%;
+  outline: 2px solid var(--focus-color);
+  outline-offset: -2px;
+}
+
+.settings-stepper-step + .settings-stepper-value,
+.settings-stepper-step + .settings-stepper-input,
+.settings-stepper-value + .settings-stepper-step,
+.settings-stepper-input + .settings-stepper-step {
+  border-left: 1px solid var(--border);
+}
+
+.settings-stepper.is-disabled {
+  border-color: var(--divider);
+}

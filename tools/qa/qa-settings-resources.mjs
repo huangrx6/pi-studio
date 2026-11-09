@@ -146,6 +146,19 @@ try {
     const item = mcpRow(name); await item.waitFor(); assert.equal(await item.getAttribute('data-state'), state); assert.match(await item.innerText(), new RegExp(text));
   }
   assert.match(await mcpRow('已连接零工具服务').innerText(), /0\s*个工具/);
+  // 状态图形是装饰：aria-hidden，语义只由状态文字承担。
+  const connectedState = mcpRow('已连接零工具服务').locator('.mcp-server-state');
+  assert.equal(await connectedState.locator('.status-glyph').getAttribute('aria-hidden'), 'true');
+  assert.equal(await connectedState.locator('.status-glyph').innerText(), '●');
+  assert.equal((await connectedState.innerText()).replace('●', '').trim(), '已连接 · 0 个工具');
+  // 行内删除按钮隐藏时不可命中，但仍可被键盘聚焦并显形。
+  const hiddenDelete = mcpRow('已连接零工具服务').getByRole('button', { name: '删除 MCP 已连接零工具服务', exact: true });
+  assert.equal(await hiddenDelete.evaluate((node) => getComputedStyle(node).pointerEvents), 'none');
+  assert.equal(await hiddenDelete.evaluate((node) => getComputedStyle(node).opacity), '0');
+  await mcpRow('已连接零工具服务').hover();
+  assert.equal(await hiddenDelete.evaluate((node) => getComputedStyle(node).pointerEvents), 'auto');
+  assert.equal(await hiddenDelete.evaluate((node) => getComputedStyle(node).opacity), '1');
+  await page.mouse.move(0, 0);
   assert.doesNotMatch(await mcpRow('等待连接服务').innerText(), /连接异常/);
   await mcpRow(longMcp).getByText('查看错误', { exact: true }).click();
   assert.match(await mcpRow(longMcp).locator('pre').innerText(), /用户明确发起测试/);

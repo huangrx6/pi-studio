@@ -144,20 +144,27 @@ try {
 
   await content.getByRole('button', { name: '深色', exact: true }).click();
   await preference('theme', 'dark');
-  await content.getByRole('radio', { name: '海蓝', exact: true }).click();
-  await preference('palette', 'ocean');
-  assert.equal(await content.getByRole('radio', { name: '海蓝', exact: true }).isChecked(), true);
-  await content.getByRole('radio', { name: '海蓝', exact: true }).focus();
-  await content.getByRole('radio', { name: '海蓝', exact: true }).press('ArrowRight');
-  await preference('palette', 'amber');
-  assert.equal(await content.getByRole('radio', { name: '琥珀', exact: true }).isChecked(), true, 'arrow keys update the native palette radio group');
-  await content.getByRole('radio', { name: '琥珀', exact: true }).press('ArrowLeft');
-  await preference('palette', 'ocean');
-  await content.getByRole('button', { name: '字号大小', exact: true }).click();
-  await page.getByRole('option', { name: '16 px', exact: true }).click();
+  const increaseFontSize = content.getByRole('button', { name: '增加字号', exact: true });
+  await increaseFontSize.click();
+  await increaseFontSize.click();
   await preference('fontSize', 16);
-  assert.match(await content.getByRole('button', { name: '字号大小', exact: true }).innerText(), /16/);
+  assert.match(await content.getByRole('button', { name: /^字号：/ }).innerText(), /16/);
   assert.equal(await page.evaluate(() => document.documentElement.style.getPropertyValue('--chat-font-size')), '16px');
+  // 步进器：点击数值直接输入，回车确认并夹到上界 18；方向键步进。
+  const fontSizeValue = content.getByRole('button', { name: /^字号：/ });
+  await fontSizeValue.click();
+  const fontSizeInput = content.getByRole('textbox', { name: '字号数值', exact: true });
+  await fontSizeInput.fill('40');
+  await fontSizeInput.press('Enter');
+  await preference('fontSize', 18);
+  assert.match(await fontSizeValue.innerText(), /18/);
+  assert.equal(await increaseFontSize.isDisabled(), true, '上界禁用增加');
+  await fontSizeValue.focus();
+  await fontSizeValue.press('ArrowDown');
+  await preference('fontSize', 17);
+  await fontSizeValue.press('ArrowDown');
+  await preference('fontSize', 16);
+  assert.match(await fontSizeValue.innerText(), /16/);
   await resize(980, 640);
   await content.evaluate((element) => { element.scrollTop = 0; });
   await capture('02-general-minimum-dark');
@@ -249,13 +256,11 @@ try {
   await page.reload();
   await page.locator('.new-conversation-welcome').waitFor();
   await preference('theme', 'dark');
-  await preference('palette', 'ocean');
   await preference('fontSize', 16);
   await page.locator('.sidebar-bottom button[title="设置"]').click();
   await nav.getByRole('button', { name: '通用', exact: true }).click();
   await content.getByRole('heading', { name: '通用', exact: true }).waitFor();
-  assert.equal(await content.getByRole('radio', { name: '海蓝', exact: true }).isChecked(), true);
-  assert.match(await content.getByRole('button', { name: '字号大小', exact: true }).innerText(), /16/);
+  assert.match(await content.getByRole('button', { name: /^字号：/ }).innerText(), /16/);
 
   assert.deepEqual(result.pageErrors, [], 'no uncaught renderer errors');
   console.log(`Settings refinement QA passed: ${result.routes.length} routes, ${Object.keys(chunks).length} lazy chunks; screenshots: ${output}`);

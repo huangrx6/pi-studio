@@ -7,10 +7,14 @@
   flex-shrink: 0;
 }
 
+.settings-navigation > .settings-nav-head {
+  padding-inline: var(--space-3);
+}
+
 .settings-navigation .settings-navigation-search {
   gap: var(--space-1);
   margin: var(--space-3) 0 var(--space-2);
-  padding-inline: var(--space-2);
+  padding-inline: var(--space-3);
   -webkit-app-region: no-drag;
 }
 
@@ -65,6 +69,9 @@
 .settings-navigation .settings-nav-row {
   min-width: 0;
   min-height: 36px;
+  display: grid;
+  grid-template-columns: var(--icon-md) minmax(0, 1fr);
+  padding-inline: var(--space-3);
   font-size: var(--text-sm);
   letter-spacing: 0;
 }

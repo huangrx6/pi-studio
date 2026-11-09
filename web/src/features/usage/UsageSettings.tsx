@@ -9,6 +9,7 @@ import {
   modelKey, shareLabel, shareOf, tokenParts, usageModelWindow, type ModelRange,
 } from './usage-presentation';
 import { useUsageResource } from './use-usage-resource';
+import { UsageSparkline } from './UsageSparkline';
 import './usage-settings.css';
 
 const RANGE_OPTIONS = [90, 180, 365] as const;
@@ -145,7 +146,7 @@ export function UsageSettings({ active }: { active: boolean }) {
   const empty = Boolean(snapshot && snapshot.allTime.totalTokens === 0 && snapshot.allTime.requests === 0);
   function refresh() { setSummaryRequest(value => value + 1); setMixRequest(value => value + 1); }
   return <div className="settings-sections usage-settings">
-    <SettingsPageHeader icon={<BarChart3 />} title="Token 使用量" meta={<span>全部工作区 · 按本地日期统计 <InfoHint label="只读取 Studio 本地汇总。按日期、Provider 与模型统计 Token；不保存提示词、回答正文、工具参数或凭据。" /></span>}
+    <SettingsPageHeader icon={<BarChart3 />} title="Token 使用量" meta={<span>全部工作区 · 按本地日期统计{snapshot && <span className="usage-updated-at"> · 更新于 {new Date(snapshot.generatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>} <InfoHint label="只读取 Studio 本地汇总。按日期、Provider 与模型统计 Token；不保存提示词、回答正文、工具参数或凭据。" /></span>}
       actions={<button type="button" className="settings-outline" disabled={refreshing} onClick={refresh}><RefreshCw className={refreshing ? 'spin' : undefined} />刷新</button>} />
     <section className="usage-summary-section" aria-label="Token 使用概览" aria-busy={summary.pending}>
       <header className="usage-section-head"><h2>近期用量</h2>{!empty && <div className="usage-range-switch" role="group" aria-label="热力图日期范围">{RANGE_OPTIONS.map(option => <button type="button" key={option} aria-pressed={days === option} className={days === option ? 'is-active' : ''} onClick={() => setDays(option)}>{option === 365 ? '1 年' : `${option} 天`}</button>)}</div>}</header>
@@ -159,7 +160,7 @@ export function UsageSettings({ active }: { active: boolean }) {
             {!snapshot.collection.enabled && <p className="usage-collection-note">用量采集已关闭。历史数据保留；重新启用 Studio Metrics 后继续记录。</p>}
             <p className="usage-window-label">{snapshot.sinceDay} 至 {dayKey(new Date(snapshot.generatedAt))} · {snapshot.days} 天 · 全部模型</p>
             <div className="usage-hero">
-              <div className="usage-hero-copy"><h3 title={`${exactNumber(snapshot.range.totalTokens)} tokens`}>{tokenNumber(snapshot.range.totalTokens)} <small>tokens</small></h3><TokenSplit totals={snapshot.range} /></div>
+              <div className="usage-hero-copy"><h3 title={`${exactNumber(snapshot.range.totalTokens)} tokens`}>{tokenNumber(snapshot.range.totalTokens)} <small>tokens</small></h3><TokenSplit totals={snapshot.range} /><UsageSparkline daily={snapshot.daily} /></div>
               <dl className="usage-stat-grid"><div className="usage-stat"><dt>请求</dt><dd>{exactNumber(snapshot.range.requests)}</dd></div><div className="usage-stat"><dt>活跃天数</dt><dd>{snapshot.range.activeDays} 天</dd></div><div className="usage-stat"><dt>估算成本 <InfoHint label="按已记录的用量成本汇总，以美元显示；未提供价格的请求可能不计入成本，这不是账单。" /></dt><dd>{costNumber(snapshot.range.cost)}</dd></div></dl>
             </div>
             <p className="usage-cumulative">累计 {tokenNumber(snapshot.allTime.totalTokens)} tokens · {exactNumber(snapshot.allTime.requests)} 次请求 · 当前连续 {snapshot.allTime.currentStreak} 天，最长 {snapshot.allTime.longestStreak} 天</p>

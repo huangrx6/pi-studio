@@ -1,5 +1,7 @@
 import { ChevronRight, Pencil, Plug, Plus, Trash2 } from 'lucide-react';
 import { InfoHint } from '../../shared/InfoHint';
+import { EmptyStateArt } from '../../shared/EmptyStateArt';
+import { StatusGlyph } from '../../shared/StatusGlyph';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
 import { mcpConnectionStatus } from './mcp-status';
 import './mcp-settings.css';
@@ -48,7 +50,7 @@ export function McpSettings<T extends McpSettingsServer>({ servers, busy, recove
             <div className="mcp-server-meta">
               <span>{server.transport === 'stdio' ? '本地进程' : 'HTTP 服务'}</span>
               <span>{server.exposure === 'deferred' ? '按需搜索' : server.exposure === 'direct' ? '直接提供' : '隐藏工具'}</span>
-              <span className="mcp-server-state">{status.label}</span>
+              <span className="mcp-server-state"><StatusGlyph state={status.state === 'connected' ? 'on' : status.state === 'error' ? 'attention' : 'off'} />{status.label}</span>
             </div>
             {server.error.trim() && <details className="mcp-server-error">
               <summary>{server.enabled ? '查看错误' : '查看上次连接错误'}</summary>
@@ -59,10 +61,14 @@ export function McpSettings<T extends McpSettingsServer>({ servers, busy, recove
             <button type="button" className={`switch ${server.enabled ? 'is-on' : ''}`} role="switch" aria-checked={server.enabled}
               disabled={busy || recoveryPending} onClick={() => onToggle(server.name, !server.enabled)} aria-label={`${server.name} ${server.enabled ? '禁用' : '启用'}`}><span /></button>
             <button type="button" className="icon-button" disabled={busy} aria-label={`编辑 ${server.name}`} title="编辑" onClick={() => onEdit(server.name)}><Pencil /></button>
-            <button type="button" className="icon-button" disabled={busy || recoveryPending} aria-label={`删除 MCP ${server.name}`} title="删除" onClick={() => onDelete(server.name)}><Trash2 /></button>
+            <button type="button" className="icon-button" data-destructive="true" disabled={busy || recoveryPending} aria-label={`删除 MCP ${server.name}`} title="删除" onClick={() => onDelete(server.name)}><Trash2 /></button>
           </div>
         </li>;
       })}
-    </ul> : <p className="mcp-settings-empty">还没有 MCP 服务器</p>}
+    </ul> : <div className="mcp-settings-empty">
+      <EmptyStateArt />
+      <p>还没有 MCP 服务器</p>
+      <span>添加后，服务器提供的工具会出现在智能体工具调用里。</span>
+    </div>}
   </div>;
 }

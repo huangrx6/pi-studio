@@ -135,6 +135,35 @@
   --terminal-ansi-bright-magenta: #7b61a0;
   --terminal-ansi-bright-cyan: #3d8487;
   --terminal-ansi-bright-white: #f5f5f5;
+  /* 设置页设计规范（黑白灰）：只在这套设置面里生效的 15 个令牌，浅色一套、
+  深色一套一一对应。设置页把通用语义角色映射到这些值，工作区其余部分继续
+  使用上面的强调色与语义色，避免把整个应用改成单色。
+   */
+
+  --settings-page-bg: #fafafa;
+  --settings-nav-bg: #f4f4f4;
+  --settings-card-bg: #ffffff;
+  --settings-border: #ebebeb;
+  --settings-divider: #f0f0f0;
+  --settings-text: #1f1f1f;
+  --settings-title: #0a0a0a;
+  --settings-muted: #767676;
+  --settings-control-bg: #f2f2f2;
+  --settings-hover-bg: #f2f2f2;
+  --settings-selected-bg: #ffffff;
+  /* 浅色下选中底与卡片同色，靠 1px 描边加轻阴影浮起；深色改为纯色块。 */
+  --settings-selected-shadow: inset 0 0 0 1px #ebebeb, 0 1px 2px rgb(0 0 0 / 6%);
+  /* 页面不再是纯白，卡片才需要 1px 极轻阴影；深色不用阴影。 */
+  --settings-card-shadow: 0 1px 2px rgb(0 0 0 / 4%);
+  --settings-thumb-shadow: 0 1px 2px rgb(0 0 0 / 20%);
+  --settings-switch-off: #d9d9d9;
+  --settings-switch-thumb: #ffffff;
+  --settings-accent: #0a0a0a;
+  --settings-on-accent: #ffffff;
+  --settings-chart-idle: #e3e3e3;
+  /* 热力图需要两档中间灰，规范只定义了当前柱与非当前柱两种。 */
+  --settings-chart-soft: #dcdcdc;
+  --settings-chart-mid: #c9c9c9;
 }
 
 /* 暗色主题：重定义页面、表面、文字、边框、语义状态、浮层与语法高亮。品牌
@@ -208,6 +237,29 @@
   --terminal-ansi-bright-white: #ffffff;
   /* 深色底上同一个占比太淡，选区需要更多强调色才看得见。 */
   --selection: color-mix(in srgb, var(--theme-accent) 44%, var(--surface));
+  /* 设置页设计规范（黑白灰）的深色一套：页面纯黑，靠微小明度差分层。 */
+
+  --settings-page-bg: #000000;
+  --settings-nav-bg: #0a0a0a;
+  --settings-card-bg: #111111;
+  --settings-border: #262626;
+  --settings-divider: #1c1c1c;
+  --settings-text: #ededed;
+  --settings-title: #ffffff;
+  --settings-muted: #a3a3a3;
+  --settings-control-bg: #1a1a1a;
+  --settings-hover-bg: #181818;
+  --settings-selected-bg: #2a2a2a;
+  --settings-selected-shadow: none;
+  --settings-card-shadow: none;
+  --settings-thumb-shadow: none;
+  --settings-switch-off: #3a3a3a;
+  --settings-switch-thumb: #d4d4d4;
+  --settings-accent: #ffffff;
+  --settings-on-accent: #000000;
+  --settings-chart-idle: #2a2a2a;
+  --settings-chart-soft: #303030;
+  --settings-chart-mid: #3a3a3a;
 }
 
 /* 配色方案：只替换品牌强调、交互表面、焦点与选区。页面中性表面和

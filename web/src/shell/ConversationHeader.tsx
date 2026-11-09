@@ -1,5 +1,5 @@
 import {
-  Bot, Columns2, MessageSquare, PanelLeft, PanelRight, Plug,
+  Bot, Columns2, MessageSquare, PanelLeft, PanelRightClose, PanelRightOpen, Plug,
 } from 'lucide-react';
 import {
   NotificationCenter,
@@ -23,7 +23,7 @@ type ConversationHeaderProps = {
   onOpenNotificationSession: (id: string) => Promise<void>;
   onRunNotificationAction: (item: AppNotification) => Promise<void>;
   filesOpen: boolean;
-  onOpenPanel: () => void;
+  onTogglePanel: () => void;
   onReturnToMainAgent: () => void;
   onOpenAgentOverview: () => void;
   onOpenModelComparison: () => void;
@@ -48,7 +48,7 @@ export function ConversationHeader({
   onOpenNotificationSession,
   onRunNotificationAction,
   filesOpen,
-  onOpenPanel,
+  onTogglePanel,
   onReturnToMainAgent,
   onOpenAgentOverview,
   onOpenModelComparison,
@@ -71,7 +71,16 @@ export function ConversationHeader({
             onOpenSession={onOpenNotificationSession}
             onRunAction={onRunNotificationAction}
           />
-          {!filesOpen && <button className="icon-button" onClick={onOpenPanel} aria-label="打开右侧面板" title="打开右侧面板"><PanelRight size={16} /></button>}
+          <button
+            type="button"
+            className={`icon-button ${filesOpen ? 'is-active' : ''}`}
+            aria-label={filesOpen ? '收起右侧面板' : '打开右侧面板'}
+            aria-pressed={filesOpen}
+            title={filesOpen ? '收起右侧面板' : '打开右侧面板'}
+            onClick={onTogglePanel}
+          >
+            {filesOpen ? <PanelRightClose /> : <PanelRightOpen />}
+          </button>
         </div>
       </header>
       {!isNewConversation && <div className="chat-tabs">

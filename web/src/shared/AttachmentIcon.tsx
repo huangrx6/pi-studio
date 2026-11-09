@@ -23,7 +23,8 @@ type AttachmentVisual = { Icon: typeof File; tone: string; label: string };
  * @param mime 可选 MIME；图片和压缩包主要靠它兜底没有扩展名的情况
  */
 export function attachmentVisual(name: string, mime = ''): AttachmentVisual {
-  const ext = (name.split('.').pop() || '').toLowerCase();
+  const ext = (typeof name === 'string' ? name.split('.').pop() || '' : '').toLowerCase();
+  mime = typeof mime === 'string' ? mime : '';
   if (mime.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif'].includes(ext)) return { Icon: FileImage, tone: 'is-image', label: ext || 'IMG' };
   if (['zip', 'tar', 'gz', 'tgz', 'rar', '7z', 'bz2', 'xz'].includes(ext) || /zip|tar|archive/.test(mime)) return { Icon: FileArchive, tone: 'is-archive', label: ext || 'ZIP' };
   if (['csv', 'xls', 'xlsx', 'numbers', 'ods'].includes(ext)) return { Icon: FileSpreadsheet, tone: 'is-sheet', label: ext || 'SHEET' };

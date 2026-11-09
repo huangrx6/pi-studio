@@ -18,6 +18,12 @@ contextBridge.exposeInMainWorld('piApi', {
   setAppearance: (theme, palette, radiusStyle) => (
     ipcRenderer.invoke('pi:set-appearance', theme, palette, radiusStyle)
   ),
+  windowState: () => ipcRenderer.invoke('pi:window-state'),
+  onWindowState: (listener) => {
+    const handler = (_event, state) => listener(state);
+    ipcRenderer.on('pi:window-state', handler);
+    return () => ipcRenderer.removeListener('pi:window-state', handler);
+  },
   updateState: () => ipcRenderer.invoke('pi:update-state'),
   checkForUpdates: (options) => ipcRenderer.invoke('pi:check-for-updates', options),
   downloadUpdate: () => ipcRenderer.invoke('pi:download-update'),

@@ -8,6 +8,7 @@ import { BackgroundLayer } from './shell/BackgroundLayer';
 import { ConversationWorkspace } from './shell/ConversationWorkspace';
 import { SettingsOverlay } from './shell/SettingsOverlay';
 import { useAppFoundation } from './shell/useAppFoundation';
+import { useWindowChrome } from './shell/useWindowChrome';
 import { useConversationController } from './shell/useConversationController';
 import { WorkbenchPane } from './shell/right-panel/WorkbenchPane';
 import { MarkdownActions } from './shared/markdown-actions';
@@ -16,6 +17,7 @@ import './shell/right-panel/panel-file.css';
 
 /** Application composition root: foundation state, conversation runtime, then layout. */
 export function App() {
+  useWindowChrome();
   const foundation = useAppFoundation();
   const conversation = useConversationController(foundation);
   const {
@@ -69,6 +71,7 @@ export function App() {
     panelFullscreen,
     workbench,
     openPanel,
+    closePanel,
     openBrowserTab,
     openTerminalTab,
     openFile,
@@ -381,7 +384,10 @@ export function App() {
           conversationDetailExtensionCount: conversationDetailExtensionItems.length,
           openNotificationSession,
           runNotificationAction,
-          openPanel,
+          togglePanel: () => {
+            if (filesOpen) closePanel();
+            else openPanel();
+          },
           returnToMainAgent,
           openAgentOverview: subagentWorkspace.openAgentOverview,
           openModelComparison,

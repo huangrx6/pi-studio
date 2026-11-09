@@ -1,0 +1,993 @@
+/* Settings surface — 设置页设计规范（黑白灰）。
+ *
+ * 这套设置面只使用规范里的 15 个令牌：页面底、侧边栏底、卡片底、强/弱分割线、
+ * 主/次文字、控件底、选中底、选中阴影、开关轨道与滑块、强调色与其上的文字、
+ * 图表非当前柱。令牌按浅深两套声明在 palette.css 里，这里把通用语义角色映射
+ * 过去，13 个设置页和设置内的弹窗一起变成单色；工作区其余部分仍用品牌强调色。
+ *
+ * 尺寸也按规范固定：侧栏 248、内容 840 左对齐、六档字号（统计 28）、卡片 14、
+ * 控件 10、导航项 9、开关 44×24。跨模块最终覆写，所以在 app.css 里最后导入。
+ */
+
+/* ---- 1. 令牌映射 ------------------------------------------------------- */
+/* 状态色也收进黑白灰：规范要求状态只用文字与图标表达。 */
+
+.settings-overlay {
+  --bg: var(--settings-page-bg);
+  --surface: var(--settings-card-bg);
+  --surface-raised: var(--settings-card-bg);
+  --surface-soft: var(--settings-control-bg);
+  --surface-hover: var(--settings-hover-bg);
+  --surface-active: var(--settings-selected-bg);
+  --selected-bg: var(--settings-selected-bg);
+  --sidebar-bg: var(--settings-nav-bg);
+  --border: var(--settings-border);
+  --border-strong: var(--settings-border);
+  --border-hover: var(--settings-muted);
+  --divider: var(--settings-divider);
+  --text: var(--settings-text);
+  --muted: var(--settings-muted);
+  --faint: var(--settings-muted);
+  --disabled-text: var(--settings-muted);
+  --icon: var(--settings-muted);
+  --accent: var(--settings-accent);
+  --accent-hover: var(--settings-accent);
+  --accent-foreground: var(--settings-text);
+  --accent-soft: var(--settings-control-bg);
+  --accent-border: var(--settings-border);
+  --button-bg: var(--settings-accent);
+  --button-hover: var(--settings-accent);
+  --on-button: var(--settings-on-accent);
+  --switch-off: var(--settings-switch-off);
+  --switch-thumb: var(--settings-switch-thumb);
+  --switch-on-thumb: var(--settings-on-accent);
+  --focus-color: var(--settings-accent);
+  --focus-halo: var(--settings-accent);
+  --focus-ring: 0 0 0 2px var(--settings-accent);
+  --selection: var(--settings-control-bg);
+  --selection-text: var(--settings-text);
+  --error: var(--settings-text);
+  --error-soft: var(--settings-control-bg);
+  --error-border: var(--settings-border);
+  --warning: var(--settings-text);
+  --warning-soft: var(--settings-control-bg);
+  --warning-border: var(--settings-border);
+  --success: var(--settings-text);
+  --success-soft: var(--settings-control-bg);
+  --success-border: var(--settings-border);
+  --info: var(--settings-muted);
+  --info-soft: var(--settings-control-bg);
+  --info-border: var(--settings-border);
+  --live: var(--settings-accent);
+  --loading: var(--settings-muted);
+  --data-level-1: var(--settings-chart-idle);
+  --data-level-2: var(--settings-chart-mid);
+  --data-level-3: var(--settings-chart-soft);
+  --data-level-4: var(--settings-accent);
+  --data-accent-muted: var(--settings-text);
+  --data-model-fill: var(--settings-accent);
+  --data-cell-border: var(--settings-divider);
+  /* 固定圆角：卡片 14、控件 10、导航项 9、内层 8。 */
+  --radius-tag: 6px;
+  --radius-control: 10px;
+  --radius-card: 14px;
+  --radius-panel: 14px;
+  --shadow-card: none;
+  --shadow-thumb: none;
+}
+
+/* ---- 2. 布局 ----------------------------------------------------------- */
+/* 侧栏 248 固定；内容列 840、左对齐，宽窗口下右侧留白。 */
+
+.settings-content {
+  padding: 48px 64px 72px;
+  background: var(--bg);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 说明文字 13/1.6，正文 14/1.5。 */
+.settings-content :is(p, small, .settings-help) { line-height: var(--leading-body); }
+
+.settings-page-frame {
+  width: 100%;
+  max-width: var(--settings-content);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--transparent);
+}
+
+.settings-nav {
+  width: 248px;
+  padding: 32px 16px 24px;
+  border-right: 1px solid var(--settings-border);
+}
+
+/* 自定义背景模式只保留玻璃层，不再给外框补表面。 */
+.settings-overlay .settings-content .settings-page-frame { background: var(--transparent); }
+
+/* ---- 3. 字号层级 ------------------------------------------------------- */
+/* 页面 24/650、侧栏标题 20/650、区块 15/600、正文与控件 14/500、说明 13/400、
+   分组标签 12/500、统计数字 28/650。 */
+
+.settings-overlay .settings-content h1 {
+  color: var(--settings-title);
+  font-size: var(--text-title);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: -.02em;
+}
+
+.settings-overlay .settings-content h2 {
+  color: var(--settings-title);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-normal);
+  letter-spacing: -.02em;
+}
+
+.settings-overlay .settings-content :is(h2, h3) small {
+  margin-left: 0;
+  color: var(--muted);
+  font-size: var(--text-13);
+  font-weight: var(--weight-regular);
+  letter-spacing: 0;
+}
+
+/* 规范不为标题和分组加图标。 */
+.settings-page-header-icon { display: none; }
+
+/* ---- 4. 页面头部 ------------------------------------------------------- */
+/* 标题在左、操作在右，底边距 32，标题与说明间距 6。 */
+
+.settings-page-header {
+  margin: 0 0 32px;
+  padding-block: 0;
+  align-items: center;
+}
+
+.settings-page-header-title { gap: 6px; }
+
+.settings-page-header h1 {
+  color: var(--settings-title);
+  font-size: var(--text-title);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: -.02em;
+}
+
+.settings-page-header-title > span,
+.settings-page-header-meta,
+.settings-content .general-page-summary {
+  color: var(--muted);
+  font-size: var(--text-13);
+}
+
+.settings-page-header-actions { gap: var(--space-2); }
+
+.settings-page-header-actions button:not(.icon-button),
+.settings-card-head .settings-head-actions button { min-height: 36px; }
+
+/* ---- 5. 左侧导航 ------------------------------------------------------- */
+/* 标题 20/650；搜索框 36/10 实线；导航项 38 高、圆角 9、14px；分组标签 12/500；
+   选中项用选中底 + 浅色下的 1px 描边与轻阴影；底部分割线上方是「返回对话」。 */
+
+.settings-nav-head {
+  height: 28px;
+  padding-inline: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: -.01em;
+}
+
+.settings-navigation .settings-navigation-search {
+  height: 36px;
+  margin: 16px 0 0;
+  padding-inline: 12px;
+  border: 1px solid var(--settings-border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.settings-navigation .settings-navigation-search:hover { background: var(--surface); }
+
+.settings-navigation .settings-navigation-search:focus-within {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: var(--focus-ring);
+}
+
+.settings-navigation .settings-navigation-search > svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.settings-navigation .settings-navigation-search input[type="search"] {
+  color: var(--text);
+  font-size: var(--text-base);
+}
+
+.settings-navigation .settings-navigation-pages { padding: 0; }
+
+.settings-navigation .settings-nav-group:first-child { margin-top: 16px; }
+
+.settings-navigation .settings-nav-group + .settings-nav-group { margin-top: 16px; }
+
+.settings-navigation .nav-section-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 8px;
+  padding-inline: 12px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0;
+}
+
+.settings-navigation .nav-section-label::after { content: none; }
+
+.settings-navigation .settings-nav-row {
+  min-height: 38px;
+  margin-bottom: 2px;
+  padding-inline: 12px;
+  border-radius: 9px;
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  box-shadow: none;
+}
+
+.settings-navigation .settings-nav-row > svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  color: var(--muted);
+}
+
+.settings-navigation .settings-nav-row:hover {
+  background: var(--settings-control-bg);
+  color: var(--text);
+}
+
+.settings-navigation .settings-nav-row.is-active {
+  background: var(--settings-selected-bg);
+  color: var(--text);
+  font-weight: var(--weight-semibold);
+  box-shadow: var(--settings-selected-shadow);
+}
+
+.settings-navigation .settings-nav-row.is-active > svg { color: var(--text); }
+
+.settings-navigation .settings-nav-bottom {
+  margin-top: auto;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--settings-border);
+}
+
+.settings-navigation .settings-back-button {
+  height: 38px;
+  padding-inline: 12px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--transparent);
+  box-shadow: none;
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+}
+
+.settings-navigation .settings-back-button:hover {
+  background: var(--settings-control-bg);
+  color: var(--text);
+}
+
+.settings-navigation .settings-back-button svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
+}
+
+.settings-navigation .settings-nav-row:focus-visible,
+.settings-navigation .settings-back-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ---- 6. 分组、卡片与行 -------------------------------------------------- */
+/* 分组之间 32；分组标题与卡片 12；卡片之间 16。卡片 1px 实线、圆角 14、内边距
+   20；行上下 18、左右 20（用负外边距铺到卡片边缘），行间 1px 弱分割线，末行
+   不加线。 */
+
+.settings-sections { gap: 32px; }
+
+.settings-card {
+  margin-bottom: 0;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.settings-card + .settings-card { margin-top: 16px; }
+
+.settings-card-head { margin-bottom: 12px; }
+
+.settings-content :is(
+  .subagent-settings,
+  .harness-settings,
+  .model-settings,
+  .usage-settings,
+  .about-page,
+  .extensions-settings,
+  .agent-tools-settings,
+  .permission-policy
+) {
+  gap: 32px;
+}
+
+/* 资源列表与资源卡片：卡片底、1px 实线、圆角 14；列表行上下 16、左右 20。 */
+.settings-content :is(.mcp-server-list, .installed-skill-group) {
+  border-color: var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.settings-content .mcp-server-row,
+.settings-content .installed-skill-row { padding: 16px 20px; }
+
+.settings-content .skill-hub-overview-row {
+  border-color: var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.settings-content .skill-hub-overview-row:hover { background: var(--settings-control-bg); }
+
+.settings-content .settings-resource-card {
+  border-color: var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.settings-content .settings-resource-card:hover {
+  border-color: var(--border);
+  background: var(--surface);
+  box-shadow: none;
+  transform: none;
+}
+
+.settings-content .settings-resource-card.is-selected,
+.settings-content .settings-resource-card.is-expanded { border-color: var(--border); }
+
+.settings-content .settings-resource-card-icon,
+.settings-content .publisher-trust-heading-copy > span {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  color: var(--muted);
+  background: var(--settings-control-bg);
+}
+
+.settings-content .settings-resource-card-icon > svg { width: var(--icon-md); height: var(--icon-md); }
+
+.settings-content .settings-empty {
+  padding: 20px;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  background: var(--transparent);
+  color: var(--muted);
+  text-align: center;
+}
+
+.settings-content :is(.mcp-settings-empty, .installed-skills-empty, .extension-empty) {
+  padding: 20px;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  background: var(--transparent);
+  color: var(--muted);
+  text-align: center;
+}
+
+.settings-loading {
+  padding: 32px 24px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.settings-save-status { border-color: var(--border); }
+
+/* ---- 7. 控件 ----------------------------------------------------------- */
+/* 主按钮 36/10/600；次按钮 36/10 实线；搜索与输入框 36/10；分段控件外框 3px、
+   每段 32/8；开关 44×24、滑块 18；图标按钮 32。 */
+
+.settings-content :is(input:not([type="checkbox"]):not([type="radio"]), .pi-select-trigger) {
+  height: 36px;
+  border-radius: 10px;
+  font-size: var(--text-base);
+}
+
+.settings-content input:not([type="checkbox"]):not([type="radio"]) {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.settings-content .pi-select-trigger {
+  padding: 0 12px;
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: var(--weight-medium);
+}
+
+.settings-content .pi-select-trigger:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.settings-content .pi-select-trigger.is-open,
+.settings-content .pi-select-trigger:focus-visible {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: var(--focus-ring);
+}
+
+.settings-content .pi-select-menu {
+  border-color: var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.settings-content :is(.settings-save, .primary-button, .settings-page-header .settings-add-button) {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--on-button);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  box-shadow: none;
+}
+
+.settings-content :is(.settings-save, .primary-button, .settings-page-header .settings-add-button):hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-button);
+}
+
+.settings-content :is(.settings-save, .primary-button, .settings-page-header .settings-add-button):disabled {
+  border-color: var(--border);
+  background: var(--settings-control-bg);
+  color: var(--muted);
+}
+
+/* 主按钮只出现在页面头部；卡片内部的“添加”类操作降为次按钮。 */
+.settings-content :is(.settings-add-button, .settings-outline, .secondary-button, .settings-mini-button) {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  box-shadow: none;
+}
+
+.settings-content :is(.settings-outline, .secondary-button, .settings-mini-button):hover:not(:disabled) {
+  border-color: var(--border);
+  background: var(--settings-control-bg);
+  color: var(--text);
+}
+
+.settings-content .settings-mini-button:hover:not(:disabled) { color: var(--text); }
+
+.settings-content .icon-button {
+  width: var(--icon-button-lg);
+  height: var(--icon-button-lg);
+  border-radius: 8px;
+}
+
+.settings-content .icon-button:hover:not(:disabled) { background: var(--settings-control-bg); }
+
+.settings-content .icon-button.is-active {
+  background: var(--settings-selected-bg);
+  color: var(--text);
+  box-shadow: var(--settings-selected-shadow);
+}
+
+.settings-content input[type="checkbox"] { width: 16px; height: 16px; border-radius: 4px; }
+
+.settings-content .switch {
+  width: 44px;
+  height: 24px;
+  padding: 3px;
+  border-radius: var(--radius-round);
+}
+
+.settings-content .switch {
+  transition: transform var(--transition), background-color var(--transition);
+}
+
+.settings-content .switch:active { transform: scale(.96); }
+
+.settings-content .switch > span {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  box-shadow: var(--settings-thumb-shadow);
+  transition: transform var(--transition);
+}
+
+.settings-content .switch.is-on > span { transform: translateX(20px); }
+
+/* ---- 8. 通用设置页 ----------------------------------------------------- */
+/* 每个分组是「区块标题 + 卡片」：标题 15/600，标题与卡片 12；卡片内行上下 18、
+   左右 20、行间弱分割线、末行无线；卡片之间 32。 */
+
+.settings-content .general-settings-section {
+  padding: 0;
+  border-top: 0;
+  max-width: none;
+}
+
+.settings-content .general-settings-section h2 {
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.settings-content .general-settings-card {
+  padding: 0 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.settings-content .general-settings-section + .general-settings-section { margin-top: 32px; }
+
+.settings-content .general-setting-row {
+  height: 56px;
+  min-height: 56px;
+  padding: 0;
+  border-top: 1px solid var(--divider);
+}
+
+.settings-content .general-settings-card > .general-setting-row:first-child { border-top: 0; }
+
+.settings-content .general-setting-row:last-child { border-bottom: 0; }
+
+.settings-content .general-setting-label {
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+}
+
+.settings-content .general-setting-control { gap: 12px; }
+
+.settings-content .general-theme-options {
+  padding: 3px;
+  gap: 2px;
+  border-radius: 10px;
+  background: var(--settings-control-bg);
+}
+
+.settings-content .general-theme-options button {
+  min-height: 32px;
+  padding-inline: 14px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+}
+
+.settings-content .general-theme-options button:hover {
+  background: var(--transparent);
+  color: var(--text);
+}
+
+.settings-content .general-theme-options button[aria-pressed="true"] {
+  background: var(--settings-selected-bg);
+  color: var(--text);
+  font-weight: var(--weight-semibold);
+  box-shadow: var(--settings-selected-shadow);
+}
+
+.settings-content .general-theme-options button[aria-pressed="true"] svg { color: var(--text); }
+
+.settings-content .general-theme-options button svg { color: var(--muted); }
+
+.settings-content .general-palette-options { gap: 2px; }
+
+.settings-content .general-palette-option {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+}
+
+.settings-content .general-palette-option:has(input:checked) {
+  background: var(--settings-selected-bg);
+  color: var(--text);
+  font-weight: var(--weight-semibold);
+  box-shadow: var(--settings-selected-shadow);
+}
+
+.settings-content .general-background-name { color: var(--muted); font-size: var(--text-13); }
+
+.settings-content .general-background-settings summary { font-size: var(--text-13); color: var(--muted); }
+
+.settings-content .general-background-settings {
+  padding: 0 0 18px;
+  border-top: 1px solid var(--divider);
+  padding-top: 18px;
+}
+
+/* ---- 9. 其它页面 ------------------------------------------------------- */
+/* 快捷键、工具、权限等页面共用同一套行节奏与分割线，只调整各自的容器。 */
+
+.settings-content .shortcut-settings { gap: 12px; }
+
+.settings-content .shortcut-settings > .settings-page-header { margin-bottom: 0; }
+
+.settings-content .shortcut-settings .shortcut-help { color: var(--muted); font-size: var(--text-13); }
+
+.settings-content .shortcut-settings .shortcut-status:empty { display: none; }
+
+.settings-content .shortcut-settings .shortcut-list {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 0 20px;
+}
+
+.settings-content .shortcut-settings .shortcut-row {
+  min-height: 56px;
+  padding: 8px 0;
+  border-top: 1px solid var(--divider);
+}
+
+.settings-content .shortcut-settings .shortcut-row:first-child { border-top: 0; }
+
+.settings-content .shortcut-settings .shortcut-label strong { font-size: var(--text-base); font-weight: var(--weight-medium); }
+
+.settings-content .shortcut-settings .shortcut-label small { color: var(--muted); font-size: var(--text-13); }
+
+.settings-content .shortcut-settings .shortcut-key {
+  min-width: 44px;
+  min-height: 28px;
+  padding: 0 8px;
+  border-color: var(--border);
+  border-radius: 6px;
+  background: var(--settings-control-bg);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.settings-content .shortcut-settings .shortcut-key:hover { border-color: var(--border); background: var(--settings-selected-bg); }
+
+.settings-content .agent-tool-row { padding: 16px 0; }
+
+.settings-content .agent-tool-open code { font-size: var(--text-base); font-weight: var(--weight-medium); }
+
+.settings-content .agent-tool-search-wrap > input.agent-tool-search { height: 36px; }
+
+.settings-content .permission-policy-scopes {
+  gap: 2px;
+  padding: 3px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--settings-control-bg);
+}
+
+.settings-content .permission-policy-scopes button {
+  min-height: 32px;
+  border-radius: 8px;
+  font-weight: var(--weight-medium);
+}
+
+.settings-content .permission-policy-scopes button.is-active {
+  border-color: var(--transparent);
+  background: var(--settings-selected-bg);
+  box-shadow: var(--settings-selected-shadow);
+  font-weight: var(--weight-semibold);
+}
+
+.settings-content .permission-policy-scopes button.is-active > small { color: var(--muted); }
+
+.settings-content .permission-preset { min-height: 48px; padding: 10px 12px; }
+
+.settings-content .permission-preset.is-active {
+  background: var(--settings-selected-bg);
+  box-shadow: var(--settings-selected-shadow);
+}
+
+.settings-content .permission-preset.is-sensitive.is-active { background: var(--settings-selected-bg); }
+
+.settings-content .permission-preset-check { border-color: var(--border); }
+
+.settings-content .permission-preset.is-active .permission-preset-check {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.settings-content .harness-apply-button.is-applied {
+  border-color: var(--border);
+  background: var(--settings-control-bg);
+  color: var(--text);
+  opacity: 1;
+}
+
+/* 图标按钮统一 32 后，原本按 28px 预留的删除列需要同步加宽。 */
+.settings-content .harness-tool-guidance-row { grid-template-columns: minmax(0, 1fr) 32px; }
+
+/* 说明文字统一 13：列表与行里的描述、状态文字。 */
+.settings-content :is(
+  .settings-card-head p,
+  .general-setting-row p,
+  .mcp-server-row p,
+  .installed-skill-row p,
+  .agent-tool-row p,
+  .permission-preset-copy small,
+  .harness-global-instructions,
+  .subagent-settings p,
+  .extensions-settings small
+) {
+  font-size: var(--text-13);
+  line-height: var(--leading-normal);
+}
+
+/* 统计数字单独一档：28/650、等宽数字。 */
+.settings-content .usage-hero h3,
+.settings-content .usage-stat dd {
+  font-size: var(--text-display);
+  font-weight: var(--weight-bold);
+  letter-spacing: -.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-content .usage-hero h3 small { font-size: var(--text-13); }
+
+.settings-content .usage-range-switch button,
+.settings-content .usage-model-filter button {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: var(--text-13);
+}
+
+.settings-content .usage-range-switch button.is-active,
+.settings-content .usage-model-filter button.is-active {
+  border-color: var(--transparent);
+  background: var(--settings-selected-bg);
+  color: var(--text);
+  box-shadow: var(--settings-selected-shadow);
+}
+
+.settings-content .usage-heat-cell.is-selected { box-shadow: 0 0 0 1px var(--text); }
+
+.settings-content .usage-heat-cell:not(:disabled):hover { box-shadow: 0 0 0 2px var(--accent); }
+
+/* ---- 10. 窄窗 ---------------------------------------------------------- */
+/* 规范未定义 < 1280 的适配；这里只把内容左右留白和侧栏宽度收紧，保持结构。 */
+
+@media (max-width: 1200px) {
+  .settings-content { padding-inline: 32px; }
+  .settings-nav { width: 232px; }
+}
+
+@media (max-width: 900px) {
+  .settings-content { padding: 40px 24px 56px; }
+  .settings-nav { width: 208px; padding-inline: 12px; }
+}
+
+/* ---- 11. 状态、悬停与反馈 ---------------------------------------------- */
+/* 状态用图形 + 文字表达，不再用颜色：● 已启用/已连接，○ 已停用/等待，△ 需要处理。
+   图形本身是 aria-hidden 的装饰元素，语义由状态文字承担（见 shared/StatusGlyph）。 */
+
+.settings-content :is(.mcp-server-state, .installed-skill-status, .resource-status) {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 列表行整行悬停；行内的“更多/删除”只在悬停或键盘聚焦时出现。 */
+.settings-content :is(.mcp-server-row, .installed-skill-row, .extension-list-row):hover {
+  background: var(--settings-hover-bg);
+}
+
+/* 只有破坏性操作默认隐藏；编辑等普通动作保持常显。
+   隐藏态同时禁用命中：不会误点，但仍在 Tab 顺序里，聚焦后立即显形。 */
+.settings-content :is(.mcp-server-row, .installed-skill-row) [data-destructive] {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition);
+}
+
+.settings-content :is(.mcp-server-row, .installed-skill-row):hover [data-destructive],
+.settings-content :is(.mcp-server-row, .installed-skill-row):focus-within [data-destructive] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 卡片在浅色下一页不再是纯白，靠 1px 极轻阴影浮起；深色不给阴影。 */
+.settings-content :is(.general-settings-card, .settings-card, .shortcut-list, .mcp-server-list, .installed-skill-group, .settings-resource-card) {
+  box-shadow: var(--settings-card-shadow);
+}
+
+/* 空状态：去掉虚线框，用单色几何线稿 + 一句话说明。 */
+.settings-content :is(.mcp-settings-empty, .installed-skills-empty, .extension-empty, .settings-empty) {
+  border: 1px solid var(--divider);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--muted);
+  text-align: center;
+}
+
+.settings-content :is(.mcp-settings-empty, .installed-skills-empty) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 28px 24px;
+}
+
+.settings-content .empty-state-art {
+  margin-bottom: 8px;
+  color: var(--faint);
+}
+
+.settings-content :is(.mcp-settings-empty, .installed-skills-empty) p {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+}
+
+.settings-content :is(.mcp-settings-empty, .installed-skills-empty) span {
+  max-width: 360px;
+  color: var(--muted);
+  font-size: var(--text-13);
+  line-height: var(--leading-body);
+}
+
+/* 切页：内容 140ms 淡入并上移 4px；减少动态效果时由全局规则取消。 */
+.settings-page-frame { animation: settings-surface-enter 140ms ease-out; }
+
+@keyframes settings-surface-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* 焦点环：2px 实线、偏移 2px，颜色跟随设置面的强调色（浅色黑、深色白）。 */
+.settings-page-header-title > span,
+.settings-page-header p,
+.settings-card-head p,
+.settings-content .general-setting-row p {
+  line-height: var(--leading-body);
+}
+
+.settings-overlay :is(button, a, summary, [role="switch"], [role="radio"]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---- 12. 弹窗与设置同一套系统 ----------------------------------------- */
+/* 标题 20/650、说明 13、底部操作栏左次右主并加分割线；错误用 △ + 文字。 */
+
+.settings-overlay .settings-dialog {
+  border-color: var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.settings-overlay .dialog-header h2 {
+  color: var(--settings-title);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: -.02em;
+}
+
+.settings-overlay .dialog-header p { font-size: var(--text-13); color: var(--muted); }
+
+.settings-overlay .dialog-body { padding: 0 24px 24px; }
+
+.settings-overlay .dialog-body small { font-size: var(--text-13); line-height: var(--leading-body); }
+
+.settings-overlay .dialog-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.settings-overlay .dialog-error {
+  margin: 0 24px 16px;
+  border: 1px solid var(--border);
+  background: var(--settings-control-bg);
+  color: var(--text);
+}
+
+.settings-overlay .dialog-error::before {
+  content: '△';
+  margin-right: 6px;
+}
+
+/* 弹窗里的表单标签统一放在输入框上方。 */
+.settings-overlay .dialog-body .settings-form-grid > label,
+.settings-overlay .dialog-body .model-token-field { gap: 6px; }
+
+/* ---- 13. 导航的滑动指示条 ---------------------------------------------- */
+/* 选中态由一条 150ms 滑动的指示条承担，行本身不再瞬时换底。 */
+
+.settings-navigation .settings-navigation-pages { position: relative; }
+
+.settings-nav-indicator {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 0;
+  border-radius: 9px;
+  background: var(--settings-selected-bg);
+  box-shadow: var(--settings-selected-shadow);
+  pointer-events: none;
+  transition: top 150ms ease, height 150ms ease, opacity 150ms ease;
+}
+
+.settings-navigation .settings-nav-row { position: relative; z-index: 1; background: var(--transparent); }
+
+.settings-navigation .settings-nav-row.is-active {
+  background: var(--transparent);
+  box-shadow: none;
+}
+
+/* ---- 15. 即时保存的确认 ------------------------------------------------ */
+/* 「✓ 已保存」1.2s 后淡出；只做确认，不占布局、不打断操作。 */
+
+.settings-saved-flash {
+  position: fixed;
+  bottom: 24px;
+  left: calc(50% + 124px);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--settings-card-shadow);
+  color: var(--text);
+  font-size: var(--text-13);
+  line-height: 1.4;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(4px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.settings-saved-flash.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.settings-saved-flash > span[aria-hidden] {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+/* 用量趋势线：40px 高，单色，不抢数字的层级。 */
+.settings-content .usage-sparkline {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  height: 40px;
+  margin-top: 12px;
+  color: var(--muted);
+}

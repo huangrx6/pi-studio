@@ -121,6 +121,20 @@ export function formatShortcut(combo, platform) {
 }
 
 /**
+ * 逐键标签，供键帽渲染使用（`formatShortcut` 仍是唯一的纯文本形式）。
+ * 返回修饰键在前、主键在后的顺序；组合非法时返回空数组。
+ */
+export function formatShortcutParts(combo, platform) {
+  const normalized = normalizeCombo(combo);
+  if (!normalized) return [];
+  const isMac = platform ?? (typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || ''));
+  const labels = isMac ? MOD_LABEL_MAC : MOD_LABEL_OTHER;
+  const parts = normalized.split('+');
+  const key = parts.pop();
+  return [...parts.map((part) => labels[part] ?? part), key];
+}
+
+/**
  * Merge stored bindings over the defaults: unknown actions are dropped and
  * unparsable values fall back to the shipped key.
  */

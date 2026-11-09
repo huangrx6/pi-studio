@@ -1,4 +1,6 @@
 import { ChevronRight, Trash2 } from 'lucide-react';
+import { EmptyStateArt } from '../../shared/EmptyStateArt';
+import { StatusGlyph } from '../../shared/StatusGlyph';
 import { installedSkillStatus } from './installed-skill-status';
 import './installed-skills.css';
 
@@ -36,7 +38,11 @@ export function InstalledSkills<T extends InstalledSkill>({ skills, errors, path
   return <section className="installed-skills" aria-label="已安装技能">
     <header className="installed-skills-heading"><h2>已安装技能</h2>{populatedGroupCount > 1 && <span>{skills.length} 个</span>}</header>
     {hasProjectSkills && <p className="installed-skills-guidance">项目技能需审查目录内容和来源后手动信任；内容变化后，旧信任会失效。</p>}
-    {!skills.length && <p className="installed-skills-empty">还没有已安装技能</p>}
+    {!skills.length && <div className="installed-skills-empty">
+      <EmptyStateArt />
+      <p>还没有已安装技能</p>
+      <span>可以在技能中心安装，或把技能目录放进工作区。</span>
+    </div>}
     {groups.map(group => {
       const items = skills.filter(skill => skill.scope === group.scope && skill.origin === group.origin);
       const defaultDiscovery = items.some(skill => skill.available && !skill.disableModelInvocation);
@@ -56,11 +62,11 @@ export function InstalledSkills<T extends InstalledSkill>({ skills, errors, path
                   <strong>{skill.name}</strong><ChevronRight aria-hidden="true" />
                 </button>
                 <p title={skill.description}>{skill.description}</p>
-                {status.label !== '自动发现' && <span className="installed-skill-status">{status.label}</span>}
+                {status.label !== '自动发现' && <span className="installed-skill-status"><StatusGlyph state={skill.available && !skill.disableModelInvocation ? 'on' : skill.available ? 'off' : 'attention'} />{status.label}</span>}
               </div>
               <div className="installed-skill-actions">
                 {status.canTrust && <button type="button" className="settings-text-button" disabled={busy} onClick={() => onTrust(skill)}>{status.trustLabel}</button>}
-                <button type="button" className="icon-button" aria-label={`删除技能 ${skill.name}`} title="删除技能" disabled={busy} onClick={() => onDelete(skill)}><Trash2 /></button>
+                <button type="button" className="icon-button" data-destructive="true" aria-label={`删除技能 ${skill.name}`} title="删除技能" disabled={busy} onClick={() => onDelete(skill)}><Trash2 /></button>
               </div>
             </li>;
           })}

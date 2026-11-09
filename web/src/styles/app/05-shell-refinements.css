@@ -169,7 +169,8 @@ just-dropped 只有一次短动画，不改变最终布局。 */
   padding-inline: 0;
   border-right-color: var(--transparent);
 }
-.is-sidebar-collapsed .chat-header { padding-left: 92px; }
+.is-sidebar-collapsed .chat-header,
+.is-sidebar-collapsed .main .chat-header { padding-left: 92px; }
 .sidebar-expand { width: 28px; height: 28px; margin-right: 2px; }
 
 /* Sidebar toggle sits on the native window-control line; header actions stay right. */

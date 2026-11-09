@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { ChevronLeft, Search, X } from 'lucide-react';
 import { isComposingKey, menuFocusIndex } from '../shared/keyboard-navigation';
@@ -63,6 +63,7 @@ export function SettingsNavigation({
   ariaLabel = '设置导航',
 }: SettingsNavigationProps) {
   const [query, setQuery] = useState('');
+  const [indicator, setIndicator] = useState<{ top: number; height: number } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const pagesRef = useRef<HTMLElement>(null);
   const navigationId = useId();
@@ -81,6 +82,25 @@ export function SettingsNavigation({
   const focusablePageId = visiblePages.some((page) => page.id === activeId)
     ? activeId
     : visiblePages[0]?.id;
+
+  // 选中指示条跟随当前页：测量行的位置与高度，切换页面时用 150ms 过渡滑过去。
+  useLayoutEffect(() => {
+    const container = pagesRef.current;
+    const active = container?.querySelector<HTMLElement>('.settings-nav-row.is-active');
+    if (!container || !active) { setIndicator(null); return; }
+    setIndicator({ top: active.offsetTop, height: active.offsetHeight });
+  }, [activeId, query, pages]);
+
+  useEffect(() => {
+    const container = pagesRef.current;
+    if (!container) return undefined;
+    const observer = new ResizeObserver(() => {
+      const active = container.querySelector<HTMLElement>('.settings-nav-row.is-active');
+      if (active) setIndicator({ top: active.offsetTop, height: active.offsetHeight });
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
 
   function clearSearch() {
     setQuery('');
@@ -127,6 +147,11 @@ export function SettingsNavigation({
         {query && <button type="button" className="icon-button" aria-label="清除设置搜索" title="清除搜索" onClick={clearSearch}><X aria-hidden="true" /></button>}
       </div>
       <nav ref={pagesRef} id={navigationId} className="settings-navigation-pages" aria-label={ariaLabel}>
+        {indicator && <span
+          className="settings-nav-indicator"
+          style={{ top: `${indicator.top}px`, height: `${indicator.height}px` }}
+          aria-hidden="true"
+        />}
         {groups.map((group, groupIndex) => (
           <div className="settings-nav-group" key={group.label || `ungrouped-${groupIndex}`}>
             {group.label && <div className="nav-section-label">{group.label}</div>}

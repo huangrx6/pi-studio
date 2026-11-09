@@ -165,7 +165,7 @@ export function normalizePreferences(value: unknown): Preferences {
       source.fontSize,
       DEFAULT_PREFERENCES.fontSize,
       12,
-      17,
+      18,
     ),
     stepDisplay: STEP_DISPLAYS.has(source.stepDisplay as StepDisplay)
       ? source.stepDisplay as StepDisplay

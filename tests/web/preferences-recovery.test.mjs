@@ -97,7 +97,7 @@ test('saving preferences writes the same canonical object loaded next time', () 
 
   const saved = JSON.parse(storage.values.get('pi-studio:preferences'));
   assert.equal(saved.theme, 'dark');
-  assert.equal(saved.fontSize, 17);
+  assert.equal(saved.fontSize, 18);
   assert.equal(saved.shortcuts.togglePanel, 'Mod+Alt+J');
   assert.deepEqual(loadPreferences(storage), saved);
   assert.equal(storage.writes.length, 1);

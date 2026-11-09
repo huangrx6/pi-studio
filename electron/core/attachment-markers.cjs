@@ -48,4 +48,42 @@ function parseAttachmentMarkers(text) {
   return { text: clean.trim(), attachments };
 }
 
-module.exports = { makeAttachmentMarker, parseAttachmentMarkers };
+/** 落盘文件名带 randomUUID 前缀（避免同名覆盖），展示时去掉。 */
+const STORAGE_PREFIX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i;
+
+function attachmentDisplayName(target) {
+  const base = target.split(/[\\/]/).filter(Boolean).at(-1) || '附件';
+  return base.replace(STORAGE_PREFIX, '');
+}
+
+/**
+ * Durable input stores attachment paths; the renderer needs named summaries.
+ * `known` carries marker-derived metadata (name / bytes / lines / kind / mime)
+ * for the same paths, so reopening a conversation keeps the real size and the
+ * original file name. Per-path order follows `value`, not the marker order.
+ */
+function chatAttachments(value, known) {
+  if (!Array.isArray(value)) return [];
+  const byPath = new Map((Array.isArray(known) ? known : [])
+    .filter((item) => item && typeof item.path === 'string')
+    .map((item) => [item.path, item]));
+  return value.flatMap((item) => {
+    const info = typeof item === 'string' ? { path: item } : item;
+    if (!info || typeof info.path !== 'string' || !info.path.trim()) return [];
+    const merged = { ...(byPath.get(info.path) || {}), ...info };
+    const name = typeof merged.name === 'string' && merged.name.trim()
+      ? merged.name.trim()
+      : attachmentDisplayName(merged.path);
+    const count = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
+    return [{
+      name,
+      path: merged.path,
+      bytes: count(merged.bytes),
+      lines: count(merged.lines),
+      kind: merged.kind === 'text' ? 'text' : 'file',
+      ...(typeof merged.mime === 'string' ? { mime: merged.mime } : {}),
+    }];
+  });
+}
+
+module.exports = { makeAttachmentMarker, parseAttachmentMarkers, chatAttachments };

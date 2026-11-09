@@ -64,7 +64,9 @@
     "qa:settings-utilities": "node tools/qa/qa-settings-utilities.mjs",
     "qa:panel-files": "node tools/qa/qa-panel-files.mjs",
     "qa:panel-lifecycle": "node tools/qa/qa-panel-lifecycle.mjs",
-    "qa:browser-panel": "node tools/qa/qa-browser-panel.mjs"
+    "qa:browser-panel": "node tools/qa/qa-browser-panel.mjs",
+    "qa:window-fullscreen": "node tools/qa/qa-window-fullscreen.mjs",
+    "qa:window-bounds": "node tools/qa/qa-window-bounds.mjs"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.1.3",

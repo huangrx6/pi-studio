@@ -141,7 +141,7 @@ Harness profile 定义 Prompt section 开关、section 覆盖、自定义补充�
 
 ### 5.4 Renderer 界面偏好
 
-字号、主题、强调色、背景、步骤展示、链接打开方式和繁忙时发送行为主要保存在 renderer `localStorage` 的 `pi-studio:preferences`。侧栏展开状态、手动排序、最近会话、筛选和面板宽度也保存在 renderer 本地。
+字号、主题、配色、背景、步骤展示、链接打开方式和繁忙时发送行为主要保存在 renderer `localStorage` 的 `pi-studio:preferences`。设置页不再提供配色与圆角入口，历史保存的值仍会应用到界面。侧栏展开状态、手动排序、最近会话、筛选和面板宽度也保存在 renderer 本地。
 
 这些偏好不参与模型请求，也不会跨工作区切换。主题与 palette 同时镜像到应用级 SQLite，供原生窗口和启动阶段使用；菜单栏开关保存在 `studio.app.menuBarEnabled`。界面偏好保存后立即应用，不需要重载运行环境。
 

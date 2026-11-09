@@ -48,6 +48,8 @@
 
   --text-xs: 11px;
   --text-sm: 12px;
+  /* 设置页规范的「说明文字」档：正文 14 与分组标签 12 之间的中间值。 */
+  --text-13: 13px;
   --text-base: 14px;
   --text-md: 15px;
   --text-lg: 17px;
@@ -72,6 +74,8 @@
     换档（28 → sm，24 → xs），不要单独写像素。 */
 
   --icon-button: 28px;
+  /* 设置页图标按钮的点击区更大，列表网格需要同尺寸列。 */
+  --icon-button-lg: 32px;
   --icon-button-compact: 24px;
   /* 聊天正文使用比通用正文更紧凑但仍有足够呼吸的固定比例；字号偏好变化时
   行高会随字号一起缩放，避免大字号下过挤或小字号下过松。 */
@@ -95,7 +99,7 @@
   /* 会话一级视图共用同一组内容宽度和左右留白；窗口或主面板变窄时只改
   gutter，所有视图随之同步收缩。 */
   --session-gutter: var(--space-8);
-  --settings-content: 1040px;
+  --settings-content: 840px;
   --header-height: 48px;
   --toolbar-height: 36px;
   /* 自定义背景的运行时默认值；App 会按用户偏好覆盖这两个变量。 */

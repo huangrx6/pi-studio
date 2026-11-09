@@ -68,6 +68,9 @@ test('installed skills render one empty state and only populated groups', () => 
   const { InstalledSkills } = compile('skills/InstalledSkills.tsx', {
     react: React,
     'lucide-react': { ChevronRight: () => null, Trash2: () => null },
+    '../../shared/EmptyStateArt': { EmptyStateArt: () => null },
+    '../../shared/StatusGlyph': { StatusGlyph: () => null },
+
     './installed-skill-status': {
       installedSkillStatus: (skill) => ({ label: skill.disableModelInvocation ? '仅显式调用' : '自动发现', canTrust: false }),
     },
@@ -108,6 +111,9 @@ test('MCP zero state relies on the primary add action without a redundant zero c
   const { McpSettings } = compile('mcp/McpSettings.tsx', {
     react: React,
     'lucide-react': { ChevronRight: () => null, Pencil: () => null, Plus: () => null, Trash2: () => null },
+    '../../shared/EmptyStateArt': { EmptyStateArt: () => null },
+    '../../shared/StatusGlyph': { StatusGlyph: () => null },
+
     '../../shared/InfoHint': { InfoHint: ({ label }) => React.createElement('span', null, label) },
     '../../shared/SettingsPageHeader': { SettingsPageHeader: Header },
     './mcp-status': { mcpConnectionStatus: () => ({ label: '未连接', state: 'disabled' }) },
@@ -138,6 +144,7 @@ test('zero usage hides empty charts and zero-value workbench behind one first-ru
     '../../shared/DatePicker': { DatePicker: () => null },
     '../../shared/InfoHint': { InfoHint: ({ label }) => React.createElement('span', null, label) },
     '../../shared/SettingsPageHeader': { SettingsPageHeader: Header },
+    './UsageSparkline': { UsageSparkline: () => null },
     './usage-presentation': {
       ALL_MODELS: 'all', dayFromToday: () => '2026-11-06', dayKey: () => '2026-11-06',
       heatLevel: () => 0, heatmapDates: () => [], heatmapNavigation: () => null,

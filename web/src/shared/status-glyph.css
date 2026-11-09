@@ -1,0 +1,10 @@
+/* 状态图形：默认灰、启用用正文色；语义由旁边文字承担。 */
+.status-glyph {
+  margin-right: 6px;
+  color: var(--muted);
+}
+
+.status-glyph.is-on,
+.status-glyph.is-attention {
+  color: var(--text);
+}

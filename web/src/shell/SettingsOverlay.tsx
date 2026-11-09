@@ -1,4 +1,4 @@
-import { lazy, type ComponentProps, type RefObject } from 'react';
+import { lazy, useEffect, type ComponentProps, type RefObject } from 'react';
 import { BookOpen, FileCode2, Layers3, LoaderCircle, Plus, RotateCw } from 'lucide-react';
 import type { DiscoveredModel } from '../features/models/model-settings-types';
 import type { ModelOption, ModelSelection } from '../types/model-types';
@@ -19,6 +19,8 @@ import { ExtensionSlot } from '../features/extensions/ExtensionSlot';
 import { ConversationListNotice } from './ConversationListNotice';
 import { SettingsEditorDialog } from './SettingsEditorDialog';
 import { SettingsNavigation } from './SettingsNavigation';
+import { SettingsSavedFlash } from './SettingsSavedFlash';
+import { isComposingKey } from '../shared/keyboard-navigation';
 import { apiTypeOptions, settingsPages } from './app-shell-config';
 
 const AgentToolsSettings = lazy(async () => {
@@ -312,6 +314,19 @@ export function SettingsOverlay({
     },
     onSubmit: submitEditor,
   };
+  // Esc 退出设置：内层编辑器/native dialog 自己处理 Esc，搜索框在前方已 stopPropagation。
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || isComposingKey(event)) return;
+      if (document.querySelector('dialog[open]')) return;
+      event.preventDefault();
+      void controller.closeSettings();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [controller, open]);
+
   if (!open) return null;
   const resourceBusy = notices.settingsBusy || notices.resourceWriteBusy;
   const close = () => { void controller.closeSettings(); };
@@ -555,6 +570,8 @@ export function SettingsOverlay({
             </div>
           </DeferredSettingsBoundary>
         </section>
+        {/* 即时设置落盘后的确认，不改变布局。 */}
+        <SettingsSavedFlash signal={appearance.preferences} />
         {editor.editor && <SettingsEditorDialog {...editor} editor={editor.editor} />}
       </div>
     </SettingsDraftContext.Provider>

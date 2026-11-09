@@ -13,6 +13,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
+const { chatAttachments, parseAttachmentMarkers } = require('../core/attachment-markers.cjs');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
 const {
   deleteWorkspaceScopedSettings,
@@ -42,6 +43,7 @@ const {
 const { fileReferenceContext } = require('../services/workspace.cjs');
 const {
   attachmentContext,
+  attachmentSize,
   removeAttachmentDirectory,
 } = require('../services/attachments.cjs');
 const {
@@ -262,6 +264,24 @@ function contentToChat(content) {
   });
 }
 
+/** 拼接消息里的文本块，用于读出用户消息携带的附件标记。 */
+/**
+ * 附件投影：Durable 只存路径，文件名/体积/行数来自消息里的附件标记；
+ * 标记缺失（例如消息被编辑后重新提交）时按已落盘文件补体积。
+ */
+function projectedAttachments(stored, content) {
+  const { attachments: marked } = parseAttachmentMarkers(messageText(content));
+  return chatAttachments(stored, marked).map((attachment) => (
+    attachment.bytes > 0 ? attachment : { ...attachment, bytes: attachmentSize(attachment.path) }
+  ));
+}
+
+function messageText(content) {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content.filter((block) => block?.type === 'text').map((block) => String(block.text || '')).join('\n');
+}
+
 function messageToChat(message, entry) {
   if (!message || !['user', 'assistant', 'toolResult'].includes(message.role)) return [];
   const data = entry.data && typeof entry.data === 'object' ? entry.data : {};
@@ -279,7 +299,7 @@ function messageToChat(message, entry) {
       content: displayContent,
       timestamp: message.timestamp,
       sourceIndex: Number(entry.id),
-      ...(Array.isArray(data.attachments) ? { attachments: data.attachments } : {}),
+      ...(Array.isArray(data.attachments) ? { attachments: projectedAttachments(data.attachments, message.content) } : {}),
     }];
   }
   if (message.role === 'assistant') {
@@ -1054,11 +1074,7 @@ async function editConversation(input = {}, options = {}) {
   const token = `edit:${requestId}`;
   const covered = context.entries.slice(targetIndex).map((entry) => Number(entry.id));
   const data = target.data && typeof target.data === 'object' ? target.data : {};
-  const attachments = Array.isArray(data.attachments)
-    ? data.attachments
-      .map((attachment) => attachment?.path)
-      .filter((attachmentPath) => typeof attachmentPath === 'string' && attachmentPath)
-    : [];
+  const attachments = chatAttachments(data.attachments).map((attachment) => attachment.path);
   const images = targetContribution
     .filter((message) => message.role === 'user')
     .flatMap((message) => message.content)

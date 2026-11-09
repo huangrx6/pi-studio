@@ -29,18 +29,37 @@
 .shortcut-settings .shortcut-label strong { color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-medium); overflow-wrap: anywhere; }
 .shortcut-settings .shortcut-label small { color: var(--muted); font-size: var(--text-xs); }
 .shortcut-settings .shortcut-key {
-  min-width: 104px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 44px;
   max-width: 100%;
-  min-height: 32px;
-  padding: 5px 10px;
+  min-height: 28px;
+  padding: 4px 8px;
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-control);
+  border-radius: 6px;
   background: var(--surface-soft);
   color: var(--text);
-  font: var(--weight-medium) var(--text-xs) var(--mono);
+  /* 键帽用系统字体：⌘ ⇧ ⌥ 只在系统字体里有完整字形，等宽字体会退回到大小不一致的符号字体。 */
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  line-height: 1.2;
   text-align: center;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
+
+.shortcut-settings .shortcut-keys { display: inline-flex; align-items: center; gap: 2px; }
+
+.shortcut-settings .shortcut-key kbd {
+  /* 会话里的快捷键提示给 kbd 定了 88px 的最小宽度，键帽里必须收回。 */
+  min-width: 0;
+  font: inherit;
+  line-height: 1;
+}
+
+.shortcut-settings .shortcut-key kbd.is-key { min-width: 10px; text-align: center; }
 .shortcut-settings .shortcut-key:hover { border-color: var(--border-hover); background: var(--surface-hover); }
 .shortcut-settings .shortcut-key.is-custom { color: var(--accent-foreground); }
 .shortcut-settings .shortcut-key.is-recording,

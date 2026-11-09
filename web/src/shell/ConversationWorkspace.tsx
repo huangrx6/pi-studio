@@ -98,7 +98,7 @@ type HeaderState = {
   conversationDetailExtensionCount: number;
   openNotificationSession: (id: string) => Promise<void>;
   runNotificationAction: (item: AppNotification) => Promise<void>;
-  openPanel: () => void;
+  togglePanel: () => void;
   returnToMainAgent: () => void;
   openAgentOverview: () => void;
   openModelComparison: () => void;
@@ -370,7 +370,7 @@ export function ConversationWorkspace({
         onOpenNotificationSession={header.openNotificationSession}
         onRunNotificationAction={header.runNotificationAction}
         filesOpen={filesOpen}
-        onOpenPanel={header.openPanel}
+        onTogglePanel={header.togglePanel}
         onReturnToMainAgent={header.returnToMainAgent}
         onOpenAgentOverview={header.openAgentOverview}
         onOpenModelComparison={header.openModelComparison}

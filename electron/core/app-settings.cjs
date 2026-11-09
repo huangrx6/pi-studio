@@ -7,6 +7,7 @@
 
 const path = require('node:path');
 const { getStudioDatabase } = require('./studio-db.cjs');
+const { normalizeWindowBounds } = require('./window-bounds.cjs');
 const {
   DEFAULT_AUTO_COMPACT_PERCENT,
   normalizeAutoCompactPercent,
@@ -28,6 +29,7 @@ const {
 
 const KEYS = Object.freeze({
   theme: 'studio.app.theme',
+  windowBounds: 'studio.window.bounds',
   palette: 'studio.app.palette',
   radiusStyle: 'studio.app.radiusStyle',
   menuBarEnabled: 'studio.app.menuBarEnabled',
@@ -550,6 +552,17 @@ function getMenuBarEnabled() {
     true,
     normalizeMenuBarEnabled,
   );
+}
+
+/** Last main-window rectangle; null until the user has moved or resized it. */
+function getWindowBounds() {
+  return readSettingWithRecovery(KEYS.windowBounds, null, normalizeWindowBounds);
+}
+
+function setWindowBounds(bounds) {
+  const normalized = normalizeWindowBounds(bounds);
+  if (!normalized) return;
+  getStudioDatabase().setSetting(KEYS.windowBounds, normalized);
 }
 
 function safePermissionTools(value) {
@@ -1322,6 +1335,7 @@ module.exports = {
   getExtensionRegistryUrl,
   getMenuBarEnabled,
   getPalette,
+  getWindowBounds,
   getRadiusPreset,
   getRadiusStyle,
   getPermissionMode,
@@ -1344,6 +1358,7 @@ module.exports = {
   selectHarnessProfile,
   setPermissionMode,
   setPermissionPolicy,
+  setWindowBounds,
   setExtensionRegistryUrl,
   resetPermissionPolicy,
   setSubagentConfig,

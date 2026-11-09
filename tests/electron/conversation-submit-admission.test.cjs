@@ -43,6 +43,7 @@ function createDurableFixture() {
       await run({ doc: async () => ({}) });
     },
     async submit(payload) {
+      this.lastSubmission = payload;
       submissionCalls += 1;
       let submission = submissions.get(payload.requestId);
       if (!submission) {
@@ -104,6 +105,7 @@ Module._load = function loadConversationFixture(request, parent, isMain) {
   if (request === '../services/attachments.cjs') {
     return {
       attachmentContext: async () => [],
+      attachmentSize: () => 0,
       removeAttachmentDirectory: async () => {},
     };
   }
@@ -300,4 +302,22 @@ test('the renderer request id is forwarded unchanged and Durable deduplicates re
     durableConversation && studioDatabase.getConversation('1').lastRequestId,
     'stable-request-id',
   );
+});
+
+test('reopening a submitted file attachment projects metadata instead of raw path strings', async (t) => {
+  createFixture(t);
+  const attachmentPath = '/studio/attachments/session/context.txt';
+  await conversationModule.submitConversation({
+    id: 'conversation-public', text: 'Read the attachment', attachments: [attachmentPath],
+  });
+  const submitted = durableConversation.lastSubmission;
+  durableConversation.entries = async () => ({ items: [{
+    id: 10,
+    ...submitted.entry,
+    model: [{ role: 'user', content: submitted.content }],
+  }] });
+  const messages = await conversationModule.fullDisplayMessages(durableConversation);
+  assert.equal(messages[0].attachments[0].name, 'context.txt');
+  assert.equal(messages[0].attachments[0].path, attachmentPath);
+  assert.equal(typeof messages[0].attachments[0].bytes, 'number');
 });

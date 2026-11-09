@@ -329,6 +329,14 @@ interface MenuBarSettings {
   platform: string;
 }
 
+/**
+ * Native window chrome state. Native fullscreen also hides the macOS traffic
+ * lights, so the shell stops reserving their gutter.
+ */
+interface NativeWindowState {
+  fullscreen: boolean;
+}
+
 declare global {
   interface Window {
     /**
@@ -343,6 +351,10 @@ declare global {
         palette: 'lime' | 'ocean' | 'amber' | 'berry',
         radiusStyle: 'square' | 'compact' | 'standard' | 'soft',
       ): Promise<void>;
+      /** Read the native window chrome state used by the shell layout. */
+      windowState(): Promise<NativeWindowState>;
+      /** Follow native fullscreen changes; returns an unsubscribe function. */
+      onWindowState(listener: (state: NativeWindowState) => void): () => void;
       /** Read the current updater snapshot. */
       updateState(): Promise<UpdateSnapshot>;
       /** Check the latest public GitHub Release. */

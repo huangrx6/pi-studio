@@ -186,7 +186,7 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 和类型徽标。附件卡最小宽度 240px，长文件名省略，不撑破气泡。 */
 
 .user-text { white-space: pre-wrap; }
-.attachment-card { display: flex; align-items: center; gap: 9px; min-width: 240px; max-width: 100%; margin-top: 9px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); text-align: left; }
+.attachment-card { display: flex; align-items: center; gap: 9px; min-width: 240px; max-width: min(100%, 460px); margin-top: 9px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); text-align: left; }
 .attachment-icon { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: var(--radius-tag); color: var(--icon); background: var(--surface-soft); }
 .attachment-icon svg { width: var(--icon-md); height: var(--icon-md); }
 .attachment-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
@@ -217,8 +217,10 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .composer-attachment > span small { color: var(--faint); font-size: var(--text-xs); }
 .composer-attachment-remove { position: absolute; z-index: 2; top: -5px; right: -5px; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; line-height: 1; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--faint); box-shadow: var(--shadow-thumb); }
 
-/* 引用徽章：输入框引用条与用户消息共用同一套外观。 */
-.ref-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; min-width: 0; padding: 0 6px 0 7px; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-body); vertical-align: -0.22em; }
+/* 引用徽章：用户消息里的技能与文件引用，嵌在正文行内。
+   徽章比正文一行略高，需要按字面中心对齐全行：middle 把盒子中心落到 x-height
+   中线，中文会偏低 1–2px，所以用一个很小的负偏移把盒子提回视觉中线。 */
+.ref-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; min-width: 0; padding: 0 6px 0 7px; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-body); vertical-align: -.06em; }
 .ref-chip > svg { width: var(--icon-xs); height: var(--icon-xs); flex: none; color: var(--faint); }
 .ref-chip > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ref-chip.is-skill { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent-foreground); }

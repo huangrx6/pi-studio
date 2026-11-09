@@ -133,6 +133,16 @@ function resolveAttachmentFile(requested) {
   return resolveAttachmentPath(attachmentRoot(), requested);
 }
 
+/** 附件体积；路径无效或已被删除时返回 0，用于消息投影补全元信息。 */
+function attachmentSize(requested) {
+  try {
+    const stat = fs.statSync(resolveAttachmentFile(requested));
+    return stat.isFile() ? stat.size : 0;
+  } catch {
+    return 0;
+  }
+}
+
 function readAttachmentFile({ path: requested } = {}) {
   const target = resolveAttachmentFile(requested);
   return readFilePath(target, target);
@@ -249,7 +259,8 @@ async function saveUpload({ sessionId, name, mime, data }) {
  */
 async function saveAttachment({ sessionId, text }) {
   if (typeof text !== 'string' || text.length === 0) throw new Error('没有可保存的内容');
-  const name = `long-message-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-');
+  const name = `long-message-${stamp}.txt`;
   const buffer = Buffer.from(text, 'utf8');
   const target = writeAttachment(sessionId, name, buffer);
   const info = { name, path: target, bytes: buffer.length, lines: text.split('\n').length, kind: 'text', mime: 'text/plain' };
@@ -350,6 +361,7 @@ module.exports = {
   saveUpload,
   saveAttachment,
   readAttachmentFile,
+  attachmentSize,
   resolveAttachmentPath,
   resolveAttachmentFile,
   attachmentContext,

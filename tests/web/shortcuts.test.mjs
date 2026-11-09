@@ -12,6 +12,7 @@ const {
   SHORTCUT_ACTIONS,
   comboFromEvent,
   formatShortcut,
+  formatShortcutParts,
   matchesShortcut,
   normalizeCombo,
   normalizeShortcuts,
@@ -68,6 +69,13 @@ test('prints platform-specific labels', () => {
   assert.equal(formatShortcut('Mod+Shift+B', true), '⌘⇧B');
   assert.equal(formatShortcut('Mod+Shift+B', false), 'Ctrl+Shift+B');
   assert.equal(formatShortcut('', true), '未设置');
+});
+
+test('splits a combo into per-key labels for keycaps', () => {
+  assert.deepEqual(formatShortcutParts('Mod+Shift+B', true), ['⌘', '⇧', 'B']);
+  assert.deepEqual(formatShortcutParts('Mod+Shift+B', false), ['Ctrl', 'Shift', 'B']);
+  assert.deepEqual(formatShortcutParts('mod+alt+shift+[', true), ['⌘', '⌥', '⇧', '[']);
+  assert.deepEqual(formatShortcutParts('', true), []);
 });
 
 test('merging stored bindings keeps defaults and drops garbage', () => {

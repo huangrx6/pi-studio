@@ -24,7 +24,7 @@
 .model-settings-view button[aria-pressed="true"] { color: var(--text); text-decoration: underline; text-underline-offset: 7px; text-decoration-color: var(--accent); }
 .model-settings-view button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: var(--radius-sm); }
 .model-settings-enabled-list { list-style: none; margin: 0; padding: 0; }
-.model-settings-enabled-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto) 28px; align-items: center; column-gap: 18px; row-gap: 7px; padding: 11px 0; }
+.model-settings-enabled-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto) var(--icon-button-lg); align-items: center; column-gap: 18px; row-gap: 7px; padding: 11px 0; }
 .model-settings-enabled-identity { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
 .model-settings-enabled-identity strong { overflow: hidden; color: var(--text); font-size: var(--text-base); font-weight: var(--weight-medium); text-overflow: ellipsis; white-space: nowrap; }
 .model-settings-enabled-identity code { overflow: hidden; color: var(--faint); font: var(--text-xs)/var(--leading-normal) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
@@ -87,7 +87,7 @@
   .model-settings .provider-model-row { grid-template-columns: 22px minmax(0, 1fr) 64px; }
   .model-settings .provider-model-row > .model-settings-capabilities { grid-column: 2 / -1; }
   .model-settings .provider-model-row-actions { grid-column: 3; grid-row: 1; }
-  .model-settings-enabled-row { grid-template-columns: minmax(0, 1fr) 28px; }
+  .model-settings-enabled-row { grid-template-columns: minmax(0, 1fr) var(--icon-button-lg); }
   .model-settings-enabled-row > .model-settings-capabilities { grid-row: 2; grid-column: 1 / -1; justify-content: flex-start; }
   .model-settings-enabled-row > button { grid-column: 2; grid-row: 1; }
 }

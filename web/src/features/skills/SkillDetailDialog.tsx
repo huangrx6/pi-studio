@@ -4,6 +4,7 @@ import { DetailDialog } from '../../shared/DetailDialog';
 import { DeferredFilePreview } from '../../shared/DeferredFilePreview';
 import { FileKindIcon } from '../../shared/FileKindIcon';
 import { formatFileSize } from '../../shared/filesize';
+import { StatusGlyph } from '../../shared/StatusGlyph';
 import { installedSkillStatus } from './installed-skill-status';
 import { createSkillDetailResource, emptySkillDetailState } from './skill-detail-resource';
 import './skill-detail.css';
@@ -34,7 +35,7 @@ export function SkillDetailDialog({ skill, busy, error, refreshing = false, onRe
       <div className="detail-heading"><div>
         <h2>{skill.name}</h2>
         {skill.description && <p>{skill.description}</p>}
-        <small className={`resource-status ${skill.available ? 'is-on' : ''}`}>{status.label}</small>
+        <small className={`resource-status ${skill.available ? 'is-on' : ''}`}><StatusGlyph state={skill.available ? 'on' : 'attention'} />{status.label}</small>
       </div></div>
       <button type="button" className="icon-button" aria-label="关闭技能详情" onClick={onClose}><X /></button>
     </header>

@@ -6,7 +6,7 @@
 const { ipcMain } = require('electron');
 const { listWorkspaces, refreshRuntimeState } = require('../runtime/conversations.cjs');
 const { DEFAULT_CWD, modelInfo } = require('../services/models.cjs');
-const { applyAppearance } = require('../window.cjs');
+const { applyAppearance, windowState } = require('../window.cjs');
 const { chooseBackgroundMedia, removeBackgroundMedia } = require('../services/background.cjs');
 
 function registerSystemIpc() {
@@ -15,6 +15,7 @@ function registerSystemIpc() {
     'pi:set-appearance',
     (_event, theme, palette, radiusStyle) => applyAppearance(theme, palette, radiusStyle),
   );
+  ipcMain.handle('pi:window-state', () => windowState());
   ipcMain.handle('pi:background-media-choose', (_event, payload) => chooseBackgroundMedia(payload));
   ipcMain.handle('pi:background-media-remove', (_event, url) => removeBackgroundMedia(url));
 
