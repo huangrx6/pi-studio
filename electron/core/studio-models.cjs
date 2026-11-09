@@ -200,6 +200,13 @@ function needsCustomProvider(provider, baseProvider, rows) {
   return rows.some((row) => row.source !== 'builtin');
 }
 
+function hasStudioApiKey(db, providerId) {
+  const credential = db.readCredential(providerId);
+  return credential?.type === 'api_key'
+    && typeof credential.key === 'string'
+    && credential.key.trim().length > 0;
+}
+
 function isPristineSeededProvider(provider, builtin, providerModels, credentialIds) {
   if (!provider.builtin || !builtin || credentialIds.has(provider.id) || !provider.enabled) {
     return false;
@@ -299,7 +306,11 @@ async function buildRuntime(db) {
     // A source may be configured before its first model. Keep it in Studio
     // SQLite, but Pi AI providers require at least one API implementation.
     if (catalog.length === 0) continue;
-    if (!needsCustomProvider(provider, builtin, providerModels)) continue;
+    // Built-in pi-ai providers normally resolve credentials from environment
+    // variables. A key saved in Studio must replace that resolver even when
+    // the catalog and endpoint are otherwise unchanged.
+    if (!needsCustomProvider(provider, builtin, providerModels)
+      && !hasStudioApiKey(db, provider.id)) continue;
     catalog = catalog.map((model) => ({
       ...model,
       provider: provider.id,

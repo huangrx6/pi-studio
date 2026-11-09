@@ -287,6 +287,12 @@ export function ConversationWorkspace({
     requestPlacement,
     turnActive,
   }), [transcriptTurns, toolResultMap, requestPlacement, turnActive]);
+  const lastAssistantTurn = transcriptTurns[lastAssistantTurnIndex];
+  const lastAssistantError = lastAssistantTurn?.kind === 'assistant'
+    ? lastAssistantTurn.messages.at(-1)?.errorMessage
+    : undefined;
+  const showSessionError = Boolean(error)
+    && !(Boolean(error) && !turnActive && lastAssistantError === error);
 
   function renderModelComparisonWorkspace() {
     if (agentView.kind !== 'comparison') return null;
@@ -474,7 +480,7 @@ export function ConversationWorkspace({
             actionBusy={conversationSubscriptionError.retrying}
             onAction={retryConversationSubscription}
           />}
-          {error && (!pendingAssistantVisible || turnActive) && <ConversationError message={error} onDismiss={() => setError(null)} />}
+          {showSessionError && (!pendingAssistantVisible || turnActive) && <ConversationError message={error!} onDismiss={() => setError(null)} />}
         </div>
       </div>}
 

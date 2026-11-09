@@ -104,8 +104,8 @@ export function ConversationHeader({
             <Plug />
             <span className="tab-label">扩展<span className="tab-count">{extensionCount}</span></span>
           </button>}
-          <ConversationTraceMenu summary={traceSummary} />
         </div>
+        <ConversationTraceMenu summary={traceSummary} />
       </div>}
       {isNewConversation && <div className="chat-tabs is-placeholder" aria-hidden="true" />}
     </>

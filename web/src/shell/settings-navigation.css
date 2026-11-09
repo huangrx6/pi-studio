@@ -36,7 +36,7 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: var(--space-2) var(--space-1);
+  padding: var(--space-2) 0;
   -webkit-app-region: no-drag;
 }
 

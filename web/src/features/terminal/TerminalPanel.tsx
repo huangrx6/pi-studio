@@ -57,6 +57,7 @@ export function TerminalPanel({
   onNewTerminal: () => void;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const focusTerminalRef = useRef<(() => void) | null>(null);
   const [connecting, setConnecting] = useState(true);
   const [status, setStatus] = useState<TerminalSessionStatus>('running');
   const [exitCode, setExitCode] = useState<number | undefined>();
@@ -104,6 +105,7 @@ export function TerminalPanel({
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(host);
+    focusTerminalRef.current = () => term.focus();
 
     const fitTerminal = () => {
       frame = 0;
@@ -294,6 +296,7 @@ export function TerminalPanel({
       resizeObserver.disconnect();
       appearanceObserver.disconnect();
       term.dispose();
+      focusTerminalRef.current = null;
     };
   }, [cwd, id, retryRevision]);
 
@@ -312,7 +315,13 @@ export function TerminalPanel({
     </header>
     {historyTruncated && <div className="terminal-history-note" role="status">较早输出已清理，历史画面可能不完整。</div>}
     <div className="terminal-stage">
-      <div ref={hostRef} className="terminal-host" aria-label="交互式终端" />
+      <div
+        ref={hostRef}
+        className="terminal-host"
+        aria-label="交互式终端"
+        onPointerDown={() => focusTerminalRef.current?.()}
+        onFocus={() => focusTerminalRef.current?.()}
+      />
       {error && <div className="terminal-error" role="alert">
         <strong>终端连接异常</strong>
         <span>{error}</span>
