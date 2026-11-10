@@ -79,17 +79,43 @@
   border-color: var(--transparent);
 }
 
+/* 所有单值控件共用同一块玻璃表面：输入框、多行文本、自定义下拉、步进器和分段轨。
+   自定义下拉是 <button>，漏掉它就会在背景图下变成唯一一块不透明黑底。 */
 .app.has-custom-background :is(
-  .settings-content input:not([type="checkbox"]),
+  .settings-content input:not([type="checkbox"]):not([type="radio"]),
   .settings-content select,
+  .settings-content textarea,
+  .settings-content .pi-select-trigger,
+  .settings-content .settings-stepper,
+  .settings-content :is(.general-theme-options, .usage-range-switch, .permission-policy-scopes),
   .dialog-body input:not([type="checkbox"]),
   .dialog-body select,
   .dialog-body textarea,
+  .dialog-body .pi-select-trigger,
+  .dialog-body .settings-stepper,
   .workspace-search,
   .settings-search,
   .search-field
 ) {
   background: var(--background-control-surface);
+  border-color: var(--background-border-strong);
+}
+
+/* 悬停、展开与聚焦保持同一块玻璃底，只把边框换成焦点色；否则控件会在交互瞬间
+   跳回不透明表面。 */
+.app.has-custom-background .settings-content :is(
+  .pi-select-trigger,
+  .settings-stepper,
+  .general-theme-options,
+  .usage-range-switch,
+  .permission-policy-scopes
+):is(:hover, :focus-visible, :focus-within, .is-open) {
+  background: var(--background-control-surface);
+}
+
+/* 下拉面板会盖在照片上，读文字优先：用更实的卡片玻璃，而不是控件层。 */
+.app.has-custom-background .pi-select-menu {
+  background: var(--background-card-strong-surface);
   border-color: var(--background-border-strong);
 }
 

@@ -27,7 +27,7 @@ const routes = [
   { label: '使用量', title: 'Token 使用量', modules: ['UsageSettings'] },
   { label: '智能体工具', title: '智能体工具', modules: ['AgentToolsSettings'] },
   { label: '权限策略', title: '智能体权限', modules: ['PermissionPolicySettings'] },
-  { label: 'Harness 配置', title: 'Harness 配置', modules: ['HarnessSettings'] },
+  { label: 'Harness 配置', title: 'Harness 配置', modules: ['HarnessSettings'], glassControls: true },
   { label: '子智能体', title: '子智能体', modules: ['SubagentSettings'] },
   { label: 'MCP 服务器', title: 'MCP 服务器', modules: ['McpSettings'] },
   { label: '技能', title: '技能', modules: ['SkillHub', 'InstalledSkills'] },
@@ -245,6 +245,27 @@ try {
     await nav.getByRole('button', { name: route.label, exact: true }).click();
     await content.getByRole('heading', { name: route.title, exact: true, level: 1 }).waitFor();
     await assertTitleAlignment(`${route.label} narrow`);
+    if (route.glassControls) {
+      // 有背景图时，输入框、自定义下拉和多行文本必须共用同一块玻璃表面。
+      await page.evaluate(() => { document.querySelector('.app').classList.add('has-custom-background'); });
+      await page.waitForTimeout(200);
+      const surfaces = await page.evaluate(() => {
+        const read = (selector) => {
+          const node = document.querySelector(selector);
+          return node ? getComputedStyle(node).backgroundColor : null;
+        };
+        return {
+          input: read('.settings-content input:not([type="checkbox"]):not([type="radio"])'),
+          select: read('.settings-content .pi-select-trigger'),
+          textarea: read('.settings-content textarea'),
+        };
+      });
+      await page.evaluate(() => { document.querySelector('.app').classList.remove('has-custom-background'); });
+      assert.ok(surfaces.input, `${route.label}: policy inputs are present`);
+      assert.equal(surfaces.select, surfaces.input, `${route.label}: select trigger shares the input surface ${JSON.stringify(surfaces)}`);
+      assert.equal(surfaces.textarea, surfaces.input, `${route.label}: textarea shares the input surface ${JSON.stringify(surfaces)}`);
+      result.glassSurfaces = surfaces;
+    }
     await resize(860, 640);
     await assertTitleAlignment(`${route.label} compact`);
     await resize(980, 640);
