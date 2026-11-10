@@ -24,7 +24,19 @@
 
 .brand .brand-name { font-size: var(--text-13); font-weight: var(--weight-semibold); letter-spacing: 0; }
 
-.sidebar-top-toggle { top: calc((var(--header-height) - 28px) / 2); right: var(--space-3); }
+/* 按钮在窗口拖拽区旁边：显式声明 no-drag 并把热区向外扩 4px，
+ * 28px 的图标旁边那点空白也应该能点中。 */
+.sidebar-top-toggle {
+  top: calc((var(--header-height) - 28px) / 2);
+  right: var(--space-3);
+  z-index: 6;
+  -webkit-app-region: no-drag;
+}
+.sidebar-top-toggle::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
 
 /* 有壁纸或全屏时品牌与侧栏内容同一条竖线（12px）；窗口模式仍让开红绿灯。 */
 .app.has-custom-background { --brand-leading: 12px; }
