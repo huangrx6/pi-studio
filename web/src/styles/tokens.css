@@ -97,6 +97,8 @@
      the comfortable default for the common two-column layout. */
   --panel-w: 390px;
   --content: 860px;
+  /* 轨迹页保持稳定的阅读列，详情通过弹层承载长内容。 */
+  --trace-content: 960px;
   /* 会话一级视图共用同一组内容宽度和左右留白；窗口或主面板变窄时只改
   gutter，所有视图随之同步收缩。 */
   --session-gutter: var(--space-8);

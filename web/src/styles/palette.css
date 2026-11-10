@@ -175,14 +175,15 @@
   color-scheme: dark;
 
 
-  --bg: #101010;
-  --surface: #181818;
-  --sidebar-bg: #141414;
-  --surface-raised: #232323;
-  --surface-soft: #202020;
-  --surface-hover: #292929;
-  --surface-active: #343434;
-  --selected-bg: #242424;
+  /* 深色工作区保留三级表面层级，避免主内容、卡片和输入区糊成一块黑。 */
+  --bg: #151515;
+  --surface: #1b1b1b;
+  --sidebar-bg: #171717;
+  --surface-raised: #242424;
+  --surface-soft: #222222;
+  --surface-hover: #2b2b2b;
+  --surface-active: #353535;
+  --selected-bg: #272727;
   --text: #ededed;
   --muted: #b8b8b8;
   --faint: #9b9b9b;
@@ -257,9 +258,10 @@
   --settings-switch-thumb: #d4d4d4;
   --settings-accent: #ffffff;
   --settings-on-accent: #000000;
-  --settings-chart-idle: #2a2a2a;
-  --settings-chart-soft: #303030;
-  --settings-chart-mid: #3a3a3a;
+  /* 深色热力图需要与纯黑页面底拉开足够明度差，避免低/中使用量整块消失。 */
+  --settings-chart-idle: #3a3a3a;
+  --settings-chart-soft: #686868;
+  --settings-chart-mid: #929292;
 }
 
 /* 配色方案：只替换品牌强调、交互表面、焦点与选区。页面中性表面和
@@ -324,6 +326,7 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --background-shell-wash: var(--bg);
   /* 外壳遮挡层：直接画在滚动容器背景上，避免 ::before 只覆盖第一个视口。 */
   --background-shell-veil: color-mix(in srgb, var(--background-shell-wash) calc(var(--background-surface-opacity) * 100%), transparent);
+  --background-settings-veil: color-mix(in srgb, var(--background-shell-wash) calc(var(--background-surface-opacity) * 60%), transparent);
   --background-sidebar-wash: var(--sidebar-bg);
   --background-card-surface: color-mix(in srgb, var(--surface) 68%, transparent);
   --background-card-strong-surface: color-mix(in srgb, var(--surface) 84%, transparent);

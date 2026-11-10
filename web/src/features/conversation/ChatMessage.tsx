@@ -24,7 +24,6 @@ import { AttachmentIcon, attachmentVisual } from '../../shared/AttachmentIcon';
 import { ConversationImageGallery, type ConversationImage } from './ConversationImageGallery';
 import { isNearBottom, resolveLiveFollow } from './chat-scroll.mjs';
 import { messageClipboardHtml } from './message-copy';
-import { ActivityRequest } from './ModelRequestTrace';
 import { Markdown } from '../../shared/Markdown';
 import { collectFileChanges } from './file-changes';
 import { FileChangeSummary } from './FileChangeSummary';
@@ -514,22 +513,36 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
     .map((entry) => entry.block.type === 'text' ? entry.block.text : '')
     .join('\n\n')
     .trim();
-  // A visible explanation or a new request ends the previous execution segment.
+  // Requests are available from the dedicated trace page. Keep the conversation
+  // view focused on the work performed in the turn itself.
+  const visibleTimeline = timeline.filter((item) => !item.request);
   // Keys use the first item, so streaming appends never reset a manual disclosure.
   const segments: Array<{ key: string; process: boolean; items: typeof timeline }> = [];
-  for (const item of timeline) {
-    const process = Boolean(item.entries || item.request);
+  for (const item of visibleTimeline) {
+    const process = Boolean(item.entries);
     const tail = segments.at(-1);
-    if (process && tail?.process && !item.request) tail.items.push(item);
+    if (process && tail?.process) tail.items.push(item);
     else segments.push({ key: item.key, process, items: [item] });
+  }
+  if (!live) {
+    const processItems = visibleTimeline.filter((item) => item.entries);
+    const firstProcess = segments.findIndex((segment) => segment.process);
+    if (processItems.length > 0 && firstProcess >= 0) {
+      const consolidated = { key: segments[firstProcess].key, process: true, items: processItems };
+      const consolidatedSegments: typeof segments = [];
+      segments.forEach((segment, index) => {
+        if (segment.process) {
+          if (index === firstProcess) consolidatedSegments.push(consolidated);
+          return;
+        }
+        consolidatedSegments.push(segment);
+      });
+      segments.splice(0, segments.length, ...consolidatedSegments);
+    }
   }
   const renderTimelineItem = (item: typeof timeline[number]) => item.entries
         ? <ActivitySequence key={item.key} entries={item.entries} results={toolResults} stepDisplay={stepDisplay} />
-        : item.request ? <ActivityRequest
-            key={item.key}
-            trace={item.request}
-            stepDisplay={stepDisplay}
-          />
+        : item.request ? null
         : item.images ? <ConversationImageGallery key={item.key} images={item.images} />
         : item.visible?.block.type === 'text' ? <div className="assistant-response" key={item.key}><Markdown>{item.visible.block.text}</Markdown></div> : null;
   return <div id={id} className={`assistant-turn ${live ? 'is-live' : ''} ${retry ? 'is-retrying' : ''} ${failed ? 'has-error' : ''} is-steps-${stepDisplay}`}>

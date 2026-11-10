@@ -177,8 +177,11 @@
 }
 .turn-trace .activity-disclosure[open] > summary > .activity-disclosure-chevron { transform: rotate(180deg); }
 
-/* 展开内容与行共用左边线：内容从图标所在的左边线开始。 */
-.turn-trace .activity-disclosure-body { min-width: 0; padding: 4px 0 8px; }
+/* 展开内容与行内标题对齐，避免正文贴着图标边线显得拥挤。 */
+.turn-trace .activity-disclosure-body {
+  min-width: 0;
+  padding: 4px 0 8px calc(var(--trace-glyph) + var(--trace-gap));
+}
 .turn-trace .activity-request-body { max-height: none; overflow: visible; }
 .turn-trace .activity-request-body .request-inspector { padding-top: 2px; }
 

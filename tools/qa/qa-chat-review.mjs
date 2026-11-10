@@ -81,8 +81,12 @@ try {
   const fonts = await page.locator('.assistant-response').filter({ has: page.locator('h2') }).first().locator('.markdown').evaluate(node => [getComputedStyle(node.querySelector('h2')).fontFamily, getComputedStyle(node.querySelector('p')).fontFamily]);
   assert.equal(fonts[0], fonts[1]);
   const standaloneThinking = page.locator('.activity-sequence .activity-thinking').first();
+  const thinkingTrace = standaloneThinking.locator('xpath=ancestor::section[contains(@class, "turn-trace")]').first();
+  const traceToggle = thinkingTrace.locator('.turn-trace-toggle');
+  if (await traceToggle.getAttribute('aria-expanded') === 'false') await traceToggle.click();
+  await thinkingTrace.waitFor({state:'visible'});
   const thinkingLabelBox = await standaloneThinking.locator('.activity-thinking-label').boundingBox();
-  await standaloneThinking.locator('summary').click();
+  if (await standaloneThinking.getAttribute('open') === null) await standaloneThinking.locator('summary').click();
   await page.waitForTimeout(220);
   const thinkingBodyBox = await standaloneThinking.locator('.activity-thinking-body .markdown p').first().boundingBox();
   assert.ok(thinkingLabelBox && thinkingBodyBox && Math.abs(thinkingLabelBox.x - thinkingBodyBox.x) <= 1, 'standalone thinking body aligns with its label');
@@ -104,7 +108,7 @@ try {
   await firstTool.locator('summary').click();
   await firstTool.locator(':scope:not([open])').waitFor();
   await page.waitForTimeout(220);
-  assert.equal(await firstTool.locator('.activity-tool-body').count(), 1, 'tool content remains mounted while collapsed');
+  assert.equal(await firstTool.locator('.activity-tool-body').count(), 0, 'collapsed tool content is released until the row is reopened');
   const closedTraceState = await firstTool.evaluate(node => {
     const content = getComputedStyle(node, '::details-content');
     return { open: node.open, blockSize: content.blockSize, opacity: content.opacity };
@@ -233,11 +237,13 @@ try {
   });
   assert.equal(openTool.open, true);
   assert.equal(openTool.border, 0, 'execution rows use the shared borderless disclosure style');
-  assert.ok(openTool.radius >= 8, 'expanded tool keeps its shared corner radius');
+  // 执行行是扁平列表：展开不画卡片，因此没有圆角。
+  assert.equal(openTool.radius, 0, 'expanded tool stays a flat disclosure row');
   assert.equal(openTool.bodyBackground, 'rgba(0, 0, 0, 0)', 'tool body does not add an opaque rectangular layer');
-  assert.ok(openTool.codePadding >= 12, 'expanded tool parameters have breathing room');
+  // 参数区改成无描边的浅表面，内边距收到 10px，与行的 8px 节奏一致。
+  assert.ok(openTool.codePadding >= 8, 'expanded tool parameters have breathing room');
   assert.ok(openTool.codeRadius >= 8, 'parameter surface follows the shared corner radius');
-  assert.ok(openTool.codeBorder >= 1, 'parameter surface has a readable inset border');
+  assert.equal(openTool.codeBorder, 0, 'parameter surface relies on its fill, not a border');
   await page.screenshot({path:output+'custom-background-tool-open.png',fullPage:true,animations:'disabled'});
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await page.screenshot({path:output+'custom-background-tool-open-dark.png',fullPage:true,animations:'disabled'});

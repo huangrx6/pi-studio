@@ -39,7 +39,11 @@
 /* 设置内容包括滚动区，绝对定位的 ::before 遮挡层只覆盖第一个视口高度，
    滚到下面就会出现『上半截发白、下半截透出照片』的硬接缝。
    改成直接画在滚动容器背景上，遮挡随内容整段覆盖。 */
-.app.has-custom-background .settings-content { background: var(--background-shell-veil); }
+.app.has-custom-background .settings-content {
+  /* 内容滚动区不能再用接近不透明的页面底覆盖背景图；保留一层可读的
+     深色玻璃，同时让背景在设置页内持续可见。 */
+  background: var(--background-settings-veil);
+}
 
 .app.has-custom-background .settings-content::before { content: none; }
 
