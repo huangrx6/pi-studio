@@ -73,15 +73,15 @@ try {
   assert.equal(rows.length, 3, 'all three files render');
 
   const added = rows.find((row) => row.path?.endsWith('qa-agent-context.mjs'));
-  assert.equal(added.mark, 'A', 'a new file carries the git-style added marker');
+  assert.equal(added.mark, '新增', 'a new file carries the added label');
   assert.equal(added.trailing, '+161−0', 'a new file shows its additions instead of prose');
 
   const modified = rows.find((row) => row.path?.endsWith('app.css'));
-  assert.equal(modified.mark, 'M');
+  assert.equal(modified.mark, '修改');
   assert.equal(modified.trailing, '+83−6');
 
   const written = rows.find((row) => row.path === 'notes.md');
-  assert.equal(written.mark, 'W', 'a tool-only write is marked separately');
+  assert.equal(written.mark, '写入', 'a tool-only write is labelled separately');
   assert.equal(written.trailing, '/ 3 行', 'a tool-only write reports its length, not a fake delta');
 
   assert.deepEqual(errors, [], `no page errors: ${errors.join(' | ')}`);

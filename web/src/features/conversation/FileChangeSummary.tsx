@@ -30,11 +30,12 @@ type DisplayFile = {
 };
 
 /** Git-style marker: A added, M modified, D deleted. */
+/* 状态用文字标签，不再用 A/M/D/W 这类需要记忆的字母。 */
 const STATUS_MARK: Record<DisplayFile['status'], string> = {
-  added: 'A',
-  modified: 'M',
-  deleted: 'D',
-  written: 'W',
+  added: '新增',
+  modified: '修改',
+  deleted: '删除',
+  written: '写入',
 };
 
 function counts(added: number, removed: number) {
