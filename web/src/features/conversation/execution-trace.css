@@ -306,23 +306,4 @@
   .turn-trace .activity-request-metrics { display: none; }
 }
 
-/* 轨迹下方的实时状态条，与轨迹框同一套字号与圆角。 */
-.run-live-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  box-sizing: border-box;
-  margin: 4px 0 10px;
-  padding: 8px 12px;
-  border-radius: var(--radius-control);
-  background: var(--surface-soft);
-  color: var(--muted);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-}
-.run-live-status > .run-live-icon { display: grid; flex: none; }
-.run-live-status > .run-live-icon > svg { width: var(--icon-xs); height: var(--icon-xs); color: var(--accent); }
-.run-live-status > span { white-space: nowrap; }
-.run-live-status > span:last-child { margin-left: auto; color: var(--faint); }
 

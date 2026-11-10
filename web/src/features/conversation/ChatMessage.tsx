@@ -563,11 +563,6 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
           {segment.items.map(renderTimelineItem)}
         </TurnTrace>;
       })}
-      {live && <div className="run-live-status" role="status">
-        <span className="run-live-icon activity-disclosure-icon"><LoaderCircle className="spin" /></span>
-        <span>{phase}</span>
-        <span>本轮尚未结束</span>
-      </div>}
       {/* 失败卡片只在非 live 时出现，避免自动重试过程中闪错误。 */}
       {!live && error && (interrupted
         ? <div className="assistant-interrupted" role="status">本轮已中断</div>
