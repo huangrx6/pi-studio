@@ -59,14 +59,21 @@ type QueuedMessagesProps = {
  */
 export function QueuedMessages({ items, canSteer = false, sendDisabled = false, onEdit, onDelete, onSendNow, onSendAll, onReorder }: QueuedMessagesProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  // 超过两条时先折叠：队列长度不是主要内容，展开后才需要逐条操作。
+  const [expanded, setExpanded] = useState(false);
   if (items.length === 0) return null;
+  const collapsible = items.length > 2;
+  const visible = collapsible && !expanded ? items.slice(0, 2) : items;
   return <div className="queued-panel" aria-label="排队消息">
     <div className="queued-panel-head">
       <span className="queued-panel-title"><Clock3 />排队消息<b>{items.length}</b></span>
-      <button type="button" className="queued-send-all" disabled={sendDisabled} title={sendDisabled ? '当前会话暂时不能发送，排队消息已保留' : undefined} onClick={onSendAll}>{canSteer ? '插话发送全部' : '发送全部'}</button>
+      <span className="queued-panel-actions">
+        {collapsible && <button type="button" className="queued-toggle" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>{expanded ? '收起' : `展开全部 ${items.length}`}</button>}
+        <button type="button" className="queued-send-all" disabled={sendDisabled} title={sendDisabled ? '当前会话暂时不能发送，排队消息已保留' : undefined} onClick={onSendAll}>{canSteer ? '插话发送全部' : '发送全部'}</button>
+      </span>
     </div>
     <div className="queued-list">
-      {items.map((item) => {
+      {visible.map((item) => {
         const itemAdmissionPending = Boolean(item.admissionPending);
         const itemSendDisabled = sendDisabled || itemAdmissionPending;
         return <div

@@ -117,7 +117,8 @@ export function TodoDock({ details, open, onToggle }: TodoDockProps) {
     ? model.current.status === 'in_progress' ? (model.current.activeForm || model.current.subject) : model.current.subject
     : total > 0 && done === total ? '全部完成' : model.closed.length > 0 ? '任务已结束' : '暂无任务';
 
-  return <div className={`todo-dock ${open ? 'is-open' : ''} ${model.current?.status === 'in_progress' ? 'is-live' : ''}`}>
+  const allDone = total > 0 && done === total;
+  return <div className={`todo-dock ${open ? 'is-open' : ''} ${allDone ? 'is-complete' : ''} ${model.current?.status === 'in_progress' ? 'is-live' : ''}`}>
     <button type="button" className="todo-dock-head" onClick={onToggle} aria-expanded={open} aria-label="任务计划">
       <span className="todo-dock-title"><ListTodo /><span>计划</span></span>
       {/* 折叠态用 title 兜底完整标题，避免长任务名被省略号截断后无法查看。 */}

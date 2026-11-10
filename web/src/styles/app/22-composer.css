@@ -1,0 +1,90 @@
+/* ---- 输入区尺寸 -------------------------------------------------------
+ * 输入框在空闲时只占一行：12px 内边距 + 一行正文 + 32px 工具条，
+ * 整体约 88px；输入变长后由 textarea 自己长高（最多 8 行）。
+ */
+
+.composer {
+  border-radius: 12px;
+}
+
+.composer textarea {
+  min-height: 40px;
+  max-height: 200px;
+  padding: 12px 12px 4px;
+  line-height: var(--leading-normal);
+}
+
+.composer-highlight {
+  padding: 12px 12px 4px;
+  line-height: var(--leading-normal);
+}
+
+/* 焦点不再用 3px 实心环：1px 边框 + 一层极淡的 tint 光晕。 */
+.composer:has(.composer-input textarea:focus) {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint), var(--shadow-float);
+}
+
+.composer-bar {
+  padding: 2px 8px 6px;
+}
+
+/* 框内附件：一行小方块，不撑高输入框。 */
+.composer-attachments {
+  gap: 6px;
+  padding: 8px 10px 0;
+}
+
+.composer-attachment.is-image {
+  width: 40px;
+  height: 40px;
+  padding: 2px;
+}
+
+.composer-attachment.is-file {
+  min-height: 32px;
+  max-width: 210px;
+  padding: 3px 6px;
+}
+
+.composer-attachment > span strong { font-size: var(--text-sm); }
+.composer-attachment > span small { font-size: var(--text-xs); }
+
+/* ---- 已发送消息的附件条 ----------------------------------------------
+ * 附件（图片与文件）挪到气泡上方，合成一行：最宽 85% / 560px，超出横向滚动，
+ * 不再一层层往下堆。图片缩到 96×72，文件卡压成 40px 单行。
+ */
+
+.user-message { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-width: 100%; }
+
+.user-attachments {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(85%, 560px);
+  padding-bottom: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+}
+
+.user-attachments::-webkit-scrollbar { height: 4px; }
+.user-attachments::-webkit-scrollbar-thumb { border-radius: var(--radius-round); background: var(--scrollbar); }
+.user-attachments > * { flex: none; }
+
+.user-attachments .conversation-image-gallery,
+.user-attachments .message-images { width: auto; max-width: none; margin: 0; }
+.user-attachments .conversation-image-strip { width: auto; padding: 0; }
+.user-attachments .conversation-image-tile { flex: 0 0 96px; width: 96px; height: 72px; }
+
+.user-attachments .attachment-card {
+  min-width: 0;
+  max-width: 200px;
+  height: 40px;
+  margin-top: 0;
+  padding: 4px 8px;
+}
+
+.user-attachments .attachment-kind { display: none; }
+.user-attachments .attachment-icon { width: 22px; height: 22px; }
+.user-attachments .attachment-icon svg { width: var(--icon-sm); height: var(--icon-sm); }

@@ -770,23 +770,25 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
         </button>
       </div>
     </div>
-    : <div className="user-bubble">
-    <MessageImages blocks={message.content} />
-    {text && <UserText text={text} />}
-    {/* 附件卡片展示名称、体积/行数与类型角标；title 给出去向的绝对路径。 */}
-    {message.attachments?.map((attachment) => {
-      const visual = attachmentVisual(attachment.name, attachment.mime);
-      const openable = Boolean(attachment.path && onOpenFile);
-      return <div className={`attachment-card ${openable ? 'is-openable' : ''}`} key={attachment.path} title={`${attachment.path}${openable ? ' · 点击查看' : ''}`}
-        role={openable ? 'button' : undefined} tabIndex={openable ? 0 : undefined} aria-label={openable ? `在右侧面板查看 ${attachment.name}` : undefined}
-        onClick={() => { if (openable) onOpenFile?.(attachment.path); }}
-        onKeyDown={(event) => { if (openable && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onOpenFile?.(attachment.path); } }}>
-        <AttachmentIcon name={attachment.name} mime={attachment.mime} />
-        <span className="attachment-main"><strong title={attachment.name}>{attachment.name}</strong><span>{formatBytes(attachment.bytes)}{attachment.lines ? ` · ${attachment.lines.toLocaleString('zh-CN')} 行` : ''}</span></span>
-        <span className={`attachment-kind ${visual.tone}`}>{visual.label.toUpperCase()}</span>
-        {openable && <span className="attachment-open-cue" aria-hidden="true"><PanelRightOpen /></span>}
-      </div>;
-    })}
+    : <div className="user-message">
+    {/* 附件与图片排在气泡上方：一行、可横向滚动，数量再多也不撑高正文。 */}
+    {preservedCount > 0 && <div className="user-attachments">
+      <MessageImages blocks={message.content} />
+      {message.attachments?.map((attachment) => {
+        const visual = attachmentVisual(attachment.name, attachment.mime);
+        const openable = Boolean(attachment.path && onOpenFile);
+        return <div className={`attachment-card ${openable ? 'is-openable' : ''}`} key={attachment.path} title={`${attachment.path}${openable ? ' · 点击查看' : ''}`}
+          role={openable ? 'button' : undefined} tabIndex={openable ? 0 : undefined} aria-label={openable ? `在右侧面板查看 ${attachment.name}` : undefined}
+          onClick={() => { if (openable) onOpenFile?.(attachment.path); }}
+          onKeyDown={(event) => { if (openable && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onOpenFile?.(attachment.path); } }}>
+          <AttachmentIcon name={attachment.name} mime={attachment.mime} />
+          <span className="attachment-main"><strong title={attachment.name}>{attachment.name}</strong><span>{formatBytes(attachment.bytes)}{attachment.lines ? ` · ${attachment.lines.toLocaleString('zh-CN')} 行` : ''}</span></span>
+          <span className={`attachment-kind ${visual.tone}`}>{visual.label.toUpperCase()}</span>
+          {openable && <span className="attachment-open-cue" aria-hidden="true"><PanelRightOpen /></span>}
+        </div>;
+      })}
+    </div>}
+    {text && <div className="user-bubble"><UserText text={text} /></div>}
   </div>}
   {/* 用户消息同样在悬浮时显示复制、编辑与发送时间；复制时带上消息里的图片。 */}
   {!editing && <MessageActions

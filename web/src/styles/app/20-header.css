@@ -202,3 +202,7 @@
 .status i { width: 5px; height: 5px; }
 
 .composer-hint .hint-divider { color: var(--border-strong); }
+
+/* 全部完成时进度线退成弱色：完成的清单不该继续用强调色占视线。 */
+.todo-dock.is-complete .todo-dock-meter i { background: var(--text-3); }
+.todo-dock.is-complete .todo-dock-title svg { color: var(--text-3); }

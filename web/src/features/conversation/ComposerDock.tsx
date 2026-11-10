@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import {
   LoaderCircle,
@@ -238,6 +238,23 @@ export function ComposerDock({
     () => splitComposerText(prompt, composerCommandNames),
     [prompt, composerCommandNames],
   );
+  // 计划全部完成时自动收起计划栏：完成的清单只留一行摘要，把高度还给消息区。
+  // 用户随后手动展开就不再自动收起，直到出现新的未完成任务。
+  const todoAllDone = useMemo(() => {
+    const tracked = (todoDetails?.tasks ?? []).filter((task) => !task.archivedAt && !task.closedAt && task.status !== 'deleted');
+    return tracked.length > 0 && tracked.every((task) => task.status === 'completed');
+  }, [todoDetails]);
+  const todoAutoCollapsedRef = useRef(false);
+  useEffect(() => {
+    if (!todoAllDone) {
+      todoAutoCollapsedRef.current = false;
+      return;
+    }
+    if (todoAutoCollapsedRef.current) return;
+    todoAutoCollapsedRef.current = true;
+    setTodoPanelOpen(false);
+  }, [todoAllDone, setTodoPanelOpen]);
+
   // 模型没配置时，发送按钮只会禁用；点击输入框时给一条可见的配置入口，
   // 而不是把用户挡在输入框外。
   const hasUsableModel = Boolean(modelSelection.modelRef) && !modelSelection.unavailable;
@@ -470,7 +487,7 @@ export function ComposerDock({
                 : turnActive
                   ? 'Enter 补充当前任务 · Cmd/Ctrl+Enter 排队 · Shift+Enter 换行'
                   : '输入问题，或使用 / 命令、@ 文件…'}
-            rows={2}
+            rows={1}
             onScroll={(event) => {
               // 高亮层与 textarea 同步滚动，保证长文本换行时不错位。
               if (composerHighlightRef.current) {
