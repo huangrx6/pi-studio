@@ -8,8 +8,8 @@
 }
 
 .composer textarea {
-  min-height: 56px;
-  max-height: 220px;
+  min-height: 76px;
+  max-height: 260px;
   padding: 15px 14px 8px;
   font-size: var(--text-base);
   line-height: var(--leading-normal);
