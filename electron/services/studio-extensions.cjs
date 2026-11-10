@@ -1545,6 +1545,7 @@ function extensionUiSnapshot() {
         priority: panel.priority || 0,
         sourceOrder,
         content: structuredClone(panel.content || []),
+        slots: Array.isArray(panel.slots) ? [...panel.slots] : [panel.slot],
         ...(panel.details ? { details: panel.details } : {}),
         ...(panel.visibility ? { visibility: panel.visibility } : {}),
       });

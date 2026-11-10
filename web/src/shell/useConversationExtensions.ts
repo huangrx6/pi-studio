@@ -68,8 +68,8 @@ export function useConversationExtensions({
     () => orderConversationExtensionItems(
       surface.items.filter((item) => (
         item.slot === 'conversation.detail'
-        || item.slot === 'conversation.footer'
-        || item.slot === 'status.chip'
+        || (item.slots ?? [item.slot]).includes('conversation.footer')
+        || (item.slots ?? [item.slot]).includes('status.chip')
       )),
       preferences,
       sessionId,
@@ -93,12 +93,12 @@ export function useConversationExtensions({
     [items],
   );
   const footerItems = useMemo(
-    () => items.filter((item) => item.slot === 'conversation.footer'),
+    () => items.filter((item) => (item.slots ?? [item.slot]).includes('conversation.footer')),
     [items],
   );
   // 顶栏 chip：details 指向本扩展的详情面板，点击时直接打开那一页。
   const chipItems = useMemo(() => items
-    .filter((item) => item.slot === 'status.chip')
+    .filter((item) => (item.slots ?? [item.slot]).includes('status.chip'))
     .map((item) => {
       const target = item.details
         ? manifestDetailItems.find((detail) => detail.extensionId === item.extensionId && detail.contributionId === item.details)

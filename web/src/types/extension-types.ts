@@ -282,6 +282,8 @@ export interface ExtensionPanelContribution {
   title: string;
   description: string;
   slot: ExtensionUiSlot;
+  /** 同一份内容声明的位置；只有一项时等价于 slot。 */
+  slots?: ExtensionUiSlot[];
   icon?: string;
   size?: 'compact' | 'regular';
   priority?: number;
@@ -556,6 +558,8 @@ export interface ExtensionUiItem {
   title: string;
   description: string;
   slot: ExtensionUiSlot;
+  /** 同一份内容声明的位置；只有一项时等价于 slot。 */
+  slots: ExtensionUiSlot[];
   icon?: string;
   size: 'compact' | 'regular';
   priority: number;

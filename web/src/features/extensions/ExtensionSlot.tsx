@@ -648,7 +648,7 @@ export function ExtensionSlot({
 
   const items = useMemo(
     () => surface.items
-      .filter((item) => item.slot === slot)
+      .filter((item) => (item.slots?.length ? item.slots.includes(slot) : item.slot === slot))
       .filter((item) => !selectedItemId || item.id === selectedItemId)
       .sort((left, right) => (
         right.priority - left.priority || left.sourceOrder - right.sourceOrder

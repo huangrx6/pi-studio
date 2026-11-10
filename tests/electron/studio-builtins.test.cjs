@@ -997,11 +997,11 @@ test('built-in responsibilities use independent runtimes and explicit dependency
   assert.deepEqual(metrics.contributes.dataSources.map((item) => item.id), ['live', 'summary']);
   const metricsPanels = Object.fromEntries(metrics.contributes.panels.map((panel) => [panel.id, panel]));
   assert.equal(metricsPanels['metrics-detail'].content[0].sourceId, 'builtin:studio-metrics/live');
-  assert.equal(metricsPanels['metrics-footer'].content[0].sourceId, 'builtin:studio-metrics/summary');
-  // 顶栏入口与详情面板成对出现：chip 指向 detail，且只在生成中保留底部摘要。
-  assert.equal(metricsPanels['metrics-chip'].slot, 'status.chip');
+  // 摘要是一份声明、两个落点：顶栏 chip 常驻，底部那行随回合出现。
+  assert.deepEqual(metricsPanels['metrics-chip'].slots, ['status.chip', 'conversation.footer']);
+  assert.equal(metricsPanels['metrics-chip'].content[0].sourceId, 'builtin:studio-metrics/summary');
   assert.equal(metricsPanels['metrics-chip'].details, 'metrics-detail');
-  assert.equal(metricsPanels['metrics-footer'].visibility, 'while-active');
+  assert.equal(metricsPanels['metrics-chip'].visibility, 'while-active');
   const known = new Set(BUILTIN_MANIFESTS.map((manifest) => `builtin:${manifest.id}`));
   for (const manifest of BUILTIN_MANIFESTS) {
     for (const requirement of manifest.requires || []) {

@@ -477,7 +477,7 @@ test('conversation detail and footer use separate layouts', () => {
         ],
       }],
     },
-  }), '/tmp/demo', 'user'), /一至两个单行摘要/);
+  }), '/tmp/demo', 'user'), /最多声明两个单行摘要/);
 });
 
 test('status.chip points at its own detail panel and accepts a visibility window', () => {
@@ -572,7 +572,7 @@ test('status.chip points at its own detail panel and accepts a visibility window
         content: [{ kind: 'text', text: 'x' }],
       }],
     },
-  }), '/tmp/demo', 'user'), /只有 conversation\.footer 与 status\.chip 可以声明 visibility/);
+  }), '/tmp/demo', 'user'), /只有 conversation\.footer、status\.chip 与 status\.bar 可以声明 visibility/);
 
   assert.throws(() => normalizeManifest(manifest({
     permissions: ['ui.panels'],

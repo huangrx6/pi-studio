@@ -14,8 +14,8 @@
     },
     {
       "path": "pi-studio.extension.json",
-      "sha256": "6691f118481ce862165f727d090c602ec556ad6ad7382b7e4d65dae69827c8bf",
-      "size": 2977
+      "sha256": "7b6f6804ee1916dd48c85e2fcd4c6dc3f0e23e657798044898798beb4ff457b9",
+      "size": 3000
     },
     {
       "path": "quota/adapters.mjs",

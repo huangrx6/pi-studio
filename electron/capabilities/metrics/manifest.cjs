@@ -17,15 +17,17 @@ id: 'studio-metrics',
     contributes: {
       panels: [
         {
-          /* 顶栏入口：一个图标，悬停展开紧凑摘要，点击打开下面的详情面板。 */
+          /* 一份摘要声明两个落点：顶栏图标给的入口，底部那行只在生成中出现。 */
           id: 'metrics-chip',
           title: '实时指标',
-          description: '顶栏的实时指标入口，点击打开完整面板。',
-          slot: 'status.chip',
+          description: '顶栏与底部的实时指标入口，点击打开完整面板。',
+          slots: ['status.chip', 'conversation.footer'],
           icon: 'activity',
           size: 'compact',
           priority: 20,
           details: 'metrics-detail',
+          /* 只约束底部那行：顶栏 chip 是常驻入口，不随回合出现/消失。 */
+          visibility: 'while-active',
           content: [{
             kind: 'dataView',
             sourceId: METRICS_FOOTER_SOURCE_ID,
@@ -46,24 +48,6 @@ id: 'studio-metrics',
               kind: 'emptyState',
               title: '等待首次运行',
               text: '发送消息后显示 TPS、TTFT、Token、缓存命中率、成本与任务阶段。',
-            }],
-          }],
-        },
-        {
-          id: 'metrics-footer',
-          title: '实时指标摘要',
-          description: '当前请求的紧凑状态、TPS、TTFT 与 Token。',
-          slot: 'conversation.footer',
-          size: 'compact',
-          /* 只在生成中的回合里占位；空闲时把高度还给消息区。 */
-          visibility: 'while-active',
-          content: [{
-            kind: 'dataView',
-            sourceId: METRICS_FOOTER_SOURCE_ID,
-            emptyText: '暂无指标',
-            fallback: [{
-              kind: 'text',
-              text: '等待首次运行',
             }],
           }],
         },

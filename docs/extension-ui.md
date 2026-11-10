@@ -101,6 +101,28 @@ Footer 与顶栏 chip 可以声明 `visibility`：
 - `always`（默认）：一直占位；
 - `while-active`：只在回合进行中渲染，空闲时把高度还给消息区。
 
+### 一份摘要，多个落点
+
+panel 可以只声明 `slot`，也可以声明 `slots` 数组，让同一份内容同时出现在多个位置：
+
+```json
+{
+  "id": "metrics-chip",
+  "title": "实时指标",
+  "slots": ["status.chip", "conversation.footer"],
+  "icon": "activity",
+  "size": "compact",
+  "details": "metrics-detail",
+  "visibility": "while-active",
+  "content": [{ "kind": "dataView", "sourceId": "…/summary" }]
+}
+```
+
+- `slot` 与 `slots` 只能声明一个，`slots` 最多三项、不能重复；
+- `slots` 里包含 `status.chip` 时必须提供 `details`，否则校验失败；
+- `visibility` 只影响 `conversation.footer`、`status.bar` 与 `status.chip` 这三个摘要槽位；顶栏入口通常保持常驻，由扩展自己按内容决定；
+- 只出现在一个位置的扩展，继续用 `slot` 即可，不必把四个位置都声明一遍。
+
 `status.chip` 是**会话视图**的顶栏状态入口。它渲染为一个 28px 图标按钮（`icon` 支持 `activity`、`gauge`、`timer`、`terminal`、`chart`，未识别的名字退回心跳图标），最多三个 chip 会按 `priority` 出现在通知按钮之前。
 
 chip 只在有真实会话时出现：新会话还是草稿态，没有 `sessionId`，扩展的数据源与 `details` 面板都无从指认，因此 Studio 一律不渲染 chip。需要「不管在哪个页面都在」的入口，请用 `status.bar`；需要「会话内的入口」，用 `status.chip`；需要「输入框附近的一行状态」，用 `conversation.footer`。悬停或键盘聚焦会展开同一份 compact 内容（因此它接受与 footer 相同的 block，最多两个），点击则打开 `details` 指向的详情面板。

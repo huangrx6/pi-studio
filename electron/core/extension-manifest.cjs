@@ -575,20 +575,39 @@ function normalizeManifest(raw, source, scope) {
   });
   // chip 的 details 只能指向同一份 manifest 里声明的详情面板。
   const detailPanelIds = new Set(requestedPanels
-    .filter((panel) => panel && panel.slot === 'conversation.detail' && typeof panel.id === 'string')
+    .filter((panel) => panel
+      && (panel.slot === 'conversation.detail' || (Array.isArray(panel.slots) && panel.slots.includes('conversation.detail')))
+      && typeof panel.id === 'string')
     .map((panel) => panel.id));
   const panels = requestedPanels.map((item, index) => {
     assertAllowedKeys(
       item,
-      new Set(['id', 'title', 'description', 'slot', 'icon', 'size', 'priority', 'content', 'details', 'visibility']),
+      new Set(['id', 'title', 'description', 'slot', 'slots', 'icon', 'size', 'priority', 'content', 'details', 'visibility']),
       `panels[${index}]`,
     );
     const id = text(item?.id, 64);
     const title = text(item?.title, 120);
-    const slot = text(item?.slot, 64);
     if (!COMMAND_PATTERN.test(id)) throw contributionError('panels', index, 'id 无效');
     if (!title) throw contributionError('panels', index, 'title 不能为空');
-    if (!UI_SLOTS.has(slot)) throw contributionError('panels', index, `未知 slot：${slot || '(empty)'}`);
+    if (item.slot !== undefined && item.slots !== undefined) {
+      throw contributionError('panels', index, 'slot 与 slots 只能声明一个');
+    }
+    // slots 让同一份摘要声明多个落点（例如既进顶栏 chip 又进底部状态区），
+    // 只给其中一个位置的扩展仍然可以只用 slot。
+    const declaredSlots = item.slots !== undefined
+      ? (Array.isArray(item.slots) ? item.slots : [item.slots])
+      : [text(item?.slot, 64)];
+    if (declaredSlots.length === 0 || declaredSlots.length > 3) {
+      throw contributionError('panels', index, 'slots 必须声明一至三个位置');
+    }
+    const slots = [];
+    for (const rawSlot of declaredSlots) {
+      const value = text(rawSlot, 64);
+      if (!UI_SLOTS.has(value)) throw contributionError('panels', index, `未知 slot：${value || '(empty)'}`);
+      if (slots.includes(value)) throw contributionError('panels', index, `slots 重复：${value}`);
+      slots.push(value);
+    }
+    const slot = slots[0];
     const description = text(item?.description, MAX_DESCRIPTION);
     const icon = optionalStrictText(item.icon, 64, ICON_PATTERN, `panels[${index}].icon`);
     if (item.size !== undefined && item.size !== 'compact' && item.size !== 'regular') {
@@ -605,22 +624,27 @@ function normalizeManifest(raw, source, scope) {
     if (item.visibility !== undefined && !UI_VISIBILITIES.has(item.visibility)) {
       throw contributionError('panels', index, `visibility 无效：${String(item.visibility)}`);
     }
-    if (item.visibility !== undefined && slot !== 'conversation.footer' && slot !== 'status.chip') {
-      throw contributionError('panels', index, '只有 conversation.footer 与 status.chip 可以声明 visibility');
+    const visibilitySlots = slots.filter((value) => value === 'conversation.footer' || value === 'status.chip' || value === 'status.bar');
+    if (item.visibility !== undefined && visibilitySlots.length === 0) {
+      throw contributionError('panels', index, '只有 conversation.footer、status.chip 与 status.bar 可以声明 visibility');
     }
     const visibility = item.visibility === 'while-active' ? 'while-active' : 'always';
-    if (slot === 'status.chip') {
+    const summarySlots = slots.filter((value) => value === 'status.chip' || value === 'conversation.footer' || value === 'status.bar');
+    if (summarySlots.length > 0) {
       if (content.length > 2) {
-        throw contributionError('panels', index, 'status.chip 最多声明两个单行摘要 block');
+        throw contributionError('panels', index, `${summarySlots[0]} 最多声明两个单行摘要 block`);
       }
       const unsupported = content.find((block) => !COMPACT_FOOTER_KINDS.has(block.kind));
       if (unsupported) {
         throw contributionError(
           'panels',
           index,
-          `status.chip 不支持 ${unsupported.kind}；完整内容请使用 conversation.detail`,
+          `${summarySlots[0]} 不支持 ${unsupported.kind}；完整内容请使用 conversation.detail`,
         );
       }
+    }
+    if (slots.includes('status.chip') && !details) {
+      throw contributionError('panels', index, 'status.chip 必须用 details 指向本扩展的详情面板');
     }
     if (slot === 'conversation.footer') {
       if (content.length === 0 || content.length > 2) {
@@ -649,6 +673,7 @@ function normalizeManifest(raw, source, scope) {
         ? Math.max(-1_000, Math.min(1_000, Math.trunc(item.priority)))
         : 0,
       content,
+      slots,
       ...(icon ? { icon } : {}),
       ...(details ? { details } : {}),
       ...(visibility === 'while-active' ? { visibility } : {}),

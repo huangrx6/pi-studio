@@ -84,7 +84,6 @@
         "id": "quota-chip",
         "title": "额度状态",
         "description": "顶栏的额度入口，点击打开完整额度面板。",
-        "slot": "status.chip",
         "icon": "gauge",
         "size": "compact",
         "priority": 20,
@@ -101,6 +100,9 @@
               }
             ]
           }
+        ],
+        "slots": [
+          "status.chip"
         ]
       }
     ],
