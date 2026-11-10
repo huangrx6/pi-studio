@@ -322,6 +322,8 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   数值是各层相对透明度，不是页面总透明度；页面总透明度由界面遮挡滑杆控制。
   */
   --background-shell-wash: var(--bg);
+  /* 外壳遮挡层：直接画在滚动容器背景上，避免 ::before 只覆盖第一个视口。 */
+  --background-shell-veil: color-mix(in srgb, var(--background-shell-wash) calc(var(--background-surface-opacity) * 100%), transparent);
   --background-sidebar-wash: var(--sidebar-bg);
   --background-card-surface: color-mix(in srgb, var(--surface) 68%, transparent);
   --background-card-strong-surface: color-mix(in srgb, var(--surface) 84%, transparent);
