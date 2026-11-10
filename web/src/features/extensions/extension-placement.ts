@@ -15,11 +15,11 @@ export type PlaceablePanel = {
   slots: Array<'status.chip' | 'conversation.footer'>;
 };
 
-export const EXTENSION_PLACEMENT_OPTIONS: Array<{ value: ExtensionPlacement; label: string }> = [
-  { value: 'both', label: '两处' },
-  { value: 'chip', label: '只在顶栏' },
-  { value: 'footer', label: '只在输入框下' },
-  { value: 'hidden', label: '隐藏' },
+export const EXTENSION_PLACEMENT_OPTIONS: Array<{ value: ExtensionPlacement; label: string; hint: string }> = [
+  { value: 'both', label: '两处', hint: '顶栏与输入框下都显示' },
+  { value: 'chip', label: '顶栏', hint: '只在顶栏显示图标入口' },
+  { value: 'footer', label: '输入框', hint: '只在输入框下方显示一行状态' },
+  { value: 'hidden', label: '隐藏', hint: '保留扩展，但不在会话里显示' },
 ];
 
 const CONFIGURABLE_SLOTS = ['status.chip', 'conversation.footer'] as const;

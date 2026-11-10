@@ -1,5 +1,4 @@
 import type { ExtensionPlacement } from '../../shared/preferences';
-import { Select } from '../../shared/Select';
 import type { ExtensionHostItem } from '../../types/extension-types';
 import {
   EXTENSION_PLACEMENT_OPTIONS,
@@ -46,15 +45,21 @@ export function InstalledExtensionCard({ item, busy, compact = false, placements
       {!compact && item.manifest?.description && <p className="extension-list-description">{item.manifest.description}</p>}
       {!compact && access.length > 0 && <p className="extension-list-access">{access.join(' · ')}</p>}
       {item.blockedReason && <p className="extension-list-notice is-error" role="status">{item.blockedReason}</p>}
-      {!compact && onPlacementChange && placeable.length > 0 && placeable.map((panel) => <div className="extension-placement" key={panel.id}>
-        <span className="extension-placement-label" id={`${panel.id}-label`}>显示位置</span>
-        <Select
-          label="显示位置"
-          value={placementFor(placements, panel.id)}
-          options={EXTENSION_PLACEMENT_OPTIONS}
-          onChange={(value) => onPlacementChange(panel.id, value as ExtensionPlacement)}
-        />
-      </div>)}
+      {!compact && onPlacementChange && placeable.map((panel) => {
+        const current = placementFor(placements, panel.id);
+        return <div className="extension-placement" key={panel.id}>
+          <span className="extension-placement-label">显示位置</span>
+          <div className="extension-placement-options" role="group" aria-label={`${item.name} 显示位置`}>
+            {EXTENSION_PLACEMENT_OPTIONS.map(({ value, label, hint }) => <button
+              key={value}
+              type="button"
+              title={hint}
+              aria-pressed={current === value}
+              onClick={() => onPlacementChange(panel.id, value)}
+            >{label}</button>)}
+          </div>
+        </div>;
+      })}
     </div>
     <div className="extension-list-actions">
       <button type="button" className="settings-text-button" aria-label={`查看 ${item.name} 详情`} onClick={() => onOpenDetail(item)}>详情</button>

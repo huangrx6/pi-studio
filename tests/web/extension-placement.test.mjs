@@ -75,5 +75,7 @@ test('each placement decides which slots render', () => {
 });
 
 test('the selector offers the four documented choices in order', () => {
-  assert.deepEqual(EXTENSION_PLACEMENT_OPTIONS.map((option) => option.label), ['两处', '只在顶栏', '只在输入框下', '隐藏']);
+  assert.deepEqual(EXTENSION_PLACEMENT_OPTIONS.map((option) => option.value), ['both', 'chip', 'footer', 'hidden']);
+  assert.deepEqual(EXTENSION_PLACEMENT_OPTIONS.map((option) => option.label), ['两处', '顶栏', '输入框', '隐藏']);
+  for (const option of EXTENSION_PLACEMENT_OPTIONS) assert.ok(option.hint.length > 0);
 });
