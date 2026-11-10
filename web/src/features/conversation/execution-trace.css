@@ -9,6 +9,8 @@
   --trace-row: 32px;
   --trace-title-col: 64px;
   --trace-status-col: 56px;
+  /* 行内边距：summary 与展开体共用同一个值，左侧内容才对得齐。 */
+  --trace-row-pad: calc(var(--space-2) + 2px);
   min-width: 0;
   margin: 8px 0 16px;
   border: 0;
@@ -91,9 +93,9 @@
   align-items: center;
   column-gap: var(--trace-gap);
   min-height: var(--trace-row);
-  /* 内边距留在行内：悬停背景与其它行同宽，内容与背景边缘留 10px，
-   * 不会像之前那样把高亮块撑得比上下行更宽。 */
-  padding: 0 calc(var(--space-2) + 2px);
+  /* 内边距留在行内：悬停背景与其它行同宽，内容与背景边缘留 10px。
+   * 展开体用同一个左内边距，参数、结果块才和上面的命令文字对得齐。 */
+  padding: 0 var(--trace-row-pad);
   border-radius: var(--radius-tag);
   list-style: none;
   cursor: pointer;
@@ -183,7 +185,7 @@
 /* 展开内容与行内标题对齐，避免正文贴着图标边线显得拥挤。 */
 .turn-trace .activity-disclosure-body {
   min-width: 0;
-  padding: 4px 0 8px calc(var(--trace-glyph) + var(--trace-gap));
+  padding: 4px var(--trace-row-pad) 8px calc(var(--trace-row-pad) + var(--trace-glyph) + var(--trace-gap));
 }
 .turn-trace .activity-request-body { max-height: none; overflow: visible; }
 .turn-trace .activity-request-body .request-inspector { padding-top: 2px; }
