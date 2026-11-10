@@ -74,9 +74,10 @@
   background: var(--transparent);
 }
 
-/* 仅统一会话周边的内嵌表面，不影响设置、消息气泡或浮动面板。 */
+/* 会话表面按用途派生，浮动面板继续使用独立的不透明阅读底。 */
 .app {
   --conversation-control-surface: var(--surface-floating);
+  --conversation-reading-surface: var(--surface-raised);
   --conversation-inset-surface: color-mix(in srgb, var(--text-1) 4%, transparent);
   --conversation-hover-surface: color-mix(in srgb, var(--text-1) 6%, transparent);
   --conversation-selected-surface: var(--tint-neutral);
@@ -84,6 +85,7 @@
 
 .app.is-wallpaper-inside {
   --conversation-control-surface: color-mix(in srgb, var(--surface-floating) calc(100% - var(--wallpaper-inside, 0) * 40%), transparent);
+  --conversation-reading-surface: color-mix(in srgb, var(--surface-raised) calc(100% - var(--wallpaper-inside, 0) * 65%), transparent);
 }
 
 .app :is(.new-chat, .run-live-status, .queued-item) {
@@ -118,14 +120,6 @@
 }
 
 /* 对话正文只保留一层阅读底，代码内部与表头不再叠加不透明色块。 */
-.app .chat-scroll .markdown {
-  --conversation-reading-surface: var(--surface-raised);
-}
-
-.app.is-wallpaper-inside .chat-scroll .markdown {
-  --conversation-reading-surface: color-mix(in srgb, var(--surface-raised) calc(100% - var(--wallpaper-inside, 0) * 65%), transparent);
-}
-
 .app .chat-scroll .markdown :is(.markdown-code, table) {
   background: var(--conversation-reading-surface);
   border-color: var(--border);

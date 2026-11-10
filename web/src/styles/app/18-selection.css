@@ -13,19 +13,44 @@
 
 :is(.session-row, .nav-row, .settings-nav-row).is-active > :is(svg, .nav-icon) { color: var(--accent); }
 
-.tab.is-active {
-  border-radius: 6px 6px 0 0;
-  background: var(--accent-tint);
+.chat-tab-list .tab {
+  isolation: isolate;
+  border-radius: var(--radius-control);
+}
+
+.chat-tab-list .tab::before {
+  content: '';
+  position: absolute;
+  inset: 5px 0 7px;
+  z-index: -1;
+  border-radius: var(--radius-control);
+  background: var(--tint-neutral);
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.chat-tab-list .tab:hover::before { opacity: 1; }
+.chat-tab-list .tab:hover { color: var(--text-1); }
+.chat-tab-list .tab:focus-visible { outline-offset: -2px; }
+
+.chat-tab-list .tab.is-active {
+  background: var(--transparent);
   color: var(--text-1);
   font-weight: var(--weight-medium);
 }
 
-.tab.is-active::after {
+.chat-tab-list .tab.is-active::after {
+  width: 20px;
   height: 2px;
-  background: var(--accent);
+  left: 50%;
+  right: auto;
+  bottom: 0;
+  transform: translateX(-50%);
+  border-radius: var(--radius-round);
+  background: currentColor;
 }
 
-.chat-tab-list .tab.is-active > svg { color: var(--accent); }
+.chat-tab-list .tab:is(:hover, .is-active) > svg { color: currentColor; }
 
 /* 分段控件：设置页、用量范围、权限作用域共用一套。 */
 :is(

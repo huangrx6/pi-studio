@@ -1,0 +1,71 @@
+/* Transcript surfaces share the shell's reading/control/inset roles. Scope these
+ * rules to the conversation so file editors and floating dialogs remain legible. */
+.app :is(.chat-scroll, .temporary-scroll) :is(.user-bubble, .message-edit) {
+  background: var(--conversation-control-surface);
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+.app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
+  .attachment-card, .conversation-image-tile, .file-change-summary, .assistant-orb,
+  .activity-tool-code:not(.is-error), .request-inspector pre,
+  .todo-dock-body, .composer-model-hint
+) {
+  background: var(--conversation-reading-surface);
+  border-color: var(--border);
+}
+
+/* Nested elements tint the existing surface instead of adding another solid card. */
+.app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
+  .ref-chip, .ref-skill-body, .attachment-icon, .attachment-kind,
+  .assistant-interrupted, .assistant-turn-meta > span,
+  .file-change-icon, .composer-attachment, .message-edit-cancel,
+  .composer-feedback.is-info, .code-work-view code,
+  .activity-tool.is-running .activity-tool-status, .compaction-banner
+) {
+  background: var(--conversation-inset-surface);
+}
+
+.app :is(.chat-scroll, .temporary-scroll) .markdown blockquote {
+  background: var(--conversation-inset-surface);
+  color: var(--text-2);
+}
+
+.app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
+  .attachment-card.is-openable, .conversation-image-tile,
+  .composer-attachment.is-openable, .message-action:not(:disabled),
+  .message-edit-cancel:not(:disabled), .activity-disclosure-summary,
+  .tool-result-images-toggle, .file-change-item.is-openable,
+  .file-change-more, .file-change-summary > header button,
+  .todo-dock-head, .queued-panel-head, .queued-item,
+  .queued-actions button:not(:disabled), .ref-skill-body > summary,
+  .composer-model-hint-action, .composer-model-hint-close
+):hover {
+  background: var(--conversation-hover-surface);
+}
+
+.app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
+  .todo-row.is-active, .request-inspector-tabs button[aria-pressed="true"]
+) {
+  background: var(--conversation-selected-surface);
+}
+
+/* Preserve semantic foregrounds and borders; only soften their tinted panels. */
+.app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
+  .conversation-error, .message-error, .activity-tool-code.is-error,
+  .activity-tool.is-error .activity-tool-status, .message-edit-error
+) {
+  background: color-mix(in srgb, var(--error) 9%, var(--conversation-reading-surface));
+}
+
+.app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
+  .file-change-incomplete-note, .composer-feedback:not(.is-info)
+) {
+  background: color-mix(in srgb, var(--warning) 9%, var(--conversation-reading-surface));
+}
+
+/* Inline composer controls remain part of the editor rather than opaque pills. */
+.app .composer :is(.composer-mode, .context-usage-trigger, .model-label, .workspace-chip):is(:hover, .is-open, .is-active),
+.app .composer .composer-mode:has(.pi-select-trigger.is-open) {
+  background: var(--conversation-hover-surface);
+}
