@@ -995,14 +995,13 @@ test('built-in responsibilities use independent runtimes and explicit dependency
   );
   assert.deepEqual(metrics.permissions, ['ui.panels', 'ui.data']);
   assert.deepEqual(metrics.contributes.dataSources.map((item) => item.id), ['live', 'summary']);
-  assert.equal(
-    metrics.contributes.panels[0].content[0].sourceId,
-    'builtin:studio-metrics/live',
-  );
-  assert.equal(
-    metrics.contributes.panels[1].content[0].sourceId,
-    'builtin:studio-metrics/summary',
-  );
+  const metricsPanels = Object.fromEntries(metrics.contributes.panels.map((panel) => [panel.id, panel]));
+  assert.equal(metricsPanels['metrics-detail'].content[0].sourceId, 'builtin:studio-metrics/live');
+  assert.equal(metricsPanels['metrics-footer'].content[0].sourceId, 'builtin:studio-metrics/summary');
+  // 顶栏入口与详情面板成对出现：chip 指向 detail，且只在生成中保留底部摘要。
+  assert.equal(metricsPanels['metrics-chip'].slot, 'status.chip');
+  assert.equal(metricsPanels['metrics-chip'].details, 'metrics-detail');
+  assert.equal(metricsPanels['metrics-footer'].visibility, 'while-active');
   const known = new Set(BUILTIN_MANIFESTS.map((manifest) => `builtin:${manifest.id}`));
   for (const manifest of BUILTIN_MANIFESTS) {
     for (const requirement of manifest.requires || []) {

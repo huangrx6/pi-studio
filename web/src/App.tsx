@@ -214,6 +214,8 @@ export function App() {
     conversationHeaderExtensionItems,
     conversationDetailExtensionItems,
     conversationFooterExtensionItems,
+    conversationExtensionChipItems,
+    openConversationExtensionChip,
     conversationExtensionHubItems,
     activeExtensionItem,
     hasConversationExtensionSessionOrder,
@@ -438,6 +440,8 @@ export function App() {
         }}
         extensions={{
           headerItems: conversationHeaderExtensionItems,
+          chipItems: conversationExtensionChipItems,
+          openChip: openConversationExtensionChip,
           surface: conversationExtensionSurface,
           hubItems: conversationExtensionHubItems,
           activeItem: activeExtensionItem,

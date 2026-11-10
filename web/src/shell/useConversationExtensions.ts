@@ -70,6 +70,7 @@ export function useConversationExtensions({
         item.slot === 'conversation.header'
         || item.slot === 'conversation.detail'
         || item.slot === 'conversation.footer'
+        || item.slot === 'status.chip'
       )),
       preferences,
       sessionId,
@@ -100,6 +101,17 @@ export function useConversationExtensions({
     () => items.filter((item) => item.slot === 'conversation.footer'),
     [items],
   );
+  // 顶栏 chip：details 指向本扩展的详情面板，点击时直接打开那一页。
+  const chipItems = useMemo(() => items
+    .filter((item) => item.slot === 'status.chip')
+    .map((item) => {
+      const target = item.details
+        ? manifestDetailItems.find((detail) => detail.extensionId === item.extensionId && detail.contributionId === item.details)
+        : undefined;
+      return { item, targetId: target?.id };
+    })
+    .filter((chip) => Boolean(chip.targetId))
+    .slice(0, 3), [items, manifestDetailItems]);
   const activeItem = agentView.kind === 'extensions' && agentView.itemId
     ? detailItems.find((item) => item.id === agentView.itemId) ?? null
     : null;
@@ -141,6 +153,10 @@ export function useConversationExtensions({
     setAgentView({ kind: 'extensions', itemId });
   }
 
+  function openChip(chip: { item: ExtensionUiItem; targetId: string }) {
+    openItem(chip.targetId);
+  }
+
   function openHub() {
     if (detailItems.length === 0) return;
     rememberMainScrollPosition();
@@ -156,11 +172,13 @@ export function useConversationExtensions({
     headerItems: headerItems as ExtensionUiItem[],
     detailItems: detailItems as ExtensionUiItem[],
     footerItems: footerItems as ExtensionUiItem[],
+    chipItems: chipItems as Array<{ item: ExtensionUiItem; targetId: string }>,
     hubItems: hubItems as ExtensionUiItem[],
     activeItem,
     hasSessionOrder: hasSessionExtensionOrder(preferences, sessionId),
     updateUi,
     openItem,
+    openChip,
     openHub,
   };
 }

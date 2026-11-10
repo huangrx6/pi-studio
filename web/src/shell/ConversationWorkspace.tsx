@@ -101,6 +101,8 @@ type HeaderState = {
 
 type ExtensionWorkspaceState = {
   headerItems: ExtensionUiItem[];
+  chipItems: Array<{ item: ExtensionUiItem; targetId: string }>;
+  openChip: (chip: { item: ExtensionUiItem; targetId: string }) => void;
   surface: ComponentProps<typeof ConversationExtensionDock>['surface'];
   hubItems: ExtensionUiItem[];
   activeItem: ExtensionUiItem | null;
@@ -240,6 +242,15 @@ export function ConversationWorkspace({
         onReturnToMainAgent={header.returnToMainAgent}
         onOpenAgentOverview={header.openAgentOverview}
         onOpenConversationExtensionHub={header.openConversationExtensionHub}
+        chips={extensions.chipItems}
+        extensionSurface={extensions.surface}
+        cwd={session?.cwd}
+        sessionId={session?.id}
+        modelRef={modelSelection.modelRef}
+        onOpenChip={extensions.openChip}
+        onOpenExtensionSettings={extensions.openSettings}
+        onSendPromptFromExtension={extensions.sendPrompt}
+        onNotifyExtension={extensions.notify}
         onOpenTrace={header.openTrace}
         showTrace={traceEnabled}
         traceSummary={traceSummary}

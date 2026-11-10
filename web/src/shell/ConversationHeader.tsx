@@ -6,6 +6,8 @@ import {
   type AppNotification,
 } from './NotificationCenter';
 import { ConversationTraceTab, type ConversationTraceSummary } from './ConversationTraceMenu';
+import { ExtensionChips, type ExtensionChipEntry } from '../features/extensions/ExtensionChips';
+import type { ExtensionSettingsPage, ExtensionUiItem, ExtensionUiSnapshot } from '../types/extension-types';
 
 type ConversationHeaderProps = {
   sidebarCollapsed: boolean;
@@ -26,6 +28,16 @@ type ConversationHeaderProps = {
   onReturnToMainAgent: () => void;
   onOpenAgentOverview: () => void;
   onOpenConversationExtensionHub: () => void;
+  /** 扩展声明的顶栏 chip（status.chip），点击打开各自的详情面板。 */
+  chips: ExtensionChipEntry[];
+  extensionSurface: ExtensionUiSnapshot;
+  cwd?: string;
+  sessionId?: string;
+  modelRef?: string;
+  onOpenChip: (chip: ExtensionChipEntry) => void;
+  onOpenExtensionSettings?: (page?: ExtensionSettingsPage) => void;
+  onSendPromptFromExtension?: (text: string, submit: boolean) => void;
+  onNotifyExtension?: React.ComponentProps<typeof ExtensionChips>['onNotify'];
   onOpenTrace: () => void;
   /** 「显示代码工作视图」关闭时，轨迹标签不出现。 */
   showTrace: boolean;
@@ -51,6 +63,15 @@ export function ConversationHeader({
   onReturnToMainAgent,
   onOpenAgentOverview,
   onOpenConversationExtensionHub,
+  chips,
+  extensionSurface,
+  cwd,
+  sessionId,
+  modelRef,
+  onOpenChip,
+  onOpenExtensionSettings,
+  onSendPromptFromExtension,
+  onNotifyExtension,
   onOpenTrace,
   showTrace,
   traceSummary,
@@ -63,6 +84,17 @@ export function ConversationHeader({
           <h1>{title}</h1>
         </div>}
         <div className="chat-actions">
+          <ExtensionChips
+            chips={chips}
+            surface={extensionSurface}
+            cwd={cwd}
+            sessionId={sessionId}
+            modelRef={modelRef}
+            onOpenChip={onOpenChip}
+            onOpenSettings={onOpenExtensionSettings}
+            onSendPrompt={onSendPromptFromExtension}
+            onNotify={onNotifyExtension}
+          />
           <NotificationCenter
             items={notifications}
             onMarkAllRead={onMarkAllRead}

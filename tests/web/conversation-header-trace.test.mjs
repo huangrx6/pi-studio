@@ -36,6 +36,8 @@ function renderHeader(showTrace) {
     'lucide-react': icons,
     './NotificationCenter': { NotificationCenter: () => null },
     './ConversationTraceMenu': { ConversationTraceTab: traceTab },
+    '../features/extensions/ExtensionChips': { ExtensionChips: () => null },
+    '../../types/extension-types': {},
   });
   return renderToStaticMarkup(React.createElement(ConversationHeader, {
     sidebarCollapsed: false,
@@ -56,6 +58,9 @@ function renderHeader(showTrace) {
     onReturnToMainAgent() {},
     onOpenAgentOverview() {},
     onOpenConversationExtensionHub() {},
+    chips: [],
+    extensionSurface: { items: [], errors: [], syncedAt: 0, apiVersion: 1 },
+    onOpenChip() {},
     onOpenTrace() {},
     showTrace,
     traceSummary: { steps: 3, requests: 1, tools: 2, state: 'done', items: [], errors: 0 },

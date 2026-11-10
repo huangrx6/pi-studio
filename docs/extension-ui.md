@@ -92,9 +92,42 @@ Pi Studio 的扩展 UI 是 **JSON 数据**，不是网页。扩展声明内容�
 按钮只能使用 `default`、`primary`、`danger` 三种语义 tone。
 同一组 `actions` 最多只能声明一个 `primary`。Studio 会在 manifest 和实时数据进入渲染层之前拒绝多个主操作，避免页面出现竞争性视觉焦点。
 
-## 3. 会话摘要与完整详情
+## 3. 会话摘要、顶栏入口与完整详情
 
 `conversation.footer` 只负责一行实时摘要。它最多接受两个 block，并且只允许 `text`、`badge`、`keyValue`、`notice`、`dataView`；完整布局和操作按钮会被 manifest 校验拒绝。Footer 不换行、不纵向滚动，超出宽度时由 Studio 省略。
+
+Footer 与顶栏 chip 可以声明 `visibility`：
+
+- `always`（默认）：一直占位；
+- `while-active`：只在回合进行中渲染，空闲时把高度还给消息区。
+
+`status.chip` 是顶栏的状态入口。它渲染为一个 28px 图标按钮（`icon` 支持 `activity`、`gauge`、`timer`、`terminal`、`chart`，未识别的名字退回心跳图标），最多三个 chip 会按 `priority` 出现在通知按钮之前。悬停或键盘聚焦会展开同一份 compact 内容（因此它接受与 footer 相同的 block，最多两个），点击则打开 `details` 指向的详情面板。
+
+```json
+[
+  {
+    "id": "quota-chip",
+    "title": "额度状态",
+    "slot": "status.chip",
+    "icon": "gauge",
+    "size": "compact",
+    "priority": 20,
+    "details": "quota-detail",
+    "content": [
+      { "kind": "text", "text": "5H 1% · W 11%" }
+    ]
+  },
+  {
+    "id": "quota-detail",
+    "title": "额度状态",
+    "slot": "conversation.detail",
+    "size": "regular",
+    "content": [{ "kind": "text", "text": "完整内容" }]
+  }
+]
+```
+
+`details` 必须指向同一份 manifest 里声明的 `conversation.detail` 面板；找不到时 manifest 校验会直接报错。Studio 只负责渲染与路由，不解释 chip 的内容，也不为某个扩展做特殊处理。
 
 ```json
 {

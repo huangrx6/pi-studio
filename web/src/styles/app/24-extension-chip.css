@@ -1,0 +1,44 @@
+/* ---- 顶栏状态 chip -----------------------------------------------------
+ * status.chip 的宿主样式：一个 28px 图标按钮，悬停或键盘聚焦展开同一份
+ * compact 内容，点击打开扩展自己的详情面板。图标与内容都由扩展声明。
+ */
+
+.extension-chips { display: flex; align-items: center; gap: 2px; }
+.extension-chip-anchor { position: relative; display: flex; }
+.extension-chip svg { width: var(--icon-sm); height: var(--icon-sm); }
+.extension-chip[aria-expanded='true'],
+.extension-chip-anchor:hover .extension-chip { background: var(--surface-hover); color: var(--text-1); }
+
+.extension-chip-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 45;
+  display: none;
+  width: 272px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-floating);
+  box-shadow: var(--shadow-popover);
+}
+
+.extension-chip-anchor:hover .extension-chip-popover,
+.extension-chip-anchor:focus-within .extension-chip-popover { display: block; }
+
+.extension-chip-popover-head { display: flex; align-items: center; gap: 6px; color: var(--text-2); font-size: var(--text-xs); }
+.extension-chip-popover-head svg { width: var(--icon-sm); height: var(--icon-sm); }
+.extension-chip-popover-head strong { color: var(--text-1); font-weight: var(--weight-medium); }
+.extension-chip-popover-body { margin-top: 8px; color: var(--text-2); font-size: var(--text-sm); line-height: var(--leading-relaxed); }
+
+.extension-chip-more {
+  width: 100%;
+  margin-top: 10px;
+  padding: 5px 8px;
+  border-top: 1px solid var(--divider);
+  color: var(--text-2);
+  font-size: var(--text-xs);
+  text-align: left;
+}
+
+.extension-chip-more:hover { color: var(--text-1); }

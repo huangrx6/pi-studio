@@ -258,6 +258,10 @@ export function ComposerDock({
   // 模型没配置时，发送按钮只会禁用；点击输入框时给一条可见的配置入口，
   // 而不是把用户挡在输入框外。
   const hasUsableModel = Boolean(modelSelection.modelRef) && !modelSelection.unavailable;
+  // status 里的 footer 摘要可以声明 while-active：只有回合进行中才占位。
+  const footerExtensionItems = conversationFooterExtensionItems.filter(
+    (item) => item.visibility !== 'while-active' || turnActive,
+  );
   const [modelHintOpen, setModelHintOpen] = useState(false);
 
   return <div className="composer-dock" hidden={!open}>
@@ -560,9 +564,9 @@ export function ComposerDock({
       onSendPrompt={sendPromptFromExtension}
       onNotify={notifyExtension}
     />
-    {!isNewConversation && conversationFooterExtensionItems.length > 0 && (
+    {!isNewConversation && footerExtensionItems.length > 0 && (
       <ConversationExtensionDock
-        items={conversationFooterExtensionItems}
+        items={footerExtensionItems}
         surface={extensionSurface}
         placement="footer"
         cwd={session?.cwd}

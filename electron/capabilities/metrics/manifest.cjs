@@ -17,6 +17,22 @@ id: 'studio-metrics',
     contributes: {
       panels: [
         {
+          /* 顶栏入口：一个图标，悬停展开紧凑摘要，点击打开下面的详情面板。 */
+          id: 'metrics-chip',
+          title: '实时指标',
+          description: '顶栏的实时指标入口，点击打开完整面板。',
+          slot: 'status.chip',
+          icon: 'activity',
+          size: 'compact',
+          priority: 20,
+          details: 'metrics-detail',
+          content: [{
+            kind: 'dataView',
+            sourceId: METRICS_FOOTER_SOURCE_ID,
+            emptyText: '空闲',
+          }],
+        },
+        {
           id: 'metrics-detail',
           title: '实时指标',
           description: '当前会话的模型请求和 Durable 任务指标。',
@@ -39,6 +55,8 @@ id: 'studio-metrics',
           description: '当前请求的紧凑状态、TPS、TTFT 与 Token。',
           slot: 'conversation.footer',
           size: 'compact',
+          /* 只在生成中的回合里占位；空闲时把高度还给消息区。 */
+          visibility: 'while-active',
           content: [{
             kind: 'dataView',
             sourceId: METRICS_FOOTER_SOURCE_ID,

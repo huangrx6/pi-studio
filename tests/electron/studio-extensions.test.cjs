@@ -480,6 +480,114 @@ test('conversation detail and footer use separate layouts', () => {
   }), '/tmp/demo', 'user'), /一至两个单行摘要/);
 });
 
+test('status.chip points at its own detail panel and accepts a visibility window', () => {
+  const normalized = normalizeManifest(manifest({
+    permissions: ['ui.panels'],
+    contributes: {
+      panels: [
+        {
+          id: 'detail',
+          title: '详情',
+          slot: 'conversation.detail',
+          content: [{ kind: 'text', text: '完整内容' }],
+        },
+        {
+          id: 'chip',
+          title: '摘要',
+          slot: 'status.chip',
+          icon: 'activity',
+          details: 'detail',
+          content: [{ kind: 'text', text: '额度 11%' }],
+        },
+        {
+          id: 'footer',
+          title: '底部',
+          slot: 'conversation.footer',
+          visibility: 'while-active',
+          content: [{ kind: 'text', text: '生成中' }],
+        },
+      ],
+    },
+  }), '/tmp/demo', 'user');
+
+  const [detail, chip, footer] = normalized.contributes.panels;
+  assert.equal(detail.slot, 'conversation.detail');
+  assert.equal(chip.slot, 'status.chip');
+  assert.equal(chip.details, 'detail');
+  assert.equal(chip.visibility, undefined, 'chip defaults to always visible');
+  assert.equal(footer.visibility, 'while-active');
+
+  // details 必须指向同一份 manifest 里的详情面板
+  assert.throws(() => normalizeManifest(manifest({
+    permissions: ['ui.panels'],
+    contributes: {
+      panels: [{
+        id: 'chip',
+        title: '摘要',
+        slot: 'status.chip',
+        details: 'missing-detail',
+        content: [{ kind: 'text', text: 'x' }],
+      }],
+    },
+  }), '/tmp/demo', 'user'), /details 必须指向本扩展的 conversation\.detail 面板/);
+
+  // chip 只收单行摘要，最多两块
+  assert.throws(() => normalizeManifest(manifest({
+    permissions: ['ui.panels'],
+    contributes: {
+      panels: [{
+        id: 'chip',
+        title: '摘要',
+        slot: 'status.chip',
+        content: [{ kind: 'list', items: [{ text: '第一项' }] }],
+      }],
+    },
+  }), '/tmp/demo', 'user'), /status\.chip 不支持/);
+
+  assert.throws(() => normalizeManifest(manifest({
+    permissions: ['ui.panels'],
+    contributes: {
+      panels: [{
+        id: 'chip',
+        title: '摘要',
+        slot: 'status.chip',
+        content: [
+          { kind: 'text', text: '一' },
+          { kind: 'text', text: '二' },
+          { kind: 'text', text: '三' },
+        ],
+      }],
+    },
+  }), '/tmp/demo', 'user'), /status\.chip 最多声明两个单行摘要 block/);
+
+  // visibility 只允许 footer 与 chip
+  assert.throws(() => normalizeManifest(manifest({
+    permissions: ['ui.panels'],
+    contributes: {
+      panels: [{
+        id: 'detail',
+        title: '详情',
+        slot: 'conversation.detail',
+        visibility: 'while-active',
+        content: [{ kind: 'text', text: 'x' }],
+      }],
+    },
+  }), '/tmp/demo', 'user'), /只有 conversation\.footer 与 status\.chip 可以声明 visibility/);
+
+  assert.throws(() => normalizeManifest(manifest({
+    permissions: ['ui.panels'],
+    contributes: {
+      panels: [{
+        id: 'footer',
+        title: '底部',
+        slot: 'conversation.footer',
+        visibility: 'sometimes',
+        content: [{ kind: 'text', text: 'x' }],
+      }],
+    },
+  }), '/tmp/demo', 'user'), /visibility 无效/);
+});
+
 test('live data sources require ui.data, a runtime entry and same-extension dataViews', () => {
   const normalized = normalizeManifest(manifest({
     permissions: ['ui.panels', 'ui.data'],

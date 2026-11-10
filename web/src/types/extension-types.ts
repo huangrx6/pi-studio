@@ -35,7 +35,9 @@ export type ExtensionUiSlot =
   | 'composer.before'
   | 'settings.panel'
   | 'panel.side'
-  | 'status.bar';
+  | 'status.bar'
+  /** 顶栏状态入口：图标 + 可选单行摘要，点击打开本扩展的详情面板。 */
+  | 'status.chip';
 
 export type ConversationExtensionLayout = 'grid' | 'list';
 export type ConversationExtensionOrderScope = 'global' | 'session';
@@ -561,6 +563,10 @@ export interface ExtensionUiItem {
   /** Stable declaration order from extension scan and manifest order. */
   sourceOrder: number;
   content: ExtensionContent[];
+  /** chip 专属：点击后打开的 conversation.detail 面板 id。 */
+  details?: string;
+  /** 只在回合进行中出现（默认常驻）。 */
+  visibility?: 'always' | 'while-active';
 }
 
 export interface ExtensionUiSnapshot {
