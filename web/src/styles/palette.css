@@ -43,30 +43,42 @@
   来区分。
    */
 
-  --bg: #ffffff;
-  --surface: #ffffff;
-  --sidebar-bg: #fafafa;
-  --surface-raised: #fafafa;
-  --surface-soft: #fafafa;
-  --surface-hover: #eeeeee;
-  --surface-active: #e3e3e3;
-  --selected-bg: #f0f0f0;
+  /* 四级表面：全 app（含设置面）共用同一套，换壁纸不会改变窗口内颜色。 */
+  --surface-canvas: #ffffff;
+  --surface-chrome: #f6f7f8;
+  --surface-raised: #ffffff;
+  --surface-floating: #ffffff;
+  --surface-hover: #eef0f2;
+  --accent-tint: color-mix(in srgb, var(--accent) 8%, transparent);
+  --add: #1f8a4c;
+  --del: #c0392b;
+
+  --bg: var(--surface-canvas);
+  --surface: var(--surface-raised);
+  --sidebar-bg: var(--surface-chrome);
+  --surface-soft: var(--surface-raised);
+  --surface-active: var(--surface-hover);
+  --selected-bg: var(--accent-tint);
   /* 文字层级：正文、次要说明、弱提示、禁用文字。muted 用于卡片说明，faint 用于
   时间戳和占位符，disabled 只用于不可用控件；对比度由测试按配对校验。
    */
 
-  --text: #202020;
-  --muted: #565656;
-  --faint: #6b6b6b;
-  --disabled-text: #929292;
+  --text-1: #111318;
+  --text-2: #5f6670;
+  --text-3: #8b929c;
+
+  --text: var(--text-1);
+  --muted: var(--text-2);
+  --faint: var(--text-2);
+  --disabled-text: var(--text-3);
   /* 边框与分隔线：border 是默认描边，border-strong 用于输入框和可交互控件，
   divider 只做弱分隔，border-hover 表示可交互元素悬停时的加深。
    */
 
-  --border: #e5e5e5;
-  --border-strong: #d2d2d2;
-  --divider: #ededed;
-  --border-hover: #a3a3a3;
+  --border: rgb(0 0 0 / 8%);
+  --border-strong: rgb(0 0 0 / 14%);
+  --divider: rgb(0 0 0 / 6%);
+  --border-hover: rgb(0 0 0 / 22%);
 
   /* 强调色与按钮：accent 用于链接、选中图标和焦点，accent-soft 是低饱和背景，
   accent-border 用于选中描边；button-bg/hover 与 on-button 组成主按钮的前景背景
@@ -140,17 +152,17 @@
   使用上面的强调色与语义色，避免把整个应用改成单色。
    */
 
-  --settings-page-bg: #fafafa;
-  --settings-nav-bg: #f4f4f4;
-  --settings-card-bg: #ffffff;
-  --settings-border: #ebebeb;
-  --settings-divider: #f0f0f0;
-  --settings-text: #1f1f1f;
-  --settings-title: #0a0a0a;
-  --settings-muted: #767676;
-  --settings-control-bg: #f2f2f2;
-  --settings-hover-bg: #f2f2f2;
-  --settings-selected-bg: #ffffff;
+  --settings-page-bg: var(--surface-canvas);
+  --settings-nav-bg: var(--surface-chrome);
+  --settings-card-bg: var(--surface-raised);
+  --settings-border: var(--border);
+  --settings-divider: var(--divider);
+  --settings-text: var(--text-1);
+  --settings-title: var(--text-1);
+  --settings-muted: var(--text-2);
+  --settings-control-bg: var(--surface-floating);
+  --settings-hover-bg: var(--surface-hover);
+  --settings-selected-bg: var(--accent-tint);
   /* 浅色下选中底与卡片同色，靠 1px 描边加轻阴影浮起；深色改为纯色块。 */
   --settings-selected-shadow: inset 0 0 0 1px #ebebeb, 0 1px 2px rgb(0 0 0 / 6%);
   /* 页面不再是纯白，卡片才需要 1px 极轻阴影；深色不用阴影。 */
@@ -175,23 +187,35 @@
   color-scheme: dark;
 
 
-  /* 深色工作区保留三级表面层级，避免主内容、卡片和输入区糊成一块黑。 */
-  --bg: #151515;
-  --surface: #1b1b1b;
-  --sidebar-bg: #171717;
-  --surface-raised: #242424;
-  --surface-soft: #222222;
-  --surface-hover: #2b2b2b;
-  --surface-active: #353535;
-  --selected-bg: #272727;
-  --text: #ededed;
-  --muted: #b8b8b8;
-  --faint: #9b9b9b;
-  --disabled-text: #707070;
-  --border: #303030;
-  --border-strong: #3b3b3b;
-  --divider: #282828;
-  --border-hover: #676767;
+  /* 四级表面：画布、外壳、卡片、输入框；rgba 只用于边框、悬停、tint 与行内代码。 */
+  --surface-canvas: #17191d;
+  --surface-chrome: #1b1e23;
+  --surface-raised: #1e2227;
+  --surface-floating: #242930;
+  --surface-hover: #262b32;
+  --accent-tint: color-mix(in srgb, var(--accent) 8%, transparent);
+  --add: #6fcf97;
+  --del: #eb7070;
+
+  --bg: var(--surface-canvas);
+  --surface: var(--surface-raised);
+  --sidebar-bg: var(--surface-chrome);
+  --surface-soft: var(--surface-raised);
+  --surface-active: var(--surface-hover);
+  --selected-bg: var(--accent-tint);
+
+  --text-1: #e8eaed;
+  --text-2: #9aa0a8;
+  --text-3: #6f7680;
+  --text: var(--text-1);
+  --muted: var(--text-2);
+  --faint: var(--text-2);
+  --disabled-text: var(--text-3);
+
+  --border: rgb(255 255 255 / 8%);
+  --border-strong: rgb(255 255 255 / 14%);
+  --divider: rgb(255 255 255 / 6%);
+  --border-hover: rgb(255 255 255 / 24%);
 
   --switch-off: #484848;
   --switch-thumb: #c1c1c1;
@@ -240,17 +264,17 @@
   --selection: color-mix(in srgb, var(--theme-accent) 44%, var(--surface));
   /* 设置页设计规范（黑白灰）的深色一套：页面纯黑，靠微小明度差分层。 */
 
-  --settings-page-bg: #000000;
-  --settings-nav-bg: #0a0a0a;
-  --settings-card-bg: #111111;
-  --settings-border: #262626;
-  --settings-divider: #1c1c1c;
-  --settings-text: #ededed;
-  --settings-title: #ffffff;
-  --settings-muted: #a3a3a3;
-  --settings-control-bg: #1a1a1a;
-  --settings-hover-bg: #181818;
-  --settings-selected-bg: #2a2a2a;
+  --settings-page-bg: var(--surface-canvas);
+  --settings-nav-bg: var(--surface-chrome);
+  --settings-card-bg: var(--surface-raised);
+  --settings-border: var(--border);
+  --settings-divider: var(--divider);
+  --settings-text: var(--text-1);
+  --settings-title: var(--text-1);
+  --settings-muted: var(--text-2);
+  --settings-control-bg: var(--surface-floating);
+  --settings-hover-bg: var(--surface-hover);
+  --settings-selected-bg: var(--accent-tint);
   --settings-selected-shadow: none;
   --settings-card-shadow: none;
   --settings-thumb-shadow: none;
@@ -366,4 +390,22 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --skeleton-gradient: linear-gradient(90deg, var(--skeleton), var(--skeleton-shine), var(--skeleton));
   --track-gradient: linear-gradient(180deg, var(--transparent), var(--border) 12%, var(--border) 88%, var(--transparent));
   --link-decoration: var(--theme-accent);
+}
+
+/* Trace lanes have stable identities across accent schemes. */
+:root {
+  --trace-input: #318057;
+  --trace-input-soft: #31805718;
+  --trace-model: #8660a6;
+  --trace-model-soft: #8660a618;
+  --trace-tool: #a76512;
+  --trace-tool-soft: #a7651218;
+}
+:root[data-theme="dark"] {
+  --trace-input: #55ad7d;
+  --trace-input-soft: #55ad7d22;
+  --trace-model: #a184c4;
+  --trace-model-soft: #a184c422;
+  --trace-tool: #d9902d;
+  --trace-tool-soft: #d9902d22;
 }

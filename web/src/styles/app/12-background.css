@@ -27,39 +27,10 @@
 .app.has-custom-background > .sidebar,
 .app.has-custom-background > .main,
 .app.has-custom-background .settings-nav,
-.app.has-custom-background .settings-content { position: relative; isolation: isolate; background: var(--transparent); backdrop-filter: blur(18px) saturate(1.08); -webkit-backdrop-filter: blur(18px) saturate(1.08); }
-.app.has-custom-background > .sidebar::before,
-.app.has-custom-background > .main::before,
-.app.has-custom-background .settings-nav::before,
-.app.has-custom-background .settings-content::before { position: absolute; inset: 0; z-index: -1; content: ''; pointer-events: none; background: var(--background-shell-wash); opacity: var(--background-surface-opacity); }
-.app.has-custom-background > .sidebar::before,
-.app.has-custom-background .settings-nav::before { background: var(--background-sidebar-wash); }
-.app.has-custom-background .settings-overlay { background: var(--transparent); }
-
-/* 设置内容包括滚动区，绝对定位的 ::before 遮挡层只覆盖第一个视口高度，
-   滚到下面就会出现『上半截发白、下半截透出照片』的硬接缝。
-   改成直接画在滚动容器背景上，遮挡随内容整段覆盖。 */
-.app.has-custom-background .settings-content {
-  /* 内容滚动区不能再用接近不透明的页面底覆盖背景图；保留一层可读的
-     深色玻璃，同时让背景在设置页内持续可见。 */
-  background: var(--background-settings-veil);
-}
-
+/* 方案 A：壁纸在窗口外。渲染层里所有表面都是不透明四级色，
+   壁纸只出现在应用卡片四周的留白里，因此换任何壁纸窗口内颜色都不变。 */
+.app.has-custom-background .settings-content { background: var(--surface-canvas); }
 .app.has-custom-background .settings-content::before { content: none; }
-
-/* 卡片同样走玻璃层：界面遮挡调到 0 时不会出现『白卡片压在照片上』的硬块。 */
-.app.has-custom-background .settings-content :is(
-  .settings-card,
-  .general-settings-card,
-  .shortcut-list,
-  .mcp-server-list,
-  .installed-skill-group,
-  .settings-resource-card
-) {
-  background: var(--background-card-surface);
-  border-color: var(--background-border);
-}
-.app.has-custom-background .composer-dock { background: var(--transparent); }
 
 /* Cards and persistent work surfaces share one glass layer. They do not add another
  * backdrop blur; the shell already softens the media, which keeps long pages cheap. */
@@ -74,8 +45,8 @@
   .diff-view,
   .temporary-chat
  ) {
-  background: var(--background-card-strong-surface);
-  border-color: var(--background-border);
+  background: var(--surface-raised);
+  border-color: var(--border);
 }
 .app.has-custom-background :is(
   .agent-workspace,
@@ -87,12 +58,12 @@
   .model-comparison,
   .conversation-trace-page
 ) {
-  background: var(--transparent);
-  border-color: var(--background-border);
+  background: var(--surface-canvas);
+  border-color: var(--border);
 }
 .app.has-custom-background .settings-page-frame {
-  background: var(--background-card-strong-surface);
-  border-color: var(--background-border);
+  background: var(--surface-raised);
+  border-color: var(--border);
 }
 
 /* Controls sit above cards with one shared surface. Semantic editor rows and small
@@ -121,8 +92,8 @@
   .settings-search,
   .search-field
 ) {
-  background: var(--background-control-surface);
-  border-color: var(--background-border-strong);
+  background: var(--surface-floating);
+  border-color: var(--border-strong);
 }
 
 /* 悬停、展开与聚焦保持同一块玻璃底，只把边框换成焦点色；否则控件会在交互瞬间
@@ -134,13 +105,13 @@
   .usage-range-switch,
   .permission-policy-scopes
 ):is(:hover, :focus-visible, :focus-within, .is-open) {
-  background: var(--background-control-surface);
+  background: var(--surface-floating);
 }
 
 /* 下拉面板会盖在照片上，读文字优先：用更实的卡片玻璃，而不是控件层。 */
 .app.has-custom-background .pi-select-menu {
-  background: var(--background-card-strong-surface);
-  border-color: var(--background-border-strong);
+  background: var(--surface-floating);
+  border-color: var(--border-strong);
 }
 
 .app.has-custom-background .composer textarea,
@@ -156,11 +127,11 @@
   :has(.pi-select-trigger.is-open),
   :has(.pi-select-trigger:focus-visible)
 ) {
-  background: var(--background-hover-surface);
+  background: var(--surface-hover);
 }
 
 .app.has-custom-background :is(.workspace-choice, .composer-mode):has(.pi-select-trigger:focus-visible) {
-  box-shadow: inset 0 0 0 1px var(--background-border-strong);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 
 .app.has-custom-background :is(
@@ -171,8 +142,8 @@
   .model-option
 ).is-active,
 .app.has-custom-background .model-option.is-selected {
-  background: var(--background-selected-surface);
-  border-color: var(--accent-border);
+  background: var(--accent-tint);
+  border-color: var(--accent);
 }
 
 
@@ -199,10 +170,8 @@
   .action-menu,
   .changes-jump
 ) {
-  background: var(--overlay-surface);
-  border-color: var(--background-border-strong);
-  backdrop-filter: blur(22px) saturate(1.08);
-  -webkit-backdrop-filter: blur(22px) saturate(1.08);
+  background: var(--surface-floating);
+  border-color: var(--border-strong);
 }
 
 /* Shared media preview and errors; the appearance feature owns its layout. */

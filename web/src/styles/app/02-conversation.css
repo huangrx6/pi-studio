@@ -202,7 +202,7 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 但隐藏滚动条，关闭按钮绝对定位在缩略图右上角。 */
 
 .composer-dock { flex: none; padding: var(--space-3) var(--session-gutter) var(--space-4); background: var(--bg); z-index: 10; }
-.composer { max-width: var(--content); margin: 0 auto; border: 1px solid var(--border-strong); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-float); transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition); }
+.composer { max-width: var(--content); margin: 0 auto; border: 1px solid var(--border-strong); border-radius: 14px; background: var(--surface-floating); box-shadow: var(--shadow-float); transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition); }
 .composer-feedback {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr) 24px;

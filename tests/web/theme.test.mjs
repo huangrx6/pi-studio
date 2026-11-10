@@ -150,8 +150,8 @@ test('all page typography consumes shared size and weight tokens', () => {
 });
 
 // 两种主题分别检查：
-// 1. 页面级背景（--bg / --surface / --sidebar-bg）必须是中性色（R=G=B），
-//    避免整页被品牌色染色；
+// 1. 页面级背景（--bg / --surface / --sidebar-bg）只能带极小的冷色偏移
+//    （四级表面规范是 #17191D 这类冷灰），不能跟着品牌色被染色；
 // 2. 前景/背景组合的 WCAG 对比度至少 4.5:1，覆盖正文、弱化文字、按钮、
 //    错误/警告/成功状态、代码语法色与选区文字。
 for (const paletteName of ['lime', 'ocean', 'amber', 'berry']) {
@@ -160,7 +160,8 @@ for (const paletteName of ['lime', 'ocean', 'amber', 'berry']) {
       const t = tokens(mode, paletteName);
       for (const key of ['--bg', '--surface', '--sidebar-bg']) {
         const color = t[key].slice(1).match(/../g).map((value) => parseInt(value, 16));
-        assert.equal(Math.max(...color) - Math.min(...color), 0, `${mode} ${key} must stay neutral`);
+        // 允许 ≤12/255 的冷色偏移：规范的四级表面就是冷灰，不能让品牌色再叠一层色相。
+        assert.ok(Math.max(...color) - Math.min(...color) <= 12, `${mode} ${key} must stay near-neutral`);
       }
       const pairs = [
         ['--text', '--bg'],
@@ -222,6 +223,19 @@ test('palette presets keep semantic status colors stable', () => {
 // 原生窗口的 backgroundColor 必须在启动瞬间就和页面一致（否则会闪一下）。
 // Electron 侧从同一份 palette.css 读取 --bg：显式主题直接取对应值，
 // system 则按当前系统是否暗色选择。
+test('the four shared surfaces stay opaque in both themes', () => {
+  // 换壁纸不改变窗口内颜色：四级表面必须是实色，不能是 rgba 或 color-mix。
+  for (const mode of ['light', 'dark']) {
+    const t = tokens(mode, 'lime');
+    for (const key of ['--surface-canvas', '--surface-chrome', '--surface-raised', '--surface-floating']) {
+      assert.match(t[key], /^#[\da-f]{6}$/i, `${mode} ${key} must be an opaque hex color`);
+    }
+    for (const key of ['--bg', '--surface', '--sidebar-bg']) {
+      assert.match(t[key], /^#[\da-f]{6}$/i, `${mode} ${key} resolves to an opaque surface`);
+    }
+  }
+});
+
 test('Electron reads both backgrounds from the same palette', () => {
   const { themeBackground } = createRequire(import.meta.url)('../../electron/theme.cjs');
   assert.equal(themeBackground('light', true), tokens('light')['--bg']);

@@ -10,10 +10,21 @@ const path = require('node:path');
 
 // The native window uses the same palette as the renderer, including at startup.
 const palette = fs.readFileSync(path.join(__dirname, '../web/src/styles/palette.css'), 'utf8');
+function paletteBlock(selector) {
+  return palette.slice(palette.indexOf(selector) + selector.length).split('}')[0];
+}
+
+/** 读取一个颜色令牌；允许一层 var(--x) 别名，因为 --bg 现在指向四级表面。 */
+function readColor(block, name) {
+  const raw = block.match(new RegExp(`--${name}:\\s*([^;]+);`, 'i'))?.[1]?.trim();
+  if (!raw) return undefined;
+  const alias = raw.match(/^var\(\s*--([\w-]+)\s*\)$/);
+  return alias ? readColor(block, alias[1]) : (raw.match(/^#[\da-f]{6}$/i) ? raw : undefined);
+}
+
 const backgrounds = Object.fromEntries(['light', 'dark'].map((theme) => {
-  const selector = theme === 'light' ? ':root {' : ':root[data-theme="dark"] {';
-  const block = palette.slice(palette.indexOf(selector) + selector.length).split('}')[0];
-  const color = block.match(/--bg:\s*(#[\da-f]{6})\s*;/i)?.[1];
+  const block = paletteBlock(theme === 'light' ? ':root {' : ':root[data-theme="dark"] {');
+  const color = readColor(block, 'bg');
   if (!color) throw new Error(`Missing --bg in the ${theme} palette`);
   return [theme, color];
 }));
