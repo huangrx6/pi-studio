@@ -364,6 +364,7 @@ export function App() {
           modelSelection,
           preferences,
           turnActive,
+          busy,
           error,
           setError,
           compaction,

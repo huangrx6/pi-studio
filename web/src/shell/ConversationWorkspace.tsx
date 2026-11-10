@@ -73,6 +73,8 @@ type ConversationShell = {
   modelSelection: ModelSelection;
   preferences: Preferences;
   turnActive: boolean;
+  /** 提交已写入但本轮还没结束：编辑必须和主进程一样等到空闲。 */
+  busy: boolean;
   error: string | null;
   setError: (error: string | null) => void;
   compaction: { active: boolean; reason?: string };
@@ -250,6 +252,7 @@ export function ConversationWorkspace({
     modelSelection,
     preferences,
     turnActive,
+    busy,
     error,
     setError,
     compaction,
@@ -438,7 +441,7 @@ export function ConversationWorkspace({
                       message={turn.message}
                       onOpenFile={actions.openAttachment}
                       onEdit={actions.editMessage}
-                      editDisabled={turnActive || compaction.active}
+                      editDisabled={turnActive || busy || compaction.active}
                     />
                     {requestPlacement.unansweredByUserTurn.has(index) && <AssistantTurnView messages={[]} toolResults={toolResultMap} requestTraces={requestPlacement.unansweredByUserTurn.get(index)} cwd={session?.cwd} busy={false} turnError={NO_ANSWER_TEXT} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={false} />}
                   </Fragment>;
