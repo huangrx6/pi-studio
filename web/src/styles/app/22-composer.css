@@ -8,14 +8,14 @@
 }
 
 .composer textarea {
-  min-height: 40px;
-  max-height: 200px;
-  padding: 12px 12px 4px;
+  min-height: 56px;
+  max-height: 220px;
+  padding: 15px 14px 8px;
   line-height: var(--leading-normal);
 }
 
 .composer-highlight {
-  padding: 12px 12px 4px;
+  padding: 15px 14px 8px;
   line-height: var(--leading-normal);
 }
 

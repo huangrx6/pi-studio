@@ -1,13 +1,13 @@
 .main.is-new-conversation { overflow-y: auto; }
 .main.is-new-conversation .composer-dock { padding-block: var(--space-8); }
 
-/* 欢迎区只做一次呼吸：一条短线、一句衬线标题、一行说明，然后是任务示例。 */
+/* 欢迎区只做一次呼吸：一条短线，一句衬线标题。 */
 .new-conversation-welcome {
   width: min(var(--content), 100%);
   display: grid;
   justify-items: center;
   gap: 10px;
-  padding: 0 var(--space-4) var(--space-8);
+  padding: 0 var(--space-4) var(--space-6);
   margin: 0 auto;
   text-align: center;
 }
@@ -22,22 +22,4 @@
   letter-spacing: .01em;
 }
 
-.new-conversation-lede { margin: 0; color: var(--text-2); font-size: var(--text-sm); line-height: var(--leading-relaxed); }
 .new-conversation-welcome p[role="status"] { margin: 0; color: var(--muted); font-size: var(--text-sm); }
-
-.new-conversation-suggestions { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-
-.new-conversation-suggestion {
-  display: inline-flex;
-  align-items: center;
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-round);
-  background: var(--transparent);
-  color: var(--text-2);
-  font-size: var(--text-sm);
-}
-
-.new-conversation-suggestion:hover { border-color: var(--border-hover); background: var(--surface-hover); color: var(--text-1); }
-.new-conversation-suggestion:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }

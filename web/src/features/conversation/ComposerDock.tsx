@@ -261,19 +261,7 @@ export function ComposerDock({
   const [modelHintOpen, setModelHintOpen] = useState(false);
 
   return <div className="composer-dock" hidden={!open}>
-    {isNewConversation && <NewConversationWelcome
-      hasWorkspace={Boolean(workspace)}
-      hasDraft={Boolean(prompt.trim() || composerAttachments.length)}
-      loading={stateLoading}
-      onSelectPrompt={(text) => {
-        setPrompt((current) => current.trim() ? `${current}\n\n${text}` : text);
-        setComposerMenu(null);
-        requestAnimationFrame(() => {
-          textareaRef.current?.focus();
-          textareaRef.current?.setSelectionRange(textareaRef.current.value.length, textareaRef.current.value.length);
-        });
-      }}
-    />}
+    {isNewConversation && <NewConversationWelcome loading={stateLoading} />}
     {!isNewConversation && (
       <LongTaskDock
         state={session?.longTask}

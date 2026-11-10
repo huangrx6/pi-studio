@@ -18,30 +18,20 @@ function compile(relative, imports = {}) {
 
 const { NewConversationWelcome } = compile('../../web/src/features/conversation/NewConversationWelcome.tsx');
 const render = overrides => renderToStaticMarkup(React.createElement(NewConversationWelcome, {
-  hasWorkspace: false,
   loading: false,
-  hasDraft: false,
-  onSelectPrompt() {},
   ...overrides,
 }));
 
-test('the welcome state is a single invitation, not a setup form', () => {
+test('the welcome state is one line and one sentence', () => {
   const html = render();
   assert.match(html, /new-conversation-rule/);
   assert.match(html, /今天想做点什么？/);
-  assert.match(html, /new-conversation-lede/);
-  // 工作区与模型的入口都在输入框里，空状态不再渲染设置按钮。
+  // 说明文字与任务示例都已移除：工作区与模型的入口在输入框里。
+  assert.doesNotMatch(html, /new-conversation-lede|new-conversation-suggestion|任务示例/);
   assert.doesNotMatch(html, /选择工作区|配置模型|new-conversation-setup/);
-  assert.doesNotMatch(html, /new-conversation-suggestion/);
 });
 
-test('task examples appear only with a workspace and no draft', () => {
-  assert.doesNotMatch(render(), /任务示例|new-conversation-suggestion/);
-  assert.match(render({ hasWorkspace: true }), /任务示例/);
-  assert.doesNotMatch(render({ hasWorkspace: true, hasDraft: true }), /任务示例|new-conversation-suggestion/);
-});
-
-test('loading hides the invitation copy instead of showing setup actions', () => {
+test('loading adds a quiet status line without bringing back the old blocks', () => {
   const html = render({ loading: true });
   assert.match(html, /正在载入…/);
   assert.doesNotMatch(html, /new-conversation-lede|new-conversation-suggestion/);
