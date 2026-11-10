@@ -1,9 +1,9 @@
 import type { ExtensionPlacement } from '../../shared/preferences';
 import type { ExtensionHostItem } from '../../types/extension-types';
 import {
-  EXTENSION_PLACEMENT_OPTIONS,
   placeablePanels,
   placementFor,
+  placementOptionsFor,
 } from './extension-placement';
 import { extensionScopeLabel, extensionStateLabel, extensionStateTone } from './extension-presentation';
 import './extension-lists.css';
@@ -49,11 +49,17 @@ export function InstalledExtensionCard({ item, busy, compact = false, placements
         * 比左侧内容更靠右，看起来像没对齐。 */}
       <div className="extension-list-footer">
         {!compact && onPlacementChange && placeable.map((panel) => {
-          const current = placementFor(placements, panel.id);
+          const options = placementOptionsFor(panel.slots);
+          // 单落点没有 both 这一档：缺省时把「两处」折算成它唯一的那一处，
+          // 否则选择器会出现「没有任何一项被选中」的空状态。
+          const stored = placementFor(placements, panel.id);
+          const current = options.some((option) => option.value === stored)
+            ? stored
+            : panel.slots[0] === 'status.chip' ? 'chip' : 'footer';
           return <div className="extension-placement" key={panel.id}>
             <span className="extension-placement-label">显示位置</span>
             <div className="extension-placement-options" role="group" aria-label={`${item.name} 显示位置`}>
-              {EXTENSION_PLACEMENT_OPTIONS.map(({ value, label, hint }) => <button
+              {options.map(({ value, label, hint }) => <button
                 key={value}
                 type="button"
                 title={hint}

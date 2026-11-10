@@ -22,6 +22,20 @@ export const EXTENSION_PLACEMENT_OPTIONS: Array<{ value: ExtensionPlacement; lab
   { value: 'hidden', label: '隐藏', hint: '保留扩展，但不在会话里显示' },
 ];
 
+/**
+ * 只列出这个 panel 真正用得到的档位：单落点时去掉与它等价的选项，
+ * 「隐藏」始终保留。
+ */
+export function placementOptionsFor(
+  slots: Array<'status.chip' | 'conversation.footer'>,
+): Array<{ value: ExtensionPlacement; label: string; hint: string }> {
+  const allowed = new Set<ExtensionPlacement>(['hidden']);
+  if (slots.length > 1) allowed.add('both');
+  if (slots.includes('status.chip')) allowed.add('chip');
+  if (slots.includes('conversation.footer')) allowed.add('footer');
+  return EXTENSION_PLACEMENT_OPTIONS.filter((option) => allowed.has(option.value));
+}
+
 const CONFIGURABLE_SLOTS = ['status.chip', 'conversation.footer'] as const;
 
 /** contribution id 与主进程 `contributionId()` 的拼法保持一致。 */
@@ -30,17 +44,17 @@ export function panelContributionId(scope: string, manifestId: string, panelId: 
 }
 
 /**
- * 该扩展里声明了**至少两个**可配置落点的 panel。
+ * 该扩展里声明了顶栏/输入框落点的 panel。
  *
- * 只声明一处时「两处 / 只在顶栏 / 只在输入框下」三种取值等价，选择器没有意义；
- * 想彻底关掉这个入口，用扩展本身的启停。
+ * 单落点的扩展也给选择器：虽然「顶栏」与「两处」对它是等价的，但用户仍然
+ * 需要「隐藏」这一个选项；具体列出哪几档由 placementOptionsFor 决定。
  */
 export function placeablePanels(item: ExtensionHostItem): PlaceablePanel[] {
   const manifestId = item.manifest?.id || item.id;
   return (item.manifest?.contributes?.panels || []).flatMap((panel) => {
     const declared = Array.isArray(panel.slots) && panel.slots.length > 0 ? panel.slots : [panel.slot];
     const slots = CONFIGURABLE_SLOTS.filter((slot) => declared.includes(slot));
-    if (slots.length < 2) return [];
+    if (slots.length === 0) return [];
     return [{ id: panelContributionId(item.scope, manifestId, panel.id), slots }];
   });
 }

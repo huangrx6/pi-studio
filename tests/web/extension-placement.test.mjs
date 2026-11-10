@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   EXTENSION_PLACEMENT_OPTIONS,
   panelContributionId,
+  placementOptionsFor,
   placeablePanels,
   placementAllowsSlot,
   placementFor,
@@ -38,7 +39,7 @@ test('contribution id matches the main process format', () => {
   assert.equal(panelContributionId('project', 'acme/panel', 'chip'), 'project:acme/panel/chip');
 });
 
-test('only panels with two configurable slots become a placement choice', () => {
+test('panels with any chip or footer slot become a placement choice', () => {
   const both = extension([
     { id: 'metrics-chip', slot: 'status.chip', slots: ['status.chip', 'conversation.footer'] },
   ]);
@@ -46,14 +47,22 @@ test('only panels with two configurable slots become a placement choice', () => 
     { id: 'user:pi-metrics/metrics-chip', slots: ['status.chip', 'conversation.footer'] },
   ]);
 
+  // 单落点也给入口：用户至少可以把这一处隐藏。
   const single = extension([
     { id: 'quota-chip', slot: 'status.chip', slots: ['status.chip'] },
     { id: 'settings-panel', slot: 'settings.panel' },
   ]);
-  assert.deepEqual(placeablePanels(single), []);
+  assert.deepEqual(placeablePanels(single), [{ id: 'user:pi-metrics/quota-chip', slots: ['status.chip'] }]);
 
   const legacy = extension([{ id: 'legacy', slot: 'conversation.footer' }]);
-  assert.deepEqual(placeablePanels(legacy), []);
+  assert.deepEqual(placeablePanels(legacy), [{ id: 'user:pi-metrics/legacy', slots: ['conversation.footer'] }]);
+});
+
+test('each panel only lists the placements it can actually use', () => {
+  const labels = (slots) => placementOptionsFor(slots).map((option) => option.value);
+  assert.deepEqual(labels(['status.chip', 'conversation.footer']), ['both', 'chip', 'footer', 'hidden']);
+  assert.deepEqual(labels(['status.chip']), ['chip', 'hidden']);
+  assert.deepEqual(labels(['conversation.footer']), ['footer', 'hidden']);
 });
 
 test('placement defaults to both and falls back for unknown values', () => {
