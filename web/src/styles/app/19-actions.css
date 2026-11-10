@@ -1,0 +1,21 @@
+/* ---- 行动点 ------------------------------------------------------------
+ * 品牌色只出现在行动点：主按钮实心，次级按钮用 raised + 1px 边框，
+ * 图标承担强调。其余控件一律中性。
+ */
+
+/* 次级按钮：「新会话」这类并列入口，不做实心填充。 */
+.new-chat {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  box-shadow: none;
+  color: var(--text-1);
+}
+
+.new-chat > svg { color: var(--accent); }
+.new-chat:hover { background: var(--surface-hover); border-color: var(--border-hover); color: var(--text-1); }
+.new-chat:active { background: var(--surface-active); }
+
+/* 主按钮：发送。有内容才实心强调，空输入退成 hover 表面。 */
+.send-button:not(:disabled, .is-stop) { background: var(--accent); color: var(--on-button); }
+.send-button:not(:disabled, .is-stop):hover { background: var(--accent-hover); }
+.send-button:disabled:not(.is-stop) { background: var(--surface-hover); color: var(--text-3); opacity: 1; }

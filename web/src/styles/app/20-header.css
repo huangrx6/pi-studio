@@ -1,0 +1,34 @@
+/* ---- 标题栏 -----------------------------------------------------------
+ * 一条 40px 的 chrome 横带，底边线把它和正文分开；计数退成纯数字，
+ * 不再用胶囊底色抢注意力。
+ *
+ * 顶部留白仍由 --header-height 决定：无壁纸时 48px 让开 mac 红黄绿，
+ * 有壁纸条或全屏时收回到 40px。
+ */
+
+.chat-header {
+  height: var(--header-height);
+  align-items: center;
+  padding: 0 var(--space-6);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-chrome);
+}
+
+.chat-header .chat-heading h1 { font-size: var(--text-13); font-weight: var(--weight-semibold); letter-spacing: 0; }
+
+.tab-count,
+.agent-tab-count {
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border-radius: 0;
+  background: var(--transparent);
+  color: var(--text-2);
+  font: var(--weight-medium) var(--text-xs)/1 var(--font);
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-tab-count.is-live { background: var(--transparent); color: var(--text-2); }
+
+.app.has-custom-background { --header-height: 40px; }
+html[data-window-fullscreen='true'] .app { --header-height: 40px; }
