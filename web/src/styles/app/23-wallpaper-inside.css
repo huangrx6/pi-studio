@@ -142,9 +142,17 @@
   background: var(--conversation-hover-surface);
 }
 
-/* 右侧面板整条链路都必须有底色：任何一层漏掉背景，壁纸就会从面板里透出来，
- * 表现为「收起面板的那一半变透明」。
- */
-.app.is-wallpaper-inside :is(.file-panel, .file-panel-inner, .panel-body, .panel-start) {
-  background: var(--surface-raised);
+/* 右侧面板整条链路都按画布同一个保留比例透出：既不漏底色，也不会在展开后
+ * 突然变成一块不透明的板子。基色仍取 raised，比画布亮一档。 */
+.app.is-wallpaper-inside :is(
+  .file-panel,
+  .file-panel-inner,
+  .panel-body,
+  .panel-start,
+  .panel-tabbar,
+  .panel-file-browser,
+  .panel-file-preview,
+  .file-code
+) {
+  background: color-mix(in srgb, var(--surface-raised) var(--wallpaper-canvas-keep), transparent);
 }

@@ -67,11 +67,13 @@
 .file-code { background: var(--surface); }
 
 /* Slide the workbench in and out from the right edge. */
-/* 右栏开关用同一套宽度、位移和透明度节奏：内部保持目标宽度，动画期间只由
-外层裁切，避免标签、树和预览随着外层宽度反复重排。≤1100px 时仍是绝对定位抽屉。 */
+/* 右栏开关只做宽度：内部保持目标宽度，动画期间由外层裁切，标签、树和预览
+ * 不会随外层宽度重排。位移与透明度都会在半途留下空隙或半透明的一层
+ * —— 右移 18px 会让面板左侧空出一条壁纸，所以只保留宽度。
+ * ≤1100px 时仍是绝对定位抽屉。 */
 
-.file-panel { width: 0; opacity: 0; overflow: hidden; transform: translateX(18px); transition: width var(--shell-transition), opacity var(--shell-transition), transform var(--shell-transition); will-change: width, transform, opacity; }
-.file-panel.is-open { width: var(--panel-w); opacity: 1; transform: translateX(0); }
+.file-panel { width: 0; overflow: hidden; transition: width var(--shell-transition); will-change: width; }
+.file-panel.is-open { width: var(--panel-w); }
 .file-panel.is-open.is-split:not(.is-fullscreen) { width: min(760px, 64vw); }
 .file-panel.is-open.is-fullscreen { width: 100%; }
 .file-panel-inner { display: flex; flex-direction: column; width: var(--panel-w); min-width: var(--panel-w); height: 100%; }
