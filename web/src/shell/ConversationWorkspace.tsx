@@ -20,8 +20,7 @@ import {
 import { ExtensionSlot } from '../features/extensions/ExtensionSlot';
 import type { Preferences } from '../shared/preferences';
 import type { AppNotification } from './NotificationCenter';
-import type { AgentView, PiSessionSummary } from './app-types';
-import type { SettingsTab } from './app-shell-config';
+import type { AgentView } from './app-types';
 import type { ModelSelection } from '../types/model-types';
 import type { TurnDiff, TurnDiffFile } from '../types/chat-types';
 import type {
@@ -31,21 +30,15 @@ import type {
   ExtensionSettingsPage,
   ExtensionUiItem,
 } from '../types/extension-types';
-import type { StoredModelComparisonMap } from '../shared/stored-ui-state';
 import { ConversationHeader } from './ConversationHeader';
 import { ConversationTracePage } from './ConversationTraceMenu';
-import type { ConversationTraceSummary, ConversationTraceItem } from './ConversationTraceMenu';
-import type { ChatMessage, RequestTrace, ToolCallBlock } from '../types/chat-types';
+import { buildTraceSummary } from '../features/conversation/trace-model';
 import {
   isNearBottom,
   nestedScrollableConsumesWheel,
   shouldReleaseFollowOnWheel,
 } from '../features/conversation/chat-scroll.mjs';
 
-const ModelComparisonPanel = lazy(async () => {
-  const module = await import('../features/comparison/ModelComparisonPanel');
-  return { default: module.ModelComparisonPanel };
-});
 const SubagentOverview = lazy(async () => {
   const module = await import('../features/subagents/SubagentViews');
   return { default: module.SubagentOverview };
@@ -96,87 +89,15 @@ type ConversationShell = {
 };
 
 type HeaderState = {
-  comparisonBranchCount: number;
   conversationDetailExtensionCount: number;
   openNotificationSession: (id: string) => Promise<void>;
   runNotificationAction: (item: AppNotification) => Promise<void>;
   togglePanel: () => void;
   returnToMainAgent: () => void;
   openAgentOverview: () => void;
-  openModelComparison: () => void;
   openConversationExtensionHub: () => void;
   openTrace: () => void;
 };
-
-function compactTraceText(value: unknown, limit = 120): string {
-  if (typeof value !== 'string') return '';
-  return value.replace(/\s+/g, ' ').trim().slice(0, limit);
-}
-
-function toolPreview(call: ToolCallBlock): string {
-  const args = call.arguments ?? {};
-  for (const value of [args.command, args.path, args.file_path, args.query, args.pattern, args.url, args.name]) {
-    if (typeof value === 'string' && value.trim()) return compactTraceText(value);
-  }
-  return '';
-}
-
-function toolDetail(call: ToolCallBlock): string {
-  try { return JSON.stringify(call.arguments ?? {}, null, 2); } catch { return ''; }
-}
-
-function traceItemFromRequest(trace: RequestTrace, status: ConversationTraceItem['status']): ConversationTraceItem {
-  const model = trace.model ? `${trace.model.provider}/${trace.model.modelId}` : '模型请求';
-  return { id: `request:${trace.id}`, kind: 'model', preview: model, label: '模型调用', detail: `消息 ${trace.stats.messageCount} 条 · 预计 ${trace.stats.estimatedChars} 字符`, status, at: trace.createdAt };
-}
-
-function buildTraceSummary(input: {
-  turns: ReturnType<typeof useTranscriptNavigation>['transcriptTurns'];
-  toolResults: Map<string, ChatMessage>;
-  requestPlacement: ReturnType<typeof useTranscriptNavigation>['requestPlacement'];
-  turnActive: boolean;
-}): ConversationTraceSummary {
-  const items: ConversationTraceItem[] = [];
-  const requests = [...input.requestPlacement.byAssistantTurn.values(), ...input.requestPlacement.unansweredByUserTurn.values(), input.requestPlacement.pending]
-    .flat()
-    .sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id));
-  const latestRequestId = requests.at(-1)?.id;
-  requests.forEach(trace => items.push(traceItemFromRequest(trace, input.turnActive && trace.id === latestRequestId ? 'running' : 'done')));
-  input.turns.forEach((turn, turnIndex) => {
-    if (turn.kind !== 'assistant') return;
-    turn.messages.forEach((message, messageIndex) => message.content.forEach((block, blockIndex) => {
-      if (block.type === 'thinking') {
-        items.push({
-          id: `decision:${turnIndex}:${messageIndex}:${blockIndex}`,
-          kind: 'decision',
-          label: '决策',
-          preview: compactTraceText(block.thinking) || '模型思考',
-          detail: block.redacted ? '模型未提供推理正文。' : block.thinking,
-          status: input.turnActive && turnIndex === input.turns.length - 1 ? 'running' : 'done',
-          at: message.timestamp,
-        });
-      }
-      if (block.type === 'toolCall') {
-        const result = input.toolResults.get(block.id);
-        items.push({
-          id: `tool:${block.id}`,
-          kind: 'tool',
-          label: block.namespace ? `${block.namespace}/${block.name}` : block.name,
-          preview: toolPreview(block),
-          detail: toolDetail(block),
-          status: result?.isError ? 'error' : !result && input.turnActive ? 'running' : 'done',
-          at: message.timestamp,
-        });
-      }
-    }));
-  });
-  items.sort((left, right) => (left.at ?? 0) - (right.at ?? 0) || left.id.localeCompare(right.id));
-  const errors = items.filter(item => item.status === 'error').length;
-  const tools = items.filter(item => item.kind === 'tool').length;
-  const requestCount = items.filter(item => item.kind === 'model').length;
-  const state = items.length === 0 ? 'idle' : input.turnActive ? 'running' : errors > 0 ? 'error' : 'done';
-  return { steps: items.length, requests: requestCount, tools, errors, state, items };
-}
 
 type ExtensionWorkspaceState = {
   headerItems: ExtensionUiItem[];
@@ -192,14 +113,6 @@ type ExtensionWorkspaceState = {
   sendPrompt: (text: string, submit: boolean) => void;
   notify: ComponentProps<typeof ExtensionSlot>['onNotify'];
   openHub: () => void;
-};
-
-type ComparisonState = {
-  byParent: StoredModelComparisonMap;
-  setByParent: React.Dispatch<React.SetStateAction<StoredModelComparisonMap>>;
-  loadState: () => Promise<void>;
-  openSession: (item: PiSessionSummary) => Promise<boolean>;
-  openSettings: (page?: SettingsTab) => void | Promise<void>;
 };
 
 type OutlineState = {
@@ -224,7 +137,6 @@ export type ConversationWorkspaceProps = {
   actions: ConversationActions;
   transcript: ReturnType<typeof useTranscriptNavigation>;
   extensions: ExtensionWorkspaceState;
-  comparison: ComparisonState;
   subagents: ReturnType<typeof useSubagentWorkspace>;
   outline: OutlineState;
   composer: ComponentProps<typeof ComposerDock>;
@@ -236,7 +148,6 @@ export function ConversationWorkspace({
   actions,
   transcript,
   extensions,
-  comparison,
   subagents,
   outline,
   composer,
@@ -286,6 +197,11 @@ export function ConversationWorkspace({
     handleTranscriptScroll,
     jumpToOutline,
   } = transcript;
+  // 轨迹页只在「显示代码工作视图」开启时出现；关闭后回落到对话视图。
+  const traceEnabled = preferences.showCodeView;
+  const showTrace = agentView.kind === 'trace' && traceEnabled;
+  const transcriptVisible = agentView.kind === 'conversation' || (agentView.kind === 'trace' && !traceEnabled);
+  const headerKind = agentView.kind === 'trace' && !traceEnabled ? 'conversation' : agentView.kind;
   const traceSummary = useMemo(() => buildTraceSummary({
     turns: transcriptTurns,
     toolResults: toolResultMap,
@@ -299,56 +215,6 @@ export function ConversationWorkspace({
   const showSessionError = Boolean(error)
     && !(Boolean(error) && !turnActive && lastAssistantError === error);
 
-  function renderModelComparisonWorkspace() {
-    if (agentView.kind !== 'comparison') return null;
-    const activeComparison = agentView.comparison;
-    return <div className="model-comparison-workspace">
-      <Suspense fallback={
-        <div className="panel-route-loading" role="status" aria-label="正在加载模型对比">
-          <LoaderCircle aria-hidden="true" />
-        </div>
-      }>
-        <ModelComparisonPanel
-          parentId={activeComparison.parentId}
-          cwd={activeComparison.cwd}
-          initialPrompt={activeComparison.prompt}
-          initialComparison={comparison.byParent[activeComparison.parentId]?.result ?? null}
-          initialModelRef={activeComparison.initialModelRef}
-          initialThinkingLevel={activeComparison.initialThinkingLevel}
-          mentions={activeComparison.mentions}
-          attachments={activeComparison.attachments}
-          images={activeComparison.images}
-          onStarted={(started) => {
-            comparison.setByParent((current) => ({
-              ...current,
-              [started.parentId]: {
-                result: started,
-                cwd: activeComparison.cwd,
-                initialModelRef: activeComparison.initialModelRef,
-                initialThinkingLevel: activeComparison.initialThinkingLevel,
-              },
-            }));
-          }}
-          onAdopt={(sessionId) => {
-            void comparison.loadState().catch(() => {});
-            void comparison.openSession({
-              id: sessionId,
-              cwd: activeComparison.cwd,
-              title: '模型对比分支',
-              kind: 'durable',
-              goal: '',
-              pinned: false,
-              archived: false,
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
-              messageCount: 0,
-            });
-          }}
-          onManageModels={() => comparison.openSettings('models')}
-        />
-      </Suspense>
-    </div>;
-  }
 
   return (
     <main className={`main ${isNewConversation ? 'is-new-conversation' : ''}`} aria-busy={sessionLoading}>
@@ -357,15 +223,12 @@ export function ConversationWorkspace({
         sidebarCollapsed={sidebarCollapsed}
         onExpandSidebar={() => setSidebarCollapsed(false)}
         isNewConversation={isNewConversation}
-        title={agentView.kind === 'comparison'
-          ? '模型同题双跑'
-          : agentView.kind === 'agents' && agentView.child
+        title={agentView.kind === 'agents' && agentView.child
             ? `${agentView.child.name || agentView.child.agent} · 子智能体`
             : (session?.title || 'Pi Studio')}
-        agentKind={agentView.kind}
+        agentKind={headerKind}
         subagentCount={subagents.subagentChildren.length}
         hasActiveSubagents={subagents.hasActiveSubagents}
-        comparisonBranchCount={header.comparisonBranchCount}
         extensionCount={header.conversationDetailExtensionCount}
         notifications={notifications}
         onMarkAllRead={markAllRead}
@@ -376,12 +239,12 @@ export function ConversationWorkspace({
         onTogglePanel={header.togglePanel}
         onReturnToMainAgent={header.returnToMainAgent}
         onOpenAgentOverview={header.openAgentOverview}
-        onOpenModelComparison={header.openModelComparison}
         onOpenConversationExtensionHub={header.openConversationExtensionHub}
         onOpenTrace={header.openTrace}
+        showTrace={traceEnabled}
         traceSummary={traceSummary}
       />
-      {!isNewConversation && agentView.kind === 'conversation' && extensions.headerItems.length > 0 && (
+      {!isNewConversation && transcriptVisible && extensions.headerItems.length > 0 && (
         <ConversationExtensionDock
           items={extensions.headerItems}
           surface={extensions.surface}
@@ -394,7 +257,7 @@ export function ConversationWorkspace({
           onNotify={extensions.notify}
         />
       )}
-      {!isNewConversation && agentView.kind === 'conversation' && <div
+      {!isNewConversation && transcriptVisible && <div
         className="chat-scroll"
         ref={scrollRef}
         onWheel={(event) => {
@@ -545,11 +408,9 @@ export function ConversationWorkspace({
         </div>
       </div>}
 
-      {!isNewConversation && agentView.kind === 'comparison' && renderModelComparisonWorkspace()}
+      {!isNewConversation && showTrace && <ConversationTracePage key={session?.id} summary={traceSummary} />}
 
-      {!isNewConversation && agentView.kind === 'trace' && <ConversationTracePage summary={traceSummary} />}
-
-      {!settingsOpen && !filesOpen && !isNewConversation && agentView.kind === 'conversation' && outline.items.length > 1 && (
+      {!settingsOpen && !filesOpen && !isNewConversation && transcriptVisible && outline.items.length > 1 && (
         <ConversationOutline
           items={outline.items}
           samples={outline.samples}
@@ -599,7 +460,7 @@ export function ConversationWorkspace({
           </Suspense>
         </div>
       )}
-      <ComposerDock {...composer} open={agentView.kind === 'conversation'} />
+      <ComposerDock {...composer} open={transcriptVisible} />
     </main>
   );
 }

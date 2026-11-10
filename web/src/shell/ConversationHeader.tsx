@@ -1,5 +1,5 @@
 import {
-  Bot, Columns2, MessageSquare, PanelLeft, PanelRightClose, PanelRightOpen, Plug,
+  Bot, MessageSquare, PanelLeft, PanelRightClose, PanelRightOpen, Plug,
 } from 'lucide-react';
 import {
   NotificationCenter,
@@ -12,10 +12,9 @@ type ConversationHeaderProps = {
   onExpandSidebar: () => void;
   isNewConversation: boolean;
   title: string;
-  agentKind: 'conversation' | 'agents' | 'comparison' | 'extensions' | 'trace';
+  agentKind: 'conversation' | 'agents' | 'extensions' | 'trace';
   subagentCount: number;
   hasActiveSubagents: boolean;
-  comparisonBranchCount: number;
   extensionCount: number;
   notifications: AppNotification[];
   onMarkAllRead: () => void;
@@ -26,9 +25,10 @@ type ConversationHeaderProps = {
   onTogglePanel: () => void;
   onReturnToMainAgent: () => void;
   onOpenAgentOverview: () => void;
-  onOpenModelComparison: () => void;
   onOpenConversationExtensionHub: () => void;
   onOpenTrace: () => void;
+  /** 「显示代码工作视图」关闭时，轨迹标签不出现。 */
+  showTrace: boolean;
   traceSummary: ConversationTraceSummary;
 };
 
@@ -40,7 +40,6 @@ export function ConversationHeader({
   agentKind,
   subagentCount,
   hasActiveSubagents,
-  comparisonBranchCount,
   extensionCount,
   notifications,
   onMarkAllRead,
@@ -51,9 +50,9 @@ export function ConversationHeader({
   onTogglePanel,
   onReturnToMainAgent,
   onOpenAgentOverview,
-  onOpenModelComparison,
   onOpenConversationExtensionHub,
   onOpenTrace,
+  showTrace,
   traceSummary,
 }: ConversationHeaderProps) {
   return (
@@ -90,18 +89,7 @@ export function ConversationHeader({
             <Bot />
             <span className="tab-label">
               子智能体
-              {subagentCount > 0 && <span
-                className={`tab-count agent-tab-count ${hasActiveSubagents ? 'is-live' : ''}`}
-                aria-live="polite"
-                aria-label={`${subagentCount} 个子智能体${hasActiveSubagents ? '，有任务正在运行' : '，当前无任务运行'}`}
-              >{subagentCount}</span>}
-            </span>
-          </button>
-          <button type="button" role="tab" aria-selected={agentKind === 'comparison'} className={`tab comparison-tab ${agentKind === 'comparison' ? 'is-active' : ''}`} onClick={onOpenModelComparison}>
-            <Columns2 />
-            <span className="tab-label">
-              双跑
-              {comparisonBranchCount > 0 && <span className="tab-count">{comparisonBranchCount}</span>}
+
             </span>
           </button>
           {extensionCount > 0 && <button
@@ -113,9 +101,9 @@ export function ConversationHeader({
             onClick={onOpenConversationExtensionHub}
           >
             <Plug />
-            <span className="tab-label">扩展<span className="tab-count">{extensionCount}</span></span>
+            <span className="tab-label">扩展</span>
           </button>}
-          <ConversationTraceTab summary={traceSummary} active={agentKind === 'trace'} onOpen={onOpenTrace} />
+          {showTrace && <ConversationTraceTab summary={traceSummary} active={agentKind === 'trace'} onOpen={onOpenTrace} />}
         </div>
       </div>}
       {isNewConversation && <div className="chat-tabs is-placeholder" aria-hidden="true" />}

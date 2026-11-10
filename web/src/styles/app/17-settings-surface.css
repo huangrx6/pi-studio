@@ -689,6 +689,15 @@
 
 .settings-content .general-setting-row:last-child { border-bottom: 0; }
 
+.settings-content .general-setting-description {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--text-13);
+  line-height: var(--leading-body);
+  font-weight: var(--weight-regular);
+}
+
 .settings-content .general-setting-label {
   color: var(--text);
   font-size: var(--text-base);
