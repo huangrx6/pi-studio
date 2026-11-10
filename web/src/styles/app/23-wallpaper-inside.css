@@ -1,7 +1,9 @@
 /* ---- 窗口内的壁纸 -----------------------------------------------------
- * 方案 A 原本把壁纸完全挡在窗口外，只剩 18px 边框条。现在按「窗口内可见度」
- * （默认 8%）在卡片内部再铺一层同源壁纸，只让画布层透出：侧栏、标题行、
- * 消息气泡、输入框、菜单与对话框仍然是不透明表面。
+ * 按「窗口内可见度」在卡片内部铺一层同源壁纸，并让整窗的**所有底色**
+ * 用同一个保留比例：侧栏、标题行、标签行、画布都按 (1 − 可见度) 保留本色，
+ * 因此壁纸在三个区域透出的强度完全一致，不会再出现「主区透、侧栏实」。
+ *
+ * 控件（气泡、输入框、菜单、对话框）仍然不透明——它们需要稳定的阅读底。
  */
 
 .window-wallpaper {
@@ -20,7 +22,17 @@
   object-position: center center;
 }
 
-/* 画布层让位：这些容器原本各自铺一层 --bg，会把壁纸层完全盖住。 */
+.app.is-wallpaper-inside {
+  background: color-mix(in srgb, var(--surface-canvas) calc(100% - var(--wallpaper-inside, 0) * 100%), transparent);
+}
+
+/* 侧栏与顶部：基色是 chrome，透出比例与画布相同。 */
+.app.is-wallpaper-inside > .sidebar,
+.app.is-wallpaper-inside :is(.chat-header, .chat-tabs, .panel-tabbar, .settings-nav) {
+  background: color-mix(in srgb, var(--surface-chrome) calc(100% - var(--wallpaper-inside, 0) * 100%), transparent);
+}
+
+/* 画布：消息区、输入栏与各工作区视图共用画布色。 */
 .app.is-wallpaper-inside :is(
   .main,
   .composer-dock,
@@ -29,5 +41,7 @@
   .agent-context-view,
   .agent-context-toolbar
 ) {
-  background: transparent;
+  background: color-mix(in srgb, var(--surface-canvas) calc(100% - var(--wallpaper-inside, 0) * 100%), transparent);
 }
+
+/* 标签行的激活下划线、侧栏分隔线仍在半透明底上，颜色不需要变化。 */

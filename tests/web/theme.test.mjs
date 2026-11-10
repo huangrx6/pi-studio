@@ -89,12 +89,18 @@ function luminance(value) {
 // TSX/TS 里也不能写内联的 color/background/fill/stroke 颜色值。
 // 否则切换主题时会出现漏改的硬编码颜色。
 test('all CSS color literals and color calculations live in palette.css', () => {
+  const literal = /#[\da-f]{3,8}\b|rgba?\(|hsla?\(|\b(?:white|black)\b(?![\w-])/;
   for (const file of sourceFiles.filter((item) => item.endsWith('.css') && !item.endsWith('/palette.css'))) {
     postcss.parse(fs.readFileSync(file, 'utf8')).walkDecls((decl) => {
+      // 先去掉 var() 引用；color-mix() 只在完全由 token、百分比与 transparent
+      // 组成时放行（例如运行时按壁纸可见度派生的透明表面），其余仍按字面量处理。
+      const value = decl.value.replace(/var\([^)]*\)/g, '');
+      const mixes = value.match(/color-mix\((?:[^()]|\([^()]*\))*\)/g) ?? [];
+      for (const mix of mixes) {
+        assert.ok(!literal.test(mix), `${file}: ${decl.prop}: ${mix}`);
+      }
       assert.ok(
-        !/#[\da-f]{3,8}\b|rgba?\(|hsla?\(|color-mix\(|\b(?:white|black)\b(?![\w-])/.test(
-          decl.value.replace(/var\([^)]*\)/g, ''),
-        ),
+        !literal.test(value.replace(/color-mix\((?:[^()]|\([^()]*\))*\)/g, '')),
         `${file}: ${decl.prop}: ${decl.value}`,
       );
     });
