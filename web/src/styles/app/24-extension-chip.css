@@ -31,14 +31,16 @@
 .extension-chip-popover-head strong { color: var(--text-1); font-weight: var(--weight-medium); }
 .extension-chip-popover-body { margin-top: 8px; color: var(--text-2); font-size: var(--text-sm); line-height: var(--leading-relaxed); }
 
+/* 「打开详情」放在卡片右下角，不再通栏左对齐。 */
 .extension-chip-more {
-  width: 100%;
-  margin-top: 10px;
-  padding: 5px 8px;
-  border-top: 1px solid var(--divider);
-  color: var(--text-2);
+  display: block;
+  margin: 10px 0 0 auto;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--accent-tint);
+  color: var(--text-1);
   font-size: var(--text-xs);
-  text-align: left;
+  text-align: right;
 }
 
-.extension-chip-more:hover { color: var(--text-1); }
+.extension-chip-more:hover { background: var(--surface-hover); }

@@ -3,7 +3,7 @@
   "format": 1,
   "id": "pi-quota-status",
   "name": "额度状态",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "description": "按当前会话的模型来源显示套餐窗口、API Key 额度和账户余额。",
   "author": "huangrx6",
   "publisher": "Pi Studio",
@@ -81,12 +81,14 @@
         ]
       },
       {
-        "id": "quota-footer",
-        "title": "额度摘要",
-        "description": "当前模型来源的紧凑额度信息。",
-        "slot": "conversation.footer",
+        "id": "quota-chip",
+        "title": "额度状态",
+        "description": "顶栏的额度入口，点击打开完整额度面板。",
+        "slot": "status.chip",
+        "icon": "gauge",
         "size": "compact",
         "priority": 20,
+        "details": "quota-detail",
         "content": [
           {
             "kind": "dataView",
