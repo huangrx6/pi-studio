@@ -295,6 +295,7 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --button-hover: var(--theme-accent);
   --focus-color: var(--theme-accent);
   --focus-halo: var(--theme-accent);
+  --settings-focus-halo: color-mix(in srgb, var(--settings-muted) 35%, transparent);
   /* 选区跟随当前 palette 的强调色混合。纯 selected-bg 灰在深色底上几乎看不出，
   选中文字很难辨认；浅色 30%、深色 44% 让两种底都明显可见。 */
   --selection: color-mix(in srgb, var(--theme-accent) 30%, var(--surface));

@@ -70,6 +70,16 @@ async function resize(width, height) {
   await page.waitForFunction(({ width, height }) => innerWidth === width && innerHeight === height, size);
 }
 
+async function assertTitleAlignment(label) {
+  const geometry = await page.evaluate(() => {
+    const nav = document.querySelector('.settings-nav-head').getBoundingClientRect();
+    const title = document.querySelector('.settings-content h1').getBoundingClientRect();
+    return { navTop: nav.top, titleTop: title.top, navHeight: nav.height, titleHeight: title.height };
+  });
+  assert.ok(Math.abs(geometry.navTop - geometry.titleTop) <= 1 && Math.abs(geometry.navHeight - geometry.titleHeight) <= 1,
+    `${label}: sidebar and page title share a line: ${JSON.stringify(geometry)}`);
+}
+
 async function capture(name) {
   await page.evaluate(async () => {
     await Promise.all(document.getAnimations().filter((animation) => animation.effect?.getTiming().iterations !== Infinity).map((animation) => animation.finished.catch(() => {})));
@@ -114,6 +124,14 @@ try {
   const settingsSearch = nav.getByRole('searchbox', { name: '搜索设置', exact: true });
   const generalPage = nav.getByRole('button', { name: '通用', exact: true });
   await content.getByRole('heading', { name: '通用', exact: true }).waitFor();
+  assert.equal(await settingsSearch.evaluate((element) => element === document.activeElement), false, 'opening settings does not activate search');
+  await page.keyboard.press('Tab');
+  assert.equal(await settingsSearch.evaluate((element) => element === document.activeElement), true, 'Tab from the settings heading reaches search');
+  const searchFocus = await nav.locator('.settings-navigation-search').evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { shadow: style.boxShadow, border: style.borderColor, accent: style.getPropertyValue('--settings-accent').trim() };
+  });
+  assert.match(searchFocus.shadow, /0px 0px 0px 1px/, 'search has a thin focus halo');
   assert.equal(await nav.locator('.settings-nav-row').count(), 13, 'all settings routes remain available');
   assert.equal(await nav.locator('.settings-nav-row[tabindex="0"]').count(), 1, 'one settings page participates in the Tab order');
   assert.equal(await generalPage.getAttribute('tabindex'), '0', 'the active settings page owns the page Tab stop');
@@ -122,6 +140,7 @@ try {
   const focusedModelPage = nav.getByRole('button', { name: '模型配置', exact: true });
   assert.equal(await focusedModelPage.evaluate((element) => element === document.activeElement), true, 'ArrowDown enters filtered settings results');
   assert.equal(await focusedModelPage.evaluate((element) => element.matches(':focus-visible')), true, 'keyboard-entered settings result keeps a visible focus ring');
+  assert.match(await focusedModelPage.evaluate((element) => getComputedStyle(element).boxShadow), /inset/, 'navigation focus uses a single inset ring');
   assert.equal(await nav.locator('.settings-nav-row[tabindex="0"]').count(), 1, 'filtering keeps one settings page Tab stop');
   await focusedModelPage.press('Tab');
   assert.equal(await nav.getByRole('button', { name: '返回对话', exact: true }).evaluate((element) => element === document.activeElement), true, 'Tab from a settings result reaches the back action');
@@ -137,13 +156,40 @@ try {
   assert.equal(await aboutPage.evaluate((element) => element === document.activeElement), true, 'End moves to the last settings page');
   await aboutPage.press('Home');
   assert.equal(await generalPage.evaluate((element) => element === document.activeElement), true, 'Home moves to the first settings page');
+  await settingsSearch.fill('通用');
+  await settingsSearch.press('Escape');
+  assert.equal(await settingsSearch.inputValue(), '', 'Escape clears the filter without changing the selected page');
+  await settingsSearch.press('ArrowDown');
+  assert.equal(await generalPage.getAttribute('aria-current'), 'page');
+  assert.equal(await generalPage.evaluate((element) => getComputedStyle(element).outlineStyle), 'none', 'selected keyboard focus does not add a second outline');
+  assert.match(await generalPage.evaluate((element) => getComputedStyle(element).boxShadow), /inset/);
+  await capture('00-navigation-keyboard-focus');
+  await generalPage.press('Escape');
+  await composer.waitFor();
+  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await content.getByRole('heading', { name: '通用', exact: true }).waitFor();
+  assert.equal(await nav.locator('[aria-current="page"]').count(), 1, 'reopening settings keeps exactly one selected page');
+  assert.equal(await nav.locator('.settings-nav-row:focus-visible').count(), 0, 'Escape and reopening leave no stale navigation focus ring');
   assert.equal(await content.locator('.background-media-empty').count(), 0, 'an empty background does not reserve a media preview');
   assert.equal(await content.getByRole('slider').count(), 0, 'background controls appear only after media selection');
   await resize(1440, 920);
   await capture('01-general-wide-light');
+  const sectionSpacing = await content.locator('.general-settings-section').evaluateAll((sections) => sections.map((section, index) => {
+    const heading = section.querySelector('h2').getBoundingClientRect();
+    const card = section.querySelector('.general-settings-card').getBoundingClientRect();
+    return {
+      border: getComputedStyle(section).borderTopWidth,
+      headingGap: Math.round(card.top - heading.bottom),
+      sectionGap: index ? Math.round(section.getBoundingClientRect().top - sections[index - 1].getBoundingClientRect().bottom) : null,
+    };
+  }));
+  assert.ok(sectionSpacing.every(({ border, headingGap, sectionGap }) => border === '0px' && headingGap === 12 && (sectionGap === null || sectionGap === 32)), `section rhythm: ${JSON.stringify(sectionSpacing)}`);
+  result.sectionSpacing = sectionSpacing;
 
   await content.getByRole('button', { name: '深色', exact: true }).click();
   await preference('theme', 'dark');
+  await settingsSearch.focus();
+  await capture('01b-search-focus-dark');
   const increaseFontSize = content.getByRole('button', { name: '增加字号', exact: true });
   await increaseFontSize.click();
   await increaseFontSize.click();
@@ -198,6 +244,10 @@ try {
   for (const [index, route] of routes.entries()) {
     await nav.getByRole('button', { name: route.label, exact: true }).click();
     await content.getByRole('heading', { name: route.title, exact: true, level: 1 }).waitFor();
+    await assertTitleAlignment(`${route.label} narrow`);
+    await resize(860, 640);
+    await assertTitleAlignment(`${route.label} compact`);
+    await resize(980, 640);
     assert.equal(await nav.getByRole('button', { name: route.label, exact: true }).getAttribute('aria-current'), 'page');
     for (const module of route.modules || []) {
       assert.ok(loadedScripts.has(chunks[module]), `${module} loads when its settings page is opened`);
@@ -247,6 +297,17 @@ try {
       loadedChunks: (route.modules || []).map((module) => chunks[module]),
     });
     await capture(`route-${String(index + 1).padStart(2, '0')}`);
+    // Review every page in a wide light window as well as the narrow dark window.
+    await nav.getByRole('button', { name: '通用', exact: true }).click();
+    await content.getByRole('button', { name: '浅色', exact: true }).click();
+    await resize(1440, 920);
+    await nav.getByRole('button', { name: route.label, exact: true }).click();
+    await content.getByRole('heading', { name: route.title, exact: true, level: 1 }).waitFor();
+    await assertTitleAlignment(`${route.label} wide`);
+    await capture(`route-${String(index + 1).padStart(2, '0')}-wide-light`);
+    await nav.getByRole('button', { name: '通用', exact: true }).click();
+    await content.getByRole('button', { name: '深色', exact: true }).click();
+    await resize(980, 640);
   }
   await nav.getByRole('button', { name: '返回对话', exact: true }).click();
   await composer.waitFor();
