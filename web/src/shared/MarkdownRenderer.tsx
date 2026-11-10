@@ -20,6 +20,35 @@ import {
 } from './markdown-highlighter-loader';
 
 /**
+ * 代码块外壳：语言标签 + 复制。
+ *
+ * 代码块本身仍由 `<pre><code>` 承担，这里只加一层 chrome；语言从
+ * rehype 挂在 code 上的 `language-*` class 里取，取不到就不显示标签。
+ */
+function MarkdownCodeBlock({ language, children }: { language: string; children: React.ReactNode }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1600);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  return <div className="markdown-code">
+    <div className="markdown-code-bar">
+      <span className="markdown-code-language">{language || 'text'}</span>
+      <button
+        type="button"
+        className="markdown-code-copy"
+        onClick={(event) => {
+          const text = event.currentTarget.closest('.markdown-code')?.querySelector('pre')?.textContent ?? '';
+          void navigator.clipboard.writeText(text).then(() => setCopied(true)).catch(() => setCopied(false));
+        }}
+      >{copied ? '已复制' : '复制'}</button>
+    </div>
+    {children}
+  </div>;
+}
+
+/**
  * 自定义渲染规则。放在模块作用域：ReactMarkdown 每次 render 都新建
  * components 会导致所有节点重挂载，流式输出时会明显掉帧。
  */
@@ -45,6 +74,14 @@ const components: Components = {
         else void window.piApi.openLink(href, getActivePreferences().linkOpen);
       }
     }}>{children}</a>;
+  },
+  pre({ node, children, ...props }) {
+    const code = node?.children?.find((child) => child.type === 'element' && child.tagName === 'code');
+    const className = (code && 'properties' in code ? code.properties?.className : undefined) as string[] | undefined;
+    const language = (className ?? []).find((name) => name.startsWith('language-'))?.slice('language-'.length) ?? '';
+    return <MarkdownCodeBlock language={language}>
+      <pre {...props}>{children}</pre>
+    </MarkdownCodeBlock>;
   },
   img({ src, alt, node: _node, ...props }) {
     const safeSrc = safeMarkdownImageSource(src);

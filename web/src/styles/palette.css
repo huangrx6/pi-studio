@@ -52,6 +52,7 @@
   --accent-tint: color-mix(in srgb, var(--accent) 8%, transparent);
   /* 中性 tint：设置页这类单色界面用的选中底。 */
   --tint-neutral: color-mix(in srgb, var(--text-1) 8%, transparent);
+  --inline-code-bg: color-mix(in srgb, var(--text-1) 6%, transparent);
   --add: #1f8a4c;
   --del: #c0392b;
 
@@ -200,6 +201,7 @@
   --accent-tint: color-mix(in srgb, var(--accent) 8%, transparent);
   /* 中性 tint：设置页这类单色界面用的选中底。 */
   --tint-neutral: color-mix(in srgb, var(--text-1) 8%, transparent);
+  --inline-code-bg: color-mix(in srgb, var(--text-1) 6%, transparent);
   --add: #6fcf97;
   --del: #eb7070;
 
