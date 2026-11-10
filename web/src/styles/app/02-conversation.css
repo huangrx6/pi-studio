@@ -323,7 +323,7 @@ is-new-conversation 下隐藏标题、压缩 header；空会话通常没有可�
 .is-new-conversation .chat-heading h1 { color: var(--faint); font-weight: var(--weight-medium); }
 .is-new-conversation .composer-dock { margin-block: auto; padding-top: 24px; padding-bottom: clamp(40px, 12vh, 120px); }
 
-/* 有壁纸时卡片自己已经让出 18px 底部留白，输入框再叠内边距就会显得"底下空
- * 一大块"。这里不再补内边距，输入框底边与卡片留白直接相接。 */
-.app.has-custom-background .composer-dock { padding-bottom: 0; }
+/* 有壁纸时卡片自己让出 18px 底部留白，输入框下再补 12px：贴到卡片底边会
+ * 显得局促，两段加起来约 30px 才是合适的呼吸。 */
+.app.has-custom-background .composer-dock { padding-bottom: var(--space-3); }
 .new-conversation-error { max-width: var(--content); margin: 16px auto 0; }
