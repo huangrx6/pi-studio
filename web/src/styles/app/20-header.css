@@ -139,3 +139,44 @@ html[data-window-fullscreen='true'] .app { --header-height: 40px; }
   border-top: 1px solid var(--divider);
   background: var(--transparent);
 }
+
+/* ---- 计划栏 ----------------------------------------------------------
+ * 计划不再是 composer 上方的卡片，而是并入输入框顶部的一行：32px 高，
+ * 下面压一条 2px 进度线；展开的任务列表才需要一块浮层底色。
+ */
+
+.todo-dock {
+  position: relative;
+  margin: 0 auto 8px;
+  padding-bottom: 2px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: var(--transparent);
+  box-shadow: none;
+}
+
+.todo-dock-head { min-height: 32px; padding: 0 2px; }
+.todo-dock-head:hover { background: var(--transparent); color: var(--text-1); }
+.todo-dock-title { font-size: var(--text-13); font-weight: var(--weight-medium); letter-spacing: 0; }
+.todo-dock-current { font-size: var(--text-13); }
+
+.todo-dock-meter {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: auto;
+  height: 2px;
+  border-radius: 0;
+  background: var(--border);
+}
+
+.todo-dock-meter i { background: var(--accent); }
+
+.todo-dock-body {
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
