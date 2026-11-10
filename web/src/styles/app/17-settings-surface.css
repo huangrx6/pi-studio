@@ -1314,3 +1314,21 @@
 .settings-content .general-background-settings {
   padding-block: 14px;
 }
+
+/* 滑杆行的焦点提示收回到滑块上：整行是透明背景、直角、无边框的结构，
+   在这里画 box-shadow 环会变成一个突兀的白框。键盘聚焦时用滑块光环
+   和轨道 1px 描边表达焦点。 */
+.settings-content .settings-range-control:focus-within:not(.is-disabled) {
+  z-index: auto;
+  box-shadow: none;
+}
+
+.settings-content .settings-range-control input[type="range"]:focus { box-shadow: none; }
+
+.settings-content .settings-range-control input[type="range"]:focus-visible::-webkit-slider-runnable-track {
+  box-shadow: inset 0 0 0 1px var(--settings-focus-halo);
+}
+
+.settings-content .settings-range-control input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px var(--accent-tint), 0 1px 2px var(--shadow-color);
+}
