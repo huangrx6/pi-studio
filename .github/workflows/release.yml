@@ -32,7 +32,7 @@ jobs:
       # node-pty is rebuilt for Electron during packaging. Its node-gyp 9
       # toolchain imports distutils, which Python 3.12+ no longer ships.
       - name: Setup Python for native modules
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
