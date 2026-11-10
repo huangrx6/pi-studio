@@ -1,10 +1,10 @@
 .extension-list-section,
 .installed-extension-section { display: flex; flex-direction: column; gap: var(--space-3); }
-/* 列表与标题一起左右各缩 12px：悬停背景才是带圆角的一行，而不是从内容列
- * 一侧贴到另一侧的长条。 */
+/* 列表与标题一起左右各缩 24px；行再用 12px 内边距 + 等量负外边距把悬停背景
+ * 拉回到距内容列 12px 的位置。这样背景不贴内容列、文字也不贴背景边缘。 */
 .extension-list-section,
 .installed-extension-section,
-.builtin-extension-section { padding-inline: var(--space-3); }
+.builtin-extension-section { padding-inline: var(--space-6); }
 .builtin-extension-section { padding-top: var(--space-3); border-top: 1px solid var(--divider); }
 .builtin-extension-summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); cursor: pointer; list-style: none; }
 .builtin-extension-summary::-webkit-details-marker { display: none; }
@@ -31,10 +31,10 @@
 .extension-placement-options button:hover { color: var(--text); }
 .extension-placement-options button[aria-pressed='true'] { background: var(--surface); color: var(--text); box-shadow: inset 0 0 0 1px var(--border); }
 
-.extension-list-row { position: relative; display: flex; align-items: flex-start; gap: var(--space-4); min-width: 0; padding: var(--space-4) 0; border-radius: var(--radius-control); }
+.extension-list-row { position: relative; display: flex; align-items: flex-start; gap: var(--space-4); min-width: 0; margin-inline: calc(var(--space-3) * -1); padding: var(--space-4) var(--space-3); border-radius: var(--radius-control); }
 /* 分割线单独画一条直线：行本身有圆角，border-bottom 会沿着圆角弯出两个弧。 */
 .extension-list-row:not(:last-child)::after { content: ''; position: absolute; inset: auto 0 0; height: 1px; background: var(--divider); }
-.extension-list-row.is-compact { align-items: center; padding: var(--space-3) 0; }
+.extension-list-row.is-compact { align-items: center; padding: var(--space-3); }
 .extension-list-row.is-compact .extension-list-title h3 { font-size: var(--text-sm); font-weight: var(--weight-medium); }
 .extension-list-row.is-compact .extension-list-meta { margin-top: 2px; }
 .extension-list-main { flex: 1; min-width: 0; }
