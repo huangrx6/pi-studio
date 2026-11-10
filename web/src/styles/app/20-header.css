@@ -148,41 +148,62 @@
 }
 
 /* ---- 计划栏 ----------------------------------------------------------
- * 计划不再是 composer 上方的卡片，而是并入输入框顶部的一行：32px 高，
- * 下面压一条 2px 进度线；展开的任务列表才需要一块浮层底色。
+ * 折叠态只是一枚 28px 的状态胶囊：图标 + 计划 + 当前任务 + 迷你进度 + 计数，
+ * 悬停给一层 hover 底。不再画贯穿整宽的进度线——那条线在折叠时没有任何信息，
+ * 却把输入框顶上切成两段。
  */
 
 .todo-dock {
   position: relative;
   margin: 0 auto 8px;
-  padding-bottom: 2px;
+  padding: 0;
   overflow: visible;
   border: 0;
-  border-radius: 0;
+  border-radius: var(--radius-control);
   background: var(--transparent);
   box-shadow: none;
 }
 
-.todo-dock-head { min-height: 32px; padding: 0 2px; }
-.todo-dock-head:hover { background: var(--transparent); color: var(--text-1); }
-.todo-dock-title { font-size: var(--text-13); font-weight: var(--weight-medium); letter-spacing: 0; }
-.todo-dock-current { font-size: var(--text-13); }
+.todo-dock-head {
+  min-height: 28px;
+  padding: 0 8px 0 6px;
+  border-radius: var(--radius-tag);
+}
+
+.todo-dock-head:hover { background: var(--surface-hover); color: var(--text-1); }
+
+.todo-dock-title {
+  gap: 5px;
+  color: var(--text-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0;
+}
+
+.todo-dock-title svg { width: var(--icon-xs); height: var(--icon-xs); }
+.todo-dock-current { color: var(--text-2); font-size: var(--text-sm); }
 
 .todo-dock-meter {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  width: auto;
-  height: 2px;
-  border-radius: 0;
+  position: static;
+  width: 44px;
+  height: 3px;
+  flex: none;
+  border-radius: var(--radius-round);
   background: var(--border);
 }
 
-.todo-dock-meter i { background: var(--accent); }
+.todo-dock-meter i { height: 100%; border-radius: inherit; background: var(--accent); }
+
+/* 全部完成时不再需要进度：收掉小条，只留计数。 */
+.todo-dock.is-complete .todo-dock-meter { display: none; }
+.todo-dock.is-complete .todo-dock-title svg { color: var(--text-3); }
+.todo-dock.is-complete .todo-dock-current { color: var(--text-3); }
+
+.todo-dock-count { color: var(--text-3); font-size: var(--text-sm); }
+.todo-dock-head > svg { width: var(--icon-xs); height: var(--icon-xs); color: var(--text-3); }
 
 .todo-dock-body {
-  margin-top: 4px;
+  margin-top: 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
@@ -202,7 +223,3 @@
 .status i { width: 5px; height: 5px; }
 
 .composer-hint .hint-divider { color: var(--border-strong); }
-
-/* 全部完成时进度线退成弱色：完成的清单不该继续用强调色占视线。 */
-.todo-dock.is-complete .todo-dock-meter i { background: var(--text-3); }
-.todo-dock.is-complete .todo-dock-title svg { color: var(--text-3); }
