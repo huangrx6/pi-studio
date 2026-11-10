@@ -64,15 +64,16 @@ isolation 建立独立层叠上下文，配合下面的 :has 规则在设置全�
   margin: var(--shell-top) var(--shell-gutter) var(--shell-gutter);
   overflow: hidden;
   isolation: isolate;
-  border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface-canvas);
-  box-shadow: var(--shadow-shell);
 }
 
+/* 只有壁纸存在时才是「卡片」：有留白才需要边框和投影，满窗时保持整块画布。 */
 .app.has-custom-background {
   --shell-top: 36px;
   --shell-gutter: 12px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-shell);
 }
 .app:has(.settings-overlay) > :is(.background-layer, .sidebar, .main) { visibility: hidden; }
 .icon-button { display: inline-grid; place-items: center; width: var(--icon-button); height: var(--icon-button); flex: none; padding: 0; border-radius: var(--radius-control); color: var(--icon); }

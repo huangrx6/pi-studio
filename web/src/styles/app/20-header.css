@@ -10,7 +10,6 @@
   height: var(--header-height);
   align-items: center;
   padding: 0 var(--space-6);
-  border-bottom: 1px solid var(--border);
   background: var(--surface-chrome);
 }
 
@@ -30,8 +29,16 @@
 
 .agent-tab-count.is-live { background: var(--transparent); color: var(--text-2); }
 
+.chat-tab-list { padding-inline: var(--space-6); }
+
+/* 顶部整条（标题行 + 标签行 + 侧栏品牌行）共用 chrome 底色，分隔线仍由
+   收口的那一行负责，避免出现两条平行线。 */
+.chat-tabs,
+.sidebar-drag { background: var(--surface-chrome); }
+
+/* 有壁纸时红绿灯落在卡片外的留白条里，标题行不必再让位，收到 40px；
+   全屏与无壁纸两种情形仍保持 48px 的系统标题行。 */
 .app.has-custom-background { --header-height: 40px; }
-html[data-window-fullscreen='true'] .app { --header-height: 40px; }
 
 /* ---- 行内代码与代码块 ------------------------------------------------
  * 行内代码是正文里的一小片染色，不描边；代码块用 raised + 边框，

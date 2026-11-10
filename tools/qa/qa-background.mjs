@@ -149,7 +149,7 @@ await page.addInitScript(() => {
 async function openGeneralSettings() {
   if (!await page.locator('.settings-overlay').count()) await page.locator('.bottom-row').click();
   await page.getByRole('button', { name: '通用', exact: true }).click();
-  await page.getByRole('heading', { name: '外观', exact: true }).waitFor();
+  await page.getByRole('heading', { name: /外观/ }).waitFor();
   const adjustments = page.locator('.general-background-settings details');
   if (await adjustments.count() && await adjustments.getAttribute('open') === null) {
     await adjustments.locator('summary').click();
@@ -196,13 +196,15 @@ try {
     };
   });
   await page.getByRole('button', { name: '选择媒体', exact: true }).click();
-  await page.locator('.app.has-custom-background .background-layer img').waitFor();
+  await page.locator('.background-layer img').waitFor();
   await page.waitForFunction(() => {
     const image = document.querySelector('.background-layer img');
     return image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0;
   });
 
-  await page.locator('.general-background-settings summary').click();
+  if (await page.locator('.general-background-settings').getAttribute('open') === null) {
+    await page.locator('.general-background-settings summary').click();
+  }
   for (const id of ['background-opacity', 'background-blur', 'background-surface']) {
     const slider = page.locator(`#${id}`);
     assert.equal(await slider.isEnabled(), true);
@@ -235,20 +237,21 @@ try {
     return media && getComputedStyle(media).getPropertyValue('--background-media-blur').trim() === '0px';
   });
   await page.locator('#background-blur').fill('18');
+  // 遮罩强度只压在壁纸层上；窗口内表面始终不透明，不再有可调透明度。
   await page.locator('#background-surface').fill('0');
   await page.waitForFunction(() => {
-    const shell = document.querySelector('.settings-content');
-    return shell && Math.abs(Number(getComputedStyle(shell, '::before').opacity)) < 0.01;
+    const scrim = document.querySelector('.background-layer-soften');
+    return scrim && Math.abs(Number(getComputedStyle(scrim).opacity)) < 0.01;
   });
   await page.locator('#background-surface').fill('100');
   await page.waitForFunction(() => {
-    const shell = document.querySelector('.settings-content');
-    return shell && Math.abs(Number(getComputedStyle(shell, '::before').opacity) - 1) < 0.01;
+    const scrim = document.querySelector('.background-layer-soften');
+    return scrim && Math.abs(Number(getComputedStyle(scrim).opacity) - 1) < 0.01;
   });
   await page.locator('#background-surface').fill('55');
   await page.waitForFunction(() => {
-    const shell = document.querySelector('.settings-content');
-    return shell && Math.abs(Number(getComputedStyle(shell, '::before').opacity) - 0.55) < 0.01;
+    const scrim = document.querySelector('.background-layer-soften');
+    return scrim && Math.abs(Number(getComputedStyle(scrim).opacity) - 0.55) < 0.01;
   });
   const layerFrame = await page.locator('.background-layer-media').evaluate((media) => {
     const rect = media.getBoundingClientRect();
@@ -269,9 +272,12 @@ try {
   assert.ok(layerFrame.bottom >= layerFrame.viewportHeight, 'background media must cover the bottom viewport edge');
   assert.equal(await backgroundAlpha(page.locator('.settings-page-header')), 0, 'page titles do not add a card surface');
   assert.equal(await backgroundAlpha(page.locator('.general-settings-section').first()), 0, 'appearance rows use the settings surface');
+  // 方案 A：窗口内不再有半透明玻璃，选中态是 8% 的 tint，其余行完全透明。
   const selectedAlpha = await backgroundAlpha(page.locator('.settings-nav-row.is-active'));
-  assert.ok(selectedAlpha > 0.32 && selectedAlpha < 0.7, `selected rows should remain distinct without becoming opaque, got ${selectedAlpha}`);
-  const themeStates = await page.locator('.general-theme-options').evaluate(element => {
+  assert.ok(selectedAlpha > 0.02 && selectedAlpha < 0.2, `selected rows use a light tint, got ${selectedAlpha}`);
+  const idleAlpha = await backgroundAlpha(page.locator('.settings-nav-row:not(.is-active)').first());
+  assert.equal(idleAlpha, 0, `idle rows stay transparent, got ${idleAlpha}`);
+  const themeStates = await page.locator('.general-theme-options').first().evaluate(element => {
     const active = element.querySelector('button[aria-pressed="true"]');
     const inactive = element.querySelector('button[aria-pressed="false"]');
     return { active: getComputedStyle(active).backgroundColor, inactive: getComputedStyle(inactive).backgroundColor };
@@ -287,7 +293,7 @@ try {
 
   await page.getByRole('button', { name: '返回对话' }).click();
   await page.locator('.settings-overlay').waitFor({ state: 'detached' });
-  await page.locator('.app.has-custom-background .background-layer img').waitFor();
+  await page.locator('.background-layer img').waitFor();
   await page.screenshot({ path: `${output}light-workspace.png`, animations: 'disabled' });
 
   await openGeneralSettings();
@@ -343,7 +349,7 @@ try {
       && stored.backgroundSurfaceOpacity === 100;
   });
   await page.reload();
-  await page.locator('.app.has-custom-background .background-layer video').waitFor();
+  await page.locator('.background-layer video').waitFor();
   await page.waitForFunction(() => {
     const element = document.querySelector('.background-layer video');
     return element instanceof HTMLVideoElement && element.readyState >= 1;

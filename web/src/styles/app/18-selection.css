@@ -54,3 +54,7 @@
   font-weight: var(--weight-medium);
   box-shadow: inset 2px 0 0 var(--settings-accent);
 }
+
+/* 未选中的分段项悬停时给一层 hover 表面，和 tint 选中态区分开。 */
+.settings-content :is(.general-theme-options, .permission-policy-scopes) button:hover:not(.is-active, [aria-pressed="true"]),
+.settings-content .permission-preset:hover:not(.is-active) { background: var(--surface-hover); }
