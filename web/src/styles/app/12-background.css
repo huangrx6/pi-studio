@@ -44,8 +44,7 @@
   .file-code,
   .panel-tabbar,
   .changes-view,
-  .diff-view,
-  .temporary-chat
+  .diff-view
  ) {
   background: var(--surface-raised);
   border-color: var(--border);

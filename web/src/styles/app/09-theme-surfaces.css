@@ -441,7 +441,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   .changes-tools { gap: 0; }
   .changes-tools .icon-button { width: var(--icon-button-compact); height: var(--icon-button-compact); }
 }
-.temporary-chat { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); }
+.temporary-chat { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--surface-canvas); }
 .temporary-scroll {
   flex: 1;
   min-height: 0;
@@ -479,7 +479,8 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   z-index: 10;
   flex: none;
   padding: var(--space-3) var(--space-8) var(--space-4);
-  background: var(--bg);
+  /* 与主会话一致：底部条用画布色，不再比面板主体暗一档。 */
+  background: var(--surface-canvas);
 }
 .temporary-composer {
   max-width: var(--content);

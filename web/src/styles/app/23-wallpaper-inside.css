@@ -3,7 +3,7 @@
  * 用同一个保留比例：侧栏、标题行、标签行、画布都按 (1 − 可见度) 保留本色，
  * 因此壁纸在三个区域透出的强度完全一致，不会再出现「主区透、侧栏实」。
  *
- * 控件（气泡、输入框、菜单、对话框）仍然不透明——它们需要稳定的阅读底。
+ * 会话内嵌控件按层级透出壁纸；浮动菜单与对话框保持稳定的阅读底。
  */
 
 .window-wallpaper {
@@ -28,15 +28,16 @@
 
 /* 侧栏与顶部：基色是 chrome，透出比例与画布相同。 */
 .app.is-wallpaper-inside > .sidebar,
-.app.is-wallpaper-inside :is(.chat-header, .chat-tabs, .panel-tabbar, .settings-nav) {
+.app.is-wallpaper-inside :is(.panel-tabbar, .settings-nav) {
   background: color-mix(in srgb, var(--surface-chrome) calc(100% - var(--wallpaper-inside, 0) * 100%), transparent);
 }
 
 /* 画布：消息区、输入栏与各工作区视图共用画布色。 */
 .app.is-wallpaper-inside :is(
   .main,
-  .composer-dock,
   .conversation-trace-page,
+  .temporary-chat,
+  .temporary-composer-dock,
   .agent-workspace,
   .agent-context-view,
   .agent-context-toolbar
@@ -44,4 +45,82 @@
   background: color-mix(in srgb, var(--surface-canvas) calc(100% - var(--wallpaper-inside, 0) * 100%), transparent);
 }
 
-/* 标签行的激活下划线、侧栏分隔线仍在半透明底上，颜色不需要变化。 */
+/* 标题与输入栏已经位于主画布上，不能再次叠加同强度的遮罩。 */
+.app.is-wallpaper-inside :is(.chat-header, .chat-tabs),
+.app .composer-dock {
+  background: var(--transparent);
+}
+
+/* 仅统一会话周边的内嵌表面，不影响设置、消息气泡或浮动面板。 */
+.app {
+  --conversation-control-surface: var(--surface-floating);
+  --conversation-inset-surface: color-mix(in srgb, var(--text-1) 4%, transparent);
+  --conversation-hover-surface: color-mix(in srgb, var(--text-1) 6%, transparent);
+  --conversation-selected-surface: var(--tint-neutral);
+}
+
+.app.is-wallpaper-inside {
+  --conversation-control-surface: color-mix(in srgb, var(--surface-floating) calc(100% - var(--wallpaper-inside, 0) * 40%), transparent);
+}
+
+.app :is(.new-chat, .run-live-status, .queued-item) {
+  background: var(--conversation-inset-surface);
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+.app :is(.new-chat, .nav-row, .session-row):hover {
+  background: var(--conversation-hover-surface);
+}
+
+.app .sidebar :is(.nav-row, .session-row).is-active {
+  background: var(--conversation-selected-surface);
+  color: var(--text-1);
+  border-color: var(--transparent);
+}
+
+.app .sidebar :is(.nav-row, .session-row).is-active:hover {
+  background: color-mix(in srgb, var(--text-1) 11%, transparent);
+}
+
+.app .composer {
+  background: var(--conversation-control-surface);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-card);
+}
+
+.app .composer:has(.composer-input textarea:focus) {
+  border-color: var(--focus-color);
+  box-shadow: 0 0 0 1px var(--accent-tint), var(--shadow-card);
+}
+
+/* 对话正文只保留一层阅读底，代码内部与表头不再叠加不透明色块。 */
+.app .chat-scroll .markdown {
+  --conversation-reading-surface: var(--surface-raised);
+}
+
+.app.is-wallpaper-inside .chat-scroll .markdown {
+  --conversation-reading-surface: color-mix(in srgb, var(--surface-raised) calc(100% - var(--wallpaper-inside, 0) * 65%), transparent);
+}
+
+.app .chat-scroll .markdown :is(.markdown-code, table) {
+  background: var(--conversation-reading-surface);
+  border-color: var(--border);
+}
+
+.app .chat-scroll .markdown :is(.markdown-code-bar, th) {
+  background: var(--conversation-inset-surface);
+  border-color: var(--border);
+}
+
+.app .chat-scroll .markdown code {
+  background: var(--inline-code-bg);
+}
+
+.app .chat-scroll .markdown .markdown-code :is(pre, code) {
+  background: var(--transparent);
+}
+
+.app .chat-scroll .markdown-code-copy:hover {
+  background: var(--conversation-hover-surface);
+}
