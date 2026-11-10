@@ -571,6 +571,95 @@
   gap: var(--space-1) var(--space-2);
 }
 
+/* 背景媒体：摘要是一条 56px 行，展开后左预览、右滑杆同顶对齐；
+   滑杆不再各自做灰卡片，只保留分隔线，避免和上方设置行抢层级。 */
+.settings-content .general-background-settings {
+  width: 100%;
+  border-top: 1px solid var(--divider);
+}
+
+.settings-content .general-background-summary {
+  display: flex;
+  width: 100%;
+  min-height: 56px;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0;
+  list-style: none;
+  cursor: pointer;
+}
+
+.settings-content .general-background-summary::-webkit-details-marker { display: none; }
+
+.settings-content .general-background-summary .general-background-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--text-base);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-content .general-background-summary small {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--text-13);
+}
+
+.settings-content .general-background-summary svg {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--muted);
+  transition: transform var(--transition);
+}
+
+.settings-content .general-background-settings[open] .general-background-summary svg { transform: rotate(180deg); }
+
+.settings-content .general-background-adjustments {
+  display: grid;
+  grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: stretch;
+  padding: 0 0 var(--space-5);
+}
+
+.settings-content .general-background-adjustments .background-media-preview {
+  /* 与右侧滑杆同高：预览铺满列高，裁切交给 object-fit。 */
+  height: 100%;
+  min-height: 200px;
+  border-radius: 10px;
+  aspect-ratio: auto;
+}
+
+.settings-content .general-background-ranges { display: grid; align-content: start; }
+
+.settings-content .general-background-ranges .settings-range-control {
+  padding: 14px 0;
+  border-top: 1px solid var(--divider);
+  border-radius: 0;
+  background: var(--transparent);
+}
+
+.settings-content .general-background-ranges .settings-range-control:first-child { border-top: 0; }
+
+.settings-content .general-background-ranges .settings-range-control:hover:not(.is-disabled) { background: var(--transparent); }
+
+.settings-content .general-background-ranges .settings-range-copy strong {
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+}
+
+.settings-content .general-background-ranges .settings-range-copy output {
+  border-color: var(--border);
+  background: var(--settings-control-bg);
+  color: var(--text);
+  font-weight: var(--weight-medium);
+}
+
 .settings-content .general-settings-card {
   padding: 0 20px;
   border: 1px solid var(--border);
@@ -678,7 +767,8 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--surface);
-  padding: 0 20px;
+  /* 四边内边距一致：卡片上下不再比左右更紧。 */
+  padding: 20px;
 }
 
 .settings-content .shortcut-settings .shortcut-row {
@@ -823,6 +913,8 @@
 
 @media (max-width: 900px) {
   .settings-overlay { --settings-top-inset: 40px; }
+  .settings-content .general-background-adjustments { grid-template-columns: minmax(0, 1fr); }
+  .settings-content .general-background-adjustments .background-media-preview { height: auto; aspect-ratio: 16 / 10; }
   .settings-content { padding: var(--settings-top-inset) 24px 56px; }
   .settings-nav { width: 208px; padding-inline: 12px; }
 }

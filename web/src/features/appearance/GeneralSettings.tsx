@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from 'react';
 import {
+  ChevronDown,
   LoaderCircle,
   Monitor,
   Moon,
@@ -64,20 +65,21 @@ export function GeneralSettings({ preferences, onChange, backgroundBusy, backgro
         {media && <button type="button" className="settings-outline" disabled={backgroundBusy} onClick={onRemoveBackground}>移除</button>}
       </SettingRow>
       {backgroundError && <div className="background-setting-error" role="alert">{backgroundError}</div>}
-      {media && <div className="general-background-settings">
-        <p className="general-background-name" title={media.name}>{media.name}</p>
-        <details>
-          <summary>调整背景</summary>
-          <div className="general-background-adjustments">
-            <BackgroundMediaPreview media={media} onError={() => onBackgroundUnavailable(media.url)} />
-            <div>
-              <RangeControl id="background-opacity" label="背景透明度" value={preferences.backgroundOpacity} onChange={value => onChange('backgroundOpacity', value)} />
-              <RangeControl id="background-blur" label="柔化程度" value={preferences.backgroundBlur} onChange={value => onChange('backgroundBlur', value)} />
-              <RangeControl id="background-surface" label="界面遮挡" value={preferences.backgroundSurfaceOpacity} onChange={value => onChange('backgroundSurfaceOpacity', value)} />
-            </div>
+      {media && <details className="general-background-settings" open>
+        <summary className="general-background-summary">
+          <span className="general-background-name" title={media.name}>{media.name}</span>
+          <small>{media.kind === 'video' ? '视频背景' : '图片背景'}</small>
+          <ChevronDown aria-hidden="true" />
+        </summary>
+        <div className="general-background-adjustments">
+          <BackgroundMediaPreview media={media} onError={() => onBackgroundUnavailable(media.url)} />
+          <div className="general-background-ranges">
+            <RangeControl id="background-opacity" label="背景透明度" value={preferences.backgroundOpacity} onChange={value => onChange('backgroundOpacity', value)} />
+            <RangeControl id="background-blur" label="柔化程度" value={preferences.backgroundBlur} onChange={value => onChange('backgroundBlur', value)} />
+            <RangeControl id="background-surface" label="界面遮挡" value={preferences.backgroundSurfaceOpacity} onChange={value => onChange('backgroundSurfaceOpacity', value)} />
           </div>
-        </details>
-      </div>}
+        </div>
+      </details>}
       </div>
     </section>
     <section className="general-settings-section" aria-labelledby={`${sectionId}-conversation`}>

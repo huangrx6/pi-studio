@@ -229,7 +229,24 @@ try {
   }, mediaPath);
   await content.getByRole('button', { name: '选择媒体', exact: true }).click();
   await page.waitForFunction(() => Boolean(JSON.parse(localStorage.getItem('pi-studio:preferences') || '{}').backgroundMedia));
-  await content.locator('summary').filter({ hasText: '调整背景' }).click();
+  // 摘要行显示文件名与类型，展开后才是预览与滑杆。
+  const backgroundSummary = content.locator('.general-background-summary');
+  await backgroundSummary.waitFor();
+  assert.match(await backgroundSummary.innerText(), /图片背景/, 'summary labels the media kind');
+  const summaryGeometry = await content.evaluate(() => {
+    const summary = document.querySelector('.general-background-summary').getBoundingClientRect();
+    const preview = document.querySelector('.background-media-preview').getBoundingClientRect();
+    const ranges = document.querySelector('.general-background-ranges').getBoundingClientRect();
+    return {
+      summaryHeight: Math.round(summary.height),
+      previewTop: Math.round(preview.top - ranges.top),
+      previewBottom: Math.round(preview.bottom - ranges.bottom),
+    };
+  });
+  assert.equal(summaryGeometry.summaryHeight, 56, `background summary is one 56px row: ${JSON.stringify(summaryGeometry)}`);
+  assert.equal(summaryGeometry.previewTop, 0, `preview and sliders share a top edge: ${JSON.stringify(summaryGeometry)}`);
+  assert.ok(Math.abs(summaryGeometry.previewBottom) <= 1, `preview and sliders share a bottom edge: ${JSON.stringify(summaryGeometry)}`);
+  result.backgroundGeometry = summaryGeometry;
   const slider = content.getByRole('slider', { name: /背景透明度/ });
   await slider.waitFor();
   assert.equal(await slider.isEnabled(), true);
