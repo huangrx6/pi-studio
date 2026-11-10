@@ -1,12 +1,12 @@
 .extension-list-section,
 .installed-extension-section { display: flex; flex-direction: column; gap: var(--space-3); }
-/* 列表与标题一起左右各缩 24px；行再用 12px 内边距 + 等量负外边距把悬停背景
- * 拉回到距内容列 12px 的位置。这样背景不贴内容列、文字也不贴背景边缘。 */
+/* 区块与页面标题同宽（都从内容列左边缘开始），缩进放进标题和行自己身上：
+ * 这样悬停背景与顶部按钮行等宽，文字又不会贴住背景边缘。 */
 .extension-list-section,
 .installed-extension-section,
-.builtin-extension-section { padding-inline: var(--space-6); }
+.builtin-extension-section { padding-inline: 0; }
 .builtin-extension-section { padding-top: var(--space-3); border-top: 1px solid var(--divider); }
-.builtin-extension-summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); cursor: pointer; list-style: none; }
+.builtin-extension-summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding-inline: var(--space-3); cursor: pointer; list-style: none; }
 .builtin-extension-summary::-webkit-details-marker { display: none; }
 .builtin-extension-summary-main { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text); }
 .builtin-extension-summary-main > svg { width: var(--icon-sm); height: var(--icon-sm); color: var(--muted); transition: transform 120ms ease; }
@@ -14,7 +14,7 @@
 .builtin-extension-summary strong { font-size: var(--text-base); font-weight: var(--weight-semibold); }
 .builtin-extension-summary small { color: var(--faint); font-size: var(--text-xs); line-height: var(--leading-normal); }
 .builtin-extension-summary:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; border-radius: var(--radius-sm); }
-.extension-list-heading { display: flex; align-items: center; gap: var(--space-2); }
+.extension-list-heading { display: flex; align-items: center; gap: var(--space-2); padding-inline: var(--space-3); }
 .extension-list-heading h2 { margin: 0; color: var(--text); font-size: var(--text-base); font-weight: var(--weight-semibold); }
 .extension-list-heading > svg { width: var(--icon-sm); height: var(--icon-sm); color: var(--muted); }
 .extension-list,
@@ -31,7 +31,7 @@
 .extension-placement-options button:hover { color: var(--text); }
 .extension-placement-options button[aria-pressed='true'] { background: var(--surface); color: var(--text); box-shadow: inset 0 0 0 1px var(--border); }
 
-.extension-list-row { position: relative; display: flex; align-items: flex-start; gap: var(--space-4); min-width: 0; margin-inline: calc(var(--space-3) * -1); padding: var(--space-4) var(--space-3); border-radius: var(--radius-control); }
+.extension-list-row { position: relative; display: flex; align-items: flex-start; gap: var(--space-4); min-width: 0; padding: var(--space-4) var(--space-3); border-radius: var(--radius-control); }
 /* 分割线单独画一条直线：行本身有圆角，border-bottom 会沿着圆角弯出两个弧。 */
 .extension-list-row:not(:last-child)::after { content: ''; position: absolute; inset: auto 0 0; height: 1px; background: var(--divider); }
 .extension-list-row.is-compact { align-items: center; padding: var(--space-3); }
