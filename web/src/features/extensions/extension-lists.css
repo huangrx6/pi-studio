@@ -6,7 +6,7 @@
 .installed-extension-section,
 .builtin-extension-section { padding-inline: 0; }
 .builtin-extension-section { padding-top: var(--space-3); border-top: 1px solid var(--divider); }
-.builtin-extension-summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding-inline: var(--space-3); cursor: pointer; list-style: none; }
+.builtin-extension-summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); cursor: pointer; list-style: none; }
 .builtin-extension-summary::-webkit-details-marker { display: none; }
 .builtin-extension-summary-main { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text); }
 .builtin-extension-summary-main > svg { width: var(--icon-sm); height: var(--icon-sm); color: var(--muted); transition: transform 120ms ease; }
@@ -14,7 +14,7 @@
 .builtin-extension-summary strong { font-size: var(--text-base); font-weight: var(--weight-semibold); }
 .builtin-extension-summary small { color: var(--faint); font-size: var(--text-xs); line-height: var(--leading-normal); }
 .builtin-extension-summary:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; border-radius: var(--radius-sm); }
-.extension-list-heading { display: flex; align-items: center; gap: var(--space-2); padding-inline: var(--space-3); }
+.extension-list-heading { display: flex; align-items: center; gap: var(--space-2); }
 .extension-list-heading h2 { margin: 0; color: var(--text); font-size: var(--text-base); font-weight: var(--weight-semibold); }
 .extension-list-heading > svg { width: var(--icon-sm); height: var(--icon-sm); color: var(--muted); }
 .extension-list,
