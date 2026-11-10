@@ -100,30 +100,35 @@
 }
 
 /* ---- 文件变更与 diff ------------------------------------------------
- * 卡片的底色、圆角、外框都去掉：只用弱分割线切分，文件名用等宽，
- * 状态是文字标签而不是字母方块。
+ * 一张明确的框：1px 边框 + 圆角 + raised 底色，头部与文件行之间用弱分割线
+ * 切开；文件名等宽，状态是文字标签而不是字母方块。
  */
 
 .file-change-summary {
   margin-top: 18px;
-  overflow: visible;
-  border: 0;
-  border-top: 1px solid var(--divider);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+
+.file-change-summary > header {
+  padding: 12px 14px;
   border-bottom: 1px solid var(--divider);
-  border-radius: 0;
   background: var(--transparent);
 }
 
-.file-change-summary > header { padding: 12px 2px; background: var(--transparent); }
-.file-change-icon { width: 20px; height: 20px; border-radius: 0; background: var(--transparent); color: var(--text-2); }
+.file-change-icon { width: 24px; height: 24px; border-radius: 6px; background: var(--surface-chrome); color: var(--text-2); }
 .file-change-icon svg { width: var(--icon-md); height: var(--icon-md); }
 .file-change-summary > header button { border-color: var(--transparent); background: var(--transparent); color: var(--text-2); }
 .file-change-summary > header button:hover { border-color: var(--border); background: var(--surface-hover); color: var(--text-1); }
 
-.file-change-item { gap: 8px; padding: 8px 2px; border-top: 1px solid var(--divider); }
+.file-change-item { gap: 10px; padding: 9px 14px; border-top: 1px solid var(--divider); }
+.file-change-item:first-child { border-top: 0; }
 .file-change-item.is-openable:hover { background: var(--surface-hover); }
-.file-change-more { padding: 8px 2px; border-top: 1px solid var(--divider); }
+.file-change-more { padding: 9px 14px; border-top: 1px solid var(--divider); }
 .file-change-more:hover { background: var(--surface-hover); }
+.file-change-incomplete-note { padding: 8px 14px; border-top: 1px solid var(--divider); background: var(--transparent); }
 
 .file-change-mark {
   width: auto;
