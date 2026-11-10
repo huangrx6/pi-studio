@@ -107,7 +107,7 @@ Safari 一旦看到非 auto 的 scrollbar-width 或 scrollbar-color，就会忽�
 
 ::-webkit-scrollbar-thumb {
   border: var(--dsh-scrollbar-thumb-border) solid var(--transparent);
-  border-radius: 999px;
+  border-radius: var(--radius-round);
   corner-shape: round;
   background: var(--dsh-scrollbar-thumb);
   background-clip: content-box;

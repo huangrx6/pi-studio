@@ -34,7 +34,7 @@
   height: 24px;
   flex: none;
   padding: 0 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--accent-tint);
   color: var(--text-1);
   font-size: var(--text-sm);
@@ -42,6 +42,6 @@
 }
 
 .composer-model-hint-action:hover { background: var(--surface-hover); }
-.composer-model-hint-close { display: grid; place-items: center; width: 20px; height: 20px; flex: none; border-radius: 4px; color: var(--text-3); }
+.composer-model-hint-close { display: grid; place-items: center; width: 20px; height: 20px; flex: none; border-radius: var(--radius-tag); color: var(--text-3); }
 .composer-model-hint-close:hover { background: var(--surface-hover); color: var(--text-1); }
 .composer-model-hint-close svg { width: var(--icon-xs); height: var(--icon-xs); }

@@ -38,7 +38,7 @@
   min-height: 28px;
   padding: 4px 8px;
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--surface-soft);
   color: var(--text);
   /* 键帽用系统字体：⌘ ⇧ ⌥ 只在系统字体里有完整字形，等宽字体会退回到大小不一致的符号字体。 */

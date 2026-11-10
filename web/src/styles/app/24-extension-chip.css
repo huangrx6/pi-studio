@@ -36,7 +36,7 @@
   display: block;
   margin: 10px 0 0 auto;
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--accent-tint);
   color: var(--text-1);
   font-size: var(--text-xs);

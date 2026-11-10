@@ -282,7 +282,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .diff-line.is-add .diff-gutter { color: var(--success); border-left: 3px solid var(--success); background: var(--success-soft); }
 .diff-line.is-del .diff-gutter { color: var(--error); border-left: 3px solid var(--error); background: var(--error-soft); }
 .diff-line.is-empty .diff-gutter { background: var(--diff-empty-gutter); }
-.diff-code mark { background: var(--diff-change-bg); color: inherit; border-radius: 2px; }
+.diff-code mark { background: var(--diff-change-bg); color: inherit; border-radius: var(--radius-tag); }
 .diff-gap { height: 30px; padding: 4px 12px; background: var(--surface-soft); color: var(--faint); font: var(--text-xs)/22px var(--font); white-space: nowrap; }
 .diff-syntax-keyword { color: var(--syntax-keyword); }
 .diff-syntax-string { color: var(--syntax-string); }
@@ -356,7 +356,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .changes-view { flex: 1; width: 100%; min-width: 0; height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--surface); }
 .changes-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 12px; border-bottom: 1px solid var(--border); }
 .changes-round, .changes-tools { display: flex; align-items: center; gap: 6px; }
-.changes-round { background: var(--surface-soft); border-radius: 20px; padding: 5px 12px 5px 6px; }
+.changes-round { background: var(--surface-soft); border-radius: var(--radius-round); padding: 5px 12px 5px 6px; }
 .changes-round .pi-select { width: 165px; max-width: 165px; }
 .changes-round .pi-select-trigger { height: 28px; padding: 0 5px; border: 0; background: var(--transparent); color: var(--text); gap: 4px; font-size: var(--text-sm); }
 .changes-round .pi-select-trigger:hover:not(:disabled) { border: 0; background: var(--transparent); color: var(--text); }
@@ -391,7 +391,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .changes-jump { position: absolute; z-index: 80; top: 36px; right: -100px; width: min(320px,70vw); padding: 8px; }
 .changes-jump input { width: 100%; border: 0; border-bottom: 1px solid var(--border); background: var(--transparent); color: var(--text); padding: 9px; outline: none; font: var(--text-sm) var(--font); }
 .changes-jump > div { max-height: 280px; overflow: auto; }
-.changes-jump button { display: block; width: 100%; text-align: left; border: 0; background: var(--transparent); color: var(--text); padding: 9px; font: var(--text-sm) var(--font); border-radius: 6px; overflow-wrap: anywhere; cursor: pointer; }
+.changes-jump button { display: block; width: 100%; text-align: left; border: 0; background: var(--transparent); color: var(--text); padding: 9px; font: var(--text-sm) var(--font); border-radius: var(--radius-control); overflow-wrap: anywhere; cursor: pointer; }
 .changes-jump button:hover { background: var(--surface-hover); }
 .changes-notice, .changes-loading { padding: 9px 14px; color: var(--muted); font: var(--text-sm)/var(--leading-body) var(--font); border-bottom: 1px solid var(--border); }
 .changes-notice .text-button { margin-left: 8px; }
@@ -399,7 +399,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .changes-loading svg { width: var(--icon-sm); height: var(--icon-sm); }
 .changes-markdown { padding: 18px; }
 .action-menu { position: fixed; z-index: 2000; width: 224px; padding: 6px; }
-.action-menu > button { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; text-align: left; padding: 9px 10px; border: 0; border-radius: 6px; background: var(--transparent); color: var(--text); font: var(--text-sm)/var(--leading-normal) var(--font); cursor: pointer; }
+.action-menu > button { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; text-align: left; padding: 9px 10px; border: 0; border-radius: var(--radius-control); background: var(--transparent); color: var(--text); font: var(--text-sm)/var(--leading-normal) var(--font); cursor: pointer; }
 .action-menu > button:hover, .action-menu > button:focus-visible { outline: none; background: var(--surface-hover); }
 .action-menu > button:disabled { color: var(--faint); cursor: default; background: var(--transparent); }
 .action-menu svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; }
@@ -430,7 +430,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .chat-tabs { border-bottom-color: var(--divider); }
 .changes-view { container-type: inline-size; }
 .changes-toolbar { flex-wrap: nowrap; padding: 0 10px; gap: 6px; }
-.changes-round { border-radius: 14px; padding: 2px 9px 2px 4px; min-width: 0; }
+.changes-round { border-radius: var(--radius-card); padding: 2px 9px 2px 4px; min-width: 0; }
 .changes-round .pi-select-trigger { height: 28px; }
 @container (max-width: 480px) {
   .changes-toolbar { padding-inline: 8px; }

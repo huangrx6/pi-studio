@@ -26,7 +26,7 @@
 .extension-detail-trust-note,
 .extension-detail-empty-permissions { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-relaxed); }
 .extension-detail-technical > summary { width: fit-content; max-width: 100%; cursor: pointer; color: var(--text); font-size: var(--text-sm); line-height: var(--leading-body); }
-.extension-detail-technical > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
+.extension-detail-technical > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: var(--radius-tag); }
 .extension-detail-technical[open] > summary { margin-bottom: var(--space-4); }
 .extension-version-list { display: flex; flex-direction: column; gap: var(--space-3); }
 .extension-version-list > div { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px var(--space-3); overflow-wrap: anywhere; }

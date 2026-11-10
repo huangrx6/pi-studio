@@ -15,7 +15,7 @@
   display: flex;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: var(--surface-canvas);
 }
 .settings-nav { gap: var(--space-1); -webkit-app-region: drag; }

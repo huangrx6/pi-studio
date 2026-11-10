@@ -47,7 +47,7 @@
 
 .markdown code {
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: var(--radius-tag);
   background: var(--inline-code-bg);
   font: var(--text-13)/1.5 var(--mono);
 }
@@ -83,7 +83,7 @@
   height: 20px;
   flex: none;
   padding: 0 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-tag);
   background: var(--transparent);
   color: var(--text-3);
   font-size: var(--text-xs);
@@ -118,7 +118,7 @@
   background: var(--transparent);
 }
 
-.file-change-icon { width: 24px; height: 24px; border-radius: 6px; background: var(--surface-chrome); color: var(--text-2); }
+.file-change-icon { width: 24px; height: 24px; border-radius: var(--radius-control); background: var(--surface-chrome); color: var(--text-2); }
 .file-change-icon svg { width: var(--icon-md); height: var(--icon-md); }
 .file-change-summary > header button { border-color: var(--transparent); background: var(--transparent); color: var(--text-2); }
 .file-change-summary > header button:hover { border-color: var(--border); background: var(--surface-hover); color: var(--text-1); }

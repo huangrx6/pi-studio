@@ -64,7 +64,7 @@ isolation 建立独立层叠上下文，配合下面的 :has 规则在设置全�
   margin: var(--shell-top) var(--shell-gutter) var(--shell-gutter);
   overflow: hidden;
   isolation: isolate;
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: var(--surface-canvas);
 }
 

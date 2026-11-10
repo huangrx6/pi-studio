@@ -74,11 +74,8 @@
   --data-accent-muted: var(--settings-text);
   --data-model-fill: var(--settings-accent);
   --data-cell-border: var(--settings-divider);
-  /* 固定圆角：卡片 14、控件 10、导航项 9、内层 8。 */
-  --radius-tag: 6px;
-  --radius-control: 10px;
-  --radius-card: 14px;
-  --radius-panel: 14px;
+  /* 圆角跟随 tokens.css 的全局阶梯（4 / 8 / 12 / 16）：设置页自成一档时，
+   * 同一屏会出现两种半径，看起来像另一套组件。 */
   --shadow-card: none;
   --shadow-thumb: none;
 }
@@ -200,7 +197,7 @@
   margin: 16px 0 0;
   padding-inline: 12px;
   border: 1px solid var(--settings-border);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--muted);
 }
@@ -247,7 +244,7 @@
   min-height: 38px;
   margin-bottom: 2px;
   padding-inline: 12px;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   color: var(--text);
   font-size: var(--text-base);
   font-weight: var(--weight-medium);
@@ -285,7 +282,7 @@
   height: 38px;
   padding-inline: 12px;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   background: var(--transparent);
   box-shadow: none;
   color: var(--text);
@@ -321,7 +318,7 @@
   margin-bottom: 0;
   padding: 20px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   background: var(--surface);
 }
 
@@ -356,7 +353,7 @@
 /* 资源列表与资源卡片：卡片底、1px 实线、圆角 14；列表行上下 16、左右 20。 */
 .settings-content :is(.mcp-server-list, .installed-skill-group) {
   border-color: var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   background: var(--surface);
 }
 
@@ -369,7 +366,7 @@
 
 .settings-content .skill-hub-overview-row {
   border-color: var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--surface);
 }
 
@@ -377,7 +374,7 @@
 
 .settings-content .settings-resource-card {
   border-color: var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   background: var(--surface);
   box-shadow: none;
 }
@@ -396,7 +393,7 @@
 .settings-content .publisher-trust-heading-copy > span {
   width: 40px;
   height: 40px;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   color: var(--muted);
   background: var(--settings-control-bg);
 }
@@ -406,7 +403,7 @@
 .settings-content .settings-empty {
   padding: 20px;
   border: 1px dashed var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   background: var(--transparent);
   color: var(--muted);
   text-align: center;
@@ -415,7 +412,7 @@
 .settings-content :is(.mcp-settings-empty, .installed-skills-empty, .extension-empty) {
   padding: 20px;
   border: 1px dashed var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   background: var(--transparent);
   color: var(--muted);
   text-align: center;
@@ -424,7 +421,7 @@
 .settings-loading {
   padding: 32px 24px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   background: var(--surface);
 }
 
@@ -436,7 +433,7 @@
 
 .settings-content :is(input:not([type="checkbox"]):not([type="radio"]), .pi-select-trigger) {
   height: 36px;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   font-size: var(--text-base);
 }
 
@@ -468,7 +465,7 @@
 
 .settings-content .pi-select-menu {
   border-color: var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--surface);
 }
 
@@ -476,7 +473,7 @@
   height: 36px;
   padding: 0 16px;
   border: 1px solid var(--accent);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--accent);
   color: var(--on-button);
   font-size: var(--text-base);
@@ -501,7 +498,7 @@
   height: 36px;
   padding: 0 16px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--text);
   font-size: var(--text-base);
@@ -520,7 +517,7 @@
 .settings-content .icon-button {
   width: var(--icon-button-lg);
   height: var(--icon-button-lg);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 
 .settings-content .icon-button:hover:not(:disabled) { background: var(--settings-control-bg); }
@@ -531,7 +528,7 @@
   box-shadow: var(--settings-selected-shadow);
 }
 
-.settings-content input[type="checkbox"] { width: 16px; height: 16px; border-radius: 4px; }
+.settings-content input[type="checkbox"] { width: 16px; height: 16px; border-radius: var(--radius-tag); }
 
 .settings-content .switch {
   width: 44px;
@@ -633,7 +630,7 @@
   /* 与右侧滑杆同高：预览铺满列高，裁切交给 object-fit。 */
   height: 100%;
   min-height: 200px;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   aspect-ratio: auto;
 }
 
@@ -672,7 +669,7 @@
 .settings-content .general-settings-card {
   padding: 0 20px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   background: var(--surface);
 }
 
@@ -712,14 +709,14 @@
 .settings-content .general-theme-options {
   padding: 3px;
   gap: 2px;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--settings-control-bg);
 }
 
 .settings-content .general-theme-options button {
   min-height: 32px;
   padding-inline: 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   color: var(--muted);
   font-size: var(--text-base);
   font-weight: var(--weight-medium);
@@ -746,7 +743,7 @@
 .settings-content .general-palette-option {
   min-height: 32px;
   padding: 0 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   color: var(--muted);
   font-size: var(--text-base);
   font-weight: var(--weight-medium);
@@ -783,7 +780,7 @@
 .settings-content .shortcut-settings .shortcut-list {
   margin-top: 12px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   background: var(--surface);
   /* 四边内边距一致：卡片上下不再比左右更紧。 */
   padding: 20px;
@@ -806,7 +803,7 @@
   min-height: 28px;
   padding: 0 8px;
   border-color: var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--settings-control-bg);
   color: var(--text);
   font-size: var(--text-sm);
@@ -824,13 +821,13 @@
   gap: 2px;
   padding: 3px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--settings-control-bg);
 }
 
 .settings-content .permission-policy-scopes button {
   min-height: 32px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   font-weight: var(--weight-medium);
 }
 
@@ -905,7 +902,7 @@
 .settings-content .usage-model-filter button {
   min-height: 32px;
   padding: 0 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   font-size: var(--text-13);
 }
 
@@ -973,7 +970,7 @@
 /* 空状态：去掉虚线框，用单色几何线稿 + 一句话说明。 */
 .settings-content :is(.mcp-settings-empty, .installed-skills-empty, .extension-empty, .settings-empty) {
   border: 1px solid var(--divider);
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   background: var(--surface);
   color: var(--muted);
   text-align: center;
@@ -1055,7 +1052,7 @@
 
 .settings-overlay .settings-dialog {
   border-color: var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   background: var(--surface);
 }
 
@@ -1107,7 +1104,7 @@
   gap: 6px;
   padding: 6px 12px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-round);
   background: var(--surface);
   box-shadow: var(--settings-card-shadow);
   color: var(--text);

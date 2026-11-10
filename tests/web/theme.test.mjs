@@ -83,6 +83,25 @@ function luminance(value) {
   return r * 0.2126 + g * 0.7152 + b * 0.0722;
 }
 
+// 圆角只有 tokens.css 里那一套阶梯：4 tag / 8 control / 12 card / 16 panel / 999 round。
+// 组件各自写 6px、10px、14px 时，同一屏里会出现三种半径，看起来像不同组件拼起来的。
+test('all CSS border radii come from the shared scale', () => {
+  // 派生圆角只允许在同一条阶梯上做小幅加减（控件内更小的同心圆角），
+  // 或按图标尺寸取比例；不允许出现与阶梯无关的独立数值。
+  const derived = /^calc\(var\(--(?:radius-[a-z-]+|provider-icon-size)\) .+\)$/;
+  const unit = /^(?:0|50%|inherit|var\(--radius-[a-z-]+\))$/;
+  for (const file of sourceFiles.filter((item) => item.endsWith('.css') && !item.endsWith('/tokens.css'))) {
+    postcss.parse(fs.readFileSync(file, 'utf8')).walkDecls((decl) => {
+      if (decl.prop !== 'border-radius') return;
+      const value = decl.value.trim();
+      if (derived.test(value)) return;
+      for (const part of value.split(/\s+/)) {
+        assert.match(part, unit, `${file}: ${decl.prop}: ${decl.value}`);
+      }
+    });
+  }
+});
+
 // 颜色必须集中在 palette.css：其它 CSS 声明里不能出现十六进制、rgb()/hsl()、
 // color-mix() 或 white/black 等颜色字面量（先去掉 var() 再匹配）。transparent
 // 只表达“无可见颜色”，不会在不同主题间泄漏色值，因此保留为布局关键字。

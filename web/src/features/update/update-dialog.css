@@ -45,7 +45,7 @@
 /* ---- 已就绪 ----------------------------------------------------------- */
 
 .update-ready { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: var(--space-3); align-items: start; }
-.update-ready-icon { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--accent-border); border-radius: 8px; background: var(--accent-soft); color: var(--accent-foreground); }
+.update-ready-icon { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--accent-border); border-radius: var(--radius-control); background: var(--accent-soft); color: var(--accent-foreground); }
 .update-ready-icon svg { width: 16px; height: 16px; }
 .update-ready-title { margin: 0 0 2px; color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-medium); overflow-wrap: anywhere; }
 
@@ -56,7 +56,7 @@
 .update-notes-body { position: relative; display: grid; gap: 4px; color: var(--text); font-size: var(--text-sm); line-height: 1.7; }
 .update-notes-body > * { margin: 0; }
 .update-notes-body strong { color: var(--text); font-weight: var(--weight-semibold); }
-.update-notes-body code { padding: 1px 4px; border: 1px solid var(--border); border-radius: 4px; background: var(--inline-code-bg); font: var(--text-xs)/1.5 var(--mono); }
+.update-notes-body code { padding: 1px 4px; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--inline-code-bg); font: var(--text-xs)/1.5 var(--mono); }
 .update-note-heading { margin-top: var(--space-3) !important; color: var(--muted); font-size: var(--text-xs); font-weight: var(--weight-semibold); letter-spacing: .04em; }
 .update-note-heading:first-child { margin-top: 0 !important; }
 .update-note-list { display: grid; gap: 4px; padding-left: 18px; }

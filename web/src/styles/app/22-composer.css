@@ -4,7 +4,7 @@
  */
 
 .composer {
-  border-radius: 12px;
+  border-radius: var(--radius-card);
 }
 
 .composer textarea {

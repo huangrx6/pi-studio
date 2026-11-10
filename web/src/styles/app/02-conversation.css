@@ -55,15 +55,15 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .conversation-trace-tab { -webkit-app-region: no-drag; cursor: pointer; }
 /* Trace inspector uses one stable frame. Its list and inspector scroll independently. */
 .conversation-trace-page { flex: 1; min-height: 0; min-width: 0; padding: 16px var(--session-gutter) 20px; background: var(--bg); }
-.conversation-trace-page-inner { width: min(var(--trace-content), 100%); height: 100%; margin-inline: auto; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.conversation-trace-page-inner { width: min(var(--trace-content), 100%); height: 100%; margin-inline: auto; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-control); overflow: hidden; background: var(--surface); }
 .conversation-trace-toolbar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 10px; min-height: 40px; border-bottom: 1px solid var(--border); }
 .trace-display-options { display: flex; align-items: center; gap: 3px; }
-.trace-display-options button { display: flex; align-items: center; gap: 5px; padding: 4px 5px; border-radius: 3px; color: var(--faint); font-size: var(--text-sm); white-space: nowrap; }
+.trace-display-options button { display: flex; align-items: center; gap: 5px; padding: 4px 5px; border-radius: var(--radius-tag); color: var(--faint); font-size: var(--text-sm); white-space: nowrap; }
 .trace-display-options button[aria-pressed="true"] { color: var(--muted); }
 .trace-display-options button:hover { background: var(--surface-hover); color: var(--text); }
 .trace-display-options button[aria-pressed="false"] svg { opacity: .4; }
 .trace-display-options svg { width: 13px; height: 13px; }
-.conversation-trace-search { display: flex; align-items: center; gap: 6px; width: 180px; min-width: 80px; border: 1px solid var(--border-strong); border-radius: 6px; padding-inline: 8px; background: var(--surface-soft); }
+.conversation-trace-search { display: flex; align-items: center; gap: 6px; width: 180px; min-width: 80px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); padding-inline: 8px; background: var(--surface-soft); }
 .conversation-trace-search svg { width: 14px; height: 14px; flex: none; color: var(--faint); }
 .conversation-trace-search input { width: 100%; min-width: 0; height: 26px; padding: 0; border: 0; outline: none; background: transparent; color: var(--text); font-size: var(--text-sm); }
 /* 焦点只画在外层搜索框上：内层 input 共享全局 input:focus 阴影会形成“框内套框”。 */
@@ -76,23 +76,23 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .lane-input { --trace-color: var(--trace-input); --trace-soft: var(--trace-input-soft); }
 .lane-model { --trace-color: var(--trace-model); --trace-soft: var(--trace-model-soft); }
 .lane-tool { --trace-color: var(--trace-tool); --trace-soft: var(--trace-tool-soft); }
-.trace-activity-cell { min-width: 0; height: 8px; align-self: center; border: 0; border-radius: 1px; padding: 0; background: var(--trace-color); cursor: pointer; }
+.trace-activity-cell { min-width: 0; height: 8px; align-self: center; border: 0; border-radius: var(--radius-tag); padding: 0; background: var(--trace-color); cursor: pointer; }
 .trace-activity-cell.is-error { background: var(--error); }
 .trace-activity-cell.is-running { animation: pulse 1.5s infinite; }
 .trace-activity-cell:hover, .trace-activity-cell:focus-visible, .trace-activity-cell[aria-pressed="true"] { outline: 1px solid var(--accent); outline-offset: 2px; }
-.trace-activity-tooltip { position: fixed; z-index: 1000; pointer-events: none; width: 280px; padding: 10px 12px; display: grid; gap: 4px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface-raised); color: var(--text); box-shadow: var(--shadow-float); font-size: var(--text-sm); }
+.trace-activity-tooltip { position: fixed; z-index: 1000; pointer-events: none; width: 280px; padding: 10px 12px; display: grid; gap: 4px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface-raised); color: var(--text); box-shadow: var(--shadow-float); font-size: var(--text-sm); }
 .trace-activity-tooltip strong { font-weight: var(--weight-medium); }
 .trace-activity-tooltip span { color: var(--muted); }
 .trace-activity-tooltip p { margin: 3px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--faint); }
 .conversation-trace-workspace { display: grid; grid-template-columns: minmax(0, 1fr); flex: 1; min-height: 0; }
 .conversation-trace-workspace.has-detail { grid-template-columns: minmax(0, 1fr) min(40%, 380px); }
 .conversation-trace-list { min-width: 0; overflow: auto; scrollbar-width: thin; padding-bottom: 16px; }
-.trace-round-marker { color: var(--accent-foreground); background: var(--accent-soft); width: fit-content; padding: 1px 5px; margin-top: 6px; font: var(--text-xs)/14px var(--mono); border-radius: 0 2px 2px 0; }
+.trace-round-marker { color: var(--accent-foreground); background: var(--accent-soft); width: fit-content; padding: 1px 5px; margin-top: 6px; font: var(--text-xs)/14px var(--mono); border-radius: 0 var(--radius-tag) var(--radius-tag) 0; }
 .conversation-trace-item { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; min-height: 32px; padding: 0 10px 0 20px; border: 0; border-bottom: 1px solid var(--divider); border-radius: 0; background: transparent; text-align: left; color: var(--text); cursor: pointer; }
 .conversation-trace-item:hover { background: var(--surface-hover); }
 .conversation-trace-item.is-selected { background: var(--surface-active); box-shadow: inset 2px 0 var(--accent); }
 .conversation-trace-item:focus-visible { outline: 1px solid var(--accent); outline-offset: -2px; }
-.conversation-trace-item-icon { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 3px; color: var(--trace-color); background: var(--trace-soft); }
+.conversation-trace-item-icon { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: var(--radius-tag); color: var(--trace-color); background: var(--trace-soft); }
 .conversation-trace-item-icon svg { width: 14px; height: 14px; }
 .conversation-trace-item-title { flex: none; max-width: 120px; color: var(--text); font: var(--text-sm)/1.3 var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .conversation-trace-item-preview { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--text-13); }
@@ -106,7 +106,7 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .conversation-trace-detail { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-left: 1px solid var(--border-strong); background: var(--surface); }
 .conversation-trace-detail-head { display: flex; align-items: center; gap: 9px; padding: 10px 12px; min-height: 46px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: var(--text-sm); }
 .conversation-trace-detail-head .icon-button { width: 24px; height: 24px; margin-left: auto; flex: none; }
-.trace-kind { color: var(--trace-color); background: var(--trace-soft); border-radius: 3px; padding: 3px 6px; white-space: nowrap; }
+.trace-kind { color: var(--trace-color); background: var(--trace-soft); border-radius: var(--radius-tag); padding: 3px 6px; white-space: nowrap; }
 .trace-detail-tabs { display: flex; flex: none; gap: 16px; padding-inline: 12px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
 .trace-detail-tabs button { position: relative; flex: none; padding: 10px 0; font-size: var(--text-sm); color: var(--muted); }
 .trace-detail-tabs button[aria-selected="true"] { color: var(--accent-foreground); }
@@ -202,7 +202,7 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 但隐藏滚动条，关闭按钮绝对定位在缩略图右上角。 */
 
 .composer-dock { flex: none; padding: var(--space-3) var(--session-gutter) var(--space-4); background: var(--bg); z-index: 10; }
-.composer { max-width: var(--content); margin: 0 auto; border: 1px solid var(--border-strong); border-radius: 14px; background: var(--surface-floating); transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition); }
+.composer { max-width: var(--content); margin: 0 auto; border: 1px solid var(--border-strong); border-radius: var(--radius-card); background: var(--surface-floating); transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition); }
 .composer-feedback {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr) 24px;
