@@ -67,10 +67,7 @@ const InstalledSkills = lazy(async () => {
   const module = await import('../features/skills/InstalledSkills');
   return { default: module.InstalledSkills };
 }) as typeof import('../features/skills/InstalledSkills').InstalledSkills;
-const OfficialExtensionCatalog = lazy(async () => {
-  const module = await import('../features/extensions/OfficialExtensionCatalog');
-  return { default: module.OfficialExtensionCatalog };
-});
+
 const PublisherTrustSettings = lazy(async () => {
   const module = await import('../features/extensions/PublisherTrustSettings');
   return { default: module.PublisherTrustSettings };
@@ -535,14 +532,6 @@ export function SettingsOverlay({
                       extensions.setExtensionInstallerOpen(true);
                     }}><Plus />安装扩展</button>
                   </>}
-                />
-                <OfficialExtensionCatalog
-                  snapshot={extensions.officialExtensions}
-                  busy={extensions.officialExtensionsBusy || resourceBusy || notices.extensionRefreshBusy || Boolean(notices.extensionRefreshError)}
-                  busyId={extensions.officialExtensionBusyId}
-                  error={extensions.officialExtensionsError}
-                  onInstall={(item) => void controller.previewOfficialExtension(item)}
-                  onAutoUpdateChange={(item, enabled) => void controller.toggleOfficialAutoUpdate(item, enabled)}
                 />
                 <PublisherTrustSettings />
                 <InstalledExtensionsSection

@@ -31,7 +31,7 @@ const routes = [
   { label: '子智能体', title: '子智能体', modules: ['SubagentSettings'] },
   { label: 'MCP 服务器', title: 'MCP 服务器', modules: ['McpSettings'] },
   { label: '技能', title: '技能', modules: ['SkillHub', 'InstalledSkills'] },
-  { label: '扩展', title: '扩展', modules: ['OfficialExtensionCatalog', 'PublisherTrustSettings', 'InstalledExtensionsSection'] },
+  { label: '扩展', title: '扩展', modules: ['PublisherTrustSettings', 'InstalledExtensionsSection'] },
   { label: '归档会话', title: '归档会话', modules: ['ArchivedConversationsSettings'] },
   { label: '关于', title: 'Pi Studio' },
 ];
