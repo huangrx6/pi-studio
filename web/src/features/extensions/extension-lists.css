@@ -19,8 +19,12 @@
 .extension-list-heading > svg { width: var(--icon-sm); height: var(--icon-sm); color: var(--muted); }
 .extension-list,
 .installed-extension-grid { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+/* 卡片底部一行：落点在左、操作在右，共用同一条基线。 */
+.extension-list-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin-top: var(--space-3); }
+.extension-list-footer .extension-list-actions { margin-left: auto; }
+
 /* 落点选择：与设置页「界面模式」同一套分段控件，只对声明了两处落点的扩展出现。 */
-.extension-placement { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-3); margin-top: var(--space-3); }
+.extension-placement { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
 .extension-placement-label { flex: none; color: var(--muted); font-size: var(--text-sm); }
 .extension-placement-options { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--radius-control); background: var(--surface-hover); }
 .extension-placement-options button { min-height: 26px; padding-inline: 10px; border-radius: var(--radius-tag); color: var(--muted); font-size: var(--text-sm); font-weight: var(--weight-medium); }

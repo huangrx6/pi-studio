@@ -45,35 +45,39 @@ export function InstalledExtensionCard({ item, busy, compact = false, placements
       {!compact && item.manifest?.description && <p className="extension-list-description">{item.manifest.description}</p>}
       {!compact && access.length > 0 && <p className="extension-list-access">{access.join(' · ')}</p>}
       {item.blockedReason && <p className="extension-list-notice is-error" role="status">{item.blockedReason}</p>}
-      {!compact && onPlacementChange && placeable.map((panel) => {
-        const current = placementFor(placements, panel.id);
-        return <div className="extension-placement" key={panel.id}>
-          <span className="extension-placement-label">显示位置</span>
-          <div className="extension-placement-options" role="group" aria-label={`${item.name} 显示位置`}>
-            {EXTENSION_PLACEMENT_OPTIONS.map(({ value, label, hint }) => <button
-              key={value}
-              type="button"
-              title={hint}
-              aria-pressed={current === value}
-              onClick={() => onPlacementChange(panel.id, value)}
-            >{label}</button>)}
-          </div>
-        </div>;
-      })}
-    </div>
-    <div className="extension-list-actions">
-      <button type="button" className="settings-text-button" aria-label={`查看 ${item.name} 详情`} onClick={() => onOpenDetail(item)}>详情</button>
-      {item.scope !== 'builtin' && <button
-        type="button" className="settings-text-button extension-list-remove"
-        aria-label={`卸载 ${item.name}`} title={item.canRemove ? '卸载扩展' : item.removeBlockedReason}
-        disabled={busy || !item.canRemove} onClick={() => onDelete(item.id, item.name)}
-      >卸载</button>}
-      <button
-        type="button" className={`switch ${item.enabled ? 'is-on' : ''}`} role="switch" aria-checked={item.enabled}
-        aria-label={`${item.enabled ? '停用' : '启用'} ${item.name}`}
-        title={item.enabled && !item.canDisable ? item.disableBlockedReason : undefined}
-        disabled={busy || (item.enabled && !item.canDisable)} onClick={() => onToggle(item, !item.enabled)}
-      ><span /></button>
+      {/* 落点在左、操作在右，同一条基线：按钮自带内边距，单独占一行时文字会
+        * 比左侧内容更靠右，看起来像没对齐。 */}
+      <div className="extension-list-footer">
+        {!compact && onPlacementChange && placeable.map((panel) => {
+          const current = placementFor(placements, panel.id);
+          return <div className="extension-placement" key={panel.id}>
+            <span className="extension-placement-label">显示位置</span>
+            <div className="extension-placement-options" role="group" aria-label={`${item.name} 显示位置`}>
+              {EXTENSION_PLACEMENT_OPTIONS.map(({ value, label, hint }) => <button
+                key={value}
+                type="button"
+                title={hint}
+                aria-pressed={current === value}
+                onClick={() => onPlacementChange(panel.id, value)}
+              >{label}</button>)}
+            </div>
+          </div>;
+        })}
+        <div className="extension-list-actions">
+          <button type="button" className="settings-text-button" aria-label={`查看 ${item.name} 详情`} onClick={() => onOpenDetail(item)}>详情</button>
+          {item.scope !== 'builtin' && <button
+            type="button" className="settings-text-button extension-list-remove"
+            aria-label={`卸载 ${item.name}`} title={item.canRemove ? '卸载扩展' : item.removeBlockedReason}
+            disabled={busy || !item.canRemove} onClick={() => onDelete(item.id, item.name)}
+          >卸载</button>}
+          <button
+            type="button" className={`switch ${item.enabled ? 'is-on' : ''}`} role="switch" aria-checked={item.enabled}
+            aria-label={`${item.enabled ? '停用' : '启用'} ${item.name}`}
+            title={item.enabled && !item.canDisable ? item.disableBlockedReason : undefined}
+            disabled={busy || (item.enabled && !item.canDisable)} onClick={() => onToggle(item, !item.enabled)}
+          ><span /></button>
+        </div>
+      </div>
     </div>
   </article>;
 }
