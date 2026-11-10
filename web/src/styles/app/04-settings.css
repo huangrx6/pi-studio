@@ -7,7 +7,17 @@
 滚动容器；页面内容统一限宽 --settings-content 并居中。所有设置页复用同一套
 卡片、行高和字段栅格，改动时优先复用这些共享类而不是另起尺寸。 */
 
-.settings-overlay { position: fixed; inset: 0; z-index: 60; display: flex; background: var(--bg); }
+/* 设置面跟随应用卡片内缩，保持同一张窗口卡片的外观。 */
+.settings-overlay {
+  position: fixed;
+  inset: var(--shell-top, 0px) var(--shell-gutter, 0px) var(--shell-gutter, 0px);
+  z-index: 60;
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-canvas);
+}
 .settings-nav { gap: var(--space-1); -webkit-app-region: drag; }
 .settings-nav-head { height: 44px; display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-1); flex: none; font-size: var(--text-lg); font-weight: var(--weight-semibold); }
 .settings-nav-head .icon-button { margin-left: auto; }

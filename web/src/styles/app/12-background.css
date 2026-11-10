@@ -8,7 +8,8 @@
  * compounds independently from component to component.
  */
 .app { position: relative; }
-.background-layer { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: var(--bg); }
+/* 壁纸铺满整个视口，位于应用卡片之外；fixed 不会被卡片的 overflow 裁剪。 */
+.background-layer { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: var(--surface-canvas); }
 .background-layer-media {
   position: absolute;
   inset: calc(-2px - var(--background-media-blur, 0px));
@@ -21,6 +22,7 @@
   transform: translateZ(0);
 }
 .background-layer-soften { position: absolute; inset: 0; background: var(--bg); opacity: .04; }
+.app { position: relative; z-index: 1; }
 .app > .sidebar,
 .app > .main { z-index: 1; }
 .app.has-custom-background > .background-layer { visibility: visible !important; }

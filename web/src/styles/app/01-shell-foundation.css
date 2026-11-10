@@ -54,7 +54,26 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 isolation 建立独立层叠上下文，配合下面的 :has 规则在设置全屏时隐藏其余兄弟
 节点。按钮、输入框和图标尺寸统一走共享控件令牌，保证各面板手感一致。 */
 
-.app { display: flex; height: 100dvh; overflow: hidden; isolation: isolate; }
+/* 方案 A：应用窗口是一张不透明卡片，壁纸（.background-layer，fixed）只在四周留白可见。
+   顶部留 36px 给 macOS 红绿灯，左右与底部各 12px。 */
+.app {
+  --shell-top: 0px;
+  --shell-gutter: 0px;
+  display: flex;
+  height: calc(100dvh - var(--shell-top) - var(--shell-gutter));
+  margin: var(--shell-top) var(--shell-gutter) var(--shell-gutter);
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-canvas);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 35%);
+}
+
+.app.has-custom-background {
+  --shell-top: 36px;
+  --shell-gutter: 12px;
+}
 .app:has(.settings-overlay) > :is(.background-layer, .sidebar, .main) { visibility: hidden; }
 .icon-button { display: inline-grid; place-items: center; width: var(--icon-button); height: var(--icon-button); flex: none; padding: 0; border-radius: var(--radius-control); color: var(--icon); }
 /* 图标按钮的图标一律 sm：不再让各面板自己把盒子改成 24/29/32 或把图标改成 13/15。 */

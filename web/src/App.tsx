@@ -10,6 +10,7 @@ import { SettingsOverlay } from './shell/SettingsOverlay';
 import { useAppFoundation } from './shell/useAppFoundation';
 import { useWindowChrome } from './shell/useWindowChrome';
 import { useConversationController } from './shell/useConversationController';
+import { ComparisonWorkbench } from './features/comparison/ComparisonWorkbench';
 import { WorkbenchPane } from './shell/right-panel/WorkbenchPane';
 import { MarkdownActions } from './shared/markdown-actions';
 import { errorText } from './shared/error-text';
@@ -198,7 +199,11 @@ export function App() {
     notifyExtension,
     comparisonByParent,
     setComparisonByParent,
-    activeSessionComparison,
+    comparisonStartPending,
+    comparisonStarting,
+    setComparisonStarting,
+    comparisonPanelContext,
+    setComparisonPanelContext,
     returnToMainAgent,
     openModelComparison,
     openTrace,
@@ -296,16 +301,17 @@ export function App() {
 
   return (
     <MarkdownActions.Provider value={markdownActionsValue}>
+    {/* 壁纸在应用卡片之外：卡片内所有表面不透明，壁纸只在四周留白可见。 */}
+    {preferences.backgroundMedia && <BackgroundLayer
+      media={preferences.backgroundMedia}
+      opacity={preferences.backgroundOpacity}
+      blur={preferences.backgroundBlur}
+      onError={() => handleBackgroundUnavailable(preferences.backgroundMedia!.url)}
+    />}
     <div
       className={`app ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${filesOpen && panelFullscreen ? 'is-panel-fullscreen' : ''} ${preferences.backgroundMedia ? 'has-custom-background' : ''}`}
       style={backgroundStyle}
     >
-      {preferences.backgroundMedia && <BackgroundLayer
-        media={preferences.backgroundMedia}
-        opacity={preferences.backgroundOpacity}
-        blur={preferences.backgroundBlur}
-        onError={() => handleBackgroundUnavailable(preferences.backgroundMedia!.url)}
-      />}
       {actionPaletteOpen && <ConversationActionPalette
         actions={availableConversationActions}
         loading={actionResourcesLoading}
@@ -381,7 +387,6 @@ export function App() {
           filesOpen,
         }}
         header={{
-          comparisonBranchCount: activeSessionComparison?.result.branches.length ?? 0,
           conversationDetailExtensionCount: conversationDetailExtensionItems.length,
           openNotificationSession,
           runNotificationAction,
@@ -391,7 +396,6 @@ export function App() {
           },
           returnToMainAgent,
           openAgentOverview: subagentWorkspace.openAgentOverview,
-          openModelComparison,
           openConversationExtensionHub,
           openTrace,
         }}
@@ -436,13 +440,6 @@ export function App() {
           sendPrompt: sendPromptFromExtension,
           notify: notifyExtension,
           openHub: openConversationExtensionHub,
-        }}
-        comparison={{
-          byParent: comparisonByParent,
-          setByParent: setComparisonByParent,
-          loadState,
-          openSession,
-          openSettings: (page) => { void openSettings(page); },
         }}
         subagents={subagentWorkspace}
         outline={{
@@ -654,6 +651,27 @@ export function App() {
 
       {filesOpen && <WorkbenchPane
         controller={workbench}
+        onOpenComparison={openModelComparison}
+        comparisonPanel={<ComparisonWorkbench
+          context={comparisonPanelContext}
+          starting={comparisonStarting}
+          onStartingChange={setComparisonStarting}
+          startPending={comparisonStartPending}
+          onContextChange={setComparisonPanelContext}
+          history={comparisonByParent}
+          setHistory={setComparisonByParent}
+          workspace={workspace}
+          modelSelection={modelSelection}
+          onOpenSettings={() => void openSettings('models')}
+          onAdopt={id => {
+            void loadState().catch(() => {});
+            void openSession({
+              id, cwd: comparisonPanelContext?.cwd || workspace, title: '模型评估',
+              kind: 'durable', goal: '', pinned: false, archived: false,
+              createdAt: Date.now(), updatedAt: Date.now(), messageCount: 0,
+            });
+          }}
+        />}
         workspace={workspace}
         session={session}
         modelSelection={modelSelection}
