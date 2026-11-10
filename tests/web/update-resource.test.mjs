@@ -75,10 +75,14 @@ test('install failure retains downloaded state, rejects to dialog, and releases 
   const retry = h.resource.install(); await tick(); h.calls[2].resolve({ started: true }); await retry;
 });
 
-test('download target autoopens once; a new build or explicit menu request opens again', async () => {
-  const h = harness(); await tick(); const first = snapshot('downloaded', { latestVersion: '1', latestBuildId: 'a' });
-  h.emit(first); h.emit(first); h.emit(snapshot('available')); h.emit(first); assert.equal(h.opens, 1);
-  h.emit({ ...first, latestBuildId: 'b' }); assert.equal(h.opens, 2); h.open(); assert.equal(h.opens, 3);
+test('available and ready targets autoopen once each; a new build or explicit request opens again', async () => {
+  const h = harness(); await tick();
+  const available = snapshot('available', { latestVersion: '2', latestBuildId: 'a' });
+  h.emit(available); h.emit(available); assert.equal(h.opens, 1);
+  const ready = snapshot('downloaded', { latestVersion: '2', latestBuildId: 'a' });
+  h.emit(ready); h.emit(ready); h.emit(available); assert.equal(h.opens, 2);
+  h.emit({ ...ready, latestBuildId: 'b' }); assert.equal(h.opens, 3);
+  h.open(); assert.equal(h.opens, 4);
 });
 
 test('dispose ignores old event/read/action completion and unsubscribes both listeners', async () => {

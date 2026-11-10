@@ -1,5 +1,5 @@
 import {
-  Bot, MessageSquare, PanelLeft, PanelRightClose, PanelRightOpen, Plug,
+  ArrowUp, Bot, Download, LoaderCircle, MessageSquare, PanelLeft, PanelRightClose, PanelRightOpen, Plug,
 } from 'lucide-react';
 import {
   NotificationCenter,
@@ -9,7 +9,15 @@ import { ConversationTraceTab, type ConversationTraceSummary } from './Conversat
 import { ExtensionChips, type ExtensionChipEntry } from '../features/extensions/ExtensionChips';
 import type { ExtensionSettingsPage, ExtensionUiItem, ExtensionUiSnapshot } from '../types/extension-types';
 
+/** 顶栏的更新入口：有可更新时替代侧栏品牌旁的旧徽标。 */
+export type UpdateEntryState = 'available' | 'downloading' | 'downloaded';
+
 type ConversationHeaderProps = {
+  update?: {
+    state: UpdateEntryState;
+    latestVersion?: string;
+    onOpen: () => void;
+  } | null;
   sidebarCollapsed: boolean;
   onExpandSidebar: () => void;
   isNewConversation: boolean;
@@ -75,6 +83,7 @@ export function ConversationHeader({
   onOpenTrace,
   showTrace,
   traceSummary,
+  update,
 }: ConversationHeaderProps) {
   return (
     <>
@@ -95,6 +104,23 @@ export function ConversationHeader({
             onSendPrompt={onSendPromptFromExtension}
             onNotify={onNotifyExtension}
           />
+          {update && <button
+            type="button"
+            className={`icon-button update-entry is-${update.state}`}
+            aria-label={update.state === 'downloaded'
+              ? '更新已下载，点击安装'
+              : update.state === 'downloading'
+                ? '正在下载更新，点击查看进度'
+                : `有新版本${update.latestVersion ? ` v${update.latestVersion}` : ''}，点击查看`}
+            title={update.state === 'downloaded'
+              ? '更新已下载，点击安装'
+              : update.state === 'downloading'
+                ? '正在下载更新'
+                : `发现新版本${update.latestVersion ? ` v${update.latestVersion}` : ''}`}
+            onClick={update.onOpen}
+          >
+            {update.state === 'downloading' ? <LoaderCircle className="spin" /> : update.state === 'downloaded' ? <ArrowUp /> : <Download />}
+          </button>}
           <NotificationCenter
             items={notifications}
             onMarkAllRead={onMarkAllRead}

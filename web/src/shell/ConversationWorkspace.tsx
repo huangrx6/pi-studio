@@ -90,6 +90,8 @@ type ConversationShell = {
 };
 
 type HeaderState = {
+  /** 顶栏更新入口；没有可更新目标时为 null。 */
+  update: ComponentProps<typeof ConversationHeader>['update'];
   conversationDetailExtensionCount: number;
   openNotificationSession: (id: string) => Promise<void>;
   runNotificationAction: (item: AppNotification) => Promise<void>;
@@ -224,6 +226,7 @@ export function ConversationWorkspace({
     <main className={`main ${isNewConversation ? 'is-new-conversation' : ''}`} aria-busy={sessionLoading}>
       <div className={`chat-loading-line ${sessionLoading ? 'is-visible' : ''}`} />
       <ConversationHeader
+        update={header.update}
         sidebarCollapsed={sidebarCollapsed}
         onExpandSidebar={() => setSidebarCollapsed(false)}
         isNewConversation={isNewConversation}

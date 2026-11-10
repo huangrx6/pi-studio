@@ -331,9 +331,6 @@ export function App() {
         onClose={() => setActionPaletteOpen(false)}
       />}
       <AppSidebar
-        updateSnapshot={updateSnapshot}
-        updateProgress={updateProgress}
-        onOpenUpdateDialog={openUpdateDialog}
         onStartSession={() => void startSession()}
         onOpenTemporaryChat={openTemporaryChat}
         onOpenSettings={(page) => { void openSettings(page); }}
@@ -398,6 +395,13 @@ export function App() {
           filesOpen,
         }}
         header={{
+          update: updateSnapshot.state === 'available' || updateSnapshot.state === 'downloading' || updateSnapshot.state === 'downloaded'
+            ? {
+              state: updateSnapshot.state,
+              latestVersion: updateSnapshot.latestVersion,
+              onOpen: openUpdateDialog,
+            }
+            : null,
           conversationDetailExtensionCount: conversationDetailExtensionItems.length,
           openNotificationSession,
           runNotificationAction,

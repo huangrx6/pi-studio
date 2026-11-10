@@ -52,6 +52,22 @@
   font: var(--text-13)/1.5 var(--mono);
 }
 
+/* 顶栏更新入口：可用时带一个警示点，下载中旋转，已就绪用强调色。 */
+.update-entry { position: relative; }
+.update-entry.is-available { color: var(--accent); }
+.update-entry.is-available::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-round);
+  background: var(--accent);
+}
+.update-entry.is-downloading { color: var(--muted); }
+.update-entry.is-downloaded { color: var(--accent); }
+
 .markdown-code {
   margin: 12px 0;
   overflow: hidden;

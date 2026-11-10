@@ -13,7 +13,6 @@
 html[data-window-fullscreen='true'] .sidebar { padding-top: 0; }
 html[data-window-fullscreen='true'] .brand { height: var(--header-height); }
 /* 品牌行接管标题行后，更新徽标要让出右侧的折叠开关（28px 按钮 + 12px 边距 + 8px 间隙）。 */
-html[data-window-fullscreen='true'] .brand-update { right: 48px; }
 /* 一条贯穿三栏的分隔线：主栏标题行补上边框，会话标签行让出这条线。 */
 html[data-window-fullscreen='true'] .chat-header { border-bottom: 1px solid var(--divider); }
 html[data-window-fullscreen='true'] .chat-tabs { border-bottom-color: var(--transparent); }

@@ -1,8 +1,7 @@
 import {
-  ChevronsDown, ChevronsUp, FolderOpen, Layers3, LoaderCircle, MessageCirclePlus,
-  MessageSquare, PanelLeft, Search, Settings, Sparkles, SquarePen, ArrowUp,
+  ChevronsDown, ChevronsUp, FolderOpen, Layers3, MessageCirclePlus,
+  MessageSquare, PanelLeft, Search, Settings, SquarePen, ArrowUp,
 } from 'lucide-react';
-import type { UpdateSnapshot } from '../types/update-types';
 import { ExtensionSlot, type ExtensionNotice } from '../features/extensions/ExtensionSlot';
 import { BrandMark, type SettingsTab } from './app-shell-config';
 import type { PiWorkspace } from './app-types';
@@ -13,9 +12,6 @@ import { SidebarSearch } from './SidebarSearch';
 import type { SidebarSessionFilter } from './sidebar-filter';
 
 type AppSidebarProps = {
-  updateSnapshot: UpdateSnapshot;
-  updateProgress: number | null;
-  onOpenUpdateDialog: () => void;
   onStartSession: () => void;
   onOpenTemporaryChat: () => void;
   onOpenSettings: (page?: SettingsTab) => void;
@@ -52,9 +48,6 @@ type AppSidebarProps = {
 };
 
 export function AppSidebar({
-  updateSnapshot,
-  updateProgress,
-  onOpenUpdateDialog,
   onStartSession,
   onOpenTemporaryChat,
   onOpenSettings,
@@ -96,34 +89,6 @@ export function AppSidebar({
       <div className="brand">
         <BrandMark />
         <span className="brand-name">Pi Studio</span>
-        {(updateSnapshot.state === 'available'
-          || updateSnapshot.state === 'downloading'
-          || updateSnapshot.state === 'downloaded') && <button
-            type="button"
-            className={`brand-update is-${updateSnapshot.state}`}
-            aria-label={updateSnapshot.state === 'downloaded'
-              ? '重启并安装更新'
-              : updateSnapshot.state === 'downloading'
-                ? `正在下载 Pi Studio 更新${updateProgress === null ? '' : `，${Math.round(updateProgress)}%`}`
-                : updateSnapshot.updateKind === 'same-version'
-                  ? `Pi Studio ${updateSnapshot.latestVersion ? `v${updateSnapshot.latestVersion} ` : ''}有新构建`
-                  : `Pi Studio ${updateSnapshot.latestVersion ? `v${updateSnapshot.latestVersion} ` : ''}可以更新`}
-            title={updateSnapshot.state === 'downloaded'
-              ? `Pi Studio ${updateSnapshot.latestVersion ? `v${updateSnapshot.latestVersion} ` : ''}已下载，点击安装`
-              : updateSnapshot.state === 'downloading'
-                ? `正在下载 Pi Studio 更新${updateProgress === null ? '' : ` · ${Math.round(updateProgress)}%`}`
-                : updateSnapshot.updateKind === 'same-version'
-                  ? `发现 Pi Studio ${updateSnapshot.latestVersion ? `v${updateSnapshot.latestVersion}` : '当前版本'} 的新构建`
-                  : `发现 Pi Studio ${updateSnapshot.latestVersion ? `v${updateSnapshot.latestVersion}` : '新版本'}`}
-            onClick={onOpenUpdateDialog}
-          >
-            {updateSnapshot.state === 'downloading'
-              ? <LoaderCircle className="spin" />
-              : updateSnapshot.state === 'downloaded'
-                ? <ArrowUp />
-                : <Sparkles />}
-            {updateSnapshot.state === 'available' && <i aria-hidden="true" />}
-          </button>}
       </div>
       <button className="new-chat" title="新会话" onClick={onStartSession}><SquarePen /><span>新会话</span></button>
       <nav className="nav">

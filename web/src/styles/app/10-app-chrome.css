@@ -1,74 +1,7 @@
 /* Split from the legacy app.css entry. Import order is part of the cascade. */
 
 
-/* Brand update control and the shared desktop updater surface. */
-.brand-update {
-  position: absolute;
-  top: 50%;
-  right: 12px;
-  width: 28px;
-  height: 28px;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  place-items: center;
-  transform: translateY(-50%);
-  border: 1px solid var(--accent-border);
-  border-radius: var(--radius-control);
-  color: var(--on-button);
-  background: var(--button-bg);
-  box-shadow: var(--shadow-card);
-  isolation: isolate;
-}
-.brand-update::before {
-  position: absolute;
-  inset: -1px;
-  z-index: -1;
-  content: '';
-  border: 1px solid var(--accent-border);
-  border-radius: inherit;
-  opacity: .45;
-  animation: updateAttention 2.4s ease-out infinite;
-}
-.brand-update:hover { border-color: var(--accent-hover); background: var(--button-hover); }
-.brand-update:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; }
-.brand-update svg { width: var(--icon-md); height: var(--icon-md); stroke-width: 1.9; }
-.brand-update.is-available svg { animation: updateGlyph 2.4s ease-in-out infinite; }
-.brand-update.is-downloading .spin { color: var(--on-button); animation-duration: .85s; }
-.brand-update.is-downloaded { border-color: var(--success-border); background: var(--success); color: var(--surface); }
-.brand-update.is-downloaded:hover { background: var(--success); }
-.brand-update.is-downloaded svg { animation: updateReady .42s ease-out; }
-.brand-update > i {
-  position: absolute;
-  top: -3px;
-  right: -3px;
-  width: 8px;
-  height: 8px;
-  border: 2px solid var(--sidebar-bg);
-  border-radius: 50%;
-  background: var(--warning);
-  animation: updateDot 1.8s ease-in-out infinite;
-}
 
-@keyframes updateAttention {
-  0%, 58%, 100% { opacity: .35; transform: scale(1); }
-  72% { opacity: .08; transform: scale(1.22); }
-  88% { opacity: .35; transform: scale(1); }
-}
-@keyframes updateGlyph {
-  0%, 55%, 100% { transform: rotate(0) scale(1); }
-  64% { transform: rotate(-10deg) scale(1.12); }
-  72% { transform: rotate(8deg) scale(.96); }
-  80% { transform: rotate(0) scale(1.04); }
-}
-@keyframes updateDot {
-  0%, 100% { opacity: .55; transform: scale(.82); }
-  50% { opacity: 1; transform: scale(1.08); }
-}
-@keyframes updateReady {
-  from { opacity: 0; transform: translateY(4px) scale(.82); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
 
 /* Agent fleet and child-session inspection.
  *

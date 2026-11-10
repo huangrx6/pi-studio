@@ -14,7 +14,9 @@ export function createUpdateResource({ api, onChange, onOpen }: {
   let started = false;
   let revision = 0;
   let snapshot: UpdateSnapshot = { currentVersion: '', state: 'idle' };
-  const announcedDownloads = new Set<string>();
+  // 每个「可更新 / 可安装」目标只自动弹一次：用户关掉之后不再重复打断，
+  // 顶栏的入口按钮继续留着。
+  const announcedTargets = new Set<string>();
   let pending: Promise<void> | null = null;
   let pendingAction: UpdateAction | null = null;
   let unsubscribe = () => {};
@@ -24,10 +26,10 @@ export function createUpdateResource({ api, onChange, onOpen }: {
     snapshot = next;
     revision += 1;
     onChange(next);
-    if (next.state === 'downloaded') {
-      const target = JSON.stringify([next.latestVersion ?? next.currentVersion, next.latestBuildId ?? '']);
-      if (!announcedDownloads.has(target)) {
-        announcedDownloads.add(target);
+    if (next.state === 'available' || next.state === 'downloaded') {
+      const target = JSON.stringify([next.state, next.latestVersion ?? next.currentVersion, next.latestBuildId ?? '']);
+      if (!announcedTargets.has(target)) {
+        announcedTargets.add(target);
         onOpen();
       }
     }
