@@ -286,6 +286,19 @@ export function ComposerDock({
       onSendAll={() => void sendAllQueued()}
       onReorder={reorderQueued}
     />}
+    {!isNewConversation && footerExtensionItems.length > 0 && (
+      <ConversationExtensionDock
+        items={footerExtensionItems}
+        surface={extensionSurface}
+        placement="footer"
+        cwd={session?.cwd}
+        sessionId={session?.id}
+        modelRef={modelSelection.modelRef}
+        onOpenSettings={(page) => { if (page) onOpenSettings(page); }}
+        onSendPrompt={sendPromptFromExtension}
+        onNotify={notifyExtension}
+      />
+    )}
     {isNewConversation && !workspace && <p id="workspace-selection-hint" className="sr-only" role="status">选择工作区后才能发送第一条消息</p>}
     <div className="composer-wrap" ref={composerWrapRef}>
       {composerMenu && <ComposerSuggestions
@@ -564,19 +577,6 @@ export function ComposerDock({
       onSendPrompt={sendPromptFromExtension}
       onNotify={notifyExtension}
     />
-    {!isNewConversation && footerExtensionItems.length > 0 && (
-      <ConversationExtensionDock
-        items={footerExtensionItems}
-        surface={extensionSurface}
-        placement="footer"
-        cwd={session?.cwd}
-        sessionId={session?.id}
-        modelRef={modelSelection.modelRef}
-        onOpenSettings={(page) => { if (page) onOpenSettings(page); }}
-        onSendPrompt={sendPromptFromExtension}
-        onNotify={notifyExtension}
-      />
-    )}
     {isNewConversation && error && <ConversationError className="new-conversation-error" message={error} onDismiss={() => setError(null)} />}
   </div>;
 }
