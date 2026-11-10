@@ -89,14 +89,14 @@
   --leading-tight: 1.3;
   --leading-normal: 1.5;
   --leading-body: 1.6;
-  --leading-relaxed: 1.7;
+  --leading-relaxed: 1.75;
   --chat-line-height: var(--leading-relaxed);
   --sidebar-w: 280px;
   /* The workbench should support code and file inspection without taking over
      the conversation. Users can still resize it from the splitter; this is
      the comfortable default for the common two-column layout. */
   --panel-w: 390px;
-  --content: 860px;
+  --content: 740px;
   /* 轨迹页保持稳定的阅读列，详情通过弹层承载长内容。 */
   --trace-content: 960px;
   /* 会话一级视图共用同一组内容宽度和左右留白；窗口或主面板变窄时只改
