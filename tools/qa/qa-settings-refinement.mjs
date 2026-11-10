@@ -237,15 +237,18 @@ try {
     const summary = document.querySelector('.general-background-summary').getBoundingClientRect();
     const preview = document.querySelector('.background-media-preview').getBoundingClientRect();
     const ranges = document.querySelector('.general-background-ranges').getBoundingClientRect();
+    const label = document.querySelector('.general-background-ranges .settings-range-copy strong').getBoundingClientRect();
     return {
       summaryHeight: Math.round(summary.height),
       previewTop: Math.round(preview.top - ranges.top),
       previewBottom: Math.round(preview.bottom - ranges.bottom),
+      labelOffset: Math.round(label.top - preview.top),
     };
   });
   assert.equal(summaryGeometry.summaryHeight, 56, `background summary is one 56px row: ${JSON.stringify(summaryGeometry)}`);
   assert.equal(summaryGeometry.previewTop, 0, `preview and sliders share a top edge: ${JSON.stringify(summaryGeometry)}`);
   assert.ok(Math.abs(summaryGeometry.previewBottom) <= 1, `preview and sliders share a bottom edge: ${JSON.stringify(summaryGeometry)}`);
+  assert.equal(summaryGeometry.labelOffset, 0, `first slider label starts at the preview top edge: ${JSON.stringify(summaryGeometry)}`);
   result.backgroundGeometry = summaryGeometry;
   const slider = content.getByRole('slider', { name: /背景透明度/ });
   await slider.waitFor();

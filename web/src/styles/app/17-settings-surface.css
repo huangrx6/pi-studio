@@ -643,7 +643,13 @@
   background: var(--transparent);
 }
 
-.settings-content .general-background-ranges .settings-range-control:first-child { border-top: 0; }
+/* 第一行不要顶部内边距：标签与左侧预览图的上沿对齐，而不是低 14px。 */
+.settings-content .general-background-ranges .settings-range-control:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.settings-content .general-background-ranges .settings-range-control:last-child { padding-bottom: 0; }
 
 .settings-content .general-background-ranges .settings-range-control:hover:not(.is-disabled) { background: var(--transparent); }
 
