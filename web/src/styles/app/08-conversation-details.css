@@ -317,6 +317,7 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 列表与批处理操作。列表限高并滚动，队列为空时整个面板不渲染。 */
 
 .queued-panel { width: 100%; max-width: var(--content); margin: 0 auto 8px; }
+/* 与计划胶囊同一套排版：左侧「图标 + 标题」，右侧「计数 + chevron」。 */
 .queued-panel-head {
   display: flex;
   align-items: center;
@@ -324,18 +325,17 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
   gap: var(--space-2);
   width: 100%;
   min-height: 28px;
-  padding: 0 8px 0 6px;
+  padding: 0 11px;
   border-radius: var(--radius-tag);
-  color: var(--text-3);
   text-align: left;
 }
 .queued-panel-head:hover { background: var(--surface-hover); }
-.queued-panel-title { display: inline-flex; align-items: center; gap: 5px; min-width: 0; font-size: var(--text-sm); }
-.queued-panel-title svg { width: var(--icon-xs); height: var(--icon-xs); flex: none; }
-.queued-panel-title b { margin-left: 2px; color: var(--text-3); font-weight: var(--weight-medium); }
-.queued-panel-head > svg { width: var(--icon-xs); height: var(--icon-xs); flex: none; color: var(--text-3); transition: transform var(--transition); }
-.queued-panel-head > svg.is-flipped { transform: rotate(180deg); }
-.queued-panel.is-expanded .queued-panel-head { color: var(--text-2); }
+.queued-panel-title { display: inline-flex; align-items: center; gap: 6px; flex: none; color: var(--text); font-size: var(--text-xs); font-weight: var(--weight-semibold); letter-spacing: .02em; }
+.queued-panel-title svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; }
+.queued-panel-meta { display: inline-flex; align-items: center; gap: 6px; flex: none; color: var(--faint); }
+.queued-panel-meta b { font: var(--text-xs) var(--mono); font-weight: var(--weight-regular); }
+.queued-panel-meta svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; transition: transform var(--transition); }
+.queued-panel-meta svg.is-flipped { transform: rotate(180deg); }
 
 .queued-body {
   margin-top: 4px;

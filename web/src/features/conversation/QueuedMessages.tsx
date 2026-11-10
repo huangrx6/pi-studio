@@ -66,8 +66,11 @@ export function QueuedMessages({ items, canSteer = false, sendDisabled = false, 
 
   return <div className={`queued-panel${expanded ? ' is-expanded' : ''}`} aria-label="排队消息">
     <button type="button" className="queued-panel-head" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
-      <span className="queued-panel-title"><Clock3 />排队消息<b>{items.length}</b></span>
-      <ChevronDown className={expanded ? 'is-flipped' : undefined} aria-hidden="true" />
+      <span className="queued-panel-title"><Clock3 />消息</span>
+      <span className="queued-panel-meta">
+        <b>{items.length}</b>
+        <ChevronDown className={expanded ? 'is-flipped' : undefined} aria-hidden="true" />
+      </span>
     </button>
     {expanded && <div className="queued-body">
       <div className="queued-list">

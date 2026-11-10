@@ -98,7 +98,8 @@ test('the queue stays a single summary row until it is expanded', () => {
   const items = [item('one', 'one'), item('two', 'two')];
   const collapsed = render(items);
   assert.match(collapsed, /aria-expanded="false"/);
-  assert.match(collapsed, /排队消息/);
+  assert.match(collapsed, />消息</);
+  assert.match(collapsed, /queued-panel-meta/);
   assert.doesNotMatch(collapsed, /queued-item/);
   assert.doesNotMatch(collapsed, /发送全部/);
 
