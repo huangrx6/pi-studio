@@ -12,6 +12,8 @@ export interface UpdateSnapshot {
   progress?: number;
   transferred?: number;
   total?: number;
+  /** 本次更新的完整安装包大小（zip）。与 total 比较可判断是否为增量下载。 */
+  packageSize?: number;
   bytesPerSecond?: number;
   error?: string;
   checkedAt?: number;

@@ -20,6 +20,7 @@ test('update state follows check, availability and download lifecycle', () => {
       releaseName: 'A quieter workspace',
       releaseNotes: '<p>Better <strong>updates</strong>.</p>',
       releaseDate: '2026-10-29T00:00:00.000Z',
+      files: [{ url: 'Pi-Studio-1.2.3.dmg', size: 9_000 }, { url: 'Pi-Studio-1.2.3.zip', size: 150_021_368 }],
     },
   });
   assert.equal(state.state, 'available');
@@ -27,6 +28,7 @@ test('update state follows check, availability and download lifecycle', () => {
   assert.equal(state.latestBuildId, 'bbbbbbbbbbbbbbbb');
   assert.equal(state.updateKind, 'same-version');
   assert.equal(state.releaseNotes, 'Better updates.');
+  assert.equal(state.packageSize, 150_021_368, 'package size comes from the zip asset');
 
   state = reduceUpdateState(state, { type: 'progress', progress: {
     percent: 42.5,

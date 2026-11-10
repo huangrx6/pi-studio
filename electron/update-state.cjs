@@ -51,9 +51,16 @@ function normalizeReleaseNotes(value) {
     .slice(0, 8_000);
 }
 
+function zipSize(files) {
+  if (!Array.isArray(files)) return undefined;
+  const zip = files.find((file) => typeof file?.url === 'string' && /\.zip$/i.test(file.url));
+  return typeof zip?.size === 'number' && Number.isFinite(zip.size) && zip.size > 0 ? zip.size : undefined;
+}
+
 function fieldsFromInfo(info = {}) {
   return {
     latestVersion: typeof info.version === 'string' ? info.version : undefined,
+    packageSize: zipSize(info.files),
     releaseName: typeof info.releaseName === 'string' && info.releaseName.trim()
       ? info.releaseName.trim()
       : undefined,
@@ -82,6 +89,7 @@ function initialUpdateState(currentVersion = '', currentBuildId) {
     progress: undefined,
     transferred: undefined,
     total: undefined,
+    packageSize: undefined,
     bytesPerSecond: undefined,
     error: undefined,
   };

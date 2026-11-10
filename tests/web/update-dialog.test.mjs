@@ -14,6 +14,13 @@ const source = fs.readFileSync(new URL('../../web/src/features/update/UpdateDial
 const compiled = ts.transpileModule(source, {
   compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
+const notesSource = fs.readFileSync(new URL('../../web/src/features/update/update-notes.ts', import.meta.url), 'utf8');
+const notesCompiled = ts.transpileModule(notesSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+const notesContext = { exports: {}, require };
+vm.runInNewContext(notesCompiled, notesContext);
+
 function component(react = React) {
   const context = { exports: {}, require(id) {
     if (id.endsWith('.css')) return {};
@@ -21,6 +28,7 @@ function component(react = React) {
     if (id.endsWith('/DetailDialog')) return { DetailDialog: ({ children }) => React.createElement('section', null, children) };
     if (id.endsWith('/error-text')) return { errorText };
     if (id === './update-presentation') return { normalizeUpdateProgress };
+    if (id === './update-notes') return notesContext.exports;
     return require(id);
   } };
   vm.runInNewContext(compiled, context);
@@ -43,6 +51,7 @@ function harness(snapshot, callbacks = {}) {
       return [slots[index], value => { slots[index] = value; writes++; }];
     },
     useRef(initial) { const index = cursor++; return slots[index] ??= { current: initial }; },
+    useMemo(factory) { return factory(); },
     useEffect(effect) { if (!initialized) setup = effect; },
   });
   const props = { ...idleCallbacks, ...callbacks, snapshot: { ...base, ...snapshot } };
@@ -65,13 +74,14 @@ test('all updater states have one title and only meaningful actions', () => {
   const cases = [
     ['idle', '检查应用更新', '检查更新'], ['checking', '正在检查更新', null],
     ['available', '发现新版本', '下载更新'], ['downloading', '正在下载更新', null],
-    ['downloaded', '更新已下载', '立即重启并更新'], ['up-to-date', '已是最新版本', '检查更新'],
+    ['downloaded', '已准备好安装', '立即重启并更新'], ['up-to-date', '已是最新版本', '检查更新'],
     ['error', '更新未完成', '重新检查'], ['unsupported', '当前环境不支持更新', null],
   ];
-  for (const [state, title, action] of cases) {
+  for (const [state, kicker, action] of cases) {
     const html = render({ state, error: '真实错误原因' });
     assert.equal((html.match(/<h2\b/g) || []).length, 1);
-    assert.match(html, new RegExp(`>${title}</h2>`));
+    assert.match(html, new RegExp(`update-kicker[^>]*>${kicker}</p>`));
+    assert.match(html, /class="update-title">v1\./);
     assert.equal((html.match(/class="settings-save"/g) || []).length, action ? 1 : 0);
     if (action) assert.ok(html.includes(`>${action}</button>`));
     assert.doesNotMatch(html, /update-orbit|update-stage|update-status-pill|update-ready-card/);

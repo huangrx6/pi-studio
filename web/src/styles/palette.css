@@ -385,6 +385,9 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --background-surface-opacity: .88;
   --skeleton: var(--surface-active);
   --skeleton-shine: var(--surface-hover);
+  /* 只用于 mask-image 的 alpha 通道：折叠内容的渐隐需要一个完全不透明的起点，
+     颜色本身不会被看到。 */
+  --mask-opaque: #000;
   --focus-ring: 0 0 0 2px var(--focus-color);
   --live-ring: 0 0 0 2px var(--focus-color);
   /* 贴在一起的内容表面只靠 1px 边框分界，不再叠投影：输入框、选择器、按钮、

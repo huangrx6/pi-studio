@@ -1,28 +1,91 @@
-.detail-dialog.update-dialog { width: min(600px, 94vw); max-height: min(720px, calc(100dvh - 48px)); }
-.update-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); flex: none; padding: var(--space-5); }
-.update-header h2 { min-width: 0; margin: 0; color: var(--text); font-size: var(--text-lg); font-weight: var(--weight-semibold); line-height: var(--leading-normal); overflow-wrap: anywhere; }
+/* 更新对话框：版本号是主角，更新内容按小节读，进度只在需要时占版面。 */
+
+.detail-dialog.update-dialog { width: min(640px, 94vw); max-height: min(760px, calc(100dvh - 48px)); }
+
+/* ---- 头部 ------------------------------------------------------------- */
+
+.update-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); flex: none; padding: var(--space-6) var(--space-6) var(--space-4); }
+.update-heading { min-width: 0; display: grid; gap: 2px; }
+.update-kicker { margin: 0; color: var(--muted); font-size: var(--text-xs); font-weight: var(--weight-medium); letter-spacing: .02em; }
+.update-title { min-width: 0; margin: 0; color: var(--text); font-size: var(--text-title); font-weight: var(--weight-semibold); line-height: 1.25; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.update-subline { margin: 2px 0 0; color: var(--text); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.update-meta { margin: 0; color: var(--muted); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
 .update-close { flex: none; }
-.update-body { display: flex; min-height: 0; flex-direction: column; gap: var(--space-5); padding: 0 var(--space-5) var(--space-5); overflow-y: auto; }
+
+/* ---- 主体 ------------------------------------------------------------- */
+
+.update-body { display: flex; min-height: 0; flex-direction: column; gap: var(--space-4); padding: 0 var(--space-6) var(--space-5); overflow-y: auto; }
 .update-body > * { flex: none; }
-.update-versions { display: grid; gap: var(--space-2); margin: 0; font-size: var(--text-sm); line-height: var(--leading-body); }
-.update-versions > div { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: var(--space-3); }
-.update-versions dt { color: var(--muted); }
-.update-versions dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
-.update-versions code { font: var(--text-xs)/var(--leading-body) var(--mono); }
 .update-description { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-relaxed); }
-.update-download-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); color: var(--muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
-.update-progress-track { height: 6px; margin: var(--space-3) 0; overflow: hidden; border-radius: var(--radius-round); background: var(--surface-active); }
-.update-progress-track > span { display: block; height: 100%; background: var(--accent); }
-.update-download-speed { margin: 0 0 var(--space-3); color: var(--muted); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
-.update-error { margin: 0; color: var(--error); font-size: var(--text-sm); line-height: var(--leading-relaxed); white-space: pre-wrap; overflow-wrap: anywhere; }
-.update-notes-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); }
-.update-notes-head h3 { margin: 0; font-size: var(--text-sm); font-weight: var(--weight-semibold); }
-.update-notes-head > span { color: var(--muted); font-size: var(--text-xs); }
-.update-release-name { margin: var(--space-3) 0 0; font-size: var(--text-sm); overflow-wrap: anywhere; }
-.update-notes-copy { margin-top: var(--space-3); color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-relaxed); white-space: pre-wrap; overflow-wrap: anywhere; }
-.update-footer { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-2); flex: none; padding: var(--space-4) var(--space-5); border-top: 1px solid var(--divider); }
+.update-error { margin: 0; padding: 10px 12px; border: 1px solid var(--error-border); border-radius: var(--radius-control); background: var(--error-soft); color: var(--error); font-size: var(--text-sm); line-height: var(--leading-relaxed); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---- 下载进度 --------------------------------------------------------- */
+
+.update-download { display: grid; gap: var(--space-2); padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface-raised); }
+.update-download-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.update-download-size { color: var(--muted); }
+.update-download-percent { color: var(--text); font-weight: var(--weight-medium); }
+.update-progress-track { height: 8px; overflow: hidden; border-radius: var(--radius-round); background: var(--surface-active); }
+.update-progress-track > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width 240ms ease; }
+.update-download-foot { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); color: var(--muted); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+/* 校验阶段没有流量，靠斜纹滚动说明「还在处理」而不是卡住。 */
+.update-download.is-verifying .update-progress-track > span {
+  background-image: repeating-linear-gradient(45deg,
+    color-mix(in srgb, var(--surface-floating) 45%, transparent) 0 3px,
+    transparent 3px 9px);
+  background-size: 13px 13px;
+  animation: update-verify-stripes 800ms linear infinite;
+}
+
+@keyframes update-verify-stripes {
+  from { background-position: 0 0; }
+  to { background-position: 13px 0; }
+}
+
+/* ---- 已就绪 ----------------------------------------------------------- */
+
+.update-ready { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: var(--space-3); align-items: start; }
+.update-ready-icon { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--accent-border); border-radius: 8px; background: var(--accent-soft); color: var(--accent-foreground); }
+.update-ready-icon svg { width: 16px; height: 16px; }
+.update-ready-title { margin: 0 0 2px; color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-medium); overflow-wrap: anywhere; }
+
+/* ---- 更新内容 --------------------------------------------------------- */
+
+.update-notes { display: grid; gap: var(--space-2); }
+.update-notes-head h3 { margin: 0; color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.update-notes-body { position: relative; display: grid; gap: 4px; color: var(--text); font-size: var(--text-sm); line-height: 1.7; }
+.update-notes-body > * { margin: 0; }
+.update-notes-body strong { color: var(--text); font-weight: var(--weight-semibold); }
+.update-notes-body code { padding: 1px 4px; border: 1px solid var(--border); border-radius: 4px; background: var(--inline-code-bg); font: var(--text-xs)/1.5 var(--mono); }
+.update-note-heading { margin-top: var(--space-3) !important; color: var(--muted); font-size: var(--text-xs); font-weight: var(--weight-semibold); letter-spacing: .04em; }
+.update-note-heading:first-child { margin-top: 0 !important; }
+.update-note-list { display: grid; gap: 4px; padding-left: 18px; }
+.update-note-list li { overflow-wrap: anywhere; }
+.update-note-list li::marker { color: var(--muted); }
+.update-note-paragraph { color: var(--text); overflow-wrap: anywhere; }
+
+/* 折叠时让正文自己渐隐，而不是在上面盖一层色块——盖色块会与对话框底色差出矩形。 */
+.update-notes-body.is-collapsed {
+  max-height: 208px;
+  overflow: hidden;
+  mask-image: linear-gradient(180deg, var(--mask-opaque) 66%, transparent);
+}
+.update-notes-toggle { justify-self: start; display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; border: 0; background: none; color: var(--accent); font-size: var(--text-xs); font-weight: var(--weight-medium); cursor: pointer; }
+.update-notes-toggle svg { width: 14px; height: 14px; transition: transform var(--transition); }
+.update-notes-toggle:hover { text-decoration: underline; text-underline-offset: 3px; }
+.update-notes-toggle .is-flipped { transform: rotate(180deg); }
+
+/* ---- 底部 ------------------------------------------------------------- */
+
+.update-footer { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-2); flex: none; padding: var(--space-4) var(--space-6); border-top: 1px solid var(--divider); }
 .update-dialog button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
 @media (max-width: 520px) {
   .update-header, .update-body, .update-footer { padding-inline: var(--space-4); }
-  .update-versions > div { grid-template-columns: 72px minmax(0, 1fr); }
+  .update-title { font-size: var(--text-xl); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-progress-track > span, .update-notes-toggle svg { transition: none; }
+  .update-download.is-verifying .update-progress-track > span { animation: none; }
 }
