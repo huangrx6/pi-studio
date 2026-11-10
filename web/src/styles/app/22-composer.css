@@ -56,7 +56,12 @@
  */
 
 /* 用户消息整列贴右：附件条与气泡共用同一条右边缘。 */
-.user-message { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; min-width: 0; max-width: 100%; }
+.user-message { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; width: 100%; min-width: 0; max-width: 100%; }
+
+/* 右对齐后气泡的宽度改由内容决定。
+ * max-content：fit-content 会受 overflow-wrap 的 min-content 影响；
+ * break-word：短句不再被 `anywhere` 随便拆开，长串（URL/路径）仍会在需要时断行。 */
+.user-message > .user-bubble { width: max-content; max-width: 85%; overflow-wrap: break-word; word-break: normal; }
 
 .user-attachments {
   display: flex;
