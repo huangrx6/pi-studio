@@ -48,7 +48,7 @@ export function InstalledExtensionCard({ item, busy, compact = false, placements
       {/* 落点在左、操作在右，同一条基线：按钮自带内边距，单独占一行时文字会
         * 比左侧内容更靠右，看起来像没对齐。 */}
       <div className="extension-list-footer">
-        {!compact && onPlacementChange && placeable.map((panel) => {
+        {onPlacementChange && placeable.map((panel) => {
           const options = placementOptionsFor(panel.slots);
           // 单落点没有 both 这一档：缺省时把「两处」折算成它唯一的那一处，
           // 否则选择器会出现「没有任何一项被选中」的空状态。

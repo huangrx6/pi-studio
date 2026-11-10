@@ -49,6 +49,8 @@ export function InstalledExtensionsSection({ items, busy, placements, onPlacemen
           item={item}
           busy={busy}
           compact
+          placements={placements}
+          onPlacementChange={onPlacementChange}
           onOpenDetail={onOpenDetail}
           onToggle={onToggle}
           onDelete={onDelete}
