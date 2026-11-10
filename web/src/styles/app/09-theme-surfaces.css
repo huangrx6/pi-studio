@@ -93,11 +93,6 @@ body { background: var(--bg); color: var(--text); }
 .todo-row.is-active { background: var(--accent-soft); box-shadow: 0 0 0 1px var(--border); color: var(--text); }
 .todo-row.is-active .todo-row-icon { color: var(--accent); }
 .todo-row.is-complete .todo-row-icon { color: var(--success); }
-.queued-panel-title { color: var(--accent-foreground); }
-.queued-panel-title svg, .queued-send-all { color: var(--accent); }
-.queued-actions button:hover { color: var(--accent-foreground); background: var(--accent-soft); }
-.queued-item { border-color: var(--border); background: var(--surface); }
-.queued-send-all:hover { color: var(--accent-hover); }
 .detail-icon, .resource-icon { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-border); }
 .provider-icon { color: var(--muted); background: var(--surface-soft); border-color: var(--border); }
 body { --dsh-scrollbar-thumb: var(--scrollbar); --dsh-scrollbar-thumb-hover: var(--scrollbar-hover); }
