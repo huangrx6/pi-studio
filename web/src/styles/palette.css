@@ -387,14 +387,17 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --skeleton-shine: var(--surface-hover);
   --focus-ring: 0 0 0 2px var(--focus-color);
   --live-ring: 0 0 0 2px var(--focus-color);
-  --shadow-card: 0 1px 4px var(--shadow-color);
-  --shadow-composer: 0 4px 20px var(--shadow-color);
+  /* 贴在一起的内容表面只靠 1px 边框分界，不再叠投影：输入框、选择器、按钮、
+     气泡、卡片都是如此。投影只留给真正浮起来的层——菜单、tooltip、对话框、
+     抽屉与窗口外壳，那是「离开平面」的语义，而不是装饰。 */
+  --shadow-card: none;
+  --shadow-composer: none;
+  --shadow-control: none;
+  --shadow-thumb: none;
   --shadow-float: 0 6px 24px var(--shadow-color), 0 2px 6px var(--shadow-color);
   --shadow-popover: 0 14px 42px var(--shadow-deep), 0 2px 8px var(--shadow-color);
   --shadow-dialog: 0 24px 80px var(--shadow-deep);
   --shadow-drawer: -12px 0 40px var(--shadow-color);
-  --shadow-control: 0 1px 2px var(--shadow-color);
-  --shadow-thumb: 0 1px 3px var(--shadow-color);
   --loading-gradient: linear-gradient(90deg, var(--transparent), var(--loading), var(--transparent));
   --skeleton-gradient: linear-gradient(90deg, var(--skeleton), var(--skeleton-shine), var(--skeleton));
   --track-gradient: linear-gradient(180deg, var(--transparent), var(--border) 12%, var(--border) 88%, var(--transparent));

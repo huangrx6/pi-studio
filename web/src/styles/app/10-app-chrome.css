@@ -30,7 +30,7 @@
   opacity: .45;
   animation: updateAttention 2.4s ease-out infinite;
 }
-.brand-update:hover { border-color: var(--accent-hover); background: var(--button-hover); box-shadow: var(--shadow-float); }
+.brand-update:hover { border-color: var(--accent-hover); background: var(--button-hover); }
 .brand-update:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; }
 .brand-update svg { width: var(--icon-md); height: var(--icon-md); stroke-width: 1.9; }
 .brand-update.is-available svg { animation: updateGlyph 2.4s ease-in-out infinite; }

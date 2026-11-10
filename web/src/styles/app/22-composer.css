@@ -24,7 +24,7 @@
 /* 焦点不再用 3px 实心环：1px 边框 + 一层极淡的 tint 光晕。 */
 .composer:has(.composer-input textarea:focus) {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-tint), var(--shadow-float);
+  box-shadow: 0 0 0 3px var(--accent-tint);
 }
 
 .composer-bar {

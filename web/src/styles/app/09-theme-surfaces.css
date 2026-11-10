@@ -45,7 +45,7 @@ body { background: var(--bg); color: var(--text); }
 .dialog-footer .settings-save:hover:not(:disabled) { background: var(--button-hover); border-color: var(--button-hover); color: var(--on-button); }
 .settings-outline, .settings-add-button, .settings-back-button { background: var(--surface); border-color: var(--border-strong); color: var(--muted); }
 .composer { background: var(--surface); border-color: var(--border-strong); }
-.composer:has(.composer-input textarea:focus) { border-color: var(--focus-color); box-shadow: var(--focus-ring), var(--shadow-composer); }
+.composer:has(.composer-input textarea:focus) { border-color: var(--focus-color); box-shadow: var(--focus-ring); }
 .chat-loading-line { background: var(--loading-gradient); }
 .panel-tab.is-active { background: var(--accent-soft); color: var(--accent-foreground); }
 .switch { background: var(--switch-off); }
