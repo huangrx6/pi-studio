@@ -313,28 +313,39 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 @keyframes todo-breathe { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
 
 /* Local outgoing queue: visible, editable, and reorderable before it reaches Pi. */
-/* 本地待发队列：消息在真正发给 Pi 之前可见、可编辑、可拖拽排序；列表限高
-184px 并滚动。队列为空时整个面板不渲染（由组件控制），这里只负责有内容时的
-卡片和操作按钮。 */
+/* 本地待发队列：收起时只有一行摘要（与计划胶囊同一套语言），展开后才是逐条
+列表与批处理操作。列表限高并滚动，队列为空时整个面板不渲染。 */
 
-/* 排队消息与计划胶囊同一套语言：28px 单行、无底色、悬停才亮。 */
 .queued-panel { width: 100%; max-width: var(--content); margin: 0 auto 8px; }
 .queued-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
   min-height: 28px;
   padding: 0 8px 0 6px;
   border-radius: var(--radius-tag);
+  color: var(--text-3);
+  text-align: left;
 }
 .queued-panel-head:hover { background: var(--surface-hover); }
-.queued-panel-title { display: inline-flex; align-items: center; gap: 5px; color: var(--text-3); font-size: var(--text-sm); }
-.queued-panel-title svg { width: var(--icon-xs); height: var(--icon-xs); }
+.queued-panel-title { display: inline-flex; align-items: center; gap: 5px; min-width: 0; font-size: var(--text-sm); }
+.queued-panel-title svg { width: var(--icon-xs); height: var(--icon-xs); flex: none; }
 .queued-panel-title b { margin-left: 2px; color: var(--text-3); font-weight: var(--weight-medium); }
-.queued-panel-actions { display: inline-flex; align-items: center; gap: 10px; }
-.queued-send-all { color: var(--text-2); font-size: var(--text-sm); }
-.queued-send-all:hover { color: var(--text-1); }
-.queued-toggle { color: var(--text-3); font-size: var(--text-sm); }
-.queued-toggle:hover { color: var(--text-1); }
+.queued-panel-head > svg { width: var(--icon-xs); height: var(--icon-xs); flex: none; color: var(--text-3); transition: transform var(--transition); }
+.queued-panel-head > svg.is-flipped { transform: rotate(180deg); }
+.queued-panel.is-expanded .queued-panel-head { color: var(--text-2); }
 
-.queued-list { display: flex; flex-direction: column; gap: 1px; max-height: 184px; overflow: auto; }
+.queued-body {
+  margin-top: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+
+.queued-list { display: flex; flex-direction: column; gap: 1px; max-height: 184px; overflow: auto; padding: 4px; }
 
 .app .queued-panel .queued-item {
   display: flex;
@@ -353,11 +364,12 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .queued-grip { display: grid; place-items: center; width: 14px; height: 22px; flex: none; color: var(--text-3); opacity: .55; cursor: grab; }
 .queued-grip:active { cursor: grabbing; }
 .queued-grip svg { width: var(--icon-xs); height: var(--icon-xs); }
-.queued-copy { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
-.queued-text { overflow: hidden; color: var(--text-2); font-size: var(--text-sm); line-height: var(--leading-normal); text-overflow: ellipsis; white-space: nowrap; }
-.queued-error { overflow: hidden; color: var(--error); font-size: var(--text-sm); line-height: var(--leading-normal); text-overflow: ellipsis; white-space: nowrap; }
-.queued-state { overflow: hidden; color: var(--text-2); font-size: var(--text-sm); line-height: var(--leading-normal); text-overflow: ellipsis; white-space: nowrap; }
-.queued-meta { color: var(--text-3); font-size: var(--text-sm); }
+/* 一条排队项就是一行：正文截断、附件计数与状态跟在后面，不换行。 */
+.queued-copy { display: flex; align-items: baseline; gap: 8px; flex: 1; min-width: 0; }
+.queued-text { flex: 1; min-width: 0; overflow: hidden; color: var(--text-2); font-size: var(--text-sm); line-height: var(--leading-normal); text-overflow: ellipsis; white-space: nowrap; }
+.queued-error { flex: none; max-width: 46%; overflow: hidden; color: var(--error); font-size: var(--text-sm); line-height: var(--leading-normal); text-overflow: ellipsis; white-space: nowrap; }
+.queued-state { flex: none; max-width: 46%; overflow: hidden; color: var(--text-2); font-size: var(--text-sm); line-height: var(--leading-normal); text-overflow: ellipsis; white-space: nowrap; }
+.queued-meta { flex: none; color: var(--text-3); font-size: var(--text-sm); white-space: nowrap; }
 .queued-actions { display: flex; align-items: center; gap: 1px; flex: none; opacity: 0; transition: opacity var(--transition); }
 .queued-item:hover .queued-actions,
 .queued-item:focus-within .queued-actions { opacity: 1; }
@@ -365,4 +377,10 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .queued-actions button:hover { background: var(--surface-active); color: var(--text-1); }
 .queued-actions button:disabled { cursor: wait; opacity: .46; }
 .queued-actions svg { width: var(--icon-xs); height: var(--icon-xs); }
+
+/* 批处理操作放在列表底部：收起态不占版面，展开后与逐条操作分开。 */
+.queued-footer { display: flex; align-items: center; justify-content: flex-end; padding: 4px 6px 6px; border-top: 1px solid var(--divider); }
+.queued-send-all { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: var(--radius-tag); color: var(--text-2); font-size: var(--text-sm); }
+.queued-send-all:hover:not(:disabled) { background: var(--surface-hover); color: var(--text-1); }
+.queued-send-all:disabled { color: var(--text-3); cursor: default; }
 .composer textarea.has-queued::placeholder { color: var(--muted); -webkit-text-fill-color: var(--muted); }

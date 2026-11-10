@@ -12,31 +12,44 @@ const source = fs.readFileSync(
   new URL('../../web/src/features/conversation/QueuedMessages.tsx', import.meta.url),
   'utf8',
 );
-const context = { exports: {} };
-vm.runInNewContext(ts.transpileModule(source, {
+const compiled = ts.transpileModule(source, {
   compilerOptions: {
     jsx: ts.JsxEmit.ReactJSX,
     module: ts.ModuleKind.CommonJS,
     target: ts.ScriptTarget.ES2022,
   },
-}).outputText, {
-  ...context,
-  require(id) {
-    if (id === 'react') return React;
-    if (id === 'lucide-react') {
-      const Icon = () => null;
-      return {
-        ArrowUp: Icon,
-        Clock3: Icon,
-        GripVertical: Icon,
-        Pencil: Icon,
-        Trash2: Icon,
-      };
-    }
-    return require(id);
-  },
-});
-const { QueuedMessages } = context.exports;
+}).outputText;
+
+const icons = {
+  ArrowUp: () => null,
+  ChevronDown: () => null,
+  Clock3: () => null,
+  GripVertical: () => null,
+  Pencil: () => null,
+  Trash2: () => null,
+};
+
+/** 用给定的 React 实现加载组件：SSR 用真 React，展开态用把 expanded 置 true 的替身。 */
+function load(react) {
+  const context = { exports: {} };
+  vm.runInNewContext(compiled, {
+    ...context,
+    require(id) {
+      if (id === 'react') return react;
+      if (id === 'lucide-react') return icons;
+      return require(id);
+    },
+  });
+  return context.exports.QueuedMessages;
+}
+
+const Collapsed = load(React);
+// 组件里两个 useState 依次是拖动中的 id（null）和是否展开（false）。
+const expandedReact = {
+  ...React,
+  useState(initial) { return [initial === false ? true : initial, () => {}]; },
+};
+const Expanded = load(expandedReact);
 
 const item = (id, text, extra = {}) => ({
   id,
@@ -47,7 +60,20 @@ const item = (id, text, extra = {}) => ({
 });
 
 function render(items, overrides = {}) {
-  return renderToStaticMarkup(React.createElement(QueuedMessages, {
+  return renderToStaticMarkup(React.createElement(Collapsed, {
+    items,
+    canSteer: false,
+    onEdit() {},
+    onDelete() {},
+    onSendNow() {},
+    onSendAll() {},
+    onReorder() {},
+    ...overrides,
+  }));
+}
+
+function renderExpanded(items, overrides = {}) {
+  return renderToStaticMarkup(React.createElement(Expanded, {
     items,
     canSteer: false,
     onEdit() {},
@@ -68,8 +94,22 @@ function row(html, text) {
     ?? '';
 }
 
+test('the queue stays a single summary row until it is expanded', () => {
+  const items = [item('one', 'one'), item('two', 'two')];
+  const collapsed = render(items);
+  assert.match(collapsed, /aria-expanded="false"/);
+  assert.match(collapsed, /排队消息/);
+  assert.doesNotMatch(collapsed, /queued-item/);
+  assert.doesNotMatch(collapsed, /发送全部/);
+
+  const expanded = renderExpanded(items);
+  assert.match(expanded, /aria-expanded="true"/);
+  assert.equal((expanded.match(/class="queued-item /g) ?? []).length, 2);
+  assert.match(expanded, /class="queued-footer"/);
+});
+
 test('only the request awaiting Durable admission locks its row and explains why', () => {
-  const html = render([
+  const html = renderExpanded([
     item('pending', 'pending message', { admissionPending: true }),
     item('ready', 'ready message'),
   ]);
@@ -88,15 +128,15 @@ test('only the request awaiting Durable admission locks its row and explains why
 });
 
 test('global send guards disable sending without blocking safe edits to other rows', () => {
-  const html = render([item('ready', 'ready message')], { sendDisabled: true });
+  const html = renderExpanded([item('ready', 'ready message')], { sendDisabled: true });
   const ready = row(html, 'ready message');
   assert.equal((ready.match(/<button type="button" disabled=""/g) ?? []).length, 1);
   assert.match(html, /<button type="button" class="queued-send-all" disabled=""/);
 });
 
 test('idle queue actions use ordinary sending labels while running turns use steering labels', () => {
-  const idle = render([item('one', 'one')], { canSteer: false });
-  const running = render([item('one', 'one')], { canSteer: true });
+  const idle = renderExpanded([item('one', 'one')], { canSteer: false });
+  const running = renderExpanded([item('one', 'one')], { canSteer: true });
   assert.match(idle, />发送全部<\/button>/);
   assert.match(idle, /aria-label="立即发送"/);
   assert.match(running, />插话发送全部<\/button>/);
