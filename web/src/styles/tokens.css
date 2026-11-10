@@ -103,7 +103,7 @@
   gutter，所有视图随之同步收缩。 */
   --session-gutter: var(--space-8);
   --settings-content: 840px;
-  --header-height: 48px;
+  --header-height: 56px;
   --toolbar-height: 36px;
   /* 自定义背景的运行时默认值；BackgroundLayer 会按用户偏好覆盖这三个变量。 */
   --background-media-opacity: 68%;

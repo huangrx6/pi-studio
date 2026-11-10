@@ -26,8 +26,18 @@
 
 .sidebar-top-toggle { top: calc((var(--header-height) - 28px) / 2); right: var(--space-3); }
 
-.app.has-custom-background { --brand-leading: var(--space-4); }
-html[data-window-fullscreen='true'] .brand { padding-left: var(--space-4); }
+/* 有壁纸或全屏时品牌与侧栏内容同一条竖线（12px）；窗口模式仍让开红绿灯。 */
+.app.has-custom-background { --brand-leading: 12px; }
+html[data-window-fullscreen='true'] .brand { padding-left: 12px; }
+
+/* 「新会话」改成左对齐的列表入口，图标与品牌、导航行落在同一条竖线上。 */
+.new-chat { justify-content: flex-start; padding-inline: 12px; }
+
+/* 主栏：标题文字与标签文字共用同一个左边界。
+   标签行左内边距 16 + 标签自身 8 = 标题的 24。 */
+.chat-tabs { padding-inline: var(--space-4); }
+.chat-tab-list { padding-inline: 0; }
+.chat-tabs .tab { padding-inline: var(--space-2); }
 
 /* 空状态只有标题行，由它收口。 */
 .is-new-conversation .chat-header { border-bottom: 1px solid var(--divider); }

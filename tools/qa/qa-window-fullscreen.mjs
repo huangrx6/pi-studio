@@ -28,7 +28,7 @@ const env = {
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.PI_STUDIO_DEV;
 
-const HEADER = 48;
+const HEADER = 56;
 
 /** Measure the shared top rows, their dividers and the native chrome flag. */
 const topRows = (page) => page.evaluate(() => {
@@ -108,7 +108,7 @@ try {
   // Layout contract: the attribute alone switches every shared row.
   await setFullscreenAttribute(page, true);
   const attributeRows = await topRows(page);
-  assertSingleTitleRow(attributeRows, 'fullscreen', { brandPadding: '16px' });
+  assertSingleTitleRow(attributeRows, 'fullscreen', { brandPadding: '12px' });
   await page.screenshot({ path: path.join(output, '02-fullscreen.png') });
 
   // The update badge lives in the brand row; the collapse toggle owns the right edge.
@@ -162,7 +162,7 @@ try {
   }
   if (native) {
     await waitForChrome(page, true);
-    assertSingleTitleRow(await topRows(page), 'native fullscreen', { brandPadding: '16px' });
+    assertSingleTitleRow(await topRows(page), 'native fullscreen', { brandPadding: '12px' });
     await setNativeFullScreen(app, false);
     await waitForChrome(page, false);
     assertSingleTitleRow(await topRows(page), 'native fullscreen exit');
