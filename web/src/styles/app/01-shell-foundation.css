@@ -75,6 +75,9 @@ isolation 建立独立层叠上下文，配合下面的 :has 规则在设置全�
   border: 1px solid var(--border);
   box-shadow: var(--shadow-shell);
 }
+/* 全屏时没有红绿灯，卡片不需要再让出顶部：四周取同一个留白。 */
+html[data-window-fullscreen='true'] .app.has-custom-background { --shell-top: var(--shell-gutter); }
+
 .app:has(.settings-overlay) > :is(.background-layer, .sidebar, .main) { visibility: hidden; }
 .icon-button { display: inline-grid; place-items: center; width: var(--icon-button); height: var(--icon-button); flex: none; padding: 0; border-radius: var(--radius-control); color: var(--icon); }
 /* 图标按钮的图标一律 sm：不再让各面板自己把盒子改成 24/29/32 或把图标改成 13/15。 */
