@@ -91,7 +91,11 @@
   align-items: center;
   column-gap: var(--trace-gap);
   min-height: var(--trace-row);
-  padding: 0;
+  /* 负外边距抵消内边距：文字位置不动，悬停背景左右各多出 10px，
+   * 内容才不会贴着高亮块的边缘。 */
+  margin-inline: calc(var(--space-2) * -1 - 2px);
+  padding: 0 calc(var(--space-2) + 2px);
+  border-radius: var(--radius-tag);
   list-style: none;
   cursor: pointer;
 }
