@@ -216,6 +216,21 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     }
   }
 
+  /**
+   * 会话变更文件走受控读取（只允许本轮改过的路径）；不在变更记录里、但落在
+   * 当前工作区内的文件回退到普通预览，聊天引用与工作区树保持一致体验。
+   */
+  async function loadDiffPreview(tab: PanelTab): Promise<PanelFile> {
+    const target = tab.path!;
+    try {
+      return await window.piApi.turnDiffAbsoluteFile({ sessionId: tab.sessionId!, path: target });
+    } catch (error) {
+      const cwd = tab.cwd || workspaceRef.current || sessionRef.current?.cwd;
+      if (!cwd || !target.startsWith(`${cwd}/`)) throw error;
+      return loadWorkspacePreview(cwd, target.slice(cwd.length + 1));
+    }
+  }
+
   async function loadFileToTab(tab: PanelTab): Promise<boolean> {
     if (!tab.path) return false;
     const source = tab.source || (tab.path.startsWith('/') ? 'diff' : 'workspace');
@@ -235,7 +250,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
       const content: PanelFile = source === 'attachment'
         ? await window.piApi.attachmentFile({ path: tab.path })
         : source === 'diff'
-          ? await window.piApi.turnDiffAbsoluteFile({ sessionId: tab.sessionId!, path: tab.path })
+          ? await loadDiffPreview(tab)
           : await loadWorkspacePreview(tab.cwd!, tab.path);
       // A closed/reopened tab has a different read token. Never revive its data.
       if (!panelTabsRef.current.some(item => item.id === tab.id) || !cache.put(key, token, content)) return true;

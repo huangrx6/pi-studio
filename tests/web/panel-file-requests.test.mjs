@@ -6,7 +6,7 @@ import ts from 'typescript';
 import { createPanelFileCache, panelFileKey } from '../../web/src/shell/right-panel/panel-file-cache.ts';
 const source = fs.readFileSync(new URL('../../web/src/shell/right-panel/useAppWorkbench.ts', import.meta.url), 'utf8');
 const tree = ts.createSourceFile('useAppWorkbench.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const names = new Set(['setPanelTabs', 'setActivePanelTabId', 'loadWorkspacePreview', 'loadFileToTab', 'activatePanelTab', 'openFile', 'disposePanelTab', 'closePanelTab', 'loadTree']);
+const names = new Set(['setPanelTabs', 'setActivePanelTabId', 'loadWorkspacePreview', 'loadDiffPreview', 'loadFileToTab', 'activatePanelTab', 'openFile', 'disposePanelTab', 'closePanelTab', 'loadTree']);
 const functions = [];
 function visit(node) {
   if (ts.isFunctionDeclaration(node) && names.has(node.name?.text)) functions.push(node.getText(tree));
@@ -20,7 +20,7 @@ function visit(node) {
 visit(tree); assert.equal(functions.length, names.size);
 const code = ts.transpileModule(functions.join('\n') + '\nObject.assign(globalThis, { openFile, activatePanelTab, closePanelTab, loadTree });', { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 function harness() {
-  const reads = [], directories = [];
+  const reads = [], directories = [], diffs = [];
   const h = {
     panelFileKey, fileCacheRef: { current: createPanelFileCache() }, fileReadRef: { current: 0 },
     workspaceRef: { current: '/A' }, sessionRef: { current: { id: 'A', cwd: '/A' } },
@@ -34,11 +34,13 @@ function harness() {
     window: { piApi: {
       filePreview(cwd, path) { return new Promise((resolve, reject) => reads.push({ cwd, path, resolve, reject })); },
       files(cwd, path) { return new Promise((resolve, reject) => directories.push({ cwd, path, resolve, reject })); },
+      turnDiffAbsoluteFile(payload) { return new Promise((resolve, reject) => diffs.push({ payload, resolve, reject })); },
     } },
   };
   vm.runInNewContext(code, h);
   const reply = (index, text) => reads[index].resolve({ path: reads[index].path, kind: 'text', size: text.length, text });
-  return { h, reads, reply, directories };
+  const replyDiff = (index, text) => diffs[index].resolve({ path: diffs[index].payload.path, kind: 'text', size: text.length, text });
+  return { h, reads, reply, directories, diffs, replyDiff };
 }
 
 test('workspace file identity is retained through navigation; late A cannot replace B preview', async () => {
@@ -85,4 +87,28 @@ test('directory requests are separate from preview state and ignore old scopes a
   assert.equal(h.busy, undefined); assert.equal(h.error, undefined);
   const retry = h.loadTree('b'); directories[2].resolve({ path: 'b', entries: ['right'] }); await retry;
   assert.deepEqual(h.entries, ['right']); assert.equal(h.treeError, null);
+});
+
+
+test('absolute file outside the turn diff falls back to a workspace preview', async () => {
+  const { h, reads, diffs, reply, replyDiff } = harness();
+  const pending = h.openFile('/A/docs/notes.md', 'A', 'diff');
+  assert.equal(diffs.length, 1);
+  diffs[0].reject(new Error('文件不在当前会话的变更记录中'));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(reads.length, 1, 'fallback asks the preview service for a workspace read');
+  assert.equal(reads[0].cwd, '/A');
+  assert.equal(reads[0].path, 'docs/notes.md');
+  reply(0, 'notes data');
+  await pending;
+  assert.equal(h.file.text, 'notes data');
+});
+
+test('absolute file outside the workspace keeps the diff error', async () => {
+  const { h, reads, diffs } = harness();
+  const pending = h.openFile('/elsewhere/secret.txt', 'A', 'diff');
+  diffs[0].reject(new Error('文件不在当前会话的变更记录中'));
+  await pending;
+  assert.equal(reads.length, 0);
+  assert.equal(h.error, '文件不在当前会话的变更记录中');
 });
