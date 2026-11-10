@@ -34,7 +34,7 @@
 .app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
   .attachment-card.is-openable, .conversation-image-tile,
   .composer-attachment.is-openable, .message-action:not(:disabled),
-  .message-edit-cancel:not(:disabled), .activity-disclosure-summary,
+  .message-edit-cancel:not(:disabled),
   .tool-result-images-toggle, .file-change-item.is-openable,
   .file-change-more, .file-change-summary > header button,
   .todo-dock-head, .queued-panel-head, .queued-item,
