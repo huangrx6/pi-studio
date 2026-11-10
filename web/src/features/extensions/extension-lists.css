@@ -31,8 +31,9 @@
 .extension-placement-options button:hover { color: var(--text); }
 .extension-placement-options button[aria-pressed='true'] { background: var(--surface); color: var(--text); box-shadow: inset 0 0 0 1px var(--border); }
 
-.extension-list-row { display: flex; align-items: flex-start; gap: var(--space-4); min-width: 0; padding: var(--space-4) 0; border-bottom: 1px solid var(--divider); border-radius: var(--radius-control); }
-.extension-list-row:last-child { border-bottom: 0; }
+.extension-list-row { position: relative; display: flex; align-items: flex-start; gap: var(--space-4); min-width: 0; padding: var(--space-4) 0; border-radius: var(--radius-control); }
+/* 分割线单独画一条直线：行本身有圆角，border-bottom 会沿着圆角弯出两个弧。 */
+.extension-list-row:not(:last-child)::after { content: ''; position: absolute; inset: auto 0 0; height: 1px; background: var(--divider); }
 .extension-list-row.is-compact { align-items: center; padding: var(--space-3) 0; }
 .extension-list-row.is-compact .extension-list-title h3 { font-size: var(--text-sm); font-weight: var(--weight-medium); }
 .extension-list-row.is-compact .extension-list-meta { margin-top: 2px; }
