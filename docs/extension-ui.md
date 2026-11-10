@@ -101,7 +101,9 @@ Footer 与顶栏 chip 可以声明 `visibility`：
 - `always`（默认）：一直占位；
 - `while-active`：只在回合进行中渲染，空闲时把高度还给消息区。
 
-`status.chip` 是顶栏的状态入口。它渲染为一个 28px 图标按钮（`icon` 支持 `activity`、`gauge`、`timer`、`terminal`、`chart`，未识别的名字退回心跳图标），最多三个 chip 会按 `priority` 出现在通知按钮之前。悬停或键盘聚焦会展开同一份 compact 内容（因此它接受与 footer 相同的 block，最多两个），点击则打开 `details` 指向的详情面板。
+`status.chip` 是**会话视图**的顶栏状态入口。它渲染为一个 28px 图标按钮（`icon` 支持 `activity`、`gauge`、`timer`、`terminal`、`chart`，未识别的名字退回心跳图标），最多三个 chip 会按 `priority` 出现在通知按钮之前。
+
+chip 只在有真实会话时出现：新会话还是草稿态，没有 `sessionId`，扩展的数据源与 `details` 面板都无从指认，因此 Studio 一律不渲染 chip。需要「不管在哪个页面都在」的入口，请用 `status.bar`；需要「会话内的入口」，用 `status.chip`；需要「输入框附近的一行状态」，用 `conversation.footer`。悬停或键盘聚焦会展开同一份 compact 内容（因此它接受与 footer 相同的 block，最多两个），点击则打开 `details` 指向的详情面板。
 
 ```json
 [

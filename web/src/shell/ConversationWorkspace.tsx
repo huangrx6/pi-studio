@@ -31,6 +31,7 @@ import type {
   ExtensionUiItem,
 } from '../types/extension-types';
 import { ConversationHeader } from './ConversationHeader';
+import { scopedExtensionChips } from '../features/extensions/extension-chip-scope';
 import { ConversationTracePage } from './ConversationTraceMenu';
 import { buildTraceSummary } from '../features/conversation/trace-model';
 import {
@@ -213,6 +214,8 @@ export function ConversationWorkspace({
   const lastAssistantError = lastAssistantTurn?.kind === 'assistant'
     ? lastAssistantTurn.messages.at(-1)?.errorMessage
     : undefined;
+  // chip 属于会话视图：草稿态没有 session，交给纯函数统一裁掉。
+  const scopedChips = scopedExtensionChips(session?.id, extensions.chipItems);
   const showSessionError = Boolean(error)
     && !(Boolean(error) && !turnActive && lastAssistantError === error);
 
@@ -241,7 +244,7 @@ export function ConversationWorkspace({
         onReturnToMainAgent={header.returnToMainAgent}
         onOpenAgentOverview={header.openAgentOverview}
         onOpenConversationExtensionHub={header.openConversationExtensionHub}
-        chips={extensions.chipItems}
+        chips={scopedChips}
         extensionSurface={extensions.surface}
         cwd={session?.cwd}
         sessionId={session?.id}
