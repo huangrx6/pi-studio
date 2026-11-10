@@ -142,6 +142,7 @@ test('zero usage hides empty charts and zero-value workbench behind one first-ru
     react: React,
     'lucide-react': EmptyIcons,
     '../../shared/DatePicker': { DatePicker: () => null },
+    '../../shared/Select': { Select: () => null },
     '../../shared/InfoHint': { InfoHint: ({ label }) => React.createElement('span', null, label) },
     '../../shared/SettingsPageHeader': { SettingsPageHeader: Header },
     './UsageSparkline': { UsageSparkline: () => null },

@@ -148,16 +148,24 @@ try {
   result.checks.push('credential-input leave guard uses generic label without reflecting values; cancel preserves input and discard never writes credentials');
   await usage().locator('.usage-token-bar i').first().waitFor();
   await settle();
-  result.heatmapInitial = await usage().locator('.usage-heatmap-scroll').evaluate((node) => { const viewport = node.getBoundingClientRect(); const last = node.querySelector('.usage-heat-cell:last-child').getBoundingClientRect(); return { scrollLeft: node.scrollLeft, viewportLeft: viewport.left, viewportRight: viewport.right, lastLeft: last.left, lastRight: last.right }; });
-  assert(result.heatmapInitial.scrollLeft > 0, '365-day initial view scrolls horizontally to latest day');
-  assert(result.heatmapInitial.lastLeft >= result.heatmapInitial.viewportLeft - 1 && result.heatmapInitial.lastRight <= result.heatmapInitial.viewportRight + 1, 'latest day is visible in the initial narrow heatmap viewport');
+  // 热力图按宽度自适应：365 天也不出现横向滚动，最后一列直接可见。
+  result.heatmapInitial = await usage().locator('.usage-heatmap-scroll').evaluate((node) => {
+    const viewport = node.getBoundingClientRect();
+    const last = node.querySelector('.usage-heat-cell:last-child').getBoundingClientRect();
+    return { scrollLeft: node.scrollLeft, scrollWidth: node.scrollWidth, clientWidth: node.clientWidth, viewportLeft: viewport.left, viewportRight: viewport.right, lastLeft: last.left, lastRight: last.right };
+  });
+  assert.equal(result.heatmapInitial.scrollLeft, 0, '365-day heatmap does not scroll horizontally');
+  assert.ok(result.heatmapInitial.scrollWidth <= result.heatmapInitial.clientWidth + 1, '365-day heatmap fits its column');
+  assert(result.heatmapInitial.lastLeft >= result.heatmapInitial.viewportLeft - 1 && result.heatmapInitial.lastRight <= result.heatmapInitial.viewportRight + 1, 'latest day is visible without scrolling');
   const widths = await usage().locator('.usage-token-bar i').evaluateAll((nodes) => nodes.map((node) => Number.parseFloat(node.style.width)));
   assert.deepEqual(widths, [99, 0.01, 0.99]);
   assert.match(await usage().locator('.usage-hero').innerText(), /1万|10,000/);
   const heatRange = usage().getByRole('group', { name: '热力图日期范围', exact: true });
   await heatRange.getByRole('button', { name: '90 天', exact: true }).click();
   await page.waitForFunction(() => window.__settingsCompletionQa.calls.filter((item) => item.method === 'usageSummary').at(-1)?.days === 90); await settle();
-  const modelFilters = usage().getByRole('group', { name: '按模型筛选热力图', exact: true }); await modelFilters.getByRole('button').filter({ hasText: '小占比模型 B' }).click();
+  // 模型筛选改为统一选择器：先展开触发按钮，再从 listbox 里选。
+  await usage().getByRole('button', { name: '按模型筛选热力图', exact: true }).click();
+  await page.getByRole('option', { name: /小占比模型 B/ }).click();
   const todayCell = usage().locator('.usage-heat-cell').last(); await todayCell.focus();
   assert.match(await todayCell.getAttribute('aria-label'), /1 tokens|1 Token/);
   const day = await todayCell.getAttribute('data-date'); await todayCell.press('ArrowUp');

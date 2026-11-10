@@ -39,19 +39,27 @@
 .usage-range-switch button { min-height: 30px; padding: 3px 9px; border: 1px solid var(--transparent); border-radius: var(--radius-control); color: var(--muted); font-size: var(--text-xs); }
 .usage-range-switch button:hover { background: var(--surface-soft); color: var(--text); }
 .usage-range-switch button.is-active { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent-foreground); }
-.usage-model-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: var(--space-4); }
-.usage-model-filter button { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 4px 7px; max-width: 100%; min-height: 30px; padding: 4px 9px; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--muted); text-align: left; font-size: var(--text-xs); overflow-wrap: anywhere; }
-.usage-model-filter button.is-active { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent-foreground); }
-.usage-model-filter button > span { min-width: 0; font-weight: var(--weight-medium); }
-.usage-model-filter button > small { min-width: 0; color: var(--faint); font-size: var(--text-xs); }
-.usage-heatmap-layout { --usage-cell-size: 14px; --usage-cell-gap: 4px; display: grid; gap: var(--space-3); min-width: 0; }
-.usage-heatmap-layout.is-days-90 { --usage-cell-size: 24px; --usage-cell-gap: 5px; }
-.usage-heatmap-layout.is-days-180 { --usage-cell-size: 19px; --usage-cell-gap: 5px; }
-.usage-heatmap-scroll { display: flex; gap: 10px; min-width: 0; padding: 4px 3px 8px; overflow-x: auto; scrollbar-width: thin; overscroll-behavior-x: contain; }
-.usage-heatmap-days { display: grid; grid-template-rows: repeat(7, var(--usage-cell-size)); gap: var(--usage-cell-gap); flex: none; }
-.usage-heatmap-days span { color: var(--faint); font: var(--text-xs)/var(--usage-cell-size) var(--mono); }
-.usage-heatmap-grid { display: grid; grid-template-rows: repeat(7, var(--usage-cell-size)); grid-auto-flow: column; grid-auto-columns: var(--usage-cell-size); gap: var(--usage-cell-gap); flex: none; }
-.usage-heat-cell { width: var(--usage-cell-size); height: var(--usage-cell-size); padding: 0; border: 0; border-radius: 3px; background: var(--surface-soft); box-shadow: inset 0 0 0 1px var(--data-cell-border); }
+.usage-model-filter { display: flex; align-items: center; gap: 6px; margin-bottom: var(--space-4); }
+.usage-model-filter .pi-select { width: min(320px, 100%); }
+/* 热力图按可用宽度自适应：列宽 = min(上限, 均分可用宽度)；365 天不出现横向滚动条。 */
+.usage-heatmap-layout { --usage-cell-max: 14px; --usage-cell-gap: 4px; display: grid; gap: var(--space-3); min-width: 0; }
+.usage-heatmap-layout.is-days-90 { --usage-cell-max: 24px; --usage-cell-gap: 5px; }
+.usage-heatmap-layout.is-days-180 { --usage-cell-max: 19px; --usage-cell-gap: 5px; }
+.usage-heatmap-scroll { display: flex; gap: 10px; min-width: 0; padding: 4px 3px 8px; }
+.usage-heatmap-days { display: grid; grid-template-rows: repeat(7, minmax(0, 1fr)); gap: var(--usage-cell-gap); flex: none; align-self: stretch; }
+.usage-heatmap-days span { color: var(--faint); font: var(--text-xs)/1 var(--mono); display: flex; align-items: center; }
+.usage-heatmap-grid {
+  /* 周数由组件按当前范围写入；这里给 1 年（53 周）作默认值。 */
+  --usage-weeks: 53;
+  display: grid;
+  grid-template-rows: repeat(7, auto);
+  grid-auto-flow: column;
+  grid-auto-columns: min(var(--usage-cell-max), calc((100% - (var(--usage-weeks, 53) - 1) * var(--usage-cell-gap)) / var(--usage-weeks, 53)));
+  gap: var(--usage-cell-gap);
+  flex: 1;
+  min-width: 0;
+}
+.usage-heat-cell { width: 100%; height: auto; aspect-ratio: 1 / 1; padding: 0; border: 0; border-radius: 3px; background: var(--surface-soft); box-shadow: inset 0 0 0 1px var(--data-cell-border); }
 .usage-heat-cell.is-selected { box-shadow: 0 0 0 1px var(--text); }
 .usage-heat-cell.is-outside { visibility: hidden; }
 .usage-heat-cell:not(:disabled):hover { box-shadow: 0 0 0 2px var(--accent); }

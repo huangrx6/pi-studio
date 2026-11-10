@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { BarChart3, RefreshCw } from 'lucide-react';
 import type { UsageAnalyticsSnapshot, UsageTotals } from '../../types/usage-types';
 import { DatePicker } from '../../shared/DatePicker';
 import { InfoHint } from '../../shared/InfoHint';
+import { Select } from '../../shared/Select';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
 import {
   ALL_MODELS, dayFromToday, dayKey, heatLevel, heatmapDates, heatmapNavigation,
@@ -94,17 +95,25 @@ function UsageHeatmap({ snapshot, modelFilter, onModelFilterChange }: {
     gridRef.current?.querySelector<HTMLButtonElement>(`[data-date="${next}"]`)?.focus();
   }
   return <>
-    {snapshot.filterModels.length > 0 && <div className="usage-model-filter" role="group" aria-label="按模型筛选热力图">
-      <button type="button" aria-pressed={effectiveFilter === ALL_MODELS} className={effectiveFilter === ALL_MODELS ? 'is-active' : ''} onClick={() => onModelFilterChange(ALL_MODELS)}>全部模型</button>
-      {snapshot.filterModels.map(item => {
-        const key = modelKey(item.providerId, item.modelId);
-        return <button type="button" key={key} aria-pressed={effectiveFilter === key} className={effectiveFilter === key ? 'is-active' : ''} title={`${item.providerName} · ${item.modelId}`} onClick={() => onModelFilterChange(key)}><span>{item.displayName}</span><small>{item.providerName}{item.enabled ? '' : ' · 已停用'}</small></button>;
-      })}
+    {snapshot.filterModels.length > 0 && <div className="usage-model-filter">
+      <Select
+        label="按模型筛选热力图"
+        value={effectiveFilter}
+        onChange={onModelFilterChange}
+        options={[
+          { value: ALL_MODELS, label: '全部模型' },
+          ...snapshot.filterModels.map(item => ({
+            value: modelKey(item.providerId, item.modelId),
+            label: item.displayName,
+            description: `${item.providerName}${item.enabled ? '' : ' · 已停用'}`,
+          })),
+        ]}
+      />
     </div>}
     <div className={`usage-heatmap-layout is-days-${snapshot.days}`}>
       <div ref={scrollRef} className="usage-heatmap-scroll">
         <div className="usage-heatmap-days" aria-hidden="true">{DAY_LABELS.map((label, index) => <span key={index}>{label}</span>)}</div>
-        <div ref={gridRef} className="usage-heatmap-grid" role="group" aria-label={`${filterLabel}，${snapshot.days} 天 Token 使用量；上下键移动一天，左右键移动一周`} onMouseLeave={() => setHoveredDay(null)}>
+        <div ref={gridRef} className="usage-heatmap-grid" style={{ '--usage-weeks': Math.max(1, Math.ceil(dates.length / 7)) } as CSSProperties} role="group" aria-label={`${filterLabel}，${snapshot.days} 天 Token 使用量；上下键移动一天，左右键移动一周`} onMouseLeave={() => setHoveredDay(null)}>
           {dates.map(date => {
             const item = dailyByDate.get(date);
             const inRange = date >= snapshot.sinceDay;
