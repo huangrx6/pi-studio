@@ -124,14 +124,14 @@
             <code>main</code> 分支的产品边界和技术契约。
           </p>
           <dl class="article-meta">
-            <div><dt>Version</dt><dd>v0.0.14 · Stable</dd></div>
+            <div><dt>Version</dt><dd>v0.0.15 · Stable</dd></div>
             <div><dt>Runtime</dt><dd>Pi Durable 1.5</dd></div>
             <div><dt>Ownership</dt><dd>Studio SQLite</dd></div>
             <div><dt>License</dt><dd>MIT · macOS</dd></div>
           </dl>
           <div class="status-note">
             <strong>版本说明</strong>
-            <p><code>v0.0.14</code> 把输入区压扁并把壁纸真正放进窗口：新增「窗口内可见度」（默认 8%），侧栏、标题行与画布按同一比例透出，气泡与输入框仍然不透明；空输入框从 200px 收到 96px，随内容自动长高，框内附件缩成 40px，已发送附件改成气泡上方一行横向滚动。计划栏在全部完成时自动收起为一行摘要，排队消息行高收到 32px 且操作悬停才出现，空状态只留一句「今天想做点什么？」。设置里的滑杆聚焦不再出现直角白框。扩展契约新增 <code>status.chip</code>：顶栏图标入口 + 悬停摘要 + 点击打开详情面板，并支持 <code>visibility: while-active</code>；语义重叠且无人使用的 <code>conversation.header</code> 已移除。视觉规范的重做（四级表面、单行顶部、衬线欢迎语、模型对比进右栏）沿用 v0.0.13。</p>
+            <p><code>v0.0.15</code> 收口了会话尾部的视觉：计划栏从「标题 + 贯穿整宽的进度线」改成 28px 状态胶囊，全部完成时只留「全部完成 9/9」；文件变更块重新装回 1px 边框 + 圆角 + raised 底色的框，保留等宽文件名与「新增 / 修改 / 写入」文字标签。用户消息修了三处排版：附件条与气泡共用右边缘、超过 min(85%, 560px) 才横向滚动；短句不再被拆成两行（外层 align-items 会让容器收缩到 fit-content，已改成撑满整行 + 内层右对齐）；中英混排的换行从 anywhere 收到 break-word。扩展侧，<code>status.chip</code> 明确为会话级入口——新会话草稿态没有 sessionId，一律不渲染。窗口内壁纸、输入区瘦身与 status.chip 契约沿用 v0.0.14。</p>
           </div>
 
           <div class="chapter-index" aria-label="主要章节">
