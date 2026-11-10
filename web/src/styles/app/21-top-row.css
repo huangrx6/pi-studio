@@ -30,6 +30,12 @@
 .app.has-custom-background { --brand-leading: 12px; }
 html[data-window-fullscreen='true'] .brand { padding-left: 12px; }
 
+/* 没有壁纸、也不是全屏时，标题行只留红绿灯与收起按钮：
+ * 品牌图标和名字在这个状态下没有额外信息，收掉更利落。 */
+html:not([data-window-fullscreen='true']) .app:not(.has-custom-background) .brand > :is(.brand-mark, .brand-name) {
+  display: none;
+}
+
 /* 「新会话」改成左对齐的列表入口，图标与品牌、导航行落在同一条竖线上。 */
 .new-chat { justify-content: flex-start; padding-inline: 12px; }
 
