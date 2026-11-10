@@ -67,8 +67,7 @@ export function useConversationExtensions({
   const items = useMemo(
     () => orderConversationExtensionItems(
       surface.items.filter((item) => (
-        item.slot === 'conversation.header'
-        || item.slot === 'conversation.detail'
+        item.slot === 'conversation.detail'
         || item.slot === 'conversation.footer'
         || item.slot === 'status.chip'
       )),
@@ -91,10 +90,6 @@ export function useConversationExtensions({
   );
   const detailItems = useMemo(
     () => items.filter((item) => item.slot === 'conversation.detail'),
-    [items],
-  );
-  const headerItems = useMemo(
-    () => items.filter((item) => item.slot === 'conversation.header'),
     [items],
   );
   const footerItems = useMemo(
@@ -169,7 +164,6 @@ export function useConversationExtensions({
     orderScope,
     setOrderScope,
     items: items as ExtensionUiItem[],
-    headerItems: headerItems as ExtensionUiItem[],
     detailItems: detailItems as ExtensionUiItem[],
     footerItems: footerItems as ExtensionUiItem[],
     chipItems: chipItems as Array<{ item: ExtensionUiItem; targetId: string }>,

@@ -48,7 +48,6 @@ const MANIFEST_KEYS = new Set([
 ]);
 const UI_SLOTS = new Set([
   'workspace.sidebar',
-  'conversation.header',
   'conversation.detail',
   'conversation.footer',
   'composer.before',

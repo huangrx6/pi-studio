@@ -179,7 +179,6 @@
   margin-inline: auto;
   overflow: hidden;
 }
-.conversation-extension-dock.is-header { margin-top: var(--space-2); }
 .conversation-extension-dock.is-footer { margin-top: var(--space-2); }
 .conversation-extension-dock-items {
   display: flex;

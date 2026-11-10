@@ -357,13 +357,13 @@ button tone：`default`、`primary`、`danger`。
 | slot | 用途与约束 |
 | --- | --- |
 | `workspace.sidebar` | 侧边栏内的工作区相关短内容；必须适应窄宽度 |
-| `conversation.header` | 会话顶部的单行摘要；使用 `text`、`badge`、`keyValue` 或紧凑实时数据 |
 | `conversation.detail` | 会话扩展标签页中的完整详情卡；展示指标、表格、时间线和说明 |
 | `conversation.footer` | 输入框附近的单行摘要；最多两个紧凑 block，不承载完整详情 |
 | `composer.before` | 输入框上方，用于上下文提示或待办摘要 |
 | `settings.panel` | 设置页内容；适合说明、状态和命令，不替代完整表单 |
 | `panel.side` | 右侧工具面板中的摘要；不创建新导航体系 |
 | `status.bar` | 底部状态栏；只放短文本和简单动作 |
+| `status.chip` | 顶栏状态入口；图标 + 最多两块紧凑摘要，`details` 指向本扩展的 `conversation.detail` |
 
 扩展不能指定像素、绝对定位、z-index、动画或覆盖层。同一扩展可以同时声明 `conversation.detail` 与 `conversation.footer`：前者负责完整、清晰的页面卡片，后者只保留用户执行任务时需要持续看到的一行状态。Studio 会按稳定扩展 ID 把同一扩展的视图归组，使全局排序和会话级排序一起移动。
 

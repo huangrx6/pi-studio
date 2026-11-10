@@ -100,7 +100,6 @@ type HeaderState = {
 };
 
 type ExtensionWorkspaceState = {
-  headerItems: ExtensionUiItem[];
   chipItems: Array<{ item: ExtensionUiItem; targetId: string }>;
   openChip: (chip: { item: ExtensionUiItem; targetId: string }) => void;
   surface: ComponentProps<typeof ConversationExtensionDock>['surface'];
@@ -255,19 +254,6 @@ export function ConversationWorkspace({
         showTrace={traceEnabled}
         traceSummary={traceSummary}
       />
-      {!isNewConversation && transcriptVisible && extensions.headerItems.length > 0 && (
-        <ConversationExtensionDock
-          items={extensions.headerItems}
-          surface={extensions.surface}
-          placement="header"
-          cwd={session?.cwd}
-          sessionId={session?.id}
-          modelRef={modelSelection.modelRef}
-          onOpenSettings={extensions.openSettings}
-          onSendPrompt={extensions.sendPrompt}
-          onNotify={extensions.notify}
-        />
-      )}
       {!isNewConversation && transcriptVisible && <div
         className="chat-scroll"
         ref={scrollRef}

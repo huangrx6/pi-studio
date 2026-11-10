@@ -29,7 +29,6 @@ export type ExtensionHealth =
 
 export type ExtensionUiSlot =
   | 'workspace.sidebar'
-  | 'conversation.header'
   | 'conversation.detail'
   | 'conversation.footer'
   | 'composer.before'

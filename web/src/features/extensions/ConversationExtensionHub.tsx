@@ -33,7 +33,7 @@ export function ConversationExtensionDock({
 }: {
   items: ExtensionUiItem[];
   surface: ExtensionUiSnapshot;
-  placement: 'header' | 'footer';
+  placement: 'footer';
   cwd?: string;
   sessionId?: string;
   modelRef?: string;
@@ -44,7 +44,7 @@ export function ConversationExtensionDock({
   if (items.length === 0) return null;
   return <nav
     className={`conversation-extension-dock is-${placement}`}
-    aria-label={placement === 'header' ? '会话顶部扩展' : '会话底部扩展'}
+    aria-label="会话底部扩展"
   >
     <div className="conversation-extension-dock-items">
       {items.map((item, index) => <Fragment key={item.id}>

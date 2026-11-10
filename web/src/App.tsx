@@ -211,7 +211,6 @@ export function App() {
     conversationExtensionUiPreferences,
     conversationExtensionOrderScope,
     setConversationExtensionOrderScope,
-    conversationHeaderExtensionItems,
     conversationDetailExtensionItems,
     conversationFooterExtensionItems,
     conversationExtensionChipItems,
@@ -439,7 +438,6 @@ export function App() {
           jumpToOutline,
         }}
         extensions={{
-          headerItems: conversationHeaderExtensionItems,
           chipItems: conversationExtensionChipItems,
           openChip: openConversationExtensionChip,
           surface: conversationExtensionSurface,

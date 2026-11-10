@@ -774,7 +774,6 @@ builtin:studio-subagents/subagent</code></pre>
               <table class="doc-table">
                 <thead><tr><th>Slot</th><th>用途</th><th>关键限制</th></tr></thead>
                 <tbody>
-                  <tr><td><code>conversation.header</code></td><td>会话顶部单行摘要</td><td>只放 text、badge、keyValue 或紧凑 dataView</td></tr>
                   <tr><td><code>conversation.detail</code></td><td>会话扩展 Tab 的完整详情</td><td>展示数据与操作，不覆盖主对话</td></tr>
                   <tr><td><code>conversation.footer</code></td><td>输入框附近的一行状态</td><td>最多两个紧凑 block，不滚动，不放完整详情</td></tr>
                   <tr><td><code>workspace.sidebar</code></td><td>工作区相关短内容</td><td>必须适配窄宽度</td></tr>
@@ -782,6 +781,7 @@ builtin:studio-subagents/subagent</code></pre>
                   <tr><td><code>settings.panel</code></td><td>设置页说明或状态</td><td>不替代完整表单</td></tr>
                   <tr><td><code>panel.side</code></td><td>右侧面板摘要</td><td>不创建新导航体系</td></tr>
                   <tr><td><code>status.bar</code></td><td>底部状态</td><td>只放短文本或简单动作</td></tr>
+                  <tr><td><code>status.chip</code></td><td>顶栏状态入口</td><td>图标 + 两块紧凑摘要，details 指向本扩展详情面板</td></tr>
                 </tbody>
               </table>
             </div>
