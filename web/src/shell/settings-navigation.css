@@ -7,9 +7,10 @@
   flex-shrink: 0;
 }
 
-/* 标题与搜索框、导航项共用同一条左边界：这里不留额外内缩。 */
+/* 标题与下方文字对齐：搜索框是「1px 边框 + 10px 内边距」，导航项是 10px，
+ * 标题取 12px 让字形左边缘落在这条竖线上（大字号留白更窄）。 */
 .settings-navigation > .settings-nav-head {
-  padding-inline: 0;
+  padding-inline: var(--space-3);
 }
 
 /* 搜索框的上间距与设置页顶部内边距同值：标题到红绿灯与到搜索框的距离一致。 */
