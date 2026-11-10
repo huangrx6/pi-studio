@@ -49,7 +49,8 @@
   --focus-ring: 0 0 0 1px var(--focus-halo);
   --settings-section-gap: var(--space-8);
   --settings-heading-gap: var(--space-3);
-  --settings-top-inset: 48px;
+  /* 页面标题与侧栏「设置」共用；搜索框上间距也用同一个值。 */
+  --settings-top-inset: 24px;
   --settings-title-height: 36px;
   --selection: var(--settings-control-bg);
   --selection-text: var(--settings-text);
@@ -110,10 +111,6 @@
   padding: var(--settings-top-inset) 16px 24px;
   border-right: 1px solid var(--settings-border);
 }
-
-/* 有壁纸时窗口卡片本身已经让出了一条顶部留白，设置页的顶部内边距再减一档：
- * 标题离窗口顶太远会显得和内容脱节。 */
-.app.has-custom-background .settings-overlay { --settings-top-inset: 36px; }
 
 /* 自定义背景模式只保留玻璃层，不再给外框补表面。 */
 .settings-overlay .settings-content .settings-page-frame { background: var(--transparent); }
@@ -1146,8 +1143,6 @@
   --settings-section-gap: 24px;
   --settings-heading-gap: 8px;
   --settings-title-height: 32px;
-  /* 顶部内边距必须和侧栏共用同一个值，否则页面标题与「设置」标题错行。 */
-  --settings-top-inset: 36px;
 }
 
 .settings-nav {
@@ -1157,12 +1152,14 @@
 .settings-nav-head {
   height: var(--settings-title-height);
   line-height: var(--settings-title-height);
+  padding-inline: 0;
   font-size: var(--text-lg);
 }
 
+/* 侧栏是 4px gap 的 flex 列：减掉这段，标题到红绿灯与到搜索框的距离才相等。 */
 .settings-navigation .settings-navigation-search {
   height: 32px;
-  margin-top: 12px;
+  margin-top: calc(var(--settings-top-inset) - var(--space-1));
   padding-inline: 10px;
 }
 

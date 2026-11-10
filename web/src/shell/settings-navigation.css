@@ -7,13 +7,16 @@
   flex-shrink: 0;
 }
 
+/* 标题与搜索框、导航项共用同一条左边界：这里不留额外内缩。 */
 .settings-navigation > .settings-nav-head {
-  padding-inline: var(--space-3);
+  padding-inline: 0;
 }
 
+/* 搜索框的上间距与设置页顶部内边距同值：标题到红绿灯与到搜索框的距离一致。 */
 .settings-navigation .settings-navigation-search {
   gap: var(--space-1);
-  margin: var(--space-3) 0 var(--space-2);
+  /* 侧栏是 4px gap 的 flex 列，减掉这段才让标题上下的距离真正相等。 */
+  margin: calc(var(--settings-top-inset) - var(--space-1)) 0 var(--space-2);
   padding-inline: var(--space-3);
   -webkit-app-region: no-drag;
 }
