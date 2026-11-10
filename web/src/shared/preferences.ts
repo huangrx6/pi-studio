@@ -26,6 +26,13 @@ export type StepDisplay = 'compact' | 'standard' | 'detailed';
 export type StepCollapse = 'after-answer' | 'keep-open' | 'manual';
 /** 对话内网页链接的打开方式：系统浏览器或应用内窗口。 */
 export type LinkPreference = 'external' | 'window';
+/**
+ * 扩展在会话界面的落点偏好。
+ *
+ * 扩展自己声明可以落在哪些位置（`slots`），用户只决定最终出现在哪一处；
+ * both 是默认值，表示按扩展声明的全部落点渲染。
+ */
+export type ExtensionPlacement = 'both' | 'chip' | 'footer' | 'hidden';
 /** 全局圆角风格，映射到 RADIUS_PRESETS。 */
 export type RadiusStyle = 'square' | 'compact' | 'standard' | 'soft';
 /** 由主进程复制到应用私有目录的背景媒体。 */
@@ -71,6 +78,8 @@ export type Preferences = {
   backgroundInsideVisibility: number;
   /** 可配置的快捷键：动作 id → 规范化的按键组合。 */
   shortcuts: Record<string, string>;
+  /** 扩展落点偏好：panel contribution id → 落点；缺省表示按扩展声明全部渲染。 */
+  extensionPlacements: Record<string, ExtensionPlacement>;
 };
 
 /** localStorage 键名；改动会导致旧用户偏好失效，需谨慎。 */
@@ -92,6 +101,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   backgroundSurfaceOpacity: 88,
   backgroundInsideVisibility: 8,
   shortcuts: { ...DEFAULT_SHORTCUTS },
+  extensionPlacements: {},
 };
 
 const THEMES = new Set<ThemePreference>(['light', 'dark', 'system']);
@@ -99,6 +109,7 @@ const STEP_DISPLAYS = new Set<StepDisplay>(['compact', 'standard', 'detailed']);
 const STEP_COLLAPSES = new Set<StepCollapse>(['after-answer', 'keep-open', 'manual']);
 const LINK_PREFERENCES = new Set<LinkPreference>(['external', 'window']);
 const RADIUS_STYLES = new Set<RadiusStyle>(['square', 'compact', 'standard', 'soft']);
+const EXTENSION_PLACEMENTS = new Set<ExtensionPlacement>(['both', 'chip', 'footer', 'hidden']);
 const MAX_MEDIA_FIELD_LENGTH = 4_096;
 
 function cloneDefaults(): Preferences {
@@ -211,7 +222,21 @@ export function normalizePreferences(value: unknown): Preferences {
       100,
     ),
     shortcuts: normalizeShortcuts(source.shortcuts) as Record<string, string>,
+    extensionPlacements: normalizeExtensionPlacements(source.extensionPlacements),
   };
+}
+
+/**
+ * 只保存非默认的落点：both 等于「没用过这个设置」，不写进存储，
+ * 这样以后再给扩展加落点时，老用户不会因为一条空记录被锁在旧行为上。
+ */
+function normalizeExtensionPlacements(value: unknown): Record<string, ExtensionPlacement> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key, item]) => key.length > 0 && item !== 'both' && EXTENSION_PLACEMENTS.has(item as ExtensionPlacement))
+      .map(([key, item]) => [key, item as ExtensionPlacement]),
+  );
 }
 
 function browserStorage(): KeyValueStorage | null {

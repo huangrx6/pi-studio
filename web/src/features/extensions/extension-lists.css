@@ -19,6 +19,12 @@
 .extension-list-heading > svg { width: var(--icon-sm); height: var(--icon-sm); color: var(--muted); }
 .extension-list,
 .installed-extension-grid { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+/* 落点选择器：跟在扩展信息下面，只对声明了顶栏/输入框落点的扩展出现。 */
+.extension-placement { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-2); }
+.extension-placement-label { flex: none; color: var(--muted); font-size: var(--text-sm); }
+.extension-placement .pi-select { width: 148px; }
+.extension-placement .pi-select-trigger { height: 28px; font-size: var(--text-sm); }
+
 .extension-list-row { display: flex; align-items: flex-start; gap: var(--space-4); min-width: 0; padding: var(--space-4) 0; border-bottom: 1px solid var(--divider); border-radius: var(--radius-control); }
 .extension-list-row:last-child { border-bottom: 0; }
 .extension-list-row.is-compact { align-items: center; padding: var(--space-3) 0; }

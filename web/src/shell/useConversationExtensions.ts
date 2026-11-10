@@ -8,9 +8,11 @@ import {
   normalizeConversationExtensionUiPreferences,
   orderConversationExtensionItems,
 } from '../features/conversation/conversation-extension-order';
+import { placementAllowsSlot, placementFor } from '../features/extensions/extension-placement';
 import type { NotificationTone } from './NotificationCenter';
 import type { AgentView } from './app-types';
 import { errorText } from '../shared/error-text';
+import type { ExtensionPlacement } from '../shared/preferences';
 import type {
   ConversationExtensionOrderScope,
   ConversationExtensionUiPreferences,
@@ -24,6 +26,8 @@ type ConversationExtensionsOptions = {
   setAgentView: Dispatch<SetStateAction<AgentView>>;
   pushNotification: (message: string, tone?: NotificationTone) => void;
   rememberMainScrollPosition: () => void;
+  /** 设置在设置页的全局落点偏好：panel contribution id → 落点。 */
+  extensionPlacements?: Record<string, ExtensionPlacement>;
 };
 
 export function useConversationExtensions({
@@ -33,6 +37,7 @@ export function useConversationExtensions({
   setAgentView,
   pushNotification,
   rememberMainScrollPosition,
+  extensionPlacements,
 }: ConversationExtensionsOptions) {
   const surface = useExtensionUiSnapshot(cwd);
   const [preferences, setPreferences] = useState<ConversationExtensionUiPreferences>(
@@ -66,15 +71,19 @@ export function useConversationExtensions({
 
   const items = useMemo(
     () => orderConversationExtensionItems(
-      surface.items.filter((item) => (
-        item.slot === 'conversation.detail'
-        || (item.slots ?? [item.slot]).includes('conversation.footer')
-        || (item.slots ?? [item.slot]).includes('status.chip')
-      )),
+      surface.items.filter((item) => {
+        if (item.slot === 'conversation.detail') return true;
+        // 用户在设置里选的落点优先：隐藏、只在顶栏、只在输入框下，缺省按声明全部渲染。
+        const placement = placementFor(extensionPlacements, item.id);
+        return (item.slots ?? [item.slot]).some((slot) => (
+          (slot === 'status.chip' || slot === 'conversation.footer')
+          && placementAllowsSlot(placement, slot)
+        ));
+      }),
       preferences,
       sessionId,
     ),
-    [preferences, sessionId, surface],
+    [extensionPlacements, preferences, sessionId, surface],
   );
   const manifestDetailItems = useMemo(
     () => surface.items.filter((item) => item.slot === 'conversation.detail'),

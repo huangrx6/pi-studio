@@ -304,6 +304,7 @@ export function useConversationController(foundation: AppFoundation) {
     setAgentView,
     pushNotification,
     rememberMainScrollPosition,
+    extensionPlacements: foundation.preferences.extensionPlacements,
   });
   const {
     surface: conversationExtensionSurface,

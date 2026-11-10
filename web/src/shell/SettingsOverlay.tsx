@@ -548,6 +548,11 @@ export function SettingsOverlay({
                 <InstalledExtensionsSection
                   items={data.extensions}
                   busy={resourceBusy || notices.extensionRefreshBusy || Boolean(notices.extensionRefreshError)}
+                  placements={appearance.preferences.extensionPlacements}
+                  onPlacementChange={(contributionId, placement) => appearance.onChange('extensionPlacements', {
+                    ...appearance.preferences.extensionPlacements,
+                    [contributionId]: placement,
+                  })}
                   onOpenDetail={extensions.setExtensionDetail}
                   onToggle={(extension, enabled) => void controller.toggleExtension(extension, enabled)}
                   onDelete={(id, name) => void controller.deleteExtension(id, name)}

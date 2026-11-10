@@ -1,4 +1,5 @@
 import { ChevronRight } from 'lucide-react';
+import type { ExtensionPlacement } from '../../shared/preferences';
 import type { ExtensionHostItem } from '../../types/extension-types';
 import { InstalledExtensionCard } from './InstalledExtensionCard';
 import './extension-lists.css';
@@ -6,13 +7,15 @@ import './extension-lists.css';
 type InstalledExtensionsSectionProps = {
   items: ExtensionHostItem[];
   busy: boolean;
+  placements?: Record<string, ExtensionPlacement>;
+  onPlacementChange?: (contributionId: string, placement: ExtensionPlacement) => void;
   onOpenDetail: (item: ExtensionHostItem) => void;
   onToggle: (item: ExtensionHostItem, enabled: boolean) => void;
   onDelete: (id: string, name: string) => void;
 };
 
 /** User extensions stay visible; built-in capabilities remain available behind one quiet disclosure. */
-export function InstalledExtensionsSection({ items, busy, onOpenDetail, onToggle, onDelete }: InstalledExtensionsSectionProps) {
+export function InstalledExtensionsSection({ items, busy, placements, onPlacementChange, onOpenDetail, onToggle, onDelete }: InstalledExtensionsSectionProps) {
   const installed = items.filter((item) => item.scope !== 'builtin');
   const builtins = items.filter((item) => item.scope === 'builtin');
   return <>
@@ -23,6 +26,8 @@ export function InstalledExtensionsSection({ items, busy, onOpenDetail, onToggle
           key={`${item.scope}:${item.id}`}
           item={item}
           busy={busy}
+          placements={placements}
+          onPlacementChange={onPlacementChange}
           onOpenDetail={onOpenDetail}
           onToggle={onToggle}
           onDelete={onDelete}

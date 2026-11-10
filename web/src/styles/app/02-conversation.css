@@ -322,4 +322,9 @@ is-new-conversation 下隐藏标题、压缩 header；空会话通常没有可�
 .is-new-conversation .chat-header { align-items: center; }
 .is-new-conversation .chat-heading h1 { color: var(--faint); font-weight: var(--weight-medium); }
 .is-new-conversation .composer-dock { margin-block: auto; padding-top: 24px; padding-bottom: clamp(40px, 12vh, 120px); }
+
+/* 有壁纸时卡片自己已经让出 18px 底部留白，输入框下再留 16px 会明显比平时空：
+ * 收一档，让「输入框到窗口底」的距离和没有壁纸时接近。 */
+.app.has-custom-background .composer-dock { padding-bottom: var(--space-2); }
+.app.has-custom-background .is-new-conversation .composer-dock { padding-bottom: clamp(28px, 8vh, 80px); }
 .new-conversation-error { max-width: var(--content); margin: 16px auto 0; }

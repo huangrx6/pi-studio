@@ -31,6 +31,12 @@ const cardApi = compile('../../web/src/features/extensions/InstalledExtensionCar
     extensionStateLabel: () => '不可用',
     extensionStateTone: () => 'pending',
   },
+  '../../shared/Select': { Select: props => React.createElement('div', { 'data-select': props.value }) },
+  './extension-placement': {
+    EXTENSION_PLACEMENT_OPTIONS: [],
+    placeablePanels: () => [],
+    placementFor: () => 'both',
+  },
 });
 const base = {
   id: 'qa.extension',
