@@ -55,7 +55,7 @@ isolation 建立独立层叠上下文，配合下面的 :has 规则在设置全�
 节点。按钮、输入框和图标尺寸统一走共享控件令牌，保证各面板手感一致。 */
 
 /* 方案 A：应用窗口是一张不透明卡片，壁纸（.background-layer，fixed）只在四周留白可见。
-   顶部留 36px 给 macOS 红绿灯，左右与底部各 12px。 */
+   顶部留 44px 给 macOS 红绿灯（离卡片更从容），左右与底部各 18px。 */
 .app {
   --shell-top: 0px;
   --shell-gutter: 0px;
@@ -70,8 +70,8 @@ isolation 建立独立层叠上下文，配合下面的 :has 规则在设置全�
 
 /* 只有壁纸存在时才是「卡片」：有留白才需要边框和投影，满窗时保持整块画布。 */
 .app.has-custom-background {
-  --shell-top: 36px;
-  --shell-gutter: 12px;
+  --shell-top: 44px;
+  --shell-gutter: 18px;
   border: 1px solid var(--border);
   box-shadow: var(--shadow-shell);
 }

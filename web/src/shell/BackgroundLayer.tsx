@@ -7,7 +7,7 @@ type MediaProps = {
   onError?: () => void;
 };
 
-function BackgroundMediaNode({ media, className, onError }: MediaProps) {
+export function BackgroundMediaNode({ media, className, onError }: MediaProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {

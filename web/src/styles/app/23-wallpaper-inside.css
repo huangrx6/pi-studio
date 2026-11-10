@@ -1,0 +1,33 @@
+/* ---- 窗口内的壁纸 -----------------------------------------------------
+ * 方案 A 原本把壁纸完全挡在窗口外，只剩 18px 边框条。现在按「窗口内可见度」
+ * （默认 8%）在卡片内部再铺一层同源壁纸，只让画布层透出：侧栏、标题行、
+ * 消息气泡、输入框、菜单与对话框仍然是不透明表面。
+ */
+
+.window-wallpaper {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: var(--wallpaper-inside, 0);
+}
+
+.window-wallpaper-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+}
+
+/* 画布层让位：这些容器原本各自铺一层 --bg，会把壁纸层完全盖住。 */
+.app.is-wallpaper-inside :is(
+  .main,
+  .composer-dock,
+  .conversation-trace-page,
+  .agent-workspace,
+  .agent-context-view,
+  .agent-context-toolbar
+) {
+  background: transparent;
+}

@@ -67,6 +67,8 @@ export type Preferences = {
   backgroundBlur: number;
   /** 主界面外壳底漆的遮挡强度，0–100%；卡片和控件层级随主题统一派生。 */
   backgroundSurfaceOpacity: number;
+  /** 窗口内的壁纸可见度，0–100；0 表示窗口内完全用纯色，只在四周留白看到壁纸。 */
+  backgroundInsideVisibility: number;
   /** 可配置的快捷键：动作 id → 规范化的按键组合。 */
   shortcuts: Record<string, string>;
 };
@@ -88,6 +90,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   backgroundOpacity: 68,
   backgroundBlur: 0,
   backgroundSurfaceOpacity: 88,
+  backgroundInsideVisibility: 8,
   shortcuts: { ...DEFAULT_SHORTCUTS },
 };
 
@@ -198,6 +201,12 @@ export function normalizePreferences(value: unknown): Preferences {
     backgroundSurfaceOpacity: clampNumber(
       source.backgroundSurfaceOpacity,
       DEFAULT_PREFERENCES.backgroundSurfaceOpacity,
+      0,
+      100,
+    ),
+    backgroundInsideVisibility: clampNumber(
+      source.backgroundInsideVisibility,
+      DEFAULT_PREFERENCES.backgroundInsideVisibility,
       0,
       100,
     ),

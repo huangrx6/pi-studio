@@ -110,6 +110,8 @@
   --background-media-blur: 0px;
   /* 壁纸遮罩强度（0–1）：只压暗窗口外的壁纸，窗口内表面始终不透明。 */
   --background-media-scrim: .3;
+  /* 窗口内壁纸可见度（0–1）：由设置里的「窗口内可见度」在运行时覆盖。 */
+  --wallpaper-inside: 0;
   /* 通用滑杆由 React 内联覆盖为实际百分比；默认值供静态主题检查与首帧降级。 */
   --range-progress: 0%;
   /* 动效与字体：常规控件 transition 统一 160ms ease；侧栏与工作台使用稍长的

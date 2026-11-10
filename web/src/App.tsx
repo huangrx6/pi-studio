@@ -1,10 +1,11 @@
 import { useMemo, useRef } from 'react';
+import type { CSSProperties } from 'react';
 import { ExtensionSlot } from './features/extensions/ExtensionSlot';
 import { ConversationActionPalette } from './features/conversation/ConversationActionPalette';
 import type { QueuedPreview } from './features/conversation/QueuedMessages';
 import { AppSidebar } from './shell/AppSidebar';
 import { AppDialogs } from './shell/AppDialogs';
-import { BackgroundLayer } from './shell/BackgroundLayer';
+import { BackgroundLayer, BackgroundMediaNode } from './shell/BackgroundLayer';
 import { ConversationWorkspace } from './shell/ConversationWorkspace';
 import { SettingsOverlay } from './shell/SettingsOverlay';
 import { useAppFoundation } from './shell/useAppFoundation';
@@ -292,6 +293,11 @@ export function App() {
   /** Latest browser opener, read through a ref so the context value stays stable. */
   const markdownLinkRef = useRef<(url: string) => void>(() => {});
   markdownLinkRef.current = (url: string) => openBrowserTab(url);
+  // 窗口内壁纸层的不透明度：0 表示完全不透出（设置里的「窗口内可见度」为 0）。
+  const insideWallpaperStyle = useMemo(() => ({
+    '--wallpaper-inside': preferences.backgroundInsideVisibility / 100,
+  }) as CSSProperties, [preferences.backgroundInsideVisibility]);
+
   const markdownActionsValue = useMemo(() => ({
     cwd: session?.cwd,
     openFile: handleOpenFile,
@@ -309,8 +315,13 @@ export function App() {
       onError={() => handleBackgroundUnavailable(preferences.backgroundMedia!.url)}
     />}
     <div
-      className={`app ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${filesOpen && panelFullscreen ? 'is-panel-fullscreen' : ''} ${preferences.backgroundMedia ? 'has-custom-background' : ''}`}
+      className={`app ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${filesOpen && panelFullscreen ? 'is-panel-fullscreen' : ''} ${preferences.backgroundMedia ? 'has-custom-background' : ''} ${preferences.backgroundMedia && preferences.backgroundInsideVisibility > 0 ? 'is-wallpaper-inside' : ''}`}
+      style={insideWallpaperStyle}
     >
+      {/* 窗口内的壁纸副本：只铺在画布层，气泡、输入框与菜单仍然不透明。 */}
+      {preferences.backgroundMedia && preferences.backgroundInsideVisibility > 0 && <div className="window-wallpaper" aria-hidden="true">
+        <BackgroundMediaNode media={preferences.backgroundMedia} className="window-wallpaper-media" />
+      </div>}
       {actionPaletteOpen && <ConversationActionPalette
         actions={availableConversationActions}
         loading={actionResourcesLoading}

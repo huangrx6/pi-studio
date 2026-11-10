@@ -49,6 +49,7 @@ test('preferences validate every field and repair malformed storage once', () =>
       backgroundOpacity: null,
       backgroundBlur: 500,
       backgroundSurfaceOpacity: false,
+      backgroundInsideVisibility: 'lots',
       shortcuts: { toggleSidebar: 'not-a-shortcut' },
       unknown: 'drop',
     }),

@@ -99,6 +99,8 @@ for (const [name, file] of [['red', 'red.png'], ['blue', 'blue.png'], ['photo', 
       theme: 'dark',
       backgroundMedia: { kind: 'image', url: `pi-media://background/${wallpaper}`, name: wallpaper, mime: 'image/png', bytes: 300 },
       backgroundOpacity: 100, backgroundBlur: 0, backgroundSurfaceOpacity: 0,
+      // 窗口内壁纸默认是 8%；这里显式关掉，才能断言「换壁纸窗口内取色不变」。
+      backgroundInsideVisibility: 0,
     }));
   }, file);
   await page.reload();

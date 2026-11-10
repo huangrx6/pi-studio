@@ -83,6 +83,7 @@ export function GeneralSettings({ preferences, onChange, backgroundBusy, backgro
             <RangeControl id="background-opacity" label="背景透明度" value={preferences.backgroundOpacity} onChange={value => onChange('backgroundOpacity', value)} />
             <RangeControl id="background-blur" label="柔化程度" value={preferences.backgroundBlur} onChange={value => onChange('backgroundBlur', value)} />
             <RangeControl id="background-surface" label="遮罩强度" value={preferences.backgroundSurfaceOpacity} onChange={value => onChange('backgroundSurfaceOpacity', value)} />
+            <RangeControl id="background-inside" label="窗口内可见度" value={preferences.backgroundInsideVisibility} onChange={value => onChange('backgroundInsideVisibility', value)} />
           </div>
         </div>
       </details>}
