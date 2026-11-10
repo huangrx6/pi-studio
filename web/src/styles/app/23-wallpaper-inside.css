@@ -22,14 +22,21 @@
   object-position: center center;
 }
 
+/* 浅色表面会把壁纸的色偏放大，同浓度下更容易「发灰」；因此浅色主题按半量
+ * 叠透，深色保持原比例。卡片与浮层始终 100% 实心，不受这个系数影响。 */
 .app.is-wallpaper-inside {
-  background: color-mix(in srgb, var(--surface-canvas) calc(100% - var(--wallpaper-inside, 0) * 100%), transparent);
+  --wallpaper-keep-scale: 1;
+  /* 画布保留量有下限：40% 是文字仍能读、画布不至于完全被壁纸吞掉的界线。 */
+  --wallpaper-canvas-keep: clamp(40%, calc(100% - var(--wallpaper-inside, 0) * var(--wallpaper-keep-scale) * 100%), 100%);
+  background: color-mix(in srgb, var(--surface-canvas) var(--wallpaper-canvas-keep), transparent);
 }
+
+:root[data-theme='light'] .app.is-wallpaper-inside { --wallpaper-keep-scale: .5; }
 
 /* 侧栏与顶部：基色是 chrome，透出比例与画布相同。 */
 .app.is-wallpaper-inside > .sidebar,
 .app.is-wallpaper-inside :is(.panel-tabbar, .settings-nav) {
-  background: color-mix(in srgb, var(--surface-chrome) calc(100% - var(--wallpaper-inside, 0) * 100%), transparent);
+  background: color-mix(in srgb, var(--surface-chrome) var(--wallpaper-canvas-keep), transparent);
 }
 
 /* 画布：消息区、输入栏与各工作区视图共用画布色。 */
@@ -42,7 +49,7 @@
   .agent-context-view,
   .agent-context-toolbar
 ) {
-  background: color-mix(in srgb, var(--surface-canvas) calc(100% - var(--wallpaper-inside, 0) * 100%), transparent);
+  background: color-mix(in srgb, var(--surface-canvas) var(--wallpaper-canvas-keep), transparent);
 }
 
 /* 标题与输入栏已经位于主画布上，不能再次叠加同强度的遮罩。 */

@@ -45,7 +45,7 @@
 
   /* 四级表面：全 app（含设置面）共用同一套，换壁纸不会改变窗口内颜色。 */
   --surface-canvas: #ffffff;
-  --surface-chrome: #f6f7f8;
+  --surface-chrome: #eff1f3;
   --surface-raised: #ffffff;
   --surface-floating: #ffffff;
   --surface-hover: #eef0f2;
@@ -78,8 +78,8 @@
   divider 只做弱分隔，border-hover 表示可交互元素悬停时的加深。
    */
 
-  --border: rgb(0 0 0 / 8%);
-  --border-strong: rgb(0 0 0 / 14%);
+  --border: rgb(0 0 0 / 12%);
+  --border-strong: rgb(0 0 0 / 18%);
   --divider: rgb(0 0 0 / 6%);
   --border-hover: rgb(0 0 0 / 22%);
 
@@ -194,7 +194,7 @@
 
   /* 四级表面：画布、外壳、卡片、输入框；rgba 只用于边框、悬停、tint 与行内代码。 */
   --surface-canvas: #17191d;
-  --surface-chrome: #1b1e23;
+  --surface-chrome: #1f2329;
   --surface-raised: #1e2227;
   --surface-floating: #242930;
   --surface-hover: #262b32;
@@ -220,8 +220,8 @@
   --faint: var(--text-2);
   --disabled-text: var(--text-3);
 
-  --border: rgb(255 255 255 / 8%);
-  --border-strong: rgb(255 255 255 / 14%);
+  --border: rgb(255 255 255 / 12%);
+  --border-strong: rgb(255 255 255 / 18%);
   --divider: rgb(255 255 255 / 6%);
   --border-hover: rgb(255 255 255 / 24%);
 
