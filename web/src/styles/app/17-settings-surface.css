@@ -111,6 +111,10 @@
   border-right: 1px solid var(--settings-border);
 }
 
+/* 有壁纸时窗口卡片本身已经让出了一条顶部留白，设置页的顶部内边距再减一档：
+ * 标题离窗口顶太远会显得和内容脱节。 */
+.app.has-custom-background .settings-overlay { --settings-top-inset: 36px; }
+
 /* 自定义背景模式只保留玻璃层，不再给外框补表面。 */
 .settings-overlay .settings-content .settings-page-frame { background: var(--transparent); }
 
