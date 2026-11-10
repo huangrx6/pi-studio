@@ -124,3 +124,10 @@
 .app .chat-scroll .markdown-code-copy:hover {
   background: var(--conversation-hover-surface);
 }
+
+/* 右侧面板整条链路都必须有底色：任何一层漏掉背景，壁纸就会从面板里透出来，
+ * 表现为「收起面板的那一半变透明」。
+ */
+.app.is-wallpaper-inside :is(.file-panel, .file-panel-inner, .panel-body, .panel-start) {
+  background: var(--surface-raised);
+}
