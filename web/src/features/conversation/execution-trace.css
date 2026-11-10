@@ -91,9 +91,8 @@
   align-items: center;
   column-gap: var(--trace-gap);
   min-height: var(--trace-row);
-  /* 负外边距抵消内边距：文字位置不动，悬停背景左右各多出 10px，
-   * 内容才不会贴着高亮块的边缘。 */
-  margin-inline: calc(var(--space-2) * -1 - 2px);
+  /* 内边距留在行内：悬停背景与其它行同宽，内容与背景边缘留 10px，
+   * 不会像之前那样把高亮块撑得比上下行更宽。 */
   padding: 0 calc(var(--space-2) + 2px);
   border-radius: var(--radius-tag);
   list-style: none;
