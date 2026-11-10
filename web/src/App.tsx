@@ -23,7 +23,6 @@ export function App() {
   const conversation = useConversationController(foundation);
   const {
     preferences,
-    backgroundStyle,
     handleBackgroundUnavailable,
     updateSnapshot,
     updateProgress,
@@ -306,11 +305,11 @@ export function App() {
       media={preferences.backgroundMedia}
       opacity={preferences.backgroundOpacity}
       blur={preferences.backgroundBlur}
+      scrim={preferences.backgroundSurfaceOpacity}
       onError={() => handleBackgroundUnavailable(preferences.backgroundMedia!.url)}
     />}
     <div
       className={`app ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${filesOpen && panelFullscreen ? 'is-panel-fullscreen' : ''} ${preferences.backgroundMedia ? 'has-custom-background' : ''}`}
-      style={backgroundStyle}
     >
       {actionPaletteOpen && <ConversationActionPalette
         actions={availableConversationActions}

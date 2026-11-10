@@ -48,11 +48,14 @@ export function BackgroundLayer({
   media,
   opacity,
   blur,
+  scrim,
   onError,
 }: {
   media: BackgroundMedia;
   opacity: number;
   blur: number;
+  /** 壁纸遮罩强度 0–100：只压暗窗口外的壁纸，不影响窗口内表面。 */
+  scrim: number;
   onError?: () => void;
 }) {
   // 对外统一使用 0–100 的强度。40px 已能充分柔化照片，同时避免 100% 直接变成
@@ -61,6 +64,7 @@ export function BackgroundLayer({
   const style = {
     '--background-media-opacity': `${opacity}%`,
     '--background-media-blur': `${blurPixels}px`,
+    '--background-media-scrim': `${Math.min(100, Math.max(0, scrim)) / 100}`,
   } as CSSProperties;
 
   return (

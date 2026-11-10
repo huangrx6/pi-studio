@@ -21,7 +21,7 @@
   filter: blur(var(--background-media-blur, 0));
   transform: translateZ(0);
 }
-.background-layer-soften { position: absolute; inset: 0; background: var(--bg); opacity: .04; }
+.background-layer-soften { position: absolute; inset: 0; background: var(--surface-canvas); opacity: var(--background-media-scrim, .3); }
 .app { position: relative; z-index: 1; }
 .app > .sidebar,
 .app > .main { z-index: 1; }

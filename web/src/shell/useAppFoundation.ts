@@ -296,10 +296,6 @@ export function useAppFoundation() {
     children: SubagentChild[];
   }>());
 
-  const backgroundStyle = {
-    '--background-surface-opacity': preferences.backgroundSurfaceOpacity / 100,
-  } as CSSProperties;
-
   return {
     actionConfirmation,
     settingsLeaveConfirmation,
@@ -502,7 +498,6 @@ export function useAppFoundation() {
     setModels,
     showComposerFeedback,
     transcriptCacheRef,
-    backgroundStyle,
   };
 }
 
