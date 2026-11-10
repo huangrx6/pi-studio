@@ -49,8 +49,12 @@
   --focus-ring: 0 0 0 1px var(--focus-halo);
   --settings-section-gap: var(--space-8);
   --settings-heading-gap: var(--space-3);
-  /* 页面标题与侧栏「设置」共用；搜索框上间距也用同一个值。 */
-  --settings-top-inset: 24px;
+  /* 页面标题与侧栏「设置」共用这一个值。
+   * 无壁纸时红绿灯直接压在窗口顶部，标题要让出 56px 的标题栏再留一个间距；
+   * 有壁纸时窗口卡片已经让过位，只需要一个间距。 */
+  --settings-top-inset: 72px;
+  /* 标题到红绿灯、到搜索框的距离用同一个值，两段才不会一紧一松。 */
+  --settings-nav-gap: var(--space-4);
   --settings-title-height: 36px;
   --selection: var(--settings-control-bg);
   --selection-text: var(--settings-text);
@@ -111,6 +115,9 @@
   padding: var(--settings-top-inset) 16px 24px;
   border-right: 1px solid var(--settings-border);
 }
+
+/* 有壁纸时窗口卡片已经让出顶部留白，设置页只需要一个间距。 */
+.app.has-custom-background .settings-overlay { --settings-top-inset: var(--settings-nav-gap); }
 
 /* 自定义背景模式只保留玻璃层，不再给外框补表面。 */
 .settings-overlay .settings-content .settings-page-frame { background: var(--transparent); }
@@ -928,7 +935,6 @@
 }
 
 @media (max-width: 900px) {
-  .settings-overlay { --settings-top-inset: 40px; }
   .settings-content .general-background-adjustments { grid-template-columns: minmax(0, 1fr); }
   .settings-content .general-background-adjustments .background-media-preview { height: auto; aspect-ratio: 16 / 10; }
   .settings-content { padding: var(--settings-top-inset) 24px 56px; }
@@ -1159,7 +1165,7 @@
 /* 侧栏是 4px gap 的 flex 列：减掉这段，标题到红绿灯与到搜索框的距离才相等。 */
 .settings-navigation .settings-navigation-search {
   height: 32px;
-  margin-top: calc(var(--settings-top-inset) - var(--space-1));
+  margin-top: calc(var(--settings-nav-gap) - var(--space-1));
   padding-inline: 10px;
 }
 
