@@ -33,8 +33,7 @@
   cursor: pointer;
 }
 .turn-trace-toggle:hover { color: var(--text); }
-.turn-trace-toggle:focus-visible,
-.turn-trace-collapse:focus-visible {
+.turn-trace-toggle:focus-visible {
   outline: 2px solid var(--focus-color);
   outline-offset: 2px;
   border-radius: var(--radius-control);
@@ -42,7 +41,7 @@
 .turn-trace-toggle > svg,
 .turn-trace-mark > svg,
 .turn-trace-errors > svg,
-.turn-trace-collapse > svg { width: var(--trace-glyph); height: var(--trace-glyph); flex: none; }
+
 .turn-trace-toggle strong { font-weight: var(--weight-medium); white-space: nowrap; }
 .turn-trace-mark { display: grid; place-items: center; flex: none; width: var(--trace-glyph); height: var(--trace-glyph); }
 .turn-trace-chevron { transform: rotate(-90deg); transition: transform var(--transition); }
@@ -60,22 +59,6 @@
   padding: 0 var(--trace-inset) 2px;
 }
 .turn-trace-body[hidden] { display: none; }
-.turn-trace-collapse {
-  display: flex;
-  align-items: center;
-  gap: var(--trace-gap);
-  justify-self: start;
-  min-height: var(--trace-row);
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font: var(--text-sm)/var(--leading-normal) var(--font);
-}
-.turn-trace-collapse > svg { transform: rotate(180deg); }
-.turn-trace-collapse:hover { color: var(--text); }
 
 /* 记录行：模型调用、决策、工具共用一套 5 列网格 图标 | 标题 | 预览 | 状态 | 箭头。 */
 .turn-trace .activity-disclosure {
@@ -312,5 +295,4 @@
 @media (max-width: 600px) {
   .turn-trace .activity-request-metrics { display: none; }
 }
-
 

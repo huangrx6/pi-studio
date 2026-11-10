@@ -371,12 +371,6 @@ function TurnTrace({ live, active, policy, phase, steps, requests, errors, child
     if (policy === 'after-answer') setOpen(live);
     else if (policy === 'keep-open') setOpen(true);
   }, [live, policy]);
-  const collapseFromBottom = () => {
-    // 底部收起后把入口带回视野，避免长轨迹移除后滚动位置落到另一轮。
-    header.current?.scrollIntoView({ block: 'nearest' });
-    setOpen(false);
-    header.current?.focus({ preventScroll: true });
-  };
   return <section className={`turn-trace ${open ? 'is-open' : ''}`} aria-label="执行轨迹">
     <button ref={header} type="button" className="turn-trace-toggle"
       aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(value => !value)}>
@@ -389,9 +383,6 @@ function TurnTrace({ live, active, policy, phase, steps, requests, errors, child
     </button>
     <div id={bodyId} hidden={!open} className="turn-trace-body">
       {(open || visited) && children}
-      {(open || visited) && steps + requests > 6 && <button type="button" className="turn-trace-collapse" onClick={collapseFromBottom}>
-        <ChevronDown />收起执行轨迹
-      </button>}
     </div>
   </section>;
 }
