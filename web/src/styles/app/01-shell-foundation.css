@@ -67,7 +67,7 @@ isolation 建立独立层叠上下文，配合下面的 :has 规则在设置全�
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface-canvas);
-  box-shadow: 0 20px 60px rgb(0 0 0 / 35%);
+  box-shadow: var(--shadow-shell);
 }
 
 .app.has-custom-background {

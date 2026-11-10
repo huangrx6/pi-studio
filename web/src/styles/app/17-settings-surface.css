@@ -31,6 +31,9 @@
   --disabled-text: var(--settings-muted);
   --icon: var(--settings-muted);
   --accent: var(--settings-accent);
+  /* 设置页单色：选中底也是中性 tint，不引入品牌色。 */
+  --accent-tint: var(--tint-neutral);
+  --settings-selected-bg: var(--accent-tint);
   --accent-hover: var(--settings-accent);
   --accent-foreground: var(--settings-text);
   --accent-soft: var(--settings-control-bg);

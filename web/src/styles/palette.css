@@ -50,6 +50,8 @@
   --surface-floating: #ffffff;
   --surface-hover: #eef0f2;
   --accent-tint: color-mix(in srgb, var(--accent) 8%, transparent);
+  /* 中性 tint：设置页这类单色界面用的选中底。 */
+  --tint-neutral: color-mix(in srgb, var(--text-1) 8%, transparent);
   --add: #1f8a4c;
   --del: #c0392b;
 
@@ -120,6 +122,8 @@
   --scrollbar: #c9c9c9;
   --scrollbar-hover: #969696;
   --shadow-color: rgb(0 0 0 / 5%);
+  /* 应用卡片投影：壁纸在窗口外时，卡片靠这层阴影浮起。 */
+  --shadow-shell: 0 20px 60px rgb(0 0 0 / 18%);
   --shadow-deep: rgb(0 0 0 / 16%);
   /* 语法高亮：关键字、字符串、数字、函数四类前景色，注释色由共享角色映射到弱
   文字色。只用于 Markdown 代码块的 hljs 类，不用于普通正文。
@@ -194,6 +198,8 @@
   --surface-floating: #242930;
   --surface-hover: #262b32;
   --accent-tint: color-mix(in srgb, var(--accent) 8%, transparent);
+  /* 中性 tint：设置页这类单色界面用的选中底。 */
+  --tint-neutral: color-mix(in srgb, var(--text-1) 8%, transparent);
   --add: #6fcf97;
   --del: #eb7070;
 
@@ -260,6 +266,7 @@
   --terminal-ansi-bright-magenta: #dac8f2;
   --terminal-ansi-bright-cyan: #ade1e3;
   --terminal-ansi-bright-white: #ffffff;
+  --shadow-shell: 0 20px 60px rgb(0 0 0 / 45%);
   /* 深色底上同一个占比太淡，选区需要更多强调色才看得见。 */
   --selection: color-mix(in srgb, var(--theme-accent) 44%, var(--surface));
   /* 设置页设计规范（黑白灰）的深色一套：页面纯黑，靠微小明度差分层。 */

@@ -1,0 +1,56 @@
+/* ---- 统一的选中态 ------------------------------------------------------
+ * 一种颜色、一种强度：accent-tint 底 + text-1 文字 + accent 图标。
+ * 形状按位置区分：列表行用左侧 2px 竖条，顶部标签用底部 2px 下划线，
+ * 分段控件用 1px 内描边 + tint 底。其它地方不要再自定义选中配色。
+ */
+
+:is(.session-row, .nav-row, .settings-nav-row).is-active {
+  position: relative;
+  background: var(--accent-tint);
+  color: var(--text-1);
+  font-weight: var(--weight-medium);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+:is(.session-row, .nav-row, .settings-nav-row).is-active > :is(svg, .nav-icon) { color: var(--accent); }
+
+.tab.is-active {
+  border-radius: 6px 6px 0 0;
+  background: var(--accent-tint);
+  color: var(--text-1);
+  font-weight: var(--weight-medium);
+}
+
+.tab.is-active::after {
+  height: 2px;
+  background: var(--accent);
+}
+
+.chat-tab-list .tab.is-active > svg { color: var(--accent); }
+
+/* 分段控件：设置页、用量范围、权限作用域共用一套。 */
+:is(
+  .settings-content .general-theme-options button[aria-pressed="true"],
+  .usage-range-switch button.is-active,
+  .settings-content .permission-policy-scopes button.is-active,
+  .settings-content .permission-preset.is-active
+) {
+  border-color: var(--transparent);
+  background: var(--accent-tint);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  color: var(--text-1);
+  font-weight: var(--weight-medium);
+}
+
+:is(
+  .settings-content .general-theme-options button[aria-pressed="true"] svg,
+  .usage-range-switch button.is-active svg
+) { color: var(--accent); }
+
+/* 设置页侧栏是列表，沿用左侧竖条；颜色保持设置页单色。 */
+.settings-navigation .settings-nav-row.is-active {
+  background: var(--accent-tint);
+  color: var(--text-1);
+  font-weight: var(--weight-medium);
+  box-shadow: inset 2px 0 0 var(--settings-accent);
+}
