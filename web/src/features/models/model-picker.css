@@ -2,7 +2,7 @@
 .model-popover { position: absolute; right: 0; bottom: calc(100% + 10px); z-index: 40; width: 340px; max-width: calc(100vw - 110px); display: flex; flex-direction: column; padding: 6px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-popover); overflow: hidden; }
 .model-popover.is-below { bottom: auto; top: calc(100% + 10px); }
 .model-popover--main { overflow-y: auto; }
-.model-menu-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 10px 12px; border-radius: var(--radius-control); text-align: left; font-size: var(--text-md); }
+.model-menu-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 38px; padding: 7px 10px; border-radius: var(--radius-control); text-align: left; font-size: var(--text-sm); }
 .model-menu-row > span:first-child { flex: none; }
 .model-menu-row .menu-value { margin-left: auto; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-menu-row > svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--faint); }
@@ -14,7 +14,7 @@
 .model-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .model-group + .model-group { margin-top: 8px; }
 .model-group-name { padding: 8px 12px 5px; color: var(--faint); font-size: var(--text-sm); font-weight: var(--weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.model-option { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 42px; padding: 10px 12px; border-radius: var(--radius-control); text-align: left; font-size: var(--text-md); }
+.model-option { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 36px; padding: 7px 10px; border-radius: var(--radius-control); text-align: left; font-size: var(--text-sm); }
 .model-option > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-option > svg { width: var(--icon-md); height: var(--icon-md); flex: none; }
 .model-option.is-selected { background: var(--accent-soft); color: var(--text); }

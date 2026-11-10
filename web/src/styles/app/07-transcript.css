@@ -382,9 +382,9 @@
 .composer-picker-group { padding-top: 4px; }
 .composer-picker-label { display: flex; align-items: center; gap: 5px; padding: 4px 7px 3px; color: var(--faint); font-size: var(--text-xs); letter-spacing: .06em; text-transform: uppercase; }
 .composer-picker-label > span { display: inline-grid; place-items: center; min-width: 16px; height: 15px; padding: 0 4px; border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--faint); font-size: var(--text-xs); letter-spacing: 0; }
-.composer-option { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 42px; padding: 5px 7px; border-radius: var(--radius-tag); text-align: left; }
+.composer-option { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 4px 7px; border-radius: var(--radius-tag); text-align: left; }
 .composer-option:hover, .composer-option.is-active { background: var(--surface-soft); }
-.composer-option-icon { display: grid; place-items: center; width: 25px; height: 25px; flex: none; border-radius: var(--radius-tag); color: var(--muted); background: var(--surface-soft); }
+.composer-option-icon { display: grid; place-items: center; width: 22px; height: 22px; flex: none; border-radius: var(--radius-tag); color: var(--muted); background: var(--surface-soft); }
 .composer-option-icon svg { width: var(--icon-sm); height: var(--icon-sm); }
 .composer-option-icon.is-builtin { color: var(--icon); background: var(--surface-soft); }
 .composer-option-icon.is-skill { color: var(--icon); background: var(--surface-soft); }

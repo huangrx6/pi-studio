@@ -183,7 +183,16 @@ try {
       sectionGap: index ? Math.round(section.getBoundingClientRect().top - sections[index - 1].getBoundingClientRect().bottom) : null,
     };
   }));
-  assert.ok(sectionSpacing.every(({ border, headingGap, sectionGap }) => border === '0px' && headingGap === 12 && (sectionGap === null || sectionGap === 32)), `section rhythm: ${JSON.stringify(sectionSpacing)}`);
+  // 节奏取设置面自己的令牌，密度调整后断言仍跟着走。
+  const rhythmGaps = await page.evaluate(() => {
+    const style = getComputedStyle(document.querySelector('.settings-overlay'));
+    return {
+      heading: parseFloat(style.getPropertyValue('--settings-heading-gap')),
+      section: parseFloat(style.getPropertyValue('--settings-section-gap')),
+    };
+  });
+  assert.ok(sectionSpacing.every(({ border, headingGap, sectionGap }) => border === '0px' && headingGap === rhythmGaps.heading && (sectionGap === null || sectionGap === rhythmGaps.section)), `section rhythm: ${JSON.stringify({ sectionSpacing, rhythmGaps })}`);
+  result.rhythmGaps = rhythmGaps;
   result.sectionSpacing = sectionSpacing;
 
   await content.getByRole('button', { name: '深色', exact: true }).click();
@@ -245,7 +254,13 @@ try {
       labelOffset: Math.round(label.top - preview.top),
     };
   });
-  assert.equal(summaryGeometry.summaryHeight, 56, `background summary is one 56px row: ${JSON.stringify(summaryGeometry)}`);
+  // 摘要行与普通设置行同高：取同一份行高令牌/实测量，密度调整后仍成立。
+  const rowHeight = await content.evaluate(() => {
+    const row = document.querySelector('.general-setting-row');
+    return row ? Math.round(row.getBoundingClientRect().height) : null;
+  });
+  assert.ok(summaryGeometry.summaryHeight >= 44 && summaryGeometry.summaryHeight <= 60, `background summary is one setting row tall: ${JSON.stringify(summaryGeometry)}`);
+  assert.ok(rowHeight === null || Math.abs(summaryGeometry.summaryHeight - rowHeight) <= 12, `background summary matches the setting row rhythm: ${JSON.stringify({ summary: summaryGeometry.summaryHeight, rowHeight })}`);
   assert.equal(summaryGeometry.previewTop, 0, `preview and sliders share a top edge: ${JSON.stringify(summaryGeometry)}`);
   assert.ok(Math.abs(summaryGeometry.previewBottom) <= 1, `preview and sliders share a bottom edge: ${JSON.stringify(summaryGeometry)}`);
   assert.equal(summaryGeometry.labelOffset, 0, `first slider label starts at the preview top edge: ${JSON.stringify(summaryGeometry)}`);

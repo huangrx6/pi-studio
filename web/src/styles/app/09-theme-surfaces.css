@@ -409,6 +409,19 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .action-menu > button:disabled { color: var(--faint); cursor: default; background: var(--transparent); }
 .action-menu svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; }
 
+/* Shared menu density. Keep transient surfaces compact so they do not interrupt
+   the reading flow with oversized click targets. */
+.sidebar-action-menu button { min-height: 32px; padding: 5px 8px; font-size: var(--text-sm); }
+.popover-heading { min-height: 40px; padding: 8px 10px 6px 12px; }
+.popover-close { width: 24px; height: 24px; }
+.popover-detail-row { gap: 12px; padding: 6px 0; font-size: var(--text-xs); }
+.popover-divider { margin: 6px 0; }
+.pi-select-menu.popover-surface { padding: 4px; }
+.popover-surface .pi-select-option { padding: 6px 8px; gap: 12px; }
+.popover-surface .pi-select-option small { font-size: var(--text-xs); }
+.action-menu { padding: 4px; }
+.action-menu > button { padding: 7px 8px; font-size: var(--text-xs); line-height: var(--leading-normal); }
+
 /* One shared title row and one shared toolbar row across the three columns. */
 .chat-header, .is-new-conversation .chat-header, .panel-tabbar { height: var(--header-height); min-height: var(--header-height); max-height: var(--header-height); padding-top: 0; padding-bottom: 0; align-items: center; }
 .sidebar { padding-top: var(--header-height); }

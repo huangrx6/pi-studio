@@ -34,14 +34,14 @@
   --radius-card: 12px;
   --radius-panel: 16px;
   --radius-round: 999px;
-  /* 控件与布局高度：sm 32 用于图标按钮和小控件，control 36 是标准输入高度，
-  row 40 是列表行，header/toolbar 分别 48/36。侧栏和右栏宽度、正文列宽、设置
+  /* 控件与布局高度：sm 30 用于图标按钮和小控件，control 34 是标准输入高度，
+  row 36 是列表行，header/toolbar 分别 48/36。侧栏和右栏宽度、正文列宽、设置
   内容列宽也在这里；响应式断点会覆盖侧栏和右栏宽度。
    */
 
-  --control-sm: 32px;
-  --control: 36px;
-  --row-height: 40px;
+  --control-sm: 30px;
+  --control: 34px;
+  --row-height: 36px;
   /* 字号：xs 11、sm 12、base 14、md 15、lg 17、title 24。base 是全局正文基准，
   md 用于对话正文和输入框，title 目前只作为保留档位；对话字号可由用户偏好在
   运行时覆盖，不写在这里。

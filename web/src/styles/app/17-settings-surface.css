@@ -1126,3 +1126,179 @@
   margin-top: 12px;
   color: var(--muted);
 }
+
+/* Final density pass. Keep the settings hierarchy legible while reducing the
+   vertical weight of navigation, cards, controls and supporting copy. */
+.settings-overlay {
+  --settings-section-gap: 24px;
+  --settings-heading-gap: 8px;
+  --settings-title-height: 32px;
+  /* 顶部内边距必须和侧栏共用同一个值，否则页面标题与「设置」标题错行。 */
+  --settings-top-inset: 36px;
+}
+
+.settings-nav {
+  padding: var(--settings-top-inset) 16px 20px;
+}
+
+.settings-nav-head {
+  height: var(--settings-title-height);
+  line-height: var(--settings-title-height);
+  font-size: var(--text-lg);
+}
+
+.settings-navigation .settings-navigation-search {
+  height: 32px;
+  margin-top: 12px;
+  padding-inline: 10px;
+}
+
+.settings-navigation .settings-navigation-search input[type="search"] {
+  font-size: var(--text-sm);
+}
+
+.settings-navigation .settings-navigation-pages {
+  padding: 12px 0 4px;
+}
+
+.settings-navigation .settings-nav-group + .settings-nav-group {
+  margin-top: 12px;
+}
+
+.settings-navigation .nav-section-label {
+  margin-bottom: 6px;
+  padding-inline: 10px;
+  font-size: var(--text-xs);
+}
+
+.settings-navigation .settings-nav-row {
+  min-height: 34px;
+  margin-bottom: 1px;
+  padding-inline: 10px;
+  font-size: var(--text-sm);
+}
+
+.settings-navigation .settings-nav-bottom {
+  padding-top: 12px;
+}
+
+.settings-navigation .settings-back-button {
+  height: 34px;
+  padding-inline: 10px;
+  font-size: var(--text-sm);
+}
+
+.settings-content {
+  padding: var(--settings-top-inset) 48px 56px;
+  font-size: var(--text-13);
+  line-height: var(--leading-normal);
+}
+
+.settings-content :is(p, small, .settings-help) {
+  font-size: var(--text-13);
+  line-height: var(--leading-body);
+}
+
+.settings-overlay .settings-content h1,
+.settings-page-header h1 {
+  /* 标题档位只有 24 / 20 / 15 / 14 / 13 / 12，密度收敛后落 20。 */
+  font-size: var(--text-xl);
+  line-height: var(--settings-title-height);
+}
+
+.settings-overlay .settings-content h2 {
+  font-size: var(--text-sm);
+}
+
+.settings-content .settings-page-header {
+  margin-bottom: var(--settings-section-gap);
+}
+
+.settings-content .settings-page-header-title {
+  min-height: var(--settings-title-height);
+}
+
+.settings-page-header-title > span,
+.settings-page-header-meta,
+.settings-content .general-page-summary {
+  font-size: var(--text-xs);
+}
+
+.settings-page-header-actions button:not(.icon-button),
+.settings-card-head .settings-head-actions button {
+  min-height: 32px;
+}
+
+.settings-card {
+  padding: 16px;
+}
+
+.settings-content .settings-card-head {
+  margin-bottom: var(--settings-heading-gap);
+}
+
+.settings-content .mcp-server-row,
+.settings-content .installed-skill-row {
+  padding: 12px 16px;
+}
+
+.settings-content :is(input:not([type="checkbox"]):not([type="radio"]), .pi-select-trigger) {
+  height: 32px;
+  font-size: var(--text-13);
+}
+
+.settings-content :is(.settings-save, .primary-button, .settings-page-header .settings-add-button,
+  .settings-add-button, .settings-outline, .secondary-button, .settings-mini-button) {
+  height: 32px;
+  padding-inline: 12px;
+  font-size: var(--text-13);
+}
+
+.settings-content .icon-button {
+  width: var(--icon-button);
+  height: var(--icon-button);
+}
+
+.settings-content .switch {
+  width: 40px;
+  height: 22px;
+}
+
+.settings-content .switch.is-on > span {
+  transform: translateX(18px);
+}
+
+.settings-content .general-settings-card {
+  padding-inline: 16px;
+}
+
+.settings-content .general-setting-row {
+  min-height: 52px;
+  padding-block: 10px;
+}
+
+.settings-content .general-setting-label {
+  font-size: var(--text-13);
+}
+
+.settings-content .general-setting-control {
+  gap: 8px;
+}
+
+.settings-content .general-theme-options button,
+.settings-content .general-palette-option {
+  min-height: 28px;
+  font-size: var(--text-13);
+}
+
+.settings-content .general-theme-options button {
+  padding-inline: 12px;
+}
+
+.settings-content .general-background-summary {
+  min-height: 48px;
+}
+
+.settings-content .general-background-settings {
+  padding-block: 14px;
+}
