@@ -49,6 +49,8 @@
   background: var(--surface-raised);
   border-color: var(--border);
 }
+/* 这些视图与对话区共用同一层画布：背景交给 23-wallpaper-inside 统一透出，
+ * 这里只负责边框，避免出现「对话区透、子智能体/扩展/轨迹区实」的割裂。 */
 .app.has-custom-background :is(
   .agent-workspace,
   .agent-overview,
@@ -59,7 +61,7 @@
   .model-comparison,
   .conversation-trace-page
 ) {
-  background: var(--surface-canvas);
+  background: var(--transparent);
   border-color: var(--border);
 }
 .app.has-custom-background .settings-page-frame {

@@ -33,6 +33,18 @@
 
 :root[data-theme='light'] .app.is-wallpaper-inside { --wallpaper-keep-scale: .5; }
 
+/* 深色主题的卡片在壁纸模式下透 12%：让卡片与画布的色相靠拢，避免画布偏绿、
+ * 卡片偏蓝的「贴补丁」感。12% 不足以让壁纸的高光透到文字底下，浅色主题则
+ * 保持全实心——浅色表面会把壁纸的色偏放大。 */
+:root[data-theme='dark'] .app.is-wallpaper-inside {
+  --conversation-control-surface: color-mix(in srgb, var(--surface-floating) 88%, transparent);
+  --conversation-reading-surface: color-mix(in srgb, var(--surface-raised) 88%, transparent);
+}
+
+:root[data-theme='dark'] .app.is-wallpaper-inside .composer {
+  background: color-mix(in srgb, var(--surface-floating) 88%, transparent);
+}
+
 /* 侧栏与顶部：基色是 chrome，透出比例与画布相同。 */
 .app.is-wallpaper-inside > .sidebar,
 .app.is-wallpaper-inside :is(.panel-tabbar, .settings-nav) {
@@ -46,8 +58,12 @@
   .temporary-chat,
   .temporary-composer-dock,
   .agent-workspace,
+  .agent-overview,
   .agent-context-view,
-  .agent-context-toolbar
+  .agent-context-toolbar,
+  .conversation-extension-scroll,
+  .model-comparison-workspace,
+  .model-comparison
 ) {
   background: color-mix(in srgb, var(--surface-canvas) var(--wallpaper-canvas-keep), transparent);
 }
