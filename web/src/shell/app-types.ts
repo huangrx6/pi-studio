@@ -118,7 +118,7 @@ export type ModelComparisonContext = {
 
 export type PanelTab = {
   id: string;
-  kind: 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services' | 'browser';
+  kind: 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services' | 'browser' | 'comparison';
   title: string;
   tooltip?: string;
   path?: string;
@@ -134,5 +134,4 @@ export type AgentView =
   | { kind: 'conversation' }
   | { kind: 'extensions'; itemId?: string }
   | { kind: 'agents'; child?: SubagentChild }
-  | { kind: 'comparison'; comparison: ModelComparisonContext }
   | { kind: 'trace' };

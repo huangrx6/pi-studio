@@ -1,16 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
-import { extractComposerMentions } from '../features/conversation/references';
-import type { ComposerAttachment } from '../types/chat-types';
 import type { ModelSelection } from '../types/model-types';
 import type { SessionStateForPersistence } from '../features/conversation/useMessageDelivery';
 import {
   STORED_UI_KEYS,
   loadStoredModelComparisons,
-  type StoredModelComparison,
   type StoredModelComparisonMap,
 } from '../shared/stored-ui-state';
-import type { AgentView } from './app-types';
+import type { AgentView, ModelComparisonContext } from './app-types';
 
 type ConversationViewStateOptions = {
   scrollRef: MutableRefObject<HTMLDivElement | null>;
@@ -19,10 +16,9 @@ type ConversationViewStateOptions = {
   agentView: AgentView;
   setAgentView: Dispatch<SetStateAction<AgentView>>;
   modelSelection: ModelSelection;
-  prompt: string;
-  composerAttachments: ComposerAttachment[];
   filesOpen: boolean;
   closePanel: () => void;
+  openComparisonTab: () => void;
 };
 
 function writeStored(key: string, value: unknown): void {
@@ -40,23 +36,17 @@ export function useConversationViewState({
   agentView,
   setAgentView,
   modelSelection,
-  prompt,
-  composerAttachments,
   filesOpen,
   closePanel,
+  openComparisonTab,
 }: ConversationViewStateOptions) {
   const mainScrollPositionRef = useRef(0);
   const [comparisonByParent, setComparisonByParent] = useState<StoredModelComparisonMap>(
     loadStoredModelComparisons,
   );
-  const activeSessionComparison = useMemo(() => {
-    const sessionId = session?.id;
-    if (!sessionId) return null;
-    if (comparisonByParent[sessionId]) return comparisonByParent[sessionId];
-    return Object.values(comparisonByParent).find((entry) => (
-      entry.result.branches.some((branch) => branch.sessionId === sessionId)
-    )) ?? null;
-  }, [comparisonByParent, session?.id]);
+  const comparisonStartPending = useRef(false);
+  const [comparisonStarting, setComparisonStarting] = useState(false);
+  const [comparisonPanelContext, setComparisonPanelContext] = useState<ModelComparisonContext | null>(null);
 
   useEffect(() => {
     writeStored(STORED_UI_KEYS.comparisons, comparisonByParent);
@@ -76,53 +66,18 @@ export function useConversationViewState({
     });
   }
 
-  function openStoredModelComparison(entry: StoredModelComparison) {
-    rememberMainScrollPosition();
-    setAgentView({
-      kind: 'comparison',
-      comparison: {
-        parentId: entry.result.parentId,
-        cwd: entry.cwd,
-        prompt: entry.result.prompt,
-        mentions: [],
-        attachments: [],
-        images: [],
-        initialModelRef: entry.initialModelRef,
-        initialThinkingLevel: entry.initialThinkingLevel,
-      },
-    });
-    if (filesOpen) closePanel();
-  }
-
   function openModelComparison() {
-    if (!session?.id || !workspace) return;
-    if (activeSessionComparison) {
-      openStoredModelComparison(activeSessionComparison);
-      return;
-    }
-    const images = composerAttachments.flatMap((attachment) => (
-      attachment.kind === 'image' && attachment.data
-        ? [{ type: 'image' as const, data: attachment.data, mimeType: attachment.mime }]
-        : []
-    ));
-    const attachments = composerAttachments.flatMap((attachment) => (
-      attachment.kind !== 'image' && attachment.path ? [attachment.path] : []
-    ));
-    rememberMainScrollPosition();
-    setAgentView({
-      kind: 'comparison',
-      comparison: {
-        parentId: session.id,
-        cwd: session.cwd,
-        prompt,
-        mentions: extractComposerMentions(prompt),
-        attachments,
-        images,
-        initialModelRef: modelSelection.modelRef,
-        initialThinkingLevel: modelSelection.thinkingLevel,
-      },
+    setComparisonPanelContext(current => current ?? {
+      parentId: '',
+      cwd: workspace,
+      prompt: '',
+      mentions: [],
+      attachments: [],
+      images: [],
+      initialModelRef: modelSelection.modelRef,
+      initialThinkingLevel: modelSelection.thinkingLevel,
     });
-    if (filesOpen) closePanel();
+    openComparisonTab();
   }
 
   function openTrace() {
@@ -135,7 +90,12 @@ export function useConversationViewState({
   return {
     comparisonByParent,
     setComparisonByParent,
-    activeSessionComparison,
+
+    comparisonStartPending,
+    comparisonStarting,
+    setComparisonStarting,
+    comparisonPanelContext,
+    setComparisonPanelContext,
     rememberMainScrollPosition,
     returnToMainAgent,
     openModelComparison,

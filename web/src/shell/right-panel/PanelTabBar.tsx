@@ -21,7 +21,7 @@ import { isComposingKey, menuFocusIndex } from '../../shared/keyboard-navigation
 
 export type PanelTabItem = {
   id: string;
-  kind: 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services' | 'browser';
+  kind: 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services' | 'browser' | 'comparison';
   title: string;
   tooltip?: string;
 };
@@ -35,6 +35,7 @@ const TAB_ICONS: Record<PanelTabItem['kind'], LucideIcon> = {
   terminal: Terminal,
   services: Activity,
   browser: Globe,
+  comparison: Columns2,
 };
 
 export function PanelTabBar<T extends PanelTabItem>({

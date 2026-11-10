@@ -541,3 +541,10 @@
   }
 
 }
+
+.comparison-workbench { flex: 1; width: 100%; min-width: 0; height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.comparison-workbench-header { display: flex; align-items: center; justify-content: space-between; padding: 16px; font-size: var(--text-sm); }
+.comparison-workbench-header button { display: inline-flex; gap: 6px; align-items: center; }
+.comparison-workbench-history { padding: 0 16px 12px; display: grid; gap: 8px; border-bottom: 1px solid var(--border); }
+.comparison-workbench-history small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--faint); font-size: var(--text-xs); }
+.comparison-workbench > .model-comparison { flex: 1; min-height: 0; overflow: auto; padding-inline: 12px; }

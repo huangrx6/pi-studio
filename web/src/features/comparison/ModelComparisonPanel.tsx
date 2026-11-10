@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -85,6 +85,11 @@ export function ModelComparisonPanel({
   attachments,
   images,
   onStarted,
+  onPromptChange,
+  onParentCreated,
+  onStartingChange,
+  startBusy,
+  startPending,
   onAdopt,
   onManageModels,
 }: {
@@ -97,6 +102,11 @@ export function ModelComparisonPanel({
   mentions: string[];
   attachments: string[];
   images: ComposerImage[];
+  startBusy: boolean;
+  startPending: MutableRefObject<boolean>;
+  onStartingChange?: (starting: boolean) => void;
+  onPromptChange?: (prompt: string) => void;
+  onParentCreated?: (parentId: string) => void;
   onStarted: (comparison: ModelComparisonStartResult) => void;
   onAdopt: (sessionId: string) => void;
   onManageModels: () => void;
@@ -116,6 +126,7 @@ export function ModelComparisonPanel({
   const [error, setError] = useState('');
   const initialized = useRef(false);
   const actionPending = useRef(false);
+  const evaluationParent = useRef(parentId);
   const confirmation = useActionConfirmation();
 
   useEffect(() => {
@@ -194,23 +205,31 @@ export function ModelComparisonPanel({
   }, [comparison]);
 
   const canStart = Boolean(
-    parentId
+    cwd
     && prompt.trim()
     && leftModel
     && rightModel
     && leftModel !== rightModel
     && availableModels.length >= 2
     && !starting
+    && !startBusy
     && !comparison,
   );
 
   async function start() {
-    if (!canStart) return;
+    if (!canStart || startPending.current) return;
+    startPending.current = true;
     setStarting(true);
+    onStartingChange?.(true);
     setError('');
     try {
+      if (!evaluationParent.current) {
+        const parent = await window.piApi.createConversation({ cwd, title: `模型评估 · ${prompt.trim().slice(0, 50)}` });
+        evaluationParent.current = parent.id;
+        onParentCreated?.(parent.id);
+      }
       const started = await window.piApi.conversationCompareStart({
-        parentId,
+        parentId: evaluationParent.current,
         prompt: prompt.trim(),
         mentions,
         attachments,
@@ -259,7 +278,9 @@ export function ModelComparisonPanel({
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '无法开始模型对比');
     } finally {
+      startPending.current = false;
       setStarting(false);
+      onStartingChange?.(false);
     }
   }
 
@@ -362,7 +383,7 @@ export function ModelComparisonPanel({
           value={prompt}
           maxLength={200_000}
           placeholder="输入问题"
-          onChange={(event) => setPrompt(event.target.value)}
+          onChange={(event) => { setPrompt(event.target.value); onPromptChange?.(event.target.value); }}
         />
       </label>
       {(images.length > 0 || attachments.length > 0) && <p className="comparison-input-note">

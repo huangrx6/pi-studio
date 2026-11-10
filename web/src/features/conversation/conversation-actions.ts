@@ -25,7 +25,7 @@ export function conversationActions(ctx: ConversationActionContext, commands: Co
   const sessionReason = ctx.loading ? '正在读取会话' : !ctx.sessionId ? '请先开始一个会话' : undefined;
   const actions: ConversationAction[] = [
     { id: 'fork', title: '分叉当前会话', description: '从当前进度建立独立会话', group: 'conversation', keywords: ['fork', 'branch', '分支'], disabledReason: sessionReason || (!ctx.hasMessages ? '会话还没有消息' : ctx.running ? '请等待任务结束或先停止任务' : undefined) },
-    { id: 'compare', title: '模型同题双跑', description: '同一上下文并行请求两个模型', group: 'conversation', keywords: ['compare', '模型', '对比', '双跑'], disabledReason: sessionReason || (!ctx.hasMessages ? '会话还没有消息' : ctx.running ? '请等待任务结束或先停止任务' : undefined) },
+    { id: 'compare', title: '模型同题双跑', description: '在右侧工作台独立评估两个模型', group: 'workspace', keywords: ['compare', '模型', '对比', '双跑'], disabledReason: !ctx.workspace ? '请先选择工作区' : undefined },
     { id: 'goal', title: '设置目标', description: '在输入框中填写持续执行的目标', group: 'conversation', keywords: ['goal', '任务', '长期'], disabledReason: ctx.loading ? '正在读取会话' : !ctx.workspace ? '请先选择工作区' : undefined },
     { id: 'subagents', title: '查看子智能体', description: '运行状态、上下文和执行结果', group: 'conversation', keywords: ['agent', '并行'], disabledReason: sessionReason || (!ctx.hasChildren ? '当前会话还没有子智能体' : undefined) },
     { id: 'extensions', title: '查看会话扩展', description: '当前会话的扩展内容与布局', group: 'conversation', keywords: ['extension', '指标', '额度'], disabledReason: sessionReason || (!ctx.hasExtensions ? '没有可展示的会话扩展' : undefined) },

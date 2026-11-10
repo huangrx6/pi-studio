@@ -7,7 +7,7 @@ const context = { sessionId: 'chat-a', workspace: '/project', running: false, lo
 test('actions explain unavailable contexts and guard a running fork', () => {
   const actions = conversationActions({ ...context, running: true });
   assert.ok(actions.find(action => action.id === 'fork').disabledReason);
-  assert.ok(actions.find(action => action.id === 'compare').disabledReason);
+  assert.equal(actions.find(action => action.id === 'compare').disabledReason, undefined);
   assert.equal(actions.find(action => action.id === 'goal').disabledReason, undefined);
   const empty = conversationActions({ ...context, sessionId: undefined, workspace: '', hasChildren: false });
   assert.ok(empty.find(action => action.id === 'files').disabledReason);
@@ -18,7 +18,7 @@ test('actions explain unavailable contexts and guard a running fork', () => {
 test('model comparison remains available through the shared action registry', () => {
   const actions = conversationActions(context);
   const compare = actions.find(action => action.id === 'compare');
-  assert.equal(compare?.group, 'conversation');
+  assert.equal(compare?.group, 'workspace');
   assert.equal(compare?.disabledReason, undefined);
 });
 

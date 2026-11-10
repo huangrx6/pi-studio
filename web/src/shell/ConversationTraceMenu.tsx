@@ -1,172 +1,188 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertCircle, Check, ChevronRight, Circle, Clock3, LoaderCircle, Search, Send, Terminal, Wrench } from 'lucide-react';
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
+import { Activity, AlertCircle, Check, Clock3, Layers, ListTree, LoaderCircle, Search, Sparkles, SquareMinus, User, Wrench, X } from 'lucide-react';
+import { Markdown } from '../shared/Markdown';
+import type { RequestTrace } from '../types/chat-types';
+import type { ConversationTraceItem, ConversationTraceSummary } from '../features/conversation/trace-model';
+export type { ConversationTraceItem, ConversationTraceSummary } from '../features/conversation/trace-model';
 
-export type ConversationTraceItem = {
-  id: string;
-  kind: 'model' | 'decision' | 'tool';
-  label: string;
-  preview: string;
-  detail?: string;
-  status: 'done' | 'running' | 'error';
-  at?: number;
-};
-
-export type ConversationTraceSummary = {
-  steps: number;
-  requests: number;
-  tools: number;
-  errors: number;
-  state: 'idle' | 'running' | 'done' | 'error';
-  items: ConversationTraceItem[];
-};
-
-type ConversationTraceProps = {
-  summary: ConversationTraceSummary;
-};
-
-function stateLabel(state: ConversationTraceSummary['state']): string {
-  if (state === 'running') return '执行中';
-  if (state === 'error') return '有异常';
-  if (state === 'done') return '已完成';
-  return '暂无轨迹';
+type ConversationTraceProps = { summary: ConversationTraceSummary };
+const kindLabels = { input: '用户', model: '模型', decision: '思考', assistant: '助手', tool: '工具' };
+const statusLabels = { done: '已完成', running: '执行中', error: '异常', unknown: '结果未记录' };
+const lane = (item: ConversationTraceItem) => item.kind === 'input' ? 'input' : item.kind === 'tool' ? 'tool' : 'model';
+function timeLabel(at?: number) {
+  return at === undefined ? '未记录' : new Date(at).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 });
 }
-
+function durationLabel(ms?: number) {
+  if (ms === undefined) return '未记录';
+  return ms < 1000 ? `${Math.round(ms)} 毫秒` : `${(ms / 1000).toFixed(2)} 秒`;
+}
 function ItemIcon({ kind }: { kind: ConversationTraceItem['kind'] }) {
-  if (kind === 'model') return <Send aria-hidden="true" />;
-  if (kind === 'decision') return <Activity aria-hidden="true" />;
-  return <Terminal aria-hidden="true" />;
+  if (kind === 'input') return <User />;
+  if (kind === 'tool') return <Wrench />;
+  if (kind === 'model') return <Activity />;
+  return <Sparkles />;
 }
-
 function StatusIcon({ status }: { status: ConversationTraceItem['status'] }) {
-  if (status === 'running') return <LoaderCircle className="spin" aria-hidden="true" />;
-  if (status === 'error') return <AlertCircle aria-hidden="true" />;
-  return <Check aria-hidden="true" />;
+  if (status === 'running') return <LoaderCircle className="spin" />;
+  if (status === 'error' || status === 'unknown') return <AlertCircle />;
+  return <Check />;
 }
 
-function kindLabel(kind: ConversationTraceItem['kind']): string {
-  if (kind === 'model') return '模型请求';
-  if (kind === 'decision') return '决策';
-  return '工具执行';
-}
-
-function timeLabel(at?: number): string {
-  return at ? new Date(at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--';
-}
-
-function TraceActivityMap({ items }: { items: ConversationTraceItem[] }) {
-  const rows: Array<{ key: ConversationTraceItem['kind']; label: string }> = [
-    { key: 'model', label: '模型' },
-    { key: 'decision', label: '决策' },
-    { key: 'tool', label: '工具' },
-  ];
+function TraceActivityMap({ items, selectedId, onSelect }: {
+  items: ConversationTraceItem[];
+  selectedId: string | null;
+  onSelect: (item: ConversationTraceItem) => void;
+}) {
+  const [hover, setHover] = useState<{ item: ConversationTraceItem; x: number; y: number } | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const selected = root.current?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (selected) selected.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [selectedId]);
+  const showHover = (item: ConversationTraceItem, target: HTMLElement) => {
+    const rect = target.getBoundingClientRect();
+    setHover({ item, x: Math.min(Math.max(rect.left, 8), window.innerWidth - 292), y: Math.min(rect.bottom + 8, window.innerHeight - 180) });
+  };
   return <div className="conversation-trace-activity" aria-label="轨迹活动概览">
-    <div className="conversation-trace-activity-labels"><span>模型</span><span>决策</span><span>工具</span></div>
-    <div className="conversation-trace-activity-grid">
-      {rows.map(row => <div className="conversation-trace-activity-row" key={row.key}>
-        <span className="conversation-trace-activity-row-label">{row.label}</span>
-        <div className="conversation-trace-activity-cells">{items.slice(0, 96).map((item, index) => <i key={`${row.key}-${item.id}-${index}`} className={item.kind === row.key ? `is-${item.status}` : 'is-empty'} aria-hidden="true" />)}</div>
-      </div>)}
+    <div className="conversation-trace-activity-labels"><span>输入</span><span>模型</span><span>工具</span></div>
+    <div className="conversation-trace-activity-scroll" ref={root} onScroll={() => setHover(null)}>
+      <div className="conversation-trace-activity-grid" style={{ '--activity-count': Math.max(1, items.length) } as CSSProperties}>
+        {items.map((item, index) => <button
+          key={item.id} type="button" className={`trace-activity-cell lane-${lane(item)} is-${item.status}`}
+          style={{ gridColumn: index + 1, gridRow: lane(item) === 'input' ? 1 : lane(item) === 'model' ? 2 : 3 }}
+          aria-label={`${kindLabels[item.kind]} · 第 ${item.round ?? 1} 轮 · ${item.label}`}
+          aria-pressed={selectedId === item.id}
+          onMouseEnter={event => showHover(item, event.currentTarget)} onMouseLeave={() => setHover(null)}
+          onFocus={event => showHover(item, event.currentTarget)} onBlur={() => setHover(null)}
+          onClick={() => { setHover(null); onSelect(item); }}
+        />)}
+      </div>
     </div>
+    {hover && createPortal(<div className="trace-activity-tooltip" role="tooltip" style={{ left: hover.x, top: hover.y }}>
+      <strong>{kindLabels[hover.item.kind]} · {hover.item.label}</strong>
+      <span>{timeLabel(hover.item.at)}{hover.item.endedAt !== undefined ? ` → ${timeLabel(hover.item.endedAt)}` : ''}</span>
+      <span>{statusLabels[hover.item.status]} · 耗时 {durationLabel(hover.item.durationMs)}</span>
+      <p>{hover.item.preview}</p>
+    </div>, document.body)}
   </div>;
 }
 
-export function ConversationTraceTab({ summary, active, onOpen }: ConversationTraceProps & { active: boolean; onOpen: () => void }) {
-  return <button
-    type="button"
-    role="tab"
-    aria-selected={active}
-    className={`tab conversation-trace-tab ${active ? 'is-active' : ''}`}
-    aria-label="打开会话轨迹页面"
-    onClick={onOpen}
-  >
-    <Activity aria-hidden="true" />
-    <span>轨迹</span>
-    {summary.steps > 0 && <span className="tab-count">{summary.steps}</span>}
-  </button>;
+type DetailTab = 'overview' | 'parameters' | 'result' | 'schema' | 'timing' | 'preview' | 'raw' | 'system' | 'context';
+function TraceDetail({ item, onClose }: { item: ConversationTraceItem; onClose: () => void }) {
+  const [tab, setTab] = useState<DetailTab>('overview');
+  const [snapshot, setSnapshot] = useState<RequestTrace | undefined>(item.request);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    let current = true;
+    setSnapshot(item.request);
+    setError('');
+    if (!item.request || item.request.snapshot !== 'deferred') return;
+    setLoading(true);
+    window.piApi.conversationRequestTrace(item.request.conversationId, item.request.requestId).then(value => {
+      if (!current) return;
+      if (!value) throw new Error('这条请求快照暂不可用');
+      setSnapshot(value);
+    }).catch(cause => { if (current) setError(cause instanceof Error ? cause.message : '读取请求快照失败'); })
+      .finally(() => { if (current) setLoading(false); });
+    return () => { current = false; };
+  }, [item.request, retry]);
+  const tabs: Array<[DetailTab, string]> = item.kind === 'tool'
+    ? [['overview', '概述'], ['parameters', '参数'], ['result', '结果'], ['schema', 'Schema'], ['timing', '计时']]
+    : item.kind === 'model'
+      ? [['overview', '概述'], ['system', '系统提示词'], ['context', '上下文'], ['schema', '工具']]
+      : [['overview', '概述'], ['preview', '预览'], ['raw', '原始内容']];
+  const schema = item.kind === 'tool' ? snapshot?.tools?.filter(tool => tool.name === item.label || tool.name === item.label.split('/').at(-1)) : snapshot?.tools;
+  const timing = <dl className="trace-detail-facts"><dt>记录时间</dt><dd>{timeLabel(item.at)}</dd><dt>结束时间</dt><dd>{timeLabel(item.endedAt)}</dd><dt>耗时</dt><dd>{durationLabel(item.durationMs)}</dd></dl>;
+  const content = <Markdown>{item.detail || '暂无内容'}</Markdown>;
+  return <aside className="conversation-trace-detail" aria-label="轨迹详情" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); onClose(); } }}>
+    <header className="conversation-trace-detail-head">
+      <span className={`trace-kind lane-${lane(item)}`}>{kindLabels[item.kind]}</span><span>第 {item.round ?? 1} 轮 · 第 {item.step ?? 1} 步</span>
+      <button className="icon-button" type="button" aria-label="关闭轨迹详情" onClick={onClose}><X /></button>
+    </header>
+    <div className="trace-detail-tabs" role="tablist" aria-label="轨迹详情内容">{tabs.map(([value, label]) => <button key={value} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)}>{label}</button>)}</div>
+    <div className="trace-detail-content" role="tabpanel" aria-label={tabs.find(([value]) => value === tab)?.[1]}>
+      {tab === 'overview' && <>
+        <dl className="trace-detail-facts"><dt>名称</dt><dd>{item.label}</dd><dt>状态</dt><dd className={`is-${item.status}`}>{statusLabels[item.status]}</dd>
+          {item.request && <><dt>来源</dt><dd>{item.request.model?.modelId || '模型请求'}</dd><dt>请求</dt><dd>{item.request.requestId}</dd></>}
+          {item.kind === 'model' && <><dt>输入消息</dt><dd>{item.request?.stats.messageCount}</dd><dt>字符</dt><dd>{item.request?.stats.estimatedChars}</dd></>}
+        </dl>
+        {item.kind === 'tool' ? <><section><h4>参数</h4><pre>{item.detail}</pre></section><section><h4>结果</h4><pre>{item.result || '尚无工具结果'}</pre></section></>
+          : <section><h4>预览</h4>{content}</section>}
+        <section><h4>计时</h4>{timing}</section>
+      </>}
+      {tab === 'parameters' && <pre>{item.detail || '暂无参数'}</pre>}
+      {tab === 'result' && <pre>{item.result || '尚无工具结果'}</pre>}
+      {tab === 'timing' && timing}
+      {tab === 'preview' && content}
+      {tab === 'raw' && <pre>{item.detail || '暂无内容'}</pre>}
+      {(tab === 'system' || tab === 'context') && snapshot?.messages?.filter(message => tab === 'system' ? message.role === 'system' : message.role !== 'system').map(message => <section key={message.index}><h4>{message.role}</h4><pre>{message.content.map(block => block.type === 'text' ? block.text : block.type === 'thinking' ? block.thinking : JSON.stringify(block, null, 2)).join('\n')}</pre></section>)}
+      {tab === 'schema' && (schema?.length ? schema.map(tool => <section key={tool.name}><h4>{tool.name}</h4><p>{tool.description}</p><pre>{JSON.stringify(tool.parameters, null, 2)}</pre></section>) : <p>该记录未保存工具定义。</p>)}
+      {loading && <p role="status">正在读取请求快照…</p>}
+      {error && <div role="alert"><p>{error}</p><button className="text-button" type="button" onClick={() => setRetry(value => value + 1)}>重试</button></div>}
+      {snapshot?.truncated && <p className="trace-detail-note">原始快照已截断，当前展示已保存内容。</p>}
+    </div>
+  </aside>;
+}
+
+export function ConversationTraceTab({ active, onOpen }: ConversationTraceProps & { active: boolean; onOpen: () => void }) {
+  return <button type="button" role="tab" aria-selected={active} className={`tab conversation-trace-tab ${active ? 'is-active' : ''}`} aria-label="打开会话轨迹页面" onClick={onOpen}><Activity aria-hidden="true" /><span>轨迹</span></button>;
 }
 
 export function ConversationTracePage({ summary }: ConversationTraceProps) {
-  const [filter, setFilter] = useState<'all' | ConversationTraceItem['kind']>('all');
-  const [timeRange, setTimeRange] = useState<'all' | 'hour' | 'day' | 'week'>('all');
   const [query, setQuery] = useState('');
-  const [selectedItem, setSelectedItem] = useState<ConversationTraceItem | null>(summary.items[0] ?? null);
-  useEffect(() => {
-    setSelectedItem(current => current && summary.items.some(item => item.id === current.id) ? current : summary.items[0] ?? null);
-  }, [summary.items]);
-  const filteredItems = useMemo(() => {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [durations, setDurations] = useState(false);
+  const [rounds, setRounds] = useState(true);
+  const [calls, setCalls] = useState(true);
+  const [subcalls, setSubcalls] = useState(true);
+  const list = useRef<HTMLDivElement>(null);
+  const rowRefs = useRef(new Map<string, HTMLButtonElement>());
+  const selected = summary.items.find(item => item.id === selectedId);
+  const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
-    const now = Date.now();
-    const rangeStart = timeRange === 'hour' ? now - 60 * 60 * 1000
-      : timeRange === 'day' ? now - 24 * 60 * 60 * 1000
-        : timeRange === 'week' ? now - 7 * 24 * 60 * 60 * 1000 : 0;
-    return summary.items.filter((item) => {
-      if (filter !== 'all' && item.kind !== filter) return false;
-      if (rangeStart > 0 && (!item.at || item.at < rangeStart)) return false;
-      if (!needle) return true;
-      return `${item.label} ${item.preview} ${item.detail || ''}`.toLocaleLowerCase().includes(needle);
-    });
-  }, [filter, query, summary.items, timeRange]);
+    return summary.items.filter(item => (calls || item.kind !== 'model') && (subcalls || item.kind !== 'tool') && (!needle || `${item.label} ${item.preview} ${item.detail || ''} ${item.result || ''}`.toLocaleLowerCase().includes(needle)));
+  }, [summary.items, query, calls, subcalls]);
+  const [jumpId, setJumpId] = useState<string | null>(null);
   useEffect(() => {
-    setSelectedItem(current => current && filteredItems.some(item => item.id === current.id) ? current : filteredItems[0] ?? null);
-  }, [filteredItems]);
+    if (!jumpId) return;
+    rowRefs.current.get(jumpId)?.scrollIntoView({ block: 'center', inline: 'nearest' });
+    setJumpId(null);
+  }, [jumpId, filtered]);
+  const selectFromMap = (item: ConversationTraceItem) => {
+    setQuery(''); setCalls(true); setSubcalls(true); setSelectedId(item.id); setJumpId(item.id);
+  };
+  const closeDetail = () => { setSelectedId(null); rowRefs.current.get(selectedId || '')?.focus({ preventScroll: true }); };
   return <div className="conversation-trace-page" role="tabpanel" aria-label="会话轨迹">
     <div className="conversation-trace-page-inner">
-      <header className="conversation-trace-page-head">
-        <div>
-          <div className="conversation-trace-page-kicker"><Activity aria-hidden="true" /><span>当前会话</span></div>
-          <h2>会话轨迹</h2>
-          <p>按时间查看模型请求、决策和工具执行状态。</p>
-        </div>
-        <div className={`conversation-trace-state is-${summary.state}`}><Circle aria-hidden="true" /><span>{stateLabel(summary.state)}</span></div>
-      </header>
       <div className="conversation-trace-toolbar">
-        <div className="conversation-trace-toolbar-groups">
-        <div className="conversation-trace-filters" role="group" aria-label="时间范围">
-          {([['all', '全部时间'], ['hour', '近 1 小时'], ['day', '今天'], ['week', '近 7 天']] as const).map(([value, label]) => (
-            <button key={value} type="button" aria-pressed={timeRange === value} onClick={() => setTimeRange(value)}>{label}</button>
-          ))}
+        <div className="trace-display-options" role="group" aria-label="轨迹显示选项">
+          <button type="button" aria-pressed={durations} onClick={() => setDurations(value => !value)} title="显示每条记录的时间与已记录耗时"><Clock3 />时长</button>
+          <button type="button" aria-pressed={rounds} onClick={() => setRounds(value => !value)} title="显示对话轮次分隔"><Layers />轮次</button>
+          <button type="button" aria-pressed={calls} onClick={() => setCalls(value => !value)} title="显示模型调用记录"><SquareMinus />调用</button>
+          <button type="button" aria-pressed={subcalls} onClick={() => setSubcalls(value => !value)} title="显示模型发起的工具子调用"><ListTree />子调用</button>
         </div>
-        <div className="conversation-trace-filters" role="group" aria-label="轨迹类型">
-          {([['all', '全部'], ['model', '模型'], ['decision', '决策'], ['tool', '工具']] as const).map(([value, label]) => (
-            <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>
-          ))}
-        </div>
-        </div>
-        <label className="conversation-trace-search">
-          <Search aria-hidden="true" />
-          <input aria-label="搜索轨迹" placeholder="搜索轨迹" value={query} onChange={(event) => setQuery(event.target.value)} />
-        </label>
+        <label className="conversation-trace-search"><Search /><input aria-label="搜索轨迹" placeholder="搜索" value={query} onChange={event => setQuery(event.target.value)} /></label>
       </div>
-      <TraceActivityMap items={summary.items} />
-      <div className="conversation-trace-overview" aria-label="轨迹统计">
-        <div><strong>{summary.steps}</strong><span>步骤</span></div>
-        <div><strong>{summary.requests}</strong><span>模型请求</span></div>
-        <div><strong>{summary.tools}</strong><span>工具执行</span></div>
-        <div className={summary.errors > 0 ? 'has-error' : ''}><strong>{summary.errors}</strong><span>异常</span></div>
-      </div>
-      {filteredItems.length > 0
-        ? <div className="conversation-trace-workspace">
-          <div className="conversation-trace-list" aria-label="最近轨迹">
-          {filteredItems.map((item, index) => <button className={`conversation-trace-item is-${item.status} ${selectedItem?.id === item.id ? 'is-selected' : ''}`} key={item.id} type="button" onClick={() => setSelectedItem(item)}>
-            <span className="conversation-trace-item-index">{String(index + 1).padStart(2, '0')}</span>
-            <span className="conversation-trace-item-icon"><ItemIcon kind={item.kind} /></span>
-            <span className="conversation-trace-item-main">
-              <span className="conversation-trace-item-meta"><strong>{kindLabel(item.kind)}</strong><time><Clock3 aria-hidden="true" />{timeLabel(item.at)}</time></span>
-              <span className="conversation-trace-item-title">{item.label}</span>
-              <span className="conversation-trace-item-preview">{item.preview || '暂无摘要，打开详情查看完整内容'}</span>
-            </span>
-            <span className="conversation-trace-item-status" title={item.status === 'error' ? '执行失败' : item.status === 'running' ? '执行中' : '已完成'}><StatusIcon status={item.status} /></span>
-            <ChevronRight className="conversation-trace-item-chevron" aria-hidden="true" />
-          </button>)}
-          </div>
-          {selectedItem && <aside className="conversation-trace-detail" aria-label="轨迹详情">
-            <div className="conversation-trace-detail-head"><div><span className="conversation-trace-detail-kicker">{kindLabel(selectedItem.kind)}</span><h3>{selectedItem.label}</h3></div><span className={`conversation-trace-detail-status is-${selectedItem.status}`}><StatusIcon status={selectedItem.status} /></span></div>
-            <div className="conversation-trace-detail-meta"><span><Clock3 aria-hidden="true" />{timeLabel(selectedItem.at)}</span><span>步骤 {Math.max(1, filteredItems.findIndex(item => item.id === selectedItem.id) + 1)}</span><span>ID {selectedItem.id}</span></div>
-            <section><h4>摘要</h4><p>{selectedItem.preview || '暂无摘要'}</p></section>
-            <section><h4>执行内容</h4>{selectedItem.detail ? <pre>{selectedItem.detail}</pre> : <p className="conversation-trace-detail-muted">该步骤没有额外内容。</p>}</section>
-          </aside>}
+      <TraceActivityMap items={summary.items} selectedId={selectedId} onSelect={selectFromMap} />
+      <div className={`conversation-trace-workspace ${selected ? 'has-detail' : ''}`}>
+        <div className="conversation-trace-list" ref={list} aria-label="轨迹记录">
+          {filtered.map((item, index) => <Fragment key={item.id}>
+            {rounds && item.round !== filtered[index - 1]?.round && <div className="trace-round-marker">第 {item.round ?? 1} 轮</div>}
+            <button ref={node => { if (node) rowRefs.current.set(item.id, node); else rowRefs.current.delete(item.id); }} type="button" className={`conversation-trace-item lane-${lane(item)} is-${item.status} ${selectedId === item.id ? 'is-selected' : ''}`} aria-pressed={selectedId === item.id} onClick={() => setSelectedId(item.id)}>
+              <span className="conversation-trace-item-icon"><ItemIcon kind={item.kind} /></span>
+              {(item.kind === 'tool' || item.kind === 'model' || item.kind === 'input') && <span className="conversation-trace-item-title">{item.kind === 'model' ? '模型' : item.label}</span>}
+              <span className="conversation-trace-item-preview">{item.preview || '暂无内容'}{item.result && <span className="trace-result-preview"> → {item.result.replace(/\s+/g, ' ')}</span>}</span>
+              {durations && <time className="conversation-trace-item-time" title={timeLabel(item.at)}>{item.durationMs !== undefined ? durationLabel(item.durationMs) : timeLabel(item.at)}</time>}
+              {item.status !== 'done' && <span className="conversation-trace-item-status" title={statusLabels[item.status]}><StatusIcon status={item.status} /></span>}
+            </button>
+          </Fragment>)}
+          {!filtered.length && <div className="conversation-trace-empty">{summary.items.length ? '没有匹配的轨迹' : '发送消息后显示执行轨迹'}</div>}
         </div>
-        : <div className="conversation-trace-empty"><Wrench aria-hidden="true" /><span>{summary.items.length > 0 ? '没有匹配的轨迹。' : '发送消息后，这里会显示模型、决策和工具步骤。'}</span></div>}
+        {selected && <TraceDetail key={selected.id} item={selected} onClose={closeDetail} />}
+      </div>
     </div>
   </div>;
 }

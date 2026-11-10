@@ -132,6 +132,19 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     if (filesOpen) setPanelEntered(true); else openPanel();
   }
 
+  function openComparisonTab() {
+    const existing = panelTabsRef.current.find((tab) => tab.kind === 'comparison');
+    if (existing) {
+      setActivePanelTabId(existing.id);
+      if (filesOpen) setPanelEntered(true); else openPanel();
+      return;
+    }
+    const id = 'comparison';
+    setPanelTabs((current) => [...current, { id, kind: 'comparison', title: '双跑' }]);
+    setActivePanelTabId(id);
+    if (filesOpen) setPanelEntered(true); else openPanel();
+  }
+
   function openTerminalTab() {
     const id = `terminal:${crypto.randomUUID()}`;
     setPanelTabs(current => {
@@ -461,6 +474,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     openPanel,
     closePanel,
     openTemporaryChat,
+    openComparisonTab,
     openTerminalTab,
     openBrowserTab,
     openFilesTab,
