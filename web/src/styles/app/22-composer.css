@@ -55,7 +55,8 @@
  * 不再一层层往下堆。图片缩到 96×72，文件卡压成 40px 单行。
  */
 
-.user-message { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-width: 100%; }
+/* 用户消息整列贴右：附件条与气泡共用同一条右边缘。 */
+.user-message { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; min-width: 0; max-width: 100%; }
 
 .user-attachments {
   display: flex;
