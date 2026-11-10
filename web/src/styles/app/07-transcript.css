@@ -48,9 +48,25 @@
 .markdown code { padding: 2px 5px; border-radius: var(--radius-tag); background: var(--surface-soft); font: .88em var(--mono); }
 .markdown pre { margin: 12px 0; padding: 13px 14px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); font: var(--text-sm)/var(--leading-relaxed) var(--mono); }
 .markdown pre code { padding: 0; border: 0; background: var(--transparent); font: inherit; }
-.markdown table { display: block; width: max-content; max-width: 100%; margin: 14px 0; overflow: auto; border-collapse: collapse; font-size: var(--text-sm); }
-.markdown th, .markdown td { padding: 7px 10px; border: 1px solid var(--border); text-align: left; }
-.markdown th { background: var(--surface-soft); font-weight: var(--weight-semibold); }
+/* 表格与代码块用同一个 8px 圆角：外框画在滚动容器上，单元格只画内部线，
+ * 否则 collapse 的单元格边框会把圆角顶成直角。 */
+.markdown table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  margin: 14px 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--text-sm);
+}
+.markdown th, .markdown td { padding: 7px 10px; border: 0; border-bottom: 1px solid var(--border); text-align: left; }
+.markdown th + th, .markdown td + td { border-left: 1px solid var(--border); }
+.markdown tbody tr:last-child td { border-bottom: 0; }
+/* 表头在任意底色上都只叠一层 tint，浅色主题下 --surface-soft 与卡片同色会看不出分区。 */
+.markdown th { background: color-mix(in srgb, var(--text-1) 4%, transparent); font-weight: var(--weight-semibold); }
 .markdown img { max-width: 100%; border-radius: var(--radius-control); }
 .markdown input[type="checkbox"] { margin-right: 5px; }
 .markdown .hljs-keyword, .markdown .hljs-selector-tag, .markdown .hljs-built_in { color: var(--syntax-keyword); }
