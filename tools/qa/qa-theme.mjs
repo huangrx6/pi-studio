@@ -311,7 +311,7 @@ async function capture(name) {
 async function openAppearanceSettings() {
   await page.locator('.bottom-row').click();
   await page.getByRole('button', { name: '通用', exact: true }).click();
-  await page.getByRole('heading', { name: '外观', exact: true }).waitFor();
+  await page.getByRole('heading', { name: /外观/ }).waitFor();
 }
 
 // 点击主题单选项，并等待 <html data-theme> 真正切换。
@@ -348,10 +348,12 @@ async function hoverAndClick(shell, label) {
 try {
   await page.goto(process.env.PREVIEW_URL || 'http://127.0.0.1:5180');
   await page.locator('.composer textarea').waitFor();
+  // 工作区选择器常驻输入框：未选时它就是「选择工作区」的入口，
+  // 空状态不再单独渲染设置按钮。
   const workspacePicker = page.getByRole('button', { name: '新对话工作区', exact: true });
-  const setupWorkspace = page.getByRole('button', { name: '选择工作区', exact: true });
-  await setupWorkspace.waitFor();
-  assert.equal(await workspacePicker.count(), 0);
+  await workspacePicker.waitFor();
+  assert.match(await workspacePicker.innerText(), /选择工作区/);
+  assert.equal(await page.locator('.new-conversation-setup-action').count(), 0, 'the welcome state no longer renders setup buttons');
   assert.equal(await page.locator('.conversation-kind-switch').count(), 0);
   assert.match(await page.locator('#workspace-selection-hint').innerText(), /选择工作区后才能发送第一条消息/);
 
@@ -377,15 +379,13 @@ try {
   await page.getByRole('button', { name: '取消选择工作区' }).click();
   await openAppearanceSettings();
   await page.locator('.settings-back-button').click();
-  await setupWorkspace.waitFor();
-  assert.equal(await workspacePicker.count(), 0);
+  await page.waitForFunction(() => document.querySelector('.workspace-choice')?.textContent?.includes('选择工作区'));
 
   // 切换到另一个工作区，之前输入的草稿必须保留。
   await page.locator('.workspace-row').filter({ hasText: 'another-project' }).click();
   await workspacePicker.waitFor();
   assert.equal(await page.getByRole('textbox', { name: '发送给 Pi 的消息' }).inputValue(), '保留这份草稿');
   assert.equal(await page.locator('#workspace-selection-hint').count(), 0, 'workspace hint disappears once the required setup is complete');
-  assert.equal(await page.locator('.new-conversation-setup').count(), 0, 'completed setup actions are removed from the welcome state');
 
   // 发送失败（IPC 抛错）时展示错误提示；此时 createConversation 已被调用一次，
   // 目标工作区就是 another-project；随后点击“新会话”不应重复创建。
@@ -426,16 +426,21 @@ try {
   // -------------------------------------------------------------------------
   await openAppearanceSettings();
   const appearanceCallsBeforeFontSize = await page.evaluate(() => window.__appearanceCalls);
-  await page.getByRole('button', { name: '字号大小', exact: true }).click();
-  await page.getByRole('option', { name: '16 px', exact: true }).click();
+  // 字号现在是步进器：键盘激活 + 两次到 16px（鼠标按住会重复加速，不适合断言）。
+  for (let step = 0; step < 2; step += 1) {
+    await page.getByRole('button', { name: '增加字号' }).focus();
+    await page.keyboard.press('Enter');
+  }
   await page.waitForFunction(() => document.documentElement.style.getPropertyValue('--chat-font-size') === '16px');
   assert.equal(
     await page.evaluate(() => window.__appearanceCalls),
     appearanceCallsBeforeFontSize,
     'reading preferences stay in renderer and do not repeat native appearance IPC',
   );
-  await page.getByRole('button', { name: '字号大小', exact: true }).click();
-  await page.getByRole('option', { name: '14 px', exact: true }).click();
+  for (let step = 0; step < 2; step += 1) {
+    await page.getByRole('button', { name: '减少字号' }).focus();
+    await page.keyboard.press('Enter');
+  }
   await page.waitForFunction(() => document.documentElement.style.getPropertyValue('--chat-font-size') === '14px');
   for (const [mode, label] of [['light', '浅色'], ['dark', '深色']]) {
     // setTheme 同时断言原生窗口收到同一个主题值（__nativeTheme）。

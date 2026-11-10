@@ -1,35 +1,43 @@
 .main.is-new-conversation { overflow-y: auto; }
 .main.is-new-conversation .composer-dock { padding-block: var(--space-8); }
+
+/* 欢迎区只做一次呼吸：一条短线、一句衬线标题、一行说明，然后是任务示例。 */
 .new-conversation-welcome {
   width: min(var(--content), 100%);
   display: grid;
   justify-items: center;
-  gap: var(--space-4);
-  padding: var(--space-4) var(--space-4) var(--space-8);
+  gap: 10px;
+  padding: 0 var(--space-4) var(--space-8);
   margin: 0 auto;
   text-align: center;
 }
-.new-conversation-welcome h1 { margin: 0; color: var(--text); font-size: var(--text-title); font-weight: var(--weight-medium); letter-spacing: -.02em; }
-.new-conversation-welcome p { margin: 0; color: var(--muted); font-size: var(--text-sm); }
-.new-conversation-setup,
-.new-conversation-suggestions { display: flex; justify-content: center; flex-wrap: wrap; gap: var(--space-2); }
-.new-conversation-setup-action,
+
+.new-conversation-rule { width: 28px; height: 2px; border-radius: 2px; background: var(--accent); opacity: .85; }
+
+/* display-font 是这套界面的衬线体，只留给这一句欢迎语。 */
+.new-conversation-welcome h1 {
+  margin: 0;
+  color: var(--text-1);
+  font: var(--weight-regular) var(--text-display)/1.32 var(--display-font);
+  letter-spacing: .01em;
+}
+
+.new-conversation-lede { margin: 0; color: var(--text-2); font-size: var(--text-sm); line-height: var(--leading-relaxed); }
+.new-conversation-welcome p[role="status"] { margin: 0; color: var(--muted); font-size: var(--text-sm); }
+
+.new-conversation-suggestions { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
 .new-conversation-suggestion {
   display: inline-flex;
   align-items: center;
-  min-height: var(--control);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-control);
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-round);
   background: var(--transparent);
-  color: var(--muted);
+  color: var(--text-2);
   font-size: var(--text-sm);
 }
-.new-conversation-setup-action { gap: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: var(--weight-medium); }
-.new-conversation-setup-action svg { width: var(--icon-sm); height: var(--icon-sm); color: var(--accent-foreground); }
-.new-conversation-setup-action.is-primary { border-color: var(--transparent); background: var(--button-bg); color: var(--on-button); }
-.new-conversation-setup-action.is-primary svg { color: currentColor; }
-.new-conversation-setup-action:hover,
-.new-conversation-suggestion:hover { background: var(--surface-hover); color: var(--text); }
-.new-conversation-setup-action.is-primary:hover { background: var(--accent-hover); color: var(--on-button); }
-.new-conversation-setup-action:focus-visible,
+
+.new-conversation-suggestion:hover { border-color: var(--border-hover); background: var(--surface-hover); color: var(--text-1); }
 .new-conversation-suggestion:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }

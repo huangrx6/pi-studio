@@ -1,15 +1,14 @@
 /* ---- 统一的选中态 ------------------------------------------------------
- * 一种颜色、一种强度：accent-tint 底 + text-1 文字 + accent 图标。
- * 形状按位置区分：列表行用左侧 2px 竖条，顶部标签用底部 2px 下划线，
- * 分段控件用 1px 内描边 + tint 底。其它地方不要再自定义选中配色。
+ * 一种颜色、一种强度：tint 底 + text-1 文字 + accent 图标。
+ * 列表行只留底色，不加左侧装饰条；顶部标签用底部 2px 下划线，
+ * 分段控件用 1px 内描边。其它地方不要再自定义选中配色。
  */
 
 :is(.session-row, .nav-row, .settings-nav-row).is-active {
-  position: relative;
   background: var(--accent-tint);
   color: var(--text-1);
   font-weight: var(--weight-medium);
-  box-shadow: inset 2px 0 0 var(--accent);
+  box-shadow: none;
 }
 
 :is(.session-row, .nav-row, .settings-nav-row).is-active > :is(svg, .nav-icon) { color: var(--accent); }
@@ -47,12 +46,12 @@
   .usage-range-switch button.is-active svg
 ) { color: var(--accent); }
 
-/* 设置页侧栏是列表，沿用左侧竖条；颜色保持设置页单色。 */
+/* 设置页侧栏同样是 tint 底，颜色保持设置页单色。 */
 .settings-navigation .settings-nav-row.is-active {
   background: var(--accent-tint);
   color: var(--text-1);
   font-weight: var(--weight-medium);
-  box-shadow: inset 2px 0 0 var(--settings-accent);
+  box-shadow: none;
 }
 
 /* 未选中的分段项悬停时给一层 hover 表面，和 tint 选中态区分开。 */

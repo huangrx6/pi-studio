@@ -29,8 +29,6 @@ delete env.ELECTRON_RUN_AS_NODE;
 delete env.PI_STUDIO_DEV;
 
 const HEADER = 48;
-const TOOLBAR = 36;
-const TRANSPARENT = 'rgba(0, 0, 0, 0)';
 
 /** Measure the shared top rows, their dividers and the native chrome flag. */
 const topRows = (page) => page.evaluate(() => {
@@ -75,29 +73,19 @@ const setNativeFullScreen = (app, fullscreen) => app.evaluate(({ BrowserWindow }
   BrowserWindow.getAllWindows()[0].setFullScreen(value);
 }, fullscreen);
 
-/** Assert one shared 48px title row across the sidebar, the main pane and the workbench. */
-function assertSharedTitleRow(rows, label) {
-  assert.equal(rows.sidebar.paddingTop, '0px', `${label}: no reserved window-control gutter`);
-  assert.equal(rows.brand.top, 0, `${label}: the brand row takes the title row`);
-  assert.equal(rows.brand.height, HEADER, `${label}: the brand row matches the shared title row`);
-  assert.equal(rows.brand.bottom, HEADER, `${label}: the brand divider is the shared divider`);
+/** 顶部只有一行：侧栏品牌、会话标题、右栏标题都在同一行，由收口的那一行画线。 */
+function assertSingleTitleRow(rows, label, { brandPadding = '92px' } = {}) {
+  assert.equal(rows.sidebar.paddingTop, '0px', `${label}: the title row owns the top edge`);
+  assert.equal(rows.brand.top, 0, `${label}: the brand sits inside the title row`);
+  assert.equal(rows.brand.height, HEADER, `${label}: the brand matches the shared title height`);
+  assert.equal(rows.brand.bottom, HEADER, `${label}: the brand divider closes the title row`);
+  assert.equal(rows.brand.paddingLeft, brandPadding, `${label}: the brand clears the window controls`);
   assert.equal(rows.header.bottom, HEADER, `${label}: the conversation title stays inside the shared row`);
   assert.equal(rows.panelTabbar.bottom, HEADER, `${label}: the workbench title stays inside the shared row`);
   assert.equal(rows.header.borderBottomWidth, '1px', `${label}: the title row draws the shared divider`);
   assert.equal(rows.header.borderBottomColor, rows.brand.borderBottomColor, `${label}: the sidebar and the main pane share one divider tone`);
   assert.equal(rows.panelTabbar.borderBottomColor, rows.brand.borderBottomColor, `${label}: the workbench continues the same divider`);
-  assert.equal(rows.tabs.borderBottomColor, TRANSPARENT, `${label}: the tab row yields the divider to the title row`);
-}
-
-/** Assert the windowed top rows the gutter is still reserved for. */
-function assertWindowedRows(rows, label) {
-  assert.equal(rows.sidebar.paddingTop, `${HEADER}px`, `${label}: the window-control gutter is reserved`);
-  assert.equal(rows.brand.top, HEADER, `${label}: the brand row sits below the window controls`);
-  assert.equal(rows.brand.height, TOOLBAR, `${label}: the brand row matches the conversation tab row`);
-  assert.equal(rows.brand.bottom, rows.tabs.bottom, `${label}: the brand divider continues the tab divider`);
-  assert.equal(rows.header.bottom, HEADER, `${label}: the conversation title row keeps its height`);
-  assert.equal(rows.header.borderBottomWidth, '0px', `${label}: the title row leaves the divider to the tab row`);
-  assert.notEqual(rows.tabs.borderBottomColor, TRANSPARENT, `${label}: the tab row keeps its divider`);
+  assert.equal(rows.tabs, null, `${label}: the empty state keeps a single row instead of a placeholder tab bar`);
 }
 
 let app;
@@ -114,13 +102,13 @@ try {
   await page.getByRole('button', { name: '打开右侧面板' }).click();
   await page.locator('.panel-tabbar').waitFor();
 
-  assertWindowedRows(await topRows(page), 'windowed');
+  assertSingleTitleRow(await topRows(page), 'windowed');
   await page.screenshot({ path: path.join(output, '01-windowed.png') });
 
   // Layout contract: the attribute alone switches every shared row.
   await setFullscreenAttribute(page, true);
   const attributeRows = await topRows(page);
-  assertSharedTitleRow(attributeRows, 'fullscreen');
+  assertSingleTitleRow(attributeRows, 'fullscreen', { brandPadding: '16px' });
   await page.screenshot({ path: path.join(output, '02-fullscreen.png') });
 
   // The update badge lives in the brand row; the collapse toggle owns the right edge.
@@ -163,7 +151,7 @@ try {
   await page.waitForFunction(() => !document.querySelector('.app').classList.contains('is-sidebar-collapsed'));
 
   await setFullscreenAttribute(page, false);
-  assertWindowedRows(await topRows(page), 'attribute reset');
+  assertSingleTitleRow(await topRows(page), 'attribute reset');
 
   // Native wiring: the main process must report the transition the CSS reacts to.
   await setNativeFullScreen(app, true);
@@ -174,10 +162,10 @@ try {
   }
   if (native) {
     await waitForChrome(page, true);
-    assertSharedTitleRow(await topRows(page), 'native fullscreen');
+    assertSingleTitleRow(await topRows(page), 'native fullscreen', { brandPadding: '16px' });
     await setNativeFullScreen(app, false);
     await waitForChrome(page, false);
-    assertWindowedRows(await topRows(page), 'native fullscreen exit');
+    assertSingleTitleRow(await topRows(page), 'native fullscreen exit');
   } else {
     await setNativeFullScreen(app, false);
     console.log('note: the OS did not grant a fullscreen space, so the native transition check was skipped');

@@ -106,7 +106,6 @@ export function ConversationHeader({
           {showTrace && <ConversationTraceTab summary={traceSummary} active={agentKind === 'trace'} onOpen={onOpenTrace} />}
         </div>
       </div>}
-      {isNewConversation && <div className="chat-tabs is-placeholder" aria-hidden="true" />}
     </>
   );
 }

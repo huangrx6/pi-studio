@@ -1,0 +1,36 @@
+/* ---- 顶部一行 ---------------------------------------------------------
+ * 整个窗口只有一行标题区：左边是 mac 红黄绿，右边紧挨着品牌与应用名，
+ * 主栏把通知与面板按钮放在同一行的右端。
+ *
+ * 三种情形只差左侧让位：
+ *   - 窗口模式：红绿灯在窗口内，品牌让出 92px 安全区；
+ *   - 有壁纸：红绿灯落在卡片外的留白条里，品牌回到 16px；
+ *   - 原生全屏：红绿灯隐藏，品牌同样回到 16px。
+ *
+ * 分隔线由「收口的那一行」负责：空状态是标题行，会话里是标签行，
+ * 任何时候都只有一条线，不再出现上下并排两层空带。
+ */
+
+.sidebar { padding-top: 0; }
+.sidebar-drag { display: none; }
+
+.brand {
+  height: var(--header-height);
+  margin: 0;
+  padding: 0 var(--space-3) 0 var(--brand-leading, 92px);
+  border-bottom: 1px solid var(--divider);
+  -webkit-app-region: drag;
+}
+
+.brand .brand-name { font-size: var(--text-13); font-weight: var(--weight-semibold); letter-spacing: 0; }
+
+.sidebar-top-toggle { top: calc((var(--header-height) - 28px) / 2); right: var(--space-3); }
+
+.app.has-custom-background { --brand-leading: var(--space-4); }
+html[data-window-fullscreen='true'] .brand { padding-left: var(--space-4); }
+
+/* 空状态只有标题行，由它收口。 */
+.is-new-conversation .chat-header { border-bottom: 1px solid var(--divider); }
+
+/* 右栏标题行与另外两栏共用同一条分隔线。 */
+.app .panel-tabbar { border-bottom-color: var(--divider); }

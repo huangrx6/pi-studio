@@ -16,38 +16,33 @@ function compile(relative, imports = {}) {
   return context.exports;
 }
 
-const icon = name => props => React.createElement('svg', { ...props, 'data-icon': name });
-const { NewConversationWelcome } = compile('../../web/src/features/conversation/NewConversationWelcome.tsx', {
-  'lucide-react': { FolderOpen: icon('folder'), SlidersHorizontal: icon('settings') },
-});
+const { NewConversationWelcome } = compile('../../web/src/features/conversation/NewConversationWelcome.tsx');
 const render = overrides => renderToStaticMarkup(React.createElement(NewConversationWelcome, {
   hasWorkspace: false,
   loading: false,
-  hasModel: false,
   hasDraft: false,
-  onConfigureModel() {},
-  onChooseWorkspace() {},
   onSelectPrompt() {},
   ...overrides,
 }));
 
-test('missing workspace and model render one primary setup path without task examples', () => {
+test('the welcome state is a single invitation, not a setup form', () => {
   const html = render();
-  assert.match(html, /<button type="button" class="new-conversation-setup-action is-primary">[\s\S]*选择工作区<\/button>/);
-  assert.match(html, /new-conversation-model-warning[^>]*>[\s\S]*配置模型<\/button>/);
-  assert.match(html, /data-icon="folder"/);
-  assert.match(html, /data-icon="settings"/);
-  assert.doesNotMatch(html, /任务示例|new-conversation-suggestion/);
+  assert.match(html, /new-conversation-rule/);
+  assert.match(html, /今天想做点什么？/);
+  assert.match(html, /new-conversation-lede/);
+  // 工作区与模型的入口都在输入框里，空状态不再渲染设置按钮。
+  assert.doesNotMatch(html, /选择工作区|配置模型|new-conversation-setup/);
+  assert.doesNotMatch(html, /new-conversation-suggestion/);
 });
 
-test('setup actions and examples disappear once prerequisites and a draft exist', () => {
-  const html = render({ hasWorkspace: true, hasModel: true, hasDraft: true });
-  assert.doesNotMatch(html, /new-conversation-setup|选择工作区|配置模型/);
-  assert.doesNotMatch(html, /任务示例/);
+test('task examples appear only with a workspace and no draft', () => {
+  assert.doesNotMatch(render(), /任务示例|new-conversation-suggestion/);
+  assert.match(render({ hasWorkspace: true }), /任务示例/);
+  assert.doesNotMatch(render({ hasWorkspace: true, hasDraft: true }), /任务示例|new-conversation-suggestion/);
 });
 
-test('task examples wait for a workspace and remain useful until a model is configured', () => {
-  assert.doesNotMatch(render({ hasWorkspace: false, hasModel: true }), /任务示例|new-conversation-suggestion/);
-  assert.match(render({ hasWorkspace: true, hasModel: false }), /任务示例/);
-  assert.match(render({ hasWorkspace: true, hasModel: true }), /任务示例/);
+test('loading hides the invitation copy instead of showing setup actions', () => {
+  const html = render({ loading: true });
+  assert.match(html, /正在载入…/);
+  assert.doesNotMatch(html, /new-conversation-lede|new-conversation-suggestion/);
 });

@@ -12,3 +12,36 @@
   .composer-toolbar .composer-right { justify-content: flex-end; }
   .composer-toolbar .composer-more-button { margin-right: auto; }
 }
+
+/* 未配置模型时的行内提示：出现在输入框上方，不遮挡输入。 */
+.composer-model-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  padding: 6px 8px 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-2);
+  font-size: var(--text-sm);
+}
+
+.composer-model-hint > svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--accent); }
+.composer-model-hint > span { flex: 1; min-width: 0; }
+
+.composer-model-hint-action {
+  height: 24px;
+  flex: none;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--accent-tint);
+  color: var(--text-1);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.composer-model-hint-action:hover { background: var(--surface-hover); }
+.composer-model-hint-close { display: grid; place-items: center; width: 20px; height: 20px; flex: none; border-radius: 4px; color: var(--text-3); }
+.composer-model-hint-close:hover { background: var(--surface-hover); color: var(--text-1); }
+.composer-model-hint-close svg { width: var(--icon-xs); height: var(--icon-xs); }

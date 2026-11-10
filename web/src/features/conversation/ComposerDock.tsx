@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import {
   LoaderCircle,
   PanelRightOpen,
   ShieldCheck,
+  SlidersHorizontal,
   X,
 } from 'lucide-react';
 import type {
@@ -237,15 +238,16 @@ export function ComposerDock({
     () => splitComposerText(prompt, composerCommandNames),
     [prompt, composerCommandNames],
   );
+  // 模型没配置时，发送按钮只会禁用；点击输入框时给一条可见的配置入口，
+  // 而不是把用户挡在输入框外。
+  const hasUsableModel = Boolean(modelSelection.modelRef) && !modelSelection.unavailable;
+  const [modelHintOpen, setModelHintOpen] = useState(false);
 
   return <div className="composer-dock" hidden={!open}>
     {isNewConversation && <NewConversationWelcome
       hasWorkspace={Boolean(workspace)}
       hasDraft={Boolean(prompt.trim() || composerAttachments.length)}
       loading={stateLoading}
-      hasModel={Boolean(modelSelection.modelRef) && !modelSelection.unavailable}
-      onConfigureModel={onConfigureModels}
-      onChooseWorkspace={chooseFile}
       onSelectPrompt={(text) => {
         setPrompt((current) => current.trim() ? `${current}\n\n${text}` : text);
         setComposerMenu(null);
@@ -290,6 +292,21 @@ export function ComposerDock({
         onRetry={retryComposerSuggestions}
       />}
       {session?.id && compaction.active && <div className="compaction-banner" role="status"><LoaderCircle className="spin" /><span>上下文正在压缩，完成后会自动继续…</span></div>}
+    {!hasUsableModel && modelHintOpen && <div className="composer-model-hint" role="status">
+        <SlidersHorizontal aria-hidden="true" />
+        <span>还没有可用模型，发送前先挑一个。</span>
+        <button
+          type="button"
+          className="composer-model-hint-action"
+          onClick={() => { setModelHintOpen(false); onConfigureModels(); }}
+        >配置模型</button>
+        <button
+          type="button"
+          className="composer-model-hint-close"
+          aria-label="关闭模型提示"
+          onClick={() => setModelHintOpen(false)}
+        ><X aria-hidden="true" /></button>
+      </div>}
       <ExtensionSlot
         slot="composer.before"
         cwd={workspace}
@@ -378,7 +395,10 @@ export function ComposerDock({
               setPrompt(value);
               updateComposerMenu(value, event.target.selectionStart ?? value.length);
             }}
-            onClick={(event) => updateComposerMenu(prompt, event.currentTarget.selectionStart ?? prompt.length)}
+            onClick={(event) => {
+              updateComposerMenu(prompt, event.currentTarget.selectionStart ?? prompt.length);
+              if (!hasUsableModel && !stateLoading) setModelHintOpen(true);
+            }}
             onPaste={(event) => {
               const node = event.currentTarget;
               const files = Array.from(event.clipboardData.files);
@@ -468,7 +488,7 @@ export function ComposerDock({
           stopping={stopping}
           compacting={compaction.active}
           hasWorkspace={Boolean(workspace)}
-          hasModel={Boolean(modelSelection.modelRef) && !modelSelection.unavailable}
+          hasModel={hasUsableModel}
           isCommand={composerAttachments.length === 0 && prompt.trim().startsWith('/')}
           hasContent={Boolean(prompt.trim() || composerAttachments.length)}
           loading={stateLoading || sessionLoading}
@@ -478,7 +498,7 @@ export function ComposerDock({
           onSend={() => void send()}
           onStop={() => void stopGeneration()}
           context={<>
-            {isNewConversation && workspace && <WorkspacePicker value={workspace} workspaces={workspaces} onChange={selectDraftWorkspace} onBrowse={chooseFile} />}
+            {isNewConversation && <WorkspacePicker value={workspace} workspaces={workspaces} onChange={selectDraftWorkspace} onBrowse={chooseFile} />}
             {visiblePermission?.status === 'ready' && visiblePermission.available && (
               <span className="composer-mode" title="Studio 工具权限模式">
                 <Select
@@ -509,21 +529,19 @@ export function ComposerDock({
               onOpenSettings={() => onOpenSettings('harness')}
             />}
           </>}
-          model={(!isNewConversation || (Boolean(modelSelection.modelRef) && !modelSelection.unavailable))
-            ? <ModelPicker
-              contextKey={modelPickerContextKey}
-              selection={modelSelection}
-              scope={session ? 'session' : 'default'}
-              disabled={stateLoading || sessionLoading}
-              hidden={settingsOpen}
-              loadCatalog={() => loadModelCatalog(workspace)}
-              onSelectModel={selectModel}
-              onSelectThinking={selectThinking}
-              onManage={onConfigureModels}
-              request={modelPickerRequest}
-              onRequestHandled={() => setModelPickerRequest(null)}
-            />
-            : null}
+          model={<ModelPicker
+            contextKey={modelPickerContextKey}
+            selection={modelSelection}
+            scope={session ? 'session' : 'default'}
+            disabled={stateLoading || sessionLoading}
+            hidden={settingsOpen}
+            loadCatalog={() => loadModelCatalog(workspace)}
+            onSelectModel={selectModel}
+            onSelectThinking={selectThinking}
+            onManage={onConfigureModels}
+            request={modelPickerRequest}
+            onRequestHandled={() => setModelPickerRequest(null)}
+          />}
         />
       </div>
     </div>
