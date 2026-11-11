@@ -131,6 +131,8 @@ export function ConversationTraceTab({ active, onOpen }: ConversationTraceProps 
   return <button type="button" role="tab" aria-selected={active} className={`tab conversation-trace-tab ${active ? 'is-active' : ''}`} aria-label="打开会话轨迹页面" onClick={onOpen}><Activity aria-hidden="true" /><span>轨迹</span></button>;
 }
 
+const TRACE_PAGE = 120;
+
 export function ConversationTracePage({ summary }: ConversationTraceProps) {
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -140,17 +142,36 @@ export function ConversationTracePage({ summary }: ConversationTraceProps) {
   const [subcalls, setSubcalls] = useState(true);
   const list = useRef<HTMLDivElement>(null);
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
+  // 一次只挂载视口附近的记录：上千条轨迹全部挂载会让整页渲染变重。
+  const [visibleCount, setVisibleCount] = useState(TRACE_PAGE);
+  const sentinel = useRef<HTMLDivElement>(null);
   const selected = summary.items.find(item => item.id === selectedId);
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
     return summary.items.filter(item => (calls || item.kind !== 'model') && (subcalls || item.kind !== 'tool') && (!needle || `${item.label} ${item.preview} ${item.detail || ''} ${item.result || ''}`.toLocaleLowerCase().includes(needle)));
   }, [summary.items, query, calls, subcalls]);
   const [jumpId, setJumpId] = useState<string | null>(null);
+  useEffect(() => { setVisibleCount(TRACE_PAGE); }, [query, calls, subcalls]);
+  // 搜索命中或地图跳转可能落在已挂载范围之外，先把它所在的一段补齐。
   useEffect(() => {
     if (!jumpId) return;
+    const index = filtered.findIndex((item) => item.id === jumpId);
+    if (index >= visibleCount) setVisibleCount(Math.min(filtered.length, index + 60));
     rowRefs.current.get(jumpId)?.scrollIntoView({ block: 'center', inline: 'nearest' });
     setJumpId(null);
-  }, [jumpId, filtered]);
+  }, [jumpId, filtered, visibleCount]);
+  // 滚到底部再挂载下一段。
+  useEffect(() => {
+    const node = sentinel.current;
+    const root = list.current;
+    if (!node || !root || visibleCount >= filtered.length) return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      setVisibleCount((current) => Math.min(filtered.length, current + TRACE_PAGE));
+    }, { root, rootMargin: '600px 0px' });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [visibleCount, filtered.length]);
   const selectFromMap = (item: ConversationTraceItem) => {
     setQuery(''); setCalls(true); setSubcalls(true); setSelectedId(item.id); setJumpId(item.id);
   };
@@ -169,7 +190,7 @@ export function ConversationTracePage({ summary }: ConversationTraceProps) {
       <TraceActivityMap items={summary.items} selectedId={selectedId} onSelect={selectFromMap} />
       <div className={`conversation-trace-workspace ${selected ? 'has-detail' : ''}`}>
         <div className="conversation-trace-list" ref={list} aria-label="轨迹记录">
-          {filtered.map((item, index) => <Fragment key={item.id}>
+          {filtered.slice(0, visibleCount).map((item, index) => <Fragment key={item.id}>
             {rounds && item.round !== filtered[index - 1]?.round && <div className="trace-round-marker">第 {item.round ?? 1} 轮</div>}
             <button ref={node => { if (node) rowRefs.current.set(item.id, node); else rowRefs.current.delete(item.id); }} type="button" className={`conversation-trace-item lane-${lane(item)} is-${item.status} ${selectedId === item.id ? 'is-selected' : ''}`} aria-pressed={selectedId === item.id} onClick={() => setSelectedId(item.id)}>
               <span className="conversation-trace-item-icon"><ItemIcon kind={item.kind} /></span>
@@ -179,6 +200,7 @@ export function ConversationTracePage({ summary }: ConversationTraceProps) {
               {item.status !== 'done' && <span className="conversation-trace-item-status" title={statusLabels[item.status]}><StatusIcon status={item.status} /></span>}
             </button>
           </Fragment>)}
+          {visibleCount < filtered.length && <div ref={sentinel} className="conversation-trace-sentinel" aria-hidden="true" />}
           {!filtered.length && <div className="conversation-trace-empty">{summary.items.length ? '没有匹配的轨迹' : '发送消息后显示执行轨迹'}</div>}
         </div>
         {selected && <TraceDetail key={selected.id} item={selected} onClose={closeDetail} />}

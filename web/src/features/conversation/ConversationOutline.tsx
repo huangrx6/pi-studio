@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import type { OutlineItem } from './outline-model';
 
 type ConversationOutlineProps = {
@@ -9,6 +10,14 @@ type ConversationOutlineProps = {
   onJump: (index: number) => void;
 };
 
+type HoverBox = { index: number; top: number; left: number };
+
+/**
+ * 会话缩略导航：每一次提问一个刻度，放在标题与菜单栏同一条左缘上。
+ *
+ * 刻度全量渲染，超出最大高度时在轨道内滚动（不显示滚动条，上下渐隐）。
+ * 悬停卡片用 fixed 定位，避免被滚动容器裁掉。
+ */
 export function ConversationOutline({
   items,
   samples,
@@ -17,38 +26,56 @@ export function ConversationOutline({
   onHover,
   onJump,
 }: ConversationOutlineProps) {
-  return (
-    <nav className="conversation-outline" aria-label="对话大纲" onMouseLeave={() => onHover(null)}>
-      <div className="outline-track">
-        {samples.map((index) => {
-          const item = items[index];
-          return <div
-            className={`outline-item ${hoverIndex === index ? 'is-hovered' : ''}`}
-            key={item.sourceIndex}
-            onMouseEnter={() => onHover(index)}
-          >
-            <button
-              type="button"
-              className={`outline-tick ${index === activeIndex ? 'is-active' : ''}`}
-              aria-label={`跳转到第 ${index + 1} 条提问`}
-              aria-current={index === activeIndex ? 'location' : undefined}
-              title={item.text.slice(0, 100)}
-              onFocus={() => onHover(index)}
-              onClick={() => onJump(index)}
-            ><span className="outline-line" /></button>
-            {hoverIndex === index && <button
-              type="button"
-              className="outline-preview"
-              tabIndex={-1}
-              aria-label={`跳转到第 ${index + 1} 条提问：${item.text.slice(0, 100)}`}
-              onClick={() => onJump(index)}
-            >
-              <span className="outline-preview-role">你 · {item.timestamp ? new Date(item.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}<span>{index + 1} / {items.length}</span></span>
-              <span className="outline-preview-text">{item.text}</span>
-            </button>}
-          </div>;
-        })}
-      </div>
-    </nav>
-  );
+  const nav = useRef<HTMLElement>(null);
+  const [box, setBox] = useState<HoverBox | null>(null);
+
+  function showPreview(index: number, node: HTMLElement) {
+    const tick = node.getBoundingClientRect();
+    const host = nav.current?.getBoundingClientRect();
+    // 相对 nav 定位（nav 自带 transform，fixed 会以它为包含块）。
+    setBox({ index, top: tick.top - (host?.top ?? 0) + tick.height / 2, left: 52 });
+    onHover(index);
+  }
+
+  function hidePreview() {
+    setBox(null);
+    onHover(null);
+  }
+
+  const hovered = box ? items[box.index] : null;
+
+  return <nav ref={nav} className="conversation-outline" aria-label="对话大纲" onMouseLeave={hidePreview}>
+    <div className="outline-track">
+      {samples.map((index) => {
+        const item = items[index];
+        if (!item) return null;
+        return <div
+          className={`outline-item ${hoverIndex === index ? 'is-hovered' : ''}`}
+          key={item.sourceIndex}
+          onMouseEnter={(event) => showPreview(index, event.currentTarget)}
+        >
+          <button
+            type="button"
+            className={`outline-tick ${index === activeIndex ? 'is-active' : ''}`}
+            aria-label={`跳转到第 ${index + 1} 条提问`}
+            aria-current={index === activeIndex ? 'location' : undefined}
+            onFocus={(event) => showPreview(index, event.currentTarget)}
+            onBlur={hidePreview}
+            onClick={() => onJump(index)}
+          ><span className="outline-line" /></button>
+        </div>;
+      })}
+    </div>
+    {hovered && box && <button
+      type="button"
+      className="outline-preview"
+      tabIndex={-1}
+      style={{ top: box.top, left: box.left }}
+      aria-label={`跳转到第 ${box.index + 1} 条提问：${hovered.text.slice(0, 100)}`}
+      onClick={() => onJump(box.index)}
+    >
+      <span className="outline-preview-role">你 · {hovered.timestamp ? new Date(hovered.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}<span>{box.index + 1} / {items.length}</span></span>
+      <span className="outline-preview-text">{hovered.text}</span>
+    </button>}
+  </nav>;
 }

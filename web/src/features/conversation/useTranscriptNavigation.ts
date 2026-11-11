@@ -5,7 +5,6 @@ import type { OutlineItem } from './outline-model';
 import { NO_ANSWER_TEXT } from './outline-model';
 import { placeRequestTraces } from './request-trace-turns';
 import { transcriptWindowStart } from './transcript-window.mjs';
-import { sampleOutlineIndices } from './outline-samples.mjs';
 import { outlineIndexAt } from './outline-sync.mjs';
 import {
   SCROLL_INTENT_WINDOW_MS,
@@ -237,9 +236,10 @@ export function useTranscriptNavigation({
   const pendingTurnError = !turnActive && requestPlacement.pending.length > 0
     ? error || NO_ANSWER_TEXT
     : undefined;
+  // 缩略导航显示全部提问：刻度全量渲染，超出高度时在轨道内滚动。
   const outlineSamples = useMemo(
-    () => sampleOutlineIndices(outlineItems.length, outlineActive),
-    [outlineItems.length, outlineActive],
+    () => outlineItems.map((_, index) => index),
+    [outlineItems],
   );
 
   function syncOutlineActive() {

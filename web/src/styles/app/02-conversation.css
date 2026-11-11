@@ -88,7 +88,8 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .conversation-trace-workspace.has-detail { grid-template-columns: minmax(0, 1fr) min(40%, 380px); }
 .conversation-trace-list { min-width: 0; overflow: auto; scrollbar-width: thin; padding-bottom: 16px; }
 .trace-round-marker { color: var(--accent-foreground); background: var(--accent-soft); width: fit-content; padding: 1px 5px; margin-top: 6px; font: var(--text-xs)/14px var(--mono); border-radius: 0 var(--radius-tag) var(--radius-tag) 0; }
-.conversation-trace-item { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; min-height: 32px; padding: 0 10px 0 20px; border: 0; border-bottom: 1px solid var(--divider); border-radius: 0; background: transparent; text-align: left; color: var(--text); cursor: pointer; }
+.conversation-trace-item { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; min-height: 32px; padding: 0 10px 0 20px; border: 0; border-bottom: 1px solid var(--divider); border-radius: 0; background: transparent; text-align: left; color: var(--text); cursor: pointer; content-visibility: auto; contain-intrinsic-size: auto 32px; }
+.conversation-trace-sentinel { height: 1px; }
 .conversation-trace-item:hover { background: var(--surface-hover); }
 .conversation-trace-item.is-selected { background: var(--surface-active); box-shadow: inset 2px 0 var(--accent); }
 .conversation-trace-item:focus-visible { outline: 1px solid var(--accent); outline-offset: -2px; }
