@@ -26,17 +26,17 @@
 
 /* 按钮在窗口拖拽区旁边：显式声明 no-drag 并把热区向外扩 4px，
  * 28px 的图标旁边那点空白也应该能点中。 */
+/* 按钮在窗口拖拽区里：显式 no-drag，并把点击目标做成 36×32 的实体块。
+ * 之前只有 28×28 且没有任何视觉边界，点在图标边缘会落到拖拽区上，看起来「点不动」。 */
 .sidebar-top-toggle {
-  top: calc((var(--header-height) - 28px) / 2);
-  right: var(--space-3);
+  top: calc((var(--header-height) - 32px) / 2);
+  right: var(--space-2);
   z-index: 6;
+  width: 36px;
+  height: 32px;
   -webkit-app-region: no-drag;
 }
-.sidebar-top-toggle::after {
-  content: '';
-  position: absolute;
-  inset: -4px;
-}
+.sidebar-top-toggle > svg { pointer-events: none; }
 
 /* 有壁纸或全屏时品牌与侧栏内容同一条竖线（12px）；窗口模式仍让开红绿灯。 */
 .app.has-custom-background { --brand-leading: 12px; }

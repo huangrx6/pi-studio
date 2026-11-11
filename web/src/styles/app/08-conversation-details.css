@@ -92,7 +92,6 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 /* 把侧栏开关、对话头标题和右侧操作对齐到同一条光学基线，操作组用负外边距
 抵消图标内边距；下面还会再微调一次 top 值。 */
 
-.sidebar-top-toggle { top: 21px; }
 .chat-actions { margin-right: -8px; }
 
 /* Optical top line: match the native window controls. */
@@ -119,7 +118,7 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
   position: absolute;
   z-index: 9;
   top: 50%;
-  left: 0;
+  left: var(--space-4);
   display: flex;
   width: 44px;
   max-height: min(56vh, 520px);
