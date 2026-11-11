@@ -217,23 +217,43 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
   }
 
   /**
-   * 会话变更文件走受控读取（只允许本轮改过的路径）；不在变更记录里、但落在
-   * 当前工作区内的文件回退到普通预览，聊天引用与工作区树保持一致体验。
+   * 会话变更文件走受控读取（只允许本轮改过的路径）。不在变更记录里的文件
+   * 依次回退：工作区内走普通预览，其它位置交给主进程统一解析——模型给出的
+   * `~/…`、相对路径、工作区外绝对路径都能打开，凭据类路径由主进程拒绝。
    */
   async function loadDiffPreview(tab: PanelTab): Promise<PanelFile> {
     const target = tab.path!;
+    const cwd = tab.cwd || workspaceRef.current || sessionRef.current?.cwd;
     try {
       return await window.piApi.turnDiffAbsoluteFile({ sessionId: tab.sessionId!, path: target });
     } catch (error) {
-      const cwd = tab.cwd || workspaceRef.current || sessionRef.current?.cwd;
-      if (!cwd || !target.startsWith(`${cwd}/`)) throw error;
-      return loadWorkspacePreview(cwd, target.slice(cwd.length + 1));
+      if (cwd && target.startsWith(`${cwd}/`)) {
+        try {
+          return await loadWorkspacePreview(cwd, target.slice(cwd.length + 1));
+        } catch {
+          // 工作区预览也拒绝时，继续走统一解析（例如符号链接指向工作区外）。
+        }
+      }
+      return loadExternalPreview(target, cwd, tab.sessionId);
     }
+  }
+
+  /** 任意文件引用：`~`、相对路径、工作区外绝对路径都由主进程解析。 */
+  async function loadExternalPreview(target: string, cwd?: string, sessionId?: string): Promise<PanelFile> {
+    const preview = await window.piApi.filePreviewAbsolute({ path: target, cwd, sessionId });
+    const path = preview.path || target;
+    return {
+      path,
+      size: preview.size,
+      binary: preview.kind === 'binary',
+      text: preview.text || '',
+      preview: { ...preview, path },
+    };
   }
 
   async function loadFileToTab(tab: PanelTab): Promise<boolean> {
     if (!tab.path) return false;
-    const source = tab.source || (tab.path.startsWith('/') ? 'diff' : 'workspace');
+    const source = tab.source || (tab.path.startsWith('/') ? 'diff' : tab.path.startsWith('~') ? 'external' : 'workspace');
     const identity = { path: tab.path, source, cwd: tab.cwd, sessionId: tab.sessionId };
     if (source === 'workspace' && !tab.cwd) return false;
     if (source === 'diff' && !tab.sessionId) {
@@ -251,7 +271,9 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
         ? await window.piApi.attachmentFile({ path: tab.path })
         : source === 'diff'
           ? await loadDiffPreview(tab)
-          : await loadWorkspacePreview(tab.cwd!, tab.path);
+          : source === 'external'
+            ? await loadExternalPreview(tab.path, tab.cwd, tab.sessionId)
+            : await loadWorkspacePreview(tab.cwd!, tab.path);
       // A closed/reopened tab has a different read token. Never revive its data.
       if (!panelTabsRef.current.some(item => item.id === tab.id) || !cache.put(key, token, content)) return true;
       if (current()) setFile(content);
@@ -269,7 +291,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
   function activatePanelTab(tab: PanelTab) {
     setActivePanelTabId(tab.id);
     if (tab.kind === 'file' && tab.path) {
-      const source = tab.source || (tab.path.startsWith('/') ? 'diff' : 'workspace');
+      const source = tab.source || (tab.path.startsWith('/') ? 'diff' : tab.path.startsWith('~') ? 'external' : 'workspace');
       const cached = fileCacheRef.current.get(panelFileKey({ path: tab.path, source, cwd: tab.cwd, sessionId: tab.sessionId }));
       setFile(cached ?? null);
       if (!cached) void loadFileToTab(tab);
@@ -280,11 +302,11 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
   async function openFile(
     target: string,
     accessSessionId = sessionRef.current?.id,
-    source: PanelFileSource = target.startsWith('/') ? 'diff' : 'workspace',
+    source: PanelFileSource = target.startsWith('/') ? 'diff' : target.startsWith('~') || target.startsWith('file://') ? 'external' : 'workspace',
   ): Promise<boolean> {
     const cwd = workspaceRef.current || sessionRef.current?.cwd;
     if (source === 'workspace' && !cwd) return false;
-    const identity = { path: target, source, cwd: source === 'workspace' ? cwd : undefined, sessionId: source === 'workspace' ? undefined : accessSessionId };
+    const identity = { path: target, source, cwd: source === 'workspace' || source === 'external' ? cwd : undefined, sessionId: source === 'workspace' ? undefined : accessSessionId };
     const key = panelFileKey(identity);
     const id = `file:${key}`;
     const tab: PanelTab = { id, kind: 'file', title: target.split('/').pop() || target, tooltip: source === 'workspace' ? `${cwd}/${target}` : target, ...identity };

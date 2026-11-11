@@ -1,5 +1,5 @@
 /** Workspace paths and session-authorized paths have distinct cache ownership. */
-export type PanelFileIdentity = { path: string; source: 'workspace' | 'attachment' | 'diff'; cwd?: string; sessionId?: string };
+export type PanelFileIdentity = { path: string; source: 'workspace' | 'attachment' | 'diff' | 'external'; cwd?: string; sessionId?: string };
 export function panelFileKey(file: PanelFileIdentity): string {
   return JSON.stringify([file.source, file.source === 'workspace' ? file.cwd || '' : file.sessionId || 'draft', file.path]);
 }

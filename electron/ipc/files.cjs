@@ -5,6 +5,7 @@
 
 const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const fs = require('node:fs');
+const path = require('node:path');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
 const { getWindow } = require('../core/state.cjs');
 const {
@@ -13,7 +14,8 @@ const {
   listDirectory,
   readFileText,
 } = require('../services/workspace.cjs');
-const { readFilePreview } = require('../services/file-preview.cjs');
+const { readFilePreview, readFilePreviewAt } = require('../services/file-preview.cjs');
+const { resolveUserTarget } = require('../services/file-target.cjs');
 const { normalizeExternalHttpUrl } = require('../core/external-url.cjs');
 const { applicationsForFile, applicationIcon, openWithApp } = require('../services/mac-apps.cjs');
 const { resolveAttachmentFile } = require('../services/attachments.cjs');
@@ -31,6 +33,7 @@ function resolveFileRequest({ cwd, path: requested, source = 'workspace', sessio
   if (source === 'workspace') return workspaceFile(cwd, requested);
   if (source === 'attachment') return resolveAttachmentFile(requested);
   if (source === 'diff') return resolveTurnDiffAbsoluteFile({ sessionId, path: requested });
+  if (source === 'external') return resolveUserTarget(requested, { cwd });
   throw new Error('文件来源无效');
 }
 
@@ -61,6 +64,22 @@ function registerFilesIpc() {
   ipcMain.handle('pi:turn-diff-absolute-file', async (event, payload) => {
     assertMainWindow(event);
     return require('../services/turn-diff.cjs').readTurnDiffAbsoluteFile(payload);
+  });
+  // 用户点开的任意文件引用：先认变更记录，再按 `~` / 相对 / 绝对路径统一解析。
+  // 相对路径以会话工作目录为基准，凭据类路径在 realpath 之后被拒绝。
+  ipcMain.handle('pi:file-preview-absolute', async (event, { path: requested, cwd, sessionId } = {}) => {
+    assertMainWindow(event);
+    if (typeof requested !== 'string' || !requested) throw new Error('缺少文件路径');
+    if (typeof sessionId === 'string' && sessionId && path.isAbsolute(requested)) {
+      try {
+        const authorized = resolveTurnDiffAbsoluteFile({ sessionId, path: requested });
+        return readFilePreviewAt(authorized, authorized);
+      } catch {
+        // 不在变更记录里，继续按用户路径解析。
+      }
+    }
+    const target = resolveUserTarget(requested, { cwd });
+    return readFilePreviewAt(target, target);
   });
 
   // 「打开方式」候选应用 + 图标

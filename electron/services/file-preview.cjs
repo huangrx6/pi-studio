@@ -127,10 +127,10 @@ function looksLikeUtf8Text(buffer) {
 }
 
 /**
- * Read a bounded preview payload. Unknown binary files never cross IPC.
+ * Read a bounded preview payload for an already-resolved absolute path.
+ * Callers own the authorization check; this only bounds what crosses IPC.
  */
-function readFilePreview(root, requested) {
-  const target = workspaceFile(root, requested);
+function readFilePreviewAt(target, requested) {
   const stat = fs.statSync(target);
   if (!stat.isFile()) throw new Error('不是文件');
 
@@ -205,10 +205,16 @@ function readFilePreview(root, requested) {
   };
 }
 
+/** 工作区内预览：路径先经过工作区越界检查。 */
+function readFilePreview(root, requested) {
+  return readFilePreviewAt(workspaceFile(root, requested), requested);
+}
+
 module.exports = {
   MAX_INLINE_DOCUMENT_BYTES,
   MAX_INLINE_MEDIA_BYTES,
   MAX_TEXT_BYTES,
   mimeTypeForPath,
   readFilePreview,
+  readFilePreviewAt,
 };

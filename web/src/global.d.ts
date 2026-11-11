@@ -507,14 +507,16 @@ declare global {
       ) => void): () => void;
       turnDiffFile(payload: { sessionId: string; at: number; path: string; full?: boolean; ignoreWhitespace?: boolean }): Promise<import('./types/chat-types').TurnDiffFile>;
       turnDiffAbsoluteFile(payload: { sessionId: string; path: string }): Promise<{ path: string; size: number; binary: boolean; text: string }>;
+      /** 打开聊天里出现的任意文件引用：`~`、相对路径与工作区外绝对路径都由主进程解析。 */
+      filePreviewAbsolute(payload: { path: string; cwd?: string; sessionId?: string }): Promise<FilePreviewResult>;
       /** 只读打开 Studio 自己管理的附件文件；主进程会拒绝附件目录之外的路径。 */
       attachmentFile(payload: { path: string }): Promise<{ path: string; size: number; binary: boolean; text: string }>;
       /** 查询系统里可用来打开该文件的应用。 */
-      fileActions(payload: { cwd?: string; path: string; source?: 'workspace' | 'attachment' | 'diff'; sessionId?: string }): Promise<{ apps: Array<{ name: string; path: string; icon?: string }> }>;
+      fileActions(payload: { cwd?: string; path: string; source?: 'workspace' | 'attachment' | 'diff' | 'external'; sessionId?: string }): Promise<{ apps: Array<{ name: string; path: string; icon?: string }> }>;
       /** 用指定应用（或系统默认应用）打开文件。 */
-      openWith(payload: { cwd?: string; path: string; appPath?: string; source?: 'workspace' | 'attachment' | 'diff'; sessionId?: string }): Promise<{ ok: boolean }>;
+      openWith(payload: { cwd?: string; path: string; appPath?: string; source?: 'workspace' | 'attachment' | 'diff' | 'external'; sessionId?: string }): Promise<{ ok: boolean }>;
       /** 在 Finder 中定位文件。 */
-      revealFile(payload: { cwd?: string; path: string; source?: 'workspace' | 'attachment' | 'diff'; sessionId?: string }): Promise<{ ok: boolean }>;
+      revealFile(payload: { cwd?: string; path: string; source?: 'workspace' | 'attachment' | 'diff' | 'external'; sessionId?: string }): Promise<{ ok: boolean }>;
       /** 用系统浏览器打开任意 http(s) 链接。 */
       openExternal(url: string): Promise<{ ok: boolean }>;
       /** 按偏好打开链接：external 走系统浏览器，window 走应用内子窗口。 */

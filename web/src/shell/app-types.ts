@@ -103,7 +103,7 @@ export type PanelFile = {
   preview?: FilePreviewResult;
 };
 
-export type PanelFileSource = 'workspace' | 'attachment' | 'diff';
+export type PanelFileSource = 'workspace' | 'attachment' | 'diff' | 'external';
 
 export type ModelComparisonContext = {
   parentId: string;

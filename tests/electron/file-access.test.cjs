@@ -43,7 +43,15 @@ function loadResolver() {
         };
       }
       if (name === '../services/file-preview.cjs') {
-        return { readFilePreview: () => ({ kind: 'text', text: '' }) };
+        return { readFilePreview: () => ({ kind: 'text', text: '' }), readFilePreviewAt: () => ({ kind: 'text', text: '' }) };
+      }
+      if (name === '../services/file-target.cjs') {
+        return {
+          resolveUserTarget: (requested, { cwd } = {}) => {
+            calls.push({ source: 'external', cwd, requested });
+            return '/resolved/external';
+          },
+        };
       }
       if (name === '../services/attachments.cjs') {
         return {
@@ -69,7 +77,7 @@ function loadResolver() {
   return { resolveFileRequest: module.exports.resolveFileRequest, calls };
 }
 
-test('file operations route workspace, attachment, and turn-diff paths through their own guards', () => {
+test('file operations route workspace, attachment, turn-diff, and external paths through their own guards', () => {
   const { resolveFileRequest, calls } = loadResolver();
 
   assert.equal(
@@ -88,6 +96,10 @@ test('file operations route workspace, attachment, and turn-diff paths through t
     }),
     '/resolved/diff',
   );
+  assert.equal(
+    resolveFileRequest({ path: '~/Downloads/report.xlsx', source: 'external', cwd: '/workspace' }),
+    '/resolved/external',
+  );
   assert.throws(
     () => resolveFileRequest({ path: '/tmp/file', source: 'guess' }),
     /文件来源无效/,
@@ -99,6 +111,11 @@ test('file operations route workspace, attachment, and turn-diff paths through t
       source: 'diff',
       sessionId: 'session-a',
       requested: '/workspace/changed.ts',
+    },
+    {
+      source: 'external',
+      cwd: '/workspace',
+      requested: '~/Downloads/report.xlsx',
     },
   ]);
 });

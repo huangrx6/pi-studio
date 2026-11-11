@@ -69,6 +69,7 @@ contextBridge.exposeInMainWorld('piApi', {
   filePreview: (cwd, path) => ipcRenderer.invoke('pi:file-preview', { cwd, path }),
   turnDiffFile: (payload) => ipcRenderer.invoke('pi:turn-diff-file', payload),
   turnDiffAbsoluteFile: (payload) => ipcRenderer.invoke('pi:turn-diff-absolute-file', payload),
+  filePreviewAbsolute: (payload) => ipcRenderer.invoke('pi:file-preview-absolute', payload),
   attachmentFile: (payload) => ipcRenderer.invoke('pi:attachment-file', payload),
   fileActions: (payload) => ipcRenderer.invoke('pi:file-actions', payload),
   openWith: (payload) => ipcRenderer.invoke('pi:open-with', payload),

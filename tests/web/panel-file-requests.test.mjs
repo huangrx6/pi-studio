@@ -6,7 +6,7 @@ import ts from 'typescript';
 import { createPanelFileCache, panelFileKey } from '../../web/src/shell/right-panel/panel-file-cache.ts';
 const source = fs.readFileSync(new URL('../../web/src/shell/right-panel/useAppWorkbench.ts', import.meta.url), 'utf8');
 const tree = ts.createSourceFile('useAppWorkbench.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const names = new Set(['setPanelTabs', 'setActivePanelTabId', 'loadWorkspacePreview', 'loadDiffPreview', 'loadFileToTab', 'activatePanelTab', 'openFile', 'disposePanelTab', 'closePanelTab', 'loadTree']);
+const names = new Set(['setPanelTabs', 'setActivePanelTabId', 'loadWorkspacePreview', 'loadDiffPreview', 'loadExternalPreview', 'loadFileToTab', 'activatePanelTab', 'openFile', 'disposePanelTab', 'closePanelTab', 'loadTree']);
 const functions = [];
 function visit(node) {
   if (ts.isFunctionDeclaration(node) && names.has(node.name?.text)) functions.push(node.getText(tree));
@@ -20,7 +20,7 @@ function visit(node) {
 visit(tree); assert.equal(functions.length, names.size);
 const code = ts.transpileModule(functions.join('\n') + '\nObject.assign(globalThis, { openFile, activatePanelTab, closePanelTab, loadTree });', { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 function harness() {
-  const reads = [], directories = [], diffs = [];
+  const reads = [], directories = [], diffs = [], externals = [];
   const h = {
     panelFileKey, fileCacheRef: { current: createPanelFileCache() }, fileReadRef: { current: 0 },
     workspaceRef: { current: '/A' }, sessionRef: { current: { id: 'A', cwd: '/A' } },
@@ -35,12 +35,14 @@ function harness() {
       filePreview(cwd, path) { return new Promise((resolve, reject) => reads.push({ cwd, path, resolve, reject })); },
       files(cwd, path) { return new Promise((resolve, reject) => directories.push({ cwd, path, resolve, reject })); },
       turnDiffAbsoluteFile(payload) { return new Promise((resolve, reject) => diffs.push({ payload, resolve, reject })); },
+      filePreviewAbsolute(payload) { return new Promise((resolve, reject) => externals.push({ payload, resolve, reject })); },
     } },
   };
   vm.runInNewContext(code, h);
   const reply = (index, text) => reads[index].resolve({ path: reads[index].path, kind: 'text', size: text.length, text });
   const replyDiff = (index, text) => diffs[index].resolve({ path: diffs[index].payload.path, kind: 'text', size: text.length, text });
-  return { h, reads, reply, directories, diffs, replyDiff };
+  const replyExternal = (index, text) => externals[index].resolve({ path: externals[index].payload.path, kind: 'text', size: text.length, text });
+  return { h, reads, reply, directories, diffs, externals, replyDiff, replyExternal };
 }
 
 test('workspace file identity is retained through navigation; late A cannot replace B preview', async () => {
@@ -104,11 +106,38 @@ test('absolute file outside the turn diff falls back to a workspace preview', as
   assert.equal(h.file.text, 'notes data');
 });
 
-test('absolute file outside the workspace keeps the diff error', async () => {
-  const { h, reads, diffs } = harness();
-  const pending = h.openFile('/elsewhere/secret.txt', 'A', 'diff');
+test('absolute file outside the workspace falls back to the shared path resolver', async () => {
+  const { h, reads, diffs, externals, replyExternal } = harness();
+  const pending = h.openFile('/elsewhere/report.xlsx', 'A', 'diff');
   diffs[0].reject(new Error('文件不在当前会话的变更记录中'));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(reads.length, 0, '工作区外不做工作区预览');
+  assert.equal(externals.length, 1);
+  assert.equal(externals[0].payload.path, '/elsewhere/report.xlsx');
+  assert.equal(externals[0].payload.cwd, '/A');
+  replyExternal(0, 'resolved data');
   await pending;
-  assert.equal(reads.length, 0);
-  assert.equal(h.error, '文件不在当前会话的变更记录中');
+  assert.equal(h.file.text, 'resolved data');
+  assert.equal(h.error, null);
+});
+
+test('tilde references go straight to the resolver without a diff lookup', async () => {
+  const { h, diffs, externals, replyExternal } = harness();
+  const pending = h.openFile('~/Downloads/report.xlsx');
+  assert.equal(diffs.length, 0);
+  assert.equal(externals.length, 1);
+  assert.equal(externals[0].payload.path, '~/Downloads/report.xlsx');
+  replyExternal(0, 'home data');
+  await pending;
+  assert.equal(h.file.text, 'home data');
+});
+
+test('a resolver rejection surfaces its own reason instead of the diff error', async () => {
+  const { h, diffs, externals } = harness();
+  const pending = h.openFile('/elsewhere/missing.txt', 'A', 'diff');
+  diffs[0].reject(new Error('文件不在当前会话的变更记录中'));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  externals[0].reject(new Error('文件不存在或无法访问'));
+  await pending;
+  assert.equal(h.error, '文件不存在或无法访问');
 });

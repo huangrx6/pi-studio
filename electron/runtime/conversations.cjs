@@ -88,6 +88,15 @@ const {
   discardManagedWorktreesForConversations,
 } = require('../capabilities/subagents/index.cjs');
 
+/**
+ * 文件路径输出规范。模型经常写 `~/Downloads/a.xlsx` 或 `out/a.xlsx`；
+ * 主进程已经能解析这些写法，这段提示只是降低出错与来回试错的概率。
+ */
+const PATH_OUTPUT_INSTRUCTIONS = [
+  'Files in your answer: when you report or link a local file, use its full absolute path.',
+  'Do not use ~, ./, or a bare relative path in a link; if you cannot confirm the absolute path, say so instead of guessing.',
+  'Markdown links to local files are clickable in the app, e.g. [report.xlsx](/Users/me/out/report.xlsx).',
+].join(' ');
 const DEFAULT_PAGE_SIZE = 80;
 const MAX_PAGE_SIZE = 2_000;
 const ENTRY_SCAN_PAGE_SIZE = 300;
@@ -875,6 +884,9 @@ async function submitConversation(input = {}, options = {}) {
   await conversation.configure({
     extensions: selection.extensions,
     tools: selection.tools,
+    // 提示词只做辅助约束：真正的路径解析在主进程（file-target.cjs），
+    // 模型写 `~` 或相对路径也不会打不开文件。
+    instructions: PATH_OUTPUT_INSTRUCTIONS,
   }, runtime.context);
   const content = await inputContent({
     cwd: row.workspace,
