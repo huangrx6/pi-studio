@@ -8,7 +8,7 @@ import {
   normalizeConversationExtensionUiPreferences,
   orderConversationExtensionItems,
 } from '../features/conversation/conversation-extension-order';
-import { placementAllowsSlot, placementFor } from '../features/extensions/extension-placement';
+import { placementAllowsSlot, placementForItem } from '../features/extensions/extension-placement';
 import type { NotificationTone } from './NotificationCenter';
 import type { AgentView } from './app-types';
 import { errorText } from '../shared/error-text';
@@ -74,7 +74,7 @@ export function useConversationExtensions({
       surface.items.filter((item) => {
         if (item.slot === 'conversation.detail') return true;
         // 用户在设置里选的落点优先：隐藏、只在顶栏、只在输入框下，缺省按声明全部渲染。
-        const placement = placementFor(extensionPlacements, item.id);
+        const placement = placementForItem(extensionPlacements, item);
         return (item.slots ?? [item.slot]).some((slot) => (
           (slot === 'status.chip' || slot === 'conversation.footer')
           && placementAllowsSlot(placement, slot)
@@ -108,6 +108,8 @@ export function useConversationExtensions({
   // 顶栏 chip：details 指向本扩展的详情面板，点击时直接打开那一页。
   const chipItems = useMemo(() => items
     .filter((item) => (item.slots ?? [item.slot]).includes('status.chip'))
+    // 与底部那条同样的兜底：落点设为「输入框」或「隐藏」时，顶栏不能再出现。
+    .filter((item) => placementAllowsSlot(placementForItem(extensionPlacements, item), 'status.chip'))
     .map((item) => {
       const target = item.details
         ? manifestDetailItems.find((detail) => detail.extensionId === item.extensionId && detail.contributionId === item.details)
@@ -115,7 +117,7 @@ export function useConversationExtensions({
       return { item, targetId: target?.id };
     })
     .filter((chip) => Boolean(chip.targetId))
-    .slice(0, 3), [items, manifestDetailItems]);
+    .slice(0, 3), [items, manifestDetailItems, extensionPlacements]);
   const activeItem = agentView.kind === 'extensions' && agentView.itemId
     ? detailItems.find((item) => item.id === agentView.itemId) ?? null
     : null;

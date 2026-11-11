@@ -548,6 +548,7 @@ export function App() {
           error,
           setError,
           conversationFooterExtensionItems,
+          extensionPlacements: preferences.extensionPlacements,
           extensionSurface: conversationExtensionSurface,
           notifyExtension,
         }}

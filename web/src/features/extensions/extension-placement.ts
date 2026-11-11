@@ -68,6 +68,27 @@ export function placementFor(
   return value === 'chip' || value === 'footer' || value === 'hidden' ? value : 'both';
 }
 
+/**
+ * 按运行时 panel 取落点：manifest 的 id、contribution id、扩展 id 都可能被
+ * 用户写成偏好键，依次匹配，避免因为 id 形态不同而静默回退到「两处」。
+ */
+export function placementForItem(
+  placements: Record<string, ExtensionPlacement> | undefined,
+  item: { id?: string; contributionId?: string; extensionId?: string; scope?: string },
+): ExtensionPlacement {
+  const keys = [
+    item.id,
+    item.contributionId,
+    item.extensionId,
+    item.scope && item.extensionId ? `${item.scope}:${item.extensionId}` : undefined,
+  ].filter((key): key is string => Boolean(key));
+  for (const key of keys) {
+    const value = placements?.[key];
+    if (value === 'both' || value === 'chip' || value === 'footer' || value === 'hidden') return value;
+  }
+  return 'both';
+}
+
 /** 某个落点是否应该渲染。 */
 export function placementAllowsSlot(
   placement: ExtensionPlacement,

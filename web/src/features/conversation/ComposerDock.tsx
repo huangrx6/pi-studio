@@ -31,6 +31,8 @@ import type { ContextUsage } from './context-usage';
 import type { PermissionMode, PermissionUiState } from '../../shell/app-shell-config';
 import { permissionOptions } from '../../shell/app-shell-config';
 import { ExtensionSlot, type ExtensionNotice } from '../extensions/ExtensionSlot';
+import { placementAllowsSlot, placementForItem } from '../extensions/extension-placement';
+import type { ExtensionPlacement } from '../../shared/preferences';
 import { AttachmentIcon } from '../../shared/AttachmentIcon';
 import { WorkspacePicker } from '../../shell/WorkspacePicker';
 import { Select } from '../../shared/Select';
@@ -138,6 +140,7 @@ export type ComposerDockProps = {
   error: string | null;
   setError: Setter<string | null>;
   conversationFooterExtensionItems: ExtensionUiItem[];
+  extensionPlacements?: Record<string, ExtensionPlacement>;
   extensionSurface: ExtensionUiSnapshot;
   notifyExtension: (notice: ExtensionNotice) => void;
 };
@@ -224,6 +227,7 @@ export function ComposerDock({
   error,
   setError,
   conversationFooterExtensionItems,
+  extensionPlacements,
   extensionSurface,
   notifyExtension,
 }: ComposerDockProps) {
@@ -259,9 +263,12 @@ export function ComposerDock({
   // 而不是把用户挡在输入框外。
   const hasUsableModel = Boolean(modelSelection.modelRef) && !modelSelection.unavailable;
   // status 里的 footer 摘要可以声明 while-active：只有回合进行中才占位。
-  const footerExtensionItems = conversationFooterExtensionItems.filter(
-    (item) => item.visibility !== 'while-active' || turnActive,
-  );
+  // 兜底再校验一次落点：用户把扩展设为「顶栏」时，底部这条必须消失，
+  // 不论上游 items 是否已经过滤过。
+  const footerExtensionItems = conversationFooterExtensionItems.filter((item) => (
+    (item.visibility !== 'while-active' || turnActive)
+    && placementAllowsSlot(placementForItem(extensionPlacements, item), 'conversation.footer')
+  ));
   const [modelHintOpen, setModelHintOpen] = useState(false);
 
   return <div className="composer-dock" hidden={!open}>
@@ -286,19 +293,6 @@ export function ComposerDock({
       onSendAll={() => void sendAllQueued()}
       onReorder={reorderQueued}
     />}
-    {!isNewConversation && footerExtensionItems.length > 0 && (
-      <ConversationExtensionDock
-        items={footerExtensionItems}
-        surface={extensionSurface}
-        placement="footer"
-        cwd={session?.cwd}
-        sessionId={session?.id}
-        modelRef={modelSelection.modelRef}
-        onOpenSettings={(page) => { if (page) onOpenSettings(page); }}
-        onSendPrompt={sendPromptFromExtension}
-        onNotify={notifyExtension}
-      />
-    )}
     {isNewConversation && !workspace && <p id="workspace-selection-hint" className="sr-only" role="status">选择工作区后才能发送第一条消息</p>}
     <div className="composer-wrap" ref={composerWrapRef}>
       {composerMenu && <ComposerSuggestions
@@ -577,6 +571,19 @@ export function ComposerDock({
       onSendPrompt={sendPromptFromExtension}
       onNotify={notifyExtension}
     />
+    {!isNewConversation && footerExtensionItems.length > 0 && (
+      <ConversationExtensionDock
+        items={footerExtensionItems}
+        surface={extensionSurface}
+        placement="footer"
+        cwd={session?.cwd}
+        sessionId={session?.id}
+        modelRef={modelSelection.modelRef}
+        onOpenSettings={(page) => { if (page) onOpenSettings(page); }}
+        onSendPrompt={sendPromptFromExtension}
+        onNotify={notifyExtension}
+      />
+    )}
     {isNewConversation && error && <ConversationError className="new-conversation-error" message={error} onDismiss={() => setError(null)} />}
   </div>;
 }

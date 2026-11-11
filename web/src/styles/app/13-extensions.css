@@ -179,8 +179,8 @@
   margin-inline: auto;
   overflow: hidden;
 }
-/* 输入框上方：与下方输入框之间留 8px，不再把底部撑高。 */
-.conversation-extension-dock.is-footer { margin-bottom: var(--space-2); }
+/* 输入框下方：与输入框之间留 8px。这是 footer 落点原本的语义。 */
+.conversation-extension-dock.is-footer { margin-top: var(--space-2); }
 .conversation-extension-dock-items {
   display: flex;
   height: 100%;
