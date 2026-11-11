@@ -43,13 +43,23 @@ const {
   updaterOwnsApplicationQuit,
 } = require('./services/updater.cjs');
 
-// Tests and QA can run complete packaged applications without sharing the
-// production Chromium profile, SQLite database, or single-instance lock.
-if (process.env.PI_STUDIO_USER_DATA) {
-  const userData = path.resolve(process.env.PI_STUDIO_USER_DATA);
-  fs.mkdirSync(userData, { recursive: true });
-  app.setPath('userData', userData);
+// 数据目录：默认 ~/.pi-studio。测试与 QA 用 PI_STUDIO_USER_DATA 覆盖，
+// 避免共享生产 profile、SQLite 和单实例锁。
+const { migrateLegacyUserData, resolveUserDataDirectory } = require('./core/user-data.cjs');
+let activeUserData = resolveUserDataDirectory({ override: process.env.PI_STUDIO_USER_DATA });
+if (!process.env.PI_STUDIO_USER_DATA) {
+  const legacy = app.getPath('userData');
+  try {
+    // 首次升级：把旧默认目录复制过来（不删旧目录），失败就继续用旧目录启动。
+    const result = migrateLegacyUserData({ legacy, target: activeUserData });
+    if (result.migrated) console.log(`用户数据已迁移：${result.from} → ${activeUserData}`);
+  } catch (error) {
+    console.error('用户数据目录迁移失败，继续使用旧目录：', error);
+    activeUserData = legacy;
+  }
 }
+fs.mkdirSync(activeUserData, { recursive: true });
+app.setPath('userData', activeUserData);
 
 let startupGate;
 const primaryInstance = installSingleInstanceGuard(app, () => {

@@ -135,8 +135,12 @@ Studio 的 `subagent` 工具通过 Durable 创建 owned child conversation。子
 
 ## 数据边界
 
+默认目录是 `~/.pi-studio`（可用环境变量 `PI_STUDIO_USER_DATA` 覆盖）。从旧版本升级时，
+主进程会把 `~/Library/Application Support/pi-studio` 的内容**复制**过来再启动，旧目录保留，
+确认无误后可以自行删除。
+
 ```text
-Pi Studio userData/
+~/.pi-studio/
 ├── AGENTS.md            # 应用级 Harness 指令
 ├── pi-studio.sqlite
 │   ├── durable_*        # Durable 会话、任务、文档、用量与实时状态

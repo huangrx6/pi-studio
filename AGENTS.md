@@ -3,7 +3,7 @@
 ## Product boundary
 
 - Pi Studio is a standalone Electron application built on Pi Durable. Do not read or modify the legacy `~/.pi` directory, Pi CLI settings, `settings.json`, `auth.json`, or `models.json`.
-- Studio owns its data through SQLite and managed directories under Electron `userData`, plus explicit project resources under `.pi-studio/`.
+- Studio owns its data through SQLite and managed directories under `~/.pi-studio` (the Electron `userData` path), plus explicit project resources under `.pi-studio/`. Tests and QA may override the directory with `PI_STUDIO_USER_DATA`.
 - Preserve the trust boundary: extensions execute as explicitly trusted Node code in the Electron main process. Do not describe integrity hashes or static command checks as an operating-system sandbox.
 
 ## Source layout
