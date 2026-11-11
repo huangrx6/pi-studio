@@ -45,8 +45,12 @@
   width: 36px;
   height: 32px;
   -webkit-app-region: no-drag;
+  transition: opacity 120ms ease;
 }
 .sidebar-top-toggle > svg { pointer-events: none; }
+/* 收起动画期间侧栏还在变窄，这个按钮会一路左滑；主区右端同时出现「展开侧边栏」，
+ * 两个一模一样的图标并排看着很乱。收起一开始就把它淡出。 */
+.is-sidebar-collapsed .sidebar-top-toggle { opacity: 0; pointer-events: none; transition: none; }
 
 /* 有壁纸或全屏时品牌与侧栏内容同一条竖线（12px）；窗口模式仍让开红绿灯。 */
 .app.has-custom-background { --brand-leading: 12px; }
