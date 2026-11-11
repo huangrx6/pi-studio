@@ -38,9 +38,14 @@ test('不存在的路径、目录与缺失的工作目录都被拒绝', () => {
   assert.throws(() => resolveUserTarget('out/report.xlsx'), /文件不存在或无法访问/);
 });
 
+// 保护范围按请求路径判定，所以这些位置即使文件不存在也报同一句，
+// 断言不依赖具体平台的目录结构（CI 是 Linux，本地是 macOS）。
 test('凭据目录与系统目录在任何写法下都被拒绝', () => {
-  assert.throws(() => resolveUserTarget(path.join(os.homedir(), '.ssh', 'id_rsa')), /不在预览范围内|不存在或无法访问/);
-  assert.throws(() => resolveUserTarget(path.join(os.homedir(), 'Library/Application Support/pi-studio/x.bin')), /不在预览范围内|不存在或无法访问/);
+  assert.throws(() => resolveUserTarget(path.join(os.homedir(), '.ssh', 'id_rsa')), /不在预览范围内/);
+  assert.throws(() => resolveUserTarget(path.join(os.homedir(), '.ssh/known_hosts')), /不在预览范围内/);
+  assert.throws(() => resolveUserTarget(path.join(os.homedir(), 'Library/Application Support/pi-studio/x.bin')), /不在预览范围内/);
   assert.throws(() => resolveUserTarget('/etc/hosts'), /不在预览范围内/);
+  assert.throws(() => resolveUserTarget('/private/etc/hosts'), /不在预览范围内/);
   assert.throws(() => resolveUserTarget('/System/Library/CoreServices/SystemVersion.plist'), /不在预览范围内/);
+  assert.throws(() => resolveUserTarget(path.join(os.homedir(), 'credentials.json')), /可能包含凭据/);
 });

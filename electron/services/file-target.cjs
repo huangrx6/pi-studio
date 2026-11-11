@@ -86,6 +86,9 @@ function resolveUserTarget(input, { cwd } = {}) {
   const expanded = expandUserPath(input);
   const base = typeof cwd === 'string' && path.isAbsolute(cwd) ? cwd : os.homedir();
   const absolute = path.isAbsolute(expanded) ? path.normalize(expanded) : path.resolve(base, expanded);
+  // 先按请求路径判定保护范围：受保护的位置即使文件不存在也报同一句，
+  // 不泄露这些路径是否存在。realpath 之后再校验一次，防止符号链接换向。
+  assertNotProtected(absolute);
   let target;
   try {
     target = fs.realpathSync(absolute);
