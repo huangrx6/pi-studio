@@ -131,7 +131,16 @@ export function ConversationTraceTab({ active, onOpen }: ConversationTraceProps 
   return <button type="button" role="tab" aria-selected={active} className={`tab conversation-trace-tab ${active ? 'is-active' : ''}`} aria-label="打开会话轨迹页面" onClick={onOpen}><Activity aria-hidden="true" /><span>轨迹</span></button>;
 }
 
-const TRACE_PAGE = 120;
+// 首批与每次追加都按视口行数算：标准窗口约 50 条，矮屏自动降到 24 条，
+// 再大的窗口也封顶 60，避免一次挂出远超一屏的内容。
+const TRACE_ROW_HEIGHT = 32;
+const TRACE_PAGE_MIN = 24;
+const TRACE_PAGE_MAX = 60;
+
+function tracePageSize(viewportHeight: number): number {
+  const rows = Math.ceil(Math.max(0, viewportHeight) / TRACE_ROW_HEIGHT);
+  return Math.min(TRACE_PAGE_MAX, Math.max(TRACE_PAGE_MIN, rows * 2 + 8));
+}
 
 export function ConversationTracePage({ summary }: ConversationTraceProps) {
   const [query, setQuery] = useState('');
@@ -143,7 +152,7 @@ export function ConversationTracePage({ summary }: ConversationTraceProps) {
   const list = useRef<HTMLDivElement>(null);
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
   // 一次只挂载视口附近的记录：上千条轨迹全部挂载会让整页渲染变重。
-  const [visibleCount, setVisibleCount] = useState(TRACE_PAGE);
+  const [visibleCount, setVisibleCount] = useState(TRACE_PAGE_MIN);
   const sentinel = useRef<HTMLDivElement>(null);
   const selected = summary.items.find(item => item.id === selectedId);
   const filtered = useMemo(() => {
@@ -151,7 +160,20 @@ export function ConversationTracePage({ summary }: ConversationTraceProps) {
     return summary.items.filter(item => (calls || item.kind !== 'model') && (subcalls || item.kind !== 'tool') && (!needle || `${item.label} ${item.preview} ${item.detail || ''} ${item.result || ''}`.toLocaleLowerCase().includes(needle)));
   }, [summary.items, query, calls, subcalls]);
   const [jumpId, setJumpId] = useState<string | null>(null);
-  useEffect(() => { setVisibleCount(TRACE_PAGE); }, [query, calls, subcalls]);
+  // 列表尺寸变化（窗口缩放、面板收放）时按新的视口重新算首批条数。
+  useEffect(() => {
+    const root = list.current;
+    if (!root) return undefined;
+    const fit = () => setVisibleCount((current) => (
+      Math.min(filtered.length, Math.max(current, tracePageSize(root.clientHeight)))
+    ));
+    fit();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(fit);
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, [filtered.length]);
+  useEffect(() => { setVisibleCount(TRACE_PAGE_MIN); }, [query, calls, subcalls]);
   // 搜索命中或地图跳转可能落在已挂载范围之外，先把它所在的一段补齐。
   useEffect(() => {
     if (!jumpId) return;
@@ -167,7 +189,10 @@ export function ConversationTracePage({ summary }: ConversationTraceProps) {
     if (!node || !root || visibleCount >= filtered.length) return undefined;
     const observer = new IntersectionObserver((entries) => {
       if (!entries.some((entry) => entry.isIntersecting)) return;
-      setVisibleCount((current) => Math.min(filtered.length, current + TRACE_PAGE));
+      // 首次布局完成前哨兵会短暂落在视口里，这里再用滚动位置确认一次，
+      // 否则一进页面就会把条数翻倍。
+      if (root.scrollTop + root.clientHeight < node.offsetTop - 600) return;
+      setVisibleCount((current) => Math.min(filtered.length, current + tracePageSize(root.clientHeight)));
     }, { root, rootMargin: '600px 0px' });
     observer.observe(node);
     return () => observer.disconnect();
