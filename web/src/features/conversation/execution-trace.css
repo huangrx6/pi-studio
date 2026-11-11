@@ -224,6 +224,27 @@
 }
 .turn-trace .activity-tool-code.is-error { color: var(--error); background: var(--error-soft); }
 
+/* 过程里的中间叙述（模型在两次工具之间说的话）：不是结论，按小字灰调并入轨迹，
+   并与工具行的标题列左对齐。 */
+.trace-narration {
+  min-width: 0;
+  padding: 2px 0 6px calc(var(--trace-glyph) + var(--trace-gap));
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+.trace-narration .markdown { font-size: var(--text-sm); line-height: var(--leading-body); }
+.trace-narration .markdown > :first-child { margin-top: 0; }
+.trace-narration .markdown > :last-child { margin-bottom: 0; }
+.trace-narration .markdown h1,
+.trace-narration .markdown h2,
+.trace-narration .markdown h3,
+.trace-narration .markdown h4,
+.trace-narration .markdown h5,
+.trace-narration .markdown h6 { color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.trace-narration .markdown pre { font-size: var(--text-xs); }
+.trace-narration .markdown :not(pre) > code { font-size: var(--text-xs); }
+
 /* 引用块在框内只保留左侧强调线，不再叠加底色；首尾段落不带外边距，上下留白与其他行一致。 */
 .turn-trace .markdown blockquote { margin: 8px 0; background: transparent; }
 .turn-trace .markdown blockquote > :first-child { margin-top: 0; }

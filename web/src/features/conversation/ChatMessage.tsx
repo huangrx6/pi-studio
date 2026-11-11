@@ -515,27 +515,28 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
     if (process && tail?.process) tail.items.push(item);
     else segments.push({ key: item.key, process, items: [item] });
   }
+  // 结束后：工具、思考与此前夹在中间的叙述合并成一条过程轨迹，只把最后一段
+  // 回答留在外面。此前每个中间叙述都是一张正文卡片，整轮读起来像流水账，
+  // 分不清哪些是过程、哪句才是结论。
+  const answerKey = !live
+    ? [...visibleTimeline].reverse().find((item) => item.visible)?.key
+    : undefined;
   if (!live) {
-    const processItems = visibleTimeline.filter((item) => item.entries);
-    const firstProcess = segments.findIndex((segment) => segment.process);
-    if (processItems.length > 0 && firstProcess >= 0) {
-      const consolidated = { key: segments[firstProcess].key, process: true, items: processItems };
-      const consolidatedSegments: typeof segments = [];
-      segments.forEach((segment, index) => {
-        if (segment.process) {
-          if (index === firstProcess) consolidatedSegments.push(consolidated);
-          return;
-        }
-        consolidatedSegments.push(segment);
-      });
-      segments.splice(0, segments.length, ...consolidatedSegments);
-    }
+    const traceItems = visibleTimeline.filter((item) => item.entries || (item.visible && item.key !== answerKey));
+    const restItems = visibleTimeline.filter((item) => !traceItems.includes(item));
+    segments.splice(0, segments.length,
+      ...(traceItems.length > 0 ? [{ key: traceItems[0].key, process: true, items: traceItems }] : []),
+      ...restItems.map((item) => ({ key: item.key, process: false, items: [item] })));
   }
-  const renderTimelineItem = (item: typeof timeline[number]) => item.entries
+  const renderTimelineItem = (item: typeof timeline[number], narration = false) => item.entries
         ? <ActivitySequence key={item.key} entries={item.entries} results={toolResults} stepDisplay={stepDisplay} />
         : item.request ? null
         : item.images ? <ConversationImageGallery key={item.key} images={item.images} />
-        : item.visible?.block.type === 'text' ? <div className="assistant-response" key={item.key}><Markdown>{item.visible.block.text}</Markdown></div> : null;
+        : item.visible?.block.type === 'text'
+          ? (narration
+            ? <div className="trace-narration" key={item.key}><Markdown>{item.visible.block.text}</Markdown></div>
+            : <div className="assistant-response" key={item.key}><Markdown>{item.visible.block.text}</Markdown></div>)
+          : null;
   return <div id={id} className={`assistant-turn ${live ? 'is-live' : ''} ${retry ? 'is-retrying' : ''} ${failed ? 'has-error' : ''} is-steps-${stepDisplay}`}>
     <div className="assistant-turn-rail"><span className="assistant-orb">π</span></div>
     <div className="assistant-turn-main">
@@ -546,12 +547,12 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
         {latest?.timestamp && <time>{formatTime(latest.timestamp)}</time>}
       </div>
       {segments.map((segment, index) => {
-        if (!segment.process) return segment.items.map(renderTimelineItem);
+        if (!segment.process) return segment.items.map((item) => renderTimelineItem(item));
         const entries = segment.items.flatMap(item => item.entries || []);
         return <TurnTrace key={segment.key} live={live} active={live && index === segments.length - 1} policy={stepCollapse} phase={phase}
           steps={entries.length} requests={segment.items.filter(item => item.request).length}
           errors={entries.filter(entry => entry.kind === 'tool' && toolResults.get(entry.call.id)?.isError).length}>
-          {segment.items.map(renderTimelineItem)}
+          {segment.items.map((item) => renderTimelineItem(item, Boolean(item.visible)))}
         </TurnTrace>;
       })}
       {/* 失败卡片只在非 live 时出现，避免自动重试过程中闪错误。 */}
