@@ -85,10 +85,14 @@ export function AppSidebar({
   return (
     <aside className="sidebar">
       <div className="sidebar-drag" />
-      <button className="icon-button sidebar-top-toggle" aria-label="收起侧边栏" title="收起侧边栏" onClick={onCollapse}><PanelLeft /></button>
-      <div className="brand">
-        <BrandMark />
-        <span className="brand-name">Pi Studio</span>
+      {/* 标题行拆成两个互不重叠的点位：左边是窗口拖拽区，右边是收起按钮。
+       * 以前按钮绝对定位压在拖拽区上，图标那一块点击会被窗口拖拽吞掉。 */}
+      <div className="sidebar-top-row">
+        <div className="brand">
+          <BrandMark />
+          <span className="brand-name">Pi Studio</span>
+        </div>
+        <button className="icon-button sidebar-top-toggle" aria-label="收起侧边栏" title="收起侧边栏" onClick={onCollapse}><PanelLeft /></button>
       </div>
       <button className="new-chat" title="新会话" onClick={onStartSession}><SquarePen /><span>新会话</span></button>
       <nav className="nav">
