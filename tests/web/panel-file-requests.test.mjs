@@ -6,7 +6,7 @@ import ts from 'typescript';
 import { createPanelFileCache, panelFileKey } from '../../web/src/shell/right-panel/panel-file-cache.ts';
 const source = fs.readFileSync(new URL('../../web/src/shell/right-panel/useAppWorkbench.ts', import.meta.url), 'utf8');
 const tree = ts.createSourceFile('useAppWorkbench.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const names = new Set(['setPanelTabs', 'setActivePanelTabId', 'loadWorkspacePreview', 'loadDiffPreview', 'loadExternalPreview', 'loadFileToTab', 'activatePanelTab', 'openFile', 'disposePanelTab', 'closePanelTab', 'loadTree']);
+const names = new Set(['setPanelTabs', 'setActivePanelTabId', 'loadWorkspacePreview', 'loadWorkspaceFile', 'loadDiffPreview', 'loadExternalPreview', 'loadFileToTab', 'activatePanelTab', 'openFile', 'disposePanelTab', 'closePanelTab', 'loadTree']);
 const functions = [];
 function visit(node) {
   if (ts.isFunctionDeclaration(node) && names.has(node.name?.text)) functions.push(node.getText(tree));

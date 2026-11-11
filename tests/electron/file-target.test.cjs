@@ -40,6 +40,22 @@ test('不存在的路径、目录与缺失的工作目录都被拒绝', () => {
 
 // 保护范围按请求路径判定，所以这些位置即使文件不存在也报同一句，
 // 断言不依赖具体平台的目录结构（CI 是 Linux，本地是 macOS）。
+test('只有文件名的引用会在会话目录与一级子目录里找同名文件', () => {
+  const root = fixture();
+  fs.mkdirSync(path.join(root, 'output'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'tmp-report.docx'), 'x');
+  fs.writeFileSync(path.join(root, 'output', '交付.docx'), 'x');
+  assert.equal(
+    resolveUserTarget('tmp-report.docx', { cwd: root }),
+    fs.realpathSync(path.join(root, 'tmp-report.docx')),
+  );
+  assert.equal(
+    resolveUserTarget('交付.docx', { cwd: root }),
+    fs.realpathSync(path.join(root, 'output', '交付.docx')),
+  );
+  assert.throws(() => resolveUserTarget('nope.docx', { cwd: root }), /文件不存在或无法访问/);
+});
+
 test('凭据目录与系统目录在任何写法下都被拒绝', () => {
   assert.throws(() => resolveUserTarget(path.join(os.homedir(), '.ssh', 'id_rsa')), /不在预览范围内/);
   assert.throws(() => resolveUserTarget(path.join(os.homedir(), '.ssh/known_hosts')), /不在预览范围内/);

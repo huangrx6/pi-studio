@@ -251,6 +251,22 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     };
   }
 
+  /**
+   * 工作区文件优先走工作区预览；定位不到时（模型只写了文件名，或把产物写到
+   * ~/Downloads）交给统一解析层，按工作目录与家目录常见位置找同名文件。
+   * 含 `..` 的路径不回退，避免把越界拒绝变成放行。
+   */
+  async function loadWorkspaceFile(root: string, target: string, sessionId?: string): Promise<PanelFile> {
+    try {
+      return await loadWorkspacePreview(root, target);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // 只有「定位不到」才换一种解析方式；权限、越界、读取失败等错误原样抛出。
+      if (target.split(/[\\/]/).includes('..') || !/不存在|无法访问|不在工作区|越界/.test(message)) throw error;
+      return loadExternalPreview(target, root, sessionId);
+    }
+  }
+
   async function loadFileToTab(tab: PanelTab): Promise<boolean> {
     if (!tab.path) return false;
     const source = tab.source || (tab.path.startsWith('/') ? 'diff' : tab.path.startsWith('~') ? 'external' : 'workspace');
@@ -273,7 +289,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
           ? await loadDiffPreview(tab)
           : source === 'external'
             ? await loadExternalPreview(tab.path, tab.cwd, tab.sessionId)
-            : await loadWorkspacePreview(tab.cwd!, tab.path);
+            : await loadWorkspaceFile(tab.cwd!, tab.path, tab.sessionId);
       // A closed/reopened tab has a different read token. Never revive its data.
       if (!panelTabsRef.current.some(item => item.id === tab.id) || !cache.put(key, token, content)) return true;
       if (current()) setFile(content);

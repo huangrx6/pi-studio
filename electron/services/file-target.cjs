@@ -78,6 +78,51 @@ function assertNotProtected(target) {
   }
 }
 
+/** 搜索裸文件名时跳过的目录：依赖与版本库比产物多得多。 */
+const SEARCH_SKIPPED_DIRECTORIES = new Set([
+  '.git', '.hg', '.svn', 'node_modules', '.venv', 'venv', '__pycache__', '.next', '.turbo',
+]);
+
+function isRegularFile(candidate) {
+  try {
+    return fs.statSync(candidate).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 只有文件名、没有目录的引用（模型常说“文件：报告.docx”）。
+ * 依次在会话目录、家目录的 Downloads / Desktop / Documents，以及会话目录的
+ * 一级子目录里找同名文件；找不到返回 null。
+ */
+function findByName(name, { cwd } = {}) {
+  const roots = [];
+  if (typeof cwd === 'string' && path.isAbsolute(cwd)) roots.push(cwd);
+  roots.push(
+    path.join(os.homedir(), 'Downloads'),
+    path.join(os.homedir(), 'Desktop'),
+    path.join(os.homedir(), 'Documents'),
+  );
+  for (const root of roots) {
+    const candidate = path.join(root, name);
+    if (isRegularFile(candidate)) return candidate;
+  }
+  if (typeof cwd !== 'string' || !path.isAbsolute(cwd)) return null;
+  let entries = [];
+  try {
+    entries = fs.readdirSync(cwd, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory() || SEARCH_SKIPPED_DIRECTORIES.has(entry.name)) continue;
+    const candidate = path.join(cwd, entry.name, name);
+    if (isRegularFile(candidate)) return candidate;
+  }
+  return null;
+}
+
 /**
  * 解析一条用户可见的文件引用。
  * 相对路径以当前会话工作目录为基准，工作目录缺失时退回主目录。
@@ -93,7 +138,11 @@ function resolveUserTarget(input, { cwd } = {}) {
   try {
     target = fs.realpathSync(absolute);
   } catch {
-    throw new Error('文件不存在或无法访问');
+    // 只有文件名（没有目录）时再按名字找一轮：模型经常只写产物名。
+    const bare = !expanded.includes('/') && !expanded.includes('\\');
+    const found = bare ? findByName(expanded, { cwd }) : null;
+    if (!found) throw new Error('文件不存在或无法访问');
+    target = fs.realpathSync(found);
   }
   assertNotProtected(target);
   let stat;
@@ -109,7 +158,9 @@ function resolveUserTarget(input, { cwd } = {}) {
 module.exports = {
   PROTECTED_FILE_NAMES,
   PROTECTED_HOME_DIRECTORIES,
+  SEARCH_SKIPPED_DIRECTORIES,
   assertNotProtected,
   expandUserPath,
+  findByName,
   resolveUserTarget,
 };

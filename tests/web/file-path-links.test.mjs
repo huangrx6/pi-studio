@@ -83,3 +83,11 @@ test('the rehype plugin links inline code and prose, never code blocks', () => {
   assert.equal(pre.children[0].tagName, 'code');
   assert.ok(!JSON.stringify(pre).includes('dataPath'));
 });
+
+test('中文文件名与裸产物名都会被识别成可打开的文件链接', () => {
+  assert.equal(pathToken('AI提效工作情况汇报-代码开发方向.docx'), 'AI提效工作情况汇报-代码开发方向.docx');
+  assert.equal(pathToken('gen_ai_report_docx.py'), 'gen_ai_report_docx.py');
+  assert.equal(pathToken('output/AI提效工作情况汇报.docx'), 'output/AI提效工作情况汇报.docx');
+  // 只在句子里出现、又不是文件名的中文词保持原样。
+  assert.equal(pathToken('文档已经生成'), null);
+});
