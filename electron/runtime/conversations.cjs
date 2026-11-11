@@ -2147,7 +2147,7 @@ async function composerResources(input = {}) {
   };
 }
 
-async function refreshRuntimeState() {
+async function inspectRuntimeState() {
   const runtime = await getDurableRuntime();
   const db = getStudioDatabase();
   const inspection = await runtime.harness.inspect(runtime.context);
@@ -2165,6 +2165,40 @@ async function refreshRuntimeState() {
     tasks: inspection.tasks.length,
     submissions: inspection.submissions.length,
   };
+}
+
+/**
+ * `harness.inspect()` 会扫一遍全部任务，任务多的时候要几百毫秒到几秒，而且是同步
+ * SQLite。以前每次 `pi:state`（首屏、切换工作区）都等它，切目录就卡在「正在载入…」，
+ * 主进程忙着扫库时打字也跟着卡。
+ *
+ * 现在按 TTL 复用结果：有旧快照就先返回、后台再刷新；只有第一次（或显式 wait）
+ * 才阻塞等待。
+ */
+let runtimeStateSnapshot = null;
+let runtimeStateRefreshedAt = 0;
+let runtimeStatePending = null;
+const RUNTIME_STATE_TTL_MS = 10_000;
+
+async function refreshRuntimeState({ wait = false } = {}) {
+  if (runtimeStateSnapshot && Date.now() - runtimeStateRefreshedAt < RUNTIME_STATE_TTL_MS) {
+    return runtimeStateSnapshot;
+  }
+  if (runtimeStatePending) return runtimeStatePending;
+  const pending = (async () => {
+    try {
+      runtimeStateSnapshot = await inspectRuntimeState();
+      runtimeStateRefreshedAt = Date.now();
+      return runtimeStateSnapshot;
+    } finally {
+      runtimeStatePending = null;
+    }
+  })();
+  runtimeStatePending = pending;
+  if (wait || !runtimeStateSnapshot) return pending;
+  // 已有旧快照：先把界面放出来，扫描在后台完成。
+  void pending.catch(() => {});
+  return runtimeStateSnapshot;
 }
 
 async function closeConversationWatches() {
