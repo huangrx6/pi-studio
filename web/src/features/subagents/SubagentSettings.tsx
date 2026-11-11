@@ -148,6 +148,8 @@ export function SubagentSettings({
   const [worktreeBusy, setWorktreeBusy] = useState('');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState('');
+  const [toolFilter, setToolFilter] = useState('');
+  const [collapsedToolGroups, setCollapsedToolGroups] = useState<string[]>([]);
   const [worktreeLoadError, setWorktreeLoadError] = useState<string | null>(null);
   const confirmation = useActionConfirmation();
   const worktrees = Array.isArray(snapshot?.worktrees) ? snapshot.worktrees : [];
@@ -233,6 +235,19 @@ export function SubagentSettings({
   const explicitTools = draft.allowedTools.length > 0;
   const selectedTools = useMemo(() => new Set(draft.allowedTools), [draft.allowedTools]);
   const missingTools = draft.allowedTools.filter((name) => !availableNames.has(name));
+  const toolGroups = useMemo(() => {
+    const query = toolFilter.trim().toLowerCase();
+    const groups = new Map<string, { label: string; tools: AgentToolInfo[] }>();
+    for (const tool of parentTools) {
+      if (query && !`${tool.name} ${tool.description ?? ''}`.toLowerCase().includes(query)) continue;
+      const label = sourceLabel(tool.source);
+      const entry = groups.get(label) ?? { label, tools: [] };
+      entry.tools.push(tool);
+      groups.set(label, entry);
+    }
+    return [...groups.values()];
+  }, [parentTools, toolFilter]);
+
   const limitSummary = [
     `${draft.maxConcurrent} 并发`,
     `最多 ${draft.maxSpawns} 次`,
@@ -270,6 +285,26 @@ export function SubagentSettings({
   function toggleTool(name: string) {
     const next = toggleSubagentAllowedTool(draft.allowedTools, parentTools.map((tool) => tool.name), name);
     if (!next) {
+      setError('至少保留一个工具。空白名单表示继承父智能体；如需恢复继承，请使用“恢复继承”。');
+      return;
+    }
+    setError(null);
+    setDraft((current) => ({ ...current, allowedTools: next }));
+  }
+
+  function toggleToolGroup(label: string) {
+    setCollapsedToolGroups((current) => (
+      current.includes(label) ? current.filter((entry) => entry !== label) : [...current, label]
+    ));
+  }
+
+  function setToolsEnabled(names: string[], enabled: boolean) {
+    const allNames = parentTools.map((tool) => tool.name);
+    const base = explicitTools ? draft.allowedTools.filter((name) => allNames.includes(name)) : allNames;
+    const next = enabled
+      ? allNames.filter((name) => base.includes(name) || names.includes(name))
+      : base.filter((name) => !names.includes(name));
+    if (!next.length) {
       setError('至少保留一个工具。空白名单表示继承父智能体；如需恢复继承，请使用“恢复继承”。');
       return;
     }
@@ -864,33 +899,93 @@ export function SubagentSettings({
             有 {missingTools.length} 个已保存工具当前不可用：{missingTools.join('、')}。它可能来自已删除的扩展或 MCP。
           </div>
         )}
-        <div className="subagent-tool-list">
-          {parentTools.map((tool) => {
-            const checked = !explicitTools || selectedTools.has(tool.name);
+        {parentTools.length > 0 && (
+          <div className="subagent-tool-toolbar">
+            <input
+              type="search"
+              className="subagent-tool-filter"
+              value={toolFilter}
+              placeholder="搜索工具名或说明…"
+              aria-label="搜索工具"
+              onChange={(event) => setToolFilter(event.target.value)}
+            />
+            <span className="subagent-tool-total">
+              {toolFilter.trim() ? `${toolGroups.reduce((sum, group) => sum + group.tools.length, 0)} / ${parentTools.length}` : `${parentTools.length} 个工具`}
+            </span>
+            <button
+              type="button"
+              className="settings-text-button"
+              onClick={() => setCollapsedToolGroups(
+                toolGroups.every((group) => collapsedToolGroups.includes(group.label))
+                  ? []
+                  : toolGroups.map((group) => group.label),
+              )}
+            >
+              {toolGroups.every((group) => collapsedToolGroups.includes(group.label)) ? '全部展开' : '全部折叠'}
+            </button>
+          </div>
+        )}
+        <div className="subagent-tool-groups">
+          {toolGroups.map((group) => {
+            const open = !collapsedToolGroups.includes(group.label);
+            const names = group.tools.map((tool) => tool.name);
+            const selectedInGroup = names.filter((name) => !explicitTools || selectedTools.has(name)).length;
             return (
-              <label
-                key={`${tool.source.key}:${tool.name}`}
-                className={`subagent-tool-row ${checked ? 'is-enabled' : ''}`}
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  aria-label={`允许工具 ${tool.name}`}
-                  onChange={() => toggleTool(tool.name)}
-                />
-                <span className="subagent-tool-copy">
-                  <strong>{tool.name}</strong>
-                  {tool.description && <small>{tool.description}</small>}
-                </span>
-                <span className="subagent-tool-source" title={tool.source.path || tool.source.source}>
-                  {sourceLabel(tool.source)}
-                </span>
-              </label>
+              <section key={group.label} className={`subagent-tool-group ${open ? 'is-open' : ''}`}>
+                <header className="subagent-tool-group-head">
+                  <button
+                    type="button"
+                    className="subagent-tool-group-toggle"
+                    aria-expanded={open}
+                    onClick={() => toggleToolGroup(group.label)}
+                  >
+                    <ChevronRight aria-hidden="true" />
+                    <strong>{group.label}</strong>
+                    <span className="subagent-tool-group-count">{selectedInGroup}/{group.tools.length}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-text-button"
+                    disabled={selectedInGroup === 0 && explicitTools}
+                    onClick={() => setToolsEnabled(names, selectedInGroup < group.tools.length)}
+                  >
+                    {selectedInGroup < group.tools.length ? '全选' : '清除'}
+                  </button>
+                </header>
+                {open && <div className="subagent-tool-group-body">
+                  {group.tools.map((tool) => {
+                    const checked = !explicitTools || selectedTools.has(tool.name);
+                    return (
+                      <label
+                        key={`${tool.source.key}:${tool.name}`}
+                        className={`subagent-tool-row ${checked ? 'is-enabled' : ''}`}
+                        title={tool.description || tool.name}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          aria-label={`允许工具 ${tool.name}`}
+                          onChange={() => toggleTool(tool.name)}
+                        />
+                        <span className="subagent-tool-copy">
+                          <strong>{tool.name}</strong>
+                          {tool.description && <small>{tool.description}</small>}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>}
+              </section>
             );
           })}
           {!parentTools.length && (
             <div className="settings-empty">
               当前父智能体没有可用工具
+            </div>
+          )}
+          {parentTools.length > 0 && !toolGroups.length && (
+            <div className="settings-empty">
+              没有匹配「{toolFilter.trim()}」的工具
             </div>
           )}
         </div>
