@@ -138,6 +138,19 @@ export function App() {
     retryComposerSuggestions,
     queuedEditContext,
   } = foundation;
+  const terminalAppearance = useMemo(() => ({
+    fontSize: preferences.terminalFontSize,
+    fontFamily: preferences.terminalFontFamily,
+    lineHeight: preferences.terminalLineHeight,
+    cursorStyle: preferences.terminalCursorStyle,
+    themeId: preferences.terminalTheme,
+  }), [
+    preferences.terminalCursorStyle,
+    preferences.terminalFontFamily,
+    preferences.terminalFontSize,
+    preferences.terminalLineHeight,
+    preferences.terminalTheme,
+  ]);
   const {
     settingsWorkspace,
     settingsOpen,
@@ -697,7 +710,7 @@ export function App() {
         makeDragPreview={makeDragPreview}
         onChooseWorkspace={chooseFile}
         onOpenSettings={(page) => { void openSettings(page); }}
-        terminalFontSize={preferences.terminalFontSize}
+        terminalAppearance={terminalAppearance}
         onTerminalFontSize={(size) => foundation.updatePreference('terminalFontSize', size)}
         extensionDock={<ExtensionSlot
           slot="panel.side"

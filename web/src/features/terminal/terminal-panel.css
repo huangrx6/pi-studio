@@ -130,6 +130,28 @@
 .terminal-paste-confirm button.is-primary { border-color: transparent; background: var(--button-bg); color: var(--on-button); }
 .terminal-paste-confirm button.is-primary:hover { background: var(--button-hover); color: var(--on-button); }
 
+/* 换主题后工具栏与终端底色保持一致，不能出现一条浅色的工具栏。 */
+.terminal-panel.has-custom-theme .terminal-toolbar,
+.terminal-panel.has-custom-theme .terminal-search {
+  border-bottom-color: color-mix(in srgb, var(--terminal-fg) 16%, transparent);
+  background: transparent;
+}
+.terminal-panel.has-custom-theme .terminal-live-state,
+.terminal-panel.has-custom-theme .terminal-shell,
+.terminal-panel.has-custom-theme .terminal-toolbar > code,
+.terminal-panel.has-custom-theme .terminal-toolbar > button {
+  color: color-mix(in srgb, var(--terminal-fg) 68%, transparent);
+}
+.terminal-panel.has-custom-theme .terminal-toolbar > button:hover {
+  background: color-mix(in srgb, var(--terminal-fg) 12%, transparent);
+  color: var(--terminal-fg);
+}
+.terminal-panel.has-custom-theme .terminal-search input {
+  border-color: color-mix(in srgb, var(--terminal-fg) 22%, transparent);
+  background: color-mix(in srgb, var(--terminal-fg) 8%, transparent);
+  color: var(--terminal-fg);
+}
+
 .terminal-stage { position: relative; flex: 1; min-height: 0; }
 .terminal-history-note {
   flex: none;

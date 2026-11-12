@@ -35,6 +35,8 @@ export type LinkPreference = 'external' | 'window';
 export type ExtensionPlacement = 'both' | 'chip' | 'footer' | 'hidden';
 /** 全局圆角风格，映射到 RADIUS_PRESETS。 */
 export type RadiusStyle = 'square' | 'compact' | 'standard' | 'soft';
+/** 终端光标形状。 */
+export type TerminalCursorStyle = 'bar' | 'block' | 'underline';
 /** 由主进程复制到应用私有目录的背景媒体。 */
 export type BackgroundMedia = {
   kind: 'image' | 'video';
@@ -58,6 +60,14 @@ export type Preferences = {
   fontSize: number;
   /** 终端字号（px），独立于对话正文；终端需要比正文更紧凑的等宽排版。 */
   terminalFontSize: number;
+  /** 终端配色主题 id；studio 表示跟随界面明暗。 */
+  terminalTheme: string;
+  /** 终端字体族；空串表示跟随系统的等宽字体栈。 */
+  terminalFontFamily: string;
+  /** 终端行高倍数。 */
+  terminalLineHeight: number;
+  /** 终端光标形状。 */
+  terminalCursorStyle: TerminalCursorStyle;
   /** 步骤展示密度。 */
   stepDisplay: StepDisplay;
   /** 步骤收起时机。 */
@@ -93,6 +103,10 @@ export const DEFAULT_PREFERENCES: Preferences = {
   palette: 'lime',
   fontSize: 14,
   terminalFontSize: 12,
+  terminalTheme: 'studio',
+  terminalFontFamily: '',
+  terminalLineHeight: 1.25,
+  terminalCursorStyle: 'bar',
   stepDisplay: 'standard',
   stepCollapse: 'after-answer',
   showCodeView: false,
@@ -113,6 +127,7 @@ const STEP_COLLAPSES = new Set<StepCollapse>(['after-answer', 'keep-open', 'manu
 const LINK_PREFERENCES = new Set<LinkPreference>(['external', 'window']);
 const RADIUS_STYLES = new Set<RadiusStyle>(['square', 'compact', 'standard', 'soft']);
 const EXTENSION_PLACEMENTS = new Set<ExtensionPlacement>(['both', 'chip', 'footer', 'hidden']);
+const TERMINAL_CURSOR_STYLES = new Set<TerminalCursorStyle>(['bar', 'block', 'underline']);
 const MAX_MEDIA_FIELD_LENGTH = 4_096;
 
 function cloneDefaults(): Preferences {
@@ -130,6 +145,17 @@ function clampNumber(
 ): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
   return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+/** 保留两位小数：行高这类步进不是整数的偏好不能四舍五入到整数。 */
+function clampDecimal(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value * 100) / 100));
 }
 
 function normalizePalette(value: unknown): PalettePreference {
@@ -190,6 +216,21 @@ export function normalizePreferences(value: unknown): Preferences {
       11,
       20,
     ),
+    terminalTheme: typeof source.terminalTheme === 'string' && source.terminalTheme.length <= 64
+      ? source.terminalTheme
+      : DEFAULT_PREFERENCES.terminalTheme,
+    terminalFontFamily: typeof source.terminalFontFamily === 'string' && source.terminalFontFamily.length <= 120
+      ? source.terminalFontFamily
+      : DEFAULT_PREFERENCES.terminalFontFamily,
+    terminalLineHeight: clampDecimal(
+      source.terminalLineHeight,
+      DEFAULT_PREFERENCES.terminalLineHeight,
+      1,
+      1.8,
+    ),
+    terminalCursorStyle: TERMINAL_CURSOR_STYLES.has(source.terminalCursorStyle as TerminalCursorStyle)
+      ? source.terminalCursorStyle as TerminalCursorStyle
+      : DEFAULT_PREFERENCES.terminalCursorStyle,
     stepDisplay: STEP_DISPLAYS.has(source.stepDisplay as StepDisplay)
       ? source.stepDisplay as StepDisplay
       : DEFAULT_PREFERENCES.stepDisplay,

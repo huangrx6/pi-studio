@@ -138,7 +138,7 @@ test('all CSS color literals and color calculations live in palette.css', () => 
 // 样式静默失效。--chat-font-size 由 App.tsx 在运行时写到根元素，
 // --provider-icon-size 由 ProviderIcon.tsx 以内联 style 注入，二者按约定列入白名单。
 test('all referenced design tokens resolve', () => {
-  const declared = new Set(['--chat-font-size', '--provider-icon-size']);
+  const declared = new Set(['--chat-font-size', '--provider-icon-size', '--terminal-fg']);
   const used = new Set();
   for (const file of sourceFiles.filter((item) => item.endsWith('.css'))) {
     postcss.parse(fs.readFileSync(file, 'utf8')).walkDecls((decl) => {

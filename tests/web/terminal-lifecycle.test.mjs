@@ -136,6 +136,9 @@ function harness() {
       if (name === '@xterm/addon-web-links') return { WebLinksAddon };
       if (name === '@xterm/addon-webgl') return { WebglAddon };
       if (name === '@xterm/addon-serialize') return { SerializeAddon };
+      if (name.endsWith('/terminal-themes')) {
+        return { STUDIO_TERMINAL_THEME: 'studio', isTerminalTheme: () => false, terminalTheme: () => null };
+      }
       if (name.endsWith('/terminal-actions')) {
         return {
           MAX_TERMINAL_FONT_SIZE, MIN_TERMINAL_FONT_SIZE,
@@ -149,7 +152,11 @@ function harness() {
     },
   });
   const nodes = (node) => !node || typeof node !== 'object' ? [] : [node, ...[node.props?.children].flat(Infinity).flatMap(nodes)];
-  let props = { id: 'a', cwd: '/workspace/a', fontSize: 12, onFontSizeChange() {}, onNewTerminal() {} };
+  let props = {
+    id: 'a', cwd: '/workspace/a',
+    appearance: { fontSize: 12, fontFamily: '', lineHeight: 1.25, cursorStyle: 'bar', themeId: 'studio' },
+    onFontSizeChange() {}, onNewTerminal() {},
+  };
   function render(next) {
     props = { ...props, ...next };
     do {

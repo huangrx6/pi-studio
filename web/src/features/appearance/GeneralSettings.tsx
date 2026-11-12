@@ -14,6 +14,7 @@ import { RangeControl } from '../../shared/RangeControl';
 import { InfoHint } from '../../shared/InfoHint';
 import type { Preferences } from '../../shared/preferences';
 import { BackgroundMediaPreview } from '../../shell/BackgroundLayer';
+import { TERMINAL_THEMES, STUDIO_TERMINAL_THEME } from '../terminal/terminal-themes';
 import './general-settings.css';
 
 type Props = {
@@ -28,6 +29,17 @@ type Props = {
   menuBarBusy: boolean;
   onMenuBarChange: (enabled: boolean) => void;
 };
+
+/** 常用等宽字体；空值表示跟随系统。字体不在机器上时浏览器会自动回退。 */
+const TERMINAL_FONT_OPTIONS = [
+  { value: '', label: '系统等宽' },
+  { value: 'SF Mono', label: 'SF Mono' },
+  { value: 'Menlo', label: 'Menlo' },
+  { value: 'JetBrains Mono', label: 'JetBrains Mono' },
+  { value: 'Fira Code', label: 'Fira Code' },
+  { value: 'Berkeley Mono', label: 'Berkeley Mono' },
+  { value: 'IBM Plex Mono', label: 'IBM Plex Mono' },
+];
 
 function SettingRow({ label, description, children }: { label: string; description?: string; children: ReactNode }) {
   return <div className="general-setting-row">
@@ -106,6 +118,40 @@ export function GeneralSettings({ preferences, onChange, backgroundBusy, backgro
       <SettingRow label="工作步骤收起时机"><Select label="工作步骤收起时机" value={preferences.stepCollapse} onChange={value => onChange('stepCollapse', value as Preferences['stepCollapse'])} options={[{ value: 'after-answer', label: '回答结束后' }, { value: 'keep-open', label: '保持展开' }, { value: 'manual', label: '手动控制' }]} /></SettingRow>
       <SettingRow label="显示代码工作视图" description="开启后显示轨迹页与本轮代码差异；关闭后只保留回答和工具步骤。">
         <button type="button" className={`switch ${preferences.showCodeView ? 'is-on' : ''}`} role="switch" aria-checked={preferences.showCodeView} aria-label="显示代码工作视图" title={preferences.showCodeView ? '隐藏轨迹与代码差异' : '显示轨迹与代码差异'} onClick={() => onChange('showCodeView', !preferences.showCodeView)}><span /></button>
+      </SettingRow>
+      </div>
+    </section>
+    <section className="general-settings-section" aria-labelledby={`${sectionId}-terminal`}>
+      <h2 id={`${sectionId}-terminal`}>
+        <span>终端</span>
+        <small>配色与等宽排版</small>
+      </h2>
+      <div className="general-settings-card">
+      <SettingRow label="配色主题" description="选一套独立配色，终端就和窗口其余部分分开；默认跟随界面明暗。">
+        <div className="terminal-theme-grid" role="group" aria-label="终端配色主题">
+          {[{ id: STUDIO_TERMINAL_THEME, label: '跟随界面' }, ...TERMINAL_THEMES].map((theme) => <button
+            type="button"
+            key={theme.id}
+            aria-pressed={preferences.terminalTheme === theme.id}
+            onClick={() => onChange('terminalTheme', theme.id)}
+          >
+            {/* 色板自己套主题属性，直接由 palette.css 里那组变量上色 */}
+            <span className="terminal-theme-swatch" aria-hidden="true" data-terminal-theme={theme.id} />
+            {theme.label}
+          </button>)}
+        </div>
+      </SettingRow>
+      <SettingRow label="终端字体"><Select label="终端字体" value={preferences.terminalFontFamily} onChange={value => onChange('terminalFontFamily', value)} options={TERMINAL_FONT_OPTIONS} /></SettingRow>
+      <SettingRow label="终端字号"><Stepper label="终端字号" value={preferences.terminalFontSize} min={11} max={20} unit=" px" onChange={value => onChange('terminalFontSize', value)} /></SettingRow>
+      <SettingRow label="行高"><Stepper label="终端行高" value={preferences.terminalLineHeight} min={1} max={1.8} step={0.05} unit="" onChange={value => onChange('terminalLineHeight', value)} /></SettingRow>
+      <SettingRow label="光标形状">
+        <div className="general-theme-options" role="group" aria-label="终端光标形状">
+          {([
+            { value: 'bar', label: '竖线' },
+            { value: 'block', label: '方块' },
+            { value: 'underline', label: '下划线' },
+          ] as const).map(({ value, label }) => <button type="button" key={value} aria-pressed={preferences.terminalCursorStyle === value} onClick={() => onChange('terminalCursorStyle', value)}>{label}</button>)}
+        </div>
       </SettingRow>
       </div>
     </section>

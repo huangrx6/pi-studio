@@ -424,3 +424,176 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --trace-tool: #d9902d;
   --trace-tool-soft: #d9902d22;
 }
+
+/* ---- 终端配色主题 ---------------------------------------------------------
+ * 终端主题要在运行时交给 xterm（它只认具体色值），所以配色在这里集中声明，
+ * 由 terminal-themes.ts 用 getComputedStyle 读取。新增主题只需加一段选择器。
+ */
+
+[data-terminal-theme='catppuccin-mocha'] {
+  --terminal-bg: #1e1e2e;
+  --terminal-fg: #cdd6f4;
+  --terminal-cursor: #f5e0dc;
+  --terminal-cursor-accent: #1e1e2e;
+  --terminal-selection: #585b70;
+  --terminal-black: #45475a;
+  --terminal-red: #f38ba8;
+  --terminal-green: #a6e3a1;
+  --terminal-yellow: #f9e2af;
+  --terminal-blue: #89b4fa;
+  --terminal-magenta: #f5c2e7;
+  --terminal-cyan: #94e2d5;
+  --terminal-white: #bac2de;
+  --terminal-bright-black: #585b70;
+  --terminal-bright-red: #f38ba8;
+  --terminal-bright-green: #a6e3a1;
+  --terminal-bright-yellow: #f9e2af;
+  --terminal-bright-blue: #89b4fa;
+  --terminal-bright-magenta: #f5c2e7;
+  --terminal-bright-cyan: #94e2d5;
+  --terminal-bright-white: #a6adc8;
+}
+
+[data-terminal-theme='tokyo-night'] {
+  --terminal-bg: #1a1b26;
+  --terminal-fg: #c0caf5;
+  --terminal-cursor: #c0caf5;
+  --terminal-cursor-accent: #1a1b26;
+  --terminal-selection: #33467c;
+  --terminal-black: #15161e;
+  --terminal-red: #f7768e;
+  --terminal-green: #9ece6a;
+  --terminal-yellow: #e0af68;
+  --terminal-blue: #7aa2f7;
+  --terminal-magenta: #bb9af7;
+  --terminal-cyan: #7dcfff;
+  --terminal-white: #a9b1d6;
+  --terminal-bright-black: #414868;
+  --terminal-bright-red: #f7768e;
+  --terminal-bright-green: #9ece6a;
+  --terminal-bright-yellow: #e0af68;
+  --terminal-bright-blue: #7aa2f7;
+  --terminal-bright-magenta: #bb9af7;
+  --terminal-bright-cyan: #7dcfff;
+  --terminal-bright-white: #c0caf5;
+}
+
+[data-terminal-theme='dracula'] {
+  --terminal-bg: #282a36;
+  --terminal-fg: #f8f8f2;
+  --terminal-cursor: #f8f8f2;
+  --terminal-cursor-accent: #282a36;
+  --terminal-selection: #44475a;
+  --terminal-black: #21222c;
+  --terminal-red: #ff5555;
+  --terminal-green: #50fa7b;
+  --terminal-yellow: #f1fa8c;
+  --terminal-blue: #bd93f9;
+  --terminal-magenta: #ff79c6;
+  --terminal-cyan: #8be9fd;
+  --terminal-white: #f8f8f2;
+  --terminal-bright-black: #6272a4;
+  --terminal-bright-red: #ff6e6e;
+  --terminal-bright-green: #69ff94;
+  --terminal-bright-yellow: #ffffa5;
+  --terminal-bright-blue: #d6acff;
+  --terminal-bright-magenta: #ff92df;
+  --terminal-bright-cyan: #a4ffff;
+  --terminal-bright-white: #ffffff;
+}
+
+[data-terminal-theme='nord'] {
+  --terminal-bg: #2e3440;
+  --terminal-fg: #d8dee9;
+  --terminal-cursor: #d8dee9;
+  --terminal-cursor-accent: #2e3440;
+  --terminal-selection: #434c5e;
+  --terminal-black: #3b4252;
+  --terminal-red: #bf616a;
+  --terminal-green: #a3be8c;
+  --terminal-yellow: #ebcb8b;
+  --terminal-blue: #81a1c1;
+  --terminal-magenta: #b48ead;
+  --terminal-cyan: #88c0d0;
+  --terminal-white: #e5e9f0;
+  --terminal-bright-black: #4c566a;
+  --terminal-bright-red: #bf616a;
+  --terminal-bright-green: #a3be8c;
+  --terminal-bright-yellow: #ebcb8b;
+  --terminal-bright-blue: #81a1c1;
+  --terminal-bright-magenta: #b48ead;
+  --terminal-bright-cyan: #8fbcbb;
+  --terminal-bright-white: #eceff4;
+}
+
+[data-terminal-theme='one-dark'] {
+  --terminal-bg: #282c34;
+  --terminal-fg: #abb2bf;
+  --terminal-cursor: #528bff;
+  --terminal-cursor-accent: #282c34;
+  --terminal-selection: #3e4451;
+  --terminal-black: #1e2127;
+  --terminal-red: #e06c75;
+  --terminal-green: #98c379;
+  --terminal-yellow: #d19a66;
+  --terminal-blue: #61afef;
+  --terminal-magenta: #c678dd;
+  --terminal-cyan: #56b6c2;
+  --terminal-white: #abb2bf;
+  --terminal-bright-black: #5c6370;
+  --terminal-bright-red: #e06c75;
+  --terminal-bright-green: #98c379;
+  --terminal-bright-yellow: #e5c07b;
+  --terminal-bright-blue: #61afef;
+  --terminal-bright-magenta: #c678dd;
+  --terminal-bright-cyan: #56b6c2;
+  --terminal-bright-white: #ffffff;
+}
+
+[data-terminal-theme='gruvbox-dark'] {
+  --terminal-bg: #282828;
+  --terminal-fg: #ebdbb2;
+  --terminal-cursor: #ebdbb2;
+  --terminal-cursor-accent: #282828;
+  --terminal-selection: #504945;
+  --terminal-black: #282828;
+  --terminal-red: #cc241d;
+  --terminal-green: #98971a;
+  --terminal-yellow: #d79921;
+  --terminal-blue: #458588;
+  --terminal-magenta: #b16286;
+  --terminal-cyan: #689d6a;
+  --terminal-white: #a89984;
+  --terminal-bright-black: #928374;
+  --terminal-bright-red: #fb4934;
+  --terminal-bright-green: #b8bb26;
+  --terminal-bright-yellow: #fabd2f;
+  --terminal-bright-blue: #83a598;
+  --terminal-bright-magenta: #d3869b;
+  --terminal-bright-cyan: #8ec07c;
+  --terminal-bright-white: #ebdbb2;
+}
+
+[data-terminal-theme='solarized-light'] {
+  --terminal-bg: #fdf6e3;
+  --terminal-fg: #586e75;
+  --terminal-cursor: #586e75;
+  --terminal-cursor-accent: #fdf6e3;
+  --terminal-selection: #eee8d5;
+  --terminal-black: #073642;
+  --terminal-red: #dc322f;
+  --terminal-green: #859900;
+  --terminal-yellow: #b58900;
+  --terminal-blue: #268bd2;
+  --terminal-magenta: #d33682;
+  --terminal-cyan: #2aa198;
+  --terminal-white: #eee8d5;
+  --terminal-bright-black: #002b36;
+  --terminal-bright-red: #cb4b16;
+  --terminal-bright-green: #586e75;
+  --terminal-bright-yellow: #657b83;
+  --terminal-bright-blue: #839496;
+  --terminal-bright-magenta: #6c71c4;
+  --terminal-bright-cyan: #93a1a1;
+  --terminal-bright-white: #fdf6e3;
+}

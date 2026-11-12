@@ -24,6 +24,8 @@ import type { TerminalEvent, TerminalSessionStatus } from '../../types/runtime-p
 import { errorText } from '../../shared/error-text';
 import { ActionMenu, type MenuAction } from '../../shared/ActionMenu';
 import { restoreTerminalReplay } from './terminal-replay';
+import { terminalTheme as themedTerminal, isTerminalTheme } from './terminal-themes';
+import type { TerminalCursorStyle } from '../../shared/preferences';
 import {
   MAX_TERMINAL_FONT_SIZE,
   MIN_TERMINAL_FONT_SIZE,
@@ -107,10 +109,26 @@ function registerFileLinks(term: Terminal, open: (target: TerminalLinkTarget) =>
   });
 }
 
+/** 终端外观：主题、字体与光标。全部来自偏好，改动即时生效。 */
+export type TerminalAppearance = {
+  fontSize: number;
+  fontFamily: string;
+  lineHeight: number;
+  cursorStyle: TerminalCursorStyle;
+  themeId: string;
+};
+
+function fontFamilyOf(custom: string) {
+  // Symbols 必须排在最前面，否则 Nerd Font 私有区字符会被通用等宽字体吞成方块。
+  return custom
+    ? `"Studio Terminal Symbols", "${custom.replaceAll('"', '')}", ${token('--mono')}`
+    : terminalFontFamily();
+}
+
 export function TerminalPanel({
   id,
   cwd,
-  fontSize,
+  appearance,
   onFontSizeChange,
   onNewTerminal,
   onOpenFile,
@@ -119,13 +137,14 @@ export function TerminalPanel({
 }: {
   id: string;
   cwd: string;
-  fontSize: number;
+  appearance: TerminalAppearance;
   onFontSizeChange: (size: number) => void;
   onNewTerminal: () => void;
   onOpenFile?: (path: string) => void;
   onOpenUrl?: (url: string) => void;
   onTitle?: (title: string) => void;
 }) {
+  const fontSize = appearance.fontSize;
   const hostRef = useRef<HTMLDivElement>(null);
   const focusTerminalRef = useRef<(() => void) | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -157,6 +176,10 @@ export function TerminalPanel({
   onOpenUrlRef.current = onOpenUrl;
   const onTitleRef = useRef(onTitle);
   onTitleRef.current = onTitle;
+  const appearanceRef = useRef(appearance);
+  appearanceRef.current = appearance;
+  // 只由外观 effect 更新：首次挂载不算「变化」，避免白白重绘一次。
+  const appliedAppearanceRef = useRef(appearance);
 
   const openLink = useCallback((target: TerminalLinkTarget) => {
     if (target.kind === 'url') { onOpenUrlRef.current?.(target.url); return; }
@@ -259,6 +282,7 @@ export function TerminalPanel({
     const pending: TerminalEvent[] = [];
     let pendingChars = 0;
     let droppedSequence = 0;
+    const custom = themedTerminal(appearance.themeId);
     const term = new Terminal({
       // Unicode11 的宽度表属于 xterm 的 proposed API，终端需要它来对齐
       // emoji 与中日韩宽字符；其余 proposed 能力这里没有使用。
@@ -267,18 +291,18 @@ export function TerminalPanel({
       convertEol: false,
       cursorBlink: true,
       cursorInactiveStyle: 'outline',
-      cursorStyle: 'bar',
+      cursorStyle: appearance.cursorStyle,
       // macOS 上默认按 ⌥ 会输入特殊字符，shell 的 ⌥←/⌥→ 就用不了。
       macOptionIsMeta: true,
       // 暗色 ANSI 颜色直接压在背景上会糊，交给 xterm 抬到可读对比度。
       minimumContrastRatio: 4.5,
       fastScrollSensitivity: 8,
       smoothScrollDuration: 80,
-      fontFamily: terminalFontFamily(),
+      fontFamily: fontFamilyOf(appearance.fontFamily),
       fontSize,
-      lineHeight: 1.25,
+      lineHeight: appearance.lineHeight,
       scrollback: 8_000,
-      theme: terminalTheme(),
+      theme: custom ?? terminalTheme(),
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
@@ -366,8 +390,10 @@ export function TerminalPanel({
     const applyAppearance = () => {
       if (disposed || document.hidden) { appearanceDirty = true; return; }
       appearanceDirty = false;
-      term.options.theme = terminalTheme();
-      term.options.fontFamily = terminalFontFamily();
+      term.options.theme = themedTerminal(appearanceRef.current.themeId) ?? terminalTheme();
+      term.options.fontFamily = fontFamilyOf(appearanceRef.current.fontFamily);
+      term.options.lineHeight = appearanceRef.current.lineHeight;
+      term.options.cursorStyle = appearanceRef.current.cursorStyle;
       term.refresh(0, term.rows - 1);
       scheduleFit();
     };
@@ -526,6 +552,24 @@ export function TerminalPanel({
     };
   }, [cwd, id, retryRevision, openLink]);
 
+  // 主题、字体、行高、光标：只改渲染参数，不重建会话。
+  useEffect(() => {
+    const term = terminalRef.current;
+    if (!term) return;
+    const previous = appliedAppearanceRef.current;
+    if (previous.themeId === appearance.themeId
+      && previous.fontFamily === appearance.fontFamily
+      && previous.lineHeight === appearance.lineHeight
+      && previous.cursorStyle === appearance.cursorStyle) return;
+    appliedAppearanceRef.current = appearance;
+    term.options.theme = themedTerminal(appearance.themeId) ?? terminalTheme();
+    term.options.fontFamily = fontFamilyOf(appearance.fontFamily);
+    term.options.lineHeight = appearance.lineHeight;
+    term.options.cursorStyle = appearance.cursorStyle;
+    fitRef.current?.();
+    term.refresh(0, term.rows - 1);
+  }, [appearance.themeId, appearance.fontFamily, appearance.lineHeight, appearance.cursorStyle]);
+
   // 字号变化只改渲染参数，不重建会话。
   useEffect(() => {
     const term = terminalRef.current;
@@ -585,7 +629,14 @@ export function TerminalPanel({
   }, [searchOpen, searchQuery]);
 
   const running = !connecting && status === 'running' && !error;
-  return <section className="terminal-panel" aria-label="终端">
+  const activePalette = themedTerminal(appearance.themeId);
+  return <section
+    className={`terminal-panel ${activePalette ? 'has-custom-theme' : ''}`}
+    aria-label="终端"
+    style={activePalette
+      ? { background: activePalette.background, ['--terminal-fg' as string]: activePalette.foreground }
+      : undefined}
+  >
     <header className="terminal-toolbar">
       <span className={`terminal-live-state ${running ? 'is-running' : 'is-exited'}`}>
         <i aria-hidden="true" />

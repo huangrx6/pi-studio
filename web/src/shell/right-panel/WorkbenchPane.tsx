@@ -25,6 +25,7 @@ import { AppWorkbench } from './AppWorkbench';
 import { BrowserPanel } from './BrowserPanel';
 import { RightPanelStart, type RightPanelToolAction } from './RightPanelStart';
 import type { useAppWorkbenchController } from './useAppWorkbench';
+import type { TerminalAppearance } from '../../features/terminal/TerminalPanel';
 
 const LazyTerminalPanel = lazy(async () => {
   const module = await import('../../features/terminal/TerminalPanel');
@@ -47,7 +48,7 @@ type WorkbenchPaneProps = {
   dragPreviewRef: MutableRefObject<HTMLDivElement | null>;
   onChooseWorkspace: () => void;
   onOpenSettings: (page: 'models') => void;
-  terminalFontSize: number;
+  terminalAppearance: TerminalAppearance;
   onTerminalFontSize: (size: number) => void;
   makeDragPreview: (event: React.DragEvent, label: string, kind: '工作区' | '会话' | '标签') => void;
 };
@@ -64,7 +65,7 @@ export function WorkbenchPane({
   dragPreviewRef,
   onChooseWorkspace,
   onOpenSettings,
-  terminalFontSize,
+  terminalAppearance,
   onTerminalFontSize,
   makeDragPreview,
 }: WorkbenchPaneProps) {
@@ -264,7 +265,7 @@ export function WorkbenchPane({
           key={`${activePanelTab.id}:${activePanelTab.restart ?? 0}`}
           id={activePanelTab.id}
           cwd={activePanelTab.cwd || session?.cwd || workspace}
-          fontSize={terminalFontSize}
+          appearance={terminalAppearance}
           onFontSizeChange={onTerminalFontSize}
           onNewTerminal={openTerminalTab}
           onOpenFile={(path) => { void openFile(path.replace(/:\d+(?::\d+)?$/u, ''), session?.id, 'external'); }}

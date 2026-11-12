@@ -61,3 +61,46 @@
 @media (max-width: 640px) {
   .general-settings-section h2 small { display: none; }
 }
+
+/* 终端主题色板：一眼看出背景、强调色与高亮色，不必逐个点开试 */
+.terminal-theme-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.terminal-theme-grid > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 9px 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.terminal-theme-grid > button:hover { background: var(--surface-hover); color: var(--text); }
+
+.terminal-theme-grid > button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--text);
+}
+
+.terminal-theme-swatch {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-tag);
+  /* 左半是主题背景色，右半是它的强调色，一眼分清深色与浅色主题 */
+  background: linear-gradient(
+    135deg,
+    var(--terminal-bg, var(--surface-soft)) 50%,
+    var(--terminal-blue, var(--border)) 50%
+  );
+}
