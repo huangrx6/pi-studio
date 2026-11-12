@@ -154,6 +154,7 @@ export function useConversationController(foundation: AppFoundation) {
     conversationSubscriptionRetryRef,
     composerFeedback,
     setComposerFeedback,
+    composerFeedbackScopeRef,
     filesOpen,
     openFile,
     openChangesTab,
@@ -162,6 +163,9 @@ export function useConversationController(foundation: AppFoundation) {
     showComposerFeedback,
     transcriptCacheRef,
   } = foundation;
+
+  // 输入框提示按会话归属：切到别的对话后，上一条会话的错误/提示不再显示。
+  composerFeedbackScopeRef.current = session?.id;
 
   const settingsWorkspace = useSettingsWorkspace({
     workspace,

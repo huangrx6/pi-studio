@@ -263,7 +263,11 @@ export function useAppFoundation() {
   const [composerFeedback, setComposerFeedback] = useState<{
     message: string;
     tone: 'info' | 'warning';
+    /** 归属会话：只在同一条对话的输入框上显示，切换会话后自动让位。 */
+    sessionId?: string;
   } | null>(null);
+  // 由 controller 每次渲染写入当前会话 id，showComposerFeedback 用它打归属。
+  const composerFeedbackScopeRef = useRef<string | undefined>(undefined);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const workbench = useAppWorkbenchController({
     workspace,
@@ -287,7 +291,7 @@ export function useAppFoundation() {
   } = workbench;
   const [models, setModels] = useState<ModelOption[]>([]);
   const showComposerFeedback = useCallback((message: string, tone: 'info' | 'warning' = 'warning') => {
-    setComposerFeedback({ message, tone });
+    setComposerFeedback({ message, tone, sessionId: composerFeedbackScopeRef.current });
   }, []);
   const transcriptCacheRef = useRef(new Map<string, {
     at: number;
@@ -481,6 +485,7 @@ export function useAppFoundation() {
     conversationSubscriptionRetryRef,
     composerFeedback,
     setComposerFeedback,
+    composerFeedbackScopeRef,
     sidebarCollapsed,
     setSidebarCollapsed,
     workbench,

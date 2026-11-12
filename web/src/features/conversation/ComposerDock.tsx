@@ -118,7 +118,7 @@ export type ComposerDockProps = {
   sessionLoading: boolean;
   preparing: boolean;
   compaction: { active: boolean; reason?: string };
-  composerFeedback: { message: string; tone: 'info' | 'warning' } | null;
+  composerFeedback: { message: string; tone: 'info' | 'warning'; sessionId?: string } | null;
   setComposerFeedback: Setter<{ message: string; tone: 'info' | 'warning' } | null>;
   visiblePermission: PermissionUiState | null;
   changePermission: (mode: PermissionMode) => Promise<void>;
@@ -245,6 +245,11 @@ export function ComposerDock({
   );
   // 计划全部完成时自动收起计划栏：完成的清单只留一行摘要，把高度还给消息区。
   // 用户随后手动展开就不再自动收起，直到出现新的未完成任务。
+  // 提示按会话归属：带了别的会话 id 就不显示；没有归属的（草稿态）照常显示。
+  const scopedComposerFeedback = composerFeedback
+    && (!composerFeedback.sessionId || composerFeedback.sessionId === session?.id)
+    ? composerFeedback
+    : null;
   const todoAllDone = useMemo(() => {
     const tracked = (todoDetails?.tasks ?? []).filter((task) => !task.archivedAt && !task.closedAt && task.status !== 'deleted');
     return tracked.length > 0 && tracked.every((task) => task.status === 'completed');
@@ -333,9 +338,10 @@ export function ComposerDock({
         onSendPrompt={sendPromptFromExtension}
         onNotify={notifyExtension}
       />
-      {composerFeedback && <ComposerFeedback
-        message={composerFeedback.message}
-        tone={composerFeedback.tone}
+      {/* 提示属于触发它的那条会话：切换后不再跟到别的输入框上 */}
+      {scopedComposerFeedback && <ComposerFeedback
+        message={scopedComposerFeedback.message}
+        tone={scopedComposerFeedback.tone}
         onDismiss={() => setComposerFeedback(null)}
       />}
       <div
