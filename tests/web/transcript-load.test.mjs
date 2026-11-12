@@ -94,3 +94,13 @@ test('没有更早内容时补页不发请求', async () => {
   assert.equal(quiet, null);
   assert.equal(called, false);
 });
+
+test('固定窗口合并时最多保留 50 条，并跟随向上加载的旧端', async () => {
+  const { mergeTranscriptPage, trimTranscript } = await import('../../web/src/features/conversation/transcript-load.mjs');
+  const current = Array.from({ length: 50 }, (_, index) => ({ role: 'user', sourceIndex: index + 51 }));
+  const older = Array.from({ length: 50 }, (_, index) => ({ role: 'user', sourceIndex: index + 1 }));
+  const merged = mergeTranscriptPage(current, older, 'older');
+  assert.equal(merged.length, 50);
+  assert.deepEqual(merged.map(item => item.sourceIndex), older.map(item => item.sourceIndex));
+  assert.equal(trimTranscript([...current, ...older], 'latest').length, 50);
+});

@@ -1,3 +1,4 @@
+import type { ComposerEditorHandle } from './ComposerEditor';
 import { useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type {
@@ -37,7 +38,7 @@ import {
   moveComposerDraft,
   type ComposerDraft,
 } from './composer-drafts';
-import { loadOlderPage, loadTranscriptWindow } from './transcript-load.mjs';
+import { loadOlderPage, loadTranscriptWindow, trimTranscript } from './transcript-load.mjs';
 import { messagesHaveMarkdownCode } from '../../shared/markdown-code.mjs';
 import { preloadMarkdownHighlighter, preloadMarkdownRenderer } from '../../shared/Markdown';
 import { errorText } from '../../shared/error-text';
@@ -70,14 +71,14 @@ type ConversationSessionsDependencies = {
   modelWriteResultsRef: MutableRefObject<Map<string, { revision: number; selection: ModelSelection }>>;
   transcriptCacheRef: MutableRefObject<Map<string, TranscriptCacheEntry>>;
   /** 当前会话已载入窗口的分页游标，用于向上补页。 */
-  transcriptPageRef: MutableRefObject<{ sessionId: string; page: { hasOlder?: boolean; nextCursor?: string } } | null>;
+  transcriptPageRef: MutableRefObject<{ sessionId: string; page: { hasOlder?: boolean; hasNewer?: boolean; nextCursor?: string; olderCursor?: string } } | null>;
   prefetchedSessionsRef: MutableRefObject<Set<string>>;
   outlineRequestRef: MutableRefObject<number>;
   subagentRequestRef: MutableRefObject<number>;
   composerDraftKeyRef: MutableRefObject<string>;
   composerDraftsRef: MutableRefObject<Map<string, ComposerDraft>>;
   requestRef: MutableRefObject<string | null>;
-  textareaRef: MutableRefObject<HTMLTextAreaElement | null>;
+  composerEditorRef: MutableRefObject<ComposerEditorHandle | null>;
   setSettingsOpen: Setter<boolean>;
   setSessionLoading: Setter<boolean>;
   setSession: Setter<SessionState>;
@@ -133,7 +134,7 @@ export function useConversationSessions({
   composerDraftKeyRef,
   composerDraftsRef,
   requestRef,
-  textareaRef,
+  composerEditorRef,
   setSettingsOpen,
   setSessionLoading,
   setSession,
@@ -213,7 +214,7 @@ export function useConversationSessions({
     if (!defaultsKnown || !defaultModelSelection.modelRef) void loadModelCatalog(cwd).catch(() => {});
     setBusy(false);
     setRetryInfo(null);
-    requestAnimationFrame(() => textareaRef.current?.focus());
+    requestAnimationFrame(() => composerEditorRef.current?.focus());
   }
 
   function selectDraftWorkspace(cwd: string) {
@@ -258,7 +259,7 @@ export function useConversationSessions({
     if (prefetchedSessionsRef.current.has(id)) return;
     prefetchedSessionsRef.current.add(id);
     void preloadMarkdownRenderer().catch(() => { /* optional renderer remains on plain-text fallback */ });
-    void window.piApi.conversationPage({ id, limit: 200 })
+    void window.piApi.conversationPage({ id, limit: 50 })
       .then((page) => {
         if (page?.messages && messagesHaveMarkdownCode(page.messages)) {
           void preloadMarkdownHighlighter().catch(() => { /* code remains readable without highlighting */ });
@@ -377,44 +378,28 @@ export function useConversationSessions({
     }
   }
 
-  /**
-   * 向上补一页更早的历史。
-   *
-   * 返回 false 表示没有更早的内容（或正在加载），调用方据此停止滚动加载。
-   */
-  /**
-   * 向上补一页更早的历史。
-   *
-   * `limit` 用于跳转：一次多取一些，几页就能跨过几千条；滚动加载用默认页大小。
-   * `keepLatest` 为 false 时把窗口截到 `maxWindow` 条，避免为了看一条旧消息
-   * 把整段历史重新装回内存（那正是窗口化要解决的问题）。截掉的尾部可以由
-   * {@link resetToLatest} 重新取回。
-   */
-  async function loadOlderMessages(options: {
-    limit?: number;
-    keepLatest?: boolean;
-    maxWindow?: number;
-  } = {}): Promise<boolean> {
+  /** 向上补一页更早的历史，最多保留一个有界窗口。 */
+  async function loadOlderMessages(options: { limit?: number; keepLatest?: boolean; maxWindow?: number } = {}): Promise<boolean> {
     const sessionId = sessionRef.current?.id;
     const cursor = transcriptPageRef.current;
-    if (!sessionId || !cursor || cursor.sessionId !== sessionId) return false;
-    if (!cursor.page?.nextCursor || olderLoadingRef.current) return false;
+    if (!sessionId || !cursor || cursor.sessionId !== sessionId
+      || !(cursor.page?.olderCursor || cursor.page?.nextCursor) || olderLoadingRef.current) return false;
     olderLoadingRef.current = true;
     try {
       const older = await loadOlderPage(window.piApi.conversationPage, sessionId, cursor.page, { limit: options.limit });
-      if (!older) {
-        transcriptPageRef.current = { sessionId, page: { hasOlder: false } };
-        return false;
-      }
-      if (sessionRef.current?.id !== sessionId) return false;
+      if (!older || sessionRef.current?.id !== sessionId) return false;
       transcriptPageRef.current = { sessionId, page: older.page };
-      const maxWindow = options.maxWindow ?? 800;
-      // 函数式插入：加载期间新到的流式消息不会被这次替换覆盖。
       setMessages((current) => {
         const merged = [...older.messages, ...current];
+        const maxWindow = options.maxWindow ?? 50;
         if (options.keepLatest === false && merged.length > maxWindow) {
           setTranscriptTruncated(true);
-          return merged.slice(0, maxWindow);
+          return trimTranscript(merged, 'oldest');
+        }
+        if (merged.length > maxWindow) {
+          setTranscriptTruncated(true);
+          // While reading upward, the fixed window follows the older edge.
+          return trimTranscript(merged, 'oldest');
         }
         return merged;
       });
@@ -426,19 +411,32 @@ export function useConversationSessions({
     }
   }
 
-  /** 重新载入最新一页，回到「窗口包含最新消息」的状态。 */
   async function resetToLatest(): Promise<void> {
     const sessionId = sessionRef.current?.id;
     if (!sessionId) return;
     try {
-      const detail = await loadTranscriptWindow(window.piApi.conversationPage, sessionId);
-      if (!detail || sessionRef.current?.id !== sessionId) return;
+      const loaded = await loadTranscriptWindow(window.piApi.conversationPage, sessionId);
+      if (!loaded || sessionRef.current?.id !== sessionId) return;
+      transcriptPageRef.current = { sessionId, page: loaded.page ?? { hasOlder: false } };
+      setMessages(loaded.messages);
+      setTranscriptTruncated(false);
+    } catch { /* keep current window */ }
+  }
+
+  /** Load a bounded window around a stable Durable entry id. */
+  async function loadMessageWindow(around: number): Promise<boolean> {
+    const sessionId = sessionRef.current?.id;
+    const generation = sessionLoadRef.current;
+    if (!sessionId || !Number.isSafeInteger(around) || around <= 0) return false;
+    try {
+      const detail = await window.piApi.conversationPage({ id: sessionId, limit: 50, around });
+      if (!detail || generation !== sessionLoadRef.current || sessionRef.current?.id !== sessionId) return false;
+      if (!detail.messages.some(message => message.sourceIndex === around)) return false;
       transcriptPageRef.current = { sessionId, page: detail.page ?? { hasOlder: false } };
       setMessages(detail.messages);
-      setTranscriptTruncated(false);
-    } catch {
-      // 保持当前窗口即可，用户还能继续读。
-    }
+      setTranscriptTruncated(Boolean(detail.page?.hasNewer));
+      return true;
+    } catch { return false; }
   }
 
   async function openNotificationSession(id: string): Promise<void> {
@@ -448,7 +446,7 @@ export function useConversationSessions({
     const opened = await openSession(target, false);
     if (!opened) throw new Error('暂时无法打开这个会话，请稍后再试。');
     if (document.activeElement?.closest('.notification-panel')) {
-      textareaRef.current?.focus({ preventScroll: true });
+      composerEditorRef.current?.focus({ preventScroll: true });
     }
   }
 
@@ -461,6 +459,7 @@ export function useConversationSessions({
     openSession,
     openNotificationSession,
     loadOlderMessages,
+    loadMessageWindow,
     resetToLatest,
   };
 }

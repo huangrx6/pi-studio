@@ -1,3 +1,4 @@
+import { composerValue } from './fixtures/composer-editor.mjs';
 /**
  * Isolated real-Electron coverage for settings refinement and lazy routes.
  * Run after pnpm run build: node tools/qa/qa-settings-refinement.mjs
@@ -367,7 +368,7 @@ try {
   }
   await nav.getByRole('button', { name: '返回对话', exact: true }).click();
   await composer.waitFor();
-  assert.equal(await composer.inputValue(), draft, 'settings edits and lazy navigation preserve the conversation draft');
+  assert.equal(await composerValue(composer), draft, 'settings edits and lazy navigation preserve the conversation draft');
   assert.equal(await page.locator('.session-row:not(.empty)').count(), 0, 'settings do not submit a conversation');
 
   await page.reload();

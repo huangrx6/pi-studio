@@ -1,3 +1,4 @@
+import { composerValue } from './fixtures/composer-editor.mjs';
 // Session-scoped composer regression: unsent drafts must survive chat switches.
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
@@ -140,29 +141,29 @@ try {
   await page.locator('.workspace-row').first().click();
   const sessionA = page.locator('.session-row').filter({ hasText: '草稿会话 A' });
   const sessionB = page.locator('.session-row').filter({ hasText: '草稿会话 B' });
-  const composer = page.locator('.composer textarea');
+  const composer = page.locator('.composer-editor');
 
   await sessionA.click();
   await composer.fill('只属于会话 A 的草稿');
   await page.getByRole('button', { name: '添加图片或文件' }).click();
   await page.locator('.composer-attachments .composer-image-preview-trigger').waitFor();
   await sessionB.click();
-  assert.equal(await composer.inputValue(), '', '会话 B 不应继承会话 A 的草稿');
+  assert.equal(await composerValue(composer), '', '会话 B 不应继承会话 A 的草稿');
   assert.equal(await page.locator('.composer-attachments .composer-image-preview-trigger').count(), 0, '会话 B 不应继承会话 A 的附件');
   await composer.fill('只属于会话 B 的草稿');
   await sessionA.click();
-  assert.equal(await composer.inputValue(), '只属于会话 A 的草稿');
+  assert.equal(await composerValue(composer), '只属于会话 A 的草稿');
   assert.equal(await page.locator('.composer-attachments .composer-image-preview-trigger').count(), 1, '会话 A 的附件应随草稿恢复');
   await sessionB.click();
-  assert.equal(await composer.inputValue(), '只属于会话 B 的草稿');
+  assert.equal(await composerValue(composer), '只属于会话 B 的草稿');
 
   await page.locator('.new-chat').click();
-  assert.equal(await composer.inputValue(), '', '新对话不应继承已有会话草稿');
+  assert.equal(await composerValue(composer), '', '新对话不应继承已有会话草稿');
   await composer.fill('未创建会话的工作区草稿');
   await sessionA.click();
-  assert.equal(await composer.inputValue(), '只属于会话 A 的草稿');
+  assert.equal(await composerValue(composer), '只属于会话 A 的草稿');
   await page.locator('.new-chat').click();
-  assert.equal(await composer.inputValue(), '未创建会话的工作区草稿');
+  assert.equal(await composerValue(composer), '未创建会话的工作区草稿');
 
   assert.deepEqual(errors, []);
   console.log('PASS: composer text and attachment state are isolated by conversation and survive switching.');

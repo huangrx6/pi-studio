@@ -1,3 +1,4 @@
+import { composerValue, selectComposerRange } from './fixtures/composer-editor.mjs';
 /**
  * Focused browser QA for the one-pass transcript load and long-paste attachments.
  *
@@ -235,15 +236,14 @@ try {
   const composer = page.getByRole('textbox', { name: '发送给 Pi 的消息' });
   await composer.fill('typed-');
   const pasted = 'P'.repeat(11_996);
+  await selectComposerRange(composer, (await composerValue(composer)).length);
   await composer.evaluate((node, text) => {
-    node.focus();
-    node.setSelectionRange(node.value.length, node.value.length);
     const data = new DataTransfer();
     data.setData('text/plain', text);
     node.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }));
   }, pasted);
   await page.waitForFunction(() => window.__savedPastes.length === 1);
-  assert.equal(await composer.inputValue(), 'typed-');
+  assert.equal(await composerValue(composer), 'typed-');
   assert.equal(await page.evaluate(() => window.__savedPastes[0].text), pasted);
 
   const attachment = page.getByRole('button', { name: '在右侧面板查看 long-paste.txt' });

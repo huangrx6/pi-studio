@@ -22,6 +22,7 @@ const {
 } = require('../core/app-settings.cjs');
 const { getStudioModelsRuntime } = require('../core/studio-models.cjs');
 const durableView = require('./view.cjs');
+const { readHistoryPage, validatePosition } = require('./history-page.cjs');
 const {
   getDurableRuntime,
   latestEntry,
@@ -422,85 +423,24 @@ function scanStopReason({ count, messageLimit, hasMoreEntries }) {
 async function scanEntries(conversation, options = {}) {
   const runtime = await getDurableRuntime();
   const editRanges = await loadEditRanges(conversation);
-  const order = options.order === 'ascending' ? 'ascending' : 'descending';
-  const messageLimit = Math.max(
-    1,
-    Math.min(MAX_PAGE_SIZE, Number(options.messageLimit) || DEFAULT_PAGE_SIZE),
-  );
-  const groups = [];
   const decoded = decodeCursor(options.cursor);
-  if (decoded && decoded.version !== 2) {
-    throw new Error('历史分页游标版本已更新，请重新打开会话');
-  }
-  if (decoded && decoded.order !== order) {
-    throw new Error('历史分页方向与游标不一致');
-  }
-  let cursor = decoded?.upstream;
-  let skip = Math.max(0, Number(decoded?.skip) || 0);
-  let nextCursor;
-  let exhausted = false;
-  let count = 0;
-
-  while (count < messageLimit) {
-    const page = await conversation.entries(
-      { order },
-      ENTRY_SCAN_PAGE_SIZE,
-      cursor,
-      runtime.context,
-    );
-    let consumedInPage = 0;
-    let pageMessages = 0;
-    for (const entry of page.items) {
-      const entryMessages = entryIsHidden(entry.id, editRanges)
-        ? []
-        : entryToMessages(entry);
-      pageMessages += entryMessages.length;
-      if (skip >= entryMessages.length) {
-        skip -= entryMessages.length;
-        consumedInPage += entryMessages.length;
-        continue;
-      }
-      const available = entryMessages.slice(skip);
-      consumedInPage += skip;
-      skip = 0;
-      const take = available.slice(0, Math.max(0, messageLimit - count));
-      if (take.length > 0) groups.push(take);
-      count += take.length;
-      consumedInPage += take.length;
-      if (scanStopReason({ count, messageLimit, hasMoreEntries: true }) !== 'continue') break;
-    }
-
-    const pageHasUnconsumedMessages = consumedInPage < pageMessages;
-    const stop = scanStopReason({ count, messageLimit, hasMoreEntries: Boolean(page.next) });
-    if (stop === 'complete' || stop === 'limit') {
-      if (pageHasUnconsumedMessages || page.next) {
-        nextCursor = encodeCursor({
-          version: 2,
-          order,
-          upstream: cursor,
-          skip: consumedInPage,
-        });
-      } else {
-        exhausted = true;
-      }
-      break;
-    }
-    if (!page.next) {
-      exhausted = true;
-      break;
-    }
-    cursor = page.next;
-    skip = 0;
-  }
-
-  const display = order === 'ascending'
-    ? groups.flat()
-    : [...groups].reverse().flat();
-  const messages = display.slice(0, messageLimit);
+  if (decoded && decoded.version !== 3) throw new Error('历史分页游标版本已更新，请重新打开会话');
+  const order = options.order === 'ascending' ? 'ascending' : 'descending';
+  if (decoded && decoded.order !== order) throw new Error('历史分页方向与游标不一致');
+  const boundary = options.boundary || decoded?.position;
+  const page = await readHistoryPage({
+    readEntries: (query, limit, cursor) => conversation.entries(query, limit, cursor, runtime.context),
+    project: entry => entryIsHidden(entry.id, editRanges) ? [] : entryToMessages(entry),
+    order,
+    boundary,
+    limit: Math.max(1, Math.min(MAX_PAGE_SIZE, Math.floor(Number(options.messageLimit) || DEFAULT_PAGE_SIZE))),
+  });
   return {
-    messages,
-    hasOlder: order === 'descending' && Boolean(nextCursor) && !exhausted,
-    nextCursor: order === 'descending' ? nextCursor : undefined,
+    ...page,
+    hasOlder: order === 'descending' ? page.hasMore : Boolean(boundary),
+    hasNewer: order === 'ascending' ? page.hasMore : Boolean(boundary),
+    nextCursor: order === 'descending' && page.hasMore
+      ? encodeCursor({ version: 3, order, position: page.first }) : undefined,
   };
 }
 
@@ -630,11 +570,44 @@ async function conversationPage(id, options = {}) {
   const conversation = await getConversationHandle(id);
   if (!row || !conversation) return undefined;
   await refreshRuntimeState();
-  const page = await scanEntries(conversation, {
-    order: 'descending',
-    messageLimit: options.limit,
-    cursor: options.cursor,
-  });
+  const modes = [options.before, options.after, options.around !== undefined, options.cursor].filter(Boolean).length;
+  if (modes > 1) throw new Error('历史读取只能指定一种定位方式');
+  if (options.around !== undefined && !normalizeId(options.around)) throw new Error('目标消息 ID 无效');
+  const boundary = options.before || options.after || undefined;
+  if (boundary) validatePosition(boundary);
+  let page;
+  if (options.around !== undefined) {
+    const total = Math.max(1, Math.min(MAX_PAGE_SIZE, Math.floor(Number(options.limit) || DEFAULT_PAGE_SIZE)));
+    const before = await scanEntries(conversation, {
+      order: 'descending',
+      messageLimit: Math.max(1, Math.floor(total / 2)),
+      boundary: { entryId: options.around, offset: 0 },
+    });
+    const after = await scanEntries(conversation, {
+      order: 'ascending',
+      messageLimit: Math.max(1, total - Math.floor(total / 2)),
+      boundary: { entryId: options.around, offset: -1 },
+    });
+    page = {
+      messages: [...before.messages.reverse(), ...after.messages],
+      hasMore: false,
+      hasOlder: before.hasMore,
+      hasNewer: after.hasMore,
+      olderCursor: before.hasMore && before.first
+        ? encodeCursor({ version: 3, order: 'descending', position: before.first })
+        : undefined,
+      nextCursor: undefined,
+      first: before.messages[0] ? { entryId: before.messages[0].sourceIndex, offset: before.messages[0].sourceOffset ?? 0 } : after.first,
+      last: after.last,
+    };
+  } else {
+    page = await scanEntries(conversation, {
+      order: options.after ? 'ascending' : 'descending',
+      messageLimit: options.limit,
+      cursor: options.cursor,
+      boundary,
+    });
+  }
   const agent = await conversation.agent((await getDurableRuntime()).context);
   const key = conversationKey(row);
   const entry = watches.get(key);
@@ -657,7 +630,9 @@ async function conversationPage(id, options = {}) {
     }),
     page: {
       hasOlder: page.hasOlder,
+      hasNewer: page.hasNewer,
       nextCursor: page.nextCursor,
+      olderCursor: page.olderCursor,
     },
     messageStart: page.messages[0]?.sourceIndex ?? 0,
   });

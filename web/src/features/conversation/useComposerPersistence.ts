@@ -38,7 +38,6 @@ type ComposerPersistenceDependencies = {
   composerPersistenceErrorRef: MutableRefObject<boolean>;
   queuedPromptsRef: MutableRefObject<Record<string, QueuedPrompt[]>>;
   restoredRef: MutableRefObject<boolean>;
-  textareaRef: MutableRefObject<HTMLTextAreaElement | null>;
   composerPersistenceReady: boolean;
   composerPersistenceStarted: boolean;
   queuedPromptsBySession: Record<string, QueuedPrompt[]>;
@@ -74,7 +73,6 @@ export function useComposerPersistence({
   composerPersistenceErrorRef,
   queuedPromptsRef,
   restoredRef,
-  textareaRef,
   composerPersistenceReady,
   composerPersistenceStarted,
   queuedPromptsBySession,
@@ -243,11 +241,6 @@ export function useComposerPersistence({
     composerPersistenceStartedRef.current = true;
     setComposerPersistenceStarted(true);
   }, [changeWorkspace, composerDraftsRef, composerPersistenceReady, composerPersistenceStartedRef, openSession, persistedComposerActiveDraftKeyRef, queuedPromptsRef, restoredRef, setComposerPersistenceStarted, setExpanded, setQueuedPromptsBySession, startSession, stateLoading, workspaces]);
-
-  useEffect(() => {
-    const textarea = textareaRef.current;
-    if (textarea) { textarea.style.height = 'auto'; textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`; }
-  }, [prompt, textareaRef]);
 
   useEffect(() => {
     if (!composerPersistenceReady || !composerPersistenceStarted) return;

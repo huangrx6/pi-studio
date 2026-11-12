@@ -1,3 +1,4 @@
+import { composerValue } from './fixtures/composer-editor.mjs';
 /**
  * First-use, settings navigation, and workbench layout regression check.
  * Run after `pnpm run build`: node tools/qa/qa-experience-refresh.mjs
@@ -98,8 +99,8 @@ try {
   assert.equal(await page.locator('.model-label').count(), 0, 'missing model stays in the single welcome setup path');
   const composer = page.getByRole('textbox', { name: '发送给 Pi 的消息', exact: true });
   await welcome.getByRole('button', { name: '了解项目', exact: true }).click();
-  await page.waitForFunction(() => Boolean(document.querySelector('textarea[aria-label="发送给 Pi 的消息"]')?.value.trim()));
-  const draft = await composer.inputValue();
+  await page.waitForFunction(() => Boolean(document.querySelector('[role="textbox"][aria-label="发送给 Pi 的消息"]')?.value.trim()));
+  const draft = await composerValue(composer);
   assert.equal(await page.locator('.session-row:not(.empty)').count(), 0, 'example fills a draft without creating a conversation');
   assert.equal(await page.locator('.new-conversation-welcome').count(), 1, 'example leaves new-conversation state intact');
   await page.locator('.new-conversation-suggestions').waitFor({ state: 'hidden' });
@@ -124,17 +125,17 @@ try {
   await navigation.getByRole('button', { name: '通用', exact: true }).waitFor();
   await navigation.getByRole('button', { name: '返回对话', exact: true }).click();
   await welcome.waitFor();
-  assert.equal(await composer.inputValue(), draft, 'returning from settings preserves the draft');
+  assert.equal(await composerValue(composer), draft, 'returning from settings preserves the draft');
   assert.equal(await page.getByRole('button', { name: '发送消息', exact: true }).isDisabled(), true, 'ordinary prompts need a configured model');
   await composer.press('Enter');
-  assert.equal(await composer.inputValue(), draft, 'Enter without a model preserves the draft');
+  assert.equal(await composerValue(composer), draft, 'Enter without a model preserves the draft');
   assert.equal(await page.locator('.session-row:not(.empty)').count(), 0, 'Enter without a model does not create a conversation');
   await composer.fill('/model');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   await page.getByRole('heading', { name: '模型配置', exact: true }).waitFor();
   await navigation.getByRole('button', { name: '返回对话', exact: true }).click();
   await welcome.waitFor();
-  assert.equal(await composer.inputValue(), '', '/model routes missing-model setup to full configuration and consumes the command');
+  assert.equal(await composerValue(composer), '', '/model routes missing-model setup to full configuration and consumes the command');
   await composer.fill(draft);
 
   await page.getByRole('button', { name: '打开右侧面板', exact: true }).click();

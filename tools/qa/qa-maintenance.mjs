@@ -1,3 +1,4 @@
+import { composerValue } from './fixtures/composer-editor.mjs';
 /** Isolated production About/update/MCP QA. All updater and connection operations are mocked. */
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
@@ -126,7 +127,7 @@ try {
   await page.keyboard.press('Escape'); await mcp().waitFor({ state: 'detached' }); await settle(); const bName = await page.evaluate(() => window.__maintenanceQa.names.B); assert.equal(await page.getByRole('button', { name: `查看 MCP ${bName} 详情`, exact: true }).evaluate(node => node === document.activeElement), true);
   await page.setViewportSize({ width: 980, height: 760 }); await openMcp('C'); await mcp().getByText('已停用', { exact: true }).waitFor(); await mcp().locator('summary').filter({ hasText: '连接参数' }).click(); await mcp().getByText(/所有工作区/).first().waitFor(); await capture('07-mcp-disabled-light', 'light', { width: 980, height: 760 }, '.mcp-detail-dialog'); await closeMcp();
   result.checks.push('MCP tools/diagnostics/connection parameters remain keyboard-accessible, long names/targets fit light and dark widths, disabled state and global scope accurate, Escape/Tab and opener focus preserved');
-  await page.getByRole('button', { name: '返回对话', exact: true }).click(); assert.equal(await composer().inputValue(), draft);
+  await page.getByRole('button', { name: '返回对话', exact: true }).click(); assert.equal(await composerValue(composer()), draft);
   assert.deepEqual(result.pageErrors, []); assert.deepEqual(result.blockedRequests, []); result.calls = await page.evaluate(() => window.__maintenanceQa.calls); assert.equal(result.calls.some(call => call.method === 'conversationSubmit'), false);
   result.passed = true; await rm(path.join(output, 'failure.png'), { force: true });
 } catch (error) { result.failure = String(error.stack || error); if (page) { result.calls = await page.evaluate(() => window.__maintenanceQa?.calls).catch(() => []); await page.screenshot({ path: path.join(output, 'failure.png') }).catch(() => {}); } throw error; }

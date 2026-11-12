@@ -1,3 +1,4 @@
+import { composerValue } from './fixtures/composer-editor.mjs';
 /** Production renderer execution settings. All reads/writes are synthetic in-memory fixtures. */
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -75,7 +76,7 @@ try {
   await permissionRetry.click();
   await page.waitForFunction(() => document.querySelector('button[aria-label="权限模式"] .pi-select-value')?.textContent?.includes('帮我批准'));
   await permissionMode.waitFor();
-  assert.equal(await composer.inputValue(), mainDraft, 'permission scope races preserve the original conversation draft');
+  assert.equal(await composerValue(composer), mainDraft, 'permission scope races preserve the original conversation draft');
   result.checks.push('permission reads are scope-owned, stale and failed results never expose another mode, explicit retry restores the current selector');
   await openSettings('权限策略');
   const scopeButton = (text) => permissions().locator('.permission-policy-scopes').getByRole('button').filter({ hasText: text });
@@ -327,7 +328,7 @@ try {
   assert.equal(await agentTools().getByRole('button', { name: '查看工具 workspace_b_tool 详情', exact: true }).count(), 1);
   result.checks.push('late tool catalog from A cannot replace B workspace discovery; persisted tool selection remains global');
   await openSession('perf-0');
-  assert.equal(await composer.inputValue(), mainDraft);
+  assert.equal(await composerValue(composer), mainDraft);
   assert.equal(await page.evaluate(() => window.__performanceQa.submitCalls), 0);
   assert.deepEqual(result.pageErrors, []); assert.deepEqual(result.blockedRequests, []);
   result.calls = await page.evaluate(() => window.__settingsExecutionQa.calls);

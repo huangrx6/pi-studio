@@ -347,7 +347,7 @@ async function hoverAndClick(shell, label) {
 // ---------------------------------------------------------------------------
 try {
   await page.goto(process.env.PREVIEW_URL || 'http://127.0.0.1:5180');
-  await page.locator('.composer textarea').waitFor();
+  await page.locator('.composer-editor').waitFor();
   // 工作区选择器常驻输入框：未选时它就是「选择工作区」的入口，
   // 空状态不再单独渲染设置按钮。
   const workspacePicker = page.getByRole('button', { name: '新对话工作区', exact: true });
@@ -543,7 +543,7 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
   await page.waitForFunction(() => document.documentElement.dataset.palette === 'amber');
   await page.waitForFunction(() => window.__nativeTheme === 'dark' && window.__nativePalette === 'amber');
-  await page.locator('.composer textarea').waitFor();
+  await page.locator('.composer-editor').waitFor();
   await openAppearanceSettings();
   await setPalette('玉石', 'lime');
   await page.locator('.settings-back-button').click();

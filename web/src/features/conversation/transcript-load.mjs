@@ -1,12 +1,11 @@
 /**
- * 会话历史一次性载入。
+ * 会话历史固定窗口加载。
  *
- * 主进程仍按页返回历史（单页上限 2000 条），这里把分页循环收在一起：
- * 打开会话时一直读到没有更早的消息为止，界面只拿到一份完整记录。
- * 这样大纲、搜索和跳转都作用在同一份数据上，不需要再“点一下才补一页”。
+ * 大纲保存完整的稳定消息 ID；正文只请求并渲染当前窗口，避免长会话把全部消息
+ * 放进渲染层。向上滚动和跳转都按窗口边界重新取数。
  */
 
-/** 主进程单页上限，与 conversations.cjs 的 MAX_PAGE_SIZE 保持一致。 */
+/** 保留旧的完整扫描测试接口；正文窗口使用 TRANSCRIPT_WINDOW_SIZE。 */
 export const TRANSCRIPT_PAGE_SIZE = 2_000;
 
 /** 防御性上限：即使主进程一直返回游标，也不会无限循环。 */
@@ -54,10 +53,9 @@ export async function loadFullTranscript(loadPage, id) {
 /**
  * 首次打开会话时载入的消息窗口。
  *
- * 大会话可能有几千条、上百 MB，整段读进渲染层会直接吃掉几百 MB 堆内存。
- * 只取最近这一段，更早的内容在滚到顶时用 {@link loadOlderTranscript} 补。
+ * 大会话只取最近这一段，更早的内容在滚到顶时按游标补入并裁掉远端。
  */
-export const TRANSCRIPT_WINDOW_SIZE = 200;
+export const TRANSCRIPT_WINDOW_SIZE = 50;
 
 /**
  * 读取最近一页历史，保留分页游标供后续补页。
@@ -93,7 +91,7 @@ export async function loadTranscriptWindow(loadPage, id, options = {}) {
  * @returns {Promise<{ messages: Array<any>, page: { hasOlder?: boolean, nextCursor?: string }, messageStart: number } | null>}
  */
 export async function loadOlderPage(loadPage, id, page, options = {}) {
-  const cursor = page?.nextCursor;
+  const cursor = page?.olderCursor ?? page?.nextCursor;
   if (!cursor) return null;
   const limit = options.limit ?? TRANSCRIPT_WINDOW_SIZE;
   const older = await loadPage({ id, limit, cursor });
@@ -126,4 +124,39 @@ export async function loadOlderTranscript(loadPage, id, current, options = {}) {
     page: older.page,
     messageStart: older.messageStart,
   });
+}
+
+/** Stable identity and bounded merge helpers for the in-memory transcript window. */
+export function messageKey(message) {
+  return message.sourceIndex > 0
+    ? `${message.sourceIndex}:${message.sourceOffset ?? 0}`
+    : `${message.role}:${message.toolCallId ?? message.timestamp}`;
+}
+export function messagePosition(message) {
+  return { entryId: message.sourceIndex, offset: message.sourceOffset ?? 0 };
+}
+export const TRANSCRIPT_MAX_MESSAGES = 50;
+export const TRANSCRIPT_MAX_BYTES = 8 * 1024 * 1024;
+export function trimTranscript(messages, edge = 'latest') {
+  const ordered = edge === 'latest' ? [...messages].reverse() : messages;
+  const kept = []; let bytes = 0;
+  for (const message of ordered) {
+    const size = JSON.stringify(message).length * 2;
+    if (kept.length && (kept.length >= TRANSCRIPT_MAX_MESSAGES || bytes + size > TRANSCRIPT_MAX_BYTES)) break;
+    kept.push(message); bytes += size;
+  }
+  return edge === 'latest' ? kept.reverse() : kept;
+}
+export function mergeTranscriptPage(current, incoming, direction) {
+  const combined = direction === 'older' ? [...incoming, ...current] : [...current, ...incoming];
+  const seen = new Set();
+  const unique = combined.filter(message => { const key = messageKey(message); if (seen.has(key)) return false; seen.add(key); return true; });
+  return trimTranscript(unique, direction === 'older' ? 'oldest' : 'latest');
+}
+export async function loadAdjacentPage(loadPage, id, messages, page, direction) {
+  const older = direction === 'older';
+  if (older ? !page?.hasOlder : !page?.hasNewer) return null;
+  const boundary = older ? messages[0] : [...messages].reverse().find(message => message.sourceIndex > 0);
+  if (!boundary || !(boundary.sourceIndex > 0)) return null;
+  return loadPage({ id, limit: 50, [older ? 'before' : 'after']: messagePosition(boundary) });
 }

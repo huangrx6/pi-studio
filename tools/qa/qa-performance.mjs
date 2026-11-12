@@ -41,7 +41,7 @@ async function ready(page) {
   return page.evaluate(() => new Promise((resolve, reject) => {
     const start = performance.now();
     const check = () => {
-      const input = document.querySelector('textarea[aria-label="发送给 Pi 的消息"]');
+      const input = document.querySelector('[role="textbox"][aria-label="发送给 Pi 的消息"]');
       if (input && !input.disabled && input.getBoundingClientRect().width > 0) requestAnimationFrame(() => requestAnimationFrame(() => resolve(performance.now())));
       else if (performance.now() - start > 15000) reject(new Error('Composer never became editable'));
       else requestAnimationFrame(check);
@@ -56,7 +56,7 @@ async function openSession(page, title) {
     const callsBefore = window.__performanceQa.pageCalls.length;
     row.click();
     const check = () => {
-      const input = document.querySelector('textarea[aria-label="发送给 Pi 的消息"]');
+      const input = document.querySelector('[role="textbox"][aria-label="发送给 Pi 的消息"]');
       if (document.querySelector('.chat-heading h1')?.textContent === expected && document.querySelector('.assistant-response') && input && !input.disabled) {
         requestAnimationFrame(() => requestAnimationFrame(() => resolve({ start, end: performance.now(), ms: performance.now() - start, pageCalls: window.__performanceQa.pageCalls.length - callsBefore })));
       } else if (performance.now() - start > 20000) reject(new Error(`Session did not render: ${expected}`));
@@ -76,11 +76,11 @@ async function dom(page) {
   });
 }
 async function inputFeedback(page) {
-  const input = page.locator('textarea[aria-label="发送给 Pi 的消息"]');
+  const input = page.locator('[role="textbox"][aria-label="发送给 Pi 的消息"]');
   await input.focus();
   await page.evaluate(() => {
     window.__inputFeedback = [];
-    document.querySelector('textarea[aria-label="发送给 Pi 的消息"]').addEventListener('input', () => {
+    document.querySelector('[role="textbox"][aria-label="发送给 Pi 的消息"]').addEventListener('input', () => {
       const start = performance.now();
       requestAnimationFrame(() => requestAnimationFrame(() => window.__inputFeedback.push(performance.now() - start)));
     });

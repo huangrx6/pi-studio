@@ -1,3 +1,4 @@
+import { composerValue } from './fixtures/composer-editor.mjs';
 /** Isolated production UI QA for archives, shortcut recording and context estimates. */
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
@@ -39,8 +40,8 @@ try {
   await chip().click(); await panel().waitFor(); await composer().focus(); await panel().waitFor({ state: 'detached' }); assert.equal(await composer().evaluate(node => node === document.activeElement), true);
   await chip().click(); await capture('01-context-light', 'light'); await panel().getByRole('button', { name: '关闭上下文用量', exact: true }).click();
   await qa('hold', 'contextPolicy', 'qa/b'); await page.locator('.model-label').click(); await page.getByRole('menuitem').filter({ hasText: '切换会话模型' }).click(); await page.getByRole('menuitemradio', { name: 'Context B', exact: true }).click(); await pending('contextPolicy');
-  assert.equal((await chip().innerText()).trim(), '—', 'old A window cannot survive a pending B model policy'); await qa('release', 'contextPolicy'); await chip().filter({ hasText: '20%' }).waitFor(); assert.equal(await composer().inputValue(), draft);
-  await chip().click(); assert.match(await panel().innerText(), /40.0k \/ 200k/); await capture('02-context-dark', 'dark'); await panel().getByRole('button', { name: '立即压缩', exact: true }).click(); await page.getByText('QA 手动压缩失败，原会话内容保留', { exact: true }).waitFor(); assert.equal(await composer().inputValue(), draft); assert.equal(await count('conversationCompact'), 1);
+  assert.equal((await chip().innerText()).trim(), '—', 'old A window cannot survive a pending B model policy'); await qa('release', 'contextPolicy'); await chip().filter({ hasText: '20%' }).waitFor(); assert.equal(await composerValue(composer()), draft);
+  await chip().click(); assert.match(await panel().innerText(), /40.0k \/ 200k/); await capture('02-context-dark', 'dark'); await panel().getByRole('button', { name: '立即压缩', exact: true }).click(); await page.getByText('QA 手动压缩失败，原会话内容保留', { exact: true }).waitFor(); assert.equal(await composerValue(composer()), draft); assert.equal(await count('conversationCompact'), 1);
   await qa('hold', 'contextPolicy', 'qa/a');
   await page.locator('.model-label').click(); await page.getByRole('menuitem').filter({ hasText: '切换会话模型' }).click(); await page.getByRole('menuitemradio', { name: 'Context A', exact: true }).click(); await pending('contextPolicy');
   await page.locator('.model-label').click(); await page.getByRole('menuitem').filter({ hasText: '切换会话模型' }).click(); await page.getByRole('menuitemradio', { name: 'Context B', exact: true }).click(); await chip().filter({ hasText: '20%' }).waitFor();
@@ -74,12 +75,12 @@ try {
   await palette.click(); await page.getByRole('heading', { name: '快捷键', exact: true }).click(); assert.equal(await palette.getAttribute('aria-pressed'), 'false');
   await page.getByRole('button', { name: '恢复默认', exact: true }).waitFor();
   await capture('05-shortcuts-light', 'light'); await page.getByRole('button', { name: '恢复默认', exact: true }).click(); await page.waitForFunction(() => JSON.parse(localStorage.getItem('pi-studio:preferences')).shortcuts.palette === 'Mod+K'); assert.equal(await page.getByRole('button', { name: '恢复默认', exact: true }).count(), 0, 'reset disappears again after defaults are restored'); await capture('06-shortcuts-dark', 'dark');
-  await closeSettings(); assert.equal(await composer().inputValue(), draft);
+  await closeSettings(); assert.equal(await composerValue(composer()), draft);
   result.checks.push('shortcut capture ignores IME/229, conflict never changes binding or triggers shell navigation, Tab cancels naturally, Escape/pointer cancel, valid combo persists, reset defaults and main draft preserved');
   // An old archive completion must not supersede an already-started native navigation.
   await qa('open', 'perf-1'); await page.locator('.chat-heading h1').filter({ hasText: '性能会话 0001' }).waitFor();
   const draftB = 'B 在旧会话归档完成后仍保留的草稿'; await composer().fill(draftB);
-  await qa('open', 'perf-0'); await page.locator('.chat-heading h1').filter({ hasText: '性能会话 0000' }).waitFor(); assert.equal(await composer().inputValue(), draft);
+  await qa('open', 'perf-0'); await page.locator('.chat-heading h1').filter({ hasText: '性能会话 0000' }).waitFor(); assert.equal(await composerValue(composer()), draft);
   await qa('expireTranscriptCache'); await qa('hold', 'conversationAction', 'perf-0');
   await page.locator('.session-row-shell[data-session-id="perf-0"]').hover(); await page.getByRole('button', { name: '归档会话：性能会话 0000', exact: true }).click();
   const archiveConfirm = page.getByRole('dialog', { name: '归档这个会话？', exact: true }).or(page.getByRole('alertdialog', { name: '归档这个会话？', exact: true }));
@@ -87,7 +88,7 @@ try {
   await qa('hold', 'conversationPage', 'perf-1'); await qa('open', 'perf-1'); await pending('conversationPage');
   await qa('release', 'conversationAction'); await page.locator('.session-row-shell[data-session-id="perf-0"]').waitFor({ state: 'detached' });
   assert.equal(await page.getByRole('heading', { name: '开始一个新会话', exact: true }).count(), 0, 'old archive cannot start a new draft during target read');
-  await qa('release', 'conversationPage'); await page.locator('.chat-heading h1').filter({ hasText: '性能会话 0001' }).waitFor(); assert.equal(await composer().inputValue(), draftB);
+  await qa('release', 'conversationPage'); await page.locator('.chat-heading h1').filter({ hasText: '性能会话 0001' }).waitFor(); assert.equal(await composerValue(composer()), draftB);
   result.checks.push('pending A archive + native B navigation with held history cannot start a new draft; B becomes active after read and retains its draft');
   assert.deepEqual(result.pageErrors, []); assert.deepEqual(result.blockedRequests, []); assert.equal(await count('conversationSubmit'), 0); result.calls = await page.evaluate(() => window.__settingsUtilitiesQa.calls); await rm(path.join(output, 'failure.png'), { force: true });
 } catch (error) { result.error = error.stack; if (page) await page.screenshot({ path: path.join(output, 'failure.png') }).catch(() => {}); throw error; }

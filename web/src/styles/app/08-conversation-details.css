@@ -224,12 +224,27 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 /* 引用徽章：用户消息里的技能与文件引用，嵌在正文行内。
    徽章比正文一行略高，需要按字面中心对齐全行：middle 把盒子中心落到 x-height
    中线，中文会偏低 1–2px，所以用一个很小的负偏移把盒子提回视觉中线。 */
-.ref-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; min-width: 0; padding: 0 6px 0 7px; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-body); vertical-align: -.06em; }
-.ref-chip > svg { width: var(--icon-xs); height: var(--icon-xs); flex: none; color: var(--faint); }
-.ref-chip > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ref-chip.is-skill { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent-foreground); }
-.ref-chip.is-skill > svg { color: var(--accent); }
-.user-text .ref-chip { margin: 0 2px; }
+.ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: min(100%, 34ch);
+  min-width: 0;
+  padding: 1px 7px;
+  border: 1px solid color-mix(in srgb, var(--info) 55%, transparent);
+  border-radius: var(--radius-tag);
+  background: color-mix(in srgb, var(--info) 9%, transparent);
+  color: var(--info);
+  font-size: .9em;
+  font-weight: var(--weight-regular);
+  line-height: 1.4;
+  vertical-align: -.22em;
+  white-space: nowrap;
+}
+.ref-chip > svg { width: 1em; height: 1em; flex: none; stroke-width: 1.75; }
+.ref-chip-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ref-chip:hover { background: color-mix(in srgb, var(--info) 15%, transparent); }
+
 .ref-skill-body { margin: 6px 0 0; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-soft); }
 .ref-skill-body > summary { padding: 5px 10px; color: var(--muted); font-size: var(--text-xs); cursor: pointer; }
 .ref-skill-body > pre { max-height: 240px; margin: 0; padding: 0 10px 10px; overflow: auto; color: var(--muted); font: var(--text-xs)/var(--leading-body) var(--mono); white-space: pre-wrap; }

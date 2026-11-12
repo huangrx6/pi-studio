@@ -17,9 +17,9 @@ test('composer references keep paths with spaces inside one highlighted token', 
   assert.deepEqual(
     splitComposerText(`${token} /skill:pingcode`, new Set()),
     [
-      { kind: 'token', text: token, tokenKind: 'file', reference: { kind: 'file', token, label: '饭撒的发生地', location: '02 Areas/饭撒的发生地/' }, gapBefore: false, lineStart: true },
+      { kind: 'token', text: token, tokenKind: 'file', reference: { kind: 'file', token, label: '饭撒的发生地', location: '02 Areas/饭撒的发生地/' } },
       { kind: 'text', text: ' ' },
-      { kind: 'token', text: '/skill:pingcode', tokenKind: 'skill', reference: { kind: 'skill', token: '/skill:pingcode', label: 'pingcode' }, gapBefore: false, lineStart: false },
+      { kind: 'token', text: '/skill:pingcode', tokenKind: 'skill', reference: { kind: 'skill', token: '/skill:pingcode', label: 'pingcode' } },
     ],
   );
 });
@@ -34,11 +34,11 @@ test('punctuation beside a reference stays in the surrounding text', () => {
   assert.deepEqual(parts, ['text:看 ', 'ref:README.md', 'text:、', 'ref:package.json', 'text:，还有 ', 'ref:docs/']);
 });
 
-test('em space gap marks where the composer can paint a type icon', () => {
+test('saved placeholder gaps still parse and normalize on send', () => {
   assert.deepEqual(splitComposerText(`${REFERENCE_GAP}@src/App.tsx next`, new Set()), [
-    // em space 自己仍是一段普通文本：它的宽度撑住图标的位置。
+    // 已保存草稿中的占位符仍按普通文本解析，发送时归一为空格。
     { kind: 'text', text: REFERENCE_GAP },
-    { kind: 'token', text: '@src/App.tsx', tokenKind: 'file', reference: { kind: 'file', token: '@src/App.tsx', label: 'App.tsx', location: 'src/App.tsx' }, gapBefore: true, lineStart: false },
+    { kind: 'token', text: '@src/App.tsx', tokenKind: 'file', reference: { kind: 'file', token: '@src/App.tsx', label: 'App.tsx', location: 'src/App.tsx' } },
     { kind: 'text', text: ' next' },
   ]);
   assert.equal(normalizeComposerText(`see${REFERENCE_GAP}@src/App.tsx`), 'see @src/App.tsx');
@@ -79,13 +79,13 @@ test('selected composer tokens gain safe surrounding spacing', () => {
     text: '/goal next',
     caret: 5,
   });
-  // 文件引用前换成 em space：既当分隔符，也给图标留出 1em 的宽度。
+  // 插入引用只需要普通分隔空格，图标不再占用原文字符。
   assert.deepEqual(insertComposerToken('Use @src tail', 4, 8, '@src/App.tsx'), {
-    text: `Use${REFERENCE_GAP}@src/App.tsx tail`,
-    caret: 17,
+    text: `Use @src/App.tsx tail`,
+    caret: 16,
   });
   assert.deepEqual(insertComposerToken('use@g tail', 3, 5, '@goal.md'), {
-    text: `use${REFERENCE_GAP}@goal.md tail`,
+    text: `use @goal.md tail`,
     caret: 12,
   });
   assert.deepEqual(insertComposerToken('@src', 0, 4, '@src/App.tsx'), {

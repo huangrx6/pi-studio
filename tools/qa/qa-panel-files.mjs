@@ -1,3 +1,4 @@
+import { composerValue } from './fixtures/composer-editor.mjs';
 /** Production renderer QA: scoped files, bounded cache, late reads and local recovery. */
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
@@ -153,7 +154,7 @@ try {
   result.checks.push('more than eight previews evict content without losing tabs; evicted A tab rereads A while current session is B');
   }
   await page.getByRole('button', { name: '收起右侧面板', exact: true }).click(); await page.locator('.file-panel').waitFor({ state: 'detached' });
-  await openSession('a'); assert.equal(await composer().inputValue(), draftA);
+  await openSession('a'); assert.equal(await composerValue(composer()), draftA);
   assert.deepEqual(result.pageErrors, []); assert.deepEqual(result.blockedRequests, []); assert.equal((await calls('conversationSubmit')).length, 0);
   result.calls = await page.evaluate(() => window.__panelFilesQa.calls); await rm(path.join(output, 'failure.png'), { force: true });
 } catch (error) {

@@ -28,6 +28,7 @@ import { Markdown } from '../../shared/Markdown';
 import { collectFileChanges } from './file-changes';
 import { FileChangeSummary } from './FileChangeSummary';
 import { splitMessageText, type Reference } from './references';
+import { ReferenceChip } from './ReferenceChip';
 import './execution-trace.css';
 import { ConversationError } from './ConversationError';
 import { isComposingKey } from '../../shared/keyboard-navigation';
@@ -618,26 +619,17 @@ function sameAssistantTurnViewProps(previous: AssistantTurnViewProps, next: Assi
 export const AssistantTurnView = memo(AssistantTurnViewComponent, sameAssistantTurnViewProps);
 
 /**
- * 一枚引用徽章：技能显示上下文菜单图标，文件显示文档图标。
+ * 与输入框共用引用徽章及文件类型图标。
  * 技能块还会把展开后的正文收进可折叠详情，避免一屏都是 SKILL.md。
  */
-function ReferenceChip({ reference }: { reference: Reference }) {
-  if (reference.kind === 'skill') {
-    return <>
-      <span className="ref-chip is-skill" title={reference.location || '技能'}>
-        <Sparkles aria-hidden="true" />
-        {reference.label}
-      </span>
-      {reference.body && <details className="ref-skill-body">
-        <summary>技能内容</summary>
-        <pre>{reference.body}</pre>
-      </details>}
-    </>;
-  }
-  return <span className="ref-chip is-file" title={reference.location}>
-    <FileText aria-hidden="true" />
-    {reference.label}
-  </span>;
+function MessageReference({ reference }: { reference: Reference }) {
+  return <>
+    <ReferenceChip reference={reference} />
+    {reference.kind === 'skill' && reference.body && <details className="ref-skill-body">
+      <summary>技能内容</summary>
+      <pre>{reference.body}</pre>
+    </details>}
+  </>;
 }
 
 /** 用户正文：普通文本原样输出，技能/文件引用替换成徽章（不改变消息本身）。 */
@@ -646,7 +638,7 @@ function UserText({ text }: { text: string }) {
   return <div className="user-text">
     {segments.map((segment, index) => segment.kind === 'text'
       ? <span key={index}>{segment.text}</span>
-      : <ReferenceChip key={index} reference={segment.reference} />)}
+      : <MessageReference key={index} reference={segment.reference} />)}
   </div>;
 }
 

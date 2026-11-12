@@ -38,10 +38,9 @@ import { WorkspacePicker } from '../../shell/WorkspacePicker';
 import { Select } from '../../shared/Select';
 import { formatFileSize } from '../../shared/filesize';
 import { composerKeyAction } from './composer-submit';
-import { ComposerTokenChip } from './ComposerTokenChip';
+import { ComposerEditor, type ComposerEditorHandle } from './ComposerEditor';
 import { planComposerPaste } from './composer-paste';
 import { pasteExceedsBudget } from './composer-budget.mjs';
-import { splitComposerText } from './references';
 import { ComposerImageAttachment } from './ComposerImageAttachment';
 import { ComposerFeedback } from './ComposerFeedback';
 import { ComposerToolbar } from './ComposerToolbar';
@@ -73,8 +72,7 @@ export type ComposerDockProps = {
   composerImageIndexes: Map<string, number>;
   composerDraftKeyRef: MutableRefObject<string>;
   composerDraftsRef: MutableRefObject<ComposerDraftStore>;
-  textareaRef: MutableRefObject<HTMLTextAreaElement | null>;
-  composerHighlightRef: MutableRefObject<HTMLDivElement | null>;
+  composerEditorRef: MutableRefObject<ComposerEditorHandle | null>;
   composerWrapRef: MutableRefObject<HTMLDivElement | null>;
   composerComposingRef: MutableRefObject<boolean>;
   composerMenu: ComposerMenuState | null;
@@ -160,8 +158,7 @@ export function ComposerDock({
   composerImageIndexes,
   composerDraftKeyRef,
   composerDraftsRef,
-  textareaRef,
-  composerHighlightRef,
+  composerEditorRef,
   composerWrapRef,
   composerComposingRef,
   composerMenu,
@@ -238,10 +235,6 @@ export function ComposerDock({
   const composerCommandNames = useMemo(
     () => new Set(composerCommands.map((command) => command.name)),
     [composerCommands],
-  );
-  const composerSegments = useMemo(
-    () => splitComposerText(prompt, composerCommandNames),
-    [prompt, composerCommandNames],
   );
   // 计划全部完成时自动收起计划栏：完成的清单只留一行摘要，把高度还给消息区。
   // 用户随后手动展开就不再自动收起，直到出现新的未完成任务。
@@ -396,34 +389,29 @@ export function ComposerDock({
             </div>)}
         </div>}
         <div className="composer-input">
-          <div className="composer-highlight" ref={composerHighlightRef} aria-hidden="true">
-            {composerSegments.map((segment, index) => segment.kind === 'text'
-              ? <span key={index}>{segment.text}</span>
-              : <ComposerTokenChip key={index} segment={segment} />)}
-            {prompt.endsWith('\n') && <span>{'\u200b'}</span>}
-          </div>
-          <textarea
-            ref={textareaRef}
+          <ComposerEditor
+            ref={composerEditorRef}
             value={prompt}
-            onChange={(event) => {
-              const value = event.target.value;
+            scope={composerDraftKeyRef.current}
+            commandNames={composerCommandNames}
+            onChange={(value, cursor) => {
               const key = composerDraftKeyRef.current;
               saveComposerDraft(composerDraftsRef.current, key, {
                 ...readComposerDraft(composerDraftsRef.current, key),
                 text: value,
               });
               setPrompt(value);
-              updateComposerMenu(value, event.target.selectionStart ?? value.length);
+              updateComposerMenu(value, cursor);
             }}
-            onClick={(event) => {
-              updateComposerMenu(prompt, event.currentTarget.selectionStart ?? prompt.length);
+            onClick={() => {
+              updateComposerMenu(prompt, composerEditorRef.current?.selectionStart ?? prompt.length);
               if (!hasUsableModel && !stateLoading) setModelHintOpen(true);
             }}
             onPaste={(event) => {
-              const node = event.currentTarget;
+              const node = composerEditorRef.current;
+              if (!node) return;
               const files = Array.from(event.clipboardData.files);
-              const text = event.clipboardData.getData('text');
-              // File clipboard formats may also carry useful plain text. Keep both.
+              const text = event.clipboardData.getData('text/plain');
               if (files.length > 0) {
                 event.preventDefault();
                 void addComposerFiles(files);
@@ -431,22 +419,11 @@ export function ComposerDock({
               if (!text) return;
               const paste = planComposerPaste(node.value, node.selectionStart, node.selectionEnd, text);
               if (!pasteExceedsBudget(paste.baseText, text)) {
-                if (files.length === 0) return; // Preserve browser-native ordinary paste.
-                node.setRangeText(text, node.selectionStart, node.selectionEnd, 'end');
-                saveComposerDraft(composerDraftsRef.current, composerDraftKeyRef.current, {
-                  ...readComposerDraft(composerDraftsRef.current, composerDraftKeyRef.current),
-                  text: node.value,
-                });
-                setPrompt(node.value);
-                updateComposerMenu(node.value, node.selectionStart);
+                if (files.length > 0) node.replaceSelection(text);
                 return;
               }
               event.preventDefault();
-              saveComposerDraft(composerDraftsRef.current, composerDraftKeyRef.current, {
-                ...readComposerDraft(composerDraftsRef.current, composerDraftKeyRef.current),
-                text: paste.baseText,
-              });
-              setPrompt(paste.baseText);
+              node.replaceSelection('');
               setComposerMenu(null);
               void attachPastedText(paste);
             }}
@@ -490,14 +467,6 @@ export function ComposerDock({
                 : turnActive
                   ? 'Enter 补充当前任务 · Cmd/Ctrl+Enter 排队 · Shift+Enter 换行'
                   : '输入问题，或使用 / 命令、@ 文件…'}
-            rows={1}
-            onScroll={(event) => {
-              // 高亮层与 textarea 同步滚动，保证长文本换行时不错位。
-              if (composerHighlightRef.current) {
-                composerHighlightRef.current.scrollTop = event.currentTarget.scrollTop;
-                composerHighlightRef.current.scrollLeft = event.currentTarget.scrollLeft;
-              }
-            }}
           />
         </div>
         <ComposerToolbar

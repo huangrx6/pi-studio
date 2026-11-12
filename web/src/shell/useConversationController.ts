@@ -138,7 +138,7 @@ export function useConversationController(foundation: AppFoundation) {
     latestPromptBySessionRef,
     preparingDraftsRef,
     setPreparingDraftKeys,
-    textareaRef,
+    composerEditorRef,
     busy,
     setBusy,
     stoppingSessionIds,
@@ -235,11 +235,12 @@ export function useConversationController(foundation: AppFoundation) {
     resourcePendingRef,
     mcpDetailGenerationRef,
   } = settingsWorkspace.state;
-  const transcriptPageRef = useRef<{ sessionId: string; page: { hasOlder?: boolean; nextCursor?: string } } | null>(null);
+  const transcriptPageRef = useRef<{ sessionId: string; page: { hasOlder?: boolean; hasNewer?: boolean; nextCursor?: string; olderCursor?: string } } | null>(null);
   // useTranscriptNavigation 先于 useConversationSessions 调用，用 ref 把补页函数桥接过去。
   const resetToLatestRef = useRef<() => Promise<void>>(async () => {});
   const [transcriptTruncated, setTranscriptTruncated] = useState(false);
   const loadOlderMessagesRef = useRef<(options?: { limit?: number; keepLatest?: boolean; maxWindow?: number }) => Promise<boolean>>(async () => false);
+  const loadMessageWindowRef = useRef<(id: number) => Promise<boolean>>(async () => false);
   const {
     scrollRef,
     topSentinelRef,
@@ -263,6 +264,7 @@ export function useConversationController(foundation: AppFoundation) {
     jumpToMessage,
   } = useTranscriptNavigation({
     onLoadOlder: (options) => loadOlderMessagesRef.current(options),
+    onLoadTarget: (id) => loadMessageWindowRef.current(id),
     sessionId: session?.id,
     messages,
     requestTraces,
@@ -488,7 +490,7 @@ export function useConversationController(foundation: AppFoundation) {
     setComposerFeedback,
     setPrompt,
     setComposerAttachments,
-    textareaRef,
+    composerEditorRef,
     requestRef,
     modelPickerRequestRef,
     setModelPickerRequest,
@@ -518,6 +520,7 @@ export function useConversationController(foundation: AppFoundation) {
     openSession,
     openNotificationSession,
     loadOlderMessages,
+    loadMessageWindow,
     resetToLatest,
   } = useConversationSessions({
     session,
@@ -540,7 +543,7 @@ export function useConversationController(foundation: AppFoundation) {
     composerDraftKeyRef,
     composerDraftsRef,
     requestRef,
-    textareaRef,
+    composerEditorRef,
     setSettingsOpen,
     setSessionLoading,
     setSession,
@@ -575,6 +578,7 @@ export function useConversationController(foundation: AppFoundation) {
   });
   outlineHandlersRef.current = { applyOutline, refreshOutline };
   loadOlderMessagesRef.current = loadOlderMessages;
+  loadMessageWindowRef.current = loadMessageWindow;
   resetToLatestRef.current = resetToLatest;
   conversationNavigationRef.current = { open: openSession, start: startSession };
   const {
@@ -603,7 +607,7 @@ export function useConversationController(foundation: AppFoundation) {
     composerFileOptions,
     composerCommandOptions,
     composerCommands,
-    textareaRef,
+    composerEditorRef,
     modelPickerRequestRef,
     conversationExtensionItems,
     conversationNavigationRef,
@@ -650,7 +654,6 @@ export function useConversationController(foundation: AppFoundation) {
     composerPersistenceErrorRef,
     queuedPromptsRef,
     restoredRef,
-    textareaRef,
     composerPersistenceReady,
     composerPersistenceStarted,
     queuedPromptsBySession,
@@ -737,7 +740,7 @@ export function useConversationController(foundation: AppFoundation) {
     modelRevisionRef,
     modelWritesRef,
     requestRef,
-    textareaRef,
+    composerEditorRef,
     subscriptionRetryRef: conversationSubscriptionRetryRef,
     loadState,
     refreshSubagentChildren,

@@ -1,3 +1,4 @@
+import { composerValue } from './fixtures/composer-editor.mjs';
 /** Production-renderer QA with isolated browser-only history fixtures.
  * Run after the central build: node tools/qa/qa-conversation-refinement.mjs
  * Owns its HTTP server and browser; never reads real userData or calls a model.
@@ -102,7 +103,7 @@ try {
   await page.getByRole('button', { name: '清除筛选', exact: true }).click();
   assert.equal(await search.inputValue(), '');
   assert.match(await filter.innerText(), /全部会话/);
-  assert.equal(await composer.inputValue(), draft, 'search and filter do not replace the active conversation or draft');
+  assert.equal(await composerValue(composer), draft, 'search and filter do not replace the active conversation or draft');
   result.checks.push('hover preloads Markdown, precise search, workspace/path search, archive exclusion, running/pinned filters, combined empty state, draft preservation');
 
   await chooseFilter('运行中');
@@ -231,7 +232,7 @@ try {
   assert.equal(await trace.getAttribute('aria-expanded'), 'false');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await capture('05-trace-collapsed-dark');
-  assert.equal(await composer.inputValue(), draft);
+  assert.equal(await composerValue(composer), draft);
   result.checks.push('lazy trace/tool/thinking bodies, independent result image, accessible success/error states, preserved manual expansion, bottom collapse focus');
 
   const settingsTrigger = page.locator('.sidebar-bottom button[title="设置"]');
@@ -244,7 +245,7 @@ try {
   await settingsSearch.press('Escape');
   await page.locator('.settings-navigation').waitFor({ state: 'detached' });
   await focused(settingsTrigger);
-  assert.equal(await composer.inputValue(), draft, 'settings Escape return preserves the current draft');
+  assert.equal(await composerValue(composer), draft, 'settings Escape return preserves the current draft');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await trace.click();
   await search.fill('');

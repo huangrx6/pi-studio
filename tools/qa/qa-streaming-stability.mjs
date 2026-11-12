@@ -167,7 +167,7 @@ try {
     return node && node.scrollHeight > node.clientHeight;
   });
 
-  await page.locator('.composer textarea').fill('验证工具调用之后的长时间流式输出');
+  await page.locator('.composer-editor').fill('验证工具调用之后的长时间流式输出');
   await page.locator('.send-button').click();
   await page.waitForFunction(() => Boolean(window.__submitArguments) && window.__conversationPageCalls >= 2);
 

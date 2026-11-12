@@ -1,3 +1,4 @@
+import { composerValue } from './fixtures/composer-editor.mjs';
 /** Production renderer + 1260 isolated synthetic sessions; no real data or model requests. */
 import assert from 'node:assert/strict';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
@@ -71,7 +72,7 @@ try {
   await settle();
   await composer.fill(draft);
   await settle();
-  assert.equal(await composer.inputValue(), draft);
+  assert.equal(await composerValue(composer), draft);
   await scrollTo(0);
   await visibleInViewport(0);
   assert.equal(await shell(1259).count(), 0, 'active row does not stay mounted or snap scroll back during ordinary scrolling');
@@ -82,8 +83,8 @@ try {
   await page.evaluate(() => window.__sidebarQa.open('perf-1259'));
   await visibleInViewport(1259);
   await page.locator('.chat-heading h1').filter({ hasText: '性能会话 1259' }).waitFor();
-  await page.waitForFunction((expected) => document.querySelector('textarea[aria-label="发送给 Pi 的消息"]').value === expected, draft);
-  assert.equal(await composer.inputValue(), draft);
+  await page.waitForFunction((expected) => document.querySelector('[role="textbox"][aria-label="发送给 Pi 的消息"]').value === expected, draft);
+  assert.equal(await composerValue(composer), draft);
   result.checks.push('external active changes scroll into view; ordinary scrolling stays free; drafts survive navigation');
 
   await composer.focus();
@@ -93,12 +94,12 @@ try {
   await composer.fill(otherDraft);
   await page.keyboard.press('Meta+Shift+]');
   await page.locator('.chat-heading h1').filter({ hasText: '性能会话 1259' }).waitFor();
-  await page.waitForFunction((expected) => document.querySelector('textarea[aria-label="发送给 Pi 的消息"]').value === expected, draft);
+  await page.waitForFunction((expected) => document.querySelector('[role="textbox"][aria-label="发送给 Pi 的消息"]').value === expected, draft);
   await page.keyboard.press('Meta+n');
   await page.getByRole('heading', { name: '开始一个新会话', exact: true }).waitFor();
   await page.evaluate(() => window.__sidebarQa.open('perf-1259'));
   await page.locator('.chat-heading h1').filter({ hasText: '性能会话 1259' }).waitFor();
-  assert.equal(await composer.inputValue(), draft);
+  assert.equal(await composerValue(composer), draft);
   result.checks.push('real previous/next/new-chat shortcuts retain independent drafts');
 
   const searchTrigger = page.getByRole('button', { name: '搜索工作区', exact: true });
@@ -118,7 +119,7 @@ try {
   await page.locator('.workspace-row').click();
   await row(0).waitFor();
   await bounded('expanded after collapse');
-  assert.equal(await composer.inputValue(), draft);
+  assert.equal(await composerValue(composer), draft);
   result.checks.push('search covers unmounted history, filter scroll resets, workspace collapse/expand preserves draft');
 
   // Walk actual Tab order beyond the initial overscan window, not a synthetic focus shortcut.
@@ -257,7 +258,7 @@ try {
   await page.getByRole('button', { name: '深色', exact: true }).click();
   await page.getByRole('button', { name: '返回对话', exact: true }).click();
   await capture('02-sidebar-dark-980');
-  assert.equal(await composer.inputValue(), draft);
+  assert.equal(await composerValue(composer), draft);
   assert.equal(await page.evaluate(() => window.__performanceQa.submitCalls), 0);
   await page.context().close();
   page = await browser.newPage({ viewport: { width: 980, height: 640 }, deviceScaleFactor: 2, reducedMotion: 'reduce' });

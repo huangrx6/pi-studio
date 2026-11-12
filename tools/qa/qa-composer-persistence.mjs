@@ -1,3 +1,4 @@
+import { composerValue } from './fixtures/composer-editor.mjs';
 // Production-renderer regression: drafts and queued prompts survive reloads
 // through IndexedDB without replaying a queued submission automatically.
 import assert from 'node:assert/strict';
@@ -213,7 +214,7 @@ try {
 
   await page.goto(baseUrl);
   await page.locator('.workspace-row').first().click();
-  const composer = page.locator('.composer textarea');
+  const composer = page.locator('.composer-editor');
   const sessionA = page.locator('.session-row').filter({ hasText: '持久化会话 A' });
   const runningSession = page.locator('.session-row').filter({ hasText: '运行中的持久化会话' });
 
@@ -232,7 +233,7 @@ try {
 
   await page.reload();
   await page.getByRole('heading', { name: '持久化会话 A' }).waitFor();
-  assert.equal(await composer.inputValue(), '会话 A 跨重启草稿');
+  assert.equal(await composerValue(composer), '会话 A 跨重启草稿');
   assert.equal(await page.locator('.composer-attachments .composer-image-preview-trigger').count(), 1);
 
   await page.locator('.new-chat').click();
@@ -247,7 +248,7 @@ try {
 
   await page.reload();
   await page.locator('.new-conversation-welcome').waitFor();
-  assert.equal(await composer.inputValue(), '新对话工作区跨重启草稿');
+  assert.equal(await composerValue(composer), '新对话工作区跨重启草稿');
 
   await runningSession.click();
   await composer.fill('刷新后必须等待确认的排队消息');

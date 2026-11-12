@@ -46,6 +46,8 @@ export type ConversationSummary = {
 };
 
 export type ConversationPageCursor = string;
+export type ConversationPosition = { entryId: number; offset: number };
+export type TranscriptPageState = { sessionId: string; page: { hasOlder?: boolean; hasNewer?: boolean; nextCursor?: string; olderCursor?: string } };
 
 export type ConversationPage = ConversationSummary & {
   messages: ChatMessage[];
@@ -54,7 +56,9 @@ export type ConversationPage = ConversationSummary & {
   turnDiffs: TurnDiff[];
   page: {
     hasOlder: boolean;
+    hasNewer?: boolean;
     nextCursor?: ConversationPageCursor;
+    olderCursor?: ConversationPageCursor;
   };
   messageStart: number;
   running: boolean;

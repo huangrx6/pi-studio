@@ -154,7 +154,7 @@ try {
   assert.ok((await metrics()).distance <= 36, 'opening a session should land at the live edge');
 
   const userCount = await page.locator('.message.user').count();
-  await page.locator('.composer textarea').fill('测试发送后立即贴底');
+  await page.locator('.composer-editor').fill('测试发送后立即贴底');
   await page.locator('.send-button').click();
   await page.waitForFunction(count => document.querySelectorAll('.message.user').length === count + 1, userCount);
   await page.waitForFunction(() => Boolean(window.__submitArguments));

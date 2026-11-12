@@ -1,3 +1,4 @@
+import type { ComposerEditorHandle } from '../features/conversation/ComposerEditor';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ComposerAttachment } from '../types/chat-types';
 import {
@@ -43,8 +44,7 @@ export function useComposerInputState({
   const preparingDraftsRef = useRef(new Set<string>());
   const composerComposingRef = useRef(false);
   const composerWrapRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const composerHighlightRef = useRef<HTMLDivElement>(null);
+  const composerEditorRef = useRef<ComposerEditorHandle>(null);
 
   const composerImages = useMemo(
     () => composerAttachments.flatMap((attachment) => attachment.kind === 'image'
@@ -126,7 +126,6 @@ export function useComposerInputState({
     preparing,
     composerComposingRef,
     composerWrapRef,
-    textareaRef,
-    composerHighlightRef,
+    composerEditorRef,
   };
 }

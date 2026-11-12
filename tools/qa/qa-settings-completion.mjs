@@ -1,3 +1,4 @@
+import { composerValue } from './fixtures/composer-editor.mjs';
 /** Isolated production renderer QA; only synthetic in-memory APIs and private loopback assets. */
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
@@ -221,7 +222,7 @@ try {
   assert.equal(await usage().locator('.usage-hero, .usage-heatmap-card, .usage-models-card').count(), 0, 'zero data replaces the whole analytics workbench with one empty state');
   assert.equal(await usage().getByRole('group', { name: '热力图日期范围', exact: true }).count(), 0, 'zero data hides the meaningless range switch');
   await capture('06-usage-empty-dark');
-  await openSession('perf-0'); assert.equal(await composer.inputValue(), mainDraft);
+  await openSession('perf-0'); assert.equal(await composerValue(composer), mainDraft);
   assert.equal(await page.evaluate(() => window.__performanceQa.submitCalls), 0); assert.deepEqual(result.pageErrors, []); assert.deepEqual(result.blockedRequests, []);
   result.calls = await page.evaluate(() => window.__settingsCompletionQa.calls); await rm(path.join(output, 'failure.png'), { force: true });
 } catch (error) { result.error = error.stack; if (page) await page.screenshot({ path: path.join(output, 'failure.png') }).catch(() => {}); throw error; }

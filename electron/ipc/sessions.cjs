@@ -307,8 +307,8 @@ function registerConversationIpc() {
     return created;
   });
 
-  ipcMain.handle('pi:conversation-page', async (_event, { id, limit, cursor } = {}) => (
-    conversationPage(id, { limit, cursor })
+  ipcMain.handle('pi:conversation-page', async (_event, { id, limit, cursor, before, after, around } = {}) => (
+    conversationPage(id, { limit, cursor, before, after, around })
   ));
   ipcMain.handle('pi:conversation-outline', async (_event, id) => outline(id));
   ipcMain.handle('pi:conversation-search', async (_event, { id, query, limit } = {}) => (

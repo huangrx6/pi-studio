@@ -1,3 +1,4 @@
+import { composerValue } from './fixtures/composer-editor.mjs';
 /** Built-renderer status/recovery QA, with in-memory data and no provider calls. */
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -78,7 +79,7 @@ try {
   await selectSession('实时连接恢复');
   await subscriptionError.waitFor();
   assert.equal(await page.evaluate(() => window.__statusQa.subscriptionAttempts('subscription-recovery')), 2, 'returning to the conversation retries its live subscription');
-  assert.equal(await composer.inputValue(), subscriptionDraft);
+  assert.equal(await composerValue(composer), subscriptionDraft);
   const reconnect = () => subscriptionError.getByRole('button', { name: '重新连接', exact: true });
   await reconnect().click();
   await page.waitForFunction(() => window.__statusQa.subscriptionAttempts('subscription-recovery') === 3);
@@ -95,7 +96,7 @@ try {
     running: true,
   }));
   await page.getByRole('button', { name: '停止当前任务', exact: true }).waitFor();
-  assert.equal(await composer.inputValue(), subscriptionDraft);
+  assert.equal(await composerValue(composer), subscriptionDraft);
   await page.evaluate(() => { window.__statusQa.closeConversationStream('subscription-recovery'); });
   const closedStreamError = page.getByRole('alert').filter({ hasText: '实时连接已中断' });
   await closedStreamError.waitFor();
@@ -104,7 +105,7 @@ try {
     1,
     'a silent stream closure does not claim that the active task completed',
   );
-  assert.equal(await composer.inputValue(), subscriptionDraft, 'stream recovery keeps the draft');
+  assert.equal(await composerValue(composer), subscriptionDraft, 'stream recovery keeps the draft');
   await capture('03b-stream-closed-light');
   await closedStreamError.getByRole('button', { name: '重新连接', exact: true }).click();
   await page.waitForFunction(() => window.__statusQa.subscriptionAttempts('subscription-recovery') === 5);
@@ -139,14 +140,14 @@ try {
   await page.evaluate(() => window.__statusQa.releaseAction(true));
   await page.waitForFunction(() => document.querySelector('.long-task-dock')?.getAttribute('aria-busy') === 'false');
   await page.getByRole('alert').filter({ hasText: 'QA_ACTION_FAILURE' }).waitFor();
-  assert.equal(await composer.inputValue(), draft);
+  assert.equal(await composerValue(composer), draft);
   await capture('04-action-failure');
   await page.evaluate(() => { window.__statusQa.holdActions = false; });
   await dock.getByRole('button', { name: '继续', exact: true }).click();
   await dock.getByText('目标执行中', { exact: true }).waitFor();
   await dock.getByRole('button', { name: '暂停', exact: true }).click();
   await dock.getByText('已暂停', { exact: true }).waitFor();
-  assert.equal(await composer.inputValue(), draft);
+  assert.equal(await composerValue(composer), draft);
   result.checks.push('status/running matrix, long detail disclosure, narrow composer, held action/rejection/manual recovery, draft preservation');
 
   // Exercise the actual conversation-event listener, without asking a provider.
@@ -156,7 +157,7 @@ try {
   await errorCard.locator('summary').filter({ hasText: '查看详情' }).click();
   assert.match(await errorCard.innerText(), /详细的错误上下文/);
   await errorCard.getByRole('button', { name: '关闭错误提示', exact: true }).click();
-  assert.equal(await composer.inputValue(), draft);
+  assert.equal(await composerValue(composer), draft);
 
   const bell = page.locator('.notification-trigger');
   const panel = page.getByRole('dialog', { name: '通知中心', exact: true });
@@ -232,7 +233,7 @@ try {
   await failingNotice.getByRole('button', { name: '查看会话', exact: true }).click();
   await failingNotice.getByRole('alert').waitFor();
   assert.equal(await panel.count(), 1, 'failed navigation keeps the notification and retry action available');
-  assert.equal(await composer.inputValue(), draft);
+  assert.equal(await composerValue(composer), draft);
   await capture('05-notification-failure-dark');
   await page.evaluate(() => window.__statusQa.setAvailable('unavailable', true));
   await failingNotice.getByRole('button', { name: '查看会话', exact: true }).click();
@@ -240,7 +241,7 @@ try {
   await page.locator('.chat-heading h1').filter({ hasText: '暂不可用会话' }).waitFor();
   await focused(composer);
   await selectSession('任务等待补充');
-  assert.equal(await composer.inputValue(), draft, 'notification navigation does not lose the previous conversation draft');
+  assert.equal(await composerValue(composer), draft, 'notification navigation does not lose the previous conversation draft');
 
   await bell.click();
   await panel.waitFor();
@@ -271,7 +272,7 @@ try {
   await refreshNotice.waitFor();
   assert.equal(await refreshNotice.getByRole('button', { name: '查看会话', exact: true }).count(), 0, 'global refresh failures do not invent a conversation source');
   assert.equal(await page.locator('.error-card').count(), 0, 'global refresh errors are not assigned to the active conversation');
-  assert.equal(await composer.inputValue(), draft);
+  assert.equal(await composerValue(composer), draft);
   result.checks.push('runtime refresh error with zero failed sessions appears only as a global notification');
   assert.deepEqual(result.pageErrors, []);
   console.log(`Status recovery QA passed: ${result.matrix.length} state combinations; screenshots: ${output}`);

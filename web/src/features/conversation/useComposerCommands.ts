@@ -1,3 +1,4 @@
+import type { ComposerEditorHandle } from './ComposerEditor';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { ChatMessage } from '../../types/chat-types';
 import type {
@@ -67,7 +68,7 @@ type ComposerCommandsDependencies = {
   composerFileOptions: Array<{ path: string; type: 'file' | 'directory' }>;
   composerCommandOptions: ComposerCommand[];
   composerCommands: ComposerCommand[];
-  textareaRef: MutableRefObject<HTMLTextAreaElement | null>;
+  composerEditorRef: MutableRefObject<ComposerEditorHandle | null>;
   modelPickerRequestRef: MutableRefObject<number>;
   conversationExtensionItems: ExtensionUiItem[];
   conversationNavigationRef: MutableRefObject<{
@@ -132,7 +133,7 @@ export function useComposerCommands({
   composerMenu,
   composerFileOptions,
   composerCommandOptions,
-  textareaRef,
+  composerEditorRef,
   modelPickerRequestRef,
   conversationExtensionItems,
   conversationNavigationRef,
@@ -198,7 +199,7 @@ export function useComposerCommands({
     requestAnimationFrame(() => {
       if (sessionLoadRef.current !== generation || composerDraftKeyRef.current !== ownerKey
         || readComposerDraft(composerDraftsRef.current, ownerKey).text !== text) return;
-      const node = textareaRef.current;
+      const node = composerEditorRef.current;
       node?.focus();
       node?.setSelectionRange(text.length, text.length);
     });
@@ -513,7 +514,7 @@ export function useComposerCommands({
       saveComposerDraft(composerDraftsRef.current, composerDraftKeyRef.current, { ...currentComposerDraft(), text: insertion.text });
       setPrompt(insertion.text);
       setComposerMenu(null);
-      requestAnimationFrame(() => { textareaRef.current?.focus(); textareaRef.current?.setSelectionRange(insertion.caret, insertion.caret); });
+      requestAnimationFrame(() => { composerEditorRef.current?.focus(); composerEditorRef.current?.setSelectionRange(insertion.caret, insertion.caret); });
       return;
     }
     const command = composerCommandOptions[index];
@@ -540,7 +541,7 @@ export function useComposerCommands({
     saveComposerDraft(composerDraftsRef.current, composerDraftKeyRef.current, { ...currentComposerDraft(), text: insertion.text });
     setPrompt(insertion.text);
     setComposerMenu(null);
-    requestAnimationFrame(() => { textareaRef.current?.focus(); textareaRef.current?.setSelectionRange(insertion.caret, insertion.caret); });
+    requestAnimationFrame(() => { composerEditorRef.current?.focus(); composerEditorRef.current?.setSelectionRange(insertion.caret, insertion.caret); });
   }
 
   return {

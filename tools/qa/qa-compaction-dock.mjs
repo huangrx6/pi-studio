@@ -144,7 +144,7 @@ try {
   await page.goto(process.env.PREVIEW_URL || 'http://127.0.0.1:5180', { waitUntil: 'domcontentloaded' });
   await page.locator('.workspace-row').first().click();
   await page.locator('.session-row').first().click();
-  await page.locator('.composer textarea').fill('继续优化代码');
+  await page.locator('.composer-editor').fill('继续优化代码');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
 
   // 输入区始终显示上下文占用；点开可以手动压缩，阈值来自运行策略。
@@ -182,11 +182,11 @@ try {
 
   await page.evaluate(() => window.emitConversation('compaction.started', { reason: 'manual' }));
   await page.locator('.compaction-banner').waitFor();
-  assert.match(await page.locator('.composer textarea').getAttribute('placeholder'), /正在压缩上下文/);
+  assert.match(await page.locator('.composer-editor').getAttribute('data-placeholder'), /正在压缩上下文/);
   assert.equal(await page.locator('.send-button[aria-label="正在压缩上下文"]:not(:disabled)').count(), 0);
   await page.evaluate(() => window.emitConversation('compaction.completed'));
   await page.locator('.compaction-banner').waitFor({ state: 'detached' });
-  assert.doesNotMatch(await page.locator('.composer textarea').getAttribute('placeholder'), /压缩/);
+  assert.doesNotMatch(await page.locator('.composer-editor').getAttribute('data-placeholder'), /压缩/);
 
   await page.evaluate(() => window.emitConversation('assistant.updated', {
     message: {
@@ -208,7 +208,7 @@ try {
   }));
   await page.waitForFunction(() => document.querySelector('.context-usage-trigger')?.classList.contains('is-critical'));
   assert.equal(await page.getByRole('button', { name: '上下文已用 94%', exact: true }).count(), 1);
-  await page.locator('.composer textarea').fill('补充说明');
+  await page.locator('.composer-editor').fill('补充说明');
   assert.equal(await page.locator('.send-button[aria-label="补充当前任务"]').isDisabled(), false);
 
   // Completed-but-aborted compaction and a later run completion remain idempotent.

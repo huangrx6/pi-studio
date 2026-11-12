@@ -285,7 +285,7 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 100% 加偏移），z-index 40；空间不足时通过 is-below 翻到下方。附件条横向滚动
 但隐藏滚动条，关闭按钮绝对定位在缩略图右上角。 */
 
-.composer-dock { flex: none; padding: var(--space-3) var(--session-gutter) var(--space-4); background: var(--bg); z-index: 10; }
+.composer-dock { flex: none; padding: var(--space-3) var(--session-gutter) var(--space-5); background: var(--bg); z-index: 10; }
 .composer { max-width: var(--content); margin: 0 auto; border: 1px solid var(--border-strong); border-radius: var(--radius-card); background: var(--surface-floating); transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition); }
 .composer-feedback {
   display: grid;
@@ -314,27 +314,7 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .composer-feedback-dismiss:hover { background: var(--surface-hover); opacity: 1; }
 .composer-feedback-dismiss:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; opacity: 1; }
 .composer-feedback-dismiss svg { width: var(--icon-sm); height: var(--icon-sm); }
-/* 只有真正编辑消息时才强调整只 composer；点工作区或类型不应把整个输入框点亮。 */
-.composer:has(.composer-input textarea:focus) { border-color: var(--focus-color); box-shadow: var(--focus-ring); }
-.composer textarea { display: block; width: 100%; min-height: 76px; max-height: 200px; resize: none; padding: var(--space-4) var(--space-4) var(--space-2); border: 0; border-radius: var(--radius-panel); outline: 0; background: var(--transparent); font-size: var(--text-md); line-height: var(--leading-relaxed); }
-
-/* 输入框内联高亮：textarea 负责编辑，底层 div 负责显示彩色 token（DSH 同款观感）。 */
-.composer-input { position: relative; }
-.composer-highlight { position: absolute; inset: 0; z-index: 0; overflow: hidden; padding: var(--space-4) var(--space-4) var(--space-2); color: var(--text); font-size: var(--text-md); line-height: var(--leading-relaxed); white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; pointer-events: none; }
-.composer textarea { position: relative; z-index: 1; color: var(--transparent); -webkit-text-fill-color: var(--transparent); caret-color: var(--text); }
-.composer textarea::placeholder { color: var(--faint); -webkit-text-fill-color: var(--faint); }
-/* 输入法组合期间也保留高亮层：高亮层本来就跟着受控值更新，隐藏整层会让
- * token 的颜色在每个词提交时闪一下。textarea 保持透明，文字只由高亮层显示。
- */
-/* Keep the marker in layout so the transparent textarea and highlight layer
- * share exact glyph positions, while presenting only the readable token. */
-.composer-token {
-  background: none;
-  color: var(--accent);
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
-}
-.composer-token-prefix { visibility: hidden; }
+.composer-input { position: relative; min-width: 0; }
 .composer-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2) var(--space-3) var(--space-3); }
 .composer-left, .composer-right { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
 .composer-left.is-new-conversation { flex: 1; }
@@ -407,7 +387,7 @@ is-new-conversation 下隐藏标题、压缩 header；空会话通常没有可�
 .is-new-conversation .chat-heading h1 { color: var(--faint); font-weight: var(--weight-medium); }
 .is-new-conversation .composer-dock { margin-block: auto; padding-top: 24px; padding-bottom: clamp(40px, 12vh, 120px); }
 
-/* 有壁纸时卡片自己让出 18px 底部留白，输入框下再补 12px：贴到卡片底边会
- * 显得局促，两段加起来约 30px 才是合适的呼吸。 */
-.app.has-custom-background .composer-dock { padding-bottom: var(--space-2); }
+/* 有背景时卡片底部已经让出窗口留白，输入框下再保留一段稳定间距；
+ * 无背景时使用更大的内边距，避免输入区贴住窗口底部。 */
+.app.has-custom-background .composer-dock { padding-bottom: var(--space-4); }
 .new-conversation-error { max-width: var(--content); margin: 16px auto 0; }

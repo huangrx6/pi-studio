@@ -29,6 +29,8 @@ type TranscriptNavigationDependencies = {
   showComposerFeedback: (message: string, tone?: 'info' | 'warning') => void;
   /** 向上补一页更早的历史；返回 false 表示没有更多。 */
   onLoadOlder?: (options?: { limit?: number; keepLatest?: boolean }) => Promise<boolean>;
+  /** 按稳定 entry id 直接读取目标附近的一窗。 */
+  onLoadTarget?: (sourceIndex: number) => Promise<boolean>;
 };
 
 const TURN_WINDOW_INITIAL = 24;
@@ -48,6 +50,7 @@ export function useTranscriptNavigation({
   setOutlineActive,
   showComposerFeedback,
   onLoadOlder,
+  onLoadTarget,
 }: TranscriptNavigationDependencies) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -244,7 +247,7 @@ export function useTranscriptNavigation({
     }, { root, rootMargin: '800px 0px 0px 0px' });
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [turnWindowFrom, windowSession]);
+  }, [turnWindowFrom, windowSession, transcriptTurns.length, messages[0]?.sourceIndex]);
 
   const lastAssistantTurnIndex = useMemo(
     () => transcriptTurns.reduce((last, turn, index) => turn.kind === 'assistant' ? index : last, -1),
@@ -372,9 +375,9 @@ export function useTranscriptNavigation({
         : turn.messages.some((message) => message.sourceIndex === sourceIndex)
     ));
     let target = locate();
-    for (let attempt = 0; target < 0 && attempt < 12; attempt += 1) {
-      const loaded = await onLoadOlderRef.current?.({ limit: 1000, keepLatest: false });
-      if (!loaded) break;
+    if (target < 0 && onLoadTarget) {
+      const loaded = await onLoadTarget(sourceIndex);
+      if (!loaded) return false;
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       target = locate();
     }

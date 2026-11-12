@@ -1,3 +1,4 @@
+import { composerValue } from './fixtures/composer-editor.mjs';
 /** App callback scope races against the production renderer, no provider calls. */
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -44,7 +45,7 @@ try {
   await page.evaluate(() => window.__modelScopeQa.release('configure'));
   await flush();
   assert.match(await label.innerText(), /Session B/, 'A configuration response does not overwrite B in the same workspace');
-  assert.equal(await composer.inputValue(), 'B 会话的草稿');
+  assert.equal(await composerValue(composer), 'B 会话的草稿');
   result.checks.push('held conversationConfigure A → B in same workspace preserves B selection/draft');
 
   await begin();
@@ -57,7 +58,7 @@ try {
   await page.evaluate(() => window.__modelScopeQa.release('catalog'));
   await flush();
   assert.match(await label.innerText(), /Session C/);
-  assert.equal(await composer.inputValue(), 'C 会话的草稿');
+  assert.equal(await composerValue(composer), 'C 会话的草稿');
   await page.locator('.new-chat').click();
   await page.waitForFunction(() => document.querySelector('.model-label')?.textContent.includes('Default B'));
   result.checks.push('held workspace A catalog cannot overwrite workspace B session or new-chat default');
@@ -77,7 +78,7 @@ try {
   await page.evaluate(() => window.__modelScopeQa.release('catalog'));
   await flush();
   assert.match(await label.innerText(), /Default B/);
-  assert.equal(await composer.inputValue(), 'B 工作区新会话草稿');
+  assert.equal(await composerValue(composer), 'B 工作区新会话草稿');
   result.checks.push('held workspace A draft defaults cannot overwrite workspace B draft selection/text');
 
   await begin();
@@ -94,7 +95,7 @@ try {
   await page.evaluate(() => window.__modelScopeQa.release('defaults'));
   await flush();
   assert.match(await label.innerText(), /Default B/);
-  assert.equal(await composer.inputValue(), 'B 默认模型写入期间的草稿');
+  assert.equal(await composerValue(composer), 'B 默认模型写入期间的草稿');
   result.checks.push('held setDefaultModel write for workspace A does not block B defaults load or overwrite its draft');
 
   await begin();
@@ -107,7 +108,7 @@ try {
   await page.evaluate(() => window.__modelScopeQa.release('subscription'));
   await flush();
   assert.match(await label.innerText(), /New Model/);
-  assert.equal(await composer.inputValue(), '订阅快照迟到时保留草稿');
+  assert.equal(await composerValue(composer), '订阅快照迟到时保留草稿');
   result.checks.push('stale subscribeConversation model cannot overwrite a newer saved selection');
 
   await begin();
@@ -137,7 +138,7 @@ try {
   await page.evaluate(() => { window.__modelScopeQa.holdPageFor = ''; window.__modelScopeQa.release('page'); });
   await page.locator('.chat-heading h1').filter({ hasText: /^Race A$/ }).waitFor();
   assert.match(await label.innerText(), /New Model/);
-  assert.equal(await composer.inputValue(), 'A 的历史读取竞态草稿');
+  assert.equal(await composerValue(composer), 'A 的历史读取竞态草稿');
   await open('Race B');
   await open('Race A');
   assert.match(await label.innerText(), /New Model/, 'revisiting the cached transcript does not restore the stale page model');

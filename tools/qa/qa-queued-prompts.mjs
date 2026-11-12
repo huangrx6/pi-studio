@@ -176,7 +176,7 @@ try {
   await page.goto('http://127.0.0.1:5180');
   await page.locator('.workspace-row').first().click();
   await page.locator('.session-row').filter({ hasText: '会话 A' }).click();
-  const composer = page.locator('.composer textarea');
+  const composer = page.locator('.composer-editor');
   await composer.fill('切换会话后仍然保留的排队消息');
   await composer.press('Control+Enter');
   const queuePanel = page.locator('.queued-panel[aria-label="排队消息"]');

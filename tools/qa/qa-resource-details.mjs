@@ -1,3 +1,4 @@
+import { composerValue } from './fixtures/composer-editor.mjs';
 /** Built production renderer with in-memory resource DTOs; no real resource reads or writes. */
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
@@ -94,7 +95,7 @@ try {
   await capture('07-extension-980-light', 'light', { width: 980, height: 760 }, '.extension-detail-dialog');
   await page.keyboard.press('Escape'); await extension.waitFor({ state: 'detached' }); await settle(); assert.equal(await extensionOpener.evaluate(node => node === document.activeElement), true);
   result.checks.push('zero declared permissions does not imply declarative isolation; technical details keyboard expand and Tab continues to rollback, full ID/hash and versions retained, Escape restores opener');
-  await page.getByRole('button', { name: '返回对话', exact: true }).click(); assert.equal(await composer().inputValue(), draft);
+  await page.getByRole('button', { name: '返回对话', exact: true }).click(); assert.equal(await composerValue(composer()), draft);
   // Service scope lifecycle uses only the fixture's synthetic process identities.
   const services = () => page.locator('.runtime-services-panel');
   const serviceRow = port => services().locator('.runtime-service-row').filter({ has: page.locator('.runtime-service-port', { hasText: new RegExp(`^${port}$`) }) });
@@ -131,7 +132,7 @@ try {
   await qa('visibility', false); await page.waitForFunction(count => window.__resourceDetailsQa.calls.filter(call => call.method === 'runtimeServices' && call.scope === 'A').length > count, hiddenCount);
   const payloads = await page.evaluate(() => window.__resourceDetailsQa.calls.filter(call => call.method === 'runtimeServiceStopPayload'));
   assert.ok(payloads.length >= 3 && payloads.every(payload => payload.startedAt === 1780000000000 + payload.pid), 'stop always retains captured PID identity timestamp');
-  assert.equal(await composer().inputValue(), draft);
+  assert.equal(await composerValue(composer()), draft);
   result.checks.push('synthetic runtime scope A/B held scan isolation, first failure vs stale projection retry, filters, outside/multiport confirmation, pre-confirm scope invalidation, late stop rejection isolation, stop error survives scans, pre-stop read cannot resurrect rows, hidden poll pauses/visible refresh, PID timestamp contract');
   assert.deepEqual(result.pageErrors, []); assert.deepEqual(result.blockedRequests, []);
   result.calls = await page.evaluate(() => window.__resourceDetailsQa.calls); assert.equal(result.calls.some(call => call.method === 'conversationSubmit'), false);

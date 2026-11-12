@@ -137,6 +137,8 @@ export type ChatMessage = {
   taskId?: string;
   /** 在完整会话消息数组中的绝对序号；分页后保持不变，供跨页跳转使用。 */
   sourceIndex?: number;
+  /** Position within a Durable entry that projects multiple display messages. */
+  sourceOffset?: number;
   /** 助手是否仍在流式输出。 */
   streaming?: boolean;
   /** 结束原因（stop / length / toolUse / aborted / error 等，由 Pi 提供）。 */

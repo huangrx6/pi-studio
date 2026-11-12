@@ -39,6 +39,7 @@ import type {
   ConversationSearchResult,
   ConversationPage,
   ConversationPageCursor,
+  ConversationPosition,
   ConversationSnapshot,
   ConversationSubmitInput,
   ConversationSubmitResult,
@@ -418,12 +419,15 @@ declare global {
         title?: string;
         goal?: string;
       }): Promise<ConversationPage>;
-      /** 读取一页 fork-aware 的 Durable 历史，cursor 来自上一页的 page.nextCursor。 */
+      /** 读取固定大小的历史窗口；around 按稳定 entry ID 直接返回目标前后的一窗。 */
       conversationPage(payload: {
         id: string;
         limit?: number;
         cursor?: ConversationPageCursor;
-        /** 目标 entry id：一直向后加载到包含这条消息为止（上限 2000 条）。 */
+        before?: ConversationPosition;
+        after?: ConversationPosition;
+        /** 直接读取目标 entry 及其后的一页，不扫描中间历史。 */
+        around?: number;
       }): Promise<ConversationPage | undefined>;
       /** 获取完整提问大纲；仅用于导航，不参与消息窗口渲染。 */
       conversationOutline(id: string): Promise<ConversationOutline | undefined>;

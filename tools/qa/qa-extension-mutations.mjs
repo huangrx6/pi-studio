@@ -1,3 +1,4 @@
+import { composerValue } from './fixtures/composer-editor.mjs';
 /** Production renderer; synthetic extension mutations only, never installs or executes extension code. */
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
@@ -70,7 +71,7 @@ try {
     assert.equal(await count('refreshExtensionMutation'), 2); await refresh().click(); await refresh().waitFor({ state: 'detached' });
     assert.equal(await count('refreshExtensionMutation'), 2, 'ready receipt does not repeat recovery side effects');
     assert.equal(await count(method), 1); assert.equal(await count('disposeExtensionMutationRecovery'), 1);
-    await page.getByRole('button', { name: '返回对话', exact: true }).click(); assert.equal(await composer().inputValue(), draft);
+    await page.getByRole('button', { name: '返回对话', exact: true }).click(); assert.equal(await composerValue(composer()), draft);
     result.checks.push(`${method}: committed error, synchronous lock, failed recovery then ready, failed current snapshot read retries without mutation/recovery repeat, draft retained`);
   }
   await fresh(); await qa('hold', 'rollbackExtension'); await start('rollbackExtension');
@@ -82,8 +83,8 @@ try {
   assert.equal(calls.filter(call => call.method === 'rollbackExtension').length, 1);
   assert.equal(calls.find(call => call.method === 'refreshExtensionMutation').input.cwd, '/qa/synthetic/performance', 'receipt recovery remains bound to source A');
   assert.equal(calls.filter(call => call.method === 'settings').at(-1).input.cwd, '/qa/synthetic/resource-details-b', 'current snapshot reads B');
-  await page.getByRole('button', { name: '返回对话', exact: true }).click(); assert.equal(await composer().inputValue(), 'B 工作区草稿不被 A 操作污染');
-  await qa('open', 'perf-0'); await page.waitForFunction(expected => document.querySelector('textarea')?.value === expected, draft);
+  await page.getByRole('button', { name: '返回对话', exact: true }).click(); assert.equal(await composerValue(composer()), 'B 工作区草稿不被 A 操作污染');
+  await qa('open', 'perf-0'); await page.waitForFunction(expected => document.querySelector('.composer-editor')?.textContent === expected, draft);
   result.checks.push('held rollback after detail close/native navigation retains receipt; recovers source A then reads B, preserves both drafts');
   assert.deepEqual(result.pageErrors, []); assert.deepEqual(result.blockedRequests, []);
   await rm(path.join(output, 'failure.png'), { force: true }); console.log(`Extension mutation QA passed (${result.checks.length} groups)`);

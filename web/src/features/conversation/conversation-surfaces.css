@@ -17,7 +17,7 @@
 
 /* Nested elements tint the existing surface instead of adding another solid card. */
 .app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
-  .ref-chip, .ref-skill-body, .attachment-icon, .attachment-kind,
+  .ref-skill-body, .attachment-icon, .attachment-kind,
   .assistant-interrupted, .assistant-turn-meta > span,
   .file-change-icon, .composer-attachment, .message-edit-cancel,
   .composer-feedback.is-info, .code-work-view code,

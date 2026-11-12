@@ -1,3 +1,4 @@
+import type { ComposerEditorHandle } from './ComposerEditor';
 import { useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react';
 import type { ChatMessage, RequestTrace, TurnDiff } from '../../types/chat-types';
@@ -38,7 +39,7 @@ type ConversationSubscriptionOptions = {
   modelRevisionRef: MutableRefObject<Map<string, number>>;
   modelWritesRef: MutableRefObject<Set<string>>;
   requestRef: MutableRefObject<string | null>;
-  textareaRef: RefObject<HTMLTextAreaElement | null>;
+  composerEditorRef: RefObject<ComposerEditorHandle | null>;
   subscriptionRetryRef: MutableRefObject<SubscriptionRecovery | null>;
   loadState: () => Promise<void>;
   refreshSubagentChildren: (showSpinner?: boolean) => Promise<void>;
@@ -70,7 +71,7 @@ export function useConversationSubscription({
   modelRevisionRef,
   modelWritesRef,
   requestRef,
-  textareaRef,
+  composerEditorRef,
   subscriptionRetryRef,
   loadState,
   refreshSubagentChildren,
@@ -343,7 +344,7 @@ export function useConversationSubscription({
         for (const event of buffered.splice(0)) handle(event);
         if (recoveredClosedStream && !streamRunActive) refreshCompletion();
         if (restoreFocus) {
-          requestAnimationFrame(() => textareaRef.current?.focus({ preventScroll: true }));
+          requestAnimationFrame(() => composerEditorRef.current?.focus({ preventScroll: true }));
         }
       }).catch((cause) => {
         if (disposed || generation !== connectionGeneration) return;

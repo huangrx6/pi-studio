@@ -58,7 +58,7 @@ try {
       await page.getByRole('searchbox', { name: '搜索工作区或会话', exact: true }).fill(sessionTitle);
       await page.locator('.session-row').filter({ hasText: sessionTitle }).click();
       await page.locator(transcript ? '.user-bubble' : '.run-live-status').waitFor();
-      await page.locator('.composer textarea').focus();
+      await page.locator('.composer-editor').focus();
       await page.mouse.move(1400, 20);
       await page.waitForTimeout(250);
       if (markdown || transcript) {

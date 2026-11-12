@@ -1,3 +1,4 @@
+import { composerValue } from './fixtures/composer-editor.mjs';
 /** Built renderer resource-settings QA. Synthetic APIs only; no user data/process/provider/install. */
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
@@ -75,7 +76,7 @@ try {
   await calls('setDefaultThinkingLevel', 1);
   await nav().getByRole('button', { name: '返回对话', exact: true }).click();
   assert.match(await page.locator('.model-label').innerText(), /当前会话模型/);
-  assert.equal(await composer.inputValue(), draft);
+  assert.equal(await composerValue(composer), draft);
   assert.equal(await callCount('conversationConfigure'), 0);
   result.checks.push('new-conversation model/thinking defaults write explicit workspace scope without changing the open session or draft');
   await page.locator('.sidebar-bottom button[title="设置"]').click();
@@ -228,7 +229,7 @@ try {
   await skillRow(longSkill).scrollIntoViewIfNeeded();
   await capture('06-skills-dark');
   await nav().getByRole('button', { name: '返回对话', exact: true }).click();
-  assert.equal(await composer.inputValue(), draft);
+  assert.equal(await composerValue(composer), draft);
   assert.match(await page.locator('.model-label').innerText(), /当前会话模型/);
   result.checks.push('installed skill scopes and explicit invocation remain visible; changed/untrusted stay unavailable until explicit confirmation; failed trust save remains visible and explicit retry requires confirmation; cancel never writes, confirmed trust/delete mock only; draft preserved');
   // Round 18: mutations that committed in main but could not build their projection.
@@ -298,7 +299,7 @@ try {
   await control('commitError', 'setMcpEnabled'); await mcpRow('等待连接服务').getByRole('switch').click(); await content().getByRole('button', { name: '刷新 MCP 状态', exact: true }).waitFor();
   const staleMcp = await page.evaluate(() => { const value = window.__settingsResourcesQa.mcpProjection(); value.providers = []; value.mcp = [{ ...value.mcp[0], name: 'OBSOLETE_SCOPE_MCP' }]; return value; }); await control('reply', 'refreshMcp', staleMcp); await control('hold', 'refreshMcp'); await content().getByRole('button', { name: '刷新 MCP 状态', exact: true }).click(); await pending('refreshMcp');
   await control('openSecondSession'); await nav().waitFor({ state: 'detached' }); await page.locator('.assistant-response').first().waitFor(); await page.locator('.sidebar-bottom button[title="设置"]').click(); await nav().getByRole('button', { name: 'MCP 服务器', exact: true }).click(); await mcpRow('等待连接服务').waitFor(); await control('release', 'refreshMcp'); assert.equal(await content().getByText('OBSOLETE_SCOPE_MCP', { exact: true }).count(), 0); await mcpRow('等待连接服务').waitFor(); await content().getByRole('button', { name: '刷新 MCP 状态', exact: true }).waitFor(); await recover('mcp', 'setMcpEnabled');
-  await nav().getByRole('button', { name: '模型配置', exact: true }).click(); await provider.waitFor(); await control('openFirstSession'); await nav().waitFor({ state: 'detached' }); assert.equal(await composer.inputValue(), draft);
+  await nav().getByRole('button', { name: '模型配置', exact: true }).click(); await provider.waitFor(); await control('openFirstSession'); await nav().waitFor({ state: 'detached' }); assert.equal(await composerValue(composer), draft);
   result.checks.push('held MCP recovery from workspace A cannot replace workspace B list/providers after native session navigation; completion notice persists until explicit current-scope read recovery, original conversation draft survives return');
 
   const allCalls = await page.evaluate(() => window.__settingsResourcesQa.calls);

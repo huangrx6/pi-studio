@@ -1,3 +1,4 @@
+import { composerValue } from './fixtures/composer-editor.mjs';
 /**
  * Verify a rejected production settings chunk stays inside its local boundary.
  * Run after `pnpm run build`: node tools/qa/qa-settings-load-failure.mjs
@@ -38,7 +39,7 @@ const results = { passed: false, blockedChunk, blockedRequests: [], checks: [] }
 const draft = '保留这份未发送草稿：设置加载失败后仍能继续输入。';
 
 async function assertDraft(composer, label) {
-  assert.equal(await composer.inputValue(), draft, label);
+  assert.equal(await composerValue(composer), draft, label);
   assert.equal(await page.locator('.session-row:not(.empty)').count(), 0, 'QA never submits or creates a conversation');
   results.checks.push(label);
 }
@@ -58,7 +59,7 @@ try {
   await page.locator('.workspace-choice.has-selection').waitFor();
   // Settings intentionally hides the conversation from the accessibility tree;
   // use the DOM locator to verify its mounted, preserved draft behind the overlay.
-  const composer = page.locator('textarea[aria-label="发送给 Pi 的消息"]');
+  const composer = page.locator('[role="textbox"][aria-label="发送给 Pi 的消息"]');
   await composer.fill(draft);
 
   // Electron WebRequest also sees file: resources. Block exactly one JS asset in

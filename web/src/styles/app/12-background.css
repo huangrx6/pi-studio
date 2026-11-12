@@ -117,8 +117,7 @@
   border-color: var(--border-strong);
 }
 
-.app.has-custom-background .composer textarea,
-.app.has-custom-background .composer-highlight {
+.app.has-custom-background .composer-editor {
   background: var(--transparent);
 }
 

@@ -1,3 +1,4 @@
+import type { ComposerEditorHandle } from './ComposerEditor';
 import { useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type {
@@ -112,7 +113,7 @@ type MessageDeliveryDependencies = {
   setComposerFeedback: Setter<{ message: string; tone: 'info' | 'warning' } | null>;
   setPrompt: Setter<string>;
   setComposerAttachments: Setter<ComposerAttachment[]>;
-  textareaRef: MutableRefObject<HTMLTextAreaElement | null>;
+  composerEditorRef: MutableRefObject<ComposerEditorHandle | null>;
   requestRef: MutableRefObject<string | null>;
   modelPickerRequestRef: MutableRefObject<number>;
   setModelPickerRequest: Setter<ModelPickerRequest | null>;
@@ -188,7 +189,7 @@ export function useMessageDelivery({
   setComposerFeedback,
   setPrompt,
   setComposerAttachments,
-  textareaRef,
+  composerEditorRef,
   requestRef,
   modelPickerRequestRef,
   setModelPickerRequest,
@@ -1142,7 +1143,7 @@ export function useMessageDelivery({
     });
     setPrompt(item.text);
     setComposerAttachments(item.attachments);
-    window.requestAnimationFrame(() => textareaRef.current?.focus());
+    window.requestAnimationFrame(() => composerEditorRef.current?.focus());
   }
 
   function deleteQueued(id: string) {
