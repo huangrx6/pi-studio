@@ -687,6 +687,83 @@ async function outline(id) {
   };
 }
 
+/** 搜索片段两侧保留的字符数。 */
+const SEARCH_SNIPPET_CONTEXT = 48;
+
+/** 从原始模型消息里抽出可搜索的文本（正文、思考、工具输出）。 */
+function searchableMessageText(message) {
+  const parts = [];
+  const content = Array.isArray(message?.content) ? message.content : [];
+  for (const block of content) {
+    if (!block || typeof block !== 'object') continue;
+    if (block.type === 'text' && typeof block.text === 'string') parts.push(block.text);
+    else if (block.type === 'thinking' && typeof block.thinking === 'string') parts.push(block.thinking);
+    else if (block.type === 'toolResult') {
+      parts.push(typeof block.content === 'string' ? block.content : JSON.stringify(block.content ?? ''));
+    }
+    // 工具调用参数也要能搜到：很多命中其实落在命令或 diff 内容里。
+    else if (block.type === 'toolCall' && block.arguments !== undefined) {
+      parts.push(typeof block.arguments === 'string' ? block.arguments : JSON.stringify(block.arguments));
+    }
+  }
+  return parts.join('\n');
+}
+
+/** 从 entry 记录里拼出可搜索文本：正文、思考、工具输出、工具参数与 Studio 自己的字段。 */
+function recordSearchText(parsed) {
+  const parts = [];
+  const data = parsed && typeof parsed === 'object' ? parsed.data : undefined;
+  if (data && typeof data === 'object') {
+    if (typeof data.displayText === 'string') parts.push(data.displayText);
+    if (typeof data.text === 'string') parts.push(data.text);
+  }
+  const messages = Array.isArray(parsed?.model) ? parsed.model : Array.isArray(parsed) ? parsed : [];
+  for (const message of messages) parts.push(searchableMessageText(message));
+  return parts.join('\n');
+}
+
+/** 命中位置前后的可读片段，压缩换行与连续空白。 */
+function searchSnippet(text, index, length) {
+  const start = Math.max(0, index - SEARCH_SNIPPET_CONTEXT);
+  const end = Math.min(text.length, index + length + SEARCH_SNIPPET_CONTEXT);
+  const body = text.slice(start, end).replace(/\s+/gu, ' ').trim();
+  return `${start > 0 ? '…' : ''}${body}${end < text.length ? '…' : ''}`;
+}
+
+/**
+ * 会话内容搜索。
+ *
+ * 只搜当前会话，覆盖完整历史（包括还没加载进渲染层的部分）。主进程先用
+ * SQLite LIKE 粗筛命中的 Durable entry，再解析出可读片段；渲染层拿到的
+ * 只有条目 id 与片段，不需要把整段历史搬过去。
+ *
+ * @param {string} id 会话 id
+ * @param {string} query 关键词（至少两个字符）
+ * @param {{ limit?: number }} [options]
+ */
+async function conversationSearch(id, query, options = {}) {
+  const row = await getConversationRow(id);
+  const needle = typeof query === 'string' ? query.trim() : '';
+  if (!row || needle.length < 2) return { id: row ? conversationKey(row) : '', items: [], total: 0 };
+  // 粗筛宁可多取一些：图片 base64 里的偶然命中会被下面的结构化匹配过滤掉。
+  const scanLimit = Math.min(600, Math.max(60, (options.limit ?? 200) * 3));
+  const entries = getStudioDatabase().searchDurableEntries(row.id, needle, { limit: scanLimit });
+  const maxItems = options.limit ?? 200;
+  const lowered = needle.toLowerCase();
+  const items = [];
+  for (const entry of entries) {
+    let parsed;
+    try { parsed = JSON.parse(entry.record); } catch { parsed = null; }
+    const text = recordSearchText(parsed);
+    const index = text.toLowerCase().indexOf(lowered);
+    // 结构化文本里没有就丢掉：LIKE 也会命中图片 base64 里的巧合字符串。
+    if (index < 0) continue;
+    items.push({ sourceIndex: Number(entry.id), snippet: searchSnippet(text, index, needle.length) });
+    if (items.length >= maxItems) break;
+  }
+  return { id: conversationKey(row), items, total: items.length };
+}
+
 function validateWorkspace(cwd) {
   if (typeof cwd !== 'string' || !cwd.trim()) throw new Error('请先选择一个工作区，再开始对话。');
   if (!path.isAbsolute(cwd) || !fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) {
@@ -2222,6 +2299,7 @@ module.exports = {
   conversationAction,
   conversationPage,
   conversationRequestTrace,
+  conversationSearch,
   conversationSnapshot,
   createConversation,
   editConversation,

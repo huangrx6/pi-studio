@@ -36,6 +36,7 @@ import type {
   ConversationEditInput,
   ConversationEditResult,
   ConversationOutline,
+  ConversationSearchResult,
   ConversationPage,
   ConversationPageCursor,
   ConversationSnapshot,
@@ -426,6 +427,12 @@ declare global {
       }): Promise<ConversationPage | undefined>;
       /** 获取完整提问大纲；仅用于导航，不参与消息窗口渲染。 */
       conversationOutline(id: string): Promise<ConversationOutline | undefined>;
+      /** 搜索整段会话内容（含尚未加载进窗口的历史），返回条目 id 与片段。 */
+      conversationSearch(payload: {
+        id: string;
+        query: string;
+        limit?: number;
+      }): Promise<ConversationSearchResult | undefined>;
       /** Full request snapshot; the page only carries summaries. */
       conversationRequestTrace(id: string, requestId: string): Promise<RequestTrace | undefined>;
       /** 获取会话当前运行、压缩和任务快照。 */

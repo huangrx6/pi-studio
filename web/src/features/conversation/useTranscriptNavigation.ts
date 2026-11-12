@@ -396,6 +396,44 @@ export function useTranscriptNavigation({
     showComposerFeedback('这条提问对应的历史消息已经不可用。');
   }
 
+  /**
+   * 跳到某条消息（按 sourceIndex，也就是 Durable entry id）。
+   *
+   * 目标可能还没加载进窗口：先按页向上补，最多六页，每补一页等 React 提交
+   * 后重新定位。找到后把渲染窗口撑到目标所在轮次再滚动过去。
+   */
+  async function jumpToMessage(sourceIndex: number): Promise<boolean> {
+    const locate = () => turnsRef.current.findIndex((turn) => (
+      turn.kind === 'user'
+        ? turn.message.sourceIndex === sourceIndex
+        : turn.messages.some((message) => message.sourceIndex === sourceIndex)
+    ));
+    let target = locate();
+    for (let attempt = 0; target < 0 && attempt < 6; attempt += 1) {
+      const loaded = await onLoadOlderRef.current?.();
+      if (!loaded) break;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      target = locate();
+    }
+    if (target < 0) return false;
+    if (target < turnWindowFrom) {
+      windowAnchorRef.current = null;
+      setTurnWindowFromState({ session: windowSession, from: target });
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    }
+    const turn = turnsRef.current[target];
+    const anchorIndex = turn.kind === 'user' ? turn.message.sourceIndex : turn.messages[0]?.sourceIndex;
+    const node = anchorIndex === undefined
+      ? null
+      : document.getElementById(`chat-turn-${anchorIndex}`) ?? document.getElementById(`chat-assistant-turn-${anchorIndex}`);
+    if (!node) return false;
+    node.scrollIntoView({ block: 'center', behavior: 'auto' });
+    // 短暂高亮，避免用户在人眼找不到落点。
+    node.classList.add('is-search-hit');
+    window.setTimeout(() => node.classList.remove('is-search-hit'), 1600);
+    return true;
+  }
+
   useLayoutEffect(() => {
     // 消息提交后先在绘制前贴底；Markdown、图片或折叠区随后长高时，
     // ResizeObserver 会继续补一次，避免输出中途停在半截。
@@ -447,5 +485,6 @@ export function useTranscriptNavigation({
     resumeTranscriptFollow,
     handleTranscriptScroll,
     jumpToOutline,
+    jumpToMessage,
   };
 }

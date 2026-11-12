@@ -85,6 +85,18 @@ export type ConversationSnapshot = ConversationSummary & {
   agent: Record<string, unknown>;
 };
 
+/** 会话内容搜索的一条结果：条目 id（与消息 sourceIndex 一致）与可读片段。 */
+export type ConversationSearchItem = {
+  sourceIndex: number;
+  snippet: string;
+};
+
+export type ConversationSearchResult = {
+  id: string;
+  items: ConversationSearchItem[];
+  total: number;
+};
+
 export type ConversationOutline = {
   id: string;
   items: Array<{

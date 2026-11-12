@@ -14,6 +14,7 @@ const {
   configureConversation,
   conversationAction,
   conversationPage,
+  conversationSearch,
   conversationSnapshot,
   conversationRequestTrace,
   createConversation,
@@ -310,6 +311,9 @@ function registerConversationIpc() {
     conversationPage(id, { limit, cursor })
   ));
   ipcMain.handle('pi:conversation-outline', async (_event, id) => outline(id));
+  ipcMain.handle('pi:conversation-search', async (_event, { id, query, limit } = {}) => (
+    conversationSearch(id, query, { limit })
+  ));
   ipcMain.handle('pi:conversation-request-trace', async (_event, { id, requestId } = {}) => (
     conversationRequestTrace(id, requestId)
   ));

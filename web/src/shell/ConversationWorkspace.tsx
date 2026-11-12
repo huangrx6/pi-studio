@@ -1,9 +1,11 @@
-import { Fragment, lazy, Suspense, useMemo, type ComponentProps } from 'react';
+import { Fragment, lazy, Suspense, useEffect, useMemo, type ComponentProps } from 'react';
 import { ChevronLeft, LoaderCircle } from 'lucide-react';
 import { AssistantTurnView, ChatMessageView } from '../features/conversation/ChatMessage';
 import { ComposerDock } from '../features/conversation/ComposerDock';
 import { ConversationError } from '../features/conversation/ConversationError';
 import { ConversationOutline } from '../features/conversation/ConversationOutline';
+import { useConversationSearch } from '../features/conversation/useConversationSearch';
+import { ConversationSearchBar } from './ConversationSearchBar';
 import {
   findTurnDiff,
 } from '../features/conversation/file-changes';
@@ -200,7 +202,28 @@ export function ConversationWorkspace({
     resumeTranscriptFollow,
     handleTranscriptScroll,
     jumpToOutline,
+    jumpToMessage,
   } = transcript;
+
+  const search = useConversationSearch({ sessionId: session?.id, onJump: jumpToMessage });
+  const searchOpen = search.state.open;
+
+  // ⌘F / Ctrl+F 打开对话搜索；焦点在终端里时让终端自己处理。
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.isComposing) return;
+      const primary = event.metaKey || event.ctrlKey;
+      if (!primary || event.altKey || event.shiftKey) return;
+      if (event.key.toLowerCase() !== 'f') return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.('.terminal-host')) return;
+      event.preventDefault();
+      if (searchOpen) { search.close(); return; }
+      search.open();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [search, searchOpen]);
   // 轨迹页只在「显示代码工作视图」开启时出现；关闭后回落到对话视图。
   const traceEnabled = preferences.showCodeView;
   const showTrace = agentView.kind === 'trace' && traceEnabled;
@@ -260,6 +283,12 @@ export function ConversationWorkspace({
         showTrace={traceEnabled}
         traceSummary={traceSummary}
       />
+      {searchOpen && <ConversationSearchBar
+        state={search.state}
+        onQueryChange={search.setQuery}
+        onStep={(direction) => { void search.step(direction); }}
+        onClose={search.close}
+      />}
       {!isNewConversation && transcriptVisible && <div
         className="chat-scroll"
         ref={scrollRef}

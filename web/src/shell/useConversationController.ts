@@ -254,6 +254,7 @@ export function useConversationController(foundation: AppFoundation) {
     resumeTranscriptFollow,
     handleTranscriptScroll,
     jumpToOutline,
+    jumpToMessage,
   } = useTranscriptNavigation({
     onLoadOlder: () => loadOlderMessagesRef.current(),
     sessionId: session?.id,
@@ -923,6 +924,7 @@ export function useConversationController(foundation: AppFoundation) {
     resumeTranscriptFollow,
     handleTranscriptScroll,
     jumpToOutline,
+    jumpToMessage,
     notifyExtension,
     comparisonByParent,
     setComparisonByParent,

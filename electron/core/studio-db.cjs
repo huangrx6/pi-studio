@@ -1716,6 +1716,32 @@ class StudioDatabase {
    * tool schemas) is up to 512k characters each, and sixteen of them were 8.6 MB
    * of a 20 MB page. The detail read below serves the one the user opens.
    */
+  /**
+   * 会话内容搜索用的一次粗筛。
+   *
+   * 直接在 Durable 的 entry JSON 上做 LIKE：库里有几千条记录，SQLite 扫一遍只要
+   * 几十毫秒，比把整段历史搬到渲染层再搜便宜得多。命中后由调用方解析 JSON
+   * 提取可读片段，这里只交出原始记录。
+   */
+  searchDurableEntries(conversationId, query, { limit = 200 } = {}) {
+    const key = typeof conversationId === 'string' || typeof conversationId === 'number'
+      ? String(conversationId)
+      : '';
+    const needle = typeof query === 'string' ? query.trim() : '';
+    if (!key || needle.length < 1) return [];
+    const safeLimit = Number.isSafeInteger(limit) ? Math.max(1, Math.min(limit, 500)) : 200;
+    // LIKE 的通配符要转义，否则用户输入 % 会命中全部记录。
+    const pattern = `%${needle.replace(/[\\%_]/g, (match) => `\\${match}`)}%`;
+    return this.db.prepare(`
+      SELECT id, record
+      FROM durable_entries
+      WHERE conversation_id = ?
+        AND record LIKE ? ESCAPE '\\'
+      ORDER BY id DESC
+      LIMIT ?
+    `).all(key, pattern, safeLimit);
+  }
+
   listRequestTraces(conversationId, { limit = REQUEST_TRACE_HISTORY_LIMIT, summary = true } = {}) {
     const key = typeof conversationId === 'string' || typeof conversationId === 'number'
       ? String(conversationId)
