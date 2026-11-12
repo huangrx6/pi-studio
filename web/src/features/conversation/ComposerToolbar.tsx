@@ -30,7 +30,7 @@ export function ComposerToolbar({
   const sendTitle = preparing ? '正在准备消息，草稿仍可编辑' : loading ? '正在加载会话'
     : !isCommand && !hasWorkspace ? '请先选择工作区'
       : !isCommand && !hasModel ? '请先选择可用模型'
-      : compacting ? '正在压缩上下文，完成后自动继续'
+      : compacting ? '正在压缩我们的对话内容，以便继续对话'
         : running ? '补充当前任务；Cmd/Ctrl+Enter 排队' : '发送消息';
   return <div className="composer-bar composer-toolbar">
     <div className={`composer-left ${isNewConversation ? 'is-new-conversation' : ''}`}>
@@ -41,7 +41,7 @@ export function ComposerToolbar({
       <button type="button" className="composer-more-button" aria-label="更多会话动作" title="会话动作 · ⌘K / Ctrl+K" onClick={onActions}><MoreHorizontal aria-hidden="true" /></button>
       {model}
       {running && <button type="button" className="send-button is-stop" disabled={stopping} onClick={onStop} aria-label={stopping ? '正在停止当前任务' : '停止当前任务'} title={stopping ? '正在停止当前任务' : '停止当前任务'}>{stopping ? <LoaderCircle className="spin" aria-hidden="true" /> : <Square fill="currentColor" aria-hidden="true" />}</button>}
-      {(!running || hasContent) && <button type="button" className="send-button" disabled={preparing || loading || stopping || (!isCommand && (!hasWorkspace || !hasModel)) || !hasContent || compacting} onClick={onSend} aria-label={preparing ? '正在准备消息' : compacting ? '正在压缩上下文' : running ? '补充当前任务' : '发送消息'} title={sendTitle}>{preparing ? <LoaderCircle className="spin" aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}</button>}
+      {(!running || hasContent) && <button type="button" className="send-button" disabled={preparing || loading || stopping || (!isCommand && (!hasWorkspace || !hasModel)) || !hasContent || compacting} onClick={onSend} aria-label={preparing ? '正在准备消息' : compacting ? '正在压缩对话内容' : running ? '补充当前任务' : '发送消息'} title={sendTitle}>{preparing ? <LoaderCircle className="spin" aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}</button>}
     </div>
   </div>;
 }

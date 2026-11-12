@@ -307,7 +307,7 @@ export function ComposerDock({
         onSelect={selectComposerOption}
         onRetry={retryComposerSuggestions}
       />}
-      {session?.id && compaction.active && <div className="compaction-banner" role="status"><LoaderCircle className="spin" /><span>上下文正在压缩，完成后会自动继续…</span></div>}
+      {session?.id && compaction.active && <div className="compaction-banner" role="status"><LoaderCircle className="spin" /><span>正在压缩我们的对话内容，以便继续对话…</span></div>}
     {!hasUsableModel && modelHintOpen && <div className="composer-model-hint" role="status">
         <SlidersHorizontal aria-hidden="true" />
         <span>还没有可用模型，发送前先挑一个。</span>
@@ -480,7 +480,7 @@ export function ComposerDock({
             className={queuedPrompts.length > 0 ? 'has-queued' : undefined}
             aria-expanded={Boolean(composerMenu)}
             placeholder={compaction.active
-              ? '正在压缩上下文，完成后自动继续…'
+              ? '正在压缩我们的对话内容，以便继续对话…'
               : queuedEditContext
                 ? '编辑排队消息 · Cmd/Ctrl+Enter 放回原位置 · Shift+Enter 换行'
                 : turnActive
