@@ -1,14 +1,14 @@
-/* ---- 顶部一行 ---------------------------------------------------------
- * 整个窗口只有一行标题区：左边是 mac 红黄绿，右边紧挨着品牌与应用名，
- * 主栏把通知与面板按钮放在同一行的右端。
+/* ---- 顶部节奏 ---------------------------------------------------------
+ * 整个窗口的第一行是统一的标题区：左边是 mac 红黄绿，右边紧挨着品牌与应用名，
+ * 主栏把通知与面板按钮放在同一行的右端；侧栏标题行下面回到自己的导航层级。
  *
  * 三种情形只差左侧让位：
  *   - 窗口模式：红绿灯在窗口内，品牌让出 92px 安全区；
  *   - 有壁纸：红绿灯落在卡片外的留白条里，品牌回到 16px；
  *   - 原生全屏：红绿灯隐藏，品牌同样回到 16px。
  *
- * 分隔线由「收口的那一行」负责：空状态是标题行，会话里是标签行，
- * 任何时候都只有一条线，不再出现上下并排两层空带。
+ * 中间与右侧继续由各自的标签/工具行收口，侧栏只在品牌标题下留一条弱分隔线，
+ * 不再把主操作伪装成内容区标签栏。
  */
 
 .sidebar { padding-top: 0; }
@@ -35,10 +35,33 @@
   align-items: center;
   gap: var(--space-2);
   height: var(--header-height);
-  padding-right: var(--space-2);
+  margin-inline: calc(-1 * var(--space-3));
+  padding: 0 var(--space-2) 0 var(--space-3);
   border-bottom: 1px solid var(--divider);
+  background: var(--surface-chrome);
 }
 .sidebar-top-row > .brand { flex: 1; min-width: 0; height: 100%; border-bottom: 0; }
+.chat-header,
+.panel-tabbar { background: var(--surface-chrome); border-bottom: 0; }
+.chat-tabs,
+.file-toolbar {
+  background: color-mix(in srgb, var(--surface-chrome) 88%, transparent);
+  border-bottom-color: var(--divider);
+}
+.file-toolbar { border-top-color: var(--transparent); }
+.nav-row.new-chat {
+  height: var(--row-height);
+  min-height: var(--row-height);
+  margin-top: 0;
+  justify-content: flex-start;
+  padding-inline: var(--space-3);
+  border: 0;
+  background: var(--transparent);
+  color: var(--muted);
+  box-shadow: none;
+}
+.nav-row.new-chat > svg { color: var(--muted); }
+.nav-row.new-chat:hover { background: var(--surface-hover); color: var(--text); }
 .sidebar-top-toggle {
   position: static;
   flex: none;
@@ -54,6 +77,7 @@
 
 /* 有壁纸或全屏时品牌与侧栏内容同一条竖线（12px）；窗口模式仍让开红绿灯。 */
 .app.has-custom-background { --brand-leading: 12px; }
+.app.has-custom-background.is-sidebar-collapsed .chat-header { padding-left: 12px; }
 html[data-window-fullscreen='true'] .brand { padding-left: 12px; }
 
 /* 没有壁纸、也不是全屏时，标题行只留红绿灯与收起按钮：
@@ -62,7 +86,7 @@ html:not([data-window-fullscreen='true']) .app:not(.has-custom-background) .bran
   display: none;
 }
 
-/* 「新会话」改成左对齐的列表入口，图标与品牌、导航行落在同一条竖线上。 */
+/* 「新对话」是创建动作，不承担当前路由状态，和普通导航行共用内容基线。 */
 .new-chat { justify-content: flex-start; padding-inline: 12px; }
 
 /* 主栏：标题文字与标签文字共用同一个左边界。

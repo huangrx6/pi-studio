@@ -100,12 +100,12 @@ export type TerminalLinkTarget =
   | { kind: 'file'; path: string; line?: number; column?: number };
 
 const URL_PATTERN = /^https?:\/\/[^\s]+$/i;
-const FILE_PATTERN = /^(?:[.~/]|[\w.-]+\/)[^\s:*?"<>|]*$/;
+const FILE_PATTERN = /^(?:(?:[A-Za-z]:[\\/])|(?:[.~/])|(?:[\w.-]+[\\/]))[^\s*?"<>|]*$/;
 
 /**
  * 解析一行输出里的可点击目标。
  *
- * 支持 `https://…` 与 `path/to/file:12:3`；`path:12` 只在看起来像文件时才算，
+ * 支持 `https://…`、Unix/Windows 路径与 `path/to/file:12:3`；`path:12` 只在看起来像文件时才算，
  * 免得把 `warning:3` 这类纯文本当成可打开的文件。
  */
 export function parseTerminalLink(raw: string): TerminalLinkTarget | null {
@@ -115,7 +115,7 @@ export function parseTerminalLink(raw: string): TerminalLinkTarget | null {
   const match = /^(.+?)(?::(\d+))(?::(\d+))?$/u.exec(text);
   if (!match) return FILE_PATTERN.test(text) && text.includes('.') ? { kind: 'file', path: text } : null;
   const path = match[1];
-  if (!FILE_PATTERN.test(path) || path.includes('/') === false) return null;
+  if (!FILE_PATTERN.test(path) || (path.includes('/') === false && path.includes('\\') === false)) return null;
   const line = Number(match[2]);
   const column = match[3] === undefined ? undefined : Number(match[3]);
   return {

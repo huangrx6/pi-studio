@@ -240,6 +240,7 @@ export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ workspa
     {loading && !hasWorkspaces && <div className="workspace-skeleton" role="status" aria-live="polite" aria-label="正在加载工作区"><span className="sr-only">正在加载工作区…</span>{[0, 1, 2].map((group) => <div className="skeleton-group" key={group} style={{ animationDelay: `${group * 90}ms` }}><div className="skeleton-workspace-head"><span className="skeleton-icon" /><span className="skeleton-line" style={{ width: `${[46, 60, 38][group]}%` }} /><span className="skeleton-chevron" /></div><div className="skeleton-sessions"><span className="skeleton-session-line" style={{ width: `${[74, 58][group % 2]}%` }} /><span className="skeleton-session-line" style={{ width: `${[53, 67][group % 2]}%` }} /></div></div>)}</div>}
     {!(loading && !hasWorkspaces) && workspaces.map((item) => {
       const open = isOpen(item.cwd);
+      const active = activeWorkspace === item.cwd && open;
       const key = workspaceKey(item.cwd);
       const focused = logicalRows.find((row) => row.key === focusedKey && row.cwd === item.cwd);
       const retained = focused?.index !== undefined ? focusNeighborIndices(focused.index, item.sessions.length) : [];
@@ -249,7 +250,7 @@ export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ workspa
       const virtual = item.sessions.length > SIDEBAR_VIRTUAL_THRESHOLD;
       return <div className="workspace" key={item.cwd} data-workspace-cwd={item.cwd}>
         <div className="sidebar-row-shell workspace-row-shell" data-sidebar-key={key}>
-          <button className={`workspace-row ${activeWorkspace === item.cwd ? 'is-active' : ''} ${dropHint === key ? 'drop-before' : ''} ${dragging?.kind === 'workspace' && dragging.cwd === item.cwd ? 'is-dragging' : ''} ${justDropped === key ? 'just-dropped' : ''}`} title={item.name && item.name !== item.cwd ? `${item.name}\n${item.cwd}` : item.cwd} aria-expanded={open} draggable
+          <button className={`workspace-row ${active ? 'is-active' : ''} ${dropHint === key ? 'drop-before' : ''} ${dragging?.kind === 'workspace' && dragging.cwd === item.cwd ? 'is-dragging' : ''} ${justDropped === key ? 'just-dropped' : ''}`} title={item.name && item.name !== item.cwd ? `${item.name}\n${item.cwd}` : item.cwd} aria-expanded={open} draggable
             onDragStart={(event) => startDrag(event, { kind: 'workspace', cwd: item.cwd }, item.name)}
             onDragOver={(event) => { if (dragRef.current?.kind !== 'workspace' || dragRef.current.cwd === item.cwd) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropHint(key); }}
             onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropHint(null); }}

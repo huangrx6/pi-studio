@@ -17,6 +17,8 @@ const { shellIntegrationEnvironment } = require('./shell-integration.cjs');
 const MAX_SESSIONS_PER_RENDERER = 8;
 const MAX_OUTPUT_CHARS = 1_000_000;
 const MAX_WRITE_CHARS = 64 * 1024;
+const OUTPUT_BATCH_DELAY_MS = 16;
+const OUTPUT_BATCH_CHARS = 64 * 1024;
 const LOGIN_SHELLS = new Set([
   'bash',
   'csh',
@@ -127,6 +129,7 @@ function loadNodePty() {
  *   send?: (ownerId: number, channel: string, payload: unknown) => void,
  *   maxSessions?: number,
  *   maxOutputChars?: number,
+ *   batchOutput?: boolean,
  *   now?: () => number,
  *   platform?: NodeJS.Platform,
  *   environment?: NodeJS.ProcessEnv,
@@ -140,6 +143,7 @@ function createTerminalSessionManager(options = {}) {
   const send = options.send || (() => {});
   const maxSessions = options.maxSessions || MAX_SESSIONS_PER_RENDERER;
   const maxOutputChars = options.maxOutputChars || MAX_OUTPUT_CHARS;
+  const batchOutput = options.batchOutput === true;
   const now = options.now || Date.now;
   const platform = options.platform || process.platform;
   const environment = options.environment || process.env;
@@ -162,6 +166,46 @@ function createTerminalSessionManager(options = {}) {
     } catch {
       // The owning renderer may have been destroyed while the PTY exited.
     }
+  }
+
+  /**
+   * PTY 往往会把一帧输出拆成很多小块。保留 replay 的逐块记录与单调序号，
+   * 但跨进程通知按一个短时间片合并，避免高频日志把 renderer 的 IPC 队列打满。
+   */
+  function flushOutput(session) {
+    const batch = session.outputBatch;
+    if (!batch) return;
+    if (batch.timer) clearTimeout(batch.timer);
+    session.outputBatch = undefined;
+    if (sessions.get(session.id) !== session || !batch.data) return;
+    emit(session, {
+      id: session.id,
+      type: 'data',
+      data: batch.data,
+      sequence: batch.sequence,
+      ...(batch.chunks.length > 1 ? { chunks: batch.chunks } : {}),
+      ...(batch.sequenceStart === batch.sequence ? {} : { sequenceStart: batch.sequenceStart }),
+    });
+  }
+
+  function queueOutput(session, data) {
+    const sequence = session.sequence;
+    if (!batchOutput) {
+      emit(session, { id: session.id, type: 'data', data, sequence });
+      return;
+    }
+    const previous = session.outputBatch;
+    if (previous) {
+      previous.data += data;
+      previous.chunks.push({ sequence, data });
+      previous.sequence = sequence;
+      if (previous.data.length >= OUTPUT_BATCH_CHARS) flushOutput(session);
+      return;
+    }
+    const batch = { data, chunks: [{ sequence, data }], sequenceStart: sequence, sequence, timer: undefined };
+    batch.timer = setTimeout(() => flushOutput(session), OUTPUT_BATCH_DELAY_MS);
+    session.outputBatch = batch;
+    if (data.length >= OUTPUT_BATCH_CHARS) flushOutput(session);
   }
 
   function create({ ownerId, id, cwd, cols, rows, shellIntegration } = {}) {
@@ -215,6 +259,7 @@ function createTerminalSessionManager(options = {}) {
       exitCode: undefined,
       replay: createTerminalReplay({ cols: initialCols, rows: initialRows, maxChars: maxOutputChars }),
       sequence: 0,
+      outputBatch: undefined,
       ptyProcess,
     };
     sessions.set(id, session);
@@ -223,10 +268,11 @@ function createTerminalSessionManager(options = {}) {
       if (sessions.get(id) !== session) return;
       session.replay.append(String(data));
       session.sequence += 1;
-      emit(session, { id, type: 'data', data: String(data), sequence: session.sequence });
+      queueOutput(session, String(data));
     });
     ptyProcess.onExit(({ exitCode, signal } = {}) => {
       if (sessions.get(id) !== session) return;
+      flushOutput(session);
       session.status = 'exited';
       session.exitCode = exitCode;
       session.exitedAt = now();
@@ -262,6 +308,7 @@ function createTerminalSessionManager(options = {}) {
     const session = sessions.get(id);
     if (!session) return { ok: true };
     assertOwner(session, ownerId);
+    flushOutput(session);
     sessions.delete(id);
     try {
       session.ptyProcess.kill();
@@ -273,6 +320,7 @@ function createTerminalSessionManager(options = {}) {
 
   function closeOwner(ownerId) {
     for (const session of sessionsForOwner(ownerId)) {
+      flushOutput(session);
       sessions.delete(session.id);
       try {
         session.ptyProcess.kill();

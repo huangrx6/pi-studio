@@ -57,6 +57,8 @@ test('终端只接管主修饰键组合，其余按键交回 shell', () => {
   assert.equal(terminalKeyIntent(key({ key: '=', metaKey: true })), 'zoom-in');
   assert.equal(terminalKeyIntent(key({ key: '-', metaKey: true })), 'zoom-out');
   assert.equal(terminalKeyIntent(key({ key: '0', metaKey: true })), 'zoom-reset');
+  assert.equal(terminalKeyIntent(key({ key: 'ArrowUp', metaKey: true, shiftKey: true })), 'prev-command');
+  assert.equal(terminalKeyIntent(key({ key: 'ArrowDown', metaKey: true, shiftKey: true })), 'next-command');
   assert.equal(terminalKeyIntent(key({ key: 'c', ctrlKey: true })), null, '⌃C 必须留给 shell');
   assert.equal(terminalKeyIntent(key({ key: 'ArrowUp' })), null);
   assert.equal(terminalKeyIntent(key({ key: 'r', metaKey: true })), null);

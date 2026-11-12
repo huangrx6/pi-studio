@@ -4,7 +4,6 @@ import type { AgentView } from '../../shell/app-types';
 import type { OutlineItem } from './outline-model';
 import { NO_ANSWER_TEXT } from './outline-model';
 import { placeRequestTraces } from './request-trace-turns';
-import { transcriptWindowStart } from './transcript-window.mjs';
 import { outlineIndexAt } from './outline-sync.mjs';
 import {
   SCROLL_INTENT_WINDOW_MS,
@@ -23,18 +22,18 @@ type TranscriptNavigationDependencies = {
   error: string | null;
   agentView: AgentView;
   filesOpen: boolean;
+  hasNewer?: boolean;
   outlineItems: OutlineItem[];
   outlineActive: number;
   setOutlineActive: Setter<number>;
   showComposerFeedback: (message: string, tone?: 'info' | 'warning') => void;
   /** 向上补一页更早的历史；返回 false 表示没有更多。 */
-  onLoadOlder?: (options?: { limit?: number; keepLatest?: boolean }) => Promise<boolean>;
+  onLoadOlder?: (beforeApply: () => number[]) => Promise<boolean>;
+  /** 向下补一页更新的历史；返回 false 表示已经到最新。 */
+  onLoadNewer?: (beforeApply: () => number[]) => Promise<boolean>;
   /** 按稳定 entry id 直接读取目标附近的一窗。 */
   onLoadTarget?: (sourceIndex: number) => Promise<boolean>;
 };
-
-const TURN_WINDOW_INITIAL = 24;
-const TURN_WINDOW_STEP = 24;
 
 export function useTranscriptNavigation({
   sessionId,
@@ -45,34 +44,55 @@ export function useTranscriptNavigation({
   error,
   agentView,
   filesOpen,
+  hasNewer = false,
   outlineItems,
   outlineActive,
   setOutlineActive,
   showComposerFeedback,
   onLoadOlder,
+  onLoadNewer,
   onLoadTarget,
 }: TranscriptNavigationDependencies) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement | null>(null);
+  const bottomSentinelRef = useRef<HTMLDivElement | null>(null);
   const chatContentRef = useRef<HTMLDivElement>(null);
-  const [turnWindowFromState, setTurnWindowFromState] = useState<{ session: string; from: number } | null>(null);
-  const [pendingOutlineJump, setPendingOutlineJump] = useState<number | null>(null);
-  const windowAnchorRef = useRef<{ session: string; top: number; height: number } | null>(null);
-  const windowBaseRef = useRef<{ session: string; from: number } | null>(null);
+  const pageAnchorRef = useRef<{ session: string; anchors: Array<{ id: string; offset: number }> } | null>(null);
+  const jumpingRef = useRef(false);
+  const hasNewerRef = useRef(hasNewer);
+  hasNewerRef.current = hasNewer;
   const outlineSyncRef = useRef<number | null>(null);
   const followBottomRef = useRef(true);
   const autoScrollFrameRef = useRef(0);
   const scrollIntentTimerRef = useRef<number | null>(null);
   const userScrollIntentRef = useRef(false);
+  // One gesture may request one page. Scroll compensation never grants
+  // another request, and cannot reverse the user's loading direction.
+  const pageIntentRef = useRef<'older' | 'newer' | 'unknown' | null>(null);
+  const pageIntentFrameRef = useRef(0);
   const lastTranscriptScrollTopRef = useRef(0);
+  const programmedTopRef = useRef<number | null>(null);
+  // Keep the last layout metrics so a composer resize can preserve the current
+  // reading edge without being mistaken for new transcript content. The input
+  // editor lives after the viewport in normal flow, so growing it reduces the
+  // viewport height while leaving the transcript's scroll height unchanged.
+  const resizeMetricsRef = useRef<{ viewportHeight: number; contentHeight: number } | null>(null);
   const onLoadOlderRef = useRef(onLoadOlder);
   onLoadOlderRef.current = onLoadOlder;
+  const onLoadNewerRef = useRef(onLoadNewer);
+  onLoadNewerRef.current = onLoadNewer;
   const olderLoadingRef = useRef(false);
+
   const turnsRef = useRef<typeof transcriptTurns>([]);
 
   useLayoutEffect(() => {
     followBottomRef.current = true;
     userScrollIntentRef.current = false;
+    pageIntentRef.current = null;
+    pageAnchorRef.current = null;
+    programmedTopRef.current = null;
+    resizeMetricsRef.current = null;
+    if (pageIntentFrameRef.current) cancelAnimationFrame(pageIntentFrameRef.current);
     if (autoScrollFrameRef.current) {
       cancelAnimationFrame(autoScrollFrameRef.current);
       autoScrollFrameRef.current = 0;
@@ -83,11 +103,22 @@ export function useTranscriptNavigation({
     }
   }, [sessionId]);
 
-  function markUserScrollIntent() {
+  function markUserScrollIntent(deltaY?: number) {
     userScrollIntentRef.current = true;
+    pageIntentRef.current = deltaY === undefined ? 'unknown' : deltaY < 0 ? 'older' : 'newer';
+    if (pageIntentFrameRef.current) cancelAnimationFrame(pageIntentFrameRef.current);
+    pageIntentFrameRef.current = requestAnimationFrame(() => {
+      pageIntentFrameRef.current = 0;
+      const root = scrollRef.current;
+      const direction = pageIntentRef.current;
+      if (!root || !direction || direction === 'unknown') return;
+      const distance = direction === 'older' ? root.scrollTop : root.scrollHeight - root.scrollTop - root.clientHeight;
+      if (distance < 240) void loadWithAnchor(direction);
+    });
     if (scrollIntentTimerRef.current !== null) window.clearTimeout(scrollIntentTimerRef.current);
     scrollIntentTimerRef.current = window.setTimeout(() => {
       userScrollIntentRef.current = false;
+      pageIntentRef.current = null;
       scrollIntentTimerRef.current = null;
     }, SCROLL_INTENT_WINDOW_MS);
   }
@@ -95,8 +126,24 @@ export function useTranscriptNavigation({
   function pinTranscriptToBottom() {
     const node = scrollRef.current;
     if (!node || !followBottomRef.current) return;
-    node.scrollTop = node.scrollHeight;
-    lastTranscriptScrollTopRef.current = node.scrollTop;
+    // Use the clamped maximum instead of assigning scrollHeight directly.  A
+    // direct `scrollTop = scrollHeight` write is repeated while the composer
+    // and streamed markdown resize; even when the browser lands on the same
+    // position it still schedules a scroll event in some WebViews.  Avoiding
+    // that no-op write keeps the reader at the live edge without a visible
+    // one-frame nudge.
+    const target = Math.max(0, node.scrollHeight - node.clientHeight);
+    const moved = Math.abs(node.scrollTop - target) > 0.5;
+    if (moved) {
+      node.scrollTop = target;
+      // Only suppress the scroll event caused by an actual programmatic move.
+      // Leaving this marker behind after a no-op pin can swallow the next tiny
+      // trackpad gesture and make follow mode feel unresponsive.
+      programmedTopRef.current = target;
+    } else {
+      programmedTopRef.current = null;
+    }
+    lastTranscriptScrollTopRef.current = target;
   }
 
   function scheduleTranscriptPin() {
@@ -115,13 +162,14 @@ export function useTranscriptNavigation({
     }
   }
 
-  function resumeTranscriptFollow() {
+  function resumeTranscriptFollow(force = false) {
+    if (!force && (hasNewerRef.current || olderLoadingRef.current || pageAnchorRef.current)) return;
     followBottomRef.current = true;
     scheduleTranscriptPin();
   }
 
-  /** 取最后一条 todo 工具结果的计划详情，供底部计划面板使用。 */
-  const todoDetails = useMemo<TodoDetails | undefined>(() => {
+  /** 工具结果仅作为刷新信号，计划栏始终读取当前会话的任务文档。 */
+  const windowTodoDetails = useMemo<TodoDetails | undefined>(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const message = messages[index];
       const details = message.role === 'toolResult' && message.toolName === 'todo' ? message.details : undefined;
@@ -129,6 +177,18 @@ export function useTranscriptNavigation({
     }
     return undefined;
   }, [messages]);
+
+  // The composer plan belongs to the conversation, not the paged transcript.
+  const [plan, setPlan] = useState<{ session: string; details?: TodoDetails } | null>(null);
+  useEffect(() => {
+    if (!sessionId) return;
+    let disposed = false;
+    void window.piApi.conversationTodo(sessionId).then(details => {
+      if (!disposed) setPlan({ session: sessionId, details });
+    }).catch(() => { /* Preserve the last authoritative plan on a transient failure. */ });
+    return () => { disposed = true; };
+  }, [sessionId, busy, windowTodoDetails]);
+  const todoDetails = plan && plan.session === sessionId ? plan.details : undefined;
 
   /**
    * Derived transcript data is memoised on the message array: streaming flushes
@@ -153,101 +213,61 @@ export function useTranscriptNavigation({
     return turns;
   }, [messages]);
   const windowSession = sessionId ?? '';
-  // The window start is pinned once per conversation and only ever moves up.
-  // Appending a message must not unmount the reader's current turn, so the
-  // window grows with the transcript instead of sliding.
-  if (transcriptTurns.length > 0 && windowBaseRef.current?.session !== windowSession) {
-    windowBaseRef.current = {
-      session: windowSession,
-      from: Math.max(0, transcriptTurns.length - TURN_WINDOW_INITIAL),
-    };
-  }
   turnsRef.current = transcriptTurns;
-  const turnWindowFrom = transcriptWindowStart(
-    windowSession,
-    transcriptTurns.length,
-    turnWindowFromState,
-    windowBaseRef.current,
-  );
-  const visibleTurns = turnWindowFrom > 0 ? transcriptTurns.slice(turnWindowFrom) : transcriptTurns;
-  useEffect(() => {
-    setTurnWindowFromState(null);
-    setPendingOutlineJump(null);
-  }, [windowSession]);
+  const turnWindowFrom = 0;
+  const visibleTurns = transcriptTurns;
 
-  /** Growing the window prepends turns; keep the reader's place. */
-  useLayoutEffect(() => {
-    const anchor = windowAnchorRef.current;
-    const container = scrollRef.current;
-    if (!anchor || !container) return;
-    windowAnchorRef.current = null;
-    if (anchor.session !== windowSession) return;
-    container.scrollTop += container.scrollHeight - anchor.height;
-  }, [turnWindowFrom, windowSession]);
-
-  /** After the window grows, scroll to the pending outline target and re-align. */
-  useLayoutEffect(() => {
-    if (pendingOutlineJump === null) return undefined;
-    const index = pendingOutlineJump;
-    let frame = 0;
-    let attempt = 0;
-    const step = () => {
-      frame = requestAnimationFrame(() => {
-        // Instant, not smooth: a repeated smooth animation measures its own
-        // in-flight position and compounds the overshoot.
-        scrollToOutlineItem(index, 'auto');
-        attempt += 1;
-        if (attempt < 3) step();
-        // Clear only after the last pass: clearing inside the effect made the
-        // StrictMode double-invoke return early and skip the scroll entirely.
-        else setPendingOutlineJump(null);
-      });
+  function capturePageAnchor() {
+    const root = scrollRef.current;
+    if (!root) return [];
+    const rect = root.getBoundingClientRect();
+    const nodes = Array.from(root.querySelectorAll<HTMLElement>('.messages > [id]'));
+    const visible = nodes.filter(node => {
+      const box = node.getBoundingClientRect();
+      return box.bottom > rect.top && box.top < rect.bottom;
+    });
+    pageAnchorRef.current = {
+      session: windowSession,
+      anchors: visible
+        .map(node => ({ id: node.id, offset: node.getBoundingClientRect().top - rect.top })),
     };
-    step();
-    return () => { if (frame) cancelAnimationFrame(frame); };
-  }, [pendingOutlineJump]);
+    return visible.map(node => Number(node.id.split('-').at(-1))).filter(Number.isFinite);
+  }
 
-  /**
-   * 补一页更早的历史，并把阅读位置钉住。
-   *
-   * 插入到前面会让 scrollHeight 变大；按差值补 scrollTop，读者视线不动。
-   */
-  async function loadOlderWithAnchor() {
-    const node = scrollRef.current;
-    const load = onLoadOlderRef.current;
-    if (!node || !load || olderLoadingRef.current) return;
+  async function loadWithAnchor(direction: 'older' | 'newer') {
+    if (direction === 'newer' && !hasNewerRef.current) return;
+    const load = direction === 'older' ? onLoadOlderRef.current : onLoadNewerRef.current;
+    if (!scrollRef.current || !load || olderLoadingRef.current || jumpingRef.current) return;
+    pageIntentRef.current = null;
     olderLoadingRef.current = true;
-    const height = node.scrollHeight;
+    pauseTranscriptFollow();
     try {
-      const loaded = await load();
-      if (!loaded) return;
-      requestAnimationFrame(() => {
-        const next = scrollRef.current;
-        if (next) next.scrollTop += next.scrollHeight - height;
-      });
+      // Measure after the request completes, immediately before applying it.
+      // Capturing at request start loses any wheel movement during the wait.
+      const loaded = await load(capturePageAnchor);
+      if (!loaded) pageAnchorRef.current = null;
+      // Keep auto-follow disabled until React has committed and compensated.
+      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
     } finally {
       olderLoadingRef.current = false;
     }
   }
 
-  /**
-   * Watch the sentinel above the mounted turns.
-   *
-   * 先扩大已渲染的 turn 窗口；渲染窗口已经到头时，才向主进程要更早的一页。
-   */
-  useEffect(() => {
-    const sentinel = topSentinelRef.current;
+  useLayoutEffect(() => {
+    const anchor = pageAnchorRef.current;
     const root = scrollRef.current;
-    if (!sentinel || !root) return undefined;
-    const observer = new IntersectionObserver((entries) => {
-      if (!entries.some((entry) => entry.isIntersecting)) return;
-      if (turnWindowFrom === 0) { void loadOlderWithAnchor(); return; }
-      windowAnchorRef.current = { session: windowSession, top: root.scrollTop, height: root.scrollHeight };
-      setTurnWindowFromState({ session: windowSession, from: Math.max(0, turnWindowFrom - TURN_WINDOW_STEP) });
-    }, { root, rootMargin: '800px 0px 0px 0px' });
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [turnWindowFrom, windowSession, transcriptTurns.length, messages[0]?.sourceIndex]);
+    if (!anchor || !root || anchor.session !== windowSession) return;
+    pageAnchorRef.current = null;
+    for (const item of anchor.anchors) {
+      const node = document.getElementById(item.id);
+      if (!node || !root.contains(node)) continue;
+      root.scrollTop += node.getBoundingClientRect().top - root.getBoundingClientRect().top - item.offset;
+      break;
+    }
+    pageIntentRef.current = null;
+    programmedTopRef.current = root.scrollTop;
+    lastTranscriptScrollTopRef.current = root.scrollTop;
+  }, [messages[0]?.sourceIndex, messages[0]?.sourceOffset, messages.at(-1)?.sourceIndex, messages.at(-1)?.sourceOffset, windowSession]);
 
   const lastAssistantTurnIndex = useMemo(
     () => transcriptTurns.reduce((last, turn, index) => turn.kind === 'assistant' ? index : last, -1),
@@ -284,11 +304,22 @@ export function useTranscriptNavigation({
   function syncOutlineActive() {
     const container = scrollRef.current;
     if (!container) return;
+    const atLatest = !hasNewerRef.current && isNearBottom({
+      scrollTop: container.scrollTop,
+      clientHeight: container.clientHeight,
+      scrollHeight: container.scrollHeight,
+    });
+    if (atLatest && outlineItems.length > 0) {
+      const latest = outlineItems.length - 1;
+      setOutlineActive((current) => (current === latest ? current : latest));
+      return;
+    }
     const top = container.getBoundingClientRect().top + 14;
-    const nodes = Array.from(container.querySelectorAll<HTMLElement>('.messages > .message.user[id^="chat-turn-"]'))
-      .filter((node) => /^chat-turn-\d+$/.test(node.id));
+    const nodes = Array.from(container.querySelectorAll<HTMLElement>('.messages > [id]'))
+      .filter((node) => /^chat-(?:assistant-)?turn-\d+$/.test(node.id));
     if (nodes.length === 0) {
-      setOutlineActive(0);
+      const resolved = outlineIndexAt(outlineItems, messages[0]?.sourceIndex);
+      if (resolved >= 0) setOutlineActive(resolved);
       return;
     }
 
@@ -307,7 +338,7 @@ export function useTranscriptNavigation({
       }
     }
     const activeNode = nodes[visible >= 0 ? visible : 0];
-    const sourceIndex = Number(activeNode.id.slice('chat-turn-'.length));
+    const sourceIndex = Number(activeNode.id.split('-').at(-1));
     // 按 entry id 找“最后一条已经读过的提问”，窗口只加载了一部分时也能对齐。
     const resolved = outlineIndexAt(outlineItems, sourceIndex);
     if (resolved >= 0) setOutlineActive((current) => current === resolved ? current : resolved);
@@ -319,20 +350,36 @@ export function useTranscriptNavigation({
    * 惯性尚未结束时触发布局读取。
    */
   function scheduleOutlineSync() {
-    if (outlineSyncRef.current !== null) window.clearTimeout(outlineSyncRef.current);
+    if (outlineSyncRef.current !== null) return;
     outlineSyncRef.current = window.setTimeout(() => {
       outlineSyncRef.current = null;
       syncOutlineActive();
-    }, 160);
+    }, 80);
   }
 
   /** 只有明确的用户滚动意图才能离开或重新进入贴底跟随。 */
   function handleTranscriptScroll(event: React.UIEvent<HTMLDivElement>) {
     const node = event.currentTarget;
     const nextTop = node.scrollTop;
+    const programmedTop = programmedTopRef.current;
+    programmedTopRef.current = null;
+    if (programmedTop !== null && Math.abs(nextTop - programmedTop) < 1) {
+      lastTranscriptScrollTopRef.current = nextTop;
+      scheduleOutlineSync();
+      return;
+    }
+
+    if (userScrollIntentRef.current && pageIntentRef.current && !jumpingRef.current) {
+      const moved = nextTop - lastTranscriptScrollTopRef.current;
+      if (pageIntentRef.current === 'unknown' && Math.abs(moved) > 0.5) {
+        pageIntentRef.current = moved < 0 ? 'older' : 'newer';
+      }
+      if (pageIntentRef.current === 'older' && nextTop < 240) void loadWithAnchor('older');
+      else if (pageIntentRef.current === 'newer' && node.scrollHeight - nextTop - node.clientHeight < 240) void loadWithAnchor('newer');
+    }
     const nextFollow = resolveAutoFollow({
       following: followBottomRef.current,
-      nearBottom: isNearBottom(node),
+      nearBottom: !hasNewer && !olderLoadingRef.current && !pageAnchorRef.current && isNearBottom(node),
       userInitiated: userScrollIntentRef.current,
       movedTowardStart: nextTop < lastTranscriptScrollTopRef.current - 0.5,
     });
@@ -344,60 +391,71 @@ export function useTranscriptNavigation({
     scheduleOutlineSync();
   }
 
-  function scrollToOutlineItem(index: number, behavior?: ScrollBehavior) {
-    const item = outlineItems[index];
+  /**
+   * Keep message navigation inside the transcript viewport.
+   *
+   * `Element.scrollIntoView()` walks all scrollable ancestors. In the desktop
+   * shell that can move the app card itself when a target is outside the
+   * current render window, which makes the wallpaper and top gutter jump. The
+   * transcript is the only owner of vertical scrolling, so calculate the
+   * target position relative to it and scroll that element directly.
+   */
+  function scrollMessageIntoView(node: HTMLElement, behavior: ScrollBehavior = 'auto') {
     const container = scrollRef.current;
-    const node = item ? document.getElementById(`chat-turn-${item.sourceIndex}`) : null;
-    if (!item || !container || !node) return false;
-    // 大纲跳转表示用户主动离开底部阅读，流式更新不能再把视图拉回最新消息。
-    pauseTranscriptFollow();
-    const delta = node.getBoundingClientRect().top - container.getBoundingClientRect().top;
-    // 近处平滑滚动；跨几百屏的远距离跳转直接落地，等动画走完反而更慢。
-    const distance = Math.abs(delta);
-    container.scrollTo({
-      top: container.scrollTop + delta - 12,
-      behavior: behavior ?? (distance > container.clientHeight * 3 ? 'auto' : 'smooth'),
-    });
-    setOutlineActive(index);
+    if (!container) return false;
+    const containerRect = container.getBoundingClientRect();
+    const nodeRect = node.getBoundingClientRect();
+    const nodeTop = container.scrollTop + nodeRect.top - containerRect.top;
+    const targetTop = nodeTop - Math.max(0, (container.clientHeight - nodeRect.height) / 2);
+    const maxTop = Math.max(0, container.scrollHeight - container.clientHeight);
+    container.scrollTo({ top: Math.min(maxTop, Math.max(0, targetTop)), behavior });
+    programmedTopRef.current = container.scrollTop;
+    lastTranscriptScrollTopRef.current = container.scrollTop;
     return true;
   }
 
   /**
    * 跳到某条消息（按 sourceIndex，也就是 Durable entry id）。
    *
-   * 目标可能还没加载进窗口：按大页向上补（一次一千条），每补一页等 React
-   * 提交后重新定位。找到后把渲染窗口撑到目标所在轮次再滚动过去。
+   * 目标未加载时直接读取附近窗口，提交后仅定位内部滚动区。
    */
   async function jumpToMessage(sourceIndex: number): Promise<boolean> {
-    const locate = () => turnsRef.current.findIndex((turn) => (
-      turn.kind === 'user'
-        ? turn.message.sourceIndex === sourceIndex
-        : turn.messages.some((message) => message.sourceIndex === sourceIndex)
-    ));
-    let target = locate();
-    if (target < 0 && onLoadTarget) {
-      const loaded = await onLoadTarget(sourceIndex);
-      if (!loaded) return false;
-      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-      target = locate();
+    // A pending prepend must not compensate a later direct jump with its old
+    // scroll height snapshot.
+    pauseTranscriptFollow();
+    pageAnchorRef.current = null;
+    pageIntentRef.current = null;
+    jumpingRef.current = true;
+    try {
+      const locate = () => turnsRef.current.findIndex((turn) => (
+        turn.kind === 'user'
+          ? turn.message.sourceIndex === sourceIndex
+          : turn.messages.some((message) => message.sourceIndex === sourceIndex)
+      ));
+      let target = locate();
+      if (target < 0 && onLoadTarget) {
+        const loaded = await onLoadTarget(sourceIndex);
+        if (!loaded) return false;
+        await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+        target = locate();
+      }
+      if (target < 0) return false;
+      const turn = turnsRef.current[target];
+      const anchorIndex = turn.kind === 'user' ? turn.message.sourceIndex : turn.messages[0]?.sourceIndex;
+      const node = anchorIndex === undefined
+        ? null
+        : document.getElementById(`chat-turn-${anchorIndex}`) ?? document.getElementById(`chat-assistant-turn-${anchorIndex}`);
+      if (!node) return false;
+      scrollMessageIntoView(node);
+      const resolvedOutlineIndex = outlineIndexAt(outlineItems, sourceIndex);
+      if (resolvedOutlineIndex >= 0) setOutlineActive(resolvedOutlineIndex);
+      // 短暂高亮，避免在一大段输出里找不到落点。
+      node.classList.add('is-search-hit');
+      window.setTimeout(() => node.classList.remove('is-search-hit'), 1600);
+      return true;
+    } finally {
+      jumpingRef.current = false;
     }
-    if (target < 0) return false;
-    if (target < turnWindowFrom) {
-      windowAnchorRef.current = null;
-      setTurnWindowFromState({ session: windowSession, from: target });
-      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    }
-    const turn = turnsRef.current[target];
-    const anchorIndex = turn.kind === 'user' ? turn.message.sourceIndex : turn.messages[0]?.sourceIndex;
-    const node = anchorIndex === undefined
-      ? null
-      : document.getElementById(`chat-turn-${anchorIndex}`) ?? document.getElementById(`chat-assistant-turn-${anchorIndex}`);
-    if (!node) return false;
-    node.scrollIntoView({ block: 'center', behavior: 'auto' });
-    // 短暂高亮，避免在一大段输出里找不到落点。
-    node.classList.add('is-search-hit');
-    window.setTimeout(() => node.classList.remove('is-search-hit'), 1600);
-    return true;
   }
 
   /** 跳到某条提问：与搜索走同一条路径，都按 sourceIndex 定位并自动补页。 */
@@ -413,7 +471,11 @@ export function useTranscriptNavigation({
     // 消息提交后先在绘制前贴底；Markdown、图片或折叠区随后长高时，
     // ResizeObserver 会继续补一次，避免输出中途停在半截。
     if (agentView.kind !== 'conversation' || !followBottomRef.current) return;
-    pinTranscriptToBottom();
+    // Coalesce the commit with the ResizeObserver pass.  React can commit a
+    // streamed token before markdown has finished settling its final height;
+    // pinning synchronously here and once more from the observer causes two
+    // competing scroll writes in one frame, which is perceived as jitter.
+    scheduleTranscriptPin();
   }, [messages, busy, agentView.kind]);
 
   useEffect(() => {
@@ -421,15 +483,54 @@ export function useTranscriptNavigation({
     const content = chatContentRef.current;
     const viewport = scrollRef.current;
     if (!content || !viewport || typeof ResizeObserver === 'undefined') return;
+    resizeMetricsRef.current = {
+      viewportHeight: viewport.clientHeight,
+      contentHeight: content.scrollHeight,
+    };
     const observer = new ResizeObserver(() => {
-      if (followBottomRef.current) scheduleTranscriptPin();
+      const previous = resizeMetricsRef.current;
+      const next = {
+        viewportHeight: viewport.clientHeight,
+        contentHeight: content.scrollHeight,
+      };
+      resizeMetricsRef.current = next;
+      if (!followBottomRef.current || !previous) return;
+
+      const viewportDelta = previous.viewportHeight - next.viewportHeight;
+      const contentChanged = Math.abs(next.contentHeight - previous.contentHeight) > 0.5;
+      const wasNearBottom = isNearBottom({
+        scrollTop: viewport.scrollTop,
+        clientHeight: previous.viewportHeight,
+        scrollHeight: previous.contentHeight,
+      });
+
+      // A composer/editor resize only changes the visible viewport. Preserve
+      // the bottom edge by the exact lost/gained height; do not write the
+      // absolute bottom position, which races the streaming content update and
+      // makes the transcript visibly jump while typing.
+      if (wasNearBottom && !contentChanged && Math.abs(viewportDelta) > 0.5) {
+        viewport.scrollTop = Math.max(0, viewport.scrollTop + viewportDelta);
+        lastTranscriptScrollTopRef.current = viewport.scrollTop;
+        programmedTopRef.current = viewport.scrollTop;
+        return;
+      }
+
+      // Markdown, images, tool traces and disclosure rows can change the
+      // transcript's natural height. Those updates still need the normal
+      // coalesced follow-to-bottom pass while the reader is following live
+      // output.
+      if (contentChanged) scheduleTranscriptPin();
     });
     observer.observe(content);
     observer.observe(viewport);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      resizeMetricsRef.current = null;
+    };
   }, [agentView.kind, sessionId, messages.length === 0]);
 
   useEffect(() => () => {
+    if (pageIntentFrameRef.current) cancelAnimationFrame(pageIntentFrameRef.current);
     if (autoScrollFrameRef.current) cancelAnimationFrame(autoScrollFrameRef.current);
     if (scrollIntentTimerRef.current !== null) window.clearTimeout(scrollIntentTimerRef.current);
     if (outlineSyncRef.current !== null) window.clearTimeout(outlineSyncRef.current);
@@ -438,11 +539,12 @@ export function useTranscriptNavigation({
   useEffect(() => {
     const frame = requestAnimationFrame(syncOutlineActive);
     return () => cancelAnimationFrame(frame);
-  }, [messages.length, sessionId, filesOpen]);
+  }, [messages.length, messages[0]?.sourceIndex, messages.at(-1)?.sourceIndex, sessionId, filesOpen, outlineItems.length]);
 
   return {
     scrollRef,
     topSentinelRef,
+    bottomSentinelRef,
     chatContentRef,
     turnWindowFrom,
     visibleTurns,

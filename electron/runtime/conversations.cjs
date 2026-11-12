@@ -433,6 +433,7 @@ async function scanEntries(conversation, options = {}) {
     project: entry => entryIsHidden(entry.id, editRanges) ? [] : entryToMessages(entry),
     order,
     boundary,
+    turnLimit: options.turnLimit,
     limit: Math.max(1, Math.min(MAX_PAGE_SIZE, Math.floor(Number(options.messageLimit) || DEFAULT_PAGE_SIZE))),
   });
   return {
@@ -542,6 +543,14 @@ async function reconcileWatchSnapshot(entry, conversation) {
   return fresh;
 }
 
+async function conversationTodo(id) {
+  const row = await getConversationRow(id);
+  if (!row) return undefined;
+  const runtime = await getDurableRuntime();
+  const { readTodoDetails } = require('../capabilities/todo/index.cjs');
+  return readTodoDetails(runtime.durable, runtime.harness, Number(row.id), runtime.context);
+}
+
 async function conversationSnapshot(id) {
   const row = await getConversationRow(id);
   const conversation = await getConversationHandle(id);
@@ -566,6 +575,10 @@ async function conversationSnapshot(id) {
 }
 
 async function conversationPage(id, options = {}) {
+  if (options.turnLimit !== undefined
+    && (!Number.isSafeInteger(options.turnLimit) || options.turnLimit < 1 || options.turnLimit > 20)) {
+    throw new Error('历史轮次必须是 1 到 20 之间的整数');
+  }
   const row = await getConversationRow(id);
   const conversation = await getConversationHandle(id);
   if (!row || !conversation) return undefined;
@@ -581,15 +594,17 @@ async function conversationPage(id, options = {}) {
     const before = await scanEntries(conversation, {
       order: 'descending',
       messageLimit: Math.max(1, Math.floor(total / 2)),
+      turnLimit: options.turnLimit === undefined ? undefined : Math.max(1, Math.floor(options.turnLimit / 2)),
       boundary: { entryId: options.around, offset: 0 },
     });
     const after = await scanEntries(conversation, {
       order: 'ascending',
       messageLimit: Math.max(1, total - Math.floor(total / 2)),
+      turnLimit: options.turnLimit === undefined ? undefined : Math.max(1, Math.ceil(options.turnLimit / 2)),
       boundary: { entryId: options.around, offset: -1 },
     });
     page = {
-      messages: [...before.messages.reverse(), ...after.messages],
+      messages: [...before.messages, ...after.messages],
       hasMore: false,
       hasOlder: before.hasMore,
       hasNewer: after.hasMore,
@@ -604,6 +619,7 @@ async function conversationPage(id, options = {}) {
     page = await scanEntries(conversation, {
       order: options.after ? 'ascending' : 'descending',
       messageLimit: options.limit,
+      turnLimit: options.turnLimit,
       cursor: options.cursor,
       boundary,
     });
@@ -1284,6 +1300,10 @@ async function configureConversationAgentCwd(id, cwd) {
 
 async function setLongTaskStatus(row, conversation, status) {
   if (!row) return undefined;
+  // Normal conversations do not have a persisted long-task goal. Avoid
+  // opening a Durable transaction for every stop click; only a conversation
+  // with a stored goal needs its status changed to paused.
+  if (status === 'paused' && !row.goal) return undefined;
   const runtime = await getDurableRuntime();
   const { LongTask } = createLongTaskContract(runtime.durable);
   await conversation.commit(async (tx) => {
@@ -1551,20 +1571,45 @@ async function longTaskClear(id) {
   return { ok: true, wasRunning, started: false, longTask: state };
 }
 
-async function abortConversation(id) {
+/**
+ * Request cancellation for a conversation.
+ *
+ * Durable's conversation abort intentionally waits for every reached task to
+ * settle. That is useful for destructive operations, but it is the wrong
+ * contract for the stop button: a model stream or tool can take its full
+ * timeout to notice the abort signal. Keep the durable abort in flight while
+ * allowing the caller to return as soon as the stop request has been queued.
+ */
+async function abortConversation(id, options = {}) {
   const row = await getConversationRow(id);
   const conversation = await getConversationHandle(id);
   if (!row || !conversation) throw new Error('会话不存在');
   const wasRunning = runningConversations.has(conversationKey(row));
   const runtime = await getDurableRuntime();
-  // A stopped goal becomes paused before the abort reaches GenerationTask.
-  // Otherwise the final boundary could immediately continue after Stop.
-  await setLongTaskStatus(row, conversation, 'paused');
   // Stop background children with the main turn. The UI exposes one stop
   // action for the conversation, so leaving an owned background task alive
   // would keep the row spinning after the user explicitly stopped it.
-  await conversation.abort(runtime.context, { background: true });
-  await refreshRuntimeState();
+  const settle = async () => {
+    // Mark the Durable tasks aborted first. A long-task status commit can be
+    // queued behind a busy conversation line; it must never delay the actual
+    // provider/tool cancellation signal.
+    await conversation.abort(runtime.context, { background: true });
+    // Persist the paused goal after cancellation has been requested. This is
+    // still part of the background settle path and therefore cannot delay the
+    // stop IPC response.
+    await setLongTaskStatus(row, conversation, 'paused');
+    await refreshRuntimeState();
+  };
+  if (options.waitForCompletion === false) {
+    // The abort mark is committed by Durable before this promise waits for
+    // task completion. Do not hold the IPC request open while a slow provider
+    // or tool is unwinding; the event stream will publish the terminal state.
+    void settle().catch((error) => {
+      console.warn('[pi-studio] conversation abort did not settle cleanly', error);
+    });
+  } else {
+    await settle();
+  }
   return { ok: true, wasRunning };
 }
 
@@ -2276,6 +2321,7 @@ module.exports = {
   conversationRequestTrace,
   conversationSearch,
   conversationSnapshot,
+  conversationTodo,
   createConversation,
   editConversation,
   fullDisplayMessages,

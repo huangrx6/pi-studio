@@ -242,6 +242,7 @@
   justify-content: flex-start;
   padding: clamp(28px, 7vh, 64px) clamp(18px, 4vw, 40px) 28px;
   background: var(--surface);
+  container-type: inline-size;
 }
 
 .panel-start-intro {
@@ -422,6 +423,12 @@
 
 @media (max-width: 520px) {
   .panel-start { padding-inline: 16px; }
+  .panel-start-tools { grid-template-columns: 1fr; }
+}
+
+/* 面板宽度会独立于窗口变化，尤其是分栏或窄屏抽屉场景；用容器宽度决定
+   卡片列数，避免窗口本身很宽时右侧面板仍被挤成双列。 */
+@container (max-width: 520px) {
   .panel-start-tools { grid-template-columns: 1fr; }
 }
 

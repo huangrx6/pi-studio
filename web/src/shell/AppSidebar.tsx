@@ -1,6 +1,6 @@
 import {
-  ChevronsDown, ChevronsUp, FolderOpen, Layers3, MessageCirclePlus,
-  MessageSquare, PanelLeft, Search, Settings, SquarePen, ArrowUp,
+  ChevronsDown, ChevronsUp, FolderOpen, MessageCirclePlus,
+  PanelLeft, Search, Settings, SquarePen, ArrowUp,
 } from 'lucide-react';
 import { ExtensionSlot, type ExtensionNotice } from '../features/extensions/ExtensionSlot';
 import { BrandMark, type SettingsTab } from './app-shell-config';
@@ -94,11 +94,9 @@ export function AppSidebar({
         </div>
         <button className="icon-button sidebar-top-toggle" aria-label="收起侧边栏" title="收起侧边栏" onClick={onCollapse}><PanelLeft /></button>
       </div>
-      <button className="new-chat" title="新会话" onClick={onStartSession}><SquarePen /><span>新会话</span></button>
       <nav className="nav">
         <button className="nav-row" title="临时聊天" onClick={onOpenTemporaryChat}><MessageCirclePlus /><span>临时聊天</span></button>
-        <button className="nav-row is-active" title="对话" aria-current="page"><MessageSquare /><span>对话</span></button>
-        <button className="nav-row" title="扩展" onClick={() => onOpenSettings('extensions')}><Layers3 /><span>扩展</span></button>
+        <button className="nav-row new-chat" title="新对话" onClick={onStartSession}><SquarePen /><span>新对话</span></button>
       </nav>
       <ExtensionSlot
         slot="workspace.sidebar"

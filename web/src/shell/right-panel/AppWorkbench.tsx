@@ -21,6 +21,7 @@ type AppWorkbenchProps = {
   toolActions: RightPanelToolAction[];
   fileTree: ReactNode;
   panelContent: ReactNode;
+  persistentPanelContent: ReactNode;
   extensionDock: ReactNode;
   onClose: () => void;
   onActivate: (tab: PanelTab) => void;
@@ -56,6 +57,7 @@ export function AppWorkbench({
   toolActions,
   fileTree,
   panelContent,
+  persistentPanelContent,
   extensionDock,
   onClose,
   onActivate,
@@ -120,8 +122,14 @@ export function AppWorkbench({
           <div className={`panel-body ${split ? 'is-split' : ''}`}>
             {split ? <>
               <div className="panel-split-tree">{fileTree}</div>
-              <div className="panel-split-main">{activeTab?.kind === 'files' ? <div className="panel-empty"><FolderOpen /><strong>选择文件进行预览</strong></div> : panelContent}</div>
-            </> : panelContent}
+              <div className="panel-split-main">
+                {activeTab?.kind === 'files' ? <div className="panel-empty"><FolderOpen /><strong>选择文件进行预览</strong></div> : panelContent}
+                {persistentPanelContent}
+              </div>
+            </> : <>
+              {panelContent}
+              {persistentPanelContent}
+            </>}
           </div>
           <div className="panel-extension-dock">{extensionDock}</div>
         </div>

@@ -15,6 +15,7 @@ function manager() {
     terminalSessions = createTerminalSessionManager({
       send: sendToRenderer,
       dataDirectory: studioDataDirectory(),
+      batchOutput: true,
     });
   }
   return terminalSessions;

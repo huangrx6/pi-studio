@@ -425,10 +425,11 @@ declare global {
       conversationPage(payload: {
         id: string;
         limit?: number;
+        turnLimit?: number;
         cursor?: ConversationPageCursor;
         before?: ConversationPosition;
         after?: ConversationPosition;
-        /** 直接读取目标 entry 及其后的一页，不扫描中间历史。 */
+        /** 直接读取目标附近；指定 turnLimit 时保留目标所在的完整轮次。 */
         around?: number;
       }): Promise<ConversationPage | undefined>;
       /** 获取完整提问大纲；仅用于导航，不参与消息窗口渲染。 */
@@ -442,6 +443,7 @@ declare global {
       /** Full request snapshot; the page only carries summaries. */
       conversationRequestTrace(id: string, requestId: string): Promise<RequestTrace | undefined>;
       /** 获取会话当前运行、压缩和任务快照。 */
+      conversationTodo(id: string): Promise<import('./types/chat-types').TodoDetails | undefined>;
       conversationSnapshot(id: string): Promise<ConversationSnapshot | undefined>;
       /** 订阅一条会话；返回与事件流同一一致性边界的初始快照。 */
       subscribeConversation(id: string): Promise<ConversationSnapshot>;

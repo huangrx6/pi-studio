@@ -74,6 +74,13 @@
   background: var(--transparent);
 }
 
+/* 壁纸模式下顶部和侧栏主操作共用同一层透出效果，不再单独出现实色块。 */
+.app.is-wallpaper-inside :is(.sidebar-top-row, .file-toolbar) {
+  background: var(--transparent);
+}
+.app.is-wallpaper-inside .nav-row.new-chat { background: var(--transparent); }
+.app.is-wallpaper-inside .nav-row.new-chat:hover { background: var(--conversation-hover-surface); }
+
 /* 会话表面按用途派生，浮动面板继续使用独立的不透明阅读底。 */
 .app {
   --conversation-control-surface: var(--surface-floating);
@@ -88,7 +95,7 @@
   --conversation-reading-surface: color-mix(in srgb, var(--surface-raised) calc(100% - var(--wallpaper-inside, 0) * 65%), transparent);
 }
 
-.app :is(.new-chat, .queued-item) {
+.app .queued-item {
   background: var(--conversation-inset-surface);
   border-color: var(--border);
   box-shadow: none;
@@ -152,7 +159,13 @@
   .panel-tabbar,
   .panel-file-browser,
   .panel-file-preview,
-  .file-code
+  .file-code,
+  .terminal-tab-stack,
+  .terminal-panel:not(.has-custom-theme)
 ) {
   background: color-mix(in srgb, var(--surface-raised) var(--wallpaper-canvas-keep), transparent);
+}
+
+.app.is-wallpaper-inside .terminal-panel:not(.has-custom-theme) :is(.terminal-toolbar, .terminal-search) {
+  background: transparent;
 }

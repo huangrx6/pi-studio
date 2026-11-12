@@ -510,10 +510,8 @@ function planText(state) {
   return `进度 ${done}/${visible.length}${lines.length ? `\n${lines.join('\n')}` : ''}`;
 }
 
-function createStudioTodoExtension(durable) {
-  const { defineDoc, defineExtension, defineTool } = durable;
-  const Type = toolSchema;
-  const Todos = defineDoc({
+function createTodoContract(durable) {
+  const Todos = durable.defineDoc({
     kind: TODO_DOC_KIND,
     version: TODO_SCHEMA_VERSION,
     scope: 'conversation',
@@ -522,6 +520,19 @@ function createStudioTodoExtension(durable) {
     checkpointWhen: (_value, _ops, info) => info.deltasSinceBase >= 64,
     initial: emptyTodoState,
   });
+
+  return Todos;
+}
+
+async function readTodoDetails(durable, harness, conversationId, context) {
+  const state = normalizeTodoState(await harness.snapshot(createTodoContract(durable), conversationId, context));
+  return state.tasks.length || state.nextId > 1 ? publicDetails(state) : undefined;
+}
+
+function createStudioTodoExtension(durable) {
+  const { defineExtension, defineTool } = durable;
+  const Type = toolSchema;
+  const Todos = createTodoContract(durable);
 
   const status = Type.Union([
     Type.Literal('pending'),
@@ -631,6 +642,7 @@ function createStudioTodoExtension(durable) {
 
 module.exports = {
   TODO_DOC_KIND,
+  readTodoDetails,
   TODO_SCHEMA_VERSION,
   applyTodoMutation,
   createStudioTodoExtension,

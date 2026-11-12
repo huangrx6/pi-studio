@@ -95,12 +95,17 @@ test('没有更早内容时补页不发请求', async () => {
   assert.equal(called, false);
 });
 
-test('固定窗口合并时最多保留 50 条，并跟随向上加载的旧端', async () => {
-  const { mergeTranscriptPage, trimTranscript } = await import('../../web/src/features/conversation/transcript-load.mjs');
+test('固定窗口按轮合并：保留最近的若干轮，并跟随向上加载的旧端', async () => {
+  const { mergeTranscriptPage, trimTranscript, TRANSCRIPT_MAX_TURNS } = await import('../../web/src/features/conversation/transcript-load.mjs');
+  // 每条消息都是一轮：裁剪单位是「轮」而不是「条」，一轮里的工具输出不会被切断。
   const current = Array.from({ length: 50 }, (_, index) => ({ role: 'user', sourceIndex: index + 51 }));
   const older = Array.from({ length: 50 }, (_, index) => ({ role: 'user', sourceIndex: index + 1 }));
   const merged = mergeTranscriptPage(current, older, 'older');
-  assert.equal(merged.length, 50);
-  assert.deepEqual(merged.map(item => item.sourceIndex), older.map(item => item.sourceIndex));
-  assert.equal(trimTranscript([...current, ...older], 'latest').length, 50);
+  assert.equal(merged.length, TRANSCRIPT_MAX_TURNS);
+  assert.deepEqual(
+    merged.map(item => item.sourceIndex),
+    older.slice(0, TRANSCRIPT_MAX_TURNS).map(item => item.sourceIndex),
+    '向上加载后窗口滑向更旧的一端',
+  );
+  assert.equal(trimTranscript([...current, ...older], 'latest').length, TRANSCRIPT_MAX_TURNS);
 });

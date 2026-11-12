@@ -46,9 +46,27 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, Props>(function C
 
   function paint(selection?: [number, number]) {
     if (!root.current || !template.current) return;
+    // Input events already mutate the editable DOM. Rebuilding the whole
+    // subtree for every keystroke forces Chromium to synchronously recalculate
+    // the editor and its flex siblings, which is visible as a transcript jump
+    // while a response is streaming. Only replace children when tokenisation
+    // or a controlled external update actually changed the rendered shape.
+    const expectedTokens = segments
+      .filter(segment => segment.kind === 'token')
+      .map(segment => segment.text);
+    const actualTokens = Array.from(root.current.querySelectorAll<HTMLElement>('[data-reference-token]'))
+      .map(node => node.dataset.referenceToken || '');
+    const hasExpectedTail = !value || value.endsWith('\n');
+    const hasActualTail = Boolean(root.current.querySelector('[data-editor-tail="true"]'));
+    const shapeMatches = readEditorText(root.current) === value
+      && expectedTokens.length === actualTokens.length
+      && expectedTokens.every((token, index) => token === actualTokens[index])
+      && hasExpectedTail === hasActualTail;
     const scrollTop = root.current.scrollTop;
-    root.current.replaceChildren(...Array.from(template.current.childNodes, node => node.cloneNode(true)));
-    root.current.scrollTop = scrollTop;
+    if (!shapeMatches) {
+      root.current.replaceChildren(...Array.from(template.current.childNodes, node => node.cloneNode(true)));
+      root.current.scrollTop = scrollTop;
+    }
     if (selection) {
       setEditorSelection(root.current, ...selection);
       if (selection[0] === selection[1]) {

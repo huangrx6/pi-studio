@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld('piApi', {
   conversationOutline: (id) => ipcRenderer.invoke('pi:conversation-outline', id),
   conversationSearch: (payload) => ipcRenderer.invoke('pi:conversation-search', payload),
   conversationRequestTrace: (id, requestId) => ipcRenderer.invoke('pi:conversation-request-trace', { id, requestId }),
+  conversationTodo: (id) => ipcRenderer.invoke('pi:conversation-todo', id),
   conversationSnapshot: (id) => ipcRenderer.invoke('pi:conversation-snapshot', id),
   conversationSubmit: (payload) => ipcRenderer.invoke('pi:conversation-submit', payload),
   conversationEdit: (payload) => ipcRenderer.invoke('pi:conversation-edit', payload),

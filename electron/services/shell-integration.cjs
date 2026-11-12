@@ -28,6 +28,7 @@ if [[ -o interactive ]]; then
     local exit_code=$?
     printf '\\033]133;D;%s\\007' "$exit_code"
     printf '\\033]133;A\\007'
+    printf '\\033]7;file://%s%s\\007' "\${HOST:-localhost}" "$PWD"
   }
 
   add-zsh-hook preexec _pi_studio_preexec 2>/dev/null

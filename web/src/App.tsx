@@ -191,6 +191,7 @@ export function App() {
     compactContext,
     scrollRef,
     topSentinelRef,
+    bottomSentinelRef,
     chatContentRef,
     turnWindowFrom,
     visibleTurns,
@@ -438,6 +439,7 @@ export function App() {
         transcript={{
           scrollRef,
           topSentinelRef,
+          bottomSentinelRef,
           chatContentRef,
           turnWindowFrom,
           visibleTurns,

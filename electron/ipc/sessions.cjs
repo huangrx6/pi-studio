@@ -16,6 +16,7 @@ const {
   conversationPage,
   conversationSearch,
   conversationSnapshot,
+  conversationTodo,
   conversationRequestTrace,
   createConversation,
   editConversation,
@@ -69,7 +70,11 @@ async function interruptConversation(id) {
   if (typeof id !== 'string' || !id) throw new Error('会话参数无效');
   cancelledRunIds.add(id);
   try {
-    const result = await abortConversation(id);
+    // Stopping is a user-facing request, not a request to wait for every
+    // model/tool invocation to finish unwinding. Durable keeps the abort
+    // running in the background and the conversation event stream reports the
+    // eventual terminal state.
+    const result = await abortConversation(id, { waitForCompletion: false });
     if (result.wasRunning) {
       publishMenuBarEvent({ type: 'finished', id, status: 'cancelled' });
       const cleanup = setTimeout(() => cancelledRunIds.delete(id), 15_000);
@@ -307,8 +312,8 @@ function registerConversationIpc() {
     return created;
   });
 
-  ipcMain.handle('pi:conversation-page', async (_event, { id, limit, cursor, before, after, around } = {}) => (
-    conversationPage(id, { limit, cursor, before, after, around })
+  ipcMain.handle('pi:conversation-page', async (_event, { id, limit, turnLimit, cursor, before, after, around } = {}) => (
+    conversationPage(id, { limit, turnLimit, cursor, before, after, around })
   ));
   ipcMain.handle('pi:conversation-outline', async (_event, id) => outline(id));
   ipcMain.handle('pi:conversation-search', async (_event, { id, query, limit } = {}) => (
@@ -317,6 +322,7 @@ function registerConversationIpc() {
   ipcMain.handle('pi:conversation-request-trace', async (_event, { id, requestId } = {}) => (
     conversationRequestTrace(id, requestId)
   ));
+  ipcMain.handle('pi:conversation-todo', async (_event, id) => conversationTodo(id));
   ipcMain.handle('pi:conversation-snapshot', async (_event, id) => conversationSnapshot(id));
 
   ipcMain.handle('pi:conversation-subscribe', async (event, id) => {
@@ -360,7 +366,13 @@ function registerConversationIpc() {
         publishMenuBarEvent({ type: 'title', id, title });
       },
     });
-    notifyConversationList();
+    try {
+      notifyConversationList();
+    } catch {
+      // Durable has already admitted the replacement branch. A sidebar
+      // refresh failure must not make the renderer treat the resend as lost.
+      result.postCommitError ||= '消息已重新发送，但会话列表暂时无法刷新。';
+    }
     return result;
   });
   ipcMain.handle('pi:conversation-compare-start', async (_event, input) => {

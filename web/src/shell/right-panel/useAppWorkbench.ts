@@ -184,6 +184,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     }
     setActivePanelTabId('files');
     setFile(null);
+    if (filesOpen) setPanelEntered(true); else openPanel();
   }
 
   function openServicesTab() {

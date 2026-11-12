@@ -11,11 +11,13 @@ function validatePosition(value) {
   return { entryId: value.entryId, offset: value.offset };
 }
 
-async function readHistoryPage({ readEntries, project, order = 'descending', boundary, limit = 200, maxBytes = PAGE_BYTES }) {
+async function readHistoryPage({ readEntries, project, order = 'descending', boundary, limit = 200, turnLimit, maxBytes = PAGE_BYTES }) {
   if (boundary) validatePosition(boundary);
   const ascending = order === 'ascending';
   const query = { order, ...(boundary ? { [ascending ? 'minEntryId' : 'maxEntryId']: boundary.entryId } : {}) };
   const picked = [];
+  const rounds = turnLimit === undefined ? null : Math.max(1, Math.min(20, Math.floor(Number(turnLimit) || 1)));
+  let turns = 0;
   let bytes = 0;
   let cursor;
   let hasMore = false;
@@ -30,11 +32,18 @@ async function readHistoryPage({ readEntries, project, order = 'descending', bou
           && (ascending ? message.sourceOffset <= boundary.offset : message.sourceOffset >= boundary.offset)) continue;
         const size = Buffer.byteLength(JSON.stringify(message), 'utf8');
         // One oversized message remains whole; never silently truncate transcript content.
-        if (picked.length && (picked.length >= limit || bytes + size > maxBytes)) {
+        // Round mode only stops between complete user-led rounds. A single
+        // oversized round stays intact; bytes are a soft budget in this mode.
+        const roundBoundary = ascending ? message.role === 'user' : picked.at(-1)?.role === 'user';
+        const full = rounds === null
+          ? picked.length >= limit || bytes + size > maxBytes
+          : roundBoundary && (turns >= rounds || bytes >= maxBytes);
+        if (picked.length && full) {
           hasMore = true;
           done = true;
           break;
         }
+        if (ascending ? message.role === 'user' || picked.length === 0 : message.role === 'user') turns += 1;
         picked.push(message);
         bytes += size;
       }

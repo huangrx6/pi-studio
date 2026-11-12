@@ -56,6 +56,26 @@
   max-width: 100%;
 }
 
+.settings-page-header-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 20px;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+.settings-page-header-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings-page-header-meta .info-hint {
+  align-self: center;
+  vertical-align: middle;
+}
+
 .settings-page-header h1 {
   margin: 0;
   color: var(--text);

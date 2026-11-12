@@ -8,6 +8,7 @@ import {
   Plus,
   RotateCw,
   Search,
+  Square,
   Terminal as TerminalIcon,
   TriangleAlert,
   X,
@@ -25,7 +26,7 @@ import { errorText } from '../../shared/error-text';
 import { ActionMenu, type MenuAction } from '../../shared/ActionMenu';
 import { restoreTerminalReplay } from './terminal-replay';
 import { terminalTheme as themedTerminal, isTerminalTheme } from './terminal-themes';
-import { CommandTracker, adjacentCommand, commandFailed, lastFailedCommand, parseOsc133, type CommandMark } from './terminal-commands';
+import { CommandTracker, commandFailed, lastFailedCommand, parseOsc133, type CommandMark } from './terminal-commands';
 import type { TerminalCursorStyle } from '../../shared/preferences';
 import {
   MAX_TERMINAL_FONT_SIZE,
@@ -51,6 +52,17 @@ function terminalFontFamily() {
 
 function token(name: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function decodeTerminalCwd(payload: string): string | null {
+  const value = typeof payload === 'string' ? payload.trim() : '';
+  const match = /^file:\/\/[^/]*(\/.*)$/u.exec(value);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
 }
 
 function terminalTheme(): ITheme {
@@ -93,7 +105,7 @@ function registerFileLinks(term: Terminal, open: (target: TerminalLinkTarget) =>
       // 含 URL 的行整行交给 WebLinksAddon，避免把 https://host/a 的路径段
       // 也注册成文件链接。
       if (!text || /https?:\/\//iu.test(text)) { callback(undefined); return; }
-      const links = [...text.matchAll(/[A-Za-z0-9_.~/@-]*\/[A-Za-z0-9_.~/@-]+(?::\d+(?::\d+)?)?/gu)]
+      const links = [...text.matchAll(/(?:\/|[A-Za-z]:[\\/]|[A-Za-z0-9_.~@-]+[\\/])[A-Za-z0-9_.~@-]+(?:[\\/][A-Za-z0-9_.~@-]+)*(?::\d+(?::\d+)?)?/gu)]
         .map((match) => {
           const target = parseTerminalLink(match[0]);
           if (!target || target.kind !== 'file') return null;
@@ -133,6 +145,8 @@ export function TerminalPanel({
   shellIntegration,
   onFontSizeChange,
   onNewTerminal,
+  onRestartTerminal,
+  active = true,
   onOpenFile,
   onOpenUrl,
   onTitle,
@@ -143,6 +157,8 @@ export function TerminalPanel({
   shellIntegration: boolean;
   onFontSizeChange: (size: number) => void;
   onNewTerminal: () => void;
+  onRestartTerminal?: () => void;
+  active?: boolean;
   onOpenFile?: (path: string) => void;
   onOpenUrl?: (url: string) => void;
   onTitle?: (title: string) => void;
@@ -154,8 +170,12 @@ export function TerminalPanel({
   const searchRef = useRef<SearchAddon | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const fitRef = useRef<(() => void) | null>(null);
+  const updateRendererRef = useRef<((visible: boolean) => void) | null>(null);
   const serializeRef = useRef<SerializeAddon | null>(null);
   const commandsRef = useRef(new CommandTracker());
+  const commandMarksRef = useRef<Array<{ decoration?: { dispose: () => void } }>>([]);
+  const commandCursorRef = useRef<number | null>(null);
+  const commandNavigationTargetRef = useRef<number | null>(null);
   const [connecting, setConnecting] = useState(true);
   const [status, setStatus] = useState<TerminalSessionStatus>('running');
   const [exitCode, setExitCode] = useState<number | undefined>();
@@ -168,11 +188,18 @@ export function TerminalPanel({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [pendingPaste, setPendingPaste] = useState<string | null>(null);
+  const [pasteNotice, setPasteNotice] = useState<string | null>(null);
   const [searchHits, setSearchHits] = useState({ index: -1, count: 0 });
   const [failedCommands, setFailedCommands] = useState(0);
+  const [commandCount, setCommandCount] = useState(0);
+  const [hasSelection, setHasSelection] = useState(false);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [dragActive, setDragActive] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const activeRef = useRef(active);
+  activeRef.current = active;
 
   // 链接与偏好会随组件重建，用 ref 让 xterm 的回调始终读到最新实现。
   const onOpenFileRef = useRef(onOpenFile);
@@ -195,17 +222,31 @@ export function TerminalPanel({
     void window.piApi.terminalWrite(id, data).catch((cause) => setError(errorText(cause)));
   }, [id]);
 
+  const interrupt = useCallback(() => {
+    if (status !== 'running' || error) return;
+    writeToPty('\u0003');
+    terminalRef.current?.focus();
+  }, [error, status, writeToPty]);
+
   /** 读剪贴板再交给 PTY；多行粘贴先停在确认条上。 */
+  const pasteText = useCallback((text: string) => {
+    if (!text) return;
+    setPasteNotice(null);
+    if (needsPasteConfirm(text)) setPendingPaste(text);
+    else writeToPty(text);
+  }, [writeToPty]);
+
   const pasteFromClipboard = useCallback(async () => {
     try {
       const text = await navigator.clipboard.readText();
       if (!text) return;
-      if (needsPasteConfirm(text)) setPendingPaste(text);
-      else writeToPty(text);
+      pasteText(text);
     } catch (cause) {
-      setError(errorText(cause));
+      // 剪贴板权限失败不代表 PTY 断了；保留终端可用，并给出局部提示。
+      setPendingPaste(null);
+      setPasteNotice(`无法读取剪贴板：${errorText(cause)}`);
     }
-  }, [writeToPty]);
+  }, [pasteText]);
 
   /** 把缓冲区里的全部输出（含回看）复制成纯文本。 */
   const copyAllOutput = useCallback(async () => {
@@ -229,6 +270,13 @@ export function TerminalPanel({
     const term = terminalRef.current;
     if (!term) return;
     term.clear();
+    commandsRef.current.reset();
+    commandCursorRef.current = null;
+    commandNavigationTargetRef.current = null;
+    for (const entry of commandMarksRef.current) entry.decoration?.dispose();
+    commandMarksRef.current = [];
+    setCommandCount(0);
+    setFailedCommands(0);
     term.focus();
   }, []);
 
@@ -236,6 +284,7 @@ export function TerminalPanel({
     const term = terminalRef.current;
     if (!term) return;
     term.scrollToBottom();
+    setIsAtBottom(true);
     term.focus();
   }, []);
 
@@ -243,10 +292,29 @@ export function TerminalPanel({
   const jumpCommand = useCallback((direction: -1 | 1) => {
     const term = terminalRef.current;
     if (!term) return;
+    const marks = commandsRef.current.list();
+    if (marks.length === 0) return;
     const currentRow = term.buffer.active.viewportY;
-    const target = adjacentCommand(commandsRef.current.list(), currentRow, direction);
-    if (!target) return;
-    term.scrollToLine(target.row);
+    const viewportEnd = currentRow + Math.max(1, term.rows - 1);
+    let index = commandCursorRef.current;
+    if (index === null || !marks[index]) {
+      if (direction === -1) {
+        const firstVisible = marks.findIndex(mark => mark.row >= currentRow && mark.row <= viewportEnd);
+        index = firstVisible >= 0
+          ? firstVisible - 1
+          : marks.reduce((last, mark, markIndex) => mark.row < currentRow ? markIndex : last, -1);
+      } else {
+        const lastVisible = marks.reduce((last, mark, markIndex) => mark.row >= currentRow && mark.row <= viewportEnd ? markIndex : last, -1);
+        index = lastVisible >= 0
+          ? lastVisible + 1
+          : marks.findIndex(mark => mark.row > viewportEnd);
+      }
+    } else index += direction;
+    if (index < 0 || index >= marks.length) return;
+    const target = marks[index];
+    commandCursorRef.current = index;
+    commandNavigationTargetRef.current = Math.max(0, target.row - 2);
+    term.scrollToLine(Math.max(0, target.row - 2));
     term.focus();
   }, []);
 
@@ -255,7 +323,7 @@ export function TerminalPanel({
     const term = terminalRef.current;
     const target = lastFailedCommand(commandsRef.current.list());
     if (!term || !target) return;
-    term.scrollToLine(target.row);
+    term.scrollToLine(Math.max(0, target.row - 2));
     term.focus();
   }, []);
 
@@ -271,19 +339,31 @@ export function TerminalPanel({
     requestAnimationFrame(() => searchInputRef.current?.select());
   }, []);
 
+  const reconnect = useCallback(() => {
+    if (status === 'exited') {
+      if (onRestartTerminal) onRestartTerminal();
+      else setRetryRevision((value) => value + 1);
+      return;
+    }
+    setRetryRevision((value) => value + 1);
+  }, [onRestartTerminal, status]);
+
+  const commandNavigationHint = !shellIntegration ? '（需开启 Shell 集成）' : commandCount === 0 ? '（暂无命令）' : '';
+  const commandNavigationDisabled = !shellIntegration || commandCount === 0;
   const menuActions: MenuAction[] = (() => [
-    { label: '复制', disabled: !(terminalRef.current?.hasSelection() ?? false), run: () => { void copySelection(); } },
+    { label: '复制', disabled: !hasSelection, run: () => { void copySelection(); } },
     { label: '粘贴', run: () => { void pasteFromClipboard(); } },
     { label: '全选', run: () => { terminalRef.current?.selectAll(); } },
-    { label: '复制全部输出', run: () => { void copyAllOutput(); } },
+    { label: '复制当前输出', run: () => { void copyAllOutput(); } },
     { label: '清屏', run: clearScreen },
     { label: '搜索', run: openSearch },
+    { label: '中断当前命令', disabled: status !== 'running' || Boolean(error), run: interrupt },
     { label: '跳到最新', run: scrollToBottom },
-    { label: '上一条命令', run: () => jumpCommand(-1) },
-    { label: '下一条命令', run: () => jumpCommand(1) },
+    { label: `上一条命令${commandNavigationHint}`, disabled: commandNavigationDisabled, run: () => jumpCommand(-1) },
+    { label: `下一条命令${commandNavigationHint}`, disabled: commandNavigationDisabled, run: () => jumpCommand(1) },
     { label: fontSize >= MAX_TERMINAL_FONT_SIZE ? '放大（已最大）' : '放大字号', disabled: fontSize >= MAX_TERMINAL_FONT_SIZE, run: () => zoom(1) },
     { label: fontSize <= MIN_TERMINAL_FONT_SIZE ? '缩小（已最小）' : '缩小字号', disabled: fontSize <= MIN_TERMINAL_FONT_SIZE, run: () => zoom(-1) },
-    { label: '重新连接', run: () => setRetryRevision((value) => value + 1) },
+    { label: status === 'exited' ? '重启终端' : '重新连接', run: reconnect },
   ])();
 
   useEffect(() => {
@@ -296,7 +376,7 @@ export function TerminalPanel({
     let fitPending = false;
     let lastSize = '';
     let appearanceDirty = false;
-    let mayFocus = true;
+    let mayFocus = active;
     setConnecting(true);
     setError(null);
     setExitCode(undefined);
@@ -304,9 +384,19 @@ export function TerminalPanel({
     setWorkingDirectory(cwd);
     setFontWarning(false);
     setHistoryTruncated(false);
+    commandCursorRef.current = null;
+    commandNavigationTargetRef.current = null;
+    setCommandCount(0);
+    setPasteNotice(null);
+    setHasSelection(false);
+    setIsAtBottom(true);
+    setDragActive(false);
     let restoredSequence = 0;
     let frame = 0;
     const pending: TerminalEvent[] = [];
+    const outputQueue: string[] = [];
+    let outputQueuedChars = 0;
+    let writingOutput = false;
     let pendingChars = 0;
     let droppedSequence = 0;
     const custom = themedTerminal(appearance.themeId);
@@ -323,8 +413,9 @@ export function TerminalPanel({
       macOptionIsMeta: true,
       // 暗色 ANSI 颜色直接压在背景上会糊，交给 xterm 抬到可读对比度。
       minimumContrastRatio: 4.5,
-      fastScrollSensitivity: 8,
-      smoothScrollDuration: 80,
+      fastScrollSensitivity: 3,
+      scrollSensitivity: 1,
+      smoothScrollDuration: 40,
       fontFamily: fontFamilyOf(appearance.fontFamily),
       fontSize,
       lineHeight: appearance.lineHeight,
@@ -357,6 +448,7 @@ export function TerminalPanel({
     const tracker = new CommandTracker();
     commandsRef.current = tracker;
     const commandMarks: { mark: CommandMark; decoration?: { dispose: () => void } }[] = [];
+    commandMarksRef.current = commandMarks;
     const oscSubscription = term.parser.registerOscHandler(133, (payload) => {
       const event = parseOsc133(payload);
       if (!event) return false;
@@ -364,6 +456,7 @@ export function TerminalPanel({
       if (event.type === 'command-end') {
         const mark = tracker.end(event.exitCode);
         if (mark) {
+          setCommandCount(tracker.list().length);
           setFailedCommands(tracker.failureCount());
           // 失败命令在滚动条上留一个红点，长输出里也能定位。
           if (commandFailed(mark)) {
@@ -378,24 +471,43 @@ export function TerminalPanel({
       }
       return true;
     });
+    const cwdSubscription = term.parser.registerOscHandler(7, (payload) => {
+      const nextCwd = decodeTerminalCwd(payload);
+      if (nextCwd) setWorkingDirectory(nextCwd);
+      return true;
+    });
     const serialize = new SerializeAddon();
     term.loadAddon(serialize);
     serializeRef.current = serialize;
     const titleSubscription = term.onTitleChange((title) => {
-      onTitleRef.current?.(terminalTabTitle(title, ''));
+      onTitleRef.current?.(terminalTabTitle(title, '终端'));
     });
     const fileLinks = registerFileLinks(term, openLink);
     term.open(host);
-    // WebGL 让几千行输出不再掉帧；拿不到上下文或显卡驱动出问题时退回 DOM。
-    try {
-      const webgl = new WebglAddon();
-      webgl.onContextLoss(() => {
-        try { webgl.dispose(); } catch { /* 已经释放 */ }
-      });
-      term.loadAddon(webgl);
-    } catch {
-      // 没有 GPU 就继续用 DOM 渲染器
-    }
+    // 后台终端仍保留自己的滚动缓冲，但不为每个隐藏标签占一个 WebGL 上下文。
+    // 切回标签时再启用 GPU 渲染，避免打开多个终端后上下文耗尽。
+    let webgl: WebglAddon | null = null;
+    const updateRenderer = (visible: boolean) => {
+      if (!visible) {
+        try { webgl?.dispose(); } catch { /* 已经释放 */ }
+        webgl = null;
+        return;
+      }
+      if (webgl || document.hidden || disposed) return;
+      try {
+        const next = new WebglAddon();
+        next.onContextLoss(() => {
+          try { next.dispose(); } catch { /* 已经释放 */ }
+          if (webgl === next) webgl = null;
+        });
+        term.loadAddon(next);
+        webgl = next;
+      } catch {
+        // 没有 GPU 就继续用 DOM 渲染器
+      }
+    };
+    updateRendererRef.current = updateRenderer;
+    updateRenderer(active);
     terminalRef.current = term;
     searchRef.current = search;
     fitRef.current = () => {
@@ -454,6 +566,7 @@ export function TerminalPanel({
         cancelAnimationFrame(frame);
         frame = 0;
       } else {
+        updateRendererRef.current?.(activeRef.current);
         if (appearanceDirty) applyAppearance();
         scheduleFit();
       }
@@ -488,9 +601,36 @@ export function TerminalPanel({
       ready = false;
       pending.length = 0;
       pendingChars = 0;
+      outputQueue.length = 0;
+      outputQueuedChars = 0;
       stopWatchingFocus();
       setConnecting(false);
       setError('终端输出同步中断，请重新连接以恢复最近内容。');
+    };
+    const drainOutput = () => {
+      if (disposed || failed || writingOutput) return;
+      const next = outputQueue.shift();
+      if (!next) return;
+      outputQueuedChars -= next.length;
+      writingOutput = true;
+      try {
+        term.write(next);
+        writingOutput = false;
+        if (outputQueue.length > 0) void Promise.resolve().then(drainOutput);
+      } catch {
+        writingOutput = false;
+        failSynchronization();
+      }
+    };
+    const enqueueOutput = (output: string) => {
+      if (!output || disposed || failed) return;
+      outputQueue.push(output);
+      outputQueuedChars += output.length;
+      if (outputQueuedChars > MAX_PENDING_CHARS) {
+        failSynchronization();
+        return;
+      }
+      drainOutput();
     };
     const applyEvent = (event: TerminalEvent) => {
       if (disposed || failed || event.id !== id) return;
@@ -511,11 +651,17 @@ export function TerminalPanel({
       }
       if (event.type === 'data') {
         if (event.sequence <= restoredSequence) return;
-        // Applying an ANSI continuation after missing output corrupts the
-        // screen/parser. Keep the last intact display and offer a fresh attach.
-        if (event.sequence !== restoredSequence + 1) { failSynchronization(); return; }
-        restoredSequence = event.sequence;
-        term.write(event.data);
+        const chunks = event.chunks?.length ? event.chunks : [{ sequence: event.sequence, data: event.data }];
+        let output = '';
+        for (const chunk of chunks) {
+          if (chunk.sequence <= restoredSequence) continue;
+          // Applying an ANSI continuation after missing output corrupts the
+          // screen/parser. Keep the last intact display and offer a fresh attach.
+          if (chunk.sequence !== restoredSequence + 1) { failSynchronization(); return; }
+          restoredSequence = chunk.sequence;
+          output += chunk.data;
+        }
+        enqueueOutput(output);
       } else {
         setStatus(event.status);
         setExitCode(event.exitCode);
@@ -528,6 +674,21 @@ export function TerminalPanel({
         if (!disposed) setError(errorText(cause));
       });
     });
+    const selection = term.onSelectionChange(() => {
+      setHasSelection(term.hasSelection());
+    });
+    const scroll = typeof term.onScroll === 'function'
+      ? term.onScroll(() => {
+        const buffer = term.buffer.active;
+        const navigationTarget = commandNavigationTargetRef.current;
+        if (navigationTarget !== null && Math.abs(buffer.viewportY - navigationTarget) <= 1) {
+          commandNavigationTargetRef.current = null;
+        } else if (navigationTarget === null) {
+          commandCursorRef.current = null;
+        }
+        setIsAtBottom(buffer.viewportY >= buffer.baseY);
+      })
+      : { dispose: () => {} };
     const resizeObserver = new ResizeObserver(scheduleFit);
     resizeObserver.observe(host);
     const appearanceObserver = new MutationObserver(applyAppearance);
@@ -564,7 +725,6 @@ export function TerminalPanel({
       ready = true;
       setConnecting(false);
       for (const event of pending.splice(0)) {
-        if (event.type === 'data' && event.sequence <= restoredSequence) continue;
         applyEvent(event);
       }
       pendingChars = 0;
@@ -586,19 +746,27 @@ export function TerminalPanel({
     return () => {
       disposed = true;
       ready = false;
+      outputQueue.length = 0;
+      outputQueuedChars = 0;
       stopWatchingFocus();
       document.removeEventListener('visibilitychange', onVisibility);
       cancelAnimationFrame(frame);
       unsubscribe();
       input.dispose();
+      selection.dispose();
+      scroll.dispose();
       resizeObserver.disconnect();
       appearanceObserver.disconnect();
       fileLinks.dispose();
       oscSubscription.dispose();
+      cwdSubscription.dispose();
       for (const entry of commandMarks) entry.decoration?.dispose();
+      commandMarksRef.current = [];
       searchResults.dispose();
       titleSubscription.dispose();
       serializeRef.current = null;
+      if (updateRendererRef.current === updateRenderer) updateRendererRef.current = null;
+      try { webgl?.dispose(); } catch { /* 已经释放 */ }
       term.dispose();
       terminalRef.current = null;
       searchRef.current = null;
@@ -606,6 +774,30 @@ export function TerminalPanel({
       focusTerminalRef.current = null;
     };
   }, [cwd, id, retryRevision, openLink]);
+
+  // 终端标签在工作台里保持挂载，切回时只恢复几何与焦点，不重新回放整段输出。
+  const wasActiveRef = useRef(active);
+  useEffect(() => {
+    const entered = !wasActiveRef.current && active;
+    wasActiveRef.current = active;
+    // Hidden tabs stay mounted so their PTY history is preserved. Release the
+    // optional WebGL context as soon as a tab leaves the foreground; otherwise
+    // each tab switch keeps another context alive until the whole stack closes.
+    if (!active) {
+      // A persistent hidden xterm can otherwise keep its textarea focused and
+      // continue consuming keyboard input after the user switches tabs.
+      terminalRef.current?.blur();
+      updateRendererRef.current?.(false);
+      return;
+    }
+    if (!entered || document.hidden) return;
+    const frame = requestAnimationFrame(() => {
+      updateRendererRef.current?.(active);
+      fitRef.current?.();
+      focusTerminalRef.current?.();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [active]);
 
   // 主题、字体、行高、光标：只改渲染参数，不重建会话。
   useEffect(() => {
@@ -652,6 +844,9 @@ export function TerminalPanel({
         platform: window.piApi.platform === 'darwin' ? 'mac' : 'other',
       });
       if (!intent) return;
+      // 没有 Shell 集成或还没有命令标记时，命令导航没有目标；把组合键交回
+      // xterm，避免用户感知到“快捷键被吃掉但没有任何动作”。
+      if ((intent === 'prev-command' || intent === 'next-command') && commandNavigationDisabled) return;
       event.preventDefault();
       event.stopPropagation();
       if (intent === 'copy') { void copySelection(); return; }
@@ -668,7 +863,7 @@ export function TerminalPanel({
     };
     host.addEventListener('keydown', onKeyDown, true);
     return () => host.removeEventListener('keydown', onKeyDown, true);
-  }, [clearScreen, copySelection, jumpCommand, onFontSizeChange, onNewTerminal, openSearch, pasteFromClipboard, zoom]);
+  }, [clearScreen, commandNavigationDisabled, copySelection, jumpCommand, onFontSizeChange, onNewTerminal, openSearch, pasteFromClipboard, zoom]);
 
   // 搜索结果随输入实时高亮，⌘F 打开时预先放入当前选区。
   useEffect(() => {
@@ -701,7 +896,7 @@ export function TerminalPanel({
         <i aria-hidden="true" />
         {connecting ? '连接中' : error ? '未连接' : running ? '运行中' : status === 'exited' ? `已退出${exitCode === undefined ? '' : ` · ${exitCode}`}` : '未连接'}
       </span>
-      <span className="terminal-shell"><TerminalIcon aria-hidden="true" />{shell || 'shell'}</span>
+      <span className="terminal-shell" title={`${shell || 'shell'} · ${workingDirectory}`}><TerminalIcon aria-hidden="true" />{shell || 'shell'}</span>
       <code title={workingDirectory}>{workingDirectory}</code>
       {failedCommands > 0 && <button
         type="button"
@@ -711,10 +906,11 @@ export function TerminalPanel({
         onClick={jumpToFailure}
       ><TriangleAlert aria-hidden="true" />{failedCommands}</button>}
       {fontWarning && <span className="terminal-font-warning" role="status" aria-label="图标字体加载失败，请重新连接终端" title="图标字体加载失败，请重新连接终端"><TriangleAlert aria-hidden /></span>}
-      <button type="button" aria-label="搜索终端输出" title="搜索终端输出 ⌘F" onClick={openSearch}><Search /></button>
-      <button type="button" aria-label="清屏" title="清屏 ⌘K" onClick={clearScreen}><Eraser /></button>
+      <button type="button" aria-label="搜索终端输出" title="搜索终端输出 ⌘F" disabled={connecting || Boolean(error)} onClick={openSearch}><Search /></button>
+      <button type="button" aria-label="清屏" title="清屏 ⌘K" disabled={connecting || Boolean(error)} onClick={clearScreen}><Eraser /></button>
+      <button type="button" className="terminal-interrupt" aria-label="中断当前命令" title="中断当前命令（Ctrl+C）" disabled={connecting || status !== 'running' || Boolean(error)} onClick={interrupt}><Square /></button>
       <button type="button" aria-label="新建终端" title="新建终端 ⌘T" onClick={onNewTerminal}><Plus /></button>
-      <button type="button" aria-label="重新连接终端" title="重新连接" onClick={() => setRetryRevision((value) => value + 1)}><RotateCw /></button>
+      <button type="button" aria-label={status === 'exited' ? '重启终端' : '重新连接终端'} title={status === 'exited' ? '重启终端' : '重新连接'} onClick={reconnect}><RotateCw /></button>
       <button
         ref={moreButtonRef}
         type="button"
@@ -754,14 +950,15 @@ export function TerminalPanel({
       <button type="button" aria-label="关闭搜索" title="关闭" onClick={() => { setSearchOpen(false); setSearchQuery(''); terminalRef.current?.focus(); }}><X /></button>
     </div>}
     {pendingPaste !== null && <div className="terminal-paste-confirm" role="status">
-      <span>粘贴 {pendingPaste.split('\n').length} 行命令？确认会直接写入终端。</span>
+      <span>粘贴 {pendingPaste.split('\n').filter((line) => line.trim().length > 0).length} 行命令？确认会直接写入终端。</span>
       <div>
         <button type="button" className="is-primary" onClick={() => { const text = pendingPaste; setPendingPaste(null); writeToPty(text); }}>粘贴</button>
         <button type="button" onClick={() => setPendingPaste(null)}>取消</button>
       </div>
     </div>}
+    {pasteNotice && <div className="terminal-paste-notice" role="status">{pasteNotice}</div>}
     {historyTruncated && <div className="terminal-history-note" role="status">较早输出已清理，历史画面可能不完整。</div>}
-    <div className="terminal-stage">
+    <div className={`terminal-stage ${dragActive ? 'is-drag-active' : ''}`}>
       <div
         ref={hostRef}
         className="terminal-host"
@@ -776,9 +973,14 @@ export function TerminalPanel({
           if (!event.dataTransfer.types.includes('Files')) return;
           event.preventDefault();
           event.dataTransfer.dropEffect = 'copy';
+          setDragActive(true);
+        }}
+        onDragLeave={(event) => {
+          if (event.currentTarget === event.target) setDragActive(false);
         }}
         onDrop={(event) => {
           const files = Array.from(event.dataTransfer.files);
+          setDragActive(false);
           if (files.length === 0) return;
           event.preventDefault();
           const text = files
@@ -786,7 +988,7 @@ export function TerminalPanel({
             .filter(Boolean)
             .join(' ');
           if (!text) return;
-          terminalRef.current?.paste(text);
+          pasteText(text);
           terminalRef.current?.focus();
         }}
       />
@@ -796,6 +998,15 @@ export function TerminalPanel({
         <button type="button" onClick={() => { setError(null); setRetryRevision((value) => value + 1); }}>重试</button>
       </div>}
     </div>
+    {!isAtBottom && !connecting && <div className="terminal-stage-footer">
+      <button
+        type="button"
+        className="terminal-bottom-jump"
+        aria-label="跳到最新输出"
+        title="跳到最新输出"
+        onClick={scrollToBottom}
+      ><ArrowDownToLine /><span>最新输出</span></button>
+    </div>}
     {menu && <ActionMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={menuActions} />}
     {moreMenu && <ActionMenu x={moreMenu.x} y={moreMenu.y} onClose={() => setMoreMenu(null)} items={menuActions} />}
   </section>;

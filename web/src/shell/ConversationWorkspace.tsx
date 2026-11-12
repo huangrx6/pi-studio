@@ -1,5 +1,5 @@
-import { Fragment, lazy, Suspense, useEffect, useMemo, type ComponentProps } from 'react';
-import { ChevronLeft, LoaderCircle } from 'lucide-react';
+import { Fragment, lazy, Suspense, useEffect, useMemo, useState, type ComponentProps } from 'react';
+import { ArrowDown, ChevronLeft, LoaderCircle } from 'lucide-react';
 import { AssistantTurnView, ChatMessageView } from '../features/conversation/ChatMessage';
 import { ComposerDock } from '../features/conversation/ComposerDock';
 import { ConversationError } from '../features/conversation/ConversationError';
@@ -192,6 +192,7 @@ export function ConversationWorkspace({
   const {
     scrollRef,
     topSentinelRef,
+    bottomSentinelRef,
     chatContentRef,
     turnWindowFrom,
     visibleTurns,
@@ -212,12 +213,44 @@ export function ConversationWorkspace({
     transcriptTruncated,
   } = transcript;
 
+  const [atBottom, setAtBottom] = useState(true);
+  const [returningToLatest, setReturningToLatest] = useState(false);
+  useEffect(() => {
+    const viewport = scrollRef.current;
+    if (!viewport) return;
+    // Keep this state event-driven. The transcript navigation hook already
+    // owns the ResizeObserver that pins the viewport while streaming. Reading
+    // layout from a second observer and setting state on every token briefly
+    // toggles the return bar while the composer or markdown grows, which makes
+    // the conversation appear to jump while the user is typing.
+    setAtBottom(isNearBottom(viewport));
+  }, [session?.id, agentView.kind, scrollRef, chatContentRef]);
+
+  async function returnToLatest() {
+    if (returningToLatest) return;
+    if (!transcriptTruncated) {
+      resumeTranscriptFollow(true);
+      return;
+    }
+    setReturningToLatest(true);
+    try { await resetToLatest(); }
+    finally { setReturningToLatest(false); }
+  }
+
   const search = useConversationSearch({ sessionId: session?.id, onJump: jumpToMessage });
   const searchOpen = search.state.open;
+  // 搜索只属于已有会话的正文视图；新会话、扩展中心、子智能体和轨迹页
+  // 都没有可供搜索的当前会话正文，不应显示或响应 ⌘F / Ctrl+F。
+  const searchEnabled = Boolean(session?.id) && agentView.kind === 'conversation';
+
+  useEffect(() => {
+    if (!searchEnabled && searchOpen) search.close();
+  }, [search.close, searchEnabled, searchOpen]);
 
   // ⌘F / Ctrl+F 打开对话搜索；焦点在终端里时让终端自己处理。
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (!searchEnabled) return;
       if (event.isComposing) return;
       const primary = event.metaKey || event.ctrlKey;
       if (!primary || event.altKey || event.shiftKey) return;
@@ -230,7 +263,7 @@ export function ConversationWorkspace({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [search, searchOpen]);
+  }, [search, searchEnabled, searchOpen]);
   // 轨迹页只在「显示代码工作视图」开启时出现；关闭后回落到对话视图。
   const traceEnabled = preferences.showCodeView;
   const showTrace = agentView.kind === 'trace' && traceEnabled;
@@ -290,19 +323,19 @@ export function ConversationWorkspace({
         showTrace={traceEnabled}
         traceSummary={traceSummary}
       />
-      {searchOpen && <ConversationSearchBar
+      {searchEnabled && searchOpen && <ConversationSearchBar
         state={search.state}
         onQueryChange={search.setQuery}
         onStep={(direction) => { void search.step(direction); }}
         onClose={search.close}
       />}
-      {!isNewConversation && transcriptVisible && <div
+      {!isNewConversation && transcriptVisible && <div className="transcript-viewport"><div
         className="chat-scroll"
         ref={scrollRef}
         onWheel={(event) => {
           if (!event.deltaY) return;
           if (nestedScrollableConsumesWheel(event.target, event.currentTarget, event.deltaY)) return;
-          markUserScrollIntent();
+          markUserScrollIntent(event.deltaY);
           if (shouldReleaseFollowOnWheel({ deltaX: event.deltaX, deltaY: event.deltaY, nestedScrollable: false })) {
             pauseTranscriptFollow();
           } else if (event.deltaY > 0 && isNearBottom(event.currentTarget)) {
@@ -322,18 +355,21 @@ export function ConversationWorkspace({
         }}
         onKeyDown={(event) => {
           if (event.key === 'PageUp' || event.key === 'ArrowUp' || event.key === 'Home') {
-            markUserScrollIntent();
+            markUserScrollIntent(-1);
             pauseTranscriptFollow();
           } else if (event.key === 'PageDown' || event.key === 'ArrowDown' || event.key === 'End') {
-            markUserScrollIntent();
+            markUserScrollIntent(1);
           }
         }}
-        onScroll={handleTranscriptScroll}
+        onScroll={(event) => {
+          setAtBottom(isNearBottom(event.currentTarget));
+          handleTranscriptScroll(event);
+        }}
       >
         <div className="chat-column" ref={chatContentRef}>
           {messageCount > 0 && (
             <div className="messages">
-              {/* 顶部哨兵：先展开已渲染的轮次，再向主进程要更早的一页 */}
+              {/* 顶部哨兵：读取相邻历史并保留当前阅读位置 */}
               <div ref={topSentinelRef} className="transcript-window-sentinel" aria-hidden="true" />
               {visibleTurns.map((turn, offset) => {
                 const index = offset + turnWindowFrom;
@@ -381,6 +417,7 @@ export function ConversationWorkspace({
                   showCodeView={false}
                 />
               )}
+              <div ref={bottomSentinelRef} className="transcript-window-sentinel" aria-hidden="true" />
             </div>
           )}
           {conversationSubscriptionError && conversationSubscriptionError.sessionId === session?.id && <ConversationError
@@ -391,10 +428,13 @@ export function ConversationWorkspace({
           />}
           {showSessionError && (!pendingAssistantVisible || turnActive) && <ConversationError message={error!} onDismiss={() => setError(null)} />}
         </div>
+      </div>
+      {(transcriptTruncated || !atBottom) && <div className="transcript-back-bar">
+        <button type="button" onClick={() => { void returnToLatest(); }} disabled={returningToLatest} aria-label="回到最新消息">
+          {returningToLatest ? <LoaderCircle className="spin" aria-hidden="true" /> : <ArrowDown aria-hidden="true" />}
+          <span>{returningToLatest ? '正在加载' : '回到最新'}</span>
+        </button>
       </div>}
-      {/* 跳到旧消息后窗口被截断：在输入框上方给一条明确回到底部的路径 */}
-      {transcriptTruncated && transcriptVisible && <div className="transcript-back-bar">
-        <button type="button" onClick={() => { void resetToLatest(); }}>回到最新消息</button>
       </div>}
 
       {!isNewConversation && agentView.kind === 'extensions' && <div className="conversation-extension-scroll">

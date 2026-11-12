@@ -239,11 +239,13 @@ export function useConversationController(foundation: AppFoundation) {
   // useTranscriptNavigation 先于 useConversationSessions 调用，用 ref 把补页函数桥接过去。
   const resetToLatestRef = useRef<() => Promise<void>>(async () => {});
   const [transcriptTruncated, setTranscriptTruncated] = useState(false);
-  const loadOlderMessagesRef = useRef<(options?: { limit?: number; keepLatest?: boolean; maxWindow?: number }) => Promise<boolean>>(async () => false);
+  const loadOlderMessagesRef = useRef<(beforeApply: () => number[]) => Promise<boolean>>(async () => false);
+  const loadNewerMessagesRef = useRef<(beforeApply: () => number[]) => Promise<boolean>>(async () => false);
   const loadMessageWindowRef = useRef<(id: number) => Promise<boolean>>(async () => false);
   const {
     scrollRef,
     topSentinelRef,
+    bottomSentinelRef,
     chatContentRef,
     turnWindowFrom,
     visibleTurns,
@@ -263,7 +265,9 @@ export function useConversationController(foundation: AppFoundation) {
     jumpToOutline,
     jumpToMessage,
   } = useTranscriptNavigation({
-    onLoadOlder: (options) => loadOlderMessagesRef.current(options),
+    onLoadOlder: (beforeApply) => loadOlderMessagesRef.current(beforeApply),
+    onLoadNewer: (beforeApply) => loadNewerMessagesRef.current(beforeApply),
+    hasNewer: transcriptTruncated,
     onLoadTarget: (id) => loadMessageWindowRef.current(id),
     sessionId: session?.id,
     messages,
@@ -520,10 +524,12 @@ export function useConversationController(foundation: AppFoundation) {
     openSession,
     openNotificationSession,
     loadOlderMessages,
+    loadNewerMessages,
     loadMessageWindow,
     resetToLatest,
   } = useConversationSessions({
     session,
+    messages,
     sessionRef,
     sessionLoadRef,
     workspace,
@@ -578,6 +584,7 @@ export function useConversationController(foundation: AppFoundation) {
   });
   outlineHandlersRef.current = { applyOutline, refreshOutline };
   loadOlderMessagesRef.current = loadOlderMessages;
+  loadNewerMessagesRef.current = loadNewerMessages;
   loadMessageWindowRef.current = loadMessageWindow;
   resetToLatestRef.current = resetToLatest;
   conversationNavigationRef.current = { open: openSession, start: startSession };
@@ -747,6 +754,7 @@ export function useConversationController(foundation: AppFoundation) {
     refreshOutline,
     pushNotification,
     setBusy,
+    setStoppingSessionIds,
     setRequestTraces,
     setCompaction,
     setRetryInfo,
@@ -919,6 +927,7 @@ export function useConversationController(foundation: AppFoundation) {
     selectThinking,
     scrollRef,
     topSentinelRef,
+    bottomSentinelRef,
     chatContentRef,
     turnWindowFrom,
     visibleTurns,
@@ -937,7 +946,10 @@ export function useConversationController(foundation: AppFoundation) {
     handleTranscriptScroll,
     jumpToOutline,
     jumpToMessage,
-    resetToLatest: () => resetToLatestRef.current(),
+    resetToLatest: async () => {
+      await resetToLatestRef.current();
+      resumeTranscriptFollow(true);
+    },
     transcriptTruncated,
     notifyExtension,
     comparisonByParent,

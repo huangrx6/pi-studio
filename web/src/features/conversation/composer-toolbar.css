@@ -4,7 +4,24 @@
 .composer-toolbar .composer-right { flex-wrap: wrap; }
 .composer-toolbar .composer-right { margin-left: auto; }
 .composer-toolbar .composer-context-group { flex-wrap: wrap; }
+.composer-toolbar .send-button-slot { display: block; width: var(--control-sm); height: var(--control-sm); flex: none; visibility: hidden; }
+.composer-toolbar .send-button.is-stop:disabled .spin { color: var(--loading, var(--accent)); }
 .composer-toolbar button:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
+
+/* Keep the footer on one stable line while a turn changes between idle, running,
+ * and stopping.  The controls are stateful, but their slots stay reserved so
+ * inserting the stop/send action cannot reflow the composer while the user is
+ * typing or streaming.  The narrow-pane rules below intentionally retain the
+ * stacked layout for compact windows. */
+@container main-pane (min-width: 661px) {
+  .composer .composer-toolbar { flex-wrap: nowrap; min-height: var(--control-sm); }
+  .composer-toolbar .composer-left,
+  .composer-toolbar .composer-right,
+  .composer-toolbar .composer-context-group { flex-wrap: nowrap; }
+  .composer-toolbar .composer-left { flex: 1 1 auto; overflow: hidden; }
+  .composer-toolbar .composer-right { flex: 0 0 auto; }
+  .composer-toolbar .composer-context-group { overflow: hidden; }
+}
 
 @container main-pane (max-width: 660px) {
   .composer-toolbar .composer-left,

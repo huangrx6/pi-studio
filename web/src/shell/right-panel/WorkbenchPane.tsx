@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import type { ModelSelection } from '../../types/model-types';
 import type { FilePreviewResult } from '../../types/file-preview-types';
+import type { PanelTab } from '../app-types';
 import type { SessionStateForPersistence } from '../../features/conversation/useMessageDelivery';
 import { TemporaryChat } from '../../features/conversation/TemporaryChat';
 import { ChangesView } from '../../features/conversation/ChangesView';
@@ -35,6 +36,8 @@ const RuntimeServicesPanel = lazy(async () => {
   const module = await import('../../features/runtime-services/RuntimeServicesPanel');
   return { default: module.RuntimeServicesPanel };
 });
+
+type TerminalPanelTab = PanelTab & { kind: 'terminal' };
 
 type WorkbenchPaneProps = {
   controller: ReturnType<typeof useAppWorkbenchController>;
@@ -244,6 +247,41 @@ export function WorkbenchPane({
     </div>;
   }
 
+  function renderTerminalTab(tab: TerminalPanelTab, isActive: boolean) {
+    return <Suspense key={`${tab.id}:${tab.restart ?? 0}`} fallback={
+      <div className={`terminal-tab-slot ${isActive ? 'is-active' : ''}`}>
+        <div className="panel-route-loading" role="status" aria-label="正在加载终端">
+          <LoaderCircle aria-hidden="true" />
+        </div>
+      </div>
+    }>
+      <div className={`terminal-tab-slot ${isActive ? 'is-active' : ''}`} aria-hidden={!isActive}>
+        <LazyTerminalPanel
+          active={isActive}
+          id={tab.id}
+          cwd={tab.cwd || session?.cwd || workspace}
+          appearance={terminalAppearance}
+          shellIntegration={terminalShellIntegration}
+          onFontSizeChange={onTerminalFontSize}
+          onNewTerminal={openTerminalTab}
+          onRestartTerminal={() => { void restartTerminal(tab.id); }}
+          onOpenFile={(path) => { void openFile(path.replace(/:\d+(?::\d+)?$/u, ''), session?.id, 'external'); }}
+          onOpenUrl={(url) => openBrowserTab(url)}
+          onTitle={(title) => setPanelTabs((current) => current.map((item) => (
+            item.id === tab.id && !item.customTitle ? { ...item, title } : item
+          )))}
+        />
+      </div>
+    </Suspense>;
+  }
+
+  function renderTerminalStack(isActive: boolean) {
+    const terminalTabs = panelTabs.filter((tab): tab is TerminalPanelTab => tab.kind === 'terminal');
+    return <div className={`terminal-tab-stack ${isActive ? 'is-active' : 'is-background'}`}>
+      {terminalTabs.map((tab) => renderTerminalTab(tab, isActive && tab.id === activePanelTabId))}
+    </div>;
+  }
+
   function renderPanelContent() {
     if (!activePanelTab) {
       return <RightPanelStart
@@ -258,26 +296,9 @@ export function WorkbenchPane({
       return <TemporaryChat key={activePanelTab.id} id={activePanelTab.id} selection={modelSelection} onManage={() => onOpenSettings('models')} />;
     }
     if (activePanelTab.kind === 'terminal') {
-      return <Suspense fallback={
-        <div className="panel-route-loading" role="status" aria-label="正在加载终端">
-          <LoaderCircle aria-hidden="true" />
-        </div>
-      }>
-        <LazyTerminalPanel
-          key={`${activePanelTab.id}:${activePanelTab.restart ?? 0}`}
-          id={activePanelTab.id}
-          cwd={activePanelTab.cwd || session?.cwd || workspace}
-          appearance={terminalAppearance}
-          shellIntegration={terminalShellIntegration}
-          onFontSizeChange={onTerminalFontSize}
-          onNewTerminal={openTerminalTab}
-          onOpenFile={(path) => { void openFile(path.replace(/:\d+(?::\d+)?$/u, ''), session?.id, 'external'); }}
-          onOpenUrl={(url) => openBrowserTab(url)}
-          onTitle={(title) => setPanelTabs((current) => current.map((tab) => (
-            tab.id === activePanelTab.id && !tab.customTitle ? { ...tab, title } : tab
-          )))}
-        />
-      </Suspense>;
+      // 终端统一由 persistentTerminalContent 渲染，切到文件、服务或浏览器时
+      // 仍留在 DOM 中，回来只切换可见槽位，不重放整段输出。
+      return null;
     }
     if (activePanelTab.kind === 'services') {
       return <Suspense fallback={
@@ -309,6 +330,8 @@ export function WorkbenchPane({
     return renderFilePreview();
   }
 
+  const persistentTerminalContent = renderTerminalStack(activePanelTab?.kind === 'terminal');
+
   return <>
     {tabMenu && <ActionMenu x={tabMenu.x} y={tabMenu.y} onClose={closeTabMenu} items={[
       { label: '重命名', run: () => { setRenamingId(tabMenu.id); closeTabMenu(); } },
@@ -336,6 +359,7 @@ export function WorkbenchPane({
       toolActions={toolActions}
       fileTree={renderFileTree()}
       panelContent={renderPanelContent()}
+      persistentPanelContent={persistentTerminalContent}
       extensionDock={extensionDock}
       onClose={closePanel}
       onActivate={activatePanelTab}

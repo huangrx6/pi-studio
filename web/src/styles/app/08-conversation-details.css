@@ -127,6 +127,7 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
   pointer-events: none;
 }
 .outline-track {
+  position: relative;
   display: flex;
   width: 100%;
   max-height: inherit;
@@ -153,10 +154,10 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
   cursor: pointer;
 }
 .outline-tick:focus-visible { outline: 1px solid var(--focus-color); outline-offset: -2px; }
-.outline-line { width: 11px; height: 2px; border-radius: var(--radius-tag); background: var(--border); transition: width 140ms ease, background 140ms ease; }
-.outline-tick:hover .outline-line { width: 16px; background: var(--accent); }
-.outline-tick.is-active { width: 15px; }
-.outline-tick.is-active .outline-line { width: 21px; background: var(--accent); }
+.outline-line { flex: none; width: 11px; height: 2px; border-radius: var(--radius-tag); background: var(--border); transition: width 140ms ease, background 140ms ease; }
+.outline-tick:hover .outline-line { flex: none; width: 16px; background: var(--accent); }
+.outline-tick.is-active { width: 44px; padding-right: 0; }
+.outline-tick.is-active .outline-line { flex: none; width: 21px; background: var(--accent); }
 .outline-preview {
   position: absolute;
   z-index: 40;
@@ -404,3 +405,6 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .queued-send-all:hover:not(:disabled) { background: var(--surface-hover); color: var(--text-1); }
 .queued-send-all:disabled { color: var(--text-3); cursor: default; }
 .composer textarea.has-queued::placeholder { color: var(--muted); -webkit-text-fill-color: var(--muted); }
+
+/* Paging keeps existing turns still; historical rows must not animate on mount. */
+.chat-scroll .assistant-turn { animation: none; }

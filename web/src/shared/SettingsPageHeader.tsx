@@ -21,7 +21,7 @@ export function SettingsPageHeader({
       <div className="settings-page-header-title">
         {icon && <span className="settings-page-header-icon" aria-hidden="true">{icon}</span>}
         <h1>{title}</h1>
-        {meta}
+        {meta && <span className="settings-page-header-meta">{meta}</span>}
       </div>
     </div>
     {actions && <div className="settings-page-header-actions">{actions}</div>}

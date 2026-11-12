@@ -45,6 +45,12 @@
   color: var(--faint);
 }
 .terminal-toolbar > button:hover { background: var(--surface-hover); color: var(--text); }
+.terminal-toolbar > button.terminal-interrupt:not(:disabled) { color: var(--warning); }
+.terminal-toolbar > button.terminal-interrupt:not(:disabled):hover { background: var(--warning-soft); color: var(--warning); }
+.terminal-toolbar > button:disabled {
+  opacity: .42;
+  cursor: default;
+}
 .terminal-toolbar > button svg { width: var(--icon-sm); height: var(--icon-sm); }
 /* 失败计数：只在有失败命令时出现，点一下跳到最近一条。
  * 需要压过 .terminal-toolbar > button 的 28px 固定方形。 */
@@ -160,6 +166,14 @@
 .terminal-paste-confirm button { border: 1px solid var(--border); background: var(--surface); color: var(--text); }
 .terminal-paste-confirm button.is-primary { border-color: transparent; background: var(--button-bg); color: var(--on-button); }
 .terminal-paste-confirm button.is-primary:hover { background: var(--button-hover); color: var(--on-button); }
+.terminal-paste-notice {
+  flex: none;
+  padding: 6px var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
 
 /* 换主题后工具栏与终端底色保持一致，不能出现一条浅色的工具栏。 */
 .terminal-panel.has-custom-theme .terminal-toolbar,
@@ -182,8 +196,17 @@
   background: color-mix(in srgb, var(--terminal-fg) 8%, transparent);
   color: var(--terminal-fg);
 }
+.terminal-panel.has-custom-theme .terminal-stage-footer {
+  border-top-color: color-mix(in srgb, var(--terminal-fg) 16%, transparent);
+  background: transparent;
+}
 
-.terminal-stage { position: relative; flex: 1; min-height: 0; }
+.terminal-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
 .terminal-history-note {
   flex: none;
   padding: var(--space-1) var(--space-3);
@@ -191,12 +214,87 @@
   font-size: var(--text-xs);
 }
 .terminal-host {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  padding: 10px 12px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 10px 12px 14px;
 }
-.terminal-host .xterm { height: 100%; }
-.terminal-host .xterm-viewport { scrollbar-color: var(--scrollbar) transparent; }
+.terminal-stage.is-drag-active::after {
+  position: absolute;
+  inset: 10px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--accent-border);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--accent-soft) 72%, transparent);
+  color: var(--text);
+  content: '松开以粘贴路径';
+  font-size: var(--text-sm);
+  pointer-events: none;
+}
+.terminal-stage-footer {
+  display: flex;
+  flex: none;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-top: 1px solid var(--divider);
+  background: var(--surface);
+}
+.terminal-host .xterm { width: 100%; height: 100%; }
+/* 保留滚轮和触控板滚动，只隐藏 xterm 原生/自绘滚动条，避免窄面板里
+ * 滚动条压住最后一列字符。 */
+.terminal-host .xterm-viewport {
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scrollbar-color: transparent transparent;
+}
+.terminal-host .xterm-viewport::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.terminal-host .xterm .xterm-scrollable-element > .scrollbar {
+  width: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none;
+}
+.terminal-bottom-jump {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-round);
+  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  box-shadow: var(--shadow-popover);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  z-index: 3;
+}
+.terminal-bottom-jump:hover {
+  border-color: var(--accent-border);
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.terminal-panel.has-custom-theme .terminal-bottom-jump {
+  border-color: color-mix(in srgb, var(--terminal-fg) 22%, transparent);
+  background: color-mix(in srgb, var(--terminal-fg) 8%, transparent);
+  color: color-mix(in srgb, var(--terminal-fg) 72%, transparent);
+}
+.terminal-panel.has-custom-theme .terminal-bottom-jump:hover {
+  border-color: color-mix(in srgb, var(--terminal-fg) 36%, transparent);
+  background: color-mix(in srgb, var(--terminal-fg) 14%, transparent);
+  color: var(--terminal-fg);
+}
+.terminal-bottom-jump svg { width: var(--icon-sm); height: var(--icon-sm); }
 .terminal-error {
   position: absolute;
   inset: 50% auto auto 50%;

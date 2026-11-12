@@ -130,37 +130,53 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
   .trace-display-options button { gap: 3px; padding-inline: 3px; }
   .conversation-trace-item { padding-left: 8px; }
 }
-/* 跳到旧消息后窗口被截断：在输入框上方占一行，给一条回到底部的入口 */
+/* The return control floats inside the transcript and never shifts the composer. */
+.transcript-viewport { position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 .transcript-back-bar {
+  position: absolute;
+  z-index: 8;
+  bottom: var(--space-3);
+  left: 0;
+  right: 0;
   display: flex;
-  flex: none;
   justify-content: center;
-  padding: 6px var(--space-6) 0;
+  pointer-events: none;
 }
 .transcript-back-bar > button {
-  height: 28px;
-  padding: 0 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-round);
-  background: var(--surface-raised);
-  color: var(--text);
-  font-size: var(--text-sm);
-}
-.transcript-back-bar > button:hover { background: var(--surface-hover); }
-
-/* 对话内搜索：贴在消息区顶部，不挤占阅读列宽度 */
-.conversation-search {
-  display: flex;
-  flex: none;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin: var(--space-2) auto 0;
-  width: min(100%, 720px);
+  min-height: 30px;
+  padding: 5px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-round);
+  background: var(--overlay-surface);
+  box-shadow: var(--shadow-popover);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 20px;
+  pointer-events: auto;
+}
+.transcript-back-bar > button > svg { width: 14px; height: 14px; }
+.transcript-back-bar > button:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
+.transcript-back-bar > button:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
+
+/* 对话内搜索：贴在消息区顶部，不挤占阅读列宽度 */
+/* 对话内搜索：浮在右上角，不占阅读列的高度，也不挡住正文的可视起点 */
+.conversation-search {
+  position: absolute;
+  top: calc(var(--header-height) + var(--toolbar-height) + var(--space-1));
+  right: var(--space-3);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(340px, calc(100% - var(--space-6)));
   padding: 4px 6px 4px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
-  position: relative;
+  box-shadow: var(--shadow-shell);
 }
 .conversation-search > svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--faint); }
 .conversation-search input {
@@ -172,7 +188,17 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
   color: var(--text);
   font-size: var(--text-sm);
 }
-.conversation-search input:focus { outline: none; }
+/* 焦点只画在浮层外框上：全局 input:focus 会给内层再套一圈焦点环，形成框内套框 */
+.conversation-search input:focus,
+.conversation-search input:focus-visible {
+  border-color: transparent;
+  outline: none;
+  box-shadow: none;
+}
+
+.conversation-search:focus-within {
+  border-color: var(--accent);
+}
 .conversation-search-count {
   display: inline-flex;
   flex: none;
@@ -197,7 +223,8 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .conversation-search button svg { width: var(--icon-sm); height: var(--icon-sm); }
 .conversation-search-error {
   position: absolute;
-  left: 0;
+  left: 10px;
+  right: 6px;
   top: calc(100% + 4px);
   color: var(--error);
   font-size: var(--text-xs);
@@ -218,6 +245,7 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  overflow-anchor: none;
   scroll-behavior: auto;
   scrollbar-gutter: stable;
   contain: layout paint;

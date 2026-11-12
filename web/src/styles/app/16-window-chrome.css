@@ -19,3 +19,8 @@ html[data-window-fullscreen='true'] .panel-tabbar { border-bottom-color: var(--d
 /* 收起侧栏与面板独占窗口时，主标题行不再需要为系统按钮留 92px 安全区。 */
 html[data-window-fullscreen='true'] .is-sidebar-collapsed .chat-header { padding-left: var(--space-6); }
 html[data-window-fullscreen='true'] .file-panel.is-fullscreen .panel-tabbar { padding-left: 10px; }
+
+/* 有壁纸时红绿灯位于应用卡片外的顶部留白，右侧面板放大后不再需要
+ * 为它预留 92px。把标签页收回到面板自己的内容边界，和壁纸卡片内的
+ * 左侧基线对齐；无壁纸的窗口模式仍保留 macOS 按钮安全区。 */
+.app.has-custom-background .file-panel.is-fullscreen .panel-tabbar { padding-left: 10px; }

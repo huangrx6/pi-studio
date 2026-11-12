@@ -790,13 +790,13 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   background: var(--surface);
-  /* 四边内边距一致：卡片上下不再比左右更紧。 */
-  padding: 20px;
+  /* 行自己负责垂直节奏，卡片只保留左右内边距，避免首尾行变高。 */
+  padding: 0 20px;
 }
 
 .settings-content .shortcut-settings .shortcut-row {
-  min-height: 56px;
-  padding: 8px 0;
+  min-height: 60px;
+  padding: 0;
   border-top: 1px solid var(--divider);
 }
 
@@ -860,7 +860,7 @@
 .settings-content .permission-preset-check { border-color: var(--border); }
 
 .settings-content .permission-preset.is-active .permission-preset-check {
-  border-color: var(--accent);
+  border-color: var(--settings-border);
   color: var(--text);
 }
 
@@ -869,6 +869,16 @@
   background: var(--settings-control-bg);
   color: var(--text);
   opacity: 1;
+}
+
+/* 权限页的选中项不再用高亮白色外框表达焦点；用细环和中性选中底即可。 */
+.settings-content .permission-policy :is(button, input):focus-visible {
+  outline: 1px solid var(--settings-muted);
+  outline-offset: 1px;
+}
+
+.settings-content .permission-policy :is(.permission-policy-scopes button.is-active, .permission-preset.is-active):focus-visible {
+  box-shadow: 0 0 0 1px var(--settings-focus-halo);
 }
 
 /* 图标按钮统一 32 后，原本按 28px 预留的删除列需要同步加宽。 */
@@ -1228,6 +1238,7 @@
 
 .settings-content .settings-page-header {
   margin-bottom: var(--settings-section-gap);
+  align-items: center;
 }
 
 .settings-content .settings-page-header-title {
@@ -1243,6 +1254,34 @@
 .settings-page-header-actions button:not(.icon-button),
 .settings-card-head .settings-head-actions button {
   min-height: 32px;
+}
+
+/* 标题只负责页面定位，右侧操作与标题垂直居中，避免壁纸模式下按钮
+   因为 32px 标题行与 36px 控件的高度差显得悬空。标题栏里的操作
+   统一使用轻量边界，真正的提交动作留给内容区的保存条。 */
+.settings-content .settings-page-header-actions {
+  min-height: var(--settings-title-height);
+  align-items: center;
+}
+
+.settings-content .settings-page-header-actions :is(.settings-outline, .settings-add-button, .secondary-button) {
+  height: 32px;
+  min-height: 32px;
+  border-color: var(--settings-divider);
+  background: var(--transparent);
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.settings-content .settings-page-header-actions :is(.settings-outline, .settings-add-button, .secondary-button):hover:not(:disabled) {
+  border-color: var(--settings-border);
+  background: var(--settings-control-bg);
+  color: var(--text);
+}
+
+.settings-content .settings-page-header-actions :is(.settings-outline, .settings-add-button, .secondary-button) svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 
 .settings-card {
@@ -1289,8 +1328,8 @@
 }
 
 .settings-content .general-setting-row {
-  min-height: 52px;
-  padding-block: 10px;
+  min-height: 58px;
+  padding-block: 12px;
 }
 
 .settings-content .general-setting-label {
@@ -1309,6 +1348,37 @@
 
 .settings-content .general-theme-options button {
   padding-inline: 12px;
+}
+
+/* Long option groups use the row's remaining width instead of forming a
+   narrow right-aligned island. This keeps the card width fixed while making
+   every theme choice follow the same control rhythm. */
+.settings-content .general-setting-row:has(.terminal-theme-grid) {
+  align-items: flex-start;
+}
+
+.settings-content .general-setting-row:has(.terminal-theme-grid) .general-setting-control {
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: flex-start;
+}
+
+.settings-content .terminal-theme-grid {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.settings-content .terminal-theme-grid > button {
+  min-height: 34px;
+  padding-inline: 10px;
+  background: var(--settings-control-bg);
+}
+
+.settings-content .terminal-theme-grid > button[aria-pressed='true'] {
+  border-color: var(--accent-border);
+  background: var(--settings-selected-bg);
+  box-shadow: var(--settings-selected-shadow);
 }
 
 .settings-content .general-background-summary {
@@ -1335,4 +1405,26 @@
 
 .settings-content .settings-range-control input[type="range"]:focus-visible::-webkit-slider-thumb {
   box-shadow: 0 0 0 4px var(--accent-tint), 0 1px 2px var(--shadow-color);
+}
+
+/* 各个可编辑设置页共用同一条草稿操作节奏：状态靠左，操作靠右，
+   仅用一条弱分割线把提交动作和内容分开。 */
+.settings-content :is(.agent-tool-save-bar, .subagent-savebar, .permission-policy-actions) {
+  border-color: var(--divider);
+  align-items: center;
+}
+
+.settings-content .agent-tool-save-bar {
+  padding-block: 12px;
+  border-block: 1px solid var(--divider);
+}
+
+.settings-content .agent-tool-save-bar p { margin-bottom: 3px; }
+
+.settings-content .subagent-savebar {
+  padding-top: 12px;
+}
+
+.settings-content .permission-policy-actions {
+  padding-block: 12px;
 }

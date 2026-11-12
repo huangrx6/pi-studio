@@ -97,7 +97,7 @@ export type TodoTask = {
   updatedAt?: number;
 };
 
-/** 任务计划的整体快照，由 todo 工具结果消息的 details 透传给 TodoDock。 */
+/** 会话任务文档的公开快照；todo 工具结果也使用相同结构。 */
 export type TodoDetails = {
   /** 结构版本号，用于将来兼容迁移。 */
   schemaVersion?: number;

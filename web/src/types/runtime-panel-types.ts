@@ -22,7 +22,15 @@ export type TerminalSessionSnapshot = {
 };
 
 export type TerminalEvent =
-  | { id: string; type: 'data'; data: string; sequence: number }
+  | {
+      id: string;
+      type: 'data';
+      data: string;
+      sequence: number;
+      sequenceStart?: number;
+      /** 合并 IPC 通知时保留原始片段，允许快照序号落在合并批次中间。 */
+      chunks?: Array<{ sequence: number; data: string }>;
+    }
   | {
       id: string;
       type: 'exit';

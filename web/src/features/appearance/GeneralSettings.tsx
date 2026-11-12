@@ -59,13 +59,11 @@ export function GeneralSettings({ preferences, onChange, backgroundBusy, backgro
     <SettingsPageHeader
       icon={<Settings />}
       title="通用"
-      meta={<span className="general-page-summary">界面偏好与应用行为</span>}
     />
     <div className="general-settings">
     <section className="general-settings-section" aria-labelledby={`${sectionId}-appearance`}>
       <h2 id={`${sectionId}-appearance`}>
         <span>外观</span>
-        <small>主题、配色与背景</small>
       </h2>
       <div className="general-settings-card">
       <SettingRow label="界面模式">
@@ -104,7 +102,6 @@ export function GeneralSettings({ preferences, onChange, backgroundBusy, backgro
     <section className="general-settings-section" aria-labelledby={`${sectionId}-conversation`}>
       <h2 id={`${sectionId}-conversation`}>
         <span>对话</span>
-        <small>阅读与执行节奏</small>
       </h2>
       <div className="general-settings-card">
       <SettingRow label="对话字号"><Stepper label="字号" value={preferences.fontSize} min={12} max={18} unit=" px" onChange={value => onChange('fontSize', value)} /></SettingRow>
@@ -124,7 +121,6 @@ export function GeneralSettings({ preferences, onChange, backgroundBusy, backgro
     <section className="general-settings-section" aria-labelledby={`${sectionId}-terminal`}>
       <h2 id={`${sectionId}-terminal`}>
         <span>终端</span>
-        <small>配色与等宽排版</small>
       </h2>
       <div className="general-settings-card">
       <SettingRow label="配色主题" description="选一套独立配色，终端就和窗口其余部分分开；默认跟随界面明暗。">
@@ -144,7 +140,7 @@ export function GeneralSettings({ preferences, onChange, backgroundBusy, backgro
       <SettingRow label="终端字体"><Select label="终端字体" value={preferences.terminalFontFamily} onChange={value => onChange('terminalFontFamily', value)} options={TERMINAL_FONT_OPTIONS} /></SettingRow>
       <SettingRow label="终端字号"><Stepper label="终端字号" value={preferences.terminalFontSize} min={11} max={20} unit=" px" onChange={value => onChange('terminalFontSize', value)} /></SettingRow>
       <SettingRow label="行高"><Stepper label="终端行高" value={preferences.terminalLineHeight} min={1} max={1.8} step={0.05} unit="" onChange={value => onChange('terminalLineHeight', value)} /></SettingRow>
-      <SettingRow label="Shell 集成" description="让 zsh 标记每条命令的起点与退出码，用于失败定位与命令间跳转；只在 Studio 自己的目录写钩子，不改你的 ~/.zshrc。">
+      <SettingRow label="Shell 集成" description="让 zsh 标记每条命令的起点与退出码，用于失败定位与命令间跳转；只在 Studio 自己的目录写钩子，不改你的 ~/.zshrc。开启后新建或重连终端生效。">
         <button type="button" className={`switch ${preferences.terminalShellIntegration ? 'is-on' : ''}`} role="switch" aria-checked={preferences.terminalShellIntegration} aria-label="Shell 集成" onClick={() => onChange('terminalShellIntegration', !preferences.terminalShellIntegration)}><span /></button>
       </SettingRow>
       <SettingRow label="光标形状">
@@ -161,7 +157,6 @@ export function GeneralSettings({ preferences, onChange, backgroundBusy, backgro
     <section className="general-settings-section" aria-labelledby={`${sectionId}-application`}>
       <h2 id={`${sectionId}-application`}>
         <span>应用</span>
-        <small>窗口与链接行为</small>
       </h2>
       <div className="general-settings-card">
       <SettingRow label="菜单栏图标"><button type="button" className={`switch ${menuBar.enabled ? 'is-on' : ''}`} role="switch" aria-checked={menuBar.enabled} disabled={!menuBar.available || menuBarBusy} aria-label={menuBar.enabled ? '隐藏菜单栏图标' : '显示菜单栏图标'} title={menuBar.available ? undefined : '当前平台不支持菜单栏图标'} onClick={() => onMenuBarChange(!menuBar.enabled)}><span /></button></SettingRow>

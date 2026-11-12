@@ -38,7 +38,7 @@ import {
   moveComposerDraft,
   type ComposerDraft,
 } from './composer-drafts';
-import { loadOlderPage, loadTranscriptWindow, trimTranscript } from './transcript-load.mjs';
+import { loadAdjacentPage, loadTranscriptWindow, mergeTranscriptPage, messageKey, TRANSCRIPT_WINDOW_TURNS } from './transcript-load.mjs';
 import { messagesHaveMarkdownCode } from '../../shared/markdown-code.mjs';
 import { preloadMarkdownHighlighter, preloadMarkdownRenderer } from '../../shared/Markdown';
 import { errorText } from '../../shared/error-text';
@@ -58,6 +58,7 @@ type TranscriptCacheEntry = {
 
 type ConversationSessionsDependencies = {
   session: SessionState;
+  messages: ChatMessage[];
   sessionRef: MutableRefObject<SessionState>;
   sessionLoadRef: MutableRefObject<number>;
   workspace: string;
@@ -115,6 +116,7 @@ type ConversationSessionsDependencies = {
 
 export function useConversationSessions({
   session,
+  messages,
   sessionRef,
   sessionLoadRef,
   workspace,
@@ -259,7 +261,7 @@ export function useConversationSessions({
     if (prefetchedSessionsRef.current.has(id)) return;
     prefetchedSessionsRef.current.add(id);
     void preloadMarkdownRenderer().catch(() => { /* optional renderer remains on plain-text fallback */ });
-    void window.piApi.conversationPage({ id, limit: 50 })
+    void window.piApi.conversationPage({ id, turnLimit: TRANSCRIPT_WINDOW_TURNS })
       .then((page) => {
         if (page?.messages && messagesHaveMarkdownCode(page.messages)) {
           void preloadMarkdownHighlighter().catch(() => { /* code remains readable without highlighting */ });
@@ -334,6 +336,7 @@ export function useConversationSessions({
         ? { ...configuredModel, pending: Boolean(detail.running) }
         : detail.model ?? createEmptyModelSelection());
       setMessages(detail.messages);
+      setTranscriptTruncated(Boolean(detail.page?.hasNewer));
       transcriptPageRef.current = { sessionId: detail.id, page: detail.page ?? { hasOlder: false } };
       setRequestTraces(Array.isArray(detail.requestTraces) ? detail.requestTraces : []);
       setSubagentChildren(Array.isArray(children) ? children : []);
@@ -378,31 +381,29 @@ export function useConversationSessions({
     }
   }
 
-  /** 向上补一页更早的历史，最多保留一个有界窗口。 */
-  async function loadOlderMessages(options: { limit?: number; keepLatest?: boolean; maxWindow?: number } = {}): Promise<boolean> {
+  async function loadAdjacentMessages(direction: 'older' | 'newer', beforeApply: () => number[]): Promise<boolean> {
     const sessionId = sessionRef.current?.id;
     const cursor = transcriptPageRef.current;
-    if (!sessionId || !cursor || cursor.sessionId !== sessionId
-      || !(cursor.page?.olderCursor || cursor.page?.nextCursor) || olderLoadingRef.current) return false;
+    const generation = sessionLoadRef.current;
+    if (!sessionId || !cursor || cursor.sessionId !== sessionId || olderLoadingRef.current) return false;
+    if (direction === 'older' ? !cursor.page.hasOlder : !cursor.page.hasNewer) return false;
     olderLoadingRef.current = true;
     try {
-      const older = await loadOlderPage(window.piApi.conversationPage, sessionId, cursor.page, { limit: options.limit });
-      if (!older || sessionRef.current?.id !== sessionId) return false;
-      transcriptPageRef.current = { sessionId, page: older.page };
-      setMessages((current) => {
-        const merged = [...older.messages, ...current];
-        const maxWindow = options.maxWindow ?? 50;
-        if (options.keepLatest === false && merged.length > maxWindow) {
-          setTranscriptTruncated(true);
-          return trimTranscript(merged, 'oldest');
-        }
-        if (merged.length > maxWindow) {
-          setTranscriptTruncated(true);
-          // While reading upward, the fixed window follows the older edge.
-          return trimTranscript(merged, 'oldest');
-        }
-        return merged;
-      });
+      const incoming = await loadAdjacentPage(window.piApi.conversationPage, sessionId, messages, cursor.page, direction);
+      if (!incoming || sessionRef.current?.id !== sessionId || generation !== sessionLoadRef.current
+        || transcriptPageRef.current !== cursor) return false;
+      const protectedSources = beforeApply();
+      const merged = mergeTranscriptPage(messages, incoming.messages, direction, protectedSources);
+      const removedOlder = messages.length > 0 && !merged.some(message => messageKey(message) === messageKey(messages[0]));
+      const removedNewer = messages.length > 0 && !merged.some(message => messageKey(message) === messageKey(messages.at(-1)));
+      const page = {
+        hasOlder: direction === 'older' ? (Boolean(incoming.page?.hasOlder) || (incoming.messages.length > 0 && messageKey(merged[0]) !== messageKey(incoming.messages[0]))) : removedOlder || Boolean(cursor.page.hasOlder),
+        hasNewer: direction === 'newer' ? (Boolean(incoming.page?.hasNewer) || (incoming.messages.length > 0 && messageKey(merged.at(-1)) !== messageKey(incoming.messages.at(-1)))) : removedNewer || Boolean(cursor.page.hasNewer),
+      };
+      transcriptPageRef.current = { sessionId, page };
+      setTranscriptTruncated(page.hasNewer);
+      if (!incoming.messages.length) return false;
+      setMessages(merged);
       return true;
     } catch {
       return false;
@@ -411,12 +412,17 @@ export function useConversationSessions({
     }
   }
 
+  function loadOlderMessages(beforeApply: () => number[]): Promise<boolean> { return loadAdjacentMessages('older', beforeApply); }
+  function loadNewerMessages(beforeApply: () => number[]): Promise<boolean> { return loadAdjacentMessages('newer', beforeApply); }
+
   async function resetToLatest(): Promise<void> {
     const sessionId = sessionRef.current?.id;
     if (!sessionId) return;
+    const request = { sessionId, page: transcriptPageRef.current?.page ?? {} };
+    transcriptPageRef.current = request;
     try {
       const loaded = await loadTranscriptWindow(window.piApi.conversationPage, sessionId);
-      if (!loaded || sessionRef.current?.id !== sessionId) return;
+      if (!loaded || sessionRef.current?.id !== sessionId || transcriptPageRef.current !== request) return;
       transcriptPageRef.current = { sessionId, page: loaded.page ?? { hasOlder: false } };
       setMessages(loaded.messages);
       setTranscriptTruncated(false);
@@ -428,9 +434,11 @@ export function useConversationSessions({
     const sessionId = sessionRef.current?.id;
     const generation = sessionLoadRef.current;
     if (!sessionId || !Number.isSafeInteger(around) || around <= 0) return false;
+    const request = { sessionId, page: transcriptPageRef.current?.page ?? {} };
+    transcriptPageRef.current = request;
     try {
-      const detail = await window.piApi.conversationPage({ id: sessionId, limit: 50, around });
-      if (!detail || generation !== sessionLoadRef.current || sessionRef.current?.id !== sessionId) return false;
+      const detail = await window.piApi.conversationPage({ id: sessionId, turnLimit: TRANSCRIPT_WINDOW_TURNS, around });
+      if (!detail || generation !== sessionLoadRef.current || sessionRef.current?.id !== sessionId || transcriptPageRef.current !== request) return false;
       if (!detail.messages.some(message => message.sourceIndex === around)) return false;
       transcriptPageRef.current = { sessionId, page: detail.page ?? { hasOlder: false } };
       setMessages(detail.messages);
@@ -459,6 +467,7 @@ export function useConversationSessions({
     openSession,
     openNotificationSession,
     loadOlderMessages,
+    loadNewerMessages,
     loadMessageWindow,
     resetToLatest,
   };

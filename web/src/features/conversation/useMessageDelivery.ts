@@ -42,7 +42,7 @@ import type {
   QueuedEditContext,
   QueuedPrompt,
 } from './composer-types';
-import { extractComposerMentions, normalizeComposerText } from './references';
+import { extractComposerMentions, normalizeComposerText, splitMessageText } from './references';
 import { mergeComposerAttachments, recoverComposerPaste, type PendingComposerPaste } from './composer-paste';
 import { loadTranscriptWindow } from './transcript-load.mjs';
 import type { OutlineData } from './outline-model';
@@ -207,6 +207,12 @@ export function useMessageDelivery({
   commandHandlersRef,
 }: MessageDeliveryDependencies) {
   const isNewConversation = !session?.id;
+  /**
+   * Editing is a branch replacement, so it needs its own request guard.
+   * `requestRef` is also owned by the live subscription and may be cleared
+   * when the old run completes while the replacement is being projected.
+   */
+  const editRequestRef = useRef<string | null>(null);
 
   function currentComposerDraft(): ComposerDraft {
     return { text: prompt, attachments: composerAttachments };
@@ -632,34 +638,94 @@ export function useMessageDelivery({
    * Durable applies the context boundary before generating the replacement,
    * so this is a real edit rather than a renderer-only transcript mask.
    */
+  function projectedEditText(message: ChatMessage): string {
+    const text = message.content
+      .map((block) => block.type === 'text' ? block.text : '')
+      .join('\n');
+    return splitMessageText(text)
+      .map((segment) => segment.kind === 'text'
+        ? segment.text
+        : segment.reference.kind === 'skill'
+          ? `/skill:${segment.reference.label}`
+          : segment.reference.token)
+      .join('')
+      .trim();
+  }
+
+  function editedMessageIsVisible(
+    page: ConversationPage | undefined,
+    entryId: number,
+    text: string,
+  ): boolean {
+    if (!page) return false;
+    const expected = normalizeComposerText(text).trim();
+    return page.messages.some((message) => (
+      message.role === 'user'
+      && Number(message.sourceIndex) > entryId
+      && projectedEditText(message) === expected
+    ));
+  }
+
+  async function loadEditedTranscriptWindow(
+    sessionId: string,
+    entryId: number,
+    text: string,
+  ): Promise<ConversationPage | undefined> {
+    let latest: ConversationPage | undefined;
+    // The Durable input is admitted before its SQLite projection is updated.
+    // Poll briefly so the replacement page cannot be overwritten by the old
+    // branch simply because the first read won the race with projection.
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      if (attempt > 0) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, Math.min(500, 80 * (2 ** (attempt - 1))));
+        });
+      }
+      latest = await loadTranscriptWindow(window.piApi.conversationPage, sessionId);
+      if (editedMessageIsVisible(latest, entryId, text)) return latest;
+    }
+    return latest;
+  }
+
   async function handleEditMessage(entryId: number, text: string) {
-    const sessionId = session?.id;
+    const sessionId = sessionRef.current?.id ?? session?.id;
     if (!sessionId) throw new Error('会话不存在，请重新打开后再试');
     if (turnActive || compaction.active) {
       throw new Error('当前会话仍在运行，请停止回答后再编辑消息');
     }
     latestPromptBySessionRef.current.delete(sessionId);
     const requestId = crypto.randomUUID();
+    const normalizedText = normalizeComposerText(text);
+    editRequestRef.current = requestId;
     requestRef.current = requestId;
     resumeTranscriptFollow();
     setBusy(true);
     setError(null);
     setRetryInfo(null);
+    let admitted = false;
     try {
-      await window.piApi.conversationEdit({
+      const result = await window.piApi.conversationEdit({
         id: sessionId,
         entryId,
-        text: normalizeComposerText(text),
+        text: normalizedText,
         requestId,
         mentions: extractComposerMentions(text),
       });
+      admitted = true;
+      if (result.postCommitError) {
+        pushNotification(
+          result.postCommitError,
+          'warning',
+          '消息已重新发送',
+          sessionId,
+        );
+      }
       void loadState().catch(() => {});
-      if (requestRef.current !== requestId) return;
-      const [saved, outline] = await Promise.all([
-        loadTranscriptWindow(window.piApi.conversationPage, sessionId),
-        refreshOutline(sessionId),
-      ]);
-      if (requestRef.current !== requestId) return;
+      if (editRequestRef.current !== requestId || sessionRef.current?.id !== sessionId) return;
+      const saved = await loadEditedTranscriptWindow(sessionId, entryId, normalizedText);
+      if (editRequestRef.current !== requestId || sessionRef.current?.id !== sessionId) return;
+      const outline = await refreshOutline(sessionId);
+      if (editRequestRef.current !== requestId || sessionRef.current?.id !== sessionId) return;
       if (saved) {
         transcriptPageRef.current = { sessionId: saved.id, page: saved.page ?? { hasOlder: false } };
         setSession({
@@ -676,11 +742,24 @@ export function useMessageDelivery({
         else applyOutline(undefined, saved.messages, saved.messageStart);
       }
     } catch (error) {
-      if (requestRef.current === requestId) {
+      if (admitted) {
+        // Durable has already accepted the replacement. A projection read
+        // failure must not make the edit dialog look like a failed send.
+        pushNotification(
+          '消息已重新发送，当前内容正在同步。',
+          'warning',
+          '编辑消息已提交',
+          sessionId,
+        );
+        return;
+      }
+      if (editRequestRef.current === requestId && sessionRef.current?.id === sessionId) {
         setBusy(false);
         setRetryInfo(null);
       }
       throw new Error(errorText(error));
+    } finally {
+      if (editRequestRef.current === requestId) editRequestRef.current = null;
     }
   }
 
@@ -1096,16 +1175,23 @@ export function useMessageDelivery({
     if (!currentSession?.id || stopping || !turnActive) return;
     const sessionId = currentSession.id;
     setStoppingSessionIds((ids) => ids.includes(sessionId) ? ids : [...ids, sessionId]);
+    // Stop the visible stream optimistically. The main process still has to
+    // unwind Durable's task, but the composer should react to the click now.
+    setMessages((current) => current.map((message) => ({ ...message, streaming: false })));
+    setBusy(false);
+    setCompaction({ active: false });
+    setRetryInfo(null);
+    setError(null);
+    requestRef.current = '';
+    let requestAccepted = false;
     try {
       await window.piApi.conversationInterrupt(sessionId);
+      requestAccepted = true;
       if (sessionRef.current?.id !== sessionId) return;
-      setMessages((current) => current.map((message) => ({ ...message, streaming: false })));
-      setBusy(false);
-      setCompaction({ active: false });
-      setRetryInfo(null);
-      setError(null);
-      requestRef.current = '';
-      await Promise.all([
+      // The stop acknowledgement is already complete at this point. Refresh
+      // secondary projections in the background so a slow state read cannot
+      // keep the stop handler pending or delay the terminal UI event.
+      void Promise.all([
         loadState().catch(() => {}),
         refreshSubagentChildren(false).catch(() => {}),
         window.piApi.conversationSnapshot(sessionId).then((snapshot) => {
@@ -1120,7 +1206,12 @@ export function useMessageDelivery({
     } catch (cause) {
       if (sessionRef.current?.id === sessionId) setError(errorText(cause));
     } finally {
-      setStoppingSessionIds((ids) => ids.filter((id) => id !== sessionId));
+      // Once accepted, the subscription clears this state on the terminal
+      // run event. Clearing here would make the stop button flip back to a
+      // square while Durable is still unwinding the provider task.
+      if (!requestAccepted || sessionRef.current?.id !== sessionId) {
+        setStoppingSessionIds((ids) => ids.filter((id) => id !== sessionId));
+      }
     }
   }
 

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { OutlineItem } from './outline-model';
 
 type ConversationOutlineProps = {
@@ -27,7 +27,27 @@ export function ConversationOutline({
   onJump,
 }: ConversationOutlineProps) {
   const nav = useRef<HTMLElement>(null);
+  const track = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<HoverBox | null>(null);
+
+  useEffect(() => {
+    const host = track.current;
+    if (!host || activeIndex < 0) return;
+    const child = host.children[samples.indexOf(activeIndex)] as HTMLElement | undefined;
+    if (!child) return;
+    // Keep the active tick in a small reading window without using
+    // scrollIntoView, which could also scroll the outer app shell.
+    const top = child.offsetTop;
+    const bottom = top + child.offsetHeight;
+    const viewTop = host.scrollTop;
+    const viewBottom = viewTop + host.clientHeight;
+    const inset = Math.max(18, Math.round(host.clientHeight * 0.28));
+    if (top < viewTop + inset) {
+      host.scrollTop = Math.max(0, top - inset);
+    } else if (bottom > viewBottom - inset) {
+      host.scrollTop = Math.min(host.scrollHeight - host.clientHeight, bottom - host.clientHeight + inset);
+    }
+  }, [activeIndex, samples]);
 
   function showPreview(index: number, node: HTMLElement) {
     const tick = node.getBoundingClientRect();
@@ -45,7 +65,7 @@ export function ConversationOutline({
   const hovered = box ? items[box.index] : null;
 
   return <nav ref={nav} className="conversation-outline" aria-label="对话大纲" onMouseLeave={hidePreview}>
-    <div className="outline-track">
+    <div ref={track} className="outline-track">
       {samples.map((index) => {
         const item = items[index];
         if (!item) return null;

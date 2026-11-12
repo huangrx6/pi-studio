@@ -46,6 +46,7 @@ type ConversationSubscriptionOptions = {
   refreshOutline: (sessionId: string, generation?: number) => Promise<OutlineData | undefined>;
   pushNotification: (message: string, tone?: NotificationTone, title?: string, sessionId?: string) => void;
   setBusy: Dispatch<SetStateAction<boolean>>;
+  setStoppingSessionIds: Dispatch<SetStateAction<string[]>>;
   setRequestTraces: Dispatch<SetStateAction<RequestTrace[]>>;
   setCompaction: Dispatch<SetStateAction<{ active: boolean; reason?: string }>>;
   setRetryInfo: Dispatch<SetStateAction<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>>;
@@ -78,6 +79,7 @@ export function useConversationSubscription({
   refreshOutline,
   pushNotification,
   setBusy,
+  setStoppingSessionIds,
   setRequestTraces,
   setCompaction,
   setRetryInfo,
@@ -114,6 +116,9 @@ export function useConversationSubscription({
     let streamRunActive = false;
     const modelScope = `session:${conversationId}`;
     const subscriptionModelRevision = modelRevisionRef.current.get(modelScope) ?? 0;
+    const clearStopping = () => {
+      setStoppingSessionIds((ids) => ids.filter((id) => id !== conversationId));
+    };
     const modelReadCurrent = (revision: number) => !disposed
       && sessionRef.current?.id === conversationId
       && revision === (modelRevisionRef.current.get(modelScope) ?? 0)
@@ -174,6 +179,7 @@ export function useConversationSubscription({
       setError(null);
       setCompaction({ active: false });
       requestRef.current = '';
+      clearStopping();
       void loadState();
       const revision = modelRevisionRef.current.get(modelScope) ?? 0;
       void window.piApi.conversationSnapshot(conversationId).then((snapshot) => {
@@ -256,6 +262,7 @@ export function useConversationSubscription({
           }
           streamRunActive = false;
           refreshCompletion();
+          clearStopping();
           void refreshSubagentChildren(false);
           return;
         case 'run.failed': {
@@ -270,11 +277,13 @@ export function useConversationSubscription({
             setBusy(streamRunActive);
             setError(null);
             requestRef.current = '';
+            if (!streamRunActive) clearStopping();
             void refreshSubagentChildren(false);
             return;
           }
           streamRunActive = eventSaysConversationRunning(event.payload, false);
           setBusy(streamRunActive);
+          if (!streamRunActive) clearStopping();
           const message = failure || event.payload.message || '执行失败，请检查原因后继续';
           setError(message);
           pushNotification(message, 'error', '会话执行失败', conversationId);

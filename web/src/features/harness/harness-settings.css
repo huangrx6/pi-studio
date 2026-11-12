@@ -14,7 +14,7 @@
 .harness-profile-tab.is-active { color: var(--text); text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 8px; }
 .harness-profile-tab:focus-visible, .harness-section-card:focus-visible, .harness-section-override > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: var(--radius-sm); }
 .harness-profile-tab:disabled { color: var(--disabled-text); cursor: default; }
-.harness-editor-head { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 14px 20px; margin-bottom: 18px; }
+.harness-editor-head { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 20px; margin-bottom: 18px; }
 .harness-editor-identity { display: flex; min-width: 0; flex: 1 1 260px; flex-direction: column; gap: 6px; }
 .harness-editor-status { color: var(--faint); font-size: var(--text-xs); line-height: var(--leading-normal); }
 .harness-editor-status.is-dirty { color: var(--warning); }
