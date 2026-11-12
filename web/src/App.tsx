@@ -697,6 +697,8 @@ export function App() {
         makeDragPreview={makeDragPreview}
         onChooseWorkspace={chooseFile}
         onOpenSettings={(page) => { void openSettings(page); }}
+        terminalFontSize={preferences.terminalFontSize}
+        onTerminalFontSize={(size) => foundation.updatePreference('terminalFontSize', size)}
         extensionDock={<ExtensionSlot
           slot="panel.side"
           cwd={workspace}

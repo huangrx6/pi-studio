@@ -1,0 +1,75 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {
+  DEFAULT_TERMINAL_FONT_SIZE,
+  MAX_TERMINAL_FONT_SIZE,
+  MIN_TERMINAL_FONT_SIZE,
+  clampTerminalFontSize,
+  needsPasteConfirm,
+  parseTerminalLink,
+  stepTerminalFontSize,
+  terminalKeyIntent,
+} from '../../web/src/features/terminal/terminal-actions.ts';
+
+const mac = { platform: 'mac' };
+
+function key(overrides) {
+  return {
+    key: '',
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    hasSelection: false,
+    ...mac,
+    ...overrides,
+  };
+}
+
+test('字号夹在 11–20 之间，越界与非法值都有确定结果', () => {
+  assert.equal(clampTerminalFontSize(14), 14);
+  assert.equal(clampTerminalFontSize(2), MIN_TERMINAL_FONT_SIZE);
+  assert.equal(clampTerminalFontSize(99), MAX_TERMINAL_FONT_SIZE);
+  assert.equal(clampTerminalFontSize('nope'), DEFAULT_TERMINAL_FONT_SIZE);
+  assert.equal(clampTerminalFontSize(undefined), DEFAULT_TERMINAL_FONT_SIZE);
+  assert.equal(stepTerminalFontSize(12, 1), 13);
+  assert.equal(stepTerminalFontSize(MIN_TERMINAL_FONT_SIZE, -1), MIN_TERMINAL_FONT_SIZE, '下界不再变化');
+  assert.equal(stepTerminalFontSize(MAX_TERMINAL_FONT_SIZE, 1), MAX_TERMINAL_FONT_SIZE, '上界不再变化');
+});
+
+test('只有多行或超长的粘贴才需要确认', () => {
+  assert.equal(needsPasteConfirm('ls -la'), false);
+  assert.equal(needsPasteConfirm(''), false);
+  assert.equal(needsPasteConfirm('git status\n'), false, '结尾换行不算第二条命令');
+  assert.equal(needsPasteConfirm('pnpm build\npnpm test'), true);
+  assert.equal(needsPasteConfirm('a'.repeat(401)), true);
+});
+
+test('终端只接管主修饰键组合，其余按键交回 shell', () => {
+  assert.equal(terminalKeyIntent(key({ key: 'c', metaKey: true, hasSelection: true })), 'copy');
+  assert.equal(terminalKeyIntent(key({ key: 'c', metaKey: true })), null, '没有选区时 ⌘C 是中断');
+  assert.equal(terminalKeyIntent(key({ key: 'C', metaKey: true, shiftKey: true, hasSelection: true })), 'copy');
+  assert.equal(terminalKeyIntent(key({ key: 'v', metaKey: true })), 'paste');
+  assert.equal(terminalKeyIntent(key({ key: 'a', metaKey: true })), 'select-all');
+  assert.equal(terminalKeyIntent(key({ key: 'f', metaKey: true })), 'search');
+  assert.equal(terminalKeyIntent(key({ key: 'k', metaKey: true })), 'clear');
+  assert.equal(terminalKeyIntent(key({ key: 't', metaKey: true })), 'new-terminal');
+  assert.equal(terminalKeyIntent(key({ key: '=', metaKey: true })), 'zoom-in');
+  assert.equal(terminalKeyIntent(key({ key: '-', metaKey: true })), 'zoom-out');
+  assert.equal(terminalKeyIntent(key({ key: '0', metaKey: true })), 'zoom-reset');
+  assert.equal(terminalKeyIntent(key({ key: 'c', ctrlKey: true })), null, '⌃C 必须留给 shell');
+  assert.equal(terminalKeyIntent(key({ key: 'ArrowUp' })), null);
+  assert.equal(terminalKeyIntent(key({ key: 'r', metaKey: true })), null);
+  assert.equal(terminalKeyIntent(key({ platform: 'other', key: 'v', ctrlKey: true })), 'paste');
+  assert.equal(terminalKeyIntent(key({ platform: 'other', key: 'v', metaKey: true })), null);
+});
+
+test('链接解析区分 URL 与 path:line，不把普通文本当文件', () => {
+  assert.deepEqual(parseTerminalLink('https://example.com/a?b=1'), { kind: 'url', url: 'https://example.com/a?b=1' });
+  assert.deepEqual(parseTerminalLink('src/App.tsx:12:3'), { kind: 'file', path: 'src/App.tsx', line: 12, column: 3 });
+  assert.deepEqual(parseTerminalLink('./docs/readme.md:7'), { kind: 'file', path: './docs/readme.md', line: 7, column: undefined });
+  assert.deepEqual(parseTerminalLink('src/App.tsx'), { kind: 'file', path: 'src/App.tsx' });
+  assert.equal(parseTerminalLink('warning:3'), null);
+  assert.equal(parseTerminalLink('done'), null);
+  assert.equal(parseTerminalLink(''), null);
+});

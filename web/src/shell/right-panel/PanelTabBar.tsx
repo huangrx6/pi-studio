@@ -55,6 +55,9 @@ export function PanelTabBar<T extends PanelTabItem>({
   onCollapse,
   onMakeDragPreview,
   onClearDragPreview,
+  renamingId,
+  onStartRename,
+  onRename,
 }: {
   tabs: T[];
   activeId: string;
@@ -72,6 +75,9 @@ export function PanelTabBar<T extends PanelTabItem>({
   onCollapse: () => void;
   onMakeDragPreview: (event: DragEvent<HTMLElement>, title: string) => void;
   onClearDragPreview: () => void;
+  renamingId: string | null;
+  onStartRename: (id: string) => void;
+  onRename: (id: string, title: string) => void;
 }) {
   const [toolMenuOpen, setToolMenuOpen] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -172,6 +178,10 @@ export function PanelTabBar<T extends PanelTabItem>({
           className={`panel-tab ${activeId === tab.id ? 'is-active' : ''} ${draggingId === tab.id ? 'is-dragging' : ''} ${dropTarget === tab.id ? 'tab-drop-before' : ''}`}
           draggable
           onClick={() => onActivate(tab)}
+          onDoubleClick={(event) => {
+            event.preventDefault();
+            onStartRename(tab.id);
+          }}
           onContextMenu={(event) => {
             event.preventDefault();
             onContextMenu(tab.id, event.clientX, event.clientY);
@@ -200,7 +210,23 @@ export function PanelTabBar<T extends PanelTabItem>({
           onDragEnd={finishDrag}
         >
           <span className={`panel-tab-icon is-${tab.kind}`}><Icon aria-hidden /></span>
-          <span className="panel-tab-label">{tab.title}</span>
+          {renamingId === tab.id
+            ? <input
+              className="panel-tab-rename"
+              defaultValue={tab.title}
+              autoFocus
+              aria-label={`重命名 ${tab.title}`}
+              onClick={(event) => event.stopPropagation()}
+              onDoubleClick={(event) => event.stopPropagation()}
+              onFocus={(event) => event.currentTarget.select()}
+              onBlur={(event) => onRename(tab.id, event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (isComposingKey(event.nativeEvent)) return;
+                if (event.key === 'Enter') { event.preventDefault(); onRename(tab.id, event.currentTarget.value); }
+                if (event.key === 'Escape') { event.preventDefault(); onRename(tab.id, tab.title); }
+              }}
+            />
+            : <span className="panel-tab-label">{tab.title}</span>}
           <button
             type="button"
             className="panel-tab-close"

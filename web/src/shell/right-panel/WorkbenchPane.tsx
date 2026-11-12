@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { MutableRefObject, ReactNode } from 'react';
 import {
   AppWindow,
@@ -47,6 +47,8 @@ type WorkbenchPaneProps = {
   dragPreviewRef: MutableRefObject<HTMLDivElement | null>;
   onChooseWorkspace: () => void;
   onOpenSettings: (page: 'models') => void;
+  terminalFontSize: number;
+  onTerminalFontSize: (size: number) => void;
   makeDragPreview: (event: React.DragEvent, label: string, kind: '工作区' | '会话' | '标签') => void;
 };
 
@@ -62,6 +64,8 @@ export function WorkbenchPane({
   dragPreviewRef,
   onChooseWorkspace,
   onOpenSettings,
+  terminalFontSize,
+  onTerminalFontSize,
   makeDragPreview,
 }: WorkbenchPaneProps) {
   const {
@@ -114,7 +118,47 @@ export function WorkbenchPane({
     setPanelTabs,
   } = controller;
 
+  const [renamingId, setRenamingId] = useState<string | null>(null);
   const panelWorkspace = session?.cwd || workspace;
+
+  /** 重命名标签：空标题回退到原名，避免出现没有文字的标签。 */
+  function renamePanelTab(id: string, title: string) {
+    const next = title.trim();
+    if (next) setPanelTabs((current) => current.map((tab) => tab.id === id ? { ...tab, title: next } : tab));
+    setRenamingId(null);
+  }
+
+  /** 重启终端：先结束旧会话，再用同一个 id 重新挂载面板。 */
+  async function restartTerminal(id: string) {
+    await window.piApi.terminalClose(id).catch(() => {});
+    setPanelTabs((current) => current.map((tab) => tab.id === id ? { ...tab, restart: (tab.restart ?? 0) + 1 } : tab));
+  }
+
+  // 面板级快捷键：⌘W 关当前标签，⌘1..9 切标签。终端内的组合键由终端自己先拦。
+  useEffect(() => {
+    if (!filesOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.isComposing || event.altKey || event.shiftKey) return;
+      if (!(event.metaKey || event.ctrlKey)) return;
+      // 终端里只认 ⌘（Ctrl+W 是 readline 的删词，不能抢）。
+      const inTerminal = (event.target as HTMLElement | null)?.closest?.('.terminal-host');
+      if (inTerminal && !event.metaKey) return;
+      const tabs = panelTabs;
+      if (event.key.toLowerCase() === 'w') {
+        if (!activePanelTabId) return;
+        event.preventDefault();
+        closePanelTab(activePanelTabId);
+        return;
+      }
+      if (!/^[1-9]$/u.test(event.key)) return;
+      const target = tabs[Number(event.key) - 1];
+      if (!target) return;
+      event.preventDefault();
+      activatePanelTab(target);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activatePanelTab, activePanelTabId, closePanelTab, filesOpen, panelTabs]);
   const toolActions: RightPanelToolAction[] = [
     { id: 'comparison', label: '模型双跑', description: '独立评估两个模型的回答与性能', onSelect: onOpenComparison },
     { id: 'files', label: '工作区文件', description: '浏览和预览项目文件', disabled: !panelWorkspace, onSelect: openFilesTab },
@@ -216,7 +260,16 @@ export function WorkbenchPane({
           <LoaderCircle aria-hidden="true" />
         </div>
       }>
-        <LazyTerminalPanel key={activePanelTab.id} id={activePanelTab.id} cwd={activePanelTab.cwd || session?.cwd || workspace} onNewTerminal={openTerminalTab} />
+        <LazyTerminalPanel
+          key={`${activePanelTab.id}:${activePanelTab.restart ?? 0}`}
+          id={activePanelTab.id}
+          cwd={activePanelTab.cwd || session?.cwd || workspace}
+          fontSize={terminalFontSize}
+          onFontSizeChange={onTerminalFontSize}
+          onNewTerminal={openTerminalTab}
+          onOpenFile={(path) => { void openFile(path.replace(/:\d+(?::\d+)?$/u, ''), session?.id, 'external'); }}
+          onOpenUrl={(url) => openBrowserTab(url)}
+        />
       </Suspense>;
     }
     if (activePanelTab.kind === 'services') {
@@ -251,6 +304,10 @@ export function WorkbenchPane({
 
   return <>
     {tabMenu && <ActionMenu x={tabMenu.x} y={tabMenu.y} onClose={closeTabMenu} items={[
+      { label: '重命名', run: () => { setRenamingId(tabMenu.id); closeTabMenu(); } },
+      ...(panelTabs.find((tab) => tab.id === tabMenu.id)?.kind === 'terminal'
+        ? [{ label: '重启终端', run: () => { void restartTerminal(tabMenu.id); closeTabMenu(); } }]
+        : []),
       { label: '关闭标签页', run: () => closePanelTab(tabMenu.id) },
       { label: '关闭左侧标签页', disabled: panelTabs.findIndex(tab => tab.id === tabMenu.id) <= 0, run: () => closePanelTabs(tabMenu.id, 'left') },
       { label: '关闭右侧标签页', disabled: panelTabs.findIndex(tab => tab.id === tabMenu.id) === panelTabs.length - 1, run: () => closePanelTabs(tabMenu.id, 'right') },
@@ -278,6 +335,9 @@ export function WorkbenchPane({
       onCloseTab={closePanelTab}
       onReorder={reorderPanelTabs}
       onContextMenu={(id, x, y) => setTabMenu({ id, x, y })}
+      renamingId={renamingId}
+      onStartRename={setRenamingId}
+      onRename={renamePanelTab}
       onToggleSplit={() => setPanelSplit((value) => !value)}
       onToggleFullscreen={() => setPanelFullscreen((value) => !value)}
       onMakeDragPreview={(event, title) => makeDragPreview(event, title, '标签')}

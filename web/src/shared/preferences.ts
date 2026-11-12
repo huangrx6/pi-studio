@@ -56,6 +56,8 @@ export type Preferences = {
   palette: PalettePreference;
   /** 对话正文字号（px），仅影响聊天内容。 */
   fontSize: number;
+  /** 终端字号（px），独立于对话正文；终端需要比正文更紧凑的等宽排版。 */
+  terminalFontSize: number;
   /** 步骤展示密度。 */
   stepDisplay: StepDisplay;
   /** 步骤收起时机。 */
@@ -90,6 +92,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   theme: 'light',
   palette: 'lime',
   fontSize: 14,
+  terminalFontSize: 12,
   stepDisplay: 'standard',
   stepCollapse: 'after-answer',
   showCodeView: false,
@@ -180,6 +183,12 @@ export function normalizePreferences(value: unknown): Preferences {
       DEFAULT_PREFERENCES.fontSize,
       12,
       18,
+    ),
+    terminalFontSize: clampNumber(
+      source.terminalFontSize,
+      DEFAULT_PREFERENCES.terminalFontSize,
+      11,
+      20,
     ),
     stepDisplay: STEP_DISPLAYS.has(source.stepDisplay as StepDisplay)
       ? source.stepDisplay as StepDisplay

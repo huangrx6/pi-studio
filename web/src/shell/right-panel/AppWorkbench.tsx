@@ -31,6 +31,9 @@ type AppWorkbenchProps = {
   onToggleFullscreen: () => void;
   onMakeDragPreview: (event: DragEvent, title: string) => void;
   onClearDragPreview: () => void;
+  renamingId: string | null;
+  onStartRename: (id: string) => void;
+  onRename: (id: string, title: string) => void;
   onResizeStart: (event: PointerEvent<HTMLDivElement>) => void;
   onResizeMove: (event: PointerEvent<HTMLDivElement>) => void;
   onResizeEnd: (event: PointerEvent<HTMLDivElement>) => void;
@@ -63,6 +66,9 @@ export function AppWorkbench({
   onToggleFullscreen,
   onMakeDragPreview,
   onClearDragPreview,
+  renamingId,
+  onStartRename,
+  onRename,
   onResizeStart,
   onResizeMove,
   onResizeEnd,
@@ -107,6 +113,9 @@ export function AppWorkbench({
             onCollapse={onClose}
             onMakeDragPreview={onMakeDragPreview}
             onClearDragPreview={onClearDragPreview}
+            renamingId={renamingId}
+            onStartRename={onStartRename}
+            onRename={onRename}
           />
           <div className={`panel-body ${split ? 'is-split' : ''}`}>
             {split ? <>

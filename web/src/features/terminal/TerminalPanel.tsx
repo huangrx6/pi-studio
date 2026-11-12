@@ -1,11 +1,36 @@
-import { useEffect, useRef, useState } from 'react';
-import { Plus, RotateCw, Terminal as TerminalIcon, TriangleAlert } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ArrowDownToLine,
+  ChevronDown,
+  ChevronUp,
+  Eraser,
+  MoreHorizontal,
+  Plus,
+  RotateCw,
+  Search,
+  Terminal as TerminalIcon,
+  TriangleAlert,
+  X,
+} from 'lucide-react';
 import { FitAddon } from '@xterm/addon-fit';
+import { SearchAddon } from '@xterm/addon-search';
+import { Unicode11Addon } from '@xterm/addon-unicode11';
+import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Terminal, type ITheme } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import type { TerminalEvent, TerminalSessionStatus } from '../../types/runtime-panel-types';
 import { errorText } from '../../shared/error-text';
+import { ActionMenu, type MenuAction } from '../../shared/ActionMenu';
 import { restoreTerminalReplay } from './terminal-replay';
+import {
+  MAX_TERMINAL_FONT_SIZE,
+  MIN_TERMINAL_FONT_SIZE,
+  needsPasteConfirm,
+  parseTerminalLink,
+  stepTerminalFontSize,
+  terminalKeyIntent,
+  type TerminalLinkTarget,
+} from './terminal-actions';
 import './terminal-panel.css';
 
 const MAX_PENDING_EVENTS = 256;
@@ -47,17 +72,60 @@ function terminalTheme(): ITheme {
   };
 }
 
+/**
+ * 把输出里的 `path:line` 变成可点链接。
+ *
+ * URL 由 WebLinksAddon 负责；这个 provider 只认文件路径，点在右侧面板打开。
+ * 坐标是 1-based 的列号，和 `buffer.getLine` 的 0-based 行号差一。
+ */
+function registerFileLinks(term: Terminal, open: (target: TerminalLinkTarget) => void) {
+  return term.registerLinkProvider({
+    provideLinks(row, callback) {
+      const line = term.buffer.active.getLine(row - 1);
+      const text = line?.translateToString(true) ?? '';
+      // 含 URL 的行整行交给 WebLinksAddon，避免把 https://host/a 的路径段
+      // 也注册成文件链接。
+      if (!text || /https?:\/\//iu.test(text)) { callback(undefined); return; }
+      const links = [...text.matchAll(/[A-Za-z0-9_.~/@-]*\/[A-Za-z0-9_.~/@-]+(?::\d+(?::\d+)?)?/gu)]
+        .map((match) => {
+          const target = parseTerminalLink(match[0]);
+          if (!target || target.kind !== 'file') return null;
+          const start = (match.index ?? 0) + 1;
+          return {
+            text: match[0],
+            range: { start: { x: start, y: row }, end: { x: start + match[0].length - 1, y: row } },
+            activate: () => open(target),
+          };
+        })
+        .filter((link): link is NonNullable<typeof link> => link !== null);
+      callback(links.length > 0 ? links : undefined);
+    },
+  });
+}
+
 export function TerminalPanel({
   id,
   cwd,
+  fontSize,
+  onFontSizeChange,
   onNewTerminal,
+  onOpenFile,
+  onOpenUrl,
 }: {
   id: string;
   cwd: string;
+  fontSize: number;
+  onFontSizeChange: (size: number) => void;
   onNewTerminal: () => void;
+  onOpenFile?: (path: string) => void;
+  onOpenUrl?: (url: string) => void;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const focusTerminalRef = useRef<(() => void) | null>(null);
+  const terminalRef = useRef<Terminal | null>(null);
+  const searchRef = useRef<SearchAddon | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const fitRef = useRef<(() => void) | null>(null);
   const [connecting, setConnecting] = useState(true);
   const [status, setStatus] = useState<TerminalSessionStatus>('running');
   const [exitCode, setExitCode] = useState<number | undefined>();
@@ -67,6 +135,88 @@ export function TerminalPanel({
   const [fontWarning, setFontWarning] = useState(false);
   const [historyTruncated, setHistoryTruncated] = useState(false);
   const [retryRevision, setRetryRevision] = useState(0);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [pendingPaste, setPendingPaste] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+
+  // 链接与偏好会随组件重建，用 ref 让 xterm 的回调始终读到最新实现。
+  const onOpenFileRef = useRef(onOpenFile);
+  onOpenFileRef.current = onOpenFile;
+  const onOpenUrlRef = useRef(onOpenUrl);
+  onOpenUrlRef.current = onOpenUrl;
+
+  const openLink = useCallback((target: TerminalLinkTarget) => {
+    if (target.kind === 'url') { onOpenUrlRef.current?.(target.url); return; }
+    onOpenFileRef.current?.(target.line ? `${target.path}:${target.line}` : target.path);
+  }, []);
+
+  const writeToPty = useCallback((data: string) => {
+    void window.piApi.terminalWrite(id, data).catch((cause) => setError(errorText(cause)));
+  }, [id]);
+
+  /** 读剪贴板再交给 PTY；多行粘贴先停在确认条上。 */
+  const pasteFromClipboard = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text) return;
+      if (needsPasteConfirm(text)) setPendingPaste(text);
+      else writeToPty(text);
+    } catch (cause) {
+      setError(errorText(cause));
+    }
+  }, [writeToPty]);
+
+  const copySelection = useCallback(async () => {
+    const selection = terminalRef.current?.getSelection() ?? '';
+    if (!selection) return false;
+    try {
+      await navigator.clipboard.writeText(selection);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const clearScreen = useCallback(() => {
+    const term = terminalRef.current;
+    if (!term) return;
+    term.clear();
+    term.focus();
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    const term = terminalRef.current;
+    if (!term) return;
+    term.scrollToBottom();
+    term.focus();
+  }, []);
+
+  const zoom = useCallback((direction: 1 | -1) => {
+    const next = stepTerminalFontSize(fontSize, direction);
+    if (next !== fontSize) onFontSizeChange(next);
+  }, [fontSize, onFontSizeChange]);
+
+  const openSearch = useCallback(() => {
+    const selection = terminalRef.current?.getSelection() ?? '';
+    if (selection && !selection.includes('\n')) setSearchQuery(selection);
+    setSearchOpen(true);
+    requestAnimationFrame(() => searchInputRef.current?.select());
+  }, []);
+
+  const menuActions: MenuAction[] = (() => [
+    { label: '复制', disabled: !(terminalRef.current?.hasSelection() ?? false), run: () => { void copySelection(); } },
+    { label: '粘贴', run: () => { void pasteFromClipboard(); } },
+    { label: '全选', run: () => { terminalRef.current?.selectAll(); } },
+    { label: '清屏', run: clearScreen },
+    { label: '搜索', run: openSearch },
+    { label: '跳到最新', run: scrollToBottom },
+    { label: fontSize >= MAX_TERMINAL_FONT_SIZE ? '放大（已最大）' : '放大字号', disabled: fontSize >= MAX_TERMINAL_FONT_SIZE, run: () => zoom(1) },
+    { label: fontSize <= MIN_TERMINAL_FONT_SIZE ? '缩小（已最小）' : '缩小字号', disabled: fontSize <= MIN_TERMINAL_FONT_SIZE, run: () => zoom(-1) },
+    { label: '重新连接', run: () => setRetryRevision((value) => value + 1) },
+  ])();
 
   useEffect(() => {
     const host = hostRef.current;
@@ -92,19 +242,37 @@ export function TerminalPanel({
     let pendingChars = 0;
     let droppedSequence = 0;
     const term = new Terminal({
+      // Unicode11 的宽度表属于 xterm 的 proposed API，终端需要它来对齐
+      // emoji 与中日韩宽字符；其余 proposed 能力这里没有使用。
+      allowProposedApi: true,
       allowTransparency: false,
       convertEol: false,
       cursorBlink: true,
       cursorStyle: 'bar',
       fontFamily: terminalFontFamily(),
-      fontSize: Math.max(11, Math.min(16, Number.parseFloat(token('--chat-font-size')) || 12)),
+      fontSize,
       lineHeight: 1.25,
       scrollback: 8_000,
       theme: terminalTheme(),
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
+    const search = new SearchAddon();
+    term.loadAddon(search);
+    const unicode = new Unicode11Addon();
+    term.loadAddon(unicode);
+    term.unicode.activeVersion = '11';
+    term.loadAddon(new WebLinksAddon((event, uri) => {
+      event.preventDefault();
+      openLink({ kind: 'url', url: uri });
+    }));
+    const fileLinks = registerFileLinks(term, openLink);
     term.open(host);
+    terminalRef.current = term;
+    searchRef.current = search;
+    fitRef.current = () => {
+      try { fit.fit(); } catch { /* 面板隐藏时没有几何信息 */ }
+    };
     focusTerminalRef.current = () => term.focus();
 
     const fitTerminal = () => {
@@ -148,7 +316,6 @@ export function TerminalPanel({
       appearanceDirty = false;
       term.options.theme = terminalTheme();
       term.options.fontFamily = terminalFontFamily();
-      term.options.fontSize = Math.max(11, Math.min(16, Number.parseFloat(token('--chat-font-size')) || 12));
       term.refresh(0, term.rows - 1);
       scheduleFit();
     };
@@ -295,10 +462,72 @@ export function TerminalPanel({
       input.dispose();
       resizeObserver.disconnect();
       appearanceObserver.disconnect();
+      fileLinks.dispose();
       term.dispose();
+      terminalRef.current = null;
+      searchRef.current = null;
+      fitRef.current = null;
       focusTerminalRef.current = null;
     };
-  }, [cwd, id, retryRevision]);
+  }, [cwd, id, retryRevision, openLink]);
+
+  // 字号变化只改渲染参数，不重建会话。
+  useEffect(() => {
+    const term = terminalRef.current;
+    if (!term || term.options.fontSize === fontSize) return;
+    term.options.fontSize = fontSize;
+    fitRef.current?.();
+    term.refresh(0, term.rows - 1);
+    term.focus();
+  }, [fontSize]);
+
+  // 面板内的组合键：复制、粘贴、搜索、清屏、缩放、新终端。
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.isComposing) return;
+      const intent = terminalKeyIntent({
+        key: event.key,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        altKey: event.altKey,
+        shiftKey: event.shiftKey,
+        hasSelection: terminalRef.current?.hasSelection() ?? false,
+      });
+      if (!intent) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (intent === 'copy') { void copySelection(); return; }
+      if (intent === 'paste') { void pasteFromClipboard(); return; }
+      if (intent === 'select-all') { terminalRef.current?.selectAll(); return; }
+      if (intent === 'search') { openSearch(); return; }
+      if (intent === 'clear') { clearScreen(); return; }
+      if (intent === 'new-terminal') { onNewTerminal(); return; }
+      if (intent === 'zoom-in') { zoom(1); return; }
+      if (intent === 'zoom-out') { zoom(-1); return; }
+      if (intent === 'zoom-reset') onFontSizeChange(12);
+    };
+    host.addEventListener('keydown', onKeyDown, true);
+    return () => host.removeEventListener('keydown', onKeyDown, true);
+  }, [clearScreen, copySelection, onFontSizeChange, onNewTerminal, openSearch, pasteFromClipboard, zoom]);
+
+  // 搜索结果随输入实时高亮，⌘F 打开时预先放入当前选区。
+  useEffect(() => {
+    if (!searchOpen) return;
+    const query = searchQuery;
+    if (!query) { searchRef.current?.clearDecorations(); return; }
+    searchRef.current?.findNext(query, {
+      incremental: true,
+      // xterm 的取色器不认识 color-mix()，这里只用具体的语义色。
+      decorations: {
+        matchBackground: token('--warning-soft'),
+        activeMatchBackground: token('--warning-soft'),
+        matchOverviewRuler: token('--warning'),
+        activeMatchColorOverviewRuler: token('--warning'),
+      },
+    });
+  }, [searchOpen, searchQuery]);
 
   const running = !connecting && status === 'running' && !error;
   return <section className="terminal-panel" aria-label="终端">
@@ -310,9 +539,52 @@ export function TerminalPanel({
       <span className="terminal-shell"><TerminalIcon aria-hidden="true" />{shell || 'shell'}</span>
       <code title={workingDirectory}>{workingDirectory}</code>
       {fontWarning && <span className="terminal-font-warning" role="status" aria-label="图标字体加载失败，请重新连接终端" title="图标字体加载失败，请重新连接终端"><TriangleAlert aria-hidden /></span>}
-      <button type="button" aria-label="新建终端" title="新建终端" onClick={onNewTerminal}><Plus /></button>
+      <button type="button" aria-label="搜索终端输出" title="搜索终端输出 ⌘F" onClick={openSearch}><Search /></button>
+      <button type="button" aria-label="清屏" title="清屏 ⌘K" onClick={clearScreen}><Eraser /></button>
+      <button type="button" aria-label="新建终端" title="新建终端 ⌘T" onClick={onNewTerminal}><Plus /></button>
       <button type="button" aria-label="重新连接终端" title="重新连接" onClick={() => setRetryRevision((value) => value + 1)}><RotateCw /></button>
+      <button
+        ref={moreButtonRef}
+        type="button"
+        aria-label="更多终端操作"
+        title="更多"
+        onClick={() => {
+          const rect = moreButtonRef.current?.getBoundingClientRect();
+          if (rect) setMoreMenu({ x: rect.right - 8, y: rect.bottom + 4 });
+        }}
+      ><MoreHorizontal /></button>
     </header>
+    {searchOpen && <div className="terminal-search" role="search">
+      <Search aria-hidden="true" />
+      <input
+        ref={searchInputRef}
+        value={searchQuery}
+        autoFocus
+        placeholder="搜索输出"
+        aria-label="搜索终端输出"
+        onChange={(event) => setSearchQuery(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') { event.preventDefault(); setSearchOpen(false); setSearchQuery(''); terminalRef.current?.focus(); return; }
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            if (!searchQuery) return;
+            if (event.shiftKey) searchRef.current?.findPrevious(searchQuery);
+            else searchRef.current?.findNext(searchQuery);
+          }
+        }}
+      />
+      <button type="button" aria-label="上一个结果" title="上一个 ⇧Enter" onClick={() => searchQuery && searchRef.current?.findPrevious(searchQuery)}><ChevronUp /></button>
+      <button type="button" aria-label="下一个结果" title="下一个 Enter" onClick={() => searchQuery && searchRef.current?.findNext(searchQuery)}><ChevronDown /></button>
+      <button type="button" aria-label="跳到最新" title="跳到最新" onClick={scrollToBottom}><ArrowDownToLine /></button>
+      <button type="button" aria-label="关闭搜索" title="关闭" onClick={() => { setSearchOpen(false); setSearchQuery(''); terminalRef.current?.focus(); }}><X /></button>
+    </div>}
+    {pendingPaste !== null && <div className="terminal-paste-confirm" role="status">
+      <span>粘贴 {pendingPaste.split('\n').length} 行命令？确认会直接写入终端。</span>
+      <div>
+        <button type="button" className="is-primary" onClick={() => { const text = pendingPaste; setPendingPaste(null); writeToPty(text); }}>粘贴</button>
+        <button type="button" onClick={() => setPendingPaste(null)}>取消</button>
+      </div>
+    </div>}
     {historyTruncated && <div className="terminal-history-note" role="status">较早输出已清理，历史画面可能不完整。</div>}
     <div className="terminal-stage">
       <div
@@ -321,6 +593,10 @@ export function TerminalPanel({
         aria-label="交互式终端"
         onPointerDown={() => focusTerminalRef.current?.()}
         onFocus={() => focusTerminalRef.current?.()}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          setMenu({ x: event.clientX, y: event.clientY });
+        }}
       />
       {error && <div className="terminal-error" role="alert">
         <strong>终端连接异常</strong>
@@ -328,5 +604,7 @@ export function TerminalPanel({
         <button type="button" onClick={() => { setError(null); setRetryRevision((value) => value + 1); }}>重试</button>
       </div>}
     </div>
+    {menu && <ActionMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={menuActions} />}
+    {moreMenu && <ActionMenu x={moreMenu.x} y={moreMenu.y} onClose={() => setMoreMenu(null)} items={menuActions} />}
   </section>;
 }

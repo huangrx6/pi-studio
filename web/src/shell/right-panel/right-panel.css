@@ -143,6 +143,21 @@
   white-space: nowrap;
 }
 
+/* 双击标签改名：输入框直接顶替标题，保持行高与文字大小 */
+.panel-tab-rename {
+  min-width: 0;
+  flex: 1;
+  height: 20px;
+  margin: 0 -2px;
+  padding: 0 4px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-tag);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+.panel-tab-rename:focus { outline: none; }
+
 .panel-tab-close {
   position: relative;
   z-index: 2;

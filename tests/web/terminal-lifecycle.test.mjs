@@ -4,6 +4,14 @@ import vm from 'node:vm';
 import test from 'node:test';
 import ts from 'typescript';
 import { restoreTerminalReplay } from '../../web/src/features/terminal/terminal-replay.ts';
+import {
+  MAX_TERMINAL_FONT_SIZE,
+  MIN_TERMINAL_FONT_SIZE,
+  needsPasteConfirm,
+  parseTerminalLink,
+  stepTerminalFontSize,
+  terminalKeyIntent,
+} from '../../web/src/features/terminal/terminal-actions.ts';
 
 const replay = data => ({ cols: 80, rows: 24, steps: [{ type: 'data', data }], truncated: false });
 
@@ -20,23 +28,57 @@ function harness() {
   let cursor = 0, deps, effect, cleanup, dirty = false, tree, frameId = 0;
   const slots = [], frames = new Map(), listeners = new Map(), events = new Set();
   const creates = [], resizes = [], writes = [], terms = [], fits = [], observers = [], fonts = [];
-  const host = { isConnected: true, clientWidth: 600, clientHeight: 400, contains: target => target === host };
+  const hostListeners = new Map();
+  const host = {
+    isConnected: true, clientWidth: 600, clientHeight: 400, contains: target => target === host,
+    addEventListener(type, fn) { const set = hostListeners.get(type) ?? new Set(); set.add(fn); hostListeners.set(type, set); },
+    removeEventListener(type, fn) { hostListeners.get(type)?.delete(fn); },
+  };
   const document = {
     hidden: false, documentElement: {}, hasFocus: () => true,
     fonts: { load() { const pending = deferred(); fonts.push(pending); return pending.promise; } },
     addEventListener(type, fn) { const set = listeners.get(type) ?? new Set(); set.add(fn); listeners.set(type, set); },
     removeEventListener(type, fn) { listeners.get(type)?.delete(fn); },
   };
+  const sameDeps = (left, right) => Array.isArray(right) && Array.isArray(left)
+    && left.length === right.length && left.every((value, index) => Object.is(value, right[index]));
+  // 组件里不止一个 effect：按 hook 序号分别保存依赖与清理函数，渲染后统一调度。
+  const cleanups = new Map();
+  const dirtyEffects = new Set();
   const react = {
     useState(initial) {
       const index = cursor++; if (!(index in slots)) slots[index] = initial;
       return [slots[index], value => { const next = typeof value === 'function' ? value(slots[index]) : value; if (!Object.is(next, slots[index])) dirty = true; slots[index] = next; }];
     },
     useRef(initial) { const index = cursor++; return slots[index] ??= { current: initial }; },
-    useEffect(next, nextDeps) { if (!deps || nextDeps.some((value, index) => value !== deps[index])) { deps = nextDeps; effect = next; } },
+    useCallback(fn, nextDeps) {
+      const index = cursor++; const slot = slots[index];
+      if (slot && sameDeps(slot.deps, nextDeps)) return slot.fn;
+      slots[index] = { fn, deps: nextDeps }; return fn;
+    },
+    useMemo(factory, nextDeps) {
+      const index = cursor++; const slot = slots[index];
+      if (slot && sameDeps(slot.deps, nextDeps)) return slot.value;
+      const value = factory(); slots[index] = { value, deps: nextDeps }; return value;
+    },
+    useEffect(next, nextDeps) {
+      const index = cursor++; const slot = slots[index];
+      if (slot && sameDeps(slot.deps, nextDeps)) return;
+      slots[index] = { deps: nextDeps }; dirtyEffects.add(index);
+      effects.set(index, next);
+    },
   };
+  const effects = new Map();
   class Terminal {
-    constructor(options) { this.options = options; this.cols = 80; this.rows = 24; this.output = []; this.focuses = 0; this.refreshes = 0; terms.push(this); }
+    constructor(options) { this.options = options; this.cols = 80; this.rows = 24; this.output = []; this.focuses = 0; this.refreshes = 0; this.unicode = {}; this.selection = ''; terms.push(this); }
+    registerLinkProvider(provider) { this.linkProvider = provider; return { dispose: () => { this.linkProviderDisposed = true; } }; }
+    hasSelection() { return this.selection.length > 0; }
+    getSelection() { return this.selection; }
+    selectAll() { this.selectAllCalls = (this.selectAllCalls ?? 0) + 1; }
+    clear() { this.clearCalls = (this.clearCalls ?? 0) + 1; }
+    scrollToBottom() { this.scrollCalls = (this.scrollCalls ?? 0) + 1; }
+    touch() { this.touchCalls = (this.touchCalls ?? 0) + 1; }
+    onSelectionChange() { return { dispose() {} }; }
     loadAddon(fit) { fit.term = this; }
     open() {}
     write(data, callback) { assert.equal(this.disposed, undefined); if (data) { this.output.push(data); (this.writeSizes ??= []).push([this.cols, this.rows]); } if (this.holdWrites && callback) (this.callbacks ??= []).push(callback); else callback?.(); }
@@ -47,6 +89,13 @@ function harness() {
     onData(fn) { this.input = fn; return { dispose: () => { this.inputDisposed = true; } }; }
     dispose() { this.disposed = true; }
   }
+  class SearchAddon {
+    findNext(query) { this.lastQuery = query; }
+    findPrevious(query) { this.lastQuery = query; }
+    clearDecorations() { this.cleared = true; }
+  }
+  class Unicode11Addon {}
+  class WebLinksAddon { constructor(handler) { this.handler = handler; } }
   class FitAddon {
     constructor() { this.calls = 0; fits.push(this); }
     fit() { this.calls++; this.term.cols = Math.floor(host.clientWidth / 10); this.term.rows = Math.floor(host.clientHeight / 20); }
@@ -75,19 +124,30 @@ function harness() {
       if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
       if (name === '@xterm/xterm') return { Terminal };
       if (name === '@xterm/addon-fit') return { FitAddon };
+      if (name === '@xterm/addon-search') return { SearchAddon };
+      if (name === '@xterm/addon-unicode11') return { Unicode11Addon };
+      if (name === '@xterm/addon-web-links') return { WebLinksAddon };
+      if (name.endsWith('/terminal-actions')) {
+        return { MAX_TERMINAL_FONT_SIZE, MIN_TERMINAL_FONT_SIZE, needsPasteConfirm, parseTerminalLink, stepTerminalFontSize, terminalKeyIntent };
+      }
+      if (name.endsWith('/ActionMenu')) return { ActionMenu: () => null };
       if (name.endsWith('error-text')) return { errorText: error => error.message };
       if (name.endsWith('terminal-replay')) return { restoreTerminalReplay };
       return {};
     },
   });
   const nodes = (node) => !node || typeof node !== 'object' ? [] : [node, ...[node.props?.children].flat(Infinity).flatMap(nodes)];
-  let props = { id: 'a', cwd: '/workspace/a', onNewTerminal() {} };
+  let props = { id: 'a', cwd: '/workspace/a', fontSize: 12, onFontSizeChange() {}, onNewTerminal() {} };
   function render(next) {
     props = { ...props, ...next };
     do {
       dirty = false; cursor = 0; tree = module.exports.TerminalPanel(props);
       nodes(tree).find(node => node.props?.className === 'terminal-host').props.ref.current = host;
-      if (effect) { cleanup?.(); cleanup = effect(); effect = null; }
+      for (const index of [...dirtyEffects].sort((left, right) => left - right)) {
+        dirtyEffects.delete(index);
+        cleanups.get(index)?.();
+        cleanups.set(index, effects.get(index)?.() ?? undefined);
+      }
     } while (dirty);
   }
   render();
@@ -98,7 +158,11 @@ function harness() {
     tick() { const next = [...frames.values()]; frames.clear(); next.forEach(fn => fn()); },
     button(label) { return nodes(tree).find(node => node.type === 'button' && node.props['aria-label'] === label); },
     text() { return JSON.stringify(tree); },
-    unmount() { cleanup?.(); },
+    pressKey(event) {
+      const full = { preventDefault() {}, stopPropagation() {}, ...event };
+      for (const fn of [...(hostListeners.get('keydown') ?? [])]) fn(full);
+    },
+    unmount() { for (const [index] of cleanups) { cleanups.get(index)?.(); cleanups.delete(index); } },
     listenerCount() { return [...listeners.values()].reduce((sum, set) => sum + set.size, 0); },
     resolve(index = 0, extra = {}) { creates[index].resolve({ id: creates[index].payload.id, cwd: '/workspace/a', shell: 'zsh', status: 'running', sequence: 0, ...extra }); },
   };
@@ -164,6 +228,22 @@ test('header reconnect clears failure and obsolete requests cannot mutate a repl
   h.resolve(1, { replay: replay('late A') }); await settle();
   assert.deepEqual(h.terms[2].output, []); assert.equal(h.terms[1].focuses, 0);
   h.resolve(2, { replay: replay('B') }); await settle(); h.render(); assert.deepEqual(h.terms[2].output, ['B']);
+});
+
+test('terminal keybindings drive search, clear and zoom without touching the PTY', async () => {
+  const h = harness(); h.resolve(); await settle(); h.render();
+  const changed = [];
+  h.render({ onFontSizeChange: (size) => changed.push(size) });
+  h.pressKey({ key: 'f', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false, isComposing: false });
+  h.render();
+  assert.match(h.text(), /搜索终端输出/, '后端未开搜索条（渲染层没有 .terminal-search）');
+  h.pressKey({ key: '=', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false, isComposing: false });
+  assert.deepEqual(changed, [13]);
+  h.pressKey({ key: 'k', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false, isComposing: false });
+  assert.equal(h.terms[0].clearCalls, 1);
+  h.pressKey({ key: 'c', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false, isComposing: false });
+  assert.equal(h.writes.length, 0, '没有选区时 ⌘C 不该被面板吃掉');
+  h.unmount();
 });
 
 test('unmount releases all renderer resources; late create/font/events cannot write, resize, or kill PTYs', async () => {
