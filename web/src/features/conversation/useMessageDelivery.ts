@@ -41,7 +41,7 @@ import type {
   QueuedEditContext,
   QueuedPrompt,
 } from './composer-types';
-import { extractComposerMentions } from './references';
+import { extractComposerMentions, normalizeComposerText } from './references';
 import { mergeComposerAttachments, recoverComposerPaste, type PendingComposerPaste } from './composer-paste';
 import { loadFullTranscript } from './transcript-load.mjs';
 import type { OutlineData } from './outline-model';
@@ -415,6 +415,8 @@ export function useMessageDelivery({
     sessionId: string,
     requestId?: string,
   ): Promise<PreparedSubmission> {
+    // 输入框用 em space 给引用徽章的图标留位置，发送前还原成普通空格。
+    text = normalizeComposerText(text);
     const files = attachments.filter((attachment) => attachment.kind === 'file');
     const images = attachments.filter((attachment) => attachment.kind === 'image');
     if (images.length > 0 && modelSelection.supportsImages === false) {
@@ -642,7 +644,7 @@ export function useMessageDelivery({
       await window.piApi.conversationEdit({
         id: sessionId,
         entryId,
-        text,
+        text: normalizeComposerText(text),
         requestId,
         mentions: extractComposerMentions(text),
       });

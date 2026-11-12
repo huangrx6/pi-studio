@@ -10,13 +10,13 @@
 .composer textarea {
   min-height: 76px;
   max-height: 260px;
-  padding: 15px 14px 8px;
+  padding: 15px 14px 8px 16px;
   font-size: var(--text-base);
   line-height: var(--leading-normal);
 }
 
 .composer-highlight {
-  padding: 15px 14px 8px;
+  padding: 15px 14px 8px 16px;
   font-size: var(--text-base);
   line-height: var(--leading-normal);
 }
@@ -29,6 +29,51 @@
 
 .composer-bar {
   padding: 2px 8px 6px;
+}
+
+/* 输入框里的引用徽章：背景与描边向左包住图标，但左右各用负外边距抵消，
+ * 布局宽度与纯文本完全一致，textarea 和这一层才不会有半个字符的错位。 */
+.composer-token {
+  position: relative;
+  padding: 1px 4px;
+  margin: 0 -4px;
+  border-radius: var(--radius-control);
+  background: var(--info-soft);
+  box-shadow: inset 0 0 0 1px var(--info);
+  color: var(--info);
+}
+
+/* 前面是 em space 时，正好有 1em 的空白可以容纳图标。 */
+.composer-token.has-icon {
+  padding-left: calc(1em + 2px);
+  margin-left: calc(-1em - 2px);
+}
+
+/* 行首没有 em space 可借，硬扩会露在输入框外。 */
+.composer-token.is-line-start.has-icon {
+  padding-left: 4px;
+  margin-left: -4px;
+}
+
+.composer-token.is-line-start .composer-token-icon {
+  display: none;
+}
+
+.composer-token-icon {
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  width: 0.85em;
+  height: 0.85em;
+  translate: 0 -50%;
+  opacity: 0.85;
+}
+
+.composer-token.is-skill,
+.composer-token.is-command {
+  background: var(--surface-soft);
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--text);
 }
 
 /* 框内附件：一行小方块，不撑高输入框。 */

@@ -38,6 +38,7 @@ import { WorkspacePicker } from '../../shell/WorkspacePicker';
 import { Select } from '../../shared/Select';
 import { formatFileSize } from '../../shared/filesize';
 import { composerKeyAction } from './composer-submit';
+import { ComposerTokenChip } from './ComposerTokenChip';
 import { planComposerPaste } from './composer-paste';
 import { pasteExceedsBudget } from './composer-budget.mjs';
 import { splitComposerText } from './references';
@@ -392,10 +393,7 @@ export function ComposerDock({
           <div className="composer-highlight" ref={composerHighlightRef} aria-hidden="true">
             {composerSegments.map((segment, index) => segment.kind === 'text'
               ? <span key={index}>{segment.text}</span>
-              : <span key={index} className={`composer-token is-${segment.tokenKind}`}>
-                <span className="composer-token-prefix">{segment.text.slice(0, 1)}</span>
-                {segment.text.slice(1)}
-              </span>)}
+              : <ComposerTokenChip key={index} segment={segment} />)}
             {prompt.endsWith('\n') && <span>{'\u200b'}</span>}
           </div>
           <textarea

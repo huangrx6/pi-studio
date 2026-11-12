@@ -11,6 +11,20 @@
  * 输入框与消息气泡共用同一套解析，保证两处显示一致。
  */
 
+/**
+ * 引用前的占位空白。
+ *
+ * 输入框的高亮层与 textarea 必须逐字符对齐，图标只能在“本来就有空白”的位置
+ * 显示；一个普通空格只有 4px，放不下图标。插入引用时改用 em space（1em 宽），
+ * 高亮层把这段宽度画成图标，textarea 里它依然只是一个不可见的空白字符。
+ */
+export const REFERENCE_GAP = '\u2003';
+
+/** 发送前把 em space 还原成普通空格，避免脏字符进入对话与模型输入。 */
+export function normalizeComposerText(text: string): string {
+  return text.includes(REFERENCE_GAP) ? text.replaceAll(REFERENCE_GAP, ' ') : text;
+}
+
 export type ReferenceKind = 'skill' | 'file';
 
 /** 一条可展示的引用（技能或工作区文件）。 */
@@ -31,14 +45,16 @@ export type TextSegment = { kind: 'text'; text: string } | { kind: 'reference'; 
 // 展开后的技能块：Pi 写成 <skill name="x" location="...">正文</skill>。
 const SKILL_BLOCK = /<skill\s+name="([^"]+)"(?:\s+location="([^"]*)")?\s*>([\s\S]*?)<\/skill>/g;
 // 含空格、引号或 @ 的路径用 JSON 字符串包在 @ 后，避免路径在第一个空格处被截断。
-const AT_REFERENCE_SOURCE = String.raw`@(?:"(?:\\.|[^"\\])*"|[^\s@]+)`;
+// 标点一律算分隔符：`@README.md、@package.json` 里中文顿号属于正文，不是路径。
+const AT_REFERENCE_SOURCE = String.raw`@(?:"(?:\\.|[^"\\])*"|[^\s@，。、；：！？,;:!?()\[\]{}（）【】「」『』]+)`;
 // 未展开的行内引用：`/skill:name` 或 `@path`；允许出现在文本中间（前面需是行首或非单词字符）。
 const INLINE_REF = new RegExp(
   String.raw`(^|[^A-Za-z0-9_])(\/skill:[\w.-]+|${AT_REFERENCE_SOURCE})`,
   'g',
 );
-// 发送时只提取真实路径并交给主进程读取文件上下文。
-const INLINE_MENTION = new RegExp(String.raw`(?:^|\s)(${AT_REFERENCE_SOURCE})`, 'g');
+// 发送时只提取真实路径并交给主进程读取文件上下文。前导边界与高亮一致：
+// `看 @a、@b` 里的顿号后面同样是引用，而 email 里的 @ 前面是字母，不会被误判。
+const INLINE_MENTION = new RegExp(String.raw`(?:^|[^A-Za-z0-9_])(${AT_REFERENCE_SOURCE})`, 'g');
 
 /** 文件路径的短标签：取最后一段（目录保留尾部斜杠的语义）。 */
 function fileLabel(path: string): string {
@@ -97,10 +113,24 @@ export function splitMessageText(text: string): TextSegment[] {
   return segments;
 }
 
-/** 输入框高亮的片段：普通文本或已识别的引用 token。 */
+/**
+ * 输入框高亮的片段：普通文本或已识别的引用 token。
+ *
+ * token 带上解析后的 `reference`，渲染层才能按目标类型（目录、代码、图片…）
+ * 选图标；`text` 始终是原文，输入框靠它和 textarea 逐字符对齐。
+ */
 export type ComposerSegment =
   | { kind: 'text'; text: string }
-  | { kind: 'token'; text: string; tokenKind: 'skill' | 'file' | 'command' };
+  | {
+    kind: 'token';
+    text: string;
+    tokenKind: 'skill' | 'file' | 'command';
+    reference?: Reference;
+    /** token 前是 em space：有 1em 的空白可以画图标，而不是压住前一个字。 */
+    gapBefore?: boolean;
+    /** token 前是换行（或文本开头）：只能内缩，不能外扩。 */
+    lineStart?: boolean;
+  };
 
 /** 把工作区路径格式化为输入框可识别、可安全包含空格的 @ 引用。 */
 export function formatFileReference(path: string): string {
@@ -129,9 +159,15 @@ export function insertComposerToken(
 ): { text: string; caret: number } {
   const safeStart = Math.max(0, Math.min(text.length, start));
   const safeEnd = Math.max(safeStart, Math.min(text.length, end));
-  const before = text.slice(0, safeStart);
+  let before = text.slice(0, safeStart);
   const after = text.slice(safeEnd);
-  const leading = safeStart > 0 && !/\s$/u.test(before) ? ' ' : '';
+  // 文件引用前面放一个 em space：它既当分隔符，也给高亮层留出图标位置。
+  // 前面已经有普通空格时直接把它换掉，避免两个空白叠在一起。
+  let leading = safeStart > 0 && !/\s$/u.test(before) ? ' ' : '';
+  if (token.startsWith('@') && safeStart > 0) {
+    if (/[ \t]$/u.test(before)) before = before.slice(0, -1);
+    leading = REFERENCE_GAP;
+  }
   const trailing = /^\s/u.test(after) ? '' : ' ';
   const inserted = `${leading}${token}${trailing}`;
   return {
@@ -159,10 +195,19 @@ export function splitComposerText(text: string, commandNames: ReadonlySet<string
     if (start > last) segments.push({ kind: 'text', text: text.slice(last, start) });
     const token = match[2];
     const name = token.slice(1);
+    const gapBefore = start > 0 && text[start - 1] === REFERENCE_GAP;
+    const lineStart = start === 0 || text[start - 1] === '\n';
     if (token.startsWith('@')) {
-      segments.push({ kind: 'token', text: token, tokenKind: 'file' });
+      segments.push({ kind: 'token', text: token, tokenKind: 'file', reference: inlineReference(token), gapBefore, lineStart });
     } else if (name.startsWith('skill:') || commandNames.has(name)) {
-      segments.push({ kind: 'token', text: token, tokenKind: name.startsWith('skill:') ? 'skill' : 'command' });
+      segments.push({
+        kind: 'token',
+        text: token,
+        tokenKind: name.startsWith('skill:') ? 'skill' : 'command',
+        reference: name.startsWith('skill:') ? inlineReference(token) : undefined,
+        gapBefore,
+        lineStart,
+      });
     } else {
       // 未识别的斜杠（常见于 /Users/... 这类路径）保持普通文本。
       segments.push({ kind: 'text', text: token });
