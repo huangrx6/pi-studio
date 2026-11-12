@@ -475,6 +475,21 @@ function recoverManagedExtensionPaths(entries, mode) {
   }
 }
 
+/**
+ * 路径是否以给定的相对片段结尾。
+ *
+ * 数据目录迁移后，状态里的旧路径与当前受管路径只差前缀；而被篡改的状态会指向
+ * 完全不相干的位置。只接受"相对受管目录的那几段完全一致"的差异，才不会把
+ * `.../outside` 之类当成旧根重新拼到受管目录下。
+ */
+function pathEndsWithSegments(target, segments) {
+  if (typeof target !== 'string' || !target || segments.length === 0) return false;
+  const parts = path.resolve(target).split(path.sep).filter(Boolean);
+  if (segments.length > parts.length) return false;
+  const tail = parts.slice(parts.length - segments.length);
+  return tail.every((part, index) => part === segments[index]);
+}
+
 function atomicWriteFile(file, content, mode = 0o600) {
   ensurePrivateDirectory(path.dirname(file));
   const temporary = `${file}.${process.pid}.${crypto.randomUUID()}.tmp`;
@@ -2012,13 +2027,52 @@ class ExtensionDistributionService {
     }
   }
 
+  /**
+   * 把安装状态里记录的绝对路径对齐到当前受管目录。
+   *
+   * 数据目录从 `~/Library/Application Support/pi-studio` 换成 `~/.pi-studio` 时
+   * 是整体复制，状态文件里的 dataPath / codePath 还写着旧根，校验会判成
+   * 「不在受管位置」。这里按受管规则重建一遍：只有目标确实存在才改，
+   * 不把路径指向空目录。
+   */
+  reconcileManagedPaths(state, scope, cwd) {
+    if (!state || typeof state !== 'object') return { state, changed: false };
+    let changed = false;
+    const expectedDataPath = path.join(this.dataRoot, this.scopeKey(scope, cwd), state.id);
+    if (path.resolve(state.dataPath || '') !== path.resolve(expectedDataPath)
+      && pathEndsWithSegments(state.dataPath, ['extension-data', this.scopeKey(scope, cwd), state.id])
+      && fs.existsSync(expectedDataPath)) {
+      state.dataPath = expectedDataPath;
+      changed = true;
+    }
+    const codeParent = path.join(this.codeRoot(scope, cwd), state.id);
+    for (const entry of Array.isArray(state.history) ? state.history : []) {
+      if (!entry || typeof entry !== 'object' || typeof entry.version !== 'string') continue;
+      const expectedCodePath = path.join(codeParent, entry.version);
+      if (path.resolve(entry.codePath || '') === path.resolve(expectedCodePath)) continue;
+      if (!pathEndsWithSegments(entry.codePath, [state.id, entry.version]) || !fs.existsSync(expectedCodePath)) continue;
+      entry.codePath = expectedCodePath;
+      changed = true;
+    }
+    return { state, changed };
+  }
+
   readState(scope, cwd, id) {
-    const raw = readJsonFile(this.stateFile(scope, cwd, id), '扩展安装状态');
+    const file = this.stateFile(scope, cwd, id);
+    const raw = readJsonFile(file, '扩展安装状态');
     if (!raw) return undefined;
     if (raw.schemaVersion !== INSTALL_STATE_VERSION || raw.id !== id || raw.scope !== scope) {
       throw distributionError('INVALID_INSTALL_STATE', `扩展安装状态损坏：${id}`);
     }
-    return raw;
+    const { state, changed } = this.reconcileManagedPaths(raw, scope, cwd);
+    if (changed) {
+      try {
+        atomicWriteJson(file, state);
+      } catch {
+        // 写不回去也只影响下次：本轮已经用修正后的路径加载。
+      }
+    }
+    return state;
   }
 
   hydrateState(state, scope = 'user', cwd = undefined) {
