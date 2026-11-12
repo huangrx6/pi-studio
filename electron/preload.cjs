@@ -7,7 +7,7 @@
  * 分组：主题与状态 / 会话 / 文件 / 附件 / 模型 / 设置 / 事件订阅。
  */
 
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('piApi', {
   temporaryModel: (payload) => ipcRenderer.invoke('pi:temporary-model', payload),
@@ -80,6 +80,10 @@ contextBridge.exposeInMainWorld('piApi', {
   terminalWrite: (id, data) => ipcRenderer.invoke('pi:terminal-write', { id, data }),
   terminalResize: (id, cols, rows) => ipcRenderer.invoke('pi:terminal-resize', { id, cols, rows }),
   terminalClose: (id) => ipcRenderer.invoke('pi:terminal-close', id),
+  // 拖进终端的文件要真实路径：浏览器 File 对象只有文件名。
+  filePathOf: (file) => {
+    try { return webUtils.getPathForFile(file) || ''; } catch { return ''; }
+  },
   onTerminalEvent: (listener) => {
     const handler = (_event, payload) => listener(payload);
     ipcRenderer.on('pi:terminal-event', handler);

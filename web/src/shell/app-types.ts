@@ -129,6 +129,8 @@ export type PanelTab = {
   url?: string;
   /** 终端重启计数：变化后以同一个 id 重新挂载并重建 PTY。 */
   restart?: number;
+  /** 用户手动改过标题：shell 的 OSC 标题不再覆盖它。 */
+  customTitle?: boolean;
   review?: { sessionId: string; initial: TurnDiff; turns: TurnDiff[]; focusPath?: string };
 };
 

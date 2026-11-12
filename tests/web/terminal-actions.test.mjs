@@ -73,3 +73,20 @@ test('链接解析区分 URL 与 path:line，不把普通文本当文件', () =>
   assert.equal(parseTerminalLink('done'), null);
   assert.equal(parseTerminalLink(''), null);
 });
+
+test('拖进终端的路径按 shell 规则转义', async () => {
+  const { shellQuotePath } = await import('../../web/src/features/terminal/terminal-actions.ts');
+  assert.equal(shellQuotePath('/tmp/a.ts'), '/tmp/a.ts');
+  assert.equal(shellQuotePath('/tmp/with space/a.ts'), "'/tmp/with space/a.ts'");
+  assert.equal(shellQuotePath("/tmp/it's/a.ts"), "'/tmp/it'\\''s/a.ts'");
+  assert.equal(shellQuotePath(''), '');
+});
+
+test('终端标题只保留可读主干，过长或为空时回退', async () => {
+  const { terminalTabTitle } = await import('../../web/src/features/terminal/terminal-actions.ts');
+  assert.equal(terminalTabTitle('pnpm dev', '终端'), 'pnpm dev');
+  assert.equal(terminalTabTitle('~/Documents/workspace/pi-studio', '终端'), 'pi-studio');
+  assert.equal(terminalTabTitle('', '终端'), '终端');
+  assert.equal(terminalTabTitle('a'.repeat(30), '终端'), '终端');
+  assert.equal(terminalTabTitle('zsh — 80x24', '终端'), 'zsh');
+});

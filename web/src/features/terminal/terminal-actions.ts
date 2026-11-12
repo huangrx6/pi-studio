@@ -119,3 +119,26 @@ export function parseTerminalLink(raw: string): TerminalLinkTarget | null {
     column: Number.isInteger(column) && (column ?? 0) > 0 ? column : undefined,
   };
 }
+
+/**
+ * 把拖进终端的文件路径变成可以直接粘贴的 shell 参数。
+ *
+ * 含空格或引号时用单引号包住，并把内部的单引号转义成 `'\''`，
+ * 这样粘贴进命令行不会把路径拆成两段。
+ */
+export function shellQuotePath(path: string): string {
+  const value = typeof path === 'string' ? path : '';
+  if (!value) return '';
+  if (!/[\s'"\\$`!*?()[\]{}<>|&;#~]/u.test(value)) return value;
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+/** 终端标题来自 shell 的 OSC 序列，可能带路径或很长；只留可读的主干。 */
+export function terminalTabTitle(raw: string, fallback: string): string {
+  const text = typeof raw === 'string' ? raw.replace(/\s+/gu, ' ').trim() : '';
+  if (!text) return fallback;
+  const segment = text.split(' — ')[0].split(' - ')[0].split('/').filter(Boolean).pop() || text;
+  const trimmed = segment.trim();
+  if (!trimmed || trimmed.length > 24) return fallback;
+  return trimmed;
+}

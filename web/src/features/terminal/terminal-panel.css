@@ -111,6 +111,7 @@
 .terminal-search button:hover,
 .terminal-paste-confirm button:hover { background: var(--surface-hover); color: var(--text); }
 .terminal-search button svg { width: var(--icon-sm); height: var(--icon-sm); }
+.terminal-search-hits { flex: none; min-width: 30px; color: var(--faint); font-size: var(--text-xs); text-align: right; font-variant-numeric: tabular-nums; }
 
 .terminal-paste-confirm {
   display: flex;

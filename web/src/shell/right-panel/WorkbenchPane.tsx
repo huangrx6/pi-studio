@@ -124,7 +124,7 @@ export function WorkbenchPane({
   /** 重命名标签：空标题回退到原名，避免出现没有文字的标签。 */
   function renamePanelTab(id: string, title: string) {
     const next = title.trim();
-    if (next) setPanelTabs((current) => current.map((tab) => tab.id === id ? { ...tab, title: next } : tab));
+    if (next) setPanelTabs((current) => current.map((tab) => tab.id === id ? { ...tab, title: next, customTitle: true } : tab));
     setRenamingId(null);
   }
 
@@ -269,6 +269,9 @@ export function WorkbenchPane({
           onNewTerminal={openTerminalTab}
           onOpenFile={(path) => { void openFile(path.replace(/:\d+(?::\d+)?$/u, ''), session?.id, 'external'); }}
           onOpenUrl={(url) => openBrowserTab(url)}
+          onTitle={(title) => setPanelTabs((current) => current.map((tab) => (
+            tab.id === activePanelTab.id && !tab.customTitle ? { ...tab, title } : tab
+          )))}
         />
       </Suspense>;
     }

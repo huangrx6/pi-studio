@@ -9,8 +9,10 @@ import {
   MIN_TERMINAL_FONT_SIZE,
   needsPasteConfirm,
   parseTerminalLink,
+  shellQuotePath,
   stepTerminalFontSize,
   terminalKeyIntent,
+  terminalTabTitle,
 } from '../../web/src/features/terminal/terminal-actions.ts';
 
 const replay = data => ({ cols: 80, rows: 24, steps: [{ type: 'data', data }], truncated: false });
@@ -79,6 +81,7 @@ function harness() {
     scrollToBottom() { this.scrollCalls = (this.scrollCalls ?? 0) + 1; }
     touch() { this.touchCalls = (this.touchCalls ?? 0) + 1; }
     onSelectionChange() { return { dispose() {} }; }
+    onTitleChange(handler) { this.titleHandler = handler; return { dispose: () => { this.titleDisposed = true; } }; }
     loadAddon(fit) { fit.term = this; }
     open() {}
     write(data, callback) { assert.equal(this.disposed, undefined); if (data) { this.output.push(data); (this.writeSizes ??= []).push([this.cols, this.rows]); } if (this.holdWrites && callback) (this.callbacks ??= []).push(callback); else callback?.(); }
@@ -93,9 +96,13 @@ function harness() {
     findNext(query) { this.lastQuery = query; }
     findPrevious(query) { this.lastQuery = query; }
     clearDecorations() { this.cleared = true; }
+    onDidChangeResults(handler) { this.resultsHandler = handler; return { dispose: () => { this.resultsDisposed = true; } }; }
   }
   class Unicode11Addon {}
   class WebLinksAddon { constructor(handler) { this.handler = handler; } }
+  class SerializeAddon { serialize() { return 'serialized output'; } }
+  class WebglAddon { constructor() { this.disposed = false; } onContextLoss(handler) { this.contextLoss = handler; } dispose() { this.disposed = true; } }
+  class SearchResults { dispose() { this.disposed = true; } }
   class FitAddon {
     constructor() { this.calls = 0; fits.push(this); }
     fit() { this.calls++; this.term.cols = Math.floor(host.clientWidth / 10); this.term.rows = Math.floor(host.clientHeight / 20); }
@@ -127,8 +134,13 @@ function harness() {
       if (name === '@xterm/addon-search') return { SearchAddon };
       if (name === '@xterm/addon-unicode11') return { Unicode11Addon };
       if (name === '@xterm/addon-web-links') return { WebLinksAddon };
+      if (name === '@xterm/addon-webgl') return { WebglAddon };
+      if (name === '@xterm/addon-serialize') return { SerializeAddon };
       if (name.endsWith('/terminal-actions')) {
-        return { MAX_TERMINAL_FONT_SIZE, MIN_TERMINAL_FONT_SIZE, needsPasteConfirm, parseTerminalLink, stepTerminalFontSize, terminalKeyIntent };
+        return {
+          MAX_TERMINAL_FONT_SIZE, MIN_TERMINAL_FONT_SIZE,
+          needsPasteConfirm, parseTerminalLink, shellQuotePath, stepTerminalFontSize, terminalKeyIntent, terminalTabTitle,
+        };
       }
       if (name.endsWith('/ActionMenu')) return { ActionMenu: () => null };
       if (name.endsWith('error-text')) return { errorText: error => error.message };

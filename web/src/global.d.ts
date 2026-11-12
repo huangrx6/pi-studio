@@ -531,6 +531,8 @@ declare global {
       terminalWrite(id: string, data: string): Promise<{ ok: boolean; status?: string }>;
       terminalResize(id: string, cols: number, rows: number): Promise<{ ok: boolean; status?: string }>;
       terminalClose(id: string): Promise<{ ok: boolean }>;
+      /** 拖放文件的真实路径；非 Electron 环境返回空串。 */
+      filePathOf(file: File): string;
       onTerminalEvent(listener: (event: TerminalEvent) => void): () => void;
       /** 扫描 TCP 监听端口，并按当前任务/工作区标记归属依据。 */
       runtimeServices(payload: { cwd?: string; roots?: string[] }): Promise<RuntimeServiceSnapshot>;

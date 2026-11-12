@@ -14,8 +14,10 @@ import {
 } from 'lucide-react';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
+import { SerializeAddon } from '@xterm/addon-serialize';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebLinksAddon } from '@xterm/addon-web-links';
+import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal, type ITheme } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import type { TerminalEvent, TerminalSessionStatus } from '../../types/runtime-panel-types';
@@ -27,8 +29,10 @@ import {
   MIN_TERMINAL_FONT_SIZE,
   needsPasteConfirm,
   parseTerminalLink,
+  shellQuotePath,
   stepTerminalFontSize,
   terminalKeyIntent,
+  terminalTabTitle,
   type TerminalLinkTarget,
 } from './terminal-actions';
 import './terminal-panel.css';
@@ -111,6 +115,7 @@ export function TerminalPanel({
   onNewTerminal,
   onOpenFile,
   onOpenUrl,
+  onTitle,
 }: {
   id: string;
   cwd: string;
@@ -119,6 +124,7 @@ export function TerminalPanel({
   onNewTerminal: () => void;
   onOpenFile?: (path: string) => void;
   onOpenUrl?: (url: string) => void;
+  onTitle?: (title: string) => void;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const focusTerminalRef = useRef<(() => void) | null>(null);
@@ -126,6 +132,7 @@ export function TerminalPanel({
   const searchRef = useRef<SearchAddon | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const fitRef = useRef<(() => void) | null>(null);
+  const serializeRef = useRef<SerializeAddon | null>(null);
   const [connecting, setConnecting] = useState(true);
   const [status, setStatus] = useState<TerminalSessionStatus>('running');
   const [exitCode, setExitCode] = useState<number | undefined>();
@@ -138,6 +145,7 @@ export function TerminalPanel({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [pendingPaste, setPendingPaste] = useState<string | null>(null);
+  const [searchHits, setSearchHits] = useState({ index: -1, count: 0 });
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
@@ -147,6 +155,8 @@ export function TerminalPanel({
   onOpenFileRef.current = onOpenFile;
   const onOpenUrlRef = useRef(onOpenUrl);
   onOpenUrlRef.current = onOpenUrl;
+  const onTitleRef = useRef(onTitle);
+  onTitleRef.current = onTitle;
 
   const openLink = useCallback((target: TerminalLinkTarget) => {
     if (target.kind === 'url') { onOpenUrlRef.current?.(target.url); return; }
@@ -168,6 +178,13 @@ export function TerminalPanel({
       setError(errorText(cause));
     }
   }, [writeToPty]);
+
+  /** 把缓冲区里的全部输出（含回看）复制成纯文本。 */
+  const copyAllOutput = useCallback(async () => {
+    const serialized = serializeRef.current?.serialize({ scrollback: 100_000 }) ?? '';
+    if (!serialized.trim()) return;
+    try { await navigator.clipboard.writeText(serialized); } catch { /* 剪贴板不可用时静默 */ }
+  }, []);
 
   const copySelection = useCallback(async () => {
     const selection = terminalRef.current?.getSelection() ?? '';
@@ -210,6 +227,7 @@ export function TerminalPanel({
     { label: '复制', disabled: !(terminalRef.current?.hasSelection() ?? false), run: () => { void copySelection(); } },
     { label: '粘贴', run: () => { void pasteFromClipboard(); } },
     { label: '全选', run: () => { terminalRef.current?.selectAll(); } },
+    { label: '复制全部输出', run: () => { void copyAllOutput(); } },
     { label: '清屏', run: clearScreen },
     { label: '搜索', run: openSearch },
     { label: '跳到最新', run: scrollToBottom },
@@ -248,7 +266,14 @@ export function TerminalPanel({
       allowTransparency: false,
       convertEol: false,
       cursorBlink: true,
+      cursorInactiveStyle: 'outline',
       cursorStyle: 'bar',
+      // macOS 上默认按 ⌥ 会输入特殊字符，shell 的 ⌥←/⌥→ 就用不了。
+      macOptionIsMeta: true,
+      // 暗色 ANSI 颜色直接压在背景上会糊，交给 xterm 抬到可读对比度。
+      minimumContrastRatio: 4.5,
+      fastScrollSensitivity: 8,
+      smoothScrollDuration: 80,
       fontFamily: terminalFontFamily(),
       fontSize,
       lineHeight: 1.25,
@@ -259,6 +284,9 @@ export function TerminalPanel({
     term.loadAddon(fit);
     const search = new SearchAddon();
     term.loadAddon(search);
+    const searchResults = search.onDidChangeResults(({ resultIndex, resultCount }) => {
+      setSearchHits({ index: resultIndex, count: resultCount });
+    });
     const unicode = new Unicode11Addon();
     term.loadAddon(unicode);
     term.unicode.activeVersion = '11';
@@ -266,8 +294,32 @@ export function TerminalPanel({
       event.preventDefault();
       openLink({ kind: 'url', url: uri });
     }));
+    // OSC 8：`ls --hyperlink` 与不少 CLI 用超链接包住文件名，明文里看不到 URL。
+    term.options.linkHandler = {
+      activate: (event, text) => {
+        event.preventDefault();
+        const target = parseTerminalLink(text);
+        if (target) openLink(target);
+      },
+    };
+    const serialize = new SerializeAddon();
+    term.loadAddon(serialize);
+    serializeRef.current = serialize;
+    const titleSubscription = term.onTitleChange((title) => {
+      onTitleRef.current?.(terminalTabTitle(title, ''));
+    });
     const fileLinks = registerFileLinks(term, openLink);
     term.open(host);
+    // WebGL 让几千行输出不再掉帧；拿不到上下文或显卡驱动出问题时退回 DOM。
+    try {
+      const webgl = new WebglAddon();
+      webgl.onContextLoss(() => {
+        try { webgl.dispose(); } catch { /* 已经释放 */ }
+      });
+      term.loadAddon(webgl);
+    } catch {
+      // 没有 GPU 就继续用 DOM 渲染器
+    }
     terminalRef.current = term;
     searchRef.current = search;
     fitRef.current = () => {
@@ -463,6 +515,9 @@ export function TerminalPanel({
       resizeObserver.disconnect();
       appearanceObserver.disconnect();
       fileLinks.dispose();
+      searchResults.dispose();
+      titleSubscription.dispose();
+      serializeRef.current = null;
       term.dispose();
       terminalRef.current = null;
       searchRef.current = null;
@@ -573,6 +628,9 @@ export function TerminalPanel({
           }
         }}
       />
+      <span className="terminal-search-hits" aria-live="polite">
+        {searchHits.count === 0 ? (searchQuery ? '0' : '') : `${searchHits.index + 1}/${searchHits.count}`}
+      </span>
       <button type="button" aria-label="上一个结果" title="上一个 ⇧Enter" onClick={() => searchQuery && searchRef.current?.findPrevious(searchQuery)}><ChevronUp /></button>
       <button type="button" aria-label="下一个结果" title="下一个 Enter" onClick={() => searchQuery && searchRef.current?.findNext(searchQuery)}><ChevronDown /></button>
       <button type="button" aria-label="跳到最新" title="跳到最新" onClick={scrollToBottom}><ArrowDownToLine /></button>
@@ -596,6 +654,23 @@ export function TerminalPanel({
         onContextMenu={(event) => {
           event.preventDefault();
           setMenu({ x: event.clientX, y: event.clientY });
+        }}
+        onDragOver={(event) => {
+          if (!event.dataTransfer.types.includes('Files')) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'copy';
+        }}
+        onDrop={(event) => {
+          const files = Array.from(event.dataTransfer.files);
+          if (files.length === 0) return;
+          event.preventDefault();
+          const text = files
+            .map((file) => shellQuotePath(window.piApi.filePathOf(file)))
+            .filter(Boolean)
+            .join(' ');
+          if (!text) return;
+          terminalRef.current?.paste(text);
+          terminalRef.current?.focus();
         }}
       />
       {error && <div className="terminal-error" role="alert">
