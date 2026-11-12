@@ -135,6 +135,23 @@
 }
 .turn-trace .activity-tool-summary,
 .turn-trace .activity-request-model { font-family: var(--mono); }
+
+/* 可点的工具路径：保持摘要的原样排版，只补一个悬停反馈 */
+.turn-trace button.activity-tool-summary.is-openable {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  text-align: left;
+}
+.turn-trace button.activity-tool-summary.is-openable:hover {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 /* 精简模式只隐藏已完成工具的参数摘要；执行中的工具保留，便于看到正在做什么。 */
 .is-steps-compact .turn-trace .activity-tool:not(.is-running) .activity-tool-summary { display: none; }
 

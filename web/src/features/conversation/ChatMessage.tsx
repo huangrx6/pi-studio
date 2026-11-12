@@ -116,7 +116,7 @@ type FlatBlock = { block: ContentBlock; key: string; messageTimestamp?: number }
  * @param result 已配对的 toolResult 消息（可能尚未到达）
  * @param busy 当前会话是否仍在运行，控制加载图标动画
  */
-function ActivityTool({ call, result, busy, defaultOpen = false }: { call: ToolCallBlock; result?: ChatMessage; busy: boolean; defaultOpen?: boolean }) {
+function ActivityTool({ call, result, busy, defaultOpen = false, onOpenFile }: { call: ToolCallBlock; result?: ChatMessage; busy: boolean; defaultOpen?: boolean; onOpenFile?: (path: string) => void }) {
   const [open, setOpen] = useState(defaultOpen);
   useEffect(() => {
     if (defaultOpen) setOpen(true);
@@ -124,6 +124,10 @@ function ActivityTool({ call, result, busy, defaultOpen = false }: { call: ToolC
   const failed = Boolean(result?.isError);
   const done = Boolean(result);
   const summary = toolSummary(call);
+  // read/edit/write 的参数就是真实路径：直接可点，不依赖对消息文本的猜测。
+  const openablePath = typeof call.arguments?.path === 'string' && (call.name === 'read' || call.name === 'edit' || call.name === 'write')
+    ? call.arguments.path
+    : undefined;
   // Closed rows need only their summary; large outputs are joined on demand.
   const resultText = open && result ? textBlocks(result.content) : '';
   const resultImages = result ? imagesFromBlocks(result.content) : [];
@@ -136,7 +140,14 @@ function ActivityTool({ call, result, busy, defaultOpen = false }: { call: ToolC
     <summary className="activity-disclosure-summary" aria-description={done && !failed ? '已完成' : undefined}>
       <span className="activity-tool-icon activity-disclosure-icon"><ToolIcon name={call.name} /></span>
       <span className="activity-tool-name activity-disclosure-title" title={call.name}>{call.name}</span>
-      {summary && <span className="activity-tool-summary activity-disclosure-preview">{summary}</span>}
+      {summary && (openablePath && onOpenFile
+        ? <button
+          type="button"
+          className="activity-tool-summary activity-disclosure-preview is-openable"
+          title={`在右侧面板打开 ${openablePath}`}
+          onClick={(event) => { event.preventDefault(); event.stopPropagation(); onOpenFile(openablePath); }}
+        >{summary}</button>
+        : <span className="activity-tool-summary activity-disclosure-preview">{summary}</span>)}
       {(!done || failed) && <span className="activity-tool-status">{failed ? <><CircleX />失败</> : busy ? <><LoaderCircle className="spin" />执行中</> : <><CircleAlert />未完成</>}</span>}
       <ChevronDown className="activity-tool-chevron activity-disclosure-chevron" />
     </summary>
@@ -334,10 +345,11 @@ function MessageActions({ text, images, time, label, align = 'start', onEdit, ed
 }
 
 /** 一段连续的执行记录。所有行共用一个网格，运行中的行与已完成的行逐列对齐。 */
-function ActivitySequence({ entries, results, stepDisplay }: {
+function ActivitySequence({ entries, results, stepDisplay, onOpenFile }: {
   entries: ActivityEntry[];
   results: Map<string, ChatMessage>;
   stepDisplay: StepDisplay;
+  onOpenFile?: (path: string) => void;
 }) {
   const defaultOpen = stepDisplay === 'detailed';
   return <section className="activity-sequence" aria-label="本轮执行步骤">
@@ -347,6 +359,7 @@ function ActivitySequence({ entries, results, stepDisplay }: {
         result={results.get(entry.call.id)}
         busy={Boolean(entry.live)}
         defaultOpen={defaultOpen}
+        onOpenFile={onOpenFile}
       />}
       {entry.kind === 'thinking' && (entry.live
         ? <LiveThinking block={entry.block} />
@@ -529,7 +542,7 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
       ...restItems.map((item) => ({ key: item.key, process: false, items: [item] })));
   }
   const renderTimelineItem = (item: typeof timeline[number], narration = false) => item.entries
-        ? <ActivitySequence key={item.key} entries={item.entries} results={toolResults} stepDisplay={stepDisplay} />
+        ? <ActivitySequence key={item.key} entries={item.entries} results={toolResults} stepDisplay={stepDisplay} onOpenFile={onOpenFile} />
         : item.request ? null
         : item.images ? <ConversationImageGallery key={item.key} images={item.images} />
         : item.visible?.block.type === 'text'
