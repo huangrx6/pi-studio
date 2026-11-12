@@ -711,6 +711,7 @@ export function App() {
         onChooseWorkspace={chooseFile}
         onOpenSettings={(page) => { void openSettings(page); }}
         terminalAppearance={terminalAppearance}
+        terminalShellIntegration={preferences.terminalShellIntegration}
         onTerminalFontSize={(size) => foundation.updatePreference('terminalFontSize', size)}
         extensionDock={<ExtensionSlot
           slot="panel.side"

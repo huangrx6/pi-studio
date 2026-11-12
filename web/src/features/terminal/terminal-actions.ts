@@ -50,7 +50,9 @@ export type TerminalKeyIntent =
   | 'zoom-in'
   | 'zoom-out'
   | 'zoom-reset'
-  | 'new-terminal';
+  | 'new-terminal'
+  | 'prev-command'
+  | 'next-command';
 
 /**
  * 判定终端内的组合键。
@@ -74,7 +76,11 @@ export function terminalKeyIntent(input: {
   const key = input.key.toLowerCase();
   if (input.shiftKey) {
     // ⌘⇧C 在 macOS 上约定俗成是复制，趁早拦住。
-    return key === 'c' && input.hasSelection ? 'copy' : null;
+    if (key === 'c' && input.hasSelection) return 'copy';
+    // ⌘⇧↑/⌘⇧↓ 在命令之间跳；单按 ⌘↑/⌘↓ 留给「到顶 / 到底」。
+    if (key === 'arrowup') return 'prev-command';
+    if (key === 'arrowdown') return 'next-command';
+    return null;
   }
   if (key === 'c') return input.hasSelection ? 'copy' : null;
   if (key === 'v') return 'paste';

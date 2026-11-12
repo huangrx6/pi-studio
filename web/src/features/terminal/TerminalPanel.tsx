@@ -25,6 +25,7 @@ import { errorText } from '../../shared/error-text';
 import { ActionMenu, type MenuAction } from '../../shared/ActionMenu';
 import { restoreTerminalReplay } from './terminal-replay';
 import { terminalTheme as themedTerminal, isTerminalTheme } from './terminal-themes';
+import { CommandTracker, adjacentCommand, commandFailed, lastFailedCommand, parseOsc133, type CommandMark } from './terminal-commands';
 import type { TerminalCursorStyle } from '../../shared/preferences';
 import {
   MAX_TERMINAL_FONT_SIZE,
@@ -129,6 +130,7 @@ export function TerminalPanel({
   id,
   cwd,
   appearance,
+  shellIntegration,
   onFontSizeChange,
   onNewTerminal,
   onOpenFile,
@@ -138,6 +140,7 @@ export function TerminalPanel({
   id: string;
   cwd: string;
   appearance: TerminalAppearance;
+  shellIntegration: boolean;
   onFontSizeChange: (size: number) => void;
   onNewTerminal: () => void;
   onOpenFile?: (path: string) => void;
@@ -152,6 +155,7 @@ export function TerminalPanel({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const fitRef = useRef<(() => void) | null>(null);
   const serializeRef = useRef<SerializeAddon | null>(null);
+  const commandsRef = useRef(new CommandTracker());
   const [connecting, setConnecting] = useState(true);
   const [status, setStatus] = useState<TerminalSessionStatus>('running');
   const [exitCode, setExitCode] = useState<number | undefined>();
@@ -165,6 +169,7 @@ export function TerminalPanel({
   const [searchQuery, setSearchQuery] = useState('');
   const [pendingPaste, setPendingPaste] = useState<string | null>(null);
   const [searchHits, setSearchHits] = useState({ index: -1, count: 0 });
+  const [failedCommands, setFailedCommands] = useState(0);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
@@ -234,6 +239,26 @@ export function TerminalPanel({
     term.focus();
   }, []);
 
+  /** 在命令之间跳转：以视口顶部为参照，和 shell 集成的标记对齐。 */
+  const jumpCommand = useCallback((direction: -1 | 1) => {
+    const term = terminalRef.current;
+    if (!term) return;
+    const currentRow = term.buffer.active.viewportY;
+    const target = adjacentCommand(commandsRef.current.list(), currentRow, direction);
+    if (!target) return;
+    term.scrollToLine(target.row);
+    term.focus();
+  }, []);
+
+  /** 跳到最近一条失败命令；没有失败就什么都不做。 */
+  const jumpToFailure = useCallback(() => {
+    const term = terminalRef.current;
+    const target = lastFailedCommand(commandsRef.current.list());
+    if (!term || !target) return;
+    term.scrollToLine(target.row);
+    term.focus();
+  }, []);
+
   const zoom = useCallback((direction: 1 | -1) => {
     const next = stepTerminalFontSize(fontSize, direction);
     if (next !== fontSize) onFontSizeChange(next);
@@ -254,6 +279,8 @@ export function TerminalPanel({
     { label: '清屏', run: clearScreen },
     { label: '搜索', run: openSearch },
     { label: '跳到最新', run: scrollToBottom },
+    { label: '上一条命令', run: () => jumpCommand(-1) },
+    { label: '下一条命令', run: () => jumpCommand(1) },
     { label: fontSize >= MAX_TERMINAL_FONT_SIZE ? '放大（已最大）' : '放大字号', disabled: fontSize >= MAX_TERMINAL_FONT_SIZE, run: () => zoom(1) },
     { label: fontSize <= MIN_TERMINAL_FONT_SIZE ? '缩小（已最小）' : '缩小字号', disabled: fontSize <= MIN_TERMINAL_FONT_SIZE, run: () => zoom(-1) },
     { label: '重新连接', run: () => setRetryRevision((value) => value + 1) },
@@ -326,6 +353,31 @@ export function TerminalPanel({
         if (target) openLink(target);
       },
     };
+    // shell 集成：解析 OSC 133，记录每条命令的行号与退出码。
+    const tracker = new CommandTracker();
+    commandsRef.current = tracker;
+    const commandMarks: { mark: CommandMark; decoration?: { dispose: () => void } }[] = [];
+    const oscSubscription = term.parser.registerOscHandler(133, (payload) => {
+      const event = parseOsc133(payload);
+      if (!event) return false;
+      if (event.type === 'command-start') tracker.start(term.buffer.active.baseY + term.buffer.active.cursorY);
+      if (event.type === 'command-end') {
+        const mark = tracker.end(event.exitCode);
+        if (mark) {
+          setFailedCommands(tracker.failureCount());
+          // 失败命令在滚动条上留一个红点，长输出里也能定位。
+          if (commandFailed(mark)) {
+            const decoration = term.registerDecoration({
+              marker: term.registerMarker(mark.row - (term.buffer.active.baseY + term.buffer.active.cursorY)),
+              width: 1,
+              overviewRulerOptions: { color: token('--error'), position: 'full' },
+            });
+            if (decoration) commandMarks.push({ mark, decoration });
+          }
+        }
+      }
+      return true;
+    });
     const serialize = new SerializeAddon();
     term.loadAddon(serialize);
     serializeRef.current = serialize;
@@ -489,6 +541,7 @@ export function TerminalPanel({
       cwd,
       cols: term.cols || 90,
       rows: term.rows || 24,
+      shellIntegration,
     }).then(async (snapshot) => {
       if (disposed) return;
       setShell(snapshot.shell);
@@ -541,6 +594,8 @@ export function TerminalPanel({
       resizeObserver.disconnect();
       appearanceObserver.disconnect();
       fileLinks.dispose();
+      oscSubscription.dispose();
+      for (const entry of commandMarks) entry.decoration?.dispose();
       searchResults.dispose();
       titleSubscription.dispose();
       serializeRef.current = null;
@@ -606,10 +661,12 @@ export function TerminalPanel({
       if (intent === 'zoom-in') { zoom(1); return; }
       if (intent === 'zoom-out') { zoom(-1); return; }
       if (intent === 'zoom-reset') onFontSizeChange(12);
+      if (intent === 'prev-command') jumpCommand(-1);
+      if (intent === 'next-command') jumpCommand(1);
     };
     host.addEventListener('keydown', onKeyDown, true);
     return () => host.removeEventListener('keydown', onKeyDown, true);
-  }, [clearScreen, copySelection, onFontSizeChange, onNewTerminal, openSearch, pasteFromClipboard, zoom]);
+  }, [clearScreen, copySelection, jumpCommand, onFontSizeChange, onNewTerminal, openSearch, pasteFromClipboard, zoom]);
 
   // 搜索结果随输入实时高亮，⌘F 打开时预先放入当前选区。
   useEffect(() => {
@@ -644,6 +701,13 @@ export function TerminalPanel({
       </span>
       <span className="terminal-shell"><TerminalIcon aria-hidden="true" />{shell || 'shell'}</span>
       <code title={workingDirectory}>{workingDirectory}</code>
+      {failedCommands > 0 && <button
+        type="button"
+        className="terminal-failures"
+        aria-label={`${failedCommands} 条命令失败，跳到最近一条`}
+        title={`${failedCommands} 条命令失败，点击跳到最后一条`}
+        onClick={jumpToFailure}
+      ><TriangleAlert aria-hidden="true" />{failedCommands}</button>}
       {fontWarning && <span className="terminal-font-warning" role="status" aria-label="图标字体加载失败，请重新连接终端" title="图标字体加载失败，请重新连接终端"><TriangleAlert aria-hidden /></span>}
       <button type="button" aria-label="搜索终端输出" title="搜索终端输出 ⌘F" onClick={openSearch}><Search /></button>
       <button type="button" aria-label="清屏" title="清屏 ⌘K" onClick={clearScreen}><Eraser /></button>

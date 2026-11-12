@@ -5,6 +5,12 @@ import test from 'node:test';
 import ts from 'typescript';
 import { restoreTerminalReplay } from '../../web/src/features/terminal/terminal-replay.ts';
 import {
+  CommandTracker,
+  adjacentCommand,
+  commandFailed,
+  parseOsc133,
+} from '../../web/src/features/terminal/terminal-commands.ts';
+import {
   MAX_TERMINAL_FONT_SIZE,
   MIN_TERMINAL_FONT_SIZE,
   needsPasteConfirm,
@@ -72,7 +78,10 @@ function harness() {
   };
   const effects = new Map();
   class Terminal {
-    constructor(options) { this.options = options; this.cols = 80; this.rows = 24; this.output = []; this.focuses = 0; this.refreshes = 0; this.unicode = {}; this.selection = ''; terms.push(this); }
+    constructor(options) { this.options = options; this.cols = 80; this.rows = 24; this.output = []; this.focuses = 0; this.refreshes = 0; this.unicode = {}; this.selection = ''; terms.push(this);
+      this.buffer = { active: { baseY: 0, cursorY: 0, viewportY: 0 } };
+      this.parser = { registerOscHandler: (ident, handler) => { this.oscHandler = handler; return { dispose: () => { this.oscDisposed = true; } }; } };
+    }
     registerLinkProvider(provider) { this.linkProvider = provider; return { dispose: () => { this.linkProviderDisposed = true; } }; }
     hasSelection() { return this.selection.length > 0; }
     getSelection() { return this.selection; }
@@ -82,6 +91,8 @@ function harness() {
     touch() { this.touchCalls = (this.touchCalls ?? 0) + 1; }
     onSelectionChange() { return { dispose() {} }; }
     onTitleChange(handler) { this.titleHandler = handler; return { dispose: () => { this.titleDisposed = true; } }; }
+    registerMarker() { return { line: 0, dispose() {} }; }
+    registerDecoration() { return undefined; }
     loadAddon(fit) { fit.term = this; }
     open() {}
     write(data, callback) { assert.equal(this.disposed, undefined); if (data) { this.output.push(data); (this.writeSizes ??= []).push([this.cols, this.rows]); } if (this.holdWrites && callback) (this.callbacks ??= []).push(callback); else callback?.(); }
@@ -136,6 +147,9 @@ function harness() {
       if (name === '@xterm/addon-web-links') return { WebLinksAddon };
       if (name === '@xterm/addon-webgl') return { WebglAddon };
       if (name === '@xterm/addon-serialize') return { SerializeAddon };
+      if (name.endsWith('/terminal-commands')) {
+        return { CommandTracker, adjacentCommand, commandFailed, parseOsc133 };
+      }
       if (name.endsWith('/terminal-themes')) {
         return { STUDIO_TERMINAL_THEME: 'studio', isTerminalTheme: () => false, terminalTheme: () => null };
       }

@@ -46,6 +46,37 @@
 }
 .terminal-toolbar > button:hover { background: var(--surface-hover); color: var(--text); }
 .terminal-toolbar > button svg { width: var(--icon-sm); height: var(--icon-sm); }
+/* 失败计数：只在有失败命令时出现，点一下跳到最近一条。
+ * 需要压过 .terminal-toolbar > button 的 28px 固定方形。 */
+.terminal-toolbar > button.terminal-failures {
+  display: inline-flex;
+  width: auto;
+  min-width: 0;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px;
+}
+.terminal-failures {
+  display: inline-flex;
+  height: 22px;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px;
+  border-radius: var(--radius-tag);
+  background: var(--error-soft);
+  color: var(--error);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+.terminal-failures:hover { background: var(--error-soft); color: var(--error); }
+.terminal-failures svg { width: 12px; height: 12px; }
+/* 主题态下工具栏按钮会被统一改成低对比前景，失败徽章要保留自己的语义色。 */
+.terminal-panel.has-custom-theme .terminal-toolbar > button.terminal-failures,
+.terminal-panel.has-custom-theme .terminal-toolbar > button.terminal-failures:hover {
+  background: var(--error-soft);
+  color: var(--error);
+}
 .terminal-font-warning { display: inline-flex; color: var(--warning); }
 .terminal-font-warning svg { width: var(--icon-sm); height: var(--icon-sm); }
 .terminal-live-state {

@@ -90,3 +90,38 @@ test('终端标题只保留可读主干，过长或为空时回退', async () =>
   assert.equal(terminalTabTitle('a'.repeat(30), '终端'), '终端');
   assert.equal(terminalTabTitle('zsh — 80x24', '终端'), 'zsh');
 });
+
+test('OSC 133 解析出提示符、命令开始与退出码', async () => {
+  const { parseOsc133, commandFailed, adjacentCommand } = await import('../../web/src/features/terminal/terminal-commands.ts');
+  assert.deepEqual(parseOsc133('A'), { type: 'prompt' });
+  assert.deepEqual(parseOsc133('C'), { type: 'command-start' });
+  assert.deepEqual(parseOsc133('D;1'), { type: 'command-end', exitCode: 1 });
+  assert.deepEqual(parseOsc133('D;0'), { type: 'command-end', exitCode: 0 });
+  assert.deepEqual(parseOsc133('D'), { type: 'command-end', exitCode: 0 });
+  assert.equal(parseOsc133('B'), null);
+  assert.equal(parseOsc133(''), null);
+  assert.equal(commandFailed({ row: 3, exitCode: 0, done: true }), false);
+  assert.equal(commandFailed({ row: 3, exitCode: 2, done: true }), true);
+  assert.equal(commandFailed({ row: 3, done: false }), false, '还在执行的命令不算失败');
+  const marks = [{ row: 5, done: true }, { row: 20, done: true }, { row: 40, done: true }];
+  assert.equal(adjacentCommand(marks, 30, -1)?.row, 20);
+  assert.equal(adjacentCommand(marks, 30, 1)?.row, 40);
+  assert.equal(adjacentCommand(marks, 0, -1), null);
+  assert.equal(adjacentCommand(marks, 99, 1), null);
+});
+
+test('命令表按落点记录，失败计数只算真正失败的', async () => {
+  const { CommandTracker } = await import('../../web/src/features/terminal/terminal-commands.ts');
+  const tracker = new CommandTracker();
+  assert.equal(tracker.end(0), null, '没有开始就没有结束');
+  tracker.start(3);
+  assert.deepEqual(tracker.end(0), { row: 3, exitCode: 0, done: true });
+  tracker.start(12);
+  tracker.end(127);
+  tracker.start(30);
+  tracker.end(0);
+  assert.equal(tracker.list().length, 3);
+  assert.equal(tracker.failureCount(), 1);
+  tracker.reset();
+  assert.equal(tracker.list().length, 0);
+});

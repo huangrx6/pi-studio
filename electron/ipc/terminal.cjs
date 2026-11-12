@@ -1,5 +1,6 @@
 const { ipcMain, webContents } = require('electron');
 const { createTerminalSessionManager } = require('../services/terminal-sessions.cjs');
+const { studioDataDirectory } = require('../core/studio-paths.cjs');
 
 let terminalSessions;
 const watchedSenders = new WeakSet();
@@ -10,7 +11,12 @@ function sendToRenderer(ownerId, channel, payload) {
 }
 
 function manager() {
-  if (!terminalSessions) terminalSessions = createTerminalSessionManager({ send: sendToRenderer });
+  if (!terminalSessions) {
+    terminalSessions = createTerminalSessionManager({
+      send: sendToRenderer,
+      dataDirectory: studioDataDirectory(),
+    });
+  }
   return terminalSessions;
 }
 

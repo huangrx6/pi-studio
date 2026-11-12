@@ -68,6 +68,8 @@ export type Preferences = {
   terminalLineHeight: number;
   /** 终端光标形状。 */
   terminalCursorStyle: TerminalCursorStyle;
+  /** 是否给终端注入 OSC 133 shell 集成（目前仅 zsh）。 */
+  terminalShellIntegration: boolean;
   /** 步骤展示密度。 */
   stepDisplay: StepDisplay;
   /** 步骤收起时机。 */
@@ -107,6 +109,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   terminalFontFamily: '',
   terminalLineHeight: 1.25,
   terminalCursorStyle: 'bar',
+  terminalShellIntegration: false,
   stepDisplay: 'standard',
   stepCollapse: 'after-answer',
   showCodeView: false,
@@ -231,6 +234,9 @@ export function normalizePreferences(value: unknown): Preferences {
     terminalCursorStyle: TERMINAL_CURSOR_STYLES.has(source.terminalCursorStyle as TerminalCursorStyle)
       ? source.terminalCursorStyle as TerminalCursorStyle
       : DEFAULT_PREFERENCES.terminalCursorStyle,
+    terminalShellIntegration: typeof source.terminalShellIntegration === 'boolean'
+      ? source.terminalShellIntegration
+      : DEFAULT_PREFERENCES.terminalShellIntegration,
     stepDisplay: STEP_DISPLAYS.has(source.stepDisplay as StepDisplay)
       ? source.stepDisplay as StepDisplay
       : DEFAULT_PREFERENCES.stepDisplay,

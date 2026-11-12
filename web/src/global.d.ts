@@ -527,6 +527,8 @@ declare global {
         cwd: string;
         cols: number;
         rows: number;
+        /** 是否注入 OSC 133 shell 集成钩子（目前仅 zsh）。 */
+        shellIntegration?: boolean;
       }): Promise<TerminalSessionSnapshot>;
       terminalWrite(id: string, data: string): Promise<{ ok: boolean; status?: string }>;
       terminalResize(id: string, cols: number, rows: number): Promise<{ ok: boolean; status?: string }>;

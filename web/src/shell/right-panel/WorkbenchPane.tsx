@@ -49,6 +49,7 @@ type WorkbenchPaneProps = {
   onChooseWorkspace: () => void;
   onOpenSettings: (page: 'models') => void;
   terminalAppearance: TerminalAppearance;
+  terminalShellIntegration: boolean;
   onTerminalFontSize: (size: number) => void;
   makeDragPreview: (event: React.DragEvent, label: string, kind: '工作区' | '会话' | '标签') => void;
 };
@@ -66,6 +67,7 @@ export function WorkbenchPane({
   onChooseWorkspace,
   onOpenSettings,
   terminalAppearance,
+  terminalShellIntegration,
   onTerminalFontSize,
   makeDragPreview,
 }: WorkbenchPaneProps) {
@@ -266,6 +268,7 @@ export function WorkbenchPane({
           id={activePanelTab.id}
           cwd={activePanelTab.cwd || session?.cwd || workspace}
           appearance={terminalAppearance}
+          shellIntegration={terminalShellIntegration}
           onFontSizeChange={onTerminalFontSize}
           onNewTerminal={openTerminalTab}
           onOpenFile={(path) => { void openFile(path.replace(/:\d+(?::\d+)?$/u, ''), session?.id, 'external'); }}

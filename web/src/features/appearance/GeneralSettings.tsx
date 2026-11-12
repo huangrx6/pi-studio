@@ -144,6 +144,9 @@ export function GeneralSettings({ preferences, onChange, backgroundBusy, backgro
       <SettingRow label="终端字体"><Select label="终端字体" value={preferences.terminalFontFamily} onChange={value => onChange('terminalFontFamily', value)} options={TERMINAL_FONT_OPTIONS} /></SettingRow>
       <SettingRow label="终端字号"><Stepper label="终端字号" value={preferences.terminalFontSize} min={11} max={20} unit=" px" onChange={value => onChange('terminalFontSize', value)} /></SettingRow>
       <SettingRow label="行高"><Stepper label="终端行高" value={preferences.terminalLineHeight} min={1} max={1.8} step={0.05} unit="" onChange={value => onChange('terminalLineHeight', value)} /></SettingRow>
+      <SettingRow label="Shell 集成" description="让 zsh 标记每条命令的起点与退出码，用于失败定位与命令间跳转；只在 Studio 自己的目录写钩子，不改你的 ~/.zshrc。">
+        <button type="button" className={`switch ${preferences.terminalShellIntegration ? 'is-on' : ''}`} role="switch" aria-checked={preferences.terminalShellIntegration} aria-label="Shell 集成" onClick={() => onChange('terminalShellIntegration', !preferences.terminalShellIntegration)}><span /></button>
+      </SettingRow>
       <SettingRow label="光标形状">
         <div className="general-theme-options" role="group" aria-label="终端光标形状">
           {([

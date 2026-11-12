@@ -12,6 +12,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { createTerminalReplay } = require('./terminal-replay.cjs');
+const { shellIntegrationEnvironment } = require('./shell-integration.cjs');
 
 const MAX_SESSIONS_PER_RENDERER = 8;
 const MAX_OUTPUT_CHARS = 1_000_000;
@@ -142,6 +143,7 @@ function createTerminalSessionManager(options = {}) {
   const now = options.now || Date.now;
   const platform = options.platform || process.platform;
   const environment = options.environment || process.env;
+  const dataDirectory = options.dataDirectory || path.join(os.homedir(), '.pi-studio');
   const sessions = new Map();
 
   function sessionsForOwner(ownerId) {
@@ -162,7 +164,7 @@ function createTerminalSessionManager(options = {}) {
     }
   }
 
-  function create({ ownerId, id, cwd, cols, rows } = {}) {
+  function create({ ownerId, id, cwd, cols, rows, shellIntegration } = {}) {
     if (!Number.isInteger(ownerId)) throw new Error('终端缺少有效的窗口标识');
     if (typeof id !== 'string' || !id || id.length > 100) throw new Error('终端标识无效');
     const existing = sessions.get(id);
@@ -178,6 +180,10 @@ function createTerminalSessionManager(options = {}) {
     const shell = shellForPlatform(platform, environment);
     const shellArgs = shellArgsForPlatform(shell, platform);
     const workingDirectory = normalizeCwd(cwd);
+    // 只有用户显式开启时才注入 OSC 133 钩子；关闭时 shell 行为与平时完全一致。
+    const integrationEnv = shellIntegration
+      ? shellIntegrationEnvironment({ dataDirectory, shell, environment })
+      : {};
     const title = path.basename(shell).replace(/\.exe$/i, '') || 'shell';
     const initialCols = clampDimension(cols, 90, 20, 500);
     const initialRows = clampDimension(rows, 24, 5, 300);
@@ -194,6 +200,7 @@ function createTerminalSessionManager(options = {}) {
         TERM: 'xterm-256color',
         TERM_PROGRAM: 'Pi Studio',
         PI_STUDIO_TERMINAL: '1',
+        ...integrationEnv,
       },
     });
     const session = {
