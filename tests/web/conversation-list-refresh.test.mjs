@@ -31,6 +31,8 @@ function harness() {
     setWorkspaces(value) { installed.push(value); }, setSession() {},
     setDefaultModelSelection() {}, setModelSelection() {},
     setConversationListRefreshError(value) { h.notice = value; },
+    // 兜底计时器在测试里不需要真的触发，给一个不回调的实现即可。
+    setTimeout() { return 0; }, clearTimeout() {},
     window: { piApi: { state() { return new Promise((resolve, reject) => waiting.push({ resolve, reject })); } } },
   };
   vm.runInNewContext(code, h);

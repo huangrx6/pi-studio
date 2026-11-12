@@ -60,6 +60,11 @@ export function useWorkspaceState({
     const request = ++stateRequestRef.current;
     const revision = modelRevisionRef.current.get(`default:${workspace}`) ?? 0;
     setStateLoading(true);
+    // 兜底：任何异常路径（IPC 未返回、主进程忙）都不该让「正在载入」永远挂着。
+    const release = setTimeout(() => {
+      clearTimeout(release);
+      if (request === stateRequestRef.current) setStateLoading(false);
+    }, 8000);
     try {
       const next = await window.piApi.state(workspace);
       if (request !== stateRequestRef.current || workspace !== workspaceRef.current) return;
@@ -113,9 +118,10 @@ export function useWorkspaceState({
         throw error;
       }
     } finally {
-      if (request === stateRequestRef.current && workspace === workspaceRef.current) {
-        setStateLoading(false);
-      }
+      // 只按请求序号判断：最后一次发起的请求完成时一定要把「正在载入」收掉。
+      // 之前还要求 workspace 等于闭包里的值，切工作区的竞态下会永远为 false，
+      // 新会话页就一直卡在「正在载入…」。
+      if (request === stateRequestRef.current) setStateLoading(false);
     }
   }, [
     conversationListNeedsRefreshRef,
