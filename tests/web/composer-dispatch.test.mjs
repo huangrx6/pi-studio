@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import test from 'node:test';
 import ts from 'typescript';
+import { loadTranscriptWindow } from '../../web/src/features/conversation/transcript-load.mjs';
 
 const source = fs.readFileSync(new URL('../../web/src/features/conversation/useMessageDelivery.ts', import.meta.url), 'utf8');
 const tree = ts.createSourceFile('useMessageDelivery.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -62,6 +63,7 @@ function harness({ submit, page = async () => ({ messages: [] }) }) {
   const context = {
     compaction,
     sessionLoadRef: { current: 1 },
+    transcriptPageRef: { current: null },
     sessionRef: { current: { id: 'A' } },
     sendBlockedRef: { current: false },
     requestRef: { current: '' },
@@ -93,9 +95,8 @@ function harness({ submit, page = async () => ({ messages: [] }) }) {
       return value instanceof Error ? value.message : String(value);
     },
     async loadState() {},
-    async loadFullTranscript(fn) {
-      return fn();
-    },
+    // dispatchSubmission 里的 loadTranscriptWindow 是自由变量，从上下文取。
+    loadTranscriptWindow: (loadPage, id) => loadTranscriptWindow(loadPage, id),
     async refreshOutline(id) {
       calls.outlines.push(id);
       return undefined;
@@ -159,6 +160,7 @@ function sendHarness({
     composerDeliveryRetriesRef: { current: retries },
     latestComposerAttemptByKeyRef: { current: new Map() },
     sessionLoadRef: { current: 1 },
+    transcriptPageRef: { current: null },
     sessionRef: { current: { id: 'A', cwd: '/workspace-a' } },
     turnActiveRef: { current: turnActive },
     queuedEditContextsRef: { current: {} },

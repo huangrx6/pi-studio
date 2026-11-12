@@ -231,6 +231,9 @@ export function useConversationController(foundation: AppFoundation) {
     resourcePendingRef,
     mcpDetailGenerationRef,
   } = settingsWorkspace.state;
+  const transcriptPageRef = useRef<{ sessionId: string; page: { hasOlder?: boolean; nextCursor?: string } } | null>(null);
+  // useTranscriptNavigation 先于 useConversationSessions 调用，用 ref 把补页函数桥接过去。
+  const loadOlderMessagesRef = useRef<() => Promise<boolean>>(async () => false);
   const {
     scrollRef,
     topSentinelRef,
@@ -252,6 +255,7 @@ export function useConversationController(foundation: AppFoundation) {
     handleTranscriptScroll,
     jumpToOutline,
   } = useTranscriptNavigation({
+    onLoadOlder: () => loadOlderMessagesRef.current(),
     sessionId: session?.id,
     messages,
     requestTraces,
@@ -433,6 +437,7 @@ export function useConversationController(foundation: AppFoundation) {
     session,
     sessionRef,
     sessionLoadRef,
+    transcriptPageRef,
     workspaces,
     workspace,
     modelSelection,
@@ -505,6 +510,7 @@ export function useConversationController(foundation: AppFoundation) {
     refreshOutline,
     openSession,
     openNotificationSession,
+    loadOlderMessages,
   } = useConversationSessions({
     session,
     sessionRef,
@@ -519,6 +525,7 @@ export function useConversationController(foundation: AppFoundation) {
     modelRevisionRef,
     modelWriteResultsRef,
     transcriptCacheRef,
+    transcriptPageRef,
     prefetchedSessionsRef,
     outlineRequestRef,
     subagentRequestRef,
@@ -558,6 +565,7 @@ export function useConversationController(foundation: AppFoundation) {
     currentComposerDraft,
   });
   outlineHandlersRef.current = { applyOutline, refreshOutline };
+  loadOlderMessagesRef.current = loadOlderMessages;
   conversationNavigationRef.current = { open: openSession, start: startSession };
   const {
     updateComposerMenu,

@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type {
   ChatMessage,
@@ -36,7 +37,7 @@ import {
   moveComposerDraft,
   type ComposerDraft,
 } from './composer-drafts';
-import { loadFullTranscript } from './transcript-load.mjs';
+import { loadOlderPage, loadTranscriptWindow } from './transcript-load.mjs';
 import { messagesHaveMarkdownCode } from '../../shared/markdown-code.mjs';
 import { preloadMarkdownHighlighter, preloadMarkdownRenderer } from '../../shared/Markdown';
 import { errorText } from '../../shared/error-text';
@@ -68,6 +69,8 @@ type ConversationSessionsDependencies = {
   modelRevisionRef: MutableRefObject<Map<string, number>>;
   modelWriteResultsRef: MutableRefObject<Map<string, { revision: number; selection: ModelSelection }>>;
   transcriptCacheRef: MutableRefObject<Map<string, TranscriptCacheEntry>>;
+  /** 当前会话已载入窗口的分页游标，用于向上补页。 */
+  transcriptPageRef: MutableRefObject<{ sessionId: string; page: { hasOlder?: boolean; nextCursor?: string } } | null>;
   prefetchedSessionsRef: MutableRefObject<Set<string>>;
   outlineRequestRef: MutableRefObject<number>;
   subagentRequestRef: MutableRefObject<number>;
@@ -121,6 +124,7 @@ export function useConversationSessions({
   modelRevisionRef,
   modelWriteResultsRef,
   transcriptCacheRef,
+  transcriptPageRef,
   prefetchedSessionsRef,
   outlineRequestRef,
   subagentRequestRef,
@@ -159,6 +163,9 @@ export function useConversationSessions({
   installComposerDraft,
   currentComposerDraft,
 }: ConversationSessionsDependencies) {
+  // 向上补页的并发保护：滚动哨兵会连续触发，不能同时发两页请求。
+  const olderLoadingRef = useRef(false);
+
   async function startSession(
     cwd = session?.cwd || workspace,
     options: { restoreDraft?: boolean; checkpoint?: boolean } = {},
@@ -296,7 +303,7 @@ export function useConversationSessions({
       const [detail, outline, children] = cacheFresh
         ? [cached.detail, cached.outline, cached.children]
         : await Promise.all([
-          loadFullTranscript(window.piApi.conversationPage, item.id),
+          loadTranscriptWindow(window.piApi.conversationPage, item.id),
           window.piApi.conversationOutline(item.id).catch(() => undefined),
           window.piApi.sessionSubagents(item.id).catch(() => [] as SubagentChild[]),
         ]);
@@ -323,6 +330,7 @@ export function useConversationSessions({
         ? { ...configuredModel, pending: Boolean(detail.running) }
         : detail.model ?? createEmptyModelSelection());
       setMessages(detail.messages);
+      transcriptPageRef.current = { sessionId: detail.id, page: detail.page ?? { hasOlder: false } };
       setRequestTraces(Array.isArray(detail.requestTraces) ? detail.requestTraces : []);
       setSubagentChildren(Array.isArray(children) ? children : []);
       setSubagentTranscript(null);
@@ -350,7 +358,7 @@ export function useConversationSessions({
           outline,
           children,
         });
-        while (transcriptCacheRef.current.size > 3) {
+        while (transcriptCacheRef.current.size > 1) {
           transcriptCacheRef.current.delete(transcriptCacheRef.current.keys().next().value as string);
         }
       }
@@ -363,6 +371,35 @@ export function useConversationSessions({
       return false;
     } finally {
       if (load === sessionLoadRef.current) setSessionLoading(false);
+    }
+  }
+
+  /**
+   * 向上补一页更早的历史。
+   *
+   * 返回 false 表示没有更早的内容（或正在加载），调用方据此停止滚动加载。
+   */
+  async function loadOlderMessages(): Promise<boolean> {
+    const sessionId = sessionRef.current?.id;
+    const cursor = transcriptPageRef.current;
+    if (!sessionId || !cursor || cursor.sessionId !== sessionId) return false;
+    if (!cursor.page?.nextCursor || olderLoadingRef.current) return false;
+    olderLoadingRef.current = true;
+    try {
+      const older = await loadOlderPage(window.piApi.conversationPage, sessionId, cursor.page);
+      if (!older) {
+        transcriptPageRef.current = { sessionId, page: { hasOlder: false } };
+        return false;
+      }
+      if (sessionRef.current?.id !== sessionId) return false;
+      transcriptPageRef.current = { sessionId, page: older.page };
+      // 函数式插入：加载期间新到的流式消息不会被这次替换覆盖。
+      setMessages((current) => [...older.messages, ...current]);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      olderLoadingRef.current = false;
     }
   }
 
@@ -385,5 +422,6 @@ export function useConversationSessions({
     refreshOutline,
     openSession,
     openNotificationSession,
+    loadOlderMessages,
   };
 }

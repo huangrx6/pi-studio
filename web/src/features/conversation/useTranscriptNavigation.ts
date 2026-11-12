@@ -27,6 +27,8 @@ type TranscriptNavigationDependencies = {
   outlineActive: number;
   setOutlineActive: Setter<number>;
   showComposerFeedback: (message: string, tone?: 'info' | 'warning') => void;
+  /** 向上补一页更早的历史；返回 false 表示没有更多。 */
+  onLoadOlder?: () => Promise<boolean>;
 };
 
 const TURN_WINDOW_INITIAL = 24;
@@ -45,6 +47,7 @@ export function useTranscriptNavigation({
   outlineActive,
   setOutlineActive,
   showComposerFeedback,
+  onLoadOlder,
 }: TranscriptNavigationDependencies) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -59,6 +62,10 @@ export function useTranscriptNavigation({
   const scrollIntentTimerRef = useRef<number | null>(null);
   const userScrollIntentRef = useRef(false);
   const lastTranscriptScrollTopRef = useRef(0);
+  const onLoadOlderRef = useRef(onLoadOlder);
+  onLoadOlderRef.current = onLoadOlder;
+  const olderLoadingRef = useRef(false);
+  const turnsRef = useRef<typeof transcriptTurns>([]);
 
   useLayoutEffect(() => {
     followBottomRef.current = true;
@@ -152,6 +159,7 @@ export function useTranscriptNavigation({
       from: Math.max(0, transcriptTurns.length - TURN_WINDOW_INITIAL),
     };
   }
+  turnsRef.current = transcriptTurns;
   const turnWindowFrom = transcriptWindowStart(
     windowSession,
     transcriptTurns.length,
@@ -196,13 +204,41 @@ export function useTranscriptNavigation({
     return () => { if (frame) cancelAnimationFrame(frame); };
   }, [pendingOutlineJump]);
 
-  /** Watch the sentinel above the mounted turns and extend the window. */
+  /**
+   * 补一页更早的历史，并把阅读位置钉住。
+   *
+   * 插入到前面会让 scrollHeight 变大；按差值补 scrollTop，读者视线不动。
+   */
+  async function loadOlderWithAnchor() {
+    const node = scrollRef.current;
+    const load = onLoadOlderRef.current;
+    if (!node || !load || olderLoadingRef.current) return;
+    olderLoadingRef.current = true;
+    const height = node.scrollHeight;
+    try {
+      const loaded = await load();
+      if (!loaded) return;
+      requestAnimationFrame(() => {
+        const next = scrollRef.current;
+        if (next) next.scrollTop += next.scrollHeight - height;
+      });
+    } finally {
+      olderLoadingRef.current = false;
+    }
+  }
+
+  /**
+   * Watch the sentinel above the mounted turns.
+   *
+   * 先扩大已渲染的 turn 窗口；渲染窗口已经到头时，才向主进程要更早的一页。
+   */
   useEffect(() => {
     const sentinel = topSentinelRef.current;
     const root = scrollRef.current;
-    if (!sentinel || !root || turnWindowFrom === 0) return undefined;
+    if (!sentinel || !root) return undefined;
     const observer = new IntersectionObserver((entries) => {
       if (!entries.some((entry) => entry.isIntersecting)) return;
+      if (turnWindowFrom === 0) { void loadOlderWithAnchor(); return; }
       windowAnchorRef.current = { session: windowSession, top: root.scrollTop, height: root.scrollHeight };
       setTurnWindowFromState({ session: windowSession, from: Math.max(0, turnWindowFrom - TURN_WINDOW_STEP) });
     }, { root, rootMargin: '800px 0px 0px 0px' });
@@ -324,25 +360,40 @@ export function useTranscriptNavigation({
   }
 
   /** 点击大纲：目标可能在可视窗口之外，先扩窗再滚动。 */
-  function jumpToOutline(index: number) {
+  /**
+   * 跳到某条提问。
+   *
+   * 目标可能还没被加载进窗口（大会话只载入最近一段）：这时先向上补页，
+   * 每次补完等两帧 React 提交再重新查一次，最多补三页。
+   */
+  async function jumpToOutline(index: number) {
     const item = outlineItems[index];
-    const targetIndex = item
-      ? transcriptTurns.findIndex((turn) => turn.kind === 'user' && turn.message.sourceIndex === item.sourceIndex)
-      : -1;
-    if (targetIndex >= 0 && targetIndex < turnWindowFrom) {
-      // Mount the target first; the scroll runs after React commits the window.
+    const locate = () => (item
+      ? turnsRef.current.findIndex((turn) => turn.kind === 'user' && turn.message.sourceIndex === item.sourceIndex)
+      : -1);
+    let targetIndex = locate();
+    for (let attempt = 0; targetIndex < 0 && attempt < 3; attempt += 1) {
+      const loaded = await onLoadOlderRef.current?.();
+      if (!loaded) break;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      targetIndex = locate();
+    }
+    if (targetIndex < 0 && item) {
+      showComposerFeedback('这条提问对应的历史已经不在当前窗口内。');
+      return;
+    }
+    // 已经渲染出来的直接滚过去；还在窗口外的先把它挂上，提交后再滚。
+    if (targetIndex >= 0 && scrollToOutlineItem(index, 'auto')) {
+      requestAnimationFrame(() => { scrollToOutlineItem(index, 'auto'); });
+      return;
+    }
+    if (targetIndex >= 0) {
       windowAnchorRef.current = null;
       setTurnWindowFromState({ session: windowSession, from: Math.min(turnWindowFrom, targetIndex) });
       setPendingOutlineJump(index);
       return;
     }
-    // Outline jumps are deliberate: land instantly, then re-align once the
-    // freshly mounted neighbours have laid out.
-    if (!scrollToOutlineItem(index, 'auto')) {
-      showComposerFeedback('这条提问对应的历史消息已经不可用。');
-      return;
-    }
-    requestAnimationFrame(() => { scrollToOutlineItem(index, 'auto'); });
+    showComposerFeedback('这条提问对应的历史消息已经不可用。');
   }
 
   useLayoutEffect(() => {

@@ -43,7 +43,7 @@ import type {
 } from './composer-types';
 import { extractComposerMentions, normalizeComposerText } from './references';
 import { mergeComposerAttachments, recoverComposerPaste, type PendingComposerPaste } from './composer-paste';
-import { loadFullTranscript } from './transcript-load.mjs';
+import { loadTranscriptWindow } from './transcript-load.mjs';
 import type { OutlineData } from './outline-model';
 import { isLongMessage } from './composer-budget.mjs';
 import { parseStudioCommand } from './composer-command-routes.mjs';
@@ -67,6 +67,8 @@ type MessageDeliveryDependencies = {
   session: SessionState;
   sessionRef: MutableRefObject<SessionState>;
   sessionLoadRef: MutableRefObject<number>;
+  /** 当前会话已载入窗口的分页游标；提交后要跟着新的一页更新。 */
+  transcriptPageRef: MutableRefObject<{ sessionId: string; page: { hasOlder?: boolean; nextCursor?: string } } | null>;
   workspaces: PiWorkspace[];
   workspace: string;
   modelSelection: ModelSelection;
@@ -142,6 +144,7 @@ export function useMessageDelivery({
   session,
   sessionRef,
   sessionLoadRef,
+  transcriptPageRef,
   workspaces,
   workspace,
   modelSelection,
@@ -550,10 +553,11 @@ export function useMessageDelivery({
       if (mode === 'prompt' && canApplyPromptResult()) {
         try {
           const [saved, outline] = await Promise.all([
-            loadFullTranscript(window.piApi.conversationPage, submission.sessionId),
+            loadTranscriptWindow(window.piApi.conversationPage, submission.sessionId),
             refreshOutline(submission.sessionId),
           ]);
           if (canApplyPromptResult() && saved) {
+            transcriptPageRef.current = { sessionId: saved.id, page: saved.page ?? { hasOlder: false } };
             setSession({
               id: saved.id,
               cwd: saved.cwd,
@@ -651,11 +655,12 @@ export function useMessageDelivery({
       void loadState().catch(() => {});
       if (requestRef.current !== requestId) return;
       const [saved, outline] = await Promise.all([
-        loadFullTranscript(window.piApi.conversationPage, sessionId),
+        loadTranscriptWindow(window.piApi.conversationPage, sessionId),
         refreshOutline(sessionId),
       ]);
       if (requestRef.current !== requestId) return;
       if (saved) {
+        transcriptPageRef.current = { sessionId: saved.id, page: saved.page ?? { hasOlder: false } };
         setSession({
           id: saved.id,
           cwd: saved.cwd,

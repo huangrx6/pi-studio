@@ -297,7 +297,8 @@ export function ConversationWorkspace({
         <div className="chat-column" ref={chatContentRef}>
           {messageCount > 0 && (
             <div className="messages">
-              {turnWindowFrom > 0 && <div ref={topSentinelRef} className="transcript-window-sentinel" aria-hidden="true" />}
+              {/* 顶部哨兵：先展开已渲染的轮次，再向主进程要更早的一页 */}
+              <div ref={topSentinelRef} className="transcript-window-sentinel" aria-hidden="true" />
               {visibleTurns.map((turn, offset) => {
                 const index = offset + turnWindowFrom;
                 if (turn.kind === 'user') {

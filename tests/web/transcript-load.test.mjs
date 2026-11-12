@@ -52,3 +52,45 @@ test('a cursor that never ends cannot spin forever', async () => {
   assert.ok(calls <= 64, `guard stops the loop (${calls} calls)`);
   assert.equal(loaded.page.hasOlder, false);
 });
+
+test('窗口只取最近一页，并保留补页游标', async () => {
+  const { loadTranscriptWindow, TRANSCRIPT_WINDOW_SIZE } = await import('../../web/src/features/conversation/transcript-load.mjs');
+  const calls = [];
+  const loaded = await loadTranscriptWindow(async (payload) => {
+    calls.push(payload);
+    return { messages: [message(600), message(601)], page: { hasOlder: true, nextCursor: 'older' }, messageStart: 600 };
+  }, 'demo');
+  assert.equal(calls.length, 1, '只发一次请求');
+  assert.equal(calls[0].limit, TRANSCRIPT_WINDOW_SIZE);
+  assert.equal(calls[0].cursor, undefined);
+  assert.deepEqual(loaded.messages.map((item) => item.sourceIndex), [600, 601]);
+  assert.equal(loaded.page.hasOlder, true);
+  assert.equal(loaded.page.nextCursor, 'older');
+  assert.equal(loaded.messageStart, 600);
+});
+
+test('补页把更早的消息插到前面，并更新游标', async () => {
+  const { loadTranscriptWindow, loadOlderTranscript } = await import('../../web/src/features/conversation/transcript-load.mjs');
+  const current = await loadTranscriptWindow(async () => ({
+    messages: [message(600), message(601)],
+    page: { hasOlder: true, nextCursor: 'older' },
+    messageStart: 600,
+  }), 'demo');
+  const calls = [];
+  const merged = await loadOlderTranscript(async (payload) => {
+    calls.push(payload);
+    return { messages: [message(598), message(599)], page: { hasOlder: false }, messageStart: 598 };
+  }, 'demo', current);
+  assert.equal(calls[0].cursor, 'older');
+  assert.deepEqual(merged.messages.map((item) => item.sourceIndex), [598, 599, 600, 601]);
+  assert.equal(merged.page.hasOlder, false);
+  assert.equal(merged.messageStart, 598, '起点跟着更早的一页走');
+});
+
+test('没有更早内容时补页不发请求', async () => {
+  const { loadOlderTranscript } = await import('../../web/src/features/conversation/transcript-load.mjs');
+  let called = false;
+  const quiet = await loadOlderTranscript(async () => { called = true; return undefined; }, 'demo', { messages: [], page: { hasOlder: false } });
+  assert.equal(quiet, null);
+  assert.equal(called, false);
+});
