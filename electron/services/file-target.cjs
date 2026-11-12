@@ -7,6 +7,7 @@
  * 保护性检查，越权与凭据类文件一律拒绝。
  */
 
+const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -124,6 +125,84 @@ function findByName(name, { cwd } = {}) {
 }
 
 /**
+ * 按路径尾段在工作区里找文件。
+ *
+ * 模型常把 `skills/deck-authoring/scripts/render.py` 写成 `scripts/render.py`，
+ * 于是相对 cwd 解析必然失败。这里只在「路径确实不存在」时才跑，并且优先用
+ * `git ls-files`（几千条也就几十毫秒），非 git 目录直接放弃，不做递归遍历。
+ *
+ * @param {string} relative 用户给出的相对路径
+ * @param {{ cwd?: string }} options
+ * @returns {string[]} 最多 5 个候选的绝对路径
+ */
+/**
+ * 列出工作区里的文件（相对 cwd）。
+ *
+ * 优先 `git ls-files`：几千个文件只要几十毫秒。非 git 目录退回到有限遍历
+ * （最多 6 层、2000 个条目），避免在超大目录上卡住。
+ */
+function listWorkspaceFiles(cwd) {
+  try {
+    const output = execFileSync('git', ['ls-files', '-z'], {
+      cwd,
+      encoding: 'utf8',
+      timeout: 3_000,
+      maxBuffer: 32 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const files = output.split('\0').filter(Boolean);
+    if (files.length > 0) return files;
+  } catch {
+    // 不是 git 仓库就落到下面的遍历。
+  }
+  const files = [];
+  let budget = 2_000;
+  const walk = (dir, depth) => {
+    if (depth > 6 || budget <= 0) return;
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (budget <= 0) return;
+      if (entry.name.startsWith('.') || SEARCH_SKIPPED_DIRECTORIES.has(entry.name)) continue;
+      budget -= 1;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full, depth + 1);
+      else if (entry.isFile()) files.push(path.relative(cwd, full));
+    }
+  };
+  walk(cwd, 0);
+  return files;
+}
+
+function findBySuffix(relative, { cwd } = {}) {
+  if (typeof cwd !== 'string' || !path.isAbsolute(cwd)) return [];
+  const needle = String(relative)
+    .replace(/^\.\//u, '')
+    .split(/[/\\]/u)
+    .filter((part) => part && part !== '.');
+  if (needle.length < 1) return [];
+  const listed = listWorkspaceFiles(cwd);
+  if (listed.length === 0) return [];
+  const matches = [];
+  for (const file of listed) {
+    if (!file) continue;
+    const parts = file.split('/');
+    if (needle.length > parts.length) continue;
+    const tail = parts.slice(parts.length - needle.length);
+    if (!tail.every((part, index) => part === needle[index])) continue;
+    const absolute = path.join(cwd, file);
+    if (!isRegularFile(absolute)) continue;
+    matches.push(absolute);
+    if (matches.length >= 5) break;
+  }
+  return matches;
+}
+
+/**
  * 解析一条用户可见的文件引用。
  * 相对路径以当前会话工作目录为基准，工作目录缺失时退回主目录。
  */
@@ -141,8 +220,18 @@ function resolveUserTarget(input, { cwd } = {}) {
     // 只有文件名（没有目录）时再按名字找一轮：模型经常只写产物名。
     const bare = !expanded.includes('/') && !expanded.includes('\\');
     const found = bare ? findByName(expanded, { cwd }) : null;
-    if (!found) throw new Error('文件不存在或无法访问');
-    target = fs.realpathSync(found);
+    if (found) {
+      target = fs.realpathSync(found);
+    } else {
+      // 带目录的引用：按路径尾段在工作区里找，唯一命中直接采用，
+      // 多个命中列出来让用户挑，别把「文件在哪」这件事丢给用户自己翻。
+      const candidates = path.isAbsolute(expanded) ? [] : findBySuffix(expanded, { cwd });
+      if (candidates.length === 1) target = fs.realpathSync(candidates[0]);
+      else if (candidates.length > 1) {
+        const listed = candidates.map((item) => path.relative(cwd, item)).join('、');
+        throw new Error(`文件不存在，但工作区里有同名文件：${listed}`);
+      } else throw new Error('文件不存在或无法访问');
+    }
   }
   assertNotProtected(target);
   let stat;
