@@ -346,6 +346,8 @@ declare global {
      * 所有 invoke 方法都是异步的；事件订阅方法返回取消订阅函数。
      */
     piApi: {
+      /** 主进程的平台标识（process.platform），渲染层不再靠 navigator 猜。 */
+      readonly platform: 'darwin' | 'win32' | 'linux' | string;
       // ---- 主题、状态与会话 ----
       /** 切换原生窗口、菜单栏与全局组件圆角。 */
       setAppearance(

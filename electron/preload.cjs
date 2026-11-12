@@ -10,6 +10,8 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('piApi', {
+  // 平台是编译期就确定的事实，交给主进程给，渲染层不用靠 navigator 猜。
+  platform: process.platform,
   temporaryModel: (payload) => ipcRenderer.invoke('pi:temporary-model', payload),
   temporaryPrompt: (payload) => ipcRenderer.invoke('pi:temporary-prompt', payload),
   temporaryStop: (id) => ipcRenderer.invoke('pi:temporary-stop', id),

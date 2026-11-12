@@ -648,6 +648,8 @@ export function TerminalPanel({
         altKey: event.altKey,
         shiftKey: event.shiftKey,
         hasSelection: terminalRef.current?.hasSelection() ?? false,
+        // 主进程给平台，比 navigator.platform 可靠（后者在测试与 Linux 上常为空）。
+        platform: window.piApi.platform === 'darwin' ? 'mac' : 'other',
       });
       if (!intent) return;
       event.preventDefault();

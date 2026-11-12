@@ -124,6 +124,7 @@ function harness() {
     disconnect() { this.disconnected = true; }
   }
   const api = {
+    platform: 'darwin',
     terminalCreate(payload) { const pending = deferred(); creates.push({ ...pending, payload }); return pending.promise; },
     terminalResize(...args) { resizes.push(args); return Promise.resolve(); },
     terminalWrite(...args) { writes.push(args); return Promise.resolve(); },
@@ -135,7 +136,7 @@ function harness() {
   const source = fs.readFileSync(new URL('../../web/src/features/terminal/TerminalPanel.tsx', import.meta.url), 'utf8');
   vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText, {
     module, exports: module.exports, document, window: { piApi: api },
-    // 组合键判定按平台决定主修饰键；这里固定成 macOS，避免 CI 的 navigator.platform 为空。
+    // 组合键判定按平台决定主修饰键：平台来自 piApi，不再依赖 navigator.platform。
     navigator: { platform: 'MacIntel', userAgent: 'Macintosh' },
     ResizeObserver: Observer, MutationObserver: Observer,
     getComputedStyle: () => ({ getPropertyValue: () => '' }),
