@@ -134,7 +134,10 @@ function harness() {
   const module = { exports: {} };
   const source = fs.readFileSync(new URL('../../web/src/features/terminal/TerminalPanel.tsx', import.meta.url), 'utf8');
   vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText, {
-    module, exports: module.exports, document, window: { piApi: api }, ResizeObserver: Observer, MutationObserver: Observer,
+    module, exports: module.exports, document, window: { piApi: api },
+    // 组合键判定按平台决定主修饰键；这里固定成 macOS，避免 CI 的 navigator.platform 为空。
+    navigator: { platform: 'MacIntel', userAgent: 'Macintosh' },
+    ResizeObserver: Observer, MutationObserver: Observer,
     getComputedStyle: () => ({ getPropertyValue: () => '' }),
     requestAnimationFrame(fn) { frames.set(++frameId, fn); return frameId; }, cancelAnimationFrame(id) { frames.delete(id); },
     require(name) {

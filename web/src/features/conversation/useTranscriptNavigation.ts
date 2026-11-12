@@ -28,7 +28,7 @@ type TranscriptNavigationDependencies = {
   setOutlineActive: Setter<number>;
   showComposerFeedback: (message: string, tone?: 'info' | 'warning') => void;
   /** 向上补一页更早的历史；返回 false 表示没有更多。 */
-  onLoadOlder?: () => Promise<boolean>;
+  onLoadOlder?: (options?: { limit?: number; keepLatest?: boolean }) => Promise<boolean>;
 };
 
 const TURN_WINDOW_INITIAL = 24;
@@ -359,48 +359,11 @@ export function useTranscriptNavigation({
     return true;
   }
 
-  /** 点击大纲：目标可能在可视窗口之外，先扩窗再滚动。 */
-  /**
-   * 跳到某条提问。
-   *
-   * 目标可能还没被加载进窗口（大会话只载入最近一段）：这时先向上补页，
-   * 每次补完等两帧 React 提交再重新查一次，最多补三页。
-   */
-  async function jumpToOutline(index: number) {
-    const item = outlineItems[index];
-    const locate = () => (item
-      ? turnsRef.current.findIndex((turn) => turn.kind === 'user' && turn.message.sourceIndex === item.sourceIndex)
-      : -1);
-    let targetIndex = locate();
-    for (let attempt = 0; targetIndex < 0 && attempt < 3; attempt += 1) {
-      const loaded = await onLoadOlderRef.current?.();
-      if (!loaded) break;
-      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-      targetIndex = locate();
-    }
-    if (targetIndex < 0 && item) {
-      showComposerFeedback('这条提问对应的历史已经不在当前窗口内。');
-      return;
-    }
-    // 已经渲染出来的直接滚过去；还在窗口外的先把它挂上，提交后再滚。
-    if (targetIndex >= 0 && scrollToOutlineItem(index, 'auto')) {
-      requestAnimationFrame(() => { scrollToOutlineItem(index, 'auto'); });
-      return;
-    }
-    if (targetIndex >= 0) {
-      windowAnchorRef.current = null;
-      setTurnWindowFromState({ session: windowSession, from: Math.min(turnWindowFrom, targetIndex) });
-      setPendingOutlineJump(index);
-      return;
-    }
-    showComposerFeedback('这条提问对应的历史消息已经不可用。');
-  }
-
   /**
    * 跳到某条消息（按 sourceIndex，也就是 Durable entry id）。
    *
-   * 目标可能还没加载进窗口：先按页向上补，最多六页，每补一页等 React 提交
-   * 后重新定位。找到后把渲染窗口撑到目标所在轮次再滚动过去。
+   * 目标可能还没加载进窗口：按大页向上补（一次一千条），每补一页等 React
+   * 提交后重新定位。找到后把渲染窗口撑到目标所在轮次再滚动过去。
    */
   async function jumpToMessage(sourceIndex: number): Promise<boolean> {
     const locate = () => turnsRef.current.findIndex((turn) => (
@@ -409,8 +372,8 @@ export function useTranscriptNavigation({
         : turn.messages.some((message) => message.sourceIndex === sourceIndex)
     ));
     let target = locate();
-    for (let attempt = 0; target < 0 && attempt < 6; attempt += 1) {
-      const loaded = await onLoadOlderRef.current?.();
+    for (let attempt = 0; target < 0 && attempt < 12; attempt += 1) {
+      const loaded = await onLoadOlderRef.current?.({ limit: 1000, keepLatest: false });
       if (!loaded) break;
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       target = locate();
@@ -428,10 +391,19 @@ export function useTranscriptNavigation({
       : document.getElementById(`chat-turn-${anchorIndex}`) ?? document.getElementById(`chat-assistant-turn-${anchorIndex}`);
     if (!node) return false;
     node.scrollIntoView({ block: 'center', behavior: 'auto' });
-    // 短暂高亮，避免用户在人眼找不到落点。
+    // 短暂高亮，避免在一大段输出里找不到落点。
     node.classList.add('is-search-hit');
     window.setTimeout(() => node.classList.remove('is-search-hit'), 1600);
     return true;
+  }
+
+  /** 跳到某条提问：与搜索走同一条路径，都按 sourceIndex 定位并自动补页。 */
+  async function jumpToOutline(index: number) {
+    const item = outlineItems[index];
+    if (!item) return;
+    // 大纲与搜索走同一条跳转路径：都按 sourceIndex 定位并自动补页。
+    const reached = await jumpToMessage(item.sourceIndex);
+    if (!reached) showComposerFeedback('没能定位到这条提问，可能已经被编辑替换。');
   }
 
   useLayoutEffect(() => {

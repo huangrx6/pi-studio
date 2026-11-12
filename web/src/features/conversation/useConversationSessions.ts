@@ -84,6 +84,8 @@ type ConversationSessionsDependencies = {
   setModelSelection: Setter<ModelSelection>;
   setDefaultModelSelection: Setter<ModelSelection>;
   setMessages: Setter<ChatMessage[]>;
+  /** 窗口是否因为跳转被截掉了较新的一段（需要提供「回到最新」入口）。 */
+  setTranscriptTruncated: Setter<boolean>;
   setRequestTraces: Setter<RequestTrace[]>;
   setAgentView: Setter<AgentView>;
   setSubagentChildren: Setter<SubagentChild[]>;
@@ -138,6 +140,7 @@ export function useConversationSessions({
   setModelSelection,
   setDefaultModelSelection,
   setMessages,
+  setTranscriptTruncated,
   setRequestTraces,
   setAgentView,
   setSubagentChildren,
@@ -379,27 +382,62 @@ export function useConversationSessions({
    *
    * 返回 false 表示没有更早的内容（或正在加载），调用方据此停止滚动加载。
    */
-  async function loadOlderMessages(): Promise<boolean> {
+  /**
+   * 向上补一页更早的历史。
+   *
+   * `limit` 用于跳转：一次多取一些，几页就能跨过几千条；滚动加载用默认页大小。
+   * `keepLatest` 为 false 时把窗口截到 `maxWindow` 条，避免为了看一条旧消息
+   * 把整段历史重新装回内存（那正是窗口化要解决的问题）。截掉的尾部可以由
+   * {@link resetToLatest} 重新取回。
+   */
+  async function loadOlderMessages(options: {
+    limit?: number;
+    keepLatest?: boolean;
+    maxWindow?: number;
+  } = {}): Promise<boolean> {
     const sessionId = sessionRef.current?.id;
     const cursor = transcriptPageRef.current;
     if (!sessionId || !cursor || cursor.sessionId !== sessionId) return false;
     if (!cursor.page?.nextCursor || olderLoadingRef.current) return false;
     olderLoadingRef.current = true;
     try {
-      const older = await loadOlderPage(window.piApi.conversationPage, sessionId, cursor.page);
+      const older = await loadOlderPage(window.piApi.conversationPage, sessionId, cursor.page, { limit: options.limit });
       if (!older) {
         transcriptPageRef.current = { sessionId, page: { hasOlder: false } };
         return false;
       }
       if (sessionRef.current?.id !== sessionId) return false;
       transcriptPageRef.current = { sessionId, page: older.page };
+      const maxWindow = options.maxWindow ?? 800;
       // 函数式插入：加载期间新到的流式消息不会被这次替换覆盖。
-      setMessages((current) => [...older.messages, ...current]);
+      setMessages((current) => {
+        const merged = [...older.messages, ...current];
+        if (options.keepLatest === false && merged.length > maxWindow) {
+          setTranscriptTruncated(true);
+          return merged.slice(0, maxWindow);
+        }
+        return merged;
+      });
       return true;
     } catch {
       return false;
     } finally {
       olderLoadingRef.current = false;
+    }
+  }
+
+  /** 重新载入最新一页，回到「窗口包含最新消息」的状态。 */
+  async function resetToLatest(): Promise<void> {
+    const sessionId = sessionRef.current?.id;
+    if (!sessionId) return;
+    try {
+      const detail = await loadTranscriptWindow(window.piApi.conversationPage, sessionId);
+      if (!detail || sessionRef.current?.id !== sessionId) return;
+      transcriptPageRef.current = { sessionId, page: detail.page ?? { hasOlder: false } };
+      setMessages(detail.messages);
+      setTranscriptTruncated(false);
+    } catch {
+      // 保持当前窗口即可，用户还能继续读。
     }
   }
 
@@ -423,5 +461,6 @@ export function useConversationSessions({
     openSession,
     openNotificationSession,
     loadOlderMessages,
+    resetToLatest,
   };
 }

@@ -141,7 +141,12 @@ export type ConversationWorkspaceProps = {
   shell: ConversationShell;
   header: HeaderState;
   actions: ConversationActions;
-  transcript: ReturnType<typeof useTranscriptNavigation>;
+  transcript: ReturnType<typeof useTranscriptNavigation> & {
+    /** 重新载入最新窗口（跳转截断后的回到底部）。 */
+    resetToLatest: () => Promise<void>;
+    /** 当前窗口是否缺少较新的一段。 */
+    transcriptTruncated: boolean;
+  };
   extensions: ExtensionWorkspaceState;
   subagents: ReturnType<typeof useSubagentWorkspace>;
   outline: OutlineState;
@@ -203,6 +208,8 @@ export function ConversationWorkspace({
     handleTranscriptScroll,
     jumpToOutline,
     jumpToMessage,
+    resetToLatest,
+    transcriptTruncated,
   } = transcript;
 
   const search = useConversationSearch({ sessionId: session?.id, onJump: jumpToMessage });
@@ -384,6 +391,10 @@ export function ConversationWorkspace({
           />}
           {showSessionError && (!pendingAssistantVisible || turnActive) && <ConversationError message={error!} onDismiss={() => setError(null)} />}
         </div>
+      </div>}
+      {/* 跳到旧消息后窗口被截断：在输入框上方给一条明确回到底部的路径 */}
+      {transcriptTruncated && transcriptVisible && <div className="transcript-back-bar">
+        <button type="button" onClick={() => { void resetToLatest(); }}>回到最新消息</button>
       </div>}
 
       {!isNewConversation && agentView.kind === 'extensions' && <div className="conversation-extension-scroll">

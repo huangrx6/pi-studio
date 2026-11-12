@@ -233,7 +233,9 @@ export function useConversationController(foundation: AppFoundation) {
   } = settingsWorkspace.state;
   const transcriptPageRef = useRef<{ sessionId: string; page: { hasOlder?: boolean; nextCursor?: string } } | null>(null);
   // useTranscriptNavigation 先于 useConversationSessions 调用，用 ref 把补页函数桥接过去。
-  const loadOlderMessagesRef = useRef<() => Promise<boolean>>(async () => false);
+  const resetToLatestRef = useRef<() => Promise<void>>(async () => {});
+  const [transcriptTruncated, setTranscriptTruncated] = useState(false);
+  const loadOlderMessagesRef = useRef<(options?: { limit?: number; keepLatest?: boolean; maxWindow?: number }) => Promise<boolean>>(async () => false);
   const {
     scrollRef,
     topSentinelRef,
@@ -256,7 +258,7 @@ export function useConversationController(foundation: AppFoundation) {
     jumpToOutline,
     jumpToMessage,
   } = useTranscriptNavigation({
-    onLoadOlder: () => loadOlderMessagesRef.current(),
+    onLoadOlder: (options) => loadOlderMessagesRef.current(options),
     sessionId: session?.id,
     messages,
     requestTraces,
@@ -512,6 +514,7 @@ export function useConversationController(foundation: AppFoundation) {
     openSession,
     openNotificationSession,
     loadOlderMessages,
+    resetToLatest,
   } = useConversationSessions({
     session,
     sessionRef,
@@ -540,6 +543,7 @@ export function useConversationController(foundation: AppFoundation) {
     setModelSelection,
     setDefaultModelSelection,
     setMessages,
+    setTranscriptTruncated,
     setRequestTraces,
     setAgentView,
     setSubagentChildren,
@@ -567,6 +571,7 @@ export function useConversationController(foundation: AppFoundation) {
   });
   outlineHandlersRef.current = { applyOutline, refreshOutline };
   loadOlderMessagesRef.current = loadOlderMessages;
+  resetToLatestRef.current = resetToLatest;
   conversationNavigationRef.current = { open: openSession, start: startSession };
   const {
     updateComposerMenu,
@@ -925,6 +930,8 @@ export function useConversationController(foundation: AppFoundation) {
     handleTranscriptScroll,
     jumpToOutline,
     jumpToMessage,
+    resetToLatest: () => resetToLatestRef.current(),
+    transcriptTruncated,
     notifyExtension,
     comparisonByParent,
     setComparisonByParent,

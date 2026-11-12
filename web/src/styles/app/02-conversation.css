@@ -130,6 +130,24 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
   .trace-display-options button { gap: 3px; padding-inline: 3px; }
   .conversation-trace-item { padding-left: 8px; }
 }
+/* 跳到旧消息后窗口被截断：在输入框上方占一行，给一条回到底部的入口 */
+.transcript-back-bar {
+  display: flex;
+  flex: none;
+  justify-content: center;
+  padding: 6px var(--space-6) 0;
+}
+.transcript-back-bar > button {
+  height: 28px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-round);
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+.transcript-back-bar > button:hover { background: var(--surface-hover); }
+
 /* 对话内搜索：贴在消息区顶部，不挤占阅读列宽度 */
 .conversation-search {
   display: flex;
