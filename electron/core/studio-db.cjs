@@ -11,6 +11,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
+const { studioDataDirectory } = require('./studio-paths.cjs');
 const {
   decryptValue,
   encryptValue,
@@ -2250,7 +2251,7 @@ let instance;
 function databasePath() {
   if (process.env.PI_STUDIO_DB) return path.resolve(process.env.PI_STUDIO_DB);
   const { app } = require('electron');
-  return path.join(app.getPath('userData'), DATABASE_NAME);
+  return path.join(studioDataDirectory(), DATABASE_NAME);
 }
 
 function getStudioDatabase() {

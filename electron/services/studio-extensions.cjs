@@ -35,6 +35,7 @@ const {
   createOfficialExtensionService,
 } = require('./official-extensions.cjs');
 const { normalizeExternalHttpUrl } = require('../core/external-url.cjs');
+const { studioDataDirectory } = require('../core/studio-paths.cjs');
 
 const MANIFEST_NAME = 'pi-studio.extension.json';
 const API_VERSION = 1;
@@ -89,7 +90,7 @@ function officialExtensionsRoot() {
 function extensionDistributionService() {
   if (!distribution) {
     distribution = createExtensionDistributionService({
-      userDataPath: app.getPath('userData'),
+      userDataPath: studioDataDirectory(),
       appVersion: typeof app.getVersion === 'function' ? app.getVersion() : '0.0.0',
       officialRoot: officialExtensionsRoot(),
       normalizeManifest,
@@ -152,7 +153,7 @@ function serializeExtensionRuntime(operation) {
 }
 
 function userExtensionsDirectory() {
-  return path.join(app.getPath('userData'), 'extensions');
+  return path.join(studioDataDirectory(), 'extensions');
 }
 
 function projectExtensionsDirectory(cwd) {
@@ -681,7 +682,7 @@ function extensionDataDirectory(row, cwd, extensionRoot) {
     : installs.getInstalled(row.manifest.id, row.scope, cwd);
   const dataRoot = installed
     ? path.join(
-      app.getPath('userData'),
+      studioDataDirectory(),
       'extension-data',
       installs.scopeKey(row.scope, cwd),
     )
@@ -1383,7 +1384,7 @@ async function removeStudioExtension(id, cwd, options = {}) {
   const extensionDirectory = path.dirname(assertManagedPath(row.source, row.scope, cwd));
   // Workspace aliases may be symlinks; resolve that explicit scope once, while
   // preserving every managed child component for the no-symlink validation.
-  const scopeDirectory = path.resolve(row.scope === 'project' ? cwd : app.getPath('userData'));
+  const scopeDirectory = path.resolve(row.scope === 'project' ? cwd : studioDataDirectory());
   const boundary = fs.realpathSync(scopeDirectory);
   installs.removeUnmanagedExtension(row.manifest.id, {
     stableId: id,

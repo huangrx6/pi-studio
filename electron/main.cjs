@@ -14,6 +14,7 @@
  */
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { app, dialog, protocol } = require('electron');
 const { installApplicationShutdown } = require('./core/app-lifecycle.cjs');
@@ -43,23 +44,28 @@ const {
   updaterOwnsApplicationQuit,
 } = require('./services/updater.cjs');
 
-// 数据目录：默认 ~/.pi-studio。测试与 QA 用 PI_STUDIO_USER_DATA 覆盖，
-// 避免共享生产 profile、SQLite 和单实例锁。
-const { migrateLegacyUserData, resolveUserDataDirectory } = require('./core/user-data.cjs');
-let activeUserData = resolveUserDataDirectory({ override: process.env.PI_STUDIO_USER_DATA });
-if (!process.env.PI_STUDIO_USER_DATA) {
-  const legacy = app.getPath('userData');
+// Electron 的 userData（Chromium 缓存、Cookies、单实例锁）留在系统默认位置；
+// Studio 自己的数据放在 ~/.pi-studio，由 core/studio-paths.cjs 统一提供。
+// PI_STUDIO_USER_DATA 覆盖时两者合一，供测试与 QA 使用一次性目录。
+const { cleanLegacyChromiumData, migrateStudioData } = require('./core/user-data.cjs');
+const { STUDIO_DATA_DIRECTORY } = require('./core/studio-paths.cjs');
+const studioData = path.join(os.homedir(), STUDIO_DATA_DIRECTORY);
+if (process.env.PI_STUDIO_USER_DATA) {
+  const override = path.resolve(process.env.PI_STUDIO_USER_DATA);
+  fs.mkdirSync(override, { recursive: true });
+  app.setPath('userData', override);
+} else {
   try {
-    // 首次升级：把旧默认目录复制过来（不删旧目录），失败就继续用旧目录启动。
-    const result = migrateLegacyUserData({ legacy, target: activeUserData });
-    if (result.migrated) console.log(`用户数据已迁移：${result.from} → ${activeUserData}`);
+    // 首次升级：把旧 userData 里的 Studio 条目复制过来（旧目录保留）。
+    const result = migrateStudioData({ legacy: app.getPath('userData'), target: studioData });
+    if (result.migrated) console.log(`Studio 数据已迁移到 ${studioData}`);
+    const removed = cleanLegacyChromiumData({ target: studioData });
+    if (removed.length > 0) console.log(`已清理误搬的 Chromium 文件：${removed.join('、')}`);
   } catch (error) {
-    console.error('用户数据目录迁移失败，继续使用旧目录：', error);
-    activeUserData = legacy;
+    console.error('Studio 数据目录准备失败：', error);
   }
+  fs.mkdirSync(studioData, { recursive: true });
 }
-fs.mkdirSync(activeUserData, { recursive: true });
-app.setPath('userData', activeUserData);
 
 let startupGate;
 const primaryInstance = installSingleInstanceGuard(app, () => {

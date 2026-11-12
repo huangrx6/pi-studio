@@ -13,6 +13,7 @@ const { randomUUID } = require('node:crypto');
 const { BrowserWindow, app, dialog } = require('electron');
 const { makeAttachmentMarker } = require('../core/attachment-markers.cjs');
 const { readFilePath } = require('./workspace.cjs');
+const { studioDataDirectory } = require('../core/studio-paths.cjs');
 
 /** 常见扩展名 → MIME。 */
 const ATTACHMENT_MIME = {
@@ -53,7 +54,7 @@ function safeAttachmentName(name) {
 
 /** 附件根目录：Pi Studio 自己的 userData，不读取或改写 ~/.pi。 */
 function attachmentRoot() {
-  return path.join(app.getPath('userData'), 'attachments');
+  return path.join(studioDataDirectory(), 'attachments');
 }
 
 function lstatIfPresent(target) {

@@ -10,6 +10,7 @@ const fs = require('node:fs');
 const { Readable } = require('node:stream');
 const { app, dialog, protocol } = require('electron');
 const { getWindow } = require('../core/state.cjs');
+const { studioDataDirectory } = require('../core/studio-paths.cjs');
 const {
   BACKGROUND_SCHEME,
   discardBackgroundMedia,
@@ -29,7 +30,7 @@ async function registerBackgroundProtocol() {
       if (request.method !== 'GET' && request.method !== 'HEAD') {
         return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
       }
-      const filePath = resolveBackgroundMediaPath(app.getPath('userData'), request.url);
+      const filePath = resolveBackgroundMediaPath(studioDataDirectory(), request.url);
       const stat = await fs.promises.stat(filePath);
       if (!stat.isFile()) return new Response('Background media not found', { status: 404 });
 
@@ -83,16 +84,16 @@ async function chooseBackgroundMedia(payload = {}) {
   });
   if (result.canceled || !result.filePaths[0]) return null;
 
-  const media = await importBackgroundMedia(app.getPath('userData'), result.filePaths[0]);
+  const media = await importBackgroundMedia(studioDataDirectory(), result.filePaths[0]);
   const previousUrl = typeof payload.replaceUrl === 'string' ? payload.replaceUrl : '';
   if (previousUrl && previousUrl !== media.url) {
-    await discardBackgroundMedia(app.getPath('userData'), previousUrl).catch(() => {});
+    await discardBackgroundMedia(studioDataDirectory(), previousUrl).catch(() => {});
   }
   return media;
 }
 
 async function removeBackgroundMedia(value) {
-  const removed = await discardBackgroundMedia(app.getPath('userData'), value);
+  const removed = await discardBackgroundMedia(studioDataDirectory(), value);
   return { removed };
 }
 

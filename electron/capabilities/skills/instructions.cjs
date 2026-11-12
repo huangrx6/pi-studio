@@ -14,7 +14,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { parse: parseYaml } = require('yaml');
 const { getStudioDatabase } = require('../../core/studio-db.cjs');
-const { userDataDirectory } = require('../../core/studio-paths.cjs');
+const { studioDataDirectory } = require('../../core/studio-paths.cjs');
 const { cleanupCommittedSkillDirectory, retryCommittedSkillCleanup } = require('./cleanup.cjs');
 
 const SKILL_FILE = 'SKILL.md';
@@ -31,7 +31,7 @@ const NAME_PATTERN = /^[a-z0-9-]+$/;
 const fingerprintCache = new Map();
 
 function userSkillsDirectory() {
-  return path.join(userDataDirectory(), 'skills');
+  return path.join(studioDataDirectory(), 'skills');
 }
 
 function sharedUserSkillsDirectory() {

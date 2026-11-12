@@ -19,7 +19,7 @@ const {
   thinkingLevelsFromMap,
 } = require('./thinking-levels.cjs');
 const {
-  userDataDirectory,
+  studioDataDirectory,
 } = require('./studio-paths.cjs');
 
 const MODELS_DEV_URL = 'https://models.dev/api.json';
@@ -329,7 +329,7 @@ function createModelsDevCatalog(payload) {
 }
 
 function modelsDevCacheFile(cacheDirectory) {
-  return path.join(cacheDirectory || userDataDirectory(), 'model-catalogs', 'models.dev.json');
+  return path.join(cacheDirectory || studioDataDirectory(), 'model-catalogs', 'models.dev.json');
 }
 
 function readModelsDevCache(file) {

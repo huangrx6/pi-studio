@@ -135,9 +135,10 @@ Studio 的 `subagent` 工具通过 Durable 创建 owned child conversation。子
 
 ## 数据边界
 
-默认目录是 `~/.pi-studio`（可用环境变量 `PI_STUDIO_USER_DATA` 覆盖）。从旧版本升级时，
-主进程会把 `~/Library/Application Support/pi-studio` 的内容**复制**过来再启动，旧目录保留，
-确认无误后可以自行删除。
+业务数据放在 `~/.pi-studio`（可用环境变量 `PI_STUDIO_USER_DATA` 覆盖）。Chromium 自己的
+缓存、Cookies 和单实例锁仍在系统默认的 `~/Library/Application Support/pi-studio`，所以打开
+`~/.pi-studio` 只会看到下面这些内容。从旧版本升级时，主进程会把旧 userData 里属于 Studio
+的条目**复制**过来，旧目录保留，确认无误后可以自行删除。
 
 ```text
 ~/.pi-studio/

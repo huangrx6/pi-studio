@@ -7,6 +7,8 @@ const Module = require('node:module');
 const { installElectronSafeStorage } = require('./helpers/electron-safe-storage.cjs');
 
 const userRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-user-extensions-'));
+// Studio 数据目录现在独立于 Electron userData：测试同样要把它指向临时目录。
+process.env.PI_STUDIO_USER_DATA = userRoot;
 process.env.PI_STUDIO_DB = path.join(userRoot, 'studio.sqlite');
 installElectronSafeStorage({ after });
 const originalLoad = Module._load;

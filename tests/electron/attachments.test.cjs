@@ -38,6 +38,9 @@ function loadAttachments(userData, { randomUUID, now } = {}) {
       if (name === 'node:crypto' && randomUUID) {
         return { randomUUID };
       }
+      if (name === '../core/studio-paths.cjs') {
+        return { studioDataDirectory: () => userData };
+      }
       return nativeRequire(name);
     },
   }, { filename });

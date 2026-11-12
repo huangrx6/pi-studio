@@ -13,7 +13,7 @@ const { createHash } = require('node:crypto');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { getStudioDatabase } = require('../../core/studio-db.cjs');
-const { userDataDirectory } = require('../../core/studio-paths.cjs');
+const { studioDataDirectory } = require('../../core/studio-paths.cjs');
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT = 30_000;
@@ -38,7 +38,7 @@ function serialized(operation, options) {
 function resolveOptions(options = {}) {
   return {
     database: options.database || getStudioDatabase(),
-    userDataPath: path.resolve(options.userDataPath || userDataDirectory()),
+    userDataPath: path.resolve(options.userDataPath || studioDataDirectory()),
   };
 }
 

@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { extractZipArchive, DEFAULT_ARCHIVE_LIMITS } = require('../../core/extension-archive.cjs');
-const { userDataDirectory } = require('../../core/studio-paths.cjs');
+const { studioDataDirectory } = require('../../core/studio-paths.cjs');
 const { inspectSkillDirectory, directoryDetails } = require('./instructions.cjs');
 
 // Repository budgets are separate from the smaller, per-skill install limits.
@@ -37,7 +37,7 @@ function createGithubSourceAdapter(readUrl) {
       `https://codeload.github.com/${repository.owner}/${repository.repo}/zip/${commit}`,
       'GitHub 技能仓库', LIMITS.maxArchiveBytes,
     );
-    const parent = path.join(userDataDirectory(), 'skill-quarantine');
+    const parent = path.join(studioDataDirectory(), 'skill-quarantine');
     fs.mkdirSync(parent, { recursive: true, mode: 0o700 });
     const staging = fs.mkdtempSync(path.join(parent, 'github-'));
     try {

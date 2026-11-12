@@ -1,45 +1,72 @@
 /**
- * 用户数据目录：`~/.pi-studio`。
+ * 用户数据：把 Studio 业务数据从旧位置搬到 `~/.pi-studio`。
  *
- * 早期版本把 SQLite、技能、扩展和 Chromium 配置都放在 Electron 默认的
- * `~/Library/Application Support/pi-studio`。那里和系统缓存混在一起，备份、
- * 迁移和「我想看看我的数据」都很别扭，所以默认目录改成家目录下的点目录。
- *
- * 首次启动会把旧目录**复制**过来（不删除旧目录），失败则继续用旧目录启动，
- * 保证升级不会把应用变成打不开的状态。
+ * 早期版本整个 `userData` 都在 `~/Library/Application Support/pi-studio`。
+ * 现在 Electron 仍用系统默认的 userData（缓存、Cookies、单实例锁），
+ * 只有 Studio 自己的条目搬到 `~/.pi-studio`，用户打开那个目录只会看到
+ * 数据库、技能、扩展这些他关心的东西。
  */
 
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 
-const DATA_DIRECTORY_NAME = '.pi-studio';
 const MARKER_FILE = 'user-data-migration.json';
 const DATABASE_FILE = 'pi-studio.sqlite';
 
-/** 只跳过大体量缓存与运行期锁文件，Chromium 的 Local Storage 等必须一起搬。 */
-const SKIPPED_ENTRIES = new Set([
+/** 需要搬到 `~/.pi-studio` 的条目：SQLite、用户资源与 Studio 自管的运行数据。 */
+const STUDIO_DATA_ENTRIES = [
+  'AGENTS.md',
+  'attachments',
+  'background-media',
+  'extension-cache',
+  'extension-data',
+  'extension-publishers.json',
+  'extension-state',
+  'extensions',
+  'model-catalogs',
+  'pi-studio.sqlite',
+  'pi-studio.sqlite-shm',
+  'pi-studio.sqlite-wal',
+  'skill-quarantine',
+  'skills',
+];
+
+/**
+ * Chromium 自己的条目。旧版本曾整体搬进 `~/.pi-studio`，现在它们该回到
+ * Electron 的 userData；这些名字只用于清理历史残留，不会碰其它文件。
+ */
+const CHROMIUM_ENTRIES = [
   'Cache',
   'Code Cache',
-  'Crashpad',
+  'Cookies',
+  'Cookies-journal',
+  'DIPS',
+  'DIPS-wal',
   'DawnCache',
   'DawnGraphiteCache',
   'DawnWebGPUCache',
+  'DevToolsActivePort',
   'GPUCache',
+  'GPUPersistentCache',
+  'GraphiteDawnCache',
   'GrShaderCache',
+  'IndexedDB',
+  'Local State',
+  'Local Storage',
+  'Network Persistent State',
+  'Partitions',
+  'Preferences',
+  'Session Storage',
   'ShaderCache',
+  'Shared Dictionary',
   'SingletonCookie',
   'SingletonLock',
   'SingletonSocket',
   'blob_storage',
-]);
-
-/** 目标目录：`PI_STUDIO_USER_DATA` 覆盖（测试 / QA）优先，否则 `~/.pi-studio`。 */
-function resolveUserDataDirectory({ override, home } = {}) {
-  if (typeof override === 'string' && override.trim()) return path.resolve(override);
-  const base = typeof home === 'string' && home ? home : os.homedir();
-  return path.join(base, DATA_DIRECTORY_NAME);
-}
+  'declarative_performance_observer.db',
+  'declarative_performance_observer.db-journal',
+  'shared_proto_db',
+];
 
 function hasDatabase(directory) {
   try {
@@ -49,21 +76,20 @@ function hasDatabase(directory) {
   }
 }
 
-function isEmptyDirectory(directory) {
-  try {
-    return fs.readdirSync(directory).length === 0;
-  } catch {
-    return true;
-  }
+function copyEntry(from, to, entry) {
+  const source = path.join(from, entry);
+  const target = path.join(to, entry);
+  if (!fs.existsSync(source) || fs.existsSync(target)) return false;
+  fs.cpSync(source, target, { recursive: true, force: false, errorOnExist: false });
+  return true;
 }
 
 /**
- * 把旧目录复制到新目录。
+ * 把旧 `userData` 里的 Studio 条目复制到新目录。
  *
- * 幂等：目标目录里已经有数据库或迁移标记就跳过；目标已有内容则合并复制，
- * 同名文件不覆盖（`force: false`）。旧目录保持原样，随时可以回退。
+ * 幂等：目标已有数据库就直接返回；已存在的同名条目不会被覆盖；旧目录保持原样。
  */
-function migrateLegacyUserData({ legacy, target, now = () => new Date() } = {}) {
+function migrateStudioData({ legacy, target, now = () => new Date() } = {}) {
   if (typeof legacy !== 'string' || typeof target !== 'string') return { migrated: false, reason: 'invalid' };
   const from = path.resolve(legacy);
   const to = path.resolve(target);
@@ -72,34 +98,50 @@ function migrateLegacyUserData({ legacy, target, now = () => new Date() } = {}) 
   if (hasDatabase(to)) return { migrated: false, reason: 'already-migrated' };
 
   fs.mkdirSync(to, { recursive: true });
-  if (!isEmptyDirectory(to) && !hasDatabase(from)) return { migrated: false, reason: 'target-not-empty' };
-
-  fs.cpSync(from, to, {
-    recursive: true,
-    force: false,
-    errorOnExist: false,
-    filter: (source) => !SKIPPED_ENTRIES.has(path.basename(source)),
-  });
+  const copied = STUDIO_DATA_ENTRIES.filter((entry) => copyEntry(from, to, entry));
 
   const result = {
     migrated: hasDatabase(to),
     reason: hasDatabase(to) ? 'copied' : 'no-database',
     from,
+    copied,
     at: now().toISOString(),
   };
   try {
     fs.writeFileSync(path.join(to, MARKER_FILE), `${JSON.stringify(result, null, 2)}\n`);
   } catch {
-    // 标记写不进去不影响启动，只是下次会再尝试合并复制（幂等）。
+    // 标记写不进去不影响启动。
   }
   return result;
 }
 
+/**
+ * 删掉早期版本误搬进 `~/.pi-studio` 的 Chromium 文件。
+ * 只在迁移标记存在（说明这个目录是旧版本建过的）时执行，避免动到别的东西。
+ */
+function cleanLegacyChromiumData({ target } = {}) {
+  if (typeof target !== 'string') return [];
+  const root = path.resolve(target);
+  if (!fs.existsSync(path.join(root, MARKER_FILE))) return [];
+  const removed = [];
+  for (const entry of CHROMIUM_ENTRIES) {
+    const candidate = path.join(root, entry);
+    if (!fs.existsSync(candidate)) continue;
+    try {
+      fs.rmSync(candidate, { recursive: true, force: true });
+      removed.push(entry);
+    } catch {
+      // 正在使用的文件删不掉就留着，下次启动再试。
+    }
+  }
+  return removed;
+}
+
 module.exports = {
-  DATA_DIRECTORY_NAME,
+  CHROMIUM_ENTRIES,
   MARKER_FILE,
-  SKIPPED_ENTRIES,
+  STUDIO_DATA_ENTRIES,
+  cleanLegacyChromiumData,
   hasDatabase,
-  migrateLegacyUserData,
-  resolveUserDataDirectory,
+  migrateStudioData,
 };
