@@ -1,13 +1,14 @@
 import {
-  ArrowUp, Bot, Download, LoaderCircle, MessageSquare, PanelLeft, PanelRightClose, PanelRightOpen, Plug,
+  ArrowUp, Download, GitBranch, LoaderCircle, PanelLeft, PanelRightOpen,
 } from 'lucide-react';
 import {
   NotificationCenter,
   type AppNotification,
 } from './NotificationCenter';
-import { ConversationTraceTab, type ConversationTraceSummary } from './ConversationTraceMenu';
-import { ExtensionChips, type ExtensionChipEntry } from '../features/extensions/ExtensionChips';
-import type { ExtensionSettingsPage, ExtensionUiItem, ExtensionUiSnapshot } from '../types/extension-types';
+import type { ExtensionChipEntry, ExtensionChips } from '../features/extensions/ExtensionChips';
+import { ConversationWorkspaceMenu } from './ConversationWorkspaceMenu';
+import type { ExtensionSettingsPage, ExtensionUiSnapshot } from '../types/extension-types';
+import type { GitWorkspaceStatus } from '../types/git-types';
 
 /** 顶栏的更新入口：有可更新时替代侧栏品牌旁的旧徽标。 */
 export type UpdateEntryState = 'available' | 'downloading' | 'downloaded';
@@ -22,6 +23,7 @@ type ConversationHeaderProps = {
   onExpandSidebar: () => void;
   isNewConversation: boolean;
   title: string;
+  gitStatus: GitWorkspaceStatus | null;
   agentKind: 'conversation' | 'agents' | 'extensions' | 'trace';
   subagentCount: number;
   hasActiveSubagents: boolean;
@@ -31,8 +33,8 @@ type ConversationHeaderProps = {
   onClearNotifications: () => void;
   onOpenNotificationSession: (id: string) => Promise<void>;
   onRunNotificationAction: (item: AppNotification) => Promise<void>;
-  filesOpen: boolean;
-  onTogglePanel: () => void;
+  panelExpanded: boolean;
+  onOpenPanel: () => void;
   onReturnToMainAgent: () => void;
   onOpenAgentOverview: () => void;
   onOpenConversationExtensionHub: () => void;
@@ -47,9 +49,8 @@ type ConversationHeaderProps = {
   onSendPromptFromExtension?: (text: string, submit: boolean) => void;
   onNotifyExtension?: React.ComponentProps<typeof ExtensionChips>['onNotify'];
   onOpenTrace: () => void;
-  /** 「显示代码工作视图」关闭时，轨迹标签不出现。 */
+  /** 「显示代码工作视图」关闭时，工作区面板不显示轨迹入口。 */
   showTrace: boolean;
-  traceSummary: ConversationTraceSummary;
 };
 
 export function ConversationHeader({
@@ -57,6 +58,7 @@ export function ConversationHeader({
   onExpandSidebar,
   isNewConversation,
   title,
+  gitStatus,
   agentKind,
   subagentCount,
   hasActiveSubagents,
@@ -66,8 +68,8 @@ export function ConversationHeader({
   onClearNotifications,
   onOpenNotificationSession,
   onRunNotificationAction,
-  filesOpen,
-  onTogglePanel,
+  panelExpanded,
+  onOpenPanel,
   onReturnToMainAgent,
   onOpenAgentOverview,
   onOpenConversationExtensionHub,
@@ -82,7 +84,6 @@ export function ConversationHeader({
   onNotifyExtension,
   onOpenTrace,
   showTrace,
-  traceSummary,
   update,
 }: ConversationHeaderProps) {
   return (
@@ -91,19 +92,28 @@ export function ConversationHeader({
         {sidebarCollapsed && <button className="icon-button sidebar-expand" aria-label="展开侧边栏" title="展开侧边栏" onClick={onExpandSidebar}><PanelLeft /></button>}
         {!isNewConversation && <div className="chat-heading">
           <h1>{title}</h1>
+          <GitWorkspaceSummary status={gitStatus} />
         </div>}
         <div className="chat-actions">
-          <ExtensionChips
+          {!isNewConversation && <ConversationWorkspaceMenu
+            agentKind={agentKind}
+            subagentCount={subagentCount}
+            hasActiveSubagents={hasActiveSubagents}
+            extensionCount={extensionCount}
             chips={chips}
-            surface={extensionSurface}
+            extensionSurface={extensionSurface}
             cwd={cwd}
             sessionId={sessionId}
             modelRef={modelRef}
+            onReturnToMainAgent={onReturnToMainAgent}
+            onOpenAgentOverview={onOpenAgentOverview}
+            onOpenConversationExtensionHub={onOpenConversationExtensionHub}
+            onOpenTrace={showTrace ? onOpenTrace : undefined}
             onOpenChip={onOpenChip}
-            onOpenSettings={onOpenExtensionSettings}
-            onSendPrompt={onSendPromptFromExtension}
-            onNotify={onNotifyExtension}
-          />
+            onOpenExtensionSettings={onOpenExtensionSettings}
+            onSendPromptFromExtension={onSendPromptFromExtension}
+            onNotifyExtension={onNotifyExtension}
+          />}
           {update && <button
             type="button"
             className={`icon-button update-entry is-${update.state}`}
@@ -130,40 +140,30 @@ export function ConversationHeader({
           />
           <button
             type="button"
-            className={`icon-button ${filesOpen ? 'is-active' : ''}`}
-            aria-label={filesOpen ? '收起右侧面板' : '打开右侧面板'}
-            aria-pressed={filesOpen}
-            title={filesOpen ? '收起右侧面板' : '打开右侧面板'}
-            onClick={onTogglePanel}
+            className="icon-button panel-open-entry"
+            aria-label="打开右侧面板"
+            aria-hidden={panelExpanded || undefined}
+            disabled={panelExpanded}
+            title="打开右侧面板"
+            onClick={onOpenPanel}
           >
-            {filesOpen ? <PanelRightClose /> : <PanelRightOpen />}
+            <PanelRightOpen />
           </button>
         </div>
       </header>
-      {!isNewConversation && <div className="chat-tabs">
-        <div className="chat-tab-list" role="tablist" aria-label="对话视图">
-          <button type="button" role="tab" aria-selected={agentKind === 'conversation'} className={`tab ${agentKind === 'conversation' ? 'is-active' : ''}`} onClick={onReturnToMainAgent}><MessageSquare /><span>对话</span></button>
-          <button type="button" role="tab" aria-selected={agentKind === 'agents'} className={`tab agent-tab ${agentKind === 'agents' ? 'is-active' : ''}`} onClick={onOpenAgentOverview}>
-            <Bot />
-            <span className="tab-label">
-              子智能体
-
-            </span>
-          </button>
-          {extensionCount > 0 && <button
-            type="button"
-            role="tab"
-            aria-selected={agentKind === 'extensions'}
-            className={`tab extension-tab ${agentKind === 'extensions' ? 'is-active' : ''}`}
-            title="当前会话的扩展视图"
-            onClick={onOpenConversationExtensionHub}
-          >
-            <Plug />
-            <span className="tab-label">扩展</span>
-          </button>}
-          {showTrace && <ConversationTraceTab summary={traceSummary} active={agentKind === 'trace'} onOpen={onOpenTrace} />}
-        </div>
-      </div>}
     </>
   );
+}
+
+function GitWorkspaceSummary({ status }: { status: GitWorkspaceStatus | null }) {
+  if (!status) return <span className="git-workspace-summary is-loading" aria-label="正在读取 Git 状态" />;
+  if (!status.available) return <span className="git-workspace-summary is-unavailable" title="当前目录不是 Git 仓库">非 Git 项目</span>;
+  const dirty = status.dirty.total;
+  const worktree = status.worktree.isWorktree ? status.worktree.name : undefined;
+  return <div className="git-workspace-summary" title={status.repositoryRoot || undefined} aria-label="Git 工作区状态">
+    {status.branch && <span className="git-workspace-branch"><GitBranch aria-hidden="true" />{status.branch}</span>}
+    {status.commit && <span className="git-workspace-commit">{status.commit}</span>}
+    <span className={`git-workspace-dirty ${dirty ? 'is-dirty' : ''}`}>{dirty ? `${dirty} 项变更` : '干净'}</span>
+    {worktree && <span className="git-workspace-worktree">工作树 · {worktree}</span>}
+  </div>;
 }

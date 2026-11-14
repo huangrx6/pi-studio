@@ -18,6 +18,7 @@ const compiled = ts.transpileModule(source, {
 // than asserting implementation text or relying on machine-dependent timings.
 function fixture() {
   const calls = { json: 0, fence: 0, table: 0 };
+  const markdownChrome = [];
   const context = {
     exports: {},
     require(id) {
@@ -28,7 +29,10 @@ function fixture() {
         markdownCodeFence(text, language) { calls.fence++; return helpers.markdownCodeFence(text, language); },
         parseDelimitedPreview(text, delimiter) { calls.table++; return helpers.parseDelimitedPreview(text, delimiter); },
       };
-      if (id === './Markdown') return { Markdown: ({ children }) => React.createElement('pre', null, children) };
+      if (id === './Markdown') return { Markdown: ({ children, codeChrome }) => {
+        markdownChrome.push(codeChrome ?? true);
+        return React.createElement('pre', null, children);
+      } };
       if (id === './FileKindIcon') return {
         FileFormatIcon: ({ format }) => React.createElement('span', { 'data-format': format }),
       };
@@ -39,6 +43,7 @@ function fixture() {
   vm.runInNewContext(compiled, context);
   return {
     calls,
+    markdownChrome,
     render(path, text, overrides = {}) {
       return renderToStaticMarkup(React.createElement(context.exports.FilePreview, {
         file: { path, name: path, text, size: text.length, kind: 'text', ...overrides },
@@ -57,7 +62,7 @@ test('plain text bypasses JSON parsing and Markdown fence construction while pre
 });
 
 test('each format runs only its required text preparation', () => {
-  const { calls, render } = fixture();
+  const { calls, markdownChrome, render } = fixture();
   assert.match(render('notes.md', '# Heading'), /# Heading/);
   assert.match(render('page.html', '<h1>Heading</h1>'), /sandbox=""/);
   assert.match(render('picture.png', '', { kind: 'image', dataUrl: 'data:image/png;base64,AA==' }), /<img/);
@@ -65,6 +70,7 @@ test('each format runs only its required text preparation', () => {
   assert.match(render('data.csv', 'name,value\nAlpha,2'), /<td>Alpha<\/td>/);
   assert.deepEqual(calls, { json: 0, fence: 0, table: 1 });
   assert.match(render('script.ts', 'const value = 2;'), /typescript/);
+  assert.deepEqual(markdownChrome, [true, false], 'README keeps the Markdown chrome while source mode removes it');
   assert.deepEqual(calls, { json: 0, fence: 1, table: 1 });
 });
 

@@ -15,14 +15,15 @@ import { MarkdownActions } from './markdown-actions';
 type FileApp = { name: string; path: string; icon?: string };
 
 export function MarkdownPathLink({ path, children }: { path: string; children: ReactNode }) {
-  const { cwd, openFile } = useContext(MarkdownActions);
+  const { cwd, openFile, openLocalFile } = useContext(MarkdownActions);
   const [menu, setMenu] = useState<{ x: number; y: number; apps: FileApp[] } | null>(null);
   const target = resolvePathToken(path, cwd);
 
   async function openMenu(x: number, y: number) {
     setMenu({ x, y, apps: [] });
     try {
-      const result = await window.piApi.fileActions({ cwd, path: target, source: 'workspace' });
+      const source = target.startsWith('/') || target.startsWith('~/') ? 'external' : 'workspace';
+      const result = await window.piApi.fileActions({ cwd, path: target, source });
       setMenu((current) => (current ? { ...current, apps: result.apps.slice(0, 6) } : current));
     } catch {
       // Applications are a convenience: keep the menu usable without them.
@@ -30,11 +31,11 @@ export function MarkdownPathLink({ path, children }: { path: string; children: R
   }
 
   const items: MenuAction[] = menu ? [
-    { label: '打开预览', run: () => openFile?.(target) },
-    { label: '在 Finder 中显示', run: () => { void window.piApi.revealFile({ cwd, path: target, source: 'workspace' }); } },
+    { label: '打开预览', run: () => (openLocalFile || openFile)?.(target) },
+    { label: '在 Finder 中显示', run: () => { const source = target.startsWith('/') || target.startsWith('~/') ? 'external' : 'workspace'; void window.piApi.revealFile({ cwd, path: target, source }); } },
     ...menu.apps.map((app) => ({
       label: `用 ${app.name} 打开`,
-      run: () => { void window.piApi.openWith({ cwd, path: target, source: 'workspace', appPath: app.path }); },
+      run: () => { const source = target.startsWith('/') || target.startsWith('~/') ? 'external' : 'workspace'; void window.piApi.openWith({ cwd, path: target, source, appPath: app.path }); },
     })),
     {
       label: '复制路径',
@@ -51,7 +52,7 @@ export function MarkdownPathLink({ path, children }: { path: string; children: R
       title={target}
       onClick={(event) => {
         event.preventDefault();
-        openFile?.(target);
+        (openLocalFile || openFile)?.(target);
       }}
       onContextMenu={(event) => {
         event.preventDefault();

@@ -9,7 +9,7 @@ function protectTool(tool, readSecrets) {
   return {
     ...tool,
     async execute(args, api, context) {
-      const secrets = readSecrets();
+      const secrets = await readSecrets();
       const { value } = expandSecretReferences(args, secrets);
       const redactor = createSecretRedactor(secrets);
       const safeApi = {
@@ -38,7 +38,7 @@ function protectTool(tool, readSecrets) {
   };
 }
 
-function createSecretAwareRegistry(registry, readSecrets = () => getStudioDatabase().readSecretValues()) {
+function createSecretAwareRegistry(registry, readSecrets = () => getStudioDatabase().readSecretValuesAsync()) {
   return {
     snapshot: () => registry.snapshot(),
     subscribe: (listener) => registry.subscribe(listener),

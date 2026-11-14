@@ -20,7 +20,7 @@ export const NAMED_KEYS = new Set([
 
 /** Actions the shell can dispatch. `default` is the shipped binding. */
 export const SHORTCUT_ACTIONS = [
-  { id: 'palette', label: '命令面板', hint: '搜索会话、命令与文件', default: 'Mod+K' },
+  { id: 'palette', label: '命令面板', default: 'Mod+K' },
   { id: 'settings', label: '打开设置', hint: '', default: 'Mod+,' },
   { id: 'toggleSidebar', label: '折叠 / 展开侧栏', hint: '', default: 'Mod+B' },
   { id: 'togglePanel', label: '折叠 / 展开右侧面板', hint: '', default: 'Mod+J' },

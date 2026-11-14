@@ -21,7 +21,7 @@ function createPermissionsExtension(durable) {
     hooks: [
       durable.hook(durable.ToolTask, {
         async beforeTool(call, api, context) {
-          const secrets = resolveToolSecrets(call.arguments || {});
+          const secrets = await resolveToolSecrets(call.arguments || {});
           const evaluatedCall = secrets.expanded
             ? { ...call, arguments: secrets.arguments }
             : call;

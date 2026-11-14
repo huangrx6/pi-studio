@@ -32,6 +32,7 @@ const { createWindow, showMainWindow, installMenu, watchSystemTheme } = require(
 const { BACKGROUND_SCHEME } = require('./background-media.cjs');
 const { registerBackgroundProtocol } = require('./services/background.cjs');
 const { installBrowserSessionGuards } = require('./services/browser-session.cjs');
+const { isAllowedLocalHtmlUrl } = require('./services/local-html.cjs');
 const {
   initializeMenuBar,
   registerMenuBarIpc,
@@ -116,7 +117,7 @@ if (primaryInstance) {
   });
 
   // The right-panel browser embeds untrusted pages: deny popups, block
-  // non-http(s) navigation and keep those pages out of the app's session.
+  // unsupported navigation and keep those pages out of the app's session.
   app.on('web-contents-created', (_event, contents) => {
     if (contents.getType() !== 'webview') return;
     contents.setWindowOpenHandler(({ url }) => {
@@ -134,7 +135,7 @@ if (primaryInstance) {
       if (url === 'about:blank') return true;
       try {
         const protocol = new URL(url).protocol;
-        return protocol === 'http:' || protocol === 'https:';
+        return protocol === 'http:' || protocol === 'https:' || isAllowedLocalHtmlUrl(url);
       } catch {
         return false;
       }

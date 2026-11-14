@@ -453,7 +453,7 @@ function registerSettingsIpc() {
   });
 
   ipcMain.handle('pi:mcp-config', async (_event, name) => {
-    const server = getStudioDatabase().getMcpServer(name, { includeSecrets: true });
+    const server = await getStudioDatabase().getMcpServerAsync(name, { includeSecrets: true });
     if (!server) throw new Error('MCP 不存在');
     return {
       name: server.name,
@@ -483,19 +483,19 @@ function registerSettingsIpc() {
 
   ipcMain.handle('pi:test-mcp', async (_event, input = {}) => {
     const db = getStudioDatabase();
-    const current = db.getMcpServer(input?.originalName || input?.name, { includeSecrets: true }) || {};
+    const current = await db.getMcpServerAsync(input?.originalName || input?.name, { includeSecrets: true }) || {};
     return testMcpConnection(normalizeMcpInput(input, current));
   });
 
   ipcMain.handle('pi:test-saved-mcp', async (_event, name) => {
-    const server = getStudioDatabase().getMcpServer(name, { includeSecrets: true });
+    const server = await getStudioDatabase().getMcpServerAsync(name, { includeSecrets: true });
     if (!server) throw new Error('MCP 不存在');
     return testMcpConnection(server);
   });
 
   ipcMain.handle('pi:mcp-oauth-start', async (_event, { name, cwd } = {}) => {
     const db = getStudioDatabase();
-    const stored = db.getMcpServer(name, { includeSecrets: true });
+    const stored = await db.getMcpServerAsync(name, { includeSecrets: true });
     if (!stored) throw new Error('MCP 不存在');
     if (stored.transport !== 'http') throw new Error('只有 HTTP MCP 可以使用 OAuth');
     const server = {
@@ -516,7 +516,7 @@ function registerSettingsIpc() {
   });
 
   ipcMain.handle('pi:mcp-oauth-logout', async (_event, { name, cwd } = {}) => {
-    const server = getStudioDatabase().getMcpServer(name, { includeSecrets: true });
+    const server = await getStudioDatabase().getMcpServerAsync(name, { includeSecrets: true });
     if (!server) throw new Error('MCP 不存在');
     if (server.transport !== 'http') throw new Error('只有 HTTP MCP 可以使用 OAuth');
     const url = normalizeSecureHttpUrl(server.url, { label: `MCP「${server.name}」地址` });
@@ -529,42 +529,71 @@ function registerSettingsIpc() {
 
   ipcMain.handle('pi:add-mcp', async (_event, input) => {
     const db = getStudioDatabase();
-    db.transaction(() => {
-      const current = db.getMcpServer(input?.originalName || input?.name, { includeSecrets: true }) || {};
-      const next = normalizeMcpInput(input, current);
-      if (input?.originalName && input.originalName !== next.name && db.getMcpServer(next.name)) {
-        throw new Error('目标 MCP 名称已被使用，请换一个名称。');
-      }
-      const normalizedName = next.name.replace(/[^A-Za-z0-9_]/g, '_');
-      const collision = db.listMcpServers().find((server) => (
-        server.name !== input?.originalName
-        && server.name !== next.name
-        && server.name.replace(/[^A-Za-z0-9_]/g, '_') === normalizedName
-      ));
-      if (collision) {
-        throw new Error(`MCP 名称「${next.name}」与「${collision.name}」会映射到同一工具命名空间，请换一个名称`);
-      }
-      db.upsertMcpServer(next);
-      if (input?.originalName && input.originalName !== next.name) db.removeMcpServer(input.originalName);
-    });
+    if (Object.hasOwn(db, 'upsertMcpServer')) {
+      db.transaction(() => {
+        const current = db.getMcpServer(input?.originalName || input?.name, { includeSecrets: true }) || {};
+        const next = normalizeMcpInput(input, current);
+        if (input?.originalName && input.originalName !== next.name && db.getMcpServer(next.name)) {
+          throw new Error('目标 MCP 名称已被使用，请换一个名称。');
+        }
+        const normalizedName = next.name.replace(/[^A-Za-z0-9_]/g, '_');
+        const collision = db.listMcpServers().find((server) => (
+          server.name !== input?.originalName
+          && server.name !== next.name
+          && server.name.replace(/[^A-Za-z0-9_]/g, '_') === normalizedName
+        ));
+        if (collision) {
+          throw new Error(`MCP 名称「${next.name}」与「${collision.name}」会映射到同一工具命名空间，请换一个名称`);
+        }
+        db.upsertMcpServer(next);
+        if (input?.originalName && input.originalName !== next.name) db.removeMcpServer(input.originalName);
+      });
+      return committedMcpProjection(typeof input?.cwd === 'string' ? input.cwd : DEFAULT_CWD);
+    }
+    const current = await db.getMcpServerAsync(input?.originalName || input?.name, { includeSecrets: true }) || {};
+    const next = normalizeMcpInput(input, current);
+    if (input?.originalName && input.originalName !== next.name && await db.getMcpServerAsync(next.name)) {
+      throw new Error('目标 MCP 名称已被使用，请换一个名称。');
+    }
+    const normalizedName = next.name.replace(/[^A-Za-z0-9_]/g, '_');
+    const collision = (await db.listMcpServersAsync()).find((server) => (
+      server.name !== input?.originalName
+      && server.name !== next.name
+      && server.name.replace(/[^A-Za-z0-9_]/g, '_') === normalizedName
+    ));
+    if (collision) {
+      throw new Error(`MCP 名称「${next.name}」与「${collision.name}」会映射到同一工具命名空间，请换一个名称`);
+    }
+    await db.upsertMcpServerAsync(next);
+    if (input?.originalName && input.originalName !== next.name) db.removeMcpServer(input.originalName);
     return committedMcpProjection(typeof input?.cwd === 'string' ? input.cwd : DEFAULT_CWD);
   });
 
   ipcMain.handle('pi:remove-mcp', async (_event, name, cwd) => {
     const db = getStudioDatabase();
-    db.transaction(() => {
-      if (!db.getMcpServer(name)) throw new Error('MCP 不存在');
-      db.removeMcpServer(name);
-    });
+    if (Object.hasOwn(db, 'removeMcpServer')) {
+      db.transaction(() => {
+        if (!db.getMcpServer(name)) throw new Error('MCP 不存在');
+        db.removeMcpServer(name);
+      });
+      return committedMcpProjection(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
+    }
+    if (!await db.getMcpServerAsync(name)) throw new Error('MCP 不存在');
+    db.removeMcpServer(name);
     return committedMcpProjection(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
   });
 
   ipcMain.handle('pi:set-mcp-enabled', async (_event, { name, enabled, cwd } = {}) => {
     const db = getStudioDatabase();
-    db.transaction(() => {
-      if (!db.getMcpServer(name) || typeof enabled !== 'boolean') throw new Error('参数无效');
-      db.setMcpEnabled(name, enabled);
-    });
+    if (Object.hasOwn(db, 'setMcpEnabled')) {
+      db.transaction(() => {
+        if (!db.getMcpServer(name) || typeof enabled !== 'boolean') throw new Error('参数无效');
+        db.setMcpEnabled(name, enabled);
+      });
+      return committedMcpProjection(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
+    }
+    if (!await db.getMcpServerAsync(name) || typeof enabled !== 'boolean') throw new Error('参数无效');
+    await db.setMcpEnabledAsync(name, enabled);
     return committedMcpProjection(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
   });
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ArrowUp, ImagePlus, LoaderCircle, MessageCirclePlus, Square } from 'lucide-react';
 import { AssistantTurnView, ChatMessageView } from './ChatMessage';
 import { ComposerImageAttachment } from './ComposerImageAttachment';
@@ -19,6 +19,9 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
   const state = useSyncExternalStore(listener => subscribeTemporary(id, listener), () => temporaryState(id, selection));
   const upload = useRef<HTMLInputElement>(null), scroll = useRef<HTMLDivElement>(null);
   const following = useRef(true), picking = useRef(false);
+  const autoScrollFrame = useRef<number | null>(null);
+  const programmedScrollTop = useRef<number | null>(null);
+  const lastScrollTop = useRef(0);
   const initializingModel = useRef(false), modelRequest = useRef(0);
   const [stopping, setStopping] = useState(false);
   const toolResults = useMemo(() => new Map(), []);
@@ -38,7 +41,40 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
       .catch(error => { if (request === modelRequest.current) updateTemporary(id, { error: errorText(error) }); })
       .finally(() => { initializingModel.current = false; });
   }, [id, state.selection.modelRef]);
-  useEffect(() => { if (following.current && scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight; }, [state.messages, state.busy]);
+  function cancelAutoScroll() {
+    if (autoScrollFrame.current === null) return;
+    cancelAnimationFrame(autoScrollFrame.current);
+    autoScrollFrame.current = null;
+  }
+  function pinToBottom() {
+    const node = scroll.current;
+    if (!node || !following.current) return;
+    const target = Math.max(0, node.scrollHeight - node.clientHeight);
+    if (Math.abs(node.scrollTop - target) > 0.5) {
+      programmedScrollTop.current = target;
+      node.scrollTop = target;
+    }
+    lastScrollTop.current = target;
+  }
+  function scheduleAutoScroll() {
+    if (!following.current || autoScrollFrame.current !== null) return;
+    autoScrollFrame.current = requestAnimationFrame(() => {
+      autoScrollFrame.current = null;
+      pinToBottom();
+    });
+  }
+  useLayoutEffect(() => {
+    following.current = true;
+    programmedScrollTop.current = null;
+    lastScrollTop.current = 0;
+    cancelAutoScroll();
+    return cancelAutoScroll;
+  }, [id]);
+  useLayoutEffect(() => {
+    // Streaming updates can arrive many times per frame. Coalesce them into
+    // one bottom pin so the browser lays out and paints only once per frame.
+    scheduleAutoScroll();
+  }, [state.messages, state.busy]);
   async function addImages(files: File[]) {
     if (picking.current) return;
     picking.current = true;
@@ -96,7 +132,35 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
   };
   const canSubmit = temporaryChatCanSubmit(submissionState);
   return <section className="temporary-chat" aria-label="临时聊天" onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }} onDrop={event => { if (event.dataTransfer.files.length) { event.preventDefault(); void addImages([...event.dataTransfer.files]); } }}>
-    <div className="temporary-scroll" ref={scroll} onWheel={event => { if (event.deltaY < 0) following.current = false; }} onScroll={() => { const node = scroll.current; if (node) following.current = node.scrollHeight-node.scrollTop-node.clientHeight < 60; }}>
+    <div className="temporary-scroll" ref={scroll}
+      onWheel={event => {
+        if (event.deltaY < 0) {
+          following.current = false;
+          programmedScrollTop.current = null;
+          cancelAutoScroll();
+        }
+      }}
+      onTouchMove={() => {
+        following.current = false;
+        programmedScrollTop.current = null;
+        cancelAutoScroll();
+      }}
+      onScroll={() => {
+        const node = scroll.current;
+        if (!node) return;
+        const currentTop = node.scrollTop;
+        const programmedTop = programmedScrollTop.current;
+        const isProgrammatic = programmedTop !== null && Math.abs(currentTop - programmedTop) <= 1;
+        programmedScrollTop.current = null;
+        if (isProgrammatic) {
+          following.current = true;
+        } else if (Math.abs(currentTop - lastScrollTop.current) > 0.5) {
+          const distance = node.scrollHeight - currentTop - node.clientHeight;
+          following.current = distance <= 40;
+          if (!following.current) cancelAutoScroll();
+        }
+        lastScrollTop.current = currentTop;
+      }}>
       <div className="chat-column">
         {!state.messages.length && <div className="temporary-empty">
           <span className="temporary-empty-mark"><MessageCirclePlus /></span>

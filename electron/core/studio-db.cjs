@@ -14,8 +14,12 @@ const { DatabaseSync } = require('node:sqlite');
 const { studioDataDirectory } = require('./studio-paths.cjs');
 const {
   decryptValue,
+  decryptValueAsync,
   encryptValue,
+  encryptValueAsync,
   isEncryptedEnvelope,
+  secureStorageAsyncAvailable,
+  SECURE_STORAGE_UNAVAILABLE,
 } = require('./secure-value.cjs');
 const {
   normalizeThinkingLevels,
@@ -61,12 +65,35 @@ function encode(value) {
 }
 
 function decodeSecretMap(value) {
-  const decoded = decryptValue(json(value, {}));
+  const decoded = decryptValueForRead(json(value, {}));
   if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) return {};
   return Object.fromEntries(
     Object.entries(decoded)
       .filter(([key, entry]) => typeof key === 'string' && typeof entry === 'string'),
   );
+}
+
+// Reading Studio metadata must remain available when the OS credential store
+// is temporarily unavailable (for example while a development Electron
+// process is starting). Keep encrypted values in SQLite untouched and expose
+// an empty projection until safeStorage becomes available again. Writes still
+// fail closed through encryptValue/encryptValueAsync.
+function decryptValueForRead(value) {
+  try {
+    return decryptValue(value);
+  } catch (error) {
+    if (error?.code === SECURE_STORAGE_UNAVAILABLE) return undefined;
+    throw error;
+  }
+}
+
+async function decryptValueForReadAsync(value) {
+  try {
+    return await decryptValueAsync(value);
+  } catch (error) {
+    if (error?.code === SECURE_STORAGE_UNAVAILABLE) return undefined;
+    throw error;
+  }
 }
 
 function encodeSecretMap(value) {
@@ -77,6 +104,25 @@ function encodeSecretMap(value) {
       )
     : {};
   return encode(encryptValue(normalized));
+}
+
+async function decodeSecretMapAsync(value) {
+  const decoded = await decryptValueAsync(json(value, {}));
+  if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) return {};
+  return Object.fromEntries(
+    Object.entries(decoded)
+      .filter(([key, entry]) => typeof key === 'string' && typeof entry === 'string'),
+  );
+}
+
+async function encodeSecretMapAsync(value) {
+  const normalized = value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.fromEntries(
+        Object.entries(value)
+          .filter(([key, entry]) => typeof key === 'string' && typeof entry === 'string'),
+      )
+    : {};
+  return encode(await encryptValueAsync(normalized));
 }
 
 function normalizeConversationRow(row) {
@@ -694,12 +740,16 @@ class StudioDatabase {
         'UPDATE mcp_servers SET env = ?, headers = ? WHERE name = ?',
       );
       for (const row of secretRows) {
-        const rawEnv = json(row.env, {});
-        const rawHeaders = json(row.headers, {});
-        const env = isEncryptedEnvelope(rawEnv) ? row.env : encodeSecretMap(decryptValue(rawEnv));
-        const headers = isEncryptedEnvelope(rawHeaders) ? row.headers : encodeSecretMap(decryptValue(rawHeaders));
-        if (env !== row.env || headers !== row.headers) {
-          updateSecrets.run(env, headers, row.name);
+        try {
+          const rawEnv = json(row.env, {});
+          const rawHeaders = json(row.headers, {});
+          const env = isEncryptedEnvelope(rawEnv) ? row.env : encodeSecretMap(decryptValue(rawEnv));
+          const headers = isEncryptedEnvelope(rawHeaders) ? row.headers : encodeSecretMap(decryptValue(rawHeaders));
+          if (env !== row.env || headers !== row.headers) updateSecrets.run(env, headers, row.name);
+        } catch (error) {
+          if (error?.code !== 'SECURE_STORAGE_UNAVAILABLE') throw error;
+          // Electron's async safeStorage API is available after startup. The
+          // legacy row is kept readable and re-encrypted by the async pass.
         }
       }
 
@@ -710,14 +760,48 @@ class StudioDatabase {
         'UPDATE credentials SET value = ?, updated_at = ? WHERE provider_id = ?',
       );
       for (const row of credentialRows) {
-        const stored = json(row.value, undefined);
-        if (isEncryptedEnvelope(stored)) continue;
-        const plaintext = decryptValue(stored);
-        if (plaintext === undefined) continue;
-        updateCredential.run(encode(encryptValue(plaintext)), Date.now(), row.provider_id);
+        try {
+          const stored = json(row.value, undefined);
+          if (isEncryptedEnvelope(stored)) continue;
+          const plaintext = decryptValue(stored);
+          if (plaintext === undefined) continue;
+          updateCredential.run(encode(encryptValue(plaintext)), Date.now(), row.provider_id);
+        } catch (error) {
+          if (error?.code !== 'SECURE_STORAGE_UNAVAILABLE') throw error;
+        }
       }
       this.db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
     });
+  }
+
+  async migrateSecureValuesAsync() {
+    const mcpRows = this.db.prepare('SELECT name, env, headers FROM mcp_servers').all();
+    const updateMcp = this.db.prepare(
+      'UPDATE mcp_servers SET env = ?, headers = ? WHERE name = ?',
+    );
+    for (const row of mcpRows) {
+      const rawEnv = json(row.env, {});
+      const rawHeaders = json(row.headers, {});
+      const env = isEncryptedEnvelope(rawEnv)
+        ? row.env
+        : await encodeSecretMapAsync(await decryptValueAsync(rawEnv));
+      const headers = isEncryptedEnvelope(rawHeaders)
+        ? row.headers
+        : await encodeSecretMapAsync(await decryptValueAsync(rawHeaders));
+      if (env !== row.env || headers !== row.headers) updateMcp.run(env, headers, row.name);
+    }
+
+    const credentialRows = this.db.prepare('SELECT provider_id, value FROM credentials').all();
+    const updateCredential = this.db.prepare(
+      'UPDATE credentials SET value = ?, updated_at = ? WHERE provider_id = ?',
+    );
+    for (const row of credentialRows) {
+      const stored = json(row.value, undefined);
+      if (isEncryptedEnvelope(stored)) continue;
+      const plaintext = await decryptValueAsync(stored);
+      if (plaintext === undefined) continue;
+      updateCredential.run(encode(await encryptValueAsync(plaintext)), Date.now(), row.provider_id);
+    }
   }
 
   transaction(callback) {
@@ -762,6 +846,10 @@ class StudioDatabase {
 
   isOpen() {
     return this.db.isOpen;
+  }
+
+  supportsAsyncSecureStorage() {
+    return secureStorageAsyncAvailable();
   }
 
   getSetting(key, fallback) {
@@ -824,9 +912,18 @@ class StudioDatabase {
   readSecretValues() {
     const rows = this.db.prepare('SELECT name, value FROM secret_values ORDER BY name').all();
     return Object.fromEntries(rows.flatMap((row) => {
-      const value = decryptValue(json(row.value, undefined));
+      const value = decryptValueForRead(json(row.value, undefined));
       return typeof value === 'string' ? [[row.name, value]] : [];
     }));
+  }
+
+  async readSecretValuesAsync() {
+    const rows = this.db.prepare('SELECT name, value FROM secret_values ORDER BY name').all();
+    const values = await Promise.all(rows.map(async (row) => {
+      const value = await decryptValueForReadAsync(json(row.value, undefined));
+      return typeof value === 'string' ? [row.name, value] : undefined;
+    }));
+    return Object.fromEntries(values.filter(Boolean));
   }
 
   writeSecretValue(name, value) {
@@ -840,6 +937,18 @@ class StudioDatabase {
     return { name, updatedAt: at };
   }
 
+  async writeSecretValueAsync(name, value) {
+    const at = Date.now();
+    const encrypted = await encryptValueAsync(value);
+    this.db.prepare(`
+      INSERT INTO secret_values(name, value, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(name) DO UPDATE SET
+        value = excluded.value,
+        updated_at = excluded.updated_at
+    `).run(name, encode(encrypted), at);
+    return { name, updatedAt: at };
+  }
+
   deleteSecretValue(name) {
     this.db.prepare('DELETE FROM secret_values WHERE name = ?').run(name);
   }
@@ -847,7 +956,13 @@ class StudioDatabase {
   readMcpOAuthState(serverUrl) {
     const row = this.db.prepare('SELECT value FROM mcp_oauth_states WHERE server_url = ?')
       .get(serverUrl);
-    return row ? decryptValue(json(row.value, undefined)) : undefined;
+    return row ? decryptValueForRead(json(row.value, undefined)) : undefined;
+  }
+
+  async readMcpOAuthStateAsync(serverUrl) {
+    const row = this.db.prepare('SELECT value FROM mcp_oauth_states WHERE server_url = ?')
+      .get(serverUrl);
+    return row ? decryptValueForReadAsync(json(row.value, undefined)) : undefined;
   }
 
   writeMcpOAuthState(serverUrl, value) {
@@ -858,6 +973,17 @@ class StudioDatabase {
         value = excluded.value,
         updated_at = excluded.updated_at
     `).run(serverUrl, encode(encryptValue(value)), at);
+  }
+
+  async writeMcpOAuthStateAsync(serverUrl, value) {
+    const at = Date.now();
+    const encrypted = await encryptValueAsync(value);
+    this.db.prepare(`
+      INSERT INTO mcp_oauth_states(server_url, value, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(server_url) DO UPDATE SET
+        value = excluded.value,
+        updated_at = excluded.updated_at
+    `).run(serverUrl, encode(encrypted), at);
   }
 
   deleteMcpOAuthState(serverUrl) {
@@ -1616,7 +1742,13 @@ class StudioDatabase {
   readCredential(providerId) {
     const row = this.db.prepare('SELECT value FROM credentials WHERE provider_id = ?').get(providerId);
     if (!row) return undefined;
-    return decryptValue(json(row.value, undefined));
+    return decryptValueForRead(json(row.value, undefined));
+  }
+
+  async readCredentialAsync(providerId) {
+    const row = this.db.prepare('SELECT value FROM credentials WHERE provider_id = ?').get(providerId);
+    if (!row) return undefined;
+    return decryptValueForReadAsync(json(row.value, undefined));
   }
 
   listCredentials() {
@@ -1624,15 +1756,38 @@ class StudioDatabase {
       .map((row) => {
         return {
           providerId: row.provider_id,
-          credential: decryptValue(json(row.value, undefined)),
+          credential: decryptValueForRead(json(row.value, undefined)),
         };
       })
       .filter((row) => row.credential !== undefined);
   }
 
+  async listCredentialsAsync() {
+    const rows = this.db.prepare('SELECT provider_id, value FROM credentials ORDER BY provider_id').all();
+    const values = await Promise.all(rows.map(async (row) => ({
+      providerId: row.provider_id,
+      credential: await decryptValueForReadAsync(json(row.value, undefined)),
+    })));
+    return values.filter((row) => row.credential !== undefined);
+  }
+
   writeCredential(providerId, credential) {
     const at = Date.now();
     const encrypted = encryptValue(credential);
+    this.db.prepare(`
+      INSERT INTO credentials(provider_id, value, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(provider_id) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+    `).run(providerId, encode(encrypted), at);
+    return credential;
+  }
+
+  async writeCredentialAsync(providerId, credential) {
+    const at = Date.now();
+    const encrypted = await encryptValueAsync(credential);
+    return this.writeCredentialEnvelope(providerId, encrypted, at, credential);
+  }
+
+  writeCredentialEnvelope(providerId, encrypted, at = Date.now(), credential) {
     this.db.prepare(`
       INSERT INTO credentials(provider_id, value, updated_at) VALUES (?, ?, ?)
       ON CONFLICT(provider_id) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
@@ -2179,8 +2334,43 @@ class StudioDatabase {
     });
   }
 
+  async listMcpServersAsync({ includeSecrets = false } = {}) {
+    const rows = this.db.prepare('SELECT * FROM mcp_servers ORDER BY name COLLATE NOCASE').all();
+    return Promise.all(rows.map(async (row) => {
+      const env = await decodeSecretMapAsync(row.env);
+      const headers = await decodeSecretMapAsync(row.headers);
+      return {
+        name: row.name,
+        transport: row.transport,
+        command: row.command,
+        args: json(row.args, []),
+        cwd: row.cwd || '',
+        url: row.url,
+        description: row.description,
+        ...(includeSecrets
+          ? { env, headers }
+          : {
+              envKeys: Object.keys(env).sort(),
+              headerKeys: Object.keys(headers).sort(),
+            }),
+        exposure: ['direct', 'deferred', 'hidden'].includes(row.exposure)
+          ? row.exposure
+          : 'deferred',
+        toolExposure: json(row.tool_exposure, {}),
+        timeoutSeconds: Math.max(1, Number(row.timeout_seconds) || 60),
+        enabled: Boolean(row.enabled),
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      };
+    }));
+  }
+
   getMcpServer(name, options) {
     return this.listMcpServers(options).find((item) => item.name === name);
+  }
+
+  async getMcpServerAsync(name, options) {
+    return (await this.listMcpServersAsync(options)).find((item) => item.name === name);
   }
 
   upsertMcpServer(input) {
@@ -2225,10 +2415,64 @@ class StudioDatabase {
     return this.getMcpServer(input.name);
   }
 
+  async upsertMcpServerAsync(input) {
+    const at = Date.now();
+    const current = await this.getMcpServerAsync(input.name, { includeSecrets: true });
+    const env = await encodeSecretMapAsync(
+      input.env && typeof input.env === 'object' ? input.env : current?.env,
+    );
+    const headers = await encodeSecretMapAsync(
+      input.headers && typeof input.headers === 'object' ? input.headers : current?.headers,
+    );
+    this.db.prepare(`
+      INSERT INTO mcp_servers(
+        name, transport, command, args, cwd, url, description, env, headers,
+        exposure, tool_exposure, timeout_seconds, enabled, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(name) DO UPDATE SET
+        transport = excluded.transport,
+        command = excluded.command,
+        args = excluded.args,
+        cwd = excluded.cwd,
+        url = excluded.url,
+        description = excluded.description,
+        env = excluded.env,
+        headers = excluded.headers,
+        exposure = excluded.exposure,
+        tool_exposure = excluded.tool_exposure,
+        timeout_seconds = excluded.timeout_seconds,
+        enabled = excluded.enabled,
+        updated_at = excluded.updated_at
+    `).run(
+      input.name,
+      input.transport,
+      input.command || '',
+      encode(Array.isArray(input.args) ? input.args : []),
+      input.cwd || '',
+      input.url || '',
+      input.description || '',
+      env,
+      headers,
+      ['direct', 'deferred', 'hidden'].includes(input.exposure) ? input.exposure : 'deferred',
+      encode(input.toolExposure && typeof input.toolExposure === 'object' ? input.toolExposure : {}),
+      Math.max(1, Math.min(3_600, Number(input.timeoutSeconds) || 60)),
+      input.enabled === false ? 0 : 1,
+      current?.createdAt || at,
+      at,
+    );
+    return this.getMcpServerAsync(input.name);
+  }
+
   setMcpEnabled(name, enabled) {
     this.db.prepare('UPDATE mcp_servers SET enabled = ?, updated_at = ? WHERE name = ?')
       .run(enabled ? 1 : 0, Date.now(), name);
     return this.getMcpServer(name);
+  }
+
+  async setMcpEnabledAsync(name, enabled) {
+    this.db.prepare('UPDATE mcp_servers SET enabled = ?, updated_at = ? WHERE name = ?')
+      .run(enabled ? 1 : 0, Date.now(), name);
+    return this.getMcpServerAsync(name);
   }
 
   removeMcpServer(name) {

@@ -33,6 +33,7 @@ import type {
   ExtensionUiItem,
 } from '../types/extension-types';
 import { ConversationHeader } from './ConversationHeader';
+import { useGitWorkspaceStatus } from './useGitWorkspaceStatus';
 import { scopedExtensionChips } from '../features/extensions/extension-chip-scope';
 import { ConversationTracePage } from './ConversationTraceMenu';
 import { buildTraceSummary } from '../features/conversation/trace-model';
@@ -97,7 +98,8 @@ type HeaderState = {
   conversationDetailExtensionCount: number;
   openNotificationSession: (id: string) => Promise<void>;
   runNotificationAction: (item: AppNotification) => Promise<void>;
-  togglePanel: () => void;
+  panelExpanded: boolean;
+  openPanel: () => void;
   returnToMainAgent: () => void;
   openAgentOverview: () => void;
   openConversationExtensionHub: () => void;
@@ -189,6 +191,7 @@ export function ConversationWorkspace({
     settingsOpen,
     filesOpen,
   } = shell;
+  const gitWorkspace = useGitWorkspaceStatus(session?.cwd);
   const {
     scrollRef,
     topSentinelRef,
@@ -257,6 +260,7 @@ export function ConversationWorkspace({
       if (event.key.toLowerCase() !== 'f') return;
       const target = event.target as HTMLElement | null;
       if (target?.closest?.('.terminal-host')) return;
+      if (target?.closest?.('.file-panel')) return;
       event.preventDefault();
       if (searchOpen) { search.close(); return; }
       search.open();
@@ -286,8 +290,7 @@ export function ConversationWorkspace({
 
 
   return (
-    <main className={`main ${isNewConversation ? 'is-new-conversation' : ''}`} aria-busy={sessionLoading}>
-      <div className={`chat-loading-line ${sessionLoading ? 'is-visible' : ''}`} />
+    <>
       <ConversationHeader
         update={header.update}
         sidebarCollapsed={sidebarCollapsed}
@@ -296,6 +299,7 @@ export function ConversationWorkspace({
         title={agentView.kind === 'agents' && agentView.child
             ? `${agentView.child.name || agentView.child.agent} · 子智能体`
             : (session?.title || 'Pi Studio')}
+        gitStatus={gitWorkspace.status}
         agentKind={headerKind}
         subagentCount={subagents.subagentChildren.length}
         hasActiveSubagents={subagents.hasActiveSubagents}
@@ -305,8 +309,8 @@ export function ConversationWorkspace({
         onClearNotifications={clearNotifications}
         onOpenNotificationSession={header.openNotificationSession}
         onRunNotificationAction={header.runNotificationAction}
-        filesOpen={filesOpen}
-        onTogglePanel={header.togglePanel}
+        panelExpanded={header.panelExpanded}
+        onOpenPanel={header.openPanel}
         onReturnToMainAgent={header.returnToMainAgent}
         onOpenAgentOverview={header.openAgentOverview}
         onOpenConversationExtensionHub={header.openConversationExtensionHub}
@@ -321,8 +325,9 @@ export function ConversationWorkspace({
         onNotifyExtension={extensions.notify}
         onOpenTrace={header.openTrace}
         showTrace={traceEnabled}
-        traceSummary={traceSummary}
       />
+      <main className={`main ${isNewConversation ? 'is-new-conversation' : ''}`} aria-busy={sessionLoading}>
+        <div className={`chat-loading-line ${sessionLoading ? 'is-visible' : ''}`} />
       {searchEnabled && searchOpen && <ConversationSearchBar
         state={search.state}
         onQueryChange={search.setQuery}
@@ -545,6 +550,7 @@ export function ConversationWorkspace({
         </div>
       )}
       <ComposerDock {...composer} open={transcriptVisible} />
-    </main>
+      </main>
+    </>
   );
 }

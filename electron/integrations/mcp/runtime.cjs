@@ -703,8 +703,8 @@ async function performReload(runtime) {
   }
   const current = state;
   current.closing = false;
-  const listed = getStudioDatabase()
-    .listMcpServers({ includeSecrets: true })
+  const listed = (await getStudioDatabase()
+    .listMcpServersAsync({ includeSecrets: true }))
     .filter((server) => server.enabled);
   const invalid = new Map();
   const servers = [];

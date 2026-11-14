@@ -12,6 +12,8 @@ export type MarkdownActionsValue = {
   cwd?: string;
   /** Open a local file preview in the right panel. */
   openFile?: (path: string) => void;
+  /** Open a file reference from Markdown as an external/local preview. */
+  openLocalFile?: (path: string) => void;
   /** Open an http(s) link (the in-app browser or the system browser). */
   openLink?: (url: string) => void;
 };

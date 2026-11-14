@@ -3,8 +3,9 @@
  *
  * Electron's `<webview>` keeps the page in its own process with an isolated
  * `persist:pi-browser` partition: no preload, no node integration, no popups.
- * The panel only exposes navigation controls and a URL field; every link that
- * leaves http(s) is refused by the main-process guard.
+ * The panel only exposes navigation controls and a URL field. Network pages
+ * use http(s); an explicitly entered local .html/.htm file is handled by the
+ * same guarded webview and cannot turn into a general file viewer.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, ExternalLink, Globe, RotateCw, X } from 'lucide-react';
@@ -101,8 +102,8 @@ export function BrowserPanel({ url, onUrlChange, onClose }: {
   const navigate = useCallback((target: string) => {
     const view = viewRef.current;
     if (!view) return;
-    if (!/^(https?:\/\/|about:blank$)/i.test(target)) {
-      setFailed('只支持 http(s) 链接');
+    if (!/^(https?:\/\/|file:\/\/|about:blank$)/i.test(target)) {
+      setFailed('只支持 http(s) 链接或本地 HTML 文件');
       return;
     }
     if (!readyRef.current) {
@@ -127,7 +128,7 @@ export function BrowserPanel({ url, onUrlChange, onClose }: {
   function submit() {
     const target = normalizeBrowserTarget(address);
     if (!target) {
-      setFailed('请输入完整网址，例如 https://example.com');
+      setFailed('请输入网址，或本地 HTML 文件（file:///.../*.html）');
       return;
     }
     setFailed('');
@@ -180,7 +181,8 @@ export function BrowserPanel({ url, onUrlChange, onClose }: {
         className="icon-button"
         aria-label="在系统浏览器打开"
         title="在系统浏览器打开"
-        onClick={() => { if (current) void window.piApi.openLink(current, 'external'); }}
+        disabled={!/^https?:\/\//i.test(current)}
+        onClick={() => { if (/^https?:\/\//i.test(current)) void window.piApi.openLink(current, 'external'); }}
       ><ExternalLink /></button>
       {onClose && <button type="button" className="icon-button" aria-label="关闭浏览器" title="关闭" onClick={onClose}><X /></button>}
     </div>

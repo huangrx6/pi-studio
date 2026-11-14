@@ -12,6 +12,7 @@
  *  - updates      GitHub Release 检查、下载与安装
  *  - terminal     每个窗口独占的交互式 PTY 会话
  *  - runtime-services 只读监听端口与服务进程发现
+ *  - git-workspace 当前目录的 Git 分支、提交、改动与 worktree
  */
 
 const { registerSystemIpc } = require('./system.cjs');
@@ -27,6 +28,7 @@ const { registerConfirmIpc } = require('./confirm.cjs');
 const { registerUpdatesIpc } = require('./updates.cjs');
 const { registerTerminalIpc } = require('./terminal.cjs');
 const { registerRuntimeServicesIpc } = require('./runtime-services.cjs');
+const { registerGitWorkspaceIpc } = require('./git-workspace.cjs');
 
 function registerIpc() {
   registerSystemIpc();
@@ -42,6 +44,7 @@ function registerIpc() {
   registerUpdatesIpc();
   registerTerminalIpc();
   registerRuntimeServicesIpc();
+  registerGitWorkspaceIpc();
 }
 
 module.exports = { registerIpc };

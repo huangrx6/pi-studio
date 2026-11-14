@@ -45,10 +45,10 @@
 
   /* 四级表面：全 app（含设置面）共用同一套，换壁纸不会改变窗口内颜色。 */
   --surface-canvas: #ffffff;
-  --surface-chrome: #eff1f3;
+  --surface-chrome: #eaeaea;
   --surface-raised: #ffffff;
   --surface-floating: #ffffff;
-  --surface-hover: #eef0f2;
+  --surface-hover: #ebebed;
   --accent-tint: color-mix(in srgb, var(--accent) 8%, transparent);
   /* 中性 tint：设置页这类单色界面用的选中底。 */
   --tint-neutral: color-mix(in srgb, var(--text-1) 8%, transparent);
@@ -193,11 +193,11 @@
 
 
   /* 四级表面：画布、外壳、卡片、输入框；rgba 只用于边框、悬停、tint 与行内代码。 */
-  --surface-canvas: #17191d;
-  --surface-chrome: #1f2329;
-  --surface-raised: #1e2227;
-  --surface-floating: #242930;
-  --surface-hover: #262b32;
+  --surface-canvas: #181818;
+  --surface-chrome: #282829;
+  --surface-raised: #181818;
+  --surface-floating: #181818;
+  --surface-hover: #2f3030;
   --accent-tint: color-mix(in srgb, var(--accent) 8%, transparent);
   /* 中性 tint：设置页这类单色界面用的选中底。 */
   --tint-neutral: color-mix(in srgb, var(--text-1) 8%, transparent);

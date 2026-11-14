@@ -15,7 +15,7 @@
     <div class="nav-inner">
       <a class="brand" href="index.html" aria-label="返回 Pi Studio 产品首页">
         <span class="brand-mark">π</span>
-        <span>Pi Studio</span><sup>®</sup>
+        <span>Pi Studio</span>
       </a>
       <nav class="nav-links" aria-label="站点导航">
         <a href="index.html">产品</a>
@@ -59,7 +59,7 @@
           <ul>
             <li data-search="工作区 临时对话 workspace cwd 归档"><a href="#workspaces">工作区与临时对话</a></li>
             <li data-search="会话 长期目标 对话 goal durable 生命周期"><a href="#conversations">会话与 /goal</a></li>
-            <li data-search="模型同题双跑 对比 fork worktree 动作面板"><a href="#model-comparison">模型同题双跑</a></li>
+            <li data-search="模型同题双跑 对比 工作台 worktree 评估历史"><a href="#model-comparison">模型同题双跑</a></li>
             <li data-search="子智能体 subagent 并行 supervisor 后台"><a href="#subagents">子智能体</a></li>
             <li data-search="文件 附件 引用 diff 变更 工作台 预览"><a href="#files-changes">文件、附件与差异</a></li>
             <li data-search="模型 提供方 API Key 模型发现 thinking 推理"><a href="#models">模型与推理</a></li>
@@ -116,24 +116,16 @@
     <main class="docs-main">
       <article class="doc-article">
         <header class="article-hero">
-          <span class="eyebrow">Pi Studio / Documentation / Main</span>
           <h1>使用、扩展与实现手册</h1>
           <p class="article-lead">
-            从第一次打开应用，到理解 Durable 请求如何穿过 Electron、SQLite 与扩展宿主；
-            从配置模型与 Harness，到开发、签名、发布和安装自己的扩展。这里描述 Pi Studio 当前
-            <code>main</code> 分支的产品边界和技术契约。
+            第一次使用，可以从安装应用、接入模型和选择工作区开始。扩展作者可跳到开发示例，查看工具、权限与声明式界面的契约。
           </p>
           <dl class="article-meta">
-            <div><dt>Version</dt><dd>v0.0.15 · Stable</dd></div>
-            <div><dt>Runtime</dt><dd>Pi Durable 1.5</dd></div>
-            <div><dt>Ownership</dt><dd>Studio SQLite</dd></div>
-            <div><dt>License</dt><dd>MIT · macOS</dd></div>
+            <div><dt>下载</dt><dd><a href="https://github.com/huangrx6/pi-studio/releases/latest">最新 macOS 版 ↗</a></dd></div>
+            <div><dt>运行时</dt><dd>Pi Durable</dd></div>
+            <div><dt>安装包</dt><dd>Apple 芯片 / Intel</dd></div>
+            <div><dt>许可证</dt><dd>MIT</dd></div>
           </dl>
-          <div class="status-note">
-            <strong>版本说明</strong>
-            <p><code>v0.0.15</code> 收口了会话尾部的视觉：计划栏从「标题 + 贯穿整宽的进度线」改成 28px 状态胶囊，全部完成时只留「全部完成 9/9」；文件变更块重新装回 1px 边框 + 圆角 + raised 底色的框，保留等宽文件名与「新增 / 修改 / 写入」文字标签。用户消息修了三处排版：附件条与气泡共用右边缘、超过 min(85%, 560px) 才横向滚动；短句不再被拆成两行（外层 align-items 会让容器收缩到 fit-content，已改成撑满整行 + 内层右对齐）；中英混排的换行从 anywhere 收到 break-word。扩展侧，<code>status.chip</code> 明确为会话级入口——新会话草稿态没有 sessionId，一律不渲染。窗口内壁纸、输入区瘦身与 status.chip 契约沿用 v0.0.14。</p>
-          </div>
-
           <div class="chapter-index" aria-label="主要章节">
             <a href="#quickstart"><span class="chapter-number">01</span><span>先完成第一次对话</span><span class="arrow">↘</span></a>
             <a href="#harness"><span class="chapter-number">02</span><span>理解 Harness 与工具策略</span><span class="arrow">↘</span></a>
@@ -165,10 +157,10 @@
               <table class="doc-table">
                 <thead><tr><th>资源</th><th>它解决什么</th><th>典型入口</th></tr></thead>
                 <tbody>
-                  <tr><td>会话</td><td>保存消息、工具轨迹、模型选择和运行状态</td><td>左侧栏、对话 Tab</td></tr>
+                  <tr><td>会话</td><td>保存消息、工具轨迹、模型选择和运行状态</td><td>左侧栏、对话正文</td></tr>
                   <tr><td>工作区</td><td>确定项目目录、项目资源、文件与差异范围</td><td>左侧工作区列表、输入框工作区选择器</td></tr>
                   <tr><td>配置</td><td>模型、Harness、权限、工具、Skill、MCP 与扩展</td><td>设置页</td></tr>
-                  <tr><td>扩展</td><td>增加工具、命令、Prompt section、hooks、tasks 与声明式 UI</td><td>会话扩展 Tab、设置 → 扩展</td></tr>
+                  <tr><td>扩展</td><td>增加工具、命令、Prompt section、hooks、tasks 与声明式 UI</td><td>工作区面板 → 扩展、设置 → 扩展</td></tr>
                 </tbody>
               </table>
             </div>
@@ -188,15 +180,11 @@
           <div class="doc-copy">
             <figure class="figure">
               <img src="assets/screens/home-light.png" alt="Pi Studio 当前版本的欢迎页、工作区与输入框" width="2880" height="1840" loading="lazy">
-              <figcaption><span>Quickstart 01</span><span>欢迎页 · 工作区 · 目标入口 · 工具策略</span></figcaption>
+              <figcaption><span>Quickstart 01</span><span>新对话 · 工作区选择 · 权限与模型</span></figcaption>
             </figure>
             <h3>1. 安装应用</h3>
-            <p>从 Releases 选择 Apple Silicon 或 Intel 安装包。构建使用固定的 Pi Studio 自签名证书，但该证书不等同于 Apple Developer ID 或公证，macOS 仍可能阻止首次启动：</p>
-            <figure class="code-block">
-              <figcaption><span>Shell</span><button class="code-copy" type="button">复制</button></figcaption>
-              <pre><code>xattr -cr "/Applications/Pi Studio.app"</code></pre>
-            </figure>
-            <p>也可以右键应用 →「打开」→ 再点击「打开」。通过终端移除隔离标记只解决本机首次启动；固定自签名用于保证后续应用内更新的签名身份连续，不提供 Apple 信任链。</p>
+            <p>打开 <a href="https://github.com/huangrx6/pi-studio/releases/latest">GitHub 最新发行版</a>。Apple 芯片的 Mac 选择 <code>arm64.dmg</code>，Intel Mac 选择 <code>x64.dmg</code>。打开磁盘映像，将 Pi Studio 拖入「应用程序」。</p>
+            <p>安装包使用项目自签名证书，尚未经过 Apple 公证。如果首次启动时提示无法验证开发者，请先确认下载来源，然后在「系统设置 → 隐私与安全性」里为 Pi Studio 选择「仍要打开」。<a href="https://support.apple.com/zh-cn/102445">Apple 的首次打开说明</a></p>
 
             <h3>2. 配置模型来源</h3>
             <p>进入 <strong>设置 → 模型配置</strong>，添加来源 ID、服务地址、API 协议和密钥。支持 OpenAI Completions、OpenAI Responses、Anthropic Messages 与 Google Generative AI；模型发现地址是可选项，手动添加模型仍然可用。</p>
@@ -208,12 +196,12 @@
             </ul>
 
             <h3>3. 添加工作区并开始</h3>
-            <p>左侧工作区入口选择项目目录，然后点击「新会话」。选择工作区与权限策略后发送第一条消息；需要跨多轮持续推进时，可在输入框直接使用 <code>/goal &lt;目标&gt;</code>。</p>
+            <p>点击「新对话」，在输入框中选择项目文件夹与权限模式，再发送第一条消息。需要跨多轮推进任务时，可在同一输入框使用 <code>/goal &lt;目标&gt;</code>。</p>
             <div class="feature-pairs">
               <div class="feature-pair"><span>Reference</span><strong><code>@</code> 文件</strong><p>把工作区中的文件或目录加入上下文。</p></div>
               <div class="feature-pair"><span>Command</span><strong><code>/</code> 命令</strong><p>执行 Studio 命令、Skill、扩展命令或会话动作。</p></div>
               <div class="feature-pair"><span>Attachment</span><strong>图片与文本附件</strong><p>图片进入支持视觉的模型；超长粘贴可以保存为文本附件。</p></div>
-              <div class="feature-pair"><span>Control</span><strong>停止与继续</strong><p>运行中可以停止；队列输入和 steer / follow-up 由 Durable 管理。</p></div>
+              <div class="feature-pair"><span>Control</span><strong>停止与继续</strong><p>运行中可以停止或补充要求，也可以按 ⌘ Enter 将下一条消息排队。</p></div>
             </div>
           </div>
         </section>
@@ -222,33 +210,26 @@
           <header class="section-heading">
             <span class="section-kicker">03 / Interface</span>
             <h2 id="interface-title">界面地图</h2>
-            <p>每个区域对应一个明确职责，避免把任务、扩展和运行时状态混进主对话正文。</p>
+            <p>消息和本轮改动在中间阅读，文件、终端、服务与浏览器可以在右侧并排打开。</p>
           </header>
           <div class="doc-copy">
             <figure class="figure">
-              <img src="assets/screens/conversation-light.png" alt="Pi Studio 会话页，展示左侧工作区、对话 Tab、子智能体和扩展 Tab、主内容与输入区" width="2880" height="1840" loading="lazy">
-              <figcaption><span>Workspace 01</span><span>会话 · 子智能体 · 扩展 · 文件面板 · 输入框</span></figcaption>
+              <img src="assets/screens/workbench-dark.png" alt="会话旁的右侧工作台正在预览工作区文件" width="2880" height="1840" loading="lazy">
+              <figcaption><span>工作台</span><span>在对话旁核对文件预览</span></figcaption>
             </figure>
             <div class="table-wrap">
               <table class="doc-table">
-                <thead><tr><th>区域</th><th>用途</th><th>不会放置什么</th></tr></thead>
+                <thead><tr><th>区域</th><th>可以做什么</th></tr></thead>
                 <tbody>
-                  <tr><td>左侧栏</td><td>新会话、临时聊天、扩展入口、工作区、会话历史、设置</td><td>完整扩展详情或大段运行日志</td></tr>
-                  <tr><td>顶部会话 Tabs</td><td>对话、子智能体总览、扩展面板三个一级视图</td><td>模型双跑等对话内临时视图</td></tr>
-                  <tr><td>主内容区</td><td>消息、工具调用、thinking、结果、子智能体 transcript</td><td>扩展 summary、文件 diff 全文</td></tr>
-                  <tr><td>右侧面板</td><td>工作区文件、预览、差异、终端与运行服务</td><td>对话消息正文</td></tr>
-                  <tr><td>输入框</td><td>工作区、类型、权限、模型、thinking、附件、队列</td><td>常驻的营销通知或临时 toast</td></tr>
-                  <tr><td>会话 footer 扩展</td><td>一行实时指标、额度或运行摘要</td><td>可滚动长表、详情按钮或嵌套卡片</td></tr>
+                  <tr><td>左侧栏</td><td>新建对话、打开临时聊天、按工作区查找历史会话，或进入设置。</td></tr>
+                  <tr><td>会话顶栏</td><td>查看会话标题与 Git 状态。在工作区面板切换子智能体、扩展与轨迹视图。铃铛和侧栏按钮分别打开通知与右侧工作台。</td></tr>
+                  <tr><td>对话正文</td><td>阅读消息，展开工具执行步骤，检查本轮文件变更。使用 ⌘ F 搜索会话。</td></tr>
+                  <tr><td>输入区</td><td>选择模型与工具权限，添加文件引用或附件。计划与排队消息会显示在输入框上方。</td></tr>
+                  <tr><td>右侧工作台</td><td>打开工作区文件、终端、服务、浏览器、临时聊天或模型双跑。不同工具各用一个标签。</td></tr>
                 </tbody>
               </table>
             </div>
-            <p>一级 Tabs 只表示当前会话的三个视图：对话、子智能体、扩展。没有子智能体或详情扩展时，对应 Tab 不出现。</p>
-            <ul>
-              <li>进入子智能体详情后，主内容区在「子智能体」Tab 内切换；返回列表和返回主对话是两个明确出口。</li>
-              <li>扩展详情在「扩展」Tab 内切换；footer 只显示摘要，完整内容进入扩展中心。</li>
-              <li>模型同题双跑从输入框的 <code>⋯</code> 或 <code>Cmd/Ctrl+K</code> 动作面板进入。它是一个对话内临时视图，主内容区替换为双栏结果，但「对话」Tab 始终保持选中，不会增加第四个一级 Tab。</li>
-              <li>终端和运行服务属于右侧工作台 Tab。关闭终端 Tab 会结束对应 PTY；短暂收起右侧面板只会卸载视图，重新打开时仍可恢复会话。</li>
-            </ul>
+            <p>新对话页也能打开右侧工作台。发送第一条消息后，顶栏会出现当前会话的工作区面板。需要查看单独的轨迹页面，可在「设置 → 通用」开启「显示代码工作视图」。</p>
           </div>
         </section>
 
@@ -272,7 +253,7 @@
             <p>临时对话使用独立的 Durable <code>MemoryStorage</code> 和空 registry。它可以使用已配置的模型与凭据，但不加载工作区工具、扩展、MCP、Skill 或项目指令。</p>
             <div class="callout warning">
               <strong>不落盘边界</strong>
-              <p>关闭最后一个临时对话或退出应用后，transcript、图片和临时运行状态会消失。需要保存的文件或结果应在会话结束前主动导出或复制。</p>
+              <p>关闭临时聊天标签或退出应用后，其中的消息、图片和运行状态会清除。需要保存的文件或结果应在会话结束前主动导出或复制。</p>
             </div>
           </div>
         </section>
@@ -284,6 +265,10 @@
             <p>Studio 只有一种持久会话；输入 <code>/goal</code> 后，同一会话按需获得目标与持续执行能力。</p>
           </header>
           <div class="doc-copy">
+            <figure class="figure">
+              <img src="assets/screens/conversation-light.png" alt="浅色会话界面中的智能体回复和输入框上方的任务计划" width="2880" height="1840" loading="lazy">
+              <figcaption><span>任务计划</span><span>执行步骤可以在回复中展开，计划进度在输入框上方查看。</span></figcaption>
+            </figure>
             <p>
               新会话不需要预先选择会话类型。普通输入创建一条 Durable conversation；第一次设置目标时，
               Studio 才会启用长期目标扩展，并把目标描述、完成条件和执行状态写入 Durable document。只要目标仍处于执行中，
@@ -317,19 +302,19 @@
                   <tr><td>Durable 持久化</td><td>是</td><td>是</td><td>否，MemoryStorage</td></tr>
                   <tr><td>Harness / 工具 / 工作区</td><td>是</td><td>是</td><td>否</td></tr>
                   <tr><td>Goal 与任务生命周期</td><td>否</td><td>是</td><td>否</td></tr>
-                  <tr><td>侧边栏历史</td><td>是</td><td>是</td><td>当前进程内</td></tr>
+                  <tr><td>侧边栏历史</td><td>是</td><td>是</td><td>仅在临时聊天标签中可见</td></tr>
                   <tr><td>可停止 / 继续</td><td>是</td><td>是</td><td>是</td></tr>
                 </tbody>
               </table>
             </div>
-            <p>打开会话时主进程按页把整段历史读完，renderer 拿到一份完整记录：滚到最顶部就能看到第一条用户消息，大纲、搜索和跳转都作用在同一份数据上。代价是极长会话会一次性渲染全部消息，因此单页上限 2000 条、最多 64 页；子智能体 transcript 仍然只按窗口读取。</p>
+            <p>打开较长的会话时，Studio 先显示最近的对话轮次，向上滚动时按需加载更早的记录。通过会话大纲或 ⌘ F 搜索跳到早期提问时，Studio 会加载相应的历史位置。</p>
             <p>模型与 thinking 可以随时切换。当前请求保持已提交配置，切换从下一请求生效；运行中不需要禁用模型选择器。</p>
             <h3 id="model-comparison">模型同题双跑</h3>
-            <p>双跑从当前会话分叉两次，把完全相同的问题、引用、附件和图片提交给两个不同模型；每个分支使用独立的托管 worktree，因此运行本身不会修改原工作区。</p>
+            <p>在右侧工作台打开「模型双跑」，选择两个不同的已启用模型，输入同一个问题。使用有提交记录的 Git 工作区，每个模型会在独立的 Git 工作树中运行，分别计费。</p>
             <ul>
-              <li>入口属于「对话」动作，不属于侧边栏或一级 Tab。</li>
-              <li>完成一个分支后可以应用它的改动；不需要的分支会连同分支会话和托管 worktree 一起永久丢弃。</li>
-              <li>切到子智能体或扩展后，可以从同一动作面板恢复本会话上一次双跑结果，不需要重新创建 fork。</li>
+              <li>并排查看两个回答，比较首个 Token 的等待时间、生成速率、总耗时与用量。</li>
+              <li>检查某一分支的文件改动后，可选择「应用并打开」接着工作，也可丢弃该分支。</li>
+              <li>用「评估历史」回看以前的结果，用「新评估」开始下一组对比。</li>
             </ul>
           </div>
         </section>
@@ -353,7 +338,7 @@
               <li>父会话取消或工具任务失败时，Durable ownership cascade 会终止 child。</li>
               <li>每个子智能体可以使用自己的模型与 thinking；未设置时继承父会话默认。</li>
             </ul>
-            <p>会话顶部的「子智能体」Tab 是聚合视图。列表按需处理、运行中和已结束分组；点击一行会把主内容区替换为该子智能体的 transcript，但始终停留在「子智能体」Tab。返回列表和返回主对话是两个明确出口。</p>
+            <p>在已有会话的工作区面板选择「子智能体」查看任务总览。点开任务可以阅读该子智能体的独立记录，并返回列表或主对话。</p>
           </div>
         </section>
 
@@ -590,8 +575,8 @@
           </header>
           <div class="doc-copy">
             <figure class="figure">
-              <img src="assets/screens/extensions-light.png" alt="Pi Studio 会话扩展 Tab，展示额度、运行指标与声明式详情卡片" width="2880" height="1840" loading="lazy">
-              <figcaption><span>Extensions</span><span>会话 Tab · 卡片布局 · 详情 · 全局 / 会话排序</span></figcaption>
+              <img src="assets/screens/extensions-light.png" alt="已有会话的扩展视图，可查看启用扩展提供的状态与详情" width="2880" height="1840" loading="lazy">
+              <figcaption><span>Extensions</span><span>扩展视图</span></figcaption>
             </figure>
             <div class="table-wrap">
               <table class="doc-table">
@@ -603,7 +588,7 @@
               </table>
             </div>
             <p>扩展 scope 分为 builtin、user 和 project。内置默认信任；用户扩展默认信任；项目扩展默认不信任，必须由用户检查来源、权限和内容后手动信任。</p>
-            <p>设置页负责安装、启用、检查、信任、升级、回滚和卸载；会话扩展 Tab 只负责显示当前会话相关面板与状态。底部 footer summary 固定一行，完整详情进入扩展 Tab。</p>
+            <p>在「设置 → 扩展」中安装、启用、检查或升级扩展。打开已有会话的工作区面板，可以查看扩展提供的状态摘要，或进入「扩展」查看完整详情。</p>
             <div class="callout warning">
               <strong>权限与代码执行是两层</strong>
               <p>manifest 权限用于契约校验和安装审计，不会把 Node 代码变成沙箱。<code>network</code> 也是审计标记，不会阻止扩展访问网络。安装 Agent 扩展等同于信任本机 Node 代码。</p>
@@ -645,7 +630,7 @@
             <p>菜单栏和应用内通知只做入口，不复制完整对话。点击通知会回到对应会话；没有被启用的通知可以静默留在通知中心。</p>
 
             <h3>交互式终端</h3>
-            <p>从右侧工作台打开终端时，Studio 在 Electron 主进程创建 PTY，renderer 只接收 JSON-safe 会话元数据和输出字符串。POSIX 终端以登录 shell 启动，因此 `.zprofile` 和 `.zlogin` 会先于 `.zshrc` 执行，Finder 启动的窗口也能获得与 Terminal.app 一致的 Homebrew 和用户工具路径。终端跟随当前主题与对话字号，切换 Tab 时由主进程保留输出并回放；最多同时打开 8 个窗口级 PTY。</p>
+            <p>从右侧工作台打开终端时，Studio 在 Electron 主进程创建 PTY，renderer 只接收 JSON-safe 会话元数据和输出字符串。POSIX 终端以交互式登录 shell 启动，按所用 shell 的规则读取用户环境。终端跟随当前主题与对话字号，切换 Tab 时由主进程保留输出并回放；最多同时打开 8 个窗口级 PTY。</p>
             <ul>
               <li>工作区可用时以工作区为起始目录；工作区已移动或不可用时回退到用户主目录。</li>
               <li>关闭终端 Tab、关闭所属窗口或退出 Studio 会结束对应 PTY；仅收起右侧面板不会终止进程。</li>
@@ -774,14 +759,14 @@ builtin:studio-subagents/subagent</code></pre>
               <table class="doc-table">
                 <thead><tr><th>Slot</th><th>用途</th><th>关键限制</th></tr></thead>
                 <tbody>
-                  <tr><td><code>conversation.detail</code></td><td>会话扩展 Tab 的完整详情</td><td>展示数据与操作，不覆盖主对话</td></tr>
+                  <tr><td><code>conversation.detail</code></td><td>工作区面板 → 扩展的完整详情</td><td>展示数据与操作，不覆盖主对话</td></tr>
                   <tr><td><code>conversation.footer</code></td><td>输入框附近的一行状态</td><td>最多两个紧凑 block，不滚动，不放完整详情</td></tr>
                   <tr><td><code>workspace.sidebar</code></td><td>工作区相关短内容</td><td>必须适配窄宽度</td></tr>
                   <tr><td><code>composer.before</code></td><td>输入框上方上下文</td><td>不抢输入框主操作焦点</td></tr>
                   <tr><td><code>settings.panel</code></td><td>设置页说明或状态</td><td>不替代完整表单</td></tr>
                   <tr><td><code>panel.side</code></td><td>右侧面板摘要</td><td>不创建新导航体系</td></tr>
                   <tr><td><code>status.bar</code></td><td>底部状态</td><td>只放短文本或简单动作</td></tr>
-                  <tr><td><code>status.chip</code></td><td>会话顶栏状态入口</td><td>图标 + 两块紧凑摘要，details 指向本扩展详情面板；新会话不渲染</td></tr>
+                  <tr><td><code>status.chip</code></td><td>工作区面板中的扩展状态</td><td>图标 + 两块紧凑摘要，details 指向本扩展详情面板；新会话不渲染</td></tr>
                 </tbody>
               </table>
             </div>
@@ -1131,7 +1116,7 @@ pnpm release:dist
           </header>
           <div class="doc-copy">
             <h3>应用无法首次打开</h3>
-            <p>检查 DMG 架构与 macOS 版本。自签名但未公证的构建可以先右键「打开」，或在确认安装路径后执行 <code>xattr -cr "/Applications/Pi Studio.app"</code>。</p>
+            <p>确认安装包与 Mac 芯片匹配。如果系统提示无法验证开发者，请参照<a href="#quickstart">首次安装步骤</a>。有关其他警告，请参阅 <a href="https://support.apple.com/zh-cn/102445">Apple 的说明</a>。</p>
             <h3>模型发现返回 401 / 403</h3>
             <p>API Key 和 Authorization 方式必须匹配该来源。模型发现地址与聊天 Base URL 也可能不同；分别填写并提供完整 endpoint。服务端返回 401 时，Studio 不会把 Key 写入错误日志或 renderer。</p>
             <h3>改了设置但当前回复没变化</h3>
@@ -1182,8 +1167,8 @@ pnpm release:dist
 
   <footer class="site-footer">
     <div class="footer-inner">
-      <span>Pi Studio® · Documentation</span>
-      <span>Updated 2026-10-30 · Main</span>
+      <span>Pi Studio · Documentation</span>
+      <span><a href="https://github.com/huangrx6/pi-studio/releases">版本记录</a></span>
       <span><a href="index.html">Home</a> · <a href="https://github.com/huangrx6/pi-studio">GitHub</a> · MIT</span>
     </div>
   </footer>

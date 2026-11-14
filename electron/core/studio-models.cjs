@@ -67,14 +67,23 @@ function invalidateProviderCredentials(providerId) {
 }
 
 function createCredentialStore(db) {
+  const readCredential = (providerId) => Object.hasOwn(db, 'readCredential')
+    ? db.readCredential(providerId)
+    : db.readCredentialAsync(providerId);
+  const listCredentials = () => Object.hasOwn(db, 'listCredentials')
+    ? db.listCredentials()
+    : db.listCredentialsAsync();
+  const writeCredential = (providerId, credential) => Object.hasOwn(db, 'writeCredential')
+    ? db.writeCredential(providerId, credential)
+    : db.writeCredentialAsync(providerId, credential);
   return {
     async read(providerId, options) {
       options?.signal?.throwIfAborted();
-      return db.readCredential(providerId);
+      return readCredential(providerId);
     },
     async list(options) {
       options?.signal?.throwIfAborted();
-      return db.listCredentials().flatMap(({ providerId, credential }) => {
+      return (await listCredentials()).flatMap(({ providerId, credential }) => {
         return credential?.type ? [{ providerId, type: credential.type }] : [];
       });
     },
@@ -87,12 +96,12 @@ function createCredentialStore(db) {
       return withProviderCredentialLock(providerId, async () => {
         options?.signal?.throwIfAborted();
         checkProvider();
-        const currentCredential = db.readCredential(providerId);
+        const currentCredential = await readCredential(providerId);
         const next = await callback(currentCredential);
         options?.signal?.throwIfAborted();
         checkProvider();
         if (next === undefined) return currentCredential;
-        db.writeCredential(providerId, next);
+        await writeCredential(providerId, next);
         return next;
       });
     },
@@ -200,8 +209,8 @@ function needsCustomProvider(provider, baseProvider, rows) {
   return rows.some((row) => row.source !== 'builtin');
 }
 
-function hasStudioApiKey(db, providerId) {
-  const credential = db.readCredential(providerId);
+async function hasStudioApiKey(db, providerId) {
+  const credential = await db.readCredentialAsync(providerId);
   return credential?.type === 'api_key'
     && typeof credential.key === 'string'
     && credential.key.trim().length > 0;
@@ -229,10 +238,30 @@ function isPristineSeededProvider(provider, builtin, providerModels, credentialI
 function retireAutoSeededCatalog(db, models) {
   const storedRevision = Number(db.getSetting(CATALOG_REVISION_KEY, 0));
   if (storedRevision >= CATALOG_REVISION) return;
-
   if (storedRevision === 1) {
     const baseProviders = new Map(models.getProviders().map((provider) => [provider.id, provider]));
     const credentialIds = new Set(db.listCredentials().map(({ providerId }) => providerId));
+    for (const provider of db.listProviders()) {
+      const builtin = baseProviders.get(provider.id);
+      if (isPristineSeededProvider(provider, builtin, db.listModels(provider.id), credentialIds)) {
+        db.deleteProvider(provider.id);
+      }
+    }
+    const defaultRef = db.getSetting('studio.models.defaultModelRef', '');
+    if (defaultRef && !db.listEnabledModels().some(
+      (model) => `${model.providerId}/${model.modelId}` === defaultRef,
+    )) db.deleteSetting('studio.models.defaultModelRef');
+  }
+  db.setSetting(CATALOG_REVISION_KEY, CATALOG_REVISION);
+}
+
+async function retireAutoSeededCatalogAsync(db, models) {
+  const storedRevision = Number(db.getSetting(CATALOG_REVISION_KEY, 0));
+  if (storedRevision >= CATALOG_REVISION) return;
+
+  if (storedRevision === 1) {
+    const baseProviders = new Map(models.getProviders().map((provider) => [provider.id, provider]));
+    const credentialIds = new Set((await db.listCredentialsAsync()).map(({ providerId }) => providerId));
     for (const provider of db.listProviders()) {
       const builtin = baseProviders.get(provider.id);
       if (isPristineSeededProvider(
@@ -257,6 +286,7 @@ function retireAutoSeededCatalog(db, models) {
 }
 
 async function buildRuntime(db) {
+  await db.migrateSecureValuesAsync();
   const [{ createProvider, getSupportedThinkingLevels }, { builtinModels }] = await Promise.all([
     import('@earendil-works/pi-ai'),
     import('@earendil-works/pi-ai/providers/all'),
@@ -283,7 +313,7 @@ async function buildRuntime(db) {
   });
   const officialCatalog = createOfficialCatalog(models.getProviders());
   const metadataCatalogs = [loadCachedModelsDevCatalog(), officialCatalog];
-  retireAutoSeededCatalog(db, models);
+  await retireAutoSeededCatalogAsync(db, models);
 
   const baseProviders = new Map(models.getProviders().map((provider) => [provider.id, provider]));
   for (const provider of db.listProviders().filter((item) => item.enabled)) {
@@ -310,7 +340,7 @@ async function buildRuntime(db) {
     // variables. A key saved in Studio must replace that resolver even when
     // the catalog and endpoint are otherwise unchanged.
     if (!needsCustomProvider(provider, builtin, providerModels)
-      && !hasStudioApiKey(db, provider.id)) continue;
+      && !(await hasStudioApiKey(db, provider.id))) continue;
     catalog = catalog.map((model) => ({
       ...model,
       provider: provider.id,

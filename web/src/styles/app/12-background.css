@@ -2,14 +2,13 @@
 
 
 /* Custom workspace background.
- * The media layer sits below the two shell columns. The shell wash is the only layer
- * whose total coverage follows the user-controlled slider; cards, controls and their
- * states use fixed role-specific glass surfaces from palette.css so transparency never
- * compounds independently from component to component.
+ * The media layer sits below the shell frame. The frame itself is opaque chrome,
+ * so the wallpaper is only visible in the gutter around the shell card and, when
+ * the in-window visibility is raised, inside the carved content hole.
  */
 .app { position: relative; }
 /* 壁纸铺满整个视口，位于应用卡片之外；fixed 不会被卡片的 overflow 裁剪。 */
-.background-layer { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: var(--surface-canvas); }
+.background-layer { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: var(--surface-chrome); }
 .background-layer-media {
   position: absolute;
   inset: calc(-2px - var(--background-media-blur, 0px));
@@ -21,13 +20,11 @@
   filter: blur(var(--background-media-blur, 0));
   transform: translateZ(0);
 }
-.background-layer-soften { position: absolute; inset: 0; background: var(--surface-canvas); opacity: var(--background-media-scrim, .3); }
+.background-layer-soften { position: absolute; inset: 0; background: var(--surface-chrome); opacity: var(--background-media-scrim, .3); }
 .app { position: relative; z-index: 1; }
 .app > .sidebar,
-.app > .main { z-index: 1; }
+.app > .content-region { z-index: 1; }
 .app.has-custom-background > .background-layer { visibility: visible !important; }
-.app.has-custom-background > .sidebar,
-.app.has-custom-background > .main,
 .app.has-custom-background .settings-nav,
 /* 方案 A：壁纸在窗口外。渲染层里所有表面都是不透明四级色，
    壁纸只出现在应用卡片四周的留白里，因此换任何壁纸窗口内颜色都不变。 */

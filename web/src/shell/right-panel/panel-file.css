@@ -13,8 +13,7 @@
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(128px, .38fr) minmax(0, 1fr);
   }
-  .file-panel .panel-split-tree {
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
-  }
+  .file-panel .panel-split-tree { grid-column: 1; grid-row: 1; border-bottom: 1px solid var(--border); }
+  .file-panel .panel-split-handle { display: none; }
+  .file-panel .panel-split-main { grid-column: 1; grid-row: 2; }
 }

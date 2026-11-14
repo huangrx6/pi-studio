@@ -2,8 +2,7 @@
  * 一条 40px 的 chrome 横带，底边线把它和正文分开；计数退成纯数字，
  * 不再用胶囊底色抢注意力。
  *
- * 顶部留白仍由 --header-height 决定：无壁纸时 56px 让开 mac 红黄绿，
- * 有壁纸条或全屏时收回到 40px。
+ * 顶部留白仍由 --header-height 决定：标题行保持紧凑，红绿灯由窗口留白承担。
  */
 
 .chat-header {
@@ -14,6 +13,32 @@
 }
 
 .chat-header .chat-heading h1 { font-size: var(--text-13); font-weight: var(--weight-semibold); letter-spacing: 0; }
+
+.git-workspace-summary {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.git-workspace-summary > span { overflow: hidden; text-overflow: ellipsis; }
+.git-workspace-summary svg { width: 12px; height: 12px; flex: none; }
+.git-workspace-summary.is-loading { width: 72px; height: 10px; border-radius: var(--radius-round); background: var(--surface-soft); }
+.git-workspace-summary.is-unavailable { color: var(--faint); }
+.git-workspace-branch { display: inline-flex; min-width: 0; align-items: center; gap: 3px; color: var(--text-2); }
+.git-workspace-commit { font-family: var(--mono); }
+.git-workspace-dirty.is-dirty { color: var(--accent-foreground); }
+.git-workspace-worktree { max-width: 150px; color: var(--text-2); }
+
+@media (max-width: 760px) {
+  .git-workspace-summary { max-width: 38vw; }
+  .git-workspace-commit, .git-workspace-worktree { display: none; }
+}
 
 .tab-count,
 .agent-tab-count {
@@ -38,7 +63,7 @@
 
 /* 有壁纸时红绿灯落在卡片外的留白条里，标题行不必再让位，收到 40px；
    全屏与无壁纸两种情形仍保持 48px 的系统标题行。 */
-.app.has-custom-background { --header-height: 48px; }
+.app.has-custom-background { --header-height: 44px; }
 
 /* ---- 行内代码与代码块 ------------------------------------------------
  * 行内代码是正文里的一小片染色，不描边；代码块用 raised + 边框，

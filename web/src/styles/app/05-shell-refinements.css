@@ -121,7 +121,7 @@ just-dropped 只有一次短动画，不改变最终布局。 */
 .workspace-choice-clear { display: grid; place-items: center; width: 22px; height: 22px; flex: none; border-radius: var(--radius-tag); color: var(--faint); }
 .workspace-choice-clear svg { width: var(--icon-xs); height: var(--icon-xs); }
 .workspace-choice-clear:hover { color: var(--text); }
-.workspace-choice-menu { min-width: min(360px, calc(100vw - 32px)); max-width: calc(100vw - 32px); }
+.workspace-choice-menu { --select-menu-max-height: 256px; min-width: min(360px, calc(100vw - 32px)); max-width: calc(100vw - 32px); overscroll-behavior-y: contain; }
 .workspace-choice-menu .pi-select-option { padding: 9px 10px; }
 .workspace-choice-menu .pi-select-option small { overflow-wrap: anywhere; font-size: var(--text-xs); }
 
@@ -169,6 +169,7 @@ just-dropped 只有一次短动画，不改变最终布局。 */
   padding-inline: 0;
   border-right-color: var(--transparent);
 }
+.chat-header { transition: padding-left var(--shell-transition); }
 .is-sidebar-collapsed .chat-header,
 .is-sidebar-collapsed .main .chat-header { padding-left: 92px; }
 .sidebar-expand { width: 28px; height: 28px; margin-right: 2px; }

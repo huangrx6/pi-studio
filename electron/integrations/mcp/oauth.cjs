@@ -44,12 +44,17 @@ function expandOAuthHeaders(headers = {}) {
 
 function stateStore(serverUrl) {
   const db = getStudioDatabase();
+  const useAsyncStorage = db.supportsAsyncSecureStorage?.() !== false;
   return {
     load() {
-      return db.readMcpOAuthState(serverUrl);
+      return useAsyncStorage
+        ? db.readMcpOAuthStateAsync(serverUrl)
+        : db.readMcpOAuthState(serverUrl);
     },
     save(value) {
-      db.writeMcpOAuthState(serverUrl, value);
+      return useAsyncStorage
+        ? db.writeMcpOAuthStateAsync(serverUrl, value)
+        : db.writeMcpOAuthState(serverUrl, value);
     },
   };
 }

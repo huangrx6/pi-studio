@@ -1,6 +1,6 @@
 import {
   ArchiveRestore, BarChart3, Bot, Code2, Cpu, FileCode2, Info, Keyboard,
-  Layers3, Plug, Settings, ShieldCheck, Wrench,
+  GitBranch, Layers3, Plug, Settings, ShieldCheck, Wrench,
 } from 'lucide-react';
 import appIcon from '../../../assets/icon.png';
 
@@ -8,6 +8,7 @@ import appIcon from '../../../assets/icon.png';
 // and layout carry the detail rather than repeating it as a sidebar subtitle.
 export const settingsPages = [
   { id: 'general', group: '外观与输入', label: '通用', icon: Settings },
+  { id: 'git', group: '工作区', label: 'Git 与 Worktree', icon: GitBranch },
   { id: 'shortcuts', group: '外观与输入', label: '快捷键', icon: Keyboard },
   { id: 'models', group: '模型与用量', label: '模型配置', icon: Cpu },
   { id: 'usage', group: '模型与用量', label: '使用量', icon: BarChart3 },

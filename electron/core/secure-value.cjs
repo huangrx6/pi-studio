@@ -16,15 +16,32 @@ function secureStorageError() {
   return error;
 }
 
-function safeStorageApi() {
+function electronSafeStorage() {
   try {
     const electron = require('electron');
-    if (electron?.safeStorage?.isEncryptionAvailable?.()) {
-      return electron.safeStorage;
-    }
+    return electron?.safeStorage;
   } catch {
     // Electron is unavailable in plain Node test processes.
   }
+  return undefined;
+}
+
+function safeStorageApi() {
+  const safeStorage = electronSafeStorage();
+  // Keep the synchronous path for plain Node tests and older Electron mocks.
+  // Electron versions with the async API must use the async helpers below.
+  if (!safeStorage || typeof safeStorage.encryptStringAsync === 'function') return undefined;
+  if (safeStorage.isEncryptionAvailable?.()) return safeStorage;
+  return undefined;
+}
+
+async function safeStorageApiAsync() {
+  const safeStorage = electronSafeStorage();
+  if (!safeStorage) return undefined;
+  if (typeof safeStorage.isAsyncEncryptionAvailable === 'function') {
+    return await safeStorage.isAsyncEncryptionAvailable() ? safeStorage : undefined;
+  }
+  if (safeStorage.isEncryptionAvailable?.()) return safeStorage;
   return undefined;
 }
 
@@ -34,6 +51,18 @@ function encryptValue(value) {
   return {
     format: SAFE_STORAGE_FORMAT,
     data: safeStorage.encryptString(JSON.stringify(value)).toString('base64'),
+  };
+}
+
+async function encryptValueAsync(value) {
+  const safeStorage = await safeStorageApiAsync();
+  if (!safeStorage) throw secureStorageError();
+  const encrypted = typeof safeStorage.encryptStringAsync === 'function'
+    ? await safeStorage.encryptStringAsync(JSON.stringify(value))
+    : safeStorage.encryptString(JSON.stringify(value));
+  return {
+    format: SAFE_STORAGE_FORMAT,
+    data: encrypted.toString('base64'),
   };
 }
 
@@ -52,6 +81,24 @@ function decryptValue(stored) {
   }
 }
 
+async function decryptValueAsync(stored) {
+  if (stored === undefined || stored === null) return undefined;
+  if (typeof stored !== 'object' || Array.isArray(stored)) return stored;
+  if (stored.format === LEGACY_PLAINTEXT_FORMAT) return stored.data;
+  if (!Object.hasOwn(stored, 'format')) return stored;
+  if (stored.format !== SAFE_STORAGE_FORMAT || typeof stored.data !== 'string') return undefined;
+  const safeStorage = await safeStorageApiAsync();
+  if (!safeStorage) throw secureStorageError();
+  try {
+    const decrypted = typeof safeStorage.decryptStringAsync === 'function'
+      ? await safeStorage.decryptStringAsync(Buffer.from(stored.data, 'base64'))
+      : { result: safeStorage.decryptString(Buffer.from(stored.data, 'base64')) };
+    return JSON.parse(typeof decrypted === 'string' ? decrypted : decrypted.result);
+  } catch {
+    return undefined;
+  }
+}
+
 function isEncryptedEnvelope(value) {
   return Boolean(
     value
@@ -65,12 +112,20 @@ function secureStorageAvailable() {
   return Boolean(safeStorageApi());
 }
 
+function secureStorageAsyncAvailable() {
+  const safeStorage = electronSafeStorage();
+  return Boolean(safeStorage && typeof safeStorage.isAsyncEncryptionAvailable === 'function');
+}
+
 module.exports = {
   LEGACY_PLAINTEXT_FORMAT,
   SAFE_STORAGE_FORMAT,
   SECURE_STORAGE_UNAVAILABLE,
   decryptValue,
+  decryptValueAsync,
   encryptValue,
+  encryptValueAsync,
   isEncryptedEnvelope,
+  secureStorageAsyncAvailable,
   secureStorageAvailable,
 };

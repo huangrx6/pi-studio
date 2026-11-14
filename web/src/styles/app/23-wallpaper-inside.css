@@ -1,7 +1,10 @@
 /* ---- 窗口内的壁纸 -----------------------------------------------------
- * 按「窗口内可见度」在卡片内部铺一层同源壁纸，并让整窗的**所有底色**
- * 用同一个保留比例：侧栏、标题行、标签行、画布都按 (1 − 可见度) 保留本色，
- * 因此壁纸在三个区域透出的强度完全一致，不会再出现「主区透、侧栏实」。
+ * 整张卡片只有一层壁纸（.window-wallpaper），铺满外框和内容区；每一块底色都
+ * 用同一个 --wallpaper-canvas-keep 保留本色，所以外框和中间看到的壁纸浓度
+ * 天然一致，不会出现「外框透、内容实」或反过来。
+ *
+ * 外框由 app::after 统一承载，位于窗口内壁纸之上、侧栏和内容区之下，覆盖
+ * 顶部、右侧和底部所有空隙。内容区只画一层画布色，不叠第二层壁纸。
  *
  * 会话内嵌控件按层级透出壁纸；浮动菜单与对话框保持稳定的阅读底。
  */
@@ -12,7 +15,10 @@
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
-  opacity: var(--wallpaper-inside, 0);
+  /* The visibility slider is applied by the surfaces that sit above this
+   * layer. Keeping the media itself opaque prevents the configured value from
+   * being multiplied a second time by the canvas color-mix. */
+  opacity: 1;
 }
 
 .window-wallpaper-media {
@@ -26,9 +32,14 @@
  * 叠透，深色保持原比例。卡片与浮层始终 100% 实心，不受这个系数影响。 */
 .app.is-wallpaper-inside {
   --wallpaper-keep-scale: 1;
-  /* 画布保留量有下限：40% 是文字仍能读、画布不至于完全被壁纸吞掉的界线。 */
+  /* 保留量有下限：40% 是文字仍能读、底色不至于完全被壁纸吞掉的界线。 */
   --wallpaper-canvas-keep: clamp(40%, calc(100% - var(--wallpaper-inside, 0) * var(--wallpaper-keep-scale) * 100%), 100%);
-  background: color-mix(in srgb, var(--surface-canvas) var(--wallpaper-canvas-keep), transparent);
+  /* 外框与内容区共用同一档透明度，只是基色不同（chrome / canvas）。 */
+  --frame-surface: color-mix(in srgb, var(--surface-chrome) var(--wallpaper-canvas-keep), transparent);
+  --canvas-surface: color-mix(in srgb, var(--surface-canvas) var(--wallpaper-canvas-keep), transparent);
+  /* The frame overlay sits above the wallpaper child and below the shell
+   * columns, so the right and bottom gutters cannot expose a bright strip. */
+  background: var(--transparent);
 }
 
 :root[data-theme='light'] .app.is-wallpaper-inside { --wallpaper-keep-scale: .5; }
@@ -45,10 +56,22 @@
   background: color-mix(in srgb, var(--surface-floating) 88%, transparent);
 }
 
-/* 侧栏与顶部：基色是 chrome，透出比例与画布相同。 */
-.app.is-wallpaper-inside > .sidebar,
-.app.is-wallpaper-inside :is(.panel-tabbar, .settings-nav) {
-  background: color-mix(in srgb, var(--surface-chrome) var(--wallpaper-canvas-keep), transparent);
+/* 外框玻璃只由 app::after 承载一遍。侧栏、标题行和右/底窄带保持透明，
+ * 透出同一层 frame，避免局部重复叠加后颜色变深。 */
+.app.is-wallpaper-inside > .sidebar {
+  background: var(--transparent);
+}
+.app.is-wallpaper-inside :is(.sidebar-top-row, .chat-header, .panel-tabbar, .settings-nav) {
+  background: var(--transparent);
+}
+
+.app.is-wallpaper-inside::after {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  content: '';
+  background: var(--frame-surface);
 }
 
 /* 画布：消息区、输入栏与各工作区视图共用画布色。 */
@@ -65,19 +88,15 @@
   .model-comparison-workspace,
   .model-comparison
 ) {
-  background: color-mix(in srgb, var(--surface-canvas) var(--wallpaper-canvas-keep), transparent);
+  background: var(--canvas-surface);
 }
 
 /* 标题与输入栏已经位于主画布上，不能再次叠加同强度的遮罩。 */
-.app.is-wallpaper-inside :is(.chat-header, .chat-tabs),
-.app .composer-dock {
-  background: var(--transparent);
-}
+.app .composer-dock { background: var(--transparent); }
+.app.is-wallpaper-inside .chat-tabs { background: var(--transparent); }
 
-/* 壁纸模式下顶部和侧栏主操作共用同一层透出效果，不再单独出现实色块。 */
-.app.is-wallpaper-inside :is(.sidebar-top-row, .file-toolbar) {
-  background: var(--transparent);
-}
+/* 壁纸模式下侧栏主操作不再单独出现实色块；侧栏顶行沿用父级外框表面。 */
+.app.is-wallpaper-inside .file-toolbar { background: var(--transparent); }
 .app.is-wallpaper-inside .nav-row.new-chat { background: var(--transparent); }
 .app.is-wallpaper-inside .nav-row.new-chat:hover { background: var(--conversation-hover-surface); }
 
@@ -149,21 +168,25 @@
   background: var(--conversation-hover-surface);
 }
 
-/* 右侧面板整条链路都按画布同一个保留比例透出：既不漏底色，也不会在展开后
- * 突然变成一块不透明的板子。基色仍取 raised，比画布亮一档。 */
+/* 右侧面板只让正文容器画一层 canvas，外层与内部子层保持透明，避免连续
+ * 几层相同的 color-mix 叠加后变成近乎不透明的白块。顶部标签栏透出 app 的 chrome 层。 */
+.app.is-wallpaper-inside .panel-body { background: var(--canvas-surface); }
 .app.is-wallpaper-inside :is(
   .file-panel,
   .file-panel-inner,
-  .panel-body,
   .panel-start,
-  .panel-tabbar,
   .panel-file-browser,
   .panel-file-preview,
   .file-code,
+  .file-toolbar,
   .terminal-tab-stack,
   .terminal-panel:not(.has-custom-theme)
 ) {
-  background: color-mix(in srgb, var(--surface-raised) var(--wallpaper-canvas-keep), transparent);
+  background: var(--transparent);
+}
+
+.app.is-wallpaper-inside .panel-tabbar {
+  background: var(--transparent);
 }
 
 .app.is-wallpaper-inside .terminal-panel:not(.has-custom-theme) :is(.terminal-toolbar, .terminal-search) {

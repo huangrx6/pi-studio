@@ -2,7 +2,7 @@
  * 扩展落点的用户偏好。
  *
  * 扩展在 manifest 里声明自己能落在哪些位置（`slot` 或 `slots`），用户只决定
- * 最终出现在哪一处：两处、只在顶栏、只在输入框下、隐藏。偏好按 panel 的
+ * 最终出现在哪一处：两处、只在顶栏、只在输入框上方、隐藏。偏好按 panel 的
  * contribution id 保存，作用域是全局的——同一扩展的所有会话表现一致。
  */
 import type { ExtensionHostItem } from '../../types/extension-types';
@@ -16,9 +16,9 @@ export type PlaceablePanel = {
 };
 
 export const EXTENSION_PLACEMENT_OPTIONS: Array<{ value: ExtensionPlacement; label: string; hint: string }> = [
-  { value: 'both', label: '两处', hint: '顶栏与输入框下都显示' },
+  { value: 'both', label: '两处', hint: '在顶栏和输入框上方显示' },
   { value: 'chip', label: '顶栏', hint: '只在顶栏显示图标入口' },
-  { value: 'footer', label: '输入框', hint: '只在输入框下方显示一行状态' },
+  { value: 'footer', label: '输入框', hint: '只在输入框上方显示一行状态' },
   { value: 'hidden', label: '隐藏', hint: '保留扩展，但不在会话里显示' },
 ];
 

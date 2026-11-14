@@ -54,6 +54,11 @@
   pointer-events: none;
 }
 
+.info-hint.is-top .info-hint-tooltip {
+  top: auto;
+  bottom: calc(100% + 7px);
+}
+
 .info-hint.is-end .info-hint-tooltip {
   right: 0;
   left: auto;

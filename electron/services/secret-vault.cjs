@@ -10,7 +10,7 @@ function listSecrets() {
   return getStudioDatabase().listSecretNames();
 }
 
-function writeSecret({ name, value } = {}) {
+async function writeSecret({ name, value } = {}) {
   const normalizedName = typeof name === 'string' ? name.trim() : '';
   const normalizedValue = typeof value === 'string' ? value : '';
   if (!isValidSecretName(normalizedName)) {
@@ -19,7 +19,7 @@ function writeSecret({ name, value } = {}) {
   if (!normalizedValue || Buffer.byteLength(normalizedValue, 'utf8') > 64 * 1024) {
     throw new Error('凭据值不能为空，且不能超过 64KB');
   }
-  return getStudioDatabase().writeSecretValue(normalizedName, normalizedValue);
+  return getStudioDatabase().writeSecretValueAsync(normalizedName, normalizedValue);
 }
 
 function removeSecret(name) {
@@ -27,7 +27,7 @@ function removeSecret(name) {
   getStudioDatabase().deleteSecretValue(name);
 }
 
-function resolveToolSecrets(argumentsValue) {
+async function resolveToolSecrets(argumentsValue) {
   const referenced = secretReferences(argumentsValue);
   if (referenced.length === 0) {
     return {
@@ -37,7 +37,7 @@ function resolveToolSecrets(argumentsValue) {
       redact: (value) => value,
     };
   }
-  const secrets = getStudioDatabase().readSecretValues();
+  const secrets = await getStudioDatabase().readSecretValuesAsync();
   const resolved = expandSecretReferences(argumentsValue, secrets);
   return {
     arguments: resolved.value,
@@ -47,8 +47,8 @@ function resolveToolSecrets(argumentsValue) {
   };
 }
 
-function redactToolSecrets(value) {
-  return redactSecretValues(value, getStudioDatabase().readSecretValues());
+async function redactToolSecrets(value) {
+  return redactSecretValues(value, await getStudioDatabase().readSecretValuesAsync());
 }
 
 module.exports = {

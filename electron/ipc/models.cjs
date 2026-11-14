@@ -8,6 +8,7 @@
 
 const { ipcMain } = require('electron');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
+const { encryptValueAsync } = require('../core/secure-value.cjs');
 const { getRuntimePolicy } = require('../core/app-settings.cjs');
 const { autoCompactReserveTokens } = require('../core/context-policy.cjs');
 const {
@@ -175,6 +176,29 @@ function registerModelsIpc() {
     const modelsUrl = normalizeUrl(input.modelsUrl);
     const apiKey = typeof input.apiKey === 'string' ? input.apiKey.trim() : '';
     try {
+      // Keep the synchronous transaction seam for tests and older embedders
+      // that wrap the legacy method. Production Electron uses the async path.
+      if (Object.hasOwn(db, 'writeCredential')) {
+        await withProviderCredentialLock(id, () => db.transaction(() => {
+          const existing = db.getProvider(id);
+          const api = typeof input.api === 'string' && input.api ? input.api : existing?.api || 'openai-completions';
+          db.upsertProvider({
+            id,
+            name: String(input.name || existing?.name || id).trim(),
+            baseUrl,
+            api,
+            icon: String(input.icon || existing?.icon || ''),
+            modelsUrl,
+            builtin: existing?.builtin ?? false,
+            enabled: input.enabled ?? existing?.enabled ?? true,
+          });
+          if (apiKey) db.writeCredential(id, { type: 'api_key', key: apiKey });
+        }));
+        return committedModelsProjection(input.cwd);
+      }
+      const encryptedCredential = apiKey
+        ? await encryptValueAsync({ type: 'api_key', key: apiKey })
+        : undefined;
       await withProviderCredentialLock(id, () => db.transaction(() => {
         const existing = db.getProvider(id);
         const api = typeof input.api === 'string' && input.api ? input.api : existing?.api || 'openai-completions';
@@ -190,7 +214,9 @@ function registerModelsIpc() {
         });
         // Both rows share one synchronous SQLite transaction. Encryption failure
         // rolls back the provider too; empty input intentionally retains its key.
-        if (apiKey) db.writeCredential(id, { type: 'api_key', key: apiKey });
+        if (encryptedCredential) {
+          db.writeCredentialEnvelope(id, encryptedCredential, Date.now(), { type: 'api_key', key: apiKey });
+        }
       }));
     } catch (error) {
       throw new Error(error?.code === 'SECURE_STORAGE_UNAVAILABLE'

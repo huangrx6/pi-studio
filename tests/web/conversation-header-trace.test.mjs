@@ -28,21 +28,24 @@ function compile(path, stubs) {
 }
 
 const icons = new Proxy({}, { get: () => () => null });
-const traceTab = ({ summary }) => React.createElement('span', { className: 'fake-trace-tab' }, `轨迹 ${summary?.steps ?? 0}`);
-
-function renderHeader(showTrace) {
+function renderHeader(showTrace, isNewConversation = false, panelExpanded = false) {
   const { ConversationHeader } = compile('../../web/src/shell/ConversationHeader.tsx', {
     react: React,
     'lucide-react': icons,
     './NotificationCenter': { NotificationCenter: () => null },
-    './ConversationTraceMenu': { ConversationTraceTab: traceTab },
     '../features/extensions/ExtensionChips': { ExtensionChips: () => null },
+    './ConversationWorkspaceMenu': {
+      ConversationWorkspaceMenu: ({ onOpenTrace }) => React.createElement(
+        'div', { className: 'workspace-menu-trigger' },
+        onOpenTrace && React.createElement('span', { className: 'fake-trace-tab' }, '轨迹'),
+      ),
+    },
     '../../types/extension-types': {},
   });
   return renderToStaticMarkup(React.createElement(ConversationHeader, {
     sidebarCollapsed: false,
     onExpandSidebar() {},
-    isNewConversation: false,
+    isNewConversation,
     title: '会话',
     agentKind: 'conversation',
     subagentCount: 0,
@@ -53,8 +56,8 @@ function renderHeader(showTrace) {
     onClearNotifications() {},
     onOpenNotificationSession: async () => {},
     onRunNotificationAction: async () => {},
-    filesOpen: false,
-    onTogglePanel() {},
+    panelExpanded,
+    onOpenPanel() {},
     onReturnToMainAgent() {},
     onOpenAgentOverview() {},
     onOpenConversationExtensionHub() {},
@@ -70,6 +73,20 @@ function renderHeader(showTrace) {
 test('the trace tab only exists while the code work view setting is on', () => {
   assert.doesNotMatch(renderHeader(false), /fake-trace-tab/, 'disabled setting hides the trace tab');
   assert.match(renderHeader(true), /fake-trace-tab/, 'enabled setting shows the trace tab');
+});
+
+test('only existing conversations show the session workspace menu', () => {
+  assert.doesNotMatch(renderHeader(true, true), /workspace-menu-trigger/);
+  assert.match(renderHeader(true, false), /workspace-menu-trigger/);
+});
+
+test('draft and existing conversations can both open the right sidebar', () => {
+  for (const isNewConversation of [true, false]) {
+    const closed = renderHeader(false, isNewConversation);
+    assert.match(closed, /panel-open-entry/);
+    assert.doesNotMatch(closed, /<button[^>]*panel-open-entry[^>]*disabled/);
+    assert.match(renderHeader(false, isNewConversation, true), /<button[^>]*panel-open-entry[^>]*aria-hidden="true"[^>]*disabled/);
+  }
 });
 
 test('the trace search box owns the focus ring instead of nesting two frames', () => {

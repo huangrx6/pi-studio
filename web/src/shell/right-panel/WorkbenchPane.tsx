@@ -3,7 +3,6 @@ import type { MutableRefObject, ReactNode } from 'react';
 import {
   AppWindow,
   ChevronDown,
-  ChevronLeft,
   Eye,
   FileText,
   Folder,
@@ -11,6 +10,8 @@ import {
   LoaderCircle,
   MoreHorizontal,
   RotateCw,
+  Search,
+  X,
 } from 'lucide-react';
 import type { ModelSelection } from '../../types/model-types';
 import type { FilePreviewResult } from '../../types/file-preview-types';
@@ -76,7 +77,6 @@ export function WorkbenchPane({
 }: WorkbenchPaneProps) {
   const {
     filesOpen,
-    treePath,
     entries,
     file,
     fileError,
@@ -102,8 +102,10 @@ export function WorkbenchPane({
     treeOwner,
     fileMenuOpen,
     fileApps,
+    fileAppsLoading,
     fileActionsRef,
     loadTree,
+    readTreeDirectory,
     closePanel,
     openTemporaryChat,
     openTerminalTab,
@@ -120,12 +122,62 @@ export function WorkbenchPane({
     showFileActions,
     openFileWith,
     revealCurrentFile,
+    saveCurrentFileText,
     setTabMenu,
     setPanelTabs,
   } = controller;
 
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set());
+  const [directoryEntries, setDirectoryEntries] = useState<Record<string, typeof entries>>({});
+  const [directoryLoading, setDirectoryLoading] = useState<Set<string>>(() => new Set());
+  const [directoryErrors, setDirectoryErrors] = useState<Record<string, string>>({});
+  const [treeSearchOpen, setTreeSearchOpen] = useState(false);
+  const [treeSearchQuery, setTreeSearchQuery] = useState('');
+  const [treeSearchResults, setTreeSearchResults] = useState<Array<{ name: string; path: string; type: 'file' | 'directory'; size?: number }>>([]);
+  const [treeSearchBusy, setTreeSearchBusy] = useState(false);
   const panelWorkspace = session?.cwd || workspace;
+
+  useEffect(() => {
+    setExpandedPaths(new Set());
+    setDirectoryEntries({});
+    setDirectoryLoading(new Set());
+    setDirectoryErrors({});
+  }, [workspace]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.isComposing || event.altKey || event.shiftKey) return;
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'f') return;
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest?.('.panel-file-browser')) return;
+      event.preventDefault();
+      setTreeSearchOpen(true);
+      window.setTimeout(() => document.querySelector<HTMLInputElement>('.file-tree-search input')?.focus(), 0);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!treeSearchOpen || !workspace || !treeSearchQuery.trim()) {
+      setTreeSearchResults([]);
+      setTreeSearchBusy(false);
+      return;
+    }
+    let cancelled = false;
+    setTreeSearchBusy(true);
+    const timer = window.setTimeout(() => {
+      void window.piApi.searchFiles({ cwd: workspace, query: treeSearchQuery.trim() }).then((result) => {
+        if (!cancelled) setTreeSearchResults(result.files as typeof treeSearchResults);
+      }).catch(() => {
+        if (!cancelled) setTreeSearchResults([]);
+      }).finally(() => {
+        if (!cancelled) setTreeSearchBusy(false);
+      });
+    }, 120);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [treeSearchOpen, treeSearchQuery, workspace]);
 
   /** 重命名标签：空标题回退到原名，避免出现没有文字的标签。 */
   function renamePanelTab(id: string, title: string) {
@@ -174,6 +226,84 @@ export function WorkbenchPane({
     { id: 'temporary', label: '临时聊天', description: '开始一个独立的临时会话', onSelect: openTemporaryChat },
   ];
 
+  async function loadDirectory(path: string) {
+    if (directoryLoading.has(path)) return;
+    setDirectoryErrors((current) => {
+      if (!current[path]) return current;
+      const next = { ...current };
+      delete next[path];
+      return next;
+    });
+    setDirectoryLoading((current) => new Set(current).add(path));
+    try {
+      const nextEntries = await readTreeDirectory(path);
+      setDirectoryEntries((current) => ({ ...current, [path]: nextEntries }));
+    } catch (error) {
+      setDirectoryErrors((current) => ({
+        ...current,
+        [path]: error instanceof Error ? error.message : String(error),
+      }));
+    } finally {
+      setDirectoryLoading((current) => {
+        const next = new Set(current);
+        next.delete(path);
+        return next;
+      });
+    }
+  }
+
+  function toggleDirectory(path: string) {
+    if (directoryLoading.has(path)) return;
+    if (expandedPaths.has(path)) {
+      setExpandedPaths((current) => {
+        const next = new Set(current);
+        next.delete(path);
+        return next;
+      });
+      return;
+    }
+    setExpandedPaths((current) => new Set(current).add(path));
+    if (!directoryEntries[path]) void loadDirectory(path);
+  }
+
+  function renderFileEntries(list: typeof entries, depth = 0): ReactNode[] {
+    const rows: ReactNode[] = [];
+    for (const entry of list) {
+      const isDirectory = entry.type === 'directory';
+      const expanded = expandedPaths.has(entry.path);
+      rows.push(
+        <button
+          key={entry.path}
+          className={`file-row ${isDirectory ? 'is-directory' : ''}`}
+          title={entry.name}
+          style={{ paddingLeft: `calc(var(--space-2) + ${depth * 18}px)` }}
+          onClick={() => isDirectory ? void toggleDirectory(entry.path) : void openFile(entry.path, undefined, 'workspace')}
+        >
+          {isDirectory
+            ? expanded ? <FolderOpen size={15} /> : <Folder size={15} />
+            : <FileText size={15} />}
+          <span>{entry.name}</span>
+          {entry.type === 'file' && <small>{formatFileSize(entry.size, '')}</small>}
+          {isDirectory && <ChevronDown size={13} className={`chevron-left ${expanded ? 'is-expanded' : ''}`} />}
+        </button>,
+      );
+      if (!isDirectory || !expanded) continue;
+      if (directoryLoading.has(entry.path)) {
+        rows.push(<div key={`${entry.path}:loading`} className="file-tree-nested-loading"><LoaderCircle className="spin" />正在读取…</div>);
+      } else if (directoryErrors[entry.path]) {
+        rows.push(
+          <div key={`${entry.path}:error`} className="file-tree-nested-error" role="alert">
+            <span>{directoryErrors[entry.path]}</span>
+            <button className="text-button" onClick={() => void loadDirectory(entry.path)}>重试</button>
+          </div>,
+        );
+      } else {
+        rows.push(...renderFileEntries(directoryEntries[entry.path] ?? [], depth + 1));
+      }
+    }
+    return rows;
+  }
+
   function renderFileTree() {
     if (!workspace) {
       return <div className="panel-empty">
@@ -182,25 +312,29 @@ export function WorkbenchPane({
       </div>;
     }
     const visibleEntries = treeOwner === workspace ? entries : [];
-    const visiblePath = treeOwner === workspace ? treePath : '';
+    const visiblePath = '';
     return <div className="panel-file-browser">
       <div className="file-toolbar">
-        <button className="icon-button" aria-label="返回上级目录" title="返回上级目录" disabled={!visiblePath} onClick={() => void loadTree(visiblePath.split('/').slice(0, -1).join('/'))}><ChevronLeft /></button>
-        <span className="path-label">{visiblePath ? `/${visiblePath}` : '/'}</span>
-        <button className="icon-button" aria-label="刷新文件列表" title="刷新" onClick={() => void loadTree(visiblePath)}><RotateCw /></button>
-        <small>{visibleEntries.length} 项</small>
+        {treeSearchOpen ? <div className="file-tree-search">
+          <Search aria-hidden="true" />
+          <input value={treeSearchQuery} onChange={(event) => setTreeSearchQuery(event.target.value)} placeholder="搜索文件" aria-label="搜索文件" />
+          <button className="icon-button" aria-label="关闭文件搜索" title="关闭搜索" onClick={() => { setTreeSearchOpen(false); setTreeSearchQuery(''); }}><X /></button>
+        </div> : <>
+          <span className="path-label">{visiblePath ? `/${visiblePath}` : '/'}</span>
+          <button className="icon-button" aria-label="搜索文件" title="搜索文件" onClick={() => setTreeSearchOpen(true)}><Search /></button>
+          <button className="icon-button" aria-label="刷新文件列表" title="刷新" onClick={() => { setDirectoryEntries({}); setExpandedPaths(new Set()); void loadTree(''); }}><RotateCw /></button>
+          <small>{visibleEntries.length} 项</small>
+        </>}
       </div>
-      {treeError && treeOwner === workspace && <div className="panel-file-error" role="alert"><p>{treeError}</p><button className="text-button" onClick={() => void loadTree(visiblePath)}>重试读取目录</button></div>}
+      {treeError && treeOwner === workspace && <div className="panel-file-error" role="alert"><p>{treeError}</p><button className="text-button" onClick={() => void loadTree('')}>重试读取目录</button></div>}
       <div className="file-tree">
-        {!treeBusy && visibleEntries.map((entry) => (
-          <button key={entry.path} className={`file-row ${entry.type === 'directory' ? 'is-directory' : ''}`} title={entry.name} onClick={() => entry.type === 'directory' ? void loadTree(entry.path) : void openFile(entry.path, undefined, 'workspace')}>
-            {entry.type === 'directory' ? <Folder size={15} /> : <FileText size={15} />}
-            <span>{entry.name}</span>
-            {entry.type === 'file' && <small>{formatFileSize(entry.size, '')}</small>}
-            {entry.type === 'directory' && <ChevronDown size={13} className="chevron-left" />}
-          </button>
-        ))}
-        {!treeBusy && !treeError && visibleEntries.length === 0 && <div className="file-empty"><FolderOpen /><strong>目录为空</strong></div>}
+        {!treeBusy && treeSearchOpen && treeSearchQuery.trim() && (treeSearchBusy
+          ? <div className="file-loading" role="status"><LoaderCircle className="spin" />正在搜索…</div>
+          : treeSearchResults.map((entry) => <button key={entry.path} className={`file-row ${entry.type === 'directory' ? 'is-directory' : ''}`} title={entry.path} onClick={() => entry.type === 'directory' ? void openFile(entry.path, undefined, 'workspace') : void openFile(entry.path, undefined, 'workspace')}>
+            {entry.type === 'directory' ? <Folder size={15} /> : <FileText size={15} />}<span>{entry.path}</span>
+          </button>))}
+        {!treeBusy && !(treeSearchOpen && treeSearchQuery.trim()) && renderFileEntries(visibleEntries)}
+        {!treeBusy && !treeError && !(treeSearchOpen && treeSearchQuery.trim()) && visibleEntries.length === 0 && <div className="file-empty"><FolderOpen /><strong>目录为空</strong></div>}
       </div>
       {treeBusy && <div className="file-loading" role="status"><LoaderCircle className="spin" />正在读取文件…</div>}
     </div>;
@@ -226,11 +360,17 @@ export function WorkbenchPane({
       kind: file.binary ? 'binary' : 'text',
       text: file.text,
     };
+    const canEdit = activePanelTab?.kind === 'file'
+      && (activePanelTab.source || 'workspace') === 'workspace'
+      && preview.kind === 'text'
+      && !preview.truncated;
     // 文件标签复用共享预览组件：Markdown/HTML 可切换渲染与源码，PDF 走内置阅读器。
     return <div className="panel-file-preview">
       <DeferredFilePreview
         file={preview}
         loading={fileBusy}
+        editable={canEdit}
+        onSave={saveCurrentFileText}
         onOpenExternal={() => void openFileWith()}
         actions={<div className="file-actions" ref={fileActionsRef}>
           <button className="icon-button" aria-label="文件操作" title="文件操作" aria-expanded={fileMenuOpen} onClick={() => void showFileActions()}><MoreHorizontal /></button>
@@ -238,7 +378,9 @@ export function WorkbenchPane({
             <div className="file-actions-label">打开方式</div>
             <button className="file-action" role="menuitem" onClick={() => void openFileWith()}><Eye /><span>预览（默认）</span></button>
             <div className="file-actions-sep" />
-            {fileApps.map((app) => <button className="file-action" role="menuitem" key={app.path} onClick={() => void openFileWith(app.path)}>{app.icon ? <img src={app.icon} alt="" /> : <AppWindow />}<span>{app.name}</span></button>)}
+            {fileAppsLoading && <div className="file-action file-action-loading" role="status"><LoaderCircle className="spin" /><span>正在读取可用应用…</span></div>}
+            {!fileAppsLoading && fileApps.map((app) => <button className="file-action" role="menuitem" key={app.path} onClick={() => void openFileWith(app.path)}>{app.icon ? <img src={app.icon} alt="" /> : <AppWindow />}<span>{app.name}</span></button>)}
+            {!fileAppsLoading && fileApps.length === 0 && <div className="file-actions-empty">没有可用应用</div>}
             <div className="file-actions-sep" />
             <button className="file-action" role="menuitem" onClick={() => void revealCurrentFile()}><FolderOpen /><span>显示文件位置</span></button>
           </div>}

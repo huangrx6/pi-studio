@@ -80,6 +80,10 @@ const GeneralSettings = lazy(async () => {
   const module = await import('../features/appearance/GeneralSettings');
   return { default: module.GeneralSettings };
 });
+const GitSettings = lazy(async () => {
+  const module = await import('../features/git/GitSettings');
+  return { default: module.GitSettings };
+});
 const AboutSettings = lazy(async () => {
   const module = await import('../features/about/AboutSettings');
   return { default: module.AboutSettings };
@@ -385,11 +389,12 @@ export function SettingsOverlay({
                 </button>
               </div>
             )}
-            {!data && !error && tab !== 'general' && tab !== 'usage' && tab !== 'archives' && tab !== 'permissions' && tab !== 'subagents' && (
+            {!data && !error && tab !== 'general' && tab !== 'git' && tab !== 'usage' && tab !== 'archives' && tab !== 'permissions' && tab !== 'subagents' && (
               <div className="settings-loading" role="status"><LoaderCircle className="spin" />正在加载设置…</div>
             )}
             {tab === 'shortcuts' && <ShortcutSettings preferences={appearance.preferences} onChange={appearance.onChange} />}
             {tab === 'general' && <GeneralSettings {...appearance} />}
+            {tab === 'git' && <GitSettings cwd={workspace} workspaces={workspaces} />}
             {tab === 'permissions' && (
               <PermissionPolicySettings
                 cwd={permission.cwd}

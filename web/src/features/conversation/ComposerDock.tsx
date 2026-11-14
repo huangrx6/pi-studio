@@ -265,7 +265,8 @@ export function ComposerDock({
   // 兜底再校验一次落点：用户把扩展设为「顶栏」时，底部这条必须消失，
   // 不论上游 items 是否已经过滤过。
   const footerExtensionItems = conversationFooterExtensionItems.filter((item) => (
-    (item.visibility !== 'while-active' || turnActive)
+    item.content.length > 0
+    && (item.visibility !== 'while-active' || turnActive)
     && placementAllowsSlot(placementForItem(extensionPlacements, item), 'conversation.footer')
   ));
   const [modelHintOpen, setModelHintOpen] = useState(false);
@@ -279,6 +280,19 @@ export function ComposerDock({
         busy={longTaskBusy}
         onChange={(action) => void changeLongTaskStatus(action)}
         onEditGoal={() => sendPromptFromExtension('/goal ', false)}
+      />
+    )}
+    {!isNewConversation && footerExtensionItems.length > 0 && (
+      <ConversationExtensionDock
+        items={footerExtensionItems}
+        surface={extensionSurface}
+        placement="footer"
+        cwd={session?.cwd}
+        sessionId={session?.id}
+        modelRef={modelSelection.modelRef}
+        onOpenSettings={(page) => { if (page) onOpenSettings(page); }}
+        onSendPrompt={sendPromptFromExtension}
+        onNotify={notifyExtension}
       />
     )}
     {(todoDetails || todoPanelOpen) && <TodoDock details={todoDetails} open={todoPanelOpen} onToggle={() => setTodoPanelOpen((value) => !value)} />}
@@ -544,19 +558,6 @@ export function ComposerDock({
       onSendPrompt={sendPromptFromExtension}
       onNotify={notifyExtension}
     />
-    {!isNewConversation && footerExtensionItems.length > 0 && (
-      <ConversationExtensionDock
-        items={footerExtensionItems}
-        surface={extensionSurface}
-        placement="footer"
-        cwd={session?.cwd}
-        sessionId={session?.id}
-        modelRef={modelSelection.modelRef}
-        onOpenSettings={(page) => { if (page) onOpenSettings(page); }}
-        onSendPrompt={sendPromptFromExtension}
-        onNotify={notifyExtension}
-      />
-    )}
     {isNewConversation && error && <ConversationError className="new-conversation-error" message={error} onDismiss={() => setError(null)} />}
   </div>;
 }

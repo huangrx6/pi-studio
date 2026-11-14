@@ -26,7 +26,7 @@ function harness() {
     workspaceRef: { current: '/A' }, sessionRef: { current: { id: 'A', cwd: '/A' } },
     panelTabsRef: { current: [] }, activePanelTabIdRef: { current: '' }, treeRequestRef: { current: 0 },
     filesOpen: true, setPanelTabsState() {}, setActivePanelTabIdState() {},
-    setPanelEntered() {}, setPanelSplit() {}, setFileMenuOpen() {}, setFileApps() {},
+    setPanelEntered() {}, setPanelSplit() {}, setFileMenuOpen() {}, setFileApps() {}, setFileAppsLoading() {},
     setFile(value) { h.file = value; }, setFileBusy(value) { h.busy = value; }, setFileError(value) { h.error = value; },
     setTreePath(value) { h.treePath = value; }, setEntries(value) { h.entries = value; },
     setTreeBusy(value) { h.treeBusy = value; }, setTreeError(value) { h.treeError = value; }, setTreeOwner(value) { h.treeOwner = value; },

@@ -97,6 +97,33 @@ export function resolvePathToken(token, cwd = '') {
   return `/${stack.join('/')}`;
 }
 
+/**
+ * Convert a Markdown href into a local path when it is an explicit file link.
+ *
+ * Markdown links bypass the prose scanner above, so absolute links such as
+ * `[手册](/Users/me/docs/手册.md)` need the same path handling as inline paths.
+ * Web URLs and non-file schemes intentionally return null.
+ */
+export function localHrefPath(href) {
+  const raw = String(href || '').trim();
+  if (!raw || raw.startsWith('#') || isWebUrl(raw) || SCHEME_LIKE.test(raw)) return null;
+  if (/^file:\/\//i.test(raw)) {
+    try {
+      const url = new URL(raw);
+      if (url.protocol !== 'file:') return null;
+      const path = decodeURIComponent(url.pathname || '');
+      return pathToken(path) ? path : null;
+    } catch {
+      return null;
+    }
+  }
+  let path = raw;
+  try { path = decodeURIComponent(path); } catch { /* keep the original href */ }
+  // A fragment/query belongs to the link target, not the filesystem path.
+  path = path.split(/[?#]/, 1)[0];
+  return pathToken(path) ? path : null;
+}
+
 /** True when a whole rendered code span is just a path. */
 export function isPathOnly(text) {
   return pathToken(text) !== null;

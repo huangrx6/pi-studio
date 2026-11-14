@@ -131,7 +131,7 @@ export function ArchivedConversationsSettings({ workspaces, onRestore, onDelete,
                   <button type="button" className="settings-outline archive-restore-button" data-action="restore" disabled={locked} onClick={() => void run(session, 'restore')}>
                     {restoring && <LoaderCircle className="spin" aria-hidden="true" />}{restoring ? '恢复中…' : '恢复会话'}
                   </button>
-                  <button type="button" className="settings-text-button archive-delete-button" data-action="delete" disabled={locked} onClick={() => void run(session, 'delete')}>
+                  <button type="button" className="settings-outline archive-delete-button" data-action="delete" disabled={locked} onClick={() => void run(session, 'delete')}>
                     {deleting && <LoaderCircle className="spin" aria-hidden="true" />}{deleting ? '处理中…' : '永久删除'}
                   </button>
                 </div>

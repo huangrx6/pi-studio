@@ -434,6 +434,7 @@ export function ModelComparisonPanel({
       <footer className="comparison-start-row">
         <InfoHint
           align="end"
+          placement="top"
           className="comparison-start-hint"
           label="两个模型分别计费；隔离分支不会修改原对话，文件改动保留在隔离工作树中。"
         />

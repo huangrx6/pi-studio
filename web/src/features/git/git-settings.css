@@ -1,0 +1,22 @@
+.git-settings-workspace { display: grid; grid-template-columns: 96px minmax(0, 320px); align-items: center; gap: 12px; margin: 0 0 22px; color: var(--muted); font-size: var(--text-sm); }
+.git-settings-workspace .pi-select { min-width: 0; }
+.git-settings-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 0 0 28px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--border); }
+.git-settings-summary > div { display: grid; min-width: 0; gap: 5px; padding: 14px; background: var(--surface-raised); }
+.git-settings-summary span { color: var(--muted); font-size: var(--text-xs); }
+.git-settings-summary strong { overflow: hidden; color: var(--text-1); font-size: var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
+.git-settings-summary strong.is-dirty { color: var(--accent-foreground); }
+.git-settings-mono { font-family: var(--mono); }
+.git-settings-section { margin-top: 8px; }
+.git-settings-section-heading { display: flex; align-items: start; justify-content: space-between; margin-bottom: 10px; }
+.git-settings-section-heading h2 { margin: 0; color: var(--text-1); font-size: var(--text-md); }
+.git-settings-section-heading p { margin: 5px 0 0; overflow-wrap: anywhere; color: var(--muted); font-size: var(--text-xs); }
+.git-worktree-list { border-top: 1px solid var(--divider); }
+.git-worktree-row { padding: 13px 0; border-bottom: 1px solid var(--divider); }
+.git-worktree-row > div { display: grid; grid-template-columns: auto auto; align-items: center; gap: 5px 8px; min-width: 0; }
+.git-worktree-row strong { overflow: hidden; color: var(--text-1); font-size: var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
+.git-worktree-row span { padding: 2px 6px; border-radius: var(--radius-tag); background: var(--accent-soft); color: var(--accent-foreground); font-size: var(--text-xs); }
+.git-worktree-row small { grid-column: 1 / -1; overflow-wrap: anywhere; color: var(--muted); font: var(--text-xs)/1.5 var(--mono); }
+.git-worktree-row.is-current { padding-left: 10px; border-left: 2px solid var(--accent); }
+.git-settings-empty { display: grid; gap: 6px; padding: 26px 0; color: var(--muted); }
+.git-settings-empty strong { color: var(--text-1); font-size: var(--text-sm); }
+@media (max-width: 760px) { .git-settings-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .git-settings-workspace { grid-template-columns: 1fr; } }

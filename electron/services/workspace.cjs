@@ -122,6 +122,18 @@ function readFileText(cwd, requested) {
   return readFilePath(requested, resolveInWorkspace(cwd, requested));
 }
 
+/** 写回工作区内的文本文件，路径与读取使用同一越界校验。 */
+function writeFileText(cwd, requested, text) {
+  if (typeof text !== 'string') throw new Error('文件内容无效');
+  const target = resolveInWorkspace(cwd, requested);
+  const stat = fs.statSync(target);
+  if (!stat.isFile()) throw new Error('不是文件');
+  const buffer = Buffer.from(text, 'utf8');
+  if (buffer.includes(0)) throw new Error('不允许写入二进制内容');
+  fs.writeFileSync(target, buffer);
+  return { ok: true, path: requested, size: buffer.byteLength };
+}
+
 /**
  * 只读打开工作区之外的绝对路径。
  * 用于文件变更卡片：bash / 脚本写到其它目录的文件也能在右栏预览。
@@ -225,6 +237,7 @@ module.exports = {
   listDirectory,
   readFilePath,
   readFileText,
+  writeFileText,
   readAbsoluteFile,
   directoryReferenceText,
   fileReferenceContext,

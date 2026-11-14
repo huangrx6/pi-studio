@@ -1,5 +1,4 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Bell, CheckCheck, CircleAlert, CircleCheck, Info, Trash2, TriangleAlert, X } from 'lucide-react';
 import { errorText } from '../shared/error-text';
 import {
@@ -44,7 +43,6 @@ export function NotificationCenter({
   onRunAction?: (item: AppNotification) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState({ left: 12, top: 52 });
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [runningActionId, setRunningActionId] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -80,28 +78,13 @@ export function NotificationCenter({
   }
 
   useLayoutEffect(() => {
-    if (!open) return;
-    const placePanel = () => {
-      const anchor = triggerRef.current?.getBoundingClientRect();
-      const panel = panelRef.current?.getBoundingClientRect();
-      if (!anchor || !panel) return;
-      setPosition({
-        left: Math.max(12, Math.min(anchor.right - panel.width, innerWidth - panel.width - 12)),
-        top: Math.max(12, Math.min(anchor.bottom + 8, innerHeight - panel.height - 12)),
-      });
-    };
-    placePanel();
-    headingRef.current?.focus({ preventScroll: true });
-    const observer = new ResizeObserver(placePanel);
-    if (panelRef.current) observer.observe(panelRef.current);
-    window.addEventListener('resize', placePanel);
-    return () => { observer.disconnect(); window.removeEventListener('resize', placePanel); };
+    if (open) headingRef.current?.focus({ preventScroll: true });
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const isInside = (target: EventTarget | null) => target instanceof Node
-      && (rootRef.current?.contains(target) || panelRef.current?.contains(target));
+      && rootRef.current?.contains(target);
     const outside = (event: PointerEvent) => { if (!isInside(event.target)) close(); };
     // A non-modal popup must not stay above a newly focused settings page.
     const focusOutside = (event: FocusEvent) => { if (!isInside(event.target)) close(); };
@@ -192,13 +175,12 @@ export function NotificationCenter({
       <Bell aria-hidden="true" />
       {unread > 0 && <span className="notification-count" aria-hidden="true">{unread}</span>}
     </button>
-    {open && createPortal(<section
+    {open && <section
       id={panelId}
       ref={panelRef}
       className="notification-panel"
       role="dialog"
       aria-label="通知中心"
-      style={position}
       onKeyDown={(event) => {
         if (event.nativeEvent.isComposing) return;
         if (event.key === 'Escape') {
@@ -265,6 +247,6 @@ export function NotificationCenter({
             </article>;
           })}
       </div>
-    </section>, document.body)}
+    </section>}
   </div>;
 }

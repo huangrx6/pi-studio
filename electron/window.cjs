@@ -32,6 +32,7 @@ const {
 const { getStudioDatabase } = require('./core/studio-db.cjs');
 const { themeBackground } = require('./theme.cjs');
 const { publishMenuBarEvent } = require('./menu-bar-events.cjs');
+const { isAllowedLocalHtmlUrl } = require('./services/local-html.cjs');
 
 const configuredCspSessions = new WeakSet();
 
@@ -73,7 +74,8 @@ function installRendererSecurity(win, rendererUrl) {
    * Only the right-panel browser may attach a guest: it must use Studio's own
    * partition, carry no preload and stay sandboxed with node disabled. Anything
    * else (a future stray <webview> in extension UI, a model-driven URL) is
-   * refused before a guest process starts.
+   * refused before a guest process starts. Local browser targets are limited
+   * to existing, non-protected .html/.htm files.
    */
   win.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     const src = String(params?.src || '');
@@ -81,7 +83,8 @@ function installRendererSecurity(win, rendererUrl) {
       && !webPreferences?.preload
       && !params?.preload
       && webPreferences?.nodeIntegration !== true;
-    if (!trusted || !/^(https?:|about:blank$)/i.test(src)) {
+    const allowedSource = /^(https?:|about:blank$)/i.test(src) || isAllowedLocalHtmlUrl(src);
+    if (!trusted || !allowedSource) {
       event.preventDefault();
       return;
     }
@@ -170,7 +173,9 @@ function createWindow() {
     minWidth: MIN_WINDOW_SIZE.width,
     minHeight: MIN_WINDOW_SIZE.height,
     titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 18 },
+    // hiddenInset 的默认纵向内缩会让原生红绿灯低于 44px 标题行的中心线。
+    // 直接在窗口层校准原生控件，避免在渲染层给网页按钮叠加补偿位移。
+    trafficLightPosition: { x: 16, y: 15 },
     backgroundColor: themeBackground(preference, nativeTheme.shouldUseDarkColors),
     icon: path.join(__dirname, '..', 'assets', 'icon.png'),
     webPreferences: {

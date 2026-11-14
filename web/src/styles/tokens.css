@@ -91,7 +91,7 @@
   --leading-body: 1.6;
   --leading-relaxed: 1.75;
   --chat-line-height: var(--leading-relaxed);
-  --sidebar-w: 280px;
+  --sidebar-w: 284px;
   /* The workbench should support code and file inspection without taking over
      the conversation. Users can still resize it from the splitter; this is
      the comfortable default for the common two-column layout. */
@@ -103,7 +103,8 @@
   gutter，所有视图随之同步收缩。 */
   --session-gutter: var(--space-8);
   --settings-content: 840px;
-  --header-height: 56px;
+  --header-height: 44px;
+  /* Dynamic reservation for the docked workbench title row. */
   --toolbar-height: 36px;
   /* 自定义背景的运行时默认值；BackgroundLayer 会按用户偏好覆盖这三个变量。 */
   --background-media-opacity: 68%;
@@ -121,6 +122,8 @@
    */
 
   --transition: 160ms ease;
+  /* 行、拖拽把手这类高频小元素用比标准控件更短的一档，避免鼠标扫过时出现拖尾。 */
+  --transition-fast: 120ms ease;
   --shell-transition: 300ms cubic-bezier(.22, .8, .2, 1);
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --display-font: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "Times New Roman", serif;

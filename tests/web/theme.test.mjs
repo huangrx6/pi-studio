@@ -245,11 +245,8 @@ test('palette presets keep semantic status colors stable', () => {
   }
 });
 
-// 原生窗口的 backgroundColor 必须在启动瞬间就和页面一致（否则会闪一下）。
-// Electron 侧从同一份 palette.css 读取 --bg：显式主题直接取对应值，
-// system 则按当前系统是否暗色选择。
+// 换壁纸不改变窗口内颜色：四级表面必须是实色，不能是 rgba 或 color-mix。
 test('the four shared surfaces stay opaque in both themes', () => {
-  // 换壁纸不改变窗口内颜色：四级表面必须是实色，不能是 rgba 或 color-mix。
   for (const mode of ['light', 'dark']) {
     const t = tokens(mode, 'lime');
     for (const key of ['--surface-canvas', '--surface-chrome', '--surface-raised', '--surface-floating']) {
@@ -261,12 +258,15 @@ test('the four shared surfaces stay opaque in both themes', () => {
   }
 });
 
-test('Electron reads both backgrounds from the same palette', () => {
+// 原生窗口的 backgroundColor 必须在启动瞬间就和页面一致（否则会闪一下）。
+// Electron 侧从同一份 palette.css 读取外框的 --surface-chrome：窗口四角、边缘
+// 与首帧都属于外框，不能是中间那块内容画布的 --bg。
+test('Electron reads the shell frame colour from the same palette', () => {
   const { themeBackground } = createRequire(import.meta.url)('../../electron/theme.cjs');
-  assert.equal(themeBackground('light', true), tokens('light')['--bg']);
-  assert.equal(themeBackground('dark', false), tokens('dark')['--bg']);
-  assert.equal(themeBackground('system', true), tokens('dark')['--bg']);
-  assert.equal(themeBackground('system', false), tokens('light')['--bg']);
+  assert.equal(themeBackground('light', true), tokens('light')['--surface-chrome']);
+  assert.equal(themeBackground('dark', false), tokens('dark')['--surface-chrome']);
+  assert.equal(themeBackground('system', true), tokens('dark')['--surface-chrome']);
+  assert.equal(themeBackground('system', false), tokens('light')['--surface-chrome']);
 });
 
 

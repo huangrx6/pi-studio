@@ -39,6 +39,50 @@ async function capture(name, theme) {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
   await page.screenshot({ path: path.join(output, `${name}.png`), animations: 'disabled' }); result.screenshots.push(name);
 }
+async function checkPanelCollapseMotion() {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const actions = '.chat-header :is(.workspace-menu-trigger, .notification-trigger)';
+  const { open, start, middle, end } = await page.evaluate(async (selector) => {
+    const panel = document.querySelector('.file-panel');
+    const buttons = [...document.querySelectorAll(selector)];
+    const sample = () => ({
+      width: panel.getBoundingClientRect().width,
+      positions: buttons.map(button => button.getBoundingClientRect().x),
+    });
+    const open = sample();
+    panel.querySelector('.panel-collapse-entry').click();
+    await new Promise(requestAnimationFrame);
+    // Seek the panel and header together so a busy browser cannot skip the middle frame.
+    const transitions = document.querySelector('.content-region').getAnimations({ subtree: true })
+      .filter(animation => animation instanceof CSSTransition);
+    const seek = progress => {
+      for (const transition of transitions) {
+        transition.currentTime = transition.effect.getComputedTiming().endTime * progress;
+      }
+      return sample();
+    };
+    return { open, start: seek(0), middle: seek(0.5), end: seek(0.999) };
+  }, actions);
+  await page.locator('.file-panel').waitFor({ state: 'detached' });
+  const closed = await page.locator('.chat-header').evaluate(async (header, selector) => {
+    await Promise.all(header.getAnimations({ subtree: true })
+      .filter(animation => animation instanceof CSSTransition)
+      .map(transition => transition.finished));
+    return [...header.querySelectorAll(selector)].map(button => button.getBoundingClientRect().x);
+  }, actions);
+  assert.equal(open.positions.length, 2);
+  assert.equal(closed.length, 2);
+  assert.ok(middle.width > 1 && middle.width < open.width - 1, 'sampled the partially collapsed panel');
+  const progress = 1 - middle.width / open.width;
+  for (const [index, initial] of open.positions.entries()) {
+    const final = closed[index];
+    assert.ok(Math.abs(start.positions[index] - initial) <= 1, 'starting the collapse preserves the button position');
+    assert.ok(final - initial > open.width / 2, 'header action moves into the released space');
+    assert.ok(Math.abs(middle.positions[index] - (initial + (final - initial) * progress)) <= 2, 'header action follows the panel throughout collapse');
+    assert.ok(Math.abs(end.positions[index] - final) <= 2, 'showing the opener after collapse cannot displace the header action');
+  }
+  result.checks.push('workspace and notification buttons follow the panel at mid-collapse and reach their final positions before it unmounts');
+}
 async function checkCacheBytes() {
   const mib = 1024 * 1024;
   await qa('payload', 'a', 'budget-large.txt', 17 * mib);
@@ -153,7 +197,7 @@ try {
   await capture('04-evicted-owner-dark', 'dark');
   result.checks.push('more than eight previews evict content without losing tabs; evicted A tab rereads A while current session is B');
   }
-  await page.getByRole('button', { name: '收起右侧面板', exact: true }).click(); await page.locator('.file-panel').waitFor({ state: 'detached' });
+  await checkPanelCollapseMotion();
   await openSession('a'); assert.equal(await composerValue(composer()), draftA);
   assert.deepEqual(result.pageErrors, []); assert.deepEqual(result.blockedRequests, []); assert.equal((await calls('conversationSubmit')).length, 0);
   result.calls = await page.evaluate(() => window.__panelFilesQa.calls); await rm(path.join(output, 'failure.png'), { force: true });

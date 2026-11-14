@@ -69,15 +69,36 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, Props>(function C
     }
     if (selection) {
       setEditorSelection(root.current, ...selection);
-      if (selection[0] === selection[1]) {
-        const caret = window.getSelection()?.getRangeAt(0).getBoundingClientRect();
-        const bounds = root.current.getBoundingClientRect();
-        if (caret?.height) {
-          if (caret.bottom > bounds.bottom - 8) root.current.scrollTop += caret.bottom - bounds.bottom + 8;
-          else if (caret.top < bounds.top) root.current.scrollTop -= bounds.top - caret.top;
-        }
-      }
+      keepCaretVisible(selection);
     }
+  }
+
+  function keepCaretVisible(selection: [number, number]) {
+    if (selection[0] !== selection[1]) return;
+    const apply = () => {
+      const node = root.current;
+      const activeSelection = window.getSelection();
+      if (!node || !activeSelection?.rangeCount || !node.contains(activeSelection.anchorNode)) return;
+      const currentSelection = editorSelection(node);
+      if (currentSelection[0] !== selection[0] || currentSelection[1] !== selection[1]) return;
+      const range = activeSelection.getRangeAt(0).cloneRange();
+      range.collapse(true);
+      const caret = range.getBoundingClientRect();
+      const fallbackCaret = Array.from(range.getClientRects()).at(-1);
+      const bounds = node.getBoundingClientRect();
+      const rect = caret.height || caret.width ? caret : fallbackCaret;
+      if (rect?.height) {
+        if (rect.bottom > bounds.bottom - 8) node.scrollTop += rect.bottom - bounds.bottom + 8;
+        else if (rect.top < bounds.top) node.scrollTop -= bounds.top - rect.top;
+      } else if (selection[1] >= readEditorText(node).length) {
+        // A collapsed range after a trailing newline can have no client rect.
+        // In that case the caret is at the end, so the only reliable anchor is
+        // the editor's scroll height.
+        node.scrollTop = node.scrollHeight;
+      }
+    };
+    apply();
+    requestAnimationFrame(apply);
   }
 
   useLayoutEffect(() => {

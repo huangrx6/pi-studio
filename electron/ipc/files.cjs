@@ -13,6 +13,7 @@ const {
   searchWorkspaceFiles,
   listDirectory,
   readFileText,
+  writeFileText,
 } = require('../services/workspace.cjs');
 const { readFilePreview, readFilePreviewAt } = require('../services/file-preview.cjs');
 const { resolveUserTarget } = require('../services/file-target.cjs');
@@ -52,6 +53,10 @@ function registerFilesIpc() {
   ipcMain.handle('pi:file', async (event, { cwd, path: requested } = {}) => {
     assertMainWindow(event);
     return readFileText(cwd, requested);
+  });
+  ipcMain.handle('pi:file-write', async (event, { cwd, path: requested, text } = {}) => {
+    assertMainWindow(event);
+    return writeFileText(cwd, requested, text);
   });
   // Structured preview for the shared renderer component. The service bounds
   // text/media payloads and never inlines arbitrary binary formats.

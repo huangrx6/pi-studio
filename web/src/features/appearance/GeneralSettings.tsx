@@ -12,7 +12,7 @@ import { Select } from '../../shared/Select';
 import { Stepper } from '../../shared/Stepper';
 import { RangeControl } from '../../shared/RangeControl';
 import { InfoHint } from '../../shared/InfoHint';
-import type { Preferences } from '../../shared/preferences';
+import { PALETTE_PRESETS, type Preferences } from '../../shared/preferences';
 import { BackgroundMediaPreview } from '../../shell/BackgroundLayer';
 import { TERMINAL_THEMES, STUDIO_TERMINAL_THEME } from '../terminal/terminal-themes';
 import './general-settings.css';
@@ -51,6 +51,10 @@ function SettingRow({ label, description, children }: { label: string; descripti
   </div>;
 }
 
+function SectionHeading({ id, title }: { id: string; title: string }) {
+  return <h2 id={id}><strong>{title}</strong></h2>;
+}
+
 /** Preference persistence and native media operations remain owned by App. */
 export function GeneralSettings({ preferences, onChange, backgroundBusy, backgroundError, onChooseBackground, onRemoveBackground, onBackgroundUnavailable, menuBar, menuBarBusy, onMenuBarChange }: Props) {
   const sectionId = useId();
@@ -62,17 +66,34 @@ export function GeneralSettings({ preferences, onChange, backgroundBusy, backgro
     />
     <div className="general-settings">
     <section className="general-settings-section" aria-labelledby={`${sectionId}-appearance`}>
-      <h2 id={`${sectionId}-appearance`}>
-        <span>外观</span>
-      </h2>
+      <SectionHeading id={`${sectionId}-appearance`} title="外观" />
       <div className="general-settings-card">
       <SettingRow label="界面模式">
-        <div className="general-theme-options" role="group" aria-label="界面模式">
+        <div className="general-theme-options general-theme-modes" role="group" aria-label="界面模式">
           {([
             { value: 'light', label: '浅色', icon: Sun },
             { value: 'dark', label: '深色', icon: Moon },
             { value: 'system', label: '跟随系统', icon: Monitor },
           ] as const).map(({ value, label, icon: Icon }) => <button type="button" key={value} aria-pressed={preferences.theme === value} onClick={() => onChange('theme', value)}><Icon aria-hidden="true" />{label}</button>)}
+        </div>
+      </SettingRow>
+      <SettingRow label="强调色" description="只影响操作强调和选中状态。">
+        <div className="general-palette-options" role="radiogroup" aria-label="强调色">
+          {PALETTE_PRESETS.map((preset) => <label key={preset.id} className="general-palette-option" data-palette-choice={preset.id} title={preset.description}>
+            <input type="radio" name="palette" value={preset.id} checked={preferences.palette === preset.id} onChange={() => onChange('palette', preset.id)} />
+            <span className="general-palette-swatch" aria-hidden="true" />
+            <span>{preset.label}</span>
+          </label>)}
+        </div>
+      </SettingRow>
+      <SettingRow label="圆角风格" description="统一影响卡片、输入框和按钮。">
+        <div className="general-theme-options general-radius-options" role="group" aria-label="圆角风格">
+          {([
+            { value: 'square', label: '直角' },
+            { value: 'compact', label: '紧凑' },
+            { value: 'standard', label: '标准' },
+            { value: 'soft', label: '柔和' },
+          ] as const).map(({ value, label }) => <button type="button" key={value} aria-pressed={preferences.radiusStyle === value} onClick={() => onChange('radiusStyle', value)}>{label}</button>)}
         </div>
       </SettingRow>
       <SettingRow label="背景">
@@ -100,9 +121,7 @@ export function GeneralSettings({ preferences, onChange, backgroundBusy, backgro
       </div>
     </section>
     <section className="general-settings-section" aria-labelledby={`${sectionId}-conversation`}>
-      <h2 id={`${sectionId}-conversation`}>
-        <span>对话</span>
-      </h2>
+      <SectionHeading id={`${sectionId}-conversation`} title="对话" />
       <div className="general-settings-card">
       <SettingRow label="对话字号"><Stepper label="字号" value={preferences.fontSize} min={12} max={18} unit=" px" onChange={value => onChange('fontSize', value)} /></SettingRow>
       <SettingRow label="工作步骤展示"><div className="general-theme-options" role="group" aria-label="工作步骤展示">
@@ -119,9 +138,7 @@ export function GeneralSettings({ preferences, onChange, backgroundBusy, backgro
       </div>
     </section>
     <section className="general-settings-section" aria-labelledby={`${sectionId}-terminal`}>
-      <h2 id={`${sectionId}-terminal`}>
-        <span>终端</span>
-      </h2>
+      <SectionHeading id={`${sectionId}-terminal`} title="终端" />
       <div className="general-settings-card">
       <SettingRow label="配色主题" description="选一套独立配色，终端就和窗口其余部分分开；默认跟随界面明暗。">
         <div className="terminal-theme-grid" role="group" aria-label="终端配色主题">
@@ -155,9 +172,7 @@ export function GeneralSettings({ preferences, onChange, backgroundBusy, backgro
       </div>
     </section>
     <section className="general-settings-section" aria-labelledby={`${sectionId}-application`}>
-      <h2 id={`${sectionId}-application`}>
-        <span>应用</span>
-      </h2>
+      <SectionHeading id={`${sectionId}-application`} title="应用" />
       <div className="general-settings-card">
       <SettingRow label="菜单栏图标"><button type="button" className={`switch ${menuBar.enabled ? 'is-on' : ''}`} role="switch" aria-checked={menuBar.enabled} disabled={!menuBar.available || menuBarBusy} aria-label={menuBar.enabled ? '隐藏菜单栏图标' : '显示菜单栏图标'} title={menuBar.available ? undefined : '当前平台不支持菜单栏图标'} onClick={() => onMenuBarChange(!menuBar.enabled)}><span /></button></SettingRow>
       <SettingRow label="网页链接打开方式"><Select label="网页链接打开方式" value={preferences.linkOpen} onChange={value => onChange('linkOpen', value as Preferences['linkOpen'])} options={[{ value: 'external', label: '系统浏览器' }, { value: 'window', label: '应用内窗口' }]} /></SettingRow>

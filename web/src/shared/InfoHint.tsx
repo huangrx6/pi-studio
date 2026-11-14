@@ -5,16 +5,18 @@ import './info-hint.css';
 export function InfoHint({
   label,
   align = 'start',
+  placement = 'bottom',
   className = '',
 }: {
   label: string;
   align?: 'start' | 'end';
+  placement?: 'top' | 'bottom';
   className?: string;
 }) {
   const tooltipId = useId();
   return <button
     type="button"
-    className={`info-hint is-${align}${className ? ` ${className}` : ''}`}
+    className={`info-hint is-${align} is-${placement}${className ? ` ${className}` : ''}`}
     aria-label={label}
     aria-describedby={tooltipId}
     onClick={(event) => event.stopPropagation()}

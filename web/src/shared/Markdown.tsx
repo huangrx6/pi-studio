@@ -8,6 +8,7 @@
  */
 import { Component, Suspense, lazy, memo, type ReactNode } from 'react';
 import { loadMarkdownHighlighter } from './markdown-highlighter-loader';
+import { copyMarkdownSource } from './markdown-copy';
 
 export function preloadMarkdownRenderer() {
   return import('./MarkdownRenderer');
@@ -34,14 +35,14 @@ class MarkdownBoundary extends Component<{ children: ReactNode; fallback: ReactN
   }
 }
 
-export const Markdown = memo(function Markdown({ children }: { children: string }) {
+export const Markdown = memo(function Markdown({ children, codeChrome = true }: { children: string; codeChrome?: boolean }) {
   return <MarkdownBoundary fallback={
-    <div className="markdown markdown-plain">{children}</div>
+    <div className="markdown markdown-plain" onCopy={(event) => copyMarkdownSource(event, children)}>{children}</div>
   }>
     <Suspense fallback={
-      <div className="markdown markdown-plain" aria-busy="true">{children}</div>
+      <div className="markdown markdown-plain" aria-busy="true" onCopy={(event) => copyMarkdownSource(event, children)}>{children}</div>
     }>
-      <LazyMarkdownRenderer>{children}</LazyMarkdownRenderer>
+      <LazyMarkdownRenderer codeChrome={codeChrome}>{children}</LazyMarkdownRenderer>
     </Suspense>
   </MarkdownBoundary>;
 });

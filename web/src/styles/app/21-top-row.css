@@ -95,8 +95,8 @@ html:not([data-window-fullscreen='true']) .app:not(.has-custom-background) .bran
 .chat-tab-list { padding-inline: 0; }
 .chat-tabs .tab { padding-inline: var(--space-2); }
 
-/* 空状态只有标题行，由它收口。 */
-.is-new-conversation .chat-header { border-bottom: 1px solid var(--divider); }
+/* 空状态只有标题行。标题行与内容区之间不再画分隔线：内容区本身就是挖出来的
+   圆角孔洞，再加一条横线会把外框切成两块。 */
 
 /* 右栏标题行与另外两栏共用同一条分隔线。 */
 .app .panel-tabbar { border-bottom-color: var(--divider); }

@@ -43,11 +43,8 @@ type SelectProps = {
   leadingIcon?: ReactNode;
 };
 
-/**
- * 菜单定位结果。left/width 为 fixed 坐标与宽度，top 与 bottom 二选一：
- * 向上展开时用 bottom（相对视口底部的距离），避免依赖菜单实际高度。
- */
-type Placement = { left: number; top?: number; bottom?: number; width: number };
+const MENU_EDGE_INSET = 12;
+const MENU_GAP = 5;
 
 /**
  * 下拉选择器。
@@ -61,44 +58,54 @@ type Placement = { left: number; top?: number; bottom?: number; width: number };
  * @param autoFocus 自动聚焦触发按钮
  * @param className / menuClassName 额外的容器/菜单 class
  *
- * 自适应展开方向由下方 useLayoutEffect 计算：菜单预计高度放不下且上方更宽裕时，
- * 改为向上展开；同时把左边界夹在视口内，防止长下拉在窄窗口里溢出。
+ * 按菜单实际高度选择展开方向，并在弹出方向的可用空间内滚动。
  */
 export function Select({ value, options, onChange, label, placeholder = '请选择', disabled = false, autoFocus = false, className = '', menuClassName = '', leadingIcon }: SelectProps) {
   const [open, setOpen] = useState(false);
-  const [placement, setPlacement] = useState<Placement | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const listId = useId();
   const selected = options.find((option) => option.value === value);
 
-  // 用 layout effect：必须在浏览器绘制前拿到位置，否则菜单会先闪在错误位置。
-  // 菜单高度无法预先测量（尚未挂载），按 34px/项估算并限制在 260px；
-  // 下方空间不足且上方更宽裕时改用 bottom 定位向上展开。
-  // scroll 使用捕获阶段，关闭/重算能覆盖任意嵌套滚动容器。
+  // 先按最终宽度排版，再测量含换行说明的菜单。Portal 使用视口坐标，
+  // 但会话内的菜单应与圆角内容区一起收口。
   useLayoutEffect(() => {
-    if (!open) return;
+    const trigger = triggerRef.current;
+    const menu = menuRef.current;
+    if (!open || !trigger || !menu) return;
+    const pane = trigger.closest('main');
     const update = (): void => {
-      const rect = triggerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const roomBelow = window.innerHeight - rect.bottom - 10;
+      const rect = trigger.getBoundingClientRect();
+      const paneRect = pane?.getBoundingClientRect();
+      const topBound = Math.max(0, paneRect?.top ?? 0) + MENU_EDGE_INSET;
+      const bottomBound = Math.min(window.innerHeight, paneRect?.bottom ?? window.innerHeight) - MENU_EDGE_INSET;
+      const roomBelow = Math.max(0, bottomBound - rect.bottom - MENU_GAP);
+      const roomAbove = Math.max(0, rect.top - MENU_GAP - topBound);
       const hasDescriptions = options.some(option => option.description);
       const width = Math.min(window.innerWidth - 16, Math.max(rect.width, hasDescriptions ? 288 : 160));
-      const estimatedHeight = Math.min(320, Math.max(80, options.length * (hasDescriptions ? 60 : 36) + 12));
-      const showAbove = roomBelow < estimatedHeight && rect.top > roomBelow;
-      setPlacement({
-        // 菜单宽度独立于紧凑的触发按钮，长说明不再挤成竖排。
-        left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
-        width,
-        ...(showAbove ? { bottom: window.innerHeight - rect.top + 5 } : { top: rect.bottom + 5 }),
-      });
+      menu.style.width = `${width}px`;
+      menu.style.removeProperty('max-height');
+      const box = menu.getBoundingClientRect();
+      const showAbove = box.height > roomBelow && roomAbove > roomBelow;
+      const room = showAbove ? roomAbove : roomBelow;
+      if (box.height > room) menu.style.maxHeight = `${room}px`;
+      menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - box.width - 8))}px`;
+      menu.style.top = showAbove ? 'auto' : `${rect.bottom + MENU_GAP}px`;
+      menu.style.bottom = showAbove ? `${window.innerHeight - rect.top + MENU_GAP}px` : 'auto';
+    };
+    const onScroll = (event: Event) => {
+      if (!(event.target instanceof Node && menu.contains(event.target))) update();
     };
     update();
+    const observer = new ResizeObserver(update);
+    observer.observe(trigger);
+    if (pane) observer.observe(pane);
     window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, true);
+    window.addEventListener('scroll', onScroll, true);
     return () => {
+      observer.disconnect();
       window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('scroll', onScroll, true);
     };
   }, [open, options]);
 
@@ -218,15 +225,13 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
         <span className={selected ? 'pi-select-value' : 'pi-select-placeholder'}>{selected?.label ?? placeholder}</span>
         <ChevronDown className="pi-select-chevron" />
       </button>
-      {/* placement 为 null 时先不渲染，避免菜单在拿到坐标前闪在左上角。 */}
-      {open && placement && createPortal(
+      {open && createPortal(
         <PopoverSurface
           ref={menuRef}
           id={listId}
           className={`pi-select-menu ${menuClassName}`}
           role="listbox"
           aria-label={label}
-          style={{ left: placement.left, width: placement.width, top: placement.top, bottom: placement.bottom }}
           onKeyDown={onMenuKeyDown}
           onBlurCapture={(event) => {
             const next = event.relatedTarget as Node | null;

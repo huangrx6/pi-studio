@@ -9,7 +9,7 @@ import {
   Maximize2,
   MessageCirclePlus,
   Minimize2,
-  PanelRight,
+  PanelRightClose,
   Plus,
   Terminal,
   X,
@@ -149,7 +149,7 @@ export function PanelTabBar<T extends PanelTabItem>({
     return <div className="panel-tabbar is-empty">
       <strong className="panel-context-name" title={workspaceName}>{workspaceName || '工具'}</strong>
       <div className="panel-tools">
-        <button className="icon-button" type="button" aria-label="收起右侧面板" title="收起右侧面板" onClick={onCollapse}><PanelRight /></button>
+        <button className="icon-button panel-collapse-entry" type="button" aria-label="收起右侧面板" title="收起右侧面板" onClick={onCollapse}><PanelRightClose /></button>
       </div>
     </div>;
   }
@@ -284,7 +284,7 @@ export function PanelTabBar<T extends PanelTabItem>({
       </div>
       <button className={`icon-button ${split ? 'is-active' : ''}`} type="button" aria-label={split ? '退出分栏' : '分栏'} title={split ? '退出分栏' : '分栏'} onClick={onToggleSplit}><Columns2 /></button>
       <button className="icon-button" type="button" aria-label={fullscreen ? '退出全屏' : '全屏'} title={fullscreen ? '退出全屏' : '应用内全屏'} onClick={onToggleFullscreen}>{fullscreen ? <Minimize2 /> : <Maximize2 />}</button>
-      <button className="icon-button" type="button" aria-label="收起右侧面板" title="收起右侧面板" onClick={onCollapse}><PanelRight /></button>
+      <button className="icon-button panel-collapse-entry" type="button" aria-label="收起右侧面板" title="收起右侧面板" onClick={onCollapse}><PanelRightClose /></button>
     </div>
   </div>;
 }

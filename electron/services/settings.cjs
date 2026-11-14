@@ -38,7 +38,13 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
   const db = getStudioDatabase();
   const providers = db.listProviders();
   const models = db.listModels();
-  const credentialIds = new Set(db.listCredentials().map((item) => item.providerId));
+  const credentialIds = new Set((await db.listCredentialsAsync()).map((item) => item.providerId));
+  const mcpServers = await db.listMcpServersAsync();
+  const oauthStates = new Map(await Promise.all(
+    mcpServers
+      .filter((server) => server.transport === 'http' && server.url)
+      .map(async (server) => [server.url, await db.readMcpOAuthStateAsync(server.url)]),
+  ));
   const enabledProviderIds = new Set(providers.filter((provider) => provider.enabled).map((provider) => provider.id));
   const extensionRuntime = extensionHostSnapshot();
   const skills = discoverSkills(cwd);
@@ -70,7 +76,7 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
       enabled: model.enabled,
       origin: model.source === 'override' ? 'override' : 'configured',
     })),
-    mcp: db.listMcpServers().map((server) => ({
+    mcp: mcpServers.map((server) => ({
       name: server.name,
       transport: server.transport,
       cwd: server.cwd,
@@ -85,7 +91,7 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
       envKeys: server.envKeys,
       headerKeys: server.headerKeys,
       oauthConnected: server.transport === 'http'
-        && Boolean(db.readMcpOAuthState(server.url)?.tokens?.access_token),
+        && Boolean(oauthStates.get(server.url)?.tokens?.access_token),
       connected: mcpRuntime.servers.find((item) => item.name === server.name)?.connected || false,
       toolCount: mcpRuntime.servers.find((item) => item.name === server.name)?.toolCount || 0,
       error: mcpRuntime.errors.find((item) => item.server === server.name)?.message || '',

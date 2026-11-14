@@ -172,15 +172,14 @@
 
 .conversation-extension-dock {
   display: flex;
-  width: min(var(--content), calc(100% - var(--space-8) - var(--space-8)));
+  width: min(var(--content), 100%);
   height: 32px;
   min-width: 0;
   flex: none;
   margin-inline: auto;
   overflow: hidden;
 }
-/* 输入框下方：与输入框之间留 8px。这是 footer 落点原本的语义。 */
-.conversation-extension-dock.is-footer { margin-top: var(--space-2); }
+.conversation-extension-dock.is-footer { margin-bottom: var(--space-2); }
 .conversation-extension-dock-items {
   display: flex;
   height: 100%;

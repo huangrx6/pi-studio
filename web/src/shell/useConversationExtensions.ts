@@ -73,7 +73,7 @@ export function useConversationExtensions({
     () => orderConversationExtensionItems(
       surface.items.filter((item) => {
         if (item.slot === 'conversation.detail') return true;
-        // 用户在设置里选的落点优先：隐藏、只在顶栏、只在输入框下，缺省按声明全部渲染。
+        // 用户在设置里选的落点优先，缺省按声明的全部位置渲染。
         const placement = placementForItem(extensionPlacements, item);
         return (item.slots ?? [item.slot]).some((slot) => (
           (slot === 'status.chip' || slot === 'conversation.footer')

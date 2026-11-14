@@ -51,6 +51,7 @@ import type { BackgroundMedia } from './shared/preferences';
 import type { FilePreviewResult } from './types/file-preview-types';
 import type { UpdateSnapshot } from './types/update-types';
 import type { RuntimeRefreshSnapshot } from './types/runtime-types';
+import type { GitWorkspaceStatus } from './types/git-types';
 import type {
   RuntimeServiceSnapshot,
   RuntimeServiceStopResult,
@@ -415,6 +416,8 @@ declare global {
       confirmResponse(payload: PermissionConfirmResponse): void;
       /** 读取侧边栏工作区/会话列表、当前模型与工作目录。 */
       state(cwd?: string): Promise<{ workspaces: PiWorkspace[]; model: ModelSelection; cwd: string }>;
+      /** 当前会话目录的 Git 分支、提交、改动和 worktree 状态。 */
+      gitWorkspaceStatus(cwd?: string): Promise<GitWorkspaceStatus>;
       /** 新建一条 Durable 会话；持久目标由 /goal 在同一会话中按需启用。 */
       createConversation(payload: {
         cwd: string;
@@ -511,6 +514,7 @@ declare global {
       file(cwd: string, path: string): Promise<{ path: string; size: number; binary: boolean; text: string }>;
       /** 读取有大小上限、可直接交给统一预览组件的数据。 */
       filePreview(cwd: string, path: string): Promise<FilePreviewResult>;
+      writeFile(payload: { cwd: string; path: string; text: string }): Promise<{ ok: boolean; path: string; size: number }>;
       /** 只读打开当前会话已记录的轮次变更文件。 */
       temporaryModel(payload?: { modelRef?: string; thinkingLevel?: import('./types/model-types').ThinkingLevel }): Promise<import('./types/model-types').ModelSelection>;
       temporaryPrompt(payload: { id: string; text: string; images: { data: string; mimeType: string }[]; modelRef: string; thinkingLevel: string }): Promise<{ ok: boolean }>;

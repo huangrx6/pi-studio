@@ -132,12 +132,46 @@ try {
   );
   assert.deepEqual(guideBrandStyle, homeBrandStyle, 'guide and home brand typography should match');
   assert.deepEqual(guideNavLinkStyle, homeNavLinkStyle, 'guide and home navigation typography should match');
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   await page.waitForFunction(() => getComputedStyle(document.body).backgroundColor === 'rgb(255, 255, 255)');
   await page.screenshot({ path: path.join(output, 'index-desktop-light.png'), animations: 'disabled' });
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await page.getByRole('button', { name: '切换到深色', exact: true }).click();
   await page.waitForFunction(() => getComputedStyle(document.body).backgroundColor === 'rgb(0, 0, 0)');
   await page.screenshot({ path: path.join(output, 'index-desktop-dark.png'), animations: 'disabled' });
+
+  const heroShot = page.locator('.hero-screen');
+  await heroShot.focus();
+  await page.keyboard.press('Enter');
+  await page.getByRole('dialog').waitFor();
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog').waitFor({ state: 'hidden' });
+  assert.ok(await heroShot.evaluate(link => link === document.activeElement), 'closing the image should return keyboard focus');
+
+  const stage = page.locator('.tour-stage');
+  await stage.waitFor();
+  for (const id of ['workbench', 'subagents', 'extensions', 'workbench']) {
+    await page.locator(`#${id}`).evaluate(scene => scene.scrollIntoView({ behavior: 'instant', block: 'center' }));
+    await page.locator(`.scene-index [href="#${id}"][aria-current="step"]`).waitFor();
+  }
+  await page.screenshot({ path: path.join(output, 'index-tour.png'), animations: 'disabled' });
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await stage.waitFor({ state: 'hidden' });
+  assert.equal(await page.locator('.scene-shot:visible').count(), 3, 'all scenes should be readable with reduced motion');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await stage.waitFor({ state: 'hidden' });
+  assert.equal(await page.locator('.scene-shot:visible').count(), 3, 'mobile should show each screenshot beside its description');
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'mobile homepage should fit the viewport');
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+  await page.screenshot({ path: path.join(output, 'index-mobile.png'), animations: 'disabled' });
+
+  const staticPage = await browser.newPage({ javaScriptEnabled: false, viewport: desktopViewport });
+  await staticPage.goto(pathToFileURL(indexPath).href);
+  assert.equal(await staticPage.locator('.scene-shot:visible').count(), 3, 'tour should work as a static gallery without JavaScript');
+  for (const source of await staticPage.locator('img[src]').evaluateAll(images => images.map(image => image.src))) {
+    await access(fileURLToPath(source));
+  }
+  await staticPage.close();
 
   assert.deepEqual(errors, []);
   console.log(`Documentation checks passed; previews saved to ${output}`);

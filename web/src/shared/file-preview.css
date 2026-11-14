@@ -1,4 +1,4 @@
-/* Unified read-only file preview: one toolbar, one body and one state model. */
+/* Unified file preview/editor: one toolbar, one body and one state model. */
 
 .file-preview-pane {
   display: flex;
@@ -226,6 +226,26 @@
   background: var(--surface);
 }
 
+.file-preview-code.has-line-numbers {
+  display: flex;
+  align-items: stretch;
+}
+
+.file-preview-line-numbers {
+  display: flex;
+  min-width: 48px;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 18px 12px 40px 8px;
+  border-right: 1px solid var(--divider);
+  color: var(--faint);
+  font: var(--text-sm)/var(--leading-relaxed) var(--mono);
+  user-select: none;
+}
+
+.file-preview-line-numbers span { display: block; min-height: 1.65em; }
+.file-preview-code-content { min-width: max-content; flex: 1; }
+
 .file-preview-code .markdown {
   min-width: max-content;
   padding: 18px 20px 40px;
@@ -252,6 +272,40 @@
   color: var(--text);
   font: var(--text-sm)/var(--leading-relaxed) var(--mono);
   white-space: pre;
+}
+
+.file-preview-editor {
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  resize: none;
+  padding: 18px 20px 40px;
+  border: 0;
+  outline: 0;
+  background: var(--surface);
+  color: var(--text);
+  font: var(--text-sm)/var(--leading-relaxed) var(--mono);
+  white-space: pre;
+  tab-size: 2;
+}
+
+.file-preview-find {
+  top: var(--space-3);
+  right: var(--space-3);
+  width: min(360px, calc(100% - var(--space-6)));
+}
+
+.file-preview-save-error {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  z-index: 3;
+  padding: 6px 10px;
+  border: 1px solid var(--error-border);
+  border-radius: var(--radius-control);
+  background: var(--error-soft);
+  color: var(--error);
+  font-size: var(--text-xs);
 }
 
 .file-preview-code-stack {

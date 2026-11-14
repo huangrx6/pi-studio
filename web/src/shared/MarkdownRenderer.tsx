@@ -4,7 +4,7 @@
  * 这个模块由 `Markdown.tsx` 按需加载；语法高亮器只在源码实际包含代码块时
  * 再加载。安全边界与链接行为仍由这个单一实现负责。
  */
-import { memo, useContext, useEffect, useState } from 'react';
+import { createContext, memo, useContext, useEffect, useState } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getActivePreferences } from './preferences';
@@ -12,7 +12,9 @@ import { safeMarkdownImageSource } from './safe-url.js';
 import rehypeLocalPaths from './rehype-local-paths.mjs';
 import { MarkdownActions } from './markdown-actions';
 import { MarkdownPathLink } from './MarkdownPathLink';
+import { localHrefPath, resolvePathToken } from './file-path-links.mjs';
 import { hasMarkdownCode } from './markdown-code.mjs';
+import { copyMarkdownSource } from './markdown-copy';
 import {
   loadMarkdownHighlighter,
   loadedMarkdownHighlighter,
@@ -20,7 +22,8 @@ import {
 } from './markdown-highlighter-loader';
 
 /**
- * 代码块外壳：语言标签 + 复制。
+ * 代码块外壳：语言标签 + 复制。文件源码视图会关闭这层 chrome，保留同一套
+ * Markdown/高亮解析，但把代码直接铺在编辑器式的内容面上。
  *
  * 代码块本身仍由 `<pre><code>` 承担，这里只加一层 chrome；语言从
  * rehype 挂在 code 上的 `language-*` class 里取，取不到就不显示标签。
@@ -48,6 +51,17 @@ function MarkdownCodeBlock({ language, children }: { language: string; children:
   </div>;
 }
 
+const MarkdownCodeChromeContext = createContext(true);
+
+const MarkdownPre: NonNullable<Components['pre']> = ({ node, children, ...props }) => {
+  const codeChrome = useContext(MarkdownCodeChromeContext);
+  const code = node?.children?.find((child) => child.type === 'element' && child.tagName === 'code');
+  const className = (code && 'properties' in code ? code.properties?.className : undefined) as string[] | undefined;
+  const language = (className ?? []).find((name) => name.startsWith('language-'))?.slice('language-'.length) ?? '';
+  const pre = <pre {...props}>{children}</pre>;
+  return codeChrome ? <MarkdownCodeBlock language={language}>{pre}</MarkdownCodeBlock> : <pre {...props} className="markdown-source-pre">{children}</pre>;
+};
+
 /**
  * 自定义渲染规则。放在模块作用域：ReactMarkdown 每次 render 都新建
  * components 会导致所有节点重挂载，流式输出时会明显掉帧。
@@ -60,6 +74,8 @@ const components: Components = {
     if (typeof dataPath === 'string') {
       return <MarkdownPathLink path={dataPath}>{children}</MarkdownPathLink>;
     }
+    const localPath = localHrefPath(href || '');
+    const localTarget = localPath ? resolvePathToken(localPath, actions.cwd) : null;
     // node 是 react-markdown 的 AST 节点；解构出来是为了避免它被 ...props 透传到 DOM。
     return <a {...props} href={href} onClick={(event) => {
       // 页内锚点与无链接不拦截，保持默认滚动行为。
@@ -67,6 +83,10 @@ const components: Components = {
       // 先统一阻止默认导航：这是 Electron 窗口，相对链接或 file: 链接
       // 会把整个渲染进程导航走，模型输出又不可信，不能交给浏览器处理。
       event.preventDefault();
+      if (localTarget) {
+        (actions.openLocalFile || actions.openFile)?.(localTarget);
+        return;
+      }
       // http(s) 优先交给宿主：有内嵌浏览器面板时开在侧边栏，否则回落到
       // 主进程按偏好打开系统浏览器或应用内窗口。
       if (/^https?:\/\//i.test(href)) {
@@ -75,14 +95,7 @@ const components: Components = {
       }
     }}>{children}</a>;
   },
-  pre({ node, children, ...props }) {
-    const code = node?.children?.find((child) => child.type === 'element' && child.tagName === 'code');
-    const className = (code && 'properties' in code ? code.properties?.className : undefined) as string[] | undefined;
-    const language = (className ?? []).find((name) => name.startsWith('language-'))?.slice('language-'.length) ?? '';
-    return <MarkdownCodeBlock language={language}>
-      <pre {...props}>{children}</pre>
-    </MarkdownCodeBlock>;
-  },
+  pre: MarkdownPre,
   img({ src, alt, node: _node, ...props }) {
     const safeSrc = safeMarkdownImageSource(src);
     if (!safeSrc) return null;
@@ -99,7 +112,7 @@ const components: Components = {
  * 正文会先以无高亮但完整可读的形式渲染。检测到代码块后才加载
  * rehypeHighlight；未标注语言仍会自动检测，未知语言静默跳过。
  */
-export const MarkdownRenderer = memo(function MarkdownRenderer({ children }: { children: string }) {
+export const MarkdownRenderer = memo(function MarkdownRenderer({ children, codeChrome = true }: { children: string; codeChrome?: boolean }) {
   const [highlighter, setHighlighter] = useState<MarkdownHighlighterPlugin | null>(loadedMarkdownHighlighter);
   const [highlighterStatus, setHighlighterStatus] = useState<'idle' | 'loading' | 'failed'>('idle');
 
@@ -121,9 +134,11 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ children }: { c
     ? [rehypeLocalPaths, highlighter]
     : [rehypeLocalPaths];
 
-  return <div className="markdown">
-    <ReactMarkdown components={components} remarkPlugins={[remarkGfm]} rehypePlugins={rehypePlugins} skipHtml>
-      {children}
-    </ReactMarkdown>
-  </div>;
+  return <MarkdownCodeChromeContext.Provider value={codeChrome}>
+    <div className="markdown" onCopy={(event) => copyMarkdownSource(event, children)}>
+      <ReactMarkdown components={components} remarkPlugins={[remarkGfm]} rehypePlugins={rehypePlugins} skipHtml>
+        {children}
+      </ReactMarkdown>
+    </div>
+  </MarkdownCodeChromeContext.Provider>;
 });

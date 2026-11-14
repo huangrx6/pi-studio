@@ -62,13 +62,14 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
   const treeRequestRef = useRef(0);
   const [fileMenuOpen, setFileMenuOpen] = useState(false);
   const [fileApps, setFileApps] = useState<Array<{ name: string; path: string; icon?: string }>>([]);
+  const [fileAppsLoading, setFileAppsLoading] = useState(false);
   const fileActionsRef = useRef<HTMLDivElement>(null);
 
   function setActivePanelTabId(id: string) {
     if (activePanelTabIdRef.current !== id) {
       ++fileReadRef.current;
       setFile(null); setFileBusy(false); setFileError(null);
-      setFileMenuOpen(false); setFileApps([]);
+      setFileMenuOpen(false); setFileApps([]); setFileAppsLoading(false);
     }
     activePanelTabIdRef.current = id;
     setActivePanelTabIdState(id);
@@ -90,6 +91,14 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     } finally {
       if (request === treeRequestRef.current && cwd === workspaceRef.current) setTreeBusy(false);
     }
+  }
+
+  /** 读取指定目录，用于文件树的行内展开，不改变当前根目录视图。 */
+  async function readTreeDirectory(nextPath: string) {
+    const cwd = workspaceRef.current;
+    if (!cwd) throw new Error('未选择工作区');
+    const result = await window.piApi.files(cwd, nextPath);
+    return result.entries;
   }
 
   /** 打开右侧面板，并用两帧 rAF 触发滑入动画。 */
@@ -431,6 +440,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     if (fileMenuOpen) { setFileMenuOpen(false); return; }
     setFileMenuOpen(true);
     setFileApps([]);
+    setFileAppsLoading(true);
     const owner = activePanelTabIdRef.current;
     const revision = fileReadRef.current;
     try {
@@ -438,6 +448,8 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
       if (owner === activePanelTabIdRef.current && revision === fileReadRef.current) setFileApps(result.apps);
     } catch (error) {
       if (owner === activePanelTabIdRef.current && revision === fileReadRef.current) setFileError(errorText(error));
+    } finally {
+      if (owner === activePanelTabIdRef.current && revision === fileReadRef.current) setFileAppsLoading(false);
     }
   }
 
@@ -455,6 +467,16 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     setFileMenuOpen(false);
     try { await window.piApi.revealFile(request); }
     catch (error) { setError(errorText(error)); }
+  }
+
+  async function saveCurrentFileText(text: string) {
+    const tab = panelTabsRef.current.find((item) => item.id === activePanelTabIdRef.current);
+    if (!tab || tab.kind !== 'file' || (tab.source && tab.source !== 'workspace') || !tab.path || !tab.cwd) {
+      throw new Error('只有工作区文本文件可以编辑');
+    }
+    await window.piApi.writeFile({ cwd: tab.cwd, path: tab.path, text });
+    fileCacheRef.current.drop(panelFileKey({ path: tab.path, source: 'workspace', cwd: tab.cwd, sessionId: tab.sessionId }));
+    await loadFileToTab(tab);
   }
 
   const activePanelTab = panelTabs.find((tab) => tab.id === activePanelTabId) ?? panelTabs[0];
@@ -522,9 +544,11 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     fileMenuOpen,
     setFileMenuOpen,
     fileApps,
+    fileAppsLoading,
     setFileApps,
     fileActionsRef,
     loadTree,
+    readTreeDirectory,
     openPanel,
     closePanel,
     openTemporaryChat,
@@ -547,5 +571,6 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     showFileActions,
     openFileWith,
     revealCurrentFile,
+    saveCurrentFileText,
   };
 }

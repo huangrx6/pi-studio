@@ -75,3 +75,35 @@ test('credential storage fails closed when Electron safeStorage is unavailable',
     (error) => error.code === SECURE_STORAGE_UNAVAILABLE && /未写入/.test(error.message),
   );
 });
+
+test('encrypted read projections stay available while safeStorage is temporarily unavailable', (t) => {
+  const safeStorage = {
+    available: true,
+    isEncryptionAvailable: () => safeStorage.available,
+    encryptString(value) { return Buffer.from(`protected:${value}`, 'utf8'); },
+    decryptString(value) {
+      const decoded = Buffer.from(value).toString('utf8');
+      if (!decoded.startsWith('protected:')) throw new Error('Invalid test ciphertext');
+      return decoded.slice('protected:'.length);
+    },
+  };
+  mockElectron(t, { safeStorage });
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-secure-read-'));
+  const { StudioDatabase } = require('../../electron/core/studio-db.cjs');
+  const database = new StudioDatabase(path.join(directory, 'studio.sqlite'));
+  t.after(() => { database.db.close(); fs.rmSync(directory, { recursive: true, force: true }); });
+  database.upsertMcpServer({
+    name: 'encrypted-server',
+    transport: 'stdio',
+    command: 'synthetic-command',
+    args: [],
+    env: { TOKEN: 'secret' },
+    headers: { Authorization: 'secret-header' },
+    enabled: true,
+  });
+
+  safeStorage.available = false;
+  assert.doesNotThrow(() => database.listMcpServers({ includeSecrets: true }));
+  assert.deepEqual(database.listMcpServers({ includeSecrets: true })[0].env, {});
+  assert.deepEqual(database.listMcpServers({ includeSecrets: true })[0].headers, {});
+});

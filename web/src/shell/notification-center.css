@@ -1,4 +1,4 @@
-.notification-center { position: relative; -webkit-app-region: no-drag; }
+.notification-center { -webkit-app-region: no-drag; }
 .notification-trigger { position: relative; }
 .notification-trigger.has-unread { color: var(--accent-foreground); }
 .notification-trigger.is-active { background: var(--surface-soft); color: var(--text); }
@@ -20,11 +20,10 @@
 }
 
 .notification-panel {
-  position: fixed;
+  --popover-max-height: 520px;
   z-index: 250;
   display: flex;
-  width: min(380px, calc(100vw - 24px));
-  max-height: min(520px, calc(100dvh - 24px));
+  width: 380px;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -32,7 +31,6 @@
   background: var(--overlay-surface);
   color: var(--text);
   box-shadow: var(--shadow-popover);
-  -webkit-app-region: no-drag;
 }
 .notification-panel-head {
   display: flex;

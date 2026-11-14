@@ -12,14 +12,39 @@
 .app.is-panel-fullscreen .sidebar,
 .app.is-panel-fullscreen .main { display: none; }
 .file-panel { width: var(--panel-w); padding: 0; background: var(--surface); border-left: 1px solid var(--border); }
-.file-panel.is-split:not(.is-fullscreen) { width: min(760px, 64vw); }
 .file-panel.is-fullscreen { width: 100%; flex: 1; border-left: 0; }
 .panel-body { position: relative; display: flex; flex: 1; min-height: 0; }
-.panel-body.is-split { display: grid; grid-template-columns: minmax(220px, .9fr) minmax(0, 1.4fr); }
+.panel-body.is-split {
+  /* 默认比例供首帧使用；拖拽时由内联样式覆盖。 */
+  --split-tree-width: 38%;
+  display: grid;
+  grid-template-columns: minmax(160px, calc(var(--split-tree-width, 38%) - 4px)) 8px minmax(0, 1fr);
+}
 .panel-file-browser, .panel-file-preview { display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; }
-.panel-split-tree { min-width: 0; min-height: 0; border-right: 1px solid var(--border); }
+.panel-split-tree { grid-column: 1; grid-row: 1; min-width: 0; min-height: 0; }
 .panel-split-tree .panel-file-browser { height: 100%; }
-.panel-split-main { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.panel-split-handle {
+  position: relative;
+  z-index: 2;
+  grid-column: 2;
+  grid-row: 1;
+  width: 8px;
+  margin-inline: -4px;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+}
+.panel-split-handle::after {
+  position: absolute;
+  inset: 0 3px;
+  background: var(--border);
+  opacity: .72;
+  content: '';
+  transition: background var(--transition-fast, .15s) ease;
+}
+.panel-split-handle:hover::after,
+.panel-split-handle.is-active::after { background: var(--accent); opacity: .55; }
+.panel-split-main { position: relative; grid-column: 3; grid-row: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .panel-split-main .panel-file-preview, .panel-split-main .panel-start { flex: 1; }
 .terminal-tab-stack { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; }
 .terminal-tab-stack.is-background { position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
@@ -33,7 +58,6 @@
 .panel-route-loading svg { width: var(--icon-md); height: var(--icon-md); animation: panel-route-spin .8s linear infinite; }
 @keyframes panel-route-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .panel-route-loading svg { animation: none; } }
-@media (max-width: 900px) { .file-panel.is-split:not(.is-fullscreen) { width: 100%; } .panel-body.is-split { grid-template-columns: minmax(160px, .85fr) minmax(0, 1.15fr); } }
 
 /* Provider marks: native brand glyphs when available, neutral fallback otherwise. */
 /* 供应商标记优先使用品牌图形，缺失时回退到首字母；尺寸由组件传入的
@@ -100,6 +124,10 @@ z-index 40，宽度和最大高度都受限并可内部滚动；每个操作行�
 .file-action > svg, .file-action > img { width: var(--icon-md); height: var(--icon-md); flex: none; border-radius: var(--radius-tag); }
 .file-action > img { object-fit: contain; }
 .file-action > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-action-loading { color: var(--faint); cursor: default; }
+.file-action-loading:hover { background: transparent; color: var(--faint); }
+.file-action-loading > svg { animation: panel-route-spin .8s linear infinite; }
+.file-actions-empty { padding: 7px 8px; color: var(--faint); font-size: var(--text-xs); }
 .file-actions-sep { height: 1px; margin: 4px 6px; background: var(--border); }
 
 /* Resource cards for MCP and global skills. */

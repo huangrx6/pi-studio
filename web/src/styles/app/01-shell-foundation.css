@@ -25,7 +25,9 @@
 
 * { box-sizing: border-box; }
 html, body, #root { width: 100%; height: 100%; margin: 0; }
-body { font: var(--text-base)/var(--leading-body) var(--font); color: var(--text); background: var(--bg); -webkit-font-smoothing: antialiased; overflow: hidden; --dsh-scrollbar-thumb: var(--scrollbar); --dsh-scrollbar-thumb-hover: var(--scrollbar-hover); --dsh-scrollbar-width: 6px; }
+/* 页面底色就是外框色：窗口四角、滚动回弹以及壁纸层加载前都不会露出内容画布的
+   深色。内容区自己再画 --surface-canvas。 */
+body { font: var(--text-base)/var(--leading-body) var(--font); color: var(--text); background: var(--surface-chrome); -webkit-font-smoothing: antialiased; overflow: hidden; --dsh-scrollbar-thumb: var(--scrollbar); --dsh-scrollbar-thumb-hover: var(--scrollbar-hover); --dsh-scrollbar-width: 6px; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { border: 0; background: var(--transparent); cursor: pointer; transition: background var(--transition), color var(--transition), border-color var(--transition), box-shadow var(--transition); }
 button:disabled { cursor: not-allowed; opacity: .48; }
@@ -54,21 +56,29 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 isolation 建立独立层叠上下文，配合下面的 :has 规则在设置全屏时隐藏其余兄弟
 节点。按钮、输入框和图标尺寸统一走共享控件令牌，保证各面板手感一致。 */
 
-/* 方案 A：应用窗口是一张不透明卡片，壁纸（.background-layer，fixed）只在四周留白可见。
-   顶部留 44px 给 macOS 红绿灯（离卡片更从容），左右与底部各 18px。 */
+/* 整个窗口是一张连续的外框：顶部横带、左侧栏、右侧与底部窄带共用同一层
+   chrome 底色，中间挖出一块圆角的内容区。内容区的内缩量由 --content-gutter
+   统一给出，任何一层（画布、右栏、壁纸层）都从这里取，避免四条边各写一份。
+   启用壁纸时，外框再离开窗口边缘，壁纸只出现在这圈留白里。 */
 .app {
   --shell-top: 0px;
   --shell-gutter: 0px;
+  /* 内容孔洞离外框右、底两条窄带的距离；顶部与左侧由标题行和侧栏本身承担。 */
+  --content-gutter: var(--space-2);
+  position: relative;
   display: flex;
   height: calc(100dvh - var(--shell-top) - var(--shell-gutter));
   margin: var(--shell-top) var(--shell-gutter) var(--shell-gutter);
   overflow: hidden;
   isolation: isolate;
-  border-radius: var(--radius-card);
-  background: var(--surface-canvas);
+  border-radius: var(--radius-panel);
+  /* The frame is one chrome surface; only the carved-out content hole shows the
+     canvas, so the boundary reads as a single clean transition. */
+  background: var(--surface-chrome);
 }
 
-/* 只有壁纸存在时才是「卡片」：有留白才需要边框和投影，满窗时保持整块画布。 */
+/* 启用壁纸时才是一张浮起来的卡片：留白、描边和投影都只服务于「壁纸在窗外」
+   这一种情形，满窗时外框与窗口边缘齐平，不再多画一圈线。 */
 .app.has-custom-background {
   --shell-top: 44px;
   --shell-gutter: 18px;
@@ -78,7 +88,10 @@ isolation 建立独立层叠上下文，配合下面的 :has 规则在设置全�
 /* 全屏时没有红绿灯，卡片不需要再让出顶部：四周取同一个留白。 */
 html[data-window-fullscreen='true'] .app.has-custom-background { --shell-top: var(--shell-gutter); }
 
-.app:has(.settings-overlay) > :is(.background-layer, .sidebar, .main) { visibility: hidden; }
+.app:has(.settings-overlay) > :is(.background-layer, .sidebar, .content-region, .main, .file-panel, .file-panel-backdrop) {
+  visibility: hidden;
+  pointer-events: none;
+}
 .icon-button { display: inline-grid; place-items: center; width: var(--icon-button); height: var(--icon-button); flex: none; padding: 0; border-radius: var(--radius-control); color: var(--icon); }
 /* 图标按钮的图标一律 sm：不再让各面板自己把盒子改成 24/29/32 或把图标改成 13/15。 */
 .icon-button svg { width: var(--icon-sm); height: var(--icon-sm); }
@@ -109,7 +122,7 @@ html[data-window-fullscreen='true'] .app.has-custom-background { --shell-top: va
 .state-dot.is-busy { background: var(--accent); animation: pulse 1.5s ease-in-out infinite; }
 
 /* Sidebar */
-/* 侧栏宽度由 --sidebar-w 决定，默认 280，1200/760 断点降到 252/212；它是
+/* 侧栏宽度由 --sidebar-w 决定，默认 284，拖拽范围 284–360；它是
 flex:none 的纵向列，唯一滚动容器是 workspace-list（flex:1 + min-height:0 +
 overflow:auto），底部账号行因此始终贴底。折叠态后来被改成完全隐藏，早先的
 72px 图标轨道规则已经失效，不要据此推断布局。顶栏是可拖拽窗口区域，按钮

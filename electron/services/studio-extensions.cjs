@@ -717,7 +717,7 @@ function providerCredentialCapability(row) {
       const db = getStudioDatabase();
       const provider = db.getProvider(id);
       if (!provider) throw new Error(`模型来源不存在：${id}`);
-      const credential = db.readCredential(id);
+      const credential = await db.readCredentialAsync(id);
       options?.signal?.throwIfAborted();
       if (!credential || credential.type !== 'api_key' || typeof credential.key !== 'string') {
         return undefined;
