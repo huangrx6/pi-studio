@@ -3,7 +3,7 @@
  *
  * Native fullscreen hides the macOS window buttons, so the shell must stop
  * reserving their gutter: the sidebar brand, the conversation title and the
- * right panel title share one 48px row whose dividers form a single line.
+ * right panel title share one row above the rounded content area.
  *
  * Run after `pnpm run build`: node tools/qa/qa-window-fullscreen.mjs
  * Uses only a fresh temporary Studio profile and writes screenshots to
@@ -28,8 +28,6 @@ const env = {
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.PI_STUDIO_DEV;
 
-const HEADER = 56;
-
 /** Measure the shared top rows, their dividers and the native chrome flag. */
 const topRows = (page) => page.evaluate(() => {
   const read = (selector) => {
@@ -46,11 +44,11 @@ const topRows = (page) => page.evaluate(() => {
       paddingTop: style.paddingTop,
       paddingLeft: style.paddingLeft,
       borderBottomWidth: style.borderBottomWidth,
-      borderBottomColor: style.borderBottomColor,
     };
   };
   return {
     fullscreen: document.documentElement.dataset.windowFullscreen,
+    headerHeight: parseFloat(getComputedStyle(document.querySelector('.app')).getPropertyValue('--header-height')),
     sidebar: read('.sidebar'),
     brand: read('.brand'),
     header: read('.chat-header'),
@@ -73,18 +71,16 @@ const setNativeFullScreen = (app, fullscreen) => app.evaluate(({ BrowserWindow }
   BrowserWindow.getAllWindows()[0].setFullScreen(value);
 }, fullscreen);
 
-/** 顶部只有一行：侧栏品牌、会话标题、右栏标题都在同一行，由收口的那一行画线。 */
+/** The three column titles align above the canvas in both window modes. */
 function assertSingleTitleRow(rows, label, { brandPadding = '92px' } = {}) {
   assert.equal(rows.sidebar.paddingTop, '0px', `${label}: the title row owns the top edge`);
   assert.equal(rows.brand.top, 0, `${label}: the brand sits inside the title row`);
-  assert.equal(rows.brand.height, HEADER, `${label}: the brand matches the shared title height`);
-  assert.equal(rows.brand.bottom, HEADER, `${label}: the brand divider closes the title row`);
+  assert.equal(rows.brand.height, rows.headerHeight, `${label}: the brand matches the shared title height`);
   assert.equal(rows.brand.paddingLeft, brandPadding, `${label}: the brand clears the window controls`);
-  assert.equal(rows.header.bottom, HEADER, `${label}: the conversation title stays inside the shared row`);
-  assert.equal(rows.panelTabbar.bottom, HEADER, `${label}: the workbench title stays inside the shared row`);
-  assert.equal(rows.header.borderBottomWidth, '1px', `${label}: the title row draws the shared divider`);
-  assert.equal(rows.header.borderBottomColor, rows.brand.borderBottomColor, `${label}: the sidebar and the main pane share one divider tone`);
-  assert.equal(rows.panelTabbar.borderBottomColor, rows.brand.borderBottomColor, `${label}: the workbench continues the same divider`);
+  assert.equal(rows.header.bottom, rows.brand.bottom, `${label}: the conversation title stays inside the shared row`);
+  assert.equal(rows.panelTabbar.bottom, rows.brand.bottom, `${label}: the workbench title stays inside the shared row`);
+  assert.equal(rows.header.borderBottomWidth, '0px', `${label}: the conversation title meets the canvas without a border`);
+  assert.equal(rows.panelTabbar.borderBottomWidth, '0px', `${label}: the workbench title meets the canvas without a border`);
   assert.equal(rows.tabs, null, `${label}: the empty state keeps a single row instead of a placeholder tab bar`);
 }
 

@@ -13,9 +13,6 @@
 html[data-window-fullscreen='true'] .sidebar { padding-top: 0; }
 html[data-window-fullscreen='true'] .brand { height: var(--header-height); }
 /* 品牌行接管标题行后，更新徽标要让出右侧的折叠开关（28px 按钮 + 12px 边距 + 8px 间隙）。 */
-/* 全屏不再单独改标题行：收口规则统一由 09/21 决定——
- * 空状态标题行画线，会话里由标签行画线（它横跨整个主栏）。 */
-html[data-window-fullscreen='true'] .panel-tabbar { border-bottom-color: var(--divider); }
 /* 收起侧栏与面板独占窗口时，主标题行不再需要为系统按钮留 92px 安全区。 */
 html[data-window-fullscreen='true'] .is-sidebar-collapsed .chat-header { padding-left: var(--space-6); }
 html[data-window-fullscreen='true'] .file-panel.is-fullscreen .panel-tabbar { padding-left: 10px; }

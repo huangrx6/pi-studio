@@ -10,7 +10,6 @@
   margin: 0;
   padding: 0 10px;
   border: 0;
-  border-bottom: 1px solid var(--border);
   border-radius: 0;
   background: var(--surface);
   -webkit-app-region: drag;
