@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#16201c">
+  <meta name="theme-color" content="#090c18">
   <title>Pi Studio · macOS 桌面 Agent 工作台</title>
-  <meta name="description" content="在 macOS 上和 Agent 一起处理真实项目。在同一个工作区里并排看对话、文件和运行结果，接入自己的模型、技能与扩展。">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2316201c'/%3E%3Ctext x='32' y='48' text-anchor='middle' font-size='50' font-family='Georgia,serif' fill='%23e1f4b2'%3E%CF%80%3C/text%3E%3C/svg%3E">
+  <meta name="description" content="让 Agent 在你的项目里工作。从一次标签搜索的实现出发，看看 Pi Studio 如何并排呈现对话、文件、验证结果，以及模型与工具的选择。">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111626'/%3E%3Ctext x='32' y='48' text-anchor='middle' font-size='50' font-family='Georgia,serif' fill='white'%3E%CF%80%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="docs.css">
   <link rel="stylesheet" href="home.css">
   <script defer src="home.js"></script>
@@ -17,12 +17,11 @@
     <div class="nav-inner nav-in">
       <a class="brand" href="index.html" aria-label="Pi Studio 产品首页"><span class="brand-mark" aria-hidden="true">π</span><span>Pi Studio</span></a>
       <nav class="nav-links" aria-label="站点导航">
-        <a href="#tour">产品导览</a>
-        <a href="guide.html">使用手册</a>
-        <a href="https://github.com/huangrx6/pi-studio">GitHub ↗</a>
+        <a href="#tour">工作流</a><a href="#atlas">配置</a><a href="guide.html">使用手册</a><a href="https://github.com/huangrx6/pi-studio">GitHub ↗</a>
       </nav>
       <button class="theme-toggle" id="themeToggle" type="button" aria-label="切换到深色" hidden>◐</button>
     </div>
+    <div class="reading-meter" aria-hidden="true"><i></i></div>
   </header>
 
   <main id="main">
@@ -30,84 +29,92 @@
       <div class="hero-light" aria-hidden="true"></div>
       <div class="wrap hero-layout">
         <div class="hero-copy">
-          <p class="product-type">macOS 桌面 Agent 工作台</p>
-          <h1 id="hero-title"><i>Pi</i> Studio</h1>
-          <p class="hero-lead">把 Agent 带进你的项目。</p>
-          <p class="hero-description">打开本地文件夹，与 Agent 一起写代码、检查改动，再到终端里验证结果。</p>
-          <div class="hero-actions">
-            <a class="download" href="https://github.com/huangrx6/pi-studio/releases/latest">下载 macOS 版 <span aria-hidden="true">↓</span></a>
-            <a class="hero-guide" href="guide.html#quickstart">安装指南 <span aria-hidden="true">↗</span></a>
-          </div>
+          <p class="product-type"><span aria-hidden="true" class="status-dot"></span> macOS 桌面 Agent 工作台</p>
+          <h1 id="hero-title"><i>Pi</i> Studio<span class="sr-only"> 桌面工作台</span></h1>
+          <p class="hero-lead">从一句需求，到一次可以核对的改动。</p>
+          <p class="hero-description">让 Agent 阅读项目、修改代码、运行测试。左边讨论实现，右边打开文件，逐行核对它做过的改动。</p>
+          <div class="hero-actions"><a class="download" href="https://github.com/huangrx6/pi-studio/releases/latest">下载 macOS 版 <span aria-hidden="true">↓</span></a><a class="hero-guide" href="#tour">看一次完整任务 <span aria-hidden="true">↘</span></a></div>
         </div>
         <figure class="hero-figure">
-          <div class="hero-perspective">
-            <a class="hero-screen shot-link" href="assets/screens/conversation-dark.png" aria-label="放大会话工作区截图">
-              <img src="assets/screens/conversation-dark.png" width="2880" height="1840" fetchpriority="high" alt="Pi Studio 深色会话，计划进度和对话输入框显示在工作区中">
-            </a>
-          </div>
-          <figcaption><span>会话工作区</span><a class="shot-link enlarge" href="assets/screens/conversation-dark.png" aria-label="查看会话工作区大图">查看大图 <span aria-hidden="true">⤢</span></a></figcaption>
+          <div class="hero-perspective"><a class="hero-screen shot-link" href="assets/screens/workbench-dark.png" aria-label="放大 Atlas Notes 工作台截图"><img src="assets/screens/workbench-dark.png" width="2880" height="1840" fetchpriority="high" alt="Atlas Notes 工作台。对话说明搜索改动，右侧 README 列出索引字段与匹配顺序。"></a></div>
+          <figcaption><span><b>Atlas Notes</b> / 标签搜索</span><a class="shot-link" href="assets/screens/workbench-dark.png">查看原图 ↗</a></figcaption>
         </figure>
       </div>
     </section>
 
     <section class="tour wrap" id="tour" aria-labelledby="tour-title">
-      <header class="section-intro">
-        <h2 id="tour-title">走进工作台<span class="accent-dot">.</span></h2>
-        <p>跟着一次开发任务，看工作台如何组织文件、协作和工具。</p>
+      <header class="section-intro" data-reveal>
+        <div><p class="section-tag">工作流 / Atlas Notes</p><h2 id="tour-title">一条搜索需求，<br>怎样落到代码里？</h2></div>
+        <p>我们做了一个演示笔记本。用户想用 <code>#design</code> 找到相关笔记。从改索引到核对结果，你可以跟着这轮对话走一遍。</p>
       </header>
       <div class="tour-grid">
         <div class="tour-stage" hidden>
           <div class="stage-stack"></div>
-          <nav class="scene-index" aria-label="跳到导览场景">
-            <a href="#workbench">工作区</a><a href="#subagents">子智能体</a><a href="#extensions">扩展</a>
-          </nav>
+          <nav class="scene-index" aria-label="跳到导览场景"><a href="#workbench">实现搜索</a><a href="#subagents">分头复核</a><a href="#verify">核对结果</a></nav>
         </div>
         <div class="scenes">
           <article class="scene" id="workbench">
-            <div class="scene-copy">
-              <h3>让文件留在对话旁。</h3>
-              <p>在右侧工作台打开项目文件，一边读预览，一边和 Agent 讨论实现。需要验证时，直接在当前工作区打开终端。</p>
-              <a class="text-link" href="guide.html#files-changes">查看文件与变更 <span aria-hidden="true">↗</span></a>
-            </div>
-            <a class="scene-shot shot-link" href="assets/screens/workbench-dark.png" aria-label="放大并排文件预览截图"><img src="assets/screens/workbench-dark.png" width="2880" height="1840" loading="lazy" decoding="async" alt="工作台中，项目文件预览与会话并排显示"></a>
+            <div class="scene-copy"><p class="section-tag">会话与计划</p><h3>从一句话，<br>拆出三件事。</h3><p>“让标题和标签都能匹配关键词。” Agent 把任务拆成统一索引、补边界测试和更新文档。展开输入框上方的计划，就能核对每一项。</p><a class="text-link" href="guide.html#conversations">了解计划与消息队列 ↗</a></div>
+            <a class="scene-shot shot-link" href="assets/screens/conversation-dark.png" aria-label="打开完整会话与计划"><img src="assets/screens/conversation-dark.png" width="2880" height="1840" loading="lazy" alt="Atlas Notes 会话展示标签搜索实现、代码与已完成的三项计划。"></a>
           </article>
           <article class="scene" id="subagents">
-            <div class="scene-copy">
-              <h3>把独立任务分开跑。</h3>
-              <p>将调查、实现或复核交给子智能体。在会话中查看各自的进度和结果，再回到主任务继续下一步。</p>
-              <a class="text-link" href="guide.html#subagents">了解子智能体 <span aria-hidden="true">↗</span></a>
-            </div>
-            <a class="scene-shot shot-link" href="assets/screens/subagents-light.png" aria-label="放大子智能体截图"><img src="assets/screens/subagents-light.png" width="2880" height="1840" loading="lazy" decoding="async" alt="子智能体视图中列出分工与运行状态"></a>
+            <div class="scene-copy"><p class="section-tag">子智能体</p><h3>实现往前走，<br>复核也能同时做。</h3><p>把大小写、重复标签和空字符串交给一个子智能体检查，让另一个核对文档示例。打开各自的会话，可以追到具体的测试命令与结论。</p><a class="text-link" href="guide.html#subagents">查看子智能体的工作方式 ↗</a></div>
+            <a class="scene-shot shot-link" href="assets/screens/subagents-light.png" aria-label="打开子智能体任务列表"><img src="assets/screens/subagents-light.png" width="2880" height="1840" loading="lazy" alt="索引策略审查正在运行，文档校对已经完成。"></a>
           </article>
-          <article class="scene" id="extensions">
-            <div class="scene-copy">
-              <h3>装入你的工作方式。</h3>
-              <p>在会话里查看扩展提供的运行状态、Git 分支和上下文用量。打开对应面板，就能读到指标背后的详情。</p>
-              <a class="text-link" href="guide.html#extensions">阅读扩展手册 <span aria-hidden="true">↗</span></a>
-            </div>
-            <a class="scene-shot shot-link" href="assets/screens/extensions-light.png" aria-label="放大扩展管理截图"><img src="assets/screens/extensions-light.png" width="2880" height="1840" loading="lazy" decoding="async" alt="会话扩展中心展示运行状态、Git 分支及上下文用量"></a>
+          <article class="scene" id="verify">
+            <div class="scene-copy"><p class="section-tag">文件与验证</p><h3>答案旁边，<br>就是改过的文件。</h3><p>右侧打开 README，就能对照检查标题与标签的匹配顺序。需要亲自验证，可以在同一工作区开终端重跑测试，再从本轮变更查看差异。</p><a class="text-link" href="guide.html#files-changes">查看文件与变更 ↗</a></div>
+            <a class="scene-shot shot-link" href="assets/screens/workbench-dark.png" aria-label="打开并排文档预览"><img src="assets/screens/workbench-dark.png" width="2880" height="1840" loading="lazy" alt="右侧 README 的索引字段表格和匹配顺序与对话并排显示。"></a>
           </article>
         </div>
       </div>
     </section>
 
-    <section class="start" aria-labelledby="start-title">
-      <div class="wrap start-layout">
-        <h2 id="start-title">打开你的<br><i>第一个工作区。</i></h2>
-        <div>
-          <p>为 Apple Silicon 或 Intel Mac 选择安装包，添加自己的模型提供方，然后打开项目文件夹。</p>
-          <a class="download" href="https://github.com/huangrx6/pi-studio/releases/latest">前往下载 <span aria-hidden="true">↗</span></a>
-        </div>
+    <section class="atlas-band" id="atlas" aria-labelledby="atlas-title">
+      <div class="wrap atlas" data-gallery>
+        <header class="section-intro" data-reveal><div><p class="section-tag">模型与运行环境</p><h2 id="atlas-title">工作台，<br>按你的习惯来。</h2></div><p>同一份项目可以搭配不同模型、工具和指令。切换下面的实拍界面，看看每项设置具体管什么。</p></header>
+        <div class="atlas-tabs" role="tablist" aria-label="切换设置画面" hidden><button type="button" data-pane="model-pane">模型接入</button><button type="button" data-pane="harness-pane">Harness 配置</button><button type="button" data-pane="usage-pane">用量记录</button></div>
+        <article class="atlas-pane" id="model-pane">
+          <div><p class="section-tag">Models</p><h3>接入自己的模型。</h3><p>为不同服务商添加来源，选择新对话默认模型。在输入框里随时切换模型和思考强度，也可以并排比较两种回答。</p><a class="text-link" href="guide.html#models">模型配置指南 ↗</a></div>
+          <a class="atlas-image shot-link" href="assets/screens/models-light.png" aria-label="放大模型配置"><img src="assets/screens/models-light.png" width="2880" height="1840" loading="lazy" alt="模型设置列出默认模型、已启用模型和多种模型来源。"></a>
+        </article>
+        <article class="atlas-pane" id="harness-pane">
+          <div><p class="section-tag">Harness</p><h3>规定 Agent 怎么工作。</h3><p>按任务保存配置方案，选择系统指令、技能和工具说明。项目里的 AGENTS.md 可以记录团队的开发约定，下一轮工作也用得上。</p><a class="text-link" href="guide.html#harness">配置指令与工具 ↗</a></div>
+          <a class="atlas-image shot-link" href="assets/screens/harness-light.png" aria-label="放大 Harness 配置"><img src="assets/screens/harness-light.png" width="2880" height="1840" loading="lazy" alt="Harness 配置显示方案、作用域及工具说明开关。"></a>
+        </article>
+        <article class="atlas-pane" id="usage-pane">
+          <div><p class="section-tag">Usage</p><h3>看清用量去了哪里。</h3><p>按日期和模型查看 Token 用量，用每日热力图找出集中工作的日子，再看模型分布，了解输入、输出与缓存各占多少。</p><a class="text-link" href="guide.html#usage">读懂用量统计 ↗</a></div>
+          <a class="atlas-image shot-link" href="assets/screens/usage-light.png" aria-label="放大模型用量统计"><img src="assets/screens/usage-light.png" width="2880" height="1840" loading="lazy" alt="Token 用量视图展示每日活动热力图和模型分布。"></a>
+        </article>
       </div>
     </section>
+
+    <section class="appearance wrap" aria-labelledby="appearance-title">
+      <header class="section-intro" data-reveal><div><p class="section-tag">工作区外观</p><h2 id="appearance-title">同一次对话，<br>两种光线。</h2></div><p>用同一条对话对照浅色与深色。留意代码、任务列表与输入框的层次，以及壁纸透过侧栏后的变化。</p></header>
+      <div class="appearance-compare" data-compare>
+        <figure class="compare-dark"><img src="assets/screens/conversation-dark.png" width="2880" height="1840" alt="深色模式下展开任务计划的 Atlas Notes 对话" loading="lazy"><figcaption>深色</figcaption></figure>
+        <figure class="compare-light"><img src="assets/screens/conversation-light.png" width="2880" height="1840" alt="浅色模式下同一条对话与任务计划" loading="lazy"><figcaption>浅色</figcaption></figure>
+        <span class="compare-handle" aria-hidden="true">↔</span>
+        <input type="range" min="0" max="100" value="55" step="1" aria-label="调整浅色和深色界面的分界" hidden>
+      </div>
+    </section>
+    <section class="toolkit wrap" aria-labelledby="tools-title">
+      <header class="section-intro" data-reveal><div><p class="section-tag">项目工具</p><h2 id="tools-title">把常用的工具，<br>带进同一个窗口。</h2></div></header>
+      <div class="tool-grid">
+        <article data-reveal><div class="tool-glyph" aria-hidden="true">⌘</div><h3>技能与命令</h3><p>把重复的审查、测试或文档步骤存成技能。在输入框键入 <kbd>/</kbd> 就能调用，键入 <kbd>@</kbd> 可以引用项目文件。</p><a class="text-link" href="guide.html#skills">管理技能 ↗</a></article>
+        <article id="extensions" data-reveal><div class="tool-glyph" aria-hidden="true">⇄</div><h3>MCP 与扩展</h3><p>用 MCP 接入已有工具。扩展可以提供自己的命令、面板或状态摘要，例如在会话工作区里查看上下文占用。</p><a class="text-link" href="guide.html#extensions">开发与安装扩展 ↗</a></article>
+        <article data-reveal><div class="tool-glyph" aria-hidden="true">›_</div><h3>终端与运行服务</h3><p>打开项目目录的终端，启动本地服务，再把预览留在右侧。查看输出和返回对话都在同一个工作区完成。</p><a class="text-link" href="guide.html#desktop">了解桌面工具 ↗</a></article>
+      </div>
+    </section>
+    <section class="start" id="start" aria-labelledby="start-title"><div class="wrap start-grid">
+      <div data-reveal><p class="section-tag">开始使用</p><h2 id="start-title">打开你的<br>第一个工作区。</h2><a class="download" href="https://github.com/huangrx6/pi-studio/releases/latest">下载 Pi Studio <span aria-hidden="true">↓</span></a></div>
+      <div class="faq" data-reveal>
+        <details open><summary>我的 Mac 该下载哪个安装包？</summary><p>Apple 芯片选择 arm64.dmg，Intel 芯片选择 x64.dmg。打开磁盘映像，将应用拖入「应用程序」。<a href="guide.html#quickstart">查看首次安装说明 ↗</a></p></details>
+        <details><summary>开始对话前，需要准备什么？</summary><p>在「设置 → 模型配置」里添加服务地址和凭据，启用一个模型。新建对话，选择项目文件夹与工具权限后即可开始。</p></details>
+        <details><summary>项目、会话和凭据存在哪里？</summary><p>文件保存在你选择的工作区，Studio 在本机管理会话与设置。凭据由系统加密保存。使用远程模型时，请求会发送到配置的提供方。<a href="guide.html#security">了解数据与权限 ↗</a></p></details>
+      </div>
+    </div></section>
   </main>
-  <footer class="home-footer wrap">
-    <a href="#main" aria-label="返回页首">π &nbsp; Pi Studio ↑</a>
-    <nav aria-label="项目资源"><a href="guide.html">使用手册</a><a href="https://github.com/huangrx6/pi-studio/releases">版本记录</a><a href="https://github.com/huangrx6/pi-studio">GitHub ↗</a></nav>
-  </footer>
-  <dialog id="preview" aria-labelledby="preview-label">
-    <div class="preview-bar"><span id="preview-label">界面截图</span><a class="original-image" href="assets/screens/conversation-dark.png">查看原图 ↗</a><button type="button" aria-label="关闭大图">关闭 <span aria-hidden="true">×</span></button></div>
-    <img alt="">
-  </dialog>
+  <footer class="home-footer wrap"><a class="footer-brand" href="#main">π &nbsp; Pi Studio ↑</a><nav aria-label="项目资源"><a href="guide.html">使用手册</a><a href="https://github.com/huangrx6/pi-studio/releases">版本记录</a><a href="https://github.com/huangrx6/pi-studio">GitHub ↗</a></nav></footer>
+  <dialog id="preview" aria-labelledby="preview-label"><div class="preview-bar"><span id="preview-label">界面截图</span><a class="original-image" href="assets/screens/workbench-dark.png">查看原图 ↗</a><button type="button" aria-label="关闭大图">关闭 ×</button></div><img alt=""></dialog>
 </body>
 </html>
