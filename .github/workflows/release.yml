@@ -34,6 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.sha }}
           fetch-depth: 0
 
       # node-pty is rebuilt for Electron during packaging. Its node-gyp 9
@@ -65,14 +66,8 @@ jobs:
             echo "::error::Tag v$tag does not match package.json version $version"
             exit 1
           fi
-          git fetch --tags --force
-          if git rev-parse -q --verify "refs/tags/$RELEASE_TAG" >/dev/null; then
-            tag_commit=$(git rev-parse "$RELEASE_TAG^{commit}")
-            if [ "$tag_commit" != "$GITHUB_SHA" ]; then
-              echo "::error::Existing tag $RELEASE_TAG points to $tag_commit; run the workflow from that tag to rebuild it."
-              exit 1
-            fi
-          fi
+          tag_commit=$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")
+          test "$tag_commit" = "$(git rev-parse HEAD)"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -146,11 +141,11 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.windows_only && format('refs/tags/{0}', inputs.tag) || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.sha }}
           fetch-depth: 0
 
       - name: Use current packaging tools with the tagged application
-        if: inputs.windows_only
+        if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: git restore --source="$GITHUB_SHA" --worktree -- tools/release tools/qa/qa-windows-installer.mjs
 
@@ -169,6 +164,23 @@ jobs:
           test "$RELEASE_TAG" = "v$version"
 
       - run: pnpm install --frozen-lockfile
+      - name: Apply Windows packaging fixes when rebuilding an older tag
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          # Keep the application's tagged lockfile. Apply the same builder patch
+          # as a fresh install on main if the tagged lockfile predates that fix.
+          builder=$(node -e '
+            const electronBuilder = require("node:module").createRequire(require.resolve("electron-builder/package.json"));
+            const path = require("node:path");
+            const dir = path.dirname(electronBuilder.resolve("app-builder-lib/package.json"));
+            console.log(path.relative(process.cwd(), dir).split(path.sep).join("/"));
+          ')
+          version=$(node -p 'require(process.argv[1]).version' "./$builder/package.json")
+          patch="tools/release/patches/app-builder-lib@$version.patch"
+          if [[ -f "$patch" ]] && ! git apply --directory="$builder" --reverse --check "$patch" 2>/dev/null; then
+            git apply --directory="$builder" "$patch"
+          fi
       - run: node tools/cli/pi-studio-extension.mjs validate extensions/pi-project-scripts --scope user --json
       - name: Build Windows installer
         run: pnpm dist
@@ -178,8 +190,14 @@ jobs:
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $installer = Get-Item "release/Pi-Studio-$version-Windows-x64-Setup.exe"
           $target = Join-Path $env:RUNNER_TEMP 'pi-studio-installed'
+          $started = Get-Date
           $process = Start-Process -FilePath $installer.FullName -ArgumentList "/S /D=$target" -Wait -PassThru
-          if ($process.ExitCode -ne 0) { throw "Installer exited with $($process.ExitCode)" }
+          if ($process.ExitCode -ne 0) {
+            Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000,1001; StartTime=$started} -ErrorAction SilentlyContinue |
+              Where-Object { $_.Message -like "*$($installer.Name)*" } |
+              Select-Object -First 4 -ExpandProperty Message | Write-Host
+            throw ('Installer exited with {0} (0x{0:X8})' -f $process.ExitCode)
+          }
           node tools/qa/qa-windows-installer.mjs "$target/Pi Studio.exe"
 
       - uses: actions/upload-artifact@v4
@@ -204,6 +222,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         if: ${{ !inputs.windows_only }}
+        with:
+          ref: ${{ format('refs/tags/{0}', env.RELEASE_TAG) }}
       - uses: actions/download-artifact@v4
         with:
           pattern: pi-studio-*
@@ -224,6 +244,7 @@ jobs:
         shell: bash
         run: |
           notes=".github/release-notes/${RELEASE_TAG}.md"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           if [ -f "$notes" ]; then
             echo "body_path=$notes" >> "$GITHUB_OUTPUT"
           else
@@ -235,7 +256,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          target_commitish: ${{ github.sha }}
+          target_commitish: ${{ steps.release-notes.outputs.commit }}
           draft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || false }}
           body_path: ${{ steps.release-notes.outputs.body_path }}
           generate_release_notes: ${{ steps.release-notes.outputs.body_path == '' }}

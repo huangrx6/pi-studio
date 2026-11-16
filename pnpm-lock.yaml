@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  app-builder-lib@25.1.8: fa700587b9731aaa9c5d24db666cdc9d4e669bbe79ed2f2f75263dc6a2ab12f3
+
 importers:
 
   .:
@@ -3913,7 +3916,7 @@ snapshots:
 
   app-builder-bin@5.0.0-alpha.10: {}
 
-  app-builder-lib@25.1.8(bluebird@3.7.2)(dmg-builder@25.1.8)(electron-builder-squirrel-windows@25.1.8)(supports-color@8.1.1):
+  app-builder-lib@25.1.8(patch_hash=fa700587b9731aaa9c5d24db666cdc9d4e669bbe79ed2f2f75263dc6a2ab12f3)(bluebird@3.7.2)(dmg-builder@25.1.8)(electron-builder-squirrel-windows@25.1.8)(supports-color@8.1.1):
     dependencies:
       '@develar/schema-utils': 2.6.5
       '@electron/notarize': 2.5.0(supports-color@8.1.1)
@@ -4361,7 +4364,7 @@ snapshots:
 
   dmg-builder@25.1.8(bluebird@3.7.2)(electron-builder-squirrel-windows@25.1.8)(supports-color@8.1.1):
     dependencies:
-      app-builder-lib: 25.1.8(bluebird@3.7.2)(dmg-builder@25.1.8)(electron-builder-squirrel-windows@25.1.8)(supports-color@8.1.1)
+      app-builder-lib: 25.1.8(patch_hash=fa700587b9731aaa9c5d24db666cdc9d4e669bbe79ed2f2f75263dc6a2ab12f3)(bluebird@3.7.2)(dmg-builder@25.1.8)(electron-builder-squirrel-windows@25.1.8)(supports-color@8.1.1)
       builder-util: 25.1.7(supports-color@8.1.1)
       builder-util-runtime: 9.2.10(supports-color@8.1.1)
       fs-extra: 10.1.0
@@ -4410,7 +4413,7 @@ snapshots:
 
   electron-builder-squirrel-windows@25.1.8(bluebird@3.7.2)(dmg-builder@25.1.8)(supports-color@8.1.1):
     dependencies:
-      app-builder-lib: 25.1.8(bluebird@3.7.2)(dmg-builder@25.1.8)(electron-builder-squirrel-windows@25.1.8)(supports-color@8.1.1)
+      app-builder-lib: 25.1.8(patch_hash=fa700587b9731aaa9c5d24db666cdc9d4e669bbe79ed2f2f75263dc6a2ab12f3)(bluebird@3.7.2)(dmg-builder@25.1.8)(electron-builder-squirrel-windows@25.1.8)(supports-color@8.1.1)
       archiver: 5.3.2
       builder-util: 25.1.7(supports-color@8.1.1)
       fs-extra: 10.1.0
@@ -4421,7 +4424,7 @@ snapshots:
 
   electron-builder@25.1.8(bluebird@3.7.2)(electron-builder-squirrel-windows@25.1.8)(supports-color@8.1.1):
     dependencies:
-      app-builder-lib: 25.1.8(bluebird@3.7.2)(dmg-builder@25.1.8)(electron-builder-squirrel-windows@25.1.8)(supports-color@8.1.1)
+      app-builder-lib: 25.1.8(patch_hash=fa700587b9731aaa9c5d24db666cdc9d4e669bbe79ed2f2f75263dc6a2ab12f3)(bluebird@3.7.2)(dmg-builder@25.1.8)(electron-builder-squirrel-windows@25.1.8)(supports-color@8.1.1)
       builder-util: 25.1.7(supports-color@8.1.1)
       builder-util-runtime: 9.2.10(supports-color@8.1.1)
       chalk: 4.1.2
