@@ -13,7 +13,7 @@
       "versions": [
         {
           "version": "0.1.0",
-          "piStudio": ">=0.0.3 <0.2.0",
+          "piStudio": ">=0.0.2 <0.2.0",
           "download": "https://github.com/huangrx6/pi-studio/releases/download/example-agent-v0.1.0/example.agent-starter-0.1.0.pi-extension.zip",
           "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
           "size": 4096,
