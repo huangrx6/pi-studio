@@ -121,9 +121,9 @@
             第一次使用，可以从安装应用、接入模型和选择工作区开始。扩展作者可跳到开发示例，查看工具、权限与声明式界面的契约。
           </p>
           <dl class="article-meta">
-            <div><dt>下载</dt><dd><a href="https://github.com/huangrx6/pi-studio/releases/latest">最新 macOS 版 ↗</a></dd></div>
+            <div><dt>下载</dt><dd><a href="https://github.com/huangrx6/pi-studio/releases/latest">最新发行版 ↗</a></dd></div>
             <div><dt>运行时</dt><dd>Pi Durable</dd></div>
-            <div><dt>安装包</dt><dd>Apple 芯片 / Intel</dd></div>
+            <div><dt>安装包</dt><dd>Windows x64 / Apple 芯片 Mac / Intel Mac</dd></div>
             <div><dt>许可证</dt><dd>MIT</dd></div>
           </dl>
           <div class="chapter-index" aria-label="主要章节">
@@ -183,8 +183,8 @@
               <figcaption><span>Quickstart 01</span><span>新对话 · 工作区选择 · 权限与模型</span></figcaption>
             </figure>
             <h3>1. 安装应用</h3>
-            <p>打开 <a href="https://github.com/huangrx6/pi-studio/releases/latest">GitHub 最新发行版</a>。Apple 芯片的 Mac 选择 <code>arm64.dmg</code>，Intel Mac 选择 <code>x64.dmg</code>。打开磁盘映像，将 Pi Studio 拖入「应用程序」。</p>
-            <p>安装包使用项目自签名证书，尚未经过 Apple 公证。如果首次启动时提示无法验证开发者，请先确认下载来源，然后在「系统设置 → 隐私与安全性」里为 Pi Studio 选择「仍要打开」。<a href="https://support.apple.com/zh-cn/102445">Apple 的首次打开说明</a></p>
+            <p>在 <a href="https://github.com/huangrx6/pi-studio/releases/latest">GitHub 最新发行版</a>的 Assets 中选择安装包。Windows x64 下载并运行名称以 <code>Windows-x64-Setup.exe</code> 结尾的文件。Apple 芯片的 Mac 选择 <code>arm64.dmg</code>，Intel Mac 选择 <code>x64.dmg</code>。打开磁盘映像，将 Pi Studio 拖入「应用程序」。</p>
+            <p>Mac 安装包使用项目自签名证书，尚未经过 Apple 公证。如果首次启动时提示无法验证开发者，请先确认下载来源，然后在「系统设置 → 隐私与安全性」里为 Pi Studio 选择「仍要打开」。<a href="https://support.apple.com/zh-cn/102445">Apple 的首次打开说明</a></p>
 
             <h3>2. 配置模型来源</h3>
             <p>进入 <strong>设置 → 模型配置</strong>，添加来源 ID、服务地址、API 协议和密钥。支持 OpenAI Completions、OpenAI Responses、Anthropic Messages 与 Google Generative AI；模型发现地址是可选项，手动添加模型仍然可用。</p>
@@ -1082,22 +1082,26 @@ git diff --check</code></pre>
           <div class="doc-copy">
             <figure class="code-block">
               <figcaption><span>Build</span><button class="code-copy" type="button">复制</button></figcaption>
-              <pre><code>pnpm run build
+              <pre><code># macOS
 pnpm release:dist
+
+# Windows x64
+pnpm dist
 
 # GitHub Actions release workflow:
 # - push v* tag, or manual dispatch
 # - verify tag == package.json version
 # - require existing rebuild tags to match the checked-out commit
 # - build arm64 + x64 DMG / ZIP / latest-mac.yml
-# - stamp one buildId into both .app and updater metadata
+# - build and test-install x64 Windows Setup.exe / latest.yml
+# - stamp each platform's buildId into its app and updater metadata
 # - require CSC_LINK / CSC_KEY_PASSWORD and verify every app signature
 # - publish GitHub Release</code></pre>
             </figure>
             <ul>
-              <li>DMG 用于首次安装与手动下载。</li>
-              <li>ZIP、<code>latest-mac.yml</code> 与 blockmap 用于 electron-updater。</li>
-              <li>Release 工作流必须使用仓库 secret <code>CSC_LINK</code> 与 <code>CSC_KEY_PASSWORD</code>，并校验 app 和更新 ZIP 内 app 的完整签名。</li>
+              <li>Windows 使用 EXE 安装，Mac 使用 DMG 安装。Windows 的更新清单是 <code>latest.yml</code>，Mac 使用 <code>latest-mac.yml</code> 和 ZIP。两个平台都提供 blockmap。</li>
+              <li>两端安装包通过检查后一起发布。给已发布版本补上 Windows 安装包时，在 Release 工作流中选择 <code>windows_only</code> 并填入原标签。</li>
+              <li>macOS 构建使用仓库 secret <code>CSC_LINK</code> 与 <code>CSC_KEY_PASSWORD</code>，并校验 app 和更新 ZIP 内 app 的完整签名。</li>
               <li>首次生成证书可运行 <code>pnpm release:cert</code>；全部版本必须复用同一自签名身份。重新生成证书会让旧客户端失去 Squirrel.Mac 更新连续性。</li>
               <li>每次构建都会生成新的 <code>buildId</code> 和递增的 <code>CFBundleVersion</code>。即使语义版本不变，客户端也能识别重新构建；同一版本更新会强制完整下载，避免旧 blockmap 与新包错配。</li>
               <li>手动创建新版本时可以继续从 main 构建；重构建已有 tag 时必须从该 tag 运行，工作流会校验 tag 提交与当前检出提交一致，并再次校验 tag 与 <code>package.json</code> 版本一致。</li>
@@ -1148,7 +1152,7 @@ pnpm release:dist
               <li>MCP resources/templates、prompts、sampling、tasks 与 Apps UI 尚无完整产品界面。</li>
               <li>插件市场、自动发现和后台自动升级尚未完成；当前 registry 与安装器已经可用。</li>
               <li>Agent 扩展没有系统级沙箱，信任它等同于信任主进程 Node 代码。</li>
-              <li>Windows / Linux 尚未作为正式支持平台发布。</li>
+              <li>Windows 提供 x64 安装包，Linux 暂无安装包。</li>
               <li>macOS 自动更新使用稳定自签名保证身份连续性；目前仍没有 Apple Developer ID 与公证，首次启动仍可能触发 Gatekeeper。</li>
               <li><code>/goal</code> 目标与子智能体会继续复用 Durable task lifecycle；不能把 Studio UI 自行定义的状态当成 Durable 事实。</li>
             </ul>

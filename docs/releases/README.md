@@ -11,4 +11,4 @@ v0.0.1 至 v0.0.5 按五个产品阶段整合了早期版本，后续版本按�
 | [v0.0.2](../../.github/release-notes/v0.0.2.md) | v0.0.4–v0.0.10 | Pi Durable、独立存储、长期任务与子智能体协作 |
 | [v0.0.1](../../.github/release-notes/v0.0.1.md) | v0.0.1–v0.0.3 | 桌面对话、工作区和变更审阅 |
 
-安装包提供 Apple 芯片和 Intel 两种架构。原 v0.0.6 至 v0.0.28 用户请按最新版发布说明手动换装。[下载最新版](https://github.com/huangrx6/pi-studio/releases/latest)
+从 v0.0.6 起，提供 Windows x64、Apple 芯片 Mac 和 Intel Mac 安装包。原 v0.0.6 至 v0.0.28 用户请按最新版发布说明手动换装。[下载最新版](https://github.com/huangrx6/pi-studio/releases/latest)

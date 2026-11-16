@@ -5,27 +5,19 @@ const { ensurePtyHelpers } = require('../pty/ensure-executable.cjs');
 const { ensureBuildIdentity } = require('./build-identity.cjs');
 
 /**
- * Sign both architectures after Electron Builder has assembled their bundles.
- * The stable self-signed identity is deliberately supplied to osx-sign instead
- * of Electron Builder's certificate importer, which requires macOS to report
- * the identity as globally trusted before Squirrel.Mac needs it.
+ * Store the identity used by the platform's update feed in the finished app.
+ * On macOS, sign the complete bundle with the stable Squirrel.Mac identity.
  */
-exports.default = async function signPackagedMacApp(context) {
-  if (context.electronPlatformName !== 'darwin') return;
-
-  const signingIdentity = process.env.PI_STUDIO_CODESIGN_IDENTITY || 'Pi Studio Self Signed';
-  const keychain = process.env.PI_STUDIO_SIGNING_KEYCHAIN;
-  if (!keychain) {
-    throw new Error('PI_STUDIO_SIGNING_KEYCHAIN is required for a signed macOS package.');
-  }
-
-  const app = path.join(
-    context.appOutDir,
-    `${context.packager.appInfo.productFilename}.app`,
-  );
+exports.default = async function preparePackagedApp(context) {
+  const platform = context.electronPlatformName;
+  if (platform !== 'darwin' && platform !== 'win32') return;
+  const app = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`);
+  const resources = platform === 'win32'
+    ? path.join(context.appOutDir, 'resources')
+    : path.join(app, 'Contents', 'Resources');
   const buildIdentity = ensureBuildIdentity(process.cwd());
   fs.writeFileSync(
-    path.join(app, 'Contents', 'Resources', 'pi-studio-build.json'),
+    path.join(resources, 'pi-studio-build.json'),
     `${JSON.stringify({
       version: context.packager.appInfo.version,
       buildId: buildIdentity.buildId,
@@ -34,14 +26,14 @@ exports.default = async function signPackagedMacApp(context) {
       commit: buildIdentity.commit,
     }, null, 2)}\n`,
   );
-  ensurePtyHelpers(path.join(
-    app,
-    'Contents',
-    'Resources',
-    'app.asar.unpacked',
-    'node_modules',
-    'node-pty',
-  ));
+  if (platform === 'win32') return;
+
+  const signingIdentity = process.env.PI_STUDIO_CODESIGN_IDENTITY || 'Pi Studio Self Signed';
+  const keychain = process.env.PI_STUDIO_SIGNING_KEYCHAIN;
+  if (!keychain) {
+    throw new Error('PI_STUDIO_SIGNING_KEYCHAIN is required for a signed macOS package.');
+  }
+  ensurePtyHelpers(path.join(resources, 'app.asar.unpacked', 'node_modules', 'node-pty'));
 
   await signAsync({
     app,

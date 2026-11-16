@@ -18,8 +18,10 @@ function stampUpdateMetadata(source, buildId) {
   return document.toString({ lineWidth: 0 });
 }
 
-function packagedBuildId(root) {
-  const candidates = [
+function packagedBuildId(root, platform = process.platform) {
+  const candidates = platform === 'win32' ? [
+    path.join(root, 'release', 'win-unpacked', 'resources', 'pi-studio-build.json'),
+  ] : [
     path.join(root, 'release', 'mac-arm64', 'Pi Studio.app', 'Contents', 'Resources', 'pi-studio-build.json'),
     path.join(root, 'release', 'mac', 'Pi Studio.app', 'Contents', 'Resources', 'pi-studio-build.json'),
   ];
@@ -35,20 +37,15 @@ function packagedBuildId(root) {
   return undefined;
 }
 
-function stampUpdateMetadataFiles(root = process.cwd(), explicitBuildId) {
+function stampUpdateMetadataFiles(root = process.cwd(), explicitBuildId, platform = process.platform) {
   const releaseDirectory = path.join(root, 'release');
   const buildId = validBuildId(explicitBuildId)
     || validBuildId(process.env.PI_STUDIO_BUILD_ID)
-    || packagedBuildId(root)
+    || packagedBuildId(root, platform)
     || ensureBuildIdentity(root).buildId;
-  const files = fs.readdirSync(releaseDirectory)
-    .filter((name) => /^latest.*\.ya?ml$/i.test(name))
-    .map((name) => path.join(releaseDirectory, name));
-  if (files.length === 0) throw new Error('没有找到 electron-builder 更新元数据');
-  for (const file of files) {
-    fs.writeFileSync(file, stampUpdateMetadata(fs.readFileSync(file, 'utf8'), buildId));
-  }
-  return { buildId, files };
+  const file = path.join(releaseDirectory, platform === 'win32' ? 'latest.yml' : 'latest-mac.yml');
+  fs.writeFileSync(file, stampUpdateMetadata(fs.readFileSync(file, 'utf8'), buildId));
+  return { buildId, files: [file] };
 }
 
 if (require.main === module) {

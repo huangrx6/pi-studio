@@ -1,8 +1,6 @@
 name: Release
 
-# Builds the signed macOS app and publishes a GitHub Release.
-# - Push a tag like `v0.1.0` → build DMG/ZIP files and updater metadata.
-# - Manual dispatch → build + create a draft release (tag name required).
+# Publish both platforms together, or attach Windows assets to an existing tag.
 on:
   push:
     tags: ["v*"]
@@ -15,12 +13,21 @@ on:
         description: "Create as draft release"
         type: boolean
         default: true
+      windows_only:
+        description: "Add Windows x64 downloads to an existing release"
+        type: boolean
+        default: false
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   build-macos:
+    if: ${{ !inputs.windows_only }}
     name: Build macOS (arm64 + x64)
     runs-on: macos-15
     timeout-minutes: 40
@@ -129,11 +136,95 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
+  build-windows:
+    name: Build and install on Windows (x64)
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - name: Preserve signed extension file contents at checkout
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.windows_only && format('refs/tags/{0}', inputs.tag) || github.sha }}
+          fetch-depth: 0
+
+      - name: Use current packaging tools with the tagged application
+        if: inputs.windows_only
+        shell: bash
+        run: git restore --source="$GITHUB_SHA" --worktree -- tools/release tools/qa/qa-windows-installer.mjs
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Verify release version
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          test "$RELEASE_TAG" = "v$version"
+
+      - run: pnpm install --frozen-lockfile
+      - run: node tools/cli/pi-studio-extension.mjs validate extensions/pi-project-scripts --scope user --json
+      - name: Build Windows installer
+        run: pnpm dist
+
+      - name: Install the release and exercise its desktop and terminal
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $installer = Get-Item "release/Pi-Studio-$version-Windows-x64-Setup.exe"
+          $target = Join-Path $env:RUNNER_TEMP 'pi-studio-installed'
+          $process = Start-Process -FilePath $installer.FullName -ArgumentList "/S /D=$target" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Installer exited with $($process.ExitCode)" }
+          node tools/qa/qa-windows-installer.mjs "$target/Pi Studio.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pi-studio-windows-x64
+          path: |
+            release/*-Windows-x64-Setup.exe
+            release/*-Windows-x64-Setup.exe.blockmap
+            release/latest.yml
+          retention-days: 14
+          if-no-files-found: error
+
+  publish:
+    name: Publish verified installers
+    needs: [build-macos, build-windows]
+    if: ${{ !cancelled() && needs.build-windows.result == 'success' && (needs.build-macos.result == 'success' || (inputs.windows_only && needs.build-macos.result == 'skipped')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        if: ${{ !inputs.windows_only }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pi-studio-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Attach Windows downloads to the existing release
+        if: inputs.windows_only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$RELEASE_TAG" artifacts/*-Windows-x64-Setup.exe{,.blockmap} --repo "$GITHUB_REPOSITORY" --clobber
+          gh release upload "$RELEASE_TAG" artifacts/latest.yml --repo "$GITHUB_REPOSITORY" --clobber
+
       - name: Select release notes
         id: release-notes
+        if: ${{ !inputs.windows_only }}
         shell: bash
-        env:
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
           notes=".github/release-notes/${RELEASE_TAG}.md"
           if [ -f "$notes" ]; then
@@ -143,11 +234,14 @@ jobs:
           fi
 
       - name: Create GitHub Release
+        if: ${{ !inputs.windows_only }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
           draft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || false }}
           body_path: ${{ steps.release-notes.outputs.body_path }}
           generate_release_notes: ${{ steps.release-notes.outputs.body_path == '' }}
           overwrite_files: true
+          fail_on_unmatched_files: true
           files: artifacts/*

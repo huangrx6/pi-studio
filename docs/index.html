@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#090c18">
-  <title>Pi Studio · macOS 桌面 Agent 工作台</title>
+  <title>Pi Studio · Windows 与 macOS 桌面 Agent 工作台</title>
   <meta name="description" content="让 Agent 在你的项目里工作。从一次标签搜索的实现出发，看看 Pi Studio 如何并排呈现对话、文件、验证结果，以及模型与工具的选择。">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111626'/%3E%3Ctext x='32' y='48' text-anchor='middle' font-size='50' font-family='Georgia,serif' fill='white'%3E%CF%80%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="docs.css">
@@ -29,11 +29,11 @@
       <div class="hero-light" aria-hidden="true"></div>
       <div class="wrap hero-layout">
         <div class="hero-copy">
-          <p class="product-type"><span aria-hidden="true" class="status-dot"></span> macOS 桌面 Agent 工作台</p>
+          <p class="product-type"><span aria-hidden="true" class="status-dot"></span> Windows 与 macOS 桌面 Agent 工作台</p>
           <h1 id="hero-title"><i>Pi</i> Studio<span class="sr-only"> 桌面工作台</span></h1>
           <p class="hero-lead">从一句需求，到一次可以核对的改动。</p>
           <p class="hero-description">让 Agent 阅读项目、修改代码、运行测试。左边讨论实现，右边打开文件，逐行核对它做过的改动。</p>
-          <div class="hero-actions"><a class="download" href="https://github.com/huangrx6/pi-studio/releases/latest">下载 macOS 版 <span aria-hidden="true">↓</span></a><a class="hero-guide" href="#tour">看一次完整任务 <span aria-hidden="true">↘</span></a></div>
+          <div class="hero-actions"><a class="download" href="https://github.com/huangrx6/pi-studio/releases/latest">下载 Pi Studio <span aria-hidden="true">↓</span></a><a class="hero-guide" href="#tour">看一次完整任务 <span aria-hidden="true">↘</span></a></div>
         </div>
         <figure class="hero-figure">
           <div class="hero-perspective"><a class="hero-screen shot-link" href="assets/screens/workbench-dark.png" aria-label="放大 Atlas Notes 工作台截图"><img src="assets/screens/workbench-dark.png" width="2880" height="1840" fetchpriority="high" alt="Atlas Notes 工作台。对话说明搜索改动，右侧 README 列出索引字段与匹配顺序。"></a></div>
@@ -108,7 +108,7 @@
     <section class="start" id="start" aria-labelledby="start-title"><div class="wrap start-grid">
       <div data-reveal><p class="section-tag">开始使用</p><h2 id="start-title">打开你的<br>第一个工作区。</h2><a class="download" href="https://github.com/huangrx6/pi-studio/releases/latest">下载 Pi Studio <span aria-hidden="true">↓</span></a></div>
       <div class="faq" data-reveal>
-        <details open><summary>我的 Mac 该下载哪个安装包？</summary><p>Apple 芯片选择 arm64.dmg，Intel 芯片选择 x64.dmg。打开磁盘映像，将应用拖入「应用程序」。<a href="guide.html#quickstart">查看首次安装说明 ↗</a></p></details>
+        <details open><summary>我的电脑该下载哪个安装包？</summary><p>Windows x64 选择 Windows-x64-Setup.exe。Apple 芯片的 Mac 选择 arm64.dmg，Intel Mac 选择 x64.dmg。<a href="guide.html#quickstart">查看首次安装说明 ↗</a></p></details>
         <details><summary>开始对话前，需要准备什么？</summary><p>在「设置 → 模型配置」里添加服务地址和凭据，启用一个模型。新建对话，选择项目文件夹与工具权限后即可开始。</p></details>
         <details><summary>项目、会话和凭据存在哪里？</summary><p>文件保存在你选择的工作区，Studio 在本机管理会话与设置。凭据由系统加密保存。使用远程模型时，请求会发送到配置的提供方。<a href="guide.html#security">了解数据与权限 ↗</a></p></details>
       </div>

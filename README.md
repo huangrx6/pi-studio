@@ -1,8 +1,8 @@
 # Pi Studio
 
-Pi Studio 是一款基于 Pi Durable 的 macOS 桌面应用，适合与 AI 一起维护代码库的人。打开项目文件夹，就能让智能体阅读代码、修改文件、运行测试。你可以在同一窗口查看它用过哪些工具、改过哪些行，并打开文件核对结果。
+Pi Studio 是一款基于 Pi Durable 的 Windows 和 macOS 桌面应用，适合与 AI 一起维护代码库的人。打开项目文件夹，就能让智能体阅读代码、修改文件、运行测试。你可以在同一窗口查看它用过哪些工具、改过哪些行，并打开文件核对结果。
 
-[下载 macOS 版](https://github.com/huangrx6/pi-studio/releases/latest) · [版本记录](docs/releases/README.md) · [产品主页](https://huangrx6.github.io/pi-studio/) · [使用手册](https://huangrx6.github.io/pi-studio/guide.html) · [反馈问题](https://github.com/huangrx6/pi-studio/issues)
+[下载 Windows 或 macOS 版](https://github.com/huangrx6/pi-studio/releases/latest) · [版本记录](docs/releases/README.md) · [产品主页](https://huangrx6.github.io/pi-studio/) · [使用手册](https://huangrx6.github.io/pi-studio/guide.html) · [反馈问题](https://github.com/huangrx6/pi-studio/issues)
 
 ![Pi Studio 左侧显示工作区，中间是标签搜索的实现结果，右侧预览对应的 README](docs/assets/screens/workbench-dark.png)
 
@@ -10,7 +10,7 @@ Pi Studio 是一款基于 Pi Durable 的 macOS 桌面应用，适合与 AI 一�
 
 ## 开始第一次对话
 
-1. **安装应用。** 在上方下载页的 Assets 中，Apple 芯片的 Mac 选文件名以 `arm64.dmg` 结尾的安装包，Intel Mac 选 `x64.dmg`。打开磁盘映像，把 Pi Studio 拖入「应用程序」。安装包使用项目自签名证书，尚未经过 Apple 公证。若首次打开提示无法验证开发者，确认来源后，可在「系统设置 → 隐私与安全性」选择「仍要打开」。[Apple 说明](https://support.apple.com/zh-cn/102445)
+1. **安装应用。** 在上方下载页的 Assets 中，Windows x64 选择 `Windows-x64-Setup.exe` 结尾的文件并运行。Apple 芯片的 Mac 选 `arm64.dmg`，Intel Mac 选 `x64.dmg`。打开磁盘映像，把 Pi Studio 拖入「应用程序」。Mac 安装包使用项目自签名证书，尚未经过 Apple 公证。若首次打开提示无法验证开发者，确认来源后，可在「系统设置 → 隐私与安全性」选择「仍要打开」。[Apple 说明](https://support.apple.com/zh-cn/102445)
 2. **接入模型。** 在「设置 → 模型配置」中添加模型来源，按服务商要求填写接口地址和凭据，启用至少一个模型。支持 OpenAI Completions、OpenAI Responses、Anthropic Messages 和 Google Generative AI 协议。
 3. **选择工作区。** 点击「新对话」，在输入框里选一个项目文件夹和工具权限模式。可以先问「这个项目从哪里启动？请给出入口文件和测试命令」，再用 `@` 引用具体文件继续追问。
 
