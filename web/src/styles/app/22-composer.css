@@ -85,8 +85,6 @@
   overscroll-behavior-inline: contain;
 }
 
-.user-attachments::-webkit-scrollbar { height: 4px; }
-.user-attachments::-webkit-scrollbar-thumb { border-radius: var(--radius-round); background: var(--scrollbar); }
 .user-attachments > * { flex: none; }
 
 .user-attachments .conversation-image-gallery,

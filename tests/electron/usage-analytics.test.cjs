@@ -101,6 +101,75 @@ test('rolls many same-day model calls into one compact daily row', () => {
   database.close();
 });
 
+test('project filters cover costs, streaks, daily models and removed workspaces across restart', () => {
+  const filename = path.join(temporary, 'project-scopes.sqlite');
+  let database = createStudioDatabase(filename);
+  const a = path.join(temporary, 'a', 'app'), b = path.join(temporary, 'b', 'app');
+  database.insertConversation({ id: '1', workspace: a, kind: 'conversation' });
+  database.insertConversation({ id: '2', workspace: b, kind: 'conversation' });
+  database.upsertWorkspace({ cwd: a, name: '历史项目' });
+  database.db.exec(`CREATE TABLE durable_conversations (id INTEGER PRIMARY KEY, owner_conversation_id INTEGER);
+    INSERT INTO durable_conversations VALUES (1, NULL), (3, 1), (4, 3)`);
+  const now = new Date(2026, 9, 30, 12).getTime();
+  const common = { at: now, providerId: 'test', modelId: 'same', input: 6, output: 4, cost: 0.25 };
+  for (const [requestId, conversationId] of [['root', '1'], ['agent', '4'], ['other', '2'], ['unknown', '']]) {
+    assert.equal(database.recordUsageRequest({ ...common, requestId, conversationId }), true);
+  }
+  assert.equal(database.recordUsageRequest({ ...common, requestId: 'agent', conversationId: '2' }), false);
+  database.deleteConversation('1');
+  database.removeWorkspace(a);
+  database.close();
+  database = createStudioDatabase(filename);
+  for (const [scope, expected] of [[{}, 4], [{ workspace: a }, 2], [{ workspace: b }, 1],
+    [{ workspace: '' }, 1], [{ includeRemoved: false }, 2], [{ workspace: a, includeRemoved: false }, 0]]) {
+    const summary = usageAnalyticsSnapshot({ database, now, ...scope });
+    const mix = usageModelMix({ database, now, all: true, ...scope });
+    assert.equal(summary.allTime.requests, expected);
+    assert.equal(summary.allTime.currentStreak, expected ? 1 : 0);
+    assert.equal(summary.range.totalTokens, expected * 10);
+    assert.equal(summary.range.cost, expected * 0.25);
+    assert.equal(summary.daily[0]?.requests || 0, expected);
+    assert.equal(summary.dailyModels[0]?.cost || 0, expected * 0.25);
+    assert.equal(mix.totals.cost, expected * 0.25);
+    assert.equal(mix.models[0]?.requests || 0, expected);
+    assert.deepEqual(summary.projects.find(p => p.workspace === a), { workspace: a, name: '历史项目', removed: true });
+  }
+  database.upsertWorkspace({ cwd: a, name: '重开的项目' });
+  assert.equal(database.usageTotals({ includeRemoved: false }).requests, 4);
+  assert.deepEqual(database.usageProjects().find(p => p.workspace === a), { workspace: a, name: '重开的项目', removed: false });
+  database.close();
+});
+
+test('v19 usage migrates verified request portions and retains unassignable totals exactly once', () => {
+  const filename = path.join(temporary, 'project-migration.sqlite');
+  let database = createStudioDatabase(filename);
+  const workspace = path.join(temporary, 'recoverable');
+  database.insertConversation({ id: '1', workspace, kind: 'conversation' });
+  const at = new Date(2026, 9, 30, 12).getTime();
+  const detail = { at, conversationId: '1', providerId: 'one', modelId: 'model', input: 5, output: 2, cost: 0.25 };
+  database.recordMetricRequest({ ...detail, requestId: 'verified' });
+  database.recordMetricRequest({ ...detail, requestId: 'no-replay-record' });
+  database.recordMetricRequest({ ...detail, requestId: 'wrong-time' });
+  database.recordMetricRequest({ ...detail, requestId: 'too-large', input: 500 });
+  database.db.exec(`DROP TABLE usage_daily;
+    CREATE TABLE usage_daily(day, provider_id, model_id, input_tokens, output_tokens, cache_read_tokens,
+      cache_write_tokens, cost, requests, updated_at, PRIMARY KEY(day, provider_id, model_id));
+    INSERT INTO usage_daily VALUES ('2026-10-30', 'one', 'model', 15, 6, 0, 0, 0.75, 3, ${at});
+    INSERT INTO usage_request_ledger VALUES ('verified', ${at}), ('wrong-time', ${at + 1}), ('too-large', ${at});
+    PRAGMA user_version = 19`);
+  database.close();
+  for (let pass = 0; pass < 2; pass++) {
+    database = createStudioDatabase(filename);
+    assert.equal(database.usageTotals().totalTokens, 21);
+    assert.equal(database.usageTotals().cost, 0.75);
+    assert.equal(database.usageTotals({ workspace }).totalTokens, 7);
+    assert.equal(database.usageTotals({ workspace: '' }).totalTokens, 14);
+    assert.equal(database.usageTotals({ workspace: '' }).cost, 0.5);
+    assert.equal(database.recordUsageRequest({ ...detail, requestId: 'verified' }), false);
+    database.close();
+  }
+});
+
 test('caps the replay ledger while preserving daily analytics', () => {
   const filename = path.join(temporary, 'bounded-ledger.sqlite');
   const database = createStudioDatabase(filename);

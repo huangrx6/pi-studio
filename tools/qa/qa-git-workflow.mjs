@@ -68,6 +68,18 @@ try {
   await button('创建并切换到 design/tokens').click();
   await button('切换分支，当前 design/tokens').waitFor();
   await button('打开会话进展').click();
+  async function verifyBranchLayout() {
+    const identity = page.locator('.conversation-progress:visible .progress-git-identity');
+    await identity.getByText('design/tokens', { exact: true }).waitFor();
+    assert.ok(await identity.evaluate(el => {
+      const icon = el.querySelector('svg').getBoundingClientRect();
+      const name = el.querySelector('.progress-git-branch').getBoundingClientRect();
+      const description = el.querySelector('small').getBoundingClientRect();
+      return icon.width <= 16 && icon.right < name.left && Math.abs(icon.top + icon.height / 2 - name.top - name.height / 2) < 1
+        && description.top >= name.bottom && Math.abs(description.left - icon.left) < 1;
+    }), 'branch icon and label share a line, description starts under the icon');
+  }
+  await verifyBranchLayout();
   await capture('progress');
   await button('变更').click();
   const work = page.getByRole('region', { name: '工作区', exact: true });
@@ -76,6 +88,14 @@ try {
   await preview.locator('.diff-code').first().waitFor();
   assert.equal(await work.getByRole('button', { name: 'palette.css 修改', exact: true }).getAttribute('aria-pressed'), 'true');
   await preview.getByText('修改后', { exact: true }).waitFor();
+  async function aligned(left, right) {
+    const result = await page.evaluate(([a, b]) => {
+      const one = document.querySelector(a).getBoundingClientRect(), two = document.querySelector(b).getBoundingClientRect();
+      return { top: Math.abs(one.top - two.top), bottom: Math.abs(one.bottom - two.bottom) };
+    }, [left, right]);
+    assert.ok(result.top <= 1 && result.bottom <= 1, JSON.stringify({ left, right, ...result }));
+  }
+  await aligned('.git-index', '.git-review-preview .diff-view');
   await capture('changes');
   await button('打开会话进展').click();
   await button('固定到右栏').click();
@@ -90,6 +110,36 @@ try {
   await preview.getByText('修改后', { exact: true }).waitFor();
   await button('取消固定，返回浮层').click();
   await page.keyboard.press('Escape');
+  // Match the reported working-tree size with real untracked files; scroll and open the last one.
+  await page.locator('.git-view-tabs').getByRole('button', { name: '提交历史' }).click();
+  const bulk = path.join(repo, 'zz-load'), bulkCount = 43321;
+  await mkdir(bulk);
+  for (let first = 0; first < bulkCount; first += 500) {
+    const chunk = path.join(bulk, String(first).padStart(5, '0'));
+    await mkdir(chunk);
+    for (let j = first; j < Math.min(first + 500, bulkCount); j += 100) {
+      await Promise.all(Array.from({ length: Math.min(100, bulkCount - j, first + 500 - j) }, (_, k) =>
+        writeFile(path.join(chunk, (j + k) + '.txt'), j + k === bulkCount - 1 ? 'last file\n' : '')));
+    }
+  }
+  const opened = Date.now();
+  await page.locator('.git-view-tabs').getByRole('button', { name: '变更' }).click();
+  await work.locator('h3 small').filter({ hasText: /^43323$/ }).waitFor();
+  const openMs = Date.now() - opened;
+  const renderedRows = await work.locator('.git-file-row').count();
+  assert.ok(renderedRows > 0 && renderedRows < 64, String(renderedRows));
+  const summary = await page.evaluate(cwd => window.piApi.gitWorkspaceStatus(cwd), repo);
+  assert.equal(summary.statusReadFailed, false);
+  assert.equal(summary.dirty.total, bulkCount + 3);
+  await work.locator('.git-file-name').first().focus();
+  await page.keyboard.press('End');
+  const lastPath = 'zz-load/43000/43320.txt';
+  await work.getByRole('button', { name: lastPath + ' 未跟踪', exact: true }).click();
+  await page.locator('.git-file-diff .diff-code').filter({ hasText: 'last file' }).first().waitFor();
+  await capture('changes-large');
+  await rm(bulk, { recursive: true });
+  await button('刷新 Git').click();
+  await work.getByText('2', { exact: true }).waitFor();
   await button('暂存 palette.css').click();
   await button('取消暂存 palette.css').waitFor();
   assert.equal(await staged.getByRole('button', { name: 'palette.css 修改', exact: true }).getAttribute('aria-pressed'), 'true');
@@ -104,10 +154,56 @@ try {
   await page.getByRole('heading', { name: '工作区干净' }).waitFor();
   await button('远程同步').click();
   await button('获取 Fetch').waitFor();
+  assert.ok(await page.locator('.git-remote-picker .pi-select-value').evaluate(el => el.scrollWidth <= el.clientWidth + 1));
+  const syncBounds = await page.locator('.git-workspace-column > .session-view-head, .git-view-toolbar, .git-remote, .git-remote-refs, .git-remote-operations').evaluateAll(nodes => nodes.map(el => {
+    const { left, right } = el.getBoundingClientRect(); return { left, right };
+  }));
+  assert.equal(syncBounds.length, 5);
+  assert.ok(syncBounds.every(box => Math.abs(box.left - syncBounds[0].left) < 1 && Math.abs(box.right - syncBounds[0].right) < 1), JSON.stringify(syncBounds));
+  assert.ok(Math.abs((await button('获取 Fetch').boundingBox()).x + (await button('获取 Fetch').boundingBox()).width - syncBounds[0].right) < 1);
   await capture('sync-first-push');
+  await button('管理远程仓库').click();
+  const manager = page.getByRole('dialog', { name: '管理远程 · origin' });
+  await manager.getByText(remote, { exact: true }).waitFor();
+  assert.equal(await manager.getByLabel('新的获取地址').inputValue(), remote);
+  await manager.getByRole('button', { name: '远程操作' }).click();
+  await page.getByRole('option', { name: '添加远程' }).click();
+  await manager.getByLabel('远程名称').fill('backup');
+  await manager.getByLabel('仓库地址').fill(remote);
+  await manager.getByRole('button', { name: '添加远程', exact: true }).click();
+  await page.locator('.git-remote-picker').getByText('backup', { exact: true }).waitFor();
+  await button('管理远程仓库').click();
+  const backup = page.getByRole('dialog', { name: '管理远程 · backup' });
+  await backup.getByRole('button', { name: '远程操作' }).click();
+  await page.getByRole('option', { name: '移除远程' }).click();
+  await backup.getByRole('button', { name: '确认移除' }).click();
+  await page.locator('.git-remote-picker').getByText('origin', { exact: true }).waitFor();
+  const mirror = path.join(temporary, 'mirror.git');
+  git(temporary, 'init', '--bare', mirror);
+  for (const address of [remote, mirror]) git(repo, 'config', '--add', 'remote.origin.pushurl', address);
+  await button('刷新 Git').click();
+  await page.locator('.git-remote-addresses dd').filter({ hasText: mirror }).waitFor();
+  await button('推送 Push').click();
+  const push = page.getByRole('dialog', { name: '推送预览' });
+  assert.ok(await push.getByRole('button', { name: '确认推送' }).isDisabled());
+  await push.getByRole('button', { name: '推送目标地址' }).click();
+  await page.getByRole('option', { name: mirror, exact: true }).click();
+  await push.locator('.git-sync-address').filter({ hasText: mirror }).waitFor();
+  await push.getByText('更新面板配色', { exact: true }).waitFor();
+  await push.getByRole('button', { name: '取消' }).click();
+  assert.equal(git(mirror, 'for-each-ref', 'refs/heads'), '');
+  git(repo, 'config', '--unset-all', 'remote.origin.pushurl');
+  await button('刷新 Git').click();
+  await page.locator('.git-remote-addresses dd').filter({ hasText: mirror }).waitFor({ state: 'hidden' });
   await button('获取 Fetch').click();
   await page.getByText('已获取远程更新', { exact: true }).waitFor();
   await button('推送 Push').click();
+  await push.getByText('更新面板配色', { exact: true }).waitFor();
+  await capture('push-preview');
+  await push.getByRole('button', { name: '取消' }).click();
+  assert.equal(git(remote, 'for-each-ref', 'refs/heads/design/tokens'), '');
+  await button('推送 Push').click();
+  await push.getByRole('button', { name: '确认推送' }).click();
   await page.getByText('推送完成', { exact: true }).waitFor();
   const hash = git(remote, 'rev-parse', 'refs/heads/design/tokens');
   assert.equal(hash, git(repo, 'rev-parse', 'HEAD'));
@@ -125,15 +221,67 @@ try {
   await page.getByRole('heading', { name: '有 1 个远程提交待拉取' }).waitFor();
   await capture('sync');
   await button('拉取 Pull').click();
+  const pull = page.getByRole('dialog', { name: '拉取预览' });
+  await pull.getByText('补充面板间距', { exact: true }).waitFor();
+  await pull.getByText('origin/design/tokens', { exact: true }).waitFor();
+  assert.equal(git(repo, 'rev-parse', 'HEAD'), hash);
+  await pull.getByRole('button', { name: '确认拉取' }).click();
   await page.getByText('拉取完成', { exact: true }).waitFor();
   assert.equal(git(repo, 'rev-parse', 'HEAD'), incoming);
   assert.equal(await readFile(path.join(repo, 'spacing.css'), 'utf8'), '.panel { gap: 12px; }\n');
+  await writeFile(path.join(repo, 'spacing.css'), '.panel { gap: 14px; }\n');
+  git(repo, 'commit', '-am', '本地调整间距');
+  await writeFile(path.join(peer, 'spacing.css'), '.panel { gap: 18px; }\n');
+  git(peer, '-c', 'user.name=Pi QA', '-c', 'user.email=peer@studio.invalid', 'commit', '-am', '远程调整间距');
+  git(peer, 'push', 'origin', 'design/tokens');
+  await button('刷新 Git').click();
+  await button('推送 Push').click();
+  await push.getByText('远程调整间距', { exact: true }).waitFor();
+  assert.ok(await push.getByRole('button', { name: '确认安全强推' }).isDisabled());
+  await push.getByRole('checkbox').check();
+  assert.ok(await push.getByRole('button', { name: '确认安全强推' }).isEnabled());
+  await push.getByRole('button', { name: '取消' }).click();
+  assert.equal(git(remote, 'rev-parse', 'refs/heads/design/tokens'), git(peer, 'rev-parse', 'HEAD'));
+  await button('拉取 Pull').click();
+  await pull.getByRole('button', { name: '确认拉取' }).click();
+  await button('查看合并中的文件').click();
+  await button('打开冲突文件 spacing.css').click();
+  await button('编辑文件').click();
+  const sourceEditor = page.getByLabel('spacing.css 源码编辑器');
+  assert.match(await sourceEditor.inputValue(), /<<<<<<< HEAD/);
+  await sourceEditor.fill('.panel { gap: 15px; }\n');
+  await button('保存文件').click();
+  await button('编辑文件').waitFor();
+  await button('收起右侧面板').click();
+  await button('标记为已解决 spacing.css').click();
+  await page.getByText('所有冲突已解决，可以提交合并。').waitFor();
+  await page.getByLabel('提交说明').fill('合并间距调整');
+  await button('提交合并').click();
+  await page.getByRole('heading', { name: '工作区干净' }).waitFor();
+  assert.equal(git(repo, 'show', '-s', '--format=%P').split(' ').length, 2);
+  await button('远程同步').click();
+  await button('推送 Push').click();
+  await push.getByRole('button', { name: '确认推送' }).click();
+  await page.getByText('推送完成', { exact: true }).waitFor();
   await button('提交历史').click();
   assert.equal(await page.getByText('拉取完成', { exact: true }).count(), 0);
+  const pageHistory = Array.from({ length: 123 }, (_, i) =>
+    'commit refs/heads/qa-pages\ncommitter QA <qa@example.invalid> ' + (1600000000 + i) + ' +0000\ndata ' + ('pagination-' + i).length + '\npagination-' + i + '\n\n').join('');
+  execFileSync('git', ['fast-import', '--quiet'], { cwd: repo, input: pageHistory });
+  await page.getByLabel('搜索提交').fill('pagination-');
+  await page.getByText('第 1 / 3 页 · 共 123 次提交').waitFor();
+  await page.getByLabel('跳转页码').fill('3');
+  await button('跳转').click();
+  await page.getByText('第 3 / 3 页 · 共 123 次提交').waitFor();
+  assert.equal(await page.locator('.git-history-row').count(), 3);
+  assert.ok(await button('下一页').isDisabled());
+  await capture('history-pagination');
   await page.getByLabel('搜索提交').fill('更新面板配色');
   await page.locator('.git-history-row').filter({ hasText: '更新面板配色' }).click();
   await page.getByText(hash, { exact: true }).waitFor();
   await page.locator('.git-history-file').filter({ hasText: 'palette.css' }).click();
+  await page.locator('.git-commit-files .diff-code').first().waitFor();
+  await aligned('.git-detail-paths', '.git-commit-files .git-file-diff');
   await page.locator('.git-file-diff .diff-code').filter({ hasText: 'teal' }).first().waitFor();
   await capture('detail');
   await button('返回对话').click();
@@ -141,6 +289,7 @@ try {
   await button('打开会话进展').click();
   await button('固定到右栏').click();
   const pinned = page.locator('.file-panel .conversation-progress');
+  await verifyBranchLayout();
   await pinned.getByRole('button', { name: '提交', exact: true }).click();
   assert.equal(await page.getByLabel('提交说明').evaluate(el => el === document.activeElement), true);
   await page.locator('.git-view-tabs').getByRole('button', { name: '提交历史' }).click();
@@ -250,12 +399,15 @@ try {
   assert.equal(git(newTree, 'branch', '--show-current'), 'feature/worktree');
   assert.deepEqual(errors, []);
   await writeFile(path.join(output, 'results.json'), JSON.stringify({
-    branch: 'design/tokens', pushedCommit: hash, pulledCommit: incoming, reviewedFile: 'palette.css',
+    branch: 'design/tokens', pushedCommit: hash, pulledCommit: incoming, reviewedFile: 'palette.css', largeWorktree: { files: bulkCount + 2, renderedRows, openMs },
     typography: { gitTitle, historySubject, panelTitle, sectionTitle },
   }, null, 2));
   console.log('Git flow verified from branch creation to remote push, commit review, pinned entry and preserved chat draft.');
 } catch (error) {
-  if (page && !page.isClosed()) console.error(await page.locator('body').innerText());
+  if (page && !page.isClosed()) console.error(await page.evaluate(() => ({
+    text: document.body.innerText.slice(0, 2800),
+    layout: [...document.querySelectorAll('.git-workspace-page, .git-review, .git-index, .git-groups, .git-file-group, .git-file-list')].map(el => [el.className, el.clientHeight, el.scrollHeight]),
+  })));
   throw error;
 } finally {
   await app?.close();

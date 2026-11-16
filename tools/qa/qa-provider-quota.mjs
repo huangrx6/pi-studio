@@ -37,15 +37,25 @@ async function measureQuotaForm(editor) {
     const body = dialog.querySelector('.dialog-body');
     const box = dialog.getBoundingClientRect();
     const footer = dialog.querySelector('.dialog-footer').getBoundingClientRect();
-    const [first, second] = Array.from(dialog.querySelectorAll('.quota-mapping'), card => card.getBoundingClientRect());
+    const [first, second, third] = Array.from(dialog.querySelectorAll('.quota-mapping'), card => card.getBoundingClientRect());
     return {
+      footerAligned: Array.from(dialog.querySelectorAll('.quota-mapping')).every(card => {
+        const remove = card.querySelector('.quota-field-footer button').getBoundingClientRect();
+        const label = card.querySelector('.quota-summary-option');
+        const fields = card.querySelector('.quota-mapping-fields');
+        const end = fields.getBoundingClientRect();
+        return Math.abs(remove.right - end.right) <= 1 && remove.top >= end.bottom
+          && getComputedStyle(label).fontSize === getComputedStyle(fields.querySelector('label')).fontSize;
+      }),
       width: box.width, contentHeight: body.scrollHeight,
       fits: box.left >= 0 && box.right <= innerWidth && body.scrollWidth <= body.clientWidth + 1,
       footerVisible: footer.top >= body.getBoundingClientRect().bottom - 1 && footer.bottom <= innerHeight,
       beside: first.right <= second.left && Math.abs(first.top - second.top) < 1,
+      oddFieldSpans: third && Math.abs(third.left - first.left) <= 1 && Math.abs(third.right - second.right) <= 1,
       stacked: first.bottom <= second.top && Math.abs(first.left - second.left) < 1,
     };
   });
+  assert.ok(layout.footerAligned, 'remove ends the field group and checkbox matches other labels');
   assert.ok(layout.fits, 'all fields fit without horizontal scrolling');
   assert.ok(layout.footerVisible, 'save and cancel stay outside the scrollable fields');
   return layout;
@@ -181,7 +191,7 @@ try {
   await group(3).getByRole('button', { name: /显示格式/ }).click();
   await page.getByRole('option', { name: '比例（0–1）' }).click();
   const desktop = await measureQuotaForm(editor);
-  assert.ok(desktop.width > compactWidth && desktop.beside, 'adding quota fields expands the form into two columns');
+  assert.ok(desktop.width > compactWidth && desktop.beside && desktop.oddFieldSpans, 'paired fields share a row and an odd last field uses the full width');
   await editor.locator('.quota-mapping-heading').evaluate(heading => heading.scrollIntoView({ block: 'start' }));
   await page.screenshot({ path: fileURLToPath(new URL('editor.png', output)) });
   const activeField = group(2).getByLabel('返回字段路径');
@@ -195,11 +205,90 @@ try {
   await page.screenshot({ path: fileURLToPath(new URL('editor-narrow.png', output)) });
   await page.setViewportSize({ width: 1280, height: 820 });
   assert.equal((await measureQuotaForm(editor)).width, desktop.width);
-  await editor.getByText('用返回样例预览').click();
-  await editor.getByLabel('JSON 返回样例').fill(JSON.stringify(responseData));
-  await editor.getByRole('button', { name: '预览映射' }).click();
-  await editor.locator('.quota-preview-list').getByText('120 次').waitFor();
-  await editor.locator('.quota-preview-list').getByText('可用').waitFor();
+  const preview = editor.locator('.quota-sample');
+  await editor.getByText('额度预览', { exact: true }).click();
+  const sample = editor.getByLabel('JSON 返回样例');
+  const format = editor.getByRole('button', { name: '格式化 JSON' });
+  const rendered = editor.getByRole('region', { name: '映射预览' });
+  const readsBeforePreview = reads;
+  await sample.fill(JSON.stringify({ note: '用于检查横向滚动的长字段'.repeat(80), ...responseData }));
+  await sample.press('ControlOrMeta+a');
+  await sample.press('ArrowLeft');
+  assert.deepEqual(await sample.evaluate(el => [getComputedStyle(el, '::-webkit-scrollbar').width, getComputedStyle(el, '::-webkit-scrollbar').height]), ['0px', '8px']);
+  assert.ok(await sample.evaluate(el => el.scrollWidth > el.clientWidth));
+  await sample.hover();
+  await page.mouse.wheel(220, 0);
+  await page.waitForFunction(() => document.querySelector('.quota-sample textarea').scrollLeft > 0);
+  await sample.press('ControlOrMeta+a');
+  await sample.press('ArrowLeft');
+  assert.equal(await sample.evaluate(el => el.selectionStart), 0);
+  await page.waitForFunction(() => document.querySelector('.quota-sample textarea').scrollLeft <= 1);
+  await sample.fill('{');
+  await rendered.getByRole('alert').waitFor();
+  assert.ok(await format.isDisabled());
+  await sample.fill('');
+  await rendered.getByText('输入 JSON 后查看显示效果。').waitFor();
+  await sample.fill('{}');
+  await rendered.getByText(/返回值与映射不匹配/).waitFor();
+  const escaped = JSON.stringify('一,二:\n"三"');
+  const literal = '{"x":9007199254740993123456,"x":[{},[],1.20e+3],"escape":' + escaped + '}';
+  await sample.fill(literal);
+  await format.click();
+  const reindented = await sample.inputValue();
+  assert.ok(reindented.includes('\n  "x": 9007199254740993123456,') && reindented.includes('1.20e+3'));
+  assert.deepEqual(JSON.parse(reindented), JSON.parse(literal));
+  await sample.fill(JSON.stringify(responseData));
+  await format.click();
+  assert.equal(await sample.inputValue(), JSON.stringify(responseData, null, 2));
+  assert.ok(await format.isDisabled());
+  await rendered.getByText('每周剩余 120 次 · 小时已用 37.5%', { exact: true }).waitFor();
+  await rendered.getByText('120 次', { exact: true }).waitFor();
+  await rendered.getByText('可用', { exact: true }).waitFor();
+  assert.equal(await rendered.getByRole('progressbar', { name: '小时已用' }).getAttribute('value'), '37.5');
+  await group(1).getByLabel('显示名称').fill('本周可用');
+  await rendered.getByText('本周可用 120 次 · 小时已用 37.5%', { exact: true }).waitFor();
+  await group(1).getByLabel('显示名称').fill('每周剩余');
+  await rendered.getByText('每周剩余 120 次 · 小时已用 37.5%', { exact: true }).waitFor();
+  assert.equal(reads, readsBeforePreview, 'editing a sample only changes the local preview');
+  const layout = () => preview.evaluate(el => {
+    const rect = selector => el.querySelector(selector).getBoundingClientRect();
+    const left = rect('.quota-sample-source');
+    const right = rect('.quota-preview-list');
+    const sourceTitle = rect('label');
+    const resultTitle = rect('h4');
+    return {
+      paired: Math.abs(left.right - right.left) <= 1 && Math.abs(left.top - right.top) <= 1 && Math.abs(left.bottom - right.bottom) <= 1,
+      titlesAligned: Math.abs((sourceTitle.top + sourceTitle.bottom - resultTitle.top - resultTitle.bottom) / 2) <= 1,
+      stacked: Math.abs(left.bottom - right.top) <= 1 && Math.abs(left.left - right.left) <= 1 && Math.abs(left.right - right.right) <= 1,
+    };
+  });
+  const widePreview = await layout();
+  assert.ok(widePreview.paired && widePreview.titlesAligned, 'sample and result share bounds and a title baseline');
+  const inputStyle = await sample.evaluate(el => {
+    const style = getComputedStyle(el);
+    return { resize: style.resize, border: style.borderTopWidth, font: style.fontFamily, fits: el.scrollHeight <= el.clientHeight + 1 };
+  });
+  assert.equal(inputStyle.resize, 'none');
+  assert.equal(inputStyle.border, '0px');
+  assert.match(inputStyle.font, /monospace/);
+  assert.ok(inputStyle.fits, 'a short formatted response fits without vertical scrolling');
+  await preview.evaluate(el => el.scrollIntoView({ block: 'center' }));
+  await page.mouse.move(0, 0);
+  await preview.screenshot({ path: fileURLToPath(new URL('display-sample-detail.png', output)) });
+  await page.screenshot({ path: fileURLToPath(new URL('display-sample.png', output)) });
+  await page.setViewportSize({ width: 432, height: 680 });
+  assert.ok((await layout()).stacked, 'the result follows the editable sample on narrow windows');
+  assert.equal(await sample.inputValue(), JSON.stringify(responseData, null, 2));
+  const lastMetric = rendered.getByRole('progressbar', { name: '小时已用' });
+  await lastMetric.evaluate(el => el.scrollIntoView({ block: 'center' }));
+  assert.ok(await lastMetric.evaluate(el => el.getBoundingClientRect().bottom <= el.closest('dialog').querySelector('.dialog-footer').getBoundingClientRect().top));
+  await page.setViewportSize({ width: 432, height: 860 });
+  await preview.evaluate(el => el.scrollIntoView({ block: 'center' }));
+  await preview.screenshot({ path: fileURLToPath(new URL('display-sample-narrow.png', output)) });
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await preview.screenshot({ path: fileURLToPath(new URL('display-sample-dark.png', output)) });
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   await editor.getByRole('button', { name: '保存更改' }).click();
   await editor.waitFor({ state: 'detached' });
   assert.equal(provider.quota.fields.length, 3);

@@ -5,7 +5,7 @@ import { ChevronRight, Gauge, RefreshCw, X } from 'lucide-react';
 import { DetailDialog } from '../../shared/DetailDialog';
 import { LoadingIndicator, LoadingState } from '../../shared/LoadingState';
 import { errorText } from '../../shared/error-text';
-import type { ProviderQuotaSnapshot } from '../../types/provider-quota';
+import type { ProviderQuotaSnapshot, QuotaMetric } from '../../types/provider-quota';
 import './styles/provider-quota.css';
 
 function useProviderQuota(id: string) {
@@ -33,22 +33,36 @@ function useProviderQuota(id: string) {
   return { snapshot, busy, read };
 }
 
+const noMappedFields = '返回值与映射不匹配，请检查字段路径和显示格式。';
 function quotaNotice(snapshot: ProviderQuotaSnapshot) {
   if (snapshot.status === 'disabled') return '此来源的额度监控已关闭。';
-  if (snapshot.status === 'unmapped') return '返回值与映射不匹配，请检查字段路径和显示格式。';
+  if (snapshot.status === 'unmapped') return noMappedFields;
   return snapshot.message;
+}
+
+export function quotaSummary(metrics: QuotaMetric[]) {
+  if (!metrics.some(metric => metric.value !== null)) return noMappedFields;
+  return metrics.filter(metric => metric.summary && metric.value !== null).map(metric => `${metric.label} ${metric.value}`).join(' · ') || `查看全部 ${metrics.length} 项额度`;
 }
 
 export function ProviderQuotaMenuRow({ id, name, item, onOpen }: { id: string; name: string; item: StatusPanel; onOpen: () => void }) {
   const { snapshot } = useProviderQuota(id);
-  const summary = snapshot?.metrics.filter(item => item.summary && item.value !== null).map(item => `${item.label} ${item.value}`).join(' · ');
-  const fallback = snapshot && (snapshot.status === 'ready' || snapshot.status === 'stale' ? `查看全部 ${snapshot.metrics.length} 项额度` : quotaNotice(snapshot));
+  const summary = snapshot && (snapshot.status === 'ready' || snapshot.status === 'stale'
+    ? quotaSummary(snapshot.metrics) : quotaNotice(snapshot));
   return <button type="button" className="workspace-menu-row quota-menu-row" onClick={onOpen} aria-label={`查看 ${name} 额度`}>
     <span className="workspace-menu-row-icon"><ExtensionStatusIcon item={item} /></span>
     <span className="quota-menu-copy"><strong>{name} 额度</strong>
-      {!snapshot ? <LoadingState>正在查询额度</LoadingState> : <small>{snapshot.status === 'stale' && '上次读数 · '}{summary || fallback}</small>}
+      {!snapshot ? <LoadingState>正在查询额度</LoadingState> : <small>{snapshot.status === 'stale' && '上次读数 · '}{summary}</small>}
     </span><ChevronRight className="workspace-menu-row-arrow" aria-hidden="true" />
   </button>;
+}
+
+export function QuotaMetricList({ metrics }: { metrics: QuotaMetric[] }) {
+  return <dl className="quota-detail-metrics">
+    {metrics.map((metric, i) => <div key={i}><dt>{metric.label}</dt><dd>{metric.value ?? <small>{metric.issue}</small>}</dd>
+      {metric.percent !== undefined && <progress aria-label={metric.label} max={100} value={metric.percent} />}
+    </div>)}
+  </dl>;
 }
 
 function QuotaMetrics({ snapshot }: { snapshot: ProviderQuotaSnapshot | null }) {
@@ -56,11 +70,7 @@ function QuotaMetrics({ snapshot }: { snapshot: ProviderQuotaSnapshot | null }) 
   return <>
     {!snapshot && <LoadingState variant="panel">正在查询额度</LoadingState>}
     {notice && <p className="quota-detail-notice" role="status">{notice}</p>}
-    {snapshot && snapshot.metrics.length > 0 && <dl className="quota-detail-metrics">
-      {snapshot.metrics.map((metric, i) => <div key={i}><dt>{metric.label}</dt><dd>{metric.value ?? <small>{metric.issue}</small>}</dd>
-        {metric.percent !== undefined && <progress aria-label={metric.label} max={100} value={metric.percent} />}
-      </div>)}
-    </dl>}
+    {snapshot && snapshot.metrics.length > 0 && <QuotaMetricList metrics={snapshot.metrics} />}
   </>;
 }
 

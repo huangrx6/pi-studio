@@ -25,8 +25,10 @@ const {
   normalizeThinkingLevels,
 } = require('./thinking-levels.cjs');
 
+const { activeProjectIds, addDailyUsage, listUsageProjects, migrateUsageProjects, usageWorkspace } = require('./usage-projects.cjs');
+
 const DATABASE_NAME = 'pi-studio.sqlite';
-const SCHEMA_VERSION = 19;
+const SCHEMA_VERSION = 20;
 const USAGE_REQUEST_LEDGER_LIMIT = 8_192;
 const USAGE_REQUEST_PRUNE_BATCH = 256;
 const METRIC_REQUEST_HISTORY_LIMIT = 8;
@@ -523,22 +525,6 @@ class StudioDatabase {
         CREATE INDEX IF NOT EXISTS usage_request_ledger_time_idx
           ON usage_request_ledger(recorded_at DESC);
 
-        CREATE TABLE IF NOT EXISTS usage_daily (
-          day TEXT NOT NULL,
-          provider_id TEXT NOT NULL,
-          model_id TEXT NOT NULL,
-          input_tokens INTEGER NOT NULL DEFAULT 0,
-          output_tokens INTEGER NOT NULL DEFAULT 0,
-          cache_read_tokens INTEGER NOT NULL DEFAULT 0,
-          cache_write_tokens INTEGER NOT NULL DEFAULT 0,
-          cost REAL NOT NULL DEFAULT 0,
-          requests INTEGER NOT NULL DEFAULT 0,
-          updated_at INTEGER NOT NULL,
-          PRIMARY KEY (day, provider_id, model_id)
-        );
-        CREATE INDEX IF NOT EXISTS usage_daily_day_idx
-          ON usage_daily(day);
-
         CREATE TABLE IF NOT EXISTS conversation_metric_requests (
           request_id TEXT PRIMARY KEY,
           conversation_id TEXT NOT NULL,
@@ -716,6 +702,7 @@ class StudioDatabase {
             FROM conversation_metric_requests;
         `);
       }
+      migrateUsageProjects(this.db);
       this.pruneUsageRequestLedger();
 
       if (current < 18) {
@@ -1244,6 +1231,10 @@ class StudioDatabase {
       if (count > 0) throw new Error('工作区仍有会话，不能删除');
       this.db.prepare('DELETE FROM project_resource_trust WHERE workspace = ?').run(cwd);
       this.removeProjectExtensionsForWorkspace(cwd);
+      this.db.prepare(`
+        INSERT OR REPLACE INTO usage_project_names(workspace, name)
+        SELECT cwd, name FROM workspaces WHERE cwd = ? AND EXISTS (SELECT 1 FROM usage_daily WHERE workspace = ?)
+      `).run(cwd, cwd);
       this.db.prepare('DELETE FROM workspaces WHERE cwd = ?').run(cwd);
     });
   }
@@ -2068,7 +2059,7 @@ class StudioDatabase {
   }
 
   /**
-   * Keep durable totals by local day and model. Only a bounded request-id
+   * Keep durable totals by workspace, local day and model. Only a bounded request-id
    * ledger is retained to make replayed Durable completions idempotent.
    */
   recordUsageRequest(input = {}) {
@@ -2095,20 +2086,8 @@ class StudioDatabase {
         VALUES (?, ?)
       `).run(requestId.slice(0, 320), at);
       if (Number(inserted.changes) === 0) return false;
-      this.db.prepare(`
-        INSERT INTO usage_daily(
-          day, provider_id, model_id, input_tokens, output_tokens,
-          cache_read_tokens, cache_write_tokens, cost, requests, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-        ON CONFLICT(day, provider_id, model_id) DO UPDATE SET
-          input_tokens = usage_daily.input_tokens + excluded.input_tokens,
-          output_tokens = usage_daily.output_tokens + excluded.output_tokens,
-          cache_read_tokens = usage_daily.cache_read_tokens + excluded.cache_read_tokens,
-          cache_write_tokens = usage_daily.cache_write_tokens + excluded.cache_write_tokens,
-          cost = usage_daily.cost + excluded.cost,
-          requests = usage_daily.requests + 1,
-          updated_at = excluded.updated_at
-      `).run(
+      this.db.prepare(addDailyUsage).run(
+        usageWorkspace(this.db, input.conversationId),
         day,
         providerId,
         modelId,
@@ -2128,17 +2107,22 @@ class StudioDatabase {
     });
   }
 
-  /** Day bounds for the usage projections; both ends are inclusive local days. */
-  usageDayFilter({ sinceDay, untilDay } = {}) {
+  usageProjects() {
+    return listUsageProjects(this.db);
+  }
+
+  usageDayFilter({ sinceDay, untilDay, workspace, includeRemoved } = {}) {
     const clauses = [];
     const params = [];
+    if (typeof workspace === 'string') { clauses.push('workspace = ?'); params.push(workspace); }
+    if (includeRemoved === false) clauses.push(`(workspace = '' OR workspace IN (${activeProjectIds}))`);
     if (sinceDay) { clauses.push('day >= ?'); params.push(sinceDay); }
     if (untilDay) { clauses.push('day <= ?'); params.push(untilDay); }
     return { where: clauses.length ? `WHERE ${clauses.join(' AND ')}` : '', params };
   }
 
-  usageTotals({ sinceDay, untilDay } = {}) {
-    const { where, params } = this.usageDayFilter({ sinceDay, untilDay });
+  usageTotals(filter = {}) {
+    const { where, params } = this.usageDayFilter(filter);
     const row = this.db.prepare(`
       SELECT
         COALESCE(SUM(input_tokens), 0) AS input_tokens,
@@ -2157,8 +2141,8 @@ class StudioDatabase {
     };
   }
 
-  usageDaily({ sinceDay, untilDay } = {}) {
-    const { where, params } = this.usageDayFilter({ sinceDay, untilDay });
+  usageDaily(filter = {}) {
+    const { where, params } = this.usageDayFilter(filter);
     const rows = this.db.prepare(`
       SELECT
         day,
@@ -2176,8 +2160,8 @@ class StudioDatabase {
     return rows.map((row) => ({ day: row.day, ...normalizeUsageRow(row) }));
   }
 
-  usageModels({ sinceDay, untilDay } = {}) {
-    const { where, params } = this.usageDayFilter({ sinceDay, untilDay });
+  usageModels(filter = {}) {
+    const { where, params } = this.usageDayFilter(filter);
     const rows = this.db.prepare(`
       SELECT
         provider_id,
@@ -2200,8 +2184,8 @@ class StudioDatabase {
     }));
   }
 
-  usageDailyModels({ sinceDay, untilDay } = {}) {
-    const { where, params } = this.usageDayFilter({ sinceDay, untilDay });
+  usageDailyModels(filter = {}) {
+    const { where, params } = this.usageDayFilter(filter);
     const rows = this.db.prepare(`
       SELECT
         day,

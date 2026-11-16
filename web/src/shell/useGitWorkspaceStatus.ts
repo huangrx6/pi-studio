@@ -17,12 +17,14 @@ const EMPTY_STATUS: GitWorkspaceStatus = {
 export function useGitWorkspaceStatus(cwd?: string) {
   const [result, setResult] = useState<{ cwd?: string; status: GitWorkspaceStatus }>();
   const requestRef = useRef(0);
+  const reading = useRef(0);
   const refresh = useCallback(async () => {
     const request = ++requestRef.current;
     if (!cwd?.trim()) {
       setResult({ cwd, status: EMPTY_STATUS });
       return EMPTY_STATUS;
     }
+    reading.current = request;
     try {
       const next = await window.piApi.gitWorkspaceStatus(cwd);
       if (request === requestRef.current) setResult({ cwd, status: next });
@@ -31,6 +33,8 @@ export function useGitWorkspaceStatus(cwd?: string) {
       const next = { ...EMPTY_STATUS, reason: error instanceof Error ? error.message : 'git-status-error' };
       if (request === requestRef.current) setResult({ cwd, status: next });
       return next;
+    } finally {
+      if (reading.current === request) reading.current = 0;
     }
   }, [cwd]);
 
@@ -38,16 +42,17 @@ export function useGitWorkspaceStatus(cwd?: string) {
     requestRef.current += 1;
     void refresh();
     if (!cwd?.trim()) return undefined;
-    const timer = window.setInterval(() => { void refresh(); }, 10_000);
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') void refresh();
+      if (!reading.current && document.visibilityState === 'visible') void refresh();
     };
+    const timer = window.setInterval(onVisibilityChange, 10_000);
     document.addEventListener('visibilitychange', onVisibilityChange);
-    window.addEventListener('pi-studio:git-changed', onVisibilityChange);
+    const onChanged = () => { if (!document.hidden) void refresh(); };
+    window.addEventListener('pi-studio:git-changed', onChanged);
     return () => {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisibilityChange);
-      window.removeEventListener('pi-studio:git-changed', onVisibilityChange);
+      window.removeEventListener('pi-studio:git-changed', onChanged);
       requestRef.current += 1;
     };
   }, [cwd, refresh]);

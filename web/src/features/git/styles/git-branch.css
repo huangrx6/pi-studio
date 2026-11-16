@@ -32,7 +32,6 @@
   padding: 7px;
   overflow: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
 }
 .git-branch-menu svg { flex: none; width: var(--icon-sm); height: var(--icon-sm); }
 .git-branch-search, .git-branch-options button, .git-branch-create {
@@ -50,7 +49,7 @@
 .git-branch-search:focus-within { box-shadow: inset 0 0 0 1px var(--focus-color); }
 .git-branch-search input:not([type="checkbox"]) { width: 100%; min-width: 0; height: 22px; padding: 0; border: 0; outline: none; background: transparent; color: var(--text-1); font-size: var(--text-13); }
 .git-branch-search input:not([type="checkbox"]):focus { box-shadow: none; }
-.git-branch-options { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.git-branch-options { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .git-branch-options section { margin-top: 11px; }
 .git-branch-options h3 {
   margin: 0 10px 3px;

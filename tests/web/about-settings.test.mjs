@@ -24,12 +24,13 @@ function component(react = React, api = {}) {
   return context.exports.AboutSettings;
 }
 const snapshot = { state: 'idle', currentVersion: '1.2.3', currentBuildId: 'full-build-identity-0123456789abcdef' };
+const runtime = { durable: '1.5.2', electron: '42.1.0', chromium: '148.0.10', node: '24.1.0', sqlite: '3.53.0', platform: 'darwin', arch: 'arm64' };
 const paths = {
   databasePath: '/synthetic/user-data/a-very-long-path/studio.sqlite',
   skillsPath: '/synthetic/user-data/skills/complete-directory',
   extensionsPath: '/synthetic/user-data/extensions/complete-directory',
 };
-const render = overrides => renderToStaticMarkup(React.createElement(component(), { snapshot: { ...snapshot, ...overrides }, paths, onOpenUpdates() {} }));
+const render = overrides => renderToStaticMarkup(React.createElement(component(), { snapshot: { ...snapshot, ...overrides }, paths, runtime, onOpenUpdates() {} }));
 const nodes = value => !value || typeof value !== 'object' ? [] : [value, ...[value.props?.children].flat(Infinity).flatMap(nodes)];
 const tick = async () => { await Promise.resolve(); await Promise.resolve(); };
 function harness(overrides = {}) {
@@ -45,7 +46,7 @@ function harness(overrides = {}) {
   }, { openExternal: url => new Promise((resolve, reject) => requests.push({ url, resolve, reject })) });
   function refresh() {
     cursor = 0;
-    tree = Component({ snapshot: { ...snapshot, ...overrides }, paths, onOpenUpdates() { opens++; } });
+    tree = Component({ snapshot: { ...snapshot, ...overrides }, paths, runtime, onOpenUpdates() { opens++; } });
     if (!initialized) { initialized = true; cleanup = setup(); }
   }
   refresh();
@@ -75,10 +76,12 @@ test('update entry names match state and open the update dialog without starting
   }
 });
 
-test('diagnostics are initially collapsed and preserve full build identity and every local path', () => {
+test('runtime versions, full build identity and storage paths are immediately readable', () => {
   const html = render();
-  assert.match(html, /<details class="about-diagnostics"><summary>本地存储与诊断信息<\/summary>/);
-  const diagnostics = html.match(/<details[\s\S]*?<\/details>/)?.[0];
+  assert.doesNotMatch(html, /<details/);
+  assert.match(html, /<h2[^>]*>运行环境<\/h2>/);
+  for (const value of [runtime.durable, runtime.electron, runtime.chromium, runtime.node, runtime.sqlite, 'macOS · arm64']) assert.ok(html.includes(value));
+  const diagnostics = html.match(/<section class="about-section about-diagnostics"[\s\S]*?<\/section>/)?.[0];
   for (const text of [snapshot.currentBuildId, ...Object.values(paths)]) assert.ok(diagnostics.includes(text), text);
   assert.match(html, /v1\.2\.3/);
   const unknown = render({ currentVersion: '', currentBuildId: undefined });

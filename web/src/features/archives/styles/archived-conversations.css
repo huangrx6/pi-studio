@@ -18,9 +18,9 @@
 .settings-content .archive-search input[type="search"] {
   width: 100%;
   padding-inline: 36px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-round);
-  background: var(--tint-neutral);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
 }
 .archive-search input::-webkit-search-cancel-button { display: none; }
 .archive-search > button { position: absolute; right: var(--space-1); }

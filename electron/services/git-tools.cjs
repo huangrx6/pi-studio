@@ -5,6 +5,7 @@ const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { createHash } = require('node:crypto');
+const remoteTools = require('./git-remotes.cjs');
 const exec = promisify(execFile);
 const locks = new Set();
 const conflictCodes = new Set(['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU']);
@@ -20,6 +21,7 @@ function gitError(err, remote) {
   if (/CONFLICT|automatic merge failed|unmerged files/i.test(detail + err.stdout)) return new Error('存在合并冲突。请在工作区解决冲突文件，暂存后提交合并。');
   if (/would be overwritten|would be lost/i.test(detail)) return new Error('本地修改会被覆盖。请先提交这些修改，或在终端中暂存到 stash，再重试。');
   if (/already (checked out|used by worktree)/i.test(detail)) return new Error('该分支已由另一工作树使用。');
+  if (/stale info|stale lease/i.test(detail)) return new Error('远程分支已变化，请重新预览后推送。');
   if (/non-fast-forward|fetch first|not possible to fast-forward/i.test(detail)) return new Error('本地与远程历史已分叉。请先获取并审阅远程提交。');
   if (/couldn't find remote ref/i.test(detail)) return new Error('远程尚无该分支。首次发布请先推送。');
   if (err.killed) return new Error('Git 操作超时，请刷新仓库状态后再试。');
@@ -38,7 +40,8 @@ async function run(cwd, args, { allowed = [], remote = false, patch = false, pat
     const processResult = exec('git', ['--no-pager', '--literal-pathspecs', ...args], {
       cwd, encoding: 'utf8', windowsHide: true, timeout: remote ? 120_000 : 30_000,
       maxBuffer: patch ? 256 * 1024 : 16 * 1024 * 1024,
-      env: { ...process.env, LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GIT_MERGE_AUTOEDIT: 'no' },
+      env: { ...process.env, LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GIT_MERGE_AUTOEDIT: 'no',
+        ...(remote ? { GIT_ALLOW_PROTOCOL: process.env.GIT_ALLOW_PROTOCOL || 'http:https:ssh:git:file' } : {}) },
     });
     processResult.child.stdin.on('error', () => { /* Git reports command failures through its exit status. */ });
     processResult.child.stdin.end(paths ? paths.join('\0') + '\0' : undefined);
@@ -67,8 +70,11 @@ async function head(cwd) {
   return { branch: ref.trimEnd(), head: oid.trimEnd() };
 }
 
-async function changes(cwd) {
-  const records = fields(await run(cwd, ['--no-optional-locks', 'status', '--porcelain=v1', '-z', '--renames', '--untracked-files=all']));
+async function statusRecords(cwd, paths = [], trackedOnly = false) {
+  return run(cwd, ['--no-optional-locks', 'status', '--porcelain=v1', '-z', '--renames', trackedOnly ? '-uno' : '-uall', '--', ...paths]);
+}
+function parseChanges(output) {
+  const records = fields(output);
   const files = [];
   for (let i = 0; i < records.length; i++) {
     const code = records[i].slice(0, 2);
@@ -95,44 +101,53 @@ async function stagedVersion(cwd) {
   const entries = await run(cwd, ['diff', '--cached', '--raw', '-z', '--no-abbrev', '--no-renames', '--']);
   return createHash('sha256').update(entries).digest('hex');
 }
-async function state(cwd) {
-  const [position, files, remotes, merge, indexVersion] = await Promise.all([
-    head(cwd), changes(cwd), run(cwd, ['remote']),
+async function state(cwd, input) {
+  const summary = input.summaryOnly === true;
+  const [position, raw, remotes, merge, indexVersion] = await Promise.all([
+    head(cwd), summary ? '' : statusRecords(cwd), run(cwd, ['remote']),
     run(cwd, ['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'], { allowed: [1] }),
-    stagedVersion(cwd),
+    summary ? '' : stagedVersion(cwd),
   ]);
+  const filesVersion = summary ? '' : createHash('sha256').update(raw).digest('hex');
+  const filesUnchanged = !summary && filesVersion === input.knownFilesVersion;
+  const files = summary && merge ? parseChanges(await statusRecords(cwd, [], true)).filter(f => f.conflict)
+    : filesUnchanged ? [] : parseChanges(raw);
   const current = position.branch && (await branches(cwd, position.branch)).find(ref => ref.name === position.branch);
-  return { ...position, root: cwd, files, indexVersion, remotes: lines(remotes), merging: Boolean(merge), upstreamRemote: current?.upstreamRemote || '', upstreamBranch: current?.upstreamBranch || '',
+  return { ...position, root: cwd, files, filesVersion, filesUnchanged, indexVersion, remotes: lines(remotes), merging: Boolean(merge), mergeHead: merge.trim(), upstreamRemote: current?.upstreamRemote || '', upstreamBranch: current?.upstreamBranch || '',
     ahead: current?.ahead || 0, behind: current?.behind || 0, gone: current?.gone || false };
 }
 
 async function history(cwd, input) {
-  const offset = input.offset ?? 0;
+  let offset = input.offset ?? 0;
   if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('历史分页无效。');
   const query = String(input.query || '').trim().slice(0, 300);
-  const args = ['log', '--graph', '--no-color', '--no-show-signature', '--no-notes', '--decorate=short', '--format=%x00%H%x00%an%x00%aI%x00%D%x00%s', '--max-count=' + (pageSize + 1), '--skip=' + offset];
+  const refs = [];
   const match = /^[a-f0-9]{4,64}$/i.test(query) && (await run(cwd, ['rev-parse', '--verify', '--quiet', query + '^{commit}'], { allowed: [1] })).trim();
-  if (match && oidPattern.test(match)) args.push('--max-count=1', match);
+  let total = 1;
+  if (match && oidPattern.test(match)) refs.push(match);
   else {
-    if (query) args.push('--fixed-strings', '--regexp-ignore-case', '--grep=' + query);
-    args.push('--branches', '--remotes', '--tags');
-    const { head: current } = await head(cwd);
-    if (current) args.push(current);
+    if (query) refs.push('--fixed-strings', '--regexp-ignore-case', '--grep=' + query);
+    refs.push('--branches', '--remotes', '--tags');
+    const current = (await run(cwd, ['rev-parse', '--verify', '--quiet', 'HEAD'], { allowed: [1] })).trim();
+    if (current) refs.push(current);
+    total = Number((await run(cwd, ['rev-list', '--count', ...refs, '--'])).trim());
   }
+  offset = Math.min(offset, Math.max(0, Math.ceil(total / pageSize) - 1) * pageSize);
+  const args = ['log', '--graph', '--no-color', '--no-show-signature', '--no-notes', '--decorate=short', '--format=%x00%H%x00%an%x00%aI%x00%D%x00%s', '--max-count=' + (match ? 1 : pageSize), '--skip=' + offset, ...refs];
   const rows = [];
   for (const line of lines(await run(cwd, [...args, '--']))) {
     const [graph, hash, author, date, refs, ...subject] = line.split('\0');
     if (hash) rows.push({ graph, hash, author, date, refs, subject: subject.join(' '), connectors: [] });
     else if (rows.length) rows.at(-1).connectors.push(graph);
   }
-  return { rows: rows.slice(0, pageSize), more: rows.length > pageSize };
+  return { rows, total, pageSize, offset, more: offset + pageSize < total };
 }
 
-async function commitInfo(cwd, hash) {
+async function commitInfo(cwd, hash, paths = []) {
   requireOid(hash);
   const [oid, parents, author, email, date, message] = (await run(cwd, ['show', '--no-patch', '--no-notes', '--no-show-signature', '--format=%H%x00%P%x00%an%x00%ae%x00%aI%x00%B', hash, '--'])).split('\0');
   const parent = parents.split(' ')[0];
-  const entries = fields(await run(cwd, ['diff-tree', '--no-commit-id', '--name-status', '-z', '-r', '-M', '--root', ...(parent ? [parent] : []), hash, '--']));
+  const entries = fields(await run(cwd, ['diff-tree', '--no-commit-id', '--name-status', '-z', '-r', '-M', '--root', ...(parent ? [parent] : []), hash, '--', ...paths]));
   const files = [];
   for (let i = 0; i < entries.length;) {
     const code = entries[i++], first = entries[i++];
@@ -147,8 +162,10 @@ function forLayer(file, layer) {
 function filePaths(file, code) { return file.previousPath && /[RC]/.test(code) ? [file.previousPath, file.path] : [file.path]; }
 async function diff(cwd, input) {
   let args, code;
+  const paths = [input.path, ...(input.previousPath ? [input.previousPath] : [])];
+  if (paths.some(p => typeof p !== 'string' || !p || p.includes('\0') || path.isAbsolute(p) || p.split('/').includes('..'))) throw new Error('文件路径无效。');
   if (input.layer === 'commit') {
-    const commit = await commitInfo(cwd, input.hash);
+    const commit = await commitInfo(cwd, input.hash, 'previousPath' in input ? paths : []);
     const file = commit.files.find(f => f.path === input.path);
     if (!file) throw new Error('该提交没有此文件。');
     code = file.code;
@@ -156,7 +173,11 @@ async function diff(cwd, input) {
     args.push('--', ...filePaths(file, code));
   } else {
     if (!['index', 'worktree'].includes(input.layer)) throw new Error('差异来源无效。');
-    const file = (await changes(cwd)).find(f => f.path === input.path && forLayer(f, input.layer));
+    let file = parseChanges(await statusRecords(cwd, paths)).find(f => f.path === input.path && forLayer(f, input.layer));
+    // Git classifies an index rename as an addition when only its destination is in the pathspec.
+    if (input.layer === 'index' && file?.index === 'A' && !('previousPath' in input)) {
+      file = parseChanges(await statusRecords(cwd, [], true)).find(f => f.path === input.path);
+    }
     if (!file) throw new Error('文件状态已变化，请刷新。');
     code = input.layer === 'index' ? file.index : file.worktree;
     if (code === '?') {
@@ -184,11 +205,18 @@ async function diff(cwd, input) {
 async function gitRead(cwd, input) {
   const root = await repository(cwd);
   switch (input?.kind) {
-    case 'state': return state(root);
+    case 'state': return state(root, input);
     case 'branches': return { ...await head(root), branches: await branches(root), root };
     case 'history': return history(root, input);
     case 'detail': return commitInfo(root, input.hash);
     case 'diff': return diff(root, input);
+    case 'remoteInfo': return (await remoteTools.remoteConfig(run, root, input.remote)).info;
+    case 'syncCommits': return remoteTools.commitPage(run, root, input);
+    case 'syncPreview': {
+      const position = await head(root);
+      const current = position.branch && (await branches(root, position.branch)).find(b => b.name === position.branch);
+      return remoteTools.preview(run, root, position, current, input);
+    }
     default: throw new Error('未知的 Git 查询。');
   }
 }
@@ -225,7 +253,7 @@ async function write(root, input) {
     case 'create': case 'switch': return changeBranch(root, input);
     case 'stage': case 'unstage': {
       const stage = input.kind === 'stage';
-      const available = (await changes(root)).filter(file => forLayer(file, stage ? 'worktree' : 'index'));
+      const available = parseChanges(await statusRecords(root, [], !stage)).filter(file => forLayer(file, stage ? 'worktree' : 'index'));
       if (!Array.isArray(input.paths) || !input.paths.length) throw new Error('请选择文件。');
       const wanted = new Set(input.paths);
       const selected = available.filter(file => wanted.has(file.path));
@@ -240,17 +268,19 @@ async function write(root, input) {
       await run(root, ['commit', '-m', input.message]);
       return;
     }
-    case 'fetch': case 'pull': case 'push': {
-      const remote = input.remote;
-      if (!lines(await run(root, ['remote'])).includes(remote) || remote.startsWith('-')) throw new Error('请选择已配置的远程仓库。');
-      if (input.kind === 'fetch') return run(root, ['fetch', '--', remote], { remote: true });
-      if (!position.branch) throw new Error('请先创建或切换到本地分支。');
-      const current = (await branches(root)).find(b => !b.remote && b.name === position.branch);
-      const upstream = current?.upstreamRemote === remote && current.upstreamBranch;
-      const destination = 'refs/heads/' + (upstream || position.branch);
-      if (input.kind === 'pull') return run(root, ['pull', '--no-rebase', '--no-autostash', '--no-edit', '--', remote, destination], { remote: true });
-      if (!position.head) throw new Error('请先创建首次提交。');
-      return run(root, ['push', ...(!current?.upstreamRemote ? ['--set-upstream'] : []), '--', remote, 'refs/heads/' + position.branch + ':' + destination], { remote: true });
+    case 'abortMerge': {
+      const merging = (await run(root, ['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'], { allowed: [1] })).trim();
+      if (!merging || merging !== input.mergeHead) throw new Error('当前合并已变化，请刷新后重试。');
+      return run(root, ['merge', '--abort']);
+    }
+    case 'remoteAdd': case 'remoteEdit': case 'remoteRename': case 'remoteRemove':
+      return remoteTools.manageRemote(run, root, input);
+    case 'fetch':
+      await remoteTools.requireRemote(run, root, input.remote);
+      return run(root, ['fetch', '--', input.remote], { remote: true });
+    case 'pull': case 'push': {
+      const current = position.branch && (await branches(root, position.branch)).find(b => b.name === position.branch);
+      return remoteTools.applySync(run, root, position, current, input, head);
     }
     default: throw new Error('未知的 Git 操作。');
   }
@@ -268,7 +298,6 @@ async function withRepositoryWrite(cwd, operation) {
   return withGitLock(common, () => operation(root));
 }
 async function gitWrite(cwd, input) {
-  const root = await repository(cwd);
-  return withGitLock(root, () => write(root, input));
+  await withRepositoryWrite(cwd, root => write(root, input));
 }
 module.exports = { gitRead, gitWrite, withRepositoryWrite, withGitLock, runGitCommand: run, validateBranch };

@@ -49,6 +49,10 @@ try {
   result.checks.push('context estimates use one denominator; model switch pending hides stale window; nonmodal keyboard/IME/Escape/Tab/outside focus, manual failure preserves draft');
 
   await settings('归档会话'); const search = page.getByRole('searchbox', { name: '搜索归档会话', exact: true }); await search.waitFor(); assert.equal(await page.locator('.archive-session-card').count(), 126);
+  const searchStyle = await search.evaluate(el => [getComputedStyle(el).borderRadius, el.getBoundingClientRect().height]);
+  const filterStyle = await page.getByRole('button', { name: '按项目筛选', exact: true }).evaluate(el => [getComputedStyle(el).borderRadius, el.getBoundingClientRect().height]);
+  assert.deepEqual(searchStyle, filterStyle, 'archive search and its adjacent filter share radius and height');
+
   await page.getByRole('button', { name: '按置顶状态筛选' }).click();
   await page.getByRole('option', { name: '已置顶', exact: true }).click();
   assert.equal(await page.locator('.archive-session-card').count(), 1);

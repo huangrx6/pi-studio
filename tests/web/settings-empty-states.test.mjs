@@ -34,7 +34,7 @@ const Header = ({ title, meta, actions }) => React.createElement('header', null,
 const SafeReact = { ...React, useLayoutEffect: React.useEffect };
 const EmptyIcons = {
   ArchiveRestore: () => null, LoaderCircle: () => null, Search: () => null, X: () => null,
-  RefreshCw: () => null,
+  RefreshCw: () => null, Folder: () => null, BarChart3: () => null,
 };
 
 test('archive with no sessions hides a useless search and count, leaving one explicit empty state', () => {
@@ -136,7 +136,7 @@ test('zero usage hides empty charts and zero-value workbench behind one first-ru
   const snapshot = {
     generatedAt: Date.now(), days: 365, sinceDay: '2025-11-07',
     collection: { enabled: true }, allTime: totals, range: totals,
-    daily: [], dailyModels: [], filterModels: [],
+    daily: [], dailyModels: [], filterModels: [], projects: [],
   };
   const resource = { value: snapshot, pending: false, error: null };
   const { UsageSettings } = compile('usage/UsageSettings.tsx', {

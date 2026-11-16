@@ -127,13 +127,15 @@ function usageAnalyticsSnapshot(options = {}) {
   const window = resolveUsageWindow({ days: options.days }, now);
   const days = window.days ?? DEFAULT_DAYS;
   const sinceDay = window.sinceDay;
-  const daily = db.usageDaily({ sinceDay });
-  const range = db.usageTotals({ sinceDay });
-  const allTime = db.usageTotals();
-  const allDaily = db.usageDaily();
+  const scope = { workspace: options.workspace, includeRemoved: options.includeRemoved };
+  const period = { ...scope, sinceDay };
+  const daily = db.usageDaily(period);
+  const range = db.usageTotals(period);
+  const allTime = db.usageTotals(scope);
+  const allDaily = db.usageDaily(scope);
   const activeDates = new Set(allDaily.map((row) => row.day));
   const { catalog: modelCatalog, describe } = usageNaming(db);
-  const historicalUsage = db.usageModels();
+  const historicalUsage = db.usageModels(scope);
   const historicalKeys = new Set(
     historicalUsage.map((entry) => `${entry.providerId}/${entry.modelId}`),
   );
@@ -162,7 +164,7 @@ function usageAnalyticsSnapshot(options = {}) {
     || left.providerName.localeCompare(right.providerName, 'zh-CN')
     || left.displayName.localeCompare(right.displayName, 'zh-CN')
   ));
-  const dailyModels = db.usageDailyModels({ sinceDay }).map((entry) => ({
+  const dailyModels = db.usageDailyModels(period).map((entry) => ({
     ...entry,
     providerName: describe(entry).providerName,
     displayName: describe(entry).displayName,
@@ -189,6 +191,7 @@ function usageAnalyticsSnapshot(options = {}) {
     daily: daily.map((entry) => ({ ...entry, cost: roundCost(entry.cost) })),
     dailyModels,
     filterModels: filterModelList,
+    projects: db.usageProjects(),
   };
 }
 
@@ -204,8 +207,9 @@ function usageModelMix(options = {}) {
   const now = Number.isFinite(options.now) ? Number(options.now) : Date.now();
   const window = resolveUsageWindow(options, now);
   const { describe } = usageNaming(db);
-  const totals = db.usageTotals(window);
-  const models = db.usageModels(window).map((entry) => ({
+  const period = { ...window, workspace: options.workspace, includeRemoved: options.includeRemoved };
+  const totals = db.usageTotals(period);
+  const models = db.usageModels(period).map((entry) => ({
     ...entry,
     ...describe(entry),
     cost: roundCost(entry.cost),

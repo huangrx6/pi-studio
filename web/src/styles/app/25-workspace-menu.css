@@ -282,7 +282,6 @@
   border-radius: var(--radius-panel);
   background: var(--surface-floating);
   box-shadow: var(--shadow-popover);
-  scrollbar-width: thin;
 }
 
 .workspace-menu-head {

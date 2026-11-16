@@ -337,8 +337,9 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     target: string,
     accessSessionId = sessionRef.current?.id,
     source: PanelFileSource = target.startsWith('/') ? 'diff' : target.startsWith('~') || target.startsWith('file://') ? 'external' : 'workspace',
+    options?: { cwd: string; refresh: boolean },
   ): Promise<boolean> {
-    const cwd = workspaceRef.current || sessionRef.current?.cwd;
+    const cwd = options?.cwd || workspaceRef.current || sessionRef.current?.cwd;
     if (source === 'workspace' && !cwd) return false;
     const identity = { path: target, source, cwd: source === 'workspace' || source === 'external' ? cwd : undefined, sessionId: source === 'workspace' ? undefined : accessSessionId };
     const key = panelFileKey(identity);
@@ -346,7 +347,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     const tab: PanelTab = { id, kind: 'file', title: target.split(/[\\/]/).pop() || target, tooltip: source === 'workspace' ? `${cwd}/${target}` : target, ...identity };
     setPanelTabs(current => current.some(item => item.id === id) ? current : [...current, tab]);
     setActivePanelTabId(id);
-    const cached = fileCacheRef.current.get(key);
+    const cached = options?.refresh ? undefined : fileCacheRef.current.get(key);
     setFile(cached ?? null);
     if (filesOpen) setPanelEntered(true); else openPanel();
     if (cached) return true;

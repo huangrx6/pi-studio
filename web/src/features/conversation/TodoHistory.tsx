@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { Check, ChevronRight, Circle, CircleDot, Lock, Minus, Target } from 'lucide-react';
 import type { TodoHistoryPage } from '../../types/chat-types';
 import { historyTaskStatus, taskStatusNames } from './todo-status';
 import { useTodoHistoryRevision } from './useTodoHistory';
 import './styles/todo-history.css';
+const statusIcons = { active: CircleDot, pending: Circle, completed: Check, blocked: Lock, unfinished: Minus };
 
 // Mounted only when the user opens the history; paging never grows the transcript window.
 export function TodoHistory({ sessionId, goalUpdatedAt }: { sessionId: string; goalUpdatedAt?: number }) {
@@ -28,16 +30,20 @@ export function TodoHistory({ sessionId, goalUpdatedAt }: { sessionId: string; g
     {error ? <p role="alert">{error} <button onClick={() => setAttempt(value => value + 1)}>重试</button></p>
       : !page ? <p role="status">正在读取清单…</p>
       : !page.items.length ? <p>本次会话还没有任务清单</p>
-      : page.items.map(plan => <details key={plan.planId}>
-        <summary>
-          <span>{plan.scope === 'goal' ? '目标' : plan.scope === 'turn' ? '普通清单' : '历史'}</span>
-          <strong>{plan.title}</strong>
-          <small>{plan.tasks.filter(task => task.status !== 'deleted').length} 项</small>
-        </summary>
-        {plan.tasks.filter(task => task.status !== 'deleted').map(task => <div key={task.id} className="todo-history-task">
-          <span>{taskStatusNames[historyTaskStatus(plan, task)]}{task.archivedAt ? ' · 已归档' : ''}</span><span>{task.subject}</span>
-        </div>)}
-      </details>)}
+      : page.items.map(plan => {
+        const tasks = plan.tasks.filter(task => task.status !== 'deleted');
+        return <details key={plan.planId}><summary><ChevronRight aria-hidden="true" />
+          <strong>{plan.title}</strong>{plan.scope === 'goal' && <Target aria-label="目标清单" />}
+          <small>{tasks.length} 项</small></summary>
+          <ul>{tasks.map(task => {
+            const status = historyTaskStatus(plan, task), Icon = statusIcons[status];
+            return <li key={task.id} className="todo-history-task" data-status={status}>
+              <span role="img" aria-label={taskStatusNames[status]} title={taskStatusNames[status]}><Icon aria-hidden="true" /></span>
+              <span>{task.subject}{task.archivedAt && <small>已归档</small>}</span>
+            </li>;
+          })}</ul>
+        </details>;
+      })}
     {(cursors.length > 0 || page?.nextCursor) ? <nav aria-label="清单历史翻页">
       <button disabled={!cursors.length} onClick={() => setCursors(value => value.slice(0, -1))}>上一页</button>
       <button disabled={!page?.nextCursor} onClick={() => {

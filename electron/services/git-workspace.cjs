@@ -11,9 +11,9 @@ const GIT_OPTIONS = {
   windowsHide: true,
 };
 
-async function runGit(cwd, args) {
+async function runGit(cwd, args, options) {
   try {
-    const result = await execFileAsync('git', args, { cwd, ...GIT_OPTIONS });
+    const result = await execFileAsync('git', args, { cwd, ...GIT_OPTIONS, ...options });
     return { stdout: result.stdout || '', error: null };
   } catch (error) {
     return { stdout: '', error };
@@ -113,7 +113,7 @@ async function getGitWorkspaceStatus(cwd) {
   const [branchResult, commitResult, statusResult, worktreeResult] = await Promise.all([
     runGit(resolvedCwd, ['branch', '--show-current']),
     runGit(resolvedCwd, ['rev-parse', '--short', 'HEAD']),
-    runGit(resolvedCwd, ['--no-optional-locks', 'status', '--porcelain=v2', '--branch', '-z', '--untracked-files=all']),
+    runGit(resolvedCwd, ['--no-optional-locks', 'status', '--porcelain=v2', '--branch', '-z', '--untracked-files=all'], { timeout: 30_000, maxBuffer: 32 * 1024 * 1024 }),
     runGit(resolvedCwd, ['worktree', 'list', '--porcelain', '-z']),
   ]);
 

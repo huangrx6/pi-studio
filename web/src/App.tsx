@@ -490,6 +490,7 @@ export function App() {
         actions={{
           openAttachment: handleOpenAttachment,
           openFile: handleOpenFile,
+          openGitFile: (root, path) => { void openFile(path, session?.id, 'workspace', { cwd: root, refresh: true }); },
           openChanges: handleOpenChanges,
           undoTurnDiff,
           editMessage: handleEditMessage,
@@ -727,6 +728,7 @@ export function App() {
         about={{
           snapshot: updateSnapshot,
           paths: settingsData!,
+          runtime: settingsData?.runtimeVersions,
           onOpenUpdates: openUpdateDialog,
         }}
       />

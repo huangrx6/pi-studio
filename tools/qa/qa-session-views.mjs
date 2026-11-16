@@ -144,13 +144,24 @@ try {
   await page.locator('.session-row').filter({ hasText: '性能会话 0001' }).click();
   await page.locator('.chat-heading h1').getByText('性能会话 0001').waitFor();
   assert.doesNotMatch(await pinned.innerText(), /核对会话清单|整理会话进展|接口核对|perf-0/);
+  async function checkViewAllButtons(panel) {
+    const appearance = name => panel.getByRole('button', { name }).evaluate(el => {
+      const css = getComputedStyle(el);
+      return [css.font, css.color, css.padding, el.clientHeight];
+    });
+    assert.deepEqual(await appearance('查看全部任务'), await appearance('查看全部子智能体'));
+  }
+  await checkViewAllButtons(pinned);
   await pinned.getByRole('button', { name: '查看历史' }).click();
   await pinned.getByText('perf-1 历史清单').waitFor();
   await button('取消固定，返回浮层').click();
   await progress.getByText('perf-1 历史清单').waitFor();
-  assert.equal(await button('固定到右栏').evaluate(el => el === document.activeElement), true);
+  await checkViewAllButtons(progress);
+  await page.waitForFunction(() => document.activeElement?.matches('.progress-popover .progress-pin'));
   assert.equal(await progressTab.count(), 0);
   assert.equal(await filesTab.count(), 1);
+  await progress.locator('.todo-history summary').first().click();
+  await progress.locator('.todo-history-task').getByRole('img', { name: '结束时未完成' }).waitFor();
   await capture('progress-floating');
   await composer.click();
   assert.equal(await progress.count(), 0);

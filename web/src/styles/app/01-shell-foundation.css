@@ -27,7 +27,7 @@
 html, body, #root { width: 100%; height: 100%; margin: 0; }
 /* 页面底色就是外框色：窗口四角、滚动回弹以及壁纸层加载前都不会露出内容画布的
    深色。内容区自己再画 --surface-canvas。 */
-body { font: var(--text-base)/var(--leading-body) var(--font); color: var(--text); background: var(--surface-chrome); -webkit-font-smoothing: antialiased; overflow: hidden; --dsh-scrollbar-thumb: var(--scrollbar); --dsh-scrollbar-thumb-hover: var(--scrollbar-hover); --dsh-scrollbar-width: 6px; }
+body { font: var(--text-base)/var(--leading-body) var(--font); color: var(--text); background: var(--surface-chrome); -webkit-font-smoothing: antialiased; overflow: hidden; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { border: 0; background: var(--transparent); cursor: pointer; transition: background var(--transition), color var(--transition), border-color var(--transition), box-shadow var(--transition); }
 button:disabled { cursor: not-allowed; opacity: .48; }

@@ -75,10 +75,15 @@ type ProgressProps = {
   onAgent: (child: SubagentChild) => void;
 };
 
+function ViewAll({ label, onClick }: { label: string; onClick: () => void }) {
+  return <button type="button" className="progress-view-all" aria-label={label} onClick={onClick}>查看全部<ChevronRight aria-hidden="true" /></button>;
+}
+
 export function ConversationProgress(props: ProgressProps) {
   const { pinned, git, sessionId, goal, running, tasks, agents, history } = props;
   const [agentsExpanded, setAgentsExpanded] = useState(false);
   const agentsId = useId();
+  const historyId = useId();
   const orderedAgents = useMemo(() => orderProgressAgents(agents), [agents]);
   const previewLimit = 3;
   const visibleAgents = agentsExpanded ? orderedAgents : orderedAgents.slice(0, previewLimit);
@@ -87,9 +92,8 @@ export function ConversationProgress(props: ProgressProps) {
     : git.reason === 'not-a-repository' ? '非 Git 项目' : 'Git 不可用';
   const gitSection = <section className="workspace-menu-section progress-git" aria-label="Git 工具" data-available={git?.available || undefined}>
     <header className="progress-git-repo">
-      <span className="progress-git-mark" aria-hidden="true"><GitBranch /></span>
       <div className="progress-git-identity">
-        <span className={git?.available ? 'progress-git-branch' : undefined} title={[repositoryLabel, git?.repositoryRoot].filter(Boolean).join('\n')}>{repositoryLabel}</span>
+        <div className="progress-git-title"><GitBranch aria-hidden="true" /><span className={git?.available ? 'progress-git-branch' : undefined} title={[repositoryLabel, git?.repositoryRoot].filter(Boolean).join('\n')}>{repositoryLabel}</span></div>
         {git?.available && <small>{git.statusReadFailed ? '未能读取变更' : git.dirty.total ? `${git.dirty.total} 项变更` : '工作区干净'}</small>}
       </div>
       <button className="icon-button" type="button" aria-label="Git 设置" title="Git 设置" onClick={props.onGitSettings}><Settings2 aria-hidden="true" /></button>
@@ -102,11 +106,7 @@ export function ConversationProgress(props: ProgressProps) {
     </nav>}
   </section>;
   const historyLabel = history ? '收起历史' : '查看历史';
-  const historyAction = <span className="progress-task-actions">
-    <button type="button" className="progress-history-toggle" aria-expanded={history} aria-label={historyLabel}
-      title={historyLabel} onClick={props.onToggleHistory}><History aria-hidden="true" /></button>
-    <button type="button" className="progress-text-action" aria-label="查看全部任务" onClick={props.onOpenTasks}>查看全部</button>
-  </span>;
+  const allTasks = <ViewAll label="查看全部任务" onClick={props.onOpenTasks} />;
   return <div className={`conversation-progress ${pinned ? 'is-pinned' : ''}`}>
     <header className="workspace-menu-head progress-head">
       <strong>会话进展</strong>
@@ -122,14 +122,16 @@ export function ConversationProgress(props: ProgressProps) {
           : <button type="button" className="progress-row" onClick={props.onEditGoal}><Target /><span>设置目标</span><ChevronRight /></button>}
       </section>
       <section className="workspace-menu-section progress-tasks" aria-label="任务列表">
-        {!pinned && <div className="workspace-menu-section-heading"><span className="workspace-menu-section-label">任务列表</span>{historyAction}</div>}
-        <TodoDock key={tasks?.planId} details={tasks} pinnedHeaderAction={pinned ? historyAction : undefined} />
-        {history && <TodoHistory key={sessionId} sessionId={sessionId} goalUpdatedAt={goal?.updatedAt} />}
+        {!pinned && <header className="progress-section-head"><h3>任务列表</h3>{allTasks}</header>}
+        <TodoDock key={tasks?.planId} details={tasks} pinnedHeaderAction={pinned ? allTasks : undefined} />
+        <button type="button" className="progress-history-toggle" aria-expanded={history} aria-controls={historyId}
+          aria-label={historyLabel} onClick={props.onToggleHistory}><ChevronRight aria-hidden="true" />历史清单</button>
+        <div id={historyId} hidden={!history}>{history && <TodoHistory key={sessionId} sessionId={sessionId} goalUpdatedAt={goal?.updatedAt} />}</div>
       </section>
       <section className="workspace-menu-section progress-agents" aria-label="子智能体">
-        <header className={pinned ? 'progress-section-head' : 'workspace-menu-section-heading'}>
-          <h3 className="workspace-menu-section-label">子智能体{agents.length > 0 && <small>{agents.length}</small>}</h3>
-          <button type="button" className="progress-text-action" aria-label="查看全部子智能体" onClick={props.onAgents}>查看全部</button>
+        <header className="progress-section-head">
+          <h3>子智能体{agents.length > 0 && <small>{agents.length}</small>}</h3>
+          <ViewAll label="查看全部子智能体" onClick={props.onAgents} />
         </header>
         {!!agents.length && <div className="progress-agent-list" id={agentsId} tabIndex={agentsExpanded ? 0 : undefined}>
           {visibleAgents.map(child => <button key={child.key} type="button" className="progress-row progress-agent"

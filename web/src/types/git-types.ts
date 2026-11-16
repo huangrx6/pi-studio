@@ -52,26 +52,42 @@ export type GitTab = 'changes' | 'commit' | 'history' | 'sync';
 export type GitHead = { branch: string; head: string };
 export type GitBranchRef = { name: string; remote: boolean; worktree: string; upstreamRemote: string; upstreamBranch: string };
 export type GitFile = { path: string; previousPath?: string; index: string; worktree: string; conflict: boolean };
-export type GitState = GitHead & { root: string; files: GitFile[]; merging: boolean; indexVersion: string; remotes: string[]; upstreamRemote: string; upstreamBranch: string; ahead: number; behind: number; gone: boolean };
+export type GitState = GitHead & { root: string; files: GitFile[]; filesVersion: string; filesUnchanged: boolean; merging: boolean; mergeHead: string; indexVersion: string; remotes: string[]; upstreamRemote: string; upstreamBranch: string; ahead: number; behind: number; gone: boolean };
 export type GitHistoryRow = { hash: string; graph: string; connectors: string[]; author: string; date: string; refs: string; subject: string };
 export type GitCommit = { hash: string; parents: string[]; author: string; email: string; date: string; message: string; files: { path: string; previousPath?: string; code: string }[] };
-export type GitDiffSource = { layer: 'commit'; path: string; hash: string } | { layer: 'index' | 'worktree'; path: string };
+export type GitRemoteInfo = { name: string; fetchUrls: string[]; pushUrls: string[]; editableFetch: string; editablePush: string; explicitPush: boolean; version: string };
+export type GitSyncKind = 'pull' | 'push';
+export type GitSyncPreview = GitHead & { remote: string; operation: GitSyncKind; target: string; remoteHead: string; address: string;
+  setUpstream: boolean; incoming: number; outgoing: number; dirty: boolean; mergeMode: 'ff' | 'ff-only' | 'no-ff'; version: string };
+export type GitDiffSource = { path: string; previousPath?: string } & ({ layer: 'commit'; hash: string } | { layer: 'index' | 'worktree' });
 export type GitReadParams = {
-  state: object;
+  state: { summaryOnly?: boolean; knownFilesVersion?: string };
   branches: object;
   history: { query?: string; offset?: number };
   detail: { hash: string };
+  remoteInfo: { remote: string };
+  syncPreview: { operation: GitSyncKind; remote: string; targetIndex?: number; remoteVersion?: string };
+  syncCommits: { tip: string; exclude: string; offset: number };
   diff: GitDiffSource;
 };
 export type GitReadResult = {
   state: GitState;
   branches: GitHead & { root: string; branches: GitBranchRef[] };
-  history: { rows: GitHistoryRow[]; more: boolean };
+  history: { rows: GitHistoryRow[]; more: boolean; total: number; pageSize: number; offset: number };
   detail: GitCommit;
+  remoteInfo: GitRemoteInfo;
+  syncPreview: GitSyncPreview;
+  syncCommits: { hash: string; subject: string }[];
   diff: import('./chat-types').TurnDiffFile;
 };
 export type GitAction =
   | { kind: 'switch' | 'create'; name: string; remoteBranch?: boolean }
   | { kind: 'stage' | 'unstage'; paths: string[] }
   | { kind: 'commit'; message: string; indexVersion: string }
-  | { kind: 'fetch' | 'pull' | 'push'; remote: string };
+  | { kind: 'abortMerge'; mergeHead: string }
+  | { kind: 'fetch'; remote: string }
+  | { kind: GitSyncKind; remote: string; version: string; force?: boolean; targetIndex?: number }
+  | { kind: 'remoteAdd'; name: string; url: string }
+  | { kind: 'remoteRename'; remote: string; name: string; version: string }
+  | { kind: 'remoteEdit'; remote: string; field: 'push' | 'fetch'; url: string; version: string }
+  | { kind: 'remoteRemove'; remote: string; version: string };

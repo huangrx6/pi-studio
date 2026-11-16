@@ -1,9 +1,21 @@
-.todo-history-disclosure { margin: 4px 0; }
-.todo-history-disclosure summary { cursor: pointer; }
-.todo-history { max-height: 250px; overflow: auto; padding: 4px 0; }
-.todo-history details { padding: 4px 0; }
-.todo-history details span, .todo-history small, .todo-history-task > span:first-child { color: var(--muted); }
-.todo-history summary > *, .todo-history-task > span + span { margin-inline-start: 7px; }
-.todo-history-task { display: flex; padding: 3px 0; overflow-wrap: anywhere; }
-.todo-history-task > span:first-child { flex: none; }
-.todo-history nav { display: flex; gap: 12px; margin-top: 6px; }
+.todo-history { max-height: min(40dvh, 280px); overflow: auto; overscroll-behavior: contain; }
+.todo-history details + details { border-top: 1px solid var(--divider); }
+.todo-history summary { display: flex; gap: 7px; align-items: center; min-height: 30px; padding: 4px 6px; list-style: none; cursor: pointer; border-radius: var(--radius-control); }
+.todo-history summary::-webkit-details-marker { display: none; }
+.todo-history summary:hover { background: var(--surface-hover); }
+.todo-history summary strong { flex: 1; min-width: 0; font-weight: var(--weight-medium); overflow-wrap: anywhere; }
+.todo-history summary svg, .todo-history-task svg { width: var(--icon-xs); height: var(--icon-xs); flex: none; }
+.todo-history summary > svg:first-child, .todo-history small { color: var(--text-2); }
+.todo-history details[open] > summary > svg:first-child { transform: rotate(90deg); }
+.todo-history small { font-size: var(--text-xs); white-space: nowrap; }
+.todo-history ul { list-style: none; margin: 0 0 6px 12px; padding: 0 0 0 9px; border-inline-start: 1px solid var(--divider); }
+.todo-history-task { display: flex; align-items: baseline; gap: 7px; padding: 4px 2px; font-size: var(--text-sm); line-height: var(--leading-normal); overflow-wrap: anywhere; }
+.todo-history-task > span:first-child { flex: none; color: var(--text-2); }
+.todo-history-task svg { vertical-align: -.12em; }
+.todo-history-task[data-status="completed"] > span:first-child { color: var(--success); }
+.todo-history-task[data-status="completed"] > span + span { color: var(--text-2); }
+.todo-history-task[data-status="active"] > span:first-child { color: var(--accent); }
+.todo-history-task[data-status="blocked"] > span:first-child { color: var(--warning); }
+.todo-history-task small { margin-inline-start: 6px; }
+.todo-history > p { margin: 4px 6px; color: var(--text-2); }
+.todo-history nav { display: flex; gap: 12px; justify-content: flex-end; padding: 4px 6px; color: var(--text-2); font-size: var(--text-xs); }

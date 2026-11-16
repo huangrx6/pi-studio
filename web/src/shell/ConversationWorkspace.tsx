@@ -141,6 +141,7 @@ type OutlineState = {
 };
 
 type ConversationActions = {
+  openGitFile: (root: string, path: string) => void;
   openAttachment: (path: string) => void;
   openFile: (path: string) => void;
   undoTurnDiff: (at: number) => Promise<void>;
@@ -513,7 +514,7 @@ export function ConversationWorkspace({
       {!isNewConversation && showTrace && <ConversationTracePage key={session?.id} summary={traceSummary} />}
 
       {session && agentView.kind === 'git' && <Suspense fallback={<LoadingState variant="panel">正在读取 Git…</LoadingState>}>
-        <GitWorkspacePage key={session.id} sessionId={session.id} tab={agentView.tab} onTab={header.openGit} diffPreferences={preferences} />
+        <GitWorkspacePage key={session.id} sessionId={session.id} tab={agentView.tab} onTab={header.openGit} diffPreferences={preferences} openFile={actions.openGitFile} />
       </Suspense>}
       {session && agentView.kind === 'tasks' && <Suspense fallback={<LoadingState variant="panel">正在读取任务…</LoadingState>}>
         <ConversationTasksPage key={session.id} sessionId={session.id} goalUpdatedAt={session.longTask?.updatedAt} />

@@ -15,11 +15,11 @@ button.progress-row:hover:not(:disabled), .progress-link:hover { color: var(--te
 .conversation-progress .long-task-dock { max-width: none; margin: 0; padding: 2px 10px; border: 0; }
 .conversation-progress .todo-dock { margin: 0; max-width: none; }
 .conversation-progress .todo-dock-body { position: static; width: auto; }
-.conversation-progress .todo-history { margin: 0 10px; font-size: var(--text-xs); }
+.conversation-progress .todo-history { margin: 0 10px; font-size: var(--text-sm); }
 
 .progress-agents h3 { margin: 0; }
 .progress-agents h3 small { margin-inline-start: 7px; font: inherit; font-variant-numeric: tabular-nums; color: var(--text-3); }
-.progress-agent-list { display: grid; max-height: min(40dvh, 280px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.progress-agent-list { display: grid; max-height: min(40dvh, 280px); overflow-y: auto; overscroll-behavior: contain; }
 .progress-agent { --subagent-avatar-size: 24px; }
 .progress-agents-more { display: inline-flex; align-items: center; gap: 4px; justify-self: start; width: fit-content; color: var(--text-2); font-size: var(--text-xs); }
 .progress-popover .progress-agents-more { margin-inline: 10px; }
@@ -31,7 +31,6 @@ button.progress-row:hover:not(:disabled), .progress-link:hover { color: var(--te
   flex-direction: column;
   gap: 24px;
   padding: 20px clamp(12px, 1.4vw, 22px) 12px;
-  scrollbar-width: thin;
 }
 .is-pinned.conversation-progress > * { flex: 0 0 auto; }
 .is-pinned.conversation-progress .progress-head { padding: 0; border: 0; }
@@ -75,8 +74,8 @@ button.progress-row:hover:not(:disabled), .progress-link:hover { color: var(--te
 .is-featured.is-blocked .progress-goal-state { color: var(--warning); }
 .is-featured.is-failed .progress-goal-state { color: var(--error); }
 
-.progress-task-scroll { max-height: min(40dvh, 280px); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
-.progress-task-scroll .todo-row { min-height: 34px; gap: 10px; margin: 0; padding: 4px 0; background: none; box-shadow: none; color: var(--text-2); font-size: var(--text-base); }
+.progress-task-scroll { max-height: min(40dvh, 280px); overflow: auto; overscroll-behavior: contain; }
+.progress-task-scroll .todo-row { min-height: 34px; gap: 10px; margin: 0; padding: 4px 0; background: none; box-shadow: none; color: var(--text-2); font-size: var(--text-sm); }
 .progress-task-scroll .todo-row.is-active { background: transparent; border: 0; box-shadow: none; color: var(--text-1); }
 .progress-task-scroll .todo-row-icon { width: 20px; height: 20px; }
 .progress-task-scroll .todo-row-icon svg { width: var(--icon-md); height: var(--icon-md); }
@@ -88,7 +87,7 @@ button.progress-row:hover:not(:disabled), .progress-link:hover { color: var(--te
 .is-pinned.conversation-progress .todo-history { margin: 0; }
 .is-pinned.conversation-progress .progress-agents { row-gap: 2px; }
 .is-pinned .progress-agents .progress-section-head { margin-bottom: 6px; }
-.is-pinned .progress-agent { gap: 10px; min-height: 38px; padding: 4px 2px; color: var(--text-1); font-size: var(--text-base); }
+.is-pinned .progress-agent { gap: 10px; min-height: 38px; padding: 4px 2px; color: var(--text-1); font-size: var(--text-sm); }
 .is-pinned .progress-agent-list { gap: 2px; }
 .is-pinned .progress-agent { --subagent-avatar-size: 26px; }
 .is-pinned .progress-agent small { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--text-2); }
@@ -96,12 +95,15 @@ button.progress-row:hover:not(:disabled), .progress-link:hover { color: var(--te
 .is-pinned .progress-agent[data-status="running"] small::before { background: var(--accent); }
 .is-pinned .progress-agent[data-status="failed"] small::before { background: var(--error); }
 .is-pinned .progress-agent[data-status="waiting"] small::before { background: var(--warning); }
-.progress-task-actions { display: inline-flex; align-items: center; gap: 6px; }
-.progress-task-actions button { color: var(--text-2); font-size: var(--text-sm); }
-.progress-task-actions button:hover { color: var(--accent); }
-.progress-history-toggle { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: var(--radius-control); }
-.progress-history-toggle svg { width: var(--icon-sm); height: var(--icon-sm); }
-.progress-popover .progress-task-actions { margin-right: 10px; }
+.progress-popover .progress-section-head { padding-inline: 10px 6px; }
+.conversation-progress .progress-view-all, .conversation-progress .progress-history-toggle {
+  display: inline-flex; align-items: center; gap: 3px; min-height: 26px; width: fit-content; padding: 3px 4px;
+  border-radius: var(--radius-control); color: var(--text-2); font: var(--text-sm)/var(--leading-normal) var(--font);
+}
+.conversation-progress .progress-view-all:hover, .conversation-progress .progress-history-toggle:hover { color: var(--text-1); background: var(--surface-hover); }
+.progress-view-all svg, .progress-history-toggle svg { width: var(--icon-xs); height: var(--icon-xs); }
+.progress-popover .progress-history-toggle { margin-inline-start: 6px; }
+.progress-history-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
 .progress-popover .todo-dock-scroll { max-height: min(40dvh, 280px); overscroll-behavior: contain; }
 .progress-popover .todo-preview-more { display: inline-flex; align-items: center; gap: 4px; margin: 3px 10px 6px; color: var(--text-2); font-size: var(--text-xs); }
 
@@ -113,21 +115,11 @@ button.progress-row:hover:not(:disabled), .progress-link:hover { color: var(--te
   border-top: 1px solid var(--divider);
 }
 .progress-git-repo { display: flex; align-items: center; gap: 9px; min-width: 0; }
-.progress-popover .progress-git-repo { margin-inline: 5px; }
-.progress-git-mark {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  flex: none;
-  border-radius: var(--radius-control);
-  color: var(--text-3);
-  background: var(--surface-soft);
-}
-.progress-git[data-available] .progress-git-mark { color: var(--accent-foreground); background: var(--accent-tint); }
-.progress-git-mark svg { width: var(--icon-md); height: var(--icon-md); }
-.progress-git-identity { display: grid; flex: 1; gap: 1px; min-width: 0; color: var(--text-2); font-size: var(--text-sm); }
-.progress-git-identity > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.progress-popover .progress-git-repo { margin-inline: 8px 5px; }
+.progress-git-identity { display: grid; flex: 1; gap: 3px; min-width: 0; color: var(--text-2); font-size: var(--text-sm); }
+.progress-git-title { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.progress-git-title svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--text-3); }
+.progress-git-title > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .progress-git-branch { color: var(--text-1); font: var(--weight-medium) var(--text-sm)/1.45 var(--mono); }
 .progress-git-identity small { color: var(--text-2); font-size: var(--text-xs); line-height: 1.4; }
 .progress-git-repo .icon-button { width: 28px; height: 28px; flex: none; color: var(--text-3); }

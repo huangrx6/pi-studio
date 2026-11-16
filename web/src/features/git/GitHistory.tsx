@@ -4,6 +4,7 @@ import { FileKindIcon } from '../../shared/FileKindIcon';
 import type { GitHistoryRow } from '../../types/git-types';
 import { useGitRead } from './useGitTools';
 import { GitFileDiff } from './GitFileDiff';
+import { GitFileList } from './GitFileList';
 import './styles/git-history.css';
 
 const lanes = ['color-mix(in srgb, var(--accent) 75%, var(--text))', 'var(--info)', 'var(--warning)', 'var(--success)', 'var(--text-2)'];
@@ -64,7 +65,7 @@ function CommitRefs({ refs }: { refs: string }) {
 function CommitDetail({ sessionId, hash, revision, back }: { sessionId: string; hash: string; revision: number; back: () => void }) {
   const { data, error } = useGitRead(sessionId, 'detail', { hash }, revision);
   const [picked, setPicked] = useState('');
-  const selected = picked || data?.files[0]?.path;
+  const selected = (picked && data?.files.find(file => file.path === picked)) || data?.files[0];
   const backButton = useRef<HTMLButtonElement>(null);
   useEffect(() => { backButton.current?.focus(); }, []);
   return <section className="git-commit-detail" aria-label="提交详情">
@@ -87,22 +88,21 @@ function CommitDetail({ sessionId, hash, revision, back }: { sessionId: string; 
         <section className="git-detail-paths" aria-label="变更文件">
           <h4>变更文件 <small>{data.files.length}</small></h4>
           {!data.files.length && <p className="git-history-feedback">这次提交没有文件变更。</p>}
-          <div className="git-detail-file-list">{data.files.map(file => {
+          <GitFileList files={data.files} className="git-detail-file-list">{file => {
             const split = file.path.lastIndexOf('/');
             const directory = file.path.slice(0, split + 1);
             const status = file.code[0];
-            return <button key={file.path} className="git-history-file" type="button" aria-pressed={selected === file.path}
+            return <button key={file.path} className="git-history-file" type="button" aria-pressed={selected?.path === file.path}
               title={file.previousPath ? file.previousPath + ' → ' + file.path : file.path} onClick={() => setPicked(file.path)}>
               <FileKindIcon path={file.path} />
               <span className="git-detail-path"><strong>{file.path.slice(split + 1)}</strong>
-                {directory && <small>{directory}</small>}
-                {file.previousPath && <small>原路径 {file.previousPath}</small>}
+                {(file.previousPath || directory) && <small>{file.previousPath ? '原路径 ' + file.previousPath : directory}</small>}
               </span>
               <span className="git-detail-change" data-change={status} title={file.code}>{changeNames[status] || file.code}</span>
             </button>;
-          })}</div>
+          }}</GitFileList>
         </section>
-        {selected && <GitFileDiff sessionId={sessionId} source={{ layer: 'commit', hash, path: selected }} revision={revision} />}
+        {selected && <GitFileDiff sessionId={sessionId} source={{ layer: 'commit', hash, path: selected.path, previousPath: selected.previousPath || '' }} revision={revision} />}
       </div>
     </>}
   </section>;
@@ -112,10 +112,11 @@ export function GitHistory({ sessionId, revision }: { sessionId: string; revisio
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   const [offset, setOffset] = useState(0);
+  const [jump, setJump] = useState('');
   const [hash, setHash] = useState('');
   const returnTo = useRef('');
   useEffect(() => {
-    const timeout = setTimeout(() => { setOffset(0); setSearch(query.trim()); }, 180);
+    const timeout = setTimeout(() => { setOffset(0); setJump(''); setSearch(query.trim()); }, 180);
     return () => clearTimeout(timeout);
   }, [query]);
   const { data, error } = useGitRead(hash ? undefined : sessionId, 'history', { query: search, offset }, revision);
@@ -126,6 +127,13 @@ export function GitHistory({ sessionId, revision }: { sessionId: string; revisio
     for (const line of [row.graph, ...row.connectors]) graphColumns = Math.max(graphColumns, line.trimEnd().length);
   }
   const graphWidth = (graphColumns - 1) * columnStep + 14;
+  const pages = data ? Math.ceil(data.total / data.pageSize) : 0;
+  const page = data ? Math.floor(data.offset / data.pageSize) + 1 : 0;
+  function go(value: number) {
+    if (!data || !Number.isInteger(value) || value < 1 || value > pages) return;
+    setJump('');
+    setOffset((value - 1) * data.pageSize);
+  }
   return <section className="git-history" aria-label="提交历史">
     <label className="git-search"><Search aria-hidden="true" /><input type="search" value={query} aria-label="搜索提交" placeholder="搜索提交说明或哈希"
       onChange={e => setQuery(e.target.value)} /></label>
@@ -138,7 +146,7 @@ export function GitHistory({ sessionId, revision }: { sessionId: string; revisio
     } as CSSProperties}>
       {data.rows.map((row, i) => <button type="button" key={row.hash} className="git-history-row" onClick={() => setHash(row.hash)}
         ref={button => { if (button && returnTo.current === row.hash) { returnTo.current = ''; button.focus(); } }}>
-        <CommitGraph row={row} width={graphWidth} first={!offset && i === 0} last={!data.more && i === data.rows.length - 1} />
+        <CommitGraph row={row} width={graphWidth} first={!data.offset && i === 0} last={!data.more && i === data.rows.length - 1} />
         <span className="git-history-subject"><strong title={row.subject}>{row.subject || '无提交说明'}</strong>
           <span className="git-history-meta"><span className="git-author">{row.author}</span><span aria-hidden="true">·</span>
             <time dateTime={row.date}>{listDate.format(new Date(row.date))}</time></span>
@@ -146,9 +154,14 @@ export function GitHistory({ sessionId, revision }: { sessionId: string; revisio
         <span className="git-history-aside">{row.refs && <CommitRefs refs={row.refs} />}<code>{row.hash.slice(0, 8)}</code></span>
       </button>)}
     </div>}
-    {(offset > 0 || data?.more) && <div className="git-pages">
-      <button type="button" disabled={!offset || !data} onClick={() => setOffset(Math.max(0, offset - 60))}><ChevronLeft />上一页</button>
-      <button type="button" disabled={!data?.more} onClick={() => setOffset(offset + (data?.rows.length || 0))}>下一页<ChevronRight /></button>
-    </div>}
+    {data && pages > 0 && <nav className="git-pages" aria-label="提交历史分页">
+      <span>第 {page} / {pages} 页 · 共 {data.total} 次提交</span>
+      {pages > 1 && <><button type="button" disabled={page <= 1} onClick={() => go(page - 1)}><ChevronLeft />上一页</button>
+        <button type="button" disabled={!data.more} onClick={() => go(page + 1)}>下一页<ChevronRight /></button>
+        <form onSubmit={e => { e.preventDefault(); go(Number(jump)); }}>
+          <input type="number" min={1} max={pages} required aria-label="跳转页码" placeholder="页码" value={jump} onChange={e => setJump(e.target.value)} />
+          <button type="submit" disabled={!jump}>跳转</button>
+        </form></>}
+    </nav>}
   </section>;
 }

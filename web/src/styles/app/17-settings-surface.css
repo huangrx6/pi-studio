@@ -830,8 +830,6 @@
 
 .settings-content .harness-section-overrides { margin-top: var(--space-6); }
 .settings-content :is(.harness-section-heading, .harness-section-overrides-head) { margin-bottom: var(--settings-heading-gap); }
-.settings-content .about-links { padding-bottom: var(--settings-section-gap); }
-.settings-content .about-diagnostics { padding-top: var(--settings-section-gap); }
 
 /* 说明文字统一 13：列表与行里的描述、状态文字。 */
 .settings-content :is(

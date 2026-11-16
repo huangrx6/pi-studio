@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { ExternalLink, Info, RotateCw } from 'lucide-react';
 import type { UpdateSnapshot } from '../../types/update-types';
+import type { StudioRuntimeVersions } from '../../types/runtime-types';
 import { errorText } from '../../shared/error-text';
 import '../../shared/styles/settings-page-header.css';
 import './styles/about-settings.css';
 
-export function AboutSettings({ snapshot, paths, onOpenUpdates }: {
+export function AboutSettings({ snapshot, paths, runtime, onOpenUpdates }: {
   snapshot: UpdateSnapshot;
   paths: { databasePath: string; skillsPath: string; extensionsPath: string };
+  runtime?: StudioRuntimeVersions;
   onOpenUpdates: () => void;
 }) {
   const [linkError, setLinkError] = useState<string | null>(null);
@@ -24,6 +26,11 @@ export function AboutSettings({ snapshot, paths, onOpenUpdates }: {
     : snapshot.state === 'downloading' ? '查看下载进度'
       : snapshot.state === 'available' ? snapshot.updateKind === 'same-version' ? '查看新构建' : '查看更新'
         : snapshot.state === 'checking' ? '正在检查更新' : '检查更新';
+  const platformNames: Record<string, string> = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' };
+  const versions = runtime ? [
+    ['Pi Durable', runtime.durable], ['Electron', runtime.electron], ['Chromium', runtime.chromium],
+    ['Node.js', runtime.node], ['SQLite', runtime.sqlite], ['运行平台', `${platformNames[runtime.platform] || runtime.platform} · ${runtime.arch}`],
+  ] : [];
   return <div className="about-page">
     <header className="settings-page-header">
       <div className="settings-page-header-copy">
@@ -37,27 +44,34 @@ export function AboutSettings({ snapshot, paths, onOpenUpdates }: {
         <button type="button" className="settings-outline" onClick={onOpenUpdates}><RotateCw aria-hidden="true" />{updateLabel}</button>
       </div>
     </header>
-    <nav className="about-links" aria-label="资源与支持">
-      {[
-        ['使用文档', 'https://huangrx6.github.io/pi-studio/'],
-        ['源代码', 'https://github.com/huangrx6/pi-studio'],
-        ['问题反馈', 'https://github.com/huangrx6/pi-studio/issues'],
-      ].map(([label, url]) => <button type="button" key={url} onClick={() => void openLink(url)}>{label}<ExternalLink aria-hidden="true" /></button>)}
-    </nav>
+    <div className="about-meta">
+      <nav className="about-links" aria-label="资源与支持">
+        {[
+          ['使用文档', 'https://huangrx6.github.io/pi-studio/'],
+          ['源代码', 'https://github.com/huangrx6/pi-studio'],
+          ['问题反馈', 'https://github.com/huangrx6/pi-studio/issues'],
+        ].map(([label, url]) => <button type="button" key={url} onClick={() => void openLink(url)}>{label}<ExternalLink aria-hidden="true" /></button>)}
+      </nav>
+      <dl className="about-credits">
+        <div><dt>作者</dt><dd><button type="button" onClick={() => void openLink('https://github.com/huangrx6')}>huangrx6<ExternalLink aria-hidden="true" /></button></dd></div>
+        <div><dt>许可</dt><dd><button type="button" onClick={() => void openLink('https://github.com/huangrx6/pi-studio/blob/main/LICENSE')}>MIT License<ExternalLink aria-hidden="true" /></button></dd></div>
+      </dl>
+    </div>
     {linkError && <p className="about-link-error" role="alert">{linkError}</p>}
-    <dl className="about-facts">
-      <div><dt>作者</dt><dd><button type="button" onClick={() => void openLink('https://github.com/huangrx6')}>huangrx6<ExternalLink aria-hidden="true" /></button></dd></div>
-      <div><dt>运行引擎</dt><dd>Pi Durable</dd></div>
-      <div><dt>许可</dt><dd><button type="button" onClick={() => void openLink('https://github.com/huangrx6/pi-studio/blob/main/LICENSE')}>MIT License<ExternalLink aria-hidden="true" /></button></dd></div>
-    </dl>
-    <details className="about-diagnostics">
-      <summary>本地存储与诊断信息</summary>
+    <section className="about-section" aria-labelledby="about-runtime-title">
+      <h2 id="about-runtime-title">运行环境</h2>
+      {runtime ? <dl className="about-versions">{versions.map(([label, value]) => <div key={label}>
+        <dt>{label}</dt><dd>{value || '未提供'}</dd>
+      </div>)}</dl> : <p>运行环境信息尚未加载</p>}
+    </section>
+    <section className="about-section about-diagnostics" aria-labelledby="about-storage-title">
+      <h2 id="about-storage-title">本地存储与诊断信息</h2>
       <dl className="about-facts">
         {snapshot.currentBuildId && <div><dt>构建标识</dt><dd><code>{snapshot.currentBuildId}</code></dd></div>}
         <div><dt>SQLite 数据库</dt><dd><code>{paths.databasePath}</code></dd></div>
         <div><dt>技能目录</dt><dd><code>{paths.skillsPath}</code></dd></div>
         <div><dt>扩展目录</dt><dd><code>{paths.extensionsPath}</code></dd></div>
       </dl>
-    </details>
+    </section>
   </div>;
 }

@@ -9,6 +9,8 @@ function registerUsageIpc() {
   ipcMain.handle('pi:usage-summary', async (_event, payload = {}) => (
     usageAnalyticsSnapshot({
       days: payload?.days,
+      workspace: payload?.workspace,
+      includeRemoved: payload?.includeRemoved !== false,
       now: Date.now(),
     })
   ));
@@ -18,6 +20,8 @@ function registerUsageIpc() {
       sinceDay: payload?.sinceDay,
       untilDay: payload?.untilDay,
       days: payload?.days,
+      workspace: payload?.workspace,
+      includeRemoved: payload?.includeRemoved !== false,
       now: Date.now(),
     })
   ));

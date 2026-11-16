@@ -80,6 +80,7 @@ export type Preferences = {
   showCodeView: boolean;
   gitDiffLayout: 'auto' | 'unified' | 'split';
   gitDiffWrap: boolean;
+  usageIncludeRemovedProjects: boolean;
   /** 网页链接打开方式。 */
   linkOpen: LinkPreference;
   /** 圆角风格。 */
@@ -122,6 +123,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   showCodeView: false,
   gitDiffLayout: 'auto',
   gitDiffWrap: false,
+  usageIncludeRemovedProjects: true,
   linkOpen: 'external',
   radiusStyle: 'standard',
   backgroundMedia: null,
@@ -258,6 +260,7 @@ export function normalizePreferences(value: unknown): Preferences {
       : DEFAULT_PREFERENCES.showCodeView,
     gitDiffLayout: source.gitDiffLayout === 'split' || source.gitDiffLayout === 'unified'
       ? source.gitDiffLayout : DEFAULT_PREFERENCES.gitDiffLayout,
+    usageIncludeRemovedProjects: source.usageIncludeRemovedProjects !== false,
     gitDiffWrap: typeof source.gitDiffWrap === 'boolean' ? source.gitDiffWrap : DEFAULT_PREFERENCES.gitDiffWrap,
     linkOpen: LINK_PREFERENCES.has(source.linkOpen as LinkPreference)
       ? source.linkOpen as LinkPreference

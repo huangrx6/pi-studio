@@ -161,24 +161,6 @@ just-dropped 只有一次短动画，不改变最终布局。 */
 .sidebar-top-toggle { position: absolute; top: 10px; right: 12px; z-index: 5; width: 28px; height: 28px; }
 .chat-actions { margin-left: auto; }
 
-/* Global scrollbar policy: no vertical bar; a slim, quiet horizontal bar. */
-/* 这里是工作台自己的滚动条覆盖策略，优先于 styles/dsh-scrollbar.css 的通用
-策略：所有元素纵向滚动条宽度归零（内容仍可滚动，只是不显示轨道），横向保留
-10px 细条，轨道用表面令牌、滑块用滚动条令牌并留 44px 最小长度。面板标签栏和
-附件条另外单独隐藏滚动条。因为选择器带 body 前缀，特异性高于通用伪元素规则，
-调整时注意不要误伤面板内部的独立滚动。 */
-
-* { scrollbar-width: auto; -ms-overflow-style: auto; scrollbar-gutter: auto; }
-body *::-webkit-scrollbar { width: 0; height: 10px; background: var(--transparent); }
-body *::-webkit-scrollbar:vertical { display: none; width: 0; }
-body *::-webkit-scrollbar:horizontal { display: block; height: 10px; }
-body *::-webkit-scrollbar-track { background: var(--transparent); }
-body *::-webkit-scrollbar-track:horizontal { background: var(--surface-soft); border-radius: var(--radius-round); }
-body *::-webkit-scrollbar-thumb { min-width: 44px; border: 2px solid var(--transparent); border-radius: var(--radius-round); background: var(--scrollbar); background-clip: padding-box; }
-body *::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); background-clip: padding-box; }
-body *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
-body *::-webkit-scrollbar-corner { background: var(--transparent); }
-
 /* Quiet sidebar skeleton while Pi session directories are being indexed. */
 /* 索引会话目录时的占位骨架：只用渐变扫光和错峰延迟营造加载感，不改变侧栏的
 实际尺寸；骨架行高与真实工作区/会话行接近，避免加载完成时跳动。sr-only 提供

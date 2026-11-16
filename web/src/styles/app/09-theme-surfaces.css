@@ -91,7 +91,6 @@ body { background: var(--bg); color: var(--text); }
 .todo-row.is-complete .todo-row-icon { color: var(--success); }
 .detail-icon, .resource-icon { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-border); }
 .provider-icon { color: var(--muted); background: var(--surface-soft); border-color: var(--border); }
-body { --dsh-scrollbar-thumb: var(--scrollbar); --dsh-scrollbar-thumb-hover: var(--scrollbar-hover); }
 
 /* Neutralize optional decorative hues; only accent, warning and error remain. */
 /* 收掉装饰性色相：文件/命令图标、供应商图标、模型标签、回合元信息全部

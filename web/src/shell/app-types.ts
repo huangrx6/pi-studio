@@ -5,7 +5,7 @@ import type { ExtensionHostSnapshot } from '../types/extension-types';
 import type { FilePreviewResult } from '../types/file-preview-types';
 import type { HarnessSettingsSnapshot } from '../types/harness-types';
 import type { ThinkingLevel } from '../types/model-types';
-import type { RuntimeRefreshSnapshot } from '../types/runtime-types';
+import type { RuntimeRefreshSnapshot, StudioRuntimeVersions } from '../types/runtime-types';
 import type { SubagentChild } from '../types/subagent-types';
 import type { CustomModelConfig, ModelProvider } from '../features/models/model-settings-types';
 
@@ -79,6 +79,7 @@ export type SettingsSnapshot = {
   agentTools: AgentToolSelection;
   harness: HarnessSettingsSnapshot;
   storagePath: string;
+  runtimeVersions: StudioRuntimeVersions;
   databasePath: string;
   skillsPath: string;
   agentsSkillsPath: string;

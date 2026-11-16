@@ -1073,6 +1073,7 @@ await page.addInitScript(() => {
       daily,
       dailyModels,
       filterModels,
+      projects: [],
     };
   }
 

@@ -51,7 +51,7 @@ import type {
 import type { BackgroundMedia } from './shared/preferences';
 import type { FilePreviewResult } from './types/file-preview-types';
 import type { UpdateSnapshot } from './types/update-types';
-import type { RuntimeRefreshSnapshot } from './types/runtime-types';
+import type { RuntimeRefreshSnapshot, StudioRuntimeVersions } from './types/runtime-types';
 import type { GitAction, GitHead, GitReadParams, GitReadResult, GitWorkspaceStatus, WorktreeInputs, WorktreeResults } from './types/git-types';
 import type {
   RuntimeServiceSnapshot,
@@ -59,7 +59,7 @@ import type {
   TerminalEvent,
   TerminalSessionSnapshot,
 } from './types/runtime-panel-types';
-import type { UsageAnalyticsSnapshot, UsageModelMix } from './types/usage-types';
+import type { UsageAnalyticsSnapshot, UsageModelMix, UsageProjectScope } from './types/usage-types';
 import type {
   ExtensionCommandResult,
   ExtensionDataViewEvent,
@@ -307,6 +307,7 @@ export interface SettingsSnapshot {
   harness: HarnessSettingsSnapshot;
   /** Studio 的 SQLite 数据库与私有资源目录。 */
   storagePath: string;
+  runtimeVersions: StudioRuntimeVersions;
   databasePath: string;
   skillsPath: string;
   agentsSkillsPath: string;
@@ -601,9 +602,9 @@ declare global {
       /** 当前模型的上下文窗口与自动压缩阈值（只读）。 */
       contextPolicy(payload?: { modelRef?: string }): Promise<{ modelRef: string; contextWindow: number; autoCompactPercent: number; compactAtTokens: number | null }>;
       /** Read aggregate token usage from Studio SQLite for the last N local days. */
-      usageSummary(payload?: { days?: number }): Promise<UsageAnalyticsSnapshot>;
+      usageSummary(payload?: UsageProjectScope & { days?: number }): Promise<UsageAnalyticsSnapshot>;
       /** Read the model mix for an explicit window: every stored day, a N-day window, or an inclusive local-day range. */
-      usageModels(payload?: { all?: boolean; days?: number; sinceDay?: string; untilDay?: string }): Promise<UsageModelMix>;
+      usageModels(payload?: UsageProjectScope & { all?: boolean; days?: number; sinceDay?: string; untilDay?: string }): Promise<UsageModelMix>;
       /** 读取某来源下可选模型及启用状态。 */
       providerModels(providerId: string): Promise<{ models: Array<{ id: string; model: string; name: string; enabled: boolean; contextWindow?: number; maxTokens?: number; supportsImages?: boolean; reasoning?: boolean; thinkingLevels?: ConcreteThinkingLevel[]; origin: 'builtin' | 'configured' | 'override'; deletable: boolean }> }>;
       /** 从来源的 /models 接口读取模型，不保存到 Pi 配置。 */

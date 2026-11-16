@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
-import { BarChart3, RefreshCw } from 'lucide-react';
+import { BarChart3, Folder, RefreshCw } from 'lucide-react';
 import { LoadingState } from '../../shared/LoadingState';
-import type { UsageAnalyticsSnapshot, UsageTotals } from '../../types/usage-types';
+import type { UsageAnalyticsSnapshot, UsageProject, UsageTotals } from '../../types/usage-types';
 import { DatePicker } from '../../shared/DatePicker';
 import { InfoHint } from '../../shared/InfoHint';
 import { Select } from '../../shared/Select';
@@ -133,31 +133,62 @@ function UsageHeatmap({ snapshot, modelFilter, onModelFilterChange }: {
   </>;
 }
 
-export function UsageSettings({ active }: { active: boolean }) {
+export function UsageSettings({ active, includeRemoved, onIncludeRemovedChange }: {
+  active: boolean; includeRemoved: boolean; onIncludeRemovedChange: (value: boolean) => void;
+}) {
   const [days, setDays] = useState<number>(365);
+  const [project, setProject] = useState('all');
+  const [projects, setProjects] = useState<UsageProject[]>([]);
+  const projectOptions = useMemo(() => {
+    const visible = projects.filter(p => includeRemoved || !p.removed);
+    const names = new Set<string>(), duplicates = new Set<string>();
+    for (const p of visible) {
+      if (names.has(p.name)) duplicates.add(p.name);
+      names.add(p.name);
+    }
+    return [{ value: 'all', label: '全部项目' }, ...visible.map(p => ({
+      value: p.workspace, label: p.removed ? `${p.name}（已移除）` : p.name,
+      description: !p.workspace ? '缺少可核实项目的使用记录' : duplicates.has(p.name) ? p.workspace : undefined,
+    }))];
+  }, [projects, includeRemoved]);
+  const scope = useMemo(() => ({ workspace: project === 'all' ? undefined : project, includeRemoved }), [project, includeRemoved]);
   const [modelFilter, setModelFilter] = useState(ALL_MODELS);
   const [modelRange, setModelRange] = useState<ModelRange>('all');
   const [customFrom, setCustomFrom] = useState(() => dayFromToday(-29));
   const [customTo, setCustomTo] = useState(() => dayFromToday(0));
   const [summaryRequest, setSummaryRequest] = useState(0);
   const [mixRequest, setMixRequest] = useState(0);
-  const loadSummary = useCallback(() => window.piApi.usageSummary({ days }), [days]);
-  const summary = useUsageResource(active, String(days), summaryRequest, loadSummary);
+  const loadSummary = useCallback(() => window.piApi.usageSummary({ days, ...scope }), [days, scope]);
+  const summary = useUsageResource(active, JSON.stringify([days, scope]), summaryRequest, loadSummary);
   const snapshot = summary.value;
+  useEffect(() => {
+    if (!snapshot) return;
+    setProjects(snapshot.projects);
+    if (project !== 'all' && !snapshot.projects.some(p => p.workspace === project && (includeRemoved || !p.removed))) setProject('all');
+  }, [snapshot, project, includeRemoved]);
   useEffect(() => {
     if (snapshot && modelFilter !== ALL_MODELS && !snapshot.filterModels.some(item => modelKey(item.providerId, item.modelId) === modelFilter)) setModelFilter(ALL_MODELS);
   }, [snapshot, modelFilter]);
   // Recompute "today" on explicit refresh/reopening, including across midnight.
   const modelWindow = useMemo(() => usageModelWindow(modelRange, customFrom, customTo), [modelRange, customFrom, customTo, mixRequest, active]);
-  const loadMix = useCallback(() => window.piApi.usageModels(modelWindow || {}), [modelWindow]);
-  const mixState = useUsageResource(active && Boolean(modelWindow), JSON.stringify(modelWindow), mixRequest, loadMix);
+  const loadMix = useCallback(() => window.piApi.usageModels({ ...modelWindow, ...scope }), [modelWindow, scope]);
+  const mixState = useUsageResource(active && Boolean(modelWindow), JSON.stringify([modelWindow, scope]), mixRequest, loadMix);
   const mix = modelWindow ? mixState.value : null;
   const refreshing = summary.pending || (Boolean(modelWindow) && mixState.pending);
   const empty = Boolean(snapshot && snapshot.allTime.totalTokens === 0 && snapshot.allTime.requests === 0);
   function refresh() { setSummaryRequest(value => value + 1); setMixRequest(value => value + 1); }
   return <div className="settings-sections usage-settings">
-    <SettingsPageHeader icon={<BarChart3 />} title="Token 使用量" meta={<span>全部工作区 · 按本地日期统计{snapshot && <span className="usage-updated-at"> · 更新于 {new Date(snapshot.generatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>} <InfoHint label="只读取 Studio 本地汇总。按日期、Provider 与模型统计 Token；不保存提示词、回答正文、工具参数或凭据。" /></span>}
+    <SettingsPageHeader icon={<BarChart3 />} title="Token 使用量" meta={<span>按本地日期统计{snapshot && <span className="usage-updated-at"> · 更新于 {new Date(snapshot.generatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>} <InfoHint label="从 Studio 本地汇总读取各项目的 Token、请求次数与估算成本。" /></span>}
       actions={<button type="button" className="settings-outline" disabled={refreshing} onClick={refresh}><RefreshCw className={refreshing ? 'spin' : undefined} />刷新</button>} />
+    <div className="usage-project-filter">
+      <Select label="按项目筛选使用量" leadingIcon={<Folder />} value={project} onChange={setProject}
+        menuClassName="usage-project-menu" options={projectOptions} />
+      {projects.some(p => p.removed) && <label><input type="checkbox" checked={includeRemoved} onChange={event => {
+        const checked = event.target.checked;
+        if (!checked && projects.some(p => p.workspace === project && p.removed)) setProject('all');
+        onIncludeRemovedChange(checked);
+      }} />包括已移除项目</label>}
+    </div>
     <section className="usage-summary-section" aria-label="Token 使用概览" aria-busy={summary.pending}>
       <header className="usage-section-head"><h2>近期用量</h2>{!empty && <div className="usage-range-switch" role="group" aria-label="热力图日期范围">{RANGE_OPTIONS.map(option => <button type="button" key={option} aria-pressed={days === option} className={days === option ? 'is-active' : ''} onClick={() => setDays(option)}>{option === 365 ? '1 年' : `${option} 天`}</button>)}</div>}</header>
       <ResourceStatus label="用量" pending={summary.pending} error={summary.error} hasData={Boolean(snapshot)} onRetry={() => setSummaryRequest(value => value + 1)} />
@@ -173,7 +204,7 @@ export function UsageSettings({ active }: { active: boolean }) {
               <div className="usage-hero-copy"><h3 title={`${exactNumber(snapshot.range.totalTokens)} tokens`}>{tokenNumber(snapshot.range.totalTokens)} <small>tokens</small></h3><TokenSplit totals={snapshot.range} /><UsageSparkline daily={snapshot.daily} /></div>
               <dl className="usage-stat-grid"><div className="usage-stat"><dt>请求</dt><dd>{exactNumber(snapshot.range.requests)}</dd></div><div className="usage-stat"><dt>活跃天数</dt><dd>{snapshot.range.activeDays} 天</dd></div><div className="usage-stat"><dt>估算成本 <InfoHint label="按已记录的用量成本汇总，以美元显示；未提供价格的请求可能不计入成本，这不是账单。" /></dt><dd>{costNumber(snapshot.range.cost)}</dd></div></dl>
             </div>
-            <p className="usage-cumulative">累计 {tokenNumber(snapshot.allTime.totalTokens)} tokens · {exactNumber(snapshot.allTime.requests)} 次请求 · 当前连续 {snapshot.allTime.currentStreak} 天，最长 {snapshot.allTime.longestStreak} 天</p>
+            <p className="usage-cumulative">累计 {tokenNumber(snapshot.allTime.totalTokens)} tokens · {exactNumber(snapshot.allTime.requests)} 次请求 · 估算成本 {costNumber(snapshot.allTime.cost)} · 当前连续 {snapshot.allTime.currentStreak} 天，最长 {snapshot.allTime.longestStreak} 天</p>
             <div className="usage-heatmap-card"><header className="usage-section-head"><h3>每日趋势</h3><span>模型筛选仅影响下方热力图</span></header><UsageHeatmap snapshot={snapshot} modelFilter={modelFilter} onModelFilterChange={setModelFilter} /></div>
           </>)}
     </section>

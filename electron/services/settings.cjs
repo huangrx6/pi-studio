@@ -33,6 +33,7 @@ const {
   readAgentToolSelection,
 } = require('../runtime/tool-selection.cjs');
 const { mcpSnapshot } = require('../integrations/mcp/index.cjs');
+const { version: durableVersion } = require('@earendil-works/pi-durable/package.json');
 
 async function settingsSnapshot(cwd = DEFAULT_CWD) {
   const db = getStudioDatabase();
@@ -122,6 +123,15 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
     agentToolCatalog: agentTools,
     harness: getHarnessSettings(cwd),
     storagePath,
+    runtimeVersions: {
+      durable: durableVersion,
+      electron: process.versions.electron,
+      chromium: process.versions.chrome,
+      node: process.versions.node,
+      sqlite: process.versions.sqlite || db.db.prepare('SELECT sqlite_version() AS version').get().version,
+      platform: process.platform,
+      arch: process.arch,
+    },
     databasePath: storagePath,
     skillsPath: userSkillsDirectory(),
     agentsSkillsPath: sharedUserSkillsDirectory(),

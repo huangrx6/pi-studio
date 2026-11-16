@@ -1,7 +1,6 @@
 .git-remote {
   display: grid;
   gap: var(--space-5);
-  max-inline-size: 860px;
   min-inline-size: 0;
 }
 
@@ -14,6 +13,28 @@
 
 .git-remote-heading > div:first-child,
 .git-remote-op-copy { min-width: 0; }
+.git-remote-controls { display: flex; flex: none; align-items: center; gap: var(--space-1); max-width: 100%; }
+.git-remote-addresses { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; margin: 0; color: var(--text-2); font-size: var(--text-sm); }
+.git-remote-addresses dd { margin: 0; font-family: var(--mono); white-space: pre-line; overflow-wrap: anywhere; user-select: text; }
+.git-remote-form, .git-sync-review { display: grid; gap: var(--space-3); min-width: 0; color: var(--text); font-size: var(--text-sm); }
+.git-remote-form label, .git-remote-form > div { display: grid; gap: 6px; }
+.git-remote-form code, .git-sync-route code, .git-sync-address { overflow-wrap: anywhere; font-family: var(--mono); }
+.git-remote-form input { width: 100%; padding: 7px 9px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-control); }
+.git-remote-form .git-inherit-url { display: flex; align-items: center; gap: 8px; }
+.git-inherit-url input { width: auto; }
+.git-remote-form p, .git-sync-review p { margin: 0; color: var(--text-2); line-height: var(--leading-body); }
+.git-sync-route { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--space-3); }
+.git-sync-route > div { display: grid; gap: 4px; }
+.git-sync-route svg { width: var(--icon-sm); color: var(--text-2); }
+.git-sync-route small, .git-remote-form small { color: var(--text-2); }
+.git-sync-range { padding-top: var(--space-3); border-top: 1px solid var(--divider); }
+.git-sync-range h3 { display: flex; gap: 8px; margin: 0 0 6px; font-size: var(--text-13); font-weight: var(--weight-medium); }
+.git-sync-range small, .git-sync-range code, .git-sync-range nav { color: var(--text-2); font-size: var(--text-xs); }
+.git-sync-range ul { max-height: 180px; overflow: auto; margin: 0; padding: 0; list-style: none; }
+.git-sync-range li { display: grid; grid-template-columns: auto 1fr; gap: 9px; align-items: baseline; padding-block: 4px; overflow-wrap: anywhere; }
+.git-sync-range nav { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+.git-sync-warning, .git-force-choice { color: var(--warning); }
+.git-force-choice { display: flex; align-items: start; gap: 8px; }
 
 .git-remote-heading h3,
 .git-remote-empty h3 {
@@ -36,9 +57,9 @@
 
 .git-remote .git-remote-picker {
   flex: 0 1 auto;
-  width: auto;
-  max-width: min(42%, 230px);
-  min-width: 80px;
+  width: max-content;
+  max-width: min(45cqi, 230px);
+  min-width: min(112px, 45cqi);
 }
 
 .git-remote-picker .pi-select-trigger {
@@ -120,7 +141,7 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-1);
+  padding-block: var(--space-4);
 }
 
 .git-remote-operations li + li { border-top: 1px solid var(--divider); }

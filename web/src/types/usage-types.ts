@@ -1,5 +1,8 @@
 /** JSON-safe aggregate returned by the Studio SQLite usage projection. */
 
+export type UsageProject = { workspace: string; name: string; removed: boolean };
+export type UsageProjectScope = { workspace?: string; includeRemoved?: boolean };
+
 export type UsageTotals = {
   input: number;
   output: number;
@@ -67,4 +70,5 @@ export type UsageAnalyticsSnapshot = {
   daily: UsageDay[];
   dailyModels: UsageModelDay[];
   filterModels: UsageFilterModel[];
+  projects: UsageProject[];
 };
