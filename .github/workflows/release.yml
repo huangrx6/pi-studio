@@ -47,7 +47,7 @@ jobs:
         run: python -c "import distutils.version"
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -154,7 +154,7 @@ jobs:
         shell: bash
         run: git restore --source="$GITHUB_SHA" --worktree -- tools/release tools/qa/qa-windows-installer.mjs
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           node-version: 22
