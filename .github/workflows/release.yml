@@ -147,6 +147,7 @@ jobs:
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           draft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || false }}
+          make_latest: false
           body_path: ${{ steps.release-notes.outputs.body_path }}
           generate_release_notes: ${{ steps.release-notes.outputs.body_path == '' }}
           overwrite_files: true
