@@ -20,8 +20,6 @@
 
 body { background: var(--bg); color: var(--text); }
 .main { background: var(--bg); }
-.sidebar, .settings-nav { background: var(--sidebar-bg); }
-.settings-overlay, .settings-content { background: var(--bg); }
 .settings-card, .panel-tool, .suggestion {
   background: var(--surface);
   border-color: var(--border);
@@ -419,8 +417,6 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 
 /* One shared title row and one shared toolbar row across the three columns. */
 .chat-header, .is-new-conversation .chat-header, .panel-tabbar { height: var(--header-height); min-height: var(--header-height); max-height: var(--header-height); padding-top: 0; padding-bottom: 0; align-items: center; }
-.sidebar { padding-top: var(--header-height); }
-.sidebar-drag { height: var(--header-height); }
 .sidebar-top-toggle { top: calc((var(--header-height) - 28px)/2); }
 .brand { height: var(--toolbar-height); margin: 0 -12px; padding: 0 16px; border-bottom: 1px solid var(--divider); }
 .brand .brand-mark { width: 26px; height: 26px; }

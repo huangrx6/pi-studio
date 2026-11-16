@@ -1,26 +1,30 @@
-.settings-nav.settings-navigation {
-  overflow: hidden;
-}
-
-.settings-navigation > .settings-nav-head,
 .settings-navigation > .settings-nav-bottom {
   flex-shrink: 0;
 }
 
-/* 标题与下方文字对齐：搜索框是「1px 边框 + 10px 内边距」，导航项是 10px，
- * 标题取 12px 让字形左边缘落在这条竖线上（大字号留白更窄）。 */
-.settings-navigation > .settings-nav-head {
-  padding-inline: var(--space-3);
-}
-
-/* 搜索框的上间距与设置页顶部内边距同值：标题到红绿灯与到搜索框的距离一致。 */
 .settings-navigation .settings-navigation-search {
   gap: var(--space-1);
-  /* 侧栏是 4px gap 的 flex 列，减掉这段才让标题上下的距离真正相等。 */
-  margin: calc(var(--settings-nav-gap) - var(--space-1)) 0 var(--space-2);
-  padding-inline: var(--space-3);
   -webkit-app-region: no-drag;
 }
+
+.settings-header {
+  font-size: var(--text-13);
+  font-weight: var(--weight-semibold);
+}
+
+.settings-header-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--control-sm);
+  margin-left: auto;
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.settings-header-back:hover { background: var(--surface-hover); color: var(--text); }
 
 .settings-navigation-search > svg {
   width: var(--icon-sm);

@@ -28,11 +28,16 @@ function compile(path, stubs) {
 }
 
 const icons = new Proxy({}, { get: () => () => null });
+const shellLayout = compile('../../web/src/shell/ShellLayout.tsx', {
+  'lucide-react': icons,
+  './app-shell-config': { BrandMark: () => null },
+});
 function renderHeader(showTrace, isNewConversation = false, panelExpanded = false) {
   const { ConversationHeader } = compile('../../web/src/shell/ConversationHeader.tsx', {
     react: React,
     'lucide-react': icons,
     './NotificationCenter': { NotificationCenter: () => null },
+    './ShellLayout': shellLayout,
     '../features/extensions/ExtensionChips': { ExtensionChips: () => null },
     './ConversationWorkspaceMenu': {
       ConversationWorkspaceMenu: ({ onOpenTrace }) => React.createElement(

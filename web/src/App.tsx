@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import { ExtensionSlot } from './features/extensions/ExtensionSlot';
 import { ConversationActionPalette } from './features/conversation/ConversationActionPalette';
@@ -8,6 +8,8 @@ import { AppDialogs } from './shell/AppDialogs';
 import { BackgroundLayer, BackgroundMediaNode } from './shell/BackgroundLayer';
 import { ConversationWorkspace } from './shell/ConversationWorkspace';
 import { SettingsOverlay } from './shell/SettingsOverlay';
+import { ShellLayout } from './shell/ShellLayout';
+import { SidebarResizeHandle, useSidebarWidth } from './shell/SidebarResizeHandle';
 import { useAppFoundation } from './shell/useAppFoundation';
 import { useWindowChrome } from './shell/useWindowChrome';
 import { useConversationController } from './shell/useConversationController';
@@ -17,29 +19,12 @@ import { MarkdownActions } from './shared/markdown-actions';
 import { errorText } from './shared/error-text';
 import './shell/right-panel/panel-file.css';
 
-const SIDEBAR_WIDTH_STORAGE_KEY = 'pi-studio:sidebar-width';
-const SIDEBAR_WIDTH_DEFAULT = 284;
-const SIDEBAR_WIDTH_MIN = 284;
-const SIDEBAR_WIDTH_MAX = 360;
-
-function normalizeSidebarWidth(value: number): number {
-  return Math.min(SIDEBAR_WIDTH_MAX, Math.max(SIDEBAR_WIDTH_MIN, Math.round(value)));
-}
-
-function readSidebarWidth(): number {
-  if (typeof window === 'undefined') return SIDEBAR_WIDTH_DEFAULT;
-  const stored = Number(window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
-  return Number.isFinite(stored) ? normalizeSidebarWidth(stored) : SIDEBAR_WIDTH_DEFAULT;
-}
-
 /** Application composition root: foundation state, conversation runtime, then layout. */
 export function App() {
   useWindowChrome();
   const foundation = useAppFoundation();
   const conversation = useConversationController(foundation);
-  const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
-  const [sidebarResizing, setSidebarResizing] = useState(false);
-  const sidebarResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
   const {
     preferences,
     handleBackgroundUnavailable,
@@ -327,45 +312,7 @@ export function App() {
   /** Latest browser opener, read through a ref so the context value stays stable. */
   const markdownLinkRef = useRef<(url: string) => void>(() => {});
   markdownLinkRef.current = (url: string) => openBrowserTab(url);
-  // 窗口内壁纸叠加比例：0 表示完全不透出（设置里的「窗口内可见度」为 0）。
-  const insideWallpaperStyle = useMemo(() => ({
-    '--wallpaper-inside': preferences.backgroundInsideVisibility / 100,
-  }) as CSSProperties, [preferences.backgroundInsideVisibility]);
-
-  useEffect(() => {
-    window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth));
-  }, [sidebarWidth]);
-
-  useEffect(() => {
-    if (!sidebarResizing) return undefined;
-    const handlePointerMove = (event: PointerEvent) => {
-      const drag = sidebarResizeRef.current;
-      if (!drag) return;
-      setSidebarWidth(normalizeSidebarWidth(drag.startWidth + event.clientX - drag.startX));
-    };
-    const finishResize = () => {
-      sidebarResizeRef.current = null;
-      setSidebarResizing(false);
-      document.body.classList.remove('is-sidebar-resizing');
-    };
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', finishResize, { once: true });
-    window.addEventListener('pointercancel', finishResize, { once: true });
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', finishResize);
-      window.removeEventListener('pointercancel', finishResize);
-      document.body.classList.remove('is-sidebar-resizing');
-    };
-  }, [sidebarResizing]);
-
-  const startSidebarResize = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (sidebarCollapsed) return;
-    event.preventDefault();
-    sidebarResizeRef.current = { startX: event.clientX, startWidth: sidebarWidth };
-    setSidebarResizing(true);
-    document.body.classList.add('is-sidebar-resizing');
-  };
+  const sidebarResizeHandle = !sidebarCollapsed && <SidebarResizeHandle onResize={setSidebarWidth} />;
 
   const markdownActionsValue = useMemo(() => ({
     cwd: panelWorkspace,
@@ -376,7 +323,7 @@ export function App() {
 
   return (
     <MarkdownActions.Provider value={markdownActionsValue}>
-    {/* 壁纸在应用卡片之外：卡片内所有表面不透明，壁纸只在四周留白可见。 */}
+    {/* 四周留白使用独立的背景透明度、柔化和遮罩设置。 */}
     {preferences.backgroundMedia && <BackgroundLayer
       media={preferences.backgroundMedia}
       opacity={preferences.backgroundOpacity}
@@ -387,11 +334,10 @@ export function App() {
     <div
       className={`app ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${filesOpen && panelFullscreen ? 'is-panel-fullscreen' : ''} ${preferences.backgroundMedia ? 'has-custom-background' : ''} ${preferences.backgroundMedia && preferences.backgroundInsideVisibility > 0 ? 'is-wallpaper-inside' : ''}`}
       style={{
-        ...insideWallpaperStyle,
-        '--sidebar-w': `${sidebarWidth}px`,
+        '--wallpaper-inside': preferences.backgroundInsideVisibility / 100,
+        '--sidebar-preferred-width': sidebarWidth ? `${sidebarWidth}px` : undefined,
       } as CSSProperties}
     >
-      {/* 窗口内的壁纸副本：由各层统一叠加，气泡、输入框与菜单仍然保持阅读底。 */}
       {preferences.backgroundMedia && preferences.backgroundInsideVisibility > 0 && <div className="window-wallpaper" aria-hidden="true">
         <BackgroundMediaNode media={preferences.backgroundMedia} className="window-wallpaper-media" />
       </div>}
@@ -402,7 +348,10 @@ export function App() {
         onExecute={executeConversationAction}
         onClose={() => setActionPaletteOpen(false)}
       />}
-      <AppSidebar
+      <ShellLayout
+        isNewConversation={isNewConversation}
+        resizeHandle={!settingsOpen && !(filesOpen && panelFullscreen) && sidebarResizeHandle}
+        sidebar={<AppSidebar
         onStartSession={() => void startSession()}
         onOpenTemporaryChat={openTemporaryChat}
         onOpenSettings={(page) => { void openSettings(page); }}
@@ -436,18 +385,8 @@ export function App() {
         sidebarCollapsed={sidebarCollapsed}
         sidebarActions={sidebarActions}
         onCollapse={() => setSidebarCollapsed(true)}
-      />
-
-      {!sidebarCollapsed && <div
-        className={`sidebar-resize-handle ${sidebarResizing ? 'is-resizing' : ''}`}
-        role="separator"
-        aria-label="调整侧边栏宽度"
-        aria-orientation="vertical"
-        style={{ left: `${sidebarWidth}px` }}
-        onPointerDown={startSidebarResize}
-      />}
-
-      <div className={`content-region ${isNewConversation ? 'is-new-conversation' : ''}`}>
+        />}
+      >
       <ConversationWorkspace
         shell={{
           isNewConversation,
@@ -681,9 +620,10 @@ export function App() {
           onNotify={notifyExtension}
         />}
       />}
-      </div>
+      </ShellLayout>
 
       <SettingsOverlay
+        sidebar={{ collapsed: sidebarCollapsed, setCollapsed: setSidebarCollapsed, resizeHandle: sidebarResizeHandle }}
         workspace={workspace}
         workspaces={workspaces}
         workspaceRef={foundation.workspaceRef}

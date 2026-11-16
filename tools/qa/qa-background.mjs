@@ -205,7 +205,7 @@ try {
   if (await page.locator('.general-background-settings').getAttribute('open') === null) {
     await page.locator('.general-background-settings summary').click();
   }
-  for (const id of ['background-opacity', 'background-blur', 'background-surface']) {
+  for (const id of ['background-opacity', 'background-blur', 'background-surface', 'background-inside']) {
     const slider = page.locator(`#${id}`);
     assert.equal(await slider.isEnabled(), true);
     assert.equal(await slider.getAttribute('min'), '0');
@@ -237,7 +237,7 @@ try {
     return media && getComputedStyle(media).getPropertyValue('--background-media-blur').trim() === '0px';
   });
   await page.locator('#background-blur').fill('18');
-  // 遮罩强度只压在壁纸层上；窗口内表面始终不透明，不再有可调透明度。
+  // The scrim applies to the outer wallpaper independently of in-window visibility.
   await page.locator('#background-surface').fill('0');
   await page.waitForFunction(() => {
     const scrim = document.querySelector('.background-layer-soften');
@@ -272,7 +272,7 @@ try {
   assert.ok(layerFrame.bottom >= layerFrame.viewportHeight, 'background media must cover the bottom viewport edge');
   assert.equal(await backgroundAlpha(page.locator('.settings-page-header')), 0, 'page titles do not add a card surface');
   assert.equal(await backgroundAlpha(page.locator('.general-settings-section').first()), 0, 'appearance rows use the settings surface');
-  // 方案 A：窗口内不再有半透明玻璃，选中态是 8% 的 tint，其余行完全透明。
+  // Navigation selection adds a tint over the shared background.
   const selectedAlpha = await backgroundAlpha(page.locator('.settings-nav-row.is-active'));
   assert.ok(selectedAlpha > 0.02 && selectedAlpha < 0.2, `selected rows use a light tint, got ${selectedAlpha}`);
   const idleAlpha = await backgroundAlpha(page.locator('.settings-nav-row:not(.is-active)').first());
@@ -342,23 +342,27 @@ try {
   await page.locator('#background-opacity').fill('100');
   await page.locator('#background-blur').fill('100');
   await page.locator('#background-surface').fill('100');
+  await page.locator('#background-inside').fill('32');
   await page.waitForFunction(() => {
     const stored = JSON.parse(localStorage.getItem('pi-studio:preferences') || '{}');
     return stored.backgroundOpacity === 100
       && stored.backgroundBlur === 100
-      && stored.backgroundSurfaceOpacity === 100;
+      && stored.backgroundSurfaceOpacity === 100 && stored.backgroundInsideVisibility === 32;
   });
   await page.reload();
   await page.locator('.background-layer video').waitFor();
   await page.waitForFunction(() => {
     const element = document.querySelector('.background-layer video');
-    return element instanceof HTMLVideoElement && element.readyState >= 1;
+    const inside = document.querySelector('.window-wallpaper');
+    return element instanceof HTMLVideoElement && element.readyState >= 1
+      && inside?.querySelector('video')?.readyState >= 1 && Number(getComputedStyle(inside).opacity) === 0.32;
   });
 
   await openGeneralSettings();
   for (const id of ['background-opacity', 'background-blur', 'background-surface']) {
     assert.equal(await page.locator(`#${id}`).inputValue(), '100');
   }
+  assert.equal(await page.locator('#background-inside').inputValue(), '32');
   await page.getByRole('button', { name: '移除', exact: true }).click();
   await page.waitForFunction(() => !document.querySelector('.app.has-custom-background, .background-layer'));
   assert.deepEqual(await page.evaluate(() => window.__removedBackgrounds), ['pi-media://background/motion.webm']);

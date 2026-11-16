@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useLayoutEffect, useState } from 'react';
 import { maximumPanelWidth, MIN_PANEL_WIDTH, normalizePanelWidth } from './panel-width.mjs';
 
 const STORAGE_KEY = 'pi-studio:panel-width';
@@ -9,18 +9,23 @@ export function usePanelWidth(sidebarCollapsed: boolean) {
     try { return normalizePanelWidth(JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null')); }
     catch { return normalizePanelWidth(null); }
   });
-  const [maximum, setMaximum] = useState(() => maximumPanelWidth(window.innerWidth, sidebarCollapsed ? 0 : 280));
-  useEffect(() => {
+  const [maximum, setMaximum] = useState(() => maximumPanelWidth(window.innerWidth, 0));
+  useLayoutEffect(() => {
+    const sidebar = document.querySelector('.sidebar');
     const measure = () => {
-      const sidebar = document.querySelector('.sidebar');
       // Fullscreen temporarily hides the sidebar; its configured width still
       // applies when returning to the conversation after a window resize.
       const sidebarWidth = sidebarCollapsed ? 0 : sidebar ? Number.parseFloat(getComputedStyle(sidebar).width) || 0 : 0;
       setMaximum(maximumPanelWidth(window.innerWidth, sidebarWidth));
     };
     measure();
+    const observer = new ResizeObserver(measure);
+    if (sidebar) observer.observe(sidebar);
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
   }, [sidebarCollapsed]);
   const resizePanel = useCallback((width: number) => {
     if (!Number.isFinite(width)) return;

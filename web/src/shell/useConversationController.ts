@@ -722,7 +722,13 @@ export function useConversationController(foundation: AppFoundation) {
   }, [settingsOpen, settingsTab, workspace]);
 
   useEffect(() => {
-    if (!settingsOpen) settingsReturnFocusRef.current?.focus();
+    const opener = settingsReturnFocusRef.current;
+    if (settingsOpen || !opener) return;
+    opener.focus();
+    // The settings toggle may have folded the sidebar containing the opener.
+    if (document.activeElement === document.body) {
+      document.querySelector<HTMLButtonElement>('.chat-header .sidebar-expand')?.focus();
+    }
   }, [settingsOpen]);
 
   useLayoutEffect(() => {

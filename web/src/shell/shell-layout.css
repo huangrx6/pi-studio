@@ -1,0 +1,113 @@
+/* Shared window geometry. The outer frame supplies the chrome and wallpaper. */
+.app {
+  --sidebar-w: clamp(var(--sidebar-min-width), var(--sidebar-preferred-width), var(--sidebar-max-width));
+  display: grid;
+  grid-template: minmax(0, 1fr) / auto minmax(0, 1fr);
+}
+
+.settings-overlay {
+  grid-area: 1 / 1 / -1 / -1;
+  display: grid;
+  grid-template: minmax(0, 1fr) / subgrid;
+}
+
+.shell-sidebar {
+  position: relative;
+  display: flex;
+  grid-area: 1 / 1;
+  flex-direction: column;
+  width: var(--sidebar-w);
+  min-height: 0;
+  padding: 0 var(--space-3) var(--space-3);
+  overflow: hidden;
+  contain: layout paint;
+  transition: width var(--shell-transition), padding-inline var(--shell-transition);
+}
+
+.is-sidebar-collapsed .shell-sidebar {
+  width: 0;
+  padding-inline: 0;
+  visibility: hidden;
+}
+
+/* The solid canvas underneath the wallpaper occupies the actual content cell. */
+.content-region, .app.is-wallpaper-inside::before {
+  grid-area: 1 / 2;
+  margin: var(--header-height) var(--content-gutter) var(--content-gutter) 0;
+}
+
+.content-region {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.content-region > .shell-canvas {
+  grid-area: 1 / 1;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: var(--radius-panel);
+  background: var(--canvas-surface, var(--surface-canvas));
+}
+
+.settings-overlay > .content-region { container: main-pane / inline-size; }
+
+/* The title tracks the first canvas column as the sidebar or workbench moves. */
+.content-region > .shell-header {
+  grid-area: 1 / 1;
+  position: absolute;
+  z-index: 3;
+  inset: calc(-1 * var(--header-height)) 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-4);
+  height: var(--header-height);
+  padding: 0 var(--space-6);
+  padding-left: var(--shell-header-leading, var(--space-6));
+  background: var(--transparent);
+  -webkit-app-region: drag;
+  transition: padding-left var(--shell-transition);
+}
+
+.app.is-sidebar-collapsed { --shell-header-leading: 92px; }
+.app.has-custom-background.is-sidebar-collapsed { --shell-header-leading: var(--space-3); }
+html[data-window-fullscreen='true'] .app.is-sidebar-collapsed { --shell-header-leading: var(--space-6); }
+
+.sidebar-resize-handle {
+  position: absolute;
+  z-index: 30;
+  top: 0;
+  bottom: 0;
+  left: var(--sidebar-w);
+  width: 9px;
+  margin-left: -4px;
+  cursor: ew-resize;
+  -webkit-app-region: no-drag;
+}
+
+.sidebar-resize-handle::after {
+  position: absolute;
+  top: 12%;
+  bottom: 12%;
+  left: 4px;
+  width: 1px;
+  border-radius: var(--radius-round);
+  background: var(--transparent);
+  content: '';
+  transition: background var(--transition);
+}
+
+.sidebar-resize-handle:hover::after,
+.sidebar-resize-handle.is-resizing::after { background: var(--border-hover); }
+
+.is-sidebar-resizing .shell-sidebar { transition: none; }
+body.is-sidebar-resizing,
+body.is-sidebar-resizing * {
+  cursor: ew-resize !important;
+  user-select: none !important;
+}

@@ -5,8 +5,7 @@
  * 图表非当前柱。令牌按浅深两套声明在 palette.css 里，这里把通用语义角色映射
  * 过去，13 个设置页和设置内的弹窗一起变成单色；工作区其余部分仍用品牌强调色。
  *
- * 尺寸也按规范固定：侧栏 248、内容 840 左对齐、六档字号（统计 28）、卡片 14、
- * 控件 10、导航项 9、开关 44×24。跨模块最终覆写，所以在 app.css 里最后导入。
+ * 窗口布局由 ShellLayout 负责，这里定义设置项、导航项和弹窗的外观。
  */
 
 /* ---- 1. 令牌映射 ------------------------------------------------------- */
@@ -49,12 +48,6 @@
   --focus-ring: 0 0 0 1px var(--focus-halo);
   --settings-section-gap: var(--space-8);
   --settings-heading-gap: var(--space-3);
-  /* 页面标题与侧栏「设置」共用这一个值。
-   * 无壁纸时红绿灯直接压在窗口顶部，标题要让出 56px 的标题栏再留一个间距；
-   * 有壁纸时窗口卡片已经让过位，只需要一个间距。 */
-  --settings-top-inset: 72px;
-  /* 标题到红绿灯、到搜索框的距离用同一个值，两段才不会一紧一松。 */
-  --settings-nav-gap: var(--space-4);
   --settings-title-height: 36px;
   --selection: var(--settings-control-bg);
   --selection-text: var(--settings-text);
@@ -86,11 +79,8 @@
 }
 
 /* ---- 2. 布局 ----------------------------------------------------------- */
-/* 侧栏 248 固定；内容列 840、左对齐，宽窗口下右侧留白。 */
 
 .settings-content {
-  padding: var(--settings-top-inset) 64px 72px;
-  background: var(--bg);
   font-size: var(--text-base);
   line-height: var(--leading-normal);
   font-variant-numeric: tabular-nums;
@@ -98,29 +88,6 @@
 
 /* 说明文字 13/1.6，正文 14/1.5。 */
 .settings-content :is(p, small, .settings-help) { line-height: var(--leading-body); }
-
-.settings-page-frame {
-  /* 840 内容列在剩余空间里居中：宽窗左右留白相等，不再贴住侧栏。 */
-  width: 100%;
-  max-width: var(--settings-content);
-  margin: 0 auto;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: var(--transparent);
-}
-
-.settings-nav {
-  width: 248px;
-  padding: var(--settings-top-inset) 16px 24px;
-  border-right: 1px solid var(--settings-border);
-}
-
-/* 有壁纸时窗口卡片已经让出顶部留白，设置页只需要一个间距。 */
-.app.has-custom-background .settings-overlay { --settings-top-inset: var(--settings-nav-gap); }
-
-/* 自定义背景模式只保留玻璃层，不再给外框补表面。 */
-.settings-overlay .settings-content .settings-page-frame { background: var(--transparent); }
 
 /* ---- 3. 字号层级 ------------------------------------------------------- */
 /* 页面 24/650、侧栏标题 20/650、区块 15/600、正文与控件 14/500、说明 13/400、
@@ -190,15 +157,6 @@
 /* ---- 5. 左侧导航 ------------------------------------------------------- */
 /* 标题 20/650；搜索框 36/10 实线；导航项 38 高、圆角 9、14px；分组标签 12/500；
    选中项用选中底 + 浅色下的 1px 描边与轻阴影；底部分割线上方是「返回对话」。 */
-
-.settings-nav-head {
-  height: var(--settings-title-height);
-  line-height: var(--settings-title-height);
-  padding-inline: 0;
-  font-size: var(--text-xl);
-  font-weight: var(--weight-bold);
-  letter-spacing: -.01em;
-}
 
 .settings-navigation .settings-navigation-search {
   height: 36px;
@@ -937,18 +895,10 @@
 .settings-content .usage-heat-cell:not(:disabled):hover { box-shadow: 0 0 0 2px var(--accent); }
 
 /* ---- 10. 窄窗 ---------------------------------------------------------- */
-/* 规范未定义 < 1280 的适配；这里只把内容左右留白和侧栏宽度收紧，保持结构。 */
-
-@media (max-width: 1200px) {
-  .settings-content { padding-inline: 32px; }
-  .settings-nav { width: 232px; }
-}
 
 @media (max-width: 900px) {
   .settings-content .general-background-adjustments { grid-template-columns: minmax(0, 1fr); }
   .settings-content .general-background-adjustments .background-media-preview { height: auto; aspect-ratio: 16 / 10; }
-  .settings-content { padding: var(--settings-top-inset) 24px 56px; }
-  .settings-nav { width: 208px; padding-inline: 12px; }
 }
 
 /* ---- 11. 状态、悬停与反馈 ---------------------------------------------- */
@@ -1112,9 +1062,9 @@
 /* 「✓ 已保存」1.2s 后淡出；只做确认，不占布局、不打断操作。 */
 
 .settings-saved-flash {
-  position: fixed;
-  bottom: 24px;
-  left: calc(50% + 124px);
+  position: absolute;
+  bottom: var(--space-4);
+  left: 50%;
   z-index: 40;
   display: flex;
   align-items: center;
@@ -1161,21 +1111,9 @@
   --settings-title-height: 32px;
 }
 
-.settings-nav {
-  padding: var(--settings-top-inset) 16px 20px;
-}
-
-.settings-nav-head {
-  height: var(--settings-title-height);
-  line-height: var(--settings-title-height);
-  padding-inline: 0;
-  font-size: var(--text-lg);
-}
-
-/* 侧栏是 4px gap 的 flex 列：减掉这段，标题到红绿灯与到搜索框的距离才相等。 */
 .settings-navigation .settings-navigation-search {
   height: 32px;
-  margin-top: calc(var(--settings-nav-gap) - var(--space-1));
+  margin-top: calc(var(--space-4) - var(--space-1));
   padding-inline: 10px;
 }
 
@@ -1205,17 +1143,16 @@
 }
 
 .settings-navigation .settings-nav-bottom {
-  padding-top: 12px;
+  padding-top: var(--space-2);
 }
 
 .settings-navigation .settings-back-button {
-  height: 34px;
+  height: var(--row-height);
   padding-inline: 10px;
   font-size: var(--text-sm);
 }
 
 .settings-content {
-  padding: var(--settings-top-inset) 48px 56px;
   font-size: var(--text-13);
   line-height: var(--leading-normal);
 }

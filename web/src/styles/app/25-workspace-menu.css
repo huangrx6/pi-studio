@@ -1,44 +1,9 @@
 /* Single entry point for session-level tools. The panel keeps the header quiet
  * while leaving navigation and extension status one click away. */
 
-/* The app is one continuous chrome shell. The content region is the single
- * rounded canvas cut out of the frame overlay: the top band, sidebar and
- * right/bottom gutters reveal that same outer surface. */
-.content-region {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: minmax(0, 1fr);
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  margin: var(--header-height) var(--content-gutter) var(--content-gutter) 0;
-  overflow: visible;
-  border: 0;
-  border-radius: 0;
-  background: var(--transparent);
-}
-
 .content-region > .main {
-  grid-area: 1 / 1;
-  min-width: 0;
-  min-height: 0;
   overflow: hidden;
   contain: layout;
-  border: 0;
-  border-radius: var(--radius-panel);
-  background: var(--surface-canvas);
-}
-
-/* The title row and conversation share a column, including every frame of
- * the workbench width transition. Lift the title row into the chrome band. */
-.content-region > .chat-header {
-  grid-area: 1 / 1 / 2 / 2;
-  position: absolute;
-  z-index: 3;
-  top: calc(-1 * var(--header-height));
-  right: 0;
-  left: 0;
 }
 
 /* The workbench tab row belongs to the same outer band. Its body remains in
@@ -75,65 +40,6 @@
 .content-region > .file-panel:not(.is-fullscreen) {
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
-}
-
-/* The sidebar is part of the same outer shell. Keep the title divider aligned
- * with the conversation header so the gray chrome closes as one band. */
-.app > .sidebar { border-right: 0; }
-.app > .sidebar .sidebar-top-row { border-bottom: 0; }
-
-/* A narrow hit target keeps resizing discoverable without adding another
- * permanent divider to the shell. */
-.sidebar-resize-handle {
-  position: absolute;
-  z-index: 30;
-  top: 0;
-  bottom: 0;
-  width: 9px;
-  margin-left: -4px;
-  cursor: ew-resize;
-  -webkit-app-region: no-drag;
-}
-.sidebar-resize-handle::after {
-  position: absolute;
-  top: 12%;
-  bottom: 12%;
-  left: 4px;
-  width: 1px;
-  border-radius: var(--radius-round);
-  background: var(--transparent);
-  content: '';
-  transition: background var(--transition);
-}
-.sidebar-resize-handle:hover::after,
-.sidebar-resize-handle.is-resizing::after {
-  background: var(--border-hover);
-}
-.app:has(.sidebar-resize-handle.is-resizing) > .sidebar {
-  transition: none;
-}
-.app:has(.settings-overlay) > .sidebar-resize-handle {
-  visibility: hidden;
-  pointer-events: none;
-}
-body.is-sidebar-resizing,
-body.is-sidebar-resizing * {
-  cursor: ew-resize !important;
-  user-select: none !important;
-}
-
-.app.is-wallpaper-inside {
-  background: var(--surface-chrome);
-}
-
-.app.is-wallpaper-inside {
-  background: var(--surface-chrome);
-}
-
-/* 壁纸副本铺满整张卡片：外框和内容区看到的是同一张图、同一档透明度，
- * 不会再出现「一圈透、中间实」或反之。外框各栏的上色见 23-wallpaper-inside。 */
-.app.is-wallpaper-inside {
-  background: var(--surface-chrome);
 }
 
 .chat-header {
@@ -183,9 +89,6 @@ body.is-sidebar-resizing * {
   -webkit-app-region: no-drag;
 }
 
-/* The title rows and the content canvas reveal the same wallpaper layer, so
- * the whole shell shares one visibility value. */
-
 /* The title rows stay square because they sit in the shared shell header; the
  * content columns below them carry the visible four-corner canvas radius. */
 .sidebar-top-row {
@@ -222,14 +125,14 @@ body.is-sidebar-resizing * {
 /* When the sidebar is collapsed, keep a small optical divider between the
  * expand control and the session title. It is deliberately shorter than the
  * full column border so the header still feels like one rounded surface. */
-.chat-header .sidebar-expand {
+.shell-header .sidebar-expand {
   position: relative;
   top: 0;
   align-self: center;
   margin-right: 10px;
 }
 
-.chat-header .sidebar-expand::after {
+.shell-header .sidebar-expand::after {
   position: absolute;
   top: 50%;
   right: -6px;
@@ -315,68 +218,16 @@ body.is-sidebar-resizing * {
   transform: translateY(-50%);
 }
 
-.app,
-.content-region {
-  background: var(--surface-chrome);
-}
-
 .content-region > .main > .composer-dock {
-  background: var(--transparent);
-}
-
-.app.is-wallpaper-inside {
-  /* The frame overlay in 23 sits above the wallpaper child and below the
-   * sidebar/content columns, keeping every outer gutter on one surface. */
-  background: var(--transparent);
-}
-.app.is-wallpaper-inside .content-region {
-  background: var(--transparent);
-}
-
-.app.is-wallpaper-inside > .sidebar { background: var(--transparent); }
-.app.is-wallpaper-inside .sidebar-top-row { background: var(--transparent); }
-.app.is-wallpaper-inside :is(.chat-header, .panel-tabbar, .settings-nav) {
   background: var(--transparent);
 }
 
 /* Keep the panel body on the conversation canvas. The tab row is intentionally
  * the only chrome-colored strip, matching the main conversation header. */
-.file-panel,
-.file-panel-inner,
-.file-panel .panel-body,
-.file-panel .panel-start,
-.file-panel .panel-file-browser,
-.file-panel .panel-file-preview,
-.file-panel .file-code,
-.file-panel .file-toolbar,
-.file-panel .terminal-tab-stack,
-.file-panel .terminal-panel:not(.has-custom-theme) {
-  background: var(--bg);
-}
-
-.app.has-custom-background .file-panel,
-.app.has-custom-background .file-panel-inner,
-.app.has-custom-background .file-panel .panel-body,
-.app.has-custom-background .file-panel .panel-start,
-.app.has-custom-background .file-panel .panel-file-browser,
-.app.has-custom-background .file-panel .panel-file-preview,
-.app.has-custom-background .file-panel .file-code,
-.app.has-custom-background .file-panel .file-toolbar,
-.app.has-custom-background .file-panel .terminal-tab-stack,
-.app.has-custom-background .file-panel .terminal-panel:not(.has-custom-theme) {
-  background: var(--surface-canvas);
-}
-
-.app.is-wallpaper-inside .file-panel,
-.app.is-wallpaper-inside .file-panel-inner {
-  background: var(--transparent);
-}
-
-.app.is-wallpaper-inside .file-panel .panel-body {
-  background: var(--canvas-surface);
-}
-
-.app.is-wallpaper-inside .file-panel :is(
+.app .file-panel,
+.app .file-panel :is(
+  .file-panel-inner,
+  .panel-body,
   .panel-start,
   .panel-file-browser,
   .panel-file-preview,
@@ -385,10 +236,10 @@ body.is-sidebar-resizing * {
   .terminal-tab-stack,
   .terminal-panel:not(.has-custom-theme)
 ) {
-  background: var(--transparent);
+  background: var(--canvas-surface, var(--surface-canvas));
 }
 
-.app.is-wallpaper-inside .file-panel .panel-tabbar {
+.app.is-wallpaper-inside .file-panel :is(.panel-tabbar, .changes-view, .diff-view) {
   background: var(--transparent);
 }
 

@@ -1,5 +1,5 @@
 .general-settings {
-  width: min(100%, 980px);
+  width: 100%;
   min-width: 0;
   margin-inline: auto;
   padding-bottom: var(--space-8);
@@ -31,8 +31,7 @@
   box-shadow: var(--settings-card-shadow);
 }
 .general-settings-card > .general-setting-row {
-  min-height: 68px;
-  padding: var(--space-4) var(--space-5);
+  padding-inline: var(--space-5);
 }
 .general-settings-card > .general-setting-row + .general-setting-row {
   border-top: 1px solid var(--border);
@@ -51,8 +50,8 @@
 .general-setting-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3) var(--space-5); }
 .general-setting-label {
   display: grid;
-  flex: 1 1 16rem;
-  min-width: min(100%, 18rem);
+  flex: 1 1 12rem;
+  min-width: 0;
   gap: var(--space-1);
   color: var(--text);
   font-size: var(--text-base);
@@ -113,7 +112,6 @@
   .general-background-adjustments { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 760px) {
-  .general-settings { width: 100%; }
   .general-settings-section h2 { align-items: flex-start; }
   .general-setting-control,
   .general-theme-modes,

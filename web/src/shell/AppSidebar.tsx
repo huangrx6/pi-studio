@@ -1,9 +1,10 @@
 import {
   ChevronsDown, ChevronsUp, FolderOpen, MessageCirclePlus,
-  PanelLeft, Search, Settings, SquarePen, ArrowUp,
+  Search, Settings, SquarePen,
 } from 'lucide-react';
 import { ExtensionSlot, type ExtensionNotice } from '../features/extensions/ExtensionSlot';
-import { BrandMark, type SettingsTab } from './app-shell-config';
+import type { SettingsTab } from './app-shell-config';
+import { ShellSidebar } from './ShellLayout';
 import type { PiWorkspace } from './app-types';
 import { ConversationListNotice } from './ConversationListNotice';
 import type { SidebarWorkspaceActions } from './SidebarWorkspaceList';
@@ -83,17 +84,7 @@ export function AppSidebar({
   onCollapse,
 }: AppSidebarProps) {
   return (
-    <aside className="sidebar">
-      <div className="sidebar-drag" />
-      {/* 标题行拆成两个互不重叠的点位：左边是窗口拖拽区，右边是收起按钮。
-       * 以前按钮绝对定位压在拖拽区上，图标那一块点击会被窗口拖拽吞掉。 */}
-      <div className="sidebar-top-row">
-        <div className="brand">
-          <BrandMark />
-          <span className="brand-name">Pi Studio</span>
-        </div>
-        <button className="icon-button sidebar-top-toggle" aria-label="收起侧边栏" title="收起侧边栏" onClick={onCollapse}><PanelLeft /></button>
-      </div>
+    <ShellSidebar className="sidebar" onCollapse={onCollapse}>
       <nav className="nav">
         <button className="nav-row" title="临时聊天" onClick={onOpenTemporaryChat}><MessageCirclePlus /><span>临时聊天</span></button>
         <button className="nav-row new-chat" title="新对话" onClick={onStartSession}><SquarePen /><span>新对话</span></button>
@@ -145,6 +136,6 @@ export function AppSidebar({
       <div className="sidebar-bottom">
         <button className="bottom-row" title="设置" onClick={() => onOpenSettings()}><Settings /><span>设置</span><span className="status"><i />本地运行</span></button>
       </div>
-    </aside>
+    </ShellSidebar>
   );
 }

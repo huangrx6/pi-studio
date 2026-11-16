@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { ChevronLeft, Search, X } from 'lucide-react';
 import { isComposingKey, menuFocusIndex } from '../shared/keyboard-navigation';
+import { ShellSidebar } from './ShellLayout';
 import './settings-navigation.css';
 
 /** A settings page entry used by the shared settings shell. */
@@ -20,7 +21,8 @@ export type SettingsNavigationProps = {
   activeId: string;
   onSelect: (id: string) => void;
   onBack: () => void;
-  title?: string;
+  collapsed: boolean;
+  onCollapse: () => void;
   backLabel?: string;
   ariaLabel?: string;
 };
@@ -58,13 +60,14 @@ export function SettingsNavigation({
   activeId,
   onSelect,
   onBack,
-  title = '设置',
+  collapsed,
+  onCollapse,
   backLabel = '返回对话',
   ariaLabel = '设置导航',
 }: SettingsNavigationProps) {
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
-  const headingRef = useRef<HTMLDivElement>(null);
+  const collapseRef = useRef<HTMLButtonElement>(null);
   const pagesRef = useRef<HTMLElement>(null);
   const navigationId = useId();
   const terms = normalizeSearch(query).split(/\s+/).filter(Boolean);
@@ -83,8 +86,10 @@ export function SettingsNavigation({
     ? activeId
     : visiblePages[0]?.id;
 
-  // Enter the settings surface without activating an input. Tab still starts at search.
-  useEffect(() => { headingRef.current?.focus({ preventScroll: true }); }, []);
+  // Opening or expanding the navigation leaves search one Tab away.
+  useEffect(() => {
+    if (!collapsed) collapseRef.current?.focus({ preventScroll: true });
+  }, [collapsed]);
 
   function clearSearch() {
     setQuery('');
@@ -100,8 +105,7 @@ export function SettingsNavigation({
   }
 
   return (
-    <aside className="settings-nav settings-navigation" aria-label={ariaLabel}>
-      <div className="settings-nav-head" ref={headingRef} tabIndex={-1}><span>{title}</span></div>
+    <ShellSidebar className="settings-nav settings-navigation" label={ariaLabel} onCollapse={onCollapse} collapseRef={collapseRef}>
       <div className="settings-search settings-navigation-search" role="search" aria-label="搜索设置">
         <Search aria-hidden="true" />
         <input
@@ -170,7 +174,7 @@ export function SettingsNavigation({
           <span>{backLabel}</span>
         </button>
       </div>
-    </aside>
+    </ShellSidebar>
   );
 }
 

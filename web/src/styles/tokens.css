@@ -91,25 +91,28 @@
   --leading-body: 1.6;
   --leading-relaxed: 1.75;
   --chat-line-height: var(--leading-relaxed);
-  --sidebar-w: 284px;
+  /* Shared by the conversation and settings. A saved drag width is clamped
+     to these bounds at the current window size. */
+  --sidebar-min-width: 284px;
+  --sidebar-max-width: 360px;
+  --sidebar-preferred-width: var(--sidebar-min-width);
   /* The workbench should support code and file inspection without taking over
      the conversation. Users can still resize it from the splitter; this is
      the comfortable default for the common two-column layout. */
   --panel-w: 390px;
-  --content: 740px;
+  --content: 740px; /* Centred reading and settings column. */
+  --content-gutter: var(--space-2); /* Right and bottom edges of the canvas. */
   /* 轨迹页保持稳定的外框，点击记录后在框内打开右侧详情。 */
   --trace-content: 960px;
-  /* 会话一级视图共用同一组内容宽度和左右留白；窗口或主面板变窄时只改
-  gutter，所有视图随之同步收缩。 */
+  /* 对话与设置共用正文列宽和左右留白，窄窗与分栏都在此收紧。 */
   --session-gutter: var(--space-8);
-  --settings-content: 840px;
   --header-height: 44px;
   /* Dynamic reservation for the docked workbench title row. */
   --toolbar-height: 36px;
   /* 自定义背景的运行时默认值；BackgroundLayer 会按用户偏好覆盖这三个变量。 */
   --background-media-opacity: 68%;
   --background-media-blur: 0px;
-  /* 壁纸遮罩强度（0–1）：只压暗窗口外的壁纸，窗口内表面始终不透明。 */
+  /* 独立作用于窗口四周留白的壁纸遮罩强度（0–1）。 */
   --background-media-scrim: .3;
   /* 窗口内壁纸可见度（0–1）：由设置里的「窗口内可见度」在运行时覆盖。 */
   --wallpaper-inside: 0;
@@ -128,4 +131,24 @@
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --display-font: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "Times New Roman", serif;
   --mono: "SF Mono", "JetBrains Mono", "Fira Code", Consolas, monospace;
+}
+
+@media (max-width: 1200px) {
+  :root {
+    --sidebar-min-width: 252px;
+    --panel-w: 320px;
+    --session-gutter: var(--space-6);
+  }
+}
+
+@media (max-width: 760px) {
+  :root {
+    --sidebar-min-width: 212px;
+    --sidebar-max-width: 252px;
+    --session-gutter: var(--space-4);
+  }
+}
+
+@container main-pane (max-width: 660px) {
+  .main > *, .settings-content { --session-gutter: var(--space-4); }
 }

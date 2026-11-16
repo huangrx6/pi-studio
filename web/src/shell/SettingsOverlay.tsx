@@ -1,5 +1,5 @@
-import { lazy, useEffect, type ComponentProps, type RefObject } from 'react';
-import { BookOpen, FileCode2, Layers3, LoaderCircle, Plus, RotateCw } from 'lucide-react';
+import { lazy, useEffect, useRef, type ComponentProps, type ReactNode, type RefObject } from 'react';
+import { BookOpen, ChevronLeft, FileCode2, Layers3, LoaderCircle, Plus, RotateCw } from 'lucide-react';
 import type { DiscoveredModel } from '../features/models/model-settings-types';
 import type { ModelOption, ModelSelection } from '../types/model-types';
 import type { SettingsDraftGuard } from '../shared/settings-draft-guard';
@@ -19,6 +19,7 @@ import { ExtensionSlot } from '../features/extensions/ExtensionSlot';
 import { ConversationListNotice } from './ConversationListNotice';
 import { SettingsEditorDialog } from './SettingsEditorDialog';
 import { SettingsNavigation } from './SettingsNavigation';
+import { ShellHeader, ShellLayout } from './ShellLayout';
 import { SettingsSavedFlash } from './SettingsSavedFlash';
 import { isComposingKey } from '../shared/keyboard-navigation';
 import { apiTypeOptions, settingsPages } from './app-shell-config';
@@ -96,6 +97,7 @@ type WorkspaceNotices = {
 };
 
 export type SettingsOverlayProps = {
+  sidebar: { collapsed: boolean; setCollapsed: (collapsed: boolean) => void; resizeHandle: ReactNode };
   workspace: string;
   workspaces: PiWorkspace[];
   workspaceRef: RefObject<string>;
@@ -130,6 +132,7 @@ export type SettingsOverlayProps = {
  * component owns the page shell, lazy-page routing and editor placement.
  */
 export function SettingsOverlay({
+  sidebar,
   workspace,
   workspaces,
   workspaceRef,
@@ -328,6 +331,11 @@ export function SettingsOverlay({
     return () => document.removeEventListener('keydown', onKey);
   }, [controller, open]);
 
+  const expandRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (open && sidebar.collapsed) expandRef.current?.focus({ preventScroll: true });
+  }, [open, sidebar.collapsed]);
+
   if (!open) return null;
   const resourceBusy = notices.settingsBusy || notices.resourceWriteBusy;
   const close = () => { void controller.closeSettings(); };
@@ -335,14 +343,27 @@ export function SettingsOverlay({
 
   return (
     <SettingsDraftContext.Provider value={draftGuard}>
-      <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="设置">
-        <SettingsNavigation
-          pages={settingsPages}
-          activeId={tab}
-          onSelect={select}
-          onBack={close}
-        />
-        <section className="settings-content" ref={contentRef as RefObject<HTMLElement>}>
+      <div className="settings-overlay" role="dialog" aria-modal="true" aria-labelledby="settings-window-title">
+        <ShellLayout
+          sidebar={<SettingsNavigation
+            pages={settingsPages}
+            activeId={tab}
+            onSelect={select}
+            onBack={close}
+            collapsed={sidebar.collapsed}
+            onCollapse={() => sidebar.setCollapsed(true)}
+          />}
+          resizeHandle={sidebar.resizeHandle}
+        >
+          <ShellHeader
+            className="settings-header"
+            onExpandSidebar={sidebar.collapsed ? () => sidebar.setCollapsed(false) : undefined}
+            expandRef={expandRef}
+          >
+            <span id="settings-window-title">设置</span>
+            {sidebar.collapsed && <button type="button" className="settings-header-back" onClick={close}><ChevronLeft />返回对话</button>}
+          </ShellHeader>
+        <main className="shell-canvas settings-content" ref={contentRef as RefObject<HTMLElement>}>
           <DeferredSettingsBoundary
             key={tab}
             isGeneral={tab === 'general'}
@@ -568,9 +589,9 @@ export function SettingsOverlay({
             {data && tab === 'about' && <AboutSettings {...about} />}
             </div>
           </DeferredSettingsBoundary>
-        </section>
-        {/* 即时设置落盘后的确认，不改变布局。 */}
-        <SettingsSavedFlash signal={appearance.preferences} />
+        </main>
+          <SettingsSavedFlash signal={appearance.preferences} />
+        </ShellLayout>
         {editor.editor && <SettingsEditorDialog {...editor} editor={editor.editor} />}
       </div>
     </SettingsDraftContext.Provider>

@@ -51,7 +51,7 @@ kbd { font: inherit; font-size: var(--text-xs); color: var(--faint); }
 @keyframes rotate { to { transform: rotate(360deg); } }
 
 /* Shell and shared controls */
-/* 应用外壳是全窗口 flex 容器：高度锁定 100dvh 并隐藏自身溢出，纵向滚动
+/* 应用外壳铺满窗口并隐藏自身溢出，纵向滚动
 必须交给内部区块（chat-scroll、settings-content 等）各自承担，外层永不滚动。
 isolation 建立独立层叠上下文，配合下面的 :has 规则在设置全屏时隐藏其余兄弟
 节点。按钮、输入框和图标尺寸统一走共享控件令牌，保证各面板手感一致。 */
@@ -63,10 +63,7 @@ isolation 建立独立层叠上下文，配合下面的 :has 规则在设置全�
 .app {
   --shell-top: 0px;
   --shell-gutter: 0px;
-  /* 内容孔洞离外框右、底两条窄带的距离；顶部与左侧由标题行和侧栏本身承担。 */
-  --content-gutter: var(--space-2);
   position: relative;
-  display: flex;
   height: calc(100dvh - var(--shell-top) - var(--shell-gutter));
   margin: var(--shell-top) var(--shell-gutter) var(--shell-gutter);
   overflow: hidden;
@@ -77,18 +74,16 @@ isolation 建立独立层叠上下文，配合下面的 :has 规则在设置全�
   background: var(--surface-chrome);
 }
 
-/* 启用壁纸时才是一张浮起来的卡片：留白、描边和投影都只服务于「壁纸在窗外」
-   这一种情形，满窗时外框与窗口边缘齐平，不再多画一圈线。 */
+/* The border outlines the frame. The outer wallpaper's scrim owns its shading. */
 .app.has-custom-background {
   --shell-top: 44px;
   --shell-gutter: 18px;
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-shell);
 }
 /* 全屏时没有红绿灯，卡片不需要再让出顶部：四周取同一个留白。 */
 html[data-window-fullscreen='true'] .app.has-custom-background { --shell-top: var(--shell-gutter); }
 
-.app:has(.settings-overlay) > :is(.background-layer, .sidebar, .content-region, .main, .file-panel, .file-panel-backdrop) {
+.app:has(.settings-overlay) > :is(.sidebar, .content-region) {
   visibility: hidden;
   pointer-events: none;
 }
@@ -122,23 +117,6 @@ html[data-window-fullscreen='true'] .app.has-custom-background { --shell-top: va
 .state-dot.is-busy { background: var(--accent); animation: pulse 1.5s ease-in-out infinite; }
 
 /* Sidebar */
-/* 侧栏宽度由 --sidebar-w 决定，默认 284，拖拽范围 284–360；它是
-flex:none 的纵向列，唯一滚动容器是 workspace-list（flex:1 + min-height:0 +
-overflow:auto），底部账号行因此始终贴底。折叠态后来被改成完全隐藏，早先的
-72px 图标轨道规则已经失效，不要据此推断布局。顶栏是可拖拽窗口区域，按钮
-通过全局 no-drag 规则恢复点击；顶栏开关与拖拽落点线分别用 5/3 的层级压在内容上。 */
-
-.sidebar, .settings-nav { width: var(--sidebar-w); flex: none; min-height: 0; display: flex; flex-direction: column; padding: var(--space-10) var(--space-3) var(--space-3); background: var(--sidebar-bg); border-right: 1px solid var(--border); }
-.sidebar {
-  position: relative;
-  overflow: hidden;
-  transition: width var(--shell-transition), padding-inline var(--shell-transition), border-color var(--shell-transition);
-  will-change: width;
-  /* Width animations reflowed the whole document; containment keeps the work
-     inside the two panels instead of the 20k-node transcript. */
-  contain: layout paint;
-}
-.sidebar-drag { position: absolute; top: 0; left: 0; width: 100%; height: 36px; -webkit-app-region: drag; }
 .brand { position: relative; height: 44px; display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-1); flex: none; }
 .brand-name { font-size: var(--text-lg); font-weight: var(--weight-bold); letter-spacing: -.4px; white-space: nowrap; }
 .brand .collapse { margin-left: auto; }
@@ -181,4 +159,3 @@ overflow:auto），底部账号行因此始终贴底。折叠态后来被改成�
 .workspace-search input, .settings-search input, .search-field input { width: 100%; height: 100%; padding: 0; border: 0; box-shadow: none !important; background: var(--transparent); }
 .workspace-search:focus-within, .settings-search:focus-within, .search-field:focus-within { border-color: var(--focus-color); box-shadow: var(--focus-ring), var(--shadow-composer); }
 .sidebar-empty { padding: var(--space-3) var(--space-2); color: var(--faint); font-size: var(--text-xs); line-height: var(--leading-normal); }
-.is-sidebar-collapsed .sidebar { width: 0; padding-inline: 0; border-right-color: var(--transparent); }

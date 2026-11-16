@@ -24,6 +24,7 @@ delete env.PI_STUDIO_DEV;
 const routes = [
   { label: '通用', title: '通用' },
   { label: '快捷键', title: '快捷键', modules: ['ShortcutSettings'] },
+  { label: 'Git 与 Worktree', title: 'Git 与 Worktree', modules: ['GitSettings'] },
   { label: '模型配置', title: '模型配置', modules: ['ModelSettings'] },
   { label: '使用量', title: 'Token 使用量', modules: ['UsageSettings'] },
   { label: '智能体工具', title: '智能体工具', modules: ['AgentToolsSettings'] },
@@ -71,14 +72,40 @@ async function resize(width, height) {
   await page.waitForFunction(({ width, height }) => innerWidth === width && innerHeight === height, size);
 }
 
-async function assertTitleAlignment(label) {
-  const geometry = await page.evaluate(() => {
-    const nav = document.querySelector('.settings-nav-head').getBoundingClientRect();
-    const title = document.querySelector('.settings-content h1').getBoundingClientRect();
-    return { navTop: nav.top, titleTop: title.top, navHeight: nav.height, titleHeight: title.height };
+async function assertShellAlignment(label) {
+  const geometry = await page.evaluate(async () => {
+    await Promise.all([...document.querySelectorAll('.shell-sidebar')].flatMap(sidebar =>
+      sidebar.getAnimations().map(animation => animation.finished.catch(() => {}))));
+    const rect = selector => document.querySelector(selector).getBoundingClientRect();
+    const chat = rect('.main');
+    const settings = rect('.settings-content');
+    const notice = rect('.settings-saved-flash');
+    return {
+      sidebarWidth: [rect('.sidebar').width, rect('.settings-nav').width],
+      headerTop: [rect('.chat-header').top, rect('.settings-header').top],
+      headerBottom: [rect('.chat-header').bottom, rect('.settings-header').bottom],
+      canvasLeft: [chat.left, settings.left],
+      canvasRight: [chat.right, settings.right],
+      canvasTop: [chat.top, settings.top],
+      canvasBottom: [chat.bottom, settings.bottom],
+      columnLeft: [rect('.composer-wrap').left, rect('.settings-page-frame').left],
+      columnRight: [rect('.composer-wrap').right, rect('.settings-page-frame').right],
+      noticeCenter: [settings.left + settings.width / 2, notice.left + notice.width / 2],
+    };
   });
-  assert.ok(Math.abs(geometry.navTop - geometry.titleTop) <= 1 && Math.abs(geometry.navHeight - geometry.titleHeight) <= 1,
-    `${label}: sidebar and page title share a line: ${JSON.stringify(geometry)}`);
+  for (const [edge, [chat, settings]] of Object.entries(geometry)) {
+    assert.ok(Math.abs(chat - settings) <= 1, `${label} ${edge}: chat ${chat}, settings ${settings}`);
+  }
+}
+
+async function dragSidebar(delta) {
+  const handle = await page.getByRole('separator', { name: '调整侧边栏宽度' }).boundingBox();
+  const x = handle.x + handle.width / 2;
+  const y = handle.y + handle.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + delta, y, { steps: 4 });
+  await page.mouse.up();
 }
 
 async function capture(name) {
@@ -88,6 +115,7 @@ async function capture(name) {
   const geometry = await page.evaluate(() => ({
     width: innerWidth, height: innerHeight,
     overflow: document.documentElement.scrollWidth > innerWidth + 1,
+    contentOverflow: document.querySelector('.settings-content').scrollWidth - document.querySelector('.settings-content').clientWidth,
     heading: document.querySelector('.settings-content h1')?.textContent,
     back: (() => {
       const box = document.querySelector('.settings-back-button')?.getBoundingClientRect();
@@ -95,6 +123,7 @@ async function capture(name) {
     })(),
   }));
   assert.equal(geometry.overflow, false, `${name}: no horizontal document overflow`);
+  assert.ok(geometry.contentOverflow <= 1, `${name}: controls fit the settings canvas (${geometry.contentOverflow}px overflow)`);
   assert.equal(geometry.back, true, `${name}: return-to-conversation stays visible`);
   await page.screenshot({ path: path.join(output, `${name}.png`), animations: 'disabled' });
   result.screenshots.push({ name, ...geometry });
@@ -133,7 +162,7 @@ try {
     return { shadow: style.boxShadow, border: style.borderColor, accent: style.getPropertyValue('--settings-accent').trim() };
   });
   assert.match(searchFocus.shadow, /0px 0px 0px 1px/, 'search has a thin focus halo');
-  assert.equal(await nav.locator('.settings-nav-row').count(), 13, 'all settings routes remain available');
+  assert.equal(await nav.locator('.settings-nav-row').count(), routes.length, 'all settings routes remain available');
   assert.equal(await nav.locator('.settings-nav-row[tabindex="0"]').count(), 1, 'one settings page participates in the Tab order');
   assert.equal(await generalPage.getAttribute('tabindex'), '0', 'the active settings page owns the page Tab stop');
   await settingsSearch.fill('模型');
@@ -174,6 +203,36 @@ try {
   assert.equal(await content.locator('.background-media-empty').count(), 0, 'an empty background does not reserve a media preview');
   assert.equal(await content.getByRole('slider').count(), 0, 'background controls appear only after media selection');
   await resize(1440, 920);
+  await assertShellAlignment('default');
+  const originalWidth = (await nav.boundingBox()).width;
+  await dragSidebar(40);
+  await assertShellAlignment('drag from settings');
+  assert.equal((await nav.boundingBox()).width, originalWidth + 40);
+  await nav.getByRole('button', { name: '返回对话' }).click();
+  assert.equal((await page.locator('.sidebar').boundingBox()).width, originalWidth + 40);
+  await dragSidebar(-16);
+  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await content.getByRole('heading', { name: '通用', exact: true }).waitFor();
+  const chosenWidth = originalWidth + 24;
+  assert.equal((await nav.boundingBox()).width, chosenWidth);
+  await nav.getByRole('button', { name: '收起侧边栏' }).click();
+  await assertShellAlignment('collapsed');
+  await page.locator('.settings-header-back').click();
+  await page.locator('.settings-overlay').waitFor({ state: 'detached' });
+  const expand = page.getByRole('button', { name: '展开侧边栏' });
+  assert.equal(await expand.evaluate(button => button === document.activeElement), true, 'return focus survives a folded sidebar');
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+,' : 'Control+,');
+  await content.getByRole('heading', { name: '通用', exact: true }).waitFor();
+  await assertShellAlignment('open settings from a folded sidebar');
+  await page.getByRole('button', { name: '展开侧边栏' }).click();
+  await assertShellAlignment('expanded');
+  // Exercise the narrow renderer breakpoint independently of native window minimums.
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width: 700, height: 760, deviceScaleFactor: 0, mobile: false });
+  await assertShellAlignment('narrow viewport');
+  assert.ok((await nav.boundingBox()).width < chosenWidth);
+  await cdp.send('Emulation.clearDeviceMetricsOverride');
+  await assertShellAlignment('restored viewport');
+  assert.equal((await nav.boundingBox()).width, chosenWidth);
   await capture('01-general-wide-light');
   const sectionSpacing = await content.locator('.general-settings-section').evaluateAll((sections) => sections.map((section, index) => {
     const heading = section.querySelector('h2').getBoundingClientRect();
@@ -242,6 +301,7 @@ try {
   // 摘要行显示文件名与类型，展开后才是预览与滑杆。
   const backgroundSummary = content.locator('.general-background-summary');
   await backgroundSummary.waitFor();
+  await assertShellAlignment('custom background');
   assert.match(await backgroundSummary.innerText(), /图片背景/, 'summary labels the media kind');
   const summaryGeometry = await content.evaluate(() => {
     const summary = document.querySelector('.general-background-summary').getBoundingClientRect();
@@ -280,7 +340,7 @@ try {
   for (const [index, route] of routes.entries()) {
     await nav.getByRole('button', { name: route.label, exact: true }).click();
     await content.getByRole('heading', { name: route.title, exact: true, level: 1 }).waitFor();
-    await assertTitleAlignment(`${route.label} narrow`);
+    await assertShellAlignment(`${route.label} narrow`);
     if (route.glassControls) {
       // 有背景图时，输入框、自定义下拉和多行文本必须共用同一块玻璃表面。
       await page.evaluate(() => { document.querySelector('.app').classList.add('has-custom-background'); });
@@ -303,7 +363,7 @@ try {
       result.glassSurfaces = surfaces;
     }
     await resize(860, 640);
-    await assertTitleAlignment(`${route.label} compact`);
+    await assertShellAlignment(`${route.label} compact`);
     await resize(980, 640);
     assert.equal(await nav.getByRole('button', { name: route.label, exact: true }).getAttribute('aria-current'), 'page');
     for (const module of route.modules || []) {
@@ -360,7 +420,7 @@ try {
     await resize(1440, 920);
     await nav.getByRole('button', { name: route.label, exact: true }).click();
     await content.getByRole('heading', { name: route.title, exact: true, level: 1 }).waitFor();
-    await assertTitleAlignment(`${route.label} wide`);
+    await assertShellAlignment(`${route.label} wide`);
     await capture(`route-${String(index + 1).padStart(2, '0')}-wide-light`);
     await nav.getByRole('button', { name: '通用', exact: true }).click();
     await content.getByRole('button', { name: '深色', exact: true }).click();
@@ -373,6 +433,7 @@ try {
 
   await page.reload();
   await page.locator('.new-conversation-welcome').waitFor();
+  assert.equal((await page.locator('.sidebar').boundingBox()).width, chosenWidth, 'sidebar width survives reload');
   await preference('theme', 'dark');
   await preference('fontSize', 16);
   await page.locator('.sidebar-bottom button[title="设置"]').click();

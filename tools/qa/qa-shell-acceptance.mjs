@@ -1,9 +1,6 @@
 /**
- * 方案 A 的验收脚本：
- *   1. 纯红 / 纯蓝 / 暗色照片三张壁纸下，窗口内同一元素取色 RGB 差 ≤ 2；
- *   2. 窗口内出现的表面色不超过四级（含 hover 不算）；
- *   3. text-1 / text-2 对各自底色对比度 ≥ 4.5。
- * 运行前先 pnpm run build。截图写到 .qa/acceptance/。
+ * Desktop pixel checks for wallpaper opacity, theme surfaces and text contrast.
+ * Run after pnpm run build. Screenshots stay in .qa/screenshots/shell-acceptance/.
  */
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync } from 'node:fs';
@@ -62,7 +59,6 @@ const env = { ...process.env, PI_STUDIO_USER_DATA: profile, PI_STUDIO_DB: path.j
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.PI_STUDIO_DEV;
 
-// 逻辑坐标 → 物理像素（截图是 2x）
 const POINTS = [
   ['sidebar', 120, 420],
   ['canvas', 1180, 700],
@@ -70,43 +66,46 @@ const POINTS = [
   ['composer', 900, 560],
 ];
 
-const app = await _electron.launch({ args: [root], env });
+const app = await _electron.launch({ args: ['--force-color-profile=srgb', root], env });
 const page = await app.firstWindow();
 page.setDefaultTimeout(20000);
 await page.locator('.app').waitFor();
 await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1440, 920));
 await page.waitForFunction(() => innerWidth === 1440);
 
-async function sample() {
-  const shot = await app.evaluate(async ({ BrowserWindow }) => {
-    const image = await BrowserWindow.getAllWindows()[0].webContents.capturePage();
-    return { width: image.getSize().width, bitmap: image.toBitmap().toString('base64') };
-  });
-  const buffer = Buffer.from(shot.bitmap, 'base64');
-  const at = (x, y) => {
-    const offset = (y * shot.width + x) * 4;
-    return [buffer[offset + 2], buffer[offset + 1], buffer[offset]];
-  };
-  return Object.fromEntries(POINTS.map(([name, x, y]) => [name, at(x * 2, y * 2)]));
+async function sample(points = POINTS) {
+  const screenshot = await page.screenshot({ scale: 'css', animations: 'disabled' });
+  return app.evaluate(({ nativeImage }, { png, points }) => {
+    const image = nativeImage.createFromBuffer(Buffer.from(png, 'base64'));
+    const bitmap = image.toBitmap();
+    const { width, height } = image.getSize();
+    return Object.fromEntries(points.map(([name, x, y]) => {
+      if (x < 0 || x >= width || y < 0 || y >= height) throw new Error(`${name} is outside the screenshot at ${x}, ${y}`);
+      const offset = (Math.floor(y) * width + Math.floor(x)) * 4;
+      return [name, [bitmap[offset + 2], bitmap[offset + 1], bitmap[offset]]];
+    }));
+  }, { png: screenshot.toString('base64'), points });
 }
 
-const results = {};
-for (const [name, file] of [['red', 'red.png'], ['blue', 'blue.png'], ['photo', 'photo.png']]) {
-  await page.evaluate((wallpaper) => {
+async function loadWallpaper(file, inside = 0, outside = 100) {
+  await page.evaluate(({ wallpaper, inside, outside }) => {
     const current = JSON.parse(localStorage.getItem('pi-studio:preferences') || '{}');
     localStorage.setItem('pi-studio:preferences', JSON.stringify({
       ...current,
       theme: 'dark',
       backgroundMedia: { kind: 'image', url: `pi-media://background/${wallpaper}`, name: wallpaper, mime: 'image/png', bytes: 300 },
-      backgroundOpacity: 100, backgroundBlur: 0, backgroundSurfaceOpacity: 0,
-      // 窗口内壁纸默认是 8%；这里显式关掉，才能断言「换壁纸窗口内取色不变」。
-      backgroundInsideVisibility: 0,
+      backgroundOpacity: outside, backgroundBlur: 0, backgroundSurfaceOpacity: 0,
+      backgroundInsideVisibility: inside,
     }));
-  }, file);
+  }, { wallpaper: file, inside, outside });
   await page.reload();
-  await page.locator('.app').waitFor();
-  await page.waitForFunction(() => innerWidth === 1440);
-  await sleep(900);
+  await page.locator('.new-conversation-welcome').waitFor();
+  await page.locator('.background-layer-media').evaluate(image => image.decode());
+}
+
+const results = {};
+for (const [name, file] of [['red', 'red.png'], ['blue', 'blue.png'], ['photo', 'photo.png']]) {
+  await loadWallpaper(file);
   results[name] = await sample();
   const gutter = await page.evaluate(() => {
     const layer = document.querySelector('.background-layer');
@@ -187,5 +186,80 @@ console.log('contrast on canvas', JSON.stringify(contrast));
 assert.ok(Number(contrast.text1) >= 4.5, `text-1 contrast ${contrast.text1}`);
 assert.ok(Number(contrast.text2) >= 4.5, `text-2 contrast ${contrast.text2}`);
 
-await app.close();
+// Sample blank pixels on each surface of the live window. Use its own theme colours
+// as the base and the known red PNG as the source in the source-over calculation.
+async function assertVisibility(label, inside, outside, scrim = 0) {
+  const { points, chrome, canvas } = await page.evaluate(async () => {
+    const view = document.querySelector('.settings-overlay') || document.querySelector('.app');
+    await Promise.all([...document.querySelectorAll('.window-wallpaper img')].map(image => image.decode()));
+    await Promise.all([...view.querySelectorAll('.shell-sidebar, .file-panel')].flatMap(node =>
+      node.getAnimations().map(animation => animation.finished.catch(() => {}))));
+    const rect = selector => view.querySelector(selector).getBoundingClientRect();
+    const region = rect('.content-region');
+    const sidebar = rect('.shell-sidebar');
+    const frame = document.querySelector('.app').getBoundingClientRect();
+    const points = [
+      ['outside', 2, 2],
+      ['outside bottom', frame.left + frame.width / 2, frame.bottom + 3],
+      ['header', region.left + region.width / 2, region.top - 4],
+      ['inner gutter', region.right + 3, region.top + region.height / 2],
+      ['canvas', region.left + 8, region.top + region.height / 2],
+    ];
+    if (sidebar.width > 0) points.push(['sidebar', sidebar.left + 4, sidebar.top + sidebar.height / 2]);
+    const panel = view.querySelector('.panel-body');
+    if (panel) {
+      const box = panel.getBoundingClientRect();
+      points.push(['workbench', box.right - 8, box.top + box.height / 2]);
+    }
+    const context = document.createElement('canvas').getContext('2d');
+    function rgb(token) {
+      context.fillStyle = getComputedStyle(view).getPropertyValue(token);
+      context.fillRect(0, 0, 1, 1);
+      return Array.from(context.getImageData(0, 0, 1, 1).data).slice(0, 3);
+    }
+    return { points, chrome: rgb('--surface-chrome'), canvas: rgb('--surface-canvas') };
+  });
+  const pixels = await sample(points);
+  for (const [area, actual] of Object.entries(pixels)) {
+    const base = ['canvas', 'workbench'].includes(area) ? canvas : chrome;
+    const alpha = area.startsWith('outside') ? (outside / 100) * (1 - scrim / 100) : inside / 100;
+    const expected = base.map((channel, i) => Math.round(channel * (1 - alpha) + (i === 0 ? 255 : 0) * alpha));
+    assert.ok(actual.every((v, i) => Math.abs(v - expected[i]) <= 2),
+      `${label} ${area}: expected RGB ${expected}, got ${actual}`);
+  }
+}
+
+try {
+  await loadWallpaper('red.png', 32, 48);
+  await page.locator('.bottom-row[title="设置"]').click();
+  for (const theme of ['dark', 'light']) {
+    await page.getByRole('button', { name: theme === 'dark' ? '深色' : '浅色', exact: true }).click();
+    for (const percent of [32, 0, 75, 100]) {
+      await page.locator('#background-inside').fill(String(percent));
+      await assertVisibility(`${theme} settings ${percent}%`, percent, 48);
+    }
+  }
+  await page.locator('#background-inside').fill('32');
+  await page.locator('#background-blur').fill('100');
+  await assertVisibility('blurred wallpaper edges', 32, 48);
+  await page.locator('#background-blur').fill('0');
+  await page.locator('#background-opacity').fill('100');
+  await page.locator('#background-surface').fill('75');
+  await assertVisibility('separate outer scrim', 32, 100, 75);
+  await page.locator('#background-opacity').fill('0');
+  await assertVisibility('outer media hidden', 32, 0, 75);
+  await page.getByRole('button', { name: '返回对话' }).click();
+  await assertVisibility('conversation', 32, 0, 75);
+  await page.getByRole('button', { name: '打开右侧面板' }).click();
+  await page.locator('.file-panel.is-open .panel-start').waitFor();
+  await assertVisibility('docked workbench', 32, 0, 75);
+  await page.locator('.panel-start').getByRole('button', { name: '临时聊天', exact: true }).click();
+  await page.getByRole('button', { name: '全屏', exact: true }).click();
+  await assertVisibility('fullscreen workbench', 32, 0, 75);
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+,' : 'Control+,');
+  await page.locator('.settings-content h1').waitFor();
+  await assertVisibility('settings over fullscreen workbench', 32, 0, 75);
+} finally {
+  await app.close();
+}
 console.log('shell acceptance passed', JSON.stringify({ drift, results, contrast }, null, 1));

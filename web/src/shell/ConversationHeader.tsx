@@ -1,5 +1,5 @@
 import {
-  ArrowUp, Download, GitBranch, LoaderCircle, PanelLeft, PanelRightOpen,
+  ArrowUp, Download, GitBranch, LoaderCircle, PanelRightOpen,
 } from 'lucide-react';
 import {
   NotificationCenter,
@@ -7,6 +7,7 @@ import {
 } from './NotificationCenter';
 import type { ExtensionChipEntry, ExtensionChips } from '../features/extensions/ExtensionChips';
 import { ConversationWorkspaceMenu } from './ConversationWorkspaceMenu';
+import { ShellHeader } from './ShellLayout';
 import type { ExtensionSettingsPage, ExtensionUiSnapshot } from '../types/extension-types';
 import type { GitWorkspaceStatus } from '../types/git-types';
 
@@ -87,9 +88,7 @@ export function ConversationHeader({
   update,
 }: ConversationHeaderProps) {
   return (
-    <>
-      <header className="chat-header">
-        {sidebarCollapsed && <button className="icon-button sidebar-expand" aria-label="展开侧边栏" title="展开侧边栏" onClick={onExpandSidebar}><PanelLeft /></button>}
+      <ShellHeader className="chat-header" onExpandSidebar={sidebarCollapsed ? onExpandSidebar : undefined}>
         {!isNewConversation && <div className="chat-heading">
           <h1>{title}</h1>
           <GitWorkspaceSummary status={gitStatus} />
@@ -150,8 +149,7 @@ export function ConversationHeader({
             <PanelRightOpen />
           </button>
         </div>
-      </header>
-    </>
+      </ShellHeader>
   );
 }
 

@@ -1,5 +1,5 @@
 .deferred-settings-state {
-  max-width: var(--settings-content);
+  max-width: var(--content);
   margin-inline: auto;
   padding-block: var(--space-8);
   color: var(--muted);

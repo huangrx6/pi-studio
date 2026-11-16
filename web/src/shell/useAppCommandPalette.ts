@@ -110,7 +110,6 @@ export function useAppCommandPalette({
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing || event.keyCode === 229 || event.repeat) return;
       if (document.querySelector('dialog[open]')) return;
-      if (settingsOpen && !matchesShortcut(event, shortcuts.settings)) return;
       const run = (id: string) => {
         event.preventDefault();
         setComposerMenu(null);
@@ -153,6 +152,7 @@ export function useAppCommandPalette({
         }
       };
       for (const id of Object.keys(shortcuts)) {
+        if (settingsOpen && id !== 'settings' && id !== 'toggleSidebar') continue;
         if (matchesShortcut(event, shortcuts[id])) {
           // Bare typing never matches (bindings require a modifier), so only
           // text-entry shortcuts such as Mod+K need the guard.

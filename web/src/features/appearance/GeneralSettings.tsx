@@ -97,7 +97,7 @@ export function GeneralSettings({ preferences, onChange, backgroundBusy, backgro
         </div>
       </SettingRow>
       <SettingRow label="背景">
-        <InfoHint align="end" label="支持 PNG、JPEG、WebP、GIF、AVIF、MP4、MOV、M4V、WebM，最大 2 GB。视频会静音循环；MOV 与 WebM 取决于编码格式。" />
+        <InfoHint align="end" label="背景透明度、柔化程度和遮罩强度作用于窗口四周的留白。侧栏、顶栏和内容区共用窗口内可见度。支持 PNG、JPEG、WebP、GIF、AVIF、MP4、MOV、M4V、WebM，最大 2 GB。视频静音循环播放，MOV 与 WebM 的支持取决于编码格式。" />
         <button type="button" className="settings-outline" disabled={backgroundBusy} onClick={onChooseBackground}>{backgroundBusy && <LoaderCircle className="spin" />}{media ? '更换媒体' : '选择媒体'}</button>
         {media && <button type="button" className="settings-outline" disabled={backgroundBusy} onClick={onRemoveBackground}>移除</button>}
       </SettingRow>

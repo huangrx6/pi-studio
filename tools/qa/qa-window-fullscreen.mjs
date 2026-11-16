@@ -146,6 +146,25 @@ try {
   await page.locator('.sidebar-expand').click();
   await page.waitForFunction(() => !document.querySelector('.app').classList.contains('is-sidebar-collapsed'));
 
+  // Settings must own its title and columns even when the workbench hides the chat.
+  await page.locator('.panel-start').getByRole('button', { name: '临时聊天', exact: true }).click();
+  await page.getByRole('button', { name: '全屏', exact: true }).click();
+  await page.locator('.app.is-panel-fullscreen').waitFor();
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+,' : 'Control+,');
+  const settings = page.getByRole('dialog', { name: '设置', exact: true });
+  await settings.getByRole('heading', { name: '通用', exact: true }).waitFor();
+  assert.ok(await settings.locator('.settings-nav').isVisible());
+  assert.ok(await settings.getByRole('separator', { name: '调整侧边栏宽度' }).isVisible());
+  const title = await settings.locator('.settings-header').boundingBox();
+  const canvas = await settings.locator('.settings-content').boundingBox();
+  assert.equal(title.y + title.height, canvas.y);
+  await settings.getByRole('button', { name: '深色', exact: true }).click();
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark'
+    && getComputedStyle(document.querySelector('.settings-saved-flash')).opacity === '0');
+  await page.screenshot({ path: path.join(output, '04-settings-fullscreen.png') });
+  await settings.getByRole('button', { name: '返回对话', exact: true }).click();
+  await page.getByRole('button', { name: '退出全屏', exact: true }).click();
+
   await setFullscreenAttribute(page, false);
   assertSingleTitleRow(await topRows(page), 'attribute reset');
 

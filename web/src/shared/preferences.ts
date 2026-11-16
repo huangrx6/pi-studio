@@ -86,7 +86,7 @@ export type Preferences = {
   backgroundOpacity: number;
   /** 背景媒体柔化强度，0–100%；渲染时映射为有上限的模糊像素值。 */
   backgroundBlur: number;
-  /** 主界面外壳底漆的遮挡强度，0–100%；卡片和控件层级随主题统一派生。 */
+  /** 窗口四周留白的壁纸遮罩强度，0–100%。 */
   backgroundSurfaceOpacity: number;
   /** 窗口内的壁纸可见度，0–100；0 表示窗口内完全用纯色，只在四周留白看到壁纸。 */
   backgroundInsideVisibility: number;

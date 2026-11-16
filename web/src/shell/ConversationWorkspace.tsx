@@ -326,7 +326,7 @@ export function ConversationWorkspace({
         onOpenTrace={header.openTrace}
         showTrace={traceEnabled}
       />
-      <main className={`main ${isNewConversation ? 'is-new-conversation' : ''}`} aria-busy={sessionLoading}>
+      <main className={`main shell-canvas ${isNewConversation ? 'is-new-conversation' : ''}`} aria-busy={sessionLoading}>
         <div className={`chat-loading-line ${sessionLoading ? 'is-visible' : ''}`} />
       {searchEnabled && searchOpen && <ConversationSearchBar
         state={search.state}
