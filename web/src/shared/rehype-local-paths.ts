@@ -1,4 +1,4 @@
-import { pathToken } from './file-path-links.ts';
+import { localHrefPath, pathToken, WINDOWS_DRIVE_ROOT } from './file-path-links.ts';
 import type { Element, ElementContent, Root, RootContent } from 'hast';
 
 /**
@@ -52,6 +52,11 @@ function transform(node: Root | Element, ancestors: Element[]) {
       continue;
     }
     if (child.type === 'element') {
+      if (child.tagName === 'a' && typeof child.properties.href === 'string') {
+        // Markdown's URL filter treats a drive letter as a URL scheme.
+        const local = localHrefPath(child.properties.href);
+        if (local && WINDOWS_DRIVE_ROOT.test(local)) child.properties.dataPath = local;
+      }
       const text = child.children?.length === 1 && child.children[0].type === 'text'
         ? child.children[0].value
         : '';

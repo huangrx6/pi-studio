@@ -81,7 +81,6 @@ export function ConversationExtensionHub({
   layout,
   orderScope,
   hasSessionOverride,
-  onBack,
   onOpenItem,
   onLayoutChange,
   onOrderScopeChange,
@@ -99,7 +98,6 @@ export function ConversationExtensionHub({
   layout: ConversationExtensionLayout;
   orderScope: ConversationExtensionOrderScope;
   hasSessionOverride: boolean;
-  onBack: () => void;
   onOpenItem: (itemId: string) => void;
   onLayoutChange: (layout: ConversationExtensionLayout) => void;
   onOrderScopeChange: (scope: ConversationExtensionOrderScope) => void;
@@ -130,9 +128,9 @@ export function ConversationExtensionHub({
   }
 
   return <div className="conversation-extension-hub">
-    <SessionViewHeader className="extension-hub-head" title="会话扩展" onBack={onBack}
+    <SessionViewHeader className="extension-hub-head" title="会话扩展"
       summary={items.length ? `${groups.length} 个扩展 · ${items.length} 个会话面板` : undefined}>
-      {onOpenSettings && <button className="text-button" type="button" onClick={() => onOpenSettings('extensions')}><Plug />管理扩展</button>}
+      {onOpenSettings && <button className="secondary-button extension-hub-manage" type="button" onClick={() => onOpenSettings('extensions')}><Plug aria-hidden="true" /><span>管理扩展</span></button>}
     </SessionViewHeader>
     {items.length > 0 && <div className="extension-hub-tools">
         {groups.length > 1 && <><span className="extension-sort-label">排序范围</span><div className="extension-hub-scope" role="group" aria-label="扩展排序范围">

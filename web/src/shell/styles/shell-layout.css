@@ -83,7 +83,7 @@
   transition: padding-left var(--shell-transition);
 }
 
-.app.is-sidebar-collapsed { --shell-header-leading: 92px; }
+.app.is-sidebar-collapsed { --shell-header-leading: var(--window-controls-leading, var(--space-6)); }
 .app.has-custom-background.is-sidebar-collapsed { --shell-header-leading: var(--space-3); }
 html[data-window-fullscreen='true'] .app.is-sidebar-collapsed { --shell-header-leading: var(--space-6); }
 

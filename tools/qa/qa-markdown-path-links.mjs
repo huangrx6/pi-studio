@@ -108,7 +108,8 @@ try {
   await page.waitForSelector('.action-menu', { timeout: 5000 });
   const items = await page.evaluate(() => [...document.querySelectorAll('.action-menu button span')].map((span) => span.textContent));
   assert.ok(items.includes('打开预览'), items.join('|'));
-  assert.ok(items.includes('在 Finder 中显示'), items.join('|'));
+  const revealLabel = { darwin: '在 Finder 中显示', win32: '在文件资源管理器中显示' }[process.platform] || '显示文件位置';
+  assert.ok(items.includes(revealLabel), items.join('|'));
   assert.ok(items.includes('复制路径'), items.join('|'));
   await page.keyboard.press('Escape');
 

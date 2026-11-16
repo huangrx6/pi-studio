@@ -11,6 +11,8 @@
  * equal shortcuts always have one string representation.
  */
 
+import { desktopPlatform } from './desktop-platform.ts';
+
 /** Named keys we accept in a binding. Anything else must be one character. */
 export const NAMED_KEYS = new Set([
   'Enter', 'Escape', 'Tab', 'Space', 'Backspace', 'Delete',
@@ -53,8 +55,7 @@ function normalizeKey(key: unknown) {
 /** 'mac' when the primary modifier is ⌘, otherwise 'other' (Ctrl). */
 export function resolvePlatform(platform?: string) {
   if (platform === 'mac' || platform === 'other') return platform;
-  const ua = typeof navigator !== 'undefined' ? (navigator.platform || navigator.userAgent || '') : '';
-  return /Mac|iPhone|iPad/.test(ua) ? 'mac' : 'other';
+  return desktopPlatform() === 'darwin' ? 'mac' : 'other';
 }
 
 /** True when the platform's primary modifier is pressed. */
@@ -112,7 +113,7 @@ const MOD_LABEL_OTHER: Record<string, string> = { Mod: 'Ctrl', Alt: 'Alt', Shift
 export function formatShortcut(combo: string, platform?: boolean) {
   const normalized = normalizeCombo(combo);
   if (!normalized) return '未设置';
-  const isMac = platform ?? (typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || ''));
+  const isMac = platform ?? (resolvePlatform() === 'mac');
   const labels = isMac ? MOD_LABEL_MAC : MOD_LABEL_OTHER;
   const parts = normalized.split('+');
   const key = parts.pop() ?? '';
@@ -127,7 +128,7 @@ export function formatShortcut(combo: string, platform?: boolean) {
 export function formatShortcutParts(combo: string, platform?: boolean) {
   const normalized = normalizeCombo(combo);
   if (!normalized) return [];
-  const isMac = platform ?? (typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || ''));
+  const isMac = platform ?? (resolvePlatform() === 'mac');
   const labels = isMac ? MOD_LABEL_MAC : MOD_LABEL_OTHER;
   const parts = normalized.split('+');
   const key = parts.pop() ?? '';

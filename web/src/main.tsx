@@ -10,6 +10,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './App';
+import { desktopPlatform } from './shared/desktop-platform';
 import { loadPreferences, resolveTheme } from './shared/preferences';
 import './styles/dsh-scrollbar.css';
 import './styles/tokens.css';
@@ -20,6 +21,7 @@ import './shell/right-panel/styles/right-panel.css';
 
 // 先应用主题与配色再 render，避免第一帧先按默认玉石青色绘制。
 const startupPreferences = loadPreferences();
+document.documentElement.dataset.platform = desktopPlatform();
 document.documentElement.dataset.theme = resolveTheme(startupPreferences.theme);
 document.documentElement.dataset.palette = startupPreferences.palette;
 

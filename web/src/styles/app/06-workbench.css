@@ -122,7 +122,6 @@ z-index 40，宽度和最大高度都受限并可内部滚动；每个操作行�
 .file-action > img { object-fit: contain; }
 .file-action > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-action-loading { display: flex; min-height: var(--control-sm); padding-inline: var(--space-2); }
-.file-actions-empty { padding: 7px 8px; color: var(--faint); font-size: var(--text-xs); }
 .file-actions-sep { height: 1px; margin: 4px 6px; background: var(--border); }
 
 /* Resource cards for MCP and global skills. */

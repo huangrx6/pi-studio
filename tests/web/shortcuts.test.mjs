@@ -6,6 +6,7 @@
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { revealFileLabel } from '../../web/src/shared/desktop-platform.ts';
 
 const {
   DEFAULT_SHORTCUTS,
@@ -69,6 +70,18 @@ test('prints platform-specific labels', () => {
   assert.equal(formatShortcut('Mod+Shift+B', true), '⌘⇧B');
   assert.equal(formatShortcut('Mod+Shift+B', false), 'Ctrl+Shift+B');
   assert.equal(formatShortcut('', true), '未设置');
+});
+
+test('the Electron platform controls both the shortcut hint and the matching key', (t) => {
+  t.after(() => { delete globalThis.window; });
+  globalThis.window = { piApi: { platform: 'win32' } };
+  assert.equal(formatShortcut('Mod+Enter'), 'Ctrl+Enter');
+  assert.equal(matchesShortcut(keyEvent('Enter', { ctrlKey: true }), 'Mod+Enter'), true);
+  assert.equal(matchesShortcut(keyEvent('Enter', { metaKey: true }), 'Mod+Enter'), false);
+  assert.equal(revealFileLabel(), '在文件资源管理器中显示');
+  globalThis.window.piApi.platform = 'darwin';
+  assert.equal(formatShortcut('Mod+Enter'), '⌘Enter');
+  assert.equal(revealFileLabel(), '在 Finder 中显示');
 });
 
 test('splits a combo into per-key labels for keycaps', () => {

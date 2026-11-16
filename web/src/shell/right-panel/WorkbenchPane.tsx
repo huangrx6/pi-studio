@@ -354,7 +354,7 @@ export function WorkbenchPane({
     }
     const preview: FilePreviewResult = file.preview ?? {
       path: file.path,
-      name: file.path.split('/').pop() || file.path,
+      name: file.path.split(/[\\/]/).pop() || file.path,
       size: file.size,
       mimeType: '',
       kind: file.binary ? 'binary' : 'text',
@@ -376,11 +376,10 @@ export function WorkbenchPane({
           <button className="icon-button" aria-label="文件操作" title="文件操作" aria-expanded={fileMenuOpen} onClick={() => void showFileActions()}><MoreHorizontal /></button>
           {fileMenuOpen && <div className="file-actions-menu" role="menu">
             <div className="file-actions-label">打开方式</div>
-            <button className="file-action" role="menuitem" onClick={() => void openFileWith()}><Eye /><span>预览（默认）</span></button>
-            <div className="file-actions-sep" />
+            <button className="file-action" role="menuitem" onClick={() => void openFileWith()}><Eye /><span>用默认应用打开</span></button>
+            {(fileAppsLoading || fileApps.length > 0) && <div className="file-actions-sep" />}
             {fileAppsLoading && <LoadingState className="file-action-loading">正在读取可用应用…</LoadingState>}
             {!fileAppsLoading && fileApps.map((app) => <button className="file-action" role="menuitem" key={app.path} onClick={() => void openFileWith(app.path)}>{app.icon ? <img src={app.icon} alt="" /> : <AppWindow />}<span>{app.name}</span></button>)}
-            {!fileAppsLoading && fileApps.length === 0 && <div className="file-actions-empty">没有可用应用</div>}
             <div className="file-actions-sep" />
             <button className="file-action" role="menuitem" onClick={() => void revealCurrentFile()}><FolderOpen /><span>显示文件位置</span></button>
           </div>}

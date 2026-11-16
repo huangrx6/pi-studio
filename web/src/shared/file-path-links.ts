@@ -27,13 +27,18 @@ const TRAILING = /[.,;:!?，。、；：！？）」』】》〉”’]$/u;
 
 const URL_LIKE = /^[a-z][a-z0-9+.-]*:\/\//i;
 const SCHEME_LIKE = /^(mailto|data|tel|javascript):/i;
+export const WINDOWS_DRIVE_ROOT = /^[a-z]:[\\/]/i;
+
+export function isAbsoluteFileToken(path: string) {
+  return path.startsWith('/') || path.startsWith('~/') || WINDOWS_DRIVE_ROOT.test(path);
+}
 
 export function isWebUrl(text: string) {
   return /^https?:\/\/\S+$/i.test(text.trim());
 }
 
 function extensionOf(path: string) {
-  const name = path.split('/').pop() || '';
+  const name = path.split(/[\\/]/).pop() || '';
   const dot = name.lastIndexOf('.');
   if (dot <= 0 || dot === name.length - 1) return '';
   return name.slice(dot + 1).toLowerCase();
@@ -54,12 +59,15 @@ export function trimPathPunctuation(text: string) {
 export function pathToken(raw: string) {
   const text = trimPathPunctuation(raw);
   if (!text || text.length > 400) return null;
-  if (/\s/.test(text)) return null;
+  const hasDrive = WINDOWS_DRIVE_ROOT.test(text);
+  if (/\s/.test(text) && !hasDrive) return null;
   if (URL_LIKE.test(text) || SCHEME_LIKE.test(text)) return null;
   if (text.startsWith('#') || text.startsWith('@')) return null;
   // Prose glued to a path ("已交付（travel/") never survives: parentheses,
   // CJK punctuation and quotes cannot appear in a path we link.
-  if (/[（）()「」『』【】《》〈〉“”‘’"'`,;:：；，。！？、]/.test(text)) return null;
+  const name = hasDrive ? text.slice(2) : text;
+  if (/[（）()「」『』【】《》〈〉“”‘’"'`,;:：；，。！？、]/.test(name)) return null;
+  if (hasDrive) return text.length > 3 ? text : null;
   // A bare word is never enough: it must either carry a path root or a known
   // extension, otherwise "readme" and "TODO" would turn into links.
   const rooted = text.startsWith('/') || text.startsWith('~/') || text.startsWith('./') || text.startsWith('../');
@@ -76,21 +84,18 @@ export function pathToken(raw: string) {
 export function resolvePathToken(token: string, cwd = '') {
   const text = String(token || '');
   if (!text) return '';
-  if (text.startsWith('~/')) {
-    // The renderer never sees the home directory; the main process expands it.
-    return text;
-  }
-  if (text.startsWith('/')) return text;
-  const root = String(cwd || '').replace(/\/+$/, '');
-  if (!root) return text;
-  const parts = `${root}/${text}`.split('/');
+  if (!cwd || isAbsoluteFileToken(text)) return text;
+  const drive = WINDOWS_DRIVE_ROOT.test(cwd) ? cwd.slice(0, 2) : '';
+  const parts = drive
+    ? `${cwd.slice(2)}/${text}`.split(/[\\/]/)
+    : `${cwd}/${text}`.split('/');
   const stack = [];
   for (const part of parts) {
     if (!part || part === '.') continue;
     if (part === '..') stack.pop();
     else stack.push(part);
   }
-  return `/${stack.join('/')}`;
+  return drive ? `${drive}\\${stack.join('\\')}` : `/${stack.join('/')}`;
 }
 
 /**
@@ -107,7 +112,8 @@ export function localHrefPath(href: string) {
     try {
       const url = new URL(raw);
       if (url.protocol !== 'file:') return null;
-      const path = decodeURIComponent(url.pathname || '');
+      if (url.hostname && url.hostname !== 'localhost') return null;
+      const path = decodeURIComponent(url.pathname).replace(/^\/(?=[a-z]:\/)/i, '');
       return pathToken(path) ? path : null;
     } catch {
       return null;

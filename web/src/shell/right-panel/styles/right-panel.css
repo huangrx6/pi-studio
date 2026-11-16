@@ -17,7 +17,7 @@
 
 .file-panel.is-fullscreen .panel-tabbar {
   margin-left: 0;
-  padding-left: 92px;
+  padding-left: var(--window-controls-leading, 10px);
 }
 
 .panel-tabbar button,

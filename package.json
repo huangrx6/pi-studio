@@ -1,6 +1,6 @@
 {
   "name": "pi-studio",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "private": true,
   "type": "module",
   "description": "Pi Studio — a native desktop workspace built on Pi Durable.",

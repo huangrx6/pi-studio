@@ -335,7 +335,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     const identity = { path: target, source, cwd: source === 'workspace' || source === 'external' ? cwd : undefined, sessionId: source === 'workspace' ? undefined : accessSessionId };
     const key = panelFileKey(identity);
     const id = `file:${key}`;
-    const tab: PanelTab = { id, kind: 'file', title: target.split('/').pop() || target, tooltip: source === 'workspace' ? `${cwd}/${target}` : target, ...identity };
+    const tab: PanelTab = { id, kind: 'file', title: target.split(/[\\/]/).pop() || target, tooltip: source === 'workspace' ? `${cwd}/${target}` : target, ...identity };
     setPanelTabs(current => current.some(item => item.id === id) ? current : [...current, tab]);
     setActivePanelTabId(id);
     const cached = fileCacheRef.current.get(key);

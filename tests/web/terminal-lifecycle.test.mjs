@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import test from 'node:test';
 import ts from 'typescript';
+import { formatShortcut } from '../../web/src/shared/shortcuts.ts';
 import { restoreTerminalReplay } from '../../web/src/features/terminal/terminal-replay.ts';
 import {
   CommandTracker,
@@ -32,7 +33,7 @@ const settle = async () => { await Promise.resolve(); await Promise.resolve(); a
 
 // Execute the actual component with controlled IPC, xterm and browser lifetimes.
 // PTY process ownership remains covered by tests/electron/terminal-sessions.
-function harness() {
+function harness(platform = 'darwin') {
   let cursor = 0, deps, effect, cleanup, dirty = false, tree, frameId = 0;
   const slots = [], frames = new Map(), listeners = new Map(), events = new Set();
   const creates = [], resizes = [], writes = [], terms = [], fits = [], observers = [], fonts = [];
@@ -124,7 +125,7 @@ function harness() {
     disconnect() { this.disconnected = true; }
   }
   const api = {
-    platform: 'darwin',
+    platform,
     terminalCreate(payload) { const pending = deferred(); creates.push({ ...pending, payload }); return pending.promise; },
     terminalResize(...args) { resizes.push(args); return Promise.resolve(); },
     terminalWrite(...args) { writes.push(args); return Promise.resolve(); },
@@ -164,6 +165,10 @@ function harness() {
         };
       }
       if (name.endsWith('/ActionMenu')) return { ActionMenu: () => null };
+      if (name.endsWith('/shortcuts')) return {
+        formatShortcut: combo => formatShortcut(combo, platform === 'darwin'),
+        resolvePlatform: () => platform === 'darwin' ? 'mac' : 'other',
+      };
       if (name.endsWith('error-text')) return { errorText: error => error.message };
       if (name.endsWith('terminal-replay')) return { restoreTerminalReplay };
       return {};
@@ -267,21 +272,24 @@ test('header reconnect clears failure and obsolete requests cannot mutate a repl
   h.resolve(2, { replay: replay('B') }); await settle(); h.render(); assert.deepEqual(h.terms[2].output, ['B']);
 });
 
-test('terminal keybindings drive search, clear and zoom without touching the PTY', async () => {
-  const h = harness(); h.resolve(); await settle(); h.render();
-  const changed = [];
-  h.render({ onFontSizeChange: (size) => changed.push(size) });
-  h.pressKey({ key: 'f', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false, isComposing: false });
-  h.render();
-  assert.match(h.text(), /搜索终端输出/, '后端未开搜索条（渲染层没有 .terminal-search）');
-  h.pressKey({ key: '=', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false, isComposing: false });
-  assert.deepEqual(changed, [13]);
-  h.pressKey({ key: 'k', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false, isComposing: false });
-  assert.equal(h.terms[0].clearCalls, 1);
-  h.pressKey({ key: 'c', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false, isComposing: false });
-  assert.equal(h.writes.length, 0, '没有选区时 ⌘C 不该被面板吃掉');
-  h.unmount();
-});
+for (const platform of ['darwin', 'win32']) {
+  test(`terminal search, clear and zoom use the primary shortcut on ${platform}`, async () => {
+    const h = harness(platform); h.resolve(); await settle(); h.render();
+    const shortcut = key => h.pressKey({ key, metaKey: platform === 'darwin', ctrlKey: platform === 'win32', altKey: false, shiftKey: false, isComposing: false });
+    const changed = [];
+    h.render({ onFontSizeChange: (size) => changed.push(size) });
+    shortcut('f');
+    h.render();
+    assert.match(h.text(), /搜索终端输出/);
+    shortcut('=');
+    assert.deepEqual(changed, [13]);
+    shortcut('k');
+    assert.equal(h.terms[0].clearCalls, 1);
+    shortcut('c');
+    assert.equal(h.writes.length, 0, 'panel shortcuts never inject PTY input');
+    h.unmount();
+  });
+}
 
 test('unmount releases all renderer resources; late create/font/events cannot write, resize, or kill PTYs', async () => {
   const h = harness(); const lateEvent = [...h.events][0];

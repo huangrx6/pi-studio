@@ -28,6 +28,11 @@ try {
     await button('打开工作区面板').click();
     await page.getByRole('group', { name: '会话视图' }).getByRole('button', { name: new RegExp(`^${name}`) }).click();
   }
+  async function returnToChat() {
+    assert.equal(await page.locator('.session-view-head').getByRole('button', { name: '返回对话' }).count(), 0);
+    await openView('返回对话');
+    await page.locator('.assistant-response').first().waitFor();
+  }
   async function capture(name) {
     await page.mouse.move(12, 12);
     await page.screenshot({ path: fileURLToPath(new URL(`${name}.png`, output)), animations: 'disabled' });
@@ -86,7 +91,7 @@ try {
   await button('收起指令').waitFor();
   await button('返回列表').click();
   await button('列表视图').click();
-  await button('返回对话').click();
+  await returnToChat();
 
   await openView('轨迹');
   const rows = page.locator('.conversation-trace-item');
@@ -145,11 +150,18 @@ try {
   assert.equal(await rows.first().isVisible(), true);
   await page.setViewportSize({ width: 1440, height: 920 });
   await button('收起右侧面板').click();
-  await button('返回对话').click();
+  await returnToChat();
 
   await openView('扩展');
   const groups = page.locator('.extension-hub-card');
   await groups.first().waitFor();
+  const manage = button('管理扩展');
+  const [control, icon, label] = await Promise.all([manage, manage.locator('svg'), manage.locator('span')].map(part => part.boundingBox()));
+  const centerY = rect => rect.y + rect.height / 2;
+  assert.ok(Math.abs(centerY(icon) - centerY(control)) <= 1 && Math.abs(centerY(label) - centerY(control)) <= 1);
+  assert.ok(Math.abs((icon.x - control.x) - (control.x + control.width - label.x - label.width)) <= 1);
+  assert.ok(label.x - icon.x - icon.width >= 8);
+  await capture('extensions-dark');
   assert.equal(await groups.count(), 2);
   assert.equal(await groups.first().locator('.extension-hub-panel').count(), 2);
   await button('打开 会话用量 详情').click();
@@ -176,6 +188,7 @@ try {
   await page.setViewportSize({ width: 1176, height: 740 });
   await button('打开右侧面板').click();
   assert.ok(await groups.first().evaluate(node => node.scrollWidth <= node.clientWidth + 1));
+  await returnToChat();
   await openView('子智能体');
   await page.locator('.agent-list-row').first().waitFor();
   assert.ok(await page.locator('.agent-overview').evaluate(node => node.scrollWidth <= node.clientWidth + 1));

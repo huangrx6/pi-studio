@@ -127,7 +127,7 @@ function registerFilesIpc() {
       const child = new BrowserWindow({
         width: 1080,
         height: 760,
-        titleBarStyle: 'hiddenInset',
+        ...(process.platform === 'win32' ? { autoHideMenuBar: true } : { titleBarStyle: 'hiddenInset' }),
         webPreferences: {
           nodeIntegration: false,
           contextIsolation: true,

@@ -34,6 +34,7 @@ import { ExtensionSlot, type ExtensionNotice } from '../extensions/ExtensionSlot
 import { placementAllowsSlot, placementForItem } from '../extensions/extension-placement';
 import type { ExtensionPlacement } from '../../shared/preferences';
 import { AttachmentIcon } from '../../shared/AttachmentIcon';
+import { formatShortcut } from '../../shared/shortcuts';
 import { WorkspacePicker } from '../../shell/WorkspacePicker';
 import { Select } from '../../shared/Select';
 import { formatFileSize } from '../../shared/filesize';
@@ -477,9 +478,9 @@ export function ComposerDock({
             placeholder={compaction.active
               ? '正在压缩我们的对话内容，以便继续对话…'
               : queuedEditContext
-                ? '编辑排队消息 · Cmd/Ctrl+Enter 放回原位置 · Shift+Enter 换行'
+                ? `编辑排队消息 · ${formatShortcut('Mod+Enter')} 放回原位置 · Shift+Enter 换行`
                 : turnActive
-                  ? 'Enter 补充当前任务 · Cmd/Ctrl+Enter 排队 · Shift+Enter 换行'
+                  ? `Enter 补充当前任务 · ${formatShortcut('Mod+Enter')} 排队 · Shift+Enter 换行`
                   : '输入问题，或使用 / 命令、@ 文件…'}
           />
         </div>

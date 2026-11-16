@@ -11,6 +11,7 @@ import {
   Undo2,
 } from 'lucide-react';
 import { LoadingIndicator, LoadingState } from '../../shared/LoadingState';
+import { revealFileLabel } from '../../shared/desktop-platform';
 import type { AgentToolInfo, AgentToolSource } from '../../types/agent-tool-types';
 import type {
   SubagentConfig,
@@ -159,7 +160,7 @@ export function SubagentSettings({
   // Project scope always targets one explicit workspace; global scope is workspace independent.
   const effectiveWorkspace = targetWorkspace || cwd || workspaces[0]?.cwd || '';
   const workspaceName = workspaces.find((workspace) => workspace.cwd === effectiveWorkspace)?.name
-    || effectiveWorkspace.split('/').filter(Boolean).at(-1)
+    || effectiveWorkspace.split(/[\\/]/).filter(Boolean).at(-1)
     || '';
 
   const owner = useRef(createSubagentSettingsOwner(effectiveWorkspace + '\0' + scope)).current;
@@ -836,7 +837,7 @@ export function SubagentSettings({
                   type="button"
                   className="icon-button"
                   disabled={!worktree.directoryExists}
-                  title="在 Finder 中显示"
+                  title={revealFileLabel()}
                   aria-label={`显示工作树 ${worktree.name}`}
                   onClick={() => void revealWorktree(worktree.id)}
                 >

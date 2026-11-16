@@ -7,6 +7,7 @@ import {
   Sun,
 } from 'lucide-react';
 import { LoadingIndicator } from '../../shared/LoadingState';
+import { desktopPlatform } from '../../shared/desktop-platform';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
 import { Select } from '../../shared/Select';
 import { Stepper } from '../../shared/Stepper';
@@ -33,6 +34,7 @@ type Props = {
 /** 常用等宽字体；空值表示跟随系统。字体不在机器上时浏览器会自动回退。 */
 const TERMINAL_FONT_OPTIONS = [
   { value: '', label: '系统等宽' },
+  ...(desktopPlatform() === 'win32' ? ['Cascadia Mono', 'Consolas'].map(value => ({ value, label: value })) : []),
   { value: 'SF Mono', label: 'SF Mono' },
   { value: 'Menlo', label: 'Menlo' },
   { value: 'JetBrains Mono', label: 'JetBrains Mono' },
@@ -59,6 +61,8 @@ function SectionHeading({ id, title }: { id: string; title: string }) {
 export function GeneralSettings({ preferences, onChange, backgroundBusy, backgroundError, onChooseBackground, onRemoveBackground, onBackgroundUnavailable, menuBar, menuBarBusy, onMenuBarChange }: Props) {
   const sectionId = useId();
   const media = preferences.backgroundMedia;
+  const windows = desktopPlatform() === 'win32';
+  const trayLabel = windows ? '系统托盘图标' : '菜单栏图标';
   return <>
     <SettingsPageHeader
       icon={<Settings />}
@@ -157,9 +161,9 @@ export function GeneralSettings({ preferences, onChange, backgroundBusy, backgro
       <SettingRow label="终端字体"><Select label="终端字体" value={preferences.terminalFontFamily} onChange={value => onChange('terminalFontFamily', value)} options={TERMINAL_FONT_OPTIONS} /></SettingRow>
       <SettingRow label="终端字号"><Stepper label="终端字号" value={preferences.terminalFontSize} min={11} max={20} unit=" px" onChange={value => onChange('terminalFontSize', value)} /></SettingRow>
       <SettingRow label="行高"><Stepper label="终端行高" value={preferences.terminalLineHeight} min={1} max={1.8} step={0.05} unit="" onChange={value => onChange('terminalLineHeight', value)} /></SettingRow>
-      <SettingRow label="Shell 集成" description="让 zsh 标记每条命令的起点与退出码，用于失败定位与命令间跳转；只在 Studio 自己的目录写钩子，不改你的 ~/.zshrc。开启后新建或重连终端生效。">
+      {!windows && <SettingRow label="Shell 集成" description="让 zsh 标记每条命令的起点与退出码，用于失败定位与命令间跳转；只在 Studio 自己的目录写钩子，不改你的 ~/.zshrc。开启后新建或重连终端生效。">
         <button type="button" className={`switch ${preferences.terminalShellIntegration ? 'is-on' : ''}`} role="switch" aria-checked={preferences.terminalShellIntegration} aria-label="Shell 集成" onClick={() => onChange('terminalShellIntegration', !preferences.terminalShellIntegration)}><span /></button>
-      </SettingRow>
+      </SettingRow>}
       <SettingRow label="光标形状">
         <div className="general-theme-options" role="group" aria-label="终端光标形状">
           {([
@@ -174,7 +178,9 @@ export function GeneralSettings({ preferences, onChange, backgroundBusy, backgro
     <section className="general-settings-section" aria-labelledby={`${sectionId}-application`}>
       <SectionHeading id={`${sectionId}-application`} title="应用" />
       <div className="general-settings-card">
-      <SettingRow label="菜单栏图标"><button type="button" className={`switch ${menuBar.enabled ? 'is-on' : ''}`} role="switch" aria-checked={menuBar.enabled} disabled={!menuBar.available || menuBarBusy} aria-label={menuBar.enabled ? '隐藏菜单栏图标' : '显示菜单栏图标'} title={menuBar.available ? undefined : '当前平台不支持菜单栏图标'} onClick={() => onMenuBarChange(!menuBar.enabled)}><span /></button></SettingRow>
+      <SettingRow label={trayLabel} description={windows ? '开启后，关闭主窗口会收起到托盘，任务可继续运行。' : undefined}>
+        <button type="button" className={`switch ${menuBar.enabled ? 'is-on' : ''}`} role="switch" aria-checked={menuBar.enabled} disabled={!menuBar.available || menuBarBusy} aria-label={`${menuBar.enabled ? '隐藏' : '显示'}${trayLabel}`} title={menuBar.available ? undefined : `当前平台不支持${trayLabel}`} onClick={() => onMenuBarChange(!menuBar.enabled)}><span /></button>
+      </SettingRow>
       <SettingRow label="网页链接打开方式"><Select label="网页链接打开方式" value={preferences.linkOpen} onChange={value => onChange('linkOpen', value as Preferences['linkOpen'])} options={[{ value: 'external', label: '系统浏览器' }, { value: 'window', label: '应用内窗口' }]} /></SettingRow>
       </div>
     </section>

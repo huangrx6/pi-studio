@@ -140,6 +140,11 @@
   --mono: "SF Mono", "JetBrains Mono", "Fira Code", Consolas, monospace;
 }
 
+:root[data-platform='win32'] {
+  --font: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --mono: "Cascadia Mono", Consolas, monospace;
+}
+
 @media (max-width: 1200px) {
   :root {
     --sidebar-min-width: 252px;

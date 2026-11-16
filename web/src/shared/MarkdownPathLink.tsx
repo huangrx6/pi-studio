@@ -9,7 +9,8 @@
 import { useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ActionMenu, type MenuAction } from './ActionMenu';
-import { resolvePathToken } from './file-path-links.ts';
+import { isAbsoluteFileToken, resolvePathToken } from './file-path-links.ts';
+import { revealFileLabel } from './desktop-platform';
 import { MarkdownActions } from './markdown-actions';
 
 type FileApp = { name: string; path: string; icon?: string };
@@ -18,11 +19,11 @@ export function MarkdownPathLink({ path, children }: { path: string; children: R
   const { cwd, openFile, openLocalFile } = useContext(MarkdownActions);
   const [menu, setMenu] = useState<{ x: number; y: number; apps: FileApp[] } | null>(null);
   const target = resolvePathToken(path, cwd);
+  const source = isAbsoluteFileToken(target) ? 'external' : 'workspace';
 
   async function openMenu(x: number, y: number) {
     setMenu({ x, y, apps: [] });
     try {
-      const source = target.startsWith('/') || target.startsWith('~/') ? 'external' : 'workspace';
       const result = await window.piApi.fileActions({ cwd, path: target, source });
       setMenu((current) => (current ? { ...current, apps: result.apps.slice(0, 6) } : current));
     } catch {
@@ -32,10 +33,10 @@ export function MarkdownPathLink({ path, children }: { path: string; children: R
 
   const items: MenuAction[] = menu ? [
     { label: '打开预览', run: () => (openLocalFile || openFile)?.(target) },
-    { label: '在 Finder 中显示', run: () => { const source = target.startsWith('/') || target.startsWith('~/') ? 'external' : 'workspace'; void window.piApi.revealFile({ cwd, path: target, source }); } },
+    { label: revealFileLabel(), run: () => { void window.piApi.revealFile({ cwd, path: target, source }); } },
     ...menu.apps.map((app) => ({
       label: `用 ${app.name} 打开`,
-      run: () => { const source = target.startsWith('/') || target.startsWith('~/') ? 'external' : 'workspace'; void window.piApi.openWith({ cwd, path: target, source, appPath: app.path }); },
+      run: () => { void window.piApi.openWith({ cwd, path: target, source, appPath: app.path }); },
     })),
     {
       label: '复制路径',

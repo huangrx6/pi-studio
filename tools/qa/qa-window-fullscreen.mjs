@@ -72,7 +72,7 @@ const setNativeFullScreen = (app, fullscreen) => app.evaluate(({ BrowserWindow }
 }, fullscreen);
 
 /** The three column titles align above the canvas in both window modes. */
-function assertSingleTitleRow(rows, label, { brandPadding = '92px' } = {}) {
+function assertSingleTitleRow(rows, label, { brandPadding = process.platform === 'win32' ? '12px' : '92px' } = {}) {
   assert.equal(rows.sidebar.paddingTop, '0px', `${label}: the title row owns the top edge`);
   assert.equal(rows.brand.top, 0, `${label}: the brand sits inside the title row`);
   assert.equal(rows.brand.height, rows.headerHeight, `${label}: the brand matches the shared title height`);

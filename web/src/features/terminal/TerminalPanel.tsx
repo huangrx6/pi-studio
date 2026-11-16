@@ -22,6 +22,7 @@ import { Terminal, type ITheme } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import type { TerminalEvent, TerminalSessionStatus } from '../../types/runtime-panel-types';
 import { errorText } from '../../shared/error-text';
+import { formatShortcut, resolvePlatform } from '../../shared/shortcuts';
 import { ActionMenu, type MenuAction } from '../../shared/ActionMenu';
 import { JumpToLatestButton } from '../../shared/JumpToLatestButton';
 import { restoreTerminalReplay } from './terminal-replay';
@@ -841,7 +842,7 @@ export function TerminalPanel({
         shiftKey: event.shiftKey,
         hasSelection: terminalRef.current?.hasSelection() ?? false,
         // 主进程给平台，比 navigator.platform 可靠（后者在测试与 Linux 上常为空）。
-        platform: window.piApi.platform === 'darwin' ? 'mac' : 'other',
+        platform: resolvePlatform(),
       });
       if (!intent) return;
       // 没有 Shell 集成或还没有命令标记时，命令导航没有目标；把组合键交回
@@ -904,10 +905,10 @@ export function TerminalPanel({
         onClick={jumpToFailure}
       ><TriangleAlert aria-hidden="true" />{failedCommands}</button>}
       {fontWarning && <span className="terminal-font-warning" role="status" aria-label="图标字体加载失败，请重新连接终端" title="图标字体加载失败，请重新连接终端"><TriangleAlert aria-hidden /></span>}
-      <button type="button" aria-label="搜索终端输出" title="搜索终端输出 ⌘F" disabled={connecting || Boolean(error)} onClick={openSearch}><Search /></button>
-      <button type="button" aria-label="清屏" title="清屏 ⌘K" disabled={connecting || Boolean(error)} onClick={clearScreen}><Eraser /></button>
+      <button type="button" aria-label="搜索终端输出" title={`搜索终端输出 ${formatShortcut('Mod+F')}`} disabled={connecting || Boolean(error)} onClick={openSearch}><Search /></button>
+      <button type="button" aria-label="清屏" title={`清屏 ${formatShortcut('Mod+K')}`} disabled={connecting || Boolean(error)} onClick={clearScreen}><Eraser /></button>
       <button type="button" className="terminal-interrupt" aria-label="中断当前命令" title="中断当前命令（Ctrl+C）" disabled={connecting || status !== 'running' || Boolean(error)} onClick={interrupt}><Square /></button>
-      <button type="button" aria-label="新建终端" title="新建终端 ⌘T" onClick={onNewTerminal}><Plus /></button>
+      <button type="button" aria-label="新建终端" title={`新建终端 ${formatShortcut('Mod+T')}`} onClick={onNewTerminal}><Plus /></button>
       <button type="button" aria-label={status === 'exited' ? '重启终端' : '重新连接终端'} title={status === 'exited' ? '重启终端' : '重新连接'} onClick={reconnect}><RotateCw /></button>
       <button
         ref={moreButtonRef}

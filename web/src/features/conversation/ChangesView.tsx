@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, ChevronsUpDown, Columns2, FileCode2, FileSearch, Files, MoreHorizontal, RefreshCw, SquareArrowOutUpRight, WrapText } from 'lucide-react';
 import { LoadingState } from '../../shared/LoadingState';
+import { revealFileLabel } from '../../shared/desktop-platform';
 import type { TurnDiff, TurnDiffFile } from '../../types/chat-types';
 import { DiffView, type DiffOptions } from './DiffView';
 import { ActionMenu, type MenuAction } from '../../shared/ActionMenu';
@@ -119,7 +120,7 @@ export function ChangesView({ sessionId, initial, turns, focusPath, onOpenFile, 
               { label: '打开当前文件', disabled: file.status === 'deleted', run: () => onOpenFile(file.path) },
               { label: '在编辑器中打开', disabled: file.status === 'deleted', run: () => void chooseEditor(file, event.clientX-220, event.clientY) },
               { label: '在默认应用中打开', disabled: file.status === 'deleted', run: () => safe(window.piApi.openWith(diffFileRequest(file))) },
-              { label: '在 Finder 中显示', disabled: file.status === 'deleted', run: () => safe(window.piApi.revealFile(diffFileRequest(file))) },
+              { label: revealFileLabel(), disabled: file.status === 'deleted', run: () => safe(window.piApi.revealFile(diffFileRequest(file))) },
               { label: open ? '折叠文件' : '展开文件', run: () => toggle(file.path) },
               { label: '复制文件补丁', run: () => safe(navigator.clipboard.writeText(file.patch || '')) },
             ])}><MoreHorizontal /></button>

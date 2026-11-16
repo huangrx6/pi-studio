@@ -472,7 +472,6 @@ export function ConversationWorkspace({
               />
             </>
             : <ConversationExtensionHub
-              onBack={header.returnToMainAgent}
               onOpenItem={extensions.openItem}
               items={extensions.hubItems}
               surface={extensions.surface}
@@ -507,7 +506,7 @@ export function ConversationWorkspace({
         </div>
       </div>}
 
-      {!isNewConversation && showTrace && <ConversationTracePage key={session?.id} summary={traceSummary} onBack={header.returnToMainAgent} />}
+      {!isNewConversation && showTrace && <ConversationTracePage key={session?.id} summary={traceSummary} />}
 
       {agentView.kind === 'agents' && (
         <div className="agent-workspace">

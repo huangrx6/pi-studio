@@ -339,7 +339,6 @@
 .workspace-menu-row-meta { display: flex; min-width: 36px; align-items: center; justify-content: flex-end; gap: 6px; color: var(--text-3); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
 .workspace-menu-row-arrow { width: 14px; height: 14px; color: var(--text-3); }
 .workspace-menu-live { width: 6px; height: 6px; border-radius: var(--radius-round); background: var(--live); box-shadow: var(--live-ring); animation: pulse 1.5s ease-in-out infinite; }
-.workspace-menu-dot { width: 8px; height: 8px; border-radius: var(--radius-round); background: currentColor; }
 
 .workspace-menu-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .workspace-menu-section-heading > button { padding: 2px 10px 4px; color: var(--accent-foreground); font-size: var(--text-xs); }

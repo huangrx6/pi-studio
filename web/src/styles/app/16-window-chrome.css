@@ -1,8 +1,7 @@
-/* Native fullscreen hides the macOS window controls above the workbench. */
+/* The Windows title bar sits above the web content. Inset traffic lights
+ * share the app's header only in a plain, windowed macOS layout. */
+html:not([data-platform='win32']):not([data-window-fullscreen='true']) .app:not(.has-custom-background) {
+  --window-controls-leading: 92px;
+  & .brand > :is(.brand-mark, .brand-name) { display: none; }
+}
 html[data-window-fullscreen='true'] .brand { height: var(--header-height); }
-html[data-window-fullscreen='true'] .file-panel.is-fullscreen .panel-tabbar { padding-left: 10px; }
-
-/* 有壁纸时红绿灯位于应用卡片外的顶部留白，右侧面板放大后不再需要
- * 为它预留 92px。把标签页收回到面板自己的内容边界，和壁纸卡片内的
- * 左侧基线对齐；无壁纸的窗口模式仍保留 macOS 按钮安全区。 */
-.app.has-custom-background .file-panel.is-fullscreen .panel-tabbar { padding-left: 10px; }

@@ -1,5 +1,5 @@
 /**
- * macOS 菜单栏入口。
+ * macOS 菜单栏与 Windows 系统托盘入口。
  *
  * 主窗口隐藏后，Tray 仍展示运行中的会话数量和完成状态。点击后打开一个
  * 独立的小型 BrowserWindow，避免把整个主界面塞进菜单栏。
@@ -68,7 +68,7 @@ function menuBarEnabled() {
 function trayImage(running) {
   const filename = running ? 'trayRunningTemplate.png' : 'trayTemplate.png';
   const image = nativeImage.createFromPath(path.join(__dirname, '..', '..', 'assets', filename));
-  if (!image.isEmpty()) image.setTemplateImage(true);
+  if (process.platform === 'darwin' && !image.isEmpty()) image.setTemplateImage(true);
   return image;
 }
 
@@ -114,7 +114,7 @@ function refreshTray() {
   } else {
     tray.setToolTip('Pi Studio');
   }
-  tray.setImage(trayImage(runningCount > 0));
+  if (process.platform !== 'win32') tray.setImage(trayImage(runningCount > 0));
   broadcast();
 }
 
@@ -221,8 +221,11 @@ function playCompletionChime(now = Date.now()) {
 
 function createTray() {
   if (tray && !tray.isDestroyed()) return tray;
-  tray = new Tray(trayImage(false));
-  tray.setIgnoreDoubleClickEvents(true);
+  const icon = process.platform === 'win32'
+    ? nativeImage.createFromPath(path.join(__dirname, '..', '..', 'assets', 'icon.png')).resize({ width: 32, height: 32 })
+    : trayImage(false);
+  tray = new Tray(icon);
+  if (process.platform === 'darwin') tray.setIgnoreDoubleClickEvents(true);
   tray.on('click', () => {
     // 聚焦中的弹窗会先因点托盘而 blur；忽略紧随其后的 tray click，避免重新打开。
     if (Date.now() < trayClickGuardUntil) {
@@ -329,7 +332,7 @@ function showCompletionNotification(completed) {
 
 function menuBarSettings() {
   return {
-    available: process.platform === 'darwin',
+    available: process.platform === 'darwin' || process.platform === 'win32',
     enabled: menuBarEnabled(),
     platform: process.platform,
   };
@@ -340,7 +343,7 @@ function setMenuBarVisible(visible) {
   getStudioDatabase().setSetting('studio.app.menuBarEnabled', enabled);
   if (enabled) createTray();
   else {
-    hideMenuBarPopover();
+    popover?.close();
     if (tray && !tray.isDestroyed()) tray.destroy();
     tray = undefined;
   }

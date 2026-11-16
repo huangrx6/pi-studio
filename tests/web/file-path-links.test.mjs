@@ -7,7 +7,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-const { pathToken, resolvePathToken, trimPathPunctuation } = await import('../../web/src/shared/file-path-links.ts');
+const { localHrefPath, pathToken, resolvePathToken, trimPathPunctuation } = await import('../../web/src/shared/file-path-links.ts');
 const rehypeLocalPaths = (await import('../../web/src/shared/rehype-local-paths.ts')).default;
 
 test('links deliverable paths in the shapes the model writes', () => {
@@ -53,6 +53,23 @@ test('resolves relative tokens against the conversation cwd', () => {
   assert.equal(resolvePathToken('../x.md', '/repo/sub'), '/repo/x.md');
   assert.equal(resolvePathToken('/abs/x.md', '/repo'), '/abs/x.md');
   assert.equal(resolvePathToken('~/x.md', '/repo'), '~/x.md');
+});
+
+test('Windows file links retain their drive and resolve relative to the conversation', () => {
+  const cwd = 'C:\\Studio\\project';
+  const document = 'D:\\My Documents\\周报.md';
+  assert.equal(pathToken(document), document);
+  assert.equal(resolvePathToken(document, cwd), document);
+  assert.equal(resolvePathToken('notes/周报.md', cwd), cwd + '\\notes\\周报.md');
+  assert.equal(resolvePathToken('..\\周报.md', cwd), 'C:\\Studio\\周报.md');
+  assert.equal(resolvePathToken('../../周报.md', 'C:\\'), 'C:\\周报.md');
+  assert.equal(pathToken('D:relative.md'), null);
+  const href = 'file:///D:/My%20Documents/%E5%91%A8%E6%8A%A5.md';
+  assert.equal(localHrefPath(href), 'D:/My Documents/周报.md');
+  const link = { type: 'element', tagName: 'a', properties: { href }, children: [{ type: 'text', value: '周报' }] };
+  rehypeLocalPaths()({ type: 'root', children: [link] });
+  assert.equal(link.properties.dataPath, 'D:/My Documents/周报.md');
+  assert.equal(localHrefPath('file://other-host/D:/notes.md'), null);
 });
 
 test('the rehype plugin links inline code and prose, never code blocks', () => {

@@ -9,6 +9,8 @@ import type { ExtensionHostItem, ExtensionInstallPreview } from '../types/extens
 import type { ConfirmRequest } from '../shared/ConfirmDialog';
 import { FullPermissionDialog, ToolConfirmDialog } from '../shared/ConfirmDialog';
 import { DetailDialog } from '../shared/DetailDialog';
+import { formatShortcut } from '../shared/shortcuts';
+import { getActivePreferences } from '../shared/preferences';
 import type { McpInfo, SkillInfo } from './app-types';
 import type { useAppSettingsController } from './useAppSettings';
 
@@ -193,7 +195,7 @@ export function AppDialogs({
       {shortcuts.open && <DetailDialog className="shortcuts-dialog" onClose={shortcuts.close}>
         <header className="detail-header"><div className="detail-heading"><span className="detail-icon"><Keyboard /></span><div><h2>快捷键</h2></div></div><button className="icon-button" aria-label="关闭快捷键" onClick={shortcuts.close}><X /></button></header>
         <div className="shortcut-list">
-          {[['发送消息 / 补充当前任务', 'Enter'], ['排队下一条消息', 'Cmd/Ctrl + Enter'], ['换行', 'Shift + Enter'], ['打开命令与技能', '/'], ['引用工作区文件', '@'], ['关闭浮层', 'Esc'], ['打开设置', 'Cmd + ,']].map(([label, key]) => <div className="shortcut-row" key={label}><span>{label}</span><kbd>{key}</kbd></div>)}
+          {[['发送消息 / 补充当前任务', 'Enter'], ['排队下一条消息', formatShortcut('Mod+Enter')], ['换行', 'Shift + Enter'], ['打开命令与技能', '/'], ['引用工作区文件', '@'], ['关闭浮层', 'Esc'], ['打开设置', formatShortcut(getActivePreferences().shortcuts.settings)]].map(([label, key]) => <div className="shortcut-row" key={label}><span>{label}</span><kbd>{key}</kbd></div>)}
         </div>
         <footer className="detail-footer"><span /><button className="settings-outline" onClick={shortcuts.close}>关闭</button></footer>
       </DetailDialog>}

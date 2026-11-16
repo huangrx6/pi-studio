@@ -33,7 +33,7 @@ type SettingsNavigationGroup = {
 };
 
 const PAGE_SEARCH_ALIASES: Record<string, readonly string[]> = {
-  general: ['外观', '主题', '字体', '字号', '背景', '圆角', '颜色', '深色', '浅色', '菜单栏'],
+  general: ['外观', '主题', '字体', '字号', '背景', '圆角', '颜色', '深色', '浅色', '菜单栏', '托盘'],
   shortcuts: ['快捷键', '键盘', '热键', 'shortcut'],
   models: ['API', '密钥', '供应商', '模型来源', 'provider', 'thinking', '推理'],
   usage: ['统计', '费用', '成本', 'token', '用量'],

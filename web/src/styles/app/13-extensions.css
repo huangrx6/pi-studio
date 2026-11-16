@@ -34,6 +34,7 @@
 .extension-panel-bar svg { width: var(--icon-sm); height: var(--icon-sm); }
 .extension-panel-bar > span { overflow: hidden; color: var(--faint); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
 .conversation-extension-hub { padding-bottom: var(--space-5); container-type: inline-size; }
+.extension-hub-manage { gap: var(--space-2); }
 .extension-hub-tools { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-4) 0; }
 .extension-hub-scope { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--radius-control); background: var(--surface-soft); }
 .extension-hub-scope button {

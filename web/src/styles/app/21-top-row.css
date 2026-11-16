@@ -1,26 +1,13 @@
-/* ---- 顶部节奏 ---------------------------------------------------------
- * 整个窗口的第一行是统一的标题区：左边是 mac 红黄绿，右边紧挨着品牌与应用名，
- * 主栏把通知与面板按钮放在同一行的右端；侧栏标题行下面回到自己的导航层级。
- *
- * 三种情形只差左侧让位：
- *   - 窗口模式：红绿灯在窗口内，品牌让出 92px 安全区；
- *   - 有壁纸：红绿灯落在卡片外的留白条里，品牌回到 16px；
- *   - 原生全屏：红绿灯隐藏，品牌同样回到 16px。
- *
- * 中间与右侧继续由各自的标签/工具行收口，侧栏只在品牌标题下留一条弱分隔线，
- * 不再把主操作伪装成内容区标签栏。
- */
-
-
+/* The brand, conversation and workbench share one title row. */
 .brand {
   height: var(--header-height);
   margin: 0;
-  padding: 0 var(--space-3) 0 var(--brand-leading, 92px);
+  padding: 0 var(--space-3) 0 var(--window-controls-leading, var(--space-3));
   border-bottom: 1px solid var(--divider);
   -webkit-app-region: drag;
 }
 
-.brand .brand-name { font-size: var(--text-13); font-weight: var(--weight-semibold); letter-spacing: 0; }
+.brand .brand-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: var(--text-13); font-weight: var(--weight-semibold); letter-spacing: 0; }
 
 /* 按钮在窗口拖拽区旁边：显式声明 no-drag 并把热区向外扩 4px，
  * 28px 的图标旁边那点空白也应该能点中。 */
@@ -71,16 +58,6 @@
 /* 收起动画期间侧栏还在变窄，这个按钮会一路左滑；主区右端同时出现「展开侧边栏」，
  * 两个一模一样的图标并排看着很乱。收起一开始就把它淡出。 */
 .is-sidebar-collapsed .sidebar-top-toggle { opacity: 0; pointer-events: none; transition: none; }
-
-/* 有壁纸或全屏时品牌与侧栏内容同一条竖线（12px）；窗口模式仍让开红绿灯。 */
-.app.has-custom-background { --brand-leading: 12px; }
-html[data-window-fullscreen='true'] .brand { padding-left: 12px; }
-
-/* 没有壁纸、也不是全屏时，标题行只留红绿灯与收起按钮：
- * 品牌图标和名字在这个状态下没有额外信息，收掉更利落。 */
-html:not([data-window-fullscreen='true']) .app:not(.has-custom-background) .brand > :is(.brand-mark, .brand-name) {
-  display: none;
-}
 
 /* 「新对话」是创建动作，不承担当前路由状态，和普通导航行共用内容基线。 */
 .new-chat { justify-content: flex-start; padding-inline: 12px; }

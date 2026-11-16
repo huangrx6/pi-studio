@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Activity, Bot, ChevronRight, Plug, SlidersHorizontal } from 'lucide-react';
+import { Activity, Bot, ChevronRight, MessageSquare, Plug, SlidersHorizontal } from 'lucide-react';
 import { ProviderQuotaMenuRow, ProviderQuotaDialog } from '../features/models/ProviderQuotaView';
 import { ExtensionSlot } from '../features/extensions/ExtensionSlot';
 import type { ExtensionSettingsPage, ExtensionUiSnapshot } from '../types/extension-types';
@@ -122,7 +122,7 @@ export function ConversationWorkspaceMenu({
 
       <div className="workspace-menu-section" role="group" aria-label="会话视图">
         <span className="workspace-menu-section-label">视图</span>
-        {agentKind !== 'conversation' && <WorkspaceRow icon={<span className="workspace-menu-dot" />} label="返回对话" active={false} onClick={() => navigate(onReturnToMainAgent)} />}
+        {agentKind !== 'conversation' && <WorkspaceRow icon={<MessageSquare aria-hidden="true" />} label="返回对话" active={false} onClick={() => navigate(onReturnToMainAgent)} />}
         <WorkspaceRow icon={<Bot />} label="子智能体" meta={subagentCount ? String(subagentCount) : undefined} live={hasActiveSubagents} active={agentKind === 'agents'} onClick={() => navigate(onOpenAgentOverview)} />
         <WorkspaceRow icon={<Plug />} label="扩展" meta={availableExtensionCount ? String(availableExtensionCount) : undefined} active={agentKind === 'extensions'} onClick={() => navigate(onOpenConversationExtensionHub)} />
         {onOpenTrace && <WorkspaceRow icon={<Activity />} label="轨迹" active={agentKind === 'trace'} onClick={() => navigate(onOpenTrace)} />}

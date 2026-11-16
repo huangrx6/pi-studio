@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { ArrowUp, MoreHorizontal, Plus, Square } from 'lucide-react';
 import { LoadingIndicator } from '../../shared/LoadingState';
+import { getActivePreferences } from '../../shared/preferences';
+import { formatShortcut } from '../../shared/shortcuts';
 import './styles/composer-toolbar.css';
 
 /** Presentation only: request, attachment and queue ownership stays with the conversation. */
@@ -35,7 +37,7 @@ export function ComposerToolbar({
     : !isCommand && !hasWorkspace ? '请先选择工作区'
       : !isCommand && !hasModel ? '请先选择可用模型'
       : compacting ? '正在压缩我们的对话内容，以便继续对话'
-        : running ? '补充当前任务；Cmd/Ctrl+Enter 排队' : '发送消息';
+        : running ? `补充当前任务 · ${formatShortcut('Mod+Enter')} 排队` : '发送消息';
   const stopTitle = stopping ? '正在停止当前任务' : '停止当前任务';
   return <div className="composer-bar composer-toolbar">
     <div className={`composer-left ${isNewConversation ? 'is-new-conversation' : ''}`}>
@@ -43,7 +45,7 @@ export function ComposerToolbar({
       <div className="composer-context-group">{context}</div>
     </div>
     <div className="composer-right">
-      <button type="button" className="composer-more-button" aria-label="更多会话动作" title="会话动作 · ⌘K / Ctrl+K" onClick={onActions}><MoreHorizontal aria-hidden="true" /></button>
+      <button type="button" className="composer-more-button" aria-label="更多会话动作" title={`会话动作 · ${formatShortcut(getActivePreferences().shortcuts.palette)}`} onClick={onActions}><MoreHorizontal aria-hidden="true" /></button>
       {model}
       {showStop && (
         <button type="button" className="send-button is-stop" disabled={stopping}

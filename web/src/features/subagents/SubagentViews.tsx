@@ -35,6 +35,7 @@ import { duration, hasEnded, isActive, liveDuration, needsAttention, STATUS_LABE
 import { SubagentFlow } from './SubagentFlow';
 import { InfoHint } from '../../shared/InfoHint';
 import { isComposingKey } from '../../shared/keyboard-navigation';
+import { formatShortcut } from '../../shared/shortcuts';
 
 export type SubagentOverviewMode = 'formation' | 'list';
 
@@ -160,7 +161,7 @@ function ChildRow({
       {replyError && <p role="alert">{replyError}</p>}
       <div className="agent-reply-actions">
         <button type="button" className="text-button" onClick={() => { setReplyOpen(false); replyButton.current?.focus(); }}>收起</button>
-        <button type="submit" className="primary-button" title="发送回复（Ctrl / ⌘ + Enter）" aria-keyshortcuts="Control+Enter Meta+Enter" disabled={!replyText.trim() || replyBusy}>{replying ? <LoadingIndicator /> : <Send />}发送回复</button>
+        <button type="submit" className="primary-button" title={`发送回复（${formatShortcut('Mod+Enter')}）`} aria-keyshortcuts="Control+Enter Meta+Enter" disabled={!replyText.trim() || replyBusy}>{replying ? <LoadingIndicator /> : <Send />}发送回复</button>
       </div>
     </form>}
   </article>;
@@ -260,7 +261,7 @@ export function SubagentOverview({
   }, [hidden, ticking]);
 
   return <div className="agent-overview" hidden={hidden}>
-    <SessionViewHeader className="agent-overview-head" title="子智能体" onBack={onReturnMain}
+    <SessionViewHeader className="agent-overview-head" title="子智能体"
       summary={overviewSummary}>
       <div className="agent-overview-actions">
         {children.length > 1 && <div className="agent-overview-layout" role="group" aria-label="子智能体视图">

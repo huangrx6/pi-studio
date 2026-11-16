@@ -42,6 +42,7 @@ function applications() {
  * 借助 NSWorkspace 实现；失败时退回全量应用列表。
  */
 function applicationsForFile(target) {
+  if (process.platform !== 'darwin') return Promise.resolve([]);
   return new Promise((resolve) => {
     const script = `ObjC.import('AppKit');
 function run(argv) {

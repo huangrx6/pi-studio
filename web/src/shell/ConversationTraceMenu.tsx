@@ -83,7 +83,7 @@ function tracePageSize(viewportHeight: number): number {
   return Math.min(TRACE_PAGE_MAX, Math.max(TRACE_PAGE_MIN, rows * 2 + 8));
 }
 
-export function ConversationTracePage({ summary, onBack }: ConversationTraceProps & { onBack: () => void }) {
+export function ConversationTracePage({ summary }: ConversationTraceProps) {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<'all' | 'error' | 'running' | 'unknown'>('all');
   const search = useRef<HTMLInputElement>(null);
@@ -179,7 +179,7 @@ export function ConversationTracePage({ summary, onBack }: ConversationTraceProp
   };
   useEffect(() => { if (selectedId && !activeItem) setSelectedId(null); }, [selectedId, activeItem]);
   return <div className="conversation-trace-page" role="tabpanel" aria-label="会话轨迹">
-    <SessionViewHeader title="会话轨迹" onBack={onBack}
+    <SessionViewHeader title="会话轨迹"
       summary={stats.all ? `${stats.rounds} 轮对话 · ${summary.requests} 次模型请求 · ${summary.tools} 次工具调用` : undefined} />
     <div className="conversation-trace-page-inner">
       {stats.all > 0 && <>

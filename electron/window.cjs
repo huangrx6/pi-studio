@@ -21,6 +21,7 @@ const {
   getPalette,
   getRadiusStyle,
   getTheme,
+  getMenuBarEnabled,
   getWindowBounds,
   setWindowBounds,
 } = require('./core/app-settings.cjs');
@@ -172,10 +173,9 @@ function createWindow() {
     ...restored.bounds,
     minWidth: MIN_WINDOW_SIZE.width,
     minHeight: MIN_WINDOW_SIZE.height,
-    titleBarStyle: 'hiddenInset',
-    // hiddenInset 的默认纵向内缩会让原生红绿灯低于 44px 标题行的中心线。
-    // 直接在窗口层校准原生控件，避免在渲染层给网页按钮叠加补偿位移。
-    trafficLightPosition: { x: 16, y: 15 },
+    ...(process.platform === 'win32'
+      ? { autoHideMenuBar: true }
+      : { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 15 } }),
     backgroundColor: themeBackground(preference, nativeTheme.shouldUseDarkColors),
     icon: path.join(__dirname, '..', 'assets', 'icon.png'),
     webPreferences: {
@@ -214,9 +214,9 @@ function createWindow() {
     : pathToFileURL(path.join(__dirname, '..', 'web-dist', 'index.html')).href;
   installRendererSecurity(win, rendererUrl);
   win.on('close', (event) => {
-    // Closing the main window keeps renderer state and in-flight agent turns
-    // alive. A real application quit sets this flag before Electron closes it.
-    if (!app.isQuitting) {
+    // Keep active turns reachable from the tray. Without a tray, Windows
+    // should follow its normal last-window close behaviour.
+    if (!app.isQuitting && (process.platform !== 'win32' || getMenuBarEnabled())) {
       event.preventDefault();
       win.hide();
     }
