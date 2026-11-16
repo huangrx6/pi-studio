@@ -1,6 +1,6 @@
 {
   "name": "pi-studio",
-  "version": "0.0.3",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "description": "Pi Studio — a native macOS desktop workspace for the Pi coding agent.",
@@ -25,7 +25,8 @@
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "start": "node scripts/launch.mjs",
     "test": "node --test scripts/*.test.cjs scripts/*.test.mjs",
-    "dist": "pnpm run build && electron-builder --mac --arm64 --x64 --publish never"
+    "dist": "pnpm run build && electron-builder --mac --arm64 --x64 --publish never",
+    "release:dist": "bash tools/release/build-signed-macos.sh"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "1.4.0",
@@ -40,6 +41,7 @@
     "simple-icons": "16.36.0"
   },
   "devDependencies": {
+    "@electron/osx-sign": "1.3.1",
     "@types/node": "^22.10.0",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
@@ -69,7 +71,7 @@
     "mac": {
       "icon": "assets/icon.icns",
       "category": "public.app-category.developer-tools",
-      "hardenedRuntime": true,
+      "hardenedRuntime": false,
       "artifactName": "Pi-Studio-${version}-${arch}.${ext}",
       "target": [
         "dmg",
@@ -80,6 +82,7 @@
       "provider": "github",
       "owner": "huangrx6",
       "repo": "pi-studio"
-    }
+    },
+    "afterPack": "tools/release/electron-builder-after-pack.cjs"
   }
 }

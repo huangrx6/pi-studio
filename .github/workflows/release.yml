@@ -1,6 +1,6 @@
 name: Release
 
-# Builds the macOS app and publishes a GitHub Release.
+# Builds the signed macOS app and publishes a GitHub Release.
 # - Push a tag like `v0.1.0` → build DMG/ZIP files and updater metadata.
 # - Manual dispatch → build + create a draft release (tag name required).
 on:
@@ -49,19 +49,36 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build & package (DMG + auto-update ZIP)
-        run: pnpm run dist
+      - name: Validate macOS signing certificate
+        shell: bash
         env:
-          # When these repository secrets are configured, electron-builder signs
-          # with the Developer ID certificate. Unsigned builds can still check
-          # and download updates, but macOS may reject in-place installation.
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          # Electron Builder automatically notarizes when this credential set is
-          # present. Empty secrets keep local and fork builds usable.
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$CSC_LINK" ] || [ -z "$CSC_KEY_PASSWORD" ]; then
+            echo "::error::CSC_LINK and CSC_KEY_PASSWORD must contain the stable self-signed macOS signing certificate."
+            exit 1
+          fi
+          certificate="$RUNNER_TEMP/pi-studio-signing.p12"
+          password_file="$RUNNER_TEMP/pi-studio-signing-password.txt"
+          printf '%s' "${CSC_LINK#*base64,}" \
+            | tr -d '\r\n\t ' \
+            | openssl base64 -d -A -out "$certificate"
+          printf '%s' "$CSC_KEY_PASSWORD" \
+            | tr -d '\r\n' \
+            > "$password_file"
+          chmod 600 "$certificate" "$password_file"
+          if [ ! -s "$certificate" ] || [ ! -s "$password_file" ]; then
+            echo "::error::The macOS signing secrets could not be decoded."
+            exit 1
+          fi
+          echo "Decoded macOS signing certificate: $(stat -f '%z' "$certificate") bytes."
+          echo "PI_STUDIO_SIGNING_CERTIFICATE=$certificate" >> "$GITHUB_ENV"
+          echo "PI_STUDIO_SIGNING_PASSWORD_FILE=$password_file" >> "$GITHUB_ENV"
+
+      - name: Build & package (DMG + auto-update ZIP)
+        shell: bash
+        run: pnpm release:dist
 
       - name: Collect installers and updater metadata
         run: |
@@ -95,6 +112,7 @@ jobs:
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           draft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || false }}
+          make_latest: false
           body_path: ${{ steps.release-notes.outputs.body_path }}
           generate_release_notes: ${{ steps.release-notes.outputs.body_path == '' }}
           files: artifacts/*
