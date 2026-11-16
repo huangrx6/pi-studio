@@ -37,6 +37,9 @@ try {
     await page.locator('.session-row').filter({ hasText: '性能会话 0000' }).click();
     await page.locator('.assistant-response').first().waitFor();
     assert.equal(await page.locator('html').getAttribute('data-platform'), 'win32');
+    const frame = page.locator('.app');
+    assert.equal(await frame.evaluate(node => getComputedStyle(node).borderRadius), '0px');
+    assert.ok(await frame.locator('.shell-canvas').first().evaluate(node => parseFloat(getComputedStyle(node).borderRadius) > 0));
     assert.ok(await page.locator('.brand-name').isVisible());
     const padding = locator => locator.evaluate(node => getComputedStyle(node).paddingLeft);
     assert.equal(await padding(page.locator('.brand')), '12px');
@@ -46,10 +49,11 @@ try {
     assert.equal(await page.evaluate(() => window.revealed.path), report);
     assert.deepEqual(await page.locator('.app').evaluate(node => {
       node.classList.add('has-custom-background');
-      const margins = [getComputedStyle(node).marginTop, getComputedStyle(node).marginBottom];
+      const style = getComputedStyle(node);
+      const geometry = [style.marginTop, style.marginBottom, style.borderRadius];
       node.classList.remove('has-custom-background');
-      return margins;
-    }), ['18px', '18px']);
+      return geometry;
+    }), ['18px', '18px', '0px']);
     await page.locator('.sidebar-top-toggle').click();
     await page.locator('.chat-header .sidebar-expand').waitFor();
     assert.equal(await padding(page.locator('.chat-header')), '24px');

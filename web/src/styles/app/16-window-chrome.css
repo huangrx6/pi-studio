@@ -1,5 +1,6 @@
 /* The Windows title bar sits above the web content. Inset traffic lights
  * share the app's header only in a plain, windowed macOS layout. */
+html[data-platform='win32'] .app { border-radius: 0; }
 html:not([data-platform='win32']):not([data-window-fullscreen='true']) .app:not(.has-custom-background) {
   --window-controls-leading: 92px;
   & .brand > :is(.brand-mark, .brand-name) { display: none; }

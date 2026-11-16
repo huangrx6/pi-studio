@@ -97,6 +97,31 @@ try {
   }
   await aligned('.git-index', '.git-review-preview .diff-view');
   await capture('changes');
+  const longBranch = 'feature/20261109-conversation-mode-and-workspace-layout-improvements';
+  git(repo, 'switch', '-c', longBranch);
+  await button('刷新 Git').click();
+  const commitForm = page.locator('.git-commit-form');
+  await commitForm.getByText(longBranch, { exact: true }).waitFor();
+  async function verifyCommitControls(screenshot) {
+    const input = commitForm.getByLabel('提交说明');
+    await input.fill('验证长分支提交');
+    const submit = commitForm.getByRole('button', { name: '提交暂存的修改' });
+    await submit.scrollIntoViewIfNeeded();
+    assert.ok(await commitForm.evaluate(form => {
+      const caption = form.querySelector('.git-commit-target');
+      const bounds = form.getBoundingClientRect();
+      const stacked = getComputedStyle(form.closest('.git-index')).display === 'contents';
+      return (stacked || caption.scrollWidth > caption.clientWidth) && [form.querySelector('textarea'), form.querySelector('button')].every(control => {
+        const rect = control.getBoundingClientRect();
+        const hit = document.elementFromPoint(rect.right - 4, rect.top + rect.height / 2);
+        return rect.left >= bounds.left && rect.right <= bounds.right && control.contains(hit);
+      });
+    }), 'the long branch truncates and the full input and button stay within the commit pane');
+    await submit.click({ trial: true });
+    if (screenshot) await capture(screenshot);
+    await input.fill('');
+  }
+  await verifyCommitControls();
   await button('打开会话进展').click();
   await button('固定到右栏').click();
   await page.waitForFunction(() => {
@@ -105,6 +130,7 @@ try {
     return files && diff && files.bottom <= diff.top + 1;
   });
   await preview.locator('.diff-unified').waitFor();
+  await verifyCommitControls();
   await capture('changes-narrow');
   await preview.getByRole('button', { name: '切换为左右对照' }).click();
   await preview.getByText('修改后', { exact: true }).waitFor();
@@ -128,6 +154,7 @@ try {
   const openMs = Date.now() - opened;
   const renderedRows = await work.locator('.git-file-row').count();
   assert.ok(renderedRows > 0 && renderedRows < 64, String(renderedRows));
+  await verifyCommitControls('changes-long-branch');
   const summary = await page.evaluate(cwd => window.piApi.gitWorkspaceStatus(cwd), repo);
   assert.equal(summary.statusReadFailed, false);
   assert.equal(summary.dirty.total, bulkCount + 3);
@@ -138,6 +165,7 @@ try {
   await page.locator('.git-file-diff .diff-code').filter({ hasText: 'last file' }).first().waitFor();
   await capture('changes-large');
   await rm(bulk, { recursive: true });
+  git(repo, 'switch', 'design/tokens');
   await button('刷新 Git').click();
   await work.getByText('2', { exact: true }).waitFor();
   await button('暂存 palette.css').click();

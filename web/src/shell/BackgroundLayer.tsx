@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { BackgroundMedia } from '../shared/preferences';
 
 type MediaProps = {
@@ -6,6 +6,18 @@ type MediaProps = {
   className: string;
   onError?: () => void;
 };
+
+function BackgroundImage({ media, className, onError }: MediaProps) {
+  const [ready, setReady] = useState(false);
+  return <img className={className} src={media.url} alt="" draggable={false} decoding="async"
+    style={{ visibility: ready ? undefined : 'hidden' }}
+    onLoad={async event => {
+      const image = event.currentTarget;
+      try { await image.decode(); } catch { /* A loaded image can still paint if predecoding is unavailable. */ }
+      if (image.isConnected && image.complete && image.naturalWidth > 0) setReady(true);
+    }}
+    onError={onError} />;
+}
 
 export function BackgroundMediaNode({ media, className, onError }: MediaProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -41,7 +53,7 @@ export function BackgroundMediaNode({ media, className, onError }: MediaProps) {
       />
     );
   }
-  return <img className={className} src={media.url} alt="" draggable={false} onError={onError} />;
+  return <BackgroundImage key={media.url} media={media} className={className} onError={onError} />;
 }
 
 export function BackgroundLayer({

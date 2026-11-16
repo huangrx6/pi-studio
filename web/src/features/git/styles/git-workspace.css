@@ -99,7 +99,7 @@
 .git-file-status:is([data-code="D"], [data-code="U"]) { color: var(--error); }
 .git-file-action { display: grid; place-items: center; flex: none; width: 25px; height: 27px; border-radius: var(--radius-tag); color: var(--text-2); }
 .git-file-action svg { width: 14px; height: 14px; }
-.git-commit-form { flex: none; display: grid; gap: 8px; margin-top: auto; padding: 12px; border-top: 1px solid var(--divider); }
+.git-commit-form { flex: none; display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 8px; margin-top: auto; padding: 12px; border-top: 1px solid var(--divider); }
 .git-commit-caption, .git-commit-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .git-commit-caption label { flex: none; }
 .git-commit-footer small { color: var(--text-2); font-size: var(--text-xs); }
