@@ -5,7 +5,7 @@
 /* main 是纵向 flex 列：header 与 tabs 固定高度（flex:none），chat-scroll 独占
 剩余空间并成为唯一的消息滚动容器（flex:1 + min-height:0 + overflow-y:auto），
 composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不会被输入框遮住。
-右侧会话大纲绝对定位于 main 的滚动视口之外，z-index 9；窄于 1100px 时整体隐藏。 */
+会话大纲固定在正文左侧的留白内，随对话栏宽度伸缩。 */
 
 .main {
   contain: layout paint; flex: 1; min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column; background: var(--surface); container-type: inline-size; container-name: main-pane; }

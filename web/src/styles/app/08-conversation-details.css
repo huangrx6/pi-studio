@@ -115,22 +115,23 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 /* 会话缩略导航：每一次提问一枚刻度，左缘与标题栏、标签栏共用同一条竖线。
    刻度全量渲染，超过最大高度时在轨道内滚动（隐藏滚动条，上下渐隐）。 */
 .conversation-outline {
+  --outline-width: 44px;
+  /* The centered reading column and the scroll gutter determine the room on its left. */
+  --outline-gutter: max(var(--session-gutter), calc((100cqw - var(--content) - var(--dsh-scrollbar-width)) / 2));
   position: absolute;
   z-index: 9;
-  top: 50%;
-  left: var(--space-4);
+  inset-block: 0;
+  left: clamp(0px, calc(var(--outline-gutter) - var(--outline-width)), var(--space-4));
   display: flex;
-  width: 44px;
-  max-height: min(56vh, 520px);
+  width: min(var(--outline-width), var(--outline-gutter));
   align-items: center;
-  transform: translateY(-50%);
   pointer-events: none;
 }
 .outline-track {
   position: relative;
   display: flex;
   width: 100%;
-  max-height: inherit;
+  max-height: min(100%, 56vh, 520px);
   flex-direction: column;
   align-items: flex-start;
   padding: 4px 0;
@@ -141,30 +142,29 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
   mask-image: linear-gradient(180deg, transparent 0, var(--mask-opaque) 18px, var(--mask-opaque) calc(100% - 18px), transparent 100%);
 }
 .outline-track::-webkit-scrollbar { display: none; }
-.outline-item { position: relative; z-index: 1; display: flex; width: 44px; min-height: 10px; flex: none; align-items: center; }
+.outline-item { position: relative; z-index: 1; display: flex; width: 100%; min-height: 10px; flex: none; align-items: center; }
 .outline-item.is-hovered { z-index: 4; }
 .outline-tick {
   display: flex;
-  width: 44px;
+  width: 100%;
   height: 10px;
   min-height: 10px;
   align-items: center;
-  padding: 0 18px 0 1px;
+  padding: 0 0 0 var(--space-1);
   border-radius: var(--radius-control);
   cursor: pointer;
 }
 .outline-tick:focus-visible { outline: 1px solid var(--focus-color); outline-offset: -2px; }
-.outline-line { flex: none; width: 11px; height: 2px; border-radius: var(--radius-tag); background: var(--border); transition: width 140ms ease, background 140ms ease; }
-.outline-tick:hover .outline-line { flex: none; width: 16px; background: var(--accent); }
-.outline-tick.is-active { width: 44px; padding-right: 0; }
-.outline-tick.is-active .outline-line { flex: none; width: 21px; background: var(--accent); }
+.outline-line { flex: none; width: min(11px, 50%); height: 2px; border-radius: var(--radius-tag); background: var(--border); transition: width 140ms ease, background 140ms ease; }
+.outline-tick:hover .outline-line { width: min(16px, 75%); background: var(--accent); }
+.outline-tick.is-active .outline-line { width: min(21px, 100%); background: var(--accent); }
 .outline-preview {
   position: absolute;
   z-index: 40;
-  left: 52px;
+  left: 100%;
   transform: translateY(-50%);
   pointer-events: auto;
-  width: min(340px, calc(100vw - 120px));
+  width: min(340px, calc(100cqw - var(--outline-width) - var(--space-6)));
   padding: 12px 14px 13px;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
@@ -184,7 +184,6 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
   .outline-item, .outline-tick { min-height: 8px; height: 8px; }
   .outline-preview { padding-block: 10px; }
 }
-@media (max-width: 1180px) { .conversation-outline { display: none; } }
 
 /* Long user input becomes a compact file attachment in the bubble. */
 /* 用户消息里的长文本与附件展示：文本保留换行，附件卡显示图标、文件名、大小

@@ -45,8 +45,13 @@
   min-height: 0;
 }
 
+/* Explicit end lines keep the absolute header inside the canvas column as the workbench resizes. */
+.content-region > .shell-header,
 .content-region > .shell-canvas {
-  grid-area: 1 / 1;
+  grid-area: 1 / 1 / 2 / 2;
+}
+
+.content-region > .shell-canvas {
   min-width: 0;
   min-height: 0;
   border: 0;
@@ -56,9 +61,7 @@
 
 .settings-overlay > .content-region { container: main-pane / inline-size; }
 
-/* The title tracks the first canvas column as the sidebar or workbench moves. */
 .content-region > .shell-header {
-  grid-area: 1 / 1;
   position: absolute;
   z-index: 3;
   inset: calc(-1 * var(--header-height)) 0 auto;

@@ -79,6 +79,7 @@ function assertSingleTitleRow(rows, label, { brandPadding = '92px' } = {}) {
   assert.equal(rows.brand.paddingLeft, brandPadding, `${label}: the brand clears the window controls`);
   assert.equal(rows.header.bottom, rows.brand.bottom, `${label}: the conversation title stays inside the shared row`);
   assert.equal(rows.panelTabbar.bottom, rows.brand.bottom, `${label}: the workbench title stays inside the shared row`);
+  assert.equal(rows.header.right, rows.panelTabbar.left, `${label}: the conversation toolbar ends at the workbench divider`);
   assert.equal(rows.header.borderBottomWidth, '0px', `${label}: the conversation title meets the canvas without a border`);
   assert.equal(rows.panelTabbar.borderBottomWidth, '0px', `${label}: the workbench title meets the canvas without a border`);
   assert.equal(rows.tabs, null, `${label}: the empty state keeps a single row instead of a placeholder tab bar`);
@@ -95,11 +96,33 @@ try {
   await waitForChrome(page, false);
 
   // The workbench shares the same title row as the sidebar and the conversation.
-  await page.getByRole('button', { name: '打开右侧面板' }).click();
-  await page.locator('.panel-tabbar').waitFor();
+  const openWorkbench = page.getByRole('button', { name: '打开右侧面板', exact: true });
+  await openWorkbench.click();
+  await page.locator('.file-panel.is-open .panel-tabbar').waitFor();
+  await page.locator('.notification-trigger').click();
+  const notifications = page.getByRole('dialog', { name: '通知中心', exact: true });
+  await notifications.waitFor();
+  await page.keyboard.press('Escape');
+  await notifications.waitFor({ state: 'hidden' });
 
-  assertSingleTitleRow(await topRows(page), 'windowed');
+  const windowed = await topRows(page);
+  assertSingleTitleRow(windowed, 'windowed');
   await page.screenshot({ path: path.join(output, '01-windowed.png') });
+
+  const divider = await page.getByRole('separator', { name: '调整右侧面板宽度' }).boundingBox();
+  const x = divider.x + divider.width / 2;
+  const y = divider.y + divider.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 48, y, { steps: 4 });
+  await page.mouse.up();
+  const resized = await topRows(page);
+  assert.ok(resized.panelTabbar.left > windowed.panelTabbar.left, 'dragging moves the workbench divider');
+  assertSingleTitleRow(resized, 'resized workbench');
+  await page.getByRole('button', { name: '收起右侧面板', exact: true }).click();
+  await page.locator('.file-panel').waitFor({ state: 'detached' });
+  await openWorkbench.click();
+  await page.locator('.file-panel.is-open .panel-tabbar').waitFor();
 
   // Layout contract: the attribute alone switches every shared row.
   await setFullscreenAttribute(page, true);

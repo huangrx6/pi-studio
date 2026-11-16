@@ -89,7 +89,6 @@ type ConversationShell = {
   } | null;
   retryConversationSubscription: () => void;
   settingsOpen: boolean;
-  filesOpen: boolean;
 };
 
 type HeaderState = {
@@ -189,7 +188,6 @@ export function ConversationWorkspace({
     conversationSubscriptionError,
     retryConversationSubscription,
     settingsOpen,
-    filesOpen,
   } = shell;
   const gitWorkspace = useGitWorkspaceStatus(session?.cwd);
   const {
@@ -440,6 +438,16 @@ export function ConversationWorkspace({
           <span>{returningToLatest ? '正在加载' : '回到最新'}</span>
         </button>
       </div>}
+      {!settingsOpen && outline.items.length > 1 && (
+        <ConversationOutline
+          items={outline.items}
+          samples={outline.samples}
+          activeIndex={outline.active}
+          hoverIndex={outline.hover}
+          onHover={outline.setHover}
+          onJump={outline.jump}
+        />
+      )}
       </div>}
 
       {!isNewConversation && agentView.kind === 'extensions' && <div className="conversation-extension-scroll">
@@ -499,16 +507,6 @@ export function ConversationWorkspace({
 
       {!isNewConversation && showTrace && <ConversationTracePage key={session?.id} summary={traceSummary} />}
 
-      {!settingsOpen && !filesOpen && !isNewConversation && transcriptVisible && outline.items.length > 1 && (
-        <ConversationOutline
-          items={outline.items}
-          samples={outline.samples}
-          activeIndex={outline.active}
-          hoverIndex={outline.hover}
-          onHover={outline.setHover}
-          onJump={outline.jump}
-        />
-      )}
       {agentView.kind === 'agents' && (
         <div className="agent-workspace">
           <Suspense fallback={

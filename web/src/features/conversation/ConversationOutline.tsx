@@ -10,13 +10,13 @@ type ConversationOutlineProps = {
   onJump: (index: number) => void;
 };
 
-type HoverBox = { index: number; top: number; left: number };
+type HoverBox = { index: number; top: number };
 
 /**
  * 会话缩略导航：每一次提问一个刻度，放在标题与菜单栏同一条左缘上。
  *
  * 刻度全量渲染，超出最大高度时在轨道内滚动（不显示滚动条，上下渐隐）。
- * 悬停卡片用 fixed 定位，避免被滚动容器裁掉。
+ * 预览卡在滚动轨道外侧，纵向对齐当前刻度。
  */
 export function ConversationOutline({
   items,
@@ -52,8 +52,7 @@ export function ConversationOutline({
   function showPreview(index: number, node: HTMLElement) {
     const tick = node.getBoundingClientRect();
     const host = nav.current?.getBoundingClientRect();
-    // 相对 nav 定位（nav 自带 transform，fixed 会以它为包含块）。
-    setBox({ index, top: tick.top - (host?.top ?? 0) + tick.height / 2, left: 52 });
+    setBox({ index, top: tick.top - (host?.top ?? 0) + tick.height / 2 });
     onHover(index);
   }
 
@@ -64,7 +63,8 @@ export function ConversationOutline({
 
   const hovered = box ? items[box.index] : null;
 
-  return <nav ref={nav} className="conversation-outline" aria-label="对话大纲" onMouseLeave={hidePreview}>
+  return <nav ref={nav} className="conversation-outline" aria-label="对话大纲" onMouseLeave={hidePreview}
+    onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) hidePreview(); }}>
     <div ref={track} className="outline-track">
       {samples.map((index) => {
         const item = items[index];
@@ -80,7 +80,6 @@ export function ConversationOutline({
             aria-label={`跳转到第 ${index + 1} 条提问`}
             aria-current={index === activeIndex ? 'location' : undefined}
             onFocus={(event) => showPreview(index, event.currentTarget)}
-            onBlur={hidePreview}
             onClick={() => onJump(index)}
           ><span className="outline-line" /></button>
         </div>;
@@ -90,7 +89,7 @@ export function ConversationOutline({
       type="button"
       className="outline-preview"
       tabIndex={-1}
-      style={{ top: box.top, left: box.left }}
+      style={{ top: box.top }}
       aria-label={`跳转到第 ${box.index + 1} 条提问：${hovered.text.slice(0, 100)}`}
       onClick={() => onJump(box.index)}
     >

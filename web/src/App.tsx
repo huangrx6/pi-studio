@@ -413,7 +413,6 @@ export function App() {
           conversationSubscriptionError,
           retryConversationSubscription,
           settingsOpen,
-          filesOpen,
         }}
         header={{
           update: updateSnapshot.state === 'available' || updateSnapshot.state === 'downloading' || updateSnapshot.state === 'downloaded'
