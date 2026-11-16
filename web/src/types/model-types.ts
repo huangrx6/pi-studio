@@ -54,6 +54,7 @@ export type ModelSelection = {
   supportsImages?: boolean;
   /** 该快照属于新对话默认值，还是某条历史会话。 */
   source?: 'default' | 'session';
+  quotaProvider?: { id: string; name: string };
   /** 当前回合仍在运行：模型已选好，但会从下一轮开始生效。 */
   pending?: boolean;
   /** 会话 transcript 中记录的原模型已不在当前 Pi 模型目录中。 */

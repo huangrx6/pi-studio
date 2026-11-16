@@ -18,6 +18,7 @@ const assert = require('node:assert/strict');
 const MODULE_EXPORTS = {
   '@earendil-works/pi-durable': [
     'Harness',
+    'ProviderDoc',
     'MemoryStorage',
     'createRegistry',
     'createSession',
@@ -28,6 +29,7 @@ const MODULE_EXPORTS = {
   ],
   '@earendil-works/pi-ai': [
     'createModels',
+    'cleanupSessionResources',
     'getSupportedThinkingLevels',
   ],
   '@earendil-works/chord/context': [
@@ -53,6 +55,7 @@ const HARNESS_METHODS = [
   'getTask',
   'inspect',
   'resume',
+  'snapshot',
   'root',
   'watchTaskGraph',
 ];

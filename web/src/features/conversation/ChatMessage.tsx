@@ -17,19 +17,20 @@
  * 图片以 data URI 内联渲染，不再额外请求主进程。
  */
 import { memo, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, CircleAlert, CircleX, Copy, FileText, Image as ImageIcon, LoaderCircle, PanelRightOpen, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
+import { Check, ChevronDown, CircleAlert, CircleX, Copy, FileText, Image as ImageIcon, PanelRightOpen, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
+import { LoadingIndicator } from '../../shared/LoadingState';
 import type { ChatMessage, ContentBlock, RequestTrace, ToolCallBlock, TurnDiff, TurnDiffFile } from '../../types/chat-types';
 import type { StepCollapse, StepDisplay } from '../../shared/preferences';
 import { AttachmentIcon, attachmentVisual } from '../../shared/AttachmentIcon';
 import { ConversationImageGallery, type ConversationImage } from './ConversationImageGallery';
-import { isNearBottom, resolveLiveFollow } from './chat-scroll.mjs';
+import { isNearBottom, resolveLiveFollow } from './chat-scroll.ts';
 import { messageClipboardHtml } from './message-copy';
 import { Markdown } from '../../shared/Markdown';
 import { collectFileChanges } from './file-changes';
 import { FileChangeSummary } from './FileChangeSummary';
 import { splitMessageText, type Reference } from './references';
 import { ReferenceChip } from './ReferenceChip';
-import './execution-trace.css';
+import './styles/execution-trace.css';
 import { ConversationError } from './ConversationError';
 import { isComposingKey } from '../../shared/keyboard-navigation';
 
@@ -149,7 +150,7 @@ function ActivityTool({ call, result, busy, defaultOpen = false, onOpenFile }: {
           onClick={(event) => { event.preventDefault(); event.stopPropagation(); onOpenFile(openablePath); }}
         >{summary}</button>
         : <span className="activity-tool-summary activity-disclosure-preview">{summary}</span>)}
-      {(!done || failed) && <span className="activity-tool-status">{failed ? <><CircleX />失败</> : busy ? <><LoaderCircle className="spin" />执行中</> : <><CircleAlert />未完成</>}</span>}
+      {(!done || failed) && <span className="activity-tool-status">{failed ? <><CircleX />失败</> : busy ? <><LoadingIndicator />执行中</> : <><CircleAlert />未完成</>}</span>}
       <ChevronDown className="activity-tool-chevron activity-disclosure-chevron" />
     </summary>
     {open && <div className="activity-tool-body activity-disclosure-body">
@@ -228,7 +229,7 @@ function LiveThinking({ block }: { block: Extract<ContentBlock, { type: 'thinkin
       <span className="activity-thinking-icon activity-disclosure-icon" aria-hidden="true"><Sparkles /></span>
       <span className="activity-thinking-label activity-disclosure-title">思考中</span>
       <span className="activity-thinking-preview activity-disclosure-preview">推理中</span>
-      <LoaderCircle className="spin activity-thinking-spinner" aria-hidden="true" />
+      <LoadingIndicator className="activity-thinking-spinner" />
     </div>
     <div
       ref={body}
@@ -393,7 +394,7 @@ function TurnTrace({ live, active, policy, phase, steps, requests, errors, child
       <span className="turn-trace-count">{[steps > 0 && `${steps} 步`, requests > 0 && `${requests} 次请求`].filter(Boolean).join(' · ')}</span>
       {errors > 0 && <span className="turn-trace-errors"><CircleAlert />{errors} 次异常</span>}
       <span className="turn-trace-state">{active ? phase : open ? '收起' : '展开'}</span>
-      {active && <LoaderCircle className="spin" />}
+      {active && <LoadingIndicator />}
     </button>
     <div id={bodyId} hidden={!open} className="turn-trace-body">
       {(open || visited) && children}
@@ -757,7 +758,7 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
       <div className="message-edit-actions">
         <button type="button" className="message-edit-cancel" disabled={savingEdit} onClick={cancelEdit}>取消</button>
         <button type="button" className="message-edit-send" disabled={savingEdit || !draft.trim()} onClick={() => void saveEdit()}>
-          {savingEdit ? <LoaderCircle className="spin" /> : null}
+          {savingEdit ? <LoadingIndicator /> : null}
           {savingEdit ? '发送中' : '发送'}
         </button>
       </div>

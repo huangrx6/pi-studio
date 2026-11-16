@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import './list-detail-workspace.css';
+import './styles/list-detail-workspace.css';
 
 /** Keep the list mounted so filters and scroll survive narrow-screen navigation. */
 export function ListDetailWorkspace({ list, detail, label }: { list: ReactNode; detail?: ReactNode; label: string }) {

@@ -1,3 +1,5 @@
+import type { ProviderEditorDraft as ProviderDraft } from '../features/models/ProviderEditorFields';
+import { emptyProviderQuota } from '../types/provider-quota';
 import { useEffect, useMemo } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { ActionConfirmOptions, useActionConfirmation } from '../shared/ConfirmDialog';
@@ -56,15 +58,6 @@ import {
 
 type Setter<T> = Dispatch<SetStateAction<T>>;
 type CustomModelDraft = ReturnType<typeof emptyCustomModelConfig>;
-type ProviderDraft = {
-  providerId: string;
-  name: string;
-  baseUrl: string;
-  api: string;
-  apiKey: string;
-  icon: string;
-  modelsUrl: string;
-};
 type McpDraft = {
   name: string;
   transport: string;
@@ -526,7 +519,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     setMcpTestResult(null);
     setMcpTesting(false);
     originalMcpArgsRef.current = null;
-    setProviderDraft({ providerId: '', name: '', baseUrl: '', api: 'openai-completions', apiKey: '', icon: '', modelsUrl: '' });
+    setProviderDraft({ providerId: '', name: '', baseUrl: '', api: 'openai-completions', apiKey: '', icon: '', modelsUrl: '', quota: emptyProviderQuota() });
     setMcpDraft({
       name: '',
       transport: 'stdio',
@@ -548,7 +541,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     try {
       if (kind === 'provider' && editId) {
         const config = await window.piApi.providerConfig(editId);
-        if (current()) setProviderDraft({ ...config, apiKey: '' });
+        if (current()) setProviderDraft({ ...config, apiKey: '', quota: config.quota ?? emptyProviderQuota() });
       }
       if (kind === 'mcp' && editId) {
         const config = await window.piApi.mcpConfig(editId);
@@ -1198,7 +1191,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
         setProviderModels(current => { const next = { ...current }; delete next[providerId]; return next; });
         setProviderDiscovery(current => { const next = { ...current }; delete next[providerId]; return next; });
       }
-      return modelEditorRecovery(owner, providerId, result.projection, selectionOwner, true);
+      return modelEditorRecovery(owner, providerId, result.projection, selectionOwner, !editor?.editId);
     });
   }
 

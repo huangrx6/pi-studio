@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import test from 'node:test';
 import ts from 'typescript';
-import { loadTranscriptWindow } from '../../web/src/features/conversation/transcript-load.mjs';
+import { loadTranscriptWindow } from '../../web/src/features/conversation/transcript-load.ts';
 
 const source = fs.readFileSync(new URL('../../web/src/features/conversation/useMessageDelivery.ts', import.meta.url), 'utf8');
 const tree = ts.createSourceFile('useMessageDelivery.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);

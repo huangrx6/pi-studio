@@ -38,8 +38,8 @@ import {
   moveComposerDraft,
   type ComposerDraft,
 } from './composer-drafts';
-import { loadAdjacentPage, loadTranscriptWindow, mergeTranscriptPage, messageKey, TRANSCRIPT_WINDOW_TURNS } from './transcript-load.mjs';
-import { messagesHaveMarkdownCode } from '../../shared/markdown-code.mjs';
+import { loadAdjacentPage, loadTranscriptWindow, mergeTranscriptPage, messageKey, TRANSCRIPT_WINDOW_TURNS } from './transcript-load.ts';
+import { messagesHaveMarkdownCode } from '../../shared/markdown-code.ts';
 import { preloadMarkdownHighlighter, preloadMarkdownRenderer } from '../../shared/Markdown';
 import { errorText } from '../../shared/error-text';
 import { STORED_UI_KEYS } from '../../shared/stored-ui-state';
@@ -395,10 +395,10 @@ export function useConversationSessions({
       const protectedSources = beforeApply();
       const merged = mergeTranscriptPage(messages, incoming.messages, direction, protectedSources);
       const removedOlder = messages.length > 0 && !merged.some(message => messageKey(message) === messageKey(messages[0]));
-      const removedNewer = messages.length > 0 && !merged.some(message => messageKey(message) === messageKey(messages.at(-1)));
+      const removedNewer = messages.length > 0 && !merged.some(message => messageKey(message) === messageKey(messages[messages.length - 1]));
       const page = {
         hasOlder: direction === 'older' ? (Boolean(incoming.page?.hasOlder) || (incoming.messages.length > 0 && messageKey(merged[0]) !== messageKey(incoming.messages[0]))) : removedOlder || Boolean(cursor.page.hasOlder),
-        hasNewer: direction === 'newer' ? (Boolean(incoming.page?.hasNewer) || (incoming.messages.length > 0 && messageKey(merged.at(-1)) !== messageKey(incoming.messages.at(-1)))) : removedNewer || Boolean(cursor.page.hasNewer),
+        hasNewer: direction === 'newer' ? (Boolean(incoming.page?.hasNewer) || (incoming.messages.length > 0 && messageKey(merged[merged.length - 1]) !== messageKey(incoming.messages[incoming.messages.length - 1]))) : removedNewer || Boolean(cursor.page.hasNewer),
       };
       transcriptPageRef.current = { sessionId, page };
       setTranscriptTruncated(page.hasNewer);

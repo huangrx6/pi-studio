@@ -3,70 +3,26 @@
  * one parent node, one node per direct child, and status-aware edges.
  *
  * React Flow owns pan, zoom, fit and edge routing; dagre owns the layout in
- * `subagent-flow.mjs`. Nodes stay non-draggable and non-connectable because
+ * `subagent-flow.ts`. Nodes stay non-draggable and non-connectable because
  * this view is a read-only projection of the registry.
  */
 import { createContext, memo, useContext, useMemo } from 'react';
 import { Background, BackgroundVariant, Controls, Handle, Position, ReactFlow } from '@xyflow/react';
 import type { Node, NodeProps } from '@xyflow/react';
-import { Bot, CheckCircle2, CircleX, LoaderCircle, MessageSquare, Pause, ChevronRight } from 'lucide-react';
+import { Bot, ChevronRight } from 'lucide-react';
+import { duration, isActive, liveDuration, STATUS_LABEL, statusIcon, tokenCount } from './subagent-display';
 import type { SubagentChild } from '../../types/subagent-types';
 import type { ModelSelection } from '../../types/model-types';
-import { buildSubagentFlow, flowCanvasHeight } from './subagent-flow.mjs';
+import { buildSubagentFlow, flowCanvasHeight, type FlowNode } from './subagent-flow.ts';
 import '@xyflow/react/dist/style.css';
-
-const STATUS_LABEL: Record<SubagentChild['status'], string> = {
-  pending: '等待启动',
-  running: '运行中',
-  completed: '已完成',
-  failed: '失败',
-  stopped: '已停止',
-  paused: '已暂停',
-  waiting: '等待回复',
-};
 
 type MemberData = { kind: 'member'; child: SubagentChild };
 type RootData = { kind: 'root'; label: string };
-type FlowNode = Node<MemberData | RootData>;
 
 const NowContext = createContext<{ now: number }>({ now: Date.now() });
 
-function statusIcon(status: SubagentChild['status']) {
-  if (status === 'running' || status === 'pending') return <LoaderCircle className="spin" />;
-  if (status === 'waiting') return <MessageSquare />;
-  if (status === 'failed' || status === 'stopped') return <CircleX />;
-  if (status === 'paused') return <Pause />;
-  return <CheckCircle2 />;
-}
-
-function duration(value?: number): string {
-  if (!value || value < 0) return '—';
-  if (value < 1_000) return `${value}ms`;
-  const seconds = Math.round(value / 1_000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const rest = seconds % 60;
-  if (minutes < 60) return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
-}
-
-function liveDuration(child: SubagentChild, now: number): number | undefined {
-  if (typeof child.durationMs === 'number') return child.durationMs;
-  if (child.startedAt && ['running', 'pending', 'waiting'].includes(child.status)) {
-    return Math.max(0, now - child.startedAt);
-  }
-  return undefined;
-}
-
-function tokenCount(value?: number): string {
-  if (value === undefined) return '—';
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)}k`;
-  return String(value);
-}
-
 const RootNode = memo(function RootNode({ data }: NodeProps<Node<RootData>>) {
-  return <div className="agent-flow-node is-root">
+  return <button type="button" className="agent-flow-node is-root" aria-label="返回主对话">
     <span className="agent-flow-avatar"><Bot /></span>
     <span className="agent-flow-identity">
       <small>主智能体</small>
@@ -74,22 +30,24 @@ const RootNode = memo(function RootNode({ data }: NodeProps<Node<RootData>>) {
     </span>
     <ChevronRight className="agent-flow-open" aria-hidden="true" />
     <Handle type="source" position={Position.Right} />
-  </div>;
+  </button>;
 });
 
 const MemberNode = memo(function MemberNode({ data }: NodeProps<Node<MemberData>>) {
   const { now } = useContext(NowContext);
   const child = data.child;
   const name = child.name || child.agent || `子智能体 ${child.index + 1}`;
-  const stateLabel = child.currentTool || STATUS_LABEL[child.status] || child.status;
+  const stateLabel = STATUS_LABEL[child.status];
+  const elapsed = liveDuration(child, now);
   const facts = [
-    duration(liveDuration(child, now)),
-    `${tokenCount(child.tokens)} tok`,
+    isActive(child.status) && child.currentTool,
+    elapsed !== undefined && duration(elapsed),
+    child.tokens !== undefined && `${tokenCount(child.tokens)} tok`,
     child.referenceCostUsd !== undefined
       ? `$${child.referenceCostUsd.toFixed(child.referenceCostUsd < 1 ? 3 : 2)}`
       : '',
-  ].filter(Boolean);
-  return <div className={`agent-flow-node is-member is-${child.status}`}>
+  ].filter((fact): fact is string => typeof fact === 'string' && fact.length > 0);
+  return <button type="button" className={`agent-flow-node is-member is-${child.status}`} disabled={!child.hasTranscript} aria-label={`${name} · ${stateLabel} · ${child.hasTranscript ? '查看记录' : '暂无记录'}`}>
     <Handle type="target" position={Position.Left} />
     <span className="agent-flow-head">
       <span className={`agent-flow-status is-${child.status}`}>{statusIcon(child.status)}</span>
@@ -98,11 +56,11 @@ const MemberNode = memo(function MemberNode({ data }: NodeProps<Node<MemberData>
     </span>
     <span className="agent-flow-task" title={child.task}>{child.task}</span>
     <span className="agent-flow-facts">
-      {child.error
+      {child.status === 'failed' && child.error
         ? <span className="agent-flow-error" title={child.error}>{child.error}</span>
         : facts.map((fact) => <span key={fact}>{fact}</span>)}
     </span>
-  </div>;
+  </button>;
 });
 
 const nodeTypes = { agentRoot: RootNode, agentMember: MemberNode };
@@ -131,21 +89,14 @@ export function SubagentFlow({
     () => new Map(children.map((child) => [String(child.key), child])),
     [children],
   );
-  const nodes = useMemo(
-    () => graph.nodes.map((node) => node.type === 'agentRoot'
-      ? { ...node, data: { kind: 'root' as const, label: rootLabel } }
-      : node),
-    [graph.nodes, rootLabel],
-  );
-
   return <section
     className="agent-flow"
     aria-label="子智能体流程图"
     style={{ height: `${flowCanvasHeight(graph.height)}px` }}
   >
     <NowContext.Provider value={{ now }}>
-      <ReactFlow
-        nodes={nodes as FlowNode[]}
+      <ReactFlow<FlowNode>
+        nodes={graph.nodes}
         edges={graph.edges}
         nodeTypes={nodeTypes}
         fitView

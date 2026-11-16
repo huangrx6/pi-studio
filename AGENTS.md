@@ -28,6 +28,12 @@
 
 Do not add source, tests, generated output, and screenshots to the same first-level directory. Put new files in the domain directory above instead of creating another general-purpose bucket.
 
+## File formats
+
+- In `web/src/`, use `.tsx` for JSX and `.ts` for hooks, data, and pure helpers. Keep feature, shell, and shared component styles in their owning directory’s `styles/` folder. Global styles and tokens belong in `web/src/styles/`.
+- Keep Electron main-process and preload modules in `.cjs`. The unbundled menu bar popover owns its HTML, browser script, and CSS in `electron/services/menu-bar/popover/`.
+- Node tests and maintainer scripts use the module format of their runner. Tests may import renderer TypeScript directly using its explicit `.ts` extension.
+
 ## Implementation rules
 
 - Keep Pi Durable as the execution source of truth. Studio SQLite stores only projections, settings, resource trust, and metadata it owns.

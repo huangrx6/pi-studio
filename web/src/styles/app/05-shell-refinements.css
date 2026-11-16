@@ -15,7 +15,6 @@
 .settings-add-button svg { width: var(--icon-sm); height: var(--icon-sm); }
 .row-actions .settings-outline.row-action { height: 30px; padding: 0 8px; border-color: var(--transparent); background: var(--transparent); color: var(--muted); font-size: var(--text-sm); }
 .row-actions .settings-outline.row-action:hover { border-color: var(--border); background: var(--surface-soft); color: var(--text); }
-.nav-row.is-active, .settings-nav-row.is-active { background: var(--accent-soft); color: var(--text); }
 .nav-row.is-active > svg, .settings-nav-row.is-active > svg { color: var(--accent); }
 .send-button { background: var(--text); }
 .send-button:hover:not(:disabled) { background: var(--surface-active); }
@@ -187,7 +186,6 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .workspace-skeleton { padding: var(--space-2) var(--space-3) var(--space-4); }
-.skeleton-group { animation: skeleton-in .42s ease both; }
 .skeleton-group + .skeleton-group { margin-top: var(--space-4); }
 .skeleton-workspace-head { display: flex; align-items: center; gap: var(--space-3); height: 32px; }
 .skeleton-icon { width: 16px; height: 16px; flex: none; border-radius: var(--radius-tag); }
@@ -198,7 +196,7 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .skeleton-icon, .skeleton-line, .skeleton-chevron, .skeleton-session-line {
   background: var(--skeleton-gradient);
   background-size: 220% 100%;
-  animation: skeleton-shimmer 1.9s ease-in-out infinite;
+  animation: skeleton-shimmer var(--loading-skeleton-duration) ease-in-out infinite;
 }
 .skeleton-group:nth-child(2) .skeleton-icon,
 .skeleton-group:nth-child(2) .skeleton-line,
@@ -209,7 +207,6 @@ body *::-webkit-scrollbar-corner { background: var(--transparent); }
 .skeleton-group:nth-child(3) .skeleton-chevron,
 .skeleton-group:nth-child(3) .skeleton-session-line { animation-delay: .24s; }
 @keyframes skeleton-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
-@keyframes skeleton-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
 
 /* Settings back action lives at the top, before the section title. */
 /* 设置页顶部返回按钮最初做成描边按钮，后来在底部设置页脚区块被改成与侧栏

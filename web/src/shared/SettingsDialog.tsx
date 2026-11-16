@@ -9,10 +9,11 @@
  * 重命名、删除等）由父组件在 onSubmit / onClose 里执行，错误通过 error 回传。
  */
 import { useEffect, useId, useRef, type ReactNode } from 'react';
-import { LoaderCircle, X } from 'lucide-react';
+import { X } from 'lucide-react';
+import { LoadingIndicator, LoadingState } from './LoadingState';
 import { InfoHint } from './InfoHint';
 import { useModalDialog } from './useModalDialog';
-import './settings-dialog.css';
+import './styles/settings-dialog.css';
 
 /**
  * @param title 弹框标题（同时作为 aria-labelledby）
@@ -74,6 +75,29 @@ export function SettingsDialog({
   const titleId = useId();
   const descriptionId = useId();
 
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const body = bodyRef.current;
+    const fields = body?.querySelector('fieldset');
+    if (loading || !dialog || !body || !fields) return;
+
+    // A wider layout can remove its own overflow. Keep that width for this step
+    // so editing a field never makes the dialog switch back and forth.
+    const widenIfNeeded = () => {
+      if (body.scrollHeight <= body.clientHeight + 1) return;
+      observer.disconnect();
+      dialog.dataset.formLayout = 'wide';
+    };
+    const observer = new ResizeObserver(widenIfNeeded);
+    observer.observe(body);
+    observer.observe(fields);
+    widenIfNeeded();
+    return () => {
+      observer.disconnect();
+      delete dialog.dataset.formLayout;
+    };
+  }, [dialogRef, loading, scrollResetKey]);
+
   // 配置读取完成后回到内容顶部，并按需聚焦第一个可编辑字段。预览类弹框
   // 可以关闭自动聚焦，避免唯一输入控件是末尾的同意复选框时把正文滚到底部。
   useEffect(() => {
@@ -111,13 +135,13 @@ export function SettingsDialog({
       </header>
       <div className="dialog-body" ref={bodyRef}>
         {/* loading 时不渲染 children：部分字段可能依赖异步配置，提前挂载会闪空值。 */}
-        {loading ? <div className="dialog-loading" role="status"><LoaderCircle className="spin" />正在读取配置…</div> : <fieldset disabled={busy || fieldsDisabled}>{children}</fieldset>}
+        {loading ? <LoadingState variant="section">正在读取配置…</LoadingState> : <fieldset disabled={busy || fieldsDisabled}>{children}</fieldset>}
       </div>
       {error && <div className="dialog-error" role="alert">{error}</div>}
       <footer className="dialog-footer">
         {footerHint && <div className="dialog-footer-hint" role="status" aria-live="polite">{footerHint}</div>}
         <button type="button" className="settings-outline" disabled={busy} onClick={onClose}>{closeLabel}</button>
-        <button type="submit" className="settings-save" disabled={busy || loading || unavailable}>{busy && <LoaderCircle className="spin" />}{busy ? busyAction : action}</button>
+        <button type="submit" className="settings-save" disabled={busy || loading || unavailable}>{busy && <LoadingIndicator />}{busy ? busyAction : action}</button>
       </footer>
     </form>
   </dialog>;

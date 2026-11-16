@@ -16,7 +16,7 @@ const {
   normalizeStoredModelComparisons,
   normalizeStoredSessionOrder,
 } = await import('../../web/src/shared/stored-ui-state.ts');
-const { DEFAULT_SHORTCUTS } = await import('../../web/src/shared/shortcuts.mjs');
+const { DEFAULT_SHORTCUTS } = await import('../../web/src/shared/shortcuts.ts');
 
 function memoryStorage(initial = {}) {
   const values = new Map(Object.entries(initial));

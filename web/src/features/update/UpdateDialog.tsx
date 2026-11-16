@@ -10,7 +10,7 @@ import {
   shouldFoldReleaseNotes,
   type ReleaseNoteBlock,
 } from './update-notes';
-import './update-dialog.css';
+import './styles/update-dialog.css';
 
 type UpdateAction = 'check' | 'download' | 'install';
 

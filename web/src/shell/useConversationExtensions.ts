@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useExtensionUiSnapshot } from '../features/extensions/use-extension-ui';
 import {
@@ -20,6 +20,7 @@ import type {
 } from '../types/extension-types';
 
 type ConversationExtensionsOptions = {
+  nativeQuota: boolean;
   cwd?: string;
   sessionId?: string;
   agentView: AgentView;
@@ -38,22 +39,30 @@ export function useConversationExtensions({
   pushNotification,
   rememberMainScrollPosition,
   extensionPlacements,
+  nativeQuota,
 }: ConversationExtensionsOptions) {
-  const surface = useExtensionUiSnapshot(cwd);
+  const discovered = useExtensionUiSnapshot(cwd);
+  // An existing user installation still serves sources that have not opted in.
+  const surface = useMemo(() => nativeQuota
+    ? { ...discovered, items: discovered.items.filter(item => !item.id.startsWith('user:pi-quota-status/')) }
+    : discovered, [discovered, nativeQuota]);
   const [preferences, setPreferences] = useState<ConversationExtensionUiPreferences>(
     () => ({
       ...DEFAULT_CONVERSATION_EXTENSION_UI_PREFERENCES,
       sessionOrders: {},
     }),
   );
-  const [orderScope, setOrderScope] = useState<ConversationExtensionOrderScope>('global');
+  const saveRevision = useRef(0);
+  const [chosenScope, setOrderScope] = useState<ConversationExtensionOrderScope | null>(null);
+  const orderScope = chosenScope ?? (hasSessionExtensionOrder(preferences, sessionId) ? 'session' : 'global');
 
   useEffect(() => {
     let disposed = false;
+    const revision = saveRevision.current;
     if (!window.piApi.conversationExtensionUiPreferences) return;
     void window.piApi.conversationExtensionUiPreferences()
       .then((saved) => {
-        if (!disposed) {
+        if (!disposed && revision === saveRevision.current) {
           setPreferences(normalizeConversationExtensionUiPreferences(saved));
         }
       })
@@ -66,7 +75,7 @@ export function useConversationExtensions({
   }, []);
 
   useEffect(() => {
-    setOrderScope('global');
+    setOrderScope(null);
   }, [sessionId]);
 
   const items = useMemo(
@@ -131,19 +140,17 @@ export function useConversationExtensions({
   async function updateUi(
     patch: Parameters<typeof applyConversationExtensionUiPatch>[1],
   ): Promise<boolean> {
+    const revision = ++saveRevision.current;
     const previous = preferences;
     setPreferences((current) => applyConversationExtensionUiPatch(current, patch));
     try {
       const saved = await window.piApi.saveConversationExtensionUiPreferences(patch);
-      setPreferences(normalizeConversationExtensionUiPreferences(saved));
+      if (revision === saveRevision.current) setPreferences(normalizeConversationExtensionUiPreferences(saved));
       return true;
     } catch (error) {
-      try {
-        setPreferences(normalizeConversationExtensionUiPreferences(
-          await window.piApi.conversationExtensionUiPreferences(),
-        ));
-      } catch {
-        setPreferences(previous);
+      if (revision === saveRevision.current) {
+        const saved = await window.piApi.conversationExtensionUiPreferences().catch(() => previous);
+        if (revision === saveRevision.current) setPreferences(normalizeConversationExtensionUiPreferences(saved));
       }
       pushNotification(`扩展展示设置保存失败：${errorText(error)}`, 'error');
       return false;
@@ -164,7 +171,6 @@ export function useConversationExtensions({
   }
 
   function openHub() {
-    if (detailItems.length === 0) return;
     rememberMainScrollPosition();
     setAgentView({ kind: 'extensions' });
   }

@@ -36,7 +36,7 @@ import {
   normalizeThinkingLevelArgument,
   parseGoalCommandArgument,
   parseStudioCommand,
-} from './composer-command-routes.mjs';
+} from './composer-command-routes.ts';
 import { errorText } from '../../shared/error-text';
 import type { AppNotificationAction, NotificationTone } from '../../shell/NotificationCenter';
 import type { SettingsTab } from '../../shell/app-shell-config';

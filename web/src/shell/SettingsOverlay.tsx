@@ -1,5 +1,6 @@
 import { lazy, useEffect, useRef, type ComponentProps, type ReactNode, type RefObject } from 'react';
-import { BookOpen, ChevronLeft, FileCode2, Layers3, LoaderCircle, Plus, RotateCw } from 'lucide-react';
+import { BookOpen, ChevronLeft, FileCode2, Layers3, Plus, RotateCw } from 'lucide-react';
+import { LoadingState } from '../shared/LoadingState';
 import type { DiscoveredModel } from '../features/models/model-settings-types';
 import type { ModelOption, ModelSelection } from '../types/model-types';
 import type { SettingsDraftGuard } from '../shared/settings-draft-guard';
@@ -411,7 +412,7 @@ export function SettingsOverlay({
               </div>
             )}
             {!data && !error && tab !== 'general' && tab !== 'git' && tab !== 'usage' && tab !== 'archives' && tab !== 'permissions' && tab !== 'subagents' && (
-              <div className="settings-loading" role="status"><LoaderCircle className="spin" />正在加载设置…</div>
+              <LoadingState variant="section">正在加载设置…</LoadingState>
             )}
             {tab === 'shortcuts' && <ShortcutSettings preferences={appearance.preferences} onChange={appearance.onChange} />}
             {tab === 'general' && <GeneralSettings {...appearance} />}

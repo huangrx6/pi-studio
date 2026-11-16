@@ -63,7 +63,8 @@ Runtime directory scanning is intentionally unsupported. Explicit imports make p
 | Metrics | Observation and UI projection | Telemetry plus extension data source | `electron/capabilities/metrics/` |
 | MCP | External tool source and adapter | Tool registration and section | `electron/integrations/mcp/` |
 | Auto compaction | Runtime policy | Generation request boundary | Pi Durable, configured through `electron/runtime/durable-runtime.cjs` |
-| Quota status | UI data source | Extension UI projection | `extensions/pi-quota-status/` |
+| Provider quota | Model-source configuration | Main-process HTTP query and mapped metrics | `electron/services/provider-quota.cjs` |
+| Project scripts | Official extension | Workspace script summary and copy actions | `extensions/pi-project-scripts/` |
 | Extension distribution | Trust and installation | Application service | `electron/services/` |
 | Credentials | Platform security | Main process storage | `electron/core/` and `electron/services/` |
 

@@ -314,7 +314,13 @@ export function useConversationController(foundation: AppFoundation) {
     closePanel: foundation.closePanel,
     openComparisonTab: foundation.workbench.openComparisonTab,
   });
+  const currentProviderId = modelSelection.modelRef.split('/')[0];
+  const source = settingsData?.providers.find(item => item.id === currentProviderId);
+  const quotaProvider = settingsData
+    ? source?.enabled && source.quotaEnabled ? { id: source.id, name: source.name } : undefined
+    : modelSelection.quotaProvider;
   const conversationExtensions = useConversationExtensions({
+    nativeQuota: Boolean(quotaProvider),
     cwd: session?.cwd,
     sessionId: session?.id,
     agentView,
@@ -780,6 +786,7 @@ export function useConversationController(foundation: AppFoundation) {
     sidebarAction,
     restoreArchivedConversation,
     permanentlyDeleteArchivedConversation,
+    deleteArchivedGroup,
   } = useSidebarActions({
     workspaces,
     sessionRef,
@@ -969,6 +976,7 @@ export function useConversationController(foundation: AppFoundation) {
     returnToMainAgent,
     openModelComparison,
     openTrace,
+    quotaProvider,
     conversationExtensionSurface,
     conversationExtensionUiPreferences,
     conversationExtensionOrderScope,
@@ -1022,6 +1030,7 @@ export function useConversationController(foundation: AppFoundation) {
     sidebarAction,
     restoreArchivedConversation,
     permanentlyDeleteArchivedConversation,
+    deleteArchivedGroup,
     runNotificationAction,
     sidebarActions,
     actionPaletteOpen,

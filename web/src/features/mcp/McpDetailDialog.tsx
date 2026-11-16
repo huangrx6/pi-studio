@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { LoaderCircle, X } from 'lucide-react';
+import { X } from 'lucide-react';
+import { LoadingIndicator } from '../../shared/LoadingState';
 import type { McpConnectionTestResult, SettingsSnapshot } from '../../global.d';
 import type { CommittedProjection } from '../../types/mutation-types';
 import { errorText } from '../../shared/error-text';
 import { DetailDialog } from '../../shared/DetailDialog';
 import { mcpConnectionStatus } from './mcp-status';
-import './mcp-detail.css';
+import './styles/mcp-detail.css';
 
 type McpServer = {
   name: string; transport: string; enabled: boolean; target: string; cwd: string;
@@ -157,14 +158,14 @@ function McpDetailScope({ server, workspace, onClose, onRefresh, onCommitted, on
       {server.description && <p className="mcp-detail-description">{server.description}</p>}
       <section className="mcp-detail-actions" aria-label="MCP 连接操作">
         <button type="button" className="settings-outline" disabled={writeDisabled} onClick={() => void testConnection()}>
-          {operation === 'test' && <LoaderCircle className="spin" />}{operation === 'test' ? '正在测试…' : '测试连接'}
+          {operation === 'test' && <LoadingIndicator />}{operation === 'test' ? '正在测试…' : '测试连接'}
         </button>
         {server.transport === 'http' && (oauthConnected
           ? <button type="button" className="settings-outline" disabled={writeDisabled} onClick={() => void changeOAuth('logout')}>
-              {operation === 'logout' && <LoaderCircle className="spin" />}{operation === 'logout' ? '正在退出…' : '退出 OAuth'}
+              {operation === 'logout' && <LoadingIndicator />}{operation === 'logout' ? '正在退出…' : '退出 OAuth'}
             </button>
           : <button type="button" className="settings-outline" disabled={writeDisabled} onClick={() => void changeOAuth('authorize')}>
-              {operation === 'authorize' && <LoaderCircle className="spin" />}{operation === 'authorize' ? '等待浏览器授权…' : 'OAuth 登录'}
+              {operation === 'authorize' && <LoadingIndicator />}{operation === 'authorize' ? '等待浏览器授权…' : 'OAuth 登录'}
             </button>)}
       </section>
       {actionError && <div className="mcp-detail-feedback is-error" role="alert">{actionError}</div>}

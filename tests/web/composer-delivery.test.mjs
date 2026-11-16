@@ -6,7 +6,7 @@ import {
   mergeRejectedComposerDraft,
   queuedSubmissionMatches,
   removeAdmittedQueuedSubmission,
-} from '../../web/src/features/conversation/composer-delivery.mjs';
+} from '../../web/src/features/conversation/composer-delivery.ts';
 
 const attachment = (id, name = id) => ({
   id,

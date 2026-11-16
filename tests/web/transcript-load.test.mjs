@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { loadFullTranscript, TRANSCRIPT_PAGE_SIZE } from '../../web/src/features/conversation/transcript-load.mjs';
+import { loadFullTranscript, TRANSCRIPT_PAGE_SIZE } from '../../web/src/features/conversation/transcript-load.ts';
 
 const message = (sourceIndex) => ({ role: 'user', sourceIndex, timestamp: sourceIndex + 1, content: [] });
 
@@ -54,7 +54,7 @@ test('a cursor that never ends cannot spin forever', async () => {
 });
 
 test('窗口只取最近一页，并保留补页游标', async () => {
-  const { loadTranscriptWindow, TRANSCRIPT_WINDOW_SIZE } = await import('../../web/src/features/conversation/transcript-load.mjs');
+  const { loadTranscriptWindow, TRANSCRIPT_WINDOW_SIZE } = await import('../../web/src/features/conversation/transcript-load.ts');
   const calls = [];
   const loaded = await loadTranscriptWindow(async (payload) => {
     calls.push(payload);
@@ -70,7 +70,7 @@ test('窗口只取最近一页，并保留补页游标', async () => {
 });
 
 test('补页把更早的消息插到前面，并更新游标', async () => {
-  const { loadTranscriptWindow, loadOlderTranscript } = await import('../../web/src/features/conversation/transcript-load.mjs');
+  const { loadTranscriptWindow, loadOlderTranscript } = await import('../../web/src/features/conversation/transcript-load.ts');
   const current = await loadTranscriptWindow(async () => ({
     messages: [message(600), message(601)],
     page: { hasOlder: true, nextCursor: 'older' },
@@ -88,7 +88,7 @@ test('补页把更早的消息插到前面，并更新游标', async () => {
 });
 
 test('没有更早内容时补页不发请求', async () => {
-  const { loadOlderTranscript } = await import('../../web/src/features/conversation/transcript-load.mjs');
+  const { loadOlderTranscript } = await import('../../web/src/features/conversation/transcript-load.ts');
   let called = false;
   const quiet = await loadOlderTranscript(async () => { called = true; return undefined; }, 'demo', { messages: [], page: { hasOlder: false } });
   assert.equal(quiet, null);
@@ -96,7 +96,7 @@ test('没有更早内容时补页不发请求', async () => {
 });
 
 test('固定窗口按轮合并：保留最近的若干轮，并跟随向上加载的旧端', async () => {
-  const { mergeTranscriptPage, trimTranscript, TRANSCRIPT_MAX_TURNS } = await import('../../web/src/features/conversation/transcript-load.mjs');
+  const { mergeTranscriptPage, trimTranscript, TRANSCRIPT_MAX_TURNS } = await import('../../web/src/features/conversation/transcript-load.ts');
   // 每条消息都是一轮：裁剪单位是「轮」而不是「条」，一轮里的工具输出不会被切断。
   const current = Array.from({ length: 50 }, (_, index) => ({ role: 'user', sourceIndex: index + 51 }));
   const older = Array.from({ length: 50 }, (_, index) => ({ role: 'user', sourceIndex: index + 1 }));

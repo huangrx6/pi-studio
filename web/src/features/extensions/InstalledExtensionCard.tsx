@@ -6,7 +6,7 @@ import {
   placementOptionsFor,
 } from './extension-placement';
 import { extensionScopeLabel, extensionStateLabel, extensionStateTone } from './extension-presentation';
-import './extension-lists.css';
+import './styles/extension-lists.css';
 
 export function InstalledExtensionCard({ item, busy, compact = false, placements, onPlacementChange, onOpenDetail, onToggle, onDelete }: {
   item: ExtensionHostItem;

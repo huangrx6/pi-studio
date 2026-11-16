@@ -53,7 +53,7 @@ try {
       window.__vite_plugin_react_preamble_installed__ = true;
       document.documentElement.dataset.theme = 'dark';
       await import('/src/styles/tokens.css'); await import('/src/styles/palette.css'); await import('/src/app.css');
-      await import('/src/shell/session-view.css');
+      await import('/src/shell/styles/session-view.css');
       await import('/@fs${process.cwd()}/node_modules/yet-another-react-lightbox/dist/styles.css');
       await import('/@fs${process.cwd()}/node_modules/yet-another-react-lightbox/dist/plugins/captions/captions.css');
       await import('/@fs${process.cwd()}/node_modules/yet-another-react-lightbox/dist/plugins/counter/counter.css');

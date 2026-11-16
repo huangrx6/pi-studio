@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import './settings-page-header.css';
+import './styles/settings-page-header.css';
 
 /** A page title on the settings surface, separate from its editable cards. */
 export function SettingsPageHeader({

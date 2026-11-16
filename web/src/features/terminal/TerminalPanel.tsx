@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowDownToLine,
   ChevronDown,
   ChevronUp,
   Eraser,
@@ -24,6 +23,7 @@ import '@xterm/xterm/css/xterm.css';
 import type { TerminalEvent, TerminalSessionStatus } from '../../types/runtime-panel-types';
 import { errorText } from '../../shared/error-text';
 import { ActionMenu, type MenuAction } from '../../shared/ActionMenu';
+import { JumpToLatestButton } from '../../shared/JumpToLatestButton';
 import { restoreTerminalReplay } from './terminal-replay';
 import { terminalTheme as themedTerminal, isTerminalTheme } from './terminal-themes';
 import { CommandTracker, commandFailed, lastFailedCommand, parseOsc133, type CommandMark } from './terminal-commands';
@@ -39,7 +39,7 @@ import {
   terminalTabTitle,
   type TerminalLinkTarget,
 } from './terminal-actions';
-import './terminal-panel.css';
+import './styles/terminal-panel.css';
 
 const MAX_PENDING_EVENTS = 256;
 const MAX_PENDING_CHARS = 1_000_000;
@@ -883,13 +883,11 @@ export function TerminalPanel({
   }, [searchOpen, searchQuery]);
 
   const running = !connecting && status === 'running' && !error;
-  const activePalette = themedTerminal(appearance.themeId);
+  const customTheme = isTerminalTheme(appearance.themeId);
   return <section
-    className={`terminal-panel ${activePalette ? 'has-custom-theme' : ''}`}
+    className={`terminal-panel ${customTheme ? 'has-custom-theme' : ''}`}
     aria-label="终端"
-    style={activePalette
-      ? { background: activePalette.background, ['--terminal-fg' as string]: activePalette.foreground }
-      : undefined}
+    data-terminal-theme={customTheme ? appearance.themeId : undefined}
   >
     <header className="terminal-toolbar">
       <span className={`terminal-live-state ${running ? 'is-running' : 'is-exited'}`}>
@@ -946,7 +944,6 @@ export function TerminalPanel({
       </span>
       <button type="button" aria-label="上一个结果" title="上一个 ⇧Enter" onClick={() => searchQuery && searchRef.current?.findPrevious(searchQuery)}><ChevronUp /></button>
       <button type="button" aria-label="下一个结果" title="下一个 Enter" onClick={() => searchQuery && searchRef.current?.findNext(searchQuery)}><ChevronDown /></button>
-      <button type="button" aria-label="跳到最新" title="跳到最新" onClick={scrollToBottom}><ArrowDownToLine /></button>
       <button type="button" aria-label="关闭搜索" title="关闭" onClick={() => { setSearchOpen(false); setSearchQuery(''); terminalRef.current?.focus(); }}><X /></button>
     </div>}
     {pendingPaste !== null && <div className="terminal-paste-confirm" role="status">
@@ -997,16 +994,8 @@ export function TerminalPanel({
         <span>{error}</span>
         <button type="button" onClick={() => { setError(null); setRetryRevision((value) => value + 1); }}>重试</button>
       </div>}
+      {!isAtBottom && !connecting && !error && <JumpToLatestButton label="跳到最新输出" onClick={scrollToBottom} />}
     </div>
-    {!isAtBottom && !connecting && <div className="terminal-stage-footer">
-      <button
-        type="button"
-        className="terminal-bottom-jump"
-        aria-label="跳到最新输出"
-        title="跳到最新输出"
-        onClick={scrollToBottom}
-      ><ArrowDownToLine /><span>最新输出</span></button>
-    </div>}
     {menu && <ActionMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={menuActions} />}
     {moreMenu && <ActionMenu x={moreMenu.x} y={moreMenu.y} onClose={() => setMoreMenu(null)} items={menuActions} />}
   </section>;

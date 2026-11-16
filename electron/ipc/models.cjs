@@ -24,6 +24,8 @@ const {
   resolveProviderApiKey,
   supportedThinkingLevels,
 } = require('../services/models.cjs');
+const { normalizeProviderQuota, previewQuota } = require('../core/provider-quota.cjs');
+const { createProviderQuotaMonitor } = require('../services/provider-quota.cjs');
 const { settingsSnapshot } = require('../services/settings.cjs');
 const { DEFAULT_CWD } = require('../core/state.cjs');
 const { fetchProviderModelDiscovery, httpUrl } = require('../model-discovery.cjs');
@@ -89,6 +91,15 @@ async function committedModelsProjection(cwd) {
 }
 
 function registerModelsIpc() {
+  const quotaMonitor = createProviderQuotaMonitor({
+    getProvider: id => getStudioDatabase().getProvider(id),
+    readKey: resolveProviderApiKey,
+  });
+  ipcMain.handle('pi:provider-quota', (_event, { providerId, refresh } = {}) =>
+    quotaMonitor.read(providerIdOf(providerId), refresh === true));
+  ipcMain.handle('pi:provider-quota-fields', (_event, input = {}) =>
+    quotaMonitor.inspect(providerIdOf(input.providerId), input));
+  ipcMain.handle('pi:preview-quota-mapping', (_event, input) => previewQuota(input));
   ipcMain.handle('pi:models', async () => availableModels());
   ipcMain.handle('pi:models-refresh', async (_event, cwd) => refreshModelsProjection(cwd));
   ipcMain.handle('pi:set-model', async (_event, modelRef) => setDefaultModel(modelRef));
@@ -164,6 +175,7 @@ function registerModelsIpc() {
       api: provider.api,
       icon: provider.icon,
       modelsUrl: provider.modelsUrl,
+      quota: provider.quota,
       builtin: provider.builtin,
       enabled: provider.enabled,
     };
@@ -175,30 +187,12 @@ function registerModelsIpc() {
     const baseUrl = normalizeUrl(input.baseUrl, 'Base URL');
     const modelsUrl = normalizeUrl(input.modelsUrl);
     const apiKey = typeof input.apiKey === 'string' ? input.apiKey.trim() : '';
+    const turnOffQuota = input.quota?.enabled === false;
+    const quota = input.quota === undefined || turnOffQuota ? undefined : normalizeProviderQuota(input.quota);
     try {
-      // Keep the synchronous transaction seam for tests and older embedders
-      // that wrap the legacy method. Production Electron uses the async path.
-      if (Object.hasOwn(db, 'writeCredential')) {
-        await withProviderCredentialLock(id, () => db.transaction(() => {
-          const existing = db.getProvider(id);
-          const api = typeof input.api === 'string' && input.api ? input.api : existing?.api || 'openai-completions';
-          db.upsertProvider({
-            id,
-            name: String(input.name || existing?.name || id).trim(),
-            baseUrl,
-            api,
-            icon: String(input.icon || existing?.icon || ''),
-            modelsUrl,
-            builtin: existing?.builtin ?? false,
-            enabled: input.enabled ?? existing?.enabled ?? true,
-          });
-          if (apiKey) db.writeCredential(id, { type: 'api_key', key: apiKey });
-        }));
-        return committedModelsProjection(input.cwd);
-      }
-      const encryptedCredential = apiKey
-        ? await encryptValueAsync({ type: 'api_key', key: apiKey })
-        : undefined;
+      const credential = apiKey ? { type: 'api_key', key: apiKey } : null;
+      const syncWriter = Object.hasOwn(db, 'writeCredential');
+      const encryptedCredential = credential && !syncWriter ? await encryptValueAsync(credential) : undefined;
       await withProviderCredentialLock(id, () => db.transaction(() => {
         const existing = db.getProvider(id);
         const api = typeof input.api === 'string' && input.api ? input.api : existing?.api || 'openai-completions';
@@ -209,13 +203,16 @@ function registerModelsIpc() {
           api,
           icon: String(input.icon || existing?.icon || ''),
           modelsUrl,
+          quota: turnOffQuota ? (existing?.quota ? { ...existing.quota, enabled: false } : null) : quota,
           builtin: existing?.builtin ?? false,
           enabled: input.enabled ?? existing?.enabled ?? true,
         });
         // Both rows share one synchronous SQLite transaction. Encryption failure
         // rolls back the provider too; empty input intentionally retains its key.
         if (encryptedCredential) {
-          db.writeCredentialEnvelope(id, encryptedCredential, Date.now(), { type: 'api_key', key: apiKey });
+          db.writeCredentialEnvelope(id, encryptedCredential, Date.now(), credential);
+        } else if (credential && syncWriter) {
+          db.writeCredential(id, credential);
         }
       }));
     } catch (error) {
@@ -223,6 +220,7 @@ function registerModelsIpc() {
         ? '系统安全存储不可用，模型来源与凭据均未更改。'
         : '模型来源保存失败，配置与凭据均未更改。请重试。');
     }
+    quotaMonitor.invalidate(id);
     return committedModelsProjection(input.cwd);
   });
 
@@ -232,6 +230,7 @@ function registerModelsIpc() {
     if (!db.getProvider(id)) throw new Error('模型来源不存在');
     try { db.transaction(() => db.setProviderEnabled(id, enabled !== false)); }
     catch { throw new Error('模型来源启停失败，配置未更改。请重试。'); }
+    quotaMonitor.invalidate(id);
     return committedModelsProjection(cwd);
   });
 
@@ -244,6 +243,7 @@ function registerModelsIpc() {
       await withProviderCredentialLock(id, () => {
         db.deleteProvider(id);
         invalidateProviderCredentials(id);
+        quotaMonitor.invalidate(id);
       });
     } catch { throw new Error('模型来源删除失败，配置与凭据均未更改。请重试。'); }
     return committedModelsProjection(cwd);
@@ -383,6 +383,7 @@ function registerModelsIpc() {
       if (message === '模型来源不存在，凭据未写入。' || message === '模型来源已变化，凭据未写入。') throw new Error(message);
       throw new Error('凭据保存失败，凭据未更改。请重试。');
     }
+    quotaMonitor.invalidate(id);
     return committedModelsProjection(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
   });
 
@@ -395,6 +396,7 @@ function registerModelsIpc() {
       if (error?.message === '模型来源已变化，凭据未清除。') throw new Error(error.message);
       throw new Error('凭据清除失败，凭据未更改。请重试。');
     }
+    quotaMonitor.invalidate(id);
     return committedModelsProjection(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
   });
 }

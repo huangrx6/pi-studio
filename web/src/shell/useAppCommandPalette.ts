@@ -8,7 +8,7 @@ import {
   conversationActions,
   type ConversationAction,
 } from '../features/conversation/conversation-actions';
-import { matchesShortcut, normalizeShortcuts, isTextEntry } from '../shared/shortcuts.mjs';
+import { matchesShortcut, normalizeShortcuts, isTextEntry } from '../shared/shortcuts.ts';
 
 type Setter<T> = Dispatch<SetStateAction<T>>;
 

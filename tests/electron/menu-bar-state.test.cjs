@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const {
   createMenuBarState,
   shouldPresentBackgroundNotification,
-} = require('../../electron/menu-bar-state.cjs');
+} = require('../../electron/services/menu-bar/state.cjs');
 
 test('completion notifications stay quiet while the main window is in front', () => {
   const window = (input = {}) => ({
@@ -123,7 +123,7 @@ test('attention is projected separately and clears without ending the run', () =
 });
 
 test('popover fits its rows and caps long lists without stretching the idle state', () => {
-  const { menuBarPopoverHeight } = require('../../electron/menu-bar-state.cjs');
+  const { menuBarPopoverHeight } = require('../../electron/services/menu-bar/state.cjs');
   assert.equal(menuBarPopoverHeight(), 148);
   assert.equal(menuBarPopoverHeight({ running: [{}] }), 198);
   assert.equal(menuBarPopoverHeight({ recent: [{}] }), 198);

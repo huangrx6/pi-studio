@@ -15,11 +15,12 @@
  * - 弹出方向：浮层默认在按钮上方展开，靠近窗口顶部时切换为向下并限制高度。
  */
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Check, ChevronLeft, ChevronRight, ChevronUp, LoaderCircle, TriangleAlert } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, ChevronUp, TriangleAlert } from 'lucide-react';
+import { LoadingState } from '../../shared/LoadingState';
 import { thinkingLabels, type ModelCatalog, type ModelOption, type ModelSelection, type ThinkingLevel } from '../../types/model-types';
 import { InfoHint } from '../../shared/InfoHint';
 import { createModelPickerRequests } from './model-picker-requests';
-import './model-picker.css';
+import './styles/model-picker.css';
 
 /** 浮层当前显示的视图。 */
 type View = 'main' | 'models' | 'thinking';
@@ -293,7 +294,7 @@ export function ModelPicker({ selection, scope, contextKey = scope, disabled, hi
       {view === 'models' && <>
         <div className="model-search-bar"><button className="icon-button" aria-label="返回模型设置" onClick={() => setView('main')}><ChevronLeft /></button><input aria-label="搜索模型" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索模型…" /></div>
         <div className="model-list" role="menu" aria-label="常用模型">
-          {loading ? <div className="model-picker-note" role="status"><LoaderCircle className="spin" />正在读取模型…</div> : [...groups].map(([provider, group]) => <div className="model-group" role="group" aria-label={group.name} key={provider}>
+          {loading ? <LoadingState className="model-picker-note">正在读取模型…</LoadingState> : [...groups].map(([provider, group]) => <div className="model-group" role="group" aria-label={group.name} key={provider}>
             <div className="model-group-name" title={provider}>{group.name}</div>
             {group.models.map((item) => <button role="menuitemradio" aria-checked={item.id === selection.modelRef} aria-disabled={saving} key={item.id} title={item.id} className={`model-option ${item.id === selection.modelRef ? 'is-selected' : ''}`} onClick={() => void choose(() => onSelectModel(item.id))}><span>{item.name}</span>{item.id === selection.modelRef && <Check />}</button>)}
           </div>)}
@@ -321,7 +322,7 @@ export function ModelPicker({ selection, scope, contextKey = scope, disabled, hi
         <button type="button" className="model-picker-retry" onClick={() => void refreshCatalog()}>重新加载</button>
       </div>}
       {error && <div className="model-picker-error" role="alert">{error}</div>}
-      {saving && <div className="model-picker-note" role="status">正在应用…</div>}
+      {saving && <LoadingState className="model-picker-note">正在应用…</LoadingState>}
     </div>}
   </div>;
 }

@@ -1,10 +1,11 @@
 import { lazy, Suspense, useState, type Dispatch, type SetStateAction, type MutableRefObject } from 'react';
-import { LoaderCircle, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
+import { LoadingState } from '../../shared/LoadingState';
 import type { ModelComparisonContext } from '../../shell/app-types';
 import type { ModelSelection } from '../../types/model-types';
 import type { StoredModelComparisonMap } from '../../shared/stored-ui-state';
 import { Select } from '../../shared/Select';
-import './model-comparison.css';
+import './styles/model-comparison.css';
 
 const ModelComparisonPanel = lazy(async () => {
   const module = await import('./ModelComparisonPanel');
@@ -48,7 +49,7 @@ export function ComparisonWorkbench({ context, starting, onStartingChange, start
       }} />
       <small title={cwd}>工作区 · {cwd || '请先选择工作区'}</small>
     </div>
-    <Suspense fallback={<div className="panel-route-loading"><LoaderCircle className="spin" /></div>}>
+    <Suspense fallback={<LoadingState variant="panel">正在加载模型评估…</LoadingState>}>
       <ModelComparisonPanel
         key={generation}
         parentId={context?.parentId || ''}

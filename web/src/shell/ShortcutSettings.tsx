@@ -11,8 +11,8 @@ import {
   formatShortcutParts,
   normalizeShortcuts,
   shortcutConflict,
-} from '../shared/shortcuts.mjs';
-import './shortcut-settings.css';
+} from '../shared/shortcuts.ts';
+import './styles/shortcut-settings.css';
 
 export function ShortcutSettings({ preferences, onChange }: {
   preferences: Preferences;

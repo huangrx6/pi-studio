@@ -1,8 +1,9 @@
 import { useId, useState } from 'react';
-import { ChevronDown, CircleAlert, LoaderCircle, Pause, PencilLine, Play, Target } from 'lucide-react';
+import { ChevronDown, CircleAlert, Pause, PencilLine, Play, Target } from 'lucide-react';
+import { LoadingIndicator } from '../../shared/LoadingState';
 import type { LongTaskState } from '../../types/durable-types';
 import { isLongTaskDetailLong, longTaskPresentation } from './long-task-presentation';
-import './long-task-dock.css';
+import './styles/long-task-dock.css';
 
 function statusIcon(status: LongTaskState['status']) {
   if (status === 'blocked') return <CircleAlert aria-hidden="true" />;
@@ -50,7 +51,7 @@ export function LongTaskDock({
       <div className="long-task-status">
         <span className="long-task-icon">
           {presentation.isRunning
-            ? <LoaderCircle className="spin" aria-hidden="true" />
+            ? <LoadingIndicator />
             : statusIcon(status)}
         </span>
         <div className="long-task-copy">

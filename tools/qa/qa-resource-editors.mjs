@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
+import { composerValue } from './fixtures/composer-editor.mjs';
 import { installPerformanceFixture } from './fixtures/performance.mjs';
 import { installResourceEditorsFixture } from './fixtures/resource-editors.mjs';
 import { serveProductionRenderer } from './fixtures/production-renderer-server.mjs';
@@ -22,7 +23,18 @@ async function close() { await dialog().getByRole('button', { name: '关闭弹�
 async function capture(name, theme, viewport, resetScroll = true) {
   await page.setViewportSize(viewport); await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme); await settle();
   if (resetScroll) await dialog().locator('.dialog-body').evaluate(node => { node.scrollTop = 0; }); await settle();
-  const geometry = await dialog().evaluate(node => { const box = node.getBoundingClientRect(); return { width: box.width, left: box.left, right: box.right, viewport: innerWidth, overflow: node.scrollWidth > node.clientWidth + 1, rootOverflow: document.documentElement.scrollWidth > innerWidth + 1 }; });
+  const geometry = await dialog().evaluate(node => {
+    const box = node.getBoundingClientRect();
+    const body = node.querySelector('.dialog-body');
+    const footer = node.querySelector('.dialog-footer').getBoundingClientRect();
+    return {
+      width: box.width, left: box.left, right: box.right, viewport: innerWidth,
+      overflow: node.scrollWidth > node.clientWidth + 1 || body.scrollWidth > body.clientWidth + 1,
+      rootOverflow: document.documentElement.scrollWidth > innerWidth + 1,
+      footerVisible: footer.top >= body.getBoundingClientRect().bottom - 1 && footer.bottom <= innerHeight,
+    };
+  });
+  assert.ok(geometry.footerVisible, `${name}: footer stays visible`);
   assert.equal(geometry.overflow, false, `${name} overflow`); assert.equal(geometry.rootOverflow, false); assert.ok(geometry.left >= -1 && geometry.right <= geometry.viewport + 1);
   if (await dialog().locator('.mcp-editor-secret-clear').count()) {
     const secretControl = await dialog().locator('.mcp-editor-secret-clear').evaluate(label => { const input = label.querySelector('input'), bounds = label.getBoundingClientRect(), inputBounds = input.getBoundingClientRect(); return { checkboxWidth: inputBounds.width, checkboxHeight: inputBounds.height, labelOverflow: label.scrollWidth > label.clientWidth + 1, labelRight: bounds.right, bodyRight: label.closest('.dialog-body').getBoundingClientRect().right }; });
@@ -67,6 +79,7 @@ try {
   console.log('CHECK', result.checks.length + 1); result.checks.push('Provider read failure explicitly retries; credentials remain blank; synchronous duplicate save is one write; success plus catalog-read failure shows completed fact and retries read only');
 
   await page.setViewportSize({ width: 980, height: 760 });
+  await page.locator('[data-provider-id="qa-provider"]').getByRole('button', { name: '管理模型', exact: true }).click();
   await page.getByRole('button', { name: '编辑模型 隔离测试模型', exact: true }).click(); await dialog().getByRole('textbox', { name: '模型 ID', exact: true }).waitFor();
   await dialog().getByRole('spinbutton', { name: '上下文长度', exact: true }).fill('256');
   await qa('hold', 'addCustomModel'); await qa('fail', 'providerModels', 'qa-provider'); await twice(dialog().getByRole('button', { name: '保存更改', exact: true })); await pending('addCustomModel'); assert.equal(await count('addCustomModel'), 1);
@@ -164,7 +177,9 @@ try {
   const installedPayload = await page.evaluate(() => window.__resourceEditorsQa.calls.filter(item => item.method === 'installExtension').at(-1).payload); assert.equal(installedPayload.scope, 'project'); assert.equal(installedPayload.acceptedExecution, true); assert.deepEqual(installedPayload.acceptedPermissions, ['agent.tools']); assert.equal(installedPayload.acceptedPublisherKey, true); assert.equal(installedPayload.cwd, '/qa/synthetic/performance');
   console.log('CHECK', result.checks.length + 1); result.checks.push('Extension picker/prepare/install synchronous locks, prepare/install failure explicit retry, abandoned preview token disposed once, installed token consumed, main committed projection error recovers by receipt reads only and disposes receipt once, explicit project scope, executable permission/publisher-fingerprint consent and missing-dependency block, wide/narrow preview layout');
 
-  await page.setViewportSize({ width: 980, height: 760 }); await page.getByRole('button', { name: '返回对话', exact: true }).click(); assert.equal(await page.getByRole('textbox', { name: '发送给 Pi 的消息', exact: true }).inputValue(), draft);
+  await page.setViewportSize({ width: 980, height: 760 });
+  await page.getByRole('button', { name: '返回对话', exact: true }).click();
+  assert.equal(await composerValue(page.getByRole('textbox', { name: '发送给 Pi 的消息', exact: true })), draft);
   assert.deepEqual(result.pageErrors, []); assert.deepEqual(result.blockedRequests, []); result.passed = true; await rm(path.join(output, 'failure.png'), { force: true });
 } catch (error) { result.passed = false; result.error = error.stack; if (page) await page.screenshot({ path: path.join(output, 'failure.png'), fullPage: true }).catch(() => {}); process.exitCode = 1; }
 finally { if (page) result.calls = await page.evaluate(() => window.__resourceEditorsQa?.calls || []).catch(() => []); result.finishedAt = new Date().toISOString(); await writeFile(path.join(output, 'results.json'), JSON.stringify(result, null, 2)); await browser?.close(); await server.close(); }

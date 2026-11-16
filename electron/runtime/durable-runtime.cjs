@@ -195,6 +195,7 @@ async function createRuntime() {
   harness.resume();
   const runtime = {
     durable,
+    cleanupSessionResources: piAi.cleanupSessionResources,
     storage,
     harness,
     context,

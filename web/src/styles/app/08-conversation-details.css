@@ -85,7 +85,7 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .workspace-row[draggable="true"]:active, .session-row[draggable="true"]:active { cursor: grabbing; }
 /* Thin, non-blocking progress line while a session is opening. */
 .chat-loading-line { position: absolute; z-index: 12; top: 0; left: 0; right: 0; height: 2px; opacity: 0; transform: scaleX(.2); transform-origin: left; background: var(--loading-gradient); transition: opacity .15s ease; pointer-events: none; }
-.chat-loading-line.is-visible { opacity: 1; animation: chat-loading 1.2s ease-in-out infinite; }
+.chat-loading-line.is-visible { opacity: 1; transition-delay: var(--loading-delay); animation: chat-loading var(--loading-skeleton-duration) ease-in-out infinite; }
 @keyframes chat-loading { 0% { transform: translateX(-45%) scaleX(.35); } 50% { transform: translateX(0) scaleX(.7); } 100% { transform: translateX(45%) scaleX(.35); } }
 
 /* Put the sidebar toggle, conversation header and header action on one optical line. */
@@ -273,7 +273,7 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .assistant-turn.has-error .assistant-turn-status { color: var(--error); }
 .assistant-turn.has-error .assistant-turn-status::before { background: var(--error); }
 
-/* Conversation errors are owned by features/conversation/conversation-error.css. */
+/* Conversation errors are owned by features/conversation/styles/conversation-error.css. */
 
 /* 错误卡是“发生过什么”的提示，不是持续状态：右上角常驻关闭按钮。 */
 

@@ -46,11 +46,17 @@ export function buildTraceSummary({ turns, toolResults, requestPlacement, turnAc
   for (const [index, traces] of [...requestPlacement.byAssistantTurn, ...requestPlacement.unansweredByUserTurn]) {
     traces.forEach(trace => requestRounds.set(trace.id, rounds.get(index) || 1));
   }
+  const lastTurn = turns.at(-1);
+  const latestRequest = requests.at(-1);
+  const lastStreaming = lastTurn?.kind === 'assistant' && lastTurn.messages.at(-1)?.streaming;
+  const liveRequest = turnActive && latestRequest && (requestPlacement.pending.some(trace => trace.id === latestRequest.id)
+    || (lastStreaming && requestPlacement.byAssistantTurn.get(turns.length - 1)?.some(trace => trace.id === latestRequest.id)))
+    ? latestRequest.id : undefined;
   requests.forEach(trace => items.push({
     id: `request:${trace.id}`, kind: 'model', label: '模型调用',
     preview: trace.model ? `${trace.model.provider}/${trace.model.modelId}` : '模型请求',
     detail: `消息 ${trace.stats.messageCount} 条 · ${trace.stats.estimatedChars} 字符 · 工具定义 ${trace.stats.toolDefinitionCount} 个`,
-    request: trace, status: turnActive && trace.id === requests.at(-1)?.id ? 'running' : 'done',
+    request: trace, status: trace.id === liveRequest ? 'running' : 'done',
     at: trace.createdAt, round: requestRounds.get(trace.id) || round || 1,
   }));
   turns.forEach((turn, turnIndex) => {
@@ -62,8 +68,13 @@ export function buildTraceSummary({ turns, toolResults, requestPlacement, turnAc
     }
     turn.messages.forEach((message, messageIndex) => {
       const messageId = message.sourceIndex ?? message.timestamp ?? `${turnIndex}:${messageIndex}`;
-      const status = message.errorMessage ? 'error' : message.streaming ? 'running' : 'done';
-      const request = requests.filter(trace => trace.createdAt <= (message.timestamp ?? 0)).at(-1);
+      const currentMessage = turnActive && turnIndex === turns.length - 1 && messageIndex === turn.messages.length - 1;
+      const status = currentMessage && message.streaming ? 'running' : 'done';
+      const request = requestPlacement.byAssistantTurn.get(turnIndex)?.filter(trace => trace.createdAt <= (message.timestamp ?? 0)).at(-1);
+      if (message.errorMessage) {
+        items.push({ id: `error:${messageId}`, kind: 'assistant', label: '执行异常', preview: preview(message.errorMessage),
+          detail: message.errorMessage, status: 'error', at: message.timestamp, round, request });
+      }
       message.content.forEach((block, blockIndex) => {
         if (block.type === 'thinking' || block.type === 'text') {
           const text = block.type === 'thinking' ? block.redacted ? '模型未提供推理正文。' : block.thinking : block.text;
@@ -80,7 +91,7 @@ export function buildTraceSummary({ turns, toolResults, requestPlacement, turnAc
             preview: preview(JSON.stringify(block.arguments ?? {})), detail,
             result: result ? messageText(result) || (result.details ? JSON.stringify(result.details, null, 2) : '工具已返回，无文本内容。') : undefined,
             request, schema: request?.tools?.filter(tool => tool.name === block.name),
-            status: result?.isError ? 'error' : result ? 'done' : turnActive ? 'running' : 'unknown',
+            status: result?.isError ? 'error' : result ? 'done' : currentMessage && !message.errorMessage ? 'running' : 'unknown',
             at: endedAt !== undefined && durationMs !== undefined ? endedAt - durationMs : message.timestamp,
             endedAt, durationMs, round,
           });

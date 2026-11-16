@@ -1,4 +1,5 @@
 import { Command, FileText, Folder, Plug, Sparkles } from 'lucide-react';
+import { LoadingState } from '../../shared/LoadingState';
 import type { ComposerCommand, ComposerCommandSource, ComposerFile } from '../../types/chat-types';
 import type { ComposerMenuState } from './useComposerSuggestions';
 
@@ -39,7 +40,7 @@ export function ComposerSuggestions({
     <div className="composer-picker">
       <div className="composer-picker-head">
         <span>{menu.kind === 'slash' ? '命令与技能' : '引用工作区文件或目录'}</span>
-        <span>{loading ? '正在加载…' : menu.kind === 'slash' ? '输入以筛选' : '↑↓ 选择文件或目录'}</span>
+        {loading ? <LoadingState>正在加载…</LoadingState> : <span>{menu.kind === 'slash' ? '输入以筛选' : '↑↓ 选择文件或目录'}</span>}
       </div>
       <div
         className="composer-picker-scroll"

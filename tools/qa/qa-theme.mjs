@@ -655,7 +655,7 @@ try {
   await openAppearanceSettings();
   await page.locator('.settings-nav-row').filter({ hasText: '归档会话' }).click();
   const archivedCard = page.locator('.archive-session-card').filter({ hasText: '已重命名的会话' });
-  await archivedCard.getByRole('button', { name: '恢复会话', exact: true }).click();
+  await archivedCard.getByRole('button', { name: '取消归档', exact: true }).click();
   await page.locator('.settings-back-button').click();
 
   // 复制 SessionId：替换 navigator.clipboard.writeText，断言复制的是会话 id。

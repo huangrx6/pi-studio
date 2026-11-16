@@ -351,3 +351,22 @@ test('an old queued set-key still rejects after provider recreation without leak
   const fresh = await call('pi:set-key', { providerId: 'gateway', apiKey: 'fresh-request' });
   assert.equal(fresh.projection.status, 'ready'); assert.equal(db.readCredential('gateway').key, 'fresh-request');
 });
+
+test('quota rules commit with their source, retain saved mappings while disabled, and survive editing by older callers', async t => {
+  const { call, db } = harness(t);
+  const quota = { enabled: true, endpoint: 'https://fixture.invalid/quota', auth: 'bearer',
+    fields: [{ label: '周剩余', path: 'limits[period=week].remaining', format: 'number', unit: '次', translations: '', summary: true }] };
+  await call('pi:add-provider', provider({ apiKey: SECRET, quota }));
+  assert.deepEqual(plain((await call('pi:provider-config', 'gateway')).quota), quota);
+  await call('pi:add-provider', provider({ name: 'Edited' }));
+  assert.deepEqual(db.getProvider('gateway').quota, quota);
+  await assert.rejects(call('pi:add-provider', provider({ name: 'Invalid', quota: { ...quota, fields: [] } })), /额度字段/);
+  assert.equal(db.getProvider('gateway').name, 'Edited');
+  await call('pi:add-provider', provider({ quota: { enabled: false } }));
+  assert.deepEqual(db.getProvider('gateway').quota, { ...quota, enabled: false });
+  assert.equal((await call('pi:provider-quota', { providerId: 'gateway' })).status, 'disabled');
+  noSecrets(await call('pi:provider-config', 'gateway'));
+  await call('pi:remove-provider', { providerId: 'gateway' });
+  await call('pi:add-provider', provider());
+  assert.equal(db.getProvider('gateway').quota, null);
+});

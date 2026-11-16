@@ -4,7 +4,7 @@ import {
   maximumPanelWidth,
   normalizePanelWidth,
   splitPanelWidth,
-} from '../../web/src/shell/right-panel/panel-width.mjs';
+} from '../../web/src/shell/right-panel/panel-width.ts';
 
 test('panel preference accepts saved sizes and recovers invalid storage', () => {
   assert.equal(normalizePanelWidth(700), 700);

@@ -17,7 +17,7 @@ import type {
 import { InfoHint } from '../../shared/InfoHint';
 import { SettingsDialog } from '../../shared/SettingsDialog';
 import { createExtensionInstallSession, extensionInstallOwnerKey, type InstallSessionState } from './extension-install-session';
-import './extension-install.css';
+import './styles/extension-install.css';
 
 const PERMISSION_LABELS: Record<ExtensionPermission, string> = {
   'agent.tools': '向智能体提供工具',

@@ -3,7 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import { ChevronLeft, Search, X } from 'lucide-react';
 import { isComposingKey, menuFocusIndex } from '../shared/keyboard-navigation';
 import { ShellSidebar } from './ShellLayout';
-import './settings-navigation.css';
+import './styles/settings-navigation.css';
 
 /** A settings page entry used by the shared settings shell. */
 export type SettingsNavigationPage = {

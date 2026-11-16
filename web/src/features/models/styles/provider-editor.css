@@ -1,0 +1,43 @@
+.provider-editor-fields { align-items: start; }
+.provider-editor-fields .provider-editor-note { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-body); overflow-wrap: anywhere; }
+.provider-editor-advanced { min-width: 0; border-top: 1px solid var(--divider); padding-top: var(--space-4); }
+.provider-editor-advanced > summary { cursor: pointer; color: var(--text); font-size: var(--text-sm); }
+.provider-editor-advanced > summary > span { margin-left: var(--space-3); color: var(--muted); font-size: var(--text-xs); }
+.provider-editor-advanced > summary:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 4px; border-radius: var(--radius-control); }
+.provider-editor-advanced[open] > summary { margin-bottom: var(--space-4); }
+
+.quota-editor { min-width: 0; border-block-start: 1px solid var(--divider); padding-block-start: var(--space-4); }
+.quota-editor-heading, .quota-mapping-heading, .quota-preview-actions { display: flex; align-items: center; gap: 10px; }
+.quota-editor-heading > svg { flex: none; width: 18px; height: 18px; color: var(--muted); }
+.quota-editor-heading > div, .quota-mapping-heading > strong, .quota-preview-actions small { min-width: 0; flex: 1; }
+.quota-editor strong { color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.quota-editor p, .quota-editor small { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-body); overflow-wrap: anywhere; }
+.quota-editor-body, .quota-connection, .quota-mapping-list, .quota-mapping, .quota-sample[open] { display: grid; min-width: 0; gap: 12px; }
+.quota-editor-body { padding-top: 16px; }
+.quota-mapping-heading { padding-top: 12px; border-top: 1px solid var(--divider); }
+.quota-editor label, .quota-editor .settings-field { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; color: var(--muted); font-size: var(--text-sm); }
+.quota-editor .pi-select, .quota-editor .pi-select-trigger { max-width: 100%; width: 100%; }
+.quota-mapping { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-control); }
+.quota-mapping-name { display: flex; align-items: end; gap: 8px; }
+.quota-mapping-name label { flex: 1; }
+.quota-mapping-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(140px,100%),1fr)); gap: 10px; }
+.quota-editor .quota-path, .quota-sample textarea { font-family: var(--mono); }
+.quota-editor label.quota-summary-option { display: flex; flex-direction: row; align-items: center; gap: 6px; font-size: var(--text-xs); }
+.quota-summary-option input[type="checkbox"] { width: 14px; height: 14px; margin: 0; accent-color: var(--accent); }
+.quota-add-field { display: inline-flex; justify-self: start; align-items: center; gap: 4px; }
+.quota-add-field svg, .quota-mapping-name svg { width: var(--icon-sm); height: var(--icon-sm); }
+.quota-sample { min-width: 0; border-top: 1px solid var(--divider); padding-top: 12px; }
+.quota-sample summary { cursor: pointer; font-size: var(--text-sm); color: var(--muted); }
+.quota-sample[open] > * + * { margin-top: 10px; }
+.quota-sample [role="alert"] { color: var(--error); }
+.quota-preview-list { margin: 0; padding: 0; font-size: var(--text-sm); }
+.quota-preview-list > div { display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: space-between; padding: 5px 0; }
+.quota-preview-list dd { margin: 0; color: var(--text); }
+
+@container settings-form (min-width: 660px) {
+  .quota-connection { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
+  .quota-mapping-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quota-mapping { align-content: start; }
+  .quota-mapping:only-child { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .quota-mapping:only-child .quota-summary-option { align-self: end; }
+}

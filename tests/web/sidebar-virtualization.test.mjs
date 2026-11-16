@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { visibleSessionIndices, sessionWindowSegments, focusNeighborIndices } from '../../web/src/shell/sidebar-virtualization.mjs';
+import { visibleSessionIndices, sessionWindowSegments, focusNeighborIndices } from '../../web/src/shell/sidebar-virtualization.ts';
 
 test('small lists preserve all rows and large lists mount only viewport with overscan', () => {
   assert.equal(visibleSessionIndices(80, 0, 600, 36, 30).length, 80);

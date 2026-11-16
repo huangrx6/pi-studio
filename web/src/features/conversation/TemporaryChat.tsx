@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { ArrowUp, ImagePlus, LoaderCircle, MessageCirclePlus, Square } from 'lucide-react';
+import { ArrowUp, ImagePlus, MessageCirclePlus, Square } from 'lucide-react';
+import { JumpToLatestButton } from '../../shared/JumpToLatestButton';
+import { LoadingIndicator } from '../../shared/LoadingState';
 import { AssistantTurnView, ChatMessageView } from './ChatMessage';
 import { ComposerImageAttachment } from './ComposerImageAttachment';
 import { ComposerFeedback } from './ComposerFeedback';
@@ -7,6 +9,7 @@ import { ModelPicker } from '../models/ModelPicker';
 import type { ModelSelection, ThinkingLevel } from '../../types/model-types';
 import { peekTemporary, sendTemporary, subscribeTemporary, temporaryState, updateTemporary, type TemporaryImage } from './temporary-chat-store';
 import { temporaryChatCanSubmit, temporaryChatEnterAction } from './temporary-chat-input';
+import { isNearBottom, nestedScrollableConsumesWheel } from './chat-scroll.ts';
 import { errorText } from '../../shared/error-text';
 
 /**
@@ -23,6 +26,7 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
   const programmedScrollTop = useRef<number | null>(null);
   const lastScrollTop = useRef(0);
   const initializingModel = useRef(false), modelRequest = useRef(0);
+  const [atBottom, setAtBottom] = useState(true);
   const [stopping, setStopping] = useState(false);
   const toolResults = useMemo(() => new Map(), []);
   const images = useMemo(
@@ -55,6 +59,26 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
       node.scrollTop = target;
     }
     lastScrollTop.current = target;
+    setAtBottom(true);
+  }
+  function resumeFollow() {
+    following.current = true;
+    pinToBottom();
+  }
+  function pauseFollow() {
+    following.current = false;
+    programmedScrollTop.current = null;
+    cancelAutoScroll();
+  }
+  function onTranscriptScroll(node: HTMLDivElement) {
+    const top = node.scrollTop;
+    const pinned = programmedScrollTop.current !== null && Math.abs(top - programmedScrollTop.current) <= 1;
+    const nearBottom = isNearBottom(node);
+    if (!pinned && top < lastScrollTop.current - 0.5) pauseFollow();
+    else if (pinned || (nearBottom && top > lastScrollTop.current)) following.current = true;
+    programmedScrollTop.current = null;
+    lastScrollTop.current = top;
+    setAtBottom(nearBottom);
   }
   function scheduleAutoScroll() {
     if (!following.current || autoScrollFrame.current !== null) return;
@@ -64,17 +88,21 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
     });
   }
   useLayoutEffect(() => {
+    const node = scroll.current;
+    if (!node) return;
     following.current = true;
     programmedScrollTop.current = null;
-    lastScrollTop.current = 0;
-    cancelAutoScroll();
-    return cancelAutoScroll;
+    pinToBottom();
+    // Observe real size changes, including streaming text, images and panel resizes.
+    const observer = new ResizeObserver(() => {
+      if (following.current) scheduleAutoScroll();
+      else if (isNearBottom(node, 1)) resumeFollow();
+      else setAtBottom(isNearBottom(node));
+    });
+    observer.observe(node);
+    if (node.firstElementChild) observer.observe(node.firstElementChild);
+    return () => { observer.disconnect(); cancelAutoScroll(); };
   }, [id]);
-  useLayoutEffect(() => {
-    // Streaming updates can arrive many times per frame. Coalesce them into
-    // one bottom pin so the browser lays out and paints only once per frame.
-    scheduleAutoScroll();
-  }, [state.messages, state.busy]);
   async function addImages(files: File[]) {
     if (picking.current) return;
     picking.current = true;
@@ -132,57 +160,37 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
   };
   const canSubmit = temporaryChatCanSubmit(submissionState);
   return <section className="temporary-chat" aria-label="临时聊天" onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }} onDrop={event => { if (event.dataTransfer.files.length) { event.preventDefault(); void addImages([...event.dataTransfer.files]); } }}>
-    <div className="temporary-scroll" ref={scroll}
-      onWheel={event => {
-        if (event.deltaY < 0) {
-          following.current = false;
-          programmedScrollTop.current = null;
-          cancelAutoScroll();
-        }
-      }}
-      onTouchMove={() => {
-        following.current = false;
-        programmedScrollTop.current = null;
-        cancelAutoScroll();
-      }}
-      onScroll={() => {
-        const node = scroll.current;
-        if (!node) return;
-        const currentTop = node.scrollTop;
-        const programmedTop = programmedScrollTop.current;
-        const isProgrammatic = programmedTop !== null && Math.abs(currentTop - programmedTop) <= 1;
-        programmedScrollTop.current = null;
-        if (isProgrammatic) {
-          following.current = true;
-        } else if (Math.abs(currentTop - lastScrollTop.current) > 0.5) {
-          const distance = node.scrollHeight - currentTop - node.clientHeight;
-          following.current = distance <= 40;
-          if (!following.current) cancelAutoScroll();
-        }
-        lastScrollTop.current = currentTop;
-      }}>
-      <div className="chat-column">
-        {!state.messages.length && <div className="temporary-empty">
-          <span className="temporary-empty-mark"><MessageCirclePlus /></span>
-          <h2>临时对话</h2>
-          <p>不绑定工作区 · 关闭标签或退出应用即清除</p>
-        </div>}
-        {state.messages.length > 0 && <div className="messages temporary-messages">
-          {state.messages.map((message, index) => message.role === 'user'
-            ? <ChatMessageView key={`user:${message.timestamp}:${index}`} message={message} />
-            : message.role === 'assistant'
-              ? <AssistantTurnView
-                key={`assistant:${message.timestamp}:${index}`}
-                messages={[message]}
-                toolResults={toolResults}
-                busy={state.busy && index === state.messages.length - 1}
-                stepDisplay="standard"
-                stepCollapse="keep-open"
-              />
-              : null)}
-          {state.busy && lastMessage?.role !== 'assistant' && <div className="thinking temporary-thinking" role="status"><span /><span /><span />正在思考</div>}
-        </div>}
+    <div className="transcript-viewport">
+      <div className="temporary-scroll" ref={scroll}
+        onWheel={event => {
+          if (event.deltaY < 0 && !nestedScrollableConsumesWheel(event.target, event.currentTarget, event.deltaY)) pauseFollow();
+        }}
+        onTouchMove={pauseFollow}
+        onScroll={event => onTranscriptScroll(event.currentTarget)}>
+        <div className="chat-column">
+          {!state.messages.length && <div className="temporary-empty">
+            <span className="temporary-empty-mark"><MessageCirclePlus /></span>
+            <h2>临时对话</h2>
+            <p>不绑定工作区 · 关闭标签或退出应用即清除</p>
+          </div>}
+          {state.messages.length > 0 && <div className="messages temporary-messages">
+            {state.messages.map((message, index) => message.role === 'user'
+              ? <ChatMessageView key={`user:${message.timestamp}:${index}`} message={message} />
+              : message.role === 'assistant'
+                ? <AssistantTurnView
+                  key={`assistant:${message.timestamp}:${index}`}
+                  messages={[message]}
+                  toolResults={toolResults}
+                  busy={state.busy && index === state.messages.length - 1}
+                  stepDisplay="standard"
+                  stepCollapse="keep-open"
+                />
+                : null)}
+            {state.busy && lastMessage?.role !== 'assistant' && <div className="thinking temporary-thinking" role="status"><span /><span /><span />正在思考</div>}
+          </div>}
+        </div>
       </div>
+      {!atBottom && <JumpToLatestButton onClick={resumeFollow} />}
     </div>
     <div className="temporary-composer-dock">
       {state.error && <ComposerFeedback message={state.error} onDismiss={() => updateTemporary(id, { error: '' })} />}
@@ -224,7 +232,7 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
           });
           if (action === 'send') {
             event.preventDefault();
-            following.current = true;
+            resumeFollow();
             void sendTemporary(id);
           }
         }} />
@@ -236,8 +244,8 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
           <div className="composer-right">
             <ModelPicker selection={state.selection} scope="session" contextKey={`temporary:${id}`} disabled={state.busy} hidden={false} loadCatalog={() => window.piApi.models()} onSelectModel={modelRef => chooseModel(modelRef)} onSelectThinking={level => chooseModel(state.selection.modelRef, level)} onManage={onManage} />
             {state.busy
-              ? <button type="button" className="send-button is-stop" disabled={stopping} aria-label={stopping ? '正在停止临时回复' : '停止临时回复'} title={stopping ? '正在停止临时回复' : '停止临时回复'} onClick={() => void stop()}>{stopping ? <LoaderCircle className="spin" aria-hidden="true" /> : <Square fill="currentColor" aria-hidden="true" />}</button>
-              : <button type="button" className="send-button" aria-label="发送临时消息" title={!hasUsableModel ? '选择可用模型后才能发送' : undefined} disabled={!canSubmit} onClick={() => { following.current = true; void sendTemporary(id); }}><ArrowUp /></button>}
+              ? <button type="button" className="send-button is-stop" disabled={stopping} aria-label={stopping ? '正在停止临时回复' : '停止临时回复'} title={stopping ? '正在停止临时回复' : '停止临时回复'} onClick={() => void stop()}>{stopping ? <LoadingIndicator /> : <Square fill="currentColor" aria-hidden="true" />}</button>
+              : <button type="button" className="send-button" aria-label="发送临时消息" title={!hasUsableModel ? '选择可用模型后才能发送' : undefined} disabled={!canSubmit} onClick={() => { resumeFollow(); void sendTemporary(id); }}><ArrowUp /></button>}
           </div>
         </div>
       </div>

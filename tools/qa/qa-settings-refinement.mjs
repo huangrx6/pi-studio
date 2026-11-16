@@ -395,7 +395,7 @@ try {
     if (route.label === '技能') {
       await content.locator('.skill-hub-empty').waitFor();
       assert.equal(await content.locator('.skill-hub-head .count-badge').count(), 0, 'empty skill sources omit a redundant zero count');
-      assert.equal(await content.getByRole('textbox', { name: '搜索技能源', exact: true }).count(), 0, 'empty skill sources do not expose search without data');
+      assert.equal(await content.getByRole('button', { name: '搜索技能', exact: true }).count(), 0, 'empty skill sources do not expose search without data');
       assert.equal(await content.getByRole('button', { name: '管理源', exact: true }).count(), 0, 'empty skill sources keep source setup in the single empty-state action');
       assert.equal(await content.getByRole('button', { name: '刷新', exact: true }).count(), 0, 'empty skill sources do not offer a no-op refresh');
       assert.equal(await content.getByRole('button', { name: '添加技能源', exact: true }).count(), 1);

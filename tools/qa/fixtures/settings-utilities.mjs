@@ -28,7 +28,13 @@ export function installSettingsUtilitiesFixture() {
     conversationPage: async input => { const value = await base.conversationPage(input); value.model = selections[input.id]; value.messages.at(-1).usage = { input: 38000, output: 2000 }; calls.push({ method: 'conversationPage', id: input.id }); return respond('conversationPage', value, input.id); },
     conversationSnapshot: snapshot, subscribeConversation: snapshot,
     onOpenSession: listener => { opens.add(listener); return () => opens.delete(listener); },
-    conversationAction: async input => { calls.push({ method: 'conversationAction', ...input }); await respond('conversationAction', {}, input.id); const index = archived.findIndex(item => item.id === input.id); if (input.action === 'archive') { if (index >= 0) archived[index].archived = !archived[index].archived; else activeArchived[input.id] = !activeArchived[input.id]; } else if (input.action === 'remove') archived.splice(index, 1); return { ok: true }; },
+    conversationAction: async input => { calls.push({ method: 'conversationAction', ...input }); await respond('conversationAction', {}, input.id); const index = archived.findIndex(item => item.id === input.id); if (input.action === 'archive') { if (index >= 0) archived[index].archived = !archived[index].archived; else activeArchived[input.id] = !activeArchived[input.id]; } else if (input.action === 'remove') archived.splice(index, 1);
+      else if (input.action === 'remove-archived') {
+        for (const id of input.sessionIds) {
+          const match = archived.findIndex(item => item.id === id && item.cwd === input.id && item.archived);
+          if (match >= 0) archived.splice(match, 1);
+        }
+      } return { ok: true }; },
     contextPolicy: async input => { calls.push({ method: 'contextPolicy', ...input }); return respond('contextPolicy', policies[input.modelRef], input.modelRef); },
     models: async () => ({ models: ['qa/a', 'qa/b'].map(ref => ({ id: ref, name: model(ref).label, provider: 'qa', providerName: 'QA', model: ref, supportsImages: false, reasoning: false })), enabled: ['qa/a', 'qa/b'], selection: model('qa/a'), defaultSelection: model('qa/a') }),
     conversationConfigure: async input => { calls.push({ method: 'conversationConfigure', ...input }); selections[input.id] = model(input.modelRef); return clone(selections[input.id]); },

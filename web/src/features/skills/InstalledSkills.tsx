@@ -2,7 +2,7 @@ import { ChevronRight, Trash2 } from 'lucide-react';
 import { EmptyStateArt } from '../../shared/EmptyStateArt';
 import { StatusGlyph } from '../../shared/StatusGlyph';
 import { installedSkillStatus } from './installed-skill-status';
-import './installed-skills.css';
+import './styles/installed-skills.css';
 
 export type InstalledSkill = {
   name: string;

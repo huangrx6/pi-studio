@@ -1,5 +1,6 @@
 import { Component, Suspense, useEffect, useRef, type ReactNode } from 'react';
-import './deferred-settings-boundary.css';
+import { LoadingState } from './LoadingState';
+import './styles/deferred-settings-boundary.css';
 
 type DeferredSettingsBoundaryProps = {
   children: ReactNode;
@@ -48,7 +49,7 @@ export class DeferredSettingsBoundary extends Component<DeferredSettingsBoundary
       />;
     }
     return <Suspense fallback={
-      <div className="deferred-settings-state" role="status" aria-live="polite">正在打开设置…</div>
+      <LoadingState variant="section">正在打开设置…</LoadingState>
     }>{this.props.children}</Suspense>;
   }
 }

@@ -2,7 +2,7 @@ import type { ConcreteThinkingLevel, ModelOption, ModelSelection, ThinkingLevel 
 import { concreteThinkingLevels } from '../../types/model-types';
 
 export type ModelOrigin = 'builtin' | 'configured' | 'override';
-export type ModelProvider = { id: string; name: string; mode: string; authConfigured?: boolean; envName?: string; envAvailable?: boolean; icon?: string; models: number; modelsUrl?: string; enabled: boolean; builtin: boolean };
+export type ModelProvider = { id: string; name: string; mode: string; authConfigured?: boolean; quotaEnabled?: boolean; envName?: string; envAvailable?: boolean; icon?: string; models: number; modelsUrl?: string; enabled: boolean; builtin: boolean };
 export type ProviderModelInfo = { id: string; model: string; name: string; enabled: boolean; contextWindow?: number; maxTokens?: number; supportsImages?: boolean; reasoning?: boolean; thinkingLevels?: ConcreteThinkingLevel[]; origin: ModelOrigin; deletable?: boolean };
 export type DiscoveredModel = { id: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean; thinkingLevels: ConcreteThinkingLevel[] };
 export type ProviderDiscoveryState = { loading?: boolean; importing?: boolean; imported?: number; endpoint?: string; models?: DiscoveredModel[]; selected?: string[]; error?: string };

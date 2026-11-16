@@ -57,6 +57,7 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
       id: provider.id,
       name: provider.name,
       authConfigured: credentialIds.has(provider.id),
+      quotaEnabled: provider.quota?.enabled === true,
       mode: 'key',
       icon: provider.icon,
       models: models.filter((model) => model.providerId === provider.id).length,

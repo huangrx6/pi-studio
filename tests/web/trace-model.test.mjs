@@ -35,3 +35,28 @@ test('missing result stays unknown after completion and trace IDs survive loadin
   const expanded = buildTraceSummary({ ...options, turns: [{ kind: 'user', message: { role: 'user', sourceIndex: 0, timestamp: 1, content: [] } }, ...turns] });
   for (const item of summary.items) assert(expanded.items.some(next => next.id === item.id));
 });
+
+test('a new round keeps old missing receipts and model snapshots in their owning turn', () => {
+  const trace = { id: 'first', requestId: 'first', createdAt: 1050, stats: { messageCount: 1 } };
+  const later = [
+    { kind: 'user', message: { timestamp: 2000, content: [] } },
+    { kind: 'assistant', messages: [{ timestamp: 2200, content: [{ type: 'toolCall', id: 'current', name: 'read' }] }] },
+  ];
+  const summary = buildTraceSummary({ turns: [...turns, ...later], toolResults: new Map(), turnActive: true,
+    requestPlacement: { ...requestPlacement, byAssistantTurn: new Map([[1, [trace]]]) } });
+  const items = new Map(summary.items.map(item => [item.id, item]));
+  assert.equal(items.get('tool:tool-1').status, 'unknown');
+  assert.equal(items.get('request:first').status, 'done');
+  assert.equal(items.get('tool:current').request, undefined);
+  assert.equal(items.get('tool:current').status, 'running');
+});
+
+test('an assistant failure without text contributes one searchable error and keeps the failed message', () => {
+  const summary = buildTraceSummary({ turns: [...turns, { kind: 'assistant', messages: [
+    { timestamp: 1500, errorMessage: '读取模型响应超时', content: [] },
+  ] }], toolResults: new Map(), requestPlacement, turnActive: false });
+  assert.equal(summary.errors, 1);
+  const item = summary.items.find(item => item.status === 'error');
+  assert.equal(item.detail, '读取模型响应超时');
+  assert.equal(item.round, 1);
+});

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import test from 'node:test';
 import ts from 'typescript';
-import * as shortcuts from '../../web/src/shared/shortcuts.mjs';
+import * as shortcuts from '../../web/src/shared/shortcuts.ts';
 
 // Drive the real component's effect and handlers. Native focus movement remains
 // a browser QA responsibility; these tests verify it is never prevented.
@@ -34,7 +34,7 @@ function harness() {
     require(name) {
       if (name === 'react') return react;
       if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
-      if (name.endsWith('shortcuts.mjs')) return {
+      if (name.endsWith('shortcuts.ts')) return {
         ...shortcuts,
         comboFromEvent: event => shortcuts.comboFromEvent(event, 'other'),
         formatShortcut: combo => shortcuts.formatShortcut(combo, false),

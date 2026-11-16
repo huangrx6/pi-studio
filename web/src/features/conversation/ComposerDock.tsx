@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import {
-  LoaderCircle,
   PanelRightOpen,
   ShieldCheck,
   SlidersHorizontal,
   X,
 } from 'lucide-react';
+import { LoadingIndicator } from '../../shared/LoadingState';
 import type {
   ChatMessage,
   ComposerAttachment,
@@ -40,7 +40,7 @@ import { formatFileSize } from '../../shared/filesize';
 import { composerKeyAction } from './composer-submit';
 import { ComposerEditor, type ComposerEditorHandle } from './ComposerEditor';
 import { planComposerPaste } from './composer-paste';
-import { pasteExceedsBudget } from './composer-budget.mjs';
+import { pasteExceedsBudget } from './composer-budget.ts';
 import { ComposerImageAttachment } from './ComposerImageAttachment';
 import { ComposerFeedback } from './ComposerFeedback';
 import { ComposerToolbar } from './ComposerToolbar';
@@ -320,7 +320,7 @@ export function ComposerDock({
         onSelect={selectComposerOption}
         onRetry={retryComposerSuggestions}
       />}
-      {session?.id && compaction.active && <div className="compaction-banner" role="status"><LoaderCircle className="spin" /><span>正在压缩我们的对话内容，以便继续对话…</span></div>}
+      {session?.id && compaction.active && <div className="compaction-banner" role="status"><LoadingIndicator /><span>正在压缩我们的对话内容，以便继续对话…</span></div>}
     {!hasUsableModel && modelHintOpen && <div className="composer-model-hint" role="status">
         <SlidersHorizontal aria-hidden="true" />
         <span>还没有可用模型，发送前先挑一个。</span>

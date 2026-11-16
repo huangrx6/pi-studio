@@ -1,0 +1,21 @@
+.jump-to-latest {
+  position: absolute;
+  z-index: 8;
+  bottom: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  width: var(--icon-button-lg);
+  height: var(--icon-button-lg);
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--surface-floating);
+  color: var(--text);
+  box-shadow: var(--shadow-card);
+}
+
+.jump-to-latest > .lucide { width: var(--icon-lg); height: var(--icon-lg); }
+.jump-to-latest:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--border-hover); }
+.jump-to-latest:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }

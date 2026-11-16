@@ -7,7 +7,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 
-const installedSkillsCss = fs.readFileSync(new URL('../../web/src/features/skills/installed-skills.css', import.meta.url), 'utf8');
+const installedSkillsCss = fs.readFileSync(new URL('../../web/src/features/skills/styles/installed-skills.css', import.meta.url), 'utf8');
 
 const require = createRequire(import.meta.url);
 const root = new URL('../../web/src/features/', import.meta.url);
@@ -40,13 +40,14 @@ const EmptyIcons = {
 test('archive with no sessions hides a useless search and count, leaving one explicit empty state', () => {
   const { ArchivedConversationsSettings } = compile('archives/ArchivedConversationsSettings.tsx', {
     react: SafeReact,
-    'lucide-react': EmptyIcons,
+    'lucide-react': require('lucide-react'),
+    '../../shared/Select': { Select: () => null },
+    '../../shared/ActionMenu': { ActionMenu: () => null },
+    '../../shared/LoadingState': { LoadingIndicator: () => null },
     '../../shared/SettingsPageHeader': { SettingsPageHeader: Header },
     '../../shared/error-text': { errorText: error => String(error) },
     '../../shared/keyboard-navigation': { isComposingKey: () => false },
-    './archive-filter': {
-      filterArchivedWorkspaces: workspaces => workspaces.filter(workspace => workspace.sessions.length),
-    },
+    './archive-filter': require('../../web/src/features/archives/archive-filter.ts'),
   });
   const empty = renderToStaticMarkup(React.createElement(ArchivedConversationsSettings, {
     workspaces: [], onRestore: async () => {}, onDelete: async () => {},
@@ -139,6 +140,7 @@ test('zero usage hides empty charts and zero-value workbench behind one first-ru
   };
   const resource = { value: snapshot, pending: false, error: null };
   const { UsageSettings } = compile('usage/UsageSettings.tsx', {
+    '../../shared/LoadingState': compile('../shared/LoadingState.tsx', {}),
     react: React,
     'lucide-react': EmptyIcons,
     '../../shared/DatePicker': { DatePicker: () => null },

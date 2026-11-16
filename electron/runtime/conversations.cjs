@@ -22,6 +22,7 @@ const {
 } = require('../core/app-settings.cjs');
 const { getStudioModelsRuntime } = require('../core/studio-models.cjs');
 const durableView = require('./view.cjs');
+const { releaseProviderSession } = require('./provider-session.cjs');
 const { readHistoryPage, validatePosition } = require('./history-page.cjs');
 const {
   getDurableRuntime,
@@ -1786,6 +1787,8 @@ async function purgeConversationData(rootIds, options = {}) {
     deletePermissionSessionPolicy(key);
   }
 
+  // Read provider identities while their conversation documents still exist.
+  for (const conversation of conversations) await releaseProviderSession(runtime, conversation.id);
   const removed = db.deleteConversationTrees(roots, {
     extraTaskIds: options.extraTaskIds,
   });
@@ -1808,6 +1811,15 @@ async function conversationAction(input = {}) {
   const db = getStudioDatabase();
   if (input.kind === 'workspace') {
     if (input.action === 'rename') db.upsertWorkspace({ cwd: input.id, name: input.name });
+    else if (input.action === 'remove-archived') {
+      if (!Array.isArray(input.sessionIds) || !input.sessionIds.length) throw new Error('请选择要删除的归档会话');
+      const ids = new Set(input.sessionIds);
+      const sessions = db.listConversations({ includeArchived: true }).filter((row) =>
+        row.workspace === input.id && row.archived && ids.has(conversationKey(row)));
+      if (sessions.length !== ids.size) throw new Error('归档列表已变化，请刷新后重新选择。');
+      await purgeConversationData(sessions.map((row) => row.id));
+      return { ok: true, deletedSessions: sessions.length };
+    }
     else if (input.action === 'remove') {
       const sessions = db.listConversations({ includeArchived: true })
         .filter((item) => item.workspace === input.id);

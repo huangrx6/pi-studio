@@ -7,7 +7,7 @@ import ts from 'typescript';
 import {
   markRejectedQueuedSubmission,
   removeAdmittedQueuedSubmission,
-} from '../../web/src/features/conversation/composer-delivery.mjs';
+} from '../../web/src/features/conversation/composer-delivery.ts';
 
 // Exercise the actual App batch and automatic queue senders. The imported
 // delivery helpers are injected because the extracted function text cannot

@@ -247,11 +247,9 @@ async function listSubagentChildren(parentId) {
       conversationId,
       runtime.context,
     );
-    const pending = Object.values(registry.supervisorRequests)
-      .filter((request) => (
-        request?.childConversationId === conversationId
-        && request.status === 'pending'
-      )).length;
+    const supervisorRequests = Object.entries(registry.supervisorRequests || {})
+      .filter(([, request]) => request?.childConversationId === conversationId && request.status === 'pending')
+      .map(([id, request]) => ({ id, question: request.question, createdAt: request.createdAt }));
     const ownerTask = agent.ownerTaskId
       ? await runtime.harness.getTask(agent.ownerTaskId, runtime.context)
       : undefined;
@@ -266,10 +264,7 @@ async function listSubagentChildren(parentId) {
       taskStatusValue,
       liveRunning: Boolean(live?.run),
       cachedStatus: agent.lastStatus,
-      supervisorPending: pending,
-      supervisorRequests: Object.values(registry.supervisorRequests)
-        .filter(request => request?.childConversationId === conversationId && request.status === 'pending')
-        .map(request => ({ id: request.requestId, question: request.question, createdAt: request.createdAt })),
+      supervisorPending: supervisorRequests.length,
     });
     if (!['pending', 'running', 'completed', 'failed', 'stopped', 'paused', 'waiting'].includes(status)) {
       status = 'pending';
@@ -293,7 +288,8 @@ async function listSubagentChildren(parentId) {
       runId: agent.lastReporterTaskId || agent.anchorTaskId || conversationId,
       startedAt: agent.createdAt,
       endedAt,
-      supervisorPending: pending,
+      supervisorPending: supervisorRequests.length,
+      supervisorRequests,
       lastReporterId: agent.lastReporterTaskId ? String(agent.lastReporterTaskId) : undefined,
       error: agent.lastError || taskError(statusTask),
     });

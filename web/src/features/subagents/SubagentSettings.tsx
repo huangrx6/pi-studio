@@ -5,12 +5,12 @@ import {
   ChevronRight,
   FolderOpen,
   GitMerge,
-  LoaderCircle,
   RotateCw,
   Save,
   Trash2,
   Undo2,
 } from 'lucide-react';
+import { LoadingIndicator, LoadingState } from '../../shared/LoadingState';
 import type { AgentToolInfo, AgentToolSource } from '../../types/agent-tool-types';
 import type {
   SubagentConfig,
@@ -24,7 +24,7 @@ import { runtimeRefreshFailure } from '../../shared/runtime-refresh';
 import { useActionConfirmation } from '../../shared/ConfirmDialog';
 import { useSettingsDraftGuard } from '../../shared/SettingsDraftGuard';
 import { createSubagentSettingsOwner, createSubagentSettingsWrites, toggleSubagentAllowedTool } from './subagent-settings-state';
-import './subagent-settings.css';
+import './styles/subagent-settings.css';
 
 const settingsWrites = createSubagentSettingsWrites();
 
@@ -440,10 +440,7 @@ export function SubagentSettings({
 
   if (loading && !snapshot) {
     return (
-      <div className="settings-loading" role="status">
-        <LoaderCircle className="spin" />
-        正在读取子智能体运行配置…
-      </div>
+      <LoadingState variant="section">正在读取子智能体运行配置…</LoadingState>
     );
   }
 
@@ -1010,7 +1007,7 @@ export function SubagentSettings({
           撤销更改
         </button>
         <button className="settings-save" disabled={!dirty || busy || !snapshot} onClick={() => void save()}>
-          {saving ? <LoaderCircle className="spin" /> : <Save />}
+          {saving ? <LoadingIndicator /> : <Save />}
           {saving ? '正在保存…' : '保存配置'}
         </button>
       </div>}

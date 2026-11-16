@@ -7,6 +7,7 @@
  */
 
 @import './styles/app/01-shell-foundation.css';
+@import './styles/loading.css';
 @import './styles/app/02-conversation.css';
 @import './styles/app/03-file-browser.css';
 @import './styles/app/04-settings.css';
@@ -31,6 +32,6 @@
 @import './styles/app/23-wallpaper-inside.css';
 @import './styles/app/24-extension-chip.css';
 @import './styles/app/25-workspace-menu.css';
-@import './shell/shell-layout.css';
-@import './features/git/git-settings.css';
-@import './features/conversation/conversation-surfaces.css';
+@import './shell/styles/shell-layout.css';
+@import './features/git/styles/git-settings.css';
+@import './features/conversation/styles/conversation-surfaces.css';

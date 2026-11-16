@@ -1,0 +1,42 @@
+/* Action icons follow their control's color and respond immediately. */
+.spin { animation: loading-spin var(--loading-spin-duration) linear infinite; }
+@keyframes loading-spin { to { transform: rotate(1turn); } }
+
+.loading-state > .loading-indicator {
+  width: var(--loading-icon-size);
+  height: var(--loading-icon-size);
+  flex: none;
+}
+
+/* Custom extension fallbacks and list skeletons use the same quiet entrance. */
+.loading-placeholder,
+.loading-state { animation: loading-appear var(--transition-fast) var(--loading-delay) backwards; }
+@keyframes loading-appear { from { opacity: 0; } to { opacity: 1; } }
+
+.loading-state {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--loading);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-normal);
+}
+
+.loading-state--inline .loading-state-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.loading-state--section,
+.loading-state--panel {
+  --loading-icon-size: var(--loading-panel-icon-size);
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+.loading-state--section { min-height: var(--loading-section-height); }
+.loading-state--panel { min-height: 0; flex: 1; align-self: stretch; }

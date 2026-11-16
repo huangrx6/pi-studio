@@ -8,7 +8,7 @@ import {
   Music2,
   Video,
 } from 'lucide-react';
-import { previewFormatForFile } from './file-preview.mjs';
+import { previewFormatForFile } from './file-preview.ts';
 
 export type FilePreviewFormat =
   | 'markdown'

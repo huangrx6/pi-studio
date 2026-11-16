@@ -16,7 +16,9 @@ function compile(relative, imports = {}) {
   return context.exports;
 }
 
-const { NewConversationWelcome } = compile('../../web/src/features/conversation/NewConversationWelcome.tsx');
+const { NewConversationWelcome } = compile('../../web/src/features/conversation/NewConversationWelcome.tsx', {
+  '../../shared/LoadingState': compile('../../web/src/shared/LoadingState.tsx'),
+});
 const render = overrides => renderToStaticMarkup(React.createElement(NewConversationWelcome, {
   loading: false,
   ...overrides,
@@ -34,5 +36,6 @@ test('the welcome state is one line and one sentence', () => {
 test('loading adds a quiet status line without bringing back the old blocks', () => {
   const html = render({ loading: true });
   assert.match(html, /正在载入…/);
+  assert.match(html, /role="status"/);
   assert.doesNotMatch(html, /new-conversation-lede|new-conversation-suggestion/);
 });

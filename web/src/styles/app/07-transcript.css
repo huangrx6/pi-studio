@@ -158,12 +158,9 @@
   position: fixed;
   z-index: 80;
   inset: 0;
-  display: grid;
-  place-items: center;
   background: var(--image-preview-scrim);
   color: var(--image-preview-title-fg);
 }
-.image-preview-loading svg { width: var(--icon-lg); height: var(--icon-lg); }
 .studio-lightbox.yarl__root {
   /* hiddenInset 窗口控制位于左上角；计数器从其后开始，避免与交通灯叠放。 */
   --studio-lightbox-top-inset: 16px;
@@ -380,9 +377,6 @@
   .studio-lightbox-hint { display: none; }
 }
 .message-error { margin-top: 12px; padding: 9px 11px; border: 1px solid var(--error-border); border-radius: var(--radius-tag); background: var(--error-soft); color: var(--error); font-size: var(--text-sm); }
-.spin { color: var(--loading); animation: rotate 1s linear infinite; }
-.settings-save .spin { color: var(--on-button); }
-.settings-save:disabled .spin { color: var(--disabled-text); }
 
 /* Composer command and file picker. */
 /* 输入框内的命令/文件选择器：锚定 composer 上方，z-index 40，最大高度 370px，

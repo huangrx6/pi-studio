@@ -1,0 +1,83 @@
+.archived-conversations-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  container-type: inline-size;
+}
+.archived-conversations-settings > .settings-page-header { margin-bottom: 0; }
+.settings-content .archived-conversations-settings .settings-page-header h1 { font-size: var(--text-title); }
+.archive-search-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(110px, .37fr) minmax(130px, .45fr);
+  align-items: center;
+  gap: var(--space-2);
+}
+.archive-search-row .pi-select { min-width: 0; }
+.archive-search { position: relative; display: flex; align-items: center; }
+.archive-search > svg { position: absolute; left: var(--space-3); width: var(--icon-md); height: var(--icon-md); color: var(--muted); pointer-events: none; }
+.settings-content .archive-search input[type="search"] {
+  width: 100%;
+  padding-inline: 36px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-round);
+  background: var(--tint-neutral);
+}
+.archive-search input::-webkit-search-cancel-button { display: none; }
+.archive-search > button { position: absolute; right: var(--space-1); }
+.archive-workspace-section { min-width: 0; }
+.archive-workspace-heading, .archive-session-actions, .archive-session-meta { display: flex; align-items: center; gap: var(--space-2); }
+.archive-workspace-heading { margin-bottom: var(--space-3); }
+.archive-workspace-heading > svg { flex: none; width: var(--icon-md); height: var(--icon-md); color: var(--muted); }
+.archive-workspace-heading h2, .archive-session-copy h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-content .archived-conversations-settings .archive-workspace-heading h2 { margin: 0; font-size: var(--text-md); font-weight: var(--weight-medium); }
+.archive-workspace-heading > span { margin-left: auto; color: var(--muted); font-size: var(--text-13); white-space: nowrap; }
+.archive-workspace-heading > button, .archive-session-actions > button { flex: none; }
+.archive-workspace-heading .icon-button[aria-expanded="true"] { background: var(--tint-neutral); }
+.archive-session-list {
+  margin: 0;
+  padding: 0 var(--space-4);
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--settings-card-bg) 96%, var(--text));
+}
+.archive-session-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  min-height: 60px;
+  padding-block: var(--space-3);
+}
+.archive-session-card + .archive-session-card { border-top: 1px solid var(--divider); }
+.archive-session-copy { min-width: 0; }
+.archive-session-copy h3 { margin: 0; font-size: var(--text-base); font-weight: var(--weight-medium); line-height: var(--leading-normal); }
+.archive-session-meta { margin-top: 2px; color: var(--muted); font-size: var(--text-sm); }
+.archive-session-actions .archive-restore-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: var(--control-sm);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--tint-neutral);
+  color: var(--text);
+  font-size: var(--text-13);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+.archive-restore-button:hover:not(:disabled) { background: var(--surface-hover); }
+.archive-session-actions .archive-delete-button { color: var(--muted); }
+.archive-delete-button:hover:not(:disabled), .action-menu > button.is-danger:hover, .action-menu > button.is-danger:focus-visible { background: var(--error-soft); color: var(--error); }
+.action-menu > button.is-danger { color: var(--error); justify-content: flex-start; font-size: var(--text-13); }
+.archive-session-error { grid-column: 1 / -1; margin: 0; color: var(--error); font-size: var(--text-sm); line-height: var(--leading-body); overflow-wrap: anywhere; }
+.archive-settings-empty { display: grid; justify-items: start; gap: 6px; padding: 28px 0; color: var(--muted); font-size: var(--text-sm); }
+.archive-settings-empty p { margin: 0; }
+.archive-settings-empty span { color: var(--faint); line-height: var(--leading-body); }
+@container (max-width: 520px) {
+  .archive-search-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .archive-search { grid-column: 1 / -1; }
+  .archive-session-list { padding-inline: var(--space-3); }
+  .archive-session-card, .archive-session-actions { column-gap: var(--space-1); }
+}

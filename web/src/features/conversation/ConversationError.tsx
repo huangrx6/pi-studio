@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
 import { errorText } from '../../shared/error-text';
 import { conversationErrorPresentation } from './error-presentation';
-import './conversation-error.css';
+import './styles/conversation-error.css';
 
 /** Show the actual reason once; expansion never resubmits a task. */
 export function ConversationError({

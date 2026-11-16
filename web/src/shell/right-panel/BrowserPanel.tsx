@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, ExternalLink, Globe, RotateCw, X } from 'lucide-react';
-import { normalizeBrowserTarget } from './browser-target.mjs';
+import { normalizeBrowserTarget } from './browser-target.ts';
 
 type WebviewElement = HTMLElement & {
   loadURL(url: string): Promise<void>;

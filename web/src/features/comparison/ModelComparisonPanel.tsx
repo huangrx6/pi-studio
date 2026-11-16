@@ -5,10 +5,10 @@ import {
   Columns2,
   ExternalLink,
   FileDiff,
-  LoaderCircle,
   Play,
   Trash2,
 } from 'lucide-react';
+import { LoadingIndicator } from '../../shared/LoadingState';
 import { Select } from '../../shared/Select';
 import { Markdown } from '../../shared/Markdown';
 import { useActionConfirmation } from '../../shared/ConfirmDialog';
@@ -25,7 +25,7 @@ import type {
   ModelComparisonSnapshot,
   ModelComparisonStartResult,
 } from '../../types/comparison-types';
-import './model-comparison.css';
+import './styles/model-comparison.css';
 
 type ComposerImage = { type: 'image'; data: string; mimeType: string };
 
@@ -439,7 +439,7 @@ export function ModelComparisonPanel({
           label="两个模型分别计费；隔离分支不会修改原对话，文件改动保留在隔离工作树中。"
         />
         <button type="button" className="primary-button comparison-start-button" disabled={!canStart} onClick={() => void start()}>
-          {starting ? <LoaderCircle className="spin" /> : <Play />}
+          {starting ? <LoadingIndicator /> : <Play />}
           {starting ? '正在创建分支' : '开始双跑'}
         </button>
       </footer>
@@ -459,7 +459,7 @@ export function ModelComparisonPanel({
           </div>
           <span className="comparison-result-status">
             {result.status === 'running'
-              ? <LoaderCircle className="spin" />
+              ? <LoadingIndicator />
               : result.status === 'completed'
                 ? <CheckCircle2 />
                 : <AlertTriangle />}
@@ -497,7 +497,7 @@ export function ModelComparisonPanel({
               disabled={result.status === 'discarded' || Boolean(adopting || discarding)}
               onClick={() => void discardBranch(result)}
             >
-              {discarding === result.sessionId ? <LoaderCircle className="spin" /> : <Trash2 />}
+              {discarding === result.sessionId ? <LoadingIndicator /> : <Trash2 />}
               <span>{result.status === 'discarded' ? '已丢弃' : '丢弃'}</span>
             </button>
             <button
@@ -506,7 +506,7 @@ export function ModelComparisonPanel({
               disabled={result.status !== 'completed' || Boolean(adopting || discarding)}
               onClick={() => void adopt(result)}
             >
-              {adopting === result.sessionId ? <LoaderCircle className="spin" /> : <ExternalLink />}
+              {adopting === result.sessionId ? <LoadingIndicator /> : <ExternalLink />}
               <span>{result.worktree?.changedFiles ? '应用并打开' : '打开分支'}</span>
             </button>
           </div>

@@ -6,7 +6,7 @@ import { BrowserPanel } from '../../../web/src/shell/right-panel/BrowserPanel';
 import '../../../web/src/styles/tokens.css';
 import '../../../web/src/styles/palette.css';
 import '../../../web/src/app.css';
-import '../../../web/src/shell/right-panel/right-panel.css';
+import '../../../web/src/shell/right-panel/styles/right-panel.css';
 const fixture = window as any;
 fixture.__panelQa = { loads: [], additions: 0, removals: 0, navigations: [], terminalCreates: [], terminalResizes: [], terminalPending: [], terminalEvents: new Set(), terminalClosed: 0 };
 fixture.piApi = {

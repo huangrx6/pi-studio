@@ -16,7 +16,7 @@ import { createPortal } from 'react-dom';
 import { Archive, Copy, GitFork, MoreHorizontal, Pencil, Pin, PinOff, SquarePen, Trash2, Undo2 } from 'lucide-react';
 import { SettingsDialog } from '../shared/SettingsDialog';
 import { errorText } from '../shared/error-text';
-import './sidebar-actions.css';
+import './styles/sidebar-actions.css';
 
 /** 侧边栏支持的操作类型，与 `pi:conversation-action` 的 action 参数一致。 */
 export type SidebarAction = 'rename' | 'remove' | 'pin' | 'archive' | 'fork';

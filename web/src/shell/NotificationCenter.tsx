@@ -6,7 +6,7 @@ import {
   type AppNotification,
   type NotificationTone,
 } from './notification-state';
-import './notification-center.css';
+import './styles/notification-center.css';
 
 export type {
   AppNotification,

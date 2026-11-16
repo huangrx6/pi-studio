@@ -10,7 +10,7 @@ import {
   parseIsoDay,
   pickerCalendarDays,
   pickerWeekday,
-} from '../../web/src/shared/date-picker.mjs';
+} from '../../web/src/shared/date-picker.ts';
 
 test('date picker parses and formats local calendar days deterministically', () => {
   const date = parseIsoDay('2026-10-05');

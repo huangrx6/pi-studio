@@ -133,10 +133,12 @@ function modelInfoFor(model, _cwd = DEFAULT_CWD, thinkingLevelOverride, modelRef
     };
   }
   const actualRuntime = runtime || throwSync('模型运行时尚未初始化');
+  const provider = getStudioDatabase().getProvider(model.provider);
   return {
     modelRef: modelRefOverride || modelRefFor(model),
     label: model.name || model.id,
     supportsImages: Array.isArray(model.input) && model.input.includes('image'),
+    ...(provider?.enabled && provider.quota?.enabled ? { quotaProvider: { id: provider.id, name: provider.name } } : {}),
     ...thinkingOptions(model, thinkingLevelOverride, actualRuntime),
   };
 }

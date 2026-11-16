@@ -224,11 +224,12 @@ try {
   await hold('saveHarnessProfile', '/qa/synthetic/performance');
   await harness().getByRole('button', { name: '保存配置', exact: true }).click(); await pending('saveHarnessProfile');
   await openSession('perf-1'); await openSettings('Harness 配置');
-  await harness().locator('.harness-loading').waitFor();
+  const refreshingHarness = harness().getByRole('status').filter({ hasText: '正在刷新 Harness 配置' });
+  await refreshingHarness.waitFor();
   assert.equal(await harnessName.isDisabled(), true, 'shared pending profile write blocks stale editor in B');
   assert.equal(await instructions.isDisabled(), true);
   await release('saveHarnessProfile');
-  await harness().locator('.harness-loading').waitFor({ state: 'detached' });
+  await refreshingHarness.waitFor({ state: 'detached' });
   assert.match(await harnessName.inputValue(), /团队审查/);
   assert.equal(await instructions.isEditable(), true);
   await instructions.fill('B 的当前未保存指令必须保留。');

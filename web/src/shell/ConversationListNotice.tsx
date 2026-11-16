@@ -1,4 +1,4 @@
-import './conversation-list-notice.css';
+import './styles/conversation-list-notice.css';
 
 /** A committed mutation needs a read retry, never a second mutation. */
 export function ConversationListNotice({ busy, onRefresh }: { busy: boolean; onRefresh: () => void }) {

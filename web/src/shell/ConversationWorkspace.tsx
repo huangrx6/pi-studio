@@ -1,5 +1,7 @@
 import { Fragment, lazy, Suspense, useEffect, useMemo, useState, type ComponentProps } from 'react';
-import { ArrowDown, ChevronLeft, LoaderCircle } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
+import { JumpToLatestButton } from '../shared/JumpToLatestButton';
+import { LoadingState } from '../shared/LoadingState';
 import { AssistantTurnView, ChatMessageView } from '../features/conversation/ChatMessage';
 import { ComposerDock } from '../features/conversation/ComposerDock';
 import { ConversationError } from '../features/conversation/ConversationError';
@@ -41,7 +43,7 @@ import {
   isNearBottom,
   nestedScrollableConsumesWheel,
   shouldReleaseFollowOnWheel,
-} from '../features/conversation/chat-scroll.mjs';
+} from '../features/conversation/chat-scroll.ts';
 
 const SubagentOverview = lazy(async () => {
   const module = await import('../features/subagents/SubagentViews');
@@ -94,6 +96,7 @@ type ConversationShell = {
 type HeaderState = {
   /** 顶栏更新入口；没有可更新目标时为 null。 */
   update: ComponentProps<typeof ConversationHeader>['update'];
+  quotaProvider?: ComponentProps<typeof ConversationHeader>['quotaProvider'];
   conversationDetailExtensionCount: number;
   openNotificationSession: (id: string) => Promise<void>;
   runNotificationAction: (item: AppNotification) => Promise<void>;
@@ -107,6 +110,7 @@ type HeaderState = {
 
 type ExtensionWorkspaceState = {
   chipItems: Array<{ item: ExtensionUiItem; targetId: string }>;
+  openItem: (id: string) => void;
   openChip: (chip: { item: ExtensionUiItem; targetId: string }) => void;
   surface: ComponentProps<typeof ConversationExtensionDock>['surface'];
   hubItems: ExtensionUiItem[];
@@ -312,6 +316,7 @@ export function ConversationWorkspace({
         onReturnToMainAgent={header.returnToMainAgent}
         onOpenAgentOverview={header.openAgentOverview}
         onOpenConversationExtensionHub={header.openConversationExtensionHub}
+        quotaProvider={header.quotaProvider}
         chips={scopedChips}
         extensionSurface={extensions.surface}
         cwd={session?.cwd}
@@ -432,12 +437,7 @@ export function ConversationWorkspace({
           {showSessionError && (!pendingAssistantVisible || turnActive) && <ConversationError message={error!} onDismiss={() => setError(null)} />}
         </div>
       </div>
-      {(transcriptTruncated || !atBottom) && <div className="transcript-back-bar">
-        <button type="button" onClick={() => { void returnToLatest(); }} disabled={returningToLatest} aria-label="回到最新消息">
-          {returningToLatest ? <LoaderCircle className="spin" aria-hidden="true" /> : <ArrowDown aria-hidden="true" />}
-          <span>{returningToLatest ? '正在加载' : '回到最新'}</span>
-        </button>
-      </div>}
+      {(transcriptTruncated || !atBottom) && <JumpToLatestButton busy={returningToLatest} onClick={() => void returnToLatest()} />}
       {!settingsOpen && outline.items.length > 1 && (
         <ConversationOutline
           items={outline.items}
@@ -451,7 +451,7 @@ export function ConversationWorkspace({
       </div>}
 
       {!isNewConversation && agentView.kind === 'extensions' && <div className="conversation-extension-scroll">
-        <div className="chat-column">
+        <div className="conversation-extension-column">
           {extensions.activeItem
             ? <>
               <div className="extension-panel-bar">
@@ -472,6 +472,8 @@ export function ConversationWorkspace({
               />
             </>
             : <ConversationExtensionHub
+              onBack={header.returnToMainAgent}
+              onOpenItem={extensions.openItem}
               items={extensions.hubItems}
               surface={extensions.surface}
               sessionId={session?.id || 'new'}
@@ -505,21 +507,20 @@ export function ConversationWorkspace({
         </div>
       </div>}
 
-      {!isNewConversation && showTrace && <ConversationTracePage key={session?.id} summary={traceSummary} />}
+      {!isNewConversation && showTrace && <ConversationTracePage key={session?.id} summary={traceSummary} onBack={header.returnToMainAgent} />}
 
       {agentView.kind === 'agents' && (
         <div className="agent-workspace">
           <Suspense fallback={
-            <div className="agent-transcript-loading" role="status" aria-label="正在加载子智能体视图">
-              <LoaderCircle className="spin" aria-hidden="true" />
-              正在加载子智能体…
-            </div>
+            <LoadingState variant="panel">正在加载子智能体…</LoadingState>
           }>
-            {!agentView.child && <SubagentOverview
+            <SubagentOverview
+              hidden={Boolean(agentView.child)}
               children={subagents.subagentChildren}
               budget={subagents.subagentBudget}
               selection={modelSelection}
               refreshing={subagents.subagentRefreshing}
+              error={subagents.subagentListError}
               onRefresh={() => void subagents.refreshSubagentChildren(true)}
               onOpenChild={subagents.openAgentTranscript}
               onDeleteChild={(child) => void subagents.deleteSubagent(child)}
@@ -529,10 +530,12 @@ export function ConversationWorkspace({
               onReturnMain={header.returnToMainAgent}
               mode={subagents.subagentOverviewMode}
               onModeChange={subagents.setSubagentOverviewMode}
-            />}
+            />
             {agentView.child && (
               <SubagentTranscriptView
+                key={agentView.child.key}
                 child={agentView.child}
+                onRetry={() => { if (agentView.child) subagents.openAgentTranscript(agentView.child); }}
                 transcript={subagents.subagentTranscript}
                 loading={subagents.subagentLoading}
                 error={subagents.subagentError}

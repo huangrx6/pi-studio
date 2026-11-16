@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { hasMarkdownCode, messagesHaveMarkdownCode } from '../../web/src/shared/markdown-code.mjs';
+import { hasMarkdownCode, messagesHaveMarkdownCode } from '../../web/src/shared/markdown-code.ts';
 
 test('fenced and indented code request syntax highlighting', () => {
   assert.equal(hasMarkdownCode('text\n```ts\nconst value = 1;\n```'), true);

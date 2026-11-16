@@ -10,6 +10,7 @@
  */
 
 export {};
+import type { ProviderQuotaConfig, ProviderQuotaSnapshot, QuotaField, QuotaFieldSuggestion, QuotaMetric } from './types/provider-quota';
 import type { CommittedProjection, MutationProjection } from './types/mutation-types';
 import type { ExtensionInstallResult, ExtensionMutationResult } from './types/extension-types';
 import type { ChatAttachment, ChatMessage, ComposerAttachment, ComposerCommand, ComposerFile, RequestTrace, TurnDiff, UploadedAttachment } from './types/chat-types';
@@ -249,7 +250,7 @@ export interface SettingsSnapshot {
   /** 用户手动添加的模型。 */
   customModels: Array<{ providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean; thinkingLevels?: ConcreteThinkingLevel[]; enabled?: boolean; origin?: 'configured' | 'override' }>;
   /** 模型来源列表。 */
-  providers: Array<{ id: string; name: string; mode: string; authConfigured?: boolean; envName?: string; envAvailable?: boolean; icon?: string; models: number; modelsUrl?: string; enabled: boolean; builtin: boolean }>;
+  providers: Array<{ id: string; name: string; mode: string; authConfigured?: boolean; quotaEnabled?: boolean; envName?: string; envAvailable?: boolean; icon?: string; models: number; modelsUrl?: string; enabled: boolean; builtin: boolean }>;
   /** MCP 服务器列表。 */
   mcp: Array<{
     name: string;
@@ -481,6 +482,7 @@ declare global {
           | 'pin'
           | 'archive'
           | 'fork'
+          | 'remove-archived'
           | 'long-task-set'
           | 'long-task-edit'
           | 'long-task-complete'
@@ -488,6 +490,7 @@ declare global {
           | 'long-task-pause'
           | 'long-task-resume';
         name?: string;
+        sessionIds?: string[];
         entryId?: string;
         goal?: string;
         completionCriteria?: string;
@@ -603,7 +606,10 @@ declare global {
       /** 把发现的模型合并到来源，已有模型保持不变。 */
       importProviderModels(payload: { providerId: string; models: Array<{ id: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean; thinkingLevels?: ConcreteThinkingLevel[] }>; cwd?: string }): Promise<CommittedProjection<ModelResourceSnapshot>>;
       /** 读取来源的 baseUrl、API 类型与图标。 */
-      providerConfig(providerId: string): Promise<{ providerId: string; name: string; baseUrl: string; api: string; icon: string; modelsUrl: string; builtin: boolean; enabled: boolean }>;
+      providerQuota(providerId: string, refresh?: boolean): Promise<ProviderQuotaSnapshot>;
+      providerQuotaFields(input: { providerId: string; endpoint: string; auth: ProviderQuotaConfig['auth']; apiKey?: string }): Promise<QuotaFieldSuggestion[]>;
+      previewQuotaMapping(input: { fields: QuotaField[]; sample: string }): Promise<QuotaMetric[]>;
+      providerConfig(providerId: string): Promise<{ providerId: string; name: string; baseUrl: string; api: string; icon: string; modelsUrl: string; quota: ProviderQuotaConfig | null; builtin: boolean; enabled: boolean }>;
       /** 切换模型，返回新的选择快照。 */
       setModel(modelRef: string, cwd?: string): Promise<ModelSelection>;
       /** 设置 Studio 新对话的默认模型。 */
@@ -678,7 +684,7 @@ declare global {
       /** 保存某来源的 API Key。 */
       setKey(payload: { providerId: string; apiKey: string; cwd?: string }): Promise<CommittedProjection<ModelResourceSnapshot>>;
       /** 保存来源配置（baseUrl、API 类型、首个模型、可选 API Key）。 */
-      addProvider(payload: { providerId: string; name: string; baseUrl: string; api: string; apiKey?: string; icon?: string; modelsUrl?: string; editing?: boolean; cwd?: string }): Promise<CommittedProjection<ModelResourceSnapshot>>;
+      addProvider(payload: { providerId: string; name: string; baseUrl: string; api: string; apiKey?: string; icon?: string; modelsUrl?: string; quota?: ProviderQuotaConfig | null; editing?: boolean; cwd?: string }): Promise<CommittedProjection<ModelResourceSnapshot>>;
       /** Retry runtime/catalog refresh without writing provider metadata or credentials. */
       refreshModels(cwd?: string): Promise<ModelResourceSnapshot>;
       /** 启用或停用一个模型来源；停用后其模型不会进入新的模型目录。 */

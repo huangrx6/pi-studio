@@ -1,9 +1,9 @@
 import { useState, type Dispatch, type SetStateAction } from 'react';
-import { LoaderCircle } from 'lucide-react';
+import { LoadingIndicator } from '../../shared/LoadingState';
 import type { McpConnectionTestResult } from '../../global.d';
 import { InfoHint } from '../../shared/InfoHint';
 import { Select } from '../../shared/Select';
-import './mcp-editor.css';
+import './styles/mcp-editor.css';
 
 export type McpEditorDraft = {
   name: string; transport: string; command: string; args: string; cwd: string; url: string;
@@ -34,15 +34,15 @@ export function McpEditorFields({ draft, setDraft, editing, mcpTesting, settings
         <span className="settings-field-heading"><label htmlFor="mcp-command">启动命令</label><InfoHint label="只填写可执行文件，不要拼接 shell 命令。开头支持 ~/ 展开。" /></span>
         <input id="mcp-command" required value={draft.command} onChange={event => update('command', event.target.value)} placeholder="npx" />
       </div>
-      <div className="settings-field field-wide">
+      <div className="settings-field mcp-connection-field">
         <span className="settings-field-heading"><label htmlFor="mcp-args">启动参数</label><InfoHint label="每行一个参数；路径中的空格会保留。" /></span>
         <textarea id="mcp-args" value={draft.args} onChange={event => update('args', event.target.value)} rows={3} placeholder={'-y\n@modelcontextprotocol/server-filesystem\n/path/to/workspace'} />
       </div>
-    </> : <div className="settings-field field-wide">
+    </> : <div className="settings-field mcp-connection-field">
       <span className="settings-field-heading"><label htmlFor="mcp-url">服务器地址</label><InfoHint label="远程服务必须使用 HTTPS；localhost、127.0.0.1 与 ::1 可使用 HTTP 做本机开发。" /></span>
       <input id="mcp-url" required type="url" value={draft.url} onChange={event => update('url', event.target.value)} placeholder="https://example.com/mcp" />
     </div>}
-    <div className="settings-field field-wide">
+    <div className="settings-field mcp-connection-field">
       <span className="settings-field-heading"><label htmlFor={stdio ? 'mcp-env' : 'mcp-headers'}>{stdio ? '环境变量' : 'HTTP Headers'}</label>
         <InfoHint label={stdio
           ? '每行 KEY=value；支持 ${ENV_VAR} 引用。Studio 只传入 PATH、HOME 等运行所需变量，不会自动透传 shell 密钥；编辑时 KEY= 可保留已保存值。值只保存在主进程的加密存储中。'
@@ -81,7 +81,7 @@ export function McpEditorFields({ draft, setDraft, editing, mcpTesting, settings
         <button type="button" className="settings-outline" disabled={mcpTesting || settingsBusy} onClick={event => {
           if (mcpTesting || settingsBusy) return;
           if (!event.currentTarget.form || event.currentTarget.form.reportValidity()) void testCurrentMcp();
-        }}>{mcpTesting && <LoaderCircle className="spin" />}{mcpTesting ? '正在连接…' : '测试连接'}</button>
+        }}>{mcpTesting && <LoadingIndicator />}{mcpTesting ? '正在连接…' : '测试连接'}</button>
         <span>使用当前草稿连接一次，不保存配置。</span>
       </div>
       {testResult && <McpEditorTestResult key={JSON.stringify([testResult.ok, testResult.durationMs])} result={testResult} />}

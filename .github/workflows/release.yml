@@ -77,7 +77,7 @@ jobs:
         run: |
           pnpm run extension:schema
           node tools/cli/pi-studio-extension.mjs validate examples/extensions/agent-starter --scope user --json
-          node tools/cli/pi-studio-extension.mjs validate extensions/pi-quota-status --scope user --json
+          node tools/cli/pi-studio-extension.mjs validate extensions/pi-project-scripts --scope user --json
 
       - name: Validate macOS signing certificate
         shell: bash

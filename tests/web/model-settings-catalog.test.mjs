@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { modelCatalogPage, discoverySelection } from '../../web/src/features/models/model-settings-catalog.mjs';
+import { modelCatalogPage, discoverySelection } from '../../web/src/features/models/model-settings-catalog.ts';
 const catalog = Array.from({ length: 347 }, (_, index) => ({ id: `source/model-${index}`, model: `model-${index}`, name: `Model ${index}` }));
 
 test('catalog pages expose all 300+ models with an explicit remaining count', () => {

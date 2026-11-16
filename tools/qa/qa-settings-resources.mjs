@@ -37,7 +37,7 @@ async function capture(name) {
   assert.deepEqual(overflows, [], `${name}: resource rows fit narrow window`);
   if (await page.locator('.model-settings').count()) {
     const gaps = await page.locator('.model-settings > .model-settings-section').evaluateAll((nodes) => nodes.slice(1).map((node, index) => node.getBoundingClientRect().top - nodes[index].getBoundingClientRect().bottom));
-    assert(gaps.length >= 2 && gaps.every((gap) => gap >= 24), `${name}: actual section gaps >=24px, got ${gaps.join(', ')}`);
+    assert(gaps.length >= 1 && gaps.every((gap) => gap >= 24), `${name}: actual section gaps >=24px, got ${gaps.join(', ')}`);
     (result.sectionGaps ??= {})[name] = gaps;
   }
   const hubGeometry = await page.locator('.skill-hub-card .skill-hub-search, .skill-hub-card .skill-hub-actions > button').evaluateAll(nodes => nodes.map(node => {
@@ -118,7 +118,9 @@ try {
   assert.deepEqual(await page.evaluate(() => window.__settingsResourcesQa.calls.find((call) => call.method === 'importProviderModels').models.map((item) => item.id)), ['discovered-new']);
   await ensureCatalog(); await provider.getByRole('button', { name: '获取模型', exact: true }).click();
   await provider.getByRole('checkbox', { name: '已添加模型 发现的新模型', exact: true }).waitFor();
+  await content().getByRole('button', { name: '查看全部模型' }).click();
   await page.locator('[data-enabled-model-id="qa/discovered-new"] strong').filter({ hasText: /^发现的新模型$/ }).waitFor();
+  await page.getByRole('button', { name: '关闭已启用模型' }).click();
   result.checks.push('350-model full pagination and global search, keyboard enable/disable, discovery selection imports only the chosen model');
   await provider.getByRole('button', { name: `编辑 ${longProvider}`, exact: true }).click();
   await page.getByRole('dialog', { name: '编辑模型来源', exact: true }).waitFor();
@@ -283,12 +285,20 @@ try {
   await control('enableMarketplace');
   await nav().getByRole('button', { name: 'MCP 服务器', exact: true }).click();
   await nav().getByRole('button', { name: '技能', exact: true }).click();
-  await page.getByRole('textbox', { name: '搜索技能源', exact: true }).fill('市场安装恢复验证技能'); await page.getByRole('button', { name: '查看技能 市场安装恢复验证技能', exact: true }).click();
+  const catalog = page.locator('.skill-catalog-dialog');
+  async function openMarketSearch() {
+    await content().getByRole('button', { name: '搜索技能', exact: true }).click();
+    await catalog.getByRole('textbox', { name: '搜索技能', exact: true }).fill('市场安装恢复验证技能');
+  }
+  await openMarketSearch();
+  await catalog.getByRole('button', { name: '查看技能 市场安装恢复验证技能', exact: true }).click();
   const skillInstall = page.locator('.skill-install-dialog'); await skillInstall.getByRole('button', { name: '安装技能', exact: true }).waitFor();
   await control('hold', 'installPreparedSkill'); await control('commitError', 'installPreparedSkill'); await twice(skillInstall.getByRole('button', { name: '安装技能', exact: true })); await pending('installPreparedSkill'); assert.equal(await callCount('installPreparedSkill'), 1); await control('release', 'installPreparedSkill'); await skillInstall.getByRole('button', { name: '重试刷新', exact: true }).waitFor(); await skillInstall.getByRole('status').filter({ hasText: /技能已安装/ }).waitFor(); assert.equal(await skillInstall.getByRole('button', { name: '项目', exact: true }).isDisabled(), true);
   assert.equal(await skillInstall.evaluate(node => node.scrollWidth > node.clientWidth + 1), false); await capture('13-skill-market-committed-dark');
   const marketReads = await callCount('refreshSkills'); await control('fail', 'refreshSkills'); await control('hold', 'refreshSkills'); await twice(skillInstall.getByRole('button', { name: '重试刷新', exact: true })); await pending('refreshSkills'); assert.equal(await callCount('refreshSkills'), marketReads + 1); await control('release', 'refreshSkills'); await skillInstall.getByRole('alert').filter({ hasText: /refreshSkills/ }).waitFor(); await twice(skillInstall.getByRole('button', { name: '重试刷新', exact: true })); await skillInstall.waitFor({ state: 'detached' }); assert.equal(await callCount('installPreparedSkill'), 1); assert.equal(await callCount('refreshSkills'), marketReads + 2);
+  await catalog.getByRole('button', { name: '关闭技能目录' }).click();
   await skillRow('市场安装恢复验证技能').waitFor(); assert.equal(await content().getByRole('button', { name: '刷新技能状态', exact: true }).count(), 0); result.checks.push('mock marketplace token is submitted once; committed install locks scope, displays installed fact and retries refreshSkills only through error/success; no actual installation or process/network activity');
+  await openMarketSearch();
   await page.locator('.skill-hub-item').getByRole('button', { name: '查看技能 市场安装恢复验证技能', exact: true }).click(); await skillInstall.getByRole('button', { name: '安装技能', exact: true }).waitFor(); await skillInstall.getByRole('button', { name: '项目', exact: true }).click(); await skillInstall.getByRole('button', { name: '项目技能工作区', exact: true }).click(); await page.getByRole('option', { name: /第二个隔离工作区/ }).click(); await skillInstall.getByRole('button', { name: '安装技能', exact: true }).waitFor();
   await control('fail', 'settings'); await skillInstall.getByRole('button', { name: '安装技能', exact: true }).click(); await skillInstall.getByRole('button', { name: '重试页面更新', exact: true }).waitFor(); assert.equal(await callCount('installPreparedSkill'), 2); const callbackReads = await callCount('refreshSkills'); await twice(skillInstall.getByRole('button', { name: '重试页面更新', exact: true })); await skillInstall.waitFor({ state: 'detached' }); assert.equal(await callCount('installPreparedSkill'), 2); assert.equal(await callCount('refreshSkills'), callbackReads, 'ready installation retries only App callback/current settings read');
   await page.locator('.skill-hub-item').getByRole('button', { name: '查看技能 市场安装恢复验证技能', exact: true }).click(); await skillInstall.getByRole('button', { name: '安装技能', exact: true }).waitFor(); await control('hold', 'installPreparedSkill'); await control('commitError', 'installPreparedSkill'); await skillInstall.getByRole('button', { name: '安装技能', exact: true }).click(); await pending('installPreparedSkill');

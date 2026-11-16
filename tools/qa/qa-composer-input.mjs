@@ -201,13 +201,16 @@ try {
   results.checks.push('send preparation ignores edits and session changes after async attachment conversion; neither later nor other-session draft is cleared and no stale submission occurs');
 
   await qa('emit', 'run.started', 'perf-0', { requestId: 'qa-running' });
-  await fill('第一条排队消息'); await composer().press('Meta+Enter'); await page.locator('.queued-item').waitFor(); assert.equal(await composerValue(composer()), '');
+  await fill('第一条排队消息'); await composer().press('Meta+Enter');
+  await page.locator('.queued-panel-head[aria-expanded="false"]').click();
+  await page.locator('.queued-item').waitFor(); assert.equal(await composerValue(composer()), '');
   await fill('第二条排队消息'); await composer().press('Meta+Enter'); await page.waitForFunction(() => document.querySelectorAll('.queued-item').length === 2);
   const queueDraft = '当前草稿不能被排队编辑覆盖'; await fill(queueDraft);
   await page.getByRole('button', { name: '编辑排队消息', exact: true }).first().click();
   assert.equal(await composerValue(composer()), queueDraft); assert.equal(await page.locator('.queued-item').count(), 2);
   await page.getByText('输入框中还有未发送内容，请先发送或清空，再编辑排队消息。', { exact: true }).waitFor();
   await qa('emit', 'compaction.started', 'perf-0', { reason: 'QA synthetic compaction' });
+  await page.getByRole('status').filter({ hasText: '正在压缩我们的对话内容' }).locator('svg[aria-hidden="true"]').waitFor();
   assert.equal(await page.getByRole('button', { name: '插话发送全部', exact: true }).isDisabled(), true);
   assert(await page.getByRole('button', { name: '立即插话发送', exact: true }).evaluateAll(nodes => nodes.length === 2 && nodes.every(node => node.disabled)));
   await composer().press('Enter'); await composer().press('Meta+Enter'); assert.equal(await composerValue(composer()), queueDraft); assert.equal(await page.locator('.queued-item').count(), 2); await assertNoSubmissions();
@@ -215,7 +218,8 @@ try {
   await page.getByRole('button', { name: '删除排队消息', exact: true }).first().click(); await page.getByRole('button', { name: '删除排队消息', exact: true }).click();
   await page.locator('.queued-panel').waitFor({ state: 'detached' });
   results.checks.push('queue uses explicit MetaEnter without dispatch, editing protects nonempty draft, compaction disables individual/all sends and keeps both queued messages and current draft');
-  await page.getByRole('button', { name: '新会话', exact: true }).click(); await page.getByRole('heading', { name: '开始一个新会话', exact: true }).waitFor();
+  await page.getByRole('button', { name: '新对话', exact: true }).click();
+  await page.getByRole('region', { name: '开始新会话', exact: true }).waitFor();
   await fill('开始新会话的原始草稿'); await qa('hold', 'createConversation');
   await composer().press('Enter'); await pending('createConversation'); await composer().press('Enter');
   assert.equal(await count('createConversation'), 1, 'double Enter cannot create duplicate conversations');

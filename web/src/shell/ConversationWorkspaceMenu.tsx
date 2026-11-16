@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Activity, Bot, ChevronRight, Plug, SlidersHorizontal } from 'lucide-react';
+import { ProviderQuotaMenuRow, ProviderQuotaDialog } from '../features/models/ProviderQuotaView';
 import { ExtensionSlot } from '../features/extensions/ExtensionSlot';
 import type { ExtensionSettingsPage, ExtensionUiSnapshot } from '../types/extension-types';
 import type { ExtensionChipEntry } from '../features/extensions/ExtensionChips';
@@ -14,6 +15,7 @@ type ConversationWorkspaceMenuProps = {
   cwd?: string;
   sessionId?: string;
   modelRef?: string;
+  quotaProvider?: { id: string; name: string };
   onReturnToMainAgent: () => void;
   onOpenAgentOverview: () => void;
   onOpenConversationExtensionHub: () => void;
@@ -60,6 +62,7 @@ export function ConversationWorkspaceMenu({
   cwd,
   sessionId,
   modelRef,
+  quotaProvider,
   onReturnToMainAgent,
   onOpenAgentOverview,
   onOpenConversationExtensionHub,
@@ -70,8 +73,10 @@ export function ConversationWorkspaceMenu({
   onNotifyExtension,
 }: ConversationWorkspaceMenuProps) {
   const [open, setOpen] = useState(false);
+  const [detailId, setDetailId] = useState('');
   const root = useRef<HTMLDivElement>(null);
   const availableExtensionCount = extensionCount || chips.length;
+  useEffect(() => { setDetailId(''); }, [sessionId, quotaProvider?.id]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -123,6 +128,13 @@ export function ConversationWorkspaceMenu({
         {onOpenTrace && <WorkspaceRow icon={<Activity />} label="轨迹" active={agentKind === 'trace'} onClick={() => navigate(onOpenTrace)} />}
       </div>
 
+      {quotaProvider && <div className="workspace-menu-section" role="group" aria-label="模型额度">
+        <span className="workspace-menu-section-label">模型额度</span>
+        <ProviderQuotaMenuRow key={quotaProvider.id} {...quotaProvider} onOpen={() => navigate(() => {
+          root.current?.querySelector<HTMLButtonElement>('.workspace-menu-trigger')?.focus();
+          setDetailId(quotaProvider.id);
+        })} />
+      </div>}
       {chips.length > 0 && <div className="workspace-menu-section workspace-menu-extension-section" role="group" aria-label="扩展状态">
         <div className="workspace-menu-section-heading">
           <span className="workspace-menu-section-label">扩展状态</span>
@@ -151,5 +163,6 @@ export function ConversationWorkspaceMenu({
         </div>
       </div>}
     </section>}
+    {quotaProvider && detailId === quotaProvider.id && <ProviderQuotaDialog key={detailId} {...quotaProvider} onClose={() => setDetailId('')} />}
   </div>;
 }

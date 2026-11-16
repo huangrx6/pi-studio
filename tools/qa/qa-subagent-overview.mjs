@@ -37,7 +37,7 @@ try {
       window.__vite_plugin_react_preamble_installed__ = true;
       document.documentElement.dataset.theme = 'dark';
       await import('/src/styles/tokens.css'); await import('/src/styles/palette.css'); await import('/src/app.css');
-      await import('/src/shell/session-view.css');
+      await import('/src/shell/styles/session-view.css');
       const React = (await import('/@fs${process.cwd()}/node_modules/.vite/deps/react.js')).default;
       const { createRoot } = (await import('/@fs${process.cwd()}/node_modules/.vite/deps/react-dom_client.js')).default;
       const { SubagentOverview } = await import('/src/features/subagents/SubagentViews.tsx');

@@ -6,7 +6,8 @@
  * 也不重复 Durable 的压缩判断：真正的压缩发生在 Durable，界面只展示与手动触发。
  */
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { Gauge, LoaderCircle, Minimize2, Settings2 } from 'lucide-react';
+import { Gauge, Minimize2, Settings2 } from 'lucide-react';
+import { LoadingIndicator } from '../../shared/LoadingState';
 import type { ContextUsage } from './context-usage';
 import { compactTokens } from './context-usage';
 import { contextUsagePresentation, type ContextPolicy } from './context-usage';
@@ -130,7 +131,7 @@ export function ContextUsageChip({
             disabled={compacting || disabled}
             onClick={() => { close(true); onCompact(); }}
           >
-            {compacting ? <LoaderCircle className="spin" /> : <Minimize2 />}
+            {compacting ? <LoadingIndicator /> : <Minimize2 />}
             立即压缩
           </button>
           <button type="button" className="text-button" onClick={() => { setOpen(false); onOpenSettings(); }}>

@@ -20,8 +20,8 @@ import type {
 } from '../types/permission-types';
 import { Select } from './Select';
 import { useModalDialog } from './useModalDialog';
-import './confirm-shell.css';
-import '../features/permissions/permission-policy.css';
+import './styles/confirm-shell.css';
+import '../features/permissions/styles/permission-policy.css';
 
 export type ConfirmRequest = PermissionConfirmRequest;
 export type ConfirmResult = Omit<PermissionConfirmResponse, 'id'>;

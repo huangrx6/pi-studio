@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, ChevronsUpDown, Columns2, FileCode2, FileSearch, Files, LoaderCircle, MoreHorizontal, RefreshCw, SquareArrowOutUpRight, WrapText } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsUpDown, Columns2, FileCode2, FileSearch, Files, MoreHorizontal, RefreshCw, SquareArrowOutUpRight, WrapText } from 'lucide-react';
+import { LoadingState } from '../../shared/LoadingState';
 import type { TurnDiff, TurnDiffFile } from '../../types/chat-types';
 import { DiffView, type DiffOptions } from './DiffView';
 import { ActionMenu, type MenuAction } from '../../shared/ActionMenu';
@@ -104,7 +105,7 @@ export function ChangesView({ sessionId, initial, turns, focusPath, onOpenFile, 
       </div>
     </div>
     {error && <div className="changes-notice" role="alert">{error}<button className="text-button" onClick={() => setError('')}>关闭</button></div>}
-    {loading && <div className="changes-loading" role="status"><LoaderCircle className="spin" />正在读取该轮快照…</div>}
+    {loading && <LoadingState className="changes-loading">正在读取该轮快照…</LoadingState>}
     <div className="changes-workspace">
       {showFiles && <nav className="changes-file-list" aria-label="变更文件列表">{turn.files.map(file => <button title={file.label} key={file.path} onClick={() => reveal(file.path)}><FileCode2 /><span>{file.label}</span></button>)}</nav>}
       <div className="changes-scroll" ref={list}>

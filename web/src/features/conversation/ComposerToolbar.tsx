@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
-import { ArrowUp, LoaderCircle, MoreHorizontal, Plus, Square } from 'lucide-react';
-import './composer-toolbar.css';
+import { ArrowUp, MoreHorizontal, Plus, Square } from 'lucide-react';
+import { LoadingIndicator } from '../../shared/LoadingState';
+import './styles/composer-toolbar.css';
 
 /** Presentation only: request, attachment and queue ownership stays with the conversation. */
 export function ComposerToolbar({
@@ -47,14 +48,14 @@ export function ComposerToolbar({
       {showStop && (
         <button type="button" className="send-button is-stop" disabled={stopping}
           onClick={onStop} aria-label={stopTitle} title={stopTitle}>
-          {stopping ? <LoaderCircle className="spin" aria-hidden="true" /> : <Square fill="currentColor" aria-hidden="true" />}
+          {stopping ? <LoadingIndicator /> : <Square fill="currentColor" aria-hidden="true" />}
         </button>
       )}
       {(!showStop || hasContent) && (
         <button type="button" className="send-button" onClick={onSend} title={sendTitle}
           disabled={preparing || loading || stopping || (!isCommand && (!hasWorkspace || !hasModel)) || !hasContent || compacting}
           aria-label={preparing ? '正在准备消息' : compacting ? '正在压缩对话内容' : running ? '补充当前任务' : '发送消息'}>
-          {preparing ? <LoaderCircle className="spin" aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}
+          {preparing ? <LoadingIndicator /> : <ArrowUp aria-hidden="true" />}
         </button>
       )}
     </div>

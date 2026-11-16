@@ -100,9 +100,8 @@ Studio 的 SQLite schema 由 Durable 管理。**SQLite 表结构可能不变，�
 数据库位置：
 
 ```
-app.getPath('userData')/pi-studio.sqlite
-# macOS 通常为 ~/Library/Application Support/Pi Studio/pi-studio.sqlite
-# 可用环境变量 PI_STUDIO_DB 覆盖
+~/.pi-studio/pi-studio.sqlite
+# PI_STUDIO_USER_DATA 可覆盖 Studio 数据目录，PI_STUDIO_DB 可单独指定数据库文件
 ```
 
 升级前请关闭应用并复制该文件。
@@ -112,3 +111,7 @@ app.getPath('userData')/pi-studio.sqlite
 - 不写"同时兼容新旧 Durable"的运行时开关。两套投影逻辑并存会让问题无法定位，且与仓库"不留死回退路径"的约定冲突。
 - 不为已删除的上游导出写长期 shim。仅在必要处补一次性的适配（例如下文的工具 schema 构造器），并注明它替代的是什么。
 - 不跳版本。逐 minor 升级，每次只消化一个 changelog。
+
+## 升级记录
+
+- [1.5.0 → 1.5.2 的调用适配与验证](./pi-durable-1.5.2.md)

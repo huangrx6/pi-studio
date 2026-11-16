@@ -31,7 +31,7 @@ const {
 } = require('./core/window-bounds.cjs');
 const { getStudioDatabase } = require('./core/studio-db.cjs');
 const { themeBackground } = require('./theme.cjs');
-const { publishMenuBarEvent } = require('./menu-bar-events.cjs');
+const { publishMenuBarEvent } = require('./services/menu-bar/events.cjs');
 const { isAllowedLocalHtmlUrl } = require('./services/local-html.cjs');
 
 const configuredCspSessions = new WeakSet();

@@ -6,7 +6,7 @@ import vm from 'node:vm';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
-import * as helpers from '../../web/src/shared/file-preview.mjs';
+import * as helpers from '../../web/src/shared/file-preview.ts';
 
 const require = createRequire(import.meta.url);
 const source = fs.readFileSync(new URL('../../web/src/shared/FilePreview.tsx', import.meta.url), 'utf8');
@@ -23,7 +23,8 @@ function fixture() {
     exports: {},
     require(id) {
       if (id.endsWith('.css')) return {};
-      if (id === './file-preview.mjs') return {
+      if (id === './LoadingState') return { LoadingIndicator: () => null, LoadingState: ({ children }) => React.createElement('span', null, children) };
+      if (id === './file-preview.ts') return {
         ...helpers,
         prettyJson(text) { calls.json++; return helpers.prettyJson(text); },
         markdownCodeFence(text, language) { calls.fence++; return helpers.markdownCodeFence(text, language); },

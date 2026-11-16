@@ -36,6 +36,7 @@ function renderHeader(showTrace, isNewConversation = false, panelExpanded = fals
   const { ConversationHeader } = compile('../../web/src/shell/ConversationHeader.tsx', {
     react: React,
     'lucide-react': icons,
+    '../shared/LoadingState': { LoadingIndicator: () => null },
     './NotificationCenter': { NotificationCenter: () => null },
     './ShellLayout': shellLayout,
     '../features/extensions/ExtensionChips': { ExtensionChips: () => null },

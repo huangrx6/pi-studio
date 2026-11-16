@@ -31,8 +31,8 @@ const {
   createMenuBarState,
   menuBarPopoverHeight,
   shouldPresentBackgroundNotification,
-} = require('../menu-bar-state.cjs');
-const { subscribeMenuBarEvent } = require('../menu-bar-events.cjs');
+} = require('./menu-bar/state.cjs');
+const { subscribeMenuBarEvent } = require('./menu-bar/events.cjs');
 const { playCompletionSound } = require('../completion-sound.cjs');
 const { themeBackground } = require('../theme.cjs');
 const { showMainWindow } = require('../window.cjs');
@@ -168,7 +168,7 @@ function ensurePopover() {
     alwaysOnTop: true,
     type: process.platform === 'darwin' ? 'panel' : 'toolbar',
     webPreferences: {
-      preload: path.join(__dirname, '..', 'menu-bar-preload.cjs'),
+      preload: path.join(__dirname, 'menu-bar', 'popover', 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -187,7 +187,7 @@ function ensurePopover() {
     popover = undefined;
     popoverReady = undefined;
   });
-  popoverReady = popover.loadFile(path.join(__dirname, '..', 'menu-bar.html'))
+  popoverReady = popover.loadFile(path.join(__dirname, 'menu-bar', 'popover', 'index.html'))
     .then(() => broadcast())
     .catch(() => undefined);
   return popover;

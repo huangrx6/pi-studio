@@ -229,13 +229,6 @@
   color: var(--text);
 }
 
-.settings-navigation .settings-nav-row.is-active {
-  background: var(--settings-selected-bg);
-  color: var(--text);
-  font-weight: var(--weight-semibold);
-  box-shadow: var(--settings-selected-shadow);
-}
-
 .settings-navigation .settings-nav-row.is-active > svg { color: var(--text); }
 
 .settings-navigation .settings-nav-bottom {
@@ -382,13 +375,6 @@
   background: var(--transparent);
   color: var(--muted);
   text-align: center;
-}
-
-.settings-loading {
-  padding: 32px 24px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-  background: var(--surface);
 }
 
 .settings-save-status { border-color: var(--border); }

@@ -4,7 +4,7 @@ import {
   mergeSubagentChild,
   mergeSubagentChildren,
   reconcileSubagentStatus,
-} from '../../web/src/features/subagents/subagent-state.mjs';
+} from '../../web/src/features/subagents/subagent-state.ts';
 
 function child(key, status, extra = {}) {
   return {

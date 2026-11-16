@@ -1,3 +1,4 @@
+import { LoadingState } from '../../shared/LoadingState';
 import { useSettingsDraftGuard } from '../../shared/SettingsDraftGuard';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -26,7 +27,7 @@ import { SecretVaultSettings } from './SecretVaultSettings';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
 import { matchForCondition, permissionDraftError, permissionScopeKey, permissionWrites, ruleCondition, type RuleCondition } from './permission-policy-editor';
 import { isComposingKey } from '../../shared/keyboard-navigation';
-import './permission-policy.css';
+import './styles/permission-policy.css';
 
 type PermissionPolicySettingsProps = {
   cwd?: string;
@@ -373,10 +374,7 @@ function PermissionPolicyEditor({
 
   if (loading) {
     return <div className={`settings-sections permission-policy is-loading ${className}`.trim()}>
-      <section className="permission-policy-loader" role="status">
-        <div />
-        <span>正在读取权限策略…</span>
-      </section>
+      <LoadingState variant="section">正在读取权限策略…</LoadingState>
     </div>;
   }
 

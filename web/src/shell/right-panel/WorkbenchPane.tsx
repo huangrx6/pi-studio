@@ -7,12 +7,12 @@ import {
   FileText,
   Folder,
   FolderOpen,
-  LoaderCircle,
   MoreHorizontal,
   RotateCw,
   Search,
   X,
 } from 'lucide-react';
+import { LoadingState } from '../../shared/LoadingState';
 import type { ModelSelection } from '../../types/model-types';
 import type { FilePreviewResult } from '../../types/file-preview-types';
 import type { PanelTab } from '../app-types';
@@ -289,7 +289,7 @@ export function WorkbenchPane({
       );
       if (!isDirectory || !expanded) continue;
       if (directoryLoading.has(entry.path)) {
-        rows.push(<div key={`${entry.path}:loading`} className="file-tree-nested-loading"><LoaderCircle className="spin" />正在读取…</div>);
+        rows.push(<LoadingState key={`${entry.path}:loading`} className="file-tree-nested-loading">正在读取…</LoadingState>);
       } else if (directoryErrors[entry.path]) {
         rows.push(
           <div key={`${entry.path}:error`} className="file-tree-nested-error" role="alert">
@@ -328,15 +328,15 @@ export function WorkbenchPane({
       </div>
       {treeError && treeOwner === workspace && <div className="panel-file-error" role="alert"><p>{treeError}</p><button className="text-button" onClick={() => void loadTree('')}>重试读取目录</button></div>}
       <div className="file-tree">
+        {treeBusy && <LoadingState variant="section">正在读取文件…</LoadingState>}
         {!treeBusy && treeSearchOpen && treeSearchQuery.trim() && (treeSearchBusy
-          ? <div className="file-loading" role="status"><LoaderCircle className="spin" />正在搜索…</div>
+          ? <LoadingState variant="section">正在搜索…</LoadingState>
           : treeSearchResults.map((entry) => <button key={entry.path} className={`file-row ${entry.type === 'directory' ? 'is-directory' : ''}`} title={entry.path} onClick={() => entry.type === 'directory' ? void openFile(entry.path, undefined, 'workspace') : void openFile(entry.path, undefined, 'workspace')}>
             {entry.type === 'directory' ? <Folder size={15} /> : <FileText size={15} />}<span>{entry.path}</span>
           </button>))}
         {!treeBusy && !(treeSearchOpen && treeSearchQuery.trim()) && renderFileEntries(visibleEntries)}
         {!treeBusy && !treeError && !(treeSearchOpen && treeSearchQuery.trim()) && visibleEntries.length === 0 && <div className="file-empty"><FolderOpen /><strong>目录为空</strong></div>}
       </div>
-      {treeBusy && <div className="file-loading" role="status"><LoaderCircle className="spin" />正在读取文件…</div>}
     </div>;
   }
 
@@ -349,7 +349,7 @@ export function WorkbenchPane({
     }
     if (!file) {
       return fileBusy
-        ? <div className="panel-empty" role="status" aria-label="正在读取文件"><LoaderCircle className="spin" /><strong>正在读取文件</strong></div>
+        ? <LoadingState variant="panel">正在读取文件</LoadingState>
         : <div className="panel-empty"><FileText /><strong>在左侧选择文件</strong></div>;
     }
     const preview: FilePreviewResult = file.preview ?? {
@@ -378,7 +378,7 @@ export function WorkbenchPane({
             <div className="file-actions-label">打开方式</div>
             <button className="file-action" role="menuitem" onClick={() => void openFileWith()}><Eye /><span>预览（默认）</span></button>
             <div className="file-actions-sep" />
-            {fileAppsLoading && <div className="file-action file-action-loading" role="status"><LoaderCircle className="spin" /><span>正在读取可用应用…</span></div>}
+            {fileAppsLoading && <LoadingState className="file-action-loading">正在读取可用应用…</LoadingState>}
             {!fileAppsLoading && fileApps.map((app) => <button className="file-action" role="menuitem" key={app.path} onClick={() => void openFileWith(app.path)}>{app.icon ? <img src={app.icon} alt="" /> : <AppWindow />}<span>{app.name}</span></button>)}
             {!fileAppsLoading && fileApps.length === 0 && <div className="file-actions-empty">没有可用应用</div>}
             <div className="file-actions-sep" />
@@ -392,9 +392,7 @@ export function WorkbenchPane({
   function renderTerminalTab(tab: TerminalPanelTab, isActive: boolean) {
     return <Suspense key={`${tab.id}:${tab.restart ?? 0}`} fallback={
       <div className={`terminal-tab-slot ${isActive ? 'is-active' : ''}`}>
-        <div className="panel-route-loading" role="status" aria-label="正在加载终端">
-          <LoaderCircle aria-hidden="true" />
-        </div>
+        <LoadingState variant="panel">正在加载终端…</LoadingState>
       </div>
     }>
       <div className={`terminal-tab-slot ${isActive ? 'is-active' : ''}`} aria-hidden={!isActive}>
@@ -444,9 +442,7 @@ export function WorkbenchPane({
     }
     if (activePanelTab.kind === 'services') {
       return <Suspense fallback={
-        <div className="panel-route-loading" role="status" aria-label="正在加载服务面板">
-          <LoaderCircle aria-hidden="true" />
-        </div>
+        <LoadingState variant="panel">正在加载服务面板…</LoadingState>
       }>
         <RuntimeServicesPanel cwd={session?.cwd} workspace={workspace} />
       </Suspense>;

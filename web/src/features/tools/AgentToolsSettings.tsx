@@ -1,10 +1,10 @@
+import { LoadingIndicator, LoadingState } from '../../shared/LoadingState';
 import { useSettingsDraftGuard } from '../../shared/SettingsDraftGuard';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   ChevronRight,
   Check,
   CircleAlert,
-  LoaderCircle,
   Package,
   Search,
   Terminal,
@@ -16,7 +16,7 @@ import { DetailDialog } from '../../shared/DetailDialog';
 import { InfoHint } from '../../shared/InfoHint';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
 import { patternMatches, sameToolNames, selectionFromSources, toggleToolSelection } from './agent-tool-selection';
-import './agent-tools-settings.css';
+import './styles/agent-tools-settings.css';
 import { toolWrites } from './agent-tool-writes';
 import type {
   AgentToolCatalog,
@@ -317,7 +317,7 @@ export function AgentToolsSettings({ cwd, initialSelection, onSaved }: {
   }
 
   return <div className="settings-sections agent-tools-settings">
-    <SettingsPageHeader icon={<Wrench />} title="智能体工具" actions={<button type="button" className="settings-outline" disabled={loading || saving} onClick={() => void loadCatalog(true)}>{loading && <LoaderCircle className="spin" />}刷新目录</button>} />
+    <SettingsPageHeader icon={<Wrench />} title="智能体工具" actions={<button type="button" className="settings-outline" disabled={loading || saving} onClick={() => void loadCatalog(true)}>{loading && <LoadingIndicator />}刷新目录</button>} />
     <div className="agent-tool-save-bar">
       <div><p>全局配置 · 保存后应用于所有工作区。</p><span role="status">{saving ? '正在保存…' : dirty ? '有未保存的更改' : '与已保存配置一致'}</span></div>
       <div className="agent-tool-toolbar-actions">
@@ -350,7 +350,7 @@ export function AgentToolsSettings({ cwd, initialSelection, onSaved }: {
       <div className="agent-tool-catalog-heading"><h2>工具目录</h2>{catalog && <span>{catalog.tools.length} 个工具 · {catalog.commands.length} 个扩展命令</span>}</div>
       <div className="agent-tool-search-wrap"><Search aria-hidden="true" /><input className="agent-tool-search" aria-label="搜索智能体工具" placeholder="搜索工具、命令或来源…" value={query} onChange={event => setQuery(event.target.value)} />{query && <button type="button" aria-label="清除工具搜索" title="清除搜索" onClick={() => setQuery('')}><X /></button>}</div>
       {catalogError && <div className="agent-tool-catalog-error"><p role="alert">{catalogError}</p><button type="button" className="settings-text-button" disabled={loading || saving} onClick={() => void loadCatalog(true)}>重新加载工具目录</button>{catalog && <small>显示上次成功读取的目录。</small>}</div>}
-      {loading && !catalog ? <p className="agent-tool-loading" role="status"><LoaderCircle className="spin" />正在读取工具目录…</p> : <div className="agent-tool-groups">
+      {loading && !catalog ? <LoadingState variant="section">正在读取工具目录…</LoadingState> : <div className="agent-tool-groups">
         {groups.length > 0 && <>
           <div className="agent-tool-tabs" role="tablist" aria-label="工具来源">{groups.map((group, index) => {
             const active = group.key === activeGroup?.key;

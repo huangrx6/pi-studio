@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Image as ImageIcon, Search, Send, Wrench } from 'lucide-react';
+import { LoadingState } from '../../shared/LoadingState';
 import type { RequestTrace, RequestTraceContentBlock, RequestTraceMessage } from '../../types/chat-types';
 import type { StepDisplay } from '../../shared/preferences';
 import { InfoHint } from '../../shared/InfoHint';
-import './request-trace.css';
+import './styles/request-trace.css';
 
 function requestRoleLabel(role: string): string {
   if (role === 'system') return '系统提示词';
@@ -38,13 +39,13 @@ function requestBlockValue(block: RequestTraceContentBlock): string {
   return '';
 }
 
-function RequestTraceMessageView({ message }: { message: RequestTraceMessage }) {
+export function RequestTraceMessageView({ message, defaultOpen = false }: { message: RequestTraceMessage; defaultOpen?: boolean }) {
   const preview = requestMessagePreview(message);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   return <details className={`request-message is-${message.role}`} open={open} onToggle={event => setOpen(event.currentTarget.open)}>
     <summary>
       <span className="request-message-role">{requestRoleLabel(message.role)}</span>
-      {preview && <span className="request-message-preview">{preview}</span>}
+      {!open && preview && <span className="request-message-preview">{preview}</span>}
       {message.truncated && <span className="request-message-truncated">已截断</span>}
       <ChevronDown className="request-message-chevron" />
     </summary>
@@ -169,7 +170,7 @@ export function ActivityRequest({ trace, stepDisplay }: { trace: RequestTrace; s
     </summary>
     {open && <div className="activity-request-body activity-disclosure-body">
       {detailError && <p className="request-inspector-empty" role="status">{detailError}</p>}
-      {!detail && !detailError && deferred ? <p className="request-inspector-empty" role="status">正在读取请求快照…</p> : null}
+      {!detail && !detailError && deferred ? <LoadingState variant="section">正在读取请求快照…</LoadingState> : null}
       {(detail || !deferred) && <RequestInspector trace={detail ?? trace} />}
     </div>}
   </details>;

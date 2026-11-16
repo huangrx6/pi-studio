@@ -1,7 +1,7 @@
 import { Search, X } from 'lucide-react';
 import { Select } from '../shared/Select';
 import type { SidebarSessionFilter } from './sidebar-filter';
-import './sidebar-search.css';
+import './styles/sidebar-search.css';
 
 export function SidebarSearch({ query, filter, onQueryChange, onFilterChange, onClose }: {
   query: string;

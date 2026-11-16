@@ -7,8 +7,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-const { pathToken, resolvePathToken, trimPathPunctuation } = await import('../../web/src/shared/file-path-links.mjs');
-const rehypeLocalPaths = (await import('../../web/src/shared/rehype-local-paths.mjs')).default;
+const { pathToken, resolvePathToken, trimPathPunctuation } = await import('../../web/src/shared/file-path-links.ts');
+const rehypeLocalPaths = (await import('../../web/src/shared/rehype-local-paths.ts')).default;
 
 test('links deliverable paths in the shapes the model writes', () => {
   for (const value of [

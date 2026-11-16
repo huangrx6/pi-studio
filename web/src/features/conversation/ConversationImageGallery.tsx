@@ -7,10 +7,8 @@
  * 下载、缩略图导航和键盘操作，视觉仍由 Studio 的主题变量控制。
  */
 import { lazy, Suspense, useState } from 'react';
-import {
-  LoaderCircle,
-  Maximize2,
-} from 'lucide-react';
+import { Maximize2 } from 'lucide-react';
+import { LoadingState } from '../../shared/LoadingState';
 import {
   ImageContextMenu,
   imageContextMenuState,
@@ -28,14 +26,8 @@ const LazyConversationImagePreview = lazy(async () => {
   return { default: module.ConversationImagePreview };
 });
 
-function ImagePreviewFallback() {
-  return <div className="image-preview-loading" role="status" aria-label="正在打开图片预览">
-    <LoaderCircle className="spin" aria-hidden="true" />
-  </div>;
-}
-
 export function ConversationImagePreview(props: Parameters<typeof LazyConversationImagePreview>[0]) {
-  return <Suspense fallback={<ImagePreviewFallback />}>
+  return <Suspense fallback={<LoadingState variant="panel" className="image-preview-loading">正在打开图片预览…</LoadingState>}>
     <LazyConversationImagePreview {...props} />
   </Suspense>;
 }

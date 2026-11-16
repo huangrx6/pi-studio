@@ -17,7 +17,7 @@ function harness() {
     resourceWriteRef: {current:null},
     editorSaveRef: {current:false}, editorRequestRef:{current:0}, editorScopeRef:{current:''}, editorBaselineRef:{current:null}, editorRecoveryRef:{current:null},
     workspace:'/A', workspaceRef:{current:'/A'}, originalMcpArgsRef:{current:null}, providerModels:{}, settingsData:{customModels:[]},
-    emptyCustomModelConfig: () => ({modelId:'',providerId:''}), errorText: e => e.message,
+    emptyCustomModelConfig: () => ({modelId:'',providerId:''}), emptyProviderQuota: () => ({enabled:false, fields:[]}), errorText: e => e.message,
     automaticTokenUnit: () => 'k', tokenInputValue: value => String(value / 1000), DEFAULT_MODEL_THINKING_LEVELS:['off','high'],
     window:{piApi:Object.fromEntries(['providerConfig','mcpConfig'].map(method=>[method,(id)=>new Promise((resolve,reject)=>calls.push({method,id,resolve,reject}))]))},
     refreshProviderModels:id=>new Promise((resolve,reject)=>calls.push({method:'providerModels',id,resolve,reject})),

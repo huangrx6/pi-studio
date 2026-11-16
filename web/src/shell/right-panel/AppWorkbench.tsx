@@ -4,7 +4,7 @@ import type {
 import { useState } from 'react';
 import { FolderOpen } from 'lucide-react';
 import { PanelTabBar } from './PanelTabBar';
-import { splitPanelWidth } from './panel-width.mjs';
+import { splitPanelWidth } from './panel-width.ts';
 import type { PanelTab } from '../app-types';
 import type { RightPanelToolAction } from './RightPanelStart';
 

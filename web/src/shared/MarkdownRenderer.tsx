@@ -8,12 +8,12 @@ import { createContext, memo, useContext, useEffect, useState } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getActivePreferences } from './preferences';
-import { safeMarkdownImageSource } from './safe-url.js';
-import rehypeLocalPaths from './rehype-local-paths.mjs';
+import { safeMarkdownImageSource } from './safe-url.ts';
+import rehypeLocalPaths from './rehype-local-paths.ts';
 import { MarkdownActions } from './markdown-actions';
 import { MarkdownPathLink } from './MarkdownPathLink';
-import { localHrefPath, resolvePathToken } from './file-path-links.mjs';
-import { hasMarkdownCode } from './markdown-code.mjs';
+import { localHrefPath, resolvePathToken } from './file-path-links.ts';
+import { hasMarkdownCode } from './markdown-code.ts';
 import { copyMarkdownSource } from './markdown-copy';
 import {
   loadMarkdownHighlighter,

@@ -54,10 +54,7 @@
 .panel-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: 48px var(--space-5); text-align: center; color: var(--faint); font-size: var(--text-sm); }
 .panel-empty > svg { width: var(--icon-xl); height: var(--icon-xl); opacity: .7; margin-bottom: var(--space-2); }
 .panel-empty strong { color: var(--muted); font-size: var(--text-base); font-weight: var(--weight-medium); }
-.panel-route-loading { display: grid; flex: 1; min-height: 0; place-items: center; color: var(--faint); }
-.panel-route-loading svg { width: var(--icon-md); height: var(--icon-md); animation: panel-route-spin .8s linear infinite; }
-@keyframes panel-route-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .panel-route-loading svg { animation: none; } }
+.file-preview-load-failure { display: grid; flex: 1; min-height: 0; place-items: center; color: var(--faint); }
 
 /* Provider marks: native brand glyphs when available, neutral fallback otherwise. */
 /* 供应商标记优先使用品牌图形，缺失时回退到首字母；尺寸由组件传入的
@@ -124,9 +121,7 @@ z-index 40，宽度和最大高度都受限并可内部滚动；每个操作行�
 .file-action > svg, .file-action > img { width: var(--icon-md); height: var(--icon-md); flex: none; border-radius: var(--radius-tag); }
 .file-action > img { object-fit: contain; }
 .file-action > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-action-loading { color: var(--faint); cursor: default; }
-.file-action-loading:hover { background: transparent; color: var(--faint); }
-.file-action-loading > svg { animation: panel-route-spin .8s linear infinite; }
+.file-action-loading { display: flex; min-height: var(--control-sm); padding-inline: var(--space-2); }
 .file-actions-empty { padding: 7px 8px; color: var(--faint); font-size: var(--text-xs); }
 .file-actions-sep { height: 1px; margin: 4px 6px; background: var(--border); }
 

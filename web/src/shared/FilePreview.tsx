@@ -9,13 +9,13 @@ import {
   ExternalLink,
   Eye,
   FileText,
-  LoaderCircle,
   ListOrdered,
   Pencil,
   Save,
   Search,
   X,
 } from 'lucide-react';
+import { LoadingIndicator, LoadingState } from './LoadingState';
 import {
   markdownCodeFence,
   parseDelimitedPreview,
@@ -25,12 +25,12 @@ import {
   previewLanguageForFile,
   previewTypeLabel,
   splitPreviewPath,
-} from './file-preview.mjs';
+} from './file-preview.ts';
 import type { FilePreviewResult } from '../types/file-preview-types';
 import { Markdown } from './Markdown';
 import { formatFileSize } from './filesize';
 import { FileFormatIcon, type FilePreviewFormat } from './FileKindIcon';
-import './file-preview.css';
+import './styles/file-preview.css';
 
 type PreviewMode = 'preview' | 'source';
 
@@ -369,7 +369,7 @@ export function FilePreview({
         {file && mode === 'source' && file.kind !== 'binary' && format !== 'pdf' && format !== 'unsupported' && <button type="button" className={`icon-button ${showLineNumbers ? 'is-active' : ''}`} aria-label={showLineNumbers ? '隐藏行号' : '显示行号'} aria-pressed={showLineNumbers} title={showLineNumbers ? '隐藏行号' : '显示行号'} onClick={() => setShowLineNumbers((value) => !value)}><ListOrdered /></button>}
         {file && editable && !editing && <button type="button" className="icon-button" aria-label="编辑文件" title="编辑文件" onClick={() => { setMode('source'); setEditing(true); setSaveError(null); }}><Pencil /></button>}
         {file && editable && editing && <>
-          <button type="button" className="icon-button" aria-label="保存文件" title="保存文件" disabled={saving} onClick={() => void saveDraft()}>{saving ? <LoaderCircle className="spin" /> : <Save />}</button>
+          <button type="button" className="icon-button" aria-label="保存文件" title="保存文件" disabled={saving} onClick={() => void saveDraft()}>{saving ? <LoadingIndicator /> : <Save />}</button>
           <button type="button" className="icon-button" aria-label="取消编辑" title="取消编辑" disabled={saving} onClick={() => { setDraft(file.text || ''); setEditing(false); setSaveError(null); }}><X /></button>
         </>}
         {actions}
@@ -393,7 +393,7 @@ export function FilePreview({
       </div>}
       {body}
       {saveError && <div className="file-preview-save-error" role="alert">保存失败：{saveError}</div>}
-      {loading && <div className="file-preview-loading" role="status"><LoaderCircle className="spin" />正在读取…</div>}
+      {loading && <LoadingState className="file-preview-loading">正在读取…</LoadingState>}
     </section>
   </div>;
 }

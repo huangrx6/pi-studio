@@ -8,7 +8,7 @@ import type {
   SubagentTranscript,
 } from '../../types/subagent-types';
 import { errorText } from '../../shared/error-text';
-import { mergeSubagentChild, mergeSubagentChildren } from './subagent-state.mjs';
+import { mergeSubagentChild, mergeSubagentChildren } from './subagent-state.ts';
 import type { SubagentOverviewMode } from './SubagentViews';
 import type { SessionStateForPersistence } from '../conversation/useMessageDelivery';
 
@@ -56,6 +56,8 @@ export function useSubagentWorkspace({
   const [subagentLoading, setSubagentLoading] = useState(false);
   const [subagentRefreshing, setSubagentRefreshing] = useState(false);
   const [subagentError, setSubagentError] = useState<string | null>(null);
+  const [subagentListError, setSubagentListError] = useState<string | null>(null);
+  const replyInFlight = useRef(false);
   const [subagentDeletingKey, setSubagentDeletingKey] = useState<string | null>(null);
   const [subagentReplyingKey, setSubagentReplyingKey] = useState<string | null>(null);
   const subagentRequestRef = useRef(0);
@@ -63,6 +65,9 @@ export function useSubagentWorkspace({
 
   useEffect(() => {
     ++subagentRequestRef.current;
+    ++subagentListRequestRef.current;
+    setSubagentListError(null);
+    setSubagentRefreshing(false);
     setAgentView({ kind: 'conversation' });
     // openSession owns child-session hydration; clearing here would erase the
     // children that were loaded in the same session transition.
@@ -86,15 +91,15 @@ export function useSubagentWorkspace({
         request !== subagentListRequestRef.current
         || sessionRef.current?.id !== sessionId
       ) return;
+      setSubagentListError(null);
       setSubagentChildren((current) => mergeSubagentChildren(current, Array.isArray(children) ? children : []));
       setSubagentBudget(budget);
     } catch (error) {
-      // Automatic refresh is best effort and must not cover the active transcript
-      // with a transport error while a Durable run is still settling, but a
-      // failure must stay diagnosable instead of silently emptying the list.
-      console.warn('Unable to load subagent children:', error);
+      if (request === subagentListRequestRef.current && sessionRef.current?.id === sessionId) {
+        setSubagentListError(errorText(error));
+      }
     } finally {
-      if (showSpinner && request === subagentListRequestRef.current) setSubagentRefreshing(false);
+      if (request === subagentListRequestRef.current) setSubagentRefreshing(false);
     }
   }
 
@@ -114,7 +119,7 @@ export function useSubagentWorkspace({
     const request = ++subagentRequestRef.current;
     const sessionId = session.id;
     setAgentView({ kind: 'agents', child });
-    setSubagentTranscript(null);
+    setSubagentTranscript(current => agentView.kind === 'agents' && agentView.child?.key === child.key && current?.child.key === child.key ? current : null);
     setSubagentError(null);
     setSubagentLoading(true);
     void window.piApi.subagentTranscript({ sessionId, childKey: child.key })
@@ -239,7 +244,9 @@ export function useSubagentWorkspace({
 
   async function replySubagentSupervisor(child: SubagentChild, requestId: string, message: string) {
     const sessionId = session?.id;
-    if (!sessionId || subagentReplyingKey) return;
+    if (!sessionId) throw new Error('会话已关闭，请重新打开任务。');
+    if (replyInFlight.current) throw new Error('正在发送回复，请稍后再试。');
+    replyInFlight.current = true;
     setSubagentReplyingKey(child.key);
     setSubagentError(null);
     try {
@@ -249,6 +256,11 @@ export function useSubagentWorkspace({
         requestId,
         message,
       });
+      if (sessionRef.current?.id !== sessionId) return;
+      // The acknowledged request has been consumed even if the following refresh fails.
+      setSubagentChildren(current => current.map(entry => entry.key === child.key
+        ? { ...entry, supervisorRequests: entry.supervisorRequests?.filter(request => request.id !== requestId) }
+        : entry));
       pushNotification(`已回复 ${child.name || child.agent}`, 'success');
       await refreshSubagentChildren(true);
     } catch (error) {
@@ -257,6 +269,7 @@ export function useSubagentWorkspace({
       pushNotification(messageText, 'error', '回复子智能体失败');
       throw error;
     } finally {
+      replyInFlight.current = false;
       setSubagentReplyingKey(null);
     }
   }
@@ -273,6 +286,7 @@ export function useSubagentWorkspace({
     subagentLoading,
     setSubagentLoading,
     subagentRefreshing,
+    subagentListError,
     subagentError,
     setSubagentError,
     subagentDeletingKey,

@@ -1,4 +1,5 @@
-import './new-conversation-welcome.css';
+import { LoadingState } from '../../shared/LoadingState';
+import './styles/new-conversation-welcome.css';
 
 type NewConversationWelcomeProps = {
   loading: boolean;
@@ -14,6 +15,6 @@ export function NewConversationWelcome({ loading }: NewConversationWelcomeProps)
   return <section className="new-conversation-welcome" aria-label="开始新会话">
     <span className="new-conversation-rule" aria-hidden="true" />
     <h1>今天想做点什么？</h1>
-    {loading && <p role="status">正在载入…</p>}
+    {loading && <LoadingState>正在载入…</LoadingState>}
   </section>;
 }

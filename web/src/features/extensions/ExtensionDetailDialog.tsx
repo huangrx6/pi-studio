@@ -14,7 +14,7 @@ import {
   extensionTierLabel,
 } from './extension-presentation';
 import { DetailDialog } from '../../shared/DetailDialog';
-import './extension-detail.css';
+import './styles/extension-detail.css';
 
 const PERMISSION_LABELS: Record<string, string> = {
   'agent.tools': '智能体工具',

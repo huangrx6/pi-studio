@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { transcriptWindowStart } from '../../web/src/features/conversation/transcript-window.mjs';
+import { transcriptWindowStart } from '../../web/src/features/conversation/transcript-window.ts';
 
 test('short to long conversation ignores the prior fully expanded window before commit', () => {
   assert.equal(transcriptWindowStart('long', 2400, { session: 'short', from: 0 }, { session: 'long', from: 2376 }), 2376);

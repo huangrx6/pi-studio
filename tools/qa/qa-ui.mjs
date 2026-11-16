@@ -3500,31 +3500,32 @@ try {
     '/workspace/pi-studio/.agents/skills',
   );
   const hub = page.locator('.skill-hub-card');
+  const catalog = page.locator('.skill-catalog-dialog');
   // 搜索跨全部技能源；没有命中时给出可清除的空态。
-  await hub.getByLabel('搜索技能源', { exact: true }).fill('missing-qa-skill');
-  await hub.getByText('没有匹配“missing-qa-skill”的技能。', { exact: false }).waitFor();
-  await hub.getByRole('button', { name: '清除搜索', exact: true }).click();
+  await hub.getByRole('button', { name: '搜索技能', exact: true }).click();
+  await catalog.getByLabel('搜索技能', { exact: true }).fill('missing-qa-skill');
+  await catalog.getByText('没有匹配“missing-qa-skill”的技能。', { exact: true }).waitFor();
+  await catalog.getByRole('button', { name: '清除搜索', exact: true }).click();
+  await catalog.getByRole('button', { name: '关闭技能目录' }).click();
   // 默认视图是“源总览”：一行一个源，技能不铺平；进入某个源才渲染卡片。
   assert.equal(await hub.locator('.skill-hub-overview-row').count(), 1);
   assert.equal(await hub.locator('.skill-hub-item').count(), 0);
-  assert.equal(await hub.locator('.skill-hub-source-tab').count(), 2);
   await hub.scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${output}22-skill-hub-overview.png`, clip: await hub.boundingBox() });
   await hub.locator('.skill-hub-overview-row').first().click();
-  assert.equal(await hub.locator('.skill-hub-item').count(), 2);
-  await hub.getByLabel('搜索技能源', { exact: true }).fill('review');
-  assert.equal(await hub.locator('.skill-hub-item').count(), 1);
-  await hub.getByRole('button', { name: '清除技能搜索', exact: true }).click();
-  assert.equal(await hub.locator('.skill-hub-item').count(), 2);
-  assert.match(await hub.locator('.skill-hub-detail-head').innerText(), /团队技能库/);
-  await hub.scrollIntoViewIfNeeded();
+  assert.equal(await catalog.locator('.skill-hub-item').count(), 2);
+  await catalog.getByLabel('搜索技能', { exact: true }).fill('review');
+  assert.equal(await catalog.locator('.skill-hub-item').count(), 1);
+  await catalog.getByRole('button', { name: '清除技能搜索', exact: true }).click();
+  assert.equal(await catalog.locator('.skill-hub-item').count(), 2);
+  await catalog.getByRole('heading', { name: '团队技能库', exact: true }).waitFor();
   await capture('22-skill-hub-compact');
   await page.setViewportSize({ width: 1440, height: 920 });
   await capture('22-skill-hub');
   await exportScreen('skills');
-  const skillSearch = hub.getByLabel('搜索技能源', { exact: true });
+  const skillSearch = catalog.getByLabel('搜索技能', { exact: true });
   await skillSearch.focus();
-  const searchFocusStyles = await hub.locator('.skill-hub-search').evaluate((container) => {
+  const searchFocusStyles = await catalog.locator('.skill-hub-search').evaluate((container) => {
     const input = container.querySelector('input');
     const containerStyle = getComputedStyle(container);
     const inputStyle = getComputedStyle(input);
@@ -3550,6 +3551,7 @@ try {
   await capture('22-skill-hub-search-focus-dark');
   await capture('22-skill-hub-dark');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  await catalog.getByRole('button', { name: '关闭技能目录' }).click();
   await hub.getByRole('button', { name: '管理源', exact: true }).click();
   const sourceManager = page.getByRole('dialog', { name: '管理技能源', exact: true });
   assert.equal(await sourceManager.getByRole('button', { name: '添加源', exact: true }).isDisabled(), true);
@@ -3590,7 +3592,8 @@ try {
   await page.waitForFunction(() => document.querySelector('.skill-source-location input')?.value === '');
   assert.equal(await sourceName.inputValue(), '');
   await page.keyboard.press('Escape');
-  const previewTrigger = hub.getByRole('button', { name: '查看技能 review-checklist', exact: true });
+  await hub.locator('.skill-hub-overview-row').first().click();
+  const previewTrigger = catalog.getByRole('button', { name: '查看技能 review-checklist', exact: true });
   await previewTrigger.click();
   const skillPreview = page.locator('.skill-install-dialog');
   await skillPreview.getByRole('button', { name: '更新技能', exact: true }).waitFor();
@@ -3622,6 +3625,7 @@ try {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(150);
   assert.equal(await page.evaluate(() => window.__qaPreparedSkills.size), 0);
+  await catalog.getByRole('button', { name: '关闭技能目录' }).click();
   await page.setViewportSize({ width: 1440, height: 920 });
   await page.locator('.skill-card', { hasText: 'code-review' }).locator('.skill-card-main').click();
   const skillDetail = page.locator('.skill-detail-dialog');

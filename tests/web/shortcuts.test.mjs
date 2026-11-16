@@ -17,7 +17,7 @@ const {
   normalizeCombo,
   normalizeShortcuts,
   shortcutConflict,
-} = await import('../../web/src/shared/shortcuts.mjs');
+} = await import('../../web/src/shared/shortcuts.ts');
 
 /** Build a KeyboardEvent-shaped object; the helpers only read these fields. */
 const keyEvent = (key, modifiers = {}) => ({

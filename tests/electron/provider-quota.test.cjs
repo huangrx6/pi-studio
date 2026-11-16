@@ -1,0 +1,127 @@
+const assert = require('node:assert/strict');
+const test = require('node:test');
+const { normalizeProviderQuota, previewQuota, quotaFieldPaths } = require('../../electron/core/provider-quota.cjs');
+const { createProviderQuotaMonitor } = require('../../electron/services/provider-quota.cjs');
+
+const field = (label, path, format = 'number', options = {}) => ({ label, path, format, unit: '', translations: '', ...options });
+const config = (fields = [field('余额', 'data.balance', 'number', { unit: '元' })]) =>
+  ({ enabled: true, endpoint: 'https://quota.example.test/accounts?period=weekly', auth: 'bearer', fields });
+const provider = () => ({ id: 'custom', enabled: true, baseUrl: 'https://models.example.test/v1', quota: config() });
+const key = 'synthetic-private-key';
+const tick = () => new Promise(resolve => setImmediate(resolve));
+const json = (body, status = 200) => Response.json(body, { status });
+
+test('a window shared by different allowance types can be addressed by type and period in either order', () => {
+  const limits = [
+    { type: 'requests', unit: 6, remaining: 0 },
+    { type: 'tokens', unit: 3, remaining: 19 },
+    { type: 'tokens', unit: 6, remaining: 42 },
+  ];
+  const fields = [field('本周剩余 Token', 'limits[type=tokens&unit=6].remaining')];
+  for (const items of [limits, [...limits].reverse()]) {
+    assert.equal(previewQuota({ fields, sample: JSON.stringify({ limits: items }) })[0].value, '42');
+  }
+});
+
+test('configurable quota windows, array selectors, units, translations and timestamps project the same way in previews', () => {
+  const fields = [
+    field('5 小时已用', 'windows[period=five_hours].used', 'fraction'),
+    field('本周剩余', 'windows[period=week].remaining', 'percent', { summary: false }),
+    field('次数', 'daily[0].remaining', 'number', { unit: '次' }),
+    field('套餐状态', 'state', 'enum', { translations: 'active=可用\nexhausted=已用尽', summary: true }),
+    field('可用', 'available', 'enum', { translations: 'false=不可用' }),
+    field('下次重置', 'reset', 'time'), field('本月', 'windows[period=month].used'),
+  ];
+  const sample = JSON.stringify({ state: 'active', available: false, reset: '2026-11-16T08:00:00Z', daily: [{ remaining: '0' }],
+    windows: [{ period: 'week', remaining: '23.5' }, { period: 'five_hours', used: 0.125 }] });
+  const metrics = previewQuota({ fields, sample });
+  assert.deepEqual(metrics.filter(item => item.summary).map(item => item.label), ['5 小时已用', '套餐状态']);
+  assert.deepEqual(metrics.map(item => item.value).slice(0, 5), ['12.5%', '23.5%', '0 次', '可用', '不可用']);
+  assert.equal(metrics[0].percent, 12.5); assert.match(metrics[5].value, /2026/);
+  assert.equal(metrics[6].value, null); assert.match(metrics[6].issue, /未返回/);
+  for (const raw of [null, '', false, 'not numeric', {}]) {
+    assert.equal(previewQuota({ fields: [field('读数', 'v')], sample: JSON.stringify({ v: raw }) })[0].value, null);
+  }
+  assert.match(previewQuota({ fields: [field('短期', '[0]', 'percent')], sample: '[101]' })[0].issue, /范围/);
+});
+
+test('validation rejects unsafe paths, invalid and duplicate translations, oversized samples, credential-bearing URLs and remote HTTP', () => {
+  for (const path of ['__proto__.key', 'items[constructor=x]', 'one..two', 'one[0]bad', 'a()', 'a[x]']) {
+    assert.throws(() => normalizeProviderQuota(config([field('测试', path)])), /路径/);
+  }
+  for (const endpoint of ['file:///tmp/test', 'http://remote.test', 'https://key@quota.test/path', 'https://quota.test/path?api_key=secret']) {
+    assert.throws(() => normalizeProviderQuota({ ...config(), endpoint }));
+  }
+  assert.doesNotThrow(() => normalizeProviderQuota({ ...config(), endpoint: 'http://127.0.0.1:8731/test' }));
+  assert.doesNotThrow(() => normalizeProviderQuota({ ...config(), endpoint: 'https://quota.test/usage?token_type=output&groupByKey=week' }));
+  assert.throws(() => normalizeProviderQuota(config([field('状态', 'v', 'enum', { translations: 'on=启用\non=有效' })])));
+  assert.throws(() => previewQuota({ fields: config().fields, sample: 'x'.repeat(70000) }), /64 KB/);
+  assert.throws(() => previewQuota({ fields: config().fields, sample: '{' }), /JSON/);
+  assert.throws(() => normalizeProviderQuota(config(['a', 'b', 'c'].map(s => field(s, s, 'number', { summary: true })))), /最多显示两个/);
+  const paths = quotaFieldPaths({ data: { balance: 0, usage_tokens: 1, keyState: 'enabled' }, apiKey: key, nested: [{ limit: 12 }] });
+  assert.deepEqual(paths.map(s => s.path), ['data.balance', 'data.usage_tokens', 'data.keyState', 'nested[0].limit']);
+  assert.ok(!JSON.stringify(paths).includes('enabled'));
+});
+
+test('monitor shares in-flight requests by source, caches, recovers, and clears stale balances on authentication failures', async () => {
+  let now = 1_000; let count = 0; let respond; let current = provider();
+  const monitor = createProviderQuotaMonitor({ getProvider: id => id === 'custom' ? current : undefined, clock: () => now,
+    readKey: async id => { assert.equal(id, 'custom'); return key; },
+    fetcher: (url, request) => {
+      assert.equal(url, current.quota.endpoint); assert.equal(request.headers.Authorization, 'Bearer ' + key);
+      assert.equal(request.redirect, 'error'); assert.equal(request.method, 'GET');
+      count++; return new Promise(resolve => { respond = resolve; });
+    },
+  });
+  const calls = [monitor.read('custom'), monitor.read('custom', true)];
+  await tick(); assert.equal(count, 1); respond(json({ data: { balance: 0 }, echo: key }));
+  const [a, b] = await Promise.all(calls); assert.deepEqual(a, b); assert.equal(a.metrics[0].value, '0 元');
+  assert.ok(!JSON.stringify(a).includes(key)); assert.deepEqual(await monitor.read('custom'), a); assert.equal(count, 1);
+  now += 61_000;
+  let result = monitor.read('custom'); await tick(); respond(json({ raw: key }, 503));
+  const stale = await result; assert.equal(stale.status, 'stale'); assert.equal(stale.updatedAt, a.updatedAt);
+  result = monitor.read('custom', true); await tick(); respond(json({ raw: key }, 401));
+  const denied = await result; assert.equal(denied.status, 'error'); assert.deepEqual(denied.metrics, []); assert.doesNotMatch(JSON.stringify(denied), new RegExp(key));
+  result = monitor.read('custom', true); await tick(); respond(json({ data: { balance: 8 } }));
+  assert.equal((await result).metrics[0].value, '8 元');
+  result = monitor.read('custom', true); await tick(); current.enabled = false; monitor.invalidate('custom'); respond(json({ data: { balance: 99 } }));
+  assert.equal((await result).status, 'disabled'); assert.equal((await monitor.read('custom')).status, 'disabled');
+  assert.equal((await monitor.read('other')).status, 'disabled');
+});
+
+test('quota inspection returns field names, respects credential destinations, and handles anonymous and x-api-key endpoints', async () => {
+  let current = provider(); let keys = 0; const requests = [];
+  const monitor = createProviderQuotaMonitor({ getProvider: () => current, readKey: async () => { keys++; return key; },
+    fetcher: async (url, request) => {
+      requests.push({ url, headers: request.headers });
+      return json({ usage: { hour: 3, week: 7, api_key: key }, status: key });
+    },
+  });
+  let draft = { endpoint: 'https://other.example.test/quota', auth: 'bearer' };
+  await assert.rejects(monitor.inspect('custom', draft), /新域名/);
+  assert.equal(keys, 0); assert.equal(requests.length, 0);
+  const paths = await monitor.inspect('custom', { ...draft, auth: 'none' });
+  assert.equal(keys, 0); assert.deepEqual(Object.keys(requests[0].headers), ['Accept']);
+  assert.deepEqual(paths.map(p => p.path), ['usage.hour', 'usage.week', 'status']);
+  assert.ok(!JSON.stringify(paths).includes(key));
+  await monitor.inspect('custom', { ...draft, auth: 'x-api-key', apiKey: 'entered' });
+  assert.equal(keys, 0); assert.equal(requests.at(-1).headers['x-api-key'], 'entered');
+  await monitor.inspect('custom', { ...draft, endpoint: current.quota.endpoint }); assert.equal(keys, 1);
+  current.quota = { ...config([field('已用', 'usage.week')]), endpoint: draft.endpoint, auth: 'x-api-key' };
+  const live = await monitor.read('custom'); assert.equal(live.metrics[0].value, '7');
+  assert.equal(requests.at(-1).headers['x-api-key'], key);
+  current.quota.enabled = false;
+  const count = requests.length; assert.equal((await monitor.read('custom')).status, 'disabled'); assert.equal(requests.length, count);
+});
+
+test('incomplete metrics stay distinct from zero and invalid or oversized responses never leak their bodies', async () => {
+  const current = provider(); let response;
+  const monitor = createProviderQuotaMonitor({ getProvider: () => current, readKey: async () => key, fetcher: async () => response });
+  response = json({ data: { balance: key } });
+  let result = await monitor.read('custom'); assert.equal(result.status, 'unmapped'); assert.doesNotMatch(JSON.stringify(result), new RegExp(key));
+  for (const body of ['<html>' + key, 'x'.repeat(520 * 1024)]) {
+    response = new Response(body);
+    result = await monitor.read('custom', true);
+    assert.equal(result.status, 'error'); assert.ok(result.message); assert.doesNotMatch(result.message, new RegExp(key));
+  }
+});

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { BarChart3, RefreshCw } from 'lucide-react';
+import { LoadingState } from '../../shared/LoadingState';
 import type { UsageAnalyticsSnapshot, UsageTotals } from '../../types/usage-types';
 import { DatePicker } from '../../shared/DatePicker';
 import { InfoHint } from '../../shared/InfoHint';
@@ -11,7 +12,7 @@ import {
 } from './usage-presentation';
 import { useUsageResource } from './use-usage-resource';
 import { UsageSparkline } from './UsageSparkline';
-import './usage-settings.css';
+import './styles/usage-settings.css';
 
 const RANGE_OPTIONS = [90, 180, 365] as const;
 const DAY_LABELS = ['一', '', '三', '', '五', '', '日'];
@@ -45,7 +46,7 @@ function ResourceStatus({ pending, error, hasData, onRetry, label }: {
   pending: boolean; error: string | null; hasData: boolean; onRetry: () => void; label: string;
 }) {
   if (error) return <div className="usage-read-error" role="alert"><span>{label}读取失败：{error}{hasData ? '（以下显示上次读取结果）' : ''}</span><button type="button" className="settings-text-button" onClick={onRetry}>重试{label}</button></div>;
-  if (pending) return <p className="usage-loading" role="status">{hasData ? `正在更新${label}，以下显示上次读取结果…` : `正在读取${label}…`}</p>;
+  if (pending) return <LoadingState variant={hasData ? 'inline' : 'section'} className="usage-loading">{hasData ? `正在更新${label}，以下显示上次读取结果…` : `正在读取${label}…`}</LoadingState>;
   return null;
 }
 

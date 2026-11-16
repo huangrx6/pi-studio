@@ -1,10 +1,11 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { ChevronDown, Folder, FolderOpen, LoaderCircle } from 'lucide-react';
+import { ChevronDown, Folder, FolderOpen } from 'lucide-react';
+import { LoadingIndicator } from '../shared/LoadingState';
 import type { ConversationSummary } from '../types/durable-types';
 import { SidebarActions, type SidebarAction } from './SidebarActions';
 import { SessionRecency } from './SessionRecency';
-import { focusNeighborIndices, sessionWindowSegments, SIDEBAR_VIRTUAL_THRESHOLD, visibleSessionIndices } from './sidebar-virtualization.mjs';
-import './sidebar-workspace-list.css';
+import { focusNeighborIndices, sessionWindowSegments, SIDEBAR_VIRTUAL_THRESHOLD, visibleSessionIndices } from './sidebar-virtualization.ts';
+import './styles/sidebar-workspace-list.css';
 
 export type SidebarWorkspace = { cwd: string; name: string; sessions: ConversationSummary[]; sessionCount?: number; archivedCount?: number };
 export type SidebarWorkspaceActions = {
@@ -237,7 +238,18 @@ export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ workspa
       if (!next) return;
       event.preventDefault(); requestFocus(next.key, event.shiftKey ? 'last' : 'first');
     }}>
-    {loading && !hasWorkspaces && <div className="workspace-skeleton" role="status" aria-live="polite" aria-label="正在加载工作区"><span className="sr-only">正在加载工作区…</span>{[0, 1, 2].map((group) => <div className="skeleton-group" key={group} style={{ animationDelay: `${group * 90}ms` }}><div className="skeleton-workspace-head"><span className="skeleton-icon" /><span className="skeleton-line" style={{ width: `${[46, 60, 38][group]}%` }} /><span className="skeleton-chevron" /></div><div className="skeleton-sessions"><span className="skeleton-session-line" style={{ width: `${[74, 58][group % 2]}%` }} /><span className="skeleton-session-line" style={{ width: `${[53, 67][group % 2]}%` }} /></div></div>)}</div>}
+    {loading && !hasWorkspaces && <div className="workspace-skeleton loading-placeholder" role="status" aria-label="正在加载工作区">
+      <span className="sr-only">正在加载工作区…</span>
+      {[0, 1, 2].map((group) => <div className="skeleton-group" key={group} aria-hidden="true">
+        <div className="skeleton-workspace-head">
+          <span className="skeleton-icon" /><span className="skeleton-line" style={{ width: `${[46, 60, 38][group]}%` }} /><span className="skeleton-chevron" />
+        </div>
+        <div className="skeleton-sessions">
+          <span className="skeleton-session-line" style={{ width: `${[74, 58][group % 2]}%` }} />
+          <span className="skeleton-session-line" style={{ width: `${[53, 67][group % 2]}%` }} />
+        </div>
+      </div>)}
+    </div>}
     {!(loading && !hasWorkspaces) && workspaces.map((item) => {
       const open = isOpen(item.cwd);
       const active = activeWorkspace === item.cwd && open;
@@ -273,7 +285,7 @@ export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ workspa
                 onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropHint(null); }}
                 onDrop={(event) => { const drag = dragRef.current; event.preventDefault(); event.stopPropagation(); if (drag?.kind === 'session' && drag.cwd === item.cwd && drag.sessionId) { actions.onReorderSessions(item.cwd, drag.sessionId, session.id); markDropped(sessionRowKey); } clearDrag(); }}
                 onClick={() => actions.onOpenSession(session)} onMouseEnter={() => actions.onPrefetchSession(session.id)} onFocus={() => actions.onPrefetchSession(session.id)}>
-                <span className="session-title">{session.title}</span><span className="session-meta">{session.running ? <span className="session-running" role="status" aria-label="会话正在运行" title="会话正在运行"><LoaderCircle className="spin" aria-hidden="true" /></span> : session.pinned ? <span className="session-pin-mark" title="已置顶">置顶</span> : <SessionRecency timestamp={session.updatedAt} durationMs={session.lastDurationMs} visible={visible && inViewport} />}</span>
+                <span className="session-title">{session.title}</span><span className="session-meta">{session.running ? <span className="session-running" role="status" aria-label="会话正在运行" title="会话正在运行"><LoadingIndicator /></span> : session.pinned ? <span className="session-pin-mark" title="已置顶">置顶</span> : <SessionRecency timestamp={session.updatedAt} durationMs={session.lastDurationMs} visible={visible && inViewport} />}</span>
               </button>
               <SidebarActions disabled={actionsDisabled} kind="session" id={session.id} name={session.title} pinned={session.pinned} archived={session.archived} onAction={(action, name) => actions.onAction('session', session.id, action, name)} onInteractionChange={(active) => retainInteraction(sessionRowKey, active)} onRestoreFocusFallback={() => restoreRemovedRow(logicalRow)} />
             </div>;

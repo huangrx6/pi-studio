@@ -12,7 +12,7 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
 
-const { menuBarPopoverHeight } = createRequire(import.meta.url)('../../electron/menu-bar-state.cjs');
+const { menuBarPopoverHeight } = createRequire(import.meta.url)('../../electron/services/menu-bar/state.cjs');
 const output = new URL('../../.qa/screenshots/menu-bar/', import.meta.url).pathname;
 mkdirSync(output, { recursive: true });
 
@@ -83,7 +83,7 @@ await page.addInitScript(() => {
 });
 
 try {
-  await page.goto(pathToFileURL(path.resolve('electron/menu-bar.html')).href);
+  await page.goto(pathToFileURL(path.resolve('electron/services/menu-bar/popover/index.html')).href);
   await page.locator('.session-row').first().waitFor();
 
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');

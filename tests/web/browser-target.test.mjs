@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-const { normalizeBrowserTarget } = await import('../../web/src/shell/right-panel/browser-target.mjs');
+const { normalizeBrowserTarget } = await import('../../web/src/shell/right-panel/browser-target.ts');
 
 test('accepts full URLs and bare hosts, refuses other schemes', () => {
   assert.equal(normalizeBrowserTarget('https://example.com/a'), 'https://example.com/a');

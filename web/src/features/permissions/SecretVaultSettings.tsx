@@ -1,10 +1,11 @@
+import { LoadingIndicator, LoadingState } from '../../shared/LoadingState';
 import { useSettingsDraftGuard } from '../../shared/SettingsDraftGuard';
 import { useEffect, useState } from 'react';
-import { Copy, KeyRound, LoaderCircle, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { Copy, KeyRound, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { useActionConfirmation } from '../../shared/ConfirmDialog';
 import { errorText } from '../../shared/error-text';
 import { InfoHint } from '../../shared/InfoHint';
-import './secret-vault.css';
+import './styles/secret-vault.css';
 
 type SecretName = { name: string; updatedAt: number };
 
@@ -114,12 +115,12 @@ export function SecretVaultSettings() {
           />
         </label>
         <button type="submit" className="settings-add-button" disabled={busy || !name.trim() || !value}>
-          {busy ? <LoaderCircle className="spin" /> : <Plus />}{busy ? '正在保存…' : replacing ? '更新凭据' : '保存凭据'}
+          {busy ? <LoadingIndicator /> : <Plus />}{busy ? '正在保存…' : replacing ? '更新凭据' : '保存凭据'}
         </button>
         </fieldset>
       </form>
       {replacing && <p className="secret-vault-hint">保存后将替换同名凭据，已有引用会使用新值。</p>}
-      {loading ? <div className="settings-loading" role="status"><LoaderCircle className="spin" />正在读取凭据…</div> : items.length > 0
+      {loading ? <LoadingState variant="section">正在读取凭据…</LoadingState> : items.length > 0
         ? <div className="secret-vault-list" aria-label="已保存的测试凭据">
           {items.map((item) => <div key={item.name} className="secret-vault-row">
             <span className="secret-vault-icon"><KeyRound /></span>

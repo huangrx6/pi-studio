@@ -46,7 +46,7 @@ export type BackgroundMedia = {
   bytes: number;
 };
 
-import { DEFAULT_SHORTCUTS, normalizeShortcuts } from './shortcuts.mjs';
+import { DEFAULT_SHORTCUTS, normalizeShortcuts } from './shortcuts.ts';
 
 export type KeyValueStorage = Pick<Storage, 'getItem' | 'setItem'>;
 

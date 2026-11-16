@@ -4,12 +4,12 @@ import type { AgentView } from '../../shell/app-types';
 import type { OutlineItem } from './outline-model';
 import { NO_ANSWER_TEXT } from './outline-model';
 import { placeRequestTraces } from './request-trace-turns';
-import { outlineIndexAt } from './outline-sync.mjs';
+import { outlineIndexAt } from './outline-sync.ts';
 import {
   SCROLL_INTENT_WINDOW_MS,
   isNearBottom,
   resolveAutoFollow,
-} from './chat-scroll.mjs';
+} from './chat-scroll.ts';
 
 type Setter<T> = React.Dispatch<React.SetStateAction<T>>;
 

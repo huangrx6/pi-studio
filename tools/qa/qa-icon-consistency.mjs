@@ -33,7 +33,7 @@ try {
       RefreshRuntime.injectIntoGlobalHook(window); window.$RefreshReg$ = () => {}; window.$RefreshSig$ = () => (type) => type;
       window.__vite_plugin_react_preamble_installed__ = true;
       await import('/src/styles/tokens.css'); await import('/src/styles/palette.css'); await import('/src/app.css');
-      await import('/src/shell/right-panel/right-panel.css');
+      await import('/src/shell/right-panel/styles/right-panel.css');
       await import('/@fs/${process.cwd()}/node_modules/yet-another-react-lightbox/dist/styles.css');
       await import('/@fs/${process.cwd()}/node_modules/yet-another-react-lightbox/dist/plugins/captions/captions.css');
       await import('/@fs/${process.cwd()}/node_modules/yet-another-react-lightbox/dist/plugins/counter/counter.css');

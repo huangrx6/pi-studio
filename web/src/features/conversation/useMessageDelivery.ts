@@ -27,7 +27,7 @@ import {
   markRejectedQueuedSubmission,
   mergeRejectedComposerDraft,
   removeAdmittedQueuedSubmission,
-} from './composer-delivery.mjs';
+} from './composer-delivery.ts';
 import {
   clearComposerDraft,
   composerDraftKeyForSession,
@@ -44,10 +44,10 @@ import type {
 } from './composer-types';
 import { extractComposerMentions, normalizeComposerText, splitMessageText } from './references';
 import { mergeComposerAttachments, recoverComposerPaste, type PendingComposerPaste } from './composer-paste';
-import { loadTranscriptWindow } from './transcript-load.mjs';
+import { loadTranscriptWindow } from './transcript-load.ts';
 import type { OutlineData } from './outline-model';
-import { isLongMessage } from './composer-budget.mjs';
-import { parseStudioCommand } from './composer-command-routes.mjs';
+import { isLongMessage } from './composer-budget.ts';
+import { parseStudioCommand } from './composer-command-routes.ts';
 import type { LongTaskState } from '../../types/durable-types';
 import type { TurnDiff } from '../../types/chat-types';
 import type { ModelPickerRequest } from '../models/ModelPicker';

@@ -53,7 +53,9 @@ function createMockRuntime() {
   let runtime;
   runtime = {
     context: { name: 'mock-context' },
+    cleanupSessionResources(id) { calls.push(['provider', 'release', id]); },
     durable: {
+      ProviderDoc: { kind: 'pi.provider' },
       Harness: {
         async open() {
           calls.push(['harness', 'open']);
@@ -67,6 +69,10 @@ function createMockRuntime() {
       },
     },
     harness: {
+      async snapshot(doc, id) {
+        assert.equal(doc, runtime.durable.ProviderDoc);
+        return { sessionId: `provider-${id}` };
+      },
       async createConversation(options) {
             const id = `conversation-${conversations.length + 1}`;
             const conversation = {
@@ -326,7 +332,9 @@ test('stop, close, and shutdown tear down streams and the memory runtime in orde
   assert.equal(firstConversation.aborted, true);
   assert.equal(currentRuntime.storage.closed, false);
 
+  const releases = calls.length;
   await temporaryChat.closeTemporary(303, 'first-chat');
+  assert.deepEqual(calls.slice(releases).filter(call => call[0] === 'provider'), [['provider', 'release', 'provider-conversation-1']]);
   assert.equal(currentRuntime.streams.find((entry) => entry.id === 'conversation-1').stopped, true);
   assert.equal(currentRuntime.storage.closed, false);
 

@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useState } from 'react';
-import { maximumPanelWidth, MIN_PANEL_WIDTH, normalizePanelWidth } from './panel-width.mjs';
+import { maximumPanelWidth, MIN_PANEL_WIDTH, normalizePanelWidth } from './panel-width.ts';
 
 const STORAGE_KEY = 'pi-studio:panel-width';
 

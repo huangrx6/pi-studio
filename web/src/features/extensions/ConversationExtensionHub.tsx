@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import {
   ArrowDown,
+  ChevronRight,
   ArrowUp,
   Globe2,
   GripVertical,
@@ -18,7 +19,7 @@ import type {
   ExtensionUiSnapshot,
 } from '../../types/extension-types';
 import { ExtensionSlot, type ExtensionNotice } from './ExtensionSlot';
-import { InfoHint } from '../../shared/InfoHint';
+import { SessionViewHeader } from '../../shell/SessionViewHeader';
 
 export function ConversationExtensionDock({
   items,
@@ -80,6 +81,8 @@ export function ConversationExtensionHub({
   layout,
   orderScope,
   hasSessionOverride,
+  onBack,
+  onOpenItem,
   onLayoutChange,
   onOrderScopeChange,
   onOrderChange,
@@ -96,6 +99,8 @@ export function ConversationExtensionHub({
   layout: ConversationExtensionLayout;
   orderScope: ConversationExtensionOrderScope;
   hasSessionOverride: boolean;
+  onBack: () => void;
+  onOpenItem: (itemId: string) => void;
   onLayoutChange: (layout: ConversationExtensionLayout) => void;
   onOrderScopeChange: (scope: ConversationExtensionOrderScope) => void;
   onOrderChange: (extensionIds: string[]) => void;
@@ -107,38 +112,30 @@ export function ConversationExtensionHub({
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropId, setDropId] = useState<string | null>(null);
 
-  const ordered = useMemo(() => items, [items]);
-
-  function persistExtensionOrder(nextItems: ExtensionUiItem[]) {
-    onOrderChange([...new Set(nextItems.map((item) => item.extensionId))]);
-  }
-
-  function move(itemId: string, direction: -1 | 1) {
-    const current = [...ordered];
-    const from = current.findIndex((item) => item.id === itemId);
-    const to = from + direction;
-    if (from < 0 || to < 0 || to >= current.length) return;
-    current.splice(to, 0, ...current.splice(from, 1));
-    persistExtensionOrder(current);
-  }
-
-  function dropBefore(targetId: string) {
-    if (!draggedId || draggedId === targetId) return;
-    const current = [...ordered];
-    const from = current.findIndex((item) => item.id === draggedId);
-    const to = current.findIndex((item) => item.id === targetId);
-    if (from < 0 || to < 0) return;
-    current.splice(to, 0, ...current.splice(from, 1));
-    persistExtensionOrder(current);
-    setDraggedId(null);
-    setDropId(null);
+  const groups = useMemo(() => {
+    const grouped = new Map<string, ExtensionUiItem[]>();
+    for (const item of items) {
+      const group = grouped.get(item.extensionId);
+      if (group) group.push(item);
+      else grouped.set(item.extensionId, [item]);
+    }
+    return [...grouped.values()];
+  }, [items]);
+  const ids = groups.map(group => group[0].extensionId);
+  function move(from: number, to: number) {
+    if (from < 0 || to < 0 || from === to || to >= ids.length) return;
+    const next = [...ids];
+    next.splice(to, 0, ...next.splice(from, 1));
+    onOrderChange(next);
   }
 
   return <div className="conversation-extension-hub">
-    <header className="session-view-head extension-hub-head">
-      <h2>会话扩展</h2>
-      <div className="extension-hub-tools">
-        <div className="extension-hub-scope" role="group" aria-label="扩展排序范围">
+    <SessionViewHeader className="extension-hub-head" title="会话扩展" onBack={onBack}
+      summary={items.length ? `${groups.length} 个扩展 · ${items.length} 个会话面板` : undefined}>
+      {onOpenSettings && <button className="text-button" type="button" onClick={() => onOpenSettings('extensions')}><Plug />管理扩展</button>}
+    </SessionViewHeader>
+    {items.length > 0 && <div className="extension-hub-tools">
+        {groups.length > 1 && <><span className="extension-sort-label">排序范围</span><div className="extension-hub-scope" role="group" aria-label="扩展排序范围">
           <button
             type="button"
             className={orderScope === 'global' ? 'is-active' : ''}
@@ -151,7 +148,7 @@ export function ConversationExtensionHub({
             aria-pressed={orderScope === 'session'}
             onClick={() => onOrderScopeChange('session')}
           ><MessageSquare />当前会话</button>
-        </div>
+        </div></>}
         {orderScope === 'session' && hasSessionOverride && <button
           type="button"
           className="extension-hub-reset"
@@ -174,79 +171,43 @@ export function ConversationExtensionHub({
             onClick={() => onLayoutChange('list')}
           ><Rows3 /></button>
         </div>
-      </div>
-    </header>
+      </div>}
 
-    {ordered.length === 0
-      ? <div className="extension-hub-empty">
-        <Plug />
-        <strong>没有扩展视图</strong>
-      </div>
+    {!items.length
+      ? <div className="extension-hub-empty"><Plug /><strong>暂无会话扩展</strong><p>启用提供会话面板的扩展后，可以在这里查看它的状态和操作。</p></div>
       : <div className={`extension-hub-items is-${layout}`} role="list" data-order-scope={orderScope}>
-        {ordered.map((item, index) => <article
-          className={`extension-hub-card ${dropId === item.id ? 'is-drop-target' : ''} ${draggedId === item.id ? 'is-dragging' : ''}`}
-          role="listitem"
-          key={item.id}
-          onDragOver={(event) => {
-            if (!draggedId || draggedId === item.id) return;
-            event.preventDefault();
-            event.dataTransfer.dropEffect = 'move';
-            setDropId(item.id);
-          }}
-          onDragLeave={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropId(null);
-          }}
-          onDrop={(event) => {
-            event.preventDefault();
-            dropBefore(item.id);
-          }}
-        >
-          <div className="extension-hub-card-copy">
-            <div className="extension-hub-card-title">
-              <button
-                type="button"
-                className="extension-hub-card-drag"
-                draggable
-                aria-label={`拖动排序 ${item.title}`}
-                title="拖动排序"
-                onDragStart={(event) => {
-                  setDraggedId(item.id);
-                  event.dataTransfer.effectAllowed = 'move';
-                  event.dataTransfer.setData('text/plain', item.id);
-                }}
-                onDragEnd={() => {
-                  setDraggedId(null);
-                  setDropId(null);
-                }}
-              >
-                <GripVertical aria-hidden="true" />
-              </button>
-              <strong>{item.title}</strong>
-              <InfoHint
-                className="extension-hub-card-info"
-                label={`${item.scope === 'project' ? '项目' : item.scope === 'user' ? '用户' : '内置'}扩展${item.description ? `：${item.description}` : ''}`}
-              />
-              <div className="extension-hub-card-actions">
-                <button type="button" disabled={index === 0} aria-label={`上移 ${item.title}`} title="上移" onClick={() => move(item.id, -1)}><ArrowUp /></button>
-                <button type="button" disabled={index === ordered.length - 1} aria-label={`下移 ${item.title}`} title="下移" onClick={() => move(item.id, 1)}><ArrowDown /></button>
-              </div>
+        {groups.map((group, index) => {
+          const { extensionId, extensionName, scope } = group[0];
+          return <article key={extensionId} role="listitem" className={`extension-hub-card${dropId === extensionId ? ' is-drop-target' : ''}${draggedId === extensionId ? ' is-dragging' : ''}`}
+            onDragOver={event => {
+              if (!draggedId || draggedId === extensionId) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = 'move';
+              setDropId(extensionId);
+            }}
+            onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropId(null); }}
+            onDrop={event => { event.preventDefault(); if (draggedId) move(ids.indexOf(draggedId), index); setDraggedId(null); setDropId(null); }}>
+            <div className="extension-group-head">
+              <Plug /><strong>{extensionName || extensionId}</strong><small>{scope === 'project' ? '项目' : scope === 'user' ? '用户' : '内置'}</small>
+              {groups.length > 1 && <div className="extension-hub-card-actions">
+                <span className="extension-hub-card-drag" draggable title="拖动调整扩展顺序"
+                  onDragStart={event => { setDraggedId(extensionId); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', extensionId); }}
+                  onDragEnd={() => { setDraggedId(null); setDropId(null); }}><GripVertical /></span>
+                <button type="button" disabled={!index} aria-label={`上移 ${extensionName}`} title="上移扩展" onClick={() => move(index, index - 1)}><ArrowUp /></button>
+                <button type="button" disabled={index === groups.length - 1} aria-label={`下移 ${extensionName}`} title="下移扩展" onClick={() => move(index, index + 1)}><ArrowDown /></button>
+              </div>}
             </div>
-            <div className="extension-hub-card-content">
-              <ExtensionSlot
-                slot={item.slot}
-                presentation="inline"
-                snapshot={surface}
-                selectedItemId={item.id}
-                cwd={cwd}
-                sessionId={sessionId}
-                modelRef={modelRef}
-                onOpenSettings={onOpenSettings}
-                onSendPrompt={onSendPrompt}
-                onNotify={onNotify}
-              />
-            </div>
-          </div>
-        </article>)}
+            {group.map(item => <section className="extension-hub-panel" key={item.id}>
+              <h3 className="extension-hub-card-title"><button type="button" aria-label={`打开 ${item.title} 详情`} onClick={() => onOpenItem(item.id)}><strong>{item.title}</strong><ChevronRight /></button></h3>
+              {item.description && <p className="extension-hub-description">{item.description}</p>}
+              <div className="extension-hub-card-content"><ExtensionSlot
+                slot={item.slot} presentation="inline" snapshot={surface} selectedItemId={item.id}
+                cwd={cwd} sessionId={sessionId} modelRef={modelRef}
+                onOpenSettings={onOpenSettings} onSendPrompt={onSendPrompt} onNotify={onNotify}
+              /></div>
+            </section>)}
+          </article>;
+        })}
       </div>}
   </div>;
 }

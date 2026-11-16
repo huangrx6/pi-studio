@@ -7,7 +7,7 @@ import {
   previewFormatForFile,
   previewLanguageForFile,
   splitPreviewPath,
-} from '../../web/src/shared/file-preview.mjs';
+} from '../../web/src/shared/file-preview.ts';
 
 test('file preview formats map extensions before textual fallbacks', () => {
   assert.equal(previewFormatForFile('SKILL.md', 'text/markdown', 'text'), 'markdown');

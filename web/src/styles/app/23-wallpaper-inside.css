@@ -75,16 +75,6 @@
   background: var(--conversation-hover-surface);
 }
 
-.app .sidebar :is(.nav-row, .session-row).is-active {
-  background: var(--conversation-selected-surface);
-  color: var(--text-1);
-  border-color: var(--transparent);
-}
-
-.app .sidebar :is(.nav-row, .session-row).is-active:hover {
-  background: color-mix(in srgb, var(--text-1) 11%, transparent);
-}
-
 .app .composer {
   background: var(--conversation-control-surface);
   border-color: var(--border-strong);

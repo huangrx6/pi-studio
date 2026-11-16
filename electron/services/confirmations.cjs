@@ -9,7 +9,7 @@
 
 const { randomUUID } = require('node:crypto');
 const { getWindow } = require('../core/state.cjs');
-const { publishMenuBarEvent } = require('../menu-bar-events.cjs');
+const { publishMenuBarEvent } = require('./menu-bar/events.cjs');
 
 /** 用户长时间不处理时按拒绝处理，避免工具调用永久挂起。 */
 const CONFIRM_TIMEOUT_MS = 10 * 60 * 1000;

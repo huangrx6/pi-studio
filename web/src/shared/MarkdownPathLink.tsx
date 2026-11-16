@@ -9,7 +9,7 @@
 import { useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ActionMenu, type MenuAction } from './ActionMenu';
-import { resolvePathToken } from './file-path-links.mjs';
+import { resolvePathToken } from './file-path-links.ts';
 import { MarkdownActions } from './markdown-actions';
 
 type FileApp = { name: string; path: string; icon?: string };

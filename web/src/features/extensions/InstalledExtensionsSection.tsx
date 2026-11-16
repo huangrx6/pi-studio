@@ -2,7 +2,7 @@ import { ChevronRight } from 'lucide-react';
 import type { ExtensionPlacement } from '../../shared/preferences';
 import type { ExtensionHostItem } from '../../types/extension-types';
 import { InstalledExtensionCard } from './InstalledExtensionCard';
-import './extension-lists.css';
+import './styles/extension-lists.css';
 
 type InstalledExtensionsSectionProps = {
   items: ExtensionHostItem[];

@@ -29,10 +29,10 @@ import {
   pickerCalendarDays,
   pickerWeekday,
   todayIsoDay,
-} from './date-picker.mjs';
+} from './date-picker.ts';
 import { PopoverSurface } from './PopoverSurface';
 import { isComposingKey } from './keyboard-navigation';
-import './date-picker.css';
+import './styles/date-picker.css';
 
 type DatePickerProps = {
   /** Current YYYY-MM-DD value. An empty string shows the placeholder. */

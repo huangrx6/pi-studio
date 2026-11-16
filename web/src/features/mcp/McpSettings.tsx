@@ -4,7 +4,7 @@ import { EmptyStateArt } from '../../shared/EmptyStateArt';
 import { StatusGlyph } from '../../shared/StatusGlyph';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
 import { mcpConnectionStatus } from './mcp-status';
-import './mcp-settings.css';
+import './styles/mcp-settings.css';
 
 export type McpSettingsServer = {
   name: string;

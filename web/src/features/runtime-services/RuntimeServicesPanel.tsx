@@ -3,9 +3,9 @@ import {
   Activity,
   Check,
   Copy,
-  LoaderCircle,
   RefreshCw,
 } from 'lucide-react';
+import { LoadingIndicator } from '../../shared/LoadingState';
 import type {
   RuntimeService,
   RuntimeServiceOwnership,
@@ -13,7 +13,7 @@ import type {
 } from '../../types/runtime-panel-types';
 import { errorText } from '../../shared/error-text';
 import { useActionConfirmation } from '../../shared/ConfirmDialog';
-import './runtime-services-panel.css';
+import './styles/runtime-services-panel.css';
 
 const OWNERSHIP_LABEL: Record<RuntimeServiceOwnership, string> = {
   agent: '任务进程',
@@ -94,7 +94,7 @@ function ServiceRow({
         aria-disabled={stopBusy || !canStop}
         onClick={() => { if (canStop && !stopBusy) onStop(); }}
       >
-        {terminating && <LoaderCircle className="spin" />}
+        {terminating && <LoadingIndicator />}
         <span>{terminating ? '终止中' : '终止'}</span>
       </button>
     </span>
@@ -300,7 +300,7 @@ function RuntimeServicesScope({ cwd, workspace }: Props) {
     </div>}
 
     <div className="runtime-services-list">
-      {loading && visibleServices.length === 0 && <div className="runtime-services-skeletons" aria-label="正在扫描监听端口">
+      {loading && visibleServices.length === 0 && <div className="runtime-services-skeletons loading-placeholder" role="status" aria-label="正在扫描监听端口">
         {[0, 1, 2].map((item) => <span key={item} />)}
       </div>}
       {!loading && visibleServices.map((service) => <ServiceRow

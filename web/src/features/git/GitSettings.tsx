@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { GitBranch, LoaderCircle, RotateCw } from 'lucide-react';
+import { GitBranch, RotateCw } from 'lucide-react';
+import { LoadingState } from '../../shared/LoadingState';
 import type { GitWorkspaceStatus } from '../../types/git-types';
 import type { PiWorkspace } from '../../shell/app-types';
 import { Select } from '../../shared/Select';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
-import './git-settings.css';
+import './styles/git-settings.css';
 
 export function GitSettings({ cwd, workspaces }: { cwd: string; workspaces: PiWorkspace[] }) {
   const [targetWorkspace, setTargetWorkspace] = useState(cwd || workspaces[0]?.cwd || '');
@@ -52,7 +53,7 @@ export function GitSettings({ cwd, workspaces }: { cwd: string; workspaces: PiWo
       <Select label="工作区" value={targetWorkspace} options={workspaceOptions} onChange={setTargetWorkspace} />
     </label>}
     {error && <div className="settings-error" role="alert">{error}</div>}
-    {loading && !status && <div className="settings-loading" role="status"><LoaderCircle className="spin" />正在读取 Git 状态…</div>}
+    {loading && !status && <LoadingState variant="section">正在读取 Git 状态…</LoadingState>}
     {!loading && status && !status.available && <div className="git-settings-empty">
       <strong>{selectedName} 不是 Git 项目</strong>
       <span>切换到 Git 仓库后，这里会显示分支、提交和 worktree 信息。</span>

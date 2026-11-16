@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Folder, LoaderCircle, RotateCw, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Folder, RotateCw, X } from 'lucide-react';
+import { LoadingState } from '../../shared/LoadingState';
 import { DetailDialog } from '../../shared/DetailDialog';
 import { DeferredFilePreview } from '../../shared/DeferredFilePreview';
 import { FileKindIcon } from '../../shared/FileKindIcon';
@@ -7,7 +8,7 @@ import { formatFileSize } from '../../shared/filesize';
 import { StatusGlyph } from '../../shared/StatusGlyph';
 import { installedSkillStatus } from './installed-skill-status';
 import { createSkillDetailResource, emptySkillDetailState } from './skill-detail-resource';
-import './skill-detail.css';
+import './styles/skill-detail.css';
 
 type Skill = Awaited<ReturnType<Window['piApi']['settings']>>['skills'][number];
 
@@ -51,7 +52,7 @@ export function SkillDetailDialog({ skill, busy, error, refreshing = false, onRe
             onClick={() => void resource.current?.retryDirectory()}><RotateCw /></button>
         </div>
         <div className="skill-tree-list">
-          {state.treeBusy ? <div className="skill-tree-empty" role="status"><LoaderCircle className="spin" aria-hidden="true" />正在读取目录</div>
+          {state.treeBusy ? <LoadingState variant="section">正在读取目录</LoadingState>
             : state.treeError ? <div className="skill-detail-read-error" role="alert"><p>{state.treeError}</p><button type="button" className="text-button" onClick={() => void resource.current?.retryDirectory()}>重试读取技能目录</button></div>
             : state.entries.length ? state.entries.map(entry => <button type="button" key={entry.path}
               className={`file-row ${entry.type === 'directory' ? 'is-directory' : ''} ${state.filePath === entry.path ? 'is-active' : ''}`}

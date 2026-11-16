@@ -1,6 +1,7 @@
 import {
-  ArrowUp, Download, GitBranch, LoaderCircle, PanelRightOpen,
+  ArrowUp, Download, GitBranch, PanelRightOpen,
 } from 'lucide-react';
+import { LoadingIndicator } from '../shared/LoadingState';
 import {
   NotificationCenter,
   type AppNotification,
@@ -45,6 +46,7 @@ type ConversationHeaderProps = {
   cwd?: string;
   sessionId?: string;
   modelRef?: string;
+  quotaProvider?: { id: string; name: string };
   onOpenChip: (chip: ExtensionChipEntry) => void;
   onOpenExtensionSettings?: (page?: ExtensionSettingsPage) => void;
   onSendPromptFromExtension?: (text: string, submit: boolean) => void;
@@ -79,6 +81,7 @@ export function ConversationHeader({
   cwd,
   sessionId,
   modelRef,
+  quotaProvider,
   onOpenChip,
   onOpenExtensionSettings,
   onSendPromptFromExtension,
@@ -104,6 +107,7 @@ export function ConversationHeader({
             cwd={cwd}
             sessionId={sessionId}
             modelRef={modelRef}
+            quotaProvider={quotaProvider}
             onReturnToMainAgent={onReturnToMainAgent}
             onOpenAgentOverview={onOpenAgentOverview}
             onOpenConversationExtensionHub={onOpenConversationExtensionHub}
@@ -128,7 +132,7 @@ export function ConversationHeader({
                 : `发现新版本${update.latestVersion ? ` v${update.latestVersion}` : ''}`}
             onClick={update.onOpen}
           >
-            {update.state === 'downloading' ? <LoaderCircle className="spin" /> : update.state === 'downloaded' ? <ArrowUp /> : <Download />}
+            {update.state === 'downloading' ? <LoadingIndicator /> : update.state === 'downloaded' ? <ArrowUp /> : <Download />}
           </button>}
           <NotificationCenter
             items={notifications}

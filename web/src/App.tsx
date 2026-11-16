@@ -17,7 +17,7 @@ import { ComparisonWorkbench } from './features/comparison/ComparisonWorkbench';
 import { WorkbenchPane } from './shell/right-panel/WorkbenchPane';
 import { MarkdownActions } from './shared/markdown-actions';
 import { errorText } from './shared/error-text';
-import './shell/right-panel/panel-file.css';
+import './shell/right-panel/styles/panel-file.css';
 
 /** Application composition root: foundation state, conversation runtime, then layout. */
 export function App() {
@@ -233,11 +233,13 @@ export function App() {
     conversationFooterExtensionItems,
     conversationExtensionChipItems,
     openConversationExtensionChip,
+    openConversationExtension,
     conversationExtensionHubItems,
     activeExtensionItem,
     hasConversationExtensionSessionOrder,
     updateConversationExtensionUi,
     openConversationExtensionHub,
+    quotaProvider,
     liveDiff,
     handleOpenFile,
     handleOpenAttachment,
@@ -269,6 +271,7 @@ export function App() {
     refreshConversationList,
     restoreArchivedConversation,
     permanentlyDeleteArchivedConversation,
+    deleteArchivedGroup,
     runNotificationAction,
     actionPaletteOpen,
     setActionPaletteOpen,
@@ -423,6 +426,7 @@ export function App() {
             }
             : null,
           conversationDetailExtensionCount: conversationDetailExtensionItems.length,
+          quotaProvider,
           openNotificationSession,
           runNotificationAction,
           panelExpanded: workbench.panelEntered,
@@ -466,6 +470,7 @@ export function App() {
         extensions={{
           chipItems: conversationExtensionChipItems,
           openChip: openConversationExtensionChip,
+          openItem: openConversationExtension,
           surface: conversationExtensionSurface,
           hubItems: conversationExtensionHubItems,
           activeItem: activeExtensionItem,
@@ -660,6 +665,7 @@ export function App() {
           workspaces,
           onRestore: restoreArchivedConversation,
           onDelete: permanentlyDeleteArchivedConversation,
+          onDeleteGroup: deleteArchivedGroup,
         }}
         skillActions={{
           notify: foundation.pushNotification,

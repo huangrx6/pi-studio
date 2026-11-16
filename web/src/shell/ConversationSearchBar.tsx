@@ -5,7 +5,8 @@
  * 每次跳转都由 `onJump` 负责补页与滚动，这里只负责输入与上下步进。
  */
 import { useEffect, useRef } from 'react';
-import { ChevronDown, ChevronUp, LoaderCircle, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
+import { LoadingIndicator } from '../shared/LoadingState';
 import type { ConversationSearchState } from '../features/conversation/useConversationSearch';
 
 export function ConversationSearchBar({
@@ -47,7 +48,7 @@ export function ConversationSearchBar({
       }}
     />
     <span className="conversation-search-count" aria-live="polite">
-      {state.loading ? <LoaderCircle className="spin" aria-hidden="true" /> : position}
+      {state.loading ? <LoadingIndicator /> : position}
     </span>
     <button type="button" aria-label="上一个结果" title="上一个 ⇧Enter" onClick={() => onStep(-1)}><ChevronUp /></button>
     <button type="button" aria-label="下一个结果" title="下一个 Enter" onClick={() => onStep(1)}><ChevronDown /></button>

@@ -1,6 +1,7 @@
+import { LoadingIndicator, LoadingState } from '../../shared/LoadingState';
 import { useSettingsDraftGuard } from '../../shared/SettingsDraftGuard';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { Check, ChevronRight, Code2, LoaderCircle, MoreHorizontal, Plus, RotateCcw, Save, Trash2, X } from 'lucide-react';
+import { Check, ChevronRight, Code2, MoreHorizontal, Plus, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import { ActionMenu } from '../../shared/ActionMenu';
 import { SettingsDialog } from '../../shared/SettingsDialog';
 import { InfoHint } from '../../shared/InfoHint';
@@ -11,7 +12,7 @@ import { errorText } from '../../shared/error-text';
 import type { HarnessProfile, HarnessSectionId, HarnessSettingsSnapshot, RuntimePolicy } from '../../types/harness-types';
 import { runtimeRefreshFailure } from '../../shared/runtime-refresh';
 import { cloneHarnessProfile as cloneProfile, cloneRuntimePolicy, createHarnessRequestOwner, createHarnessWriteQueue, guidanceDraft, type GuidanceRow } from './harness-state';
-import './harness-settings.css';
+import './styles/harness-settings.css';
 
 function slugify(value: string): string { return value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^[^a-z0-9]+/, '').slice(0, 64); }
 class HarnessReloadError extends Error {}
@@ -250,7 +251,7 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd
 
     {loadError && <div className="harness-load-error"><p role="alert">{loadError}</p><button type="button" className="settings-text-button" disabled={loading} onClick={() => void reload(readyScope === cwd)}>重新加载 Harness 配置</button></div>}
     {!newProfileOpen && (error || message) && <p className={`harness-notice ${error ? 'is-error' : ''}`} role={error ? 'alert' : 'status'}>{error || message}</p>}
-    {loading && <p className="harness-loading" role="status"><LoaderCircle className="spin" />正在刷新 Harness 配置…</p>}
+    {loading && <LoadingState>正在刷新 Harness 配置…</LoadingState>}
 
     <fieldset
       disabled={blocked}
@@ -286,7 +287,7 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd
             <button type="button" className="settings-outline" disabled={!dirty || saving} onClick={() => selectedStored && installProfile(selectedStored)}>撤销</button>
             <div className="harness-editor-action-group is-primary">
               <button type="button" className="settings-save" disabled={!dirty || saving || Boolean(guidance.error) || !draft.name.trim()} onClick={() => void saveProfile()}>
-                {saving ? <LoaderCircle className="spin" /> : <Save />}保存配置
+                {saving ? <LoadingIndicator /> : <Save />}保存配置
               </button>
             </div>
           </div>
@@ -312,7 +313,7 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd
               title={dirty ? '请先保存配置' : undefined}
               onClick={() => void applyProfile()}
             >
-              {saving ? <LoaderCircle className="spin" /> : <Check />}
+              {saving ? <LoadingIndicator /> : <Check />}
               {applied ? '已应用' : scope === 'global' ? '设为全局默认' : '应用到工作区'}
             </button>
           </div>
@@ -471,7 +472,7 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd
                 disabled={!policyDirty || policySaving}
                 onClick={() => void savePolicy()}
               >
-                {policySaving ? <LoaderCircle className="spin" /> : <Save />}
+                {policySaving ? <LoadingIndicator /> : <Save />}
                 保存策略
               </button>
             </div>

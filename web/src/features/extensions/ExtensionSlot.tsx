@@ -10,7 +10,6 @@ import {
   CircleEllipsis,
   Clock3,
   Info,
-  LoaderCircle,
   Minus,
   Plug,
   RefreshCw,
@@ -20,6 +19,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
+import { LoadingIndicator, LoadingState } from '../../shared/LoadingState';
 import type {
   ExtensionContent,
   ExtensionDataViewSnapshot,
@@ -315,7 +315,7 @@ function LiveDataViewConnection({
   }
   if (loading) {
     if (block.fallback?.length) {
-      return <div className="extension-data-view is-loading">
+      return <div className="extension-data-view loading-placeholder" role="status">
         <ContentBlocks
           blocks={block.fallback}
           busyButton={busyButton}
@@ -328,12 +328,10 @@ function LiveDataViewConnection({
         />
       </div>;
     }
-    return <div className="extension-empty is-compact" role="status">
-      <span><LoaderCircle className="spin" /></span>
-      <strong>正在连接实时数据</strong>
-    </div>;
+    return <LoadingState variant={compact ? 'inline' : 'section'}>正在连接实时数据</LoadingState>;
   }
   if (!snapshot?.content.length) {
+    if (compact) return <span>{block.emptyText || '暂无实时数据'}</span>;
     return <div className="extension-empty is-compact">
       <span><BarChart3 /></span>
       <strong>{block.emptyText || '暂无实时数据'}</strong>
@@ -547,7 +545,7 @@ function ContentBlocks({
           disabled={busyButton !== null}
           onClick={() => onAction(button.action)}
         >
-          {busyButton === button.id ? <span className="extension-action-spinner" /> : null}
+          {busyButton === button.id && <LoadingIndicator />}
           {button.label}
         </button>
       ))}</div>;

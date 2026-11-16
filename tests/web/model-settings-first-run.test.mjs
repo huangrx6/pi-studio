@@ -17,6 +17,7 @@ function compile(relative, imports = {}) {
 }
 
 const { ModelSettings } = compile('../../web/src/features/models/ModelSettings.tsx', {
+  '../../shared/LoadingState': compile('../../web/src/shared/LoadingState.tsx'),
   '../../shared/SettingsPageHeader': {
     SettingsPageHeader: ({ title, actions }) => React.createElement(
       'header',
@@ -27,9 +28,12 @@ const { ModelSettings } = compile('../../web/src/features/models/ModelSettings.t
   },
   '../../shared/Select': { Select: () => null },
   '../../shared/InfoHint': { InfoHint: () => null },
-  '../../shared/token-units': { tokenLabel: value => `${value} tokens` },
+  './EnabledModelsDialog': { ENABLED_MODELS_PAGE_SIZE: 24, EnabledModelsDialog: () => null },
+  './ModelCapabilities': { ModelCapabilities: () => null },
+  './ProviderIcon': { ProviderIcon: () => null },
+  './ProviderQuotaView': { ProviderQuotaDialog: () => null },
   '../../types/model-types': { thinkingLabels: {} },
-  './model-settings-catalog.mjs': {
+  './model-settings-catalog.ts': {
     discoverySelection: () => ({}),
     MODEL_CATALOG_PAGE_SIZE: 20,
     modelCatalogPage: () => ({ items: [], total: 0, remaining: 0 }),

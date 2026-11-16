@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ExternalLink, Info, RotateCw } from 'lucide-react';
 import type { UpdateSnapshot } from '../../types/update-types';
 import { errorText } from '../../shared/error-text';
-import '../../shared/settings-page-header.css';
-import './about-settings.css';
+import '../../shared/styles/settings-page-header.css';
+import './styles/about-settings.css';
 
 export function AboutSettings({ snapshot, paths, onOpenUpdates }: {
   snapshot: UpdateSnapshot;

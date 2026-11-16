@@ -58,7 +58,7 @@ const {
   modelComparisonSnapshot,
   startModelComparison,
 } = require('../services/model-comparison.cjs');
-const { publishMenuBarEvent } = require('../menu-bar-events.cjs');
+const { publishMenuBarEvent } = require('../services/menu-bar/events.cjs');
 
 // `run_end` is also emitted for a user-requested abort. Keep a short-lived
 // marker until that terminal event arrives so the menu bar can distinguish a

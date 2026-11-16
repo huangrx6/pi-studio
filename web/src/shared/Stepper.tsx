@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import './stepper.css';
+import './styles/stepper.css';
 
 type StepperProps = {
   /** Visible row label; also part of the button accessible names. */

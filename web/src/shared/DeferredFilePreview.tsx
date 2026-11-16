@@ -1,5 +1,5 @@
 import { Component, Suspense, lazy, type ReactNode } from 'react';
-import { LoaderCircle } from 'lucide-react';
+import { LoadingState } from './LoadingState';
 import type { FilePreviewProps } from './FilePreview';
 
 const LazyFilePreview = lazy(async () => {
@@ -16,7 +16,7 @@ class FilePreviewBoundary extends Component<{ children: ReactNode }, { failed: b
 
   render() {
     if (this.state.failed) {
-      return <div className="panel-route-loading file-preview-load-failure" role="alert">
+      return <div className="file-preview-load-failure" role="alert">
         文件预览暂时无法加载
       </div>;
     }
@@ -31,9 +31,7 @@ class FilePreviewBoundary extends Component<{ children: ReactNode }, { failed: b
 export function DeferredFilePreview(props: FilePreviewProps) {
   return <FilePreviewBoundary>
     <Suspense fallback={
-      <div className="panel-route-loading" role="status" aria-label="正在加载文件预览">
-        <LoaderCircle aria-hidden="true" />
-      </div>
+      <LoadingState variant="panel">正在加载文件预览…</LoadingState>
     }>
       <LazyFilePreview {...props} />
     </Suspense>

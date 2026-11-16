@@ -90,9 +90,9 @@ export function useSidebarActions({
   async function sidebarAction(
     kind: 'workspace' | 'session',
     id: string,
-    action: SidebarAction,
+    action: SidebarAction | 'remove-archived',
     name?: string,
-    options: { preserveCurrentView?: boolean; notify?: boolean } = {},
+    options: { preserveCurrentView?: boolean; notify?: boolean; sessionIds?: string[] } = {},
   ) {
     if (sidebarMutationRef.current) throw new Error('会话操作正在完成，请稍后再试。');
     if (conversationListNeedsRefreshRef.current) throw new Error('请先刷新会话列表，再继续操作。');
@@ -101,7 +101,7 @@ export function useSidebarActions({
     const generation = sessionLoadRef.current;
     const targetSummary = workspaces.flatMap((item) => item.sessions).find((item) => item.id === id);
     try {
-      const result = await window.piApi.conversationAction({ kind, id, action, name });
+      const result = await window.piApi.conversationAction({ kind, id, action, name, ...(options.sessionIds && { sessionIds: options.sessionIds }) });
       conversationListNeedsRefreshRef.current = true;
       ++stateRequestRef.current;
       try {
@@ -116,7 +116,17 @@ export function useSidebarActions({
             delete queuedEditContextsRef.current[item.id];
           }
         }
+        if (action === 'remove-archived') {
+          for (const sessionId of options.sessionIds ?? []) {
+            clearSessionQueuedPrompts(sessionId);
+            delete queuedEditContextsRef.current[sessionId];
+            clearComposerDraft(composerDraftsRef.current, composerDraftKeyForSession(sessionId));
+          }
+        }
         const current = sessionRef.current;
+        if (action === 'remove-archived' && current && options.sessionIds?.includes(current.id) && generation === sessionLoadRef.current) {
+          await conversationNavigationRef.current.start(current.cwd);
+        }
         if (generation === sessionLoadRef.current && kind === 'workspace' && action === 'remove' && workspaceRef.current === id) await conversationNavigationRef.current.start('');
         if (!options.preserveCurrentView && generation === sessionLoadRef.current && kind === 'session' && action === 'archive' && current?.id === id && !targetSummary?.archived) await conversationNavigationRef.current.start(current.cwd);
         if (generation === sessionLoadRef.current && kind === 'session' && action === 'remove' && current?.id === id) await conversationNavigationRef.current.start(current.cwd);
@@ -205,10 +215,23 @@ export function useSidebarActions({
     if (accepted) await sidebarAction('session', item.id, 'remove');
   }
 
+  async function deleteArchivedGroup(cwd: string, label: string, sessionIds: string[]) {
+    const accepted = await actionConfirmation.confirm({
+      title: `永久删除这 ${sessionIds.length} 个归档会话？`,
+      description: `将删除「${label}」中选定的 ${sessionIds.length} 个归档会话及其消息、任务、附件和关联子智能体。此操作无法撤销。`,
+      confirmLabel: '永久删除',
+      tone: 'danger',
+    });
+    if (!accepted) return;
+    await sidebarAction('workspace', cwd, 'remove-archived', undefined, { sessionIds });
+    pushNotification(`「${label}」中的 ${sessionIds.length} 个归档会话已删除。`, 'success');
+  }
+
   return {
     refreshConversationList,
     sidebarAction,
     restoreArchivedConversation,
     permanentlyDeleteArchivedConversation,
+    deleteArchivedGroup,
   };
 }

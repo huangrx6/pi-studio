@@ -1,6 +1,6 @@
 import { useId } from 'react';
 import { Info } from 'lucide-react';
-import './info-hint.css';
+import './styles/info-hint.css';
 
 export function InfoHint({
   label,

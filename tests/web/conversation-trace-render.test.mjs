@@ -28,7 +28,7 @@ function fixture() {
     Markdown: ({ children }) => { metrics.markdown++; return React.createElement('p', null, children); },
     ToolResultImages: () => React.createElement('div', { className: 'tool-result-images' }),
   };
-  for (const name of ['ToolIcon', 'ChevronDown', 'CircleAlert', 'CircleX', 'LoaderCircle', 'Sparkles']) context[name] = () => null;
+  for (const name of ['ToolIcon', 'ChevronDown', 'CircleAlert', 'CircleX', 'LoadingIndicator', 'Sparkles']) context[name] = () => null;
   vm.runInNewContext(compiled, context);
   return { ...context.exports, metrics };
 }

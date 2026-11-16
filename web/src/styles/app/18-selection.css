@@ -1,14 +1,14 @@
-/* ---- 统一的选中态 ------------------------------------------------------
- * 一种颜色、一种强度：tint 底 + text-1 文字 + accent 图标。
- * 列表行只留底色，不加左侧装饰条；顶部标签用底部 2px 下划线，
- * 分段控件用 1px 内描边。其它地方不要再自定义选中配色。
- */
-
-:is(.session-row, .nav-row, .settings-nav-row).is-active {
-  background: var(--accent-tint);
+/* Shell navigation shares one neutral selection across both sidebars and the workbench. */
+.app :is(.session-row, .nav-row, .settings-nav-row, .panel-tab).is-active {
+  background: var(--nav-selected-bg);
+  border-color: var(--transparent);
   color: var(--text-1);
   font-weight: var(--weight-medium);
   box-shadow: none;
+}
+
+.app :is(.session-row, .nav-row, .settings-nav-row, .panel-tab).is-active:hover {
+  background: var(--nav-selected-hover-bg);
 }
 
 :is(.session-row, .nav-row, .settings-nav-row).is-active > :is(svg, .nav-icon) { color: var(--accent); }
@@ -70,14 +70,6 @@
   .settings-content .general-theme-options button[aria-pressed="true"] svg,
   .usage-range-switch button.is-active svg
 ) { color: var(--accent); }
-
-/* 设置页侧栏同样是 tint 底，颜色保持设置页单色。 */
-.settings-navigation .settings-nav-row.is-active {
-  background: var(--accent-tint);
-  color: var(--text-1);
-  font-weight: var(--weight-medium);
-  box-shadow: none;
-}
 
 /* 未选中的分段项悬停时给一层 hover 表面，和 tint 选中态区分开。 */
 .settings-content :is(.general-theme-options, .permission-policy-scopes) button:hover:not(.is-active, [aria-pressed="true"]),

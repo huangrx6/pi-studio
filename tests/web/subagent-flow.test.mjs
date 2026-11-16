@@ -18,7 +18,7 @@ const {
   buildSubagentFlow,
   flowCanvasHeight,
   flowEdgeState,
-} = await import('../../web/src/features/subagents/subagent-flow.mjs');
+} = await import('../../web/src/features/subagents/subagent-flow.ts');
 
 const child = (overrides = {}) => ({
   key: 'conversation:1',

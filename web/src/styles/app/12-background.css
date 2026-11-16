@@ -28,7 +28,6 @@
 .app.has-custom-background :is(
   .file-toolbar,
   .file-code,
-  .panel-tabbar,
   .changes-view,
   .diff-view
  ) {
@@ -118,13 +117,7 @@
   box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 
-.app.has-custom-background :is(
-  .nav-row,
-  .settings-nav-row,
-  .session-row,
-  .panel-tab,
-  .model-option
-).is-active,
+.app.has-custom-background .model-option.is-active,
 .app.has-custom-background .model-option.is-selected {
   background: var(--accent-tint);
   border-color: var(--accent);

@@ -151,7 +151,7 @@ chip 只在有真实会话时出现：新会话还是草稿态，没有 `session
 ]
 ```
 
-`details` 必须指向同一份 manifest 里声明的 `conversation.detail` 面板；找不到时 manifest 校验会直接报错。Studio 只负责渲染与路由，不解释 chip 的内容，也不为某个扩展做特殊处理。
+`details` 必须指向同一份 manifest 里声明的 `conversation.detail` 面板。上面的额度数字演示声明式布局。实际模型额度在「设置 → 模型配置」中按来源配置。可运行的官方示例会在会话工作区展示当前项目的脚本数量，打开详情可复制脚本命令。[项目脚本速查](../extensions/pi-project-scripts/README.md)
 
 ```json
 {

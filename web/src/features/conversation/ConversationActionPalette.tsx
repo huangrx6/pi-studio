@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, LoaderCircle, Search, X } from 'lucide-react';
+import { ArrowUpRight, Search, X } from 'lucide-react';
+import { LoadingIndicator, LoadingState } from '../../shared/LoadingState';
 import { filterConversationActions, type ConversationAction } from './conversation-actions';
-import './conversation-actions.css';
+import './styles/conversation-actions.css';
 
 const groups = { conversation: '当前会话', workspace: '工作区', extension: '扩展动作' };
 
@@ -73,12 +74,15 @@ export function ConversationActionPalette({ actions, loading, resourceError, onE
         {(i === 0 || filtered[i - 1].group !== action.group) && <div className="conversation-action-group" role="presentation">{groups[action.group]}</div>}
         <button id={`${listId}-${i}`} type="button" role="option" tabIndex={-1} aria-selected={index === i} aria-disabled={Boolean(action.disabledReason) || pending} className="conversation-action-row" onMouseMove={() => setSelected(i)} onMouseDown={event => event.preventDefault()} onClick={() => void execute(action)}>
           <span><strong>{action.title}</strong><small>{action.disabledReason || action.description}</small></span>
-          {pending && index === i ? <LoaderCircle className="spin" /> : <ArrowUpRight aria-hidden="true" />}
+          {pending && index === i ? <LoadingIndicator /> : <ArrowUpRight aria-hidden="true" />}
         </button>
       </div>)}
       {!filtered.length && <p className="conversation-action-empty">没有匹配的动作</p>}
     </div>
     {error && <p className="conversation-action-error" role="alert">{error}</p>}
-    <footer><span>{resourceError || (loading ? '正在加载扩展动作…' : '↑ ↓ 选择 · Enter 执行')}</span><kbd>Esc 关闭</kbd></footer>
+    <footer>
+      {loading && !resourceError ? <LoadingState>正在加载扩展动作…</LoadingState> : <span>{resourceError || '↑ ↓ 选择 · Enter 执行'}</span>}
+      <kbd>Esc 关闭</kbd>
+    </footer>
   </dialog>, document.body);
 }

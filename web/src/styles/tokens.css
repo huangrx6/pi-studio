@@ -101,9 +101,9 @@
      the comfortable default for the common two-column layout. */
   --panel-w: 390px;
   --content: 740px; /* Centred reading and settings column. */
-  --content-gutter: var(--space-2); /* Right and bottom edges of the canvas. */
+  --content-gutter: var(--space-2); /* Exposed canvas edges and inset workbench surfaces. */
   /* 轨迹页保持稳定的外框，点击记录后在框内打开右侧详情。 */
-  --trace-content: 960px;
+  --session-view-width: 960px;
   /* 对话与设置共用正文列宽和左右留白，窄窗与分栏都在此收紧。 */
   --session-gutter: var(--space-8);
   --header-height: 44px;
@@ -127,6 +127,13 @@
   --transition: 160ms ease;
   /* 行、拖拽把手这类高频小元素用比标准控件更短的一档，避免鼠标扫过时出现拖尾。 */
   --transition-fast: 120ms ease;
+  /* 加载提示共用尺寸与动效。行内状态保留一行，独立区域为内容预留空间。 */
+  --loading-icon-size: var(--icon-xs);
+  --loading-panel-icon-size: var(--icon-md);
+  --loading-section-height: 96px;
+  --loading-delay: 160ms;
+  --loading-spin-duration: 1s;
+  --loading-skeleton-duration: 1.8s;
   --shell-transition: 300ms cubic-bezier(.22, .8, .2, 1);
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --display-font: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "Times New Roman", serif;

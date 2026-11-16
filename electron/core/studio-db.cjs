@@ -26,7 +26,7 @@ const {
 } = require('./thinking-levels.cjs');
 
 const DATABASE_NAME = 'pi-studio.sqlite';
-const SCHEMA_VERSION = 18;
+const SCHEMA_VERSION = 19;
 const USAGE_REQUEST_LEDGER_LIMIT = 8_192;
 const USAGE_REQUEST_PRUNE_BATCH = 256;
 const METRIC_REQUEST_HISTORY_LIMIT = 8;
@@ -156,6 +156,7 @@ function normalizeProviderRow(row) {
     api: row.api,
     icon: row.icon || '',
     modelsUrl: row.models_url || '',
+    quota: json(row.quota_config, null),
     builtin: Boolean(row.builtin),
     enabled: Boolean(row.enabled),
     createdAt: row.created_at,
@@ -677,6 +678,9 @@ class StudioDatabase {
       }
       if (!modelColumns.has('metadata_source')) {
         this.db.exec("ALTER TABLE model_catalog ADD COLUMN metadata_source TEXT NOT NULL DEFAULT 'legacy'");
+      }
+      if (current < 19 && !this.db.prepare('PRAGMA table_info(model_providers)').all().some(row => row.name === 'quota_config')) {
+        this.db.exec('ALTER TABLE model_providers ADD COLUMN quota_config TEXT');
       }
 
       const legacyUsageRequests = this.db.prepare(`
@@ -1582,19 +1586,21 @@ class StudioDatabase {
       api: input.api || current?.api || 'openai-completions',
       icon: input.icon ?? current?.icon ?? '',
       modelsUrl: input.modelsUrl ?? current?.modelsUrl ?? '',
+      quota: input.quota === undefined ? current?.quota : input.quota,
       builtin: input.builtin ?? current?.builtin ?? false,
       enabled: input.enabled ?? current?.enabled ?? true,
     };
     this.db.prepare(`
       INSERT INTO model_providers(
-        id, name, base_url, api, icon, models_url, builtin, enabled, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, name, base_url, api, icon, models_url, quota_config, builtin, enabled, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         base_url = excluded.base_url,
         api = excluded.api,
         icon = excluded.icon,
         models_url = excluded.models_url,
+        quota_config = excluded.quota_config,
         builtin = excluded.builtin,
         enabled = excluded.enabled,
         updated_at = excluded.updated_at
@@ -1605,6 +1611,7 @@ class StudioDatabase {
       next.api,
       next.icon,
       next.modelsUrl,
+      next.quota ? encode(next.quota) : null,
       next.builtin ? 1 : 0,
       next.enabled ? 1 : 0,
       current?.createdAt || at,

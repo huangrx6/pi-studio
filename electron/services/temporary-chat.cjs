@@ -16,6 +16,7 @@ const {
 } = require('./models.cjs');
 const { getDurableRuntime } = require('../runtime/durable-runtime.cjs');
 const durableView = require('../runtime/view.cjs');
+const { releaseProviderSession } = require('../runtime/provider-session.cjs');
 
 const chats = new Map();
 let memoryRuntime;
@@ -53,6 +54,7 @@ async function openMemoryRuntime() {
     memoryRuntime = {
       durable: durableRuntime.durable,
       context: durableRuntime.context,
+      cleanupSessionResources: durableRuntime.cleanupSessionResources,
       harness,
       storage,
     };
@@ -149,7 +151,7 @@ async function temporaryPrompt(owner, payload, send) {
   const input = validateInput(payload);
   const key = `${owner}:${payload.id}`;
   let entry = chats.get(key);
-  if (entry?.busy) throw new Error('请等待当前回复完成，或先停止回复');
+  if (entry?.busy || entry?.closing) throw new Error('请等待当前回复完成，或先停止回复');
 
   const runtime = await openMemoryRuntime();
   const { model, selection } = await resolveModel(payload.modelRef, payload.thinkingLevel);
@@ -180,6 +182,7 @@ async function temporaryPrompt(owner, payload, send) {
     const watch = await conversation.watch(runtime.context);
     const initial = durableView.liveFromView(watch.value);
     entry = {
+      runtime,
       busy: false,
       cancelled: false,
       conversation,
@@ -247,14 +250,21 @@ async function stopTemporary(owner, id) {
   await entry.conversation.abort((await openMemoryRuntime()).context).catch(() => {});
 }
 
+async function disposeTemporaryEntry(entry) {
+  await entry.conversation.abort(entry.runtime.context).catch(() => {});
+  await entry.stream.stop().catch(() => {});
+  await releaseProviderSession(entry.runtime, entry.conversation.id);
+}
+
 async function closeTemporary(owner, id) {
   const key = `${owner}:${id}`;
   const entry = chats.get(key);
   if (!entry) return;
-  chats.delete(key);
+  if (entry.closing) return entry.closing;
   entry.cancelled = true;
-  await entry.conversation.abort((await openMemoryRuntime()).context).catch(() => {});
-  await entry.stream.stop().catch(() => {});
+  entry.closing = disposeTemporaryEntry(entry);
+  await entry.closing;
+  chats.delete(key);
   if (chats.size === 0) await closeMemoryRuntime();
 }
 
@@ -267,13 +277,12 @@ async function closeOwner(owner) {
 }
 
 async function shutdownTemporaryChats() {
-  const entries = [...chats.entries()];
-  chats.clear();
-  await Promise.all(entries.map(async ([key, entry]) => {
+  await Promise.all([...chats.values()].map(entry => {
     entry.cancelled = true;
-    await entry.stream.stop().catch(() => {});
-    await entry.conversation.abort(memoryRuntime?.context ?? (await openMemoryRuntime()).context).catch(() => {});
+    entry.closing ??= disposeTemporaryEntry(entry);
+    return entry.closing;
   }));
+  chats.clear();
   await closeMemoryRuntime();
 }
 

@@ -1,3 +1,4 @@
+import { emptyProviderQuota } from '../types/provider-quota';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { ChatMessage, ComposerAttachment } from '../types/chat-types';
@@ -201,6 +202,7 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
     apiKey: '',
     icon: '',
     modelsUrl: '',
+    quota: emptyProviderQuota(),
   });
   const [mcpDraft, setMcpDraftState] = useState({
     name: '',

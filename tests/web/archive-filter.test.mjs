@@ -25,3 +25,9 @@ test('title, workspace and path terms combine case-insensitively, including norm
   assert.deepEqual(filterArchivedWorkspaces(workspaces, 'not-found'), []);
   assert.equal(filterArchivedWorkspaces(workspaces, '  ')[0].sessions.length, 350);
 });
+
+test('project, pin status and normalized title search intersect within archived rows', () => {
+  assert.deepEqual(filterArchivedWorkspaces(workspaces, '中文', 'pinned', '/projects/Studio')[0].sessions.map(item => item.id), ['a9']);
+  assert.deepEqual(filterArchivedWorkspaces(workspaces, '', 'pinned', '/projects/other'), []);
+  assert.deepEqual(filterArchivedWorkspaces(workspaces, '', 'unpinned', '/projects/other')[0].sessions.map(item => item.id), ['b']);
+});
