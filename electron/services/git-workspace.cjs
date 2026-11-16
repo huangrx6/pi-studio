@@ -1,4 +1,5 @@
 const path = require('node:path');
+const { stat } = require('node:fs/promises');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 
@@ -6,7 +7,7 @@ const execFileAsync = promisify(execFile);
 const GIT_OPTIONS = {
   encoding: 'utf8',
   timeout: 1500,
-  maxBuffer: 256 * 1024,
+  maxBuffer: 4 * 1024 * 1024,
   windowsHide: true,
 };
 
@@ -33,34 +34,46 @@ function unavailable(reason) {
   };
 }
 
-function parseDirty(stdout) {
+function parseStatus(stdout) {
   const dirty = emptyDirty();
-  for (const line of stdout.split(/\r?\n/)) {
-    if (!line) continue;
-    dirty.total += 1;
-    if (line.startsWith('??')) {
+  let upstream, ahead, behind, ignored = false;
+  const records = stdout.split('\0');
+  for (let i = 0; i < records.length; i++) {
+    const line = records[i];
+    if (line.startsWith('# branch.upstream ')) upstream = line.slice('# branch.upstream '.length);
+    else if (line.startsWith('# branch.ab ')) {
+      const match = /^# branch\.ab \+(\d+) -(\d+)$/.exec(line);
+      if (match) { ahead = Number(match[1]); behind = Number(match[2]); }
+    } else if (line.startsWith('! ')) {
+      ignored = true;
+    } else if (line.startsWith('? ')) {
       dirty.untracked += 1;
-      continue;
+      dirty.total += 1;
+    } else if (/^[12u] /.test(line)) {
+      dirty.total += 1;
+      if (line[2] !== '.') dirty.staged += 1;
+      if (line[3] !== '.') dirty.unstaged += 1;
+      if (line[0] === '2') i++; // Renames and copies include a separate NUL-delimited source path.
     }
-    if (line[0] && line[0] !== ' ') dirty.staged += 1;
-    if (line[1] && line[1] !== ' ') dirty.unstaged += 1;
   }
-  return dirty;
+  return { dirty, ignored, upstream: upstream ? { name: upstream, ahead, behind } : undefined };
 }
 
 function parseWorktrees(stdout, repositoryRoot) {
   return stdout
-    .split(/\r?\n\r?\n/)
+    .split('\0\0')
     .map((block) => {
-      const lines = block.split(/\r?\n/);
-      const rawPath = lines.find((line) => line.startsWith('worktree '))?.slice(9).trim();
+      const lines = block.split('\0');
+      const rawPath = lines.find((line) => line.startsWith('worktree '))?.slice(9);
       if (!rawPath) return null;
       const branchLine = lines.find((line) => line.startsWith('branch '));
       const branch = branchLine?.slice(7).trim().replace(/^refs\/heads\//, '') || null;
       return {
         path: path.resolve(repositoryRoot, rawPath),
+        head: lines.find(line => line.startsWith('HEAD '))?.slice(5) || '',
         branch,
         detached: lines.includes('detached'),
+        locked: lines.some(line => line === 'locked' || line.startsWith('locked ')),
       };
     })
     .filter(Boolean);
@@ -89,30 +102,36 @@ async function getGitWorkspaceStatus(cwd) {
 
   const rootResult = await runGit(resolvedCwd, ['rev-parse', '--show-toplevel']);
   if (rootResult.error) {
-    return unavailable(rootResult.error.code === 'ENOENT' ? 'git-unavailable' : 'not-a-repository');
+    if (rootResult.error.code === 'ENOENT' || rootResult.error.code === 'ENOTDIR') {
+      const directory = await stat(resolvedCwd).catch(() => null);
+      return unavailable(directory?.isDirectory() ? 'git-unavailable' : 'invalid-workspace');
+    }
+    return unavailable('not-a-repository');
   }
 
   const repositoryRoot = path.resolve(rootResult.stdout.trim() || resolvedCwd);
   const [branchResult, commitResult, statusResult, worktreeResult] = await Promise.all([
     runGit(resolvedCwd, ['branch', '--show-current']),
     runGit(resolvedCwd, ['rev-parse', '--short', 'HEAD']),
-    runGit(resolvedCwd, ['status', '--porcelain=v1', '--untracked-files=all']),
-    runGit(resolvedCwd, ['worktree', 'list', '--porcelain']),
+    runGit(resolvedCwd, ['--no-optional-locks', 'status', '--porcelain=v2', '--branch', '-z', '--untracked-files=all']),
+    runGit(resolvedCwd, ['worktree', 'list', '--porcelain', '-z']),
   ]);
 
   const worktrees = parseWorktrees(worktreeResult.stdout, repositoryRoot);
-  const selected = findWorktree(worktrees, resolvedCwd);
+  const selected = findWorktree(worktrees, repositoryRoot);
   const main = worktrees[0] || null;
   const branch = branchResult.stdout.trim() || null;
   const commit = commitResult.stdout.trim() || null;
   const isWorktree = Boolean(selected && main && selected.path !== main.path);
 
+  const { dirty, upstream } = parseStatus(statusResult.stdout);
   return {
     available: true,
     repositoryRoot,
     branch,
     commit,
-    dirty: parseDirty(statusResult.stdout),
+    dirty, upstream,
+    statusReadFailed: Boolean(statusResult.error),
     worktree: {
       isWorktree,
       path: selected?.path || repositoryRoot,
@@ -124,4 +143,4 @@ async function getGitWorkspaceStatus(cwd) {
   };
 }
 
-module.exports = { getGitWorkspaceStatus };
+module.exports = { getGitWorkspaceStatus, parseStatus, parseWorktrees };

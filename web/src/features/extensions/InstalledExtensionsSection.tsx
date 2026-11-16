@@ -2,6 +2,7 @@ import { ChevronRight } from 'lucide-react';
 import type { ExtensionPlacement } from '../../shared/preferences';
 import type { ExtensionHostItem } from '../../types/extension-types';
 import { InstalledExtensionCard } from './InstalledExtensionCard';
+import type { ChangePanelAppearance } from './ExtensionAppearancePicker';
 import './styles/extension-lists.css';
 
 type InstalledExtensionsSectionProps = {
@@ -9,13 +10,14 @@ type InstalledExtensionsSectionProps = {
   busy: boolean;
   placements?: Record<string, ExtensionPlacement>;
   onPlacementChange?: (contributionId: string, placement: ExtensionPlacement) => void;
+  onAppearanceChange?: ChangePanelAppearance;
   onOpenDetail: (item: ExtensionHostItem) => void;
   onToggle: (item: ExtensionHostItem, enabled: boolean) => void;
   onDelete: (id: string, name: string) => void;
 };
 
 /** User extensions stay visible; built-in capabilities remain available behind one quiet disclosure. */
-export function InstalledExtensionsSection({ items, busy, placements, onPlacementChange, onOpenDetail, onToggle, onDelete }: InstalledExtensionsSectionProps) {
+export function InstalledExtensionsSection({ items, busy, placements, onPlacementChange, onAppearanceChange, onOpenDetail, onToggle, onDelete }: InstalledExtensionsSectionProps) {
   const installed = items.filter((item) => item.scope !== 'builtin');
   const builtins = items.filter((item) => item.scope === 'builtin');
   return <>
@@ -28,6 +30,7 @@ export function InstalledExtensionsSection({ items, busy, placements, onPlacemen
           busy={busy}
           placements={placements}
           onPlacementChange={onPlacementChange}
+          onAppearanceChange={onAppearanceChange}
           onOpenDetail={onOpenDetail}
           onToggle={onToggle}
           onDelete={onDelete}
@@ -51,6 +54,7 @@ export function InstalledExtensionsSection({ items, busy, placements, onPlacemen
           compact
           placements={placements}
           onPlacementChange={onPlacementChange}
+          onAppearanceChange={onAppearanceChange}
           onOpenDetail={onOpenDetail}
           onToggle={onToggle}
           onDelete={onDelete}

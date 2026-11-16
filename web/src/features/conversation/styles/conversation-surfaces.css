@@ -19,7 +19,7 @@
 .app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
   .ref-skill-body, .attachment-icon, .attachment-kind,
   .assistant-interrupted, .assistant-turn-meta > span,
-  .file-change-icon, .composer-attachment, .message-edit-cancel,
+  .composer-attachment, .message-edit-cancel,
   .composer-feedback.is-info, .code-work-view code,
   .activity-tool.is-running .activity-tool-status, .compaction-banner
 ) {
@@ -36,7 +36,7 @@
   .composer-attachment.is-openable, .message-action:not(:disabled),
   .message-edit-cancel:not(:disabled),
   .tool-result-images-toggle, .file-change-item.is-openable,
-  .file-change-more, .file-change-summary > header button,
+  .file-change-more, .file-change-summary > header button:not(:disabled),
   .todo-dock-head, .queued-panel-head, .queued-item,
   .queued-actions button:not(:disabled), .ref-skill-body > summary,
   .composer-model-hint-action, .composer-model-hint-close

@@ -17,8 +17,16 @@ function compile(file, dependencies = {}) {
   }).outputText, context);
   return context.exports;
 }
-const attachments = compile('shared/AttachmentIcon.tsx');
-const { ReferenceChip } = compile('features/conversation/ReferenceChip.tsx', { '../../shared/AttachmentIcon': attachments });
+const manifest = require('material-icon-theme/dist/material-icons.json');
+const associations = group => new Map(Object.entries(group).map(([key, id]) => [key.toLowerCase(), id]));
+const theme = {
+  fileNames: associations(manifest.fileNames), fileExtensions: associations(manifest.fileExtensions),
+  urls: Object.fromEntries(Object.entries(manifest.iconDefinitions).map(([id, value]) => [id, value.iconPath])),
+  lightIcons: { toml: 'toml_light' },
+};
+const resolver = compile('shared/file-icon.ts', { 'virtual:studio-file-icons': theme });
+const icons = compile('shared/FileKindIcon.tsx', { './file-icon': resolver, 'virtual:studio-file-icons': theme });
+const { ReferenceChip } = compile('features/conversation/ReferenceChip.tsx', { '../../shared/FileKindIcon': icons });
 const render = reference => renderToStaticMarkup(React.createElement(ReferenceChip, { reference }));
 
 test('composer and message paths produce identical chips with complete transport tokens', () => {
@@ -33,18 +41,34 @@ test('composer and message paths produce identical chips with complete transport
 
 test('reference icons distinguish folders, data, configuration, media and unknown files', () => {
   const cases = [
-    ['@.qa/', 'folder'], ['@src/main.tsx', 'file-code2'], ['@package.json', 'file-json2'],
-    ['@.env.local', 'file-sliders'], ['@Dockerfile', 'file-terminal'], ['@db.sqlite', 'database'],
-    ['@notes.md', 'file-text'], ['@spec.pdf', 'file-type2'], ['@report.xlsx', 'file-spreadsheet'],
-    ['@slides.pptx', 'presentation'], ['@photo.PNG', 'file-image'], ['@music.mp3', 'file-audio2'],
-    ['@movie.mp4', 'file-video2'], ['@release.tar.gz', 'file-archive'], ['@unknown.weird', 'lucide-file"'],
+    ['@src/main.tsx', 'react_ts'], ['@package.json', 'nodejs'], ['@.env.local', 'tune'],
+    ['@Dockerfile', 'docker'], ['@db.sqlite', 'database'], ['@notes.md', 'markdown'],
+    ['@spec.pdf', 'pdf'], ['@report.xlsx', 'table'], ['@slides.pptx', 'powerpoint'],
+    ['@photo.PNG', 'image'], ['@music.mp3', 'audio'], ['@movie.mp4', 'video'],
+    ['@release.tar.gz', 'zip'], ['@unknown.weird', 'file'],
   ];
-  for (const [token, icon] of cases) assert.ok(render(splitMessageText(token)[0].reference).includes(icon), `${token}: ${icon}`);
+  assert.match(render(splitMessageText('@.qa/')[0].reference), /lucide-folder/);
+  for (const [token, id] of cases) assert.ok(render(splitMessageText(token)[0].reference).includes(`data-file-icon="${id}"`), token);
 });
 
 test('reference labels and full path attributes escape markup', () => {
   const html = render({ kind: 'file', token: '@"<img>.md"', label: '<img>.md', location: 'docs/"<img>.md' });
   assert.ok(html.includes('&lt;img&gt;.md'));
   assert.ok(html.includes('&quot;'));
-  assert.ok(!html.includes('<img'));
+  assert.equal((html.match(/<img /g) || []).length, 1, 'only the trusted file icon becomes an image');
+});
+
+test('file icons respect full names, scoped paths, compound suffixes and MIME fallbacks', () => {
+  for (const [path, mime, expected] of [
+    ['C:\\repo\\.github\\FUNDING.yml', '', 'github-sponsors'],
+    ['src/APP.D.TS', '', 'typescript-def'], ['src/model.ts', '', 'typescript'],
+    ['.env.staging-west', '', 'tune'], ['Dockerfile.custom', '', 'docker'],
+    ['.github/workflows/publish.yml', '', 'github-actions-workflow'],
+    ['download', 'application/problem+json', 'json'], ['download', 'image/png', 'image'],
+    ['image.py', 'image/png', 'python'], ['unknown.constructor', '', 'file'],
+  ]) {
+    const id = resolver.fileIconId(path, mime);
+    assert.equal(id, expected, path);
+    assert.ok(theme.urls[id], `missing asset for ${path}`);
+  }
 });

@@ -498,6 +498,7 @@ test('status.chip points at its own detail panel and accepts a visibility window
           title: '摘要',
           slot: 'status.chip',
           icon: 'activity',
+          color: 'info',
           details: 'detail',
           content: [{ kind: 'text', text: '额度 11%' }],
         },
@@ -516,6 +517,13 @@ test('status.chip points at its own detail panel and accepts a visibility window
   assert.equal(detail.slot, 'conversation.detail');
   assert.equal(chip.slot, 'status.chip');
   assert.equal(chip.details, 'detail');
+  assert.equal(chip.icon, 'activity');
+  assert.equal(chip.color, 'info');
+  assert.throws(() => normalizeManifest(manifest({
+    permissions: ['ui.panels'], contributes: { panels: [{
+      id: 'bar', title: '状态', slot: 'status.bar', color: '#ffcc00', content: [],
+    }] },
+  }), '/tmp/demo', 'user'), /color/);
   assert.equal(chip.visibility, undefined, 'chip defaults to always visible');
   assert.equal(footer.visibility, 'while-active');
 
@@ -1607,7 +1615,7 @@ test('installed quota 0.5.5 exposes the settings switch without activating its a
     runtime: { durableEntry: 'extension.mjs' },
     contributes: {
       dataSources: [{ id: 'live', title: '额度' }],
-      panels: [{ id: 'quota-detail', title: '额度', slot: 'conversation.detail',
+      panels: [{ id: 'quota-detail', title: '额度', slot: 'conversation.detail', icon: 'gauge', color: 'accent',
         content: [{ kind: 'dataView', sourceId: id + '/live' }] }],
     },
   })));
@@ -1616,6 +1624,8 @@ test('installed quota 0.5.5 exposes the settings switch without activating its a
   assert.equal(studioExtensions.providerQuotaExtensionAvailable(), true);
   const panel = studioExtensions.extensionUiSnapshot().items.find(item => item.extensionId === id);
   assert.deepEqual(panel.content, []);
+  assert.equal(panel.icon, 'gauge');
+  assert.equal(panel.color, 'accent');
   assert.equal(studioExtensions.extensionDataSource(id + '/live'), undefined);
   studioExtensions.setStudioExtensionEnabled(id, false, '');
   assert.equal(studioExtensions.providerQuotaExtensionAvailable(), false);

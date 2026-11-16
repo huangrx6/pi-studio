@@ -6,15 +6,17 @@ import {
   placementOptionsFor,
 } from './extension-placement';
 import { extensionScopeLabel, extensionStateLabel, extensionStateTone } from './extension-presentation';
+import { ExtensionAppearancePicker, type ChangePanelAppearance } from './ExtensionAppearancePicker';
 import './styles/extension-lists.css';
 
-export function InstalledExtensionCard({ item, busy, compact = false, placements, onPlacementChange, onOpenDetail, onToggle, onDelete }: {
+export function InstalledExtensionCard({ item, busy, compact = false, placements, onPlacementChange, onAppearanceChange, onOpenDetail, onToggle, onDelete }: {
   item: ExtensionHostItem;
   busy: boolean;
   compact?: boolean;
   /** 全局落点偏好；只有声明了顶栏/输入框落点的扩展才显示选择器。 */
   placements?: Record<string, ExtensionPlacement>;
   onPlacementChange?: (contributionId: string, placement: ExtensionPlacement) => void;
+  onAppearanceChange?: ChangePanelAppearance;
   onOpenDetail: (item: ExtensionHostItem) => void;
   onToggle: (item: ExtensionHostItem, enabled: boolean) => void;
   onDelete: (id: string, name: string) => void;
@@ -48,7 +50,7 @@ export function InstalledExtensionCard({ item, busy, compact = false, placements
       {/* 落点在左、操作在右，同一条基线：按钮自带内边距，单独占一行时文字会
         * 比左侧内容更靠右，看起来像没对齐。 */}
       <div className="extension-list-footer">
-        {onPlacementChange && placeable.map((panel) => {
+        {(onPlacementChange || onAppearanceChange) && placeable.map((panel) => {
           const options = placementOptionsFor(panel.slots);
           // 单落点没有 both 这一档：缺省时把「两处」折算成它唯一的那一处，
           // 否则选择器会出现「没有任何一项被选中」的空状态。
@@ -57,8 +59,9 @@ export function InstalledExtensionCard({ item, busy, compact = false, placements
             ? stored
             : panel.slots[0] === 'status.chip' ? 'chip' : 'footer';
           return <div className="extension-placement" key={panel.id}>
-            <span className="extension-placement-label">显示位置</span>
-            <div className="extension-placement-options" role="group" aria-label={`${item.name} 显示位置`}>
+            {placeable.length > 1 && <strong className="extension-appearance-panel-title">{panel.title}</strong>}
+            {onPlacementChange && panel.slots.length > 0 && <><span className="extension-placement-label">显示位置</span>
+            <div className="extension-placement-options" role="group" aria-label={`${panel.title} 显示位置`}>
               {options.map(({ value, label, hint }) => <button
                 key={value}
                 type="button"
@@ -66,7 +69,8 @@ export function InstalledExtensionCard({ item, busy, compact = false, placements
                 aria-pressed={current === value}
                 onClick={() => onPlacementChange(panel.id, value)}
               >{label}</button>)}
-            </div>
+            </div></>}
+            {onAppearanceChange && <ExtensionAppearancePicker panel={panel} onChange={onAppearanceChange} />}
           </div>;
         })}
         <div className="extension-list-actions">

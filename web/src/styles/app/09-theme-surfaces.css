@@ -196,54 +196,6 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .assistant-turn-name { font-family: var(--font); }
 
 .assistant-turn-meta > span { background: none; padding-inline: 2px; }
-.file-change-summary { margin-top: 22px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); font: var(--text-sm)/var(--leading-normal) var(--font); }
-.file-change-summary > header { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--surface-soft); }
-.file-change-icon { display: grid; place-items: center; width: 30px; height: 30px; flex: none; border-radius: var(--radius-control); background: var(--accent-soft); color: var(--accent); }
-.file-change-icon svg { width: var(--icon-md); height: var(--icon-md); }
-.file-change-summary > header > div { flex: 1; display: flex; flex-direction: column; gap: 3px; }
-.file-change-heading { display: flex; min-width: 0; align-items: center; gap: 6px; }
-.file-change-summary strong { font-size: var(--text-sm); font-weight: var(--weight-semibold); }
-.file-change-summary > header button { padding: 5px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); font-size: var(--text-sm); }
-.file-change-summary > header button:hover { background: var(--surface-hover); }
-.file-change-counts { display: inline-flex; gap: 8px; font-variant-numeric: tabular-nums; font-size: var(--text-sm); }
-.file-change-counts > :first-child { color: var(--success); }
-.file-change-counts > :last-child { color: var(--error); }
-.file-change-list { display: flex; flex-direction: column; }
-.file-change-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 16px; border-top: 1px solid var(--border); color: var(--text); font-size: var(--text-sm); text-align: left; }
-.file-change-item:first-child { border-top: 0; }
-.file-change-item > svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--faint); }
-.file-change-item > span.file-change-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--text-sm) var(--mono); }
-/* Git 风格状态字符：A 新增、M 修改、D 删除、W 整文件写入。 */
-.file-change-mark {
-  display: grid;
-  width: 16px;
-  height: 16px;
-  flex: none;
-  place-items: center;
-  border-radius: var(--radius-tag);
-  background: var(--surface-soft);
-  color: var(--faint);
-  font: var(--weight-semibold) var(--text-xs)/1 var(--mono);
-}
-.file-change-mark.is-added { background: var(--success-soft); color: var(--success); }
-.file-change-mark.is-modified { background: var(--surface-soft); color: var(--muted); }
-.file-change-mark.is-deleted { background: var(--error-soft); color: var(--error); }
-.file-change-mark.is-written { background: var(--surface-soft); color: var(--faint); }
-.file-change-item > small { flex: none; color: var(--faint); font-size: var(--text-xs); }
-.file-change-item.is-openable:hover { background: var(--surface-soft); }
-.file-change-item:disabled { cursor: default; opacity: 1; }
-.file-change-open { width: 13px !important; height: 13px !important; color: var(--faint); }
-.file-change-item.is-openable:hover .file-change-open { color: var(--accent-foreground); }
-.file-change-more { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: var(--text-sm); text-align: left; }
-.file-change-more:hover { background: var(--surface-soft); }
-.file-change-more svg { width: var(--icon-sm); height: var(--icon-sm); }
-.file-change-incomplete-note { display: flex; align-items: center; gap: 6px; margin: 0; padding: 8px 16px 12px; border-top: 1px solid var(--warning-border); background: var(--warning-soft); color: var(--warning); font-size: var(--text-xs); }
-.file-change-incomplete-note svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; }
-/* 文件在回合结束后被移动或删除：这一行留在原地但不再可点，避免每次点击都弹错误。 */
-.file-change-item.is-missing { cursor: default; opacity: .72; }
-.file-change-item.is-missing .file-change-path { text-decoration: line-through; text-decoration-color: var(--border-strong); }
-.file-change-missing { color: var(--warning); font-size: var(--text-xs); }
-.file-change-missing-note { margin: 0; padding: 8px 16px; border-top: 1px solid var(--border); color: var(--warning); font-size: var(--text-xs); }
 
 /* 右栏 diff 视图：统一 diff，双行号，新增/删除语义色。 */
 .diff-view { flex: 1; width: 100%; min-width: 0; display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--surface); }
@@ -386,7 +338,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .changes-jump { position: absolute; z-index: 80; top: 36px; right: -100px; width: min(320px,70vw); padding: 8px; }
 .changes-jump input { width: 100%; border: 0; border-bottom: 1px solid var(--border); background: var(--transparent); color: var(--text); padding: 9px; outline: none; font: var(--text-sm) var(--font); }
 .changes-jump > div { max-height: 280px; overflow: auto; }
-.changes-jump button { display: block; width: 100%; text-align: left; border: 0; background: var(--transparent); color: var(--text); padding: 9px; font: var(--text-sm) var(--font); border-radius: var(--radius-control); overflow-wrap: anywhere; cursor: pointer; }
+.changes-jump button { display: flex; align-items: center; gap: var(--space-2); width: 100%; text-align: left; border: 0; background: var(--transparent); color: var(--text); padding: 9px; font: var(--text-sm) var(--font); border-radius: var(--radius-control); overflow-wrap: anywhere; cursor: pointer; }
 .changes-jump button:hover { background: var(--surface-hover); }
 .changes-loading { padding: 9px 14px; }
 .changes-notice { padding: 9px 14px; color: var(--muted); font: var(--text-sm)/var(--leading-body) var(--font); border-bottom: 1px solid var(--border); }

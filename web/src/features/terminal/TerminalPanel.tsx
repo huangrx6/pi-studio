@@ -795,7 +795,8 @@ export function TerminalPanel({
     const frame = requestAnimationFrame(() => {
       updateRendererRef.current?.(active);
       fitRef.current?.();
-      focusTerminalRef.current?.();
+      // Restoring a tab can also open a header dialog. Keep its keyboard focus.
+      if (!document.activeElement?.closest('[role="dialog"]')) focusTerminalRef.current?.();
     });
     return () => cancelAnimationFrame(frame);
   }, [active]);

@@ -102,6 +102,7 @@ export type SettingsOverlayProps = {
   sidebar: { collapsed: boolean; setCollapsed: (collapsed: boolean) => void; resizeHandle: ReactNode };
   workspace: string;
   workspaces: PiWorkspace[];
+  onOpenWorktree: (path: string) => Promise<void>;
   workspaceRef: RefObject<string>;
   sessionId?: string;
   activeWorkspaceName?: string;
@@ -137,6 +138,7 @@ export function SettingsOverlay({
   sidebar,
   workspace,
   workspaces,
+  onOpenWorktree,
   workspaceRef,
   sessionId,
   activeWorkspaceName,
@@ -417,7 +419,7 @@ export function SettingsOverlay({
             )}
             {tab === 'shortcuts' && <ShortcutSettings preferences={appearance.preferences} onChange={appearance.onChange} />}
             {tab === 'general' && <GeneralSettings {...appearance} />}
-            {tab === 'git' && <GitSettings cwd={workspace} workspaces={workspaces} />}
+            {tab === 'git' && <GitSettings cwd={workspace} workspaces={workspaces} preferences={appearance.preferences} onChange={appearance.onChange} onOpenWorktree={onOpenWorktree} />}
             {tab === 'permissions' && (
               <PermissionPolicySettings
                 cwd={permission.cwd}
@@ -567,6 +569,12 @@ export function SettingsOverlay({
                   items={data.extensions}
                   busy={resourceBusy || notices.extensionRefreshBusy || Boolean(notices.extensionRefreshError)}
                   placements={appearance.preferences.extensionPlacements}
+                  onAppearanceChange={(id, override) => {
+                    const next = { ...appearance.preferences.extensionAppearances };
+                    if (override) next[id] = override;
+                    else delete next[id];
+                    appearance.onChange('extensionAppearances', next);
+                  }}
                   onPlacementChange={(contributionId, placement) => appearance.onChange('extensionPlacements', {
                     ...appearance.preferences.extensionPlacements,
                     [contributionId]: placement,

@@ -35,6 +35,7 @@ function fixture() {
         return React.createElement('pre', null, children);
       } };
       if (id === './FileKindIcon') return {
+        FileKindIcon: ({ path }) => React.createElement('span', { 'data-path': path }),
         FileFormatIcon: ({ format }) => React.createElement('span', { 'data-format': format }),
       };
       if (id === './filesize') return { formatFileSize: size => `${size} B` };

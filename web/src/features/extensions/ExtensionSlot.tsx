@@ -1,3 +1,4 @@
+import { ExtensionStatusIcon } from './ExtensionStatusIcon';
 import { ProviderQuotaPanel } from '../models/ProviderQuotaView';
 import { QUOTA_EXTENSION_ID } from '../../types/provider-quota';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -713,7 +714,8 @@ export function ExtensionSlot({
   return <>
     {presentation === 'page' && items[0] && <section className="extension-page" aria-label={items[0].title}>
       <header className="extension-page-head">
-        <span className="extension-page-icon"><Plug /></span>
+        <span className="extension-page-icon">{detailItem.icon || detailItem.color
+          ? <ExtensionStatusIcon item={detailItem} /> : <Plug />}</span>
         <span className="extension-page-title">
           <span className="extension-slot-source">{items[0].scope === 'project' ? '项目扩展' : items[0].scope === 'user' ? '用户扩展' : '内置扩展'}</span>
           <strong>{items[0].title}</strong>
@@ -738,7 +740,8 @@ export function ExtensionSlot({
     {presentation === 'cards' && items.length > 0 && <section className={`extension-slot is-${slot.replaceAll('.', '-')}`} aria-label="扩展内容">
       {items.map((item) => <article className={`extension-slot-card is-${item.size}`} key={item.id}>
         <header className="extension-slot-head">
-          <span className="extension-slot-icon"><Plug /></span>
+          <span className="extension-slot-icon">{slot === 'status.bar' || item.icon || item.color
+            ? <ExtensionStatusIcon item={item} /> : <Plug />}</span>
           <span className="extension-slot-title">
             <strong>{item.title}</strong>
             {item.description && <small>{item.description}</small>}

@@ -1550,6 +1550,7 @@ function extensionUiSnapshot() {
         description: panel.description,
         slot: panel.slot,
         ...(panel.icon ? { icon: panel.icon } : {}),
+        ...(panel.color ? { color: panel.color } : {}),
         size: panel.size || 'regular',
         priority: panel.priority || 0,
         sourceOrder,

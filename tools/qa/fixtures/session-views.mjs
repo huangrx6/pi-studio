@@ -13,18 +13,72 @@ export function installSessionViewsFixture() {
     return state;
   };
   const qa = window.sessionViewsQa = { replies: [], reads: 0, failList: false, failReply: false, failSnapshot: false, failTranscript: false };
+  api.gitWorkspaceStatus = async () => ({ available: true, branch: 'main', dirty: { total: 2 }, worktree: {}, worktrees: [] });
+  const goal = { enabled: true, status: 'paused', goal: '整理会话进展', iteration: 1, pauseReason: '等待继续',
+    lastProgress: '', nextStep: '', blockReason: '', updatedAt: now };
+  const task = { id: 1, subject: '核对会话清单', status: 'in_progress' };
+  const tasks = new URLSearchParams(location.search).has('long-plan')
+    ? [task, ...Array.from({ length: 15 }, (_, i) => ({ id: i + 2, subject: '检查任务 ' + (i + 2), status: 'pending' }))]
+    : [task];
+  const todoListeners = new Set();
+  const originalSubscribe = api.onConversationEvent;
+  api.onConversationEvent = listener => {
+    todoListeners.add(listener);
+    const stop = originalSubscribe(listener);
+    return () => { todoListeners.delete(listener); stop(); };
+  };
+  qa.finishGoal = () => {
+    goal.status = 'completed';
+    goal.updatedAt++;
+    for (const listener of todoListeners) listener({ conversationId: 'perf-0', type: 'todo.changed', payload: {} });
+  };
+  api.conversationTodo = async id => id === 'perf-0' && goal.status !== 'completed' && !new URLSearchParams(location.search).has('empty')
+    ? { planId: 1, goalId: 'goal-qa', scope: 'goal', tasks } : undefined;
+  qa.failHistory = false;
+  api.conversationTodoHistory = async ({ id, cursor, limit }) => {
+    if (qa.failHistory) throw new Error('暂时无法读取清单');
+    if (new URLSearchParams(location.search).has('empty')) return { items: [], nextCursor: null };
+    const count = id === 'perf-0' ? 15 : 1;
+    const first = cursor ?? count;
+    const end = Math.max(0, first - limit);
+    const items = Array.from({ length: first - end }, (_, i) => {
+      const planId = first - i;
+      if (id === 'perf-0' && planId === 1) return {
+        planId, scope: 'goal', goalId: 'goal-qa', lifecycle: goal.status === 'completed' ? 'ended' : 'open', title: goal.goal, tasks: [
+          task, { id: 2, subject: '准备后续检查', status: 'pending' },
+          { id: 3, subject: '等待核对完成', status: 'pending', blockedBy: [1] },
+        ],
+      };
+      return { planId, scope: 'turn', lifecycle: 'ended', title: planId === count ? id + ' 历史清单' : '回合 ' + planId,
+        tasks: [{ id: 100 + planId, subject: '回合记录 ' + planId, status: planId === count ? 'in_progress' : 'completed' }] };
+    });
+    return { items, nextCursor: end || null };
+  };
+  api.files = async (_cwd, path) => ({ path, entries: [] });
+  qa.terminals = [];
+  api.terminalCreate = async ({ id, cwd }) => {
+    qa.terminals.push(id);
+    return { id, cwd, shell: 'qa', status: 'running', sequence: 0 };
+  };
   // Exercise the copy action without modifying the system clipboard.
   Object.defineProperty(navigator.clipboard, 'writeText', { value: async value => { qa.copied = value; } });
   const child = { runId: 'qa-run', agent: 'subagent', source: 'background', context: 'fresh', model: 'qa/reviewer',
     thinking: 'medium', cwd: '/qa/synthetic/performance', isolation: 'worktree', hasTranscript: true, preview: '', toolCount: 3, tokens: 1420 };
+  const avatarIds = ['frog-pistachio', 'owl-lavender', 'fox-apricot', 'puffin-seafoam', 'koala-ice', 'panda-rose'];
   const children = [
     { name: '接口核对', status: 'waiting', task: '核对工作区的接口约定，整理需要确认的字段。', startedAt: now - 42_000,
       supervisorRequests: [{ id: 'format', question: '导出文件使用哪种格式？' }, { id: 'locale', question: '是否保留英文列名？' }] },
     { name: '回归检查', status: 'failed', task: '检查历史会话的恢复流程。', error: '读取历史样例时找不到 fixtures/session.json。', hasTranscript: false, durationMs: 1200 },
     { name: '索引整理', status: 'running', task: '按功能整理工作区索引，并核对文档链接。', currentTool: 'read', startedAt: now - 65_000 },
     { name: '布局审查', status: 'completed', task: '检查桌面布局\n核对导航\n核对表格\n核对工具栏\n检查面板边界', preview: '已完成六处布局检查，两个窄屏边界已记录。', durationMs: 0 },
-  ].map((data, index) => ({ ...child, key: `child-${index}`, index, ...data }));
-  api.sessionSubagents = async () => { if (qa.failList) throw new Error('暂时无法读取任务'); return structuredClone(children); };
+    ...(new URLSearchParams(location.search).has('long-plan') ? Array.from({ length: 8 }, (_, index) => ({
+      name: '已归档检查 ' + (index + 1), status: 'completed', task: '检查附加示例。',
+    })) : []),
+  ].map((data, index) => ({ ...child, key: `child-${index}`, avatarId: avatarIds[index % avatarIds.length], index, ...data }));
+  api.sessionSubagents = async id => {
+    if (qa.failList) throw new Error('暂时无法读取任务');
+    return id === 'perf-0' ? structuredClone(children) : [];
+  };
   api.subagentBudget = async () => ({ tokens: 7840, budgetTokens: 25_000, requests: 12, costUsd: 0.024, budgetCostUsd: 0.5, exceeded: false });
   api.replySubagentSupervisor = async input => {
     if (qa.failReply) throw new Error('回复暂未送达');
@@ -57,7 +111,7 @@ export function installSessionViewsFixture() {
   messages.forEach((message, index) => { message.sourceIndex = index; });
   for (const name of ['conversationPage', 'subscribeConversation', 'conversationSnapshot']) {
     const original = api[name];
-    api[name] = async input => ({ ...await original(input), requestTraces, ...(name === 'conversationPage' ? { messages, messageStart: 0, page: { hasOlder: false } } : {}) });
+    api[name] = async input => ({ ...await original(input), requestTraces, longTask: (input.id || input) === 'perf-0' ? goal : undefined, ...(name === 'conversationPage' ? { messages, messageStart: 0, page: { hasOlder: false } } : {}) });
   }
   api.conversationRequestTrace = async (_id, requestId) => {
     qa.reads++;

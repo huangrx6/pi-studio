@@ -230,7 +230,7 @@ function sendHarness({
     },
     setPreparingDraftKeys() {},
     setComposerMenu() {},
-    setTodoPanelOpen() {},
+    openTodoHistory() {},
     setError() {},
     setModelPickerRequest() {},
     setSession() {},

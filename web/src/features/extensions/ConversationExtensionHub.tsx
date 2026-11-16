@@ -19,6 +19,7 @@ import type {
   ExtensionUiSnapshot,
 } from '../../types/extension-types';
 import { ExtensionSlot, type ExtensionNotice } from './ExtensionSlot';
+import { ExtensionStatusIcon } from './ExtensionStatusIcon';
 import { SessionViewHeader } from '../../shell/SessionViewHeader';
 
 export function ConversationExtensionDock({
@@ -54,6 +55,7 @@ export function ConversationExtensionDock({
           className="conversation-extension-dock-item"
           aria-label={item.title}
         >
+          <ExtensionStatusIcon item={item} />
           <ExtensionSlot
             slot={item.slot}
             presentation="compact"

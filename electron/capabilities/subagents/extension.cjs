@@ -28,6 +28,7 @@ const {
   isGitRepository,
 } = require('./worktrees.cjs');
 const { subagentUsage } = require('./usage.cjs');
+const { assignAvatar } = require('./avatars.cjs');
 const { resolveWorkspacePath } = require('../filesystem/index.cjs');
 
 const MAX_SUBAGENT_TEXT_LENGTH = 64_000;
@@ -309,6 +310,7 @@ async function configureChildConversation({
   registry.agents[name] = {
     name,
     conversationId: childId,
+    avatarId: assignAvatar(registry.agents, childId),
     anchorTaskId: anchorTaskId || 0,
     ownerTaskId: ownerTaskId || 0,
     mode,

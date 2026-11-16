@@ -14,6 +14,7 @@ import {
   defineExtension,
 } from '@earendil-works/pi-durable';
 import { createToolSearchExtension } from '@earendil-works/pi-durable/tool-search';
+import { openNodeJsonlStorage } from '@earendil-works/pi-durable/storage/jsonl/node';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import {
   createModels,
@@ -38,6 +39,7 @@ const {
   createStudioBuiltins,
 } = require('../../electron/runtime/builtin-registry.cjs');
 const {
+  createProtocol,
   discardManagedWorktree,
   listManagedWorktrees,
 } = require('../../electron/capabilities/subagents/index.cjs');
@@ -92,11 +94,9 @@ test('a foreground subagent returns its child answer through the real Durable to
   registry.install(subagentChannel);
   const models = createModels();
   models.setProvider(faux.provider);
-  const harness = await Harness.open(
-    new MemoryStorage(),
-    { models, registry },
-    BACKGROUND_CONTEXT,
-  );
+  const directory = path.join(temporary, 'foreground');
+  const open = async () => Harness.open(await openNodeJsonlStorage(directory, BACKGROUND_CONTEXT), { models, registry }, BACKGROUND_CONTEXT);
+  let harness = await open();
 
   try {
     const conversation = await harness.root(BACKGROUND_CONTEXT, {
@@ -127,6 +127,16 @@ test('a foreground subagent returns its child answer through the real Durable to
     assert.notEqual(result.isError, true);
     assert.equal(result.content[0]?.type, 'text');
     assert.equal(result.content[0]?.text, 'child result');
+    const parentId = conversation.id;
+    const token = createProtocol(durable).Subagents;
+    const readChild = async () => Object.values((await harness.snapshot(token, parentId, BACKGROUND_CONTEXT)).agents)[0];
+    const child = await readChild();
+    assert.ok(child.avatarId);
+    await harness.close(BACKGROUND_CONTEXT);
+    harness = await open();
+    const restored = await readChild();
+    assert.equal(restored.conversationId, child.conversationId);
+    assert.equal(restored.avatarId, child.avatarId);
   } finally {
     await harness.close(BACKGROUND_CONTEXT);
   }
@@ -270,7 +280,6 @@ test('a background subagent report carries the child answer instead of "without 
   const subagents = builtins.get('builtin:studio-subagents');
   const subagentChannel = builtins.get('builtin:studio-subagent-channel');
   const subagentTool = subagents.tools.find((tool) => tool.name === 'subagent');
-  const { createProtocol } = { createProtocol: require('../../electron/capabilities/subagents/index.cjs').createProtocol };
 
   const faux = fauxProvider({
     provider: 'faux',

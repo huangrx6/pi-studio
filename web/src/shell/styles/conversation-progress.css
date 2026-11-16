@@ -1,0 +1,153 @@
+.progress-trigger.is-active { color: var(--text-1); background: var(--surface-active); }
+.conversation-progress { min-width: 0; color: var(--text-1); }
+.conversation-progress.is-pinned { flex: 1; height: 100%; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 8px; }
+.conversation-progress .workspace-menu-head { justify-content: space-between; }
+.conversation-progress .progress-pin { width: 28px; height: 28px; }
+.conversation-progress .workspace-menu-section { min-width: 0; }
+.progress-row { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 5px 10px; color: var(--text-2); font-size: var(--text-sm); text-align: left; }
+.progress-row > svg, .progress-link > svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--text-3); }
+.progress-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.progress-row small, .progress-empty { color: var(--text-3); font-size: var(--text-xs); }
+button.progress-row, .progress-link { border-radius: var(--radius-control); }
+button.progress-row:hover:not(:disabled), .progress-link:hover { color: var(--text-1); background: var(--surface-hover); }
+.progress-link { display: inline-flex; align-items: center; justify-content: space-between; gap: 6px; padding: 5px 10px; color: var(--text-2); font-size: var(--text-xs); }
+.progress-empty { margin: 10px; }
+.conversation-progress .long-task-dock { max-width: none; margin: 0; padding: 2px 10px; border: 0; }
+.conversation-progress .todo-dock { margin: 0; max-width: none; }
+.conversation-progress .todo-dock-body { position: static; width: auto; }
+.conversation-progress .todo-history { margin: 0 10px; font-size: var(--text-xs); }
+
+.progress-agents h3 { margin: 0; }
+.progress-agents h3 small { margin-inline-start: 7px; font: inherit; font-variant-numeric: tabular-nums; color: var(--text-3); }
+.progress-agent-list { display: grid; max-height: min(40dvh, 280px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.progress-agent { --subagent-avatar-size: 24px; }
+.progress-agents-more { display: inline-flex; align-items: center; gap: 4px; justify-self: start; width: fit-content; color: var(--text-2); font-size: var(--text-xs); }
+.progress-popover .progress-agents-more { margin-inline: 10px; }
+
+/* A docked tab has a full column. Give the work its own reading order and
+   keep the repository controls at the foot of the column. */
+.conversation-progress.is-pinned {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 20px clamp(12px, 1.4vw, 22px) 12px;
+  scrollbar-width: thin;
+}
+.is-pinned.conversation-progress > * { flex: 0 0 auto; }
+.is-pinned.conversation-progress .progress-head { padding: 0; border: 0; }
+.is-pinned.conversation-progress .progress-head strong { font-size: var(--text-base); line-height: var(--leading-normal); }
+.is-pinned.conversation-progress .progress-pin { color: var(--text-3); }
+.is-pinned.conversation-progress .workspace-menu-section { gap: 8px; padding: 0; border: 0; }
+.progress-section-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; }
+.progress-section-head h3, .progress-section-head h3.workspace-menu-section-label {
+  display: inline-flex; align-items: baseline; gap: 8px; margin: 0; padding: 0;
+  color: var(--text-1); font-size: var(--text-sm); font-weight: var(--weight-semibold); line-height: var(--leading-normal);
+}
+.progress-section-head h3 small { margin: 0; color: var(--text-3); font: var(--text-xs) var(--mono); }
+.is-pinned .progress-text-action { display: inline-flex; width: fit-content; align-items: center; gap: 4px; min-height: 26px; color: var(--text-2); font-size: var(--text-sm); }
+.is-pinned .progress-text-action:hover { color: var(--accent); }
+.progress-text-action svg { width: var(--icon-xs); height: var(--icon-xs); }
+
+.conversation-progress .long-task-dock.is-featured {
+  display: grid; align-content: start; gap: 12px; margin: 0; padding: 15px 16px;
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+.progress-goal-head, .progress-goal-head > span:first-child { display: flex; align-items: center; gap: 6px; }
+.progress-goal-head { justify-content: space-between; flex-wrap: wrap; }
+.progress-goal-head > span:first-child { color: var(--text-2); font-size: var(--text-sm); }
+.progress-goal-head svg { width: var(--icon-md); height: var(--icon-md); color: var(--accent); }
+.progress-goal-head .long-task-heading strong { color: var(--text-2); font-size: var(--text-xs); font-weight: var(--weight-medium); }
+.is-featured.is-blocked .long-task-heading strong { color: var(--warning); }
+.is-featured.is-failed .long-task-heading strong { color: var(--error); }
+.is-featured .long-task-content { gap: 6px; }
+.is-featured .long-task-goal { font-size: var(--text-md); font-weight: var(--weight-semibold); line-height: 1.55; }
+.is-featured .long-task-detail { color: var(--text-2); font-size: var(--text-sm); }
+.is-featured .long-task-actions { justify-content: flex-start; gap: 8px; margin: 2px 0 0; }
+.is-featured .long-task-action { min-height: 28px; }
+.progress-goal-state { display: inline-flex; align-items: center; gap: 4px; color: var(--text-2); font-size: var(--text-sm); }
+.progress-goal-state:hover { color: var(--text-1); }
+.progress-goal-state svg { width: var(--icon-xs); height: var(--icon-xs); color: currentColor; }
+.progress-goal-state[aria-expanded="true"] svg { transform: rotate(180deg); }
+.progress-goal-note { max-height: 140px; overflow: auto; color: var(--text-2); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.progress-goal-note p { margin: 0; white-space: pre-wrap; }
+.progress-goal-note small { color: var(--text-3); }
+.is-featured.is-blocked .progress-goal-state { color: var(--warning); }
+.is-featured.is-failed .progress-goal-state { color: var(--error); }
+
+.progress-task-scroll { max-height: min(40dvh, 280px); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.progress-task-scroll .todo-row { min-height: 34px; gap: 10px; margin: 0; padding: 4px 0; background: none; box-shadow: none; color: var(--text-2); font-size: var(--text-base); }
+.progress-task-scroll .todo-row.is-active { background: transparent; border: 0; box-shadow: none; color: var(--text-1); }
+.progress-task-scroll .todo-row-icon { width: 20px; height: 20px; }
+.progress-task-scroll .todo-row-icon svg { width: var(--icon-md); height: var(--icon-md); }
+.progress-task-scroll .is-active .todo-row-icon { color: var(--accent); }
+.progress-task-scroll .is-complete .todo-row-icon { color: var(--success); }
+.progress-task-scroll .todo-row-id { display: none; }
+.progress-task-scroll .todo-row-subject { overflow-wrap: anywhere; white-space: normal; }
+.progress-archive-count { color: var(--text-3); font-size: var(--text-xs); }
+.is-pinned.conversation-progress .todo-history { margin: 0; }
+.is-pinned.conversation-progress .progress-agents { row-gap: 2px; }
+.is-pinned .progress-agents .progress-section-head { margin-bottom: 6px; }
+.is-pinned .progress-agent { gap: 10px; min-height: 38px; padding: 4px 2px; color: var(--text-1); font-size: var(--text-base); }
+.is-pinned .progress-agent-list { gap: 2px; }
+.is-pinned .progress-agent { --subagent-avatar-size: 26px; }
+.is-pinned .progress-agent small { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--text-2); }
+.is-pinned .progress-agent small::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--text-3); }
+.is-pinned .progress-agent[data-status="running"] small::before { background: var(--accent); }
+.is-pinned .progress-agent[data-status="failed"] small::before { background: var(--error); }
+.is-pinned .progress-agent[data-status="waiting"] small::before { background: var(--warning); }
+.progress-task-actions { display: inline-flex; align-items: center; gap: 6px; }
+.progress-task-actions button { color: var(--text-2); font-size: var(--text-sm); }
+.progress-task-actions button:hover { color: var(--accent); }
+.progress-history-toggle { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: var(--radius-control); }
+.progress-history-toggle svg { width: var(--icon-sm); height: var(--icon-sm); }
+.progress-popover .progress-task-actions { margin-right: 10px; }
+.progress-popover .todo-dock-scroll { max-height: min(40dvh, 280px); overscroll-behavior: contain; }
+.progress-popover .todo-preview-more { display: inline-flex; align-items: center; gap: 4px; margin: 3px 10px 6px; color: var(--text-2); font-size: var(--text-xs); }
+
+.progress-popover .progress-git { gap: 5px; padding: 10px 4px 8px; }
+.is-pinned.conversation-progress .progress-git {
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--divider);
+}
+.progress-git-repo { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.progress-popover .progress-git-repo { margin-inline: 5px; }
+.progress-git-mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: var(--radius-control);
+  color: var(--text-3);
+  background: var(--surface-soft);
+}
+.progress-git[data-available] .progress-git-mark { color: var(--accent-foreground); background: var(--accent-tint); }
+.progress-git-mark svg { width: var(--icon-md); height: var(--icon-md); }
+.progress-git-identity { display: grid; flex: 1; gap: 1px; min-width: 0; color: var(--text-2); font-size: var(--text-sm); }
+.progress-git-identity > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.progress-git-branch { color: var(--text-1); font: var(--weight-medium) var(--text-sm)/1.45 var(--mono); }
+.progress-git-identity small { color: var(--text-2); font-size: var(--text-xs); line-height: 1.4; }
+.progress-git-repo .icon-button { width: 28px; height: 28px; flex: none; color: var(--text-3); }
+.progress-git-repo .icon-button:hover { color: var(--text-1); }
+.progress-git-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 8px;
+}
+.progress-git-links button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 3px 8px;
+  border-radius: var(--radius-control);
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  text-align: start;
+}
+.progress-git-links svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--text-3); }
+.progress-git-links button:hover, .progress-git-links button:focus-visible { color: var(--text-1); background: var(--surface-hover); }
+.progress-git-links button:is(:hover, :focus-visible) svg { color: var(--accent-foreground); }

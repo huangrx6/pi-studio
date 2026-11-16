@@ -265,6 +265,16 @@
                   "regular"
                 ]
               },
+              "color": {
+                "enum": [
+                  "neutral",
+                  "accent",
+                  "info",
+                  "success",
+                  "warning",
+                  "error"
+                ]
+              },
               "priority": {
                 "type": "integer",
                 "minimum": -1000,

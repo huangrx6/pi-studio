@@ -43,6 +43,8 @@ test('preferences validate every field and repair malformed storage once', () =>
       stepDisplay: 'full',
       stepCollapse: 'never',
       showCodeView: 'false',
+      gitDiffLayout: 'inline',
+      gitDiffWrap: 'off',
       linkOpen: 'embedded',
       radiusStyle: 'pill',
       backgroundMedia: [],
@@ -92,12 +94,16 @@ test('saving preferences writes the same canonical object loaded next time', () 
   savePreferences({
     ...DEFAULT_PREFERENCES,
     theme: 'dark',
+    gitDiffLayout: 'unified',
+    gitDiffWrap: true,
     fontSize: 99,
     shortcuts: { ...DEFAULT_SHORTCUTS, togglePanel: 'alt+mod+j' },
   }, storage);
 
   const saved = JSON.parse(storage.values.get('pi-studio:preferences'));
   assert.equal(saved.theme, 'dark');
+  assert.equal(saved.gitDiffLayout, 'unified');
+  assert.equal(saved.gitDiffWrap, true);
   assert.equal(saved.fontSize, 18);
   assert.equal(saved.shortcuts.togglePanel, 'Mod+Alt+J');
   assert.deepEqual(loadPreferences(storage), saved);

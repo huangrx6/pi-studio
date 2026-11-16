@@ -7,10 +7,10 @@
  */
 import type { ExtensionHostItem } from '../../types/extension-types';
 import type { ExtensionPlacement } from '../../shared/preferences';
+import type { StatusPanel } from '../../shared/extension-appearance';
 
-export type PlaceablePanel = {
-  /** panel 的 contribution id，与运行时 UI 快照里的 item.id 一致。 */
-  id: string;
+export type PlaceablePanel = StatusPanel & {
+  title: string;
   /** 该 panel 声明的落点，只保留可配置的 chip / footer。 */
   slots: Array<'status.chip' | 'conversation.footer'>;
 };
@@ -54,8 +54,14 @@ export function placeablePanels(item: ExtensionHostItem): PlaceablePanel[] {
   return (item.manifest?.contributes?.panels || []).flatMap((panel) => {
     const declared = Array.isArray(panel.slots) && panel.slots.length > 0 ? panel.slots : [panel.slot];
     const slots = CONFIGURABLE_SLOTS.filter((slot) => declared.includes(slot));
-    if (slots.length === 0) return [];
-    return [{ id: panelContributionId(item.scope, manifestId, panel.id), slots }];
+    if (slots.length === 0 && !declared.includes('status.bar')) return [];
+    return [{
+      id: panelContributionId(item.scope, manifestId, panel.id),
+      title: panel.title || panel.id,
+      slots,
+      ...(panel.icon && { icon: panel.icon }),
+      ...(panel.color && { color: panel.color }),
+    }];
   });
 }
 

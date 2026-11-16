@@ -15,6 +15,7 @@ type Setter<T> = React.Dispatch<React.SetStateAction<T>>;
 
 type TranscriptNavigationDependencies = {
   sessionId?: string;
+  goalUpdatedAt?: number;
   messages: ChatMessage[];
   requestTraces: RequestTrace[];
   busy: boolean;
@@ -37,6 +38,7 @@ type TranscriptNavigationDependencies = {
 
 export function useTranscriptNavigation({
   sessionId,
+  goalUpdatedAt,
   messages,
   requestTraces,
   busy,
@@ -168,27 +170,32 @@ export function useTranscriptNavigation({
     scheduleTranscriptPin();
   }
 
-  /** 工具结果仅作为刷新信号，计划栏始终读取当前会话的任务文档。 */
-  const windowTodoDetails = useMemo<TodoDetails | undefined>(() => {
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-      const message = messages[index];
-      const details = message.role === 'toolResult' && message.toolName === 'todo' ? message.details : undefined;
-      if (details && typeof details === 'object' && Array.isArray((details as TodoDetails).tasks)) return details as TodoDetails;
-    }
-    return undefined;
-  }, [messages]);
-
-  // The composer plan belongs to the conversation, not the paged transcript.
   const [plan, setPlan] = useState<{ session: string; details?: TodoDetails } | null>(null);
   useEffect(() => {
     if (!sessionId) return;
-    let disposed = false;
-    void window.piApi.conversationTodo(sessionId).then(details => {
-      if (!disposed) setPlan({ session: sessionId, details });
-    }).catch(() => { /* Preserve the last authoritative plan on a transient failure. */ });
-    return () => { disposed = true; };
-  }, [sessionId, busy, windowTodoDetails]);
-  const todoDetails = plan && plan.session === sessionId ? plan.details : undefined;
+    const session = sessionId;
+    let revision = 0;
+    function refresh() {
+      const request = ++revision;
+      void window.piApi.conversationTodo(session).then(details => {
+        if (request === revision) setPlan({ session, details });
+      }).catch(() => { /* A later runtime event retries transient snapshot failures. */ });
+    }
+    const unsubscribe = window.piApi.onConversationEvent(event => {
+      if (event.conversationId !== sessionId) return;
+      if (event.type === 'run.started' || event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'todo.changed') {
+        setPlan(null);
+        refresh();
+      } else if (event.type === 'snapshot' || (event.type === 'transcript.appended'
+        && event.payload.messages.some(message => message.toolName === 'todo' || message.toolName === 'long_task'))) {
+        refresh();
+      }
+    });
+    refresh();
+    return () => { revision++; unsubscribe(); };
+  }, [sessionId, goalUpdatedAt, turnActive]);
+  const todoDetails = plan?.session === sessionId && (plan?.details?.scope !== 'turn' || turnActive)
+    ? plan?.details : undefined;
 
   /**
    * Derived transcript data is memoised on the message array: streaming flushes

@@ -17,6 +17,7 @@ const {
   conversationSearch,
   conversationSnapshot,
   conversationTodo,
+  conversationTodoHistory,
   conversationRequestTrace,
   createConversation,
   editConversation,
@@ -322,6 +323,7 @@ function registerConversationIpc() {
   ipcMain.handle('pi:conversation-request-trace', async (_event, { id, requestId } = {}) => (
     conversationRequestTrace(id, requestId)
   ));
+  ipcMain.handle('pi:conversation-todo-history', (_event, options) => conversationTodoHistory(options));
   ipcMain.handle('pi:conversation-todo', async (_event, id) => conversationTodo(id));
   ipcMain.handle('pi:conversation-snapshot', async (_event, id) => conversationSnapshot(id));
 

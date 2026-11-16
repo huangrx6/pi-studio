@@ -15,28 +15,27 @@ const EMPTY_STATUS: GitWorkspaceStatus = {
  * switching sessions/workspaces immediately discards the previous status.
  */
 export function useGitWorkspaceStatus(cwd?: string) {
-  const [status, setStatus] = useState<GitWorkspaceStatus | null>(null);
+  const [result, setResult] = useState<{ cwd?: string; status: GitWorkspaceStatus }>();
   const requestRef = useRef(0);
   const refresh = useCallback(async () => {
     const request = ++requestRef.current;
     if (!cwd?.trim()) {
-      setStatus(EMPTY_STATUS);
+      setResult({ cwd, status: EMPTY_STATUS });
       return EMPTY_STATUS;
     }
     try {
       const next = await window.piApi.gitWorkspaceStatus(cwd);
-      if (request === requestRef.current) setStatus(next);
+      if (request === requestRef.current) setResult({ cwd, status: next });
       return next;
     } catch (error) {
       const next = { ...EMPTY_STATUS, reason: error instanceof Error ? error.message : 'git-status-error' };
-      if (request === requestRef.current) setStatus(next);
+      if (request === requestRef.current) setResult({ cwd, status: next });
       return next;
     }
   }, [cwd]);
 
   useEffect(() => {
     requestRef.current += 1;
-    setStatus(null);
     void refresh();
     if (!cwd?.trim()) return undefined;
     const timer = window.setInterval(() => { void refresh(); }, 10_000);
@@ -44,12 +43,14 @@ export function useGitWorkspaceStatus(cwd?: string) {
       if (document.visibilityState === 'visible') void refresh();
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pi-studio:git-changed', onVisibilityChange);
     return () => {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pi-studio:git-changed', onVisibilityChange);
       requestRef.current += 1;
     };
   }, [cwd, refresh]);
 
-  return { status, refresh };
+  return { status: result && result.cwd === cwd ? result.status : null, refresh };
 }

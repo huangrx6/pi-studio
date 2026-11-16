@@ -8,7 +8,9 @@ import {
   Music2,
   Video,
 } from 'lucide-react';
-import { previewFormatForFile } from './file-preview.ts';
+import type { CSSProperties } from 'react';
+import { lightIcons, urls } from 'virtual:studio-file-icons';
+import { fileIconId } from './file-icon';
 
 export type FilePreviewFormat =
   | 'markdown'
@@ -35,8 +37,12 @@ export function FileFormatIcon({ format }: { format: FilePreviewFormat }) {
   return <FileArchive />;
 }
 
-/** Reuse the same file-type marks in tree rows and preview headers. */
-export function FileKindIcon({ path, className = '' }: { path: string; className?: string }) {
-  const format = previewFormatForFile(path) as FilePreviewFormat;
-  return <span className={className} aria-hidden="true"><FileFormatIcon format={format} /></span>;
+/** Decorative identity for a specific file; the adjacent filename supplies the label. */
+export function FileKindIcon({ path, mime, className = '' }: { path: string; mime?: string; className?: string }) {
+  const id = fileIconId(path, mime);
+  const light = lightIcons[id];
+  return <img alt="" aria-hidden="true" draggable={false} width={16} height={16} data-file-icon={id} data-light-file-icon={light}
+    className={`studio-file-icon ${className}`}
+    style={light ? { '--light-file-icon': `url("${urls[light]}")` } as CSSProperties : undefined}
+    src={urls[id]} />;
 }

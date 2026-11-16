@@ -210,6 +210,7 @@
   overflow: hidden;
   position: relative;
 }
+.conversation-extension-dock-item > .extension-status-glyph { flex: none; width: var(--icon-xs); height: var(--icon-xs); margin-right: 5px; }
 .conversation-extension-dock-item .extension-compact-slot { display: flex; min-width: 0; overflow: hidden; align-items: center; }
 .extension-compact-content { display: inline-flex; min-width: 0; max-width: 100%; align-items: center; gap: 5px; overflow: hidden; font-size: var(--text-xs); line-height: 1; white-space: nowrap; }
 .extension-compact-content > .loading-state { color: inherit; font-size: inherit; line-height: inherit; }

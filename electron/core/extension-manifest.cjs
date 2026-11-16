@@ -58,6 +58,7 @@ const UI_SLOTS = new Set([
 ]);
 /** chip 与 footer 是单行摘要；visibility 决定它在会话生命周期里出现多久。 */
 const UI_VISIBILITIES = new Set(['always', 'while-active']);
+const PANEL_COLORS = new Set(['neutral', 'accent', 'info', 'success', 'warning', 'error']);
 const PLACEMENTS = new Set(['composer', 'command-menu', 'session', 'workspace']);
 const PERMISSIONS = new Set([
   'agent.tools',
@@ -582,7 +583,7 @@ function normalizeManifest(raw, source, scope) {
   const panels = requestedPanels.map((item, index) => {
     assertAllowedKeys(
       item,
-      new Set(['id', 'title', 'description', 'slot', 'slots', 'icon', 'size', 'priority', 'content', 'details', 'visibility']),
+      new Set(['id', 'title', 'description', 'slot', 'slots', 'icon', 'color', 'size', 'priority', 'content', 'details', 'visibility']),
       `panels[${index}]`,
     );
     const id = text(item?.id, 64);
@@ -610,6 +611,9 @@ function normalizeManifest(raw, source, scope) {
     const slot = slots[0];
     const description = text(item?.description, MAX_DESCRIPTION);
     const icon = optionalStrictText(item.icon, 64, ICON_PATTERN, `panels[${index}].icon`);
+    if (item.color !== undefined && !PANEL_COLORS.has(item.color)) {
+      throw contributionError('panels', index, 'color 必须是受支持的主题配色');
+    }
     if (item.size !== undefined && item.size !== 'compact' && item.size !== 'regular') {
       throw contributionError('panels', index, `size 无效：${String(item.size)}`);
     }
@@ -675,6 +679,7 @@ function normalizeManifest(raw, source, scope) {
       content,
       slots,
       ...(icon ? { icon } : {}),
+      ...(item.color ? { color: item.color } : {}),
       ...(details ? { details } : {}),
       ...(visibility === 'while-active' ? { visibility } : {}),
     };

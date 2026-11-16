@@ -1,0 +1,46 @@
+.file-change-summary {
+  margin-top: var(--space-4);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  color: var(--text);
+  font: var(--text-13)/var(--leading-normal) var(--font);
+}
+.file-change-summary > header, .file-change-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--space-10);
+  padding: var(--space-1) var(--space-4);
+}
+.file-change-summary > header {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  background: var(--conversation-inset-surface, var(--surface-soft));
+}
+.file-change-heading, .file-change-undo, .file-change-counts, .file-change-more {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.file-change-heading, .file-change-undo { padding-inline: 0; }
+.file-change-heading { flex-wrap: wrap; text-align: start; min-height: var(--control-sm); border-radius: var(--radius-tag); }
+.file-change-heading strong, .file-change-path { font-weight: var(--weight-semibold); }
+.file-change-undo { margin-inline-start: auto; min-height: var(--control-sm); color: var(--muted); }
+.file-change-undo:not(:disabled):hover { color: var(--text); }
+.file-change-undo svg, .file-change-more svg { width: var(--icon-sm); height: var(--icon-sm); }
+.file-change-counts { flex: none; font-variant-numeric: tabular-nums; }
+.file-change-counts > :first-child { color: var(--success); }
+.file-change-counts > :last-child { color: var(--error); }
+.file-change-item { width: 100%; text-align: start; }
+.file-change-item:disabled { opacity: 1; cursor: default; }
+.file-change-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-change-item.is-openable:hover, .file-change-more:hover { background: var(--surface-hover); }
+.file-change-item small { color: var(--muted); font-size: var(--text-xs); }
+.file-change-item.is-missing .file-change-path { color: var(--muted); text-decoration: line-through; }
+.file-change-more { width: 100%; justify-content: center; min-height: var(--control-sm); border-top: 1px solid var(--divider); color: var(--muted); }
+.file-change-more[aria-expanded="true"] svg { transform: rotate(180deg); }
+.file-change-incomplete-note, .file-change-missing-note { margin: 0; padding: var(--space-2) var(--space-4); color: var(--warning); font-size: var(--text-xs); }
+.file-change-incomplete-note { display: flex; align-items: center; gap: var(--space-2); }
+.file-change-incomplete-note svg { flex: none; width: var(--icon-sm); height: var(--icon-sm); }

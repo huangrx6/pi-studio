@@ -99,12 +99,33 @@ export type TodoTask = {
 
 /** 会话任务文档的公开快照；todo 工具结果也使用相同结构。 */
 export type TodoDetails = {
+  planId?: number;
+  lastTurnId?: string;
+  createdAt?: number;
+  updatedAt?: number;
+  scope?: 'turn' | 'goal' | 'legacy';
+  conversationId?: string;
+  turnId?: string;
+  goalId?: string;
+  title?: string;
   /** 结构版本号，用于将来兼容迁移。 */
   schemaVersion?: number;
   /** 全部任务（含已归档、已删除）。 */
   tasks: TodoTask[];
   /** 下一个可用任务编号。 */
   nextId: number;
+};
+
+export type TodoHistoryPlan = TodoDetails & {
+  planId: number;
+  scope: 'turn' | 'goal' | 'legacy';
+  title: string;
+  lifecycle: 'open' | 'ended' | 'unknown';
+};
+
+export type TodoHistoryPage = {
+  items: TodoHistoryPlan[];
+  nextCursor: number | null;
 };
 
 /** 通过系统文件选择器上传并落盘后的附件信息（带发送用 marker）。 */
@@ -287,6 +308,7 @@ export type TurnDiffFile = {
 
 /** 一轮对话结束后的 Git 变更汇总。 */
 export type TurnDiff = {
+  undone?: boolean;
   snapshot?: { root: string; before: string; after: string };
   /** 该轮最后一条助手消息的时间戳，用于和回合配对。 */
   at: number;

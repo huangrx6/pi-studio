@@ -75,9 +75,8 @@ test('an unchanged turn produces an empty diff', async () => {
   }
 });
 
-test('full historical diff uses saved trees, supports whitespace filtering, and rejects missing records', async () => {
+function storedTurnApi() {
   const vm = require('node:vm');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-turn-full-'));
   const turns = new Map();
   const database = {
     saveTurnDiff(sessionId, diff) {
@@ -101,7 +100,12 @@ test('full historical diff uses saved trees, supports whitespace filtering, and 
         ? require('../../electron/services/workspace.cjs')
         : require(name),
   });
-  const api = module.exports;
+  return module.exports;
+}
+
+test('full historical diff uses saved trees, supports whitespace filtering, and rejects missing records', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-turn-full-'));
+  const api = storedTurnApi();
   try {
     git(dir, ['init','-q']);
     const target = path.join(dir,'long.txt');
@@ -181,4 +185,38 @@ test('absolute file preview is limited to files recorded by that session', async
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('undo restores only the turn, preserves staging, and rejects conflicts before touching other files', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-turn-undo-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const api = storedTurnApi();
+  const edit = path.join(dir, 'edit.js'), added = path.join(dir, '样式 [1].css'), deleted = path.join(dir, 'index.html');
+  git(dir, ['init', '-q']);
+  fs.writeFileSync(edit, 'staged');
+  git(dir, ['add', 'edit.js']);
+  fs.writeFileSync(edit, 'before');
+  fs.writeFileSync(deleted, 'deleted in turn');
+  const token = await api.beginTurn(dir);
+  fs.writeFileSync(edit, 'after');
+  fs.writeFileSync(added, 'new');
+  fs.unlinkSync(deleted);
+  api.saveTurnDiff('one', { ...await api.endTurn(token), at: 123 });
+  const undo = () => api.undoTurnDiff({ sessionId: 'one', at: 123 });
+  await assert.rejects(api.undoTurnDiff({ sessionId: 'other', at: 123 }));
+  fs.writeFileSync(added, 'later edit');
+  await assert.rejects(undo(), /无法撤销/);
+  assert.equal(fs.readFileSync(edit, 'utf8'), 'after');
+  fs.writeFileSync(added, 'new');
+  fs.writeFileSync(deleted, 'recreated');
+  await assert.rejects(undo(), /无法撤销/);
+  assert.equal(fs.readFileSync(deleted, 'utf8'), 'recreated');
+  fs.unlinkSync(deleted);
+  await undo();
+  assert.equal(fs.readFileSync(edit, 'utf8'), 'before');
+  assert.equal(fs.readFileSync(deleted, 'utf8'), 'deleted in turn');
+  assert.equal(fs.existsSync(added), false);
+  assert.equal(git(dir, ['show', ':edit.js']), 'staged');
+  assert.equal(api.readTurnDiffs('one')[0].undone, true);
+  await undo();
 });

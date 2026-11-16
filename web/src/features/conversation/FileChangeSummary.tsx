@@ -10,10 +10,12 @@
  */
 
 import { useState } from 'react';
-import { AlertTriangle, ChevronDown, ChevronRight, FileDiff } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Undo2 } from 'lucide-react';
 import type { TurnDiff, TurnDiffFile } from '../../types/chat-types';
 import type { FileChange } from './file-changes';
-import { InfoHint } from '../../shared/InfoHint';
+import { useActionConfirmation } from '../../shared/ConfirmDialog';
+import { FileKindIcon } from '../../shared/FileKindIcon';
+import './styles/file-change-summary.css';
 
 type DisplayFile = {
   path: string;
@@ -29,8 +31,6 @@ type DisplayFile = {
   truncated?: boolean;
 };
 
-/** Git-style marker: A added, M modified, D deleted. */
-/* 状态用文字标签，不再用 A/M/D/W 这类需要记忆的字母。 */
 const STATUS_MARK: Record<DisplayFile['status'], string> = {
   added: '新增',
   modified: '修改',
@@ -44,7 +44,8 @@ function counts(added: number, removed: number) {
 
 function statusLabel(file: DisplayFile) {
   if (file.status === 'deleted') return '已删除';
-  if (file.lines) return `/ ${file.lines} 行`;
+  if (file.binary) return '二进制文件';
+  if (file.lines !== undefined) return `/ ${file.lines} 行`;
   if (file.status === 'written') return '已写入';
   return '';
 }
@@ -84,13 +85,17 @@ function mergeFiles(git: TurnDiff | undefined, toolFiles: FileChange[]): Display
   return [...merged.values()];
 }
 
-export function FileChangeSummary({ files, gitDiff, onOpenDiff, onOpenFile }: {
+export function FileChangeSummary({ files, gitDiff, onUndo, onOpenDiff, onOpenFile }: {
   files: FileChange[];
   gitDiff?: TurnDiff;
+  onUndo?: (at: number) => Promise<void>;
   onOpenDiff?: (file: TurnDiffFile | undefined, turn: TurnDiff) => void;
   /** 打开文件预览；返回 false 表示文件已不可读（被移动或删除）。 */
   onOpenFile?: (path: string) => Promise<boolean> | boolean | void;
 }) {
+  const confirmation = useActionConfirmation();
+  const [undoBusy, setUndoBusy] = useState(false);
+  const [undoError, setUndoError] = useState('');
   const [expanded, setExpanded] = useState(false);
   /** 已在磁盘上消失的文件：点过一次就记下来，不再反复失败。 */
   const [missing, setMissing] = useState<Set<string>>(() => new Set());
@@ -119,30 +124,48 @@ export function FileChangeSummary({ files, gitDiff, onOpenDiff, onOpenFile }: {
     if (!available) setMissing((current) => new Set(current).add(path));
   }
 
+  const names = display.map(file => file.label.split(/[\\/]/).pop() || file.label);
+  const canUndo = gitDiff?.snapshot && !gitDiff.truncated && gitDiff.files.length === display.length && onUndo;
+  async function undo() {
+    if (!gitDiff || !onUndo || undoBusy) return;
+    if (!await confirmation.confirm({
+      title: '撤销本轮文件变更？',
+      description: `将这 ${display.length} 个文件恢复到本轮开始时的内容。本轮新增的文件会从工作区移除。`,
+      confirmLabel: '撤销变更', tone: 'danger',
+    })) return;
+    setUndoBusy(true);
+    setUndoError('');
+    try { await onUndo(gitDiff.at); }
+    catch (error) { setUndoError(error instanceof Error ? error.message : '撤销失败，请重试。'); }
+    finally { setUndoBusy(false); }
+  }
+
   return <section className="file-change-summary" aria-label="本轮文件变更">
     <header>
-      <span className="file-change-icon"><FileDiff aria-hidden="true" /></span>
-      <div>
-        <span className="file-change-heading">
-          <strong>已编辑 {display.length} 个文件</strong>
-          <InfoHint label={sourceHint} />
-        </span>
+      <button type="button" className="file-change-heading" aria-label="查看变更" title={sourceHint}
+        disabled={!onOpenDiff} onClick={() => onOpenDiff?.(undefined, review)}>
+        <strong>{display.length} 个文件变更</strong>
         {hasCounts && counts(added, removed)}
-      </div>
-      <button type="button" onClick={() => onOpenDiff?.(undefined, review)}>查看变更</button>
+      </button>
+      {(canUndo || gitDiff?.undone) && <button type="button" className="file-change-undo"
+        disabled={undoBusy || gitDiff?.undone} onClick={() => void undo()}>
+        {gitDiff?.undone ? '已撤销' : undoBusy ? '正在撤销' : '撤销'}<Undo2 aria-hidden="true" />
+      </button>}
     </header>
+    {confirmation.dialog}
+    {undoError && <p className="file-change-missing-note" role="alert">{undoError}</p>}
 
-    <div className="file-change-list">{visible.map((file) => {
+    <div className="file-change-list">{visible.map((file, index) => {
       // 有补丁先看 diff；没有补丁但路径可读时，直接打开右侧文件预览。
       const gone = missing.has(file.path);
       const canDiff = Boolean(file.patch && onOpenDiff);
-      const canView = Boolean(onOpenFile && file.path.startsWith('/'));
+      const canView = Boolean(onOpenFile && /^(?:\/|[a-z]:[\\/]|\\\\)/i.test(file.path));
       const openable = !gone && (canDiff || canView);
       return <button
         type="button"
         className={`file-change-item ${openable ? 'is-openable' : ''} ${gone ? 'is-missing' : ''}`}
         key={file.path}
-        title={gone ? `${file.path}\n文件已不在磁盘上（可能被移动或删除）` : file.path}
+        title={`${STATUS_MARK[file.status]} · ${file.path}${gone ? '\n文件已不在磁盘上（可能被移动或删除）' : ''}`}
         disabled={!openable}
         onClick={() => {
           if (!openable) return;
@@ -150,18 +173,18 @@ export function FileChangeSummary({ files, gitDiff, onOpenDiff, onOpenFile }: {
           onOpenDiff?.(review.files.find(item => item.path === file.path), review);
         }}
       >
-        <span className={`file-change-mark is-${file.status}`} aria-hidden="true">{STATUS_MARK[file.status]}</span>
-        <span className="file-change-path">{file.label}</span>
+        <FileKindIcon path={file.path} />
+        <span className="sr-only">{STATUS_MARK[file.status]} </span>
+        <span className="file-change-path">{names.indexOf(names[index]) === names.lastIndexOf(names[index]) ? names[index] : file.label}</span>
         {gone
           ? <small className="file-change-missing">已移出磁盘</small>
           : file.complete
             ? counts(file.added, file.removed)
             : <small>{statusLabel(file)}</small>}
-        {openable && <ChevronRight className="file-change-open" aria-hidden="true" />}
       </button>;
     })}</div>
 
-    {display.length > 4 && <button type="button" className="file-change-more" onClick={() => setExpanded((value) => !value)}>
+    {display.length > 4 && <button type="button" className="file-change-more" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
       {expanded ? '收起' : `全部 ${display.length} 个文件`}
       <ChevronDown aria-hidden="true" />
     </button>}
@@ -170,6 +193,7 @@ export function FileChangeSummary({ files, gitDiff, onOpenDiff, onOpenFile }: {
       {missingCount} 个文件已不在磁盘上（可能被移动或删除），已从可打开列表中移除。
     </p>}
 
+    {gitDiff?.truncated && <p className="file-change-incomplete-note">文件较多，仅显示已记录的部分，行数为小计。</p>}
     {!complete && hasCounts && <p className="file-change-incomplete-note" role="status">
       <AlertTriangle />
       部分文件未提供差异，行数可能不完整。

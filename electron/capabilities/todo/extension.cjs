@@ -8,8 +8,7 @@
 
 const toolSchema = require('../../runtime/tool-schema.cjs');
 
-const TODO_DOC_KIND = 'studio.todo';
-const TODO_SCHEMA_VERSION = 1;
+const { TODO_DOC_KIND, TODO_SCHEMA_VERSION, executePlanAction, readTodoDetails, readTodoHistory } = require('./plans.cjs');
 const MAX_TASKS = 100;
 const MAX_CREATE_ITEMS = 50;
 const MAX_BLOCKED_BY = 20;
@@ -40,7 +39,6 @@ function emptyTodoState() {
     schemaVersion: TODO_SCHEMA_VERSION,
     tasks: [],
     nextId: 1,
-    lastMutationTaskId: 0,
   };
 }
 
@@ -159,30 +157,7 @@ function normalizeTodoState(value) {
     maximumId + 1,
     1,
   );
-  state.lastMutationTaskId = Number.isSafeInteger(Number(value.lastMutationTaskId))
-    ? Math.max(0, Number(value.lastMutationTaskId))
-    : 0;
   return state;
-}
-
-function publicDetails(state) {
-  const normalized = normalizeTodoState(state);
-  return {
-    schemaVersion: TODO_SCHEMA_VERSION,
-    tasks: normalized.tasks.map((task) => ({ ...task, ...(task.blockedBy ? { blockedBy: [...task.blockedBy] } : {}) })),
-    nextId: normalized.nextId,
-  };
-}
-
-function cloneState(state) {
-  const normalized = normalizeTodoState(state);
-  return {
-    ...normalized,
-    tasks: normalized.tasks.map((task) => ({
-      ...task,
-      ...(task.blockedBy ? { blockedBy: [...task.blockedBy] } : {}),
-    })),
-  };
 }
 
 function activeTasks(state) {
@@ -362,7 +337,7 @@ function applyTodoMutation(inputState, args, nowValue = Date.now()) {
   const action = typeof args.action === 'string' ? args.action : '';
   if (!ACTIONS.has(action)) throw new Error(`未知 todo action：${action || '(empty)'}`);
   const now = Number(nowValue) > 0 ? Number(nowValue) : Date.now();
-  const state = cloneState(inputState);
+  const state = normalizeTodoState(inputState);
 
   if (action === 'list') {
     return { state, changed: false, message: '已读取当前任务计划。' };
@@ -510,29 +485,9 @@ function planText(state) {
   return `进度 ${done}/${visible.length}${lines.length ? `\n${lines.join('\n')}` : ''}`;
 }
 
-function createTodoContract(durable) {
-  const Todos = durable.defineDoc({
-    kind: TODO_DOC_KIND,
-    version: TODO_SCHEMA_VERSION,
-    scope: 'conversation',
-    history: 'rewindable',
-    fork: 'asOf',
-    checkpointWhen: (_value, _ops, info) => info.deltasSinceBase >= 64,
-    initial: emptyTodoState,
-  });
-
-  return Todos;
-}
-
-async function readTodoDetails(durable, harness, conversationId, context) {
-  const state = normalizeTodoState(await harness.snapshot(createTodoContract(durable), conversationId, context));
-  return state.tasks.length || state.nextId > 1 ? publicDetails(state) : undefined;
-}
-
 function createStudioTodoExtension(durable) {
   const { defineExtension, defineTool } = durable;
   const Type = toolSchema;
-  const Todos = createTodoContract(durable);
 
   const status = Type.Union([
     Type.Literal('pending'),
@@ -550,11 +505,13 @@ function createStudioTodoExtension(durable) {
     name: 'todo',
     description: [
       'Create and maintain the visible execution plan shown above the composer.',
+      'Use scope="goal" for work on the active persistent goal, including resumes; list that scope before creating tasks. Use scope="turn" for independent requests. Ordinary plans belong to this run.',
       'For multi-step work, call createMany before implementation, then start and complete tasks as work advances.',
       'Use one in_progress task at a time, complete each task immediately after its verification succeeds, and use update/list/get for the remaining lifecycle operations.',
       'Do not use todo for a simple one-step request, and do not describe a plan only in prose when this tool is available.',
     ].join(' '),
     parameters: Type.Object({
+      scope: Type.Optional(Type.Union([Type.Literal('turn'), Type.Literal('goal')])),
       action: Type.Union([
         Type.Literal('create'),
         Type.Literal('createMany'),
@@ -590,40 +547,7 @@ function createStudioTodoExtension(durable) {
       if (!Number.isSafeInteger(conversationId) || conversationId <= 0) {
         throw new Error('todo 只能在持久会话中运行');
       }
-      const action = String(args?.action || '');
-      const readOnly = action === 'list' || action === 'get';
-      const mutationTaskId = Number(api.taskId);
-      let details;
-      let message;
-      if (readOnly) {
-        const state = normalizeTodoState(await api.snapshot(Todos, conversationId, context));
-        const result = applyTodoMutation(state, args, api.now());
-        details = publicDetails(result.state);
-        message = result.message;
-      } else {
-        const committed = await api.commit(async (tx) => {
-          const stored = await tx.doc(Todos, conversationId);
-          const draft = normalizeTodoState(stored);
-          if (Number.isSafeInteger(mutationTaskId) && mutationTaskId > 0
-            && draft.lastMutationTaskId === mutationTaskId) {
-            return {
-              details: publicDetails(draft),
-              message: '这次任务计划变更已经记录。',
-            };
-          }
-          const applied = applyTodoMutation(draft, args, api.now());
-          Object.assign(stored, applied.state);
-          if (Number.isSafeInteger(mutationTaskId) && mutationTaskId > 0) {
-            stored.lastMutationTaskId = mutationTaskId;
-          }
-          return {
-            details: publicDetails(normalizeTodoState(stored)),
-            message: applied.message,
-          };
-        }, context);
-        details = committed.details;
-        message = committed.message;
-      }
+      const { details, message } = await executePlanAction(durable, api, args, applyTodoMutation, context);
       return {
         output: [{
           type: 'text',
@@ -643,10 +567,10 @@ function createStudioTodoExtension(durable) {
 module.exports = {
   TODO_DOC_KIND,
   readTodoDetails,
+  readTodoHistory,
   TODO_SCHEMA_VERSION,
   applyTodoMutation,
   createStudioTodoExtension,
   emptyTodoState,
   normalizeTodoState,
-  publicDetails,
 };

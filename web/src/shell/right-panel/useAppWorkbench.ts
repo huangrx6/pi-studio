@@ -196,6 +196,14 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     if (filesOpen) setPanelEntered(true); else openPanel();
   }
 
+  function openProgressTab() {
+    if (!panelTabsRef.current.some(tab => tab.kind === 'progress')) {
+      setPanelTabs(current => [...current, { id: 'progress', kind: 'progress', title: '会话进展' }]);
+    }
+    setActivePanelTabId('progress');
+    if (!panelEntered || panelCloseTimerRef.current !== null) openPanel();
+  }
+
   function openServicesTab() {
     if (!panelTabs.some((tab) => tab.kind === 'services')) {
       setPanelTabs((current) => [...current, { id: 'services', kind: 'services', title: '运行服务' }]);
@@ -557,6 +565,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     openBrowserTab,
     openFilesTab,
     openServicesTab,
+    openProgressTab,
     loadWorkspacePreview,
     loadFileToTab,
     activatePanelTab,

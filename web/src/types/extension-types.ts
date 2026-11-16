@@ -101,6 +101,7 @@ export interface ExtensionActionButton {
 }
 
 export type ExtensionTone = 'neutral' | 'info' | 'success' | 'warning' | 'error';
+export type ExtensionIconColor = ExtensionTone | 'accent';
 export type ExtensionStatus = 'pending' | 'active' | 'success' | 'warning' | 'error' | 'neutral';
 export type ExtensionDensity = 'compact' | 'comfortable' | 'spacious';
 
@@ -285,6 +286,7 @@ export interface ExtensionPanelContribution {
   /** 同一份内容声明的位置；只有一项时等价于 slot。 */
   slots?: ExtensionUiSlot[];
   icon?: string;
+  color?: ExtensionIconColor;
   size?: 'compact' | 'regular';
   priority?: number;
   content: ExtensionContent[];
@@ -561,6 +563,7 @@ export interface ExtensionUiItem {
   /** 同一份内容声明的位置；只有一项时等价于 slot。 */
   slots: ExtensionUiSlot[];
   icon?: string;
+  color?: ExtensionIconColor;
   size: 'compact' | 'regular';
   priority: number;
   /** Stable declaration order from extension scan and manifest order. */

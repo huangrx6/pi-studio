@@ -99,6 +99,7 @@ export type SubagentStatus = 'pending' | 'running' | 'completed' | 'failed' | 's
 /** 主会话中的一张子智能体卡片。key 由主进程生成，渲染层只把它当作稳定句柄。 */
 export type SubagentChild = {
   key: string;
+  avatarId: string;
   runId: string;
   index: number;
   agent: string;

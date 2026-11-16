@@ -118,7 +118,7 @@ export type ModelComparisonContext = {
 
 export type PanelTab = {
   id: string;
-  kind: 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services' | 'browser' | 'comparison';
+  kind: 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services' | 'browser' | 'comparison' | 'progress';
   title: string;
   tooltip?: string;
   path?: string;
@@ -135,7 +135,9 @@ export type PanelTab = {
 };
 
 export type AgentView =
+  | { kind: 'git'; tab: import('../types/git-types').GitTab }
   | { kind: 'conversation' }
   | { kind: 'extensions'; itemId?: string }
   | { kind: 'agents'; child?: SubagentChild }
-  | { kind: 'trace' };
+  | { kind: 'trace' }
+  | { kind: 'tasks' };

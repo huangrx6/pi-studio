@@ -1,11 +1,14 @@
-import { useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import { ExtensionSlot } from './features/extensions/ExtensionSlot';
+import { ExtensionAppearanceContext } from './features/extensions/ExtensionStatusIcon';
 import { ConversationActionPalette } from './features/conversation/ConversationActionPalette';
 import type { QueuedPreview } from './features/conversation/QueuedMessages';
 import { AppSidebar } from './shell/AppSidebar';
 import { AppDialogs } from './shell/AppDialogs';
 import { BackgroundLayer, BackgroundMediaNode } from './shell/BackgroundLayer';
+import { ConversationProgress, ProgressTrigger } from './shell/ConversationProgress';
+import { useGitWorkspaceStatus } from './shell/useGitWorkspaceStatus';
 import { ConversationWorkspace } from './shell/ConversationWorkspace';
 import { SettingsOverlay } from './shell/SettingsOverlay';
 import { ShellLayout } from './shell/ShellLayout';
@@ -117,8 +120,8 @@ export function App() {
     setModelPickerRequest,
     sessionLoadRef,
     longTaskBusy,
-    todoPanelOpen,
-    setTodoPanelOpen,
+    progressView,
+    setProgressView,
     prompt,
     setPrompt,
     composerAttachments,
@@ -244,6 +247,7 @@ export function App() {
     handleOpenFile,
     handleOpenAttachment,
     handleOpenChanges,
+    undoTurnDiff,
     subagentWorkspace,
     handleEditMessage,
     addComposerFiles,
@@ -312,6 +316,45 @@ export function App() {
   const panelWorkspaceName = activeWorkspace?.name
     || panelWorkspace.split(/[\\/]/).filter(Boolean).at(-1)
     || '工具';
+  const { status: gitStatus } = useGitWorkspaceStatus(session?.cwd);
+  const progressPinned = workbench.panelTabs.some(tab => tab.kind === 'progress');
+  const dismissProgress = useCallback(() => setProgressView(view => view.floating
+    ? { ...view, floating: false } : view), [setProgressView]);
+  function navigateFromProgress(action: () => void) {
+    dismissProgress();
+    if (workbench.panelFullscreen) workbench.setPanelFullscreen(false);
+    action();
+  }
+  function openProgressPage(action: () => void) {
+    navigateFromProgress(action);
+    if (filesOpen && window.matchMedia('(max-width: 1100px)').matches) workbench.closePanel();
+  }
+  function openGit(tab: import('./types/git-types').GitTab) {
+    openProgressPage(() => {
+      conversation.rememberMainScrollPosition();
+      foundation.setAgentView({ kind: 'git', tab });
+    });
+  }
+  const progressContent = <ConversationProgress key={session?.id} sessionId={session?.id} pinned={progressPinned}
+    onPinChange={() => {
+      setProgressView(view => ({ ...view, floating: progressPinned && Boolean(session) }));
+      if (progressPinned) {
+        workbench.setPanelFullscreen(false);
+        workbench.closePanelTab('progress');
+      } else workbench.openProgressTab();
+      requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('.conversation-progress .progress-pin')?.focus());
+    }}
+    git={gitStatus} onGitSettings={() => navigateFromProgress(() => void openSettings('git'))}
+    onOpenGit={openGit}
+    goal={session?.longTask} running={turnActive} goalBusy={longTaskBusy} onGoalAction={changeLongTaskStatus}
+    onEditGoal={() => navigateFromProgress(() => { returnToMainAgent(); sendPromptFromExtension('/goal ', false); })}
+    onOpenTasks={() => openProgressPage(() => {
+      conversation.rememberMainScrollPosition();
+      foundation.setAgentView({ kind: 'tasks' });
+    })}
+    tasks={todoDetails} history={progressView.history} onToggleHistory={() => setProgressView(view => ({ ...view, history: !view.history }))}
+    agents={subagentWorkspace.subagentChildren} onAgents={() => openProgressPage(subagentWorkspace.openAgentOverview)}
+    onAgent={child => openProgressPage(() => subagentWorkspace.openAgentTranscript(child))} />;
   /** Latest browser opener, read through a ref so the context value stays stable. */
   const markdownLinkRef = useRef<(url: string) => void>(() => {});
   markdownLinkRef.current = (url: string) => openBrowserTab(url);
@@ -326,6 +369,7 @@ export function App() {
 
   return (
     <MarkdownActions.Provider value={markdownActionsValue}>
+    <ExtensionAppearanceContext.Provider value={preferences.extensionAppearances}>
     {/* 四周留白使用独立的背景透明度、柔化和遮罩设置。 */}
     {preferences.backgroundMedia && <BackgroundLayer
       media={preferences.backgroundMedia}
@@ -432,7 +476,14 @@ export function App() {
           panelExpanded: workbench.panelEntered,
           openPanel,
           returnToMainAgent,
-          openAgentOverview: subagentWorkspace.openAgentOverview,
+          gitStatus,
+          openGit,
+          progressTrigger: <ProgressTrigger open={!progressPinned && progressView.floating} pinned={progressPinned}
+            active={progressPinned && workbench.panelEntered && workbench.activePanelTabId === 'progress'}
+            onDismiss={dismissProgress} onToggle={() => {
+              if (progressPinned) workbench.openProgressTab();
+              else setProgressView(view => ({ ...view, floating: !view.floating }));
+            }}>{progressContent}</ProgressTrigger>,
           openConversationExtensionHub,
           openTrace,
         }}
@@ -440,6 +491,7 @@ export function App() {
           openAttachment: handleOpenAttachment,
           openFile: handleOpenFile,
           openChanges: handleOpenChanges,
+          undoTurnDiff,
           editMessage: handleEditMessage,
         }}
         transcript={{
@@ -538,11 +590,6 @@ export function App() {
           queuedPreviews,
           queuedEditContext,
           queueAdmissionPending,
-          todoDetails,
-          todoPanelOpen,
-          setTodoPanelOpen,
-          longTaskBusy,
-          changeLongTaskStatus,
           sendPromptFromExtension,
           turnActive,
           stopping,
@@ -582,6 +629,7 @@ export function App() {
 
       {filesOpen && <WorkbenchPane
         controller={workbench}
+        progressPanel={progressContent}
         onOpenComparison={openModelComparison}
         comparisonPanel={<ComparisonWorkbench
           context={comparisonPanelContext}
@@ -627,6 +675,7 @@ export function App() {
       </ShellLayout>
 
       <SettingsOverlay
+        onOpenWorktree={async cwd => { await loadState(); await startSession(cwd); }}
         sidebar={{ collapsed: sidebarCollapsed, setCollapsed: setSidebarCollapsed, resizeHandle: sidebarResizeHandle }}
         workspace={workspace}
         workspaces={workspaces}
@@ -741,6 +790,7 @@ export function App() {
       />
 
     </div>
+    </ExtensionAppearanceContext.Provider>
     </MarkdownActions.Provider>
   );
 }

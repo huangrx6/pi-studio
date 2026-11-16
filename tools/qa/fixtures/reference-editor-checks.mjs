@@ -10,8 +10,8 @@ export async function checkReferenceEditor(page) {
   assert.deepEqual(await editor.locator('.ref-chip-label').allTextContents(), [
     'frontend', 'App.tsx', 'spec.pdf', 'report.xlsx', 'package.json', 'settings.yaml', 'demo.png', 'demo.mp3', 'demo.mp4', 'release.zip', 'skill-creator',
   ]);
-  for (const kind of ['folder', 'code', 'doc', 'sheet', 'image', 'audio', 'video', 'archive', 'skill']) {
-    assert(await editor.locator(`.ref-chip.is-${kind} > svg`).count(), `${kind} has an icon`);
+  for (const chip of await editor.locator('.ref-chip').all()) {
+    assert.equal(await chip.locator(':scope > :is(svg, img[data-file-icon])').count(), 1, await chip.innerText());
   }
   assert.equal(await editor.locator('.ref-chip').first().getAttribute('title'), 'frontend/');
   assert.equal(await editor.evaluate(node => node.scrollWidth <= node.clientWidth + 1), true);
@@ -41,7 +41,7 @@ export async function checkReferenceEditor(page) {
     node.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: clipboard }));
   });
   assert.equal(await composerValue(editor), '前 @README.md 后');
-  assert.equal(await editor.locator('img').count(), 0, 'rich clipboard markup is never imported');
+  assert.equal(await editor.locator('img:not([data-file-icon]), [onerror]').count(), 0, 'rich clipboard markup is never imported');
 
   await editor.fill('中文 @src/App.tsx ');
   await selectComposerRange(editor, (await composerValue(editor)).length);

@@ -1,0 +1,180 @@
+.git-remote {
+  display: grid;
+  gap: var(--space-5);
+  max-inline-size: 860px;
+  min-inline-size: 0;
+}
+
+.git-remote-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+
+.git-remote-heading > div:first-child,
+.git-remote-op-copy { min-width: 0; }
+
+.git-remote-heading h3,
+.git-remote-empty h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-normal);
+}
+
+.git-remote-heading p,
+.git-remote-op-copy p,
+.git-remote-empty p {
+  margin: var(--space-1) 0 0;
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+  overflow-wrap: anywhere;
+}
+
+.git-remote .git-remote-picker {
+  flex: 0 1 auto;
+  width: auto;
+  max-width: min(42%, 230px);
+  min-width: 80px;
+}
+
+.git-remote-picker .pi-select-trigger {
+  height: var(--control-sm);
+  border-color: var(--border);
+  padding-inline: var(--space-2);
+  font: var(--text-sm)/var(--leading-normal) var(--mono);
+}
+
+.git-remote-refs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(32px, 9%) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5) clamp(16px, 3cqi, 32px);
+  background: color-mix(in srgb, var(--surface-hover) 42%, transparent);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-card);
+}
+
+.git-remote-ref { display: grid; min-width: 0; gap: var(--space-2); }
+
+.git-remote-ref > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: var(--text-sm);
+}
+
+.git-remote-ref svg,
+.git-remote-connection svg,
+.git-remote-conflicts svg {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.git-remote-ref code {
+  color: var(--text);
+  font: var(--text-sm)/var(--leading-normal) var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.git-remote-connection {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: var(--text-2);
+}
+
+.git-remote-connection::before,
+.git-remote-connection::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.git-remote .git-remote-conflicts {
+  display: inline-flex;
+  justify-self: start;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--warning);
+  font-size: var(--text-13);
+  border-radius: var(--radius-tag);
+}
+
+.git-remote-operations {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.git-remote-operations li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-1);
+}
+
+.git-remote-operations li + li { border-top: 1px solid var(--divider); }
+
+.git-remote-op-icon {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  color: var(--text-2);
+}
+
+.git-remote-op-copy strong {
+  color: var(--text);
+  font-size: var(--text-13);
+  font-weight: var(--weight-medium);
+}
+
+.git-remote-operations button {
+  min-height: var(--control-sm);
+  min-width: 74px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  background: var(--surface);
+  font: var(--weight-medium) var(--text-sm)/var(--leading-normal) var(--mono);
+}
+
+.git-remote-operations button:hover:enabled { border-color: var(--border-hover); background: var(--surface-hover); }
+
+.git-remote-empty {
+  padding: var(--space-8) 0;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+
+.git-remote-empty > svg {
+  width: var(--icon-xl);
+  height: var(--icon-xl);
+  color: var(--text-2);
+  margin-bottom: var(--space-2);
+  stroke-width: 1.5;
+}
+
+@container (max-width: 480px) {
+  .git-remote-heading { flex-wrap: wrap; gap: var(--space-3); }
+  .git-remote .git-remote-picker { max-width: 100%; }
+  .git-remote-refs { gap: var(--space-2); padding: var(--space-4); }
+  .git-remote-operations li { gap: var(--space-3); }
+}
+
+@container (max-width: 340px) {
+  .git-remote-refs { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+  .git-remote-connection { display: none; }
+  .git-remote-operations button { min-width: 0; padding-inline: var(--space-2); }
+}

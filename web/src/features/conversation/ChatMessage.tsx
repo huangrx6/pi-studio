@@ -17,16 +17,22 @@
  * 图片以 data URI 内联渲染，不再额外请求主进程。
  */
 import { memo, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, CircleAlert, CircleX, Copy, FileText, Image as ImageIcon, PanelRightOpen, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
+import { Check, ChevronDown, CircleAlert, CircleX, Copy, FileText, Image as ImageIcon, List, PanelRightOpen, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
 import { LoadingIndicator } from '../../shared/LoadingState';
 import type { ChatMessage, ContentBlock, RequestTrace, ToolCallBlock, TurnDiff, TurnDiffFile } from '../../types/chat-types';
 import type { StepCollapse, StepDisplay } from '../../shared/preferences';
-import { AttachmentIcon, attachmentVisual } from '../../shared/AttachmentIcon';
+import { AttachmentIcon } from '../../shared/AttachmentIcon';
+import { previewTypeLabel } from '../../shared/file-preview.ts';
 import { ConversationImageGallery, type ConversationImage } from './ConversationImageGallery';
 import { isNearBottom, resolveLiveFollow } from './chat-scroll.ts';
 import { messageClipboardHtml } from './message-copy';
+import { MarkdownImageRenderer } from '../../shared/markdown-actions';
+import { ConversationMarkdownImage } from './ConversationMarkdownImage';
 import { Markdown } from '../../shared/Markdown';
 import { collectFileChanges } from './file-changes';
+import { WebSources } from './WebSources';
+import { webSources, type WebSource } from './web-sources';
+import { ActivitySummary, activityKind, type ActivityEntry } from './ActivitySummary';
 import { FileChangeSummary } from './FileChangeSummary';
 import { splitMessageText, type Reference } from './references';
 import { ReferenceChip } from './ReferenceChip';
@@ -96,14 +102,8 @@ function formatTime(timestamp?: number): string {
   return new Date(timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 }
 
-/** 执行轨迹里的一条工具调用。 */
-type ToolEntry = { kind: 'tool'; call: ToolCallBlock };
-/** 执行轨迹里的一条思考。 */
-type ThinkingEntry = { kind: 'thinking'; block: Extract<ContentBlock, { type: 'thinking' }> };
-/** 轨迹条目：工具调用或思考。live 表示仍在执行（工具尚无结果，或思考仍在输出）。 */
-type ActivityEntry = (ToolEntry | ThinkingEntry) & { key: string; live?: boolean };
 /** 拍平后的内容块；key 由「消息序号-块序号」组成，流式追加时保持稳定。 */
-type FlatBlock = { block: ContentBlock; key: string; messageTimestamp?: number };
+type FlatBlock = { block: ContentBlock; key: string };
 
 /**
  * 单条工具调用（使用原生 <details> 折叠）。
@@ -132,9 +132,7 @@ function ActivityTool({ call, result, busy, defaultOpen = false, onOpenFile }: {
     : undefined;
   // Closed rows need only their summary; large outputs are joined on demand.
   const resultText = open && result ? textBlocks(result.content) : '';
-  const resultImages = result ? imagesFromBlocks(result.content) : [];
-  return <>
-  <details
+  return <details
     className={`activity-tool activity-disclosure ${failed ? 'is-error' : ''} ${done ? 'is-done' : busy ? 'is-running' : 'is-incomplete'}`}
     open={open}
     onToggle={(event) => setOpen(event.currentTarget.open)}
@@ -161,9 +159,7 @@ function ActivityTool({ call, result, busy, defaultOpen = false, onOpenFile }: {
           <pre className={`activity-tool-code ${failed ? 'is-error' : ''}`}>{resultText}</pre></>}
       </>}
     </div>}
-  </details>
-  {resultImages.length > 0 && <ToolResultImages callId={call.id} images={resultImages} />}
-  </>;
+  </details>;
 }
 
 /** 图片属于工具产物，与参数详情分别折叠；预览仅浏览当前步骤的图片。 */
@@ -360,7 +356,7 @@ function ActivitySequence({ entries, results, stepDisplay, onOpenFile }: {
         call={entry.call}
         result={results.get(entry.call.id)}
         busy={Boolean(entry.live)}
-        defaultOpen={defaultOpen}
+        defaultOpen={defaultOpen || Boolean(results.get(entry.call.id)?.isError)}
         onOpenFile={onOpenFile}
       />}
       {entry.kind === 'thinking' && (entry.live
@@ -371,34 +367,36 @@ function ActivitySequence({ entries, results, stepDisplay, onOpenFile }: {
 }
 
 /** 折叠策略只在整轮运行边界或配置变化时应用，流式增量不覆盖手动操作。 */
-function TurnTrace({ live, active, policy, phase, steps, requests, errors, children }: {
-  live: boolean; active: boolean; policy: StepCollapse; phase: string; steps: number; requests: number;
-  errors: number; children: React.ReactNode;
+function TurnTrace({ live, active, policy, summary, errors, incomplete, sources, fetched, images, children }: {
+  live: boolean; active: boolean; policy: StepCollapse; summary: React.ReactNode; errors: number;
+  incomplete: number; sources?: WebSource[]; fetched?: boolean; images?: React.ReactNode; children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(policy !== 'after-answer' || live);
   // Defer historical trace contents until first opened. Keep visited children
   // mounted so closing the group never resets their individual disclosure state.
   const [visited, setVisited] = useState(open);
   const bodyId = useId();
-  const header = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (open) setVisited(true); }, [open]);
   useEffect(() => {
     if (policy === 'after-answer') setOpen(live);
     else if (policy === 'keep-open') setOpen(true);
   }, [live, policy]);
+  const status = <>
+    {errors > 0 && <span className="turn-trace-errors">{errors > 1 ? `${errors} 项失败` : '失败'}</span>}
+    {incomplete > 0 && <span className="turn-trace-incomplete">未完成</span>}
+    {active && <span className="inline-activity-running"><LoadingIndicator />执行中</span>}
+  </>;
+  const toggle = { 'aria-expanded': open, 'aria-controls': bodyId, onClick: () => setOpen(value => !value) };
   return <section className={`turn-trace ${open ? 'is-open' : ''}`} aria-label="执行轨迹">
-    <button ref={header} type="button" className="turn-trace-toggle"
-      aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(value => !value)}>
-      <span className="turn-trace-mark" aria-hidden="true"><ChevronDown className="turn-trace-chevron" /></span>
-      <strong>执行轨迹</strong>
-      <span className="turn-trace-count">{[steps > 0 && `${steps} 步`, requests > 0 && `${requests} 次请求`].filter(Boolean).join(' · ')}</span>
-      {errors > 0 && <span className="turn-trace-errors"><CircleAlert />{errors} 次异常</span>}
-      <span className="turn-trace-state">{active ? phase : open ? '收起' : '展开'}</span>
-      {active && <LoadingIndicator />}
-    </button>
+    {sources?.length ? <WebSources sources={sources} fetched={Boolean(fetched)} status={status}
+      tools={<button type="button" className="web-source-details" aria-label="工具详情" title="工具详情" {...toggle}><List /></button>} />
+      : <button type="button" className="turn-trace-toggle" {...toggle}>
+        {summary}{status}<ChevronDown className="turn-trace-chevron" aria-hidden="true" />
+      </button>}
     <div id={bodyId} hidden={!open} className="turn-trace-body">
       {(open || visited) && children}
     </div>
+    {images}
   </section>;
 }
 
@@ -416,11 +414,12 @@ type AssistantTurnViewProps = {
   cwd?: string;
   /** 本轮 Git 快照；比工具参数更完整，包含 bash/脚本产生的改动。 */
   gitDiff?: TurnDiff;
+  onUndo?: (at: number) => Promise<void>;
   onOpenDiff?: (file: TurnDiffFile | undefined, turn: TurnDiff) => void;
   onOpenFile?: (path: string) => void;
 };
 
-function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [], busy, id, turnError, retry, stepDisplay = 'standard', stepCollapse = 'after-answer', showCodeView = false, cwd, gitDiff, onOpenDiff, onOpenFile }: AssistantTurnViewProps) {
+function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [], busy, id, turnError, retry, stepDisplay = 'standard', stepCollapse = 'after-answer', showCodeView = false, cwd, gitDiff, onUndo, onOpenDiff, onOpenFile }: AssistantTurnViewProps) {
   const live = Boolean(retry) || busy;
   // 只看本轮最后一条助手消息：压缩/重试产生的中间失败不应盖住后面的成功输出。
   const lastMessage = messages[messages.length - 1];
@@ -431,84 +430,44 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
   const flat: FlatBlock[] = messages.flatMap((message, messageIndex) => message.content.map((block, blockIndex) => ({
     block,
     key: `${messageIndex}-${blockIndex}`,
-    messageTimestamp: message.timestamp,
   })));
   // 最后一次操作仅用于确定“复制回答”的范围；视觉分组在下方按正文边界处理。
   let lastActivity = -1;
   flat.forEach((entry, index) => { if (entry.block.type === 'thinking' || entry.block.type === 'toolCall') lastActivity = index; });
-  const activityBlocks = lastActivity >= 0 ? flat.slice(0, lastActivity + 1) : [];
-  const responseBlocks = lastActivity >= 0 ? flat.slice(lastActivity + 1) : flat;
-  // 轨迹条目只有思考和工具调用；可见文本、图片与请求快照各自分段显示。
-  const activity: ActivityEntry[] = activityBlocks.flatMap((entry): ActivityEntry[] => {
-    if (entry.block.type === 'thinking') return [{ kind: 'thinking', block: entry.block, key: entry.key }];
-    if (entry.block.type === 'toolCall') return [{ kind: 'tool', call: entry.block, key: entry.key }];
-    return [];
-  });
-  // 顶部指标按整轮原始消息统计，不依赖上面的分区结果，避免统计口径随轨迹过滤变化。
-  const latest = messages[messages.length - 1];
-  const lastBlock = flat.filter(entry => entry.block.type !== 'text' || entry.block.text.trim()).at(-1);
-  const currentEntries = live ? activity.filter(entry =>
-    entry.kind === 'tool' ? !toolResults.has(entry.call.id)
-      : entry.key === lastBlock?.key
-  ) : [];
-  const currentKeys = new Set(currentEntries.map(entry => entry.key));
-  // Every visible text/image breaks a process group, preserving chronological order.
-  const timeline: Array<{
-    key: string;
-    entries?: ActivityEntry[];
-    visible?: FlatBlock;
-    images?: ConversationImage[];
-    request?: RequestTrace;
-  }> = [];
-  const activityByKey = new Map(activity.map(entry => [entry.key, entry]));
-  const orderedTraces = [...requestTraces].sort((left, right) => (
-    left.createdAt - right.createdAt || left.id.localeCompare(right.id)
-  ));
-  let traceIndex = 0;
-  // The first actual provider request always precedes the first assistant
-  // message in a turn, even when a provider reports a coarse timestamp.
-  if (orderedTraces[0]) {
-    timeline.push({
-      key: `request-${orderedTraces[0].id}`,
-      request: orderedTraces[0],
-    });
-    traceIndex = 1;
-  }
-  const appendTracesThrough = (timestamp: number) => {
-    while (traceIndex < orderedTraces.length && orderedTraces[traceIndex].createdAt <= timestamp) {
-      const trace = orderedTraces[traceIndex];
-      timeline.push({
-        key: `request-${trace.id}`,
-        request: trace,
-      });
-      traceIndex += 1;
-    }
-  };
-  for (const entry of flat) {
-    if (entry.messageTimestamp !== undefined) appendTracesThrough(entry.messageTimestamp);
-    const record = activityByKey.get(entry.key);
-    if (entry.block.type === 'image') {
-      const image = { src: `data:${entry.block.mimeType};base64,${entry.block.data}` };
-      const tail = timeline.at(-1);
-      if (tail?.images) tail.images.push(image);
-      else timeline.push({ key: entry.key, images: [image] });
-    } else if (entry.block.type === 'text' && entry.block.text.trim()) {
-      timeline.push({ key: entry.key, visible: entry });
-    } else if (record) {
-      const row = { ...record, live: currentKeys.has(entry.key) };
-      const tail = timeline.at(-1);
-      if (tail?.entries) tail.entries.push(row);
-      else timeline.push({ key: entry.key, entries: [row] });
+  const responseBlocks = flat.slice(lastActivity + 1);
+  const latest = messages.at(-1);
+  const lastBlock = [...flat].reverse().find(entry => entry.block.type !== 'text' || entry.block.text.trim());
+  type Segment = { key: string } & (
+    | { kind: 'activity'; entries: ActivityEntry[] }
+    | { kind: 'text'; text: string }
+    | { kind: 'images'; images: ConversationImage[] }
+  );
+  const segments: Segment[] = [];
+  let activeTool = false;
+  for (const { block, key } of flat) {
+    const tail = segments.at(-1);
+    if (block.type === 'text') {
+      if (block.text.trim()) segments.push({ key, kind: 'text', text: block.text });
+    } else if (block.type === 'image') {
+      const image = { src: `data:${block.mimeType};base64,${block.data}` };
+      if (tail?.kind === 'images') tail.images.push(image);
+      else segments.push({ key, kind: 'images', images: [image] });
+    } else if (block.type === 'toolCall' || block.type === 'thinking') {
+      const entry: ActivityEntry = block.type === 'toolCall'
+        ? { key, kind: 'tool', call: block, live: live && !toolResults.has(block.id) }
+        : { key, kind: 'thinking', block, live: live && key === lastBlock?.key };
+      if (entry.live && entry.kind === 'tool') activeTool = true;
+      const kind = activityKind(entry);
+      if (tail?.kind === 'activity' && ['explore', 'write', 'edit', 'search', 'fetch'].includes(kind)
+        && activityKind(tail.entries[0]) === kind) tail.entries.push(entry);
+      else segments.push({ key, kind: 'activity', entries: [entry] });
     }
   }
-  // A request that has started but whose assistant message has not arrived yet
-  // belongs at the live tail of the turn.
-  appendTracesThrough(Number.POSITIVE_INFINITY);
   const phase = retry ? `正在重试 ${retry.attempt}/${retry.maxAttempts}`
-    : currentEntries.some(entry => entry.kind === 'tool') ? '正在执行'
+    : activeTool ? '正在执行'
       : lastBlock?.block.type === 'thinking' ? '正在思考'
         : latest?.streaming && lastBlock?.block.type === 'text' ? '正在回复'
-          : orderedTraces.length > 0 && currentEntries.length === 0 ? '正在请求模型'
+          : requestTraces.length > 0 ? '正在请求模型'
             : '正在继续处理';
 
   const codeFiles = showCodeView && !live ? collectFileChanges(messages, toolResults, cwd) : [];
@@ -519,39 +478,6 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
     .map((entry) => entry.block.type === 'text' ? entry.block.text : '')
     .join('\n\n')
     .trim();
-  // Requests are available from the dedicated trace page. Keep the conversation
-  // view focused on the work performed in the turn itself.
-  const visibleTimeline = timeline.filter((item) => !item.request);
-  // Keys use the first item, so streaming appends never reset a manual disclosure.
-  const segments: Array<{ key: string; process: boolean; items: typeof timeline }> = [];
-  for (const item of visibleTimeline) {
-    const process = Boolean(item.entries);
-    const tail = segments.at(-1);
-    if (process && tail?.process) tail.items.push(item);
-    else segments.push({ key: item.key, process, items: [item] });
-  }
-  // 结束后：工具、思考与此前夹在中间的叙述合并成一条过程轨迹，只把最后一段
-  // 回答留在外面。此前每个中间叙述都是一张正文卡片，整轮读起来像流水账，
-  // 分不清哪些是过程、哪句才是结论。
-  const answerKey = !live
-    ? [...visibleTimeline].reverse().find((item) => item.visible)?.key
-    : undefined;
-  if (!live) {
-    const traceItems = visibleTimeline.filter((item) => item.entries || (item.visible && item.key !== answerKey));
-    const restItems = visibleTimeline.filter((item) => !traceItems.includes(item));
-    segments.splice(0, segments.length,
-      ...(traceItems.length > 0 ? [{ key: traceItems[0].key, process: true, items: traceItems }] : []),
-      ...restItems.map((item) => ({ key: item.key, process: false, items: [item] })));
-  }
-  const renderTimelineItem = (item: typeof timeline[number], narration = false) => item.entries
-        ? <ActivitySequence key={item.key} entries={item.entries} results={toolResults} stepDisplay={stepDisplay} onOpenFile={onOpenFile} />
-        : item.request ? null
-        : item.images ? <ConversationImageGallery key={item.key} images={item.images} />
-        : item.visible?.block.type === 'text'
-          ? (narration
-            ? <div className="trace-narration" key={item.key}><Markdown>{item.visible.block.text}</Markdown></div>
-            : <div className="assistant-response" key={item.key}><Markdown>{item.visible.block.text}</Markdown></div>)
-          : null;
   return <div id={id} className={`assistant-turn ${live ? 'is-live' : ''} ${retry ? 'is-retrying' : ''} ${failed ? 'has-error' : ''} is-steps-${stepDisplay}`}>
     <div className="assistant-turn-rail"><span className="assistant-orb">π</span></div>
     <div className="assistant-turn-main">
@@ -561,20 +487,30 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
         <span className="assistant-turn-status" title={retry?.errorMessage}>{retry ? `重试中 ${retry.attempt}/${retry.maxAttempts}` : interrupted ? '已中断' : failed ? '失败' : live ? phase : '已完成'}</span>
         {latest?.timestamp && <time>{formatTime(latest.timestamp)}</time>}
       </div>
-      {segments.map((segment, index) => {
-        if (!segment.process) return segment.items.map((item) => renderTimelineItem(item));
-        const entries = segment.items.flatMap(item => item.entries || []);
-        return <TurnTrace key={segment.key} live={live} active={live && index === segments.length - 1} policy={stepCollapse} phase={phase}
-          steps={entries.length} requests={segment.items.filter(item => item.request).length}
-          errors={entries.filter(entry => entry.kind === 'tool' && toolResults.get(entry.call.id)?.isError).length}>
-          {segment.items.map((item) => renderTimelineItem(item, Boolean(item.visible)))}
+      {segments.map(segment => {
+        if (segment.kind === 'text') return <div className="assistant-response" key={segment.key}><MarkdownImageRenderer.Provider value={ConversationMarkdownImage}><Markdown>{segment.text}</Markdown></MarkdownImageRenderer.Provider></div>;
+        if (segment.kind === 'images') return <ConversationImageGallery key={segment.key} images={segment.images} />;
+        const { entries } = segment;
+        const kind = activityKind(entries[0]);
+        const calls = entries.flatMap(entry => entry.kind === 'tool' ? [entry.call] : []);
+        const sites = kind === 'search' || kind === 'fetch' ? webSources(calls, toolResults) : undefined;
+        return <TurnTrace key={segment.key} live={live} active={entries.some(entry => entry.live)} policy={stepCollapse}
+          sources={sites} fetched={kind === 'fetch'} images={calls.map(call => {
+            const result = toolResults.get(call.id);
+            const images = result && imagesFromBlocks(result.content);
+            return images?.length ? <ToolResultImages key={call.id} callId={call.id} images={images} /> : null;
+          })}
+          summary={<ActivitySummary entries={entries} results={toolResults} />}
+          errors={entries.filter(entry => entry.kind === 'tool' && toolResults.get(entry.call.id)?.isError).length}
+          incomplete={entries.filter(entry => entry.kind === 'tool' && !entry.live && !toolResults.has(entry.call.id)).length}>
+          <ActivitySequence entries={entries} results={toolResults} stepDisplay={stepDisplay} onOpenFile={onOpenFile} />
         </TurnTrace>;
       })}
       {/* 失败卡片只在非 live 时出现，避免自动重试过程中闪错误。 */}
       {!live && error && (interrupted
         ? <div className="assistant-interrupted" role="status">本轮已中断</div>
         : <AssistantError message={error} />)}
-      {(codeFiles.length > 0 || (turnDiff?.files.length ?? 0) > 0) && <FileChangeSummary files={codeFiles} gitDiff={turnDiff} onOpenDiff={(file, turn) => onOpenDiff?.(file, { ...turn, at: turn.at || messages.at(-1)?.timestamp || 0 })} onOpenFile={onOpenFile} />}
+      {(codeFiles.length > 0 || (turnDiff?.files.length ?? 0) > 0) && <FileChangeSummary key={turnDiff?.at} onUndo={onUndo} files={codeFiles} gitDiff={turnDiff} onOpenDiff={onOpenDiff && ((file, turn) => onOpenDiff(file, { ...turn, at: turn.at || messages.at(-1)?.timestamp || 0 }))} onOpenFile={onOpenFile} />}
       {/* 回答结束后，悬浮显示复制与完成时间。 */}
       {!live && <MessageActions text={answerText} time={latest?.timestamp} label="复制回答" />}
     </div>
@@ -602,6 +538,7 @@ function sameAssistantTurnViewProps(previous: AssistantTurnViewProps, next: Assi
     && previous.stepCollapse === next.stepCollapse
     && previous.showCodeView === next.showCodeView
     && previous.cwd === next.cwd
+    && previous.onUndo === next.onUndo
     && previous.gitDiff === next.gitDiff
     && previous.onOpenDiff === next.onOpenDiff
     && previous.onOpenFile === next.onOpenFile
@@ -768,7 +705,6 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
     {preservedCount > 0 && <div className="user-attachments">
       <MessageImages blocks={message.content} />
       {message.attachments?.map((attachment) => {
-        const visual = attachmentVisual(attachment.name, attachment.mime);
         const openable = Boolean(attachment.path && onOpenFile);
         return <div className={`attachment-card ${openable ? 'is-openable' : ''}`} key={attachment.path} title={`${attachment.path}${openable ? ' · 点击查看' : ''}`}
           role={openable ? 'button' : undefined} tabIndex={openable ? 0 : undefined} aria-label={openable ? `在右侧面板查看 ${attachment.name}` : undefined}
@@ -776,7 +712,7 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
           onKeyDown={(event) => { if (openable && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onOpenFile?.(attachment.path); } }}>
           <AttachmentIcon name={attachment.name} mime={attachment.mime} />
           <span className="attachment-main"><strong title={attachment.name}>{attachment.name}</strong><span>{formatBytes(attachment.bytes)}{attachment.lines ? ` · ${attachment.lines.toLocaleString('zh-CN')} 行` : ''}</span></span>
-          <span className={`attachment-kind ${visual.tone}`}>{visual.label.toUpperCase()}</span>
+          <span className="attachment-kind">{previewTypeLabel(attachment.name)}</span>
           {openable && <span className="attachment-open-cue" aria-hidden="true"><PanelRightOpen /></span>}
         </div>;
       })}

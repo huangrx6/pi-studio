@@ -1,0 +1,9 @@
+.todo-history-disclosure { margin: 4px 0; }
+.todo-history-disclosure summary { cursor: pointer; }
+.todo-history { max-height: 250px; overflow: auto; padding: 4px 0; }
+.todo-history details { padding: 4px 0; }
+.todo-history details span, .todo-history small, .todo-history-task > span:first-child { color: var(--muted); }
+.todo-history summary > *, .todo-history-task > span + span { margin-inline-start: 7px; }
+.todo-history-task { display: flex; padding: 3px 0; overflow-wrap: anywhere; }
+.todo-history-task > span:first-child { flex: none; }
+.todo-history nav { display: flex; gap: 12px; margin-top: 6px; }

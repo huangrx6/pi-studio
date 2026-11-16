@@ -34,7 +34,7 @@ function fixture() {
 }
 const render = (Component, props, child) => renderToStaticMarkup(React.createElement(Component, props, child));
 
-test('closed tool details do not serialize parameters or concatenate the output; images stay independent', () => {
+test('closed tool details do not serialize parameters, concatenate output or duplicate inline images', () => {
   const { ActivityTool } = fixture();
   let serializations = 0;
   let outputReads = 0;
@@ -47,7 +47,7 @@ test('closed tool details do not serialize parameters or concatenate the output;
   assert.equal(serializations, 0);
   assert.equal(outputReads, 0);
   assert.ok(!closed.includes('activity-tool-body'));
-  assert.ok(closed.includes('tool-result-images'));
+  assert.ok(!closed.includes('tool-result-images'));
   assert.ok(closed.includes('aria-description="已完成"'));
   const expanded = render(ActivityTool, { call, result, busy: false, defaultOpen: true });
   assert.equal(serializations, 1);
@@ -82,10 +82,11 @@ test('historical traces defer child rendering while keeping errors discoverable;
   const { TurnTrace } = fixture();
   let childRenders = 0;
   const Child = () => { childRenders++; return React.createElement('pre', null, 'large trace'); };
-  const props = { live: false, active: false, policy: 'after-answer', phase: '', steps: 1, requests: 0, errors: 1 };
+  const props = { live: false, active: false, policy: 'after-answer', summary: '探索', incomplete: 0, errors: 1, images: React.createElement('img', { alt: '工具生成的图' }) };
   const closed = render(TurnTrace, props, React.createElement(Child));
   assert.equal(childRenders, 0);
-  assert.match(closed, /次异常/);
+  assert.match(closed, /<img alt="工具生成的图"/);
+  assert.match(closed, /失败/);
   assert.match(closed, /aria-expanded="false"/);
   for (const override of [{ policy: 'keep-open' }, { policy: 'manual' }, { live: true, active: true }]) {
     assert.match(render(TurnTrace, { ...props, ...override }, React.createElement(Child)), /large trace/);

@@ -37,6 +37,7 @@ function fakeDurable(configured) {
     GenerationTask: { name: 'GenerationTask' },
     LiveDoc: { kind: 'pi.live' },
     defineDoc: (definition) => definition,
+    defineDocFamily: (definition) => definition,
     defineTask: (definition) => definition,
     defineTool: (definition) => definition,
     defineExtension: (definition) => definition,
@@ -51,13 +52,13 @@ function fakeDurable(configured) {
 function fakeDocuments() {
   const values = new Map();
   return {
-    read(token, id) {
-      const key = `${token.kind}:${id}`;
-      if (!values.has(key)) values.set(key, token.initial());
+    read(token, id, member, seed) {
+      const key = [token.kind, id, member].filter(value => value !== undefined).join(':');
+      if (!values.has(key)) values.set(key, token.initial(seed));
       return values.get(key);
     },
-    doc(token, id) {
-      return this.read(token, id);
+    doc(...args) {
+      return this.read(...args);
     },
     inspect(token, id) {
       return values.get(`${token.kind}:${id}`);
@@ -78,7 +79,7 @@ function todoApi(documents, conversationId, taskId) {
     ...docApi(documents, conversationId),
     taskId,
     commit: async (callback) => callback({
-      doc: (token, id) => documents.doc(token, id),
+      doc: (...args) => documents.doc(...args),
     }),
   };
 }
@@ -119,6 +120,7 @@ test('the todo built-in persists plans, lifecycle state, dependencies, and repla
 
   const documents = fakeDocuments();
   const conversationId = 71;
+  documents.doc({ kind: 'pi.live', initial: () => ({ run: { inputs: [31] } }) }, conversationId);
   const created = await tool.execute({
     action: 'createMany',
     items: [
@@ -135,7 +137,8 @@ test('the todo built-in persists plans, lifecycle state, dependencies, and repla
       [2, 'Implement the fix', 'pending'],
     ],
   );
-  assert.equal(documents.inspect({ kind: 'studio.todo' }, conversationId).lastMutationTaskId, 1001);
+  assert.equal(created.details.turnId, '31');
+  assert.equal(created.details.scope, 'turn');
 
   // A replayed tool task returns the current snapshot instead of creating duplicates.
   const replayed = await tool.execute({
@@ -761,6 +764,8 @@ test('background subagents use a conversation-owned anchor, reporter, supervisor
     {},
   );
   assert.match(spawned.output[0].text, /后台启动 reader/);
+  const readerAvatar = documents.inspect({ kind: 'studio.subagents' }, 501).agents.reader.avatarId;
+  assert.ok(readerAvatar);
   const anchor = tasks.get(701);
   const reporter = tasks.get(702);
   assert.equal(anchor.kind, 'studio.subagent-anchor');
@@ -785,6 +790,7 @@ test('background subagents use a conversation-owned anchor, reporter, supervisor
     {},
   );
   assert.match(sent.output[0].text, /自动回传/);
+  assert.equal(documents.inspect({ kind: 'studio.subagents' }, 501).agents.reader.avatarId, readerAvatar);
   assert.equal(tasks.get(703).input.name, 'reader');
   assert.equal(tasks.get(703).input.followUp, true);
 
@@ -937,6 +943,7 @@ test('consecutive background reporters do not read task tables after the registr
 
   const registry = documents.inspect({ kind: 'studio.subagents' }, 501);
   assert.equal(registry.agents.zhengzhou.lastStatus, 'running');
+  assert.notEqual(registry.agents.zhengzhou.avatarId, registry.agents.beijing.avatarId);
   assert.equal(registry.agents.beijing.lastStatus, 'running');
   assert.equal(
     Object.values(registry.reporters).filter((reporter) => reporter.active).length,
@@ -999,6 +1006,8 @@ test('built-in responsibilities use independent runtimes and explicit dependency
   assert.equal(metricsPanels['metrics-detail'].content[0].sourceId, 'builtin:studio-metrics/live');
   // 摘要是一份声明、两个落点：顶栏 chip 常驻，底部那行随回合出现。
   assert.deepEqual(metricsPanels['metrics-chip'].slots, ['status.chip', 'conversation.footer']);
+  assert.equal(metricsPanels['metrics-chip'].icon, 'activity');
+  assert.equal(metricsPanels['metrics-chip'].color, 'info');
   assert.equal(metricsPanels['metrics-chip'].content[0].sourceId, 'builtin:studio-metrics/summary');
   assert.equal(metricsPanels['metrics-chip'].details, 'metrics-detail');
   assert.equal(metricsPanels['metrics-chip'].visibility, 'while-active');

@@ -26,6 +26,7 @@ const sectionApi = compile('../../web/src/features/extensions/InstalledExtension
   './InstalledExtensionCard': { InstalledExtensionCard: card },
 });
 const cardApi = compile('../../web/src/features/extensions/InstalledExtensionCard.tsx', {
+  './ExtensionAppearancePicker': { ExtensionAppearancePicker: () => null },
   './extension-presentation': {
     extensionScopeLabel: scope => scope === 'builtin' ? '内置' : scope === 'project' ? '当前工作区' : '全局',
     extensionStateLabel: () => '不可用',

@@ -134,6 +134,7 @@ const contributors = {
     },
     icon: { $ref: '#/$defs/icon' },
     size: { enum: ['compact', 'regular'] },
+    color: { enum: ['neutral', 'accent', 'info', 'success', 'warning', 'error'] },
     priority: { type: 'integer', minimum: -1000, maximum: 1000 },
     content: array(content, 64),
   }, ['id', 'title', 'slot']), 256),

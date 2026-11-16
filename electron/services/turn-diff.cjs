@@ -86,10 +86,10 @@ async function beginTurn(cwd, key = randomUUID()) {
 /** 解析 `git diff --name-status` 输出为 path → 状态。 */
 function parseStatus(text) {
   const map = new Map();
-  for (const line of text.split('\n')) {
-    if (!line.trim()) continue;
-    const [code, ...rest] = line.split('\t');
-    const file = rest.join('\t');
+  const fields = text.split('\0');
+  for (let index = 0; index + 1 < fields.length; index += 2) {
+    const code = fields[index];
+    const file = fields[index + 1];
     if (!file) continue;
     map.set(file, code.startsWith('A') ? 'added' : code.startsWith('D') ? 'deleted' : 'modified');
   }
@@ -109,12 +109,12 @@ async function endTurn(requestId) {
     const endTree = (await git(snap.cwd, ['write-tree'], snap.env)).trim();
     if (endTree === snap.startTree) return { files: [], totalAdded: 0, totalRemoved: 0 };
 
-    const numstat = await git(snap.cwd, ['diff', '--numstat', '--no-renames', snap.startTree, endTree]);
-    const status = parseStatus(await git(snap.cwd, ['diff', '--name-status', '--no-renames', snap.startTree, endTree]));
+    const numstat = await git(snap.cwd, ['diff', '--numstat', '-z', '--no-renames', snap.startTree, endTree]);
+    const status = parseStatus(await git(snap.cwd, ['diff', '--name-status', '-z', '--no-renames', snap.startTree, endTree]));
     const files = [];
     let totalAdded = 0;
     let totalRemoved = 0;
-    for (const line of numstat.split('\n')) {
+    for (const line of numstat.split('\0')) {
       if (!line.trim()) continue;
       const [addedRaw, removedRaw, ...rest] = line.split('\t');
       const file = rest.join('\t');
@@ -135,7 +135,7 @@ async function endTurn(requestId) {
       let patch = '';
       if (!binary) {
         try {
-          patch = await git(snap.cwd, ['diff', '--no-color', '--unified=3', snap.startTree, endTree, '--', file]);
+          patch = await git(snap.root, ['--literal-pathspecs', 'diff', '--no-ext-diff', '--no-textconv', '--no-color', '--unified=3', snap.startTree, endTree, '--', file]);
         } catch { /* 单个文件 diff 失败不影响汇总 */ }
       }
       files.push({
@@ -172,6 +172,58 @@ async function readTurnDiffFile({ sessionId, at, path: requested, full = false, 
   return { ...file, patch: patch.slice(0, limit), truncated: patch.length > limit };
 }
 
+const undoingRoots = new Set();
+
+/** Reverse only the stored tree delta, using a private index so staged changes survive. */
+async function undoTurnDiff({ sessionId, at }) {
+  const turn = readTurnDiffs(sessionId).find(item => item.at === at);
+  if (!turn?.snapshot || turn.truncated || !turn.files.length) throw new Error('本轮没有可撤销的完整快照。');
+  if (turn.undone) return;
+  const { root, before, after } = turn.snapshot;
+  if (![before, after].every(hash => /^[a-f0-9]{40,64}$/.test(hash))) throw new Error('本轮快照无效。');
+  if (undoingRoots.has(root)) throw new Error('正在撤销此工作区的变更。');
+  undoingRoots.add(root);
+  let directory;
+  try {
+    if (fs.realpathSync((await git(root, ['rev-parse', '--show-toplevel'])).trim()) !== root) throw new Error('workspace changed');
+    const names = (await git(root, ['diff', '--name-only', '-z', '--no-renames', before, after])).split('\0').filter(Boolean);
+    const recorded = new Set(turn.files.map(file => file.path));
+    if (!names.length || names.length !== recorded.size || names.some(name => !recorded.has(path.join(root, name)))) throw new Error('incomplete file list');
+    directory = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'pi-studio-undo-'));
+    const env = { GIT_INDEX_FILE: path.join(directory, 'index') };
+    await git(root, ['read-tree', after], env);
+    // Refresh stat information only. Compare every touched path including edits outside patch hunks.
+    await git(root, ['update-index', '-q', '--refresh'], env);
+    await git(root, ['--literal-pathspecs', 'diff-files', '--quiet', '--', ...names], env);
+    for (const file of turn.files) {
+      if (file.status !== 'deleted') continue;
+      // A deleted path is untracked in the private index, so diff-files alone cannot detect its recreation.
+      const exists = await fs.promises.lstat(file.path).then(() => true, error => {
+        if (error.code === 'ENOENT') return false;
+        throw error;
+      });
+      if (exists) throw new Error('deleted path was recreated');
+    }
+    const { stdout: patch } = await execFileAsync('git', ['-C', root, 'diff', '--binary', '--full-index',
+      '--no-ext-diff', '--no-textconv', '--no-renames', '--src-prefix=a/', '--dst-prefix=b/', before, after], {
+      encoding: 'buffer', timeout: GIT_TIMEOUT, maxBuffer: 16 * 1024 * 1024,
+    });
+    if (/^(?:(?:old|new|deleted file|new file) mode 160000|index [a-f0-9.]+ 160000)$/m.test(patch.toString('latin1'))) throw new Error('submodule');
+    const patchPath = path.join(directory, 'turn.patch');
+    await fs.promises.writeFile(patchPath, patch);
+    // --index rechecks the worktree before writing. git apply checks the whole patch by default.
+    await git(root, ['apply', '--reverse', '--index', '--whitespace=nowarn', patchPath], env);
+  } catch {
+    throw new Error('无法撤销本轮变更。请查看差异，确认文件仍与回合结束时一致且 Git 快照可用。');
+  } finally {
+    undoingRoots.delete(root);
+    if (directory) fs.rmSync(directory, { recursive: true, force: true });
+  }
+  if (readTurnDiffs(sessionId).some(item => item.at === at && item.snapshot?.after === after)) {
+    saveTurnDiff(sessionId, { ...turn, undone: true });
+  }
+}
+
 /**
  * Open a changed file referenced by one of this session's persisted turn diffs.
  * Canonicalizing before the membership check prevents a later symlink swap from
@@ -203,6 +255,7 @@ module.exports = {
   readTurnDiffs,
   saveTurnDiff,
   readTurnDiffFile,
+  undoTurnDiff,
   resolveTurnDiffAbsoluteFile,
   readTurnDiffAbsoluteFile,
 };

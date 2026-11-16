@@ -1,0 +1,23 @@
+.session-tasks-page { flex: 1; min-height: 0; min-width: 0; overflow: auto; color: var(--text); }
+.session-tasks-column { max-width: var(--content); margin: 0 auto; padding: var(--space-5) var(--content-gutter); }
+.session-tasks-toolbar, .session-tasks-group > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.session-tasks-toolbar { margin-bottom: var(--space-5); }
+.session-tasks-toolbar > .pi-select { width: min(144px, 100%); }
+.session-tasks-views { display: inline-flex; padding: 3px; gap: 2px; border-radius: var(--radius-control); background: var(--surface-hover); }
+.session-tasks-views button { padding: 5px 10px; border-radius: var(--radius-tag); color: var(--text-2); font-size: var(--text-sm); }
+.session-tasks-views button[aria-pressed="true"] { background: var(--surface-raised); color: var(--text-1); box-shadow: var(--shadow-card); }
+.session-tasks-group { margin: var(--space-4) 0 var(--space-5); }
+.session-tasks-group > header { padding-bottom: var(--space-2); border-bottom: 1px solid var(--divider); }
+.session-tasks-group h3 { margin: 0; font-size: var(--text-base); font-weight: var(--weight-semibold); overflow-wrap: anywhere; }
+.session-tasks-group small, .session-tasks-group li > span { color: var(--text-3); font-size: var(--text-xs); }
+.session-tasks-group ul { margin: 0; padding: 0; list-style: none; }
+.session-tasks-group li { display: grid; grid-template-columns: var(--icon-md) minmax(0, 1fr) auto; align-items: baseline; gap: var(--space-2); padding: 9px 0; }
+.session-tasks-group li svg { width: var(--icon-sm); height: var(--icon-sm); align-self: start; margin-top: 2px; color: var(--text-3); }
+.session-tasks-group li div { display: grid; gap: 3px; overflow-wrap: anywhere; }
+.session-tasks-group li strong { color: var(--text-1); font-size: var(--text-base); font-weight: var(--weight-regular); }
+.session-tasks-group li[data-status="active"] svg { color: var(--accent); }
+.session-tasks-group li[data-status="completed"] svg { color: var(--success); }
+.session-tasks-group li[data-status="blocked"] svg { color: var(--warning); }
+.session-tasks-more, .session-tasks-feedback button { padding: 6px 10px; border-radius: var(--radius-control); background: var(--surface-hover); color: var(--text-2); font-size: var(--text-sm); }
+.session-tasks-feedback { display: flex; align-items: center; gap: var(--space-2); color: var(--error); }
+.session-tasks-empty { display: grid; justify-items: center; margin: var(--space-5) 0; color: var(--text-3); font-size: var(--text-sm); }

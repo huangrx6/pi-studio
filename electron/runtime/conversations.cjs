@@ -549,7 +549,17 @@ async function conversationTodo(id) {
   if (!row) return undefined;
   const runtime = await getDurableRuntime();
   const { readTodoDetails } = require('../capabilities/todo/index.cjs');
-  return readTodoDetails(runtime.durable, runtime.harness, Number(row.id), runtime.context);
+  const current = await readTodoDetails(runtime.durable, runtime.harness, Number(row.id), runtime.context);
+  return current && { ...current, conversationId: conversationKey(row) };
+}
+
+async function conversationTodoHistory({ id, cursor, limit } = {}) {
+  const row = await getConversationRow(id);
+  if (!row) throw new Error('会话不存在');
+  const runtime = await getDurableRuntime();
+  const { readTodoHistory } = require('../capabilities/todo/index.cjs');
+  const page = await readTodoHistory(runtime.durable, runtime.harness, Number(row.id), { cursor, limit }, runtime.context);
+  return { ...page, items: page.items.map(plan => ({ ...plan, conversationId: conversationKey(row) })) };
 }
 
 async function conversationSnapshot(id) {
@@ -1344,6 +1354,7 @@ async function submitLongTaskContinuation(row, conversation, state, requestPrefi
   await conversation.submit({
     type: 'input',
     content: continuationText(state),
+    entry: { kind: 'studio.user', data: { studioGoalId: state.goalId } },
     requestId: `${requestPrefix}:${randomUUID()}`,
     whenBusy: 'followUp',
   }, runtime.context);
@@ -1920,6 +1931,17 @@ async function taskGraph(id) {
   }
 }
 
+// The terminal event needs a fresh answer for this conversation. The workspace
+// cache may still include its finished run, and scanning all past tasks here
+// would delay the next prompt in a large Studio database.
+async function refreshEndedConversation(row) {
+  if (runtimeStatePending) await runtimeStatePending;
+  const key = conversationKey(row);
+  const { tasks } = await taskGraph(key);
+  if (tasks.some(task => task.conversationId === String(row.id))) runningConversations.add(key);
+  else runningConversations.delete(key);
+}
+
 function cloneJson(value) {
   return value === undefined ? undefined : structuredClone(value);
 }
@@ -2046,7 +2068,7 @@ async function applyView(view, entry, conversation, emit) {
       entry.running = false;
       entry.runStartedAt = undefined;
       entry.partial = undefined;
-      await refreshRuntimeState();
+      await refreshEndedConversation(conversation);
       await finishRunDiff(entry, conversation, emit);
       getStudioDatabase().updateConversation(key, {
         updatedAt: endedAt,
@@ -2066,7 +2088,7 @@ async function applyView(view, entry, conversation, emit) {
 
     if (change.type === 'run.failed') {
       entry.running = false;
-      await refreshRuntimeState();
+      await refreshEndedConversation(conversation);
       getStudioDatabase().updateConversation(key, {
         lastError: change.payload.message,
         updatedAt: Date.now(),
@@ -2334,6 +2356,7 @@ module.exports = {
   conversationSearch,
   conversationSnapshot,
   conversationTodo,
+  conversationTodoHistory,
   createConversation,
   editConversation,
   fullDisplayMessages,

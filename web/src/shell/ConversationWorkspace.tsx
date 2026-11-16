@@ -35,7 +35,6 @@ import type {
   ExtensionUiItem,
 } from '../types/extension-types';
 import { ConversationHeader } from './ConversationHeader';
-import { useGitWorkspaceStatus } from './useGitWorkspaceStatus';
 import { scopedExtensionChips } from '../features/extensions/extension-chip-scope';
 import { ConversationTracePage } from './ConversationTraceMenu';
 import { buildTraceSummary } from '../features/conversation/trace-model';
@@ -44,6 +43,9 @@ import {
   nestedScrollableConsumesWheel,
   shouldReleaseFollowOnWheel,
 } from '../features/conversation/chat-scroll.ts';
+
+const GitWorkspacePage = lazy(() => import('../features/git/GitWorkspacePage'));
+const ConversationTasksPage = lazy(() => import('../features/conversation/ConversationTasksPage'));
 
 const SubagentOverview = lazy(async () => {
   const module = await import('../features/subagents/SubagentViews');
@@ -59,6 +61,7 @@ type SessionView = {
   cwd: string;
   title: string;
   turnDiffs?: TurnDiff[];
+  longTask?: { updatedAt: number };
 } | null;
 
 type ConversationShell = {
@@ -103,7 +106,9 @@ type HeaderState = {
   panelExpanded: boolean;
   openPanel: () => void;
   returnToMainAgent: () => void;
-  openAgentOverview: () => void;
+  gitStatus: ComponentProps<typeof ConversationHeader>['gitStatus'];
+  openGit: (tab: import('../types/git-types').GitTab) => void;
+  progressTrigger: React.ReactNode;
   openConversationExtensionHub: () => void;
   openTrace: () => void;
 };
@@ -138,6 +143,7 @@ type OutlineState = {
 type ConversationActions = {
   openAttachment: (path: string) => void;
   openFile: (path: string) => void;
+  undoTurnDiff: (at: number) => Promise<void>;
   openChanges: (file: TurnDiffFile | undefined, turn: TurnDiff) => void;
   editMessage: (entryId: number, text: string) => Promise<void>;
 };
@@ -193,7 +199,6 @@ export function ConversationWorkspace({
     retryConversationSubscription,
     settingsOpen,
   } = shell;
-  const gitWorkspace = useGitWorkspaceStatus(session?.cwd);
   const {
     scrollRef,
     topSentinelRef,
@@ -301,10 +306,9 @@ export function ConversationWorkspace({
         title={agentView.kind === 'agents' && agentView.child
             ? `${agentView.child.name || agentView.child.agent} · 子智能体`
             : (session?.title || 'Pi Studio')}
-        gitStatus={gitWorkspace.status}
+        gitStatus={header.gitStatus}
+        progressTrigger={header.progressTrigger}
         agentKind={headerKind}
-        subagentCount={subagents.subagentChildren.length}
-        hasActiveSubagents={subagents.hasActiveSubagents}
         extensionCount={header.conversationDetailExtensionCount}
         notifications={notifications}
         onMarkAllRead={markAllRead}
@@ -314,7 +318,6 @@ export function ConversationWorkspace({
         panelExpanded={header.panelExpanded}
         onOpenPanel={header.openPanel}
         onReturnToMainAgent={header.returnToMainAgent}
-        onOpenAgentOverview={header.openAgentOverview}
         onOpenConversationExtensionHub={header.openConversationExtensionHub}
         quotaProvider={header.quotaProvider}
         chips={scopedChips}
@@ -406,6 +409,7 @@ export function ConversationWorkspace({
                   stepCollapse={preferences.stepCollapse}
                   showCodeView={preferences.showCodeView}
                   gitDiff={index === lastAssistantTurnIndex && liveDiff ? liveDiff : findTurnDiff(session?.turnDiffs, { from: turn.messages.at(-1)?.timestamp, until: nextUserTimestamps[index] })}
+                  onUndo={turnActive || busy ? undefined : actions.undoTurnDiff}
                   onOpenDiff={actions.openChanges}
                   onOpenFile={actions.openFile}
                 />;
@@ -508,6 +512,12 @@ export function ConversationWorkspace({
 
       {!isNewConversation && showTrace && <ConversationTracePage key={session?.id} summary={traceSummary} />}
 
+      {session && agentView.kind === 'git' && <Suspense fallback={<LoadingState variant="panel">正在读取 Git…</LoadingState>}>
+        <GitWorkspacePage key={session.id} sessionId={session.id} tab={agentView.tab} onTab={header.openGit} diffPreferences={preferences} />
+      </Suspense>}
+      {session && agentView.kind === 'tasks' && <Suspense fallback={<LoadingState variant="panel">正在读取任务…</LoadingState>}>
+        <ConversationTasksPage key={session.id} sessionId={session.id} goalUpdatedAt={session.longTask?.updatedAt} />
+      </Suspense>}
       {agentView.kind === 'agents' && (
         <div className="agent-workspace">
           <Suspense fallback={
@@ -542,7 +552,7 @@ export function ConversationWorkspace({
                 stepCollapse={preferences.stepCollapse}
                 showCodeView={preferences.showCodeView}
                 onBackMain={header.returnToMainAgent}
-                onOverview={header.openAgentOverview}
+                onOverview={subagents.openAgentOverview}
                 onOpenFile={actions.openFile}
               />
             )}

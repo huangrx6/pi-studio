@@ -41,3 +41,16 @@ file-tree 与 file-code 分别承担目录和代码的滚动，文件头与工�
 .file-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: 64px var(--space-4); text-align: center; color: var(--faint); font-size: var(--text-sm); }
 .file-empty > svg { width: var(--icon-xl); height: var(--icon-xl); margin-bottom: var(--space-2); stroke-width: 1.25; opacity: .7; }
 .file-empty strong { color: var(--muted); font-size: var(--text-base); font-weight: var(--weight-medium); }
+
+/* Fixed icon slot across the file tree, inline transcript, pickers and tabs. */
+.studio-file-icon {
+  --light-file-icon: normal;
+  display: inline-block;
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  object-fit: contain;
+  vertical-align: middle;
+}
+:root[data-theme="light"] .studio-file-icon[data-light-file-icon] { content: var(--light-file-icon); }
+.ref-chip .studio-file-icon { width: 1em; height: 1em; }

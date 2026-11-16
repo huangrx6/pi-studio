@@ -10,7 +10,8 @@ import { createContext, memo, useContext, useMemo } from 'react';
 import { Background, BackgroundVariant, Controls, Handle, Position, ReactFlow } from '@xyflow/react';
 import type { Node, NodeProps } from '@xyflow/react';
 import { Bot, ChevronRight } from 'lucide-react';
-import { duration, isActive, liveDuration, STATUS_LABEL, statusIcon, tokenCount } from './subagent-display';
+import { duration, isActive, liveDuration, STATUS_LABEL, tokenCount } from './subagent-display';
+import { SubagentAvatar } from './SubagentAvatar';
 import type { SubagentChild } from '../../types/subagent-types';
 import type { ModelSelection } from '../../types/model-types';
 import { buildSubagentFlow, flowCanvasHeight, type FlowNode } from './subagent-flow.ts';
@@ -50,7 +51,7 @@ const MemberNode = memo(function MemberNode({ data }: NodeProps<Node<MemberData>
   return <button type="button" className={`agent-flow-node is-member is-${child.status}`} disabled={!child.hasTranscript} aria-label={`${name} · ${stateLabel} · ${child.hasTranscript ? '查看记录' : '暂无记录'}`}>
     <Handle type="target" position={Position.Left} />
     <span className="agent-flow-head">
-      <span className={`agent-flow-status is-${child.status}`}>{statusIcon(child.status)}</span>
+      <SubagentAvatar id={child.avatarId} />
       <strong>{name}</strong>
       <span className="agent-flow-state" title={stateLabel}>{stateLabel}</span>
     </span>

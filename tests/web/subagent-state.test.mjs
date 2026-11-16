@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   mergeSubagentChild,
   mergeSubagentChildren,
+  orderProgressAgents,
   reconcileSubagentStatus,
 } from '../../web/src/features/subagents/subagent-state.ts';
 
@@ -62,4 +63,15 @@ test('same-child refresh keeps a known transcript flag', () => {
 
   assert.equal(merged[0].status, 'failed');
   assert.equal(merged[0].hasTranscript, true);
+});
+
+test('progress prioritizes open questions then active runs without changing overview order', () => {
+  const rows = [child('done', 'completed'), child('busy', 'running'), child('reply', 'waiting'), child('next', 'pending')];
+  assert.deepEqual(orderProgressAgents(rows).map(row => row.key), ['reply', 'busy', 'next', 'done']);
+  assert.equal(rows[0].key, 'done');
+  const reused = mergeSubagentChild(child('same', 'completed', { runId: '4', durationMs: 100, avatarId: 'koala-ice' }),
+    child('same', 'running', { runId: '7', avatarId: 'koala-ice' }));
+  assert.equal(reused.status, 'running');
+  assert.equal(reused.avatarId, 'koala-ice');
+  assert.equal(reused.durationMs, undefined);
 });

@@ -29,7 +29,7 @@ import {
 import type { FilePreviewResult } from '../types/file-preview-types';
 import { Markdown } from './Markdown';
 import { formatFileSize } from './filesize';
-import { FileFormatIcon, type FilePreviewFormat } from './FileKindIcon';
+import { FileFormatIcon, FileKindIcon, type FilePreviewFormat } from './FileKindIcon';
 import './styles/file-preview.css';
 
 type PreviewMode = 'preview' | 'source';
@@ -166,7 +166,7 @@ function PreviewBody({
 
   if (file.kind === 'binary' || format === 'unsupported') {
     return <div className="file-preview-unsupported">
-      <span><FileFormatIcon format={format} /></span>
+      <span><FileKindIcon path={file.path} mime={file.mimeType} /></span>
       <strong>{previewTypeLabel(file.path)} 暂不支持内嵌预览</strong>
       {file.unavailableReason && <p>{file.unavailableReason}</p>}
       {onOpenExternal && <button type="button" className="settings-outline" onClick={() => onOpenExternal(file)}>
@@ -339,7 +339,7 @@ export function FilePreview({
   return <div className="file-preview-pane" ref={paneRef}>
     <header className="file-preview-toolbar">
       <div className="file-preview-identity">
-        <span className="file-preview-icon"><FileFormatIcon format={format} /></span>
+        <span className="file-preview-icon">{file ? <FileKindIcon path={file.path} mime={file.mimeType} /> : <FileFormatIcon format={format} />}</span>
         <div>
           <strong title={pathParts.name}>{file?.name || emptyTitle}</strong>
           {file && <span title={file.path}>{pathParts.directory || '根目录'}</span>}

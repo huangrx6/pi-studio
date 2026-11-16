@@ -5,7 +5,7 @@
  * mount the same markdown component, so file and link behaviour is injected
  * once by the app shell instead of being threaded through every view.
  */
-import { createContext } from 'react';
+import { createContext, type ComponentType } from 'react';
 
 export type MarkdownActionsValue = {
   /** Conversation working directory used to resolve relative paths. */
@@ -19,3 +19,6 @@ export type MarkdownActionsValue = {
 };
 
 export const MarkdownActions = createContext<MarkdownActionsValue>({});
+
+// Only the conversation mounts this provider; file and settings previews retain their own image handling.
+export const MarkdownImageRenderer = createContext<ComponentType<{ src: string; alt: string; cwd?: string; linked: boolean }> | null>(null);

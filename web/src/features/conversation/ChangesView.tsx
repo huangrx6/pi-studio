@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, ChevronsUpDown, Columns2, FileCode2, FileSearch, Files, MoreHorizontal, RefreshCw, SquareArrowOutUpRight, WrapText } from 'lucide-react';
+import { FileKindIcon } from '../../shared/FileKindIcon';
+import { ChevronDown, ChevronRight, ChevronsUpDown, Columns2, FileSearch, Files, MoreHorizontal, RefreshCw, SquareArrowOutUpRight, WrapText } from 'lucide-react';
 import { LoadingState } from '../../shared/LoadingState';
 import { revealFileLabel } from '../../shared/desktop-platform';
 import type { TurnDiff, TurnDiffFile } from '../../types/chat-types';
@@ -96,7 +97,7 @@ export function ChangesView({ sessionId, initial, turns, focusPath, onOpenFile, 
           { label: '复制本轮补丁', run: () => safe(navigator.clipboard.writeText(turn.files.map(file => file.patch || '').join('\n'))) },
         ])}><MoreHorizontal /></button>
         <div ref={jumpHost} className="changes-jump-host"><button className="icon-button" title="跳转到文件" aria-label="跳转到文件" aria-expanded={jump} onClick={() => setJump(!jump)}><FileSearch /></button>
-          {jump && <div className="changes-jump popover-surface" onKeyDown={event => { if (event.key === 'Escape') setJump(false); }}><input autoFocus placeholder="搜索本轮文件…" aria-label="搜索本轮文件" value={query} onChange={event => setQuery(event.target.value)} /><div>{turn.files.filter(file => file.label.toLowerCase().includes(query.toLowerCase())).map(file => <button key={file.path} onClick={() => reveal(file.path)}>{file.label}</button>)}</div></div>}
+          {jump && <div className="changes-jump popover-surface" onKeyDown={event => { if (event.key === 'Escape') setJump(false); }}><input autoFocus placeholder="搜索本轮文件…" aria-label="搜索本轮文件" value={query} onChange={event => setQuery(event.target.value)} /><div>{turn.files.filter(file => file.label.toLowerCase().includes(query.toLowerCase())).map(file => <button key={file.path} onClick={() => reveal(file.path)}><FileKindIcon path={file.path} /><span>{file.label}</span></button>)}</div></div>}
         </div>
         <button className="icon-button" title="刷新" aria-label="刷新变更" disabled={refreshing || loading} onClick={() => void refresh()}><RefreshCw className={refreshing ? 'spin' : ''} /></button>
         <button className="icon-button" title="自动换行" aria-label="自动换行" aria-pressed={options.wrap} onClick={() => setOptions({ ...options, wrap: !options.wrap })}><WrapText /></button>
@@ -108,11 +109,11 @@ export function ChangesView({ sessionId, initial, turns, focusPath, onOpenFile, 
     {error && <div className="changes-notice" role="alert">{error}<button className="text-button" onClick={() => setError('')}>关闭</button></div>}
     {loading && <LoadingState className="changes-loading">正在读取该轮快照…</LoadingState>}
     <div className="changes-workspace">
-      {showFiles && <nav className="changes-file-list" aria-label="变更文件列表">{turn.files.map(file => <button title={file.label} key={file.path} onClick={() => reveal(file.path)}><FileCode2 /><span>{file.label}</span></button>)}</nav>}
+      {showFiles && <nav className="changes-file-list" aria-label="变更文件列表">{turn.files.map(file => <button title={file.label} key={file.path} onClick={() => reveal(file.path)}><FileKindIcon path={file.path} /><span>{file.label}</span></button>)}</nav>}
       <div className="changes-scroll" ref={list}>
         {turn.files.map(original => { const file = loaded[original.path] ?? original, open = expanded.has(file.path); return <article className="changes-file" key={file.path} data-diff-path={file.path}>
           <header className="changes-file-head">
-            <button className="changes-file-toggle" aria-expanded={open} onClick={() => toggle(file.path)} title={file.path}>{open ? <ChevronDown /> : <ChevronRight />}<FileCode2 /><span><small>{file.label.includes('/') ? file.label.slice(0,file.label.lastIndexOf('/')+1) : ''}</small>{file.label.split('/').pop()}</span></button>
+            <button className="changes-file-toggle" aria-expanded={open} onClick={() => toggle(file.path)} title={file.path}>{open ? <ChevronDown /> : <ChevronRight />}<FileKindIcon path={file.path} /><span><small>{file.label.includes('/') ? file.label.slice(0,file.label.lastIndexOf('/')+1) : ''}</small>{file.label.split('/').pop()}</span></button>
             <span className="diff-view-counts"><span>+{file.added}</span><span>−{file.removed}</span></span>
             <button className="icon-button" title="在新标签页打开差异" aria-label={`在新标签页打开 ${file.label}`} onClick={() => onOpenDiff(file, turn.at)}><SquareArrowOutUpRight /></button>
             <button className="icon-button" title="文件操作" aria-label={`${file.label} 文件操作`} onClick={event => menuAt(event, [

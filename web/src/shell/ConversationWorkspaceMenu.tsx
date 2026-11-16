@@ -1,23 +1,22 @@
+import type { AgentView } from './app-types';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Activity, Bot, ChevronRight, MessageSquare, Plug, SlidersHorizontal } from 'lucide-react';
+import { Activity, ChevronRight, Plug, SlidersHorizontal } from 'lucide-react';
 import { ProviderQuotaMenuRow, ProviderQuotaDialog } from '../features/models/ProviderQuotaView';
+import { ExtensionStatusIcon } from '../features/extensions/ExtensionStatusIcon';
+import type { StatusPanel } from '../shared/extension-appearance';
 import { ExtensionSlot } from '../features/extensions/ExtensionSlot';
 import type { ExtensionSettingsPage, ExtensionUiSnapshot } from '../types/extension-types';
 import type { ExtensionChipEntry } from '../features/extensions/ExtensionChips';
 
 type ConversationWorkspaceMenuProps = {
-  agentKind: 'conversation' | 'agents' | 'extensions' | 'trace';
-  subagentCount: number;
-  hasActiveSubagents: boolean;
+  agentKind: AgentView['kind'];
   extensionCount: number;
   chips: ExtensionChipEntry[];
   extensionSurface: ExtensionUiSnapshot;
   cwd?: string;
   sessionId?: string;
   modelRef?: string;
-  quotaProvider?: { id: string; name: string };
-  onReturnToMainAgent: () => void;
-  onOpenAgentOverview: () => void;
+  quotaProvider?: { id: string; name: string; item: StatusPanel };
   onOpenConversationExtensionHub: () => void;
   onOpenTrace?: () => void;
   onOpenChip: (chip: ExtensionChipEntry) => void;
@@ -31,31 +30,24 @@ function WorkspaceRow({
   label,
   meta,
   active,
-  live,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
   meta?: string;
   active: boolean;
-  live?: boolean;
   onClick: () => void;
 }) {
   return <button type="button" className={`workspace-menu-row ${active ? 'is-active' : ''}`} aria-current={active ? 'page' : undefined} onClick={onClick}>
     <span className="workspace-menu-row-icon">{icon}</span>
     <span className="workspace-menu-row-label">{label}</span>
-    <span className="workspace-menu-row-meta">
-      {live && <i className="workspace-menu-live" aria-label="有运行中的子智能体" />}
-      {meta}
-    </span>
+    <span className="workspace-menu-row-meta">{meta}</span>
     <ChevronRight className="workspace-menu-row-arrow" aria-hidden="true" />
   </button>;
 }
 
 export function ConversationWorkspaceMenu({
   agentKind,
-  subagentCount,
-  hasActiveSubagents,
   extensionCount,
   chips,
   extensionSurface,
@@ -63,8 +55,6 @@ export function ConversationWorkspaceMenu({
   sessionId,
   modelRef,
   quotaProvider,
-  onReturnToMainAgent,
-  onOpenAgentOverview,
   onOpenConversationExtensionHub,
   onOpenTrace,
   onOpenChip,
@@ -80,16 +70,20 @@ export function ConversationWorkspaceMenu({
 
   useEffect(() => {
     if (!open) return undefined;
-    const onPointerDown = (event: PointerEvent) => {
+    const onOutside = (event: Event) => {
       if (!root.current?.contains(event.target as Node)) setOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key !== 'Escape' || event.isComposing) return;
+      setOpen(false);
+      root.current?.querySelector<HTMLButtonElement>('.workspace-menu-trigger')?.focus();
     };
-    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('pointerdown', onOutside);
+    document.addEventListener('focusin', onOutside);
     document.addEventListener('keydown', onKeyDown);
     return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('pointerdown', onOutside);
+      document.removeEventListener('focusin', onOutside);
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [open]);
@@ -103,27 +97,24 @@ export function ConversationWorkspaceMenu({
     <button
       type="button"
       className={`icon-button workspace-menu-trigger ${open ? 'is-active' : ''}`}
-      aria-label="打开工作区面板"
+      aria-label="打开扩展与轨迹"
       aria-haspopup="dialog"
       aria-expanded={open}
-      title="工作区"
+      title="扩展与轨迹"
       onClick={() => setOpen(value => !value)}
     >
       <SlidersHorizontal aria-hidden="true" />
     </button>
-    {open && <section className="workspace-menu" role="dialog" aria-label="工作区面板">
+    {open && <section className="workspace-menu" role="dialog" aria-label="扩展与轨迹">
       <header className="workspace-menu-head">
         <div>
-          <strong>工作区</strong>
-          <span>在当前会话中切换工作视图</span>
+          <strong>扩展与轨迹</strong>
         </div>
         <span className="workspace-menu-head-icon"><SlidersHorizontal aria-hidden="true" /></span>
       </header>
 
       <div className="workspace-menu-section" role="group" aria-label="会话视图">
         <span className="workspace-menu-section-label">视图</span>
-        {agentKind !== 'conversation' && <WorkspaceRow icon={<MessageSquare aria-hidden="true" />} label="返回对话" active={false} onClick={() => navigate(onReturnToMainAgent)} />}
-        <WorkspaceRow icon={<Bot />} label="子智能体" meta={subagentCount ? String(subagentCount) : undefined} live={hasActiveSubagents} active={agentKind === 'agents'} onClick={() => navigate(onOpenAgentOverview)} />
         <WorkspaceRow icon={<Plug />} label="扩展" meta={availableExtensionCount ? String(availableExtensionCount) : undefined} active={agentKind === 'extensions'} onClick={() => navigate(onOpenConversationExtensionHub)} />
         {onOpenTrace && <WorkspaceRow icon={<Activity />} label="轨迹" active={agentKind === 'trace'} onClick={() => navigate(onOpenTrace)} />}
       </div>
@@ -142,7 +133,7 @@ export function ConversationWorkspaceMenu({
         </div>
         <div className="workspace-menu-extension-list">
           {chips.map(chip => <div className="workspace-menu-extension-row" key={chip.item.id}>
-            <span className="workspace-menu-extension-icon"><Activity aria-hidden="true" /></span>
+            <span className="workspace-menu-extension-icon"><ExtensionStatusIcon item={chip.item} /></span>
             <span className="workspace-menu-extension-copy">
               <button type="button" className="workspace-menu-extension-open" onClick={() => navigate(() => onOpenChip(chip))}>{chip.item.title}</button>
               <ExtensionSlot

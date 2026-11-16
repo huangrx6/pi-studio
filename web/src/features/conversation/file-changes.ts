@@ -27,6 +27,22 @@ function normalizedPath(path: string) {
   return `${path.startsWith('/') ? '/' : ''}${parts.join('/')}`;
 }
 
+/** A write's content length alone does not say how many lines changed. */
+export function toolResultDiff(result: ChatMessage) {
+  const details = result.details as { patch?: unknown; diff?: unknown } | undefined;
+  const patch = typeof details?.patch === 'string' && details.patch;
+  const diff = patch || (typeof details?.diff === 'string' && details.diff);
+  if (!diff) return undefined;
+  let added = 0, removed = 0, inHunk = !patch;
+  for (const line of diff.split('\n')) {
+    if (patch && line.startsWith('@@ ')) { inHunk = true; continue; }
+    if (!inHunk) continue;
+    if (line.startsWith('+')) added++;
+    if (line.startsWith('-')) removed++;
+  }
+  return { diff, added, removed };
+}
+
 /** Only successful mutation tools are evidence of a change. Reads and shell
  * commands cannot establish a file delta from their arguments alone. */
 export function collectFileChanges(messages: ChatMessage[], results: Map<string, ChatMessage>, cwd = ''): FileChange[] {
@@ -42,18 +58,11 @@ export function collectFileChanges(messages: ChatMessage[], results: Map<string,
     const path = normalizedPath(target.startsWith('/') || !cwd ? target : `${cwd}/${target}`);
     const root = normalizedPath(cwd).replace(/\/$/, '');
     const label = root && path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path;
-    const details = result.details && typeof result.details === 'object' ? result.details as Record<string, unknown> : {};
-    const patch = typeof details.patch === 'string' ? details.patch : undefined;
-    const diff = patch || (typeof details.diff === 'string' ? details.diff : undefined);
+    const delta = toolResultDiff(result);
     const file = files.get(path) || { path, label, operations: [], added: 0, removed: 0, completeCounts: true };
-    if (diff) {
-      let hunk = !patch;
-      for (const line of diff.split('\n')) {
-        if (patch && line.startsWith('@@ ')) { hunk = true; continue; }
-        if (!hunk) continue;
-        if (line.startsWith('+')) file.added++;
-        if (line.startsWith('-')) file.removed++;
-      }
+    if (delta) {
+      file.added += delta.added;
+      file.removed += delta.removed;
     } else {
       file.completeCounts = false;
       if (call.name === 'write' && typeof call.arguments.content === 'string') {
@@ -61,7 +70,7 @@ export function collectFileChanges(messages: ChatMessage[], results: Map<string,
         file.lines = writtenLineCount(call.arguments.content);
       }
     }
-    file.operations.push({ id: call.id, diff, content: call.name === 'write' && typeof call.arguments.content === 'string' ? call.arguments.content : undefined });
+    file.operations.push({ id: call.id, diff: delta?.diff, content: call.name === 'write' && typeof call.arguments.content === 'string' ? call.arguments.content : undefined });
     files.set(path, file);
   }
   return [...files.values()];

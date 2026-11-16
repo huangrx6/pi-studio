@@ -39,6 +39,7 @@ function renderHeader(showTrace, isNewConversation = false, panelExpanded = fals
     '../shared/LoadingState': { LoadingIndicator: () => null },
     './NotificationCenter': { NotificationCenter: () => null },
     './ShellLayout': shellLayout,
+    '../features/git/GitBranchPicker': { GitBranchPicker: () => null },
     '../features/extensions/ExtensionChips': { ExtensionChips: () => null },
     './ConversationWorkspaceMenu': {
       ConversationWorkspaceMenu: ({ onOpenTrace }) => React.createElement(
@@ -54,8 +55,7 @@ function renderHeader(showTrace, isNewConversation = false, panelExpanded = fals
     isNewConversation,
     title: '会话',
     agentKind: 'conversation',
-    subagentCount: 0,
-    hasActiveSubagents: false,
+    progressTrigger: React.createElement('button', { 'aria-label': '打开会话进展' }),
     extensionCount: 0,
     notifications: [],
     onMarkAllRead() {},
@@ -65,7 +65,6 @@ function renderHeader(showTrace, isNewConversation = false, panelExpanded = fals
     panelExpanded,
     onOpenPanel() {},
     onReturnToMainAgent() {},
-    onOpenAgentOverview() {},
     onOpenConversationExtensionHub() {},
     chips: [],
     extensionSurface: { items: [], errors: [], syncedAt: 0, apiVersion: 1 },
@@ -81,9 +80,11 @@ test('the trace tab only exists while the code work view setting is on', () => {
   assert.match(renderHeader(true), /fake-trace-tab/, 'enabled setting shows the trace tab');
 });
 
-test('only existing conversations show the session workspace menu', () => {
+test('only existing conversations show the two session menus', () => {
   assert.doesNotMatch(renderHeader(true, true), /workspace-menu-trigger/);
   assert.match(renderHeader(true, false), /workspace-menu-trigger/);
+  assert.doesNotMatch(renderHeader(true, true), /打开会话进展/);
+  assert.match(renderHeader(true, false), /打开会话进展/);
 });
 
 test('draft and existing conversations can both open the right sidebar', () => {

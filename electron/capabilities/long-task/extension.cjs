@@ -7,10 +7,11 @@
  * iteration while the goal remains active.
  */
 
+const { randomUUID } = require('node:crypto');
 const toolSchema = require('../../runtime/tool-schema.cjs');
 
 const LONG_TASK_DOC_KIND = 'studio.long-task';
-const LONG_TASK_SCHEMA_VERSION = 2;
+const LONG_TASK_SCHEMA_VERSION = 3;
 const LONG_TASK_EXTENSION_NAME = 'studio-long-task';
 const LONG_TASK_TOOL_NAME = 'long_task';
 const LONG_TASK_CONTINUATION_PREFIX = '[studio-long-task-continuation]';
@@ -47,6 +48,7 @@ function validateLongTaskGoal(value) {
 function emptyLongTaskState() {
   return {
     enabled: false,
+    goalId: '',
     goal: '',
     completionCriteria: '',
     status: 'idle',
@@ -71,6 +73,7 @@ function normalizeLongTaskState(value) {
   const initial = emptyLongTaskState();
   return {
     enabled: source.enabled === true,
+    goalId: cleanText(source.goalId, 96) || (source.goal ? `legacy-${Number(source.createdAt) || 0}` : ''),
     goal: cleanText(source.goal),
     completionCriteria: cleanText(source.completionCriteria),
     status: LONG_TASK_STATUSES.has(source.status) ? source.status : initial.status,
@@ -126,6 +129,7 @@ function initializeLongTaskState(target, options = {}) {
   const goal = cleanText(options.goal);
   if (goal) {
     state.enabled = true;
+    state.goalId ||= randomUUID();
     state.goal = goal;
     state.completionCriteria = cleanText(options.completionCriteria) || goal;
     state.status = options.status || 'active';
@@ -141,6 +145,7 @@ function replaceLongTaskState(target, options = {}) {
   const goal = validateLongTaskGoal(options.goal);
   const next = emptyLongTaskState();
   next.enabled = true;
+  next.goalId = randomUUID();
   next.goal = goal;
   next.completionCriteria = cleanText(options.completionCriteria) || goal;
   next.status = 'active';
@@ -211,6 +216,7 @@ function publicLongTaskState(value) {
   const state = normalizeLongTaskState(value);
   return {
     enabled: state.enabled,
+    goalId: state.goalId,
     goal: state.goal,
     completionCriteria: state.completionCriteria,
     status: state.status,
@@ -288,6 +294,7 @@ function longTaskPrompt(state) {
   const statusGuidance = current.status === 'active'
     ? [
         'You are executing a persistent Studio goal. Continue autonomously across iterations until the goal is completed or genuinely blocked.',
+        'For a multi-step goal, call todo list with scope="goal" and continue that checklist across iterations. Use scope="turn" for unrelated work.',
         'Use long_task progress after material milestones, long_task complete after verified completion, and long_task block when user input is required.',
       ]
     : [

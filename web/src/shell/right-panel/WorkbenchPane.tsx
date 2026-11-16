@@ -1,3 +1,4 @@
+import { FileKindIcon } from '../../shared/FileKindIcon';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import type { MutableRefObject, ReactNode } from 'react';
 import {
@@ -48,6 +49,7 @@ type WorkbenchPaneProps = {
   workspaceName: string;
   extensionDock: ReactNode;
   comparisonPanel: ReactNode;
+  progressPanel: ReactNode;
   onOpenComparison: () => void;
   dragPreviewRef: MutableRefObject<HTMLDivElement | null>;
   onChooseWorkspace: () => void;
@@ -66,6 +68,7 @@ export function WorkbenchPane({
   workspaceName,
   extensionDock,
   comparisonPanel,
+  progressPanel,
   onOpenComparison,
   dragPreviewRef,
   onChooseWorkspace,
@@ -281,7 +284,7 @@ export function WorkbenchPane({
         >
           {isDirectory
             ? expanded ? <FolderOpen size={15} /> : <Folder size={15} />
-            : <FileText size={15} />}
+            : <FileKindIcon path={entry.path} />}
           <span>{entry.name}</span>
           {entry.type === 'file' && <small>{formatFileSize(entry.size, '')}</small>}
           {isDirectory && <ChevronDown size={13} className={`chevron-left ${expanded ? 'is-expanded' : ''}`} />}
@@ -332,7 +335,7 @@ export function WorkbenchPane({
         {!treeBusy && treeSearchOpen && treeSearchQuery.trim() && (treeSearchBusy
           ? <LoadingState variant="section">正在搜索…</LoadingState>
           : treeSearchResults.map((entry) => <button key={entry.path} className={`file-row ${entry.type === 'directory' ? 'is-directory' : ''}`} title={entry.path} onClick={() => entry.type === 'directory' ? void openFile(entry.path, undefined, 'workspace') : void openFile(entry.path, undefined, 'workspace')}>
-            {entry.type === 'directory' ? <Folder size={15} /> : <FileText size={15} />}<span>{entry.path}</span>
+            {entry.type === 'directory' ? <Folder size={15} /> : <FileKindIcon path={entry.path} />}<span>{entry.path}</span>
           </button>))}
         {!treeBusy && !(treeSearchOpen && treeSearchQuery.trim()) && renderFileEntries(visibleEntries)}
         {!treeBusy && !treeError && !(treeSearchOpen && treeSearchQuery.trim()) && visibleEntries.length === 0 && <div className="file-empty"><FolderOpen /><strong>目录为空</strong></div>}
@@ -430,6 +433,7 @@ export function WorkbenchPane({
         onChooseWorkspace={onChooseWorkspace}
       />;
     }
+    if (activePanelTab.kind === 'progress') return progressPanel;
     if (activePanelTab.kind === 'comparison') return comparisonPanel;
     if (activePanelTab.kind === 'temporary') {
       return <TemporaryChat key={activePanelTab.id} id={activePanelTab.id} selection={modelSelection} onManage={() => onOpenSettings('models')} />;

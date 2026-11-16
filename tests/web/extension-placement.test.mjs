@@ -9,6 +9,7 @@ import {
   placementFor,
 } from '../../web/src/features/extensions/extension-placement.ts';
 import { normalizePreferences } from '../../web/src/shared/preferences.ts';
+import { statusAppearance } from '../../web/src/shared/extension-appearance.ts';
 
 function extension(panels, { id = 'pi-metrics', scope = 'user' } = {}) {
   return {
@@ -41,10 +42,10 @@ test('contribution id matches the main process format', () => {
 
 test('panels with any chip or footer slot become a placement choice', () => {
   const both = extension([
-    { id: 'metrics-chip', slot: 'status.chip', slots: ['status.chip', 'conversation.footer'] },
+    { id: 'metrics-chip', title: '实时指标', icon: 'activity', color: 'info', slot: 'status.chip', slots: ['status.chip', 'conversation.footer'] },
   ]);
   assert.deepEqual(placeablePanels(both), [
-    { id: 'user:pi-metrics/metrics-chip', slots: ['status.chip', 'conversation.footer'] },
+    { id: 'user:pi-metrics/metrics-chip', title: '实时指标', icon: 'activity', color: 'info', slots: ['status.chip', 'conversation.footer'] },
   ]);
 
   // 单落点也给入口：用户至少可以把这一处隐藏。
@@ -52,10 +53,31 @@ test('panels with any chip or footer slot become a placement choice', () => {
     { id: 'quota-chip', slot: 'status.chip', slots: ['status.chip'] },
     { id: 'settings-panel', slot: 'settings.panel' },
   ]);
-  assert.deepEqual(placeablePanels(single), [{ id: 'user:pi-metrics/quota-chip', slots: ['status.chip'] }]);
+  assert.deepEqual(placeablePanels(single), [{ id: 'user:pi-metrics/quota-chip', title: 'quota-chip', slots: ['status.chip'] }]);
 
   const legacy = extension([{ id: 'legacy', slot: 'conversation.footer' }]);
-  assert.deepEqual(placeablePanels(legacy), [{ id: 'user:pi-metrics/legacy', slots: ['conversation.footer'] }]);
+  assert.deepEqual(placeablePanels(legacy), [{ id: 'user:pi-metrics/legacy', title: 'legacy', slots: ['conversation.footer'] }]);
+  const bar = extension([{ id: 'bar', title: '状态', slot: 'status.bar' }]);
+  assert.deepEqual(placeablePanels(bar), [{ id: 'user:pi-metrics/bar', title: '状态', slots: [] }]);
+});
+
+test('each status field inherits the panel default until overridden for that exact contribution', () => {
+  const panel = { id: 'user:pi-metrics/quota', icon: 'gauge', color: 'info' };
+  const { extensionAppearances } = normalizePreferences({ extensionAppearances: {
+    [panel.id]: { color: 'warning', icon: '../icon.svg' },
+    'project:pi-metrics/quota': { icon: 'wallet', color: '#fff' },
+    'user:pi-metrics': { color: 'accent' },
+    'user:pi-metrics/unused': { icon: 'constructor', color: 'inherit' },
+  } });
+  assert.deepEqual(extensionAppearances, {
+    [panel.id]: { color: 'warning' },
+    'project:pi-metrics/quota': { icon: 'wallet' },
+  });
+  assert.deepEqual(statusAppearance(panel, extensionAppearances[panel.id]), { icon: 'gauge', color: 'warning' });
+  assert.deepEqual(statusAppearance(panel, extensionAppearances['project:pi-metrics/quota']), { icon: 'wallet', color: 'info' });
+  assert.deepEqual(statusAppearance(panel), { icon: 'gauge', color: 'info' });
+  assert.deepEqual(statusAppearance({ id: 'a', icon: 'pulse' }), { icon: 'activity', color: 'neutral' });
+  assert.deepEqual(statusAppearance({ id: 'b', icon: 'future-glyph' }), { icon: 'activity', color: 'neutral' });
 });
 
 test('each panel only lists the placements it can actually use', () => {

@@ -117,9 +117,9 @@ try {
   await page.goto(server.origin);
   await page.locator('.session-row').first().click();
   await page.locator('.assistant-response').first().waitFor();
-  const workspace = page.getByRole('button', { name: '打开工作区面板' });
+  const workspace = page.getByRole('button', { name: '打开扩展与轨迹' });
   await workspace.click();
-  await page.getByRole('dialog', { name: '工作区面板' }).waitFor();
+  await page.getByRole('dialog', { name: '扩展与轨迹' }).waitFor();
   assert.equal(await page.getByText('旧额度状态', { exact: true }).count(), 0);
   assert.equal(await page.locator('.quota-menu-row').count(), 0);
   const views = page.getByRole('group', { name: '会话视图' });
@@ -127,8 +127,7 @@ try {
   await page.getByText('暂无会话扩展').waitFor();
   assert.equal(reads, 0);
   assert.equal(await page.evaluate(() => window.__legacyQuotaReads), 0);
-  await workspace.click();
-  await views.getByRole('button', { name: '返回对话' }).click();
+  await page.getByRole('button', { name: '返回对话', exact: true }).click();
 
   const nav = page.locator('.settings-navigation');
   await page.locator('.sidebar-bottom button[title="设置"]').click();
@@ -235,7 +234,7 @@ try {
   await page.evaluate(() => window.__settingsResourcesQa.openSecondSession());
   await page.locator('.model-label').getByText('第二来源模型').waitFor();
   await workspace.click();
-  await page.getByRole('dialog', { name: '工作区面板' }).waitFor();
+  await page.getByRole('dialog', { name: '扩展与轨迹' }).waitFor();
   assert.equal(await page.getByText('旧额度状态', { exact: true }).count(), 0);
   assert.equal(await row.count(), 0);
   await page.reload();
@@ -254,7 +253,7 @@ try {
   assert.equal(await quotaButton.count(), 0);
   const before = reads;
   await nav.getByRole('button', { name: '返回对话' }).click(); await workspace.click();
-  await page.getByRole('dialog', { name: '工作区面板' }).waitFor();
+  await page.getByRole('dialog', { name: '扩展与轨迹' }).waitFor();
   assert.equal(await page.getByText('旧额度状态', { exact: true }).count(), 0);
   assert.equal(await row.count(), 0); assert.equal(reads, before);
   // A saved, enabled source still needs the extension to expose any quota UI.

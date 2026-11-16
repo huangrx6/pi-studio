@@ -8,6 +8,7 @@
 
 const { modelUsageTotals } = require('../../core/usage-totals.cjs');
 const { getSubagentConfig } = require('../../core/app-settings.cjs');
+const { legacyAvatar } = require('./avatars.cjs');
 const {
   createProtocol,
   queueSupervisorReply,
@@ -17,7 +18,6 @@ const {
   reconcileManagedWorktreesForChildren,
 } = require('./worktrees.cjs');
 
-const MAX_CHILDREN = 100;
 const CONVERSATION_SCAN_PAGE = 200;
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'stopped']);
 
@@ -131,8 +131,8 @@ async function ownedChildRecords(parent) {
     }, CONVERSATION_SCAN_PAGE, cursor, runtime.context);
     records.push(...page.items);
     cursor = page.next;
-  } while (cursor && records.length < MAX_CHILDREN);
-  return records.slice(0, MAX_CHILDREN);
+  } while (cursor);
+  return records;
 }
 
 /**
@@ -193,6 +193,7 @@ async function childDto(record, info, index, runtimeOverride, overrides = {}) {
   const durableUsage = modelUsageTotals(usage);
   return {
     key: childKey(record.id),
+    avatarId: overrides.avatarId || legacyAvatar(record.id),
     runId: String(overrides.runId || task?.id || record.id),
     index,
     agent: overrides.agent || info?.call?.name || 'subagent',
@@ -283,6 +284,7 @@ async function listSubagentChildren(parentId) {
     }, undefined, children.length, runtime, {
       agent: 'subagent',
       name: agent.name,
+      avatarId: agent.avatarId,
       status,
       source: agent.mode === 'foreground' ? 'foreground' : 'background',
       runId: agent.lastReporterTaskId || agent.anchorTaskId || conversationId,

@@ -1,3 +1,4 @@
+import { FileKindIcon } from '../../shared/FileKindIcon';
 import { Command, FileText, Folder, Plug, Sparkles } from 'lucide-react';
 import { LoadingState } from '../../shared/LoadingState';
 import type { ComposerCommand, ComposerCommandSource, ComposerFile } from '../../types/chat-types';
@@ -94,7 +95,7 @@ export function ComposerSuggestions({
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => onSelect(index)}
           >
-            <span className={`composer-option-icon ${file.type === 'directory' ? 'is-directory' : 'is-file'}`}>{file.type === 'directory' ? <Folder /> : <FileText />}</span>
+            <span className={`composer-option-icon ${file.type === 'directory' ? 'is-directory' : 'is-file'}`}>{file.type === 'directory' ? <Folder /> : <FileKindIcon path={file.path} />}</span>
             <span className="composer-option-main"><strong>{file.name}{file.type === 'directory' ? '/' : ''}</strong><span>{file.path}{file.type === 'directory' ? '/' : ''}</span></span>
           </button>)}
         </div>}

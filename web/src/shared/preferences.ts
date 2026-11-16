@@ -10,6 +10,8 @@
  * 调用 `window.piApi.setAppearance` 同步给 electron 主进程（见 App.tsx 的偏好 effect）。
  */
 
+import { normalizeAppearanceOverrides, type AppearanceOverrides } from './extension-appearance.ts';
+
 /** 主题偏好；system 表示跟随 macOS 外观。 */
 export type ThemePreference = 'light' | 'dark' | 'system';
 /** 全局强调色方案；中性背景和语义状态色不随它改变。 */
@@ -76,6 +78,8 @@ export type Preferences = {
   stepCollapse: StepCollapse;
   /** 是否展示「代码工作视图」文件清单。 */
   showCodeView: boolean;
+  gitDiffLayout: 'auto' | 'unified' | 'split';
+  gitDiffWrap: boolean;
   /** 网页链接打开方式。 */
   linkOpen: LinkPreference;
   /** 圆角风格。 */
@@ -94,7 +98,10 @@ export type Preferences = {
   shortcuts: Record<string, string>;
   /** 扩展落点偏好：panel contribution id → 落点；缺省表示按扩展声明全部渲染。 */
   extensionPlacements: Record<string, ExtensionPlacement>;
+  extensionAppearances: AppearanceOverrides;
 };
+
+export type GitDiffPreferences = Pick<Preferences, 'gitDiffLayout' | 'gitDiffWrap'>;
 
 /** localStorage 键名；改动会导致旧用户偏好失效，需谨慎。 */
 const STORAGE_KEY = 'pi-studio:preferences';
@@ -113,6 +120,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   stepDisplay: 'standard',
   stepCollapse: 'after-answer',
   showCodeView: false,
+  gitDiffLayout: 'auto',
+  gitDiffWrap: false,
   linkOpen: 'external',
   radiusStyle: 'standard',
   backgroundMedia: null,
@@ -122,6 +131,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   backgroundInsideVisibility: 8,
   shortcuts: { ...DEFAULT_SHORTCUTS },
   extensionPlacements: {},
+  extensionAppearances: {},
 };
 
 const THEMES = new Set<ThemePreference>(['light', 'dark', 'system']);
@@ -246,6 +256,9 @@ export function normalizePreferences(value: unknown): Preferences {
     showCodeView: typeof source.showCodeView === 'boolean'
       ? source.showCodeView
       : DEFAULT_PREFERENCES.showCodeView,
+    gitDiffLayout: source.gitDiffLayout === 'split' || source.gitDiffLayout === 'unified'
+      ? source.gitDiffLayout : DEFAULT_PREFERENCES.gitDiffLayout,
+    gitDiffWrap: typeof source.gitDiffWrap === 'boolean' ? source.gitDiffWrap : DEFAULT_PREFERENCES.gitDiffWrap,
     linkOpen: LINK_PREFERENCES.has(source.linkOpen as LinkPreference)
       ? source.linkOpen as LinkPreference
       : DEFAULT_PREFERENCES.linkOpen,
@@ -279,6 +292,7 @@ export function normalizePreferences(value: unknown): Preferences {
     ),
     shortcuts: normalizeShortcuts(source.shortcuts) as Record<string, string>,
     extensionPlacements: normalizeExtensionPlacements(source.extensionPlacements),
+    extensionAppearances: normalizeAppearanceOverrides(source.extensionAppearances),
   };
 }
 

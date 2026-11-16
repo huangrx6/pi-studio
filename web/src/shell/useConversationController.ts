@@ -53,8 +53,7 @@ export function useConversationController(foundation: AppFoundation) {
     pushNotification,
     compaction,
     setCompaction,
-    todoPanelOpen,
-    setTodoPanelOpen,
+    setProgressView,
     queuedPromptsBySession,
     setQueuedPromptsBySession,
     queuedPromptsRef,
@@ -270,6 +269,7 @@ export function useConversationController(foundation: AppFoundation) {
     hasNewer: transcriptTruncated,
     onLoadTarget: (id) => loadMessageWindowRef.current(id),
     sessionId: session?.id,
+    goalUpdatedAt: session?.longTask?.updatedAt,
     messages,
     requestTraces,
     busy,
@@ -310,7 +310,7 @@ export function useConversationController(foundation: AppFoundation) {
     agentView,
     setAgentView,
     modelSelection,
-    filesOpen,
+    collapsePanelForTrace: filesOpen && foundation.workbench.activePanelTab?.kind !== 'progress',
     closePanel: foundation.closePanel,
     openComparisonTab: foundation.workbench.openComparisonTab,
   });
@@ -373,6 +373,16 @@ export function useConversationController(foundation: AppFoundation) {
   const handleOpenAttachment = useCallback((path: string) => {
     openFileHandlerRef.current(path, 'attachment');
   }, []);
+  const undoSessionId = session?.id;
+  const undoTurnDiff = useCallback(async (at: number) => {
+    if (!undoSessionId) throw new Error('找不到当前会话。');
+    await window.piApi.undoTurnDiff({ sessionId: undoSessionId, at });
+    if (sessionRef.current?.id !== undoSessionId) return;
+    setSession(current => current?.id === undoSessionId ? {
+      ...current, turnDiffs: current.turnDiffs?.map(turn => turn.at === at ? { ...turn, undone: true } : turn),
+    } : current);
+    setLiveDiff(current => current?.at === at ? { ...current, undone: true } : current);
+  }, [undoSessionId, sessionRef, setSession]);
   const handleOpenChanges = useCallback((nextFile: TurnDiffFile | undefined, turn: TurnDiff) => {
     openChangesHandlerRef.current(nextFile, turn);
   }, []);
@@ -504,7 +514,11 @@ export function useConversationController(foundation: AppFoundation) {
     requestRef,
     modelPickerRequestRef,
     setModelPickerRequest,
-    setTodoPanelOpen,
+    openTodoHistory: () => {
+      const pinned = foundation.workbench.panelTabsRef.current.some(tab => tab.kind === 'progress');
+      if (pinned) foundation.workbench.openProgressTab();
+      setProgressView({ floating: !pinned, history: true });
+    },
     setSession,
     setMessages,
     setRequestTraces,
@@ -738,7 +752,7 @@ export function useConversationController(foundation: AppFoundation) {
   }, [settingsOpen]);
 
   useLayoutEffect(() => {
-    setTodoPanelOpen(false);
+    setProgressView({ floating: false, history: false });
     setCompaction({ active: false });
   }, [session?.id]);
 
@@ -976,7 +990,8 @@ export function useConversationController(foundation: AppFoundation) {
     returnToMainAgent,
     openModelComparison,
     openTrace,
-    quotaProvider: conversationExtensions.showQuotaMenu ? quotaProvider : undefined,
+    quotaProvider: quotaProvider && conversationExtensions.quotaMenuItem
+      ? { ...quotaProvider, item: conversationExtensions.quotaMenuItem } : undefined,
     conversationExtensionSurface,
     conversationExtensionUiPreferences,
     conversationExtensionOrderScope,
@@ -996,6 +1011,7 @@ export function useConversationController(foundation: AppFoundation) {
     handleOpenFile,
     handleOpenAttachment,
     handleOpenChanges,
+    undoTurnDiff,
     subagentWorkspace,
     subagentChildren,
     clearSessionQueuedPrompts,

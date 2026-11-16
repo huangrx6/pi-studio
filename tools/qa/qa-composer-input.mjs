@@ -204,6 +204,11 @@ try {
   await fill('第一条排队消息'); await composer().press('Meta+Enter');
   await page.locator('.queued-panel-head[aria-expanded="false"]').click();
   await page.locator('.queued-item').waitFor(); assert.equal(await composerValue(composer()), '');
+  await page.getByRole('button', { name: '打开会话进展' }).click();
+  await page.getByRole('button', { name: '固定到右栏' }).click();
+  assert.equal(await page.locator('.composer-dock > .queued-panel + .composer-wrap').count(), 1);
+  assert.equal(await page.locator('.file-panel .queued-panel').count(), 0);
+  await page.getByRole('button', { name: '关闭 会话进展' }).click();
   await fill('第二条排队消息'); await composer().press('Meta+Enter'); await page.waitForFunction(() => document.querySelectorAll('.queued-item').length === 2);
   const queueDraft = '当前草稿不能被排队编辑覆盖'; await fill(queueDraft);
   await page.getByRole('button', { name: '编辑排队消息', exact: true }).first().click();

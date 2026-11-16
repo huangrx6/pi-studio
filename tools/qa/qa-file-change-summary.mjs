@@ -1,92 +1,96 @@
-/**
- * Focused browser QA for the turn file-change summary.
- *
- * The reported symptom: a brand-new file (`write` to a path git has never seen)
- * was labelled "已写入" with no line counts, while git would report the whole
- * file as additions. Two sources now feed the card:
- *   - the stored turn diff, which knows the file is added and counts +N −0;
- *   - the tool arguments, which only know how long the written file is.
- * This QA pins both presentations plus the git-style A/M/D marker.
- *
- * Run the Vite server first:
- *   pnpm run web
- *   node tools/qa/qa-file-change-summary.mjs
- */
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
+import { installPerformanceFixture } from './fixtures/performance.mjs';
+import { serveProductionRenderer } from './fixtures/production-renderer-server.mjs';
 
-const output = new URL('../../.qa/screenshots/file-change-summary/', import.meta.url).pathname;
+const root = new URL('../../', import.meta.url);
+const output = new URL('.qa/screenshots/file-change-summary/', root);
 await mkdir(output, { recursive: true });
+const server = await serveProductionRenderer(fileURLToPath(root));
 
-const browser = await chromium.launch({
-  executablePath: process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  headless: true,
-});
-
-try {
-  const page = await browser.newPage({ viewport: { width: 860, height: 620 }, deviceScaleFactor: 2 });
-  page.setDefaultTimeout(12000);
-  const errors = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-
-  await page.route('**/file-change-probe', (route) => route.fulfill({
-    contentType: 'text/html',
-    body: `<!doctype html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:24px"><div id="root"></div><script type="module">
-      import RefreshRuntime from '/@react-refresh';
-      RefreshRuntime.injectIntoGlobalHook(window); window.$RefreshReg$ = () => {}; window.$RefreshSig$ = () => (t) => t;
-      window.__vite_plugin_react_preamble_installed__ = true;
-      document.documentElement.dataset.theme = 'dark';
-      await import('/src/styles/tokens.css'); await import('/src/styles/palette.css'); await import('/src/app.css');
-      const React = (await import('/@fs${process.cwd()}/node_modules/.vite/deps/react.js')).default;
-      const { createRoot } = (await import('/@fs${process.cwd()}/node_modules/.vite/deps/react-dom_client.js')).default;
-      const { FileChangeSummary } = await import('/src/features/conversation/FileChangeSummary.tsx');
-      const gitDiff = {
-        at: 1, totalAdded: 161, totalRemoved: 6, files: [
-          { path: '/repo/tools/qa/qa-agent-context.mjs', label: 'tools/qa/qa-agent-context.mjs', status: 'added', added: 161, removed: 0, patch: '+x\\n+y', completeCounts: true },
-          { path: '/repo/web/src/app.css', label: 'web/src/app.css', status: 'modified', added: 83, removed: 6, patch: '+a\\n-b', completeCounts: true },
-        ],
-      };
-      const toolFiles = [
-        { path: '/repo/notes.md', label: 'notes.md', operations: [{ id: 'w1' }], added: 0, removed: 0, completeCounts: false, lines: 3 },
-      ];
-      createRoot(document.getElementById('root')).render(React.createElement(FileChangeSummary, {
-        files: toolFiles, gitDiff, onOpenDiff: () => {}, onOpenFile: () => true,
-      }));
-      window.__ready = true;
-    </script></body></html>`,
+function installDiffFixture() {
+  const api = window.piApi;
+  localStorage.setItem('pi-studio:preferences', JSON.stringify({ theme: 'dark', showCodeView: true }));
+  const at = 1_780_000_000_500;
+  const files = [['app.js', 471, 0], ['index.html', 62, 6], ['styles.css', 201, 1]].map(([label, added, removed]) => ({
+    label, path: '/qa/synthetic/performance/' + label, added, removed, status: 'modified', patch: '@@ -1 +1 @@\n-old\n+new',
   }));
+  const turn = { at, snapshot: { root: '/qa/synthetic/performance', before: 'before', after: 'after' }, files, totalAdded: 734, totalRemoved: 7 };
+  const toolOnly = new URLSearchParams(location.search).has('tool-only');
+  const withDiff = fn => async (...args) => {
+    const result = await fn(...args);
+    if (!toolOnly) return { ...result, turnDiffs: [turn] };
+    if (!result.messages) return result;
+    const messages = [
+      result.messages[0],
+      { role: 'assistant', sourceIndex: 1, timestamp: at, content: [
+        { type: 'toolCall', id: 'write-1', name: 'write', arguments: { path: '/tmp/notes.md', content: 'a\nb\nc' } },
+      ] },
+      { role: 'toolResult', sourceIndex: 2, timestamp: at + 1, toolCallId: 'write-1', content: [{ type: 'text', text: 'ok' }] },
+      { role: 'assistant', sourceIndex: 3, timestamp: at + 2, content: [{ type: 'text', text: '已写入文件。' }] },
+    ];
+    return { ...result, messages, messageCount: messages.length, turnDiffs: [] };
+  };
+  window.piApi = new Proxy({
+    conversationPage: withDiff(api.conversationPage),
+    conversationSnapshot: withDiff(api.conversationSnapshot),
+    subscribeConversation: withDiff(api.subscribeConversation),
+    undoTurnDiff: async ({ sessionId, at: requested }) => {
+      if (sessionId !== 'perf-0' || requested !== at) throw new Error('Wrong turn');
+      window.undoCalls = (window.undoCalls || 0) + 1;
+      turn.undone = true;
+    },
+  }, { get: (target, key) => key in target ? target[key] : api[key] });
+}
 
-  await page.goto('http://127.0.0.1:5180/file-change-probe');
-  await page.waitForFunction(() => window.__ready === true, null, { timeout: 20000 });
-  await page.waitForTimeout(400);
-
-  const rows = await page.evaluate(() => [...document.querySelectorAll('.file-change-item')].map((row) => ({
-    path: row.querySelector('.file-change-path')?.textContent,
-    mark: row.querySelector('.file-change-mark')?.textContent,
-    markClass: row.querySelector('.file-change-mark')?.className,
-    trailing: row.querySelector('.file-change-counts')?.textContent
-      || row.querySelector('small')?.textContent
-      || '',
-  })));
-
-  assert.equal(rows.length, 3, 'all three files render');
-
-  const added = rows.find((row) => row.path?.endsWith('qa-agent-context.mjs'));
-  assert.equal(added.mark, '新增', 'a new file carries the added label');
-  assert.equal(added.trailing, '+161−0', 'a new file shows its additions instead of prose');
-
-  const modified = rows.find((row) => row.path?.endsWith('app.css'));
-  assert.equal(modified.mark, '修改');
-  assert.equal(modified.trailing, '+83−6');
-
-  const written = rows.find((row) => row.path === 'notes.md');
-  assert.equal(written.mark, '写入', 'a tool-only write is labelled separately');
-  assert.equal(written.trailing, '/ 3 行', 'a tool-only write reports its length, not a fake delta');
-
-  assert.deepEqual(errors, [], `no page errors: ${errors.join(' | ')}`);
-  await page.screenshot({ path: `${output}summary.png` });
-  console.log('file change summary QA passed', JSON.stringify(rows, null, 1));
+let browser;
+try {
+  browser = await chromium.launch({ executablePath: process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' });
+  const page = await browser.newPage({ viewport: { width: 1320, height: 920 }, deviceScaleFactor: 2 });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.addInitScript({ content: `(${installPerformanceFixture})({sessionCount:1,turnCount:1});(${installDiffFixture})();` });
+  await page.goto(server.origin);
+  await page.locator('.session-row').first().click();
+  const card = page.getByRole('region', { name: '本轮文件变更' });
+  const rows = card.locator('.file-change-item');
+  await card.waitFor();
+  assert.deepEqual(await rows.locator('.file-change-path').allTextContents(), ['app.js', 'index.html', 'styles.css']);
+  assert.deepEqual(await rows.locator('.file-change-counts').allTextContents(), ['+471−0', '+62−6', '+201−1']);
+  assert.equal(await card.locator('header .file-change-counts').innerText().then(s => s.replace(/\s/g, '')), '+734−7');
+  for (const theme of ['dark', 'light']) {
+    await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+    const icons = await rows.locator('img[data-file-icon]').evaluateAll(async images => {
+      await Promise.all(images.map(image => image.decode()));
+      return images.map(image => image.dataset.fileIcon);
+    });
+    assert.deepEqual(icons, ['javascript', 'html', 'css']);
+    await card.screenshot({ path: fileURLToPath(new URL(`summary-${theme}.png`, output)), animations: 'disabled' });
+  }
+  await card.getByRole('button', { name: '撤销', exact: true }).click();
+  await page.getByRole('button', { name: '取消', exact: true }).click();
+  assert.equal(await page.evaluate(() => window.undoCalls || 0), 0);
+  await card.getByRole('button', { name: '撤销', exact: true }).click();
+  await page.getByRole('button', { name: '撤销变更', exact: true }).click();
+  await card.getByRole('button', { name: '已撤销' }).waitFor();
+  assert.equal(await page.evaluate(() => window.undoCalls), 1);
+  await rows.first().click();
+  const changes = page.locator('.changes-view');
+  await changes.waitFor();
+  const expectedIcons = ['javascript', 'html', 'css'];
+  const iconIds = selector => changes.locator(selector + ' [data-file-icon]').evaluateAll(images => images.map(image => image.dataset.fileIcon));
+  assert.deepEqual(await iconIds('.changes-file-toggle'), expectedIcons);
+  await changes.getByRole('button', { name: '跳转到文件' }).click();
+  assert.deepEqual(await iconIds('.changes-jump button'), expectedIcons);
+  await page.goto(server.origin + '/?tool-only');
+  await page.locator('.session-row').first().click();
+  await rows.filter({ hasText: 'notes.md' }).getByText('/ 3 行').waitFor();
+  assert.equal(await card.locator('.file-change-counts, .file-change-undo').count(), 0);
+  assert.deepEqual(errors, []);
+  console.log('Passed file icons, per-file totals, diff navigation, confirmation, and undo state.');
 } finally {
-  await browser.close();
+  await browser?.close();
+  await server.close();
 }

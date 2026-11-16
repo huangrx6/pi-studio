@@ -16,7 +16,7 @@ type ConversationViewStateOptions = {
   agentView: AgentView;
   setAgentView: Dispatch<SetStateAction<AgentView>>;
   modelSelection: ModelSelection;
-  filesOpen: boolean;
+  collapsePanelForTrace: boolean;
   closePanel: () => void;
   openComparisonTab: () => void;
 };
@@ -36,7 +36,7 @@ export function useConversationViewState({
   agentView,
   setAgentView,
   modelSelection,
-  filesOpen,
+  collapsePanelForTrace,
   closePanel,
   openComparisonTab,
 }: ConversationViewStateOptions) {
@@ -84,7 +84,7 @@ export function useConversationViewState({
     if (!session?.id) return;
     rememberMainScrollPosition();
     setAgentView({ kind: 'trace' });
-    if (filesOpen) closePanel();
+    if (collapsePanelForTrace) closePanel();
   }
 
   return {

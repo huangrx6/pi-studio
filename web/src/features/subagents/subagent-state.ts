@@ -18,7 +18,7 @@ export function reconcileSubagentStatus(current: SubagentChild['status'], incomi
 }
 
 export function mergeSubagentChild(current: SubagentChild | undefined, incoming: SubagentChild) {
-  if (!current) return incoming;
+  if (!current || incoming.runId !== current.runId) return incoming;
   const fields = Object.fromEntries(
     Object.entries(incoming).filter(([, value]) => (
       value !== undefined && value !== null && value !== ''
@@ -39,8 +39,21 @@ export function mergeSubagentChild(current: SubagentChild | undefined, incoming:
  */
 export function mergeSubagentChildren(current: SubagentChild[], incoming: SubagentChild[]) {
   const previous = new Map(current.map((child) => [child.key, child]));
-  return incoming.slice(-100).map((child) => {
+  return incoming.map((child) => {
     const cached = previous.get(child.key);
     return cached ? mergeSubagentChild(cached, child) : child;
   });
+}
+
+function progressPriority(child: SubagentChild) {
+  if (child.status === 'waiting' || (child.supervisorRequests?.length ?? child.supervisorPending)) return 0;
+  if (child.status === 'running') return 1;
+  if (child.status === 'pending') return 2;
+  if (child.status === 'paused' || child.status === 'failed') return 3;
+  return 4;
+}
+
+export function orderProgressAgents(children: SubagentChild[]) {
+  return [...children].sort((a, b) => progressPriority(a) - progressPriority(b)
+    || (b.startedAt ?? 0) - (a.startedAt ?? 0) || b.index - a.index);
 }

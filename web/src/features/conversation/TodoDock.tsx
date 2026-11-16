@@ -11,38 +11,18 @@
  * - 进度 = 未结束任务中已完成的比例，右上角显示 done/total；
  * - 折叠时只显示当前任务标题和进度条，展开后显示分组明细与归档数量。
  */
-import { useMemo } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Archive, Check, ChevronDown, ChevronUp, Circle, CircleDot, ListTodo, Lock, Minus } from 'lucide-react';
+import { taskIsBlocked } from './todo-status';
 import type { TodoDetails, TodoTask } from '../../types/chat-types';
 
 type TodoDockProps = {
   /** 任务计划快照；undefined 表示当前会话还没有 todo 结果。 */
   details?: TodoDetails;
-  /** 面板是否展开。 */
-  open: boolean;
-  /** 切换展开/收起。 */
-  onToggle: () => void;
+  pinnedHeaderAction?: ReactNode;
 };
 
 type Group = { key: string; label: string; tasks: TodoTask[]; icon: React.ReactNode };
-
-/**
- * 判断任务是否被依赖阻塞。
- *
- * 只有「依赖仍然存在、未归档、未完成、也未结束」才算阻塞：
- * - 依赖已归档：视为不再阻塞（归档通常意味着不再参与当前计划）；
- * - 依赖已结束（closedAt）：同样视为解除；
- * - blockedBy 里指向不存在的 id：忽略，避免脏数据把任务永久锁住。
- *
- * @param task 待判断任务
- * @param tasks 参与判断的任务集合（调用方传 visible，即未归档/未删除的任务）
- */
-function taskIsBlocked(task: TodoTask, tasks: TodoTask[]): boolean {
-  return (task.blockedBy || []).some((id) => {
-    const blocker = tasks.find((candidate) => candidate.id === id);
-    return Boolean(blocker && !blocker.archivedAt && blocker.status !== 'completed' && !blocker.closedAt);
-  });
-}
 
 /**
  * 单条任务行。
@@ -53,12 +33,12 @@ function taskIsBlocked(task: TodoTask, tasks: TodoTask[]): boolean {
  * @param task 任务
  * @param blocked 是否被依赖阻塞（由分组决定，父级已知）
  */
-function TaskRow({ task, blocked }: { task: TodoTask; blocked: boolean }) {
+function TaskRow({ task, blocked, label }: { task: TodoTask; blocked: boolean; label?: string }) {
   const complete = task.status === 'completed';
   const closed = Boolean(task.closedAt);
   const active = task.status === 'in_progress';
   return <div className={`todo-row ${active ? 'is-active' : ''} ${complete ? 'is-complete' : ''} ${closed ? 'is-closed' : ''} ${blocked ? 'is-blocked' : ''}`}>
-    <span className="todo-row-icon">
+    <span className="todo-row-icon" role={label ? 'img' : undefined} aria-label={label} title={label}>
       {complete ? <Check /> : closed ? <Minus /> : blocked ? <Lock /> : active ? <CircleDot /> : <Circle />}
     </span>
     <span className="todo-row-id">#{task.id}</span>
@@ -72,13 +52,13 @@ function TaskRow({ task, blocked }: { task: TodoTask; blocked: boolean }) {
  * 任务计划浮层。
  *
  * @param details 任务快照（来自最新 todo 工具结果）
- * @param open 是否展开
- * @param onToggle 折叠头部的点击回调
  *
  * 进度分母只统计「未结束」任务（tracked），因此提前结束的任务不会拉低完成率；
  * 当前任务按「进行中 → 可开始 → 被阻塞」的优先级选取，用于折叠态标题。
  */
-export function TodoDock({ details, open, onToggle }: TodoDockProps) {
+export function TodoDock({ details, pinnedHeaderAction }: TodoDockProps) {
+  const [open, setOpen] = useState(true);
+  const [showMore, setShowMore] = useState(false);
   const model = useMemo(() => {
     const all = Array.isArray(details?.tasks) ? details.tasks : [];
     // deleted 是软删除，任何分组都不展示；archived 只保留在归档计数里。
@@ -99,7 +79,7 @@ export function TodoDock({ details, open, onToggle }: TodoDockProps) {
   }, [details]);
 
   const total = model.tracked.length;
-  const done = model.completed.length;
+  const done = model.tracked.filter(task => task.status === 'completed').length;
   const ratio = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
   // 空分组不渲染，保持展开后的列表紧凑；顺序即产品上希望用户看到的优先级。
   const groups: Group[] = [
@@ -110,8 +90,29 @@ export function TodoDock({ details, open, onToggle }: TodoDockProps) {
     { key: 'closed', label: '已结束', tasks: model.closed, icon: <Minus /> },
   ].filter((group) => group.tasks.length > 0);
 
-  // 折叠且无任务时不占位；展开时即使无任务也要显示空状态（用户主动点开的）。
-  if (!open && model.visible.length === 0) return null;
+  const rows = groups.flatMap(group => group.tasks.map(task => ({ task, group })));
+  const previewLimit = 4;
+  const preview = showMore ? rows : rows.slice(0, previewLimit);
+  const more = rows.length > previewLimit && <button className="progress-text-action todo-preview-more" type="button"
+    aria-expanded={showMore} onClick={() => setShowMore(value => !value)}>
+    {showMore ? '收起任务' : `展开其余 ${rows.length - previewLimit} 项`}{showMore ? <ChevronUp /> : <ChevronDown />}</button>;
+
+  if (pinnedHeaderAction) {
+    return <>
+      <header className="progress-section-head">
+        <h3>任务列表{total > 0 && <small aria-label={`已完成 ${done} 项，共 ${total} 项`}>{done} / {total}</small>}</h3>
+        {pinnedHeaderAction}
+      </header>
+      {rows.length > 0 && <div className="progress-task-scroll" tabIndex={showMore ? 0 : undefined}>
+        {preview.map(({ task, group }) =>
+          <TaskRow key={task.id} task={task} blocked={group.key === 'blocked'} label={group.label} />)}
+      </div>}
+      {more}
+      {model.archived.length > 0 && <small className="progress-archive-count">{model.archived.length} 项已归档</small>}
+    </>;
+  }
+
+  if (model.visible.length === 0) return null;
 
   const currentLabel = model.current
     ? model.current.status === 'in_progress' ? (model.current.activeForm || model.current.subject) : model.current.subject
@@ -119,7 +120,7 @@ export function TodoDock({ details, open, onToggle }: TodoDockProps) {
 
   const allDone = total > 0 && done === total;
   return <div className={`todo-dock ${open ? 'is-open' : ''} ${allDone ? 'is-complete' : ''} ${model.current?.status === 'in_progress' ? 'is-live' : ''}`}>
-    <button type="button" className="todo-dock-head" onClick={onToggle} aria-expanded={open} aria-label="任务计划">
+    <button type="button" className="todo-dock-head" onClick={() => setOpen(value => !value)} aria-expanded={open} aria-label="任务计划">
       <span className="todo-dock-title"><ListTodo /><span>计划</span></span>
       {/* 折叠态用 title 兜底完整标题，避免长任务名被省略号截断后无法查看。 */}
       <span className="todo-dock-current" title={currentLabel}>{currentLabel}</span>
@@ -128,14 +129,15 @@ export function TodoDock({ details, open, onToggle }: TodoDockProps) {
       {open ? <ChevronUp /> : <ChevronDown />}
     </button>
     {open && <div className="todo-dock-body">
-      {groups.length === 0 ? <div className="todo-dock-empty"><ListTodo /><strong>暂无任务</strong></div> : <div className="todo-dock-scroll">
-        {groups.map((group) => <section className="todo-group" key={group.key}>
+      {groups.length > 0 && <div className="todo-dock-scroll">
+        {groups.filter(group => preview.some(row => row.group === group)).map((group) => <section className="todo-group" key={group.key}>
           <div className="todo-group-head">{group.icon}<span>{group.label}</span><b>{group.tasks.length}</b></div>
           {/* 只有 blocked 分组才把 blocked 标记传给行，避免其他分组出现重复提示。 */}
-          {group.tasks.map((task) => <TaskRow key={task.id} task={task} blocked={group.key === 'blocked'} />)}
+          {preview.filter(row => row.group === group).map(({ task }) => <TaskRow key={task.id} task={task} blocked={group.key === 'blocked'} />)}
         </section>)}
         {model.archived.length > 0 && <div className="todo-dock-archived"><Archive /><span>{model.archived.length} 项已归档</span></div>}
       </div>}
+      {more}
     </div>}
   </div>;
 }

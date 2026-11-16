@@ -111,6 +111,7 @@ panel 可以只声明 `slot`，也可以声明 `slots` 数组，让同一份内�
   "title": "实时指标",
   "slots": ["status.chip", "conversation.footer"],
   "icon": "activity",
+  "color": "info",
   "size": "compact",
   "details": "metrics-detail",
   "visibility": "while-active",
@@ -123,9 +124,18 @@ panel 可以只声明 `slot`，也可以声明 `slots` 数组，让同一份内�
 - `visibility` 只影响 `conversation.footer`、`status.bar` 与 `status.chip` 这三个摘要槽位；顶栏入口通常保持常驻，由扩展自己按内容决定；
 - 只出现在一个位置的扩展，继续用 `slot` 即可，不必把四个位置都声明一遍。
 
-`status.chip` 是**会话视图**的顶栏状态入口。它渲染为一个 28px 图标按钮（`icon` 支持 `activity`、`gauge`、`timer`、`terminal`、`chart`，未识别的名字退回心跳图标），最多三个 chip 会按 `priority` 出现在通知按钮之前。
+`status.chip` 显示在会话右上角的「扩展与轨迹」菜单中。状态行显示图标、标题和一行摘要，点击标题可打开 `details` 指向的详情。摘要接受与 footer 相同的 block，最多两个。只有已经创建的会话才会显示这些入口。额度扩展使用当前模型来源的读数，并沿用额度状态项的图标与颜色。
 
-chip 只在有真实会话时出现：新会话还是草稿态，没有 `sessionId`，扩展的数据源与 `details` 面板都无从指认，因此 Studio 一律不渲染 chip。需要「不管在哪个页面都在」的入口，请用 `status.bar`；需要「会话内的入口」，用 `status.chip`；需要「输入框附近的一行状态」，用 `conversation.footer`。悬停或键盘聚焦会展开同一份 compact 内容（因此它接受与 footer 相同的 block，最多两个），点击则打开 `details` 指向的详情面板。
+### 给状态项设置图标和颜色
+
+在每个状态 panel 上分别声明可选的 `icon` 和 `color`。同一项使用多个落点时，各处共享外观。扩展包自身的顶层 `icon` 仍然表示包图标。
+
+| 字段 | 可选值 | 缺省行为 |
+| --- | --- | --- |
+| `icon` | `activity`、`gauge`、`timer`、`terminal`、`chart`、`wallet`、`database`、`cloud`、`cpu`、`layers`、`plug`、`zap` | 缺省或未识别时显示波形，旧名 `pulse` 也显示波形 |
+| `color` | `neutral`、`accent`、`info`、`success`、`warning`、`error` | 缺省为 `neutral`，颜色随主题切换 |
+
+用户可以在「设置 → 扩展」的对应状态项打开「图标与配色」，预览并分别覆盖图标和颜色。选择「恢复默认」后，该项重新采用扩展当前声明的外观。显示位置和同一扩展的其他状态项各自保留。
 
 ```json
 [

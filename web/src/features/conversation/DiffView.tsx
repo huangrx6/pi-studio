@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { FileKindIcon } from '../../shared/FileKindIcon';
 import { Columns2, Rows3, FileCode2 } from 'lucide-react';
 import type { TurnDiffFile } from '../../types/chat-types';
 import { splitPatch, changedRange, type DiffLine } from './diff-rows';
@@ -23,16 +24,22 @@ function Line({ line, side, other, wordDiff = true }: { line?: DiffLine; side: '
 export type DiffOptions = { layout: 'auto' | 'split' | 'unified'; wrap: boolean; wordDiff: boolean; hideImports: boolean };
 /** Horizontal scrollers of one file: a single unified list or one per split pane. */
 type Channel = 'unified' | 'left' | 'right';
-export function DiffView({ file, options, embedded = false }: { file: TurnDiffFile; options?: DiffOptions; embedded?: boolean }) {
+export function DiffView({ file, options, embedded = false, responsive = false }: { file: TurnDiffFile; options?: DiffOptions; embedded?: boolean; responsive?: boolean }) {
   const rows = useMemo(() => splitPatch(file.patch || '').filter(row => row.gap || !options?.hideImports || ![row.left, row.right].filter(Boolean).every(line => /^(?:import\s.+(?:;|['"])$|from\s+\S+\s+import\s+[^()]+$|(?:const|let|var)\s+.+require\(.+\);?$)/.test(line!.text.trim()))), [file.patch, options?.hideImports]);
-  const [localSplit, setSplit] = useState(true);
+  const [localSplit, setSplit] = useState<boolean>();
   const host = useRef<HTMLDivElement>(null);
   const scrollers = useRef<Partial<Record<Channel, HTMLDivElement | null>>>({});
   const mirrors = useRef<Partial<Record<Channel, HTMLDivElement | null>>>({});
   const [tracks, setTracks] = useState<Partial<Record<Channel, number>>>({});
   const [wide, setWide] = useState(false);
-  useEffect(() => { const observer = new ResizeObserver(([entry]) => setWide(entry.contentRect.width >= 760)); if (host.current) observer.observe(host.current); return () => observer.disconnect(); }, []);
-  const split = options ? options.layout === 'split' || (options.layout === 'auto' && wide) : localSplit;
+  useEffect(() => {
+    const breakpoint = responsive ? 580 : 760;
+    const observer = new ResizeObserver(([entry]) => setWide(entry.contentRect.width >= breakpoint));
+    if (host.current) observer.observe(host.current);
+    return () => observer.disconnect();
+  }, [responsive]);
+  const defaultSplit = options ? options.layout === 'split' || (options.layout === 'auto' && wide) : !responsive || wide;
+  const split = localSplit ?? defaultSplit;
   const wordDiff = options?.wordDiff !== false;
   const channels: Channel[] = split ? (options?.wrap ? [] : ['left', 'right']) : ['unified'];
   // A round of changes shares one vertical surface, so a diff's own horizontal
@@ -61,7 +68,7 @@ export function DiffView({ file, options, embedded = false }: { file: TurnDiffFi
   const mirror = (name: Channel) => { const node = scrollers.current[name], bar = mirrors.current[name]; if (node && bar && bar.scrollLeft !== node.scrollLeft) bar.scrollLeft = node.scrollLeft; };
   const drive = (name: Channel) => { const node = scrollers.current[name], bar = mirrors.current[name]; if (node && bar && node.scrollLeft !== bar.scrollLeft) node.scrollLeft = bar.scrollLeft; };
   return <div ref={host} className={`diff-view ${embedded ? 'is-embedded' : ''} ${options?.wrap ? 'is-wrapped' : ''}`}>
-    {!embedded && <div className="diff-view-head"><FileCode2 /><strong title={file.path}>{file.label}</strong>
+    {!embedded && <div className="diff-view-head"><FileKindIcon path={file.path} /><strong title={file.path}>{file.label}</strong>
       {file.completeCounts !== false && <span className="diff-view-counts"><span>+{file.added}</span><span>−{file.removed}</span></span>}
       <button type="button" className="icon-button" aria-label={split ? '切换为单列差异' : '切换为左右对照'} title={split ? '单列差异' : '左右对照'} onClick={() => setSplit(!split)}>{split ? <Rows3 /> : <Columns2 />}</button>
     </div>}

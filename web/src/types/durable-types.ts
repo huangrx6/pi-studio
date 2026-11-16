@@ -13,6 +13,7 @@ export type LongTaskStatus =
   | 'failed';
 
 export type LongTaskState = {
+  goalId?: string;
   enabled: boolean;
   goal: string;
   completionCriteria: string;
@@ -202,6 +203,7 @@ export type ConversationEvent =
   | EventBase<'assistant.updated' | 'assistant.completed', { message: ChatMessage }>
   | EventBase<'transcript.appended', { messages: ChatMessage[] }>
   | EventBase<'request.trace', { trace: RequestTrace }>
+  | EventBase<'todo.changed', Record<string, never>>
   | EventBase<'inbox.updated', { items: unknown[] }>
   | EventBase<'agent.updated', { agent: Record<string, unknown> }>
   | EventBase<'usage.updated', { usage: unknown }>

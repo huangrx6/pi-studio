@@ -43,8 +43,8 @@ try {
     await page.locator('.session-row').first().click();
     await page.locator('.assistant-response').first().waitFor();
     await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
-    const trigger = page.getByRole('button', { name: '打开工作区面板' });
-    const menu = page.getByRole('dialog', { name: '工作区面板' });
+    const trigger = page.getByRole('button', { name: '打开扩展与轨迹' });
+    const menu = page.getByRole('dialog', { name: '扩展与轨迹' });
     const row = menu.locator('.workspace-menu-extension-row').filter({ hasText: '实时指标' });
     const scriptsRow = menu.locator('.workspace-menu-extension-row').filter({ hasText: '项目脚本' });
     const status = row.getByRole('status');

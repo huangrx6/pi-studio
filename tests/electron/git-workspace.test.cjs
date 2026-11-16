@@ -55,4 +55,18 @@ test('Git workspace status degrades safely outside a repository', async () => {
   assert.equal(status.reason, 'not-a-repository');
   assert.deepEqual(status.dirty, { total: 0, staged: 0, unstaged: 0, untracked: 0 });
   assert.deepEqual(status.worktrees, []);
+  assert.equal((await getGitWorkspaceStatus(path.join(directory, 'missing'))).reason, 'invalid-workspace');
+});
+
+test('Git settings report local upstream distance and count renamed paths once', async t => {
+  const root = fixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  git(root, ['branch', 'baseline']);
+  git(root, ['branch', '--set-upstream-to=baseline']);
+  git(root, ['commit', '--allow-empty', '-qm', 'ahead']);
+  git(root, ['mv', 'tracked.txt', '新文件.txt']);
+  const status = await getGitWorkspaceStatus(root);
+  assert.deepEqual(status.upstream, { name: 'baseline', ahead: 1, behind: 0 });
+  assert.deepEqual(status.dirty, { total: 1, staged: 1, unstaged: 0, untracked: 0 });
+  assert.equal(status.statusReadFailed, false);
 });

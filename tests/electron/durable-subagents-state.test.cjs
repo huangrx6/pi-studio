@@ -66,7 +66,7 @@ test('the child list exposes only its own still-pending supervisor questions wit
   const { listSubagentChildren } = require('../../electron/capabilities/subagents/index.cjs');
   const durable = { defineDoc: doc => doc, defineTask: task => task, LiveDoc: {}, UsageDoc: {} };
   const registry = {
-    agents: { first: { conversationId: 2 }, second: { conversationId: 3 } },
+    agents: { first: { conversationId: 2, avatarId: 'panda-rose' }, second: { conversationId: 3 } },
     supervisorRequests: {
       format: { childConversationId: 2, status: 'pending', question: 'Which format?', createdAt: 1 },
       done: { childConversationId: 2, status: 'replied', question: 'Already answered' },
@@ -87,10 +87,28 @@ test('the child list exposes only its own still-pending supervisor questions wit
   }));
   const [first, second] = await listSubagentChildren('parent');
   assert.equal(first.status, 'waiting');
+  assert.equal(first.avatarId, 'panda-rose');
+  assert.ok(second.avatarId);
   assert.equal(first.supervisorPending, 2);
   assert.deepEqual(first.supervisorRequests, [
     { id: 'format', question: 'Which format?', createdAt: 1 },
     { id: 'locale', question: 'Which locale?', createdAt: 2 },
   ]);
   assert.deepEqual(second.supervisorRequests, [{ id: 'path', question: 'Which path?', createdAt: 3 }]);
+});
+
+test('existing registries replay the same migration and use all available portraits before repeating', () => {
+  const { createProtocol } = require('../../electron/capabilities/subagents/index.cjs');
+  const { Subagents } = createProtocol({ defineDoc: doc => doc, defineTask: task => task });
+  const agents = Object.fromEntries(Array.from({ length: 13 }, (_, i) => [`worker-${i}`, { conversationId: 6 * (i + 1) }]));
+  const v1 = { agents, reporters: {}, supervisorRequests: {} };
+  const next = Subagents.migrate(v1, 1);
+  assert.deepEqual(next, Subagents.migrate(v1, 1));
+  const ids = Object.values(next.agents).map(agent => agent.avatarId);
+  assert.equal(new Set(ids.slice(0, 6)).size, 6);
+  assert.equal(new Set(ids.slice(6, 12)).size, 6);
+  assert.equal(Object.values(v1.agents)[0].avatarId, undefined);
+  for (const id of new Set(ids)) {
+    assert.ok(fs.existsSync(path.join(__dirname, '../../web/src/features/subagents/avatars', id + '.webp')));
+  }
 });

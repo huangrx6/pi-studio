@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import {
   PanelRightOpen,
@@ -12,7 +12,6 @@ import type {
   ComposerAttachment,
   ComposerCommand,
   ComposerFile,
-  TodoDetails,
 } from '../../types/chat-types';
 import type { ModelCatalog, ModelSelection } from '../../types/model-types';
 import type { SessionStateForPersistence } from './useMessageDelivery';
@@ -47,8 +46,6 @@ import { ComposerFeedback } from './ComposerFeedback';
 import { ComposerToolbar } from './ComposerToolbar';
 import { ComposerSuggestions } from './ComposerSuggestions';
 import { NewConversationWelcome } from './NewConversationWelcome';
-import { LongTaskDock } from './LongTaskDock';
-import { TodoDock } from './TodoDock';
 import { QueuedMessages, type QueuedPreview } from './QueuedMessages';
 import { ConversationError } from './ConversationError';
 import { ContextUsageChip } from './ContextUsageChip';
@@ -104,11 +101,6 @@ export type ComposerDockProps = {
   queuedPreviews: QueuedPreview[];
   queuedEditContext?: QueuedEditContext;
   queueAdmissionPending: boolean;
-  todoDetails?: TodoDetails;
-  todoPanelOpen: boolean;
-  setTodoPanelOpen: Setter<boolean>;
-  longTaskBusy: boolean;
-  changeLongTaskStatus: (action: 'long-task-pause' | 'long-task-resume') => Promise<void>;
   sendPromptFromExtension: (prompt: string, submit: boolean) => void;
   turnActive: boolean;
   stopping: boolean;
@@ -190,11 +182,6 @@ export function ComposerDock({
   queuedPreviews,
   queuedEditContext,
   queueAdmissionPending,
-  todoDetails,
-  todoPanelOpen,
-  setTodoPanelOpen,
-  longTaskBusy,
-  changeLongTaskStatus,
   sendPromptFromExtension,
   turnActive,
   stopping,
@@ -237,28 +224,11 @@ export function ComposerDock({
     () => new Set(composerCommands.map((command) => command.name)),
     [composerCommands],
   );
-  // 计划全部完成时自动收起计划栏：完成的清单只留一行摘要，把高度还给消息区。
-  // 用户随后手动展开就不再自动收起，直到出现新的未完成任务。
   // 提示按会话归属：带了别的会话 id 就不显示；没有归属的（草稿态）照常显示。
   const scopedComposerFeedback = composerFeedback
     && (!composerFeedback.sessionId || composerFeedback.sessionId === session?.id)
     ? composerFeedback
     : null;
-  const todoAllDone = useMemo(() => {
-    const tracked = (todoDetails?.tasks ?? []).filter((task) => !task.archivedAt && !task.closedAt && task.status !== 'deleted');
-    return tracked.length > 0 && tracked.every((task) => task.status === 'completed');
-  }, [todoDetails]);
-  const todoAutoCollapsedRef = useRef(false);
-  useEffect(() => {
-    if (!todoAllDone) {
-      todoAutoCollapsedRef.current = false;
-      return;
-    }
-    if (todoAutoCollapsedRef.current) return;
-    todoAutoCollapsedRef.current = true;
-    setTodoPanelOpen(false);
-  }, [todoAllDone, setTodoPanelOpen]);
-
   // 模型没配置时，发送按钮只会禁用；点击输入框时给一条可见的配置入口，
   // 而不是把用户挡在输入框外。
   const hasUsableModel = Boolean(modelSelection.modelRef) && !modelSelection.unavailable;
@@ -274,15 +244,6 @@ export function ComposerDock({
 
   return <div className="composer-dock" hidden={!open}>
     {isNewConversation && <NewConversationWelcome loading={stateLoading} />}
-    {!isNewConversation && (
-      <LongTaskDock
-        state={session?.longTask}
-        running={turnActive}
-        busy={longTaskBusy}
-        onChange={(action) => void changeLongTaskStatus(action)}
-        onEditGoal={() => sendPromptFromExtension('/goal ', false)}
-      />
-    )}
     {!isNewConversation && footerExtensionItems.length > 0 && (
       <ConversationExtensionDock
         items={footerExtensionItems}
@@ -296,7 +257,6 @@ export function ComposerDock({
         onNotify={notifyExtension}
       />
     )}
-    {(todoDetails || todoPanelOpen) && <TodoDock details={todoDetails} open={todoPanelOpen} onToggle={() => setTodoPanelOpen((value) => !value)} />}
     {queuedPrompts.length > 0 && <QueuedMessages
       items={queuedPreviews}
       canSteer={turnActive}

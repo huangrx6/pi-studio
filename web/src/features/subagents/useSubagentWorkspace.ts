@@ -111,17 +111,15 @@ export function useSubagentWorkspace({
   }
 
   function openAgentTranscript(child: SubagentChild) {
-    if (!session?.id || !child.hasTranscript) {
-      setSubagentError('这个子智能体没有可安全读取的本地会话。');
-      return;
-    }
+    if (!session?.id) return;
     rememberMainScrollPosition();
     const request = ++subagentRequestRef.current;
     const sessionId = session.id;
     setAgentView({ kind: 'agents', child });
     setSubagentTranscript(current => agentView.kind === 'agents' && agentView.child?.key === child.key && current?.child.key === child.key ? current : null);
     setSubagentError(null);
-    setSubagentLoading(true);
+    setSubagentLoading(child.hasTranscript);
+    if (!child.hasTranscript) return;
     void window.piApi.subagentTranscript({ sessionId, childKey: child.key })
       .then((transcript) => {
         if (request !== subagentRequestRef.current || sessionRef.current?.id !== sessionId) return;
@@ -145,7 +143,7 @@ export function useSubagentWorkspace({
   const activeChild = agentView.kind === 'agents' ? agentView.child : undefined;
 
   useEffect(() => {
-    if (!activeChild || !session?.id || subagentLoading) return;
+    if (!activeChild?.hasTranscript || !session?.id || subagentLoading) return;
     if (!['pending', 'running', 'waiting', 'paused'].includes(activeChild.status)) return;
     let disposed = false;
     let fetching = false;
@@ -178,6 +176,7 @@ export function useSubagentWorkspace({
     agentView.kind,
     activeChild?.key,
     activeChild?.status,
+    activeChild?.hasTranscript,
     session?.id,
     subagentLoading,
     setAgentView,

@@ -13,6 +13,7 @@ const {
   reactivateManagedWorktree,
 } = require('./worktrees.cjs');
 
+const { assignAvatar } = require('./avatars.cjs');
 const contracts = new WeakMap();
 const MAX_REPORTED_ANSWERS = 64;
 const MAX_SUPERVISOR_REQUESTS = 200;
@@ -77,12 +78,22 @@ function createProtocol(durable) {
 
   const Subagents = durable.defineDoc({
     kind: 'studio.subagents',
-    version: 1,
+    version: 2,
     scope: 'conversation',
     history: 'latest',
     fork: 'initial',
     checkpointWhen: () => false,
     initial: emptyRegistry,
+    migrate(value, version) {
+      if (version !== 1) throw new Error('无法升级此版本的子智能体记录');
+      const agents = {};
+      for (const [name, agent] of Object.entries(value.agents)) {
+        // Snapshot-only upgrades can replay before the next write.
+        const avatarId = assignAvatar(agents, agent.conversationId, count => agent.conversationId % count);
+        agents[name] = { ...agent, avatarId };
+      }
+      return { ...value, agents };
+    },
   });
 
   const ChildContext = durable.defineDoc({

@@ -5,20 +5,9 @@
  * 悬停或键盘聚焦时展开同一份 compact 内容，点击打开它自己的
  * `conversation.detail` 面板。host 不解释内容，只负责布局与路由。
  */
-import type { ComponentType } from 'react';
-import { Activity, BarChart3, Gauge, Timer, Terminal } from 'lucide-react';
+import { ExtensionStatusIcon } from './ExtensionStatusIcon';
 import { ExtensionSlot } from './ExtensionSlot';
 import type { ExtensionUiItem, ExtensionUiSnapshot } from '../../types/extension-types';
-
-/** 扩展声明的 icon 名到图标的映射；未识别的名字退回心跳图标。 */
-const CHIP_ICONS: Record<string, ComponentType> = {
-  activity: Activity,
-  gauge: Gauge,
-  timer: Timer,
-  terminal: Terminal,
-  chart: BarChart3,
-  pulse: Activity,
-};
 
 const MAX_CHIPS = 3;
 
@@ -48,7 +37,6 @@ export function ExtensionChips({
   if (chips.length === 0) return null;
   return <div className="extension-chips">
     {chips.slice(0, MAX_CHIPS).map((chip) => {
-      const Icon = CHIP_ICONS[(chip.item.icon || '').toLowerCase()] ?? Activity;
       return <div className="extension-chip-anchor" key={chip.item.id}>
         <button
           type="button"
@@ -57,12 +45,12 @@ export function ExtensionChips({
           title={chip.item.title}
           onClick={() => onOpenChip(chip)}
         >
-          <Icon aria-hidden="true" />
+          <ExtensionStatusIcon item={chip.item} />
         </button>
         {/* 悬停与键盘聚焦共用同一张浮层；内容由扩展自己声明。 */}
         <div className="extension-chip-popover" role="group" aria-label={chip.item.title}>
           <header className="extension-chip-popover-head">
-            <Icon aria-hidden="true" />
+            <ExtensionStatusIcon item={chip.item} />
             <strong>{chip.item.title}</strong>
           </header>
           <div className="extension-chip-popover-body">

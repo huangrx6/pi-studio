@@ -117,7 +117,7 @@ type MessageDeliveryDependencies = {
   requestRef: MutableRefObject<string | null>;
   modelPickerRequestRef: MutableRefObject<number>;
   setModelPickerRequest: Setter<ModelPickerRequest | null>;
-  setTodoPanelOpen: Setter<boolean>;
+  openTodoHistory: () => void;
   setSession: Setter<SessionState>;
   setMessages: Setter<ChatMessage[]>;
   setRequestTraces: Setter<RequestTrace[]>;
@@ -193,7 +193,7 @@ export function useMessageDelivery({
   requestRef,
   modelPickerRequestRef,
   setModelPickerRequest,
-  setTodoPanelOpen,
+  openTodoHistory,
   setSession,
   setMessages,
   setRequestTraces,
@@ -870,7 +870,8 @@ export function useMessageDelivery({
     lock(sourceDraftKey);
     try {
       if (!turnActiveRef.current && original.attachments.length === 0 && text === '/todos') {
-        setTodoPanelOpen(true);
+        if (sessionRef.current?.id) openTodoHistory();
+        else showComposerFeedback('本次会话还没有任务清单', 'info');
         consumeCommand();
         return;
       }

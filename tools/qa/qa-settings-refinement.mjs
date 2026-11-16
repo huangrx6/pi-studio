@@ -24,7 +24,7 @@ delete env.PI_STUDIO_DEV;
 const routes = [
   { label: '通用', title: '通用' },
   { label: '快捷键', title: '快捷键', modules: ['ShortcutSettings'] },
-  { label: 'Git 与 Worktree', title: 'Git 与 Worktree', modules: ['GitSettings'] },
+  { label: 'Git 工作流', title: 'Git 工作流', modules: ['GitSettings'] },
   { label: '模型配置', title: '模型配置', modules: ['ModelSettings'] },
   { label: '使用量', title: 'Token 使用量', modules: ['UsageSettings'] },
   { label: '智能体工具', title: '智能体工具', modules: ['AgentToolsSettings'] },

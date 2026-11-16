@@ -86,7 +86,7 @@ export function useAppFoundation() {
   } = useNotifications();
   const [compaction, setCompaction] = useState<{ active: boolean; reason?: string }>({ active: false });
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
-  const [todoPanelOpen, setTodoPanelOpen] = useState(false);
+  const [progressView, setProgressView] = useState({ floating: false, history: false });
   const [queuedPromptsBySession, setQueuedPromptsBySession] = useState<Record<string, QueuedPrompt[]>>({});
   const queuedPromptsRef = useRef(queuedPromptsBySession);
   queuedPromptsRef.current = queuedPromptsBySession;
@@ -345,8 +345,8 @@ export function useAppFoundation() {
     setCompaction,
     confirmRequest,
     setConfirmRequest,
-    todoPanelOpen,
-    setTodoPanelOpen,
+    progressView,
+    setProgressView,
     queuedPromptsBySession,
     setQueuedPromptsBySession,
     queuedPromptsRef,

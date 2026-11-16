@@ -1,3 +1,5 @@
+import type { PanelTab } from '../app-types';
+import { FileKindIcon } from '../../shared/FileKindIcon';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
 import {
   Activity,
@@ -6,6 +8,7 @@ import {
   FileText,
   Folder,
   Globe,
+  ListChecks,
   Maximize2,
   MessageCirclePlus,
   Minimize2,
@@ -21,9 +24,10 @@ import { isComposingKey, menuFocusIndex } from '../../shared/keyboard-navigation
 
 export type PanelTabItem = {
   id: string;
-  kind: 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services' | 'browser' | 'comparison';
+  kind: PanelTab['kind'];
   title: string;
   tooltip?: string;
+  path?: string;
 };
 
 const TAB_ICONS: Record<PanelTabItem['kind'], LucideIcon> = {
@@ -36,6 +40,7 @@ const TAB_ICONS: Record<PanelTabItem['kind'], LucideIcon> = {
   services: Activity,
   browser: Globe,
   comparison: Columns2,
+  progress: ListChecks,
 };
 
 export function PanelTabBar<T extends PanelTabItem>({
@@ -209,7 +214,7 @@ export function PanelTabBar<T extends PanelTabItem>({
           }}
           onDragEnd={finishDrag}
         >
-          <span className={`panel-tab-icon is-${tab.kind}`}><Icon aria-hidden /></span>
+          <span className={`panel-tab-icon is-${tab.kind}`}>{tab.kind === 'file' || tab.kind === 'diff' ? <FileKindIcon path={tab.path || tab.tooltip || tab.title} /> : <Icon aria-hidden />}</span>
           {renamingId === tab.id
             ? <input
               className="panel-tab-rename"

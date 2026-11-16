@@ -5,12 +5,12 @@
  * 再加载。安全边界与链接行为仍由这个单一实现负责。
  */
 import { createContext, memo, useContext, useEffect, useState } from 'react';
-import ReactMarkdown, { type Components } from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getActivePreferences } from './preferences';
 import { safeMarkdownImageSource } from './safe-url.ts';
 import rehypeLocalPaths from './rehype-local-paths.ts';
-import { MarkdownActions } from './markdown-actions';
+import { MarkdownActions, MarkdownImageRenderer } from './markdown-actions';
 import { MarkdownPathLink } from './MarkdownPathLink';
 import { localHrefPath, resolvePathToken } from './file-path-links.ts';
 import { hasMarkdownCode } from './markdown-code.ts';
@@ -51,6 +51,16 @@ function MarkdownCodeBlock({ language, children }: { language: string; children:
   </div>;
 }
 
+function markdownUrl(url: string, key: string) {
+  if (key === 'src') {
+    if (/^data:image\//i.test(url)) return safeMarkdownImageSource(url);
+    // Local workspace images are resolved by the conversation's preview component.
+    if (/^[a-z]:[\\/]/i.test(url)) return url;
+  }
+  return defaultUrlTransform(url);
+}
+
+const InsideMarkdownLink = createContext(false);
 const MarkdownCodeChromeContext = createContext(true);
 
 const MarkdownPre: NonNullable<Components['pre']> = ({ node, children, ...props }) => {
@@ -69,10 +79,11 @@ const MarkdownPre: NonNullable<Components['pre']> = ({ node, children, ...props 
 const components: Components = {
   a({ href, children, node, ...props }) {
     const actions = useContext(MarkdownActions);
+    const content = <InsideMarkdownLink.Provider value>{children}</InsideMarkdownLink.Provider>;
     // Local paths detected by rehypeLocalPaths carry dataPath instead of a URL.
     const dataPath = (node?.properties as Record<string, unknown> | undefined)?.dataPath;
     if (typeof dataPath === 'string') {
-      return <MarkdownPathLink path={dataPath}>{children}</MarkdownPathLink>;
+      return <MarkdownPathLink path={dataPath}>{content}</MarkdownPathLink>;
     }
     const localPath = localHrefPath(href || '');
     const localTarget = localPath ? resolvePathToken(localPath, actions.cwd) : null;
@@ -93,10 +104,14 @@ const components: Components = {
         if (actions.openLink) actions.openLink(href);
         else void window.piApi.openLink(href, getActivePreferences().linkOpen);
       }
-    }}>{children}</a>;
+    }}>{content}</a>;
   },
   pre: MarkdownPre,
   img({ src, alt, node: _node, ...props }) {
+    const Renderer = useContext(MarkdownImageRenderer);
+    const { cwd } = useContext(MarkdownActions);
+    const linked = useContext(InsideMarkdownLink);
+    if (Renderer && src) return <Renderer key={`${cwd || ''}\0${src}`} src={src} alt={alt || ''} cwd={cwd} linked={linked} />;
     const safeSrc = safeMarkdownImageSource(src);
     if (!safeSrc) return null;
     return <img {...props} src={safeSrc} alt={alt || ''} loading="lazy" referrerPolicy="no-referrer" />;
@@ -136,7 +151,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ children, codeC
 
   return <MarkdownCodeChromeContext.Provider value={codeChrome}>
     <div className="markdown" onCopy={(event) => copyMarkdownSource(event, children)}>
-      <ReactMarkdown components={components} remarkPlugins={[remarkGfm]} rehypePlugins={rehypePlugins} skipHtml>
+      <ReactMarkdown urlTransform={markdownUrl} components={components} remarkPlugins={[remarkGfm]} rehypePlugins={rehypePlugins} skipHtml>
         {children}
       </ReactMarkdown>
     </div>

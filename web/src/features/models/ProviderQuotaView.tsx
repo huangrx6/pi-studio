@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ExtensionStatusIcon } from '../extensions/ExtensionStatusIcon';
+import type { StatusPanel } from '../../shared/extension-appearance';
 import { ChevronRight, Gauge, RefreshCw, X } from 'lucide-react';
 import { DetailDialog } from '../../shared/DetailDialog';
 import { LoadingIndicator, LoadingState } from '../../shared/LoadingState';
@@ -37,12 +39,12 @@ function quotaNotice(snapshot: ProviderQuotaSnapshot) {
   return snapshot.message;
 }
 
-export function ProviderQuotaMenuRow({ id, name, onOpen }: { id: string; name: string; onOpen: () => void }) {
+export function ProviderQuotaMenuRow({ id, name, item, onOpen }: { id: string; name: string; item: StatusPanel; onOpen: () => void }) {
   const { snapshot } = useProviderQuota(id);
   const summary = snapshot?.metrics.filter(item => item.summary && item.value !== null).map(item => `${item.label} ${item.value}`).join(' · ');
   const fallback = snapshot && (snapshot.status === 'ready' || snapshot.status === 'stale' ? `查看全部 ${snapshot.metrics.length} 项额度` : quotaNotice(snapshot));
   return <button type="button" className="workspace-menu-row quota-menu-row" onClick={onOpen} aria-label={`查看 ${name} 额度`}>
-    <span className="workspace-menu-row-icon"><Gauge aria-hidden="true" /></span>
+    <span className="workspace-menu-row-icon"><ExtensionStatusIcon item={item} /></span>
     <span className="quota-menu-copy"><strong>{name} 额度</strong>
       {!snapshot ? <LoadingState>正在查询额度</LoadingState> : <small>{snapshot.status === 'stale' && '上次读数 · '}{summary || fallback}</small>}
     </span><ChevronRight className="workspace-menu-row-arrow" aria-hidden="true" />
@@ -67,10 +69,10 @@ export function ProviderQuotaPanel({ id }: { id: string }) {
   return <QuotaMetrics snapshot={snapshot} />;
 }
 
-export function ProviderQuotaDialog({ id, name, onClose }: { id: string; name: string; onClose: () => void }) {
+export function ProviderQuotaDialog({ id, name, item, onClose }: { id: string; name: string; item?: StatusPanel; onClose: () => void }) {
   const { snapshot, busy, read } = useProviderQuota(id);
   return <DetailDialog className="provider-quota-dialog" onClose={onClose}>
-    <header className="detail-header"><div className="detail-heading"><span className="detail-icon"><Gauge /></span>
+    <header className="detail-header"><div className="detail-heading"><span className="detail-icon">{item ? <ExtensionStatusIcon item={item} /> : <Gauge />}</span>
       <div><h2>额度监控</h2><p>{name}</p></div></div>
       <button type="button" className="icon-button" aria-label="关闭额度详情" onClick={onClose}><X /></button></header>
     <div className="quota-detail-body">

@@ -43,6 +43,10 @@ function registerFilesIpc() {
     assertMainWindow(event);
     return require('../services/turn-diff.cjs').readTurnDiffFile(payload);
   });
+  ipcMain.handle('pi:undo-turn-diff', (event, { sessionId, at }) => {
+    assertMainWindow(event);
+    return require('../services/turn-diff.cjs').undoTurnDiff({ sessionId, at });
+  });
   // 目录列表（右侧文件树）
   ipcMain.handle('pi:files', async (event, { cwd, path: requested } = {}) => {
     assertMainWindow(event);

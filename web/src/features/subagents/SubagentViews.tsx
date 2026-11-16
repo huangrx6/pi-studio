@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
-  Bot,
   ChevronDown,
   ChevronRight,
   CircleX,
@@ -33,6 +32,7 @@ import { SessionViewHeader } from '../../shell/SessionViewHeader';
 import { errorText } from '../../shared/error-text';
 import { duration, hasEnded, isActive, liveDuration, needsAttention, STATUS_LABEL, statusIcon, tokenCount } from './subagent-display';
 import { SubagentFlow } from './SubagentFlow';
+import { SubagentAvatar } from './SubagentAvatar';
 import { InfoHint } from '../../shared/InfoHint';
 import { isComposingKey } from '../../shared/keyboard-navigation';
 import { formatShortcut } from '../../shared/shortcuts';
@@ -114,7 +114,7 @@ function ChildRow({
 
   return <article className={`agent-list-row is-${child.status}`}>
     <div className="agent-list-main">
-      <span className={`agent-list-state is-${child.status}`}>{statusIcon(child.status)}</span>
+      <SubagentAvatar id={child.avatarId} />
       <div className="agent-list-copy">
         <div className="agent-list-title"><strong>{name}</strong><span>{STATUS_LABEL[child.status]}</span></div>
         <p className="agent-list-task">{child.task || '未记录任务说明'}</p>
@@ -440,7 +440,7 @@ export function SubagentTranscriptView({
       <div className="agent-context-column">
         {/* One compact row: small mark, name, then the state chips on the right. */}
         <header className="agent-context-head">
-          <span className="agent-context-avatar"><Bot /></span>
+          <SubagentAvatar id={child.avatarId} />
           <h2>{child.name || child.agent}</h2>
           <div className="agent-context-state">
             <span className={`agent-status is-${child.status}`}>{statusIcon(child.status)}<span>{STATUS_LABEL[child.status]}</span></span>
@@ -478,6 +478,7 @@ export function SubagentTranscriptView({
           </div>
         </div>}
         {loading && !transcript && <LoadingState variant="section">正在读取子智能体会话…</LoadingState>}
+        {!child.hasTranscript && <p className="agent-record-unavailable">暂无会话记录</p>}
         {error && <div className="agent-transcript-error" role="alert"><CircleX /><strong>{transcript ? '更新记录失败' : '无法打开这个上下文'}</strong><p>{error}</p>
           <button type="button" className="text-button" disabled={loading} onClick={onRetry}>重新读取</button></div>}
         {transcript?.hasMore && <div className="agent-transcript-window"><Layers3 /><span>只显示最近 {transcript.messages.length} / {transcript.totalMessages} 条消息</span></div>}

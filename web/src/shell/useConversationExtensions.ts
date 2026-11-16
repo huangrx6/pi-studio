@@ -43,9 +43,9 @@ export function useConversationExtensions({
   sourceQuotaEnabled,
 }: ConversationExtensionsOptions) {
   const discovered = useExtensionUiSnapshot(cwd);
-  const quotaChip = discovered.items.find(item => item.extensionId === QUOTA_EXTENSION_ID && item.slot === 'status.chip');
-  const showQuotaMenu = Boolean(sourceQuotaEnabled && quotaChip
-    && placementAllowsSlot(placementForItem(extensionPlacements, quotaChip), 'status.chip'));
+  const quotaChip = discovered.items.find(item => item.extensionId === QUOTA_EXTENSION_ID && (item.slots ?? [item.slot]).includes('status.chip'));
+  const quotaMenuItem = sourceQuotaEnabled && quotaChip && placementAllowsSlot(placementForItem(extensionPlacements, quotaChip), 'status.chip')
+    ? quotaChip : undefined;
   const surface = useMemo(() => ({
     ...discovered,
     items: discovered.items.filter(item => item.extensionId !== QUOTA_EXTENSION_ID
@@ -182,7 +182,7 @@ export function useConversationExtensions({
 
   return {
     surface,
-    showQuotaMenu,
+    quotaMenuItem,
     preferences,
     orderScope,
     setOrderScope,
