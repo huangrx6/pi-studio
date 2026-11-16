@@ -154,9 +154,6 @@ jobs:
         shell: bash
         run: git restore --source="$GITHUB_SHA" --worktree -- tools/release tools/qa/qa-windows-installer.mjs
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:

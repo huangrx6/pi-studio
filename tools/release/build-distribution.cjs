@@ -12,6 +12,8 @@ async function buildDistribution() {
       : Platform.MAC.createTarget(null, Arch.arm64, Arch.x64),
     publish: 'never',
     config: windows ? {
+      // node-pty ships Windows x64 Node-API binaries and ConPTY with the pinned package.
+      npmRebuild: false,
       // Each Windows version component is 16-bit. Studio keeps the full build ID in resources.
       buildNumber: '0',
       win: {
