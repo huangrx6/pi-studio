@@ -39,13 +39,15 @@ export function useExtensionUiSnapshot(cwd?: string, enabled = true) {
       return;
     }
     let disposed = false;
+    let revision = 0;
     const load = () => {
+      const request = ++revision;
       void window.piApi.extensionsUi(cwd)
         .then((next) => {
-          if (!disposed) setSnapshot(safeSnapshot(next));
+          if (!disposed && request === revision) setSnapshot(safeSnapshot(next));
         })
         .catch(() => {
-          if (!disposed) setSnapshot(EMPTY_SNAPSHOT);
+          if (!disposed && request === revision) setSnapshot(EMPTY_SNAPSHOT);
         });
     };
     load();

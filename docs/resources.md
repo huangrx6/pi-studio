@@ -120,7 +120,7 @@ Harness profile 定义 Prompt section 开关、section 覆盖、自定义补充�
 - `studio.models.defaultThinkingLevel`：新会话默认 thinking。
 - `studio.models.thinkingByModel`：按模型保存的 thinking 偏好；存在时优先于全局 thinking 默认值。
 
-在「设置 → 模型配置 → 编辑模型来源」中可开启额度监控。同一来源下的模型共用一个返回 JSON 的 GET 接口。选择接口认证方式后，点「读取接口字段」，为需要的字段填写中文名称和显示格式。也可以粘贴 JSON 样例，在保存前核对映射。
+在「设置 → 扩展」启用「额度状态」后，可在「模型配置 → 编辑模型来源」中开启额度监控。同一来源下的模型共用一个返回 JSON 的 GET 接口。选择接口认证方式后，点「读取接口字段」，为需要的字段填写中文名称和显示格式。也可以粘贴 JSON 样例，在保存前核对映射。
 
 | 接口字段示例 | 显示规则 | 界面读数示例 |
 | --- | --- | --- |
@@ -128,7 +128,7 @@ Harness profile 定义 Prompt section 开关、section 覆盖、自定义补充�
 | `usage.rolling` | 名称「5 小时已用」，比例（0–1） | 5 小时已用 37.5% |
 | `plan.status` | 名称「套餐状态」，状态翻译 `active=可用` | 套餐状态 可用 |
 
-按需添加小时、日、周、月、余额或重置时间。数组顺序可能变化时，可按字段值匹配，多条件示例为 `limits[type=tokens&unit=6].remaining`。最多可勾选两项显示在会话工作区摘要，点摘要或来源的「查看额度」即可查看全部字段。
+按需添加小时、日、周、月、余额或重置时间。数组顺序可能变化时，可按字段值匹配，多条件示例为 `limits[type=tokens&unit=6].remaining`。只有当前会话的模型来源已开启并保存规则时，才会查询额度并显示会话扩展卡片。最多可勾选两项显示在会话工作区摘要，点摘要或来源的「查看额度」即可查看全部字段。
 
 渲染进程只拿到“是否已配置凭据”和脱敏后的模型信息，不会收到明文密钥。Agent 扩展只有在 manifest 声明 `provider.credentials`、获得用户同意且 provider 在 `providerAccess` 范围内时，才可通过受控 capability 读取对应凭据。
 

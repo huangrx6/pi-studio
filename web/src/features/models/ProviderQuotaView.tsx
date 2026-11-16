@@ -49,21 +49,32 @@ export function ProviderQuotaMenuRow({ id, name, onOpen }: { id: string; name: s
   </button>;
 }
 
+function QuotaMetrics({ snapshot }: { snapshot: ProviderQuotaSnapshot | null }) {
+  const notice = snapshot && quotaNotice(snapshot);
+  return <>
+    {!snapshot && <LoadingState variant="panel">正在查询额度</LoadingState>}
+    {notice && <p className="quota-detail-notice" role="status">{notice}</p>}
+    {snapshot && snapshot.metrics.length > 0 && <dl className="quota-detail-metrics">
+      {snapshot.metrics.map((metric, i) => <div key={i}><dt>{metric.label}</dt><dd>{metric.value ?? <small>{metric.issue}</small>}</dd>
+        {metric.percent !== undefined && <progress aria-label={metric.label} max={100} value={metric.percent} />}
+      </div>)}
+    </dl>}
+  </>;
+}
+
+export function ProviderQuotaPanel({ id }: { id: string }) {
+  const { snapshot } = useProviderQuota(id);
+  return <QuotaMetrics snapshot={snapshot} />;
+}
+
 export function ProviderQuotaDialog({ id, name, onClose }: { id: string; name: string; onClose: () => void }) {
   const { snapshot, busy, read } = useProviderQuota(id);
-  const notice = snapshot && quotaNotice(snapshot);
   return <DetailDialog className="provider-quota-dialog" onClose={onClose}>
     <header className="detail-header"><div className="detail-heading"><span className="detail-icon"><Gauge /></span>
       <div><h2>额度监控</h2><p>{name}</p></div></div>
       <button type="button" className="icon-button" aria-label="关闭额度详情" onClick={onClose}><X /></button></header>
     <div className="quota-detail-body">
-      {!snapshot && <LoadingState variant="panel">正在查询额度</LoadingState>}
-      {notice && <p className="quota-detail-notice" role="status">{notice}</p>}
-      {snapshot && snapshot.metrics.length > 0 && <dl className="quota-detail-metrics">
-        {snapshot.metrics.map((metric, i) => <div key={i}><dt>{metric.label}</dt><dd>{metric.value ?? <small>{metric.issue}</small>}</dd>
-          {metric.percent !== undefined && <progress aria-label={metric.label} max={100} value={metric.percent} />}
-        </div>)}
-      </dl>}
+      <QuotaMetrics snapshot={snapshot} />
     </div>
     <footer className="quota-detail-footer"><span>{snapshot?.updatedAt ? `${snapshot.status === 'stale' ? '上次成功' : '更新于'} ${new Date(snapshot.updatedAt).toLocaleTimeString()}` : ''}</span>
       <button type="button" className="settings-outline" disabled={busy || snapshot?.status === 'disabled'} onClick={() => void read(true)}>

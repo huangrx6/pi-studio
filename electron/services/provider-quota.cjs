@@ -32,7 +32,7 @@ function statusError(status) {
   return new QuotaError(`额度接口返回 HTTP ${status}。`, status >= 500);
 }
 
-function createProviderQuotaMonitor({ getProvider, readKey, fetcher = globalThis.fetch, clock = Date.now }) {
+function createProviderQuotaMonitor({ getProvider, readKey, isAvailable = () => true, fetcher = globalThis.fetch, clock = Date.now }) {
   const entries = new Map();
 
   function invalidate(id) {
@@ -69,6 +69,7 @@ function createProviderQuotaMonitor({ getProvider, readKey, fetcher = globalThis
   }
 
   function inspect(id, draft) {
+    if (!isAvailable()) throw new QuotaError('请先启用额度状态扩展。');
     const connection = quotaConnection(draft);
     const provider = getProvider(id);
     // Draft endpoints may use a freshly entered key. A saved credential can
@@ -87,7 +88,7 @@ function createProviderQuotaMonitor({ getProvider, readKey, fetcher = globalThis
 
   async function read(id, force = false) {
     const provider = getProvider(id);
-    if (!provider?.enabled || !provider.quota?.enabled) {
+    if (!provider?.enabled || !provider.quota?.enabled || !isAvailable()) {
       invalidate(id);
       return { status: 'disabled', metrics: [] };
     }
@@ -122,7 +123,7 @@ function createProviderQuotaMonitor({ getProvider, readKey, fetcher = globalThis
       }
     };
     entry.pending = query().then(snapshot => {
-      if (entries.get(id) !== entry) return { status: 'disabled', metrics: [] };
+      if (entries.get(id) !== entry || !isAvailable()) return { status: 'disabled', metrics: [] };
       entry.snapshot = snapshot;
       entry.nextRead = clock() + ((snapshot.status === 'error' || snapshot.status === 'stale') ? 15_000 : FRESH_MS);
       return snapshot;

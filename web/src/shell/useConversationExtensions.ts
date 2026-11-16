@@ -10,6 +10,7 @@ import {
 } from '../features/conversation/conversation-extension-order';
 import { placementAllowsSlot, placementForItem } from '../features/extensions/extension-placement';
 import type { NotificationTone } from './NotificationCenter';
+import { QUOTA_EXTENSION_ID } from '../types/provider-quota';
 import type { AgentView } from './app-types';
 import { errorText } from '../shared/error-text';
 import type { ExtensionPlacement } from '../shared/preferences';
@@ -20,7 +21,7 @@ import type {
 } from '../types/extension-types';
 
 type ConversationExtensionsOptions = {
-  nativeQuota: boolean;
+  sourceQuotaEnabled: boolean;
   cwd?: string;
   sessionId?: string;
   agentView: AgentView;
@@ -39,13 +40,17 @@ export function useConversationExtensions({
   pushNotification,
   rememberMainScrollPosition,
   extensionPlacements,
-  nativeQuota,
+  sourceQuotaEnabled,
 }: ConversationExtensionsOptions) {
   const discovered = useExtensionUiSnapshot(cwd);
-  // An existing user installation still serves sources that have not opted in.
-  const surface = useMemo(() => nativeQuota
-    ? { ...discovered, items: discovered.items.filter(item => !item.id.startsWith('user:pi-quota-status/')) }
-    : discovered, [discovered, nativeQuota]);
+  const quotaChip = discovered.items.find(item => item.extensionId === QUOTA_EXTENSION_ID && item.slot === 'status.chip');
+  const showQuotaMenu = Boolean(sourceQuotaEnabled && quotaChip
+    && placementAllowsSlot(placementForItem(extensionPlacements, quotaChip), 'status.chip'));
+  const surface = useMemo(() => ({
+    ...discovered,
+    items: discovered.items.filter(item => item.extensionId !== QUOTA_EXTENSION_ID
+      || (sourceQuotaEnabled && item.slot === 'conversation.detail')),
+  }), [discovered, sourceQuotaEnabled]);
   const [preferences, setPreferences] = useState<ConversationExtensionUiPreferences>(
     () => ({
       ...DEFAULT_CONVERSATION_EXTENSION_UI_PREFERENCES,
@@ -177,6 +182,7 @@ export function useConversationExtensions({
 
   return {
     surface,
+    showQuotaMenu,
     preferences,
     orderScope,
     setOrderScope,

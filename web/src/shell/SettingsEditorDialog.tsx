@@ -3,6 +3,7 @@ import { Check, Folder, Image as ImageIcon, Sparkles } from 'lucide-react';
 import type { ConcreteThinkingLevel } from '../types/model-types';
 import { concreteThinkingLevels, thinkingLabels } from '../types/model-types';
 import { emptyCustomModelConfig } from '../features/models/model-settings-types';
+import { quotaExtensionAvailable } from '../types/provider-quota';
 import { ProviderEditorFields } from '../features/models/ProviderEditorFields';
 import { McpEditorFields } from '../features/mcp/McpEditorFields';
 import { Select, type SelectOption } from '../shared/Select';
@@ -104,6 +105,7 @@ export function SettingsEditorDialog({
   >
     {editor.kind === 'provider' && <ProviderEditorFields
       key={editorRequestId}
+      quotaAvailable={quotaExtensionAvailable(settingsData?.extensions)}
       draft={providerDraft}
       setDraft={setProviderDraft}
       editing={Boolean(editor.editId)}

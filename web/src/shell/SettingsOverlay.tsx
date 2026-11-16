@@ -18,6 +18,7 @@ import { InfoHint } from '../shared/InfoHint';
 import { errorText } from '../shared/error-text';
 import { ExtensionSlot } from '../features/extensions/ExtensionSlot';
 import { ConversationListNotice } from './ConversationListNotice';
+import { quotaExtensionAvailable } from '../types/provider-quota';
 import { SettingsEditorDialog } from './SettingsEditorDialog';
 import { SettingsNavigation } from './SettingsNavigation';
 import { ShellHeader, ShellLayout } from './ShellLayout';
@@ -449,6 +450,7 @@ export function SettingsOverlay({
             {tab === 'usage' && <UsageSettings active={open} />}
             {data && tab === 'models' && <ModelSettings
               providers={data.providers}
+              quotaAvailable={quotaExtensionAvailable(data.extensions)}
               models={models.models}
               enabledModels={models.enabledModels}
               defaultModelSelection={models.defaultModelSelection}

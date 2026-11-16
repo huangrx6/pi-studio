@@ -57,6 +57,7 @@ export type ModelSettingsActions = {
   onImportModels: (providerId: string, models: DiscoveredModel[]) => void;
 };
 export type ModelSettingsProps = {
+  quotaAvailable: boolean;
   providers: ModelProvider[];
   models: ModelOption[];
   enabledModels: string[];

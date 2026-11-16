@@ -318,9 +318,9 @@ export function useConversationController(foundation: AppFoundation) {
   const source = settingsData?.providers.find(item => item.id === currentProviderId);
   const quotaProvider = settingsData
     ? source?.enabled && source.quotaEnabled ? { id: source.id, name: source.name } : undefined
-    : modelSelection.quotaProvider;
+    : modelSelection.quotaProvider?.id === currentProviderId ? modelSelection.quotaProvider : undefined;
   const conversationExtensions = useConversationExtensions({
-    nativeQuota: Boolean(quotaProvider),
+    sourceQuotaEnabled: Boolean(quotaProvider),
     cwd: session?.cwd,
     sessionId: session?.id,
     agentView,
@@ -976,7 +976,7 @@ export function useConversationController(foundation: AppFoundation) {
     returnToMainAgent,
     openModelComparison,
     openTrace,
-    quotaProvider,
+    quotaProvider: conversationExtensions.showQuotaMenu ? quotaProvider : undefined,
     conversationExtensionSurface,
     conversationExtensionUiPreferences,
     conversationExtensionOrderScope,

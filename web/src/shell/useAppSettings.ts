@@ -1,5 +1,5 @@
 import type { ProviderEditorDraft as ProviderDraft } from '../features/models/ProviderEditorFields';
-import { emptyProviderQuota } from '../types/provider-quota';
+import { emptyProviderQuota, quotaExtensionAvailable } from '../types/provider-quota';
 import { useEffect, useMemo } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { ActionConfirmOptions, useActionConfirmation } from '../shared/ConfirmDialog';
@@ -1185,7 +1185,12 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
       invalidateModelRefresh();
       const providerId = providerDraft.providerId.trim();
       const selectionOwner = modelProjectionOwner(owner.cwd);
-      const result = await window.piApi.addProvider({ ...providerDraft, editing: Boolean(editor?.editId), cwd: owner.cwd });
+      const result = await window.piApi.addProvider({
+        ...providerDraft,
+        quota: quotaExtensionAvailable(settingsData?.extensions) ? providerDraft.quota : undefined,
+        editing: Boolean(editor?.editId),
+        cwd: owner.cwd,
+      });
       if (owner.current()) {
         setProviderDraft(current => ({ ...current, apiKey: '' }));
         setProviderModels(current => { const next = { ...current }; delete next[providerId]; return next; });

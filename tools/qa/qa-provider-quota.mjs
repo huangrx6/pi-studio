@@ -53,20 +53,22 @@ async function measureQuotaForm(editor) {
 
 // Use the production mapping and query service behind an in-memory provider.
 function installQuotaFixture(baseUrl) {
+  window.__legacyQuotaReads = 0;
   const base = window.piApi;
   const fixtures = window.__settingsResourcesQa;
   fixtures.failNextCatalog = false;
+  const extensionEnabled = () => localStorage.getItem('quota-extension') !== 'off';
   const project = async () => {
     const { models, settings } = fixtures.projection();
     const all = models.models.map(item => item.id);
     const config = await window.readQuotaConfig();
     const providers = settings.providers.map(source => ({ ...source, quotaEnabled: source.id === 'qa' && config?.enabled === true }));
-    return { models: { ...models, enabled: all }, settings: { ...settings, enabledModels: all, providers } };
+    return { models: { ...models, enabled: all }, settings: { ...settings, enabledModels: all, providers, extensions: [{ id: 'user:pi-quota-status', available: extensionEnabled() }] } };
   };
   const legacy = {
-    id: 'user:pi-quota-status/chip', contributionId: 'chip', extensionId: 'pi-quota-status',
+    id: 'user:pi-quota-status/chip', contributionId: 'chip', extensionId: 'user:pi-quota-status',
     extensionName: '旧额度扩展', scope: 'user', slot: 'status.chip', details: 'detail', title: '旧额度状态', size: 'compact',
-    content: [{ kind: 'text', text: '已有安装' }],
+    content: [{ kind: 'dataView', sourceId: 'user:pi-quota-status/live' }],
   };
   const withSessionModel = read => async input => {
     const result = await read(input);
@@ -88,7 +90,11 @@ function installQuotaFixture(baseUrl) {
     conversationPage: withSessionModel(base.conversationPage),
     conversationSnapshot: withSessionModel(base.conversationSnapshot),
     subscribeConversation: withSessionModel(base.subscribeConversation),
-    extensionsUi: async () => ({ items: [legacy, { ...legacy, id: 'user:pi-quota-status/detail', contributionId: 'detail', slot: 'conversation.detail', size: 'regular' }], errors: [], syncedAt: Date.now(), apiVersion: 1 }),
+    openExtensionDataView: async payload => {
+      if (payload.sourceId.startsWith('user:pi-quota-status/')) window.__legacyQuotaReads++;
+      return base.openExtensionDataView(payload);
+    },
+    extensionsUi: async () => ({ items: extensionEnabled() ? [legacy, { ...legacy, id: 'user:pi-quota-status/detail', contributionId: 'detail', slot: 'conversation.detail', size: 'regular' }] : [], errors: [], syncedAt: Date.now(), apiVersion: 1 }),
   }, { get: (target, key) => key in target ? target[key] : base[key] });
 }
 
@@ -113,9 +119,16 @@ try {
   await page.locator('.assistant-response').first().waitFor();
   const workspace = page.getByRole('button', { name: '打开工作区面板' });
   await workspace.click();
-  await page.locator('.workspace-menu-extension-row').filter({ hasText: '旧额度状态' }).waitFor();
+  await page.getByRole('dialog', { name: '工作区面板' }).waitFor();
+  assert.equal(await page.getByText('旧额度状态', { exact: true }).count(), 0);
+  assert.equal(await page.locator('.quota-menu-row').count(), 0);
+  const views = page.getByRole('group', { name: '会话视图' });
+  await views.getByRole('button', { name: /^扩展/ }).click();
+  await page.getByText('暂无会话扩展').waitFor();
   assert.equal(reads, 0);
+  assert.equal(await page.evaluate(() => window.__legacyQuotaReads), 0);
   await workspace.click();
+  await views.getByRole('button', { name: '返回对话' }).click();
 
   const nav = page.locator('.settings-navigation');
   await page.locator('.sidebar-bottom button[title="设置"]').click();
@@ -213,10 +226,17 @@ try {
   assert.equal(await page.locator('.workspace-menu-extension-row').filter({ hasText: '旧额度状态' }).count(), 0);
   await row.click(); await detail.getByText('可用').waitFor(); await page.keyboard.press('Escape');
   await page.waitForFunction(() => document.activeElement?.classList.contains('workspace-menu-trigger'));
+  await workspace.click();
+  await views.getByRole('button', { name: /^扩展/ }).click();
+  await page.locator('.extension-hub-card').getByText('120 次').waitFor();
+  await page.getByRole('button', { name: '打开 旧额度状态 详情' }).click();
+  await page.locator('.extension-page').getByText('可用').waitFor();
+  assert.equal(await page.evaluate(() => window.__legacyQuotaReads), 0);
   await page.evaluate(() => window.__settingsResourcesQa.openSecondSession());
   await page.locator('.model-label').getByText('第二来源模型').waitFor();
   await workspace.click();
-  await page.locator('.workspace-menu-extension-row').filter({ hasText: '旧额度状态' }).waitFor();
+  await page.getByRole('dialog', { name: '工作区面板' }).waitFor();
+  assert.equal(await page.getByText('旧额度状态', { exact: true }).count(), 0);
   assert.equal(await row.count(), 0);
   await page.reload();
   await page.locator('.session-row').filter({ hasText: '性能会话 0000' }).click();
@@ -234,8 +254,25 @@ try {
   assert.equal(await quotaButton.count(), 0);
   const before = reads;
   await nav.getByRole('button', { name: '返回对话' }).click(); await workspace.click();
-  await page.locator('.workspace-menu-extension-row').filter({ hasText: '旧额度状态' }).waitFor();
+  await page.getByRole('dialog', { name: '工作区面板' }).waitFor();
+  assert.equal(await page.getByText('旧额度状态', { exact: true }).count(), 0);
   assert.equal(await row.count(), 0); assert.equal(reads, before);
+  // A saved, enabled source still needs the extension to expose any quota UI.
+  provider.quota = { ...provider.quota, enabled: true };
+  await page.evaluate(() => localStorage.setItem('quota-extension', 'off'));
+  await page.reload();
+  await page.locator('.session-row').first().click();
+  await workspace.click();
+  await views.waitFor();
+  assert.equal(await row.count(), 0);
+  await workspace.click();
+  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await nav.getByRole('button', { name: '模型配置', exact: true }).click();
+  await edit.click();
+  await editor.getByLabel('显示名称', { exact: true }).waitFor();
+  assert.equal(await toggle.count(), 0);
+  assert.equal(await quotaButton.count(), 0);
+  assert.equal(reads, before);
   assert.deepEqual(errors, []);
   console.log('350-model directory, quota mapping, stale/auth/retry, saved preferences, keyboard focus and existing extension verified.');
 } finally {

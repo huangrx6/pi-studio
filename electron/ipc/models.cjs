@@ -91,7 +91,9 @@ async function committedModelsProjection(cwd) {
 }
 
 function registerModelsIpc() {
+  const { providerQuotaExtensionAvailable } = require('../services/studio-extensions.cjs');
   const quotaMonitor = createProviderQuotaMonitor({
+    isAvailable: providerQuotaExtensionAvailable,
     getProvider: id => getStudioDatabase().getProvider(id),
     readKey: resolveProviderApiKey,
   });

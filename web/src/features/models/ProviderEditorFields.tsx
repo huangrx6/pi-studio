@@ -10,10 +10,11 @@ export type ProviderEditorDraft = {
   apiKey: string; icon: string; modelsUrl: string; quota: ProviderQuotaConfig;
 };
 
-export function ProviderEditorFields({ draft, setDraft, editing, apiTypeOptions, settingsBusy = false }: {
+export function ProviderEditorFields({ draft, setDraft, editing, quotaAvailable, apiTypeOptions, settingsBusy = false }: {
   draft: ProviderEditorDraft;
   setDraft: Dispatch<SetStateAction<ProviderEditorDraft>>;
   editing: boolean;
+  quotaAvailable: boolean;
   apiTypeOptions: SelectOption[];
   settingsBusy?: boolean;
 }) {
@@ -36,8 +37,8 @@ export function ProviderEditorFields({ draft, setDraft, editing, apiTypeOptions,
       <input id="provider-api-key" aria-describedby={editing ? 'provider-api-key-note' : undefined} type="password" autoComplete="new-password" value={draft.apiKey} onChange={event => update('apiKey', event.target.value)} placeholder={editing ? '输入新 API Key' : '粘贴 API Key'} />
       {editing && <small id="provider-api-key-note" className="provider-editor-note">留空保留已保存的 API Key，不会清除凭据。</small>}
     </div>
-    <ProviderQuotaFields config={draft.quota} providerId={draft.providerId} apiKey={draft.apiKey}
-      onChange={quota => setDraft(current => ({ ...current, quota }))} />
+    {quotaAvailable && <ProviderQuotaFields config={draft.quota} providerId={draft.providerId} apiKey={draft.apiKey}
+      onChange={quota => setDraft(current => ({ ...current, quota }))} />}
     <details className="provider-editor-advanced field-wide" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}
       onInvalidCapture={event => {
         // Open synchronously before native form validation tries to focus a field.

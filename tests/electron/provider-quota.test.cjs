@@ -125,3 +125,24 @@ test('incomplete metrics stay distinct from zero and invalid or oversized respon
     assert.equal(result.status, 'error'); assert.ok(result.message); assert.doesNotMatch(result.message, new RegExp(key));
   }
 });
+
+test('disabling the extension suppresses in-flight balances, cached reads and credential inspection', async () => {
+  let available = true;
+  let requests = 0;
+  let finish;
+  const monitor = createProviderQuotaMonitor({
+    getProvider: provider,
+    readKey: () => key,
+    isAvailable: () => available,
+    fetcher: () => { requests++; return new Promise(resolve => { finish = resolve; }); },
+  });
+  const pending = monitor.read('custom');
+  await tick();
+  available = false;
+  finish(json({ data: { balance: 31.86 } }));
+  const disabled = { status: 'disabled', metrics: [] };
+  assert.deepEqual(await pending, disabled);
+  assert.deepEqual(await monitor.read('custom'), disabled);
+  assert.throws(() => monitor.inspect('custom', config()), /启用额度状态扩展/);
+  assert.equal(requests, 1);
+});

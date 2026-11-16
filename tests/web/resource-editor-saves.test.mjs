@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import test from 'node:test';
 import ts from 'typescript';
+import { quotaExtensionAvailable } from '../../web/src/types/provider-quota.ts';
 
 const source = fs.readFileSync(new URL('../../web/src/shell/useAppSettings.ts', import.meta.url), 'utf8');
 const tree = ts.createSourceFile('useAppSettings.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -27,6 +28,7 @@ function harness(kind = 'provider') {
     mcpRefreshRequestRef: { current: 0 }, mcpRefreshLockRef: { current: false }, settingsRequestRef: { current: 0 }, catalogRequestRef: { current: 0 }, extensionRefreshRequestRef: { current: 0 }, extensionRefreshLockRef: { current: false },
     setMcpRefreshBusy: value => { h.mcpRefreshBusy = value; }, setMcpRefreshError: value => { h.mcpRefreshError = value; }, setMcpRefreshSummary: value => { h.mcpRefreshSummary = value; },
     setModelRefreshSummary: value => { h.modelRefreshSummary = value; }, setDefaultModelSelection: value => { h.defaultSelection = value; }, setModelSelection: value => { h.selection = value; },
+    settingsData: null, quotaExtensionAvailable,
     editor: { kind }, editorLoading: false, settingsBusy: false,
     modelRefreshLockRef: {current:false}, modelRefreshRequestRef:{current:0},
     setModelRefreshBusy: value => { h.modelRefreshBusy = value; }, setModelRefreshError: value => { h.modelRefreshError = value; },

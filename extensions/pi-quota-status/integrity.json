@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "algorithm": "sha256",
+  "files": [
+    {
+      "path": "LICENSE",
+      "sha256": "a11d00421b80b0563e08f13d2f3b6c4ef823856fad3d148fe435b08a2a9c1366",
+      "size": 1065
+    },
+    {
+      "path": "pi-studio.extension.json",
+      "sha256": "de320d5f5a7b08000609878d66e8516a5626f1a8360deaecd02dd5faf4cfd802",
+      "size": 943
+    }
+  ]
+}

@@ -1,3 +1,9 @@
+export const QUOTA_EXTENSION_ID = 'user:pi-quota-status';
+
+export function quotaExtensionAvailable(extensions?: Array<{ id: string; available: boolean }>) {
+  return extensions?.some(extension => extension.id === QUOTA_EXTENSION_ID && extension.available) === true;
+}
+
 export type QuotaField = {
   path: string;
   label: string;

@@ -68,6 +68,10 @@ const TIER_RANK = new Map([
 const PROTECTED_BUILTIN_TIERS = new Set(['core', 'optional']);
 const EXTENSION_CLEANUP_TIMEOUT_MS = 2_000;
 
+// Studio owns quota connections and field mappings. Installed editions only
+// contribute the entry points, including editions that shipped a Node adapter.
+const QUOTA_EXTENSION_ID = 'user:pi-quota-status';
+
 let host;
 let distribution;
 let officialCatalog;
@@ -1160,7 +1164,7 @@ async function reloadStudioExtensionsUnlocked(runtime, cwd, prepared = {}) {
         }
         loaded = { extension, handlers: new Map(), dataSources: providers };
       } else {
-        if (!row.manifest?.runtime?.durableEntry) continue;
+        if (row.id === QUOTA_EXTENSION_ID || !row.manifest?.runtime?.durableEntry) continue;
         loaded = await loadRuntimeExtension(row, effectiveCwd, {
           contentHash: inventory.fingerprints.get(row.id),
         });
@@ -1475,7 +1479,7 @@ function extensionHostSnapshot() {
       const rowHealth = health.get(row.id);
       const management = managementState(row, graph);
       const needsRuntime = row.scope === 'builtin'
-        || Boolean(row.manifest?.runtime?.durableEntry);
+        || (row.id !== QUOTA_EXTENSION_ID && Boolean(row.manifest?.runtime?.durableEntry));
       return {
         ...row,
         tier: extensionTier(row),
@@ -1516,6 +1520,10 @@ function extensionHostSnapshot() {
   };
 }
 
+function providerQuotaExtensionAvailable() {
+  return extensionHostSnapshot().extensions.some(row => row.id === QUOTA_EXTENSION_ID && row.available);
+}
+
 function extensionRowsForRuntime(cwd) {
   const effectiveCwd = cwd || host?.cwd || '';
   const rows = syncStudioExtensions(effectiveCwd).rows
@@ -1545,7 +1553,7 @@ function extensionUiSnapshot() {
         size: panel.size || 'regular',
         priority: panel.priority || 0,
         sourceOrder,
-        content: structuredClone(panel.content || []),
+        content: row.id === QUOTA_EXTENSION_ID ? [] : structuredClone(panel.content || []),
         slots: Array.isArray(panel.slots) ? [...panel.slots] : [panel.slot],
         ...(panel.details ? { details: panel.details } : {}),
         ...(panel.visibility ? { visibility: panel.visibility } : {}),
@@ -1722,6 +1730,7 @@ module.exports = {
   extensionRowsForRuntime,
   extensionTier,
   extensionUiSnapshot,
+  providerQuotaExtensionAvailable,
   importStudioExtension,
   installBuiltinExtension,
   loadRuntimeExtension,

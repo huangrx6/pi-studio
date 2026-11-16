@@ -1,3 +1,5 @@
+import { ProviderQuotaPanel } from '../models/ProviderQuotaView';
+import { QUOTA_EXTENSION_ID } from '../../types/provider-quota';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
@@ -700,6 +702,14 @@ export function ExtensionSlot({
     sessionId,
     modelRef,
   };
+  const detailItem = items[0];
+  const providerId = modelRef?.split('/')[0];
+  const detailContent = detailItem && (
+    detailItem.extensionId === QUOTA_EXTENSION_ID && providerId
+      ? <ProviderQuotaPanel key={providerId} id={providerId} />
+      : <ContentBlocks blocks={detailItem.content} {...contentProps}
+          onAction={(action) => void activate(`${presentation}:${detailItem.id}`, action)} />
+  );
   return <>
     {presentation === 'page' && items[0] && <section className="extension-page" aria-label={items[0].title}>
       <header className="extension-page-head">
@@ -711,19 +721,11 @@ export function ExtensionSlot({
         </span>
       </header>
       <div className="extension-page-body">
-        <ContentBlocks
-          blocks={items[0].content}
-          {...contentProps}
-          onAction={(action) => void activate(`page:${items[0].id}`, action)}
-        />
+        {detailContent}
       </div>
     </section>}
     {presentation === 'inline' && items[0] && <div className="extension-inline-content" aria-label={items[0].title}>
-      <ContentBlocks
-        blocks={items[0].content}
-        {...contentProps}
-        onAction={(action) => void activate(`inline:${items[0].id}`, action)}
-      />
+      {detailContent}
     </div>}
     {presentation === 'compact' && items[0] && <div className="extension-compact-slot" aria-label={items[0].title}>
       <ContentBlocks

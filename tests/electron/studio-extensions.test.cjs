@@ -1591,3 +1591,33 @@ test('child conversations open through the Durable harness without a Studio row 
   assert.equal(await openChildConversation('invalid', runtime), undefined);
   assert.equal(calls.length, 1);
 });
+
+test('installed quota 0.5.5 exposes the settings switch without activating its automatic balance adapter', async t => {
+  const directory = path.join(studioExtensions.userExtensionsDirectory(), 'pi-quota-status');
+  const id = 'user:pi-quota-status';
+  fs.mkdirSync(directory, { recursive: true });
+  t.after(async () => {
+    await studioExtensions.uninstallStudioExtensions();
+    require('../../electron/core/studio-db.cjs').getStudioDatabase().removeExtension(id);
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  fs.writeFileSync(path.join(directory, 'pi-studio.extension.json'), JSON.stringify(manifest({
+    id: 'pi-quota-status', version: '0.5.5',
+    permissions: ['ui.panels', 'ui.data'],
+    runtime: { durableEntry: 'extension.mjs' },
+    contributes: {
+      dataSources: [{ id: 'live', title: '额度' }],
+      panels: [{ id: 'quota-detail', title: '额度', slot: 'conversation.detail',
+        content: [{ kind: 'dataView', sourceId: id + '/live' }] }],
+    },
+  })));
+  writeEntry(directory, "throw new Error('旧版余额适配器已执行');");
+  await studioExtensions.reloadStudioExtensions({ registry: { install() {}, uninstall() {} } }, '');
+  assert.equal(studioExtensions.providerQuotaExtensionAvailable(), true);
+  const panel = studioExtensions.extensionUiSnapshot().items.find(item => item.extensionId === id);
+  assert.deepEqual(panel.content, []);
+  assert.equal(studioExtensions.extensionDataSource(id + '/live'), undefined);
+  studioExtensions.setStudioExtensionEnabled(id, false, '');
+  assert.equal(studioExtensions.providerQuotaExtensionAvailable(), false);
+  assert.equal(studioExtensions.extensionUiSnapshot().items.some(item => item.extensionId === id), false);
+});
