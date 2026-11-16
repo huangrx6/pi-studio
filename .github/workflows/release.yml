@@ -238,13 +238,14 @@ jobs:
           gh release upload "$RELEASE_TAG" artifacts/*-Windows-x64-Setup.exe{,.blockmap} --repo "$GITHUB_REPOSITORY" --clobber
           gh release upload "$RELEASE_TAG" artifacts/latest.yml --repo "$GITHUB_REPOSITORY" --clobber
 
-      - name: Select release notes
+      - name: Verify published tag and select release notes
         id: release-notes
         if: ${{ !inputs.windows_only }}
         shell: bash
         run: |
+          git fetch --no-tags origin "refs/tags/${RELEASE_TAG}"
+          test "$(git rev-parse 'FETCH_HEAD^{commit}')" = "$(git rev-parse HEAD)"
           notes=".github/release-notes/${RELEASE_TAG}.md"
-          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           if [ -f "$notes" ]; then
             echo "body_path=$notes" >> "$GITHUB_OUTPUT"
           else
@@ -255,8 +256,10 @@ jobs:
         if: ${{ !inputs.windows_only }}
         uses: softprops/action-gh-release@v2
         with:
+          # The existing tag determines the release commit. GitHub separately
+          # checks workflow-write access if target_commitish names an old workflow.
           tag_name: ${{ env.RELEASE_TAG }}
-          target_commitish: ${{ steps.release-notes.outputs.commit }}
+          target_commitish: ${{ github.event.repository.default_branch }}
           draft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || false }}
           body_path: ${{ steps.release-notes.outputs.body_path }}
           generate_release_notes: ${{ steps.release-notes.outputs.body_path == '' }}
