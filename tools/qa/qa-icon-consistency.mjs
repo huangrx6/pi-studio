@@ -26,9 +26,9 @@ try {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
 
-  await page.route('**/popover-preview', route => route.fulfill({
+  await page.route('**/popover-preview*', route => route.fulfill({
     contentType: 'text/html',
-    body: `<!doctype html><html><head><meta charset="UTF-8"></head><body style="margin:0;background:var(--bg)"><div id="fixture"></div><script type="module">
+    body: `<!doctype html><html><head><meta charset="UTF-8"></head><body style="margin:0;background:var(--bg)"><div id="fixture" class="app"></div><script type="module">
       import RefreshRuntime from '/@react-refresh';
       RefreshRuntime.injectIntoGlobalHook(window); window.$RefreshReg$ = () => {}; window.$RefreshSig$ = () => (type) => type;
       window.__vite_plugin_react_preamble_installed__ = true;
@@ -41,27 +41,40 @@ try {
       const React = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react.js')).default;
       const { createRoot } = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react-dom_client.js')).default;
       const { PanelTabBar } = await import('/src/shell/right-panel/PanelTabBar.tsx');
+      const { RightPanelToolList } = await import('/src/shell/right-panel/RightPanelStart.tsx');
       const { FilePreview } = await import('/src/shared/FilePreview.tsx');
+      const { AttachmentIcon } = await import('/src/shared/AttachmentIcon.tsx');
+      const { ComposerSuggestions } = await import('/src/features/conversation/ComposerSuggestions.tsx');
       const { ConversationImageGallery } = await import('/src/features/conversation/ConversationImageGallery.tsx');
       const canvas = document.createElement('canvas'); canvas.width = 320; canvas.height = 200;
       const ctx = canvas.getContext('2d'); ctx.fillStyle = '#192126'; ctx.fillRect(0, 0, 320, 200);
       const shot = canvas.toDataURL('image/png');
       const { MoreHorizontal } = await import('/@fs/${process.cwd()}/node_modules/.vite/deps/lucide-react.js');
-      const tabs = [{ id: 'file:1', kind: 'file', title: 'README.md' }];
+      const filePath = new URLSearchParams(location.search).get('file') || 'README.md';
+      const name = filePath.split('/').at(-1);
+      const tabs = [{ id: 'files', kind: 'files', title: '文件' }, { id: 'file:1', kind: 'file', title: name, path: filePath }];
       const toolActions = [
         { id: 'files', label: '文件', onSelect: () => {} },
         { id: 'terminal', label: '终端', onSelect: () => {} },
       ];
       const file = {
-        path: '/workspace/pi-studio/README.md',
-        name: 'README.md',
+        path: filePath, name,
         size: 72,
         mimeType: 'text/markdown',
         kind: 'text',
         text: '# Pi Studio\\n\\n工作区文件预览。\\n\\n- Markdown 渲染\\n- 源码切换\\n',
       };
       function Fixture() {
-        return React.createElement('div', { style: { width: '520px' } },
+        if (new URLSearchParams(location.search).has('file-icons')) {
+          return React.createElement('div', { className: 'file-panel' },
+            React.createElement(RightPanelToolList, { actions: toolActions }),
+            React.createElement('div', { className: 'composer-dock' },
+              React.createElement(AttachmentIcon, { name }),
+              React.createElement(ComposerSuggestions, { menu: { kind: 'file', query: '' }, commandOptions: [], activeIndex: 0,
+                loading: false, error: '', workspace: 'pi-studio', onHover: () => {}, onSelect: () => {}, onRetry: () => {},
+                fileOptions: [{ type: 'file', name, path: filePath }, { type: 'directory', name: 'docs', path: 'docs' }] })));
+        }
+        return React.createElement('div', { className: 'file-panel', style: { width: 'min(520px, 100%)' } },
           React.createElement(PanelTabBar, {
             tabs, activeId: 'file:1', workspaceName: 'pi-studio', fullscreen: false, split: false, resizing: false,
             toolActions,
@@ -149,6 +162,7 @@ try {
     };
     const counter = document.querySelector('.studio-lightbox .yarl__counter');
     return {
+      controlSize: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--control-sm')),
       toolbarButtons: [...document.querySelectorAll('.studio-lightbox .yarl__toolbar .yarl__button')].map(read),
       nav: ['.yarl__navigation_prev', '.yarl__navigation_next']
         .map((selector) => document.querySelector(`.studio-lightbox ${selector}`))
@@ -159,8 +173,8 @@ try {
   });
   assert.ok(lightbox.toolbarButtons.length >= 3, `lightbox toolbar buttons: ${JSON.stringify(lightbox)}`);
   for (const button of lightbox.toolbarButtons) {
-    assert.equal(button.width, 32, `lightbox button box drifted: ${JSON.stringify(button)}`);
-    assert.equal(button.height, 32, `lightbox button box drifted: ${JSON.stringify(button)}`);
+    assert.equal(button.width, lightbox.controlSize, `lightbox button box drifted: ${JSON.stringify(button)}`);
+    assert.equal(button.height, lightbox.controlSize, `lightbox button box drifted: ${JSON.stringify(button)}`);
     assert.equal(button.iconWidth, 16, `lightbox icon size drifted: ${JSON.stringify(button)}`);
     assert.equal(button.stroke, '1.75px', `lightbox icon stroke drifted: ${JSON.stringify(button)}`);
   }
@@ -168,17 +182,59 @@ try {
     assert.equal(nav.width, 40, `lightbox nav box drifted: ${JSON.stringify(nav)}`);
     assert.equal(nav.iconWidth, 20, `lightbox nav icon drifted: ${JSON.stringify(nav)}`);
   }
-  assert.equal(lightbox.counterHeight, 32, `lightbox counter drifted: ${JSON.stringify(lightbox.counterHeight)}`);
+  assert.equal(lightbox.counterHeight, lightbox.controlSize, `lightbox counter drifted: ${JSON.stringify(lightbox.counterHeight)}`);
   await page.screenshot({ path: output + 'icon-lightbox-light.png', animations: 'disabled' });
   await page.keyboard.press('Escape');
   await page.locator('.studio-lightbox').waitFor({ state: 'detached' });
 
-  await page.screenshot({ path: output + 'icon-consistency-light.png', animations: 'disabled' });
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
-  await page.screenshot({ path: output + 'icon-consistency-dark.png', animations: 'disabled' });
+  async function checkFileHeader(directory) {
+    const identity = page.locator('.file-preview-identity');
+    assert.equal(await identity.locator('.file-preview-directory').innerText(), directory);
+    const [icon, name, path, actions] = await Promise.all([
+      identity.locator('img'), identity.locator('strong'), identity.locator('.file-preview-directory'), page.locator('.file-preview-actions'),
+    ].map(element => element.boundingBox()));
+    assert.ok(Math.abs((icon.y + icon.height / 2) - (name.y + name.height / 2)) <= 1);
+    assert.ok(icon.x + icon.width <= name.x && name.x + name.width <= actions.x);
+    assert.ok(path.y >= name.y + name.height && Math.abs(path.x - icon.x) <= 1);
+    const fills = await page.locator('.panel-tab-icon, .panel-tab-icon > *, .file-preview-identity, .file-preview-identity img')
+      .evaluateAll(icons => icons.map(icon => getComputedStyle(icon).backgroundColor));
+    assert.ok(fills.every(fill => fill === 'rgba(0, 0, 0, 0)'), 'file and folder glyphs have transparent backgrounds');
+    const tabColors = await page.getByRole('tab').evaluateAll(tabs => tabs.map(tab => getComputedStyle(tab).backgroundColor));
+    assert.notEqual(tabColors[0], tabColors[1], 'selection is still visible across the whole file tab');
+  }
+
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
+    await checkFileHeader('根目录');
+    await page.screenshot({ path: output + 'icon-consistency-' + theme + '.png', animations: 'disabled' });
+    const bar = await page.locator('.panel-tabbar').boundingBox();
+    const header = await page.locator('.file-preview-toolbar').boundingBox();
+    await page.screenshot({ path: output + 'file-header-' + theme + '.png', animations: 'disabled',
+      clip: { x: bar.x, y: bar.y, width: bar.width, height: header.y + header.height - bar.y } });
+  }
+  const directory = '工作区/' + '嵌套目录/'.repeat(10) + '文档';
+  const file = directory + '/文件预览时需要显示的完整文件名.md';
+  await page.setViewportSize({ width: 340, height: 640 });
+  await page.goto('http://127.0.0.1:5180/popover-preview?file=' + encodeURIComponent(file));
+  await checkFileHeader(directory);
+  assert.ok(await page.locator('.file-preview-directory').evaluate(path => path.scrollWidth > path.clientWidth));
+  assert.equal(await page.locator('.file-preview-directory').getAttribute('title'), file);
+
+  await page.goto('http://127.0.0.1:5180/popover-preview?file-icons');
+  const reusedIcons = page.locator('.panel-tool-icon, .attachment-icon, .composer-option-icon');
+  await reusedIcons.first().waitFor({ state: 'attached' });
+  assert.equal(await reusedIcons.count(), 5);
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
+    for (const wallpaper of [false, true]) {
+      await page.locator('.app').evaluate((app, enabled) => app.classList.toggle('is-wallpaper-inside', enabled), wallpaper);
+      const fills = await reusedIcons.evaluateAll(icons => icons.map(icon => getComputedStyle(icon).backgroundColor));
+      assert.ok(fills.every(fill => fill === 'rgba(0, 0, 0, 0)'), 'tool shortcuts, attachment icons and file suggestions have transparent backgrounds');
+    }
+  }
 
   assert.deepEqual(errors, []);
-  console.log('PASS: tab bar and file preview share one icon-button box (28), icon size (14), stroke and colour.');
+  console.log('Passed toolbar geometry, file title and directory alignment, and transparent icons in both themes.');
 } finally {
   await browser.close();
 }

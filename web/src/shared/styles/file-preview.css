@@ -31,48 +31,35 @@
 }
 
 .file-preview-identity {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--icon-sm) minmax(0, 1fr);
   min-width: 0;
   align-items: center;
-  gap: var(--space-2);
+  gap: 1px 6px;
 }
 
-.file-preview-icon {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  flex: none;
-  place-items: center;
-  border-radius: var(--radius-tag);
+.file-preview-identity > svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   color: var(--icon);
-  background: var(--surface-soft);
 }
 
-.file-preview-icon svg,
-.file-row .file-kind-icon svg {
-  width: var(--icon-sm); height: var(--icon-sm);
-}
-
-.file-preview-identity > div {
-  display: grid;
-  min-width: 0;
-  gap: 1px;
-}
-
-.file-preview-identity strong,
-.file-preview-identity span {
+.file-preview-identity > strong,
+.file-preview-directory {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.file-preview-identity strong {
+.file-preview-identity > strong {
   color: var(--text);
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
 }
 
-.file-preview-identity span {
+.file-preview-directory {
+  grid-column: 1 / -1;
+  text-align: start;
   color: var(--faint);
   font: var(--text-xs) var(--mono);
 }
@@ -470,8 +457,7 @@
   text-align: center;
 }
 
-.file-preview-empty > span,
-.file-preview-unsupported > span {
+.file-preview-empty > span {
   display: grid;
   width: 42px;
   height: 42px;
@@ -482,7 +468,7 @@
 }
 
 .file-preview-empty > span svg,
-.file-preview-unsupported > span svg {
+.file-preview-unsupported > .studio-file-icon {
   width: var(--icon-lg); height: var(--icon-lg);
 }
 

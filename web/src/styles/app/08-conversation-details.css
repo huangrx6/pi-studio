@@ -193,7 +193,7 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 
 .user-text { white-space: pre-wrap; }
 .attachment-card { display: flex; align-items: center; gap: 9px; min-width: 240px; max-width: min(100%, 460px); margin-top: 9px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); text-align: left; }
-.attachment-icon { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: var(--radius-tag); color: var(--icon); background: var(--surface-soft); }
+.attachment-icon { display: grid; place-items: center; width: 28px; height: 28px; flex: none; }
 .attachment-icon svg { width: var(--icon-md); height: var(--icon-md); }
 .attachment-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .attachment-main strong { overflow: hidden; color: var(--muted); font: var(--text-xs) var(--mono); font-weight: var(--weight-semibold); text-overflow: ellipsis; white-space: nowrap; }
@@ -255,12 +255,6 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .composer-attach-button { display: grid; place-items: center; width: 30px; height: var(--control-sm); flex: none; border-radius: var(--radius-control); color: var(--muted); }
 .composer-attach-button:hover:not(:disabled) { background: var(--surface-soft); color: var(--text); }
 .composer-attach-button svg { width: var(--icon-md); height: var(--icon-md); }
-.attachment-icon.is-image { color: var(--icon); background: var(--surface-soft); }
-.attachment-icon.is-code { color: var(--icon); background: var(--surface-soft); }
-.attachment-icon.is-archive { color: var(--icon); background: var(--surface-soft); }
-.attachment-icon.is-sheet { color: var(--icon); background: var(--surface-soft); }
-.attachment-icon.is-doc { color: var(--icon); background: var(--surface-soft); }
-.attachment-icon.is-generic { color: var(--icon); background: var(--surface-soft); }
 .attachment-kind.is-code { background: var(--surface-soft); color: var(--faint); }
 .attachment-kind.is-archive { background: var(--surface-soft); color: var(--muted); }
 .attachment-kind.is-sheet { background: var(--surface-soft); color: var(--muted); }
@@ -278,8 +272,6 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 /* Conversation errors are owned by features/conversation/styles/conversation-error.css. */
 
 /* 错误卡是“发生过什么”的提示，不是持续状态：右上角常驻关闭按钮。 */
-
-.composer-option-icon.is-directory { color: var(--icon); background: var(--surface-soft); }
 
 .shortcut-list { padding: 8px 20px 14px; }
 .shortcut-row { display: flex; align-items: center; justify-content: space-between; min-height: 38px; border-top: 1px solid var(--border); color: var(--muted); font-size: var(--text-sm); }

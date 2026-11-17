@@ -43,7 +43,6 @@ body { background: var(--bg); color: var(--text); }
 .settings-outline, .settings-add-button, .settings-back-button { background: var(--surface); border-color: var(--border-strong); color: var(--muted); }
 .composer { background: var(--surface); border-color: var(--border-strong); }
 .composer:has(.composer-input textarea:focus) { border-color: var(--focus-color); box-shadow: var(--focus-ring); }
-.chat-loading-line { background: var(--loading-gradient); }
 .switch { background: var(--switch-off); }
 .switch > span { background: var(--switch-thumb); }
 .switch.is-on { background: var(--button-bg); }
@@ -67,7 +66,6 @@ body { background: var(--bg); color: var(--text); }
 .markdown .hljs-comment, .markdown .hljs-quote { color: var(--faint); }
 .assistant-response .markdown h1, .assistant-response .markdown h2 { color: var(--text); }
 .assistant-response .markdown pre, .assistant-response .markdown code { background: var(--surface-soft); border-color: var(--border); }
-.attachment-icon, .attachment-icon.is-image, .attachment-icon.is-code, .attachment-icon.is-archive, .attachment-icon.is-sheet, .attachment-icon.is-doc, .attachment-icon.is-generic { color: var(--accent); background: var(--accent-soft); }
 .attachment-kind, .attachment-kind.is-code, .attachment-kind.is-archive, .attachment-kind.is-sheet, .attachment-kind.is-doc { color: var(--muted); background: var(--surface-soft); }
 .attachment-card, .composer-attachment { background: var(--surface); border-color: var(--border); }
 .composer-attachment-remove { background: var(--surface); border-color: var(--border); color: var(--muted); }
@@ -96,13 +94,6 @@ body { background: var(--bg); color: var(--text); }
 /* 收掉装饰性色相：文件/命令图标、供应商图标、模型标签、回合元信息全部
 回到中性图标色和柔和表面，只保留 accent、warning、error 三类语义色。 */
 
-.panel-tab-icon, .panel-tab-icon.is-file, .panel-tab-icon.is-files,
-.composer-option-icon, .composer-option-icon.is-builtin, .composer-option-icon.is-skill,
-.composer-option-icon.is-prompt, .composer-option-icon.is-extension,
-.composer-option-icon.is-directory {
-  color: var(--muted);
-  background: var(--surface-soft);
-}
 .provider-icon, .provider-icon.is-blue, .provider-icon.is-warm, .provider-icon.is-green,
 .provider-icon.is-clay, .provider-icon.is-violet, .provider-icon.is-sky, .provider-icon.is-neutral {
   color: var(--icon);
@@ -342,7 +333,6 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .changes-loading { padding: 9px 14px; }
 .changes-notice { padding: 9px 14px; color: var(--muted); font: var(--text-sm)/var(--leading-body) var(--font); border-bottom: 1px solid var(--border); }
 .changes-notice .text-button { margin-left: 8px; }
-.changes-markdown { padding: 18px; }
 .action-menu { position: fixed; z-index: 2000; width: 224px; padding: 6px; }
 .action-menu > button { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; text-align: left; padding: 9px 10px; border: 0; border-radius: var(--radius-control); background: var(--transparent); color: var(--text); font: var(--text-sm)/var(--leading-normal) var(--font); cursor: pointer; }
 .action-menu > button:hover, .action-menu > button:focus-visible { outline: none; background: var(--surface-hover); }

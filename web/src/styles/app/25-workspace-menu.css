@@ -255,7 +255,6 @@
   background: var(--conversation-reading-surface);
 }
 
-.app.is-wallpaper-inside .file-panel .panel-tool-icon,
 .app.is-wallpaper-inside .file-panel .panel-tool-count {
   background: var(--conversation-inset-surface);
 }

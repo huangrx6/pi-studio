@@ -169,7 +169,7 @@ function PreviewBody({
   if (file.kind === 'archive' && file.archive) return <ArchivePreview data={file.archive} />;
   if (file.kind === 'binary' || format === 'unsupported') {
     return <div className="file-preview-unsupported">
-      <span><FileKindIcon path={file.path} mime={file.mimeType} /></span>
+      <FileKindIcon path={file.path} mime={file.mimeType} />
       <strong>{previewTypeLabel(file.path)} 暂不支持内嵌预览</strong>
       {file.unavailableReason && <p>{file.unavailableReason}</p>}
       {file.byteSample && <details className="file-preview-bytes"><summary>查看前 {file.byteSample.length / 2} 字节</summary>
@@ -344,11 +344,9 @@ export function FilePreview({
   return <div className="file-preview-pane" ref={paneRef}>
     <header className="file-preview-toolbar">
       <div className="file-preview-identity">
-        <span className="file-preview-icon">{file ? <FileKindIcon path={file.path} mime={file.mimeType} /> : <FileFormatIcon format={format} />}</span>
-        <div>
-          <strong title={pathParts.name}>{file?.name || emptyTitle}</strong>
-          {file && <span title={file.path}>{pathParts.directory || '根目录'}</span>}
-        </div>
+        {file ? <FileKindIcon path={file.path} mime={file.mimeType} /> : <FileFormatIcon format={format} />}
+        <strong title={pathParts.name}>{file?.name || emptyTitle}</strong>
+        {file && <span className="file-preview-directory" title={file.path}>{pathParts.directory || '根目录'}</span>}
       </div>
       <div className="file-preview-actions">
         {file && <span className="file-preview-format">{previewTypeLabel(file.path)}</span>}
