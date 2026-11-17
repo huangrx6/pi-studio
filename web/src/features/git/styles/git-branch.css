@@ -4,6 +4,10 @@
   flex-shrink: 1;
   -webkit-app-region: no-drag;
 }
+.git-repository-picker { min-width: 0; max-width: min(32vw, 280px); -webkit-app-region: no-drag; }
+.chat-heading .git-repository-picker { max-width: min(18vw, 170px); }
+.chat-heading .git-repository-picker .pi-select-trigger { min-height: 25px; height: 25px; padding: 0 7px; gap: 5px; background: transparent; font-size: var(--text-xs); }
+.git-repository-picker .pi-select-leading svg { width: 14px; height: 14px; }
 
 .git-workspace-summary.git-branch-trigger {
   max-width: min(25vw, 220px);

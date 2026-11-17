@@ -2,13 +2,13 @@
  * Unified, bounded file previews for renderer surfaces.
  *
  * Text is returned only after the shared workspace path guard accepts it.
- * Media is inlined only for an explicit allowlist and a small byte budget;
- * documents that Chromium cannot render safely remain metadata-only.
+ * Media and document previews have separate read and display budgets.
  */
 
 const fs = require('node:fs');
 const path = require('node:path');
 const { workspaceFile } = require('./workspace.cjs');
+const { MAX_ARCHIVE_BYTES, archiveFormats, archivePreview } = require('./archive-preview.cjs');
 
 const MAX_TEXT_BYTES = 1_500_000;
 const MAX_INLINE_MEDIA_BYTES = 12_000_000;
@@ -126,83 +126,58 @@ function looksLikeUtf8Text(buffer) {
   return sample.length === 0 || controlBytes / sample.length < 0.02;
 }
 
-/**
- * Read a bounded preview payload for an already-resolved absolute path.
- * Callers own the authorization check; this only bounds what crosses IPC.
- */
-function readFilePreviewAt(target, requested) {
-  const stat = fs.statSync(target);
-  if (!stat.isFile()) throw new Error('不是文件');
+const BYTE_SAMPLE = 128;
 
-  const mimeType = mimeTypeForPath(target);
+function previewReadSize(name, size) {
+  if (archiveFormats.has(path.extname(name).toLowerCase())) return size > MAX_ARCHIVE_BYTES ? BYTE_SAMPLE : size;
+  const kind = previewKindForMime(mimeTypeForPath(name));
+  if (kind === 'text') return Math.min(size, MAX_TEXT_BYTES);
+  const limit = kind === 'pdf' ? MAX_INLINE_DOCUMENT_BYTES : MAX_INLINE_MEDIA_BYTES;
+  return size > limit ? BYTE_SAMPLE : size;
+}
+
+// The same classification applies to working files and immutable Git blobs.
+function previewFromBytes(requested, size, buffer) {
+  const name = path.basename(requested);
+  const mimeType = mimeTypeForPath(name);
   const kind = previewKindForMime(mimeType);
-  const base = {
-    path: normalizedDisplayPath(target, requested),
-    name: path.basename(target),
-    size: stat.size,
-    mimeType,
-  };
-
-  if (kind === 'pdf') {
-    if (stat.size > MAX_INLINE_DOCUMENT_BYTES) {
-      return {
-        ...base,
-        kind: 'binary',
-        unavailableReason: `文件超过 ${Math.round(MAX_INLINE_DOCUMENT_BYTES / 1_000_000)} MB 内嵌预览上限`,
-      };
-    }
-    return {
-      ...base,
-      kind,
-      dataUrl: `data:${mimeType};base64,${fs.readFileSync(target).toString('base64')}`,
-    };
-  }
-
+  const base = { path: normalizedDisplayPath(name, requested), name, size, mimeType };
+  const binary = () => ({ ...base, kind: 'binary', byteSample: buffer.subarray(0, BYTE_SAMPLE).toString('hex') });
   if (kind !== 'text') {
-    if (stat.size > MAX_INLINE_MEDIA_BYTES) {
-      return {
-        ...base,
-        kind: 'binary',
-        unavailableReason: `文件超过 ${Math.round(MAX_INLINE_MEDIA_BYTES / 1_000_000)} MB 内嵌预览上限`,
-      };
+    const limit = kind === 'pdf' ? MAX_INLINE_DOCUMENT_BYTES : MAX_INLINE_MEDIA_BYTES;
+    if (size > limit) return { ...binary(), unavailableReason: `文件超过 ${Math.round(limit / 1_000_000)} MB 内嵌预览上限` };
+    if (size < 1024 && buffer.toString('ascii', 0, 43).startsWith('version https://git-lfs.github.com/spec/v1')) {
+      return { ...base, kind: 'binary', unavailableReason: '此版本保存的是 Git LFS 指针，文件内容尚未包含在此版本中。' };
     }
-    return {
-      ...base,
-      kind,
-      dataUrl: `data:${mimeType};base64,${fs.readFileSync(target).toString('base64')}`,
-    };
+    return { ...base, kind, dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}` };
   }
+  const extension = path.extname(name).toLowerCase();
+  if (archiveFormats.has(extension)) {
+    if (size > MAX_ARCHIVE_BYTES) return { ...binary(), unavailableReason: '此文件超过 8 MB 文档预览上限。' };
+    try { return { ...base, kind: 'archive', archive: archivePreview(extension, buffer) }; }
+    catch { return { ...binary(), unavailableReason: '无法读取文件目录或文档内容。加密文件和超出解压大小限制的文件可在系统应用中查看。' }; }
+  }
+  if ((MIME_BY_EXTENSION.has(extension) && !TEXT_EXTENSIONS.has(extension)) || !looksLikeUtf8Text(buffer)) return binary();
+  return { ...base, kind: 'text', text: buffer.toString('utf8'), truncated: buffer.length < size };
+}
 
-  const extension = path.extname(target).toLocaleLowerCase();
-  const knownText = TEXT_EXTENSIONS.has(extension) || mimeType.startsWith('text/')
-    || ['application/json', 'application/x-ndjson', 'application/yaml', 'application/toml', 'application/sql', 'application/xml', 'application/graphql']
-      .includes(mimeType);
-  const knownBinary = MIME_BY_EXTENSION.has(extension) && !knownText;
-  const truncated = stat.size > MAX_TEXT_BYTES;
-  const buffer = Buffer.alloc(Math.min(stat.size, MAX_TEXT_BYTES));
-  const descriptor = fs.openSync(target, 'r');
+function readFilePreviewAt(target, requested) {
+  const fd = fs.openSync(target, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK);
   try {
-    fs.readSync(descriptor, buffer, 0, buffer.length, 0);
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile()) throw new Error('不是文件');
+    const display = requested || path.basename(target);
+    const buffer = Buffer.alloc(previewReadSize(display, stat.size));
+    let offset = 0;
+    while (offset < buffer.length) {
+      const bytes = fs.readSync(fd, buffer, offset, buffer.length - offset, offset);
+      if (!bytes) break;
+      offset += bytes;
+    }
+    return previewFromBytes(display, stat.size, buffer.subarray(0, offset));
   } finally {
-    fs.closeSync(descriptor);
+    fs.closeSync(fd);
   }
-  const binary = knownBinary || !looksLikeUtf8Text(buffer);
-
-  if (binary) {
-    // The shared preview title already states that the format is unavailable.
-    // Only size limits or decoding failures need a separate explanatory line.
-    return {
-      ...base,
-      kind: 'binary',
-    };
-  }
-
-  return {
-    ...base,
-    kind: 'text',
-    text: buffer.toString('utf8'),
-    truncated,
-  };
 }
 
 /** 工作区内预览：路径先经过工作区越界检查。 */
@@ -215,6 +190,8 @@ module.exports = {
   MAX_INLINE_MEDIA_BYTES,
   MAX_TEXT_BYTES,
   mimeTypeForPath,
+  previewReadSize,
+  previewFromBytes,
   readFilePreview,
   readFilePreviewAt,
 };

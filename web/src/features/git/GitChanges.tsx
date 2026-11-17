@@ -5,6 +5,7 @@ import { SettingsDialog } from '../../shared/SettingsDialog';
 import type { GitAction, GitFile, GitState } from '../../types/git-types';
 import { GitFileDiff } from './GitFileDiff';
 import { GitFileList } from './GitFileList';
+import { useGitRepositories } from './useWorkspaceRepositories';
 
 type Execute = (action: GitAction) => Promise<boolean>;
 type Layer = 'index' | 'worktree';
@@ -14,7 +15,9 @@ const changeNames: Record<string, string> = { A: '新增', D: '删除', M: '修�
 function CommitForm({ sessionId, state, focus, disabled, busy, staged, conflicts, execute }: {
   sessionId: string; state: GitState; focus: boolean; disabled: boolean; busy: boolean; staged: number; conflicts: boolean; execute: Execute;
 }) {
-  const key = 'pi-studio:git-message:' + sessionId + '/' + state.branch;
+  const repository = useGitRepositories().selected!.id;
+  const key = repository === '.' ? 'pi-studio:git-message:' + sessionId + '/' + state.branch
+    : 'pi-studio:git-message:' + JSON.stringify([sessionId, repository, state.branch]);
   const [message, setMessage] = useState(() => sessionStorage.getItem(key) || '');
   const input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { if (focus) input.current?.focus(); }, [focus]);

@@ -129,6 +129,7 @@ export type PanelTab = {
   cwd?: string;
   sessionId?: string;
   diff?: TurnDiffFile;
+  turnAt?: number;
   url?: string;
   /** 终端重启计数：变化后以同一个 id 重新挂载并重建 PTY。 */
   restart?: number;

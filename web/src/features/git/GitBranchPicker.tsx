@@ -4,9 +4,16 @@ import { PopoverSurface } from '../../shared/PopoverSurface';
 import { isComposingKey, menuFocusIndex } from '../../shared/keyboard-navigation';
 import type { GitAction, GitWorkspaceStatus } from '../../types/git-types';
 import { useGitAction, useGitRead, useGitRevision } from './useGitTools';
+import { useGitRepositories } from './useWorkspaceRepositories';
 import './styles/git-branch.css';
 
-export function GitBranchPicker({ status, sessionId }: { status: GitWorkspaceStatus | null; sessionId?: string }) {
+type BranchPickerProps = { status: GitWorkspaceStatus | null; sessionId?: string };
+export function GitBranchPicker(props: BranchPickerProps) {
+  const { selected } = useGitRepositories();
+  return selected ? <BranchMenu key={selected.id} {...props} /> : null;
+}
+
+function BranchMenu({ status, sessionId }: BranchPickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const anchor = useRef<HTMLDivElement>(null);

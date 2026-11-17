@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FileKindIcon } from '../../shared/FileKindIcon';
 import { Columns2, Rows3, FileCode2 } from 'lucide-react';
 import type { TurnDiffFile } from '../../types/chat-types';
@@ -24,7 +24,7 @@ function Line({ line, side, other, wordDiff = true }: { line?: DiffLine; side: '
 export type DiffOptions = { layout: 'auto' | 'split' | 'unified'; wrap: boolean; wordDiff: boolean; hideImports: boolean };
 /** Horizontal scrollers of one file: a single unified list or one per split pane. */
 type Channel = 'unified' | 'left' | 'right';
-export function DiffView({ file, options, embedded = false, responsive = false }: { file: TurnDiffFile; options?: DiffOptions; embedded?: boolean; responsive?: boolean }) {
+export function DiffView({ file, options, embedded = false, responsive = false, actions }: { file: TurnDiffFile; options?: DiffOptions; embedded?: boolean; responsive?: boolean; actions?: ReactNode }) {
   const rows = useMemo(() => splitPatch(file.patch || '').filter(row => row.gap || !options?.hideImports || ![row.left, row.right].filter(Boolean).every(line => /^(?:import\s.+(?:;|['"])$|from\s+\S+\s+import\s+[^()]+$|(?:const|let|var)\s+.+require\(.+\);?$)/.test(line!.text.trim()))), [file.patch, options?.hideImports]);
   const [localSplit, setSplit] = useState<boolean>();
   const host = useRef<HTMLDivElement>(null);
@@ -70,6 +70,7 @@ export function DiffView({ file, options, embedded = false, responsive = false }
   return <div ref={host} className={`diff-view ${embedded ? 'is-embedded' : ''} ${options?.wrap ? 'is-wrapped' : ''}`}>
     {!embedded && <div className="diff-view-head"><FileKindIcon path={file.path} /><strong title={file.path}>{file.label}</strong>
       {file.completeCounts !== false && <span className="diff-view-counts"><span>+{file.added}</span><span>−{file.removed}</span></span>}
+      {actions}
       <button type="button" className="icon-button" aria-label={split ? '切换为单列差异' : '切换为左右对照'} title={split ? '单列差异' : '左右对照'} onClick={() => setSplit(!split)}>{split ? <Rows3 /> : <Columns2 />}</button>
     </div>}
     {rows.length ? <div className="diff-view-body">

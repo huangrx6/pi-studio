@@ -10,6 +10,7 @@ import { orderProgressAgents } from '../features/subagents/subagent-state';
 import type { TodoDetails } from '../types/chat-types';
 import type { LongTaskState } from '../types/durable-types';
 import type { GitWorkspaceStatus, GitTab } from '../types/git-types';
+import { useGitRepositories } from '../features/git/useWorkspaceRepositories';
 import type { SubagentChild } from '../types/subagent-types';
 import './styles/conversation-progress.css';
 
@@ -81,6 +82,7 @@ function ViewAll({ label, onClick }: { label: string; onClick: () => void }) {
 
 export function ConversationProgress(props: ProgressProps) {
   const { pinned, git, sessionId, goal, running, tasks, agents, history } = props;
+  const scope = useGitRepositories();
   const [agentsExpanded, setAgentsExpanded] = useState(false);
   const agentsId = useId();
   const historyId = useId();
@@ -88,8 +90,12 @@ export function ConversationProgress(props: ProgressProps) {
   const previewLimit = 3;
   const visibleAgents = agentsExpanded ? orderedAgents : orderedAgents.slice(0, previewLimit);
   const pinLabel = pinned ? '取消固定，返回浮层' : '固定到右栏';
-  const repositoryLabel = !git ? '正在读取 Git 状态…' : git.available ? git.branch || git.commit || '当前仓库'
-    : git.reason === 'not-a-repository' ? '非 Git 项目' : 'Git 不可用';
+  const branch = git?.branch || git?.commit || '当前仓库';
+  const project = scope.selected?.id === '.' ? (scope.repositories.length > 1 ? scope.selected.name : '') : scope.selected?.id;
+  let repositoryLabel = [project, branch].filter(Boolean).join(' · ');
+  if (!scope.selected) repositoryLabel = scope.loading ? '正在查找项目仓库…' : scope.error ? '仓库读取失败' : '没有 Git 仓库';
+  else if (!git) repositoryLabel = '正在读取 Git 状态…';
+  else if (!git.available) repositoryLabel = 'Git 不可用';
   const gitSection = <section className="workspace-menu-section progress-git" aria-label="Git 工具" data-available={git?.available || undefined}>
     <header className="progress-git-repo">
       <div className="progress-git-identity">
@@ -98,12 +104,12 @@ export function ConversationProgress(props: ProgressProps) {
       </div>
       <button className="icon-button" type="button" aria-label="Git 设置" title="Git 设置" onClick={props.onGitSettings}><Settings2 aria-hidden="true" /></button>
     </header>
-    {git?.available && <nav className="progress-git-links" aria-label="Git 操作">
+    {git?.available ? <nav className="progress-git-links" aria-label="Git 操作">
       <button type="button" onClick={() => props.onOpenGit('changes')}><FileDiff aria-hidden="true" />变更</button>
       <button type="button" onClick={() => props.onOpenGit('commit')}><GitCommitHorizontal aria-hidden="true" />提交</button>
       <button type="button" onClick={() => props.onOpenGit('history')}><History aria-hidden="true" />提交历史</button>
       <button type="button" onClick={() => props.onOpenGit('sync')}><ArrowDownUp aria-hidden="true" />远程同步</button>
-    </nav>}
+    </nav> : !!scope.cwd && !scope.loading && <button type="button" className="progress-row" onClick={() => props.onOpenGit('changes')}><GitBranch /><span>查看项目仓库</span><ChevronRight /></button>}
   </section>;
   const historyLabel = history ? '收起历史' : '查看历史';
   const allTasks = <ViewAll label="查看全部任务" onClick={props.onOpenTasks} />;

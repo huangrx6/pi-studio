@@ -33,6 +33,87 @@ function seed(repo) {
   cli(repo, 'commit', '-m', 'initial');
 }
 
+test('workspace repositories distinguish independent roots, initialized submodules and linked worktrees', async t => {
+  const { repo, base } = fixture(t);
+  const { listGitRepositories, resolveGitRepository } = require('../../electron/services/git-repositories.cjs');
+  seed(repo);
+  const a = 'apps/client', b = 'services/client';
+  for (const id of [a, b]) {
+    const dir = path.join(base, id);
+    fs.mkdirSync(dir, { recursive: true });
+    cli(dir, 'init', '-b', 'main');
+    identity(dir);
+    seed(dir);
+    fs.writeFileSync(path.join(dir, 'tracked.txt'), id);
+  }
+  const linked = 'checkouts/review';
+  cli(repo, 'worktree', 'add', '-b', 'review', path.join(base, linked));
+  cli(repo, '-c', 'protocol.file.allow=always', 'submodule', 'add', path.join(base, a), 'vendor/module');
+  fs.mkdirSync(path.join(base, 'node_modules/hidden'), { recursive: true });
+  cli(path.join(base, 'node_modules/hidden'), 'init');
+  fs.symlinkSync(path.join(base, a), path.join(base, 'alias'), process.platform === 'win32' ? 'junction' : 'dir');
+  const found = await listGitRepositories(base);
+  assert.deepEqual(found.map(item => item.id), [a, linked, b, 'workspace', 'workspace/vendor/module']);
+  assert.deepEqual((await listGitRepositories(repo)).map(item => item.id), ['.', 'vendor/module']);
+  assert.equal(await resolveGitRepository(path.join(base, a), '.'), path.join(base, a));
+  assert.equal((await gitRead(base, { kind: 'branches', repository: linked })).branch, 'review');
+  const state = await gitRead(base, { kind: 'state', repository: b });
+  await gitWrite(base, { ...state, repository: b, kind: 'stage', paths: ['tracked.txt'] });
+  assert.equal(cli(path.join(base, a), 'diff', '--cached', '--name-only'), '');
+  assert.equal(cli(path.join(base, b), 'diff', '--cached', '--name-only'), 'tracked.txt');
+  cli(path.join(base, b), 'commit', '-m', 'server change');
+  assert.equal((await gitRead(base, { repository: b, kind: 'history' })).rows[0].subject, 'server change');
+  assert.equal((await gitRead(base, { repository: a, kind: 'history' })).rows[0].subject, 'initial');
+  for (const invalid of ['alias', '../other', path.join(base, a), 'workspace/vendor', 'workspace/.git']) {
+    await assert.rejects(resolveGitRepository(base, invalid));
+  }
+  fs.renameSync(path.join(repo, 'vendor/module/.git'), path.join(base, 'saved-marker'));
+  await assert.rejects(gitRead(repo, { kind: 'history', repository: 'vendor/module' }), /仓库已变化/);
+  await assert.rejects(gitWrite(repo, { kind: 'stage', repository: 'vendor/module', branch: 'main', head: state.head, paths: ['tracked.txt'] }), /仓库已变化/);
+});
+
+test('file previews read the selected Git version across additions, staging, rename and deletion', async t => {
+  const { repo, read } = fixture(t);
+  const file = '图表/项目 [1].jpg', renamed = '图表/新版.jpg';
+  fs.mkdirSync(path.dirname(path.join(repo, file)));
+  const jpeg = n => Buffer.from([0xff, 0xd8, 0xff, 0, n, 0xd9]);
+  const put = n => fs.writeFileSync(path.join(repo, file), jpeg(n));
+  const expectJpeg = async (params, side, n) => {
+    const result = await read('preview', { ...params, side });
+    assert.equal(result.kind, 'image');
+    assert.equal(result.dataUrl, 'data:image/jpeg;base64,' + jpeg(n).toString('base64'));
+  };
+  const index = { layer: 'index', path: file };
+  const working = { layer: 'worktree', path: file };
+  put(1);
+  assert.deepEqual((await read('diff', working)).sides, ['after']);
+  await expectJpeg(working, 'after', 1);
+  await assert.rejects(read('preview', { ...working, side: 'before' }), /版本中不存在/);
+  cli(repo, 'add', '.'); cli(repo, 'commit', '-m', 'first image');
+  const initial = { layer: 'commit', path: file, hash: cli(repo, 'rev-parse', 'HEAD') };
+  put(2); cli(repo, 'add', file); put(3);
+  await expectJpeg(index, 'after', 2);
+  await expectJpeg(index, 'before', 1);
+  await expectJpeg(working, 'before', 2);
+  await expectJpeg(working, 'after', 3);
+  await expectJpeg(initial, 'after', 1);
+  assert.deepEqual((await read('diff', initial)).sides, ['after']);
+  cli(repo, 'commit', '-m', 'staged image');
+  cli(repo, 'add', file); cli(repo, 'commit', '-m', 'working image');
+  cli(repo, 'mv', file, renamed);
+  await expectJpeg({ layer: 'index', path: renamed, previousPath: file }, 'before', 3);
+  cli(repo, 'commit', '-m', 'rename image');
+  await expectJpeg({ layer: 'commit', hash: cli(repo, 'rev-parse', 'HEAD'), path: renamed }, 'before', 3);
+  fs.unlinkSync(path.join(repo, renamed));
+  await expectJpeg({ layer: 'worktree', path: renamed }, 'before', 3);
+  cli(repo, 'add', '-u'); cli(repo, 'commit', '-m', 'delete image');
+  const deleted = { layer: 'commit', hash: cli(repo, 'rev-parse', 'HEAD'), path: renamed };
+  assert.deepEqual((await read('diff', deleted)).sides, ['before']);
+  await expectJpeg(deleted, 'before', 3);
+  await assert.rejects(read('preview', { ...deleted, path: '../foreign', side: 'before' }), /路径无效/);
+  await assert.rejects(read('preview', { ...deleted, path: 'other.jpg', side: 'before' }), /没有此文件/);
+});
+
 test('unborn branch, literal names, partial staging, first push and searchable history with root and rename diffs', async t => {
   const { base, repo, read, write } = fixture(t);
   assert.deepEqual(await read('history'), { rows: [], more: false, total: 0, offset: 0, pageSize: 60 });

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, GitBranch, GitCommitHorizontal, GitMerge, Search, Tag } from 'lucide-react';
 import { FileKindIcon } from '../../shared/FileKindIcon';
+import { LoadingState } from '../../shared/LoadingState';
 import type { GitHistoryRow } from '../../types/git-types';
 import { useGitRead } from './useGitTools';
 import { GitFileDiff } from './GitFileDiff';
@@ -73,7 +74,9 @@ function CommitDetail({ sessionId, hash, revision, back }: { sessionId: string; 
       <button ref={backButton} type="button" className="git-back" onClick={back}><ArrowLeft />提交历史</button>
       <span className="git-commit-id"><GitCommitHorizontal aria-hidden="true" /><code className="git-full-hash" title={hash}>{hash}</code></span>
     </div>
-    {!data ? <p className="git-history-feedback" role={error ? 'alert' : 'status'}>{error || '正在读取提交…'}</p> : <>
+    {!data && error && <p className="git-history-feedback" role="alert">{error}</p>}
+    {!data && !error && <LoadingState variant="section">正在读取提交…</LoadingState>}
+    {data && <>
       <header className="git-detail-heading">
         <h3>{data.message.split('\n')[0] || '无提交说明'}</h3>
         <div className="git-detail-byline">
@@ -138,7 +141,7 @@ export function GitHistory({ sessionId, revision }: { sessionId: string; revisio
     <label className="git-search"><Search aria-hidden="true" /><input type="search" value={query} aria-label="搜索提交" placeholder="搜索提交说明或哈希"
       onChange={e => setQuery(e.target.value)} /></label>
     {error && <p className="git-history-feedback" role="alert">{error}</p>}
-    {!error && !data && <p className="git-history-feedback" role="status">正在读取历史…</p>}
+    {!error && !data && <LoadingState variant="section">正在读取历史…</LoadingState>}
     {data && !data.rows.length && <p className="git-history-feedback">{search ? '没有匹配的提交' : '还没有提交'}</p>}
     {data && data.rows.length > 0 && <div className="git-history-list" style={{
       '--git-graph-width': graphWidth + 'px',

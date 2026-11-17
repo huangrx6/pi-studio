@@ -10,6 +10,7 @@ const { ipcMain, shell } = require('electron');
 const { getWindow, DEFAULT_CWD } = require('../core/state.cjs');
 const { manageWorktree, contains } = require('../services/git-worktrees.cjs');
 const { getGitWorkspaceStatus } = require('../services/git-workspace.cjs');
+const { listGitRepositories, resolveGitRepository } = require('../services/git-repositories.cjs');
 const { gitRead, gitWrite } = require('../services/git-tools.cjs');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
 
@@ -21,6 +22,16 @@ function assertMainWindow(event) {
 }
 
 function registerGitWorkspaceIpc() {
+  function checkWorkspace(cwd) {
+    if (typeof cwd !== 'string' || !path.isAbsolute(cwd) || (cwd !== DEFAULT_CWD && !getStudioDatabase().getWorkspace(cwd))) {
+      throw new Error('请选择已打开的工作区。');
+    }
+  }
+  ipcMain.handle('pi:git-repositories', (event, cwd) => {
+    assertMainWindow(event);
+    checkWorkspace(cwd);
+    return listGitRepositories(cwd);
+  });
   for (const [channel, handler] of [['pi:git-read', gitRead], ['pi:git-write', gitWrite]]) {
     ipcMain.handle(channel, async (event, sessionId, input) => {
       assertMainWindow(event);
@@ -30,17 +41,20 @@ function registerGitWorkspaceIpc() {
       return handler(cwd, input);
     });
   }
-  ipcMain.handle('pi:git-workspace-status', async (event, cwd) => {
+  ipcMain.handle('pi:git-workspace-status', async (event, cwd, repository) => {
     assertMainWindow(event);
+    if (repository && repository !== '.') {
+      checkWorkspace(cwd);
+      return getGitWorkspaceStatus(await resolveGitRepository(cwd, repository));
+    }
     return getGitWorkspaceStatus(typeof cwd === 'string' ? cwd : '');
   });
   ipcMain.handle('pi:git-worktree', async (event, cwd, input) => {
     assertMainWindow(event);
     const db = getStudioDatabase();
-    if (typeof cwd !== 'string' || !path.isAbsolute(cwd) || (cwd !== DEFAULT_CWD && !db.getWorkspace(cwd))) {
-      throw new Error('请选择已打开的工作区。');
-    }
-    const result = await manageWorktree(cwd, input, {
+    checkWorkspace(cwd);
+    const root = await resolveGitRepository(cwd, input.repository);
+    const result = await manageWorktree(root, input, {
       trashItem: target => shell.trashItem(target),
       assertUnused: async target => {
         if (db.listManagedWorktrees({ includeTerminal: true }).some(record => contains(target, record.path))) {

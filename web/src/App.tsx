@@ -9,6 +9,7 @@ import { AppDialogs } from './shell/AppDialogs';
 import { BackgroundLayer, BackgroundMediaNode } from './shell/BackgroundLayer';
 import { ConversationProgress, ProgressTrigger } from './shell/ConversationProgress';
 import { useGitWorkspaceStatus } from './shell/useGitWorkspaceStatus';
+import { GitRepositoryContext, useWorkspaceRepositories } from './features/git/useWorkspaceRepositories';
 import { ConversationWorkspace } from './shell/ConversationWorkspace';
 import { SettingsOverlay } from './shell/SettingsOverlay';
 import { ShellLayout } from './shell/ShellLayout';
@@ -323,7 +324,8 @@ export function App() {
   const panelWorkspaceName = activeWorkspace?.name
     || panelWorkspace.split(/[\\/]/).filter(Boolean).at(-1)
     || '工具';
-  const { status: gitStatus } = useGitWorkspaceStatus(session?.cwd);
+  const repositories = useWorkspaceRepositories(session?.cwd, workspaces.find(item => item.cwd === session?.cwd)?.name);
+  const { status: gitStatus } = useGitWorkspaceStatus(session?.cwd, repositories.selected?.id);
   const progressPinned = workbench.panelTabs.some(tab => tab.kind === 'progress');
   const dismissProgress = useCallback(() => setProgressView(view => view.floating
     ? { ...view, floating: false } : view), [setProgressView]);
@@ -375,6 +377,7 @@ export function App() {
   }), [panelWorkspace, session?.id, handleOpenFile, openFile]);
 
   return (
+    <GitRepositoryContext.Provider value={repositories}>
     <MarkdownActions.Provider value={markdownActionsValue}>
     <ExtensionAppearanceContext.Provider value={preferences.extensionAppearances}>
     {/* 四周留白使用独立的背景透明度、柔化和遮罩设置。 */}
@@ -803,5 +806,6 @@ export function App() {
     </div>
     </ExtensionAppearanceContext.Provider>
     </MarkdownActions.Provider>
+    </GitRepositoryContext.Provider>
   );
 }

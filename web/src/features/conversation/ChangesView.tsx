@@ -6,9 +6,9 @@ import { revealFileLabel } from '../../shared/desktop-platform';
 import type { TurnDiff, TurnDiffFile } from '../../types/chat-types';
 import { DiffView, type DiffOptions } from './DiffView';
 import { ActionMenu, type MenuAction } from '../../shared/ActionMenu';
-import { Markdown } from '../../shared/Markdown';
+import { prefersFilePreview } from '../../shared/file-preview';
+import { TurnFilePreview } from './TurnFilePreview';
 import { Select } from '../../shared/Select';
-import { splitPatch } from './diff-rows';
 
 type Props = { sessionId: string; initial: TurnDiff; turns: TurnDiff[]; focusPath?: string; onOpenFile: (path: string) => void; onOpenDiff: (file: TurnDiffFile, at: number) => void };
 export function ChangesView({ sessionId, initial, turns, focusPath, onOpenFile, onOpenDiff }: Props) {
@@ -90,7 +90,7 @@ export function ChangesView({ sessionId, initial, turns, focusPath, onOpenFile, 
       <div className="changes-tools">
         <button className="icon-button" title="差异选项" aria-label="差异选项" onClick={event => menuAt(event, [
           { label: '加载完整文件', checked: full, run: () => chooseSnapshotFeature(() => setFull(!full)) },
-          { label: '渲染 Markdown 预览', checked: preview, disabled: !turn.files.some(file => /\.md$/i.test(file.label)), run: () => chooseSnapshotFeature(() => { setPreview(!preview); if (!preview) setFull(true); }) },
+          { label: '显示文件预览', checked: preview, run: () => chooseSnapshotFeature(() => setPreview(!preview)) },
           { label: '词级差异', checked: options.wordDiff, run: () => setOptions({ ...options, wordDiff: !options.wordDiff }) },
           { label: '忽略空白字符差异', checked: ignoreWhitespace, run: () => chooseSnapshotFeature(() => setIgnoreWhitespace(!ignoreWhitespace)) },
           { label: '隐藏单行导入内容', checked: options.hideImports, run: () => setOptions({ ...options, hideImports: !options.hideImports }) },
@@ -126,7 +126,9 @@ export function ChangesView({ sessionId, initial, turns, focusPath, onOpenFile, 
               { label: '复制文件补丁', run: () => safe(navigator.clipboard.writeText(file.patch || '')) },
             ])}><MoreHorizontal /></button>
           </header>
-          {open && (preview && /\.md$/i.test(file.label) && loaded[file.path] && !file.truncated ? <div className="changes-markdown"><Markdown>{splitPatch(file.patch || '').filter(row => row.right).map(row => row.right!.text).join('\n')}</Markdown></div> : <DiffView file={file} options={options} embedded />)}
+          {open && (turn.snapshot && (preview || prefersFilePreview(file.label, file.binary))
+            ? <TurnFilePreview key={turn.at} sessionId={sessionId} at={turn.at} file={file} />
+            : <DiffView file={file} options={options} embedded />)}
         </article>; })}
         {!turn.files.length && <div className="diff-empty">本轮没有文件变更</div>}
         {turn.truncated && <p className="diff-note">本轮文件过多，列表仅包含已保存的部分文件。</p>}

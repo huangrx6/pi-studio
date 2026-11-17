@@ -1,3 +1,4 @@
+import { useGitRepositories } from './useWorkspaceRepositories';
 import { useEffect, useRef, useState } from 'react';
 import { Check, Copy, FolderOpen, GitBranch, Plus, Trash2 } from 'lucide-react';
 import { SettingsDialog } from '../../shared/SettingsDialog';
@@ -24,33 +25,35 @@ function CopyPath({ path }: { path: string }) {
 function CreateTreeDialog({ cwd, mainPath, close, created }: {
   cwd: string; mainPath: string; close: () => void; created: (path: string, open: boolean) => void;
 }) {
+  const repository = useGitRepositories().selected!.id;
   const [refs, setRefs] = useState<WorktreeResults['options']>();
   const [mode, setMode] = useState<'existing' | 'new'>('new');
   const [existing, setExisting] = useState('');
   const [name, setName] = useState('');
   const [folder, setFolder] = useState<string>();
+  const [destination, setDestination] = useState('');
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
-    window.piApi.gitWorktree(cwd, { kind: 'options' }).then(data => {
+    window.piApi.gitWorktree(cwd, { repository, kind: 'options' }).then(data => {
       if (!active) return;
       setRefs(data);
       setExisting(data.branches.find(branch => !branch.occupied)?.name || '');
     }, e => { if (active) setError(errorText(e)); });
     return () => { active = false; };
-  }, [cwd]);
+  }, [cwd, repository]);
   const branch = mode === 'new' ? name.trim() : existing;
   const split = Math.max(mainPath.lastIndexOf('/'), mainPath.lastIndexOf('\\'));
-  const parent = mainPath.slice(0, split + 1);
+  const parent = destination ? destination.replace(/[\\/]+$/, '') + mainPath[split] : mainPath.slice(0, split + 1);
   const suggested = branch ? mainPath.slice(split + 1) + '-' + branch.replace(/[\\/]/g, '-') : '';
   const directory = folder ?? suggested;
   async function create() {
     if (!refs || busy) return;
     setBusy(true); setError(null);
     try {
-      const target = await window.piApi.gitWorktree(cwd, { kind: 'create', mode, name: branch, folder: directory.trim(), head: refs.head });
+      const target = await window.piApi.gitWorktree(cwd, { repository, kind: 'create', mode, name: branch, folder: directory.trim(), parent: destination || undefined, head: refs.head });
       created(target, open);
     } catch (e) { setError(errorText(e)); setBusy(false); }
   }
@@ -70,6 +73,10 @@ function CreateTreeDialog({ cwd, mainPath, close, created }: {
           }))} /></div>}
       <label>文件夹名称<input value={directory} placeholder="输入文件夹名称" onChange={e => setFolder(e.target.value)} />
         <small title={parent + directory}>{parent + directory}</small></label>
+      <button type="button" className="settings-outline" disabled={busy} onClick={async () => {
+        try { const selected = await window.piApi.pickWorktreeParent(); if (selected) setDestination(selected); }
+        catch (e) { setError(errorText(e)); }
+      }}>更改存放位置</button>
       <label className="git-tree-check"><input type="checkbox" checked={open} onChange={e => setOpen(e.target.checked)} />创建后打开工作区</label>
     </div>
   </SettingsDialog>;
@@ -78,21 +85,22 @@ function CreateTreeDialog({ cwd, mainPath, close, created }: {
 function RemoveTreeDialog({ cwd, activeCwd, tree, close, removed }: {
   cwd: string; activeCwd: string; tree: GitWorktree; close: () => void; removed: () => void;
 }) {
+  const repository = useGitRepositories().selected!.id;
   const [review, setReview] = useState<WorktreeReview>();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [read, setRead] = useState(0);
   useEffect(() => {
     let active = true;
-    window.piApi.gitWorktree(cwd, { kind: 'inspect', path: tree.path, activeCwd }).then(
+    window.piApi.gitWorktree(cwd, { repository, kind: 'inspect', path: tree.path, activeCwd }).then(
       result => { if (active) setReview(result); }, e => { if (active) setError(errorText(e)); });
     return () => { active = false; };
-  }, [cwd, activeCwd, tree.path, read]);
+  }, [cwd, repository, activeCwd, tree.path, read]);
   async function remove() {
     if (!review || busy) return;
     setBusy(true);
     try {
-      await window.piApi.gitWorktree(cwd, { kind: 'remove', path: tree.path, activeCwd, version: review.version });
+      await window.piApi.gitWorktree(cwd, { repository, kind: 'remove', path: tree.path, activeCwd, version: review.version });
       removed();
     } catch (e) { setError(errorText(e)); setReview(undefined); setBusy(false); }
   }
@@ -115,6 +123,7 @@ function RemoveTreeDialog({ cwd, activeCwd, tree, close, removed }: {
 export function WorktreeSettings({ cwd, activeCwd, status, onOpen, onChange }: {
   cwd: string; activeCwd: string; status: GitWorkspaceStatus; onOpen: (target: string) => Promise<void>; onChange: () => void;
 }) {
+  const repository = useGitRepositories().selected!.id;
   const [create, setCreate] = useState(false);
   const [remove, setRemove] = useState<GitWorktree>();
   const [opening, setOpening] = useState('');
@@ -125,7 +134,7 @@ export function WorktreeSettings({ cwd, activeCwd, status, onOpen, onChange }: {
   async function open(target: string) {
     setOpening(target); setError('');
     try {
-      const path = await window.piApi.gitWorktree(cwd, { kind: 'open', path: target });
+      const path = await window.piApi.gitWorktree(cwd, { repository, kind: 'open', path: target });
       if (mounted.current) await onOpen(path);
     } catch (e) { if (mounted.current) setError(errorText(e)); }
     finally { if (mounted.current) setOpening(''); }

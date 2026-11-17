@@ -398,7 +398,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
   /** 打开文件 diff 标签页；已存在时直接激活。 */
   function openDiffTab(file: TurnDiffFile, at: number, ownerSessionId = sessionId) {
     const id = `diff:${ownerSessionId}:${at}:${file.path}`;
-    setPanelTabs((current) => current.some((tab) => tab.id === id) ? current : [...current, { id, kind: 'diff', title: file.label.split('/').pop() || file.label, path: file.path, diff: file }]);
+    setPanelTabs((current) => current.some((tab) => tab.id === id) ? current : [...current, { id, kind: 'diff', title: file.label.split('/').pop() || file.label, path: file.path, diff: file, sessionId: ownerSessionId, turnAt: at }]);
     setActivePanelTabId(id);
     if (filesOpen) setPanelEntered(true);
     else openPanel();

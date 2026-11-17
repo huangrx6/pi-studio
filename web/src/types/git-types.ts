@@ -16,7 +16,7 @@ export type GitWorktree = {
 export type WorktreeReview = { version: string; dirty: GitDirtyStatus; ignored: boolean; missing: boolean; head: string };
 export type WorktreeInputs = {
   options: object;
-  create: { mode: 'existing' | 'new'; name: string; folder: string; head: string };
+  create: { mode: 'existing' | 'new'; name: string; folder: string; parent?: string; head: string };
   open: { path: string };
   inspect: { path: string; activeCwd: string };
   remove: { path: string; activeCwd: string; version: string };
@@ -29,6 +29,7 @@ export type WorktreeResults = {
   remove: void;
 };
 
+export type GitRepository = { id: string; name: string; root: string };
 export type GitWorkspaceStatus = {
   available: boolean;
   reason?: 'no-workspace' | 'invalid-workspace' | 'git-unavailable' | 'not-a-repository' | string;
@@ -60,6 +61,7 @@ export type GitSyncKind = 'pull' | 'push';
 export type GitSyncPreview = GitHead & { remote: string; operation: GitSyncKind; target: string; remoteHead: string; address: string;
   setUpstream: boolean; incoming: number; outgoing: number; dirty: boolean; mergeMode: 'ff' | 'ff-only' | 'no-ff'; version: string };
 export type GitDiffSource = { path: string; previousPath?: string } & ({ layer: 'commit'; hash: string } | { layer: 'index' | 'worktree' });
+export type GitFileSide = 'before' | 'after';
 export type GitReadParams = {
   state: { summaryOnly?: boolean; knownFilesVersion?: string };
   branches: object;
@@ -69,6 +71,7 @@ export type GitReadParams = {
   syncPreview: { operation: GitSyncKind; remote: string; targetIndex?: number; remoteVersion?: string };
   syncCommits: { tip: string; exclude: string; offset: number };
   diff: GitDiffSource;
+  preview: GitDiffSource & { side: GitFileSide };
 };
 export type GitReadResult = {
   state: GitState;
@@ -78,7 +81,8 @@ export type GitReadResult = {
   remoteInfo: GitRemoteInfo;
   syncPreview: GitSyncPreview;
   syncCommits: { hash: string; subject: string }[];
-  diff: import('./chat-types').TurnDiffFile;
+  diff: import('./chat-types').TurnDiffFile & { sides: GitFileSide[]; beforeStage?: 1 | 2 | 3; previewVersion: string };
+  preview: import('./file-preview-types').FilePreviewResult;
 };
 export type GitAction =
   | { kind: 'switch' | 'create'; name: string; remoteBranch?: boolean }

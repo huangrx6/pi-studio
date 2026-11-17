@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { SettingsDialog } from '../../shared/SettingsDialog';
+import { LoadingState } from '../../shared/LoadingState';
 import { Select } from '../../shared/Select';
 import type { GitAction, GitRemoteInfo, GitSyncKind } from '../../types/git-types';
 import { useGitRead } from './useGitTools';
@@ -11,7 +12,7 @@ function CommitRange({ sessionId, title, tip, exclude, count }: {
   const [page, setPage] = useState(0);
   const { data, error } = useGitRead(count ? sessionId : undefined, 'syncCommits', { tip, exclude, offset: page * 20 }, 0);
   return <section className="git-sync-range" aria-label={title}><h3>{title}<small>{count}</small></h3>
-    {!count ? <p>没有提交</p> : error ? <p role="alert">{error}</p> : !data ? <p role="status">正在读取提交…</p>
+    {!count ? <p>没有提交</p> : error ? <p role="alert">{error}</p> : !data ? <LoadingState>正在读取提交…</LoadingState>
       : <ul>{data.map(commit => <li key={commit.hash}><code title={commit.hash}>{commit.hash.slice(0, 8)}</code><span>{commit.subject || '无提交说明'}</span></li>)}</ul>}
     {count > 20 && <nav aria-label={title + '翻页'}><button type="button" disabled={!page} onClick={() => setPage(page - 1)}>上一页</button>
       <span>{page + 1} / {Math.ceil(count / 20)}</span>

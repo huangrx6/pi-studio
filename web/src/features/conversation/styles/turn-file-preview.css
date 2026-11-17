@@ -1,0 +1,6 @@
+.turn-file-preview { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
+.turn-file-preview > p { margin: 12px; color: var(--text-2); font-size: var(--text-sm); }
+.turn-file-versions { display: flex; gap: 4px; padding: 6px 12px; border-block-end: 1px solid var(--divider); }
+.turn-file-versions button { padding: 4px 8px; border-radius: var(--radius-control); color: var(--text-2); font-size: var(--text-xs); }
+.turn-file-versions button[aria-pressed="true"] { color: var(--accent); background: var(--selected-bg); box-shadow: inset 0 0 0 1px var(--divider); }
+.changes-file .turn-file-preview .file-preview-body { max-height: 55vh; }

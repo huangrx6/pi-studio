@@ -6,6 +6,8 @@ const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { createHash } = require('node:crypto');
 const remoteTools = require('./git-remotes.cjs');
+const { resolveGitRepository } = require('./git-repositories.cjs');
+const { previewGitVersion } = require('./git-file-preview.cjs');
 const exec = promisify(execFile);
 const locks = new Set();
 const conflictCodes = new Set(['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU']);
@@ -35,11 +37,11 @@ function gitError(err, remote) {
   return new Error('Git 操作未完成。请刷新状态，并检查仓库配置及 Git 钩子。');
 }
 
-async function run(cwd, args, { allowed = [], remote = false, patch = false, paths } = {}) {
+async function run(cwd, args, { allowed = [], remote = false, patch = false, paths, bytes } = {}) {
   try {
     const processResult = exec('git', ['--no-pager', '--literal-pathspecs', ...args], {
-      cwd, encoding: 'utf8', windowsHide: true, timeout: remote ? 120_000 : 30_000,
-      maxBuffer: patch ? 256 * 1024 : 16 * 1024 * 1024,
+      cwd, encoding: bytes ? 'buffer' : 'utf8', windowsHide: true, timeout: remote ? 120_000 : 30_000,
+      maxBuffer: bytes || (patch ? 256 * 1024 : 16 * 1024 * 1024),
       env: { ...process.env, LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GIT_MERGE_AUTOEDIT: 'no',
         ...(remote ? { GIT_ALLOW_PROTOCOL: process.env.GIT_ALLOW_PROTOCOL || 'http:https:ssh:git:file' } : {}) },
     });
@@ -47,6 +49,7 @@ async function run(cwd, args, { allowed = [], remote = false, patch = false, pat
     processResult.child.stdin.end(paths ? paths.join('\0') + '\0' : undefined);
     return (await processResult).stdout;
   } catch (err) {
+    if (bytes && err.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' && Buffer.isBuffer(err.stdout) && err.stdout.length >= bytes) return err.stdout.subarray(0, bytes);
     if (allowed.includes(err.code) || (patch && err.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER')) return err.stdout || '';
     throw gitError(err, remote);
   }
@@ -57,10 +60,6 @@ function fields(output) { const values = output.split('\0'); values.pop(); retur
 function requireOid(hash) {
   if (typeof hash !== 'string' || !oidPattern.test(hash)) throw new Error('提交标识无效。');
   return hash;
-}
-async function repository(cwd) {
-  if (typeof cwd !== 'string' || !path.isAbsolute(cwd)) throw new Error('没有选定工作区。');
-  return fs.realpath((await run(cwd, ['rev-parse', '--show-toplevel'])).replace(/\r?\n$/, ''));
 }
 async function head(cwd) {
   const [ref, oid] = await Promise.all([
@@ -160,8 +159,8 @@ function forLayer(file, layer) {
   return layer === 'index' ? !file.conflict && ![' ', '?'].includes(file.index) : file.conflict || file.worktree !== ' ';
 }
 function filePaths(file, code) { return file.previousPath && /[RC]/.test(code) ? [file.previousPath, file.path] : [file.path]; }
-async function diff(cwd, input) {
-  let args, code;
+async function resolveChange(cwd, input) {
+  let args, code, before, after;
   const paths = [input.path, ...(input.previousPath ? [input.previousPath] : [])];
   if (paths.some(p => typeof p !== 'string' || !p || p.includes('\0') || path.isAbsolute(p) || p.split('/').includes('..'))) throw new Error('文件路径无效。');
   if (input.layer === 'commit') {
@@ -169,6 +168,8 @@ async function diff(cwd, input) {
     const file = commit.files.find(f => f.path === input.path);
     if (!file) throw new Error('该提交没有此文件。');
     code = file.code;
+    before = { path: file.previousPath || file.path, tree: commit.parents[0] };
+    after = { path: file.path, tree: commit.hash };
     args = commit.parents.length ? ['diff', ...diffFlags, '-M', commit.parents[0], commit.hash] : ['show', '--format=', '--root', ...diffFlags, commit.hash];
     args.push('--', ...filePaths(file, code));
   } else {
@@ -180,17 +181,40 @@ async function diff(cwd, input) {
     }
     if (!file) throw new Error('文件状态已变化，请刷新。');
     code = input.layer === 'index' ? file.index : file.worktree;
+    const previousPath = /[RC]/.test(code) && file.previousPath || file.path;
+    if (input.layer === 'index') {
+      before = { path: previousPath, tree: 'HEAD' };
+      after = { path: file.path, stage: 0 };
+    } else {
+      const conflict = file.index + file.worktree;
+      const stage = !file.conflict ? 0 : conflict === 'DD' ? 1 : ['UA', 'DU'].includes(conflict) ? 3 : 2;
+      before = { path: previousPath, stage };
+      after = { path: file.path, working: true };
+    }
     if (code === '?') {
       const stat = await fs.lstat(path.join(cwd, file.path));
+      if (stat.isDirectory()) return { code, after };
       if (!stat.isFile() && !stat.isSymbolicLink()) throw new Error('此项没有可展示的文本差异。');
     }
     let comparison = [];
     if (input.layer === 'index') comparison = ['--cached'];
-    else if (file.conflict) comparison = [['UA', 'DU'].includes(file.index + file.worktree) ? '--theirs' : '--ours'];
+    else if (file.conflict) {
+      comparison = [before.stage === 1 ? '--base' : before.stage === 3 ? '--theirs' : '--ours'];
+      const exists = await fs.lstat(path.join(cwd, file.path)).then(() => true, err => {
+        if (err.code === 'ENOENT') return false;
+        throw err;
+      });
+      return { args: ['diff', ...diffFlags, ...comparison, '--', file.path], code: 'U', before, after: exists ? after : undefined };
+    }
     args = code === '?' ? ['diff', '--no-index', ...diffFlags, '--', '/dev/null', file.path]
       : ['diff', ...diffFlags, ...comparison, '--', ...filePaths(file, code)];
   }
-  const raw = await run(cwd, args, { allowed: code === '?' ? [1] : [], patch: true });
+  return { args, code, before: ['A', '?'].includes(code[0]) ? undefined : before, after: code === 'D' ? undefined : after };
+}
+
+async function diff(cwd, input) {
+  const { args, code, before, after } = await resolveChange(cwd, input);
+  const raw = args ? await run(cwd, args, { allowed: code === '?' ? [1] : [], patch: true }) : '嵌套 Git 仓库';
   const limit = 80_000;
   const patch = raw.slice(0, limit);
   const binary = /^Binary files .* differ$/m.test(patch);
@@ -198,18 +222,27 @@ async function diff(cwd, input) {
   const hunk = changedLines.findIndex(line => line.startsWith('@@ '));
   const content = hunk < 0 ? [] : changedLines.slice(hunk);
   return { path: input.path, label: input.path, status: ['A','?'].includes(code) ? 'added' : code === 'D' ? 'deleted' : 'modified',
+    sides: [before && 'before', after && 'after'].filter(Boolean),
+    ...(before?.stage ? { beforeStage: before.stage } : {}),
+    previewVersion: createHash('sha256').update(raw).digest('hex'),
     binary, patch, truncated: raw.length > limit, completeCounts: !binary && raw.length <= limit,
     added: content.filter(l => l.startsWith('+')).length, removed: content.filter(l => l.startsWith('-')).length };
 }
 
 async function gitRead(cwd, input) {
-  const root = await repository(cwd);
+  const root = await resolveGitRepository(cwd, input?.repository);
   switch (input?.kind) {
     case 'state': return state(root, input);
     case 'branches': return { ...await head(root), branches: await branches(root), root };
     case 'history': return history(root, input);
     case 'detail': return commitInfo(root, input.hash);
     case 'diff': return diff(root, input);
+    case 'preview': {
+      const change = await resolveChange(root, input);
+      const version = input.side === 'before' ? change.before : input.side === 'after' ? change.after : undefined;
+      if (!version) throw new Error('该文件在所选版本中不存在。');
+      return previewGitVersion(run, root, version);
+    }
     case 'remoteInfo': return (await remoteTools.remoteConfig(run, root, input.remote)).info;
     case 'syncCommits': return remoteTools.commitPage(run, root, input);
     case 'syncPreview': {
@@ -292,12 +325,12 @@ async function withGitLock(key, operation) {
   try { return await operation(); }
   finally { locks.delete(key); }
 }
-async function withRepositoryWrite(cwd, operation) {
-  const root = await repository(cwd);
+async function withRepositoryWrite(cwd, operation, repositoryId) {
+  const root = await resolveGitRepository(cwd, repositoryId);
   const common = await fs.realpath(path.resolve(root, (await run(root, ['rev-parse', '--git-common-dir'])).trimEnd()));
   return withGitLock(common, () => operation(root));
 }
 async function gitWrite(cwd, input) {
-  await withRepositoryWrite(cwd, root => write(root, input));
+  await withRepositoryWrite(cwd, root => write(root, input), input?.repository);
 }
 module.exports = { gitRead, gitWrite, withRepositoryWrite, withGitLock, runGitCommand: run, validateBranch };

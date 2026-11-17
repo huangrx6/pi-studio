@@ -23,11 +23,13 @@ import {
   previewExtension,
   previewFormatForFile,
   previewLanguageForFile,
+  formatByteSample,
   previewTypeLabel,
   splitPreviewPath,
 } from './file-preview.ts';
 import type { FilePreviewResult } from '../types/file-preview-types';
 import { Markdown } from './Markdown';
+import { ArchivePreview } from './ArchivePreview';
 import { formatFileSize } from './filesize';
 import { FileFormatIcon, FileKindIcon, type FilePreviewFormat } from './FileKindIcon';
 import './styles/file-preview.css';
@@ -164,11 +166,14 @@ function PreviewBody({
   const json = useMemo(() => format === 'json' ? prettyJson(text) : null, [format, text]);
   const language = previewLanguageForFile(file.path);
 
+  if (file.kind === 'archive' && file.archive) return <ArchivePreview data={file.archive} />;
   if (file.kind === 'binary' || format === 'unsupported') {
     return <div className="file-preview-unsupported">
       <span><FileKindIcon path={file.path} mime={file.mimeType} /></span>
       <strong>{previewTypeLabel(file.path)} 暂不支持内嵌预览</strong>
       {file.unavailableReason && <p>{file.unavailableReason}</p>}
+      {file.byteSample && <details className="file-preview-bytes"><summary>查看前 {file.byteSample.length / 2} 字节</summary>
+        <pre>{formatByteSample(file.byteSample)}</pre></details>}
       {onOpenExternal && <button type="button" className="settings-outline" onClick={() => onOpenExternal(file)}>
         <ExternalLink />用系统应用打开
       </button>}
@@ -376,7 +381,7 @@ export function FilePreview({
         {copyable && <button type="button" className="icon-button" aria-label={copied ? '已复制文件内容' : '复制文件内容'} title="复制内容" onClick={() => void copySource()}>
           {copied ? <Check /> : <Copy />}
         </button>}
-        {file && (file.kind === 'binary' || file.kind === 'pdf') && onOpenExternal && <button type="button" className="icon-button" aria-label="用系统应用打开文件" title="用系统应用打开" onClick={() => onOpenExternal(file)}>
+        {file && file.kind !== 'text' && onOpenExternal && <button type="button" className="icon-button" aria-label="用系统应用打开文件" title="用系统应用打开" onClick={() => onOpenExternal(file)}>
           <ExternalLink />
         </button>}
       </div>

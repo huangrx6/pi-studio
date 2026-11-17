@@ -21,6 +21,8 @@ import type { SessionStateForPersistence } from '../../features/conversation/use
 import { TemporaryChat } from '../../features/conversation/TemporaryChat';
 import { ChangesView } from '../../features/conversation/ChangesView';
 import { DiffView } from '../../features/conversation/DiffView';
+import { TurnFilePreview } from '../../features/conversation/TurnFilePreview';
+import { prefersFilePreview } from '../../shared/file-preview';
 import { DeferredFilePreview } from '../../shared/DeferredFilePreview';
 import { ActionMenu } from '../../shared/ActionMenu';
 import { formatFileSize } from '../../shared/filesize';
@@ -467,7 +469,12 @@ export function WorkbenchPane({
         onOpenDiff={(file, at) => openDiffTab(file, at, activePanelTab.review!.sessionId)}
       />;
     }
-    if (activePanelTab.kind === 'diff' && activePanelTab.diff) return <DiffView file={activePanelTab.diff} />;
+    if (activePanelTab.kind === 'diff' && activePanelTab.diff) {
+      const { diff, sessionId, turnAt } = activePanelTab;
+      return sessionId && turnAt !== undefined && prefersFilePreview(diff.label, diff.binary)
+        ? <TurnFilePreview key={activePanelTab.id} sessionId={sessionId} at={turnAt} file={diff} />
+        : <DiffView file={diff} />;
+    }
     return renderFilePreview();
   }
 

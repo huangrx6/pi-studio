@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { Columns2, GitCommitHorizontal, PanelsTopLeft, RotateCw, Rows3 } from 'lucide-react';
 import { LoadingState } from '../../shared/LoadingState';
 import { Select } from '../../shared/Select';
@@ -9,6 +9,8 @@ import type { PiWorkspace } from '../../shell/app-types';
 import type { GitWorkspaceStatus } from '../../types/git-types';
 import '../appearance/styles/general-settings.css';
 import { WorktreeSettings } from './WorktreeSettings';
+import { GitRepositoryPicker } from './GitRepositoryPicker';
+import { GitRepositoryContext, useWorkspaceRepositories } from './useWorkspaceRepositories';
 import './styles/git-settings.css';
 
 const layouts = [
@@ -17,7 +19,7 @@ const layouts = [
   { value: 'split', label: '左右对照', Icon: Columns2 },
 ] as const;
 
-type StatusRead = { cwd: string; revision: number; status?: GitWorkspaceStatus; error?: string };
+type StatusRead = { key: string; revision: number; status?: GitWorkspaceStatus; error?: string };
 
 function upstreamStatus(status: GitWorkspaceStatus) {
   if (status.statusReadFailed) return '未能读取';
@@ -65,18 +67,23 @@ export function GitSettings({ cwd, workspaces, preferences, onChange, onOpenWork
   }
   const selected = options.find(option => option.value === picked) || options.find(option => option.value === cwd) || options[0];
   const target = selected?.value || '';
+  const conversation = useContext(GitRepositoryContext);
+  const other = useWorkspaceRepositories(conversation?.cwd === target ? '' : target, selected?.label);
+  const repositories = conversation?.cwd === target ? conversation : other;
+  const repository = repositories.selected;
+  const key = JSON.stringify([target, repository?.id]);
   const [revision, setRevision] = useState(0);
   const [read, setRead] = useState<StatusRead>();
   useEffect(() => {
     let active = true;
-    if (target) window.piApi.gitWorkspaceStatus(target).then(
-      status => { if (active) setRead({ cwd: target, revision, status }); },
-      error => { if (active) setRead({ cwd: target, revision, error: errorText(error) }); },
+    if (target && repository) window.piApi.gitWorkspaceStatus(target, repository.id).then(
+      status => { if (active) setRead({ key, revision, status }); },
+      error => { if (active) setRead({ key, revision, error: errorText(error) }); },
     );
     return () => { active = false; };
-  }, [target, revision]);
-  const current = read?.cwd === target ? read : undefined;
-  const loading = Boolean(target && current?.revision !== revision);
+  }, [target, revision, key, repository?.id]);
+  const current = read?.key === key ? read : undefined;
+  const loading = repositories.loading || Boolean(repository && current?.revision !== revision);
   const status = current?.status;
   return <div className="settings-sections git-settings">
     <SettingsPageHeader title="Git 工作流" />
@@ -97,21 +104,22 @@ export function GitSettings({ cwd, workspaces, preferences, onChange, onOpenWork
         </div>
       </div>
     </section>
-    <section className="git-settings-project" aria-labelledby="git-project-title">
+    <GitRepositoryContext.Provider value={repositories}><section className="git-settings-project" aria-labelledby="git-project-title">
       <div className="git-settings-project-head">
         <h2 id="git-project-title">仓库状态</h2>
         {options.length > 1 && <Select label="工作区" value={target} options={options} onChange={setPicked} />}
+        <GitRepositoryPicker label="设置中的项目仓库" />
         <button type="button" className="icon-button" aria-label="刷新 Git 状态" title="刷新 Git 状态" disabled={!target || loading}
-          onClick={() => setRevision(value => value + 1)}><RotateCw className={loading ? 'spin' : ''} /></button>
+          onClick={() => { repositories.refresh(); setRevision(value => value + 1); }}><RotateCw className={loading ? 'spin' : ''} /></button>
       </div>
-      {current?.error && <p role="alert" className="settings-error">{current.error}</p>}
+      {(repositories.error || current?.error) && <p role="alert" className="settings-error">{repositories.error || current?.error}</p>}
       {loading && !current && <LoadingState variant="section">正在读取 Git 状态…</LoadingState>}
-      {(!target || (status && !status.available)) && <p className="git-settings-message">{!target ? unavailable['no-workspace'] : unavailable[status?.reason || ''] || '无法读取当前仓库。'}</p>}
+      {(!target || (!repository && !loading && !repositories.error) || (status && !status.available)) && <p className="git-settings-message">{!target ? unavailable['no-workspace'] : unavailable[status?.reason || 'not-a-repository'] || '无法读取当前仓库。'}</p>}
       {status?.available && <>
-        <RepositoryStatus status={status} name={selected?.label || target} />
-        <WorktreeSettings key={target} cwd={target} activeCwd={cwd} status={status} onOpen={onOpenWorktree}
+        <RepositoryStatus status={status} name={repository?.name || selected?.label || target} />
+        <WorktreeSettings key={key} cwd={target} activeCwd={cwd} status={status} onOpen={onOpenWorktree}
           onChange={() => setRevision(value => value + 1)} />
       </>}
-    </section>
+    </section></GitRepositoryContext.Provider>
   </div>;
 }

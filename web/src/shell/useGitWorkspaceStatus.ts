@@ -14,34 +14,34 @@ const EMPTY_STATUS: GitWorkspaceStatus = {
  * conversation is visible. The directory is part of the request key, so
  * switching sessions/workspaces immediately discards the previous status.
  */
-export function useGitWorkspaceStatus(cwd?: string) {
-  const [result, setResult] = useState<{ cwd?: string; status: GitWorkspaceStatus }>();
+export function useGitWorkspaceStatus(cwd?: string, repository?: string) {
+  const [result, setResult] = useState<{ cwd?: string; repository?: string; status: GitWorkspaceStatus }>();
   const requestRef = useRef(0);
   const reading = useRef(0);
   const refresh = useCallback(async () => {
     const request = ++requestRef.current;
-    if (!cwd?.trim()) {
-      setResult({ cwd, status: EMPTY_STATUS });
+    if (!cwd?.trim() || !repository) {
+      setResult({ cwd, repository, status: EMPTY_STATUS });
       return EMPTY_STATUS;
     }
     reading.current = request;
     try {
-      const next = await window.piApi.gitWorkspaceStatus(cwd);
-      if (request === requestRef.current) setResult({ cwd, status: next });
+      const next = await window.piApi.gitWorkspaceStatus(cwd, repository);
+      if (request === requestRef.current) setResult({ cwd, repository, status: next });
       return next;
     } catch (error) {
       const next = { ...EMPTY_STATUS, reason: error instanceof Error ? error.message : 'git-status-error' };
-      if (request === requestRef.current) setResult({ cwd, status: next });
+      if (request === requestRef.current) setResult({ cwd, repository, status: next });
       return next;
     } finally {
       if (reading.current === request) reading.current = 0;
     }
-  }, [cwd]);
+  }, [cwd, repository]);
 
   useEffect(() => {
     requestRef.current += 1;
     void refresh();
-    if (!cwd?.trim()) return undefined;
+    if (!cwd?.trim() || !repository) return undefined;
     const onVisibilityChange = () => {
       if (!reading.current && document.visibilityState === 'visible') void refresh();
     };
@@ -55,7 +55,7 @@ export function useGitWorkspaceStatus(cwd?: string) {
       window.removeEventListener('pi-studio:git-changed', onChanged);
       requestRef.current += 1;
     };
-  }, [cwd, refresh]);
+  }, [cwd, repository, refresh]);
 
-  return { status: result && result.cwd === cwd ? result.status : null, refresh };
+  return { status: result && result.cwd === cwd && result.repository === repository ? result.status : null, refresh };
 }

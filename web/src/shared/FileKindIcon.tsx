@@ -23,6 +23,7 @@ export type FilePreviewFormat =
   | 'image'
   | 'audio'
   | 'video'
+  | 'archive'
   | 'unsupported';
 
 export function FileFormatIcon({ format }: { format: FilePreviewFormat }) {

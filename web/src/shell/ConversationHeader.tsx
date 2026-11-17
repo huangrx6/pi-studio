@@ -3,6 +3,7 @@ import {
   ArrowLeft, ArrowUp, Download, PanelRightOpen,
 } from 'lucide-react';
 import { GitBranchPicker } from '../features/git/GitBranchPicker';
+import { GitRepositoryPicker } from '../features/git/GitRepositoryPicker';
 import { LoadingIndicator } from '../shared/LoadingState';
 import {
   NotificationCenter,
@@ -93,6 +94,7 @@ export function ConversationHeader({
       <ShellHeader className="chat-header" onExpandSidebar={sidebarCollapsed ? onExpandSidebar : undefined}>
         {!isNewConversation && <div className="chat-heading">
           <h1>{title}</h1>
+          <GitRepositoryPicker label="顶栏项目仓库" />
           <GitBranchPicker key={sessionId} status={gitStatus} sessionId={sessionId} />
         </div>}
         <div className="chat-actions">

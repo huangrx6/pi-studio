@@ -1,4 +1,13 @@
 /* Unified file preview/editor: one toolbar, one body and one state model. */
+.file-preview-office, .file-preview-archive { padding: 16px; font-size: var(--text-sm); overflow: auto; }
+.file-preview-office > p { margin: 0 0 0.8em; line-height: 1.65; overflow-wrap: anywhere; white-space: pre-wrap; }
+.file-preview-office > .pi-select { max-width: 18rem; margin-bottom: 14px; }
+.file-preview-archive h4 { margin: 0 0 12px; font-size: inherit; }
+.file-preview-archive small { font-size: var(--text-xs); color: var(--text-2); font-weight: var(--weight-regular); }
+.file-preview-archive ul { margin: 0; padding: 0; list-style: none; }
+.file-preview-archive li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-block: 7px; border-bottom: 1px solid var(--divider); }
+.file-preview-archive li span { overflow-wrap: anywhere; }
+.file-preview-archive li small { flex: none; }
 
 .file-preview-pane {
   display: flex;
@@ -550,3 +559,6 @@
 /* HTML 与 PDF 都交给内置渲染器：整块文档区占满面板，滚动留在 iframe 里。 */
 .file-preview-document.is-frame { height: 100%; min-height: 0; padding: 0; overflow: hidden; }
 .file-preview-frame { display: block; width: 100%; height: 100%; min-height: 320px; border: 0; background: var(--surface); }
+.file-preview-bytes { min-width: 0; max-width: 100%; text-align: start; }
+.file-preview-bytes summary { cursor: pointer; color: var(--text-2); font-size: var(--text-sm); }
+.file-preview-bytes pre { overflow-x: auto; margin-block: var(--space-2); font: var(--text-xs)/1.65 var(--mono); }

@@ -143,4 +143,4 @@ async function getGitWorkspaceStatus(cwd) {
   };
 }
 
-module.exports = { getGitWorkspaceStatus, parseStatus, parseWorktrees };
+module.exports = { getGitWorkspaceStatus, parseStatus, parseWorktrees, runGit };

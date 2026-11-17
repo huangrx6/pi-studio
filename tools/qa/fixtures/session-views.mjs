@@ -13,6 +13,7 @@ export function installSessionViewsFixture() {
     return state;
   };
   const qa = window.sessionViewsQa = { replies: [], reads: 0, failList: false, failReply: false, failSnapshot: false, failTranscript: false };
+  api.gitRepositories = async cwd => [{ id: '.', name: cwd.split('/').pop(), root: cwd }];
   api.gitWorkspaceStatus = async () => ({ available: true, branch: 'main', dirty: { total: 2 }, worktree: {}, worktrees: [] });
   const goal = { enabled: true, status: 'paused', goal: '整理会话进展', iteration: 1, pauseReason: '等待继续',
     lastProgress: '', nextStep: '', blockReason: '', updatedAt: now };

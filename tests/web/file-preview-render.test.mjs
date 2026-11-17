@@ -23,6 +23,7 @@ function fixture() {
     exports: {},
     require(id) {
       if (id.endsWith('.css')) return {};
+      if (id === './ArchivePreview') return { ArchivePreview: ({ data }) => React.createElement('div', null, data.format) };
       if (id === './LoadingState') return { LoadingIndicator: () => null, LoadingState: ({ children }) => React.createElement('span', null, children) };
       if (id === './file-preview.ts') return {
         ...helpers,

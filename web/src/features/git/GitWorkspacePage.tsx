@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Cloud, Files, History, RefreshCw, TriangleAlert } from 'lucide-react';
 import { SessionViewHeader } from '../../shell/SessionViewHeader';
+import { LoadingState } from '../../shared/LoadingState';
 import type { GitAction, GitTab } from '../../types/git-types';
 import { gitChangedEvent, useGitAction, useGitState, useGitRevision } from './useGitTools';
 import { GitChanges } from './GitChanges';
 import { GitHistory } from './GitHistory';
 import { GitSync } from './GitSync';
 import { GitDiffDefaults } from './GitFileDiff';
+import { GitRepositoryPicker } from './GitRepositoryPicker';
+import { useGitRepositories } from './useWorkspaceRepositories';
 import type { GitDiffPreferences } from '../../shared/preferences';
 import './styles/git-workspace.css';
 
@@ -19,9 +22,15 @@ const tabs = [
   ['changes', '变更', Files], ['history', '提交历史', History], ['sync', '远程同步', Cloud],
 ] as const;
 
-export default function GitWorkspacePage({ sessionId, tab, onTab, diffPreferences, openFile }: {
+type WorkspaceProps = {
   sessionId: string; tab: GitTab; onTab: (tab: GitTab) => void; diffPreferences: GitDiffPreferences; openFile: (root: string, path: string) => void;
-}) {
+};
+export default function GitWorkspacePage(props: WorkspaceProps) {
+  const { selected } = useGitRepositories();
+  return <RepositoryPage key={selected?.root || ''} {...props} />;
+}
+function RepositoryPage({ sessionId, tab, onTab, diffPreferences, openFile }: WorkspaceProps) {
+  const repositories = useGitRepositories();
   const pollReady = useRef(false);
   const revision = useGitRevision(pollReady);
   const state = useGitState(sessionId, tab === 'sync' || tab === 'history', revision);
@@ -42,20 +51,24 @@ export default function GitWorkspacePage({ sessionId, tab, onTab, diffPreference
     if (ok) setFeedback({ view, message: successes[action.kind], detail });
     return ok;
   }
-  const repo = state.data?.root;
-  const error = state.error || (feedback?.view === view && mutation.error);
+  const repo = repositories.selected;
+  const error = repositories.error || state.error || (feedback?.view === view && mutation.error);
   const success = feedback?.view === view && feedback.message;
   return <section className="git-workspace-page" aria-label="Git 工作台"><div className="git-workspace-column">
-    <SessionViewHeader title="版本控制" summary={repo && <span title={repo}>{repo.split(/[\\/]/).filter(Boolean).at(-1) || repo}</span>}>
-      <button type="button" className="icon-button git-refresh" aria-label="刷新 Git" title="刷新 Git" disabled={mutation.busy}
-        onClick={() => { setFeedback(undefined); window.dispatchEvent(new Event(gitChangedEvent)); }}><RefreshCw /></button>
+    <SessionViewHeader title="版本控制" summary={<span title={repositories.cwd}>{repositories.workspaceName}</span>}>
+      <div className="git-page-actions"><GitRepositoryPicker />
+        <button type="button" className="icon-button git-refresh" aria-label="刷新 Git" title="刷新 Git" disabled={mutation.busy}
+          onClick={() => { setFeedback(undefined); repositories.refresh(); window.dispatchEvent(new Event(gitChangedEvent)); }}><RefreshCw /></button>
+      </div>
     </SessionViewHeader>
     <div className="git-view-toolbar"><nav className="git-view-tabs" aria-label="Git 视图">{tabs.map(([key, title, Icon]) =>
       <button key={key} type="button" aria-current={view === key ? 'page' : undefined} onClick={() => onTab(key)}><Icon />{title}</button>)}</nav>
       <div className="git-operation-note" role="status">{mutation.busy ? <><RefreshCw className="spin" />正在处理…</> : success && <><Check /><span>{success}</span>{feedback?.detail && <span>{feedback.detail}</span>}</>}</div>
     </div>
     {error && <p role="alert" className="git-feedback"><TriangleAlert />{error}</p>}
-    <GitDiffDefaults.Provider value={diffPreferences}>{tab === 'history' ? <GitHistory sessionId={sessionId} revision={revision} /> : !state.data ? !state.error && <p className="git-muted">正在读取仓库…</p>
+    <GitDiffDefaults.Provider value={diffPreferences}>{!repo
+      ? repositories.loading ? <LoadingState variant="section">正在查找项目仓库…</LoadingState> : !error && <p className="git-muted">工作区中没有找到 Git 仓库。</p>
+      : tab === 'history' ? <GitHistory sessionId={sessionId} revision={revision} /> : !state.data ? !state.error && <LoadingState variant="section">正在读取仓库…</LoadingState>
       : tab === 'sync' ? <GitSync sessionId={sessionId} revision={revision} state={state.data} busy={mutation.busy} error={mutation.error}
           disabled={mutation.busy || state.loading} execute={execute} openChanges={() => onTab('changes')} />
       : <GitChanges key={state.data.branch} state={state.data} sessionId={sessionId} revision={revision} focusCommit={tab === 'commit'} busy={mutation.busy}

@@ -157,8 +157,7 @@ async function endTurn(requestId) {
   }
 }
 
-/** Re-read immutable trees, never compare historical patches against today's working tree. */
-async function readTurnDiffFile({ sessionId, at, path: requested, full = false, ignoreWhitespace = false }) {
+function recordedFile({ sessionId, at, path: requested }) {
   const turn = readTurnDiffs(sessionId).find(item => item.at === at);
   const file = turn?.files.find(item => item.path === requested);
   if (!file) throw new Error('找不到该轮文件变更');
@@ -166,10 +165,27 @@ async function readTurnDiffFile({ sessionId, at, path: requested, full = false, 
   const { root, before, after } = turn.snapshot;
   if (![before, after].every(value => /^[a-f0-9]{40,64}$/.test(value))) throw new Error('快照标识无效');
   const relative = path.relative(root, requested);
-  if (relative.startsWith('../') || path.isAbsolute(relative)) throw new Error('文件不在快照中');
+  if (!relative || relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) throw new Error('文件不在快照中');
+  return { file, root, before, after, relative: relative.split(path.sep).join('/') };
+}
+
+/** Re-read immutable trees, never compare historical patches against today's working tree. */
+async function readTurnDiffFile({ sessionId, at, path, full = false, ignoreWhitespace = false }) {
+  const { file, root, before, after, relative } = recordedFile({ sessionId, at, path });
   const patch = file.binary ? '' : await git(root, ['--literal-pathspecs', 'diff', '--no-ext-diff', '--no-textconv', '--no-color', '--no-renames', full ? '--unified=100000' : '--unified=3', ...(ignoreWhitespace ? ['--ignore-all-space'] : []), before, after, '--', relative]);
   const limit = full ? 2_000_000 : MAX_PATCH_CHARS;
   return { ...file, patch: patch.slice(0, limit), truncated: patch.length > limit };
+}
+
+async function readTurnFilePreview(input) {
+  const { root, before, after, relative, file } = recordedFile(input);
+  const side = input.side ?? (file.status === 'deleted' ? 'before' : 'after');
+  if (!['before', 'after'].includes(side) || (side === 'before' && file.status === 'added') || (side === 'after' && file.status === 'deleted')) {
+    throw new Error('该文件在所选版本中不存在。');
+  }
+  const { previewGitVersion } = require('./git-file-preview.cjs');
+  const { runGitCommand } = require('./git-tools.cjs');
+  return previewGitVersion(runGitCommand, root, { tree: side === 'before' ? before : after, path: relative });
 }
 
 const undoingRoots = new Set();
@@ -255,6 +271,7 @@ module.exports = {
   readTurnDiffs,
   saveTurnDiff,
   readTurnDiffFile,
+  readTurnFilePreview,
   undoTurnDiff,
   resolveTurnDiffAbsoluteFile,
   readTurnDiffAbsoluteFile,

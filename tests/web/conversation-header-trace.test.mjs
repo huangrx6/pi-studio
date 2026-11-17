@@ -40,6 +40,7 @@ function renderHeader(showTrace, isNewConversation = false, panelExpanded = fals
     './NotificationCenter': { NotificationCenter: () => null },
     './ShellLayout': shellLayout,
     '../features/git/GitBranchPicker': { GitBranchPicker: () => null },
+    '../features/git/GitRepositoryPicker': { GitRepositoryPicker: () => null },
     '../features/extensions/ExtensionChips': { ExtensionChips: () => null },
     './ConversationWorkspaceMenu': {
       ConversationWorkspaceMenu: ({ onOpenTrace }) => React.createElement(

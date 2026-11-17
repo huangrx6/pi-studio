@@ -96,8 +96,8 @@ function storedTurnApi() {
     process,
     require: name => name === '../core/studio-db.cjs'
       ? { getStudioDatabase: () => database }
-      : name === './workspace.cjs'
-        ? require('../../electron/services/workspace.cjs')
+      : name.startsWith('./')
+        ? require(path.join(__dirname, '../../electron/services', name))
         : require(name),
   });
   return module.exports;
@@ -121,9 +121,14 @@ test('full historical diff uses saved trees, supports whitespace filtering, and 
     const full = await api.readTurnDiffFile({sessionId:'test',at:1,path:file.path,full:true});
     assert.match(full.patch,/line 0/); assert.match(full.patch,/line 29/);
     assert.match(full.patch,/\+changed 15/); assert.doesNotMatch(full.patch,/UNRELATED/);
+    const recorded = { sessionId:'test', at:1, path:file.path };
+    assert.equal((await api.readTurnFilePreview({ ...recorded, side:'before' })).text, before);
+    assert.equal((await api.readTurnFilePreview(recorded)).text, before.replace('line 15','changed 15'));
+    await assert.rejects(api.readTurnFilePreview({ ...recorded, path:'/not-in-turn' }), /找不到/);
     await assert.rejects(api.readTurnDiffFile({sessionId:'test',at:1,path:'/not-in-turn'}),/找不到/);
     api.saveTurnDiff('legacy',{ at:2, files:diff.files });
     await assert.rejects(api.readTurnDiffFile({sessionId:'legacy',at:2,path:file.path,full:true}),/没有保存完整快照/);
+    await assert.rejects(api.readTurnFilePreview({ sessionId:'legacy',at:2,path:file.path }), /没有保存完整快照/);
     fs.writeFileSync(target,'hello world\n');
     const whitespace = await api.beginTurn(dir);
     fs.writeFileSync(target,'hello    world\n');

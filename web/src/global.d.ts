@@ -52,7 +52,7 @@ import type { BackgroundMedia } from './shared/preferences';
 import type { FilePreviewResult } from './types/file-preview-types';
 import type { UpdateSnapshot } from './types/update-types';
 import type { RuntimeRefreshSnapshot, StudioRuntimeVersions } from './types/runtime-types';
-import type { GitAction, GitHead, GitReadParams, GitReadResult, GitWorkspaceStatus, WorktreeInputs, WorktreeResults } from './types/git-types';
+import type { GitAction, GitHead, GitReadParams, GitReadResult, GitRepository, GitWorkspaceStatus, WorktreeInputs, WorktreeResults } from './types/git-types';
 import type {
   RuntimeServiceSnapshot,
   RuntimeServiceStopResult,
@@ -423,10 +423,11 @@ declare global {
       workspaceReady(): void;
       state(cwd?: string): Promise<{ workspaces: PiWorkspace[]; model: ModelSelection; cwd: string }>;
       /** 当前会话目录的 Git 分支、提交、改动和 worktree 状态。 */
-      gitWorkspaceStatus(cwd?: string): Promise<GitWorkspaceStatus>;
-      gitWorktree<K extends keyof WorktreeInputs>(cwd: string, input: { kind: K } & WorktreeInputs[K]): Promise<WorktreeResults[K]>;
-      gitRead<K extends keyof GitReadResult>(id: string, input: { kind: K } & GitReadParams[K]): Promise<GitReadResult[K]>;
-      gitWrite(id: string, input: GitAction & GitHead): Promise<void>;
+      gitRepositories(cwd: string): Promise<GitRepository[]>;
+      gitWorkspaceStatus(cwd?: string, repository?: string): Promise<GitWorkspaceStatus>;
+      gitWorktree<K extends keyof WorktreeInputs>(cwd: string, input: { kind: K; repository?: string } & WorktreeInputs[K]): Promise<WorktreeResults[K]>;
+      gitRead<K extends keyof GitReadResult>(id: string, input: { kind: K; repository?: string } & GitReadParams[K]): Promise<GitReadResult[K]>;
+      gitWrite(id: string, input: GitAction & GitHead & { repository?: string }): Promise<void>;
       /** 新建一条 Durable 会话；持久目标由 /goal 在同一会话中按需启用。 */
       createConversation(payload: {
         cwd: string;
@@ -538,6 +539,7 @@ declare global {
       ) => void): () => void;
       undoTurnDiff(payload: { sessionId: string; at: number }): Promise<void>;
       turnDiffFile(payload: { sessionId: string; at: number; path: string; full?: boolean; ignoreWhitespace?: boolean }): Promise<import('./types/chat-types').TurnDiffFile>;
+      turnFilePreview(payload: { sessionId: string; at: number; path: string; side: 'before' | 'after' }): Promise<import('./types/file-preview-types').FilePreviewResult>;
       turnDiffAbsoluteFile(payload: { sessionId: string; path: string }): Promise<{ path: string; size: number; binary: boolean; text: string }>;
       /** 打开聊天里出现的任意文件引用：`~`、相对路径与工作区外绝对路径都由主进程解析。 */
       filePreviewAbsolute(payload: { path: string; cwd?: string; sessionId?: string }): Promise<FilePreviewResult>;

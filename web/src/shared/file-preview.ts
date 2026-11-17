@@ -129,6 +129,8 @@ export function previewTypeLabel(filePath: string) {
 
 /** Resolve the visual mode used by the unified preview component. */
 export function previewFormatForFile(filePath: string, mimeType = '', kind = 'text') {
+  if (kind === 'archive') return 'archive';
+  if (mimeType === 'inode/symlink' || mimeType === 'application/x-gitlink') return 'text';
   if (kind === 'image' || kind === 'audio' || kind === 'video' || kind === 'pdf') return kind;
   if (kind === 'binary') return 'unsupported';
   const extensionFormat = FORMAT_BY_EXTENSION.get(previewExtension(filePath));
@@ -143,6 +145,23 @@ export function previewFormatForFile(filePath: string, mimeType = '', kind = 'te
       : 'text';
   }
   return 'unsupported';
+}
+
+/** Open visual and binary files in the viewer when reviewing a change. */
+export function prefersFilePreview(path: string, binary = false) {
+  return binary || ['image', 'audio', 'video', 'pdf', 'unsupported'].includes(previewFormatForFile(path));
+}
+
+/** Fixed-width rows keep unknown formats inspectable without loading the entire file. */
+export function formatByteSample(sample: string) {
+  const bytes = sample.match(/../g) || [];
+  const rows = [];
+  for (let i = 0; i < bytes.length; i += 16) {
+    const row = bytes.slice(i, i + 16);
+    const ascii = row.map(hex => { const n = parseInt(hex, 16); return n >= 32 && n <= 126 ? String.fromCharCode(n) : '.'; }).join('');
+    rows.push(i.toString(16).padStart(4, '0') + '  ' + row.join(' ').padEnd(47) + '  ' + ascii);
+  }
+  return rows.join('\n');
 }
 
 /** Highlight.js language identifier inferred from the path. */
