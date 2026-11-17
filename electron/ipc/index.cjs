@@ -30,7 +30,10 @@ const { registerTerminalIpc } = require('./terminal.cjs');
 const { registerRuntimeServicesIpc } = require('./runtime-services.cjs');
 const { registerGitWorkspaceIpc } = require('./git-workspace.cjs');
 
+const { registerStoryboardIpc } = require('./video-storyboard.cjs');
+
 function registerIpc(waitForStartup) {
+  registerStoryboardIpc();
   registerSystemIpc(waitForStartup);
   registerConversationIpc();
   registerFilesIpc();

@@ -10,6 +10,7 @@
  */
 
 export {};
+import type { AssetPreview, MediaGenerationInput, MediaModelCatalog, MediaPreferences, ProductionInput, ShotPatch, StoryboardDraftPreview, StoryboardDraftRequest, StoryboardReply, StoryboardBrief, StoryboardSummary, StoryboardWork } from './types/storyboard-types';
 import type { ProviderQuotaConfig, ProviderQuotaSnapshot, QuotaField, QuotaFieldSuggestion, QuotaMetric } from './types/provider-quota';
 import type { CommittedProjection, MutationProjection } from './types/mutation-types';
 import type { ExtensionInstallResult, ExtensionMutationResult } from './types/extension-types';
@@ -250,7 +251,7 @@ export interface SettingsSnapshot {
   /** 用户手动添加的模型。 */
   customModels: Array<{ providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean; thinkingLevels?: ConcreteThinkingLevel[]; enabled?: boolean; origin?: 'configured' | 'override' }>;
   /** 模型来源列表。 */
-  providers: Array<{ id: string; name: string; mode: string; authConfigured?: boolean; quotaEnabled?: boolean; envName?: string; envAvailable?: boolean; icon?: string; models: number; modelsUrl?: string; enabled: boolean; builtin: boolean }>;
+  providers: Array<{ id: string; name: string; mode: string; authConfigured?: boolean; quotaEnabled?: boolean; envName?: string; envAvailable?: boolean; icon?: string; models: number; mediaModelCount?: number; modelsUrl?: string; enabled: boolean; builtin: boolean }>;
   /** MCP 服务器列表。 */
   mcp: Array<{
     name: string;
@@ -571,6 +572,31 @@ declare global {
       filePathOf(file: File): string;
       onTerminalEvent(listener: (event: TerminalEvent) => void): () => void;
       /** 扫描 TCP 监听端口，并按当前任务/工作区标记归属依据。 */
+      storyboardList(workspace: string): Promise<StoryboardSummary[]>;
+      storyboardCreate(workspace: string, example?: 'web-sources'): Promise<StoryboardWork>;
+      storyboardRenderBegin(workspace: string, id: string, plan: string, revision: number): Promise<{ id: string; sizes: Record<string, number> }>;
+      storyboardRenderRead(workspace: string, id: string, token: string, asset: string, start: number, size: number): Promise<string>;
+      storyboardRenderWrite(workspace: string, id: string, token: string, position: number, data: string): Promise<void>;
+      storyboardRenderFinish(workspace: string, id: string, token: string): Promise<string>;
+      storyboardRenderDiscard(workspace: string, id: string, token: string): Promise<void>;
+      storyboardRenderSave(workspace: string, id: string, token: string): Promise<string | null>;
+      storyboardRead(workspace: string, id: string): Promise<StoryboardWork>;
+      storyboardGenerateDraft(workspace: string, id: string, input: StoryboardDraftRequest): Promise<StoryboardDraftPreview>;
+      storyboardApplyDraft(workspace: string, id: string, token: string): Promise<StoryboardWork>;
+      storyboardDiscardDraft(workspace: string, id: string, token: string): Promise<void>;
+      storyboardMediaModels(): Promise<MediaModelCatalog>;
+      storyboardMediaPreferences(workspace: string, id: string, patch: MediaPreferences): Promise<StoryboardWork>;
+      storyboardGenerateMedia(workspace: string, id: string, input: MediaGenerationInput): Promise<{ work: StoryboardWork; assetId: string }>;
+      storyboardApplyMedia(workspace: string, id: string, input: { shotId: string; assetId: string }): Promise<StoryboardWork>;
+      storyboardEditBrief(workspace: string, id: string, patch: Partial<StoryboardBrief>): Promise<{ revision: number; updatedAt: number }>;
+      storyboardAdvance(workspace: string, id: string, input: StoryboardReply): Promise<StoryboardWork>;
+      storyboardProduce(workspace: string, id: string, input: ProductionInput): Promise<StoryboardWork>;
+      storyboardEditShot(workspace: string, id: string, shotId: string, patch: ShotPatch): Promise<StoryboardWork>;
+      storyboardPreview(workspace: string, id: string, assetId: string): Promise<AssetPreview>;
+      storyboardRelink(workspace: string, id: string, assetId: string): Promise<StoryboardWork>;
+      storyboardPick(workspace: string, id: string): Promise<StoryboardWork>;
+      storyboardDrop(workspace: string, id: string, files: File[]): Promise<StoryboardWork>;
+      storyboardRemoveFile(workspace: string, id: string, assetId: string): Promise<StoryboardWork>;
       runtimeServices(payload: { cwd?: string; roots?: string[] }): Promise<RuntimeServiceSnapshot>;
       /** 终止已经通过主进程身份与操作系统用户校验的服务。 */
       runtimeServiceStop(payload: {
@@ -621,7 +647,7 @@ declare global {
       providerQuota(providerId: string, refresh?: boolean): Promise<ProviderQuotaSnapshot>;
       providerQuotaFields(input: { providerId: string; endpoint: string; auth: ProviderQuotaConfig['auth']; apiKey?: string }): Promise<QuotaFieldSuggestion[]>;
       previewQuotaMapping(input: { fields: QuotaField[]; sample: string }): Promise<QuotaMetric[]>;
-      providerConfig(providerId: string): Promise<{ providerId: string; name: string; baseUrl: string; api: string; icon: string; modelsUrl: string; quota: ProviderQuotaConfig | null; builtin: boolean; enabled: boolean }>;
+      providerConfig(providerId: string): Promise<{ providerId: string; name: string; baseUrl: string; api: string; icon: string; modelsUrl: string; mediaModels?: { speech: string[]; image: string[] }; quota: ProviderQuotaConfig | null; builtin: boolean; enabled: boolean }>;
       /** 切换模型，返回新的选择快照。 */
       setModel(modelRef: string, cwd?: string): Promise<ModelSelection>;
       /** 设置 Studio 新对话的默认模型。 */
@@ -696,7 +722,7 @@ declare global {
       /** 保存某来源的 API Key。 */
       setKey(payload: { providerId: string; apiKey: string; cwd?: string }): Promise<CommittedProjection<ModelResourceSnapshot>>;
       /** 保存来源配置（baseUrl、API 类型、首个模型、可选 API Key）。 */
-      addProvider(payload: { providerId: string; name: string; baseUrl: string; api: string; apiKey?: string; icon?: string; modelsUrl?: string; quota?: ProviderQuotaConfig | null; editing?: boolean; cwd?: string }): Promise<CommittedProjection<ModelResourceSnapshot>>;
+      addProvider(payload: { providerId: string; name: string; baseUrl: string; api: string; apiKey?: string; icon?: string; modelsUrl?: string; mediaModels?: { speech: string[]; image: string[] }; quota?: ProviderQuotaConfig | null; editing?: boolean; cwd?: string }): Promise<CommittedProjection<ModelResourceSnapshot>>;
       /** Retry runtime/catalog refresh without writing provider metadata or credentials. */
       refreshModels(cwd?: string): Promise<ModelResourceSnapshot>;
       /** 启用或停用一个模型来源；停用后其模型不会进入新的模型目录。 */

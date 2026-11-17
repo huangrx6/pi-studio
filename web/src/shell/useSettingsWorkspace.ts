@@ -20,7 +20,7 @@ import type {
   ProviderDiscoveryState,
   ProviderModelInfo,
 } from '../features/models/model-settings-types';
-import { emptyCustomModelConfig } from '../features/models/model-settings-types';
+import { emptyCustomModelConfig, emptyMediaModels } from '../features/models/model-settings-types';
 import type { McpInfo, McpTestResult, PiWorkspace, SettingsEditor, SettingsSnapshot, SkillInfo } from './app-types';
 import type { SettingsTab } from './app-shell-config';
 import type { useActionConfirmation } from '../shared/ConfirmDialog';
@@ -202,6 +202,7 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
     apiKey: '',
     icon: '',
     modelsUrl: '',
+    mediaModels: emptyMediaModels(),
     quota: emptyProviderQuota(),
   });
   const [mcpDraft, setMcpDraftState] = useState({

@@ -25,6 +25,7 @@ const {
   supportedThinkingLevels,
 } = require('../services/models.cjs');
 const { normalizeProviderQuota, previewQuota } = require('../core/provider-quota.cjs');
+const { isMediaModel, normalizeMediaModels } = require('../core/media-model-config.cjs');
 const { createProviderQuotaMonitor } = require('../services/provider-quota.cjs');
 const { settingsSnapshot } = require('../services/settings.cjs');
 const { DEFAULT_CWD } = require('../core/state.cjs');
@@ -178,6 +179,7 @@ function registerModelsIpc() {
       icon: provider.icon,
       modelsUrl: provider.modelsUrl,
       quota: provider.quota,
+      mediaModels: provider.mediaModels,
       builtin: provider.builtin,
       enabled: provider.enabled,
     };
@@ -188,6 +190,7 @@ function registerModelsIpc() {
     const db = getStudioDatabase();
     const baseUrl = normalizeUrl(input.baseUrl, 'Base URL');
     const modelsUrl = normalizeUrl(input.modelsUrl);
+    const mediaModels = input.mediaModels === undefined ? undefined : normalizeMediaModels(input.mediaModels);
     const apiKey = typeof input.apiKey === 'string' ? input.apiKey.trim() : '';
     const turnOffQuota = input.quota?.enabled === false;
     const quota = input.quota === undefined || turnOffQuota ? undefined : normalizeProviderQuota(input.quota);
@@ -205,6 +208,7 @@ function registerModelsIpc() {
           api,
           icon: String(input.icon || existing?.icon || ''),
           modelsUrl,
+          mediaModels,
           quota: turnOffQuota ? (existing?.quota ? { ...existing.quota, enabled: false } : null) : quota,
           builtin: existing?.builtin ?? false,
           enabled: input.enabled ?? existing?.enabled ?? true,
@@ -322,9 +326,11 @@ function registerModelsIpc() {
       officialCatalog: runtime.officialCatalog,
     });
     const remoteCatalog = await remoteCatalogPromise;
+    const chatIds = new Set(getStudioDatabase().listModels(id).map(model => model.modelId));
     return {
       ...discovery,
-      models: mergeDiscoveredModelMetadata(discovery.models, {
+      // Bulk importing a mixed upstream catalog must not enroll media-only IDs for chat.
+      models: mergeDiscoveredModelMetadata(discovery.models.filter(model => !isMediaModel(provider, model.id) || chatIds.has(model.id)), {
         providerId: provider.id,
         baseUrl: provider.baseUrl,
         catalogs: [remoteCatalog, runtime.officialCatalog],
@@ -343,6 +349,7 @@ function registerModelsIpc() {
           const modelId = typeof item?.id === 'string' ? item.id.trim() : '';
           if (!modelId) continue;
           const existing = db.getModel(providerId, modelId);
+          if (!existing && isMediaModel(provider, modelId)) continue;
           const reasoning = item.reasoning ?? existing?.reasoning ?? false;
           db.upsertModel({
             providerId,

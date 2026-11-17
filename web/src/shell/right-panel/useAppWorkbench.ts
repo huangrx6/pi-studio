@@ -141,16 +141,9 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     if (filesOpen) setPanelEntered(true); else openPanel();
   }
 
-  function openComparisonTab() {
-    const existing = panelTabsRef.current.find((tab) => tab.kind === 'comparison');
-    if (existing) {
-      setActivePanelTabId(existing.id);
-      if (filesOpen) setPanelEntered(true); else openPanel();
-      return;
-    }
-    const id = 'comparison';
-    setPanelTabs((current) => [...current, { id, kind: 'comparison', title: '双跑' }]);
-    setActivePanelTabId(id);
+  function openWorkspaceTool(kind: 'comparison' | 'storyboard', title: string) {
+    setPanelTabs(current => current.some(tab => tab.id === kind) ? current : [...current, { id: kind, kind, title }]);
+    setActivePanelTabId(kind);
     if (filesOpen) setPanelEntered(true); else openPanel();
   }
 
@@ -561,7 +554,8 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     openPanel,
     closePanel,
     openTemporaryChat,
-    openComparisonTab,
+    openComparisonTab: () => openWorkspaceTool('comparison', '双跑'),
+    openStoryboardTab: () => openWorkspaceTool('storyboard', '视频分镜'),
     openTerminalTab,
     openBrowserTab,
     openFilesTab,

@@ -22,10 +22,30 @@ const {
   modelInfo,
   resolveProviderApiKey,
 } = require('../../electron/services/models.cjs');
+const { listMediaModels, resolveMediaModel } = require('../../electron/services/media-models.cjs');
 
 test.after(() => {
   closeStudioDatabase();
   fs.rmSync(temporary, { recursive: true, force: true });
+});
+
+test('media model choices expose only enabled provider IDs and resolve the selected capability with its own saved key', async t => {
+  const db = getStudioDatabase();
+  const id = 'media-gateway';
+  t.after(() => db.deleteProvider(id));
+  assert.deepEqual(listMediaModels(), { speech: [], image: [] });
+  db.upsertProvider({ id, name: 'Media', baseUrl: 'https://media.example/v1', mediaModels: { speech: ['voice/a'], image: ['painter'] } });
+  db.writeCredential(id, { type: 'api_key', key: 'synthetic-media-secret' });
+  assert.deepEqual(listMediaModels().speech, [{ providerId: id, modelId: 'voice/a', label: 'Media · voice/a' }]);
+  assert.deepEqual(await resolveMediaModel('image', id, 'painter'), { modelId: 'painter', baseUrl: 'https://media.example/v1', apiKey: 'synthetic-media-secret' });
+  await assert.rejects(resolveMediaModel('speech', id, 'painter'), /重新选择/);
+  await assert.rejects(resolveMediaModel('image', 'unknown', 'painter'), /重新选择/);
+  db.setProviderEnabled(id, false);
+  assert.deepEqual(listMediaModels(), { speech: [], image: [] });
+  await assert.rejects(resolveMediaModel('speech', id, 'voice/a'), /已停用/);
+  db.deleteProvider(id);
+  db.upsertProvider({ id });
+  assert.deepEqual(listMediaModels(), { speech: [], image: [] });
 });
 
 test('a fresh Studio database starts with no providers or enabled models', async () => {

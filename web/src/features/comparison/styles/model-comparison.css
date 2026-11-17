@@ -54,7 +54,7 @@
   box-sizing: border-box;
   resize: vertical;
   padding: 12px 13px;
-  border: 1px solid var(--border-strong);
+  border: var(--field-border-width) solid var(--border-strong);
   border-radius: var(--radius-control);
   outline: 0;
   background: var(--surface-soft);

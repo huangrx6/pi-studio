@@ -12,7 +12,7 @@
   height: 36px;
   color: var(--text-2);
   background: color-mix(in srgb, var(--text) 3%, transparent);
-  border: 1px solid var(--border);
+  border: var(--field-border-width) solid var(--border);
   border-radius: var(--radius-control);
   cursor: text;
 }
@@ -134,7 +134,7 @@
 }
 .git-pages > span { margin-inline-end: auto; color: var(--text-2); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
 .git-pages form { display: inline-flex; align-items: center; gap: 2px; }
-.git-pages input { width: 7ch; padding: 4px 6px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--text); font-size: var(--text-sm); }
+.git-pages input { width: calc(5ch + 34px); padding: 4px 6px; border: var(--field-border-width) solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--text); font-size: var(--text-sm); }
 .git-pages button, .git-back {
   display: inline-flex;
   align-items: center;

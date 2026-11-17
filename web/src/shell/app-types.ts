@@ -121,7 +121,7 @@ export type ModelComparisonContext = {
 
 export type PanelTab = {
   id: string;
-  kind: 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services' | 'browser' | 'comparison' | 'progress';
+  kind: 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services' | 'browser' | 'comparison' | 'storyboard' | 'progress';
   title: string;
   tooltip?: string;
   path?: string;

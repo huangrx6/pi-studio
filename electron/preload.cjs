@@ -35,6 +35,35 @@ contextBridge.exposeInMainWorld('piApi', {
     pendingNavigation = undefined;
     deliver?.();
   },
+  storyboardList: workspace => ipcRenderer.invoke('pi:storyboard-list', workspace),
+  storyboardCreate: (workspace, example) => ipcRenderer.invoke('pi:storyboard-create', workspace, example),
+  storyboardRenderBegin: (workspace, id, plan, revision) => ipcRenderer.invoke('pi:storyboard-render-begin', workspace, id, plan, revision),
+  storyboardRenderRead: (workspace, id, token, asset, start, size) => ipcRenderer.invoke('pi:storyboard-render-read', workspace, id, token, asset, start, size),
+  storyboardRenderWrite: (workspace, id, token, position, data) => ipcRenderer.invoke('pi:storyboard-render-write', workspace, id, token, position, data),
+  storyboardRenderFinish: (workspace, id, token) => ipcRenderer.invoke('pi:storyboard-render-finish', workspace, id, token),
+  storyboardRenderDiscard: (workspace, id, token) => ipcRenderer.invoke('pi:storyboard-render-discard', workspace, id, token),
+  storyboardRenderSave: (workspace, id, token) => ipcRenderer.invoke('pi:storyboard-render-save', workspace, id, token),
+  storyboardRead: (workspace, id) => ipcRenderer.invoke('pi:storyboard-read', workspace, id),
+  storyboardGenerateDraft: (workspace, id, input) => ipcRenderer.invoke('pi:storyboard-generate-draft', workspace, id, input),
+  storyboardApplyDraft: (workspace, id, token) => ipcRenderer.invoke('pi:storyboard-apply-draft', workspace, id, token),
+  storyboardDiscardDraft: (workspace, id, token) => ipcRenderer.invoke('pi:storyboard-discard-draft', workspace, id, token),
+  storyboardMediaModels: () => ipcRenderer.invoke('pi:storyboard-media-models'),
+  storyboardMediaPreferences: (workspace, id, patch) => ipcRenderer.invoke('pi:storyboard-media-preferences', workspace, id, patch),
+  storyboardGenerateMedia: (workspace, id, input) => ipcRenderer.invoke('pi:storyboard-generate-media', workspace, id, input),
+  storyboardApplyMedia: (workspace, id, input) => ipcRenderer.invoke('pi:storyboard-apply-media', workspace, id, input),
+  storyboardEditBrief: (workspace, id, patch) => ipcRenderer.invoke('pi:storyboard-edit-brief', workspace, id, patch),
+  storyboardAdvance: (workspace, id, input) => ipcRenderer.invoke('pi:storyboard-advance', workspace, id, input),
+  storyboardProduce: (workspace, id, input) => ipcRenderer.invoke('pi:storyboard-produce', workspace, id, input),
+  storyboardEditShot: (workspace, id, shotId, patch) => ipcRenderer.invoke('pi:storyboard-edit-shot', workspace, id, shotId, patch),
+  storyboardPreview: (workspace, id, assetId) => ipcRenderer.invoke('pi:storyboard-preview', workspace, id, assetId),
+  storyboardRelink: (workspace, id, assetId) => ipcRenderer.invoke('pi:storyboard-relink', workspace, id, assetId),
+  storyboardPick: (workspace, id) => ipcRenderer.invoke('pi:storyboard-pick', workspace, id),
+  storyboardDrop: (workspace, id, files) => {
+    const paths = files.map(file => webUtils.getPathForFile(file));
+    if (paths.some(path => !path)) return Promise.reject(new Error('请从本机选择素材文件'));
+    return ipcRenderer.invoke('pi:storyboard-drop', workspace, id, paths);
+  },
+  storyboardRemoveFile: (workspace, id, assetId) => ipcRenderer.invoke('pi:storyboard-remove-file', workspace, id, assetId),
   temporaryModel: (payload) => ipcRenderer.invoke('pi:temporary-model', payload),
   temporaryPrompt: (payload) => ipcRenderer.invoke('pi:temporary-prompt', payload),
   temporaryStop: (id) => ipcRenderer.invoke('pi:temporary-stop', id),

@@ -442,7 +442,7 @@
   gap: 6px;
   height: 30px;
   padding: 0 10px;
-  border: 1px solid var(--border);
+  border: var(--field-border-width) solid var(--border);
   border-radius: var(--radius-round);
   background: var(--surface-soft);
   transition: border-color var(--transition), box-shadow var(--transition);
@@ -450,7 +450,7 @@
 /* The pill owns the focus state; the bare input must not paint its own box. */
 .browser-address:focus-within {
   border-color: var(--focus-color);
-  box-shadow: var(--focus-ring);
+  box-shadow: none;
 }
 .browser-address svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--faint); }
 /* Higher specificity than the global `input:not([type="checkbox"])` chrome,

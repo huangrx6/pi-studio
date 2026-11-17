@@ -14,7 +14,7 @@
 .request-inspector-tabs button { padding: 5px 8px; display: flex; gap: 6px; align-items: center; }
 .request-inspector-tabs button[aria-pressed="true"] { color: var(--text); background: var(--selected-bg); }
 .request-inspector-tabs button span { color: var(--faint); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
-.request-inspector-search { display: flex; flex: 1; min-width: 140px; max-width: 240px; margin-left: auto; align-items: center; gap: 8px; padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--radius-control); }
+.request-inspector-search { display: flex; flex: 1; min-width: 140px; max-width: 240px; margin-left: auto; align-items: center; gap: 8px; padding: 5px 8px; border: var(--field-border-width) solid var(--border); border-radius: var(--radius-control); }
 .request-inspector-search > svg { width: var(--icon-xs); height: var(--icon-xs); flex: none; color: var(--faint); }
 .request-inspector-search input:not([type="checkbox"]) { width: 100%; min-width: 0; height: 24px; padding: 0; border: 0; outline: none; box-shadow: none; background: transparent; color: var(--text); font: inherit; }
 .request-inspector-search input:not([type="checkbox"]):focus { border: 0; box-shadow: none; outline: none; }

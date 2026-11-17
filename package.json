@@ -1,6 +1,6 @@
 {
   "name": "pi-studio",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "private": true,
   "type": "module",
   "description": "Pi Studio — a native desktop workspace built on Pi Durable.",
@@ -85,6 +85,7 @@
     "@xyflow/react": "^12.12.1",
     "electron-updater": "^6.8.11",
     "lucide-react": "^0.468.0",
+    "mediabunny": "1.66.0",
     "node-pty": "^1.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -117,7 +118,8 @@
     "productName": "Pi Studio",
     "afterPack": "tools/release/electron-builder-after-pack.cjs",
     "asarUnpack": [
-      "node_modules/node-pty/**"
+      "node_modules/node-pty/**",
+      "assets/storyboard/web-sources/**"
     ],
     "directories": {
       "output": "release"
@@ -128,6 +130,7 @@
       "web-dist/**",
       "web/src/styles/palette.css",
       "web/src/styles/tokens.css",
+      "THIRD_PARTY_NOTICES.md",
       "package.json"
     ],
     "extraResources": [

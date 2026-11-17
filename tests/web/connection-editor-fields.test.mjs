@@ -27,6 +27,21 @@ function harness(file, name, initial) {
   return { render, text: () => text(tree), find: predicate => nodes(tree).find(predicate), all: predicate => nodes(tree).filter(predicate) };
 }
 const provider = { providerId: 'source-a', name: 'Source A', baseUrl: 'https://source.example/v1', api: 'custom-api', apiKey: '', modelsUrl: '', icon: '' };
+test('selecting a registered media model updates only its intended capability and accepts custom model IDs', () => {
+  let models = { speech: [], image: ['image/custom'] };
+  const h = harness('models/ProviderMediaFields.tsx', 'ProviderMediaFields', {
+    models, catalog: [{ id: 'voice/a', name: '配音候选' }, { id: 'image/custom', name: '插画模型' }], onChange: next => { models = next; },
+  });
+  const select = label => h.find(node => node.type === 'Select' && node.props.label === label);
+  assert.equal(select('语音合成 · 从已有模型选择').props.options.find(option => option.value === 'voice/a').label, '配音候选');
+  select('语音合成 · 从已有模型选择').props.onChange('voice/a');
+  h.render({ models });
+  assert.equal(models.speech.join(), 'voice/a');
+  assert.equal(models.image.join(), 'image/custom');
+  assert.ok(!select('语音合成 · 从已有模型选择').props.options.some(option => option.value === 'voice/a'));
+  h.find(node => node.props?.['aria-label'] === '图像生成模型 ID').props.onChange({ target: { value: 'image/custom\nimage/new' } });
+  assert.equal(models.image.join(), 'image/custom,image/new');
+});
 const mcp = { name: 'server', transport: 'stdio', command: 'npx', args: 'one\npath with spaces', cwd: '', url: '', description: '', env: 'TOKEN=', headers: '', exposure: 'deferred', timeoutSeconds: '60', toolExposure: '', clearEnv: false, clearHeaders: false };
 const input = id => node => node.props?.id === id;
 

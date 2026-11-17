@@ -2,25 +2,28 @@ import { useState, type Dispatch, type SetStateAction } from 'react';
 import { InfoHint } from '../../shared/InfoHint';
 import { Select, type SelectOption } from '../../shared/Select';
 import { ProviderQuotaFields } from './ProviderQuotaFields';
+import { ProviderMediaFields } from './ProviderMediaFields';
+import type { MediaModelCandidate, ProviderMediaModels } from './model-settings-types';
 import type { ProviderQuotaConfig } from '../../types/provider-quota';
 import './styles/provider-editor.css';
 
 export type ProviderEditorDraft = {
   providerId: string; name: string; baseUrl: string; api: string;
-  apiKey: string; icon: string; modelsUrl: string; quota: ProviderQuotaConfig;
+  apiKey: string; icon: string; modelsUrl: string; quota: ProviderQuotaConfig; mediaModels: ProviderMediaModels;
 };
 
-export function ProviderEditorFields({ draft, setDraft, editing, quotaAvailable, apiTypeOptions, settingsBusy = false }: {
+export function ProviderEditorFields({ draft, setDraft, editing, quotaAvailable, apiTypeOptions, mediaCandidates, settingsBusy = false }: {
   draft: ProviderEditorDraft;
   setDraft: Dispatch<SetStateAction<ProviderEditorDraft>>;
   editing: boolean;
   quotaAvailable: boolean;
   apiTypeOptions: SelectOption[];
+  mediaCandidates: MediaModelCandidate[];
   settingsBusy?: boolean;
 }) {
   const configured = Boolean(draft.modelsUrl || draft.icon);
   const [advancedOpen, setAdvancedOpen] = useState(configured);
-  const update = (key: Exclude<keyof ProviderEditorDraft, 'quota'>, value: string) => setDraft(current => ({ ...current, [key]: value }));
+  const update = (key: Exclude<keyof ProviderEditorDraft, 'quota' | 'mediaModels'>, value: string) => setDraft(current => ({ ...current, [key]: value }));
   const options = apiTypeOptions.some(option => option.value === draft.api)
     ? apiTypeOptions : [...apiTypeOptions, { value: draft.api, label: draft.api }];
   return <div className="settings-form-grid provider-editor-fields">
@@ -37,6 +40,8 @@ export function ProviderEditorFields({ draft, setDraft, editing, quotaAvailable,
       <input id="provider-api-key" aria-describedby={editing ? 'provider-api-key-note' : undefined} type="password" autoComplete="new-password" value={draft.apiKey} onChange={event => update('apiKey', event.target.value)} placeholder={editing ? '输入新 API Key' : '粘贴 API Key'} />
       {editing && <small id="provider-api-key-note" className="provider-editor-note">留空保留已保存的 API Key，不会清除凭据。</small>}
     </div>
+    <ProviderMediaFields models={draft.mediaModels} catalog={mediaCandidates}
+      onChange={mediaModels => setDraft(current => ({ ...current, mediaModels }))} />
     {quotaAvailable && <ProviderQuotaFields config={draft.quota} providerId={draft.providerId} apiKey={draft.apiKey}
       onChange={quota => setDraft(current => ({ ...current, quota }))} />}
     <details className="provider-editor-advanced field-wide" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}

@@ -296,6 +296,11 @@ export function SettingsOverlay({
     editorUnavailable,
     editorRequestId,
     settingsData: data,
+    mediaCandidates: [
+      ...(providerDiscovery[providerDraft.providerId]?.models ?? []),
+      ...(data?.customModels ?? []).filter(model => model.providerId === providerDraft.providerId)
+        .map(model => ({ id: model.modelId, name: model.name })),
+    ],
     providerDraft,
     setProviderDraft,
     apiTypeOptions,

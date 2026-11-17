@@ -202,8 +202,8 @@
 .agent-workspace > .agent-overview,
 .agent-workspace > .agent-context-view { flex: 1; min-width: 0; }
 .agent-list-tools { display: flex; align-items: center; gap: var(--space-2); margin-block: var(--space-3) var(--space-2); }
-.agent-list-search { display: flex; align-items: center; gap: 7px; min-width: 150px; flex: 1; height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); }
-.agent-list-search:focus-within { border-color: var(--focus-color); box-shadow: var(--focus-ring); }
+.agent-list-search { display: flex; align-items: center; gap: 7px; min-width: 150px; flex: 1; height: 34px; padding: 0 10px; border: var(--field-border-width) solid var(--border); border-radius: var(--radius-control); background: var(--surface); }
+.agent-list-search:focus-within { border-color: var(--focus-color); box-shadow: none; }
 .agent-list-search svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--muted); }
 /* Beat the global input chrome: the pill owns height, radius and the focus ring. */
 .agent-list-search input:not([type="checkbox"]) {

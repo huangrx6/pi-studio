@@ -162,7 +162,7 @@
   height: 36px;
   margin: 16px 0 0;
   padding-inline: 12px;
-  border: 1px solid var(--settings-border);
+  border: var(--field-border-width) solid var(--settings-border);
   border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--muted);
@@ -173,7 +173,7 @@
 .settings-navigation .settings-navigation-search:focus-within {
   border-color: var(--focus-color);
   background: var(--surface);
-  box-shadow: var(--focus-ring);
+  box-shadow: none;
 }
 
 .settings-navigation .settings-navigation-search > svg {
@@ -412,7 +412,7 @@
 .settings-content .pi-select-trigger:focus-visible {
   border-color: var(--focus-color);
   background: var(--surface);
-  box-shadow: var(--focus-ring);
+  box-shadow: none;
 }
 
 .settings-content .pi-select-menu {
@@ -816,7 +816,7 @@
 }
 
 /* 权限页的选中项不再用高亮白色外框表达焦点；用细环和中性选中底即可。 */
-.settings-content .permission-policy :is(button, input):focus-visible {
+.settings-content .permission-policy button:focus-visible {
   outline: 1px solid var(--settings-muted);
   outline-offset: 1px;
 }
@@ -977,7 +977,7 @@
 
 .settings-overlay .pi-select-trigger:focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring);
+  box-shadow: none;
 }
 
 /* Keep the entire keyboard outline inside the scrolling navigation column. */
@@ -989,12 +989,6 @@
 .settings-overlay :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea):focus {
   outline: none;
   border-color: var(--focus-color);
-  box-shadow: var(--focus-ring);
-}
-
-.settings-overlay .settings-stepper-input:focus {
-  outline: 1px solid var(--focus-color);
-  outline-offset: -1px;
   box-shadow: none;
 }
 

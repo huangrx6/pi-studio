@@ -35,7 +35,7 @@
 .model-settings-provider-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 .model-settings-provider-identity { min-width: 0; }
 .model-settings-provider-identity h3 { overflow-wrap: anywhere; }
-.model-settings-provider-identity p { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 12px; margin-top: 4px; color: var(--faint); font-size: var(--text-xs); line-height: var(--leading-body); }
+.model-settings-provider-identity p { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 12px; margin-top: 4px; color: var(--faint); font-size: var(--text-xs); line-height: var(--leading-body); }
 .model-settings-provider-identity code { min-width: 0; overflow-wrap: anywhere; font-family: var(--mono); }
 .model-settings-provider-identity .is-attention { color: var(--muted); }
 .model-settings-actions { display: flex; flex: none; align-items: center; flex-wrap: wrap; gap: 10px; }
@@ -111,7 +111,7 @@
 .model-directory-pages { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 8px 0; color: var(--muted); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
 .model-directory-pages .icon-button { flex: none; }
 .model-directory-pages svg, .enabled-models-actions svg { width: var(--icon-sm); height: var(--icon-sm); }
-.model-list-search { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--muted); }
+.model-list-search { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 0 10px; border: var(--field-border-width) solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--muted); }
 .model-list-search:focus-within { border-color: var(--focus-color); }
 .model-list-search svg { flex: none; width: var(--icon-sm); height: var(--icon-sm); }
 .model-list-search input { min-width: 0; width: 100%; min-height: 32px; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--text-sm); outline: 0; }

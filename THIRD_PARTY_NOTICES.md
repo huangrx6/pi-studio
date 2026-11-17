@@ -1,5 +1,10 @@
 # Third-party notices
 
+## Mediabunny
+
+Storyboard preview and MP4 export use Mediabunny 1.66.0 under the
+Mozilla Public License 2.0. [Source and license](https://github.com/Vanilagy/mediabunny/tree/v1.66.0).
+
 ## DeepSeek Harness UI styles
 
 Parts of the visual token sheets under `web/src/styles/` are copied from

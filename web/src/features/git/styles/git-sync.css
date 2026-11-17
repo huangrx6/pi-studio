@@ -19,7 +19,7 @@
 .git-remote-form, .git-sync-review { display: grid; gap: var(--space-3); min-width: 0; color: var(--text); font-size: var(--text-sm); }
 .git-remote-form label, .git-remote-form > div { display: grid; gap: 6px; }
 .git-remote-form code, .git-sync-route code, .git-sync-address { overflow-wrap: anywhere; font-family: var(--mono); }
-.git-remote-form input { width: 100%; padding: 7px 9px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-control); }
+.git-remote-form input { width: 100%; padding: 7px 9px; color: var(--text); background: var(--surface); border: var(--field-border-width) solid var(--border); border-radius: var(--radius-control); }
 .git-remote-form .git-inherit-url { display: flex; align-items: center; gap: 8px; }
 .git-inherit-url input { width: auto; }
 .git-remote-form p, .git-sync-review p { margin: 0; color: var(--text-2); line-height: var(--leading-body); }

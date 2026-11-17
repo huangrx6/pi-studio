@@ -185,7 +185,7 @@
 .agent-overview-empty p { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-relaxed); }
 .agent-flow-node { text-align: start; }
 .agent-flow-node:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
-.agent-supervisor-reply textarea { width: 100%; min-height: 54px; resize: vertical; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-control); outline: 0; background: var(--surface); color: var(--text); font: inherit; }
+.agent-supervisor-reply textarea { width: 100%; min-height: 54px; resize: vertical; padding: 8px; border: var(--field-border-width) solid var(--border); border-radius: var(--radius-control); outline: 0; background: var(--surface); color: var(--text); font: inherit; }
 .agent-supervisor-reply textarea:focus { border-color: var(--accent); }
 .agent-supervisor-reply .primary-button { min-height: 34px; gap: 5px; padding-inline: 10px; }
 .agent-supervisor-reply .primary-button svg { width: var(--icon-sm); height: var(--icon-sm); }

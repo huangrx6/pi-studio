@@ -20,6 +20,7 @@ import { concreteThinkingLevels } from '../types/model-types';
 import {
   DEFAULT_MODEL_THINKING_LEVELS,
   emptyCustomModelConfig,
+  emptyMediaModels,
 } from '../features/models/model-settings-types';
 import type {
   DiscoveredModel,
@@ -519,7 +520,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     setMcpTestResult(null);
     setMcpTesting(false);
     originalMcpArgsRef.current = null;
-    setProviderDraft({ providerId: '', name: '', baseUrl: '', api: 'openai-completions', apiKey: '', icon: '', modelsUrl: '', quota: emptyProviderQuota() });
+    setProviderDraft({ providerId: '', name: '', baseUrl: '', api: 'openai-completions', apiKey: '', icon: '', modelsUrl: '', quota: emptyProviderQuota(), mediaModels: emptyMediaModels() });
     setMcpDraft({
       name: '',
       transport: 'stdio',
@@ -541,7 +542,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     try {
       if (kind === 'provider' && editId) {
         const config = await window.piApi.providerConfig(editId);
-        if (current()) setProviderDraft({ ...config, apiKey: '', quota: config.quota ?? emptyProviderQuota() });
+        if (current()) setProviderDraft({ ...config, apiKey: '', quota: config.quota ?? emptyProviderQuota(), mediaModels: config.mediaModels ?? emptyMediaModels() });
       }
       if (kind === 'mcp' && editId) {
         const config = await window.piApi.mcpConfig(editId);

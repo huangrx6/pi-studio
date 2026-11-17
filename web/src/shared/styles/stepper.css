@@ -1,4 +1,4 @@
-/* 设置页数字步进器：外框 1px 实线、圆角 10、加减按钮 36 宽、数值区最小 64。
+/* 设置页数字步进器：共用输入框描边、加减按钮 36 宽、数值区最小 64。
  * 只消费语义令牌，设置面里会映射成同一套黑白灰。 */
 
 .settings-stepper {
@@ -6,7 +6,7 @@
   height: 36px;
   align-items: stretch;
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: var(--field-border-width) solid var(--border);
   border-radius: var(--radius-control);
   background: var(--surface);
 }
@@ -53,11 +53,15 @@
   cursor: text;
 }
 
-.settings-stepper-input {
+.settings-stepper > input.settings-stepper-input {
   height: 100%;
-  outline: 2px solid var(--focus-color);
-  outline-offset: -2px;
+  border: 0;
+  border-inline-start: 1px solid var(--border);
+  border-radius: 0;
+  outline: none;
 }
+
+.settings-stepper:has(.settings-stepper-input:focus) { border-color: var(--focus-color); }
 
 .settings-stepper-step + .settings-stepper-value,
 .settings-stepper-step + .settings-stepper-input,

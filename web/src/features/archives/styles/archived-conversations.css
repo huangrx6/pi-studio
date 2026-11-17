@@ -18,7 +18,7 @@
 .settings-content .archive-search input[type="search"] {
   width: 100%;
   padding-inline: 36px;
-  border: 1px solid var(--border);
+  border: var(--field-border-width) solid var(--border);
   border-radius: var(--radius-control);
   background: var(--surface);
 }

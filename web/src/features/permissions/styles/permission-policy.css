@@ -49,7 +49,7 @@
   line-height: var(--leading-body);
 }
 
-.permission-policy :is(button, input):focus-visible {
+.permission-policy button:focus-visible {
   outline: 2px solid var(--focus-color);
   outline-offset: 2px;
 }
@@ -93,7 +93,7 @@
 
 .permission-policy input {
   height: var(--control);
-  border: 1px solid var(--border-strong);
+  border: var(--field-border-width) solid var(--border-strong);
   border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--text);
@@ -107,7 +107,6 @@
 
 .permission-policy input:focus {
   border-color: var(--focus-color);
-  box-shadow: var(--focus-ring);
 }
 
 .permission-policy input::placeholder {

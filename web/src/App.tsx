@@ -642,6 +642,7 @@ export function App() {
 
       {filesOpen && <WorkbenchPane
         controller={workbench}
+        settingsOpen={settingsOpen}
         progressPanel={progressContent}
         onOpenComparison={openModelComparison}
         comparisonPanel={<ComparisonWorkbench

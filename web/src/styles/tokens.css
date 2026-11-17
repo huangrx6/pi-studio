@@ -31,6 +31,7 @@
   --radius-tag: 4px;
   --radius-sm: var(--radius-tag);
   --radius-control: 8px;
+  --field-border-width: 1.5px;
   --radius-card: 12px;
   --radius-panel: 16px;
   --radius-round: 999px;

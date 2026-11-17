@@ -2576,7 +2576,8 @@ try {
     probe.remove();
     return styles;
   });
-  assert.equal(paletteSearchFocus.wrapperBorderWidth, '1px');
+  const fieldBorderWidth = await page.evaluate(() => Math.floor(1.5 * devicePixelRatio) / devicePixelRatio + 'px');
+  assert.equal(paletteSearchFocus.wrapperBorderWidth, fieldBorderWidth);
   assert.equal(paletteSearchFocus.wrapperBorderColor, paletteSearchFocus.focusColor);
   assert.equal(paletteSearchFocus.wrapperBoxShadow, 'none');
   assert.equal(paletteSearchFocus.inputBorderWidth, '0px');
@@ -3540,7 +3541,7 @@ try {
     };
   });
   assert.deepEqual(searchFocusStyles, {
-    borderWidth: '1px',
+    borderWidth: fieldBorderWidth,
     outlineStyle: 'none',
     containerShadow: 'none',
     inputBorderWidth: '0px',

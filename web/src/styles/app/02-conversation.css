@@ -63,13 +63,13 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .trace-display-options button:hover { background: var(--surface-hover); color: var(--text); }
 .trace-display-options button[aria-pressed="false"] svg { opacity: .4; }
 .trace-display-options svg { width: 13px; height: 13px; }
-.conversation-trace-search { display: flex; align-items: center; gap: 6px; width: 180px; min-width: 80px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); padding-inline: 8px; background: var(--surface-soft); }
+.conversation-trace-search { display: flex; align-items: center; gap: 6px; width: 180px; min-width: 80px; border: var(--field-border-width) solid var(--border-strong); border-radius: var(--radius-control); padding-inline: 8px; background: var(--surface-soft); }
 .conversation-trace-search button { display: grid; place-items: center; padding: var(--space-1); color: var(--muted); }
 .conversation-trace-search svg { width: 14px; height: 14px; flex: none; color: var(--faint); }
 .conversation-trace-search input { width: 100%; min-width: 0; height: 26px; padding: 0; border: 0; outline: none; background: transparent; color: var(--text); font-size: var(--text-sm); }
 /* 焦点只画在外层搜索框上：内层 input 共享全局 input:focus 阴影会形成“框内套框”。 */
 .conversation-trace-search input:focus { box-shadow: none !important; }
-.conversation-trace-search:focus-within { border-color: var(--focus-color); box-shadow: var(--focus-ring); outline: none; }
+.conversation-trace-search:focus-within { border-color: var(--focus-color); box-shadow: none; outline: none; }
 .conversation-trace-page > .session-view-head { width: min(var(--session-view-width), 100%); margin-inline: auto; }
 .conversation-trace-activity { display: flex; flex: none; min-height: 64px; border-bottom: 1px solid var(--border); background: var(--surface-soft); }
 .conversation-trace-activity-labels { display: grid; grid-template-rows: repeat(3, 14px); gap: 2px; padding: 8px 9px; color: var(--faint); font-size: var(--text-xs); }
@@ -183,7 +183,7 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
   gap: 6px;
   width: min(340px, calc(100% - var(--space-6)));
   padding: 4px 6px 4px 10px;
-  border: 1px solid var(--border);
+  border: var(--field-border-width) solid var(--border);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
   box-shadow: var(--shadow-shell);
@@ -291,8 +291,8 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .message-action svg { width: var(--icon-xs); height: var(--icon-xs); }
 .message-action-time { padding: 0 4px; color: var(--faint); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
 .user-bubble { max-width: 85%; padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-panel) var(--radius-panel) var(--radius-tag) var(--radius-panel); background: var(--surface-soft); font-size: var(--text-md); line-height: var(--chat-line-height); white-space: pre-wrap; overflow-wrap: anywhere; }
-.message-edit { width: min(85%, 760px); overflow: hidden; border: 1px solid var(--border-strong); border-radius: var(--radius-panel); background: var(--surface); }
-.message-edit:focus-within { border-color: var(--focus-color); box-shadow: var(--focus-ring); }
+.message-edit { width: min(85%, 760px); overflow: hidden; border: var(--field-border-width) solid var(--border-strong); border-radius: var(--radius-panel); background: var(--surface); }
+.message-edit:focus-within { border-color: var(--focus-color); box-shadow: none; }
 .message-edit-body { padding: var(--space-3) var(--space-4) 0; }
 .message-edit textarea { display: block; width: 100%; min-height: 84px; max-height: 320px; resize: none; padding: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--text-md); line-height: var(--leading-relaxed); }
 .message-edit-preserved { margin-top: 6px; color: var(--faint); font-size: var(--text-xs); }
@@ -324,7 +324,7 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 但隐藏滚动条，关闭按钮绝对定位在缩略图右上角。 */
 
 .composer-dock { flex: none; padding: var(--space-3) var(--session-gutter) var(--space-5); background: var(--bg); z-index: 10; }
-.composer { max-width: var(--content); margin: 0 auto; border: 1px solid var(--border-strong); border-radius: var(--radius-card); background: var(--surface-floating); transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition); }
+.composer { max-width: var(--content); margin: 0 auto; border: var(--field-border-width) solid var(--border-strong); border-radius: var(--radius-card); background: var(--surface-floating); transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition); }
 .composer-feedback {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr) 24px;

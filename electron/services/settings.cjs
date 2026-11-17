@@ -64,6 +64,7 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
       mode: 'key',
       icon: provider.icon,
       models: models.filter((model) => model.providerId === provider.id).length,
+      mediaModelCount: new Set([...provider.mediaModels.speech, ...provider.mediaModels.image]).size,
       modelsUrl: provider.modelsUrl,
       enabled: provider.enabled,
       builtin: provider.builtin,

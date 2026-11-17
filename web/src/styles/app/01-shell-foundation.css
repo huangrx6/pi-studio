@@ -34,7 +34,26 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 button, input, select, textarea, summary { -webkit-app-region: no-drag; }
 button:focus-visible, summary:focus-visible, input[type="checkbox"]:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; }
 input:not([type="checkbox"]), select { min-width: 0; height: var(--control); padding: 0 var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); font-size: var(--text-base); outline: none; transition: border-color var(--transition), box-shadow var(--transition); }
-input:not([type="checkbox"]):focus, select:focus { border-color: var(--focus-color); box-shadow: var(--focus-ring); }
+input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]), select, textarea { border-width: var(--field-border-width); }
+input:not([type="checkbox"]):focus, select:focus, textarea:focus { border-color: var(--focus-color); outline: none; }
+input:is([type="radio"], [type="range"], [type="file"]):focus { box-shadow: var(--focus-ring); }
+
+/* Keep Chromium's native step targets and keyboard behaviour, with theme-coloured chevrons. */
+@media (forced-colors: none) {
+  input[type="number"]::-webkit-inner-spin-button {
+    appearance: none;
+    width: 18px;
+    height: 24px;
+    align-self: center;
+    margin: 0;
+    background-color: var(--muted);
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 24' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4.5 9 3.5-3.5L11.5 9m-7 6 3.5 3.5 3.5-3.5'/%3E%3C/svg%3E") center / 16px 24px no-repeat;
+    opacity: .75;
+    cursor: pointer;
+  }
+  input[type="number"]:is(:hover, :focus)::-webkit-inner-spin-button { opacity: 1; }
+  input[type="number"]:is(:disabled, :read-only)::-webkit-inner-spin-button { visibility: hidden; }
+}
 input::placeholder, textarea::placeholder { color: var(--faint); }
 input[type="checkbox"] { position: relative; display: inline-grid; place-items: center; width: 16px; height: 16px; margin: 0; flex: none; appearance: none; border: 1px solid var(--border-strong); border-radius: var(--radius-tag); background: var(--surface); cursor: pointer; transition: border-color var(--transition), background var(--transition); }
 input[type="checkbox"]::after { width: 4px; height: 8px; border-right: 2px solid var(--on-button); border-bottom: 2px solid var(--on-button); content: ''; opacity: 0; transform: rotate(45deg) translate(-1px, -1px) scale(.7); transition: opacity var(--transition), transform var(--transition); }
@@ -150,8 +169,8 @@ html:is([data-platform='win32'], [data-window-fullscreen='true']) :is(.app.has-c
 .bottom-row:hover { background: var(--surface-hover); }
 .status { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--faint); font-size: var(--text-xs); white-space: nowrap; }
 .status i { width: 5px; height: 5px; background: var(--success); border-radius: 50%; }
-.workspace-search, .settings-search, .search-field { display: flex; align-items: center; gap: var(--space-2); height: var(--control); flex: none; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); padding: 0 var(--space-3); color: var(--faint); }
+.workspace-search, .settings-search, .search-field { display: flex; align-items: center; gap: var(--space-2); height: var(--control); flex: none; border: var(--field-border-width) solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); padding: 0 var(--space-3); color: var(--faint); }
 .workspace-search { margin-bottom: var(--space-2); }
 .workspace-search input, .settings-search input, .search-field input { width: 100%; height: 100%; padding: 0; border: 0; box-shadow: none !important; background: var(--transparent); }
-.workspace-search:focus-within, .settings-search:focus-within, .search-field:focus-within { border-color: var(--focus-color); box-shadow: var(--focus-ring), var(--shadow-composer); }
+.workspace-search:focus-within, .settings-search:focus-within, .search-field:focus-within { border-color: var(--focus-color); box-shadow: none; }
 .sidebar-empty { padding: var(--space-3) var(--space-2); color: var(--faint); font-size: var(--text-xs); line-height: var(--leading-normal); }

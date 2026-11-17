@@ -224,7 +224,7 @@ function isPristineSeededProvider(provider, builtin, providerModels, credentialI
   const expectedBaseUrl = providerBaseUrl(builtin) || builtin.getModels?.()[0]?.baseUrl || '';
   if (provider.name !== expectedName) return false;
   if ((provider.baseUrl || '') !== expectedBaseUrl) return false;
-  if (provider.modelsUrl) return false;
+  if (provider.modelsUrl || provider.mediaModels?.speech.length || provider.mediaModels?.image.length) return false;
   return providerModels.every((model) => model.source === 'builtin' && model.enabled);
 }
 

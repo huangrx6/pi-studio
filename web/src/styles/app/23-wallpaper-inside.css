@@ -83,7 +83,7 @@
 
 .app .composer:has(.composer-input textarea:focus) {
   border-color: var(--focus-color);
-  box-shadow: 0 0 0 1px var(--accent-tint), var(--shadow-card);
+  box-shadow: none;
 }
 
 /* 对话正文只保留一层阅读底，代码内部与表头不再叠加不透明色块。 */

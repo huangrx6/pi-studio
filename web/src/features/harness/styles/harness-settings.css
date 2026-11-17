@@ -61,9 +61,9 @@
 .harness-section-override-chevron { width: 13px; height: 13px; flex: none; color: var(--faint); }
 .harness-section-override[open] .harness-section-override-chevron { transform: rotate(90deg); }
 .harness-section-override-body { padding: 3px 0 14px; }
-.harness-section-override-body textarea, .harness-instructions, .harness-tool-guidance-row textarea { width: 100%; padding: 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--text); font: var(--text-sm)/var(--leading-relaxed) var(--mono); resize: vertical; }
+.harness-section-override-body textarea, .harness-instructions, .harness-tool-guidance-row textarea { width: 100%; padding: 10px; border: var(--field-border-width) solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--text); font: var(--text-sm)/var(--leading-relaxed) var(--mono); resize: vertical; }
 .harness-section-override-body textarea { min-height: 112px; max-height: 300px; }
-.harness-section-override-body textarea:focus-visible, .harness-instructions:focus-visible, .harness-tool-guidance-row textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.harness-section-override-body textarea:focus, .harness-instructions:focus, .harness-tool-guidance-row textarea:focus { border-color: var(--focus-color); }
 .harness-section-override-body textarea:disabled { color: var(--disabled-text); background: var(--surface-soft); }
 .harness-section-override-body > div { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 6px; color: var(--faint); font-size: var(--text-xs); }
 .harness-tool-guidance-list { display: flex; flex-direction: column; gap: 16px; }

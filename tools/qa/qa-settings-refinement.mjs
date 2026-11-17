@@ -155,13 +155,17 @@ try {
   const generalPage = nav.getByRole('button', { name: '通用', exact: true });
   await content.getByRole('heading', { name: '通用', exact: true }).waitFor();
   assert.equal(await settingsSearch.evaluate((element) => element === document.activeElement), false, 'opening settings does not activate search');
+  const searchFrame = nav.locator('.settings-navigation-search');
+  const idleBorder = await searchFrame.evaluate(element => getComputedStyle(element).borderColor);
   await page.keyboard.press('Tab');
   assert.equal(await settingsSearch.evaluate((element) => element === document.activeElement), true, 'Tab from the settings heading reaches search');
-  const searchFocus = await nav.locator('.settings-navigation-search').evaluate((element) => {
+  const searchFocus = await searchFrame.evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map(animation => animation.finished));
     const style = getComputedStyle(element);
-    return { shadow: style.boxShadow, border: style.borderColor, accent: style.getPropertyValue('--settings-accent').trim() };
+    return { shadow: style.boxShadow, border: style.borderColor };
   });
-  assert.match(searchFocus.shadow, /0px 0px 0px 1px/, 'search has a thin focus halo');
+  assert.notEqual(searchFocus.border, idleBorder, 'keyboard focus highlights the search border');
+  assert.equal(searchFocus.shadow, 'none', 'search draws a single border');
   assert.equal(await nav.locator('.settings-nav-row').count(), routes.length, 'all settings routes remain available');
   assert.equal(await nav.locator('.settings-nav-row[tabindex="0"]').count(), 1, 'one settings page participates in the Tab order');
   assert.equal(await generalPage.getAttribute('tabindex'), '0', 'the active settings page owns the page Tab stop');

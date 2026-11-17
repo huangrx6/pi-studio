@@ -118,6 +118,21 @@ test('upgrading existing sources keeps their models and leaves quota monitoring 
   } finally { upgraded.close(); }
 });
 
+test('v22 sources retain their chat model selection when media catalogs are introduced', () => {
+  const filename = path.join(temporary, 'provider-v22.sqlite');
+  const previous = createStudioDatabase(filename);
+  try {
+    previous.upsertProvider({ id: 'source' });
+    previous.upsertModel({ providerId: 'source', modelId: 'vision', supportsImages: true });
+    previous.db.exec('ALTER TABLE model_providers DROP COLUMN media_models; PRAGMA user_version = 22;');
+  } finally { previous.close(); }
+  const upgraded = createStudioDatabase(filename);
+  try {
+    assert.deepEqual(upgraded.getProvider('source').mediaModels, { speech: [], image: [] });
+    assert.ok(upgraded.getModel('source', 'vision').enabled);
+  } finally { upgraded.close(); }
+});
+
 test('organizing older migration backups preserves collisions, active SQLite companions and unrelated files', () => {
   const { organizeDatabaseBackups } = require('../../electron/core/database-backups.cjs');
   const dir = fs.mkdtempSync(path.join(temporary, 'layout-'));

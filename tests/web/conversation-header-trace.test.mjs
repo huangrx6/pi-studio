@@ -99,6 +99,6 @@ test('draft and existing conversations can both open the right sidebar', () => {
 
 test('the trace search box owns the focus ring instead of nesting two frames', () => {
   assert.match(conversationCss, /\.conversation-trace-search input:focus\s*\{[^}]*box-shadow:\s*none\s*!important/, 'inner input never paints its own ring');
-  assert.match(conversationCss, /\.conversation-trace-search:focus-within\s*\{[^}]*box-shadow:\s*var\(--focus-ring\)/, 'wrapper paints the single focus ring');
+  assert.match(conversationCss, /\.conversation-trace-search:focus-within\s*\{[^}]*border-color:\s*var\(--focus-color\);\s*box-shadow:\s*none/, 'wrapper highlights its existing border');
   assert.match(conversationCss, /\.conversation-trace-search:focus-within\s*\{[^}]*outline:\s*none/, 'wrapper drops the extra outline');
 });

@@ -32,6 +32,7 @@ import { RightPanelStart, type RightPanelToolAction } from './RightPanelStart';
 import type { useAppWorkbenchController } from './useAppWorkbench';
 import type { TerminalAppearance } from '../../features/terminal/TerminalPanel';
 
+const StoryboardWorkbench = lazy(() => import('../../features/video-storyboard/StoryboardWorkbench'));
 const LazyTerminalPanel = lazy(async () => {
   const module = await import('../../features/terminal/TerminalPanel');
   return { default: module.TerminalPanel };
@@ -45,6 +46,7 @@ type TerminalPanelTab = PanelTab & { kind: 'terminal' };
 
 type WorkbenchPaneProps = {
   controller: ReturnType<typeof useAppWorkbenchController>;
+  settingsOpen: boolean;
   workspace: string;
   session: SessionStateForPersistence;
   modelSelection: ModelSelection;
@@ -64,6 +66,7 @@ type WorkbenchPaneProps = {
 
 export function WorkbenchPane({
   controller,
+  settingsOpen,
   workspace,
   session,
   modelSelection,
@@ -224,6 +227,7 @@ export function WorkbenchPane({
   }, [activatePanelTab, activePanelTabId, closePanelTab, filesOpen, panelTabs]);
   const toolActions: RightPanelToolAction[] = [
     { id: 'comparison', label: '模型双跑', description: '独立评估两个模型的回答与性能', onSelect: onOpenComparison },
+    { id: 'storyboard', label: '视频分镜', description: '记录创作想法，整理视频素材', onSelect: controller.openStoryboardTab },
     { id: 'files', label: '工作区文件', description: '浏览和预览项目文件', disabled: !panelWorkspace, onSelect: openFilesTab },
     { id: 'terminal', label: '新建终端', description: '在当前工作区运行命令', disabled: !panelWorkspace, onSelect: openTerminalTab },
     { id: 'services', label: '运行服务', description: '查看正在运行的服务', disabled: !panelWorkspace, onSelect: openServicesTab },
@@ -434,6 +438,13 @@ export function WorkbenchPane({
         actions={toolActions}
         onChooseWorkspace={onChooseWorkspace}
       />;
+    }
+    if (activePanelTab.kind === 'storyboard') {
+      const owner = workspace || panelWorkspace;
+      return <Suspense fallback={<LoadingState variant="panel">正在打开视频分镜…</LoadingState>}>
+        <StoryboardWorkbench key={owner} workspace={owner} onChooseWorkspace={onChooseWorkspace}
+          settingsOpen={settingsOpen} onConfigureModels={() => onOpenSettings('models')} />
+      </Suspense>;
     }
     if (activePanelTab.kind === 'progress') return progressPanel;
     if (activePanelTab.kind === 'comparison') return comparisonPanel;

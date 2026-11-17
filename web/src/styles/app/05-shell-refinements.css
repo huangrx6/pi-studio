@@ -33,9 +33,9 @@ z-index 200，避免被设置卡片或对话框的 overflow 裁剪，定位由�
 支持描述行和禁用态，选中态只改文字色，不改变背景层级。 */
 
 .pi-select { position: relative; min-width: 0; width: 100%; }
-.pi-select-trigger { width: 100%; height: var(--control); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0 var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--text); font-size: var(--text-base); text-align: left; }
+.pi-select-trigger { width: 100%; height: var(--control); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0 var(--space-3); border: var(--field-border-width) solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--text); font-size: var(--text-base); text-align: left; }
 .pi-select-trigger:hover:not(:disabled) { border-color: var(--border-hover); }
-.pi-select-trigger.is-open, .pi-select-trigger:focus-visible { border-color: var(--focus-color); box-shadow: var(--focus-ring); outline: none; }
+.pi-select-trigger.is-open, .pi-select-trigger:focus-visible { border-color: var(--focus-color); box-shadow: none; outline: none; }
 .pi-select-trigger:disabled { background: var(--surface-soft); color: var(--faint); cursor: not-allowed; }
 .pi-select-leading { display: grid; place-items: center; flex: none; color: var(--faint); }
 .pi-select-leading svg { width: var(--icon-sm); height: var(--icon-sm); }

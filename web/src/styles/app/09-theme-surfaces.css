@@ -42,7 +42,7 @@ body { background: var(--bg); color: var(--text); }
 .dialog-footer .settings-save:hover:not(:disabled) { background: var(--button-hover); border-color: var(--button-hover); color: var(--on-button); }
 .settings-outline, .settings-add-button, .settings-back-button { background: var(--surface); border-color: var(--border-strong); color: var(--muted); }
 .composer { background: var(--surface); border-color: var(--border-strong); }
-.composer:has(.composer-input textarea:focus) { border-color: var(--focus-color); box-shadow: var(--focus-ring); }
+.composer:has(.composer-input textarea:focus) { border-color: var(--focus-color); box-shadow: none; }
 .switch { background: var(--switch-off); }
 .switch > span { background: var(--switch-thumb); }
 .switch.is-on { background: var(--button-bg); }
@@ -428,7 +428,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
   background: var(--surface);
   box-shadow: var(--shadow-composer);
 }
-.temporary-composer:focus-within { border-color: var(--focus-color); box-shadow: var(--focus-ring), var(--shadow-composer); }
+.temporary-composer:focus-within { border-color: var(--focus-color); box-shadow: none; }
 .temporary-textarea,
 .temporary-composer .temporary-textarea {
   display: block;

@@ -370,3 +370,26 @@ test('quota rules commit with their source, retain saved mappings while disabled
   await call('pi:add-provider', provider());
   assert.equal(db.getProvider('gateway').quota, null);
 });
+
+test('assigning media capabilities preserves explicit chat enablement and keeps media-only IDs out of bulk chat imports', async t => {
+  const { call, db } = harness(t);
+  await call('pi:add-provider', provider({ apiKey: SECRET }));
+  db.upsertModel({ providerId: 'gateway', modelId: 'artist', name: 'Existing model', enabled: true });
+  db.upsertModel({ providerId: 'gateway', modelId: 'vision-chat', supportsImages: true });
+  const mediaModels = { speech: ['voice'], image: ['artist'] };
+  await call('pi:add-provider', provider({ mediaModels: { speech: ['voice', '', ' voice '], image: ['artist'] } }));
+  await call('pi:add-provider', provider({ name: 'Renamed' }));
+  assert.deepEqual(plain((await call('pi:provider-config', 'gateway')).mediaModels), mediaModels);
+  assert.deepEqual(db.listEnabledModels().map(item => item.modelId), ['artist', 'vision-chat']);
+  assert.equal(db.getModel('gateway', 'voice'), undefined);
+  assert.ok(db.getModel('gateway', 'vision-chat').supportsImages);
+  await call('pi:import-provider-models', { providerId: 'gateway', models: [{ id: 'voice', name: 'Voice' }] });
+  assert.equal(db.getModel('gateway', 'voice'), undefined);
+  await assert.rejects(call('pi:add-provider', provider({ mediaModels: { ...mediaModels, speech: ['bad id'] } })), /模型 ID/);
+  await call('pi:set-enabled-models', { models: ['gateway/vision-chat'] });
+  assert.deepEqual(db.getProvider('gateway').mediaModels, mediaModels);
+  await call('pi:add-provider', provider({ mediaModels: { speech: [], image: [] } }));
+  assert.equal(db.getModel('gateway', 'artist').name, 'Existing model');
+  assert.equal(db.getModel('gateway', 'artist').enabled, false);
+  noSecrets(await call('pi:provider-config', 'gateway'));
+});

@@ -2,7 +2,7 @@ import type { ComponentProps, Dispatch, SetStateAction } from 'react';
 import { Check, Folder, Image as ImageIcon, Sparkles } from 'lucide-react';
 import type { ConcreteThinkingLevel } from '../types/model-types';
 import { concreteThinkingLevels, thinkingLabels } from '../types/model-types';
-import { emptyCustomModelConfig } from '../features/models/model-settings-types';
+import { emptyCustomModelConfig, type MediaModelCandidate } from '../features/models/model-settings-types';
 import { quotaExtensionAvailable } from '../types/provider-quota';
 import { ProviderEditorFields } from '../features/models/ProviderEditorFields';
 import { McpEditorFields } from '../features/mcp/McpEditorFields';
@@ -31,6 +31,7 @@ type SettingsEditorDialogProps = {
   editorUnavailable: boolean;
   editorRequestId: number;
   settingsData: SettingsSnapshot | null;
+  mediaCandidates: MediaModelCandidate[];
   providerDraft: ProviderDraft;
   setProviderDraft: Dispatch<SetStateAction<ProviderDraft>>;
   apiTypeOptions: SelectOption[];
@@ -66,6 +67,7 @@ export function SettingsEditorDialog({
   editorRequestId,
   settingsData,
   providerDraft,
+  mediaCandidates,
   setProviderDraft,
   apiTypeOptions,
   customModel,
@@ -107,6 +109,7 @@ export function SettingsEditorDialog({
       key={editorRequestId}
       quotaAvailable={quotaExtensionAvailable(settingsData?.extensions)}
       draft={providerDraft}
+      mediaCandidates={mediaCandidates}
       setDraft={setProviderDraft}
       editing={Boolean(editor.editId)}
       apiTypeOptions={apiTypeOptions}

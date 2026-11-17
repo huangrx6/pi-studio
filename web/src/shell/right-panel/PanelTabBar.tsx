@@ -4,6 +4,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type DragEvent, ty
 import {
   Activity,
   Columns2,
+  Clapperboard,
   FileDiff,
   FileText,
   Folder,
@@ -40,6 +41,7 @@ const TAB_ICONS: Record<PanelTabItem['kind'], LucideIcon> = {
   services: Activity,
   browser: Globe,
   comparison: Columns2,
+  storyboard: Clapperboard,
   progress: ListChecks,
 };
 

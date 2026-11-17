@@ -29,7 +29,7 @@ const {
 const { activeProjectIds, addDailyUsage, listUsageProjects, migrateUsageProjects, usageWorkspace } = require('./usage-projects.cjs');
 
 const DATABASE_NAME = 'pi-studio.sqlite';
-const SCHEMA_VERSION = 21;
+const SCHEMA_VERSION = 23;
 const USAGE_REQUEST_LEDGER_LIMIT = 8_192;
 const USAGE_REQUEST_PRUNE_BATCH = 256;
 const METRIC_REQUEST_HISTORY_LIMIT = 8;
@@ -160,6 +160,7 @@ function normalizeProviderRow(row) {
     icon: row.icon || '',
     modelsUrl: row.models_url || '',
     quota: json(row.quota_config, null),
+    mediaModels: json(row.media_models, { speech: [], image: [] }),
     builtin: Boolean(row.builtin),
     enabled: Boolean(row.enabled),
     createdAt: row.created_at,
@@ -359,6 +360,23 @@ class StudioDatabase {
           position INTEGER NOT NULL DEFAULT 0,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS video_storyboards (
+          id TEXT PRIMARY KEY,
+          workspace TEXT NOT NULL,
+          revision INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          document TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS video_storyboards_workspace_idx
+          ON video_storyboards(workspace, updated_at DESC);
+        CREATE TABLE IF NOT EXISTS video_storyboard_sources (
+          work_id TEXT NOT NULL REFERENCES video_storyboards(id) ON DELETE CASCADE,
+          asset_id TEXT NOT NULL,
+          source_path TEXT NOT NULL,
+          PRIMARY KEY (work_id, asset_id),
+          UNIQUE (work_id, source_path)
         );
 
         CREATE TABLE IF NOT EXISTS conversations (
@@ -690,6 +708,9 @@ class StudioDatabase {
       }
       if (current < 19 && !this.db.prepare('PRAGMA table_info(model_providers)').all().some(row => row.name === 'quota_config')) {
         this.db.exec('ALTER TABLE model_providers ADD COLUMN quota_config TEXT');
+      }
+      if (current < 23 && !this.db.prepare('PRAGMA table_info(model_providers)').all().some(row => row.name === 'media_models')) {
+        this.db.exec('ALTER TABLE model_providers ADD COLUMN media_models TEXT');
       }
 
       const legacyUsageRequests = this.db.prepare(`
@@ -1611,13 +1632,14 @@ class StudioDatabase {
       icon: input.icon ?? current?.icon ?? '',
       modelsUrl: input.modelsUrl ?? current?.modelsUrl ?? '',
       quota: input.quota === undefined ? current?.quota : input.quota,
+      mediaModels: input.mediaModels ?? current?.mediaModels,
       builtin: input.builtin ?? current?.builtin ?? false,
       enabled: input.enabled ?? current?.enabled ?? true,
     };
     this.db.prepare(`
       INSERT INTO model_providers(
-        id, name, base_url, api, icon, models_url, quota_config, builtin, enabled, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, name, base_url, api, icon, models_url, quota_config, media_models, builtin, enabled, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         base_url = excluded.base_url,
@@ -1625,6 +1647,7 @@ class StudioDatabase {
         icon = excluded.icon,
         models_url = excluded.models_url,
         quota_config = excluded.quota_config,
+        media_models = excluded.media_models,
         builtin = excluded.builtin,
         enabled = excluded.enabled,
         updated_at = excluded.updated_at
@@ -1636,6 +1659,7 @@ class StudioDatabase {
       next.icon,
       next.modelsUrl,
       next.quota ? encode(next.quota) : null,
+      next.mediaModels?.speech.length || next.mediaModels?.image.length ? encode(next.mediaModels) : null,
       next.builtin ? 1 : 0,
       next.enabled ? 1 : 0,
       current?.createdAt || at,

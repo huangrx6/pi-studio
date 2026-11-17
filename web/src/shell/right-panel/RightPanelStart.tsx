@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { pollServiceCount } from './service-count-polling';
-import { Activity, Columns2, ChevronRight, Folder, FolderOpen, Globe, MessageCirclePlus, PanelRight, Terminal, type LucideIcon } from 'lucide-react';
+import { Activity, Clapperboard, Columns2, ChevronRight, Folder, FolderOpen, Globe, MessageCirclePlus, PanelRight, Terminal, type LucideIcon } from 'lucide-react';
 
-export type RightPanelToolId = 'files' | 'terminal' | 'services' | 'browser' | 'temporary' | 'comparison';
+export type RightPanelToolId = 'files' | 'terminal' | 'services' | 'browser' | 'temporary' | 'comparison' | 'storyboard';
 
 export type RightPanelToolAction = {
   id: RightPanelToolId;
@@ -14,6 +14,7 @@ export type RightPanelToolAction = {
 
 const TOOL_ICONS: Record<RightPanelToolId, LucideIcon> = {
   comparison: Columns2,
+  storyboard: Clapperboard,
   files: Folder,
   terminal: Terminal,
   services: Activity,
