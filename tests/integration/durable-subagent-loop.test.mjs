@@ -258,7 +258,7 @@ test('an isolated subagent writes in Studio userData without changing the projec
   }
 });
 
-test('a background subagent report carries the child answer instead of "without a text answer"', async () => {
+test('two background subagents complete and each reports its own answer with Studio writing the same SQLite file', async () => {
   setSubagentConfig('user', '', {
     defaultModel: '',
     defaultThinking: '',
@@ -285,17 +285,19 @@ test('a background subagent report carries the child answer instead of "without 
     provider: 'faux',
     models: [{ id: 'faux-1', name: 'Subagent background probe' }],
   });
+  const names = ['beijing-trip', 'shanghai-trip'];
+  let responseNumber = 0;
+  const answer = () => fauxAssistantMessage('background answer ' + ++responseNumber);
   faux.setResponses([
-    () => fauxAssistantMessage(
+    () => fauxAssistantMessage(names.map(name =>
       fauxToolCall('subagent', {
         action: 'spawn',
-        name: 'bg-1',
-        task: 'Answer with the background child result.',
-      }, { id: 'call-spawn' }),
+        name,
+        task: 'Return the result for ' + name,
+      }, { id: 'call-' + name })),
       { stopReason: 'toolUse' },
     ),
-    () => fauxAssistantMessage('background child answer'),
-    () => fauxAssistantMessage('parent acknowledged'),
+    answer, answer, answer,
   ]);
 
   const registry = createRegistry();
@@ -303,11 +305,14 @@ test('a background subagent report carries the child answer instead of "without 
   registry.install(subagentChannel);
   const models = createModels();
   models.setProvider(faux.provider);
-  const harness = await Harness.open(
-    new MemoryStorage(),
-    { models, registry },
-    BACKGROUND_CONTEXT,
-  );
+  const studio = require('../../electron/core/studio-db.cjs').getStudioDatabase();
+  const { openDurableStorage } = require('../../electron/runtime/durable-storage.cjs');
+  const storage = await openDurableStorage(process.env.PI_STUDIO_DB, { prefix: 'durable_', busyTimeoutMs: 1500 });
+  const harness = await Harness.open(storage, { models, registry }, BACKGROUND_CONTEXT);
+  studio.db.exec('CREATE TABLE subagent_projection_probe(value INTEGER)');
+  const project = studio.db.prepare("INSERT INTO subagent_projection_probe(value) VALUES(?)");
+  let writes = 0;
+  const timer = setInterval(() => project.run(String(++writes)), 5);
 
   try {
     const conversation = await harness.root(BACKGROUND_CONTEXT, {
@@ -319,29 +324,34 @@ test('a background subagent report carries the child answer instead of "without 
     });
     const parentId = conversation.id;
     const protocol = createProtocol(durable);
-    const submission = await conversation.submit({ type: 'input', content: 'Spawn a background child.' }, BACKGROUND_CONTEXT);
+    const submission = await conversation.submit({ type: 'input', content: 'Spawn both background children.' }, BACKGROUND_CONTEXT);
     assert.equal((await submission.wait(BACKGROUND_CONTEXT)).status, 'done');
 
     const deadline = Date.now() + 10_000;
-    let reporterId;
+    let reporters = [];
     while (Date.now() < deadline) {
       const state = await harness.snapshot(protocol.Subagents, parentId, BACKGROUND_CONTEXT);
-      reporterId = state?.agents?.['bg-1']?.lastReporterTaskId;
-      if (reporterId) break;
-      await new Promise((resolve) => setTimeout(resolve, 25));
+      reporters = names.map(name => state?.agents?.[name]?.lastReporterTaskId).filter(Boolean);
+      if (reporters.length === names.length) break;
+      await new Promise(resolve => setTimeout(resolve, 25));
     }
-    assert.ok(reporterId, 'the spawn registers a reporter task');
-    await harness.waitForTask(reporterId, BACKGROUND_CONTEXT);
-
+    assert.equal(reporters.length, 2);
+    await Promise.all(reporters.map(id => harness.waitForTask(id, BACKGROUND_CONTEXT)));
     const settled = await harness.snapshot(protocol.Subagents, parentId, BACKGROUND_CONTEXT);
-    const agent = settled.agents['bg-1'];
-    // 子会话里的捕获任务把最终回答落进 ChildContext，reporter 正是从这里回读。
-    const childContext = await harness.snapshot(protocol.ChildContext, agent.conversationId, BACKGROUND_CONTEXT);
-    assert.equal(childContext.lastAnswer, 'background child answer');
-    assert.equal(agent.lastStatus, 'completed');
-    assert.match(agent.lastReport, /\[subagent bg-1 answered\]/);
-    assert.match(agent.lastReport, /background child answer/);
+    const childAnswers = new Set();
+    for (const name of names) {
+      const agent = settled.agents[name];
+      const child = await harness.snapshot(protocol.ChildContext, agent.conversationId, BACKGROUND_CONTEXT);
+      assert.match(child.lastAnswer, /^background answer [1-3]$/);
+      childAnswers.add(child.lastAnswer);
+      assert.equal(agent.lastStatus, 'completed');
+      assert.ok(agent.lastReport.includes('[subagent ' + name + ' answered]'));
+      assert.ok(agent.lastReport.includes(child.lastAnswer));
+    }
+    assert.equal(childAnswers.size, names.length);
+    assert.ok(writes > 0);
   } finally {
+    clearInterval(timer);
     await harness.close(BACKGROUND_CONTEXT);
   }
 });

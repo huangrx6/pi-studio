@@ -14,7 +14,6 @@ const {
   getStudioDatabase,
 } = require('../../electron/core/studio-db.cjs');
 const {
-  closeStudioModelsRuntime,
   getStudioModelsRuntime,
 } = require('../../electron/core/studio-models.cjs');
 
@@ -33,12 +32,15 @@ Module._load = function loadWithElectronStub(request, parent, isMain) {
   return originalLoad.call(this, request, parent, isMain);
 };
 const { settingsSnapshot } = require('../../electron/services/settings.cjs');
+const { closeDurableRuntime } = require('../../electron/runtime/durable-runtime.cjs');
 Module._load = originalLoad;
 
-test.after(() => {
-  closeStudioModelsRuntime();
-  closeStudioDatabase();
-  fs.rmSync(temporary, { recursive: true, force: true });
+test.after(async () => {
+  try {
+    await closeDurableRuntime();
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
 });
 
 test('Studio database and model runtime recover after a closed connection is encountered', async () => {

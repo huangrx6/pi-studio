@@ -12,6 +12,7 @@ const {
   getStudioDatabase,
 } = require('../core/studio-db.cjs');
 const { getRuntimePolicy } = require('../core/app-settings.cjs');
+const { openDurableStorage } = require('./durable-storage.cjs');
 const { autoCompactOverrides } = require('../core/context-policy.cjs');
 const {
   closeStudioModelsRuntime,
@@ -112,7 +113,6 @@ async function createRuntime() {
     chordContext,
     durableTools,
     durableEnv,
-    durableSqlite,
     piAi,
     durableToolSearch,
     telemetry,
@@ -121,7 +121,6 @@ async function createRuntime() {
     import('@earendil-works/chord/context'),
     import('@earendil-works/pi-durable/tools'),
     import('@earendil-works/pi-durable/env/node'),
-    import('@earendil-works/pi-durable/storage/sqlite/node'),
     import('@earendil-works/pi-ai'),
     import('@earendil-works/pi-durable/tool-search'),
     import('@earendil-works/pi-telemetry'),
@@ -148,10 +147,8 @@ async function createRuntime() {
     chordContext,
   });
 
-  const storage = await durableSqlite.openNodeSqliteStorage(databasePath(), {
+  const storage = await openDurableStorage(databasePath(), {
     prefix: DURABLE_PREFIX,
-    // 并行子智能体各自提交时，5s 的默认等待偶尔会直接抛 "database is locked"，
-    // 一次就被记成子智能体失败。放宽到 15s，让写锁排队而不是失败。
     busyTimeoutMs: 15_000,
   });
   const shellEnv = sanitizedShellEnv();
@@ -191,7 +188,11 @@ async function createRuntime() {
       if (reports.length > 100) reports.shift();
       console.error('[pi-durable]', report.kind, entry.message);
     },
-  }, context);
+  }, context).catch(async error => {
+    metricsRuntime.close();
+    await storage.close().catch(() => {});
+    throw error;
+  });
   harness.resume();
   const runtime = {
     durable,
@@ -208,6 +209,18 @@ async function createRuntime() {
     }),
     reports,
   };
+  try {
+    await installRuntimeResources(runtime, db);
+    return runtime;
+  } catch (error) {
+    metricsRuntime.close();
+    await harness.close(context).catch(() => {});
+    await storage.close().catch(() => {});
+    throw error;
+  }
+}
+
+async function installRuntimeResources(runtime, db) {
   for (const manifest of BUILTIN_MANIFESTS) {
     installBuiltinExtension(db, {
       id: manifest.id,
@@ -245,7 +258,6 @@ async function createRuntime() {
       removed: 0,
       failures: [error instanceof Error ? error.message : String(error)],
     }));
-  return runtime;
 }
 
 function syncMetricsExtensionRuntime(runtime) {
