@@ -137,9 +137,13 @@ function createModelComparisonService(overrides = {}) {
     completeManagedWorktree: (...args) => (
       require('../capabilities/subagents/index.cjs').completeManagedWorktree(...args)
     ),
-    createManagedWorktree: (...args) => (
-      require('../capabilities/subagents/index.cjs').createManagedWorktree(...args)
-    ),
+    createManagedWorktree: (input) => {
+      const { getSubagentConfig } = require('../core/app-settings.cjs');
+      const config = { ...getSubagentConfig('user'), ...getSubagentConfig('project', input.workspace) };
+      return require('../capabilities/subagents/index.cjs').createManagedWorktree({
+        ...input, worktreeParent: config.worktreeParent, limit: config.worktreeLimit,
+      });
+    },
     discardManagedWorktree: (...args) => (
       require('../capabilities/subagents/index.cjs').discardManagedWorktree(...args)
     ),

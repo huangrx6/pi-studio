@@ -1,6 +1,7 @@
 import type { ChatMessage } from '../../types/chat-types';
 
 export type ComposerImagePayload = {
+  name?: string;
   type: 'image';
   data: string;
   mimeType: string;

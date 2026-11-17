@@ -208,3 +208,42 @@ test('startup cleanup removes orphan directories below the managed root', async 
     database.close();
   }
 });
+
+test('external worktrees stay registered while disconnected and still apply after returning', async () => {
+  const repository = createRepository('external');
+  const data = fs.mkdtempSync(path.join(temporary, 'external-data-'));
+  const disk = fs.realpathSync(fs.mkdtempSync(path.join(temporary, 'external-drive-')));
+  const database = createStudioDatabase(path.join(data, 'studio.sqlite'));
+  const options = { database, userDataPath: data };
+  const input = { id: 'external-a', parentConversationId: '1', workspace: repository, worktreeParent: disk };
+  try {
+    await assert.rejects(createManagedWorktree({ ...input, worktreeParent: repository }, options), /仓库以外/);
+    const tree = await createManagedWorktree(input, options);
+    assert.equal(tree.storageRoot, path.join(disk, 'Pi-Studio-worktrees'));
+    assert.equal(path.dirname(path.dirname(tree.path)), tree.storageRoot);
+    assert.match(runGit(repository, ['worktree', 'list', '--porcelain']), /locked/);
+    fs.writeFileSync(path.join(tree.path, 'child.txt'), 'external');
+    await completeManagedWorktree(tree.id, { status: 'finished' }, options);
+    fs.renameSync(disk, disk + '-offline');
+    await cleanupManagedWorktrees(options);
+    assert.equal(database.getManagedWorktree(tree.id).status, 'finished');
+    await assert.rejects(createManagedWorktree(input, options), /重新连接/);
+    await assert.rejects(discardManagedWorktree(tree.id, {}, options), /重新连接/);
+    fs.renameSync(disk + '-offline', disk);
+    await applyManagedWorktree(tree.id, options);
+    assert.equal(fs.readFileSync(path.join(repository, 'child.txt'), 'utf8'), 'external');
+    assert.equal(fs.existsSync(tree.path), false);
+  } finally { database.close(); }
+});
+
+test('worktree cleanup never follows a replaced root into another disk', async t => {
+  const dir = fs.mkdtempSync(path.join(temporary, 'replaced-root-'));
+  const external = fs.mkdtempSync(path.join(temporary, 'external-directory-'));
+  const saved = path.join(external, 'a12345678901', 'valuable');
+  fs.mkdirSync(saved, { recursive: true });
+  const database = createStudioDatabase(path.join(dir, 'studio.sqlite'));
+  t.after(() => database.close());
+  fs.symlinkSync(external, path.join(dir, 'worktrees'), 'junction');
+  await assert.rejects(cleanupManagedWorktrees({ database, userDataPath: dir }), /根目录已被替换/);
+  assert.equal(fs.existsSync(saved), true);
+});

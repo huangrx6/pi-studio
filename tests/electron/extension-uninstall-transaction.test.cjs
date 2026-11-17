@@ -8,6 +8,7 @@ const { test, after } = require('node:test');
 const { installElectronSafeStorage } = require('./helpers/electron-safe-storage.cjs');
 
 const userRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-uninstall-transaction-'));
+process.env.PI_STUDIO_USER_DATA = userRoot;
 process.env.PI_STUDIO_DB = path.join(userRoot, 'studio.sqlite');
 installElectronSafeStorage({ after });
 const originalLoad = Module._load;

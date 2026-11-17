@@ -54,7 +54,7 @@
     "qa:settings": "node tools/qa/qa-settings-refinement.mjs && node tools/qa/qa-settings-load-failure.mjs",
     "qa:startup": "node tools/qa/qa-packaged-startup.mjs",
     "start": "node tools/launch.mjs",
-    "test": "node --test tests/electron/*.test.cjs tests/web/*.test.mjs tests/integration/*.test.cjs tests/integration/*.test.mjs",
+    "test": "node --require ./tests/electron/helpers/isolated-studio-data.cjs --test tests/electron/*.test.cjs tests/web/*.test.mjs tests/integration/*.test.cjs tests/integration/*.test.mjs",
     "dist": "pnpm run build && node tools/release/build-distribution.cjs",
     "postinstall": "node tools/pty/ensure-executable.cjs",
     "qa:settings-completion": "node tools/qa/qa-settings-completion.mjs",

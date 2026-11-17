@@ -256,7 +256,7 @@ function reconstructSubmission(
 
   const imagePayload = attachments.flatMap((attachment) => (
     attachment.kind === 'image' && attachment.data
-      ? [{ type: 'image' as const, data: attachment.data, mimeType: attachment.mime }]
+      ? [{ type: 'image' as const, data: attachment.data, mimeType: attachment.mime, name: attachment.name }]
       : []
   ));
   const content: ChatMessage['content'] = [];

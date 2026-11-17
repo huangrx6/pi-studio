@@ -1,7 +1,7 @@
 /**
  * Studio-owned Git worktrees used to isolate parallel child agents.
  *
- * Worktrees live below Electron userData, never inside the project. Git
+ * Worktrees live in the Studio data directory or a user-selected location. Git
  * operations that need an index use a temporary GIT_INDEX_FILE so Studio never
  * reads or rewrites the user's real staging area.
  */
@@ -13,6 +13,7 @@ const { createHash } = require('node:crypto');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { getStudioDatabase } = require('../../core/studio-db.cjs');
+const { checkWorktreeSpace } = require('../../core/worktree-space.cjs');
 const { studioDataDirectory } = require('../../core/studio-paths.cjs');
 
 const execFileAsync = promisify(execFile);
@@ -118,9 +119,30 @@ async function isGitRepository(workspace) {
   }
 }
 
+const EXTERNAL_ROOT_NAME = 'Pi-Studio-worktrees';
+
+function externalRootUnavailable(record) {
+  return record.storageRoot && !fs.existsSync(record.storageRoot);
+}
+
+function checkExternalRoot(record) {
+  if (externalRootUnavailable(record)) throw new Error('工作树磁盘或目录当前不可用，请重新连接原来的位置');
+}
+
 function safeWorktreePath(record, options = {}) {
-  const root = managedRoot(options);
+  const root = record.storageRoot || managedRoot(options);
+  if (record.storageRoot) {
+    checkExternalRoot(record);
+    if (path.basename(root) !== EXTERNAL_ROOT_NAME || fs.realpathSync(root) !== root
+        || path.dirname(record.path) !== path.join(root, workspaceKey(record.repositoryRoot))) {
+      throw new Error('托管工作树位置与登记不一致');
+    }
+  }
   assertContained(root, record.path);
+  for (const directory of [root, path.dirname(record.path)]) {
+    const stat = fs.lstatSync(directory, { throwIfNoEntry: false });
+    if (stat && !stat.isDirectory()) throw new Error('托管工作树的父目录已被替换');
+  }
   if (fs.existsSync(record.path)) {
     if (fs.lstatSync(record.path).isSymbolicLink()) throw new Error('托管工作树不能是符号链接');
     assertContained(fs.realpathSync(root), fs.realpathSync(record.path));
@@ -132,14 +154,18 @@ async function removeDirectory(record, options = {}) {
   const target = safeWorktreePath(record, options);
   if (fs.existsSync(target)) {
     try {
-      await git(record.repositoryRoot, ['worktree', 'remove', '--force', target]);
-    } catch {
+      await git(record.repositoryRoot, ['worktree', 'remove', '--force', ...(record.storageRoot ? ['--force'] : []), target]);
+    } catch (error) {
+      if (record.storageRoot) throw error;
       const stat = fs.lstatSync(target);
       if (stat.isSymbolicLink()) throw new Error('拒绝删除符号链接形式的工作树目录');
       fs.rmSync(target, { recursive: true, force: true });
     }
   }
-  await git(record.repositoryRoot, ['worktree', 'prune'], { allowFailure: true });
+  if (!fs.existsSync(target)) {
+    // Git can remove a missing registration by path. A global prune could also forget a disconnected disk.
+    await git(record.repositoryRoot, ['worktree', 'remove', ...(record.storageRoot ? ['--force', '--force'] : []), '--', target], { allowFailure: true });
+  }
 }
 
 function directorySize(root) {
@@ -256,7 +282,6 @@ async function snapshotChanges(record, options = {}) {
 }
 
 async function describeRecord(record, options = {}, { includePatch = false } = {}) {
-  safeWorktreePath(record, options);
   let changes;
   let inspectionError = '';
   try {
@@ -264,11 +289,12 @@ async function describeRecord(record, options = {}, { includePatch = false } = {
   } catch (error) {
     inspectionError = error instanceof Error ? error.message : String(error);
   }
-  const size = fs.existsSync(record.path)
+  const size = !inspectionError && fs.existsSync(record.path)
     ? directorySize(record.path)
     : { bytes: 0, entries: 0, truncated: false };
+  const { storageRoot, ...details } = record;
   return {
-    ...record,
+    ...details,
     changed: changes?.changed,
     changedFiles: changes?.changedFiles,
     files: changes?.files || [],
@@ -292,7 +318,8 @@ async function createManagedWorktree(input = {}, options = {}) {
   if (!id) throw new Error('托管工作树缺少稳定标识');
   const existing = database.getManagedWorktree(id);
   if (existing) {
-    if (fs.existsSync(existing.path)) return existing;
+    checkExternalRoot(existing);
+    if (fs.existsSync(existing.path)) { safeWorktreePath(existing, resolved); return existing; }
     database.removeManagedWorktree(id);
   }
 
@@ -302,14 +329,35 @@ async function createManagedWorktree(input = {}, options = {}) {
     throw new Error(`当前工作区已有 ${limit} 个待处理工作树，请先合并或丢弃其中一个`);
   }
   const name = slug(input.name, 'agent');
+  let root = managedRoot(resolved);
+  if (input.worktreeParent) {
+    if (!path.isAbsolute(input.worktreeParent) || !fs.statSync(input.worktreeParent, { throwIfNoEntry: false })?.isDirectory()) {
+      throw new Error('所选工作树位置不可用，请连接磁盘或重新选择目录');
+    }
+    root = path.join(fs.realpathSync(input.worktreeParent), EXTERNAL_ROOT_NAME);
+    const relative = path.relative(info.repositoryRoot, root);
+    if (!relative || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative))) {
+      throw new Error('隔离工作树应放在仓库以外，请选择其他位置');
+    }
+  }
+  // Validate each managed component before creating anything below it.
+  if (!input.worktreeParent) fs.mkdirSync(resolved.userDataPath, { recursive: true, mode: 0o700 });
+  const group = path.join(root, workspaceKey(info.repositoryRoot));
+  for (const directory of [root, group]) {
+    try { fs.mkdirSync(directory, { mode: 0o700 }); }
+    catch (error) { if (error.code !== 'EEXIST') throw error; }
+    if (!fs.lstatSync(directory).isDirectory()) throw new Error('工作树位置不是普通目录');
+  }
+  await checkWorktreeSpace(info.repositoryRoot, info.baseCommit, root);
+  const storageRoot = input.worktreeParent ? root : '';
   const location = path.join(
-    managedRoot(resolved),
+    root,
     workspaceKey(info.repositoryRoot),
     `${Date.now().toString(36)}-${name}-${createHash('sha256').update(id).digest('hex').slice(0, 6)}`,
   );
-  fs.mkdirSync(path.dirname(location), { recursive: true, mode: 0o700 });
+  if (fs.existsSync(location)) throw new Error('工作树目标已存在');
   try {
-    await git(info.repositoryRoot, ['worktree', 'add', '--detach', location, info.baseCommit]);
+    await git(info.repositoryRoot, ['worktree', 'add', '--detach', ...(storageRoot ? ['--lock'] : []), location, info.baseCommit]);
   } catch (error) {
     fs.rmSync(location, { recursive: true, force: true });
     throw error;
@@ -322,6 +370,7 @@ async function createManagedWorktree(input = {}, options = {}) {
       name,
       workspace: info.repositoryRoot,
       repositoryRoot: info.repositoryRoot,
+      storageRoot,
       path: location,
       baseCommit: info.baseCommit,
       status: 'active',
@@ -329,6 +378,7 @@ async function createManagedWorktree(input = {}, options = {}) {
   } catch (error) {
     await removeDirectory({
       repositoryRoot: info.repositoryRoot,
+      storageRoot,
       path: location,
     }, resolved).catch(() => {});
     throw error;
@@ -494,6 +544,7 @@ async function discardManagedWorktree(id, {
     await removeDirectory(record, resolved);
     return { ok: true, alreadyTerminal: true };
   }
+  checkExternalRoot(record);
   let cleanupError = '';
   try {
     await removeDirectory(record, resolved);
@@ -501,11 +552,11 @@ async function discardManagedWorktree(id, {
     cleanupError = error instanceof Error ? error.message : String(error);
   }
   resolved.database.updateManagedWorktree(id, {
-    status: 'discarded',
+    status: cleanupError ? record.status : 'discarded',
     error: cleanupError,
     finishedAt: Date.now(),
   });
-  if (cleanupError) throw new Error(`工作树已标记丢弃，但目录清理失败：${cleanupError}`);
+  if (cleanupError) throw new Error(`工作树清理失败：${cleanupError}`);
   return { ok: true };
 }
 
@@ -579,6 +630,7 @@ async function cleanupManagedWorktrees(options = {}) {
   let removed = 0;
   const failures = [];
   for (const record of all) {
+    if (externalRootUnavailable(record)) continue;
     if (TERMINAL_STATUSES.has(record.status) && fs.existsSync(record.path)) {
       try {
         await removeDirectory(record, resolved);
@@ -594,13 +646,14 @@ async function cleanupManagedWorktrees(options = {}) {
         error: '托管工作树目录已丢失',
         finishedAt: record.finishedAt || Date.now(),
       });
-      await git(record.repositoryRoot, ['worktree', 'prune'], { allowFailure: true });
+      await removeDirectory(record, resolved);
     }
   }
 
   if (fs.existsSync(root)) {
+    if (!fs.lstatSync(root).isDirectory()) throw new Error('托管工作树根目录已被替换');
     for (const workspaceDirectory of fs.readdirSync(root, { withFileTypes: true })) {
-      if (!workspaceDirectory.isDirectory()) continue;
+      if (!workspaceDirectory.isDirectory() || !/^[a-f0-9]{12}$/.test(workspaceDirectory.name)) continue;
       const workspacePath = path.join(root, workspaceDirectory.name);
       for (const child of fs.readdirSync(workspacePath, { withFileTypes: true })) {
         if (!child.isDirectory()) continue;

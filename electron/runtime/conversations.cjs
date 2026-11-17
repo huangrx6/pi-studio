@@ -42,6 +42,7 @@ const {
   splitModelRef,
   validateThinkingLevel,
 } = require('../services/models.cjs');
+const { assetOwner, bindConversationUploads, removeConversationAssets } = require('../services/conversation-assets.cjs');
 const { fileReferenceContext } = require('../services/workspace.cjs');
 const {
   attachmentContext,
@@ -967,11 +968,12 @@ async function submitConversation(input = {}, options = {}) {
     // 模型写 `~` 或相对路径也不会打不开文件。
     instructions: PATH_OUTPUT_INSTRUCTIONS,
   }, runtime.context);
+  const attachments = bindConversationUploads(row, input.attachments);
   const content = await inputContent({
     cwd: row.workspace,
     text: expandSkillCommand(input.text, row.workspace),
     mentions: input.mentions,
-    attachments: input.attachments,
+    attachments,
     images: input.images,
   });
   if (content.some((block) => block?.type === 'image')) {
@@ -995,7 +997,11 @@ async function submitConversation(input = {}, options = {}) {
       kind: 'studio.user',
       data: {
         displayText,
-        attachments: Array.isArray(input.attachments) ? input.attachments : [],
+        attachments,
+        ...(Array.isArray(input.images) && input.images.length ? {
+          imageNames: input.images.filter(image => image?.type === 'image' && image.data && image.mimeType)
+            .map(image => typeof image.name === 'string' ? image.name.slice(0, 200) : ''),
+        } : {}),
       },
     },
   }, runtime.context);
@@ -1170,8 +1176,9 @@ async function editConversation(input = {}, options = {}) {
     .filter((message) => message.role === 'user')
     .flatMap((message) => message.content)
     .filter((block) => block?.type === 'image')
-    .map((block) => ({
+    .map((block, index, blocks) => ({
       type: 'image',
+      name: data.imageNames?.[index - blocks.length + data.imageNames.length],
       data: block.data,
       mimeType: block.mimeType,
     }));
@@ -1739,6 +1746,7 @@ async function purgeConversationData(rootIds, options = {}) {
       deletePermissionSessionPolicy(key);
       db.deleteConversation(String(root));
       try {
+        if (row && removeConversationAssets(row)) attachmentsRemoved += 1;
         if (removeAttachmentDirectory(key)) attachmentsRemoved += 1;
       } catch (error) {
         console.warn('[pi-studio] unable to remove conversation attachments', error);
@@ -1800,10 +1808,15 @@ async function purgeConversationData(rootIds, options = {}) {
 
   // Read provider identities while their conversation documents still exist.
   for (const conversation of conversations) await releaseProviderSession(runtime, conversation.id);
+  const assetOwners = tree.conversationIds.map(id => assetOwner(db.db, id)).filter(Boolean);
   const removed = db.deleteConversationTrees(roots, {
     extraTaskIds: options.extraTaskIds,
   });
   let attachmentsRemoved = 0;
+  for (const owner of assetOwners) {
+    try { if (removeConversationAssets(owner)) attachmentsRemoved += 1; }
+    catch (error) { console.warn('[pi-studio] unable to remove conversation assets', error.code || error.name); }
+  }
   for (const key of cleanupKeys) {
     try {
       if (removeAttachmentDirectory(key)) attachmentsRemoved += 1;

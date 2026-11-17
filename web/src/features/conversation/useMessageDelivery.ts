@@ -101,8 +101,6 @@ type MessageDeliveryDependencies = {
   queuedEditContextsRef: MutableRefObject<Record<string, QueuedEditContext>>;
   composerDraftKeyRef: MutableRefObject<string>;
   composerDraftsRef: MutableRefObject<Map<string, ComposerDraft>>;
-  composerPersistenceStartedRef: MutableRefObject<boolean>;
-  setComposerPersistenceStarted: Setter<boolean>;
   composerAttachments: ComposerAttachment[];
   composerDeliveryRetriesRef: MutableRefObject<Map<string, { draft: ComposerDraft; requestId: string }>>;
   latestComposerAttemptByKeyRef: MutableRefObject<Map<string, string>>;
@@ -177,8 +175,6 @@ export function useMessageDelivery({
   queuedEditContextsRef,
   composerDraftKeyRef,
   composerDraftsRef,
-  composerPersistenceStartedRef,
-  setComposerPersistenceStarted,
   composerAttachments,
   composerDeliveryRetriesRef,
   latestComposerAttemptByKeyRef,
@@ -233,10 +229,6 @@ export function useMessageDelivery({
     composerDraftKeyRef.current = key;
     setPrompt(next.text);
     setComposerAttachments(next.attachments);
-    if (!composerPersistenceStartedRef.current) {
-      composerPersistenceStartedRef.current = true;
-      setComposerPersistenceStarted(true);
-    }
   }
 
   function clearActiveComposerDraftText(): void {
@@ -456,7 +448,7 @@ export function useMessageDelivery({
       if (image.data) content.push({ type: 'image', data: image.data, mimeType: image.mime });
     }
     const persistentAttachments = [...(longAttachments ?? []), ...fileAttachments];
-    const imagePayload = images.filter((image) => image.data).map((image) => ({ type: 'image' as const, data: image.data as string, mimeType: image.mime }));
+    const imagePayload = images.filter((image) => image.data).map((image) => ({ type: 'image' as const, data: image.data as string, mimeType: image.mime, name: image.name }));
     const mentions = extractComposerMentions(text);
     return {
       sessionId,

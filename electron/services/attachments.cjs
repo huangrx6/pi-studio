@@ -3,7 +3,7 @@
  *
  * 设计：
  *  - 图片直接以 base64 内联进消息（Pi 的多模态输入要求）
- *  - 其它文件先落盘到 Pi Studio userData/attachments/<sessionId>/，消息里只放标记
+ *  - 其他文件按会话保存。新对话的草稿在发送时归入实际会话，历史路径仍可读取。
  *  - 发消息时 attachmentContext() 再把落盘文件的文本内容读回来
  */
 
@@ -158,7 +158,9 @@ function safeSessionDirectoryName(sessionId) {
  * 随机 UUID 与独占创建共同保证同名附件绝不会互相覆盖。
  */
 function writeAttachment(sessionId, name, buffer) {
-  const dir = managedSessionDirectory(sessionId, { create: true });
+  const dir = sessionId && typeof sessionId === 'object'
+    ? require('./conversation-assets.cjs').uploadDirectory(sessionId, studioDataDirectory())
+    : managedSessionDirectory(sessionId, { create: true });
   const target = path.join(dir, `${randomUUID()}-${safeAttachmentName(name)}`);
   let descriptor;
   let created = false;
@@ -300,7 +302,7 @@ async function attachmentContext(paths) {
 /** Remove only the session-owned attachment directory below Studio userData. */
 function removeAttachmentDirectory(sessionId) {
   const rawSession = typeof sessionId === 'string' ? sessionId.trim() : '';
-  if (!rawSession || !/^[A-Za-z0-9-]{1,80}$/.test(rawSession)) return false;
+  if (!rawSession || rawSession === 'projects' || !/^[A-Za-z0-9-]{1,80}$/.test(rawSession)) return false;
   const safeSession = safeSessionDirectoryName(sessionId);
   let root;
   let target;
@@ -330,7 +332,7 @@ function removeAttachmentDirectory(sessionId) {
 function cleanupOrphanedAttachmentDirectories(activeSessionIds = []) {
   const root = managedAttachmentRoot();
   if (!root) return { removed: 0, failed: 0 };
-  const protectedNames = new Set(['draft']);
+  const protectedNames = new Set(['draft', 'projects']);
   for (const value of activeSessionIds) {
     if (typeof value !== 'string' && typeof value !== 'number') continue;
     const raw = String(value).trim();

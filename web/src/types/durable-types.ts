@@ -119,7 +119,7 @@ export type ConversationSubmitInput = {
   whenBusy?: 'steer' | 'followUp' | 'reject';
   mentions?: string[];
   attachments?: string[];
-  images?: Array<{ type: 'image'; data: string; mimeType: string }>;
+  images?: Array<{ type: 'image'; data: string; mimeType: string; name?: string }>;
 };
 
 export type ConversationSubmitResult = {

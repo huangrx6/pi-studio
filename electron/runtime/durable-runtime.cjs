@@ -193,10 +193,12 @@ async function createRuntime() {
     await storage.close().catch(() => {});
     throw error;
   });
+  const stopAssetArchive = require('../services/conversation-asset-archive.cjs').startAssetArchive(db);
   harness.resume();
   const runtime = {
     durable,
     cleanupSessionResources: piAi.cleanupSessionResources,
+    stopAssetArchive,
     storage,
     harness,
     context,
@@ -213,6 +215,7 @@ async function createRuntime() {
     await installRuntimeResources(runtime, db);
     return runtime;
   } catch (error) {
+    await stopAssetArchive();
     metricsRuntime.close();
     await harness.close(context).catch(() => {});
     await storage.close().catch(() => {});
@@ -304,6 +307,7 @@ async function closeDurableRuntime() {
       try {
         await current.harness.close(current.context);
       } finally {
+        await current.stopAssetArchive();
         await current.storage.close(current.context).catch(() => {});
       }
     }

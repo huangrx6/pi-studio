@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { extractZipArchive, DEFAULT_ARCHIVE_LIMITS } = require('../../core/extension-archive.cjs');
 const { studioDataDirectory } = require('../../core/studio-paths.cjs');
+const { removeEmptyQuarantine } = require('./cleanup.cjs');
 const { inspectSkillDirectory, directoryDetails } = require('./instructions.cjs');
 
 // Repository budgets are separate from the smaller, per-skill install limits.
@@ -47,6 +48,7 @@ function createGithubSourceAdapter(readUrl) {
       return await callback(path.join(staging, roots[0].name));
     } finally {
       fs.rmSync(staging, { recursive: true, force: true });
+      removeEmptyQuarantine(parent);
     }
   }
 

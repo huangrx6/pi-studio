@@ -309,6 +309,8 @@ export interface SettingsSnapshot {
   storagePath: string;
   runtimeVersions: StudioRuntimeVersions;
   databasePath: string;
+  attachmentsPath: string;
+  backupsPath: string;
   skillsPath: string;
   agentsSkillsPath: string;
   projectSkillsPath: string;
@@ -754,6 +756,7 @@ declare global {
       /** 添加技能（scope 决定用户级还是工作区级）。 */
       addSkill(payload: { scope: 'user' | 'project'; cwd?: string }): Promise<CommittedProjection<SettingsSnapshot> | undefined>;
       refreshSkills(cwd?: string): Promise<SettingsSnapshot>;
+      pickWorktreeParent(): Promise<string | undefined>;
       pickSkillSourceDirectory(): Promise<string | undefined>;
       pickSkillRegistryFile(): Promise<string | undefined>;
       skillHub(payload?: { refresh?: boolean }): Promise<SkillHubSnapshot>;

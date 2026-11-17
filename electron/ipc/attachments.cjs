@@ -10,6 +10,7 @@ const {
   saveAttachment,
   readAttachmentFile,
 } = require('../services/attachments.cjs');
+const { getStudioDatabase } = require('../core/studio-db.cjs');
 const { copyImageToClipboard } = require('../services/image-clipboard.cjs');
 const { copyTextAndHtml } = require('../services/rich-clipboard.cjs');
 const { getWindow } = require('../core/state.cjs');
@@ -21,23 +22,29 @@ function assertMainWindow(event) {
   }
 }
 
+function uploadPayload(payload) {
+  const id = typeof payload?.sessionId === 'string' ? payload.sessionId : '';
+  const owner = id && id !== 'draft' ? getStudioDatabase().getConversation(id) : undefined;
+  return { ...payload, sessionId: owner || 'draft' };
+}
+
 function registerAttachmentsIpc() {
   // 打开文件选择框，返回可直接发送的附件
   ipcMain.handle('pi:pick-attachments', async (event, payload) => {
     assertMainWindow(event);
-    return pickAttachments(payload || {});
+    return pickAttachments(uploadPayload(payload));
   });
 
   // 保存拖拽上传的文件（base64）
   ipcMain.handle('pi:save-upload', async (event, payload) => {
     assertMainWindow(event);
-    return saveUpload(payload || {});
+    return saveUpload(uploadPayload(payload));
   });
 
   // 超长消息保存为附件
   ipcMain.handle('pi:save-attachment', async (event, payload) => {
     assertMainWindow(event);
-    return saveAttachment(payload || {});
+    return saveAttachment(uploadPayload(payload));
   });
 
   // 只读预览 Studio 自己管理的附件，不接受任意绝对路径。

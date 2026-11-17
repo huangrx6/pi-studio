@@ -38,7 +38,7 @@ test('existing databases receive a validated pre-migration snapshot before upgra
   try {
     assert.equal(studio.db.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
     assert.equal(studio.getSetting('retained').value, 'before migration');
-    assert.equal(studio.migrationBackupPath, `${filename}.migration-backup-v17-to-v${SCHEMA_VERSION}.sqlite`);
+    assert.equal(studio.migrationBackupPath, path.join(temporary, 'backups', 'sqlite', `${path.basename(filename)}.migration-backup-v17-to-v${SCHEMA_VERSION}.sqlite`));
     assert.equal(fs.statSync(studio.migrationBackupPath).mode & 0o777, 0o600);
 
     const backup = new DatabaseSync(studio.migrationBackupPath, { readOnly: true });
@@ -74,7 +74,7 @@ test('an interrupted or failed migration rolls back and retains a usable snapsho
     current.close();
   }
 
-  const backupFile = `${filename}.migration-backup-v17-to-v${SCHEMA_VERSION}.sqlite`;
+  const backupFile = path.join(temporary, 'backups', 'sqlite', `${path.basename(filename)}.migration-backup-v17-to-v${SCHEMA_VERSION}.sqlite`);
   assert.ok(fs.existsSync(backupFile));
   const backup = new DatabaseSync(backupFile, { readOnly: true });
   try {
@@ -94,7 +94,7 @@ test('brand-new databases do not create an empty migration snapshot', () => {
   const studio = createStudioDatabase(filename);
   try {
     assert.equal(studio.migrationBackupPath, undefined);
-    assert.equal(fs.existsSync(`${filename}.migration-backup-v0-to-v${SCHEMA_VERSION}.sqlite`), false);
+    assert.equal(fs.existsSync(path.join(temporary, 'backups', 'sqlite', `${path.basename(filename)}.migration-backup-v0-to-v${SCHEMA_VERSION}.sqlite`)), false);
   } finally {
     studio.close();
   }
@@ -114,6 +114,39 @@ test('upgrading existing sources keeps their models and leaves quota monitoring 
     assert.equal(upgraded.getProvider('gateway').name, '原有来源');
     assert.equal(upgraded.getProvider('gateway').quota, null);
     assert.equal(upgraded.getModel('gateway', 'original').enabled, true);
-    assert.equal(upgraded.migrationBackupPath, `${filename}.migration-backup-v18-to-v${SCHEMA_VERSION}.sqlite`);
+    assert.equal(upgraded.migrationBackupPath, path.join(temporary, 'backups', 'sqlite', `${path.basename(filename)}.migration-backup-v18-to-v${SCHEMA_VERSION}.sqlite`));
   } finally { upgraded.close(); }
+});
+
+test('organizing older migration backups preserves collisions, active SQLite companions and unrelated files', () => {
+  const { organizeDatabaseBackups } = require('../../electron/core/database-backups.cjs');
+  const dir = fs.mkdtempSync(path.join(temporary, 'layout-'));
+  const db = path.join(dir, 'pi-studio.sqlite');
+  const name = 'pi-studio.sqlite.migration-backup-v18-to-v19.sqlite';
+  const old = path.join(dir, name);
+  const dest = path.join(dir, 'backups', 'sqlite');
+  fs.mkdirSync(dest, { recursive: true });
+  fs.writeFileSync(path.join(dest, name), 'earlier snapshot');
+  fs.writeFileSync(old, 'second snapshot');
+  for (const suffix of ['', '-wal', '-shm', '.migration-backup-v19-to-v20.sqlite', '.migration-backup-v19-to-v20.sqlite-wal']) fs.writeFileSync(db + suffix, 'keep');
+  fs.writeFileSync(path.join(dir, 'another.sqlite.migration-backup-v1-to-v2.sqlite'), 'unrelated');
+  assert.equal(organizeDatabaseBackups(db), 1);
+  assert.equal(organizeDatabaseBackups(db), 0);
+  assert.equal(fs.readFileSync(path.join(dest, name), 'utf8'), 'earlier snapshot');
+  assert.equal(fs.readFileSync(path.join(dest, name.replace(/\.sqlite$/, '-copy-1.sqlite')), 'utf8'), 'second snapshot');
+  assert.equal(fs.readdirSync(dir).length, 7);
+});
+
+test('a pre-existing unreadable snapshot survives publishing a validated replacement', () => {
+  const filename = path.join(temporary, 'retained.sqlite');
+  legacyDatabase(filename);
+  const directory = path.join(temporary, 'backups', 'sqlite');
+  fs.mkdirSync(directory, { recursive: true });
+  const target = path.join(directory, 'retained.sqlite.migration-backup-v17-to-v' + SCHEMA_VERSION + '.sqlite');
+  fs.writeFileSync(target, 'pre-existing bytes');
+  const studio = createStudioDatabase(filename);
+  try {
+    assert.equal(fs.readFileSync(target, 'utf8'), 'pre-existing bytes');
+    assert.equal(studio.migrationBackupPath, target.replace(/\.sqlite$/, '-copy-1.sqlite'));
+  } finally { studio.close(); }
 });

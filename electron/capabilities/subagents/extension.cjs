@@ -567,6 +567,7 @@ function createSubagentExtension(durable, piAi, chordContext) {
                 name: name || `agent-${api.taskId}`,
                 workspace: parentAgent.cwd,
                 limit: defaults.worktreeLimit,
+                worktreeParent: defaults.worktreeParent,
               });
               sendWorktreeId = nextWorktreeId;
             }
@@ -690,6 +691,7 @@ function createSubagentExtension(durable, piAi, chordContext) {
                   name: args.name || requestedName || `agent-${api.taskId}`,
                   workspace: parentWorkspace,
                   limit: settingsBase.defaults.worktreeLimit,
+                  worktreeParent: settingsBase.defaults.worktreeParent,
                 });
               } catch (error) {
                 throw new Error(`无法创建隔离工作树：${error instanceof Error ? error.message : String(error)}`);

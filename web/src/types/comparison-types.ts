@@ -11,7 +11,7 @@ export type ModelComparisonInput = {
   prompt: string;
   mentions?: string[];
   attachments?: string[];
-  images?: Array<{ type: 'image'; data: string; mimeType: string }>;
+  images?: Array<{ type: 'image'; data: string; mimeType: string; name?: string }>;
   branches: [ModelComparisonBranchInput, ModelComparisonBranchInput];
 };
 

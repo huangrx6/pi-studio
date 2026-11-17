@@ -183,6 +183,7 @@ contextBridge.exposeInMainWorld('piApi', {
   addMcp: (payload) => ipcRenderer.invoke('pi:add-mcp', payload),
   refreshSkills: (cwd) => ipcRenderer.invoke('pi:skills-refresh', cwd),
   addSkill: (payload) => ipcRenderer.invoke('pi:add-skill', payload),
+  pickWorktreeParent: () => ipcRenderer.invoke('pi:pick-worktree-parent'),
   pickSkillSourceDirectory: () => ipcRenderer.invoke('pi:pick-skill-source-directory'),
   pickSkillRegistryFile: () => ipcRenderer.invoke('pi:pick-skill-registry-file'),
   skillHub: (payload) => ipcRenderer.invoke('pi:skill-hub', payload),

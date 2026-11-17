@@ -93,3 +93,17 @@ test('目标目录不存在时不猜路径，仍然报不受管', () => {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('reading an unconfigured project leaves its extension state and data directories absent', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-scope-read-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const cwd = path.join(root, 'project');
+  const userDataPath = path.join(root, 'user');
+  fs.mkdirSync(cwd);
+  fs.mkdirSync(userDataPath);
+  const service = new ExtensionDistributionService({ userDataPath });
+  assert.deepEqual(service.listInstalled('project', cwd), []);
+  assert.deepEqual(service.listInstalledDetailed('project', cwd), { installed: [], errors: [] });
+  assert.equal(fs.existsSync(path.dirname(service.stateFile('project', cwd, 'demo.extension'))), false);
+  assert.equal(fs.existsSync(path.join(userDataPath, 'extension-data', service.scopeKey('project', cwd))), false);
+});

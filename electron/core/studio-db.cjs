@@ -4,13 +4,14 @@
  * Durable 自己使用 durable_* 表保存会话、任务和文档；这里保存 Studio 的
  * 配置与展示投影。两者位于同一个 SQLite 文件，但使用独立连接：
  * Durable 的异步存储需要自己的连接，Electron 的设置和窗口 API 则需要同步读取。
- * SQLite WAL + busy_timeout 负责协调两个连接。
+ * Durable 在独立线程提交事务，主线程等待写锁时它仍可提交并释放锁。
  */
 
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
+const { migrationBackupPath, organizeDatabaseBackups } = require('./database-backups.cjs');
 const { studioDataDirectory } = require('./studio-paths.cjs');
 const {
   decryptValue,
@@ -28,7 +29,7 @@ const {
 const { activeProjectIds, addDailyUsage, listUsageProjects, migrateUsageProjects, usageWorkspace } = require('./usage-projects.cjs');
 
 const DATABASE_NAME = 'pi-studio.sqlite';
-const SCHEMA_VERSION = 20;
+const SCHEMA_VERSION = 21;
 const USAGE_REQUEST_LEDGER_LIMIT = 8_192;
 const USAGE_REQUEST_PRUNE_BATCH = 256;
 const METRIC_REQUEST_HISTORY_LIMIT = 8;
@@ -260,6 +261,7 @@ function managedWorktreeRow(row) {
     name: row.name,
     workspace: row.workspace,
     repositoryRoot: row.repository_root,
+    storageRoot: row.storage_root,
     path: row.path,
     baseCommit: row.base_commit,
     status: row.status,
@@ -273,6 +275,8 @@ function managedWorktreeRow(row) {
 class StudioDatabase {
   constructor(filename) {
     fs.mkdirSync(path.dirname(filename), { recursive: true });
+    try { organizeDatabaseBackups(filename); }
+    catch (error) { console.warn('[pi-studio] 旧备份归档未完成', error.message); }
     this.filename = filename;
     this.usageLedgerWrites = 0;
     this.db = new DatabaseSync(filename, { timeout: 5_000 });
@@ -299,30 +303,40 @@ class StudioDatabase {
   }
 
   backupBeforeMigration(current) {
-    const backup = `${this.filename}.migration-backup-v${current}-to-v${SCHEMA_VERSION}.sqlite`;
-    const verify = () => {
-      if (!fs.existsSync(backup)) return false;
+    const backup = migrationBackupPath(this.filename, current, SCHEMA_VERSION);
+    function verify(file) {
+      const stat = fs.lstatSync(file, { throwIfNoEntry: false });
+      if (!stat?.isFile()) return false;
       let copy;
       try {
-        copy = new DatabaseSync(backup, { readOnly: true });
-        const integrity = copy.prepare('PRAGMA quick_check').get().quick_check;
-        const version = Number(copy.prepare('PRAGMA user_version').get().user_version) || 0;
-        return integrity === 'ok' && version === current;
-      } catch {
-        return false;
-      } finally {
-        try { copy?.close(); } catch { /* retain the validation failure */ }
-      }
-    };
-    if (!verify()) {
-      try { fs.rmSync(backup, { force: true }); } catch { /* VACUUM INTO reports the usable error */ }
-      this.db.prepare('VACUUM INTO ?').run(backup);
-      try { fs.chmodSync(backup, 0o600); } catch { /* best effort on non-POSIX filesystems */ }
-      if (!verify()) {
-        throw new Error(`数据库升级快照校验失败：${backup}`);
-      }
+        copy = new DatabaseSync(file, { readOnly: true });
+        return copy.prepare('PRAGMA quick_check').get().quick_check === 'ok'
+          && Number(copy.prepare('PRAGMA user_version').get().user_version) === current;
+      } catch { return false; }
+      finally { try { copy?.close(); } catch { /* preserve the validation result */ } }
     }
-    return backup;
+    if (verify(backup)) return backup;
+    // Publish only a complete snapshot. Retain pre-existing files, even when verification fails.
+    const partial = backup + '.' + randomUUID() + '.partial';
+    try {
+      fs.closeSync(fs.openSync(partial, 'wx', 0o600));
+      this.db.prepare('VACUUM INTO ?').run(partial);
+      if (!verify(partial)) throw new Error('数据库升级快照未通过校验');
+      for (let i = 0; ; i++) {
+        const target = i ? backup.replace(/\.sqlite$/, '-copy-' + i + '.sqlite') : backup;
+        try {
+          try { fs.linkSync(partial, target); }
+          catch (error) {
+            if (!['EPERM', 'ENOTSUP', 'EXDEV', 'EOPNOTSUPP'].includes(error.code)) throw error;
+            fs.copyFileSync(partial, target, fs.constants.COPYFILE_EXCL);
+          }
+          return target;
+        } catch (error) {
+          if (error.code !== 'EEXIST') throw error;
+          if (verify(target)) return target;
+        }
+      }
+    } finally { fs.rmSync(partial, { force: true }); }
   }
 
   migrate(currentVersion) {
@@ -418,6 +432,11 @@ class StudioDatabase {
           updated_at INTEGER NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS studio_asset_pending (
+          entry_id INTEGER PRIMARY KEY, historical INTEGER NOT NULL, retry_after INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS studio_asset_pending_order ON studio_asset_pending(historical, entry_id);
+
         CREATE TABLE IF NOT EXISTS managed_worktrees (
           id TEXT PRIMARY KEY,
           parent_conversation_id TEXT NOT NULL,
@@ -425,6 +444,7 @@ class StudioDatabase {
           name TEXT NOT NULL,
           workspace TEXT NOT NULL,
           repository_root TEXT NOT NULL,
+          storage_root TEXT NOT NULL DEFAULT '',
           path TEXT NOT NULL UNIQUE,
           base_commit TEXT NOT NULL,
           status TEXT NOT NULL CHECK (
@@ -664,6 +684,9 @@ class StudioDatabase {
       }
       if (!modelColumns.has('metadata_source')) {
         this.db.exec("ALTER TABLE model_catalog ADD COLUMN metadata_source TEXT NOT NULL DEFAULT 'legacy'");
+      }
+      if (!this.db.prepare('PRAGMA table_info(managed_worktrees)').all().some(row => row.name === 'storage_root')) {
+        this.db.exec("ALTER TABLE managed_worktrees ADD COLUMN storage_root TEXT NOT NULL DEFAULT ''");
       }
       if (current < 19 && !this.db.prepare('PRAGMA table_info(model_providers)').all().some(row => row.name === 'quota_config')) {
         this.db.exec('ALTER TABLE model_providers ADD COLUMN quota_config TEXT');
@@ -999,9 +1022,9 @@ class StudioDatabase {
     this.db.prepare(`
       INSERT INTO managed_worktrees(
         id, parent_conversation_id, child_conversation_id, name, workspace,
-        repository_root, path, base_commit, status, created_at, updated_at,
+        repository_root, storage_root, path, base_commit, status, created_at, updated_at,
         finished_at, error
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       input.id,
       input.parentConversationId,
@@ -1009,6 +1032,7 @@ class StudioDatabase {
       input.name,
       input.workspace,
       input.repositoryRoot,
+      input.storageRoot || '',
       input.path,
       input.baseCommit,
       input.status || 'active',
@@ -1276,6 +1300,14 @@ class StudioDatabase {
     ).get(id, id));
   }
 
+  attachmentSessionIds() {
+    const ids = this.db.prepare('SELECT id, public_id FROM conversations').all().flatMap(row => [row.id, row.public_id]);
+    if (this.db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'durable_conversations' AND type = 'table'").get()) {
+      for (const row of this.db.prepare('SELECT id FROM durable_conversations').iterate()) ids.push(String(row.id));
+    }
+    return ids;
+  }
+
   insertConversation(input) {
     const at = input.createdAt || Date.now();
     const publicId = input.publicId || randomUUID();
@@ -1505,6 +1537,7 @@ class StudioDatabase {
       const studioIds = [...new Set([...tree.conversationIds.map(String), ...tree.publicIds])];
       const encodedStudioIds = JSON.stringify(studioIds);
 
+      this.db.prepare('DELETE FROM studio_asset_pending WHERE entry_id IN (SELECT value FROM json_each(?))').run(JSON.stringify(tree.entryIds));
       this.db.prepare(`
         DELETE FROM durable_document_revisions
         WHERE document_id IN (SELECT value FROM json_each(?))

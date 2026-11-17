@@ -5,6 +5,8 @@
  * CLI credential, model, MCP, skill, or extension file is inspected.
  */
 
+const path = require('node:path');
+const { studioDataDirectory } = require('../core/studio-paths.cjs');
 const {
   databasePath,
   getStudioDatabase,
@@ -133,6 +135,8 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
       arch: process.arch,
     },
     databasePath: storagePath,
+    attachmentsPath: path.join(studioDataDirectory(), 'attachments', 'projects'),
+    backupsPath: path.join(path.dirname(storagePath), 'backups', 'sqlite'),
     skillsPath: userSkillsDirectory(),
     agentsSkillsPath: sharedUserSkillsDirectory(),
     projectSkillsPath: cwd ? projectSkillsDirectory(cwd) : '',

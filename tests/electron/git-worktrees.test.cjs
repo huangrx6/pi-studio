@@ -89,3 +89,19 @@ test('recheck ownership before removal and recover only the selected missing reg
   assert.equal(await act('open', { path: other }), other);
   assert.ok(git('rev-parse', 'available'));
 });
+
+test('selecting a worktree destination checks the target disk before any Git mutation', async t => {
+  const { dir, repo, git, head, act } = await fixture(t);
+  const parent = path.join(dir, 'another-disk');
+  await fs.mkdir(parent);
+  const args = { mode: 'new', name: 'external', folder: 'external', head };
+  await assert.rejects(act('create', { ...args, parent: repo }), /以外/);
+  const lowSpace = t.mock.method(fs, 'statfs', async (target) => {
+    assert.equal(target, parent);
+    return { bsize: 4096n, blocks: 20n, bavail: 0n };
+  });
+  await assert.rejects(act('create', { ...args, parent }), /空间不足/);
+  assert.equal(git('branch', '--list', 'external'), '');
+  lowSpace.mock.restore();
+  assert.equal(await act('create', { ...args, parent }), path.join(parent, 'external'));
+});

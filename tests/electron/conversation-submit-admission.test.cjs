@@ -306,7 +306,17 @@ test('the renderer request id is forwarded unchanged and Durable deduplicates re
 
 test('reopening a submitted file attachment projects metadata instead of raw path strings', async (t) => {
   createFixture(t);
-  const attachmentPath = '/studio/attachments/session/context.txt';
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-upload-'));
+  const previous = process.env.PI_STUDIO_USER_DATA;
+  process.env.PI_STUDIO_USER_DATA = root;
+  t.after(() => {
+    if (previous === undefined) delete process.env.PI_STUDIO_USER_DATA; else process.env.PI_STUDIO_USER_DATA = previous;
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const draft = path.join(root, 'attachments', 'draft');
+  fs.mkdirSync(draft, { recursive: true });
+  const attachmentPath = path.join(draft, '6b4d7e18-a8dd-483d-bdbf-21ceab252303-context.txt');
+  fs.writeFileSync(attachmentPath, 'test attachment');
   await conversationModule.submitConversation({
     id: 'conversation-public', text: 'Read the attachment', attachments: [attachmentPath],
   });
@@ -318,6 +328,8 @@ test('reopening a submitted file attachment projects metadata instead of raw pat
   }] });
   const messages = await conversationModule.fullDisplayMessages(durableConversation);
   assert.equal(messages[0].attachments[0].name, 'context.txt');
-  assert.equal(messages[0].attachments[0].path, attachmentPath);
+  assert.notEqual(messages[0].attachments[0].path, attachmentPath);
+  assert.ok(messages[0].attachments[0].path.split(path.sep).includes('conversation-public'));
+  assert.equal(fs.readFileSync(messages[0].attachments[0].path, 'utf8'), 'test attachment');
   assert.equal(typeof messages[0].attachments[0].bytes, 'number');
 });

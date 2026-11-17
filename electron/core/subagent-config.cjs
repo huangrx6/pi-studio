@@ -1,4 +1,5 @@
 /** Shared subagent defaults and validation, independent of Electron and Durable. */
+const path = require('node:path');
 const THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
 const MODEL_REF = /^[A-Za-z0-9][A-Za-z0-9._-]*\/.+$/;
 const TOOL_NAME = /^[A-Za-z0-9_.:-]{1,120}$/;
@@ -68,7 +69,10 @@ function normalizeConfig(raw, { strict = true } = {}) {
   const worktreeIsolation = ['off', 'background', 'always'].includes(source.worktreeIsolation)
     ? source.worktreeIsolation
     : 'background';
+  const parent = typeof source.worktreeParent === 'string' ? source.worktreeParent.trim() : '';
+  if (parent && !path.isAbsolute(parent) && strict) throw new Error('工作树位置必须是绝对路径');
   return {
+    worktreeParent: parent && path.isAbsolute(parent) ? path.resolve(parent) : '',
     defaultModel,
     defaultProvider: defaultModel.split('/')[0] || '',
     defaultThinking,

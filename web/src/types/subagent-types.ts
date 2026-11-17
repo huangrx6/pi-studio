@@ -21,6 +21,7 @@ export type SubagentConfig = {
   worktreeIsolation: 'off' | 'background' | 'always';
   /** Maximum preserved worktrees in one Git repository before another child is blocked. */
   worktreeLimit: number;
+  worktreeParent: string;
   /** 0 disables the token budget. */
   budgetTokens: number;
   /** 0 disables the reference-cost budget. */

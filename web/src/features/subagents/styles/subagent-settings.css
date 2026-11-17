@@ -101,3 +101,5 @@
   .subagent-savebar { flex-wrap: wrap; }
   .subagent-savebar > div { flex-basis: 100%; }
 }
+
+.subagent-storage-path { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: start; max-width: 100%; }

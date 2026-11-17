@@ -81,6 +81,8 @@ export type SettingsSnapshot = {
   storagePath: string;
   runtimeVersions: StudioRuntimeVersions;
   databasePath: string;
+  attachmentsPath: string;
+  backupsPath: string;
   skillsPath: string;
   agentsSkillsPath: string;
   projectSkillsPath: string;
@@ -112,7 +114,7 @@ export type ModelComparisonContext = {
   prompt: string;
   mentions: string[];
   attachments: string[];
-  images: Array<{ type: 'image'; data: string; mimeType: string }>;
+  images: Array<{ type: 'image'; data: string; mimeType: string; name?: string }>;
   initialModelRef: string;
   initialThinkingLevel: ThinkingLevel;
 };

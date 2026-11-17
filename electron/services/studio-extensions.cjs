@@ -297,7 +297,7 @@ function scanStudioExtensions(cwd) {
       managedSnapshot = {
         installed: [],
         errors: [{
-          path: installs.stateDirectory(source.scope, cwd),
+          path: installs.stateDirectory(source.scope, cwd, false),
           message: error instanceof Error ? error.message : String(error),
         }],
       };

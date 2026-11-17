@@ -962,6 +962,9 @@ function normalizeSubagentOverridesV2(value) {
   ) {
     picked.worktreeIsolation = source.worktreeIsolation;
   }
+  if (typeof source.worktreeParent === 'string' && (!source.worktreeParent || path.isAbsolute(source.worktreeParent))) {
+    picked.worktreeParent = source.worktreeParent ? path.resolve(source.worktreeParent) : '';
+  }
   if (
     typeof source.budgetCostUsd === 'number'
     && Number.isFinite(source.budgetCostUsd)

@@ -616,6 +616,11 @@ function registerSettingsIpc() {
     readSkillSettingsWithRuntime(typeof cwd === 'string' ? cwd : DEFAULT_CWD)
   ));
 
+  ipcMain.handle('pi:pick-worktree-parent', async () => {
+    const result = await dialog.showOpenDialog({ title: '选择工作树位置', properties: ['openDirectory'] });
+    return result.canceled ? undefined : result.filePaths[0];
+  });
+
   ipcMain.handle('pi:pick-skill-source-directory', async () => {
     const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
     return result.canceled ? undefined : result.filePaths[0];

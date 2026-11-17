@@ -70,6 +70,7 @@ test('GitHub sources discover nested and root skills and install the catalog com
     assert.match(preview.version, /^0\.0\.0\+[a-f0-9]{12}$/);
     assert.ok(requests.at(-1).endsWith(`/zip/${commit}`));
     const installed = installPreparedSkill({ token: preview.token });
+    assert.equal(fs.existsSync(path.join(process.env.PI_STUDIO_USER_DATA, 'skill-quarantine')), false);
     assert.ok(fs.existsSync(path.join(installed.baseDir, 'scripts/run.sh')));
     fs.rmSync(installed.baseDir, { recursive: true });
     require('../../electron/core/studio-db.cjs').getStudioDatabase().removeSkillInstallation(installed.baseDir);

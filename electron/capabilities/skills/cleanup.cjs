@@ -28,4 +28,9 @@ function retryCommittedSkillCleanup() {
   }
 }
 
-module.exports = { cleanupCommittedSkillDirectory, retryCommittedSkillCleanup };
+// rmdir succeeds only after every concurrently prepared preview has released its files.
+function removeEmptyQuarantine(directory) {
+  try { fs.rmdirSync(directory); } catch { /* a current preview may still own it */ }
+}
+
+module.exports = { cleanupCommittedSkillDirectory, retryCommittedSkillCleanup, removeEmptyQuarantine };

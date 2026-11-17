@@ -64,6 +64,7 @@ function emptyConfig(): SubagentConfig {
     waitTimeoutMs: 30_000,
     worktreeIsolation: 'background',
     worktreeLimit: 8,
+    worktreeParent: '',
     budgetTokens: 0,
     budgetCostUsd: 0,
     budgetAction: 'warn',
@@ -682,6 +683,19 @@ export function SubagentSettings({
               }))}
             />
           </label>
+          <div className="subagent-field">
+            <span className="subagent-label">隔离工作树位置 <InfoHint label="只影响新建工作树。可以选择其他磁盘，已有工作树仍在原位置。" /></span>
+            <button type="button" className="settings-outline subagent-storage-path" disabled={busy || draft.worktreeIsolation === 'off'}
+              title={draft.worktreeParent || 'Studio 数据目录下的 worktrees'}
+              onClick={async () => {
+                try {
+                  const directory = await window.piApi.pickWorktreeParent();
+                  if (directory) setDraft(current => ({ ...current, worktreeParent: directory }));
+                } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+              }}>{draft.worktreeParent || '选择位置 · 当前使用 Studio 数据目录'}</button>
+            {draft.worktreeParent && <button type="button" className="settings-text-button" disabled={busy}
+              onClick={() => setDraft(current => ({ ...current, worktreeParent: '' }))}>恢复默认位置</button>}
+          </div>
           <label htmlFor={`${inputPrefix}-budgetTokens`} className="subagent-field">
             <span className="subagent-label">Token 预算 <InfoHint align="end" label="按当前会话内所有子智能体的模型请求累计；0 表示不限制。" /></span>
             <input

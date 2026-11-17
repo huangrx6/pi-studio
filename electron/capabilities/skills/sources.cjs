@@ -13,7 +13,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { cleanupCommittedSkillDirectory, retryCommittedSkillCleanup } = require('./cleanup.cjs');
+const { cleanupCommittedSkillDirectory, retryCommittedSkillCleanup, removeEmptyQuarantine } = require('./cleanup.cjs');
 const {
   DEFAULT_ARCHIVE_LIMITS,
   extractZipArchive,
@@ -524,6 +524,7 @@ function cleanupPrepared(token, removeDirectory = true) {
   if (!value) return;
   prepared.delete(token);
   if (removeDirectory) fs.rmSync(path.dirname(value.contentRoot), { recursive: true, force: true });
+  removeEmptyQuarantine(quarantineRoot());
 }
 
 async function downloadArchive(item) {
@@ -627,6 +628,7 @@ async function prepareSkillInstall({ sourceId: requestedSourceId, listingId, sco
   } catch (error) {
     prepared.delete(token);
     fs.rmSync(staging, { recursive: true, force: true });
+    removeEmptyQuarantine(quarantineRoot());
     throw error;
   }
 }
@@ -706,6 +708,7 @@ function installPreparedSkill({ token, cwd } = {}) {
     prepared.delete(token);
     if (movedExisting) cleanupCommittedSkillDirectory(backup);
     cleanupCommittedSkillDirectory(path.dirname(pending.contentRoot));
+    removeEmptyQuarantine(quarantineRoot());
     return {
       name: pending.skill.name,
       version: pending.skill.version,
@@ -751,6 +754,7 @@ function pruneSkillPrepared() {
       // A concurrent install may have just moved or removed the quarantine.
     }
   }
+  removeEmptyQuarantine(root);
 }
 
 module.exports = {

@@ -166,10 +166,7 @@ if (primaryInstance) {
       // Database and credential paths depend on app.getPath('userData').
       await initializeStudioModels();
       try {
-        const conversations = getStudioDatabase().listConversations({ includeArchived: true });
-        const cleanup = cleanupOrphanedAttachmentDirectories(
-          conversations.flatMap((conversation) => [conversation.id, conversation.publicId]),
-        );
+        const cleanup = cleanupOrphanedAttachmentDirectories(getStudioDatabase().attachmentSessionIds());
         if (cleanup.failed > 0) {
           console.warn(`[pi-studio] ${cleanup.failed} orphaned attachment directories could not be cleaned`);
         }

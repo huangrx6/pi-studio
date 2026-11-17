@@ -912,16 +912,18 @@ class ExtensionDistributionService {
     return path.join(workspace, '.pi-studio', 'extensions');
   }
 
-  stateDirectory(scope, cwd) {
-    return ensureContainedDirectory(
-      path.join(this.stateRoot, this.scopeKey(scope, cwd)),
-      this.userDataPath,
-    );
+  stateDirectory(scope, cwd, create = true) {
+    const directory = path.join(this.stateRoot, this.scopeKey(scope, cwd));
+    if (create) return ensureContainedDirectory(directory, this.userDataPath);
+    assertManagedPathInside(this.userDataPath, directory, '扩展状态目录');
+    return directory;
   }
 
   stateFile(scope, cwd, id) {
     assertSafeExtensionId(id);
-    return path.join(this.stateDirectory(scope, cwd), `${id}.json`);
+    const file = path.join(this.stateDirectory(scope, cwd, false), `${id}.json`);
+    assertManagedPathInside(this.userDataPath, file, '扩展安装状态');
+    return file;
   }
 
   dataDirectory(scope, cwd, id) {
@@ -2160,7 +2162,7 @@ class ExtensionDistributionService {
   }
 
   listInstalled(scope = 'user', cwd = undefined) {
-    const directory = this.stateDirectory(scope, cwd);
+    const directory = this.stateDirectory(scope, cwd, false);
     if (!fs.existsSync(directory)) return [];
     return fs.readdirSync(directory)
       .filter((name) => name.endsWith('.json') && !name.startsWith('.'))
@@ -2170,7 +2172,7 @@ class ExtensionDistributionService {
   }
 
   listInstalledDetailed(scope = 'user', cwd = undefined) {
-    const directory = this.stateDirectory(scope, cwd);
+    const directory = this.stateDirectory(scope, cwd, false);
     if (!fs.existsSync(directory)) return { installed: [], errors: [] };
     const installed = [];
     const errors = [];

@@ -8,7 +8,7 @@ import './styles/about-settings.css';
 
 export function AboutSettings({ snapshot, paths, runtime, onOpenUpdates }: {
   snapshot: UpdateSnapshot;
-  paths: { databasePath: string; skillsPath: string; extensionsPath: string };
+  paths: { attachmentsPath: string; backupsPath: string; databasePath: string; skillsPath: string; extensionsPath: string };
   runtime?: StudioRuntimeVersions;
   onOpenUpdates: () => void;
 }) {
@@ -69,6 +69,8 @@ export function AboutSettings({ snapshot, paths, runtime, onOpenUpdates }: {
       <dl className="about-facts">
         {snapshot.currentBuildId && <div><dt>构建标识</dt><dd><code>{snapshot.currentBuildId}</code></dd></div>}
         <div><dt>SQLite 数据库</dt><dd><code>{paths.databasePath}</code></dd></div>
+        <div><dt>会话附件与输出</dt><dd><code>{paths.attachmentsPath}</code></dd></div>
+        <div><dt>数据库升级备份</dt><dd><code>{paths.backupsPath}</code></dd></div>
         <div><dt>技能目录</dt><dd><code>{paths.skillsPath}</code></dd></div>
         <div><dt>扩展目录</dt><dd><code>{paths.extensionsPath}</code></dd></div>
       </dl>

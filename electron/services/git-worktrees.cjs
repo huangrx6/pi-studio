@@ -1,6 +1,7 @@
 // User-created worktrees are ordinary Git worktrees. Git owns their branch and registration.
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { checkWorktreeSpace } = require('../core/worktree-space.cjs');
 const { createHash } = require('node:crypto');
 const { gitRead, runGitCommand: run, validateBranch, withRepositoryWrite, withGitLock } = require('./git-tools.cjs');
 const { parseStatus, parseWorktrees } = require('./git-workspace.cjs');
@@ -31,8 +32,14 @@ async function createTree(root, input) {
   if (mode === 'existing' && (!ref || ref.worktree)) throw new Error(ref ? '该分支已由另一工作树使用。' : '本地分支已不存在。');
   if (mode === 'new' && ref) throw new Error('同名分支已存在。');
   if (mode === 'new' && (!refs.head || refs.head !== input.head)) throw new Error('起点提交已变化，请重新打开创建窗口。');
-  const target = path.join(path.dirname(list[0].path), folder);
+  if (input.parent && (typeof input.parent !== 'string' || !path.isAbsolute(input.parent))) throw new Error('请选择工作树的目标目录。');
+  const parent = await fs.realpath(input.parent || path.dirname(list[0].path));
+  if (!(await fs.stat(parent)).isDirectory() || list.some(tree => contains(tree.path, parent))) {
+    throw new Error('请选择现有工作树以外的目录。');
+  }
+  const target = path.join(parent, folder);
   if (list.some(row => row.path === target) || await statOrMissing(target)) throw new Error('目标文件夹已存在，请换一个名称。');
+  await checkWorktreeSpace(root, mode === 'new' ? refs.head : 'refs/heads/' + name, path.dirname(target));
   try {
     await run(root, ['worktree', 'add', ...(mode === 'new' ? ['-b', name] : []), '--', target, mode === 'new' ? refs.head : name]);
   } catch (error) {
