@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -148,6 +148,7 @@ export function TerminalPanel({
   onNewTerminal,
   onRestartTerminal,
   active = true,
+  focusRef,
   onOpenFile,
   onOpenUrl,
   onTitle,
@@ -160,14 +161,16 @@ export function TerminalPanel({
   onNewTerminal: () => void;
   onRestartTerminal?: () => void;
   active?: boolean;
+  focusRef?: Ref<() => void>;
   onOpenFile?: (path: string) => void;
   onOpenUrl?: (url: string) => void;
   onTitle?: (title: string) => void;
 }) {
   const fontSize = appearance.fontSize;
   const hostRef = useRef<HTMLDivElement>(null);
-  const focusTerminalRef = useRef<(() => void) | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
+  const focusTerminal = useCallback(() => terminalRef.current?.focus(), []);
+  useImperativeHandle(focusRef, () => focusTerminal, [focusTerminal]);
   const searchRef = useRef<SearchAddon | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const fitRef = useRef<(() => void) | null>(null);
@@ -514,7 +517,6 @@ export function TerminalPanel({
     fitRef.current = () => {
       try { fit.fit(); } catch { /* 面板隐藏时没有几何信息 */ }
     };
-    focusTerminalRef.current = () => term.focus();
 
     const fitTerminal = () => {
       frame = 0;
@@ -772,7 +774,6 @@ export function TerminalPanel({
       terminalRef.current = null;
       searchRef.current = null;
       fitRef.current = null;
-      focusTerminalRef.current = null;
     };
   }, [cwd, id, retryRevision, openLink]);
 
@@ -796,10 +797,10 @@ export function TerminalPanel({
       updateRendererRef.current?.(active);
       fitRef.current?.();
       // Restoring a tab can also open a header dialog. Keep its keyboard focus.
-      if (!document.activeElement?.closest('[role="dialog"]')) focusTerminalRef.current?.();
+      if (!document.activeElement?.closest('[role="dialog"]')) focusTerminal();
     });
     return () => cancelAnimationFrame(frame);
-  }, [active]);
+  }, [active, focusTerminal]);
 
   // 主题、字体、行高、光标：只改渲染参数，不重建会话。
   useEffect(() => {
@@ -962,8 +963,8 @@ export function TerminalPanel({
         ref={hostRef}
         className="terminal-host"
         aria-label="交互式终端"
-        onPointerDown={() => focusTerminalRef.current?.()}
-        onFocus={() => focusTerminalRef.current?.()}
+        onPointerDown={focusTerminal}
+        onFocus={focusTerminal}
         onContextMenu={(event) => {
           event.preventDefault();
           setMenu({ x: event.clientX, y: event.clientY });

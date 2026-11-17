@@ -1,5 +1,5 @@
 import { FileKindIcon } from '../../shared/FileKindIcon';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { MutableRefObject, ReactNode } from 'react';
 import {
   AppWindow,
@@ -136,6 +136,7 @@ export function WorkbenchPane({
   } = controller;
 
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  const focusActiveTerminal = useRef<(() => void) | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set());
   const [directoryEntries, setDirectoryEntries] = useState<Record<string, typeof entries>>({});
   const [directoryLoading, setDirectoryLoading] = useState<Set<string>>(() => new Set());
@@ -406,6 +407,7 @@ export function WorkbenchPane({
       <div className={`terminal-tab-slot ${isActive ? 'is-active' : ''}`} aria-hidden={!isActive}>
         <LazyTerminalPanel
           active={isActive}
+          focusRef={isActive ? focusActiveTerminal : undefined}
           id={tab.id}
           cwd={tab.cwd || session?.cwd || workspace}
           appearance={terminalAppearance}
@@ -521,7 +523,10 @@ export function WorkbenchPane({
       persistentPanelContent={persistentTerminalContent}
       extensionDock={extensionDock}
       onClose={closePanel}
-      onActivate={activatePanelTab}
+      onActivate={(tab) => {
+        activatePanelTab(tab);
+        if (tab.kind === 'terminal' && tab.id === activePanelTabId) focusActiveTerminal.current?.();
+      }}
       onCloseTab={closePanelTab}
       onReorder={reorderPanelTabs}
       onContextMenu={(id, x, y) => setTabMenu({ id, x, y })}

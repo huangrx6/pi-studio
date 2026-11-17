@@ -60,6 +60,13 @@ function harness(platform = 'darwin') {
       return [slots[index], value => { const next = typeof value === 'function' ? value(slots[index]) : value; if (!Object.is(next, slots[index])) dirty = true; slots[index] = next; }];
     },
     useRef(initial) { const index = cursor++; return slots[index] ??= { current: initial }; },
+    useImperativeHandle(ref, create, dependencies) {
+      react.useEffect(() => {
+        if (!ref) return;
+        ref.current = create();
+        return () => { ref.current = null; };
+      }, [...dependencies, ref]);
+    },
     useCallback(fn, nextDeps) {
       const index = cursor++; const slot = slots[index];
       if (slot && sameDeps(slot.deps, nextDeps)) return slot.fn;
@@ -209,6 +216,23 @@ function harness(platform = 'darwin') {
     resolve(index = 0, extra = {}) { creates[index].resolve({ id: creates[index].payload.id, cwd: '/workspace/a', shell: 'zsh', status: 'running', sequence: 0, ...extra }); },
   };
 }
+
+test('workbench can refocus the current terminal without recreating the session', async () => {
+  const h = harness();
+  h.resolve(); await settle(); h.render();
+  const focusRef = { current: null };
+  h.render({ focusRef });
+  const term = h.terms[0];
+  const before = term.focuses;
+  focusRef.current();
+  assert.equal(term.focuses, before + 1);
+  assert.equal(h.creates.length, 1);
+  h.render({ focusRef: undefined });
+  assert.equal(focusRef.current, null);
+  h.render({ focusRef });
+  h.unmount();
+  assert.equal(focusRef.current, null);
+});
 
 test('creation waits before resizing, then synchronizes latest dimensions without repeated IPC', async () => {
   const h = harness(); assert.match(h.text(), /连接中/); assert.equal(h.resizes.length, 0);
