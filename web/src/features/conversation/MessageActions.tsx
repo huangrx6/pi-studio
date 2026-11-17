@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Check, Copy, Pencil } from 'lucide-react';
 import { messageClipboardHtml } from './message-copy';
 import { formatTime } from './message-content';
@@ -58,17 +58,18 @@ function CopyButton({ text, images, label }: { text: string; images?: readonly s
 }
 
 /** 消息下方的悬浮操作行：复制、编辑与时间；没有内容时整行隐藏。 */
-export function MessageActions({ text, images, time, label, align = 'start', onEdit, editDisabled = false }: {
+export function MessageActions({ text, images, time, label, children, align = 'start', onEdit, editDisabled = false }: {
   text: string;
   images?: readonly string[];
   time?: number;
   label: string;
+  children?: ReactNode;
   align?: 'start' | 'end';
   onEdit?: () => void;
   editDisabled?: boolean;
 }) {
   const hasImages = Boolean(images && images.length > 0);
-  if (!text.trim() && !hasImages && !time) return null;
+  if (!text.trim() && !hasImages && !time && !children) return null;
   return <div className={`message-actions is-${align}`}>
     {(text.trim() || hasImages) && <CopyButton text={text} images={images} label={label} />}
     {onEdit && <button
@@ -79,6 +80,7 @@ export function MessageActions({ text, images, time, label, align = 'start', onE
       disabled={editDisabled}
       onClick={onEdit}
     ><Pencil /></button>}
+    {children}
     {time ? <time className="message-action-time">{formatTime(time)}</time> : null}
   </div>;
 }

@@ -1,0 +1,39 @@
+.message-actions:has(.web-sources-trigger) { opacity: 1; }
+
+.detail-overlay:has(.web-sources-dialog)::backdrop { background: var(--scrim); }
+.detail-dialog.web-sources-dialog { width: min(460px, 100%); max-height: min(580px, 80dvh); }
+.web-sources-header {
+  display: flex; flex: none; align-items: center; gap: 12px; padding: 20px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(110deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent 75%);
+}
+.web-sources-emblem {
+  display: grid; place-items: center; width: 42px; height: 42px; border-radius: var(--radius-card);
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.web-sources-emblem svg { width: 21px; height: 21px; stroke-width: 1.6; }
+.web-sources-header h2 { margin: 0; font-size: var(--text-lg); line-height: 1.4; }
+.web-sources-header p { margin: 2px 0 0; color: var(--muted); font-size: var(--text-xs); }
+.web-sources-header button { margin-inline-start: auto; }
+.web-sources-list { margin: 0; padding: 8px; list-style: none; overflow-y: auto; overscroll-behavior: contain; }
+.web-sources-list a {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border-radius: var(--radius-control); color: var(--text); text-decoration: none;
+}
+.web-sources-list a:is(:hover, :focus-visible) { background: var(--surface-hover); }
+.web-sources-list a:focus-visible { outline: 2px solid var(--focus-color); outline-offset: -2px; }
+.web-source-mark {
+  display: grid; flex: none; place-items: center; width: 34px; height: 34px; border-radius: var(--radius-control);
+  background: var(--surface-soft); color: var(--text-2); font-size: var(--text-md); font-weight: var(--weight-semibold);
+}
+.web-source-mark svg { width: 17px; height: 17px; }
+.web-source-caption { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.web-source-caption > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.web-source-caption strong { font-weight: var(--weight-medium); font-size: var(--text-base); }
+.web-source-caption small { font-size: var(--text-xs); color: var(--muted); }
+.web-source-arrow { flex: none; width: 14px; height: 14px; color: var(--faint); }
+.web-sources-list a:is(:hover, :focus-visible) .web-source-arrow { color: var(--accent); }
+@media (prefers-reduced-motion: no-preference) {
+  .web-sources-dialog { animation: web-sources-enter 150ms ease-out; }
+  @keyframes web-sources-enter { from { opacity: 0; transform: translateY(4px); } }
+}

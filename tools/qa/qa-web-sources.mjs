@@ -28,10 +28,11 @@ function installWebFixture() {
     const report = new URLSearchParams(location.search).has('report');
     push('assistant', [{ type: 'thinking', thinking: '先确认每个来源的发布时间。' }, { type: 'toolCall', name: 'mcp__brave__brave_web_search', id: 'search', arguments: { query: 'interaction feedback' } }]);
     push('toolResult', [say('搜索完成')], { toolCallId: 'search', details: { structuredContent: { results: [
-      { url: 'https://www.nngroup.com/articles/response-times-3-important-limits/' },
+      { url: 'https://www.nngroup.com/articles/response-times-3-important-limits/', title: 'Response Times: The 3 Important Limits' },
       { url: 'https://developer.mozilla.org/docs/Web/Accessibility' }, { url: 'https://web.dev/learn/accessibility/' },
       { url: 'https://web.dev/articles/rendering-performance' },
       { url: 'https://www.w3.org/WAI/standards-guidelines/' }, { url: 'https://react.dev/reference/react' },
+      ...Array.from({ length: 22 }, (_, i) => ({ url: `https://source-${i + 1}.example.org/` })),
     ] } } });
     push('assistant', [{ type: 'toolCall', name: 'web_fetch', id: 'read', arguments: { url: 'https://developer.mozilla.org/docs/Web/Accessibility' } },
       { type: 'toolCall', name: 'bash', id: 'command', arguments: { command: 'node tools/check-docs.mjs --files ' + 'chapter.md '.repeat(35) } }]);
@@ -65,29 +66,6 @@ function installWebFixture() {
 const root = new URL('../../', import.meta.url);
 const output = new URL('.qa/screenshots/web-sources/', root);
 
-async function checkSourceAlignment(sources) {
-  const lines = await sources.evaluate(section => {
-    const bounds = section.getBoundingClientRect();
-    const rows = [];
-    for (const item of section.querySelectorAll('.web-source-heading, .web-source-chip, .web-source-more')) {
-      const box = item.getBoundingClientRect();
-      let row = rows.at(-1);
-      if (!row || box.top >= row.bottom) {
-        row = { left: box.left - bounds.left, centers: [], bottom: box.bottom };
-        rows.push(row);
-      }
-      row.right = bounds.right - box.right;
-      row.centers.push(box.top + box.height / 2);
-    }
-    return rows;
-  });
-  for (const row of lines) {
-    assert.ok(Math.abs(row.left - row.right) <= 1, 'each source line is horizontally centered');
-    assert.ok(Math.max(...row.centers) - Math.min(...row.centers) <= 1, 'the heading, chips and button share one vertical center');
-  }
-  return lines.length;
-}
-
 await mkdir(output, { recursive: true });
 const server = await serveProductionRenderer(fileURLToPath(root));
 let browser;
@@ -100,18 +78,20 @@ try {
   await page.goto(server.origin);
   await page.locator('.session-row').first().click();
   const turn = page.locator('.assistant-turn-main').first();
-  const sources = turn.getByRole('region', { name: '网页来源' });
-  await sources.waitFor();
-  assert.equal(await turn.locator('.turn-sources').count(), 1);
-  assert.ok(await sources.evaluate(node => node.previousElementSibling.classList.contains('assistant-response')));
-  assert.deepEqual(await page.locator('.web-source-chip > span:last-child').allTextContents(), ['nngroup.com', 'developer.mozilla.org', 'web.dev']);
-  assert.match(await page.locator('.web-source-chip').last().getAttribute('href'), /web.dev\/learn\/accessibility/);
-  const more = sources.getByRole('button', { name: '另 2 个' });
-  await more.focus();
+  const trigger = turn.locator('.message-actions').getByRole('button', { name: '网页来源（27 个网站）' });
+  const dialog = page.getByRole('dialog', { name: '网页来源' });
+  await trigger.waitFor();
+  assert.equal(await dialog.count(), 0);
+  assert.ok(await trigger.evaluate(button => button.previousElementSibling?.title === '复制回答' && button.nextElementSibling?.tagName === 'TIME'));
+  await trigger.focus();
   await page.keyboard.press('Space');
-  assert.equal(await sources.locator('.web-source-chip').count(), 5);
-  await page.keyboard.press('Space');
-  assert.equal(await sources.locator('.web-source-chip').count(), 3);
+  await dialog.waitFor();
+  assert.equal(await dialog.getByRole('link').count(), 27);
+  assert.equal(await dialog.getByRole('link', { name: /Response Times/ }).count(), 1);
+  assert.equal(await dialog.getByRole('link').nth(2).getAttribute('href'), 'https://web.dev/learn/accessibility/');
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'detached' });
+  assert.ok(await trigger.evaluate(button => button === document.activeElement));
   const activity = turn.getByRole('button', { name: /执行过程/ });
   assert.match(await activity.textContent(), /3 次工具调用 · 1 次思考.*失败/);
   await activity.click();
@@ -131,15 +111,20 @@ try {
   }
   for (const theme of ['light', 'dark']) {
     await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
-    assert.equal(await checkSourceAlignment(sources), 1);
-    await sources.screenshot({ path: fileURLToPath(new URL(theme + '.png', output)), animations: 'disabled' });
+    await trigger.click();
+    const panel = dialog.locator('.web-sources-dialog');
+    await panel.screenshot({ path: fileURLToPath(new URL(theme + '.png', output)), animations: 'disabled' });
+    await dialog.getByRole('button', { name: '关闭网页来源' }).click();
   }
   await turn.screenshot({ path: fileURLToPath(new URL('conversation.png', output)), animations: 'disabled' });
-  await page.setViewportSize({ width: 760, height: 780 });
-  await more.click();
-  assert.ok(await checkSourceAlignment(sources) > 1, 'expanded sources wrap on narrow screens');
-  await sources.getByRole('button', { name: '收起' }).click();
   await page.setViewportSize({ width: 480, height: 780 });
+  await trigger.click();
+  const list = dialog.getByRole('list');
+  assert.ok(await list.evaluate(el => el.scrollHeight > el.clientHeight && el.scrollWidth === el.clientWidth));
+  await dialog.getByRole('link').last().scrollIntoViewIfNeeded();
+  assert.ok(await list.evaluate(el => el.scrollTop > 0));
+  await page.mouse.click(3, 3);
+  await dialog.waitFor({ state: 'detached' });
   const table = turn.getByRole('region', { name: '表格' });
   const layout = await table.evaluate(el => ({
     ownWidth: el.clientWidth, scrollWidth: el.scrollWidth, articleWidth: el.closest('.assistant-turn-main').clientWidth,
@@ -159,6 +144,14 @@ try {
   assert.ok(await turn.locator('.turn-trace-toggle').evaluate(node => node.getBoundingClientRect().height < 40));
   await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
   await turn.screenshot({ path: fileURLToPath(new URL('compact-report.png', output)), animations: 'disabled' });
+  await trigger.click();
+  const firstSource = dialog.getByRole('link').first();
+  const url = await firstSource.getAttribute('href');
+  await firstSource.click();
+  await dialog.waitFor({ state: 'detached' });
+  const address = page.getByRole('textbox', { name: '浏览器地址' });
+  await address.waitFor();
+  assert.equal(await address.inputValue(), url);
   assert.deepEqual(errors, []);
   console.log('Passed per-turn source deduplication, keyboard disclosures, failed commands, tool images, local previews and a seven-column table on a narrow screen.');
 } finally {

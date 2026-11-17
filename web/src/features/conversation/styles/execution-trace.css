@@ -25,7 +25,7 @@
 }
 .turn-trace .activity-disclosure-summary { list-style: none; }
 .turn-trace summary::-webkit-details-marker { display: none; }
-.turn-trace :is(button, summary):focus-visible, .turn-sources :is(a, button):focus-visible,
+.turn-trace :is(button, summary):focus-visible,
 .tool-result-images-toggle:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
 .activity-summary { flex: 1; display: flex; align-items: center; min-width: 0; gap: var(--trace-gap); }
 .activity-summary .activity-disclosure-icon { color: var(--text-3); display: inline-flex; flex: none; }
@@ -93,33 +93,6 @@
 .inline-activity-delta .added { color: var(--success); }
 .inline-activity-delta .removed { color: var(--error); }
 .is-steps-compact .is-grouped .activity-tool.is-done .activity-disclosure-preview.is-mono { display: none; }
-
-/* Sources belong to the whole answer. Limit the default footprint even for a long search. */
-.turn-sources {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
-  gap: 4px 6px; min-width: 0; margin-top: 12px;
-  font: var(--text-xs)/var(--leading-normal) var(--font);
-}
-.web-source-list { display: contents; }
-.web-source-heading, .web-source-chip, .web-source-more {
-  display: inline-flex; align-items: center; gap: 5px; min-width: 0;
-  min-height: var(--icon-button-compact); font: inherit; white-space: nowrap;
-}
-.web-source-heading { color: var(--muted); }
-.web-source-heading svg, .web-source-more svg { flex: none; width: var(--icon-xs); height: var(--icon-xs); }
-.web-source-chip, .web-source-more {
-  max-width: 100%; padding: 1px 7px; border-radius: var(--radius-control);
-  background: var(--surface-soft); color: var(--text-2); text-decoration: none;
-}
-.web-source-more { background: transparent; }
-.web-source-more[aria-expanded="true"] svg { transform: rotate(180deg); }
-.web-source-chip:hover, .web-source-more:hover { background: var(--surface-hover); color: var(--text-1); }
-.web-source-mark {
-  display: grid; place-items: center; flex: none; width: var(--icon-sm); height: var(--icon-sm);
-  font-weight: var(--weight-semibold); line-height: 1;
-}
-.web-source-mark svg { width: 11px; height: 11px; }
-.web-source-chip span:last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 .tool-result-images { margin: 8px 0; min-width: 0; }
 .tool-result-images-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0; background: transparent; color: var(--text-2); font-size: var(--text-sm); }

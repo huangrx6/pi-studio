@@ -73,14 +73,14 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
           <Markdown>{segment.text}</Markdown>
         </MarkdownImageRenderer.Provider></div>;
       })}
-      {sources.length > 0 && <WebSources sources={sources} />}
       {/* 失败卡片只在非 live 时出现，避免自动重试过程中闪错误。 */}
       {!live && error && (interrupted
         ? <div className="assistant-interrupted" role="status">本轮已中断</div>
         : <ConversationError className="assistant-error" message={error} announce={false} />)}
       {(codeFiles.length > 0 || (turnDiff?.files.length ?? 0) > 0) && <FileChangeSummary key={turnDiff?.at} onUndo={onUndo} files={codeFiles} gitDiff={turnDiff} onOpenDiff={onOpenDiff && ((file, turn) => onOpenDiff(file, { ...turn, at: turn.at || messages.at(-1)?.timestamp || 0 }))} onOpenFile={onOpenFile} />}
-      {/* 回答结束后，悬浮显示复制与完成时间。 */}
-      {!live && <MessageActions text={answerText} time={latest?.timestamp} label="复制回答" />}
+      <MessageActions text={live ? '' : answerText} time={live ? undefined : latest?.timestamp} label="复制回答">
+        {sources.length > 0 && <WebSources sources={sources} />}
+      </MessageActions>
     </div>
   </div>;
 }
