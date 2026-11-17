@@ -22,11 +22,12 @@ import {
   Trash2,
 } from 'lucide-react';
 import { LoadingIndicator, LoadingState } from '../../shared/LoadingState';
-import type { ChatMessage } from '../../types/chat-types';
 import type { ModelSelection } from '../../types/model-types';
 import type { StepCollapse, StepDisplay } from '../../shared/preferences';
 import type { SubagentBudgetSnapshot, SubagentChild, SubagentTranscript } from '../../types/subagent-types';
-import { AssistantTurnView, ChatMessageView } from '../conversation/ChatMessage';
+import { ChatMessageView } from '../conversation/ChatMessage';
+import { AssistantTurnView } from '../conversation/AssistantTurn';
+import { groupTranscript } from '../conversation/turn-content';
 import { Select } from '../../shared/Select';
 import { SessionViewHeader } from '../../shell/SessionViewHeader';
 import { errorText } from '../../shared/error-text';
@@ -361,21 +362,6 @@ export function SubagentOverview({
   </div>;
 }
 
-function transcriptTurns(messages: ChatMessage[]) {
-  const turns: Array<{ kind: 'user'; message: ChatMessage } | { kind: 'assistant'; messages: ChatMessage[] }> = [];
-  for (const message of messages) {
-    if (message.role === 'toolResult') continue;
-    if (message.role === 'user') {
-      turns.push({ kind: 'user', message });
-      continue;
-    }
-    const previous = turns.at(-1);
-    if (previous?.kind === 'assistant') previous.messages.push(message);
-    else turns.push({ kind: 'assistant', messages: [message] });
-  }
-  return turns;
-}
-
 export function SubagentTranscriptView({
   child,
   transcript,
@@ -404,12 +390,7 @@ export function SubagentTranscriptView({
   const [taskOpen, setTaskOpen] = useState(false);
   const back = useRef<HTMLButtonElement>(null);
   useEffect(() => { back.current?.focus({ preventScroll: true }); }, []);
-  const turns = transcriptTurns(transcript?.messages || []);
-  const results = new Map(
-    (transcript?.messages || [])
-      .filter(message => message.role === 'toolResult' && message.toolCallId)
-      .map(message => [message.toolCallId as string, message]),
-  );
+  const { turns, results } = useMemo(() => groupTranscript(transcript?.messages || []), [transcript?.messages]);
   const busy = child.status === 'running' || child.status === 'pending';
   const taskText = useRef<HTMLParagraphElement>(null);
   const [longTask, setLongTask] = useState(false);

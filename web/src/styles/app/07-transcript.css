@@ -50,19 +50,26 @@
 .markdown pre code { padding: 0; border: 0; background: var(--transparent); font: inherit; }
 /* 表格与代码块用同一个 8px 圆角：外框画在滚动容器上，单元格只画内部线，
  * 否则 collapse 的单元格边框会把圆角顶成直角。 */
-.markdown table {
-  display: block;
-  width: max-content;
+.markdown-table-scroll {
+  width: fit-content;
   max-width: 100%;
   margin: 14px 0;
-  overflow: auto;
+  overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
+}
+.markdown-table-scroll:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
+.markdown table {
   border-collapse: separate;
   border-spacing: 0;
   font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  overflow-wrap: normal;
 }
-.markdown th, .markdown td { padding: 7px 10px; border: 0; border-bottom: 1px solid var(--border); text-align: left; }
+.markdown th, .markdown td { padding: 7px 10px; border: 0; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.markdown th { white-space: nowrap; }
+.markdown td { min-width: 5ch; overflow-wrap: break-word; }
+.markdown table:has(th:nth-child(6)) td { min-width: 7ch; }
 .markdown th + th, .markdown td + td { border-left: 1px solid var(--border); }
 .markdown tbody tr:last-child td { border-bottom: 0; }
 /* 表头在任意底色上都只叠一层 tint，浅色主题下 --surface-soft 与卡片同色会看不出分区。 */

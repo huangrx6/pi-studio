@@ -2,7 +2,8 @@ import { Fragment, lazy, Suspense, useEffect, useMemo, useState, type ComponentP
 import { ChevronLeft } from 'lucide-react';
 import { JumpToLatestButton } from '../shared/JumpToLatestButton';
 import { LoadingState } from '../shared/LoadingState';
-import { AssistantTurnView, ChatMessageView } from '../features/conversation/ChatMessage';
+import { ChatMessageView } from '../features/conversation/ChatMessage';
+import { AssistantTurnView } from '../features/conversation/AssistantTurn';
 import { ComposerDock } from '../features/conversation/ComposerDock';
 import { ConversationError } from '../features/conversation/ConversationError';
 import { ConversationOutline } from '../features/conversation/ConversationOutline';

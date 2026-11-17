@@ -77,6 +77,11 @@ const MarkdownPre: NonNullable<Components['pre']> = ({ node, children, ...props 
  * components 会导致所有节点重挂载，流式输出时会明显掉帧。
  */
 const components: Components = {
+  table({ node, children, ...props }) {
+    return <div className="markdown-table-scroll" tabIndex={0} role="region" aria-label="表格">
+      <table {...props}>{children}</table>
+    </div>;
+  },
   a({ href, children, node, ...props }) {
     const actions = useContext(MarkdownActions);
     const content = <InsideMarkdownLink.Provider value>{children}</InsideMarkdownLink.Provider>;

@@ -59,18 +59,20 @@ try {
   await page.goto(server.origin);
   await page.locator('.session-row').first().click();
   const turn = page.locator('.assistant-turn-main').first();
-  const toggles = turn.locator('.turn-trace-toggle');
+  const toggles = turn.locator('.turn-trace > .turn-trace-toggle, .turn-trace.is-single > .activity-sequence > details > summary');
   await turn.getByText('即可试玩。', { exact: false }).waitFor();
   assert.deepEqual(await turn.locator(':scope > .assistant-response, :scope > .turn-trace').evaluateAll(elements =>
     elements.map(element => element.classList.contains('assistant-response') ? '正文' : element.querySelector('strong').textContent)),
-    ['正文', '探索', '正文', '运行', '正文', '写入', '正文', '运行', '正文', '更新', '正文']);
+    ['正文', '探索', '正文', '运行命令', '正文', '写入', '正文', '运行命令', '正文', '更新', '正文']);
   assert.equal(await turn.locator('.turn-trace-toggle[aria-expanded="true"]').count(), 0);
-  assert.match(await toggles.nth(0).textContent(), /1 次搜索，1 个文件失败/);
+  assert.match(await toggles.nth(0).textContent(), /1 次搜索，1 个文件1 步失败/);
   assert.match(await toggles.nth(2).textContent(), /6 行/);
   assert.equal(await toggles.nth(4).locator('.inline-activity-delta').textContent(), '+1−3');
   await toggles.nth(1).focus();
+  assert.equal(await toggles.nth(1).getAttribute('aria-expanded'), 'false');
   await page.keyboard.press('Enter');
   await turn.getByText('当前目录不是 Git 仓库', { exact: true }).waitFor();
+  assert.equal(await turn.getByText('git status --short', { exact: true }).count(), 1);
   await page.keyboard.press('Enter');
   await toggles.nth(1).blur();
   for (const theme of ['dark', 'light']) {

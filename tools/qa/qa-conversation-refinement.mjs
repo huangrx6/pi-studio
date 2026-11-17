@@ -196,7 +196,10 @@ try {
   const trace = page.locator('.turn-trace-toggle').first();
   assert.equal(await trace.getAttribute('aria-expanded'), 'false');
   assert.equal(await page.locator('.activity-tool').count(), 0, 'completed trace does not mount child tool components before first expansion');
+  const remaining = page.locator('.turn-trace-toggle').last();
+  assert.match(await remaining.innerText(), /1 步失败/);
   await trace.click();
+  await remaining.click();
   await page.locator('.activity-tool').first().waitFor();
   assert.equal(await page.locator('.activity-tool-body').count(), 0, 'standard tools do not mount large output while closed');
   assert.equal(await page.locator('.activity-thinking-body').count(), 0, 'closed thinking does not mount markdown');
@@ -204,7 +207,6 @@ try {
   assert.equal(await tool.locator('summary').getAttribute('aria-description'), '已完成');
   assert.equal(await tool.locator('.activity-tool-status').count(), 0, 'success state avoids a repeated visual completion label');
   await page.locator('.activity-tool.is-error').getByText('失败', { exact: true }).waitFor();
-  await page.locator('.turn-trace-errors').filter({ hasText: '1 次异常' }).waitFor();
   const gallery = page.locator('.tool-result-images').first();
   assert.equal(await gallery.locator('.conversation-image-tile').count(), 1, 'image results remain separate from closed parameter details');
   await tool.locator('summary').click();
@@ -228,8 +230,9 @@ try {
   await page.setViewportSize({ width: 980, height: 640 });
   await capture('04-trace-expanded-light');
   await page.locator('.turn-trace-collapse').click();
-  await focused(trace);
-  assert.equal(await trace.getAttribute('aria-expanded'), 'false');
+  await focused(remaining);
+  assert.equal(await remaining.getAttribute('aria-expanded'), 'false');
+  await trace.click();
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await capture('05-trace-collapsed-dark');
   assert.equal(await composerValue(composer), draft);
@@ -253,7 +256,7 @@ try {
   await page.mouse.move(1000, 100);
   await page.locator('.session-running .spin').waitFor();
   const motion = await page.evaluate(() => ({
-    chevron: getComputedStyle(document.querySelector('.turn-trace-chevron')).transitionDuration,
+    chevron: getComputedStyle(document.querySelector('.turn-trace-toggle > .activity-disclosure-chevron')).transitionDuration,
     details: getComputedStyle(document.querySelector('.activity-tool'), '::details-content').transitionDuration,
     spinners: [...document.querySelectorAll('.spin')].map((element) => getComputedStyle(element).animationName),
   }));

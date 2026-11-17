@@ -1,27 +1,9 @@
-import { Globe, Image as ImageIcon, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
-import type { ChatMessage, ContentBlock, ToolCallBlock } from '../../types/chat-types';
+import type { ReactNode } from 'react';
+import { Bot, FileText, Globe, Image as ImageIcon, ListTree, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
+import type { ChatMessage, ToolCallBlock } from '../../types/chat-types';
 import { FileKindIcon } from '../../shared/FileKindIcon';
 import { toolResultDiff, writtenLineCount } from './file-changes';
-import { webAction } from './web-sources';
-
-export type ActivityEntry = (
-  | { kind: 'tool'; call: ToolCallBlock }
-  | { kind: 'thinking'; block: Extract<ContentBlock, { type: 'thinking' }> }
-) & { key: string; live?: boolean };
-
-export function activityKind(entry: ActivityEntry) {
-  if (entry.kind === 'thinking') return 'thinking';
-  const web = webAction(entry.call);
-  if (web) return web;
-  if (/^(?:generate_image|image_generation|imagegen|text_to_image)$/.test(entry.call.name.split('__').at(-1) || '')) return 'image';
-  switch (entry.call.name) {
-    case 'read': case 'grep': case 'find': case 'ls': return 'explore';
-    case 'write': return 'write';
-    case 'edit': return 'edit';
-    case 'bash': case 'powershell': return 'command';
-    default: return 'other';
-  }
-}
+import { activityKind, type ActivityEntry } from './turn-content';
 
 const basename = (path: string) => path.split(/[\\/]/).pop() || path;
 function filePath(call: ToolCallBlock) {
@@ -29,7 +11,12 @@ function filePath(call: ToolCallBlock) {
   return typeof path === 'string' ? path : '';
 }
 
-function MutationSummary({ calls, results }: { calls: ToolCallBlock[]; results: Map<string, ChatMessage> }) {
+function FileTarget({ path, children, onOpenFile }: { path: string; children: ReactNode; onOpenFile?: (path: string) => void }) {
+  return onOpenFile ? <button type="button" className="activity-file-target" title={path}
+    onClick={event => { event.preventDefault(); event.stopPropagation(); onOpenFile(path); }}>{children}</button> : <span>{children}</span>;
+}
+
+function MutationSummary({ calls, results, onOpenFile }: { calls: ToolCallBlock[]; results: Map<string, ChatMessage>; onOpenFile?: (path: string) => void }) {
   const paths = [...new Set(calls.map(filePath).filter(Boolean))];
   let added = 0, removed = 0, lines = 0, withDelta = 0, wholeWrites = 0, successful = 0;
   for (const call of calls) {
@@ -49,7 +36,7 @@ function MutationSummary({ calls, results }: { calls: ToolCallBlock[]; results: 
   const shown = paths.slice(0, 3);
   return <>
     {shown.map((path, index) => <span className="inline-activity-file" key={path} title={path}>
-      <FileKindIcon path={path} /><span>{paths.some(other => other !== path && basename(other) === basename(path)) ? path : basename(path)}</span>
+      <FileKindIcon path={path} /><FileTarget path={path} onOpenFile={onOpenFile}>{paths.some(other => other !== path && basename(other) === basename(path)) ? path : basename(path)}</FileTarget>
       {index < shown.length - 1 && <i aria-hidden="true">,</i>}
     </span>)}
     {paths.length > shown.length && <span>另 {paths.length - shown.length} 个文件</span>}
@@ -60,28 +47,64 @@ function MutationSummary({ calls, results }: { calls: ToolCallBlock[]; results: 
   </>;
 }
 
-export function ActivitySummary({ entries, results }: { entries: ActivityEntry[]; results: Map<string, ChatMessage> }) {
+function label(icon: ReactNode, name: string, preview?: ReactNode, mono = false, title?: string) {
+  return <span className="activity-summary">
+    <span className="activity-disclosure-icon" aria-hidden="true">{icon}</span>
+    <strong className="activity-disclosure-title" title={title}>{name}</strong>
+    {preview && <span className={'activity-disclosure-preview' + (mono ? ' is-mono' : '')}>{preview}</span>}
+  </span>;
+}
+
+function short(value: unknown) {
+  return typeof value === 'string' ? value.trim().slice(0, 200).replace(/\s+/g, ' ') : '';
+}
+
+const agentActions: Record<string, string> = {
+  spawn: '启动子智能体', run: '运行子智能体', send: '继续子智能体', status: '查询子智能体',
+  stop: '停止子智能体', wait: '等待子智能体', pending: '查看待答问题', reply: '回复子智能体',
+};
+
+export function ActivitySummary({ entries, results, expanded = false, onOpenFile }: {
+  entries: ActivityEntry[]; results: Map<string, ChatMessage>; expanded?: boolean; onOpenFile?: (path: string) => void;
+}) {
   const first = entries[0];
-  if (first.kind === 'thinking') return <><Sparkles /><strong>思考</strong></>;
   const kind = activityKind(first);
   const calls = entries.flatMap(entry => entry.kind === 'tool' ? [entry.call] : []);
-  if (kind === 'image') return <><ImageIcon /><strong>生成图片</strong></>;
-  if (kind === 'search' || kind === 'fetch') return <><Globe /><strong>{kind === 'search' ? '搜索网页' : '读取网页'}</strong></>;
+  if (entries.some(entry => activityKind(entry) !== kind)) {
+    const thoughts = entries.length - calls.length;
+    return label(<ListTree />, '执行过程', [calls.length && calls.length + ' 次工具调用', thoughts && thoughts + ' 次思考'].filter(Boolean).join(' · '));
+  }
+  if (first.kind === 'thinking') {
+    const preview = first.block.redacted ? '模型未提供内容' : short(first.block.thinking);
+    return label(<Sparkles />, first.live ? '思考中' : '思考', entries.length > 1 ? entries.length + ' 个步骤' : !expanded && preview);
+  }
+  const call = first.call, args = call.arguments || {};
+  if (kind === 'write' || kind === 'edit') {
+    return label(<Pencil />, kind === 'write' ? '写入' : '更新', <MutationSummary calls={calls} results={results} onOpenFile={onOpenFile} />);
+  }
+  if (entries.length > 1) {
+    if (kind === 'explore') {
+      const searches = calls.filter(c => c.name === 'find' || c.name === 'grep').length;
+      const files = new Set(calls.filter(c => c.name === 'read').map(filePath).filter(Boolean)).size;
+      const dirs = calls.filter(c => c.name === 'ls').length;
+      return label(<Search />, '探索', [searches && searches + ' 次搜索', files && files + ' 个文件', dirs && dirs + ' 次目录浏览'].filter(Boolean).join('，'));
+    }
+    if (kind === 'command') return label(<Terminal />, '运行命令', calls.length + ' 条');
+    if (kind === 'search' || kind === 'fetch') return label(<Globe />, kind === 'fetch' ? '读取网页' : '搜索网页', calls.length + ' 次');
+    return label(<ListTree />, '执行过程', calls.length + ' 次工具调用');
+  }
+  if (kind === 'command') return label(<Terminal />, '运行命令', !expanded && short(args.command), true, call.name);
+  if (kind === 'search' || kind === 'fetch') return label(<Globe />, kind === 'fetch' ? '读取网页' : '搜索网页', short(args.query || args.url));
+  if (kind === 'agent') {
+    const action = call.name === 'bg_wait' ? 'wait' : call.name === 'subagent_stop' ? 'stop' : String(args.action || 'run');
+    return label(<Bot />, agentActions[action] || '子智能体', short(args.name || args.agent || args.task || args.action), false, call.name);
+  }
+  if (kind === 'image') return label(<ImageIcon />, '生成图片');
   if (kind === 'explore') {
-    const searches = calls.filter(call => call.name === 'find' || call.name === 'grep').length;
-    const files = new Set(calls.filter(call => call.name === 'read').map(filePath).filter(Boolean)).size;
-    const directories = calls.filter(call => call.name === 'ls').length;
-    return <><Search /><strong>探索</strong><span>{[
-      searches && `${searches} 次搜索`, files && `${files} 个文件`, directories && `${directories} 次目录浏览`,
-    ].filter(Boolean).join('，')}</span></>;
+    const name = { read: '读取文件', grep: '搜索内容', find: '查找文件', ls: '浏览目录' }[call.name];
+    const path = filePath(call);
+    const target = call.name === 'read' && path ? <FileTarget path={path} onOpenFile={onOpenFile}>{path}</FileTarget> : short(args.pattern || path);
+    return label(call.name === 'read' ? <FileText /> : <Search />, name || '探索', target, true);
   }
-  if (kind === 'write' || kind === 'edit') return <>
-    <Pencil /><strong>{kind === 'write' ? '写入' : '更新'}</strong><MutationSummary calls={calls} results={results} />
-  </>;
-  if (kind === 'command') {
-    const command = first.call.arguments?.command;
-    const preview = typeof command === 'string' ? command.trim().replace(/\s+/g, ' ') : '';
-    return <><Terminal /><strong>运行</strong>{preview && <code>{preview.length > 160 ? preview.slice(0, 159) + '…' : preview}</code>}</>;
-  }
-  return <><Wrench /><strong>{first.call.name}</strong></>;
+  return label(<Wrench />, call.name.split('__').at(-1) || call.name, short(args.name || args.description || args.path), false, call.name);
 }

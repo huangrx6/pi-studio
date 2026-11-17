@@ -514,7 +514,7 @@ try {
   await completedThinking.waitFor();
   if (await completedThinking.getAttribute('open') === null) await completedThinking.locator(':scope > summary').click();
     // 展开后思考预览行应隐藏，避免内容重复。
-  await completedThinking.locator(':scope > summary .activity-thinking-preview').waitFor({ state: 'detached' });
+  await completedThinking.locator(':scope > summary .activity-disclosure-preview').waitFor({ state: 'detached' });
     await capture(`${mode}-thinking-expanded`);
     await page.locator('.chat-scroll').evaluate((element) => { element.scrollTop = element.scrollHeight; });
     await capture(`${mode}-error`);

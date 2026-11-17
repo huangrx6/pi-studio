@@ -18,7 +18,7 @@ try {
     await import('/src/styles/tokens.css'); await import('/src/styles/palette.css'); await import('/src/app.css');
     const React = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react.js')).default;
     const { createRoot } = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react-dom_client.js')).default;
-    const { AssistantTurnView } = await import('/src/features/conversation/ChatMessage.tsx');
+    const { AssistantTurnView } = await import('/src/features/conversation/AssistantTurn.tsx');
     const tools = ['read', 'edit', 'edit', 'write', 'edit', 'edit'];
     const imageColors = ['d6f5e8','dce9ff','fff0cf','f3dcff','ffe1dc','dff2f0','e7e8ff'];
     const images = imageColors.map((color,index) => {
@@ -53,6 +53,7 @@ try {
             showCodeView:true,
             cwd:'/project',
             stepDisplay:'detailed',
+            stepCollapse:'keep-open',
             onOpenDiff:(file,turn) => {
               const next = {path:file?.path || '', total:turn.files.length};
               window.openedDiff = next;
@@ -83,9 +84,9 @@ try {
   const standaloneThinking = page.locator('.activity-sequence .activity-thinking').first();
   const thinkingTrace = standaloneThinking.locator('xpath=ancestor::section[contains(@class, "turn-trace")]').first();
   const traceToggle = thinkingTrace.locator('.turn-trace-toggle');
-  if (await traceToggle.getAttribute('aria-expanded') === 'false') await traceToggle.click();
+  if (await traceToggle.count() && await traceToggle.getAttribute('aria-expanded') === 'false') await traceToggle.click();
   await thinkingTrace.waitFor({state:'visible'});
-  const thinkingLabelBox = await standaloneThinking.locator('.activity-thinking-label').boundingBox();
+  const thinkingLabelBox = await standaloneThinking.locator('.activity-disclosure-title').boundingBox();
   if (await standaloneThinking.getAttribute('open') === null) await standaloneThinking.locator('summary').click();
   await page.waitForTimeout(220);
   const thinkingBodyBox = await standaloneThinking.locator('.activity-thinking-body .markdown p').first().boundingBox();
@@ -133,14 +134,14 @@ try {
   assert.notEqual(detailsTransition, '0s', 'trace content uses the shared smooth details transition');
   const firstTraceTool = firstTool;
   const toolIconBefore = await firstTraceTool.evaluate(node => {
-    const icon = node.querySelector('.activity-tool-icon').getBoundingClientRect();
+    const icon = node.querySelector('.activity-disclosure-icon').getBoundingClientRect();
     const summary = node.querySelector(':scope > summary').getBoundingClientRect();
     return { viewportX: icon.x, centerOffset: icon.y + icon.height / 2 - summary.y };
   });
   await firstTraceTool.locator('summary').click();
   await page.waitForTimeout(220);
   const toolIconAfter = await firstTraceTool.evaluate(node => {
-    const icon = node.querySelector('.activity-tool-icon').getBoundingClientRect();
+    const icon = node.querySelector('.activity-disclosure-icon').getBoundingClientRect();
     const summary = node.querySelector(':scope > summary').getBoundingClientRect();
     return { viewportX: icon.x, centerOffset: icon.y + icon.height / 2 - summary.y };
   });

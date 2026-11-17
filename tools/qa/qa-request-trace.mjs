@@ -30,7 +30,8 @@ try {
       await import('/src/app.css');
       const React = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react.js')).default;
       const { createRoot } = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react-dom_client.js')).default;
-      const { AssistantTurnView } = await import('/src/features/conversation/ChatMessage.tsx');
+      const { AssistantTurnView } = await import('/src/features/conversation/AssistantTurn.tsx');
+      const { ActivityRequest } = await import('/src/features/conversation/ModelRequestTrace.tsx');
       const trace = {
         id: 'trace-1',
         requestId: 'trace-1',
@@ -161,7 +162,10 @@ try {
             cwd: '/project',
             stepDisplay: 'standard',
             ...extra,
-          })
+          }),
+          React.createElement('aside', { 'aria-label': '模型调用详情' },
+            (extra.requestTraces || [trace, secondTrace]).map(request =>
+              React.createElement(ActivityRequest, { key: request.id, trace: request, stepDisplay: 'standard' })))
         )
       );
       window.renderTrace = render;
@@ -200,12 +204,12 @@ try {
   await inspector.getByRole('button', {name:'工具定义'}).click();
   await inspector.locator('.request-tool > summary').click();
   assert.match(await inspector.locator('pre').innerText(), /properties/);
-  await inspector.getByRole('button', {name:'上下文'}).click();
+  await inspector.locator('.request-inspector-tabs').getByRole('button', {name:/^上下文/}).click();
   const aligned = await page.evaluate(() => {
-    const icons = [...document.querySelectorAll('.turn-trace .activity-disclosure-icon')];
+    const icons = [...document.querySelectorAll('.activity-sequence .activity-disclosure-icon')];
     return icons.map(node => ({left:node.getBoundingClientRect().left, width:node.getBoundingClientRect().width}));
   });
-  assert.ok(aligned.every(rect => rect.width === 18 && Math.abs(rect.left - aligned[0].left) < 1), JSON.stringify(aligned));
+  assert.ok(aligned.length > 1 && aligned.every(rect => rect.width === 13 && Math.abs(rect.left - aligned[0].left) < 1), JSON.stringify(aligned));
   await page.screenshot({path:output+'light-segments.png', fullPage:true, animations:'disabled'});
   await page.evaluate(() => window.longRequest());
   await page.waitForFunction(() => document.querySelector('.activity-request-metrics')?.textContent.includes('739'));
@@ -246,13 +250,12 @@ try {
   assert.equal(await groups.count(), 2, 'one assistant message can contain multiple execution groups');
   assert.equal(await page.locator('.assistant-response').count(), 2);
   await page.evaluate(() => window.renderTrace({stepCollapse:'after-answer', busy:true}));
-  await page.waitForFunction(() => [...document.querySelectorAll('.turn-trace-toggle')].every(node => node.getAttribute('aria-expanded') === 'true'));
-  const footer = await page.locator('.run-live-status').evaluate(node => ({left:parseFloat(getComputedStyle(node).paddingLeft), right:parseFloat(getComputedStyle(node).paddingRight)}));
-  assert.deepEqual(footer, {left:12, right:12});
+  await page.waitForFunction(() => [...document.querySelectorAll('.turn-trace-toggle')].every(node => node.getAttribute('aria-expanded') === 'false'));
+  assert.equal(await page.locator('.assistant-turn-status').innerText(), '正在请求模型');
   await toggles.first().click();
   await page.evaluate(() => window.renderTrace({stepCollapse:'after-answer', busy:true}));
-  assert.equal(await toggles.first().getAttribute('aria-expanded'), 'false', 'updates preserve manual collapse');
-  assert.equal(await toggles.last().getAttribute('aria-expanded'), 'true', 'groups fold independently');
+  assert.equal(await toggles.first().getAttribute('aria-expanded'), 'true', 'updates preserve manual expansion');
+  assert.equal(await toggles.last().getAttribute('aria-expanded'), 'false', 'groups fold independently');
   await page.evaluate(() => window.renderTrace({stepCollapse:'after-answer', busy:false}));
   await page.waitForFunction(() => [...document.querySelectorAll('.turn-trace-toggle')].every(node => node.getAttribute('aria-expanded') === 'false'));
   assert.deepEqual(errors, []);

@@ -15,7 +15,7 @@ try {
     await import('/@fs/${process.cwd()}/node_modules/yet-another-react-lightbox/dist/styles.css');
     const React = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react.js')).default;
     const { createRoot } = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react-dom_client.js')).default;
-    const { AssistantTurnView } = await import('/src/features/conversation/ChatMessage.tsx');
+    const { AssistantTurnView } = await import('/src/features/conversation/AssistantTurn.tsx');
     const prior = {role:'assistant',timestamp:1,content:[{type:'toolCall',id:'read',name:'read',arguments:{path:'src/features/conversation/ChatMessage.tsx'}},{type:'thinking',thinking:'已经定位轨迹布局差异。'},{type:'toolCall',id:'edit',name:'edit',arguments:{path:'src/app.css'}}]};
     const results = new Map(['read','edit'].map(id => [id,{role:'toolResult',content:[{type:'text',text:'Completed'}]}]));
     const canvas = document.createElement('canvas'); canvas.width=480; canvas.height=300;
@@ -29,6 +29,7 @@ try {
     ]});
     let update;
     window.images = () => update(s => ({...s,images:true,long:false}));
+    window.think = () => update(s => ({...s,stage:'thinking',busy:true}));
     window.tick = () => update(s => ({...s,text:s.text+' 最新增量内容已经显示在这里。'}));
     window.tool = () => update(s => ({...s,stage:'tool'}));
     window.waiting = () => update(s => ({...s,stage:'waiting'}));
@@ -47,19 +48,20 @@ try {
     createRoot(document.getElementById('fixture')).render(React.createElement(Fixture));
     </script></body></html>` }));
   await page.goto(new URL('popover-preview', process.env.PREVIEW_URL || 'http://127.0.0.1:5180/').href, { waitUntil: 'domcontentloaded' });
-  await page.locator('.activity-thinking.is-live').waitFor();
-  await page.locator('.activity-sequence').waitFor();
+  await page.locator('.activity-thinking.is-live').waitFor().catch(async error => {
+    throw new Error('Live thinking did not appear. ' + await page.locator('body').innerText() + '\n' + errors.join('\n'), { cause: error });
+  });
+  await page.locator('.activity-sequence').first().waitFor();
   assert.equal(await page.locator('.activity-sequence .activity-thinking:not(.is-live)').getAttribute('open'), null);
   await page.locator('.activity-thinking.is-live').getByText('思考中',{exact:true}).waitFor();
-  await page.locator('.activity-thinking.is-live').getByText('推理中',{exact:true}).waitFor();
   await page.evaluate(() => window.tick());
   await page.locator('.activity-thinking.is-live .markdown').filter({hasText:'最新增量内容已经显示在这里'}).waitFor();
   assert.equal(await page.locator('.activity-thinking.is-live details').count(),0,'thinking is not nested in details');
   await page.locator('.activity-sequence .activity-tool').first().waitFor();
-  await page.locator('.activity-sequence .activity-tool-summary').filter({hasText:'src/app.css'}).waitFor();
+  await page.locator('.activity-sequence .activity-disclosure-preview').filter({hasText:'app.css'}).waitFor();
   const traceAlignment = await page.evaluate(() => {
-    const completedIcons = Array.from(document.querySelectorAll('.activity-sequence .activity-tool-icon, .activity-sequence .activity-thinking-icon'));
-    const completedText = Array.from(document.querySelectorAll('.activity-sequence .activity-tool-name, .activity-sequence .activity-thinking-label'));
+    const completedIcons = Array.from(document.querySelectorAll('.activity-sequence .activity-disclosure-icon'));
+    const completedText = Array.from(document.querySelectorAll('.activity-sequence .activity-disclosure-title'));
     return {
       icon: completedIcons.map(node => node.getBoundingClientRect().left),
       text: completedText.map(node => node.getBoundingClientRect().left),
@@ -76,9 +78,9 @@ try {
     };
     return {
       summary: center('summary'),
-      icon: center('.activity-tool-icon'),
-      name: center('.activity-tool-name'),
-      chevron: center('.activity-tool-chevron'),
+      icon: center('.activity-disclosure-icon'),
+      name: center('.activity-disclosure-title'),
+      chevron: center('.activity-disclosure-chevron'),
     };
   }));
   for (const alignment of toolVerticalAlignment) {
@@ -88,21 +90,21 @@ try {
   await page.screenshot({path:output+'thinking-light.png',fullPage:true,animations:'disabled'});
   await page.locator('.activity-thinking.is-live .markdown').waitFor();
   await page.evaluate(() => window.tool());
-  await page.locator('.run-live-status').getByText('正在执行',{exact:true}).waitFor();
+  await page.locator('.assistant-turn-status').getByText('正在执行',{exact:true}).waitFor();
   await page.locator('.assistant-response').getByText('接下来检查构建结果。',{exact:true}).waitFor();
-  await page.locator('.turn-trace-body .activity-tool.is-running .activity-tool-summary').filter({hasText:'pnpm run build'}).waitFor();
-  const currentToolVerticalAlignment = await page.locator('.turn-trace-body .activity-tool.is-running').evaluate(tool => {
+  await page.locator('.activity-sequence .activity-tool.is-running .activity-disclosure-preview').filter({hasText:'pnpm run build'}).waitFor();
+  const currentToolVerticalAlignment = await page.locator('.activity-sequence .activity-tool.is-running').evaluate(tool => {
     const center = selector => {
       const rect = tool.querySelector(selector).getBoundingClientRect();
       return rect.top + rect.height / 2;
     };
     return {
       summary: center('summary'),
-      icon: center('.activity-tool-icon'),
-      name: center('.activity-tool-name'),
-      summaryText: center('.activity-tool-summary'),
+      icon: center('.activity-disclosure-icon'),
+      name: center('.activity-disclosure-title'),
+      summaryText: center('.activity-disclosure-preview'),
       status: center('.activity-tool-status'),
-      chevron: center('.activity-tool-chevron'),
+      chevron: center('.activity-disclosure-chevron'),
     };
   });
   assert.ok(
@@ -112,11 +114,11 @@ try {
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await page.screenshot({path:output+'tool-dark.png',fullPage:true,animations:'disabled'});
   await page.evaluate(() => window.reply());
-  await page.locator('.run-live-status').getByText('正在回复',{exact:true}).waitFor();
+  await page.locator('.assistant-turn-status').getByText('正在回复',{exact:true}).waitFor();
   await page.locator('.assistant-response').getByText('已完成调整，实时输出不会藏在历史记录中。').waitFor();
   assert.equal(await page.getByText('已完成',{exact:true}).count(),0);
   await page.evaluate(() => window.waiting());
-  await page.locator('.run-live-status').getByText('正在继续处理',{exact:true}).waitFor();
+  await page.locator('.assistant-turn-status').getByText('正在继续处理',{exact:true}).waitFor();
   assert.equal(await page.getByText('已完成',{exact:true}).count(),0);
   await page.evaluate(() => window.finish());
   await page.locator('.activity-thinking.is-live').waitFor({state:'detached'});
@@ -140,11 +142,12 @@ try {
   await page.evaluate(() => window.finish());
   assert.equal(await toggle.getAttribute('aria-expanded'), 'false', 'manual choice survives run transitions');
   await page.evaluate(() => window.policy('after-answer'));
-  await page.evaluate(() => window.resume());
+  await page.evaluate(() => window.think());
   await page.waitForFunction(() => document.querySelector('.turn-trace-toggle').getAttribute('aria-expanded') === 'true');
   await toggle.click();
   await page.evaluate(() => window.tick());
   assert.equal(await toggle.getAttribute('aria-expanded'), 'false', 'streaming must not reopen a manually collapsed trace');
+  await page.evaluate(() => window.reply());
   await page.evaluate(() => window.finish());
   await page.screenshot({path:output+'trace-collapsed-dark.png',fullPage:true,animations:'disabled'});
   await toggle.click();
@@ -161,24 +164,14 @@ try {
   await page.screenshot({path:output+'long-trace-collapsed.png',fullPage:true,animations:'disabled'});
 
   await page.evaluate(() => window.images());
-  await toggle.click();
   const imageGroups = page.locator('.tool-result-images');
+  await imageGroups.last().waitFor();
   assert.equal(await imageGroups.count(), 2);
   for (const [id,count] of [['read',1],['edit',2]]) {
     const group = page.locator('.tool-result-images[data-tool-call-id="'+id+'"]');
     assert.equal(await group.locator('.conversation-image-tile').count(),count);
-    assert.ok(await group.evaluate(el => el.previousElementSibling?.classList.contains('activity-tool')));
+    assert.ok(await group.evaluate(el => el.previousElementSibling?.classList.contains('turn-trace')));
   }
-  const imageAlignment = await page.evaluate(() => ({
-    icons: [...document.querySelectorAll('.activity-sequence .activity-disclosure-icon > svg')].map(el => {
-      const { x, width, height } = el.getBoundingClientRect(); return { x, width, height };
-    }),
-    labels: [...document.querySelectorAll('.activity-sequence .activity-disclosure-title, .tool-result-images-label')].map(el => el.getBoundingClientRect().x),
-  }));
-  assert.equal(new Set(imageAlignment.icons.map(icon => `${icon.width}x${icon.height}`)).size, 1);
-  assert.ok(Math.max(...imageAlignment.icons.map(icon => icon.x)) - Math.min(...imageAlignment.icons.map(icon => icon.x)) < .5);
-  assert.ok(Math.max(...imageAlignment.labels) - Math.min(...imageAlignment.labels) < .5);
-
   const firstGroup = imageGroups.first();
   await firstGroup.locator('button.tool-result-images-toggle').click();
   assert.equal(await firstGroup.locator('.conversation-image-tile').first().isVisible(), false);
@@ -186,11 +179,12 @@ try {
   await firstGroup.locator('button.tool-result-images-toggle').click();
   await page.screenshot({path:output+'step-images-dark.png',fullPage:true,animations:'disabled'});
   await firstGroup.locator('.conversation-image-tile').click();
-  await page.getByRole('dialog',{name:'图片预览'}).waitFor();
+  await page.locator('.yarl__slide_image').first().waitFor();
   assert.equal(await page.locator('.yarl__counter').count(),0,'single-step preview must not include other steps');
-  await page.getByRole('button',{name:'关闭图片预览',exact:true}).click();
+  await page.keyboard.press('Escape');
+  await page.locator('.yarl__root').waitFor({state:'detached'});
   await toggle.click();
-  assert.equal(await imageGroups.last().locator('.conversation-image-tile').first().isVisible(), false);
+  assert.ok(await imageGroups.last().locator('.conversation-image-tile').first().isVisible(), 'folding execution leaves generated images visible');
   assert.deepEqual(errors, []);
   console.log('PASS: live thinking deltas, compact/collapsed history, visible commentary and tools, reply/wait/completion states, light/dark.');
 } finally { await browser.close(); }

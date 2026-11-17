@@ -53,6 +53,7 @@ try {
   assert.equal(await page.locator('.composer-dock :is(.todo-dock,.long-task-dock)').count(), 0);
   await progress.getByRole('button', { name: '继续', exact: true }).waitFor();
   assert.deepEqual(await progress.locator('.progress-agent > span').allTextContents(), ['接口核对', '索引整理', '回归检查']);
+  assert.equal(await progress.locator('.subagent-avatar').first().evaluate(el => el.getBoundingClientRect().width), 18);
   await progress.getByRole('button', { name: '展开其余 1 个子智能体' }).click();
   assert.equal(await progress.locator('.progress-agent').count(), 4);
   await progress.getByRole('button', { name: '收起子智能体' }).click();
@@ -74,6 +75,7 @@ try {
   await progressButton.click();
   await button('固定到右栏').click();
   await pinned.getByText('核对会话清单', { exact: true }).last().waitFor();
+  assert.equal(await pinned.locator('.progress-agent .subagent-avatar').first().evaluate(el => el.getBoundingClientRect().width), 20);
   assert.equal(await progress.count(), 0);
   assert.equal(await progressTab.count(), 1);
   const filesTab = page.getByRole('tab', { name: /^文件/ });

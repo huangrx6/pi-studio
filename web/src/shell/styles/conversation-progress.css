@@ -20,7 +20,7 @@ button.progress-row:hover:not(:disabled), .progress-link:hover { color: var(--te
 .progress-agents h3 { margin: 0; }
 .progress-agents h3 small { margin-inline-start: 7px; font: inherit; font-variant-numeric: tabular-nums; color: var(--text-3); }
 .progress-agent-list { display: grid; max-height: min(40dvh, 280px); overflow-y: auto; overscroll-behavior: contain; }
-.progress-agent { --subagent-avatar-size: 24px; }
+.progress-agent { --subagent-avatar-size: 18px; }
 .progress-agents-more { display: inline-flex; align-items: center; gap: 4px; justify-self: start; width: fit-content; color: var(--text-2); font-size: var(--text-xs); }
 .progress-popover .progress-agents-more { margin-inline: 10px; }
 
@@ -89,7 +89,7 @@ button.progress-row:hover:not(:disabled), .progress-link:hover { color: var(--te
 .is-pinned .progress-agents .progress-section-head { margin-bottom: 6px; }
 .is-pinned .progress-agent { gap: 10px; min-height: 38px; padding: 4px 2px; color: var(--text-1); font-size: var(--text-sm); }
 .is-pinned .progress-agent-list { gap: 2px; }
-.is-pinned .progress-agent { --subagent-avatar-size: 26px; }
+.is-pinned .progress-agent { --subagent-avatar-size: 20px; }
 .is-pinned .progress-agent small { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--text-2); }
 .is-pinned .progress-agent small::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--text-3); }
 .is-pinned .progress-agent[data-status="running"] small::before { background: var(--accent); }

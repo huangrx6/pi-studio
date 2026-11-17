@@ -2,7 +2,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalS
 import { ArrowUp, ImagePlus, MessageCirclePlus, Square } from 'lucide-react';
 import { JumpToLatestButton } from '../../shared/JumpToLatestButton';
 import { LoadingIndicator } from '../../shared/LoadingState';
-import { AssistantTurnView, ChatMessageView } from './ChatMessage';
+import { ChatMessageView } from './ChatMessage';
+import { AssistantTurnView } from './AssistantTurn';
+import { groupTranscript } from './turn-content';
 import { ComposerImageAttachment } from './ComposerImageAttachment';
 import { ComposerFeedback } from './ComposerFeedback';
 import { ModelPicker } from '../models/ModelPicker';
@@ -28,7 +30,7 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
   const initializingModel = useRef(false), modelRequest = useRef(0);
   const [atBottom, setAtBottom] = useState(true);
   const [stopping, setStopping] = useState(false);
-  const toolResults = useMemo(() => new Map(), []);
+  const { turns, results: toolResults } = useMemo(() => groupTranscript(state.messages), [state.messages]);
   const images = useMemo(
     () => state.images.map((image) => ({
       src: `data:${image.mimeType};base64,${image.data}`,
@@ -149,7 +151,6 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
       setStopping(false);
     }
   }
-  const lastMessage = state.messages.at(-1);
   const hasUsableModel = Boolean(state.selection.modelRef) && !state.selection.unavailable;
   const submissionState = {
     draft: state.draft,
@@ -174,19 +175,17 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
             <p>不绑定工作区 · 关闭标签或退出应用即清除</p>
           </div>}
           {state.messages.length > 0 && <div className="messages temporary-messages">
-            {state.messages.map((message, index) => message.role === 'user'
-              ? <ChatMessageView key={`user:${message.timestamp}:${index}`} message={message} />
-              : message.role === 'assistant'
-                ? <AssistantTurnView
-                  key={`assistant:${message.timestamp}:${index}`}
-                  messages={[message]}
+            {turns.map((turn, index) => turn.kind === 'user'
+              ? <ChatMessageView key={`user:${turn.message.timestamp}:${index}`} message={turn.message} />
+              : <AssistantTurnView
+                  key={`assistant:${index}`}
+                  messages={turn.messages}
                   toolResults={toolResults}
-                  busy={state.busy && index === state.messages.length - 1}
+                  busy={state.busy && index === turns.length - 1}
                   stepDisplay="standard"
                   stepCollapse="keep-open"
-                />
-                : null)}
-            {state.busy && lastMessage?.role !== 'assistant' && <div className="thinking temporary-thinking" role="status"><span /><span /><span />正在思考</div>}
+                />)}
+            {state.busy && turns.at(-1)?.kind !== 'assistant' && <div className="thinking temporary-thinking" role="status"><span /><span /><span />正在思考</div>}
           </div>}
         </div>
       </div>

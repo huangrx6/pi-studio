@@ -31,7 +31,7 @@ try {
       await import('/src/styles/tokens.css'); await import('/src/styles/palette.css'); await import('/src/app.css');
       const React = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react.js')).default;
       const { createRoot } = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react-dom_client.js')).default;
-      const { AssistantTurnView } = await import('/src/features/conversation/ChatMessage.tsx');
+      const { AssistantTurnView } = await import('/src/features/conversation/AssistantTurn.tsx');
       let update;
       const line = '推理正文的连续增量，用来把思考框撑满并保持流式更新。';
       window.tick = count => update(state => ({ ...state, text: state.text + line.repeat(count || 1) }));
