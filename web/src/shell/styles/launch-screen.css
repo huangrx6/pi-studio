@@ -1,0 +1,56 @@
+/* This surface is painted directly from the document, before React and the runtime are ready. */
+:root:not([data-theme]) .launch-screen { color-scheme: light dark; }
+
+.launch-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: radial-gradient(ellipse at center, var(--launch-light), var(--launch-ground) 66%);
+  user-select: none;
+  -webkit-app-region: drag;
+}
+.launch-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 184px;
+  height: 154px;
+  isolation: isolate;
+}
+.launch-mark img {
+  display: block;
+  width: 144px;
+  height: 144px;
+  object-fit: contain;
+  animation: launch-float 4.8s ease-in-out infinite alternate;
+}
+.launch-orbit {
+  position: absolute;
+  inset: 19% 1%;
+  z-index: -1;
+  border: 1px solid var(--launch-orbit);
+  border-radius: 50%;
+  transform: rotate(-24deg);
+}
+.launch-orbit::after {
+  content: '';
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--launch-glint);
+  offset-path: ellipse(50% 50% at 50% 50%);
+  offset-distance: 72%;
+  animation: launch-orbit-travel 6s linear infinite;
+}
+@keyframes launch-float {
+  from { transform: translateY(2px) rotate(-1deg); }
+  to { transform: translateY(-4px) rotate(1deg); }
+}
+@keyframes launch-orbit-travel { from { offset-distance: 72%; } to { offset-distance: 172%; } }
+@media (prefers-reduced-motion: reduce) {
+  .launch-mark img, .launch-orbit::after { animation: none; }
+}

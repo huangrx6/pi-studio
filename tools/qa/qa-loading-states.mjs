@@ -29,6 +29,17 @@ function holdDataViews(items) {
   window.finishDataView = (id, content) => pending.get(id)(content);
 }
 
+function holdStartup(theme) {
+  const prefs = JSON.parse(localStorage.getItem('pi-studio:preferences'));
+  localStorage.setItem('pi-studio:preferences', JSON.stringify({ ...prefs, theme }));
+  window.piApi.waitForStartup = () => new Promise(resolve => { window.finishStartup = resolve; });
+  const getState = window.piApi.state;
+  window.piApi.state = async () => {
+    await new Promise(resolve => { window.finishWorkspaceList = resolve; });
+    return getState();
+  };
+}
+
 const server = await serveProductionRenderer(fileURLToPath(root));
 let browser;
 try {
@@ -38,10 +49,38 @@ try {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/*', route => route.request().url().startsWith(server.origin) ? route.continue() : route.abort());
-    await page.addInitScript({ content: `(${installPerformanceFixture})({sessionCount:1,turnCount:2});(${holdDataViews})(${JSON.stringify(items)});` });
+    await page.addInitScript({ content: `(${installPerformanceFixture})({sessionCount:1,turnCount:2});(${holdDataViews})(${JSON.stringify(items)});(${holdStartup})(${JSON.stringify(theme)});` });
     await page.goto(server.origin);
+    const launch = page.locator('#launch-screen');
+    await page.waitForFunction(() => typeof window.finishStartup === 'function');
+    assert.equal(await page.locator('#root').evaluate(el => [el.inert, el.childElementCount].join()), 'true,0');
+    assert.equal(await launch.locator('img').evaluate(img => img.complete && img.naturalWidth > 0), true);
+    if (theme === 'dark') {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      assert.equal(await launch.locator('img').evaluate(img => getComputedStyle(img).animationName), 'none');
+    }
+    await launch.screenshot({ path: fileURLToPath(new URL(`launch-${theme}.png`, output)) });
+    await page.evaluate(() => window.finishStartup());
+    assert.equal((await launch.innerText()).trim(), '');
+    assert.equal(await launch.getByRole('button').count(), 0);
+    await page.waitForFunction(() => typeof window.finishWorkspaceList === 'function');
+    assert.equal(await page.locator('#root').evaluate(el => el.inert), true);
+    await page.evaluate(() => window.finishWorkspaceList());
+    await launch.waitFor({ state: 'detached' });
+    await page.locator('.workspace-choice:not(.has-selection)').waitFor();
+    assert.equal(await page.evaluate(() => window.__performanceQa.pageCalls.length), 0);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.evaluate(() => {
+      const read = window.piApi.conversationPage;
+      const held = new Promise(resolve => { window.finishTranscript = resolve; });
+      window.piApi.conversationPage = async payload => { await held; return read(payload); };
+    });
+    await page.locator('.session-row').first().hover();
     await page.locator('.session-row').first().click();
+    await page.locator('.chat-loading-line.is-visible').waitFor();
+    await page.evaluate(() => window.finishTranscript());
     await page.locator('.assistant-response').first().waitFor();
+    assert.equal(await page.evaluate(() => window.__performanceQa.pageCalls.length), 1);
     await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
     const trigger = page.getByRole('button', { name: '打开扩展与轨迹' });
     const menu = page.getByRole('dialog', { name: '扩展与轨迹' });
@@ -83,6 +122,21 @@ try {
         assert.equal(await status.evaluate(el => getComputedStyle(el).opacity), '0');
       }
     }
+    await trigger.click();
+    await page.evaluate(() => document.documentElement.style.removeProperty('--loading-delay'));
+    let finishSettings;
+    const held = new Promise(resolve => { finishSettings = resolve; });
+    await page.route('**/GeneralSettings-*.js', async route => { await held; await route.continue(); });
+    await page.locator('.sidebar-bottom button[title="设置"]').click();
+    const pageIndicator = page.locator('.settings-overlay .loading-pi');
+    await pageIndicator.waitFor();
+    const motion = () => pageIndicator.evaluate(el => getComputedStyle(el, '::before').animationName);
+    assert.equal(await motion(), 'loading-spin');
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    assert.equal(await motion(), 'none');
+    finishSettings();
+    await page.locator('.general-settings').waitFor();
+    assert.equal(await launch.count(), 0);
     assert.deepEqual(errors, []);
     console.log(`${theme} · ${width}px · menu row ${pendingHeight}px`);
     await page.close();

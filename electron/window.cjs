@@ -36,6 +36,7 @@ const { publishMenuBarEvent } = require('./services/menu-bar/events.cjs');
 const { isAllowedLocalHtmlUrl } = require('./services/local-html.cjs');
 
 const configuredCspSessions = new WeakSet();
+let awaitingFirstPaint;
 
 function installRendererSecurity(win, rendererUrl) {
   const session = win.webContents.session;
@@ -158,12 +159,7 @@ function publishWindowState(win) {
  */
 function createWindow() {
   const existing = getWindow();
-  if (existing && !existing.isDestroyed()) {
-    if (existing.isMinimized()) existing.restore();
-    if (!existing.isVisible()) existing.show();
-    existing.focus();
-    return existing;
-  }
+  if (existing && !existing.isDestroyed()) return showMainWindow();
 
   const preference = getTheme();
   nativeTheme.themeSource = preference;
@@ -171,6 +167,7 @@ function createWindow() {
 
   const win = new BrowserWindow({
     ...restored.bounds,
+    show: false,
     minWidth: MIN_WINDOW_SIZE.width,
     minHeight: MIN_WINDOW_SIZE.height,
     ...(process.platform === 'win32'
@@ -191,7 +188,13 @@ function createWindow() {
   });
 
   setWindow(win);
-  if (restored.maximized) win.maximize();
+  awaitingFirstPaint = win;
+  win.once('ready-to-show', () => {
+    awaitingFirstPaint = undefined;
+    if (win.isDestroyed() || app.isQuitting) return;
+    if (restored.maximized) win.maximize();
+    win.show();
+  });
   win.on('enter-full-screen', () => publishWindowState(win));
   win.on('leave-full-screen', () => publishWindowState(win));
   // 拖动和缩放会连续触发事件：去抖后再写 SQLite，窗口隐藏或退出时立即落盘。
@@ -222,11 +225,11 @@ function createWindow() {
     }
   });
   win.on('closed', () => {
+    if (awaitingFirstPaint === win) awaitingFirstPaint = undefined;
     if (boundsTimer) { clearTimeout(boundsTimer); boundsTimer = null; }
     if (getWindow() === win) setWindow(null);
   });
-  if (DEV) void win.loadURL(rendererUrl);
-  else void win.loadURL(rendererUrl);
+  void win.loadURL(rendererUrl);
   return win;
 }
 
@@ -234,6 +237,7 @@ function createWindow() {
 function showMainWindow() {
   const win = getWindow();
   if (!win || win.isDestroyed()) return createWindow();
+  if (win === awaitingFirstPaint) return win;
   if (win.isMinimized()) win.restore();
   if (!win.isVisible()) win.show();
   win.focus();

@@ -4,6 +4,7 @@ import type { AgentView } from '../../shell/app-types';
 import type { OutlineItem } from './outline-model';
 import { NO_ANSWER_TEXT } from './outline-model';
 import { placeRequestTraces } from './request-trace-turns';
+import { groupTranscript } from './turn-content';
 import { outlineIndexAt } from './outline-sync.ts';
 import {
   SCROLL_INTENT_WINDOW_MS,
@@ -203,22 +204,7 @@ export function useTranscriptNavigation({
    * repeat work. `messages` is replaced by identity on every real update, so
    * the cache invalidates exactly when the content changes.
    */
-  const toolResultMap = useMemo(
-    () => new Map(messages.filter((message) => message.role === 'toolResult' && message.toolCallId).map((message) => [message.toolCallId as string, message])),
-    [messages],
-  );
-  /** 把消息序列折叠成「用户提问 + 助手多步回复」的轮次，工具结果挂到对应轮次。 */
-  const transcriptTurns = useMemo(() => {
-    const turns: Array<{ kind: 'user'; message: ChatMessage } | { kind: 'assistant'; messages: ChatMessage[] }> = [];
-    for (const message of messages) {
-      if (message.role === 'toolResult') continue;
-      if (message.role === 'user') { turns.push({ kind: 'user', message }); continue; }
-      const last = turns[turns.length - 1];
-      if (last?.kind === 'assistant') last.messages.push(message);
-      else turns.push({ kind: 'assistant', messages: [message] });
-    }
-    return turns;
-  }, [messages]);
+  const { turns: transcriptTurns, results: toolResultMap } = useMemo(() => groupTranscript(messages), [messages]);
   const windowSession = sessionId ?? '';
   turnsRef.current = transcriptTurns;
   const turnWindowFrom = 0;

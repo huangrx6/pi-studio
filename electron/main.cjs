@@ -77,7 +77,10 @@ if (primaryInstance) {
   // IPC registration is synchronous. It happens before any asynchronous
   // database/runtime work so activation cannot expose a renderer without
   // handlers.
-  registerIpc();
+  registerIpc(async () => {
+    await startupGate.start();
+    if (startupGate.status !== 'ready' || app.isQuitting) throw new Error('Pi Studio 未能完成启动');
+  });
   registerMenuBarIpc();
 
   // Must be registered before app.ready so <img>/<video> can treat these URLs
@@ -109,8 +112,7 @@ if (primaryInstance) {
     if (process.platform !== 'darwin') app.quit();
   });
 
-  // Dock activation may arrive before model and Durable startup finishes. The
-  // gate defers it instead of creating a renderer against a half-ready main.
+  // Coalesce Dock activation while the launch screen is visible.
   app.on('activate', () => {
     if (app.isQuitting) return;
     if (startupGate?.requestReveal()) showMainWindow();
@@ -152,10 +154,15 @@ if (primaryInstance) {
   startupGate = createStartupGate({
     initialize: async () => {
       await app.whenReady();
+      if (app.isQuitting) return;
       // macOS 开发模式下 Dock 图标取自项目资源
       if (process.platform === 'darwin') {
         app.dock.setIcon(path.join(__dirname, '..', 'assets', 'icon.png'));
       }
+      // Paint the launch screen in the actual window while its runtime starts.
+      registerBackgroundProtocol();
+      installBrowserSessionGuards();
+      createWindow();
       // Database and credential paths depend on app.getPath('userData').
       await initializeStudioModels();
       try {
@@ -173,14 +180,12 @@ if (primaryInstance) {
       }
       await initializeDurableRuntime();
     },
-    ready: () => {
+    ready: ({ requestedBeforeReady }) => {
       if (app.isQuitting) return;
       // 系统外观变化时同步窗口底色
       watchSystemTheme();
-      registerBackgroundProtocol();
-      installBrowserSessionGuards();
       installMenu({ onCheckForUpdates: openAndCheckForUpdates });
-      createWindow();
+      if (requestedBeforeReady) showMainWindow();
       initializeMenuBar();
       initializeUpdater();
     },

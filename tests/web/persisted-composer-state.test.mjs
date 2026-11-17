@@ -113,6 +113,7 @@ test('a restored queue is rebuilt and requires explicit confirmation', () => {
     type: 'image',
     data: 'ZmFrZQ==',
     mimeType: 'image/png',
+    name: 'screen.png',
   }]);
   assert.deepEqual(item.submission.attachmentPaths, ['/workspace/notes.txt']);
   assert.deepEqual(item.submission.content, [

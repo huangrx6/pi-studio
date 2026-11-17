@@ -1,7 +1,7 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { ComposerAttachment } from '../../types/chat-types';
-import type { PiSessionSummary, PiWorkspace } from '../../shell/app-types';
+import type { PiWorkspace } from '../../shell/app-types';
 import type { ComposerDraft } from './composer-drafts';
 import {
   clearComposerDraft,
@@ -9,14 +9,12 @@ import {
   subscribeComposerDraftStore,
 } from './composer-drafts';
 import type { QueuedPrompt } from './composer-types';
-import type { RestoredComposerInputState } from './persisted-composer-state';
 import {
   buildPersistedComposerInputState,
   loadPersistedComposerInputState,
   savePersistedComposerInputState,
 } from './persisted-composer-state';
 import type { SessionStateForPersistence } from './useMessageDelivery';
-import { STORED_UI_KEYS, loadStoredActiveSession } from '../../shared/stored-ui-state';
 import { errorText } from '../../shared/error-text';
 
 type Setter<T> = Dispatch<SetStateAction<T>>;
@@ -30,29 +28,17 @@ type ComposerPersistenceDependencies = {
   composerAttachments: ComposerAttachment[];
   composerDraftKeyRef: MutableRefObject<string>;
   composerDraftsRef: MutableRefObject<Map<string, ComposerDraft>>;
-  persistedComposerActiveDraftKeyRef: MutableRefObject<string>;
   composerPersistenceReadyRef: MutableRefObject<boolean>;
-  composerPersistenceStartedRef: MutableRefObject<boolean>;
   composerPersistenceTimerRef: MutableRefObject<number | null>;
   composerPersistenceWriteRef: MutableRefObject<Promise<void>>;
   composerPersistenceErrorRef: MutableRefObject<boolean>;
   queuedPromptsRef: MutableRefObject<Record<string, QueuedPrompt[]>>;
-  restoredRef: MutableRefObject<boolean>;
   composerPersistenceReady: boolean;
-  composerPersistenceStarted: boolean;
   queuedPromptsBySession: Record<string, QueuedPrompt[]>;
   setQueuedPromptsBySession: Setter<Record<string, QueuedPrompt[]>>;
   setComposerPersistenceReady: Setter<boolean>;
-  setComposerPersistenceStarted: Setter<boolean>;
-  setExpanded: Setter<Set<string>>;
   setError: Setter<string | null>;
   showComposerFeedback: (message: string, tone?: 'info' | 'warning') => void;
-  changeWorkspace: (cwd: string) => void;
-  openSession: (item: PiSessionSummary) => Promise<boolean>;
-  startSession: (
-    cwd?: string,
-    options?: { restoreDraft?: boolean; checkpoint?: boolean },
-  ) => Promise<void>;
   loadStateRef: MutableRefObject<() => Promise<void>>;
 };
 
@@ -65,30 +51,22 @@ export function useComposerPersistence({
   composerAttachments,
   composerDraftKeyRef,
   composerDraftsRef,
-  persistedComposerActiveDraftKeyRef,
   composerPersistenceReadyRef,
-  composerPersistenceStartedRef,
   composerPersistenceTimerRef,
   composerPersistenceWriteRef,
   composerPersistenceErrorRef,
   queuedPromptsRef,
-  restoredRef,
   composerPersistenceReady,
-  composerPersistenceStarted,
   queuedPromptsBySession,
   setQueuedPromptsBySession,
   setComposerPersistenceReady,
-  setComposerPersistenceStarted,
-  setExpanded,
   setError,
   showComposerFeedback,
-  changeWorkspace,
-  openSession,
-  startSession,
   loadStateRef,
 }: ComposerPersistenceDependencies) {
+  const prunedDrafts = useRef(false);
   const persistComposerStateNow = useCallback((): Promise<void> => {
-    if (!composerPersistenceReadyRef.current || !composerPersistenceStartedRef.current) {
+    if (!composerPersistenceReadyRef.current) {
       return Promise.resolve();
     }
     if (composerPersistenceTimerRef.current !== null) {
@@ -111,50 +89,40 @@ export function useComposerPersistence({
         showComposerFeedback('本地草稿暂时无法保存。本次输入仍可使用，请检查磁盘空间后继续。');
       });
     return composerPersistenceWriteRef.current;
-  }, [composerDraftKeyRef, composerDraftsRef, composerPersistenceErrorRef, composerPersistenceReadyRef, composerPersistenceStartedRef, composerPersistenceTimerRef, composerPersistenceWriteRef, queuedPromptsRef, showComposerFeedback]);
+  }, [composerDraftKeyRef, composerDraftsRef, composerPersistenceErrorRef, composerPersistenceReadyRef, composerPersistenceTimerRef, composerPersistenceWriteRef, queuedPromptsRef, showComposerFeedback]);
 
   const scheduleComposerStatePersistence = useCallback(() => {
     if (
       !composerPersistenceReadyRef.current
-      || !composerPersistenceStartedRef.current
       || composerPersistenceTimerRef.current !== null
     ) return;
     composerPersistenceTimerRef.current = window.setTimeout(() => {
       composerPersistenceTimerRef.current = null;
       void persistComposerStateNow();
     }, 180);
-  }, [composerPersistenceReadyRef, composerPersistenceStartedRef, composerPersistenceTimerRef, persistComposerStateNow]);
+  }, [composerPersistenceReadyRef, composerPersistenceTimerRef, persistComposerStateNow]);
 
   useEffect(() => {
     let disposed = false;
-    void (async () => {
-      let restoreFailed = false;
-      let restored: RestoredComposerInputState;
-      try {
-        restored = await loadPersistedComposerInputState();
-      } catch {
-        restoreFailed = true;
-        restored = {
-          activeDraftKey: '',
-          drafts: new Map(),
-          queues: {},
-        };
-      }
+    void Promise.resolve().then(() => {
+      if (!disposed) void loadStateRef.current().catch((error) => { if (!disposed) setError(errorText(error)); });
+    });
+    // Recover each draft under its owner. Cold start always opens the unscoped, empty composer.
+    void loadPersistedComposerInputState().then((restored) => {
       if (disposed) return;
       composerDraftsRef.current = restored.drafts;
-      persistedComposerActiveDraftKeyRef.current = restored.activeDraftKey;
       queuedPromptsRef.current = restored.queues;
       setQueuedPromptsBySession(restored.queues);
       composerPersistenceReadyRef.current = true;
-      setComposerPersistenceReady(true);
-      if (restoreFailed) {
-        composerPersistenceErrorRef.current = true;
-        showComposerFeedback('本地草稿读取失败。本次输入仍可使用，但上次未发送内容没有恢复。');
-      }
-      void loadStateRef.current().catch((error) => setError(errorText(error)));
-    })();
+    }).catch(() => {
+      if (disposed) return;
+      // Keep the unread snapshot on disk so a later launch can recover it.
+      showComposerFeedback('本地草稿读取失败。本次输入仅保留在当前窗口，重新打开后可重试。');
+    }).finally(() => {
+      if (!disposed) setComposerPersistenceReady(true);
+    });
     return () => { disposed = true; };
-  }, [composerDraftsRef, composerPersistenceErrorRef, composerPersistenceReadyRef, loadStateRef, persistedComposerActiveDraftKeyRef, queuedPromptsRef, setComposerPersistenceReady, setError, setQueuedPromptsBySession, showComposerFeedback]);
+  }, [composerDraftsRef, composerPersistenceReadyRef, loadStateRef, queuedPromptsRef, setComposerPersistenceReady, setError, setQueuedPromptsBySession, showComposerFeedback]);
 
   useEffect(() => {
     if (!composerPersistenceReady) return;
@@ -167,25 +135,20 @@ export function useComposerPersistence({
   }, [composerDraftsRef, composerPersistenceReady, scheduleComposerStatePersistence]);
 
   useEffect(() => {
-    if (!composerPersistenceReady || !composerPersistenceStarted) return;
+    if (!composerPersistenceReady) return;
     scheduleComposerStatePersistence();
-  }, [composerPersistenceReady, composerPersistenceStarted, queuedPromptsBySession, scheduleComposerStatePersistence]);
+  }, [composerPersistenceReady, queuedPromptsBySession, session?.id, scheduleComposerStatePersistence, workspace]);
 
   useEffect(() => {
-    if (!composerPersistenceReady || !composerPersistenceStarted) return;
-    scheduleComposerStatePersistence();
-  }, [composerPersistenceReady, composerPersistenceStarted, session?.id, scheduleComposerStatePersistence, workspace]);
-
-  useEffect(() => {
-    if (!composerPersistenceReady || !composerPersistenceStarted) return;
+    if (!composerPersistenceReady) return;
     const flush = () => { void persistComposerStateNow(); };
     window.addEventListener('pagehide', flush);
     return () => window.removeEventListener('pagehide', flush);
-  }, [composerPersistenceReady, composerPersistenceStarted, persistComposerStateNow]);
+  }, [composerPersistenceReady, persistComposerStateNow]);
 
   useEffect(() => {
-    if (!composerPersistenceReady || stateLoading || restoredRef.current || workspaces.length === 0) return;
-    const saved = loadStoredActiveSession();
+    if (!composerPersistenceReady || stateLoading || prunedDrafts.current || workspaces.length === 0) return;
+    prunedDrafts.current = true;
     const sessions = workspaces.flatMap((item) => item.sessions);
     const knownSessionIds = new Set(sessions.map((item) => item.id));
     const knownWorkspaces = new Set(workspaces.map((item) => item.cwd));
@@ -205,48 +168,13 @@ export function useComposerPersistence({
         clearComposerDraft(composerDraftsRef.current, key);
       }
     }
-    const savedSummary = saved?.id
-      ? sessions.find((item) => item.id === saved.id && !item.archived)
-      : undefined;
-    const fallbackKey = persistedComposerActiveDraftKeyRef.current;
-    const fallbackSessionId = fallbackKey.startsWith('session:')
-      ? fallbackKey.slice('session:'.length)
-      : '';
-    const fallbackSession = fallbackSessionId
-      ? sessions.find((item) => item.id === fallbackSessionId && !item.archived)
-      : undefined;
-    const fallbackWorkspace = fallbackKey.startsWith('new:')
-      ? fallbackKey.slice('new:'.length)
-      : '';
-    const summary = savedSummary || fallbackSession;
-    restoredRef.current = true;
-    if (summary) {
-      changeWorkspace(summary.cwd);
-      setExpanded((current) => {
-        if (current.has(summary.cwd)) return current;
-        const next = new Set(current);
-        next.add(summary.cwd);
-        return next;
-      });
-      void openSession(summary);
-      return;
-    }
-    if (fallbackWorkspace && knownWorkspaces.has(fallbackWorkspace)) {
-      void startSession(fallbackWorkspace, { checkpoint: false });
-      return;
-    }
-    if (saved) {
-      try { window.localStorage.setItem(STORED_UI_KEYS.activeSession, 'null'); } catch { /* storage unavailable */ }
-    }
-    composerPersistenceStartedRef.current = true;
-    setComposerPersistenceStarted(true);
-  }, [changeWorkspace, composerDraftsRef, composerPersistenceReady, composerPersistenceStartedRef, openSession, persistedComposerActiveDraftKeyRef, queuedPromptsRef, restoredRef, setComposerPersistenceStarted, setExpanded, setQueuedPromptsBySession, startSession, stateLoading, workspaces]);
+  }, [composerDraftsRef, composerPersistenceReady, queuedPromptsRef, setQueuedPromptsBySession, stateLoading, workspaces]);
 
   useEffect(() => {
-    if (!composerPersistenceReady || !composerPersistenceStarted) return;
+    if (!composerPersistenceReady) return;
     saveComposerDraft(composerDraftsRef.current, composerDraftKeyRef.current, {
       text: prompt,
       attachments: composerAttachments,
     });
-  }, [composerAttachments, composerDraftKeyRef, composerDraftsRef, composerPersistenceReady, composerPersistenceStarted, prompt]);
+  }, [composerAttachments, composerDraftKeyRef, composerDraftsRef, composerPersistenceReady, prompt]);
 }

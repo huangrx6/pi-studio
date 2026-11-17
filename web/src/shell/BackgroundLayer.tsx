@@ -4,22 +4,26 @@ import type { BackgroundMedia } from '../shared/preferences';
 type MediaProps = {
   media: BackgroundMedia;
   className: string;
+  onReady?: (url: string) => void;
   onError?: () => void;
 };
 
-function BackgroundImage({ media, className, onError }: MediaProps) {
+function BackgroundImage({ media, className, onReady, onError }: MediaProps) {
   const [ready, setReady] = useState(false);
   return <img className={className} src={media.url} alt="" draggable={false} decoding="async"
     style={{ visibility: ready ? undefined : 'hidden' }}
     onLoad={async event => {
       const image = event.currentTarget;
       try { await image.decode(); } catch { /* A loaded image can still paint if predecoding is unavailable. */ }
-      if (image.isConnected && image.complete && image.naturalWidth > 0) setReady(true);
+      if (image.isConnected && image.complete && image.naturalWidth > 0) {
+        setReady(true);
+        onReady?.(media.url);
+      }
     }}
     onError={onError} />;
 }
 
-export function BackgroundMediaNode({ media, className, onError }: MediaProps) {
+export function BackgroundMediaNode({ media, className, onReady, onError }: MediaProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -49,11 +53,12 @@ export function BackgroundMediaNode({ media, className, onError }: MediaProps) {
         playsInline
         preload="auto"
         disablePictureInPicture
+        onLoadedData={() => onReady?.(media.url)}
         onError={onError}
       />
     );
   }
-  return <BackgroundImage key={media.url} media={media} className={className} onError={onError} />;
+  return <BackgroundImage key={media.url} media={media} className={className} onReady={onReady} onError={onError} />;
 }
 
 export function BackgroundLayer({
@@ -61,6 +66,7 @@ export function BackgroundLayer({
   opacity,
   blur,
   scrim,
+  onReady,
   onError,
 }: {
   media: BackgroundMedia;
@@ -68,6 +74,7 @@ export function BackgroundLayer({
   blur: number;
   /** 壁纸遮罩强度 0–100：只压暗窗口外的壁纸，不影响窗口内表面。 */
   scrim: number;
+  onReady?: (url: string) => void;
   onError?: () => void;
 }) {
   // 对外统一使用 0–100 的强度。40px 已能充分柔化照片，同时避免 100% 直接变成
@@ -81,8 +88,12 @@ export function BackgroundLayer({
 
   return (
     <div className="background-layer" style={style} aria-hidden="true">
-      <BackgroundMediaNode key={media.url} media={media} className="background-layer-media" onError={onError} />
+      <BackgroundMediaNode key={media.url} media={media} className="background-layer-media" onReady={onReady} onError={onError} />
       <div className="background-layer-soften" />
+      <div className="wallpaper-drag-edge top" />
+      <div className="wallpaper-drag-edge left" />
+      <div className="wallpaper-drag-edge right" />
+      <div className="wallpaper-drag-edge bottom" />
     </div>
   );
 }

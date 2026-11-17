@@ -9,9 +9,32 @@
 
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
+// A tray or menu command can arrive before the workspace has mounted and recovered its drafts.
+let workspaceReady = false;
+let pendingNavigation;
+function navigationEvent(channel) {
+  const listeners = new Set();
+  ipcRenderer.on(channel, (_event, payload) => {
+    const deliver = () => { for (const listener of listeners) listener(payload); };
+    if (workspaceReady) deliver();
+    else pendingNavigation = deliver;
+  });
+  return (listener) => {
+    listeners.add(listener);
+    return () => { listeners.delete(listener); };
+  };
+}
+
 contextBridge.exposeInMainWorld('piApi', {
   // 平台是编译期就确定的事实，交给主进程给，渲染层不用靠 navigator 猜。
   platform: process.platform,
+  waitForStartup: () => ipcRenderer.invoke('pi:startup-ready'),
+  workspaceReady: () => {
+    workspaceReady = true;
+    const deliver = pendingNavigation;
+    pendingNavigation = undefined;
+    deliver?.();
+  },
   temporaryModel: (payload) => ipcRenderer.invoke('pi:temporary-model', payload),
   temporaryPrompt: (payload) => ipcRenderer.invoke('pi:temporary-prompt', payload),
   temporaryStop: (id) => ipcRenderer.invoke('pi:temporary-stop', id),
@@ -212,31 +235,15 @@ contextBridge.exposeInMainWorld('piApi', {
   removeCustomModel: (payload) => ipcRenderer.invoke('pi:remove-custom-model', payload),
   // ---- 主进程 → 渲染进程 的事件订阅（返回取消订阅函数）----
   onConfirmRequest: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:confirm-request', handler); return () => ipcRenderer.removeListener('pi:confirm-request', handler); },
-  onOpenSettings: (listener) => {
-    const handler = () => listener();
-    ipcRenderer.on('pi:open-settings', handler);
-    return () => ipcRenderer.removeListener('pi:open-settings', handler);
-  },
-  onOpenUpdate: (listener) => {
-    const handler = () => listener();
-    ipcRenderer.on('pi:open-update', handler);
-    return () => ipcRenderer.removeListener('pi:open-update', handler);
-  },
+  onOpenSettings: navigationEvent('pi:open-settings'),
+  onOpenUpdate: navigationEvent('pi:open-update'),
   onUpdateState: (listener) => {
     const handler = (_event, payload) => listener(payload);
     ipcRenderer.on('pi:update-state', handler);
     return () => ipcRenderer.removeListener('pi:update-state', handler);
   },
-  onOpenMain: (listener) => {
-    const handler = () => listener();
-    ipcRenderer.on('pi:open-main', handler);
-    return () => ipcRenderer.removeListener('pi:open-main', handler);
-  },
-  onOpenSession: (listener) => {
-    const handler = (_event, session) => listener(session);
-    ipcRenderer.on('pi:open-session', handler);
-    return () => ipcRenderer.removeListener('pi:open-session', handler);
-  },
+  onOpenMain: navigationEvent('pi:open-main'),
+  onOpenSession: navigationEvent('pi:open-session'),
   onRuntimeRefresh: (listener) => {
     const handler = (_event, payload) => listener(payload);
     ipcRenderer.on('pi:runtime-refresh', handler);

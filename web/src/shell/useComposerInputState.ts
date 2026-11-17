@@ -25,13 +25,10 @@ export function useComposerInputState({
   const [composerMenu, setComposerMenu] = useState<ComposerMenuState | null>(null);
   const [composerMenuIndex, setComposerMenuIndex] = useState(0);
   const [composerPersistenceReady, setComposerPersistenceReady] = useState(false);
-  const [composerPersistenceStarted, setComposerPersistenceStarted] = useState(false);
   const [preparingDraftKeys, setPreparingDraftKeys] = useState<string[]>([]);
   const composerDraftKeyRef = useRef(composerDraftKeyForNew(''));
   const composerDraftsRef = useRef<ComposerDraftStore>(new Map());
   const composerPersistenceReadyRef = useRef(false);
-  const composerPersistenceStartedRef = useRef(false);
-  const persistedComposerActiveDraftKeyRef = useRef('');
   const composerPersistenceTimerRef = useRef<number | null>(null);
   const composerPersistenceWriteRef = useRef<Promise<void>>(Promise.resolve());
   const composerPersistenceErrorRef = useRef(false);
@@ -110,10 +107,6 @@ export function useComposerInputState({
     composerPersistenceReady,
     setComposerPersistenceReady,
     composerPersistenceReadyRef,
-    composerPersistenceStarted,
-    setComposerPersistenceStarted,
-    composerPersistenceStartedRef,
-    persistedComposerActiveDraftKeyRef,
     composerPersistenceTimerRef,
     composerPersistenceWriteRef,
     composerPersistenceErrorRef,

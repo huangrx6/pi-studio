@@ -129,7 +129,7 @@
   --transition-fast: 120ms ease;
   /* 加载提示共用尺寸与动效。行内状态保留一行，独立区域为内容预留空间。 */
   --loading-icon-size: var(--icon-xs);
-  --loading-panel-icon-size: var(--icon-md);
+  --loading-panel-icon-size: var(--icon-xl);
   --loading-section-height: 96px;
   --loading-delay: 160ms;
   --loading-spin-duration: 1s;

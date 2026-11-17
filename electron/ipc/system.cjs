@@ -9,7 +9,8 @@ const { DEFAULT_CWD, modelInfo } = require('../services/models.cjs');
 const { applyAppearance, windowState } = require('../window.cjs');
 const { chooseBackgroundMedia, removeBackgroundMedia } = require('../services/background.cjs');
 
-function registerSystemIpc() {
+function registerSystemIpc(waitForStartup) {
+  ipcMain.handle('pi:startup-ready', () => waitForStartup());
   // 渲染进程切换外观（设置页），持久化并同步原生窗口与菜单栏。
   ipcMain.handle(
     'pi:set-appearance',
@@ -21,6 +22,7 @@ function registerSystemIpc() {
 
   // 首屏状态：侧边栏工作区 + 当前模型 + 默认工作区
   ipcMain.handle('pi:state', async (_event, cwd) => {
+    await waitForStartup();
     await refreshRuntimeState();
     return {
       workspaces: await listWorkspaces(),

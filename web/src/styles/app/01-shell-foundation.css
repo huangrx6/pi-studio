@@ -71,13 +71,15 @@ isolation 建立独立层叠上下文，配合下面的 :has 规则在设置全�
 }
 
 /* The border outlines the frame. The outer wallpaper's scrim owns its shading. */
-.app.has-custom-background {
+:is(.app.has-custom-background, .background-layer) {
   --shell-top: 44px;
   --shell-gutter: 18px;
+}
+.app.has-custom-background {
   border: 1px solid var(--border);
 }
 /* A separate native title bar or fullscreen leaves all four wallpaper margins equal. */
-html:is([data-platform='win32'], [data-window-fullscreen='true']) .app.has-custom-background { --shell-top: var(--shell-gutter); }
+html:is([data-platform='win32'], [data-window-fullscreen='true']) :is(.app.has-custom-background, .background-layer) { --shell-top: var(--shell-gutter); }
 
 .app:has(.settings-overlay) > :is(.sidebar, .content-region) {
   visibility: hidden;

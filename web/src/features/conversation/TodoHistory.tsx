@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Check, ChevronRight, Circle, CircleDot, Lock, Minus, Target } from 'lucide-react';
 import type { TodoHistoryPage } from '../../types/chat-types';
+import { LoadingState } from '../../shared/LoadingState';
 import { historyTaskStatus, taskStatusNames } from './todo-status';
 import { useTodoHistoryRevision } from './useTodoHistory';
 import './styles/todo-history.css';
@@ -28,7 +29,7 @@ export function TodoHistory({ sessionId, goalUpdatedAt }: { sessionId: string; g
 
   return <section className="todo-history" aria-label="会话任务历史">
     {error ? <p role="alert">{error} <button onClick={() => setAttempt(value => value + 1)}>重试</button></p>
-      : !page ? <p role="status">正在读取清单…</p>
+      : !page ? <LoadingState>正在读取清单…</LoadingState>
       : !page.items.length ? <p>本次会话还没有任务清单</p>
       : page.items.map(plan => {
         const tasks = plan.tasks.filter(task => task.status !== 'deleted');

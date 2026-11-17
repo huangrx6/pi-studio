@@ -417,6 +417,8 @@ declare global {
       /** 回传确认结果；超时或窗口关闭视为拒绝。 */
       confirmResponse(payload: PermissionConfirmResponse): void;
       /** 读取侧边栏工作区/会话列表、当前模型与工作目录。 */
+      waitForStartup(): Promise<void>;
+      workspaceReady(): void;
       state(cwd?: string): Promise<{ workspaces: PiWorkspace[]; model: ModelSelection; cwd: string }>;
       /** 当前会话目录的 Git 分支、提交、改动和 worktree 状态。 */
       gitWorkspaceStatus(cwd?: string): Promise<GitWorkspaceStatus>;

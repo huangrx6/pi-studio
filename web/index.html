@@ -4,9 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pi Studio</title>
+    <link rel="stylesheet" href="./src/styles/tokens.css" />
+    <link rel="stylesheet" href="./src/styles/palette.css" />
+    <link rel="stylesheet" href="./src/shell/styles/launch-screen.css" />
   </head>
   <body>
-    <div id="root"></div>
+    <section id="launch-screen" class="launch-screen" role="status" aria-label="正在启动">
+      <div class="launch-mark" aria-hidden="true">
+        <span class="launch-orbit"></span>
+        <img src="./src/shell/assets/launch-pi.webp" width="144" height="144" alt="" draggable="false" fetchpriority="high" />
+      </div>
+    </section>
+    <div id="root" inert></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

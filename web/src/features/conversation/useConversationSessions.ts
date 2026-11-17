@@ -42,7 +42,6 @@ import { loadAdjacentPage, loadTranscriptWindow, mergeTranscriptPage, messageKey
 import { messagesHaveMarkdownCode } from '../../shared/markdown-code.ts';
 import { preloadMarkdownHighlighter, preloadMarkdownRenderer } from '../../shared/Markdown';
 import { errorText } from '../../shared/error-text';
-import { STORED_UI_KEYS } from '../../shared/stored-ui-state';
 import type { ComposerMenuState } from './useComposerSuggestions';
 import type { ModelPickerRequest } from '../models/ModelPicker';
 import type { SessionStateForPersistence } from './useMessageDelivery';
@@ -171,6 +170,7 @@ export function useConversationSessions({
 }: ConversationSessionsDependencies) {
   // 向上补页的并发保护：滚动哨兵会连续触发，不能同时发两页请求。
   const olderLoadingRef = useRef(false);
+  const pendingPreloads = useRef(new Map<string, ReturnType<typeof loadTranscriptWindow>>());
 
   async function startSession(
     cwd = session?.cwd || workspace,
@@ -188,7 +188,6 @@ export function useConversationSessions({
     setSessionLoading(false);
     sessionRef.current = null;
     setSession(null);
-    try { window.localStorage.setItem(STORED_UI_KEYS.activeSession, 'null'); } catch { /* storage unavailable */ }
     setMessages([]);
     setRequestTraces([]);
     setAgentView({ kind: 'conversation' });
@@ -230,7 +229,6 @@ export function useConversationSessions({
     setSessionLoading(false);
     sessionRef.current = null;
     setSession(null);
-    try { window.localStorage.setItem(STORED_UI_KEYS.activeSession, 'null'); } catch { /* storage unavailable */ }
     setAgentView({ kind: 'conversation' });
     setSubagentChildren([]);
     setSubagentBudget(null);
@@ -261,15 +259,18 @@ export function useConversationSessions({
     if (prefetchedSessionsRef.current.has(id)) return;
     prefetchedSessionsRef.current.add(id);
     void preloadMarkdownRenderer().catch(() => { /* optional renderer remains on plain-text fallback */ });
-    void window.piApi.conversationPage({ id, turnLimit: TRANSCRIPT_WINDOW_TURNS })
+    const read = loadTranscriptWindow(window.piApi.conversationPage, id);
+    pendingPreloads.current.set(id, read);
+    void read
       .then((page) => {
         if (page?.messages && messagesHaveMarkdownCode(page.messages)) {
           void preloadMarkdownHighlighter().catch(() => { /* code remains readable without highlighting */ });
         }
       })
       .catch(() => {
-        /* prefetch is best effort */
-      });
+        prefetchedSessionsRef.current.delete(id);
+      })
+      .finally(() => pendingPreloads.current.delete(id));
   }
 
   function applyOutline(data: OutlineData | undefined, loadedMessages: ChatMessage[], fallbackStart = 0) {
@@ -309,7 +310,7 @@ export function useConversationSessions({
       const [detail, outline, children] = cacheFresh
         ? [cached.detail, cached.outline, cached.children]
         : await Promise.all([
-          loadTranscriptWindow(window.piApi.conversationPage, item.id),
+          pendingPreloads.current.get(item.id) ?? loadTranscriptWindow(window.piApi.conversationPage, item.id),
           window.piApi.conversationOutline(item.id).catch(() => undefined),
           window.piApi.sessionSubagents(item.id).catch(() => [] as SubagentChild[]),
         ]);

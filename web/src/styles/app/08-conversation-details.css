@@ -84,9 +84,11 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .workspace-row, .session-row, .workspace-row[draggable="true"], .session-row[draggable="true"] { cursor: default; }
 .workspace-row[draggable="true"]:active, .session-row[draggable="true"]:active { cursor: grabbing; }
 /* Thin, non-blocking progress line while a session is opening. */
-.chat-loading-line { position: absolute; z-index: 12; top: 0; left: 0; right: 0; height: 2px; opacity: 0; transform: scaleX(.2); transform-origin: left; background: var(--loading-gradient); transition: opacity .15s ease; pointer-events: none; }
-.chat-loading-line.is-visible { opacity: 1; transition-delay: var(--loading-delay); animation: chat-loading var(--loading-skeleton-duration) ease-in-out infinite; }
-@keyframes chat-loading { 0% { transform: translateX(-45%) scaleX(.35); } 50% { transform: translateX(0) scaleX(.7); } 100% { transform: translateX(45%) scaleX(.35); } }
+.chat-loading-line { position: absolute; z-index: 12; top: 0; left: 0; right: 0; height: 2px; overflow: hidden; opacity: 0; transition: opacity var(--transition-fast); pointer-events: none; }
+.chat-loading-line.is-visible { opacity: 1; transition-delay: var(--loading-delay); }
+.chat-loading-line::after { content: ''; position: absolute; inset: 0; background: var(--loading-gradient); }
+.chat-loading-line.is-visible::after { animation: chat-loading var(--loading-skeleton-duration) ease-in-out infinite; }
+@keyframes chat-loading { from { transform: translateX(-65%) scaleX(.36); } 50% { transform: scaleX(.65); } to { transform: translateX(65%) scaleX(.36); } }
 
 /* Put the sidebar toggle, conversation header and header action on one optical line. */
 /* 把侧栏开关、对话头标题和右侧操作对齐到同一条光学基线，操作组用负外边距

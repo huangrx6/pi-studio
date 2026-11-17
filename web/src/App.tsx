@@ -15,6 +15,7 @@ import { ShellLayout } from './shell/ShellLayout';
 import { SidebarResizeHandle, useSidebarWidth } from './shell/SidebarResizeHandle';
 import { useAppFoundation } from './shell/useAppFoundation';
 import { useWindowChrome } from './shell/useWindowChrome';
+import { useLaunchScreen } from './shell/useLaunchScreen';
 import { useConversationController } from './shell/useConversationController';
 import { ComparisonWorkbench } from './features/comparison/ComparisonWorkbench';
 import { WorkbenchPane } from './shell/right-panel/WorkbenchPane';
@@ -142,6 +143,12 @@ export function App() {
     retryComposerSuggestions,
     queuedEditContext,
   } = foundation;
+  const { setOuterReady, setInnerSettled } = useLaunchScreen(
+    foundation.initialStateSettled && foundation.composerPersistenceReady
+      && (visiblePermission?.status === 'ready' || visiblePermission?.status === 'error'),
+    preferences.backgroundMedia?.url,
+    preferences.backgroundInsideVisibility > 0,
+  );
   const terminalAppearance = useMemo(() => ({
     fontSize: preferences.terminalFontSize,
     fontFamily: preferences.terminalFontFamily,
@@ -376,6 +383,7 @@ export function App() {
       opacity={preferences.backgroundOpacity}
       blur={preferences.backgroundBlur}
       scrim={preferences.backgroundSurfaceOpacity}
+      onReady={setOuterReady}
       onError={() => handleBackgroundUnavailable(preferences.backgroundMedia!.url)}
     />}
     <div
@@ -386,7 +394,8 @@ export function App() {
       } as CSSProperties}
     >
       {preferences.backgroundMedia && preferences.backgroundInsideVisibility > 0 && <div className="window-wallpaper" aria-hidden="true">
-        <BackgroundMediaNode media={preferences.backgroundMedia} className="window-wallpaper-media" />
+        <BackgroundMediaNode media={preferences.backgroundMedia} className="window-wallpaper-media" onReady={setInnerSettled}
+          onError={() => setInnerSettled(preferences.backgroundMedia!.url)} />
       </div>}
       {actionPaletteOpen && <ConversationActionPalette
         actions={availableConversationActions}

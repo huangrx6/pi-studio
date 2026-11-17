@@ -4,9 +4,12 @@ import { composerValue } from './fixtures/composer-editor.mjs';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright-core';
+import { fileURLToPath } from 'node:url';
+import { serveProductionRenderer } from './fixtures/production-renderer-server.mjs';
 
 const output = new URL('../../.qa/screenshots/composer-persistence/', import.meta.url).pathname;
-const baseUrl = process.env.PI_STUDIO_QA_BASE_URL || 'http://127.0.0.1:5180';
+const server = process.env.PI_STUDIO_QA_BASE_URL ? null : await serveProductionRenderer(fileURLToPath(new URL('../../', import.meta.url)));
+const baseUrl = process.env.PI_STUDIO_QA_BASE_URL || server.origin;
 await mkdir(output, { recursive: true });
 
 const browser = await chromium.launch({
@@ -55,9 +58,10 @@ try {
   page.on('pageerror', error => errors.push(error.stack || error.message));
 
   await page.addInitScript(() => {
-    // Run on every document load so startup depends on the active draft stored
-    // in IndexedDB, not the convenience copy in localStorage.
     localStorage.clear();
+    // Simulate upgrading with both the old selection and real saved drafts present.
+    localStorage.setItem('pi-studio:active-session', JSON.stringify({ id: 'persist-session-a', cwd: '/workspace' }));
+    localStorage.setItem('pi-studio:expanded-workspaces', JSON.stringify(['/workspace']));
     localStorage.setItem('pi-studio:preferences', JSON.stringify({ busySend: 'queue' }));
     const model = {
       modelRef: 'demo/model',
@@ -213,11 +217,16 @@ try {
   });
 
   await page.goto(baseUrl);
-  await page.locator('.workspace-row').first().click();
   const composer = page.locator('.composer-editor');
   const sessionA = page.locator('.session-row').filter({ hasText: '持久化会话 A' });
   const runningSession = page.locator('.session-row').filter({ hasText: '运行中的持久化会话' });
+  async function expectBlankLaunch() {
+    await page.locator('#root:not([inert]) .new-conversation-welcome').waitFor();
+    assert.equal(await page.locator('.workspace-choice.has-selection, .session-row.is-active').count(), 0);
+    assert.equal(await composerValue(composer), '');
+  }
 
+  await expectBlankLaunch();
   await sessionA.click();
   await composer.fill('会话 A 跨重启草稿');
   await page.getByRole('button', { name: '添加图片或文件' }).click();
@@ -232,6 +241,8 @@ try {
   ));
 
   await page.reload();
+  await expectBlankLaunch();
+  await sessionA.click();
   await page.getByRole('heading', { name: '持久化会话 A' }).waitFor();
   assert.equal(await composerValue(composer), '会话 A 跨重启草稿');
   assert.equal(await page.locator('.composer-attachments .composer-image-preview-trigger').count(), 1);
@@ -247,7 +258,9 @@ try {
   ));
 
   await page.reload();
-  await page.locator('.new-conversation-welcome').waitFor();
+  await expectBlankLaunch();
+  await page.locator('.workspace-choice .pi-select-trigger').click();
+  await page.getByRole('option', { name: /Composer persistence fixture/ }).click();
   assert.equal(await composerValue(composer), '新对话工作区跨重启草稿');
 
   await runningSession.click();
@@ -268,8 +281,11 @@ try {
   assert.equal(await page.evaluate(() => window.qaComposerPersistence.calls.length), 0);
 
   await page.reload();
+  await expectBlankLaunch();
+  await runningSession.click();
   await page.getByRole('heading', { name: '运行中的持久化会话' }).waitFor();
   await queuePanel.waitFor();
+  await queuePanel.getByRole('button', { expanded: false }).click();
   await page.waitForTimeout(700);
   assert.equal(await queuePanel.locator('.queued-item').count(), 1);
   await queuePanel.getByText('上次退出前未发送；确认后再发送。', { exact: true }).waitFor();
@@ -300,4 +316,5 @@ try {
   throw error;
 } finally {
   await browser.close();
+  await server?.close();
 }

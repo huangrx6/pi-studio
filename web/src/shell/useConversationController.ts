@@ -26,12 +26,7 @@ import { useAppCommandPalette } from './useAppCommandPalette';
 import { useSidebarWorkspaceActions } from './useSidebarWorkspaceActions';
 import { useSubagentWorkspace } from '../features/subagents/useSubagentWorkspace';
 import { runtimeRefreshFailure } from '../shared/runtime-refresh';
-import { STORED_UI_KEYS } from '../shared/stored-ui-state';
 import type { AppFoundation } from './useAppFoundation';
-
-function writeStored(key: string, value: unknown): void {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
-}
 
 /**
  * Owns conversation and settings hook composition. It deliberately returns
@@ -125,10 +120,6 @@ export function useConversationController(foundation: AppFoundation) {
     composerPersistenceReady,
     setComposerPersistenceReady,
     composerPersistenceReadyRef,
-    composerPersistenceStarted,
-    setComposerPersistenceStarted,
-    composerPersistenceStartedRef,
-    persistedComposerActiveDraftKeyRef,
     composerPersistenceTimerRef,
     composerPersistenceWriteRef,
     composerPersistenceErrorRef,
@@ -350,7 +341,6 @@ export function useConversationController(foundation: AppFoundation) {
   const requestRef = useRef<string | null>(null);
   const modelPickerRequestRef = useRef(0);
   const prefetchedSessionsRef = useRef<Set<string>>(new Set());
-  const restoredRef = useRef(false);
   // Native navigation and keyboard shortcuts outlive individual renders.
   // Always checkpoint the latest composer draft when they switch conversations.
   const conversationNavigationRef = useRef<{
@@ -498,8 +488,6 @@ export function useConversationController(foundation: AppFoundation) {
     queuedEditContextsRef,
     composerDraftKeyRef,
     composerDraftsRef,
-    composerPersistenceStartedRef,
-    setComposerPersistenceStarted,
     composerAttachments,
     composerDeliveryRetriesRef,
     latestComposerAttemptByKeyRef,
@@ -673,35 +661,21 @@ export function useConversationController(foundation: AppFoundation) {
     composerAttachments,
     composerDraftKeyRef,
     composerDraftsRef,
-    persistedComposerActiveDraftKeyRef,
     composerPersistenceReadyRef,
-    composerPersistenceStartedRef,
     composerPersistenceTimerRef,
     composerPersistenceWriteRef,
     composerPersistenceErrorRef,
     queuedPromptsRef,
-    restoredRef,
     composerPersistenceReady,
-    composerPersistenceStarted,
     queuedPromptsBySession,
     setQueuedPromptsBySession,
     setComposerPersistenceReady,
-    setComposerPersistenceStarted,
-    setExpanded,
     setError,
     showComposerFeedback,
-    changeWorkspace,
-    openSession,
-    startSession,
     loadStateRef,
   });
   const settingsNavigationRef = useRef({ open: openSettings, close: closeSettings, select: selectSettingsTab });
   settingsNavigationRef.current = { open: openSettings, close: closeSettings, select: selectSettingsTab };
-
-  useEffect(() => {
-    if (!restoredRef.current) return;
-    writeStored(STORED_UI_KEYS.activeSession, session ? { id: session.id, cwd: session.cwd } : null);
-  }, [session]);
 
   // 扩展请求工具确认时，渲染进程负责显示统一样式的弹窗。
   useEffect(() => window.piApi.onConfirmRequest((request) => foundation.setConfirmRequest(request)), [foundation.setConfirmRequest]);

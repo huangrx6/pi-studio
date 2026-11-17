@@ -1,9 +1,8 @@
 /**
- * Gate window creation behind successful application initialization.
+ * Gate workspace access and activation behind successful initialization.
  *
  * macOS may emit `activate` or `second-instance` before Durable is ready. Those
- * requests are remembered, but must never create a renderer while IPC is in a
- * partially initialized state.
+ * requests are remembered while the window displays the launch screen.
  */
 function createStartupGate({
   initialize,

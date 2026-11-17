@@ -32,6 +32,7 @@ export function useWorkspaceState({
 }: WorkspaceStateOptions) {
   const [workspaces, setWorkspaces] = useState<PiWorkspace[]>([]);
   const [stateLoading, setStateLoading] = useState(true);
+  const [initialStateSettled, setInitialStateSettled] = useState(false);
   const [workspace, setWorkspace] = useState('');
   const workspaceRef = useRef(workspace);
   workspaceRef.current = workspace;
@@ -118,10 +119,14 @@ export function useWorkspaceState({
         throw error;
       }
     } finally {
+      clearTimeout(release);
       // 只按请求序号判断：最后一次发起的请求完成时一定要把「正在载入」收掉。
       // 之前还要求 workspace 等于闭包里的值，切工作区的竞态下会永远为 false，
       // 新会话页就一直卡在「正在载入…」。
-      if (request === stateRequestRef.current) setStateLoading(false);
+      if (request === stateRequestRef.current) {
+        setInitialStateSettled(true);
+        setStateLoading(false);
+      }
     }
   }, [
     conversationListNeedsRefreshRef,
@@ -144,6 +149,7 @@ export function useWorkspaceState({
   return {
     workspaces,
     stateLoading,
+    initialStateSettled,
     workspace,
     workspaceRef,
     stateRequestRef,
