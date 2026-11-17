@@ -6,6 +6,29 @@ import { installPerformanceFixture } from './fixtures/performance.mjs';
 import { installSessionViewsFixture } from './fixtures/session-views.mjs';
 import { serveProductionRenderer } from './fixtures/production-renderer-server.mjs';
 
+async function checkProgressAlignment(panel) {
+  const metrics = await panel.evaluate(container => {
+    const box = selector => container.querySelector(selector).getBoundingClientRect();
+    const start = box('.progress-head strong').left;
+    const end = box('.progress-agents .progress-view-all').right;
+    const bounds = container.getBoundingClientRect();
+    const pinned = container.classList.contains('is-pinned');
+    const list = box(pinned ? '.progress-task-scroll' : '.todo-dock-body');
+    return {
+      insets: [start - bounds.left, bounds.right - end],
+      left: [list.left, box('.progress-tasks h3').left, box('.progress-history-toggle').left,
+        box('.progress-agent .subagent-avatar').left, box('.progress-git-title svg').left,
+        box('.progress-git-links button svg').left].map(value => value - start),
+      right: [list.right, box('.progress-agent small').right, box('.progress-pin svg').right,
+        box('.progress-git-repo button svg').right].map(value => end - value),
+      overflow: container.scrollWidth - container.clientWidth,
+    };
+  });
+  assert.ok(Math.abs(metrics.insets[0] - metrics.insets[1]) <= 1, JSON.stringify(metrics));
+  assert.ok([...metrics.left, ...metrics.right].every(offset => Math.abs(offset) <= 1), JSON.stringify(metrics));
+  assert.ok(metrics.overflow <= 1, JSON.stringify(metrics));
+}
+
 const root = new URL('../../', import.meta.url);
 const output = new URL('.qa/session-views/', root);
 await mkdir(output, { recursive: true });
@@ -75,6 +98,7 @@ try {
   await progressButton.click();
   await button('固定到右栏').click();
   await pinned.getByText('核对会话清单', { exact: true }).last().waitFor();
+  await checkProgressAlignment(pinned);
   assert.equal(await pinned.locator('.progress-agent .subagent-avatar').first().evaluate(el => el.getBoundingClientRect().width), 20);
   assert.equal(await progress.count(), 0);
   assert.equal(await progressTab.count(), 1);
@@ -357,6 +381,7 @@ try {
   assert.match(await floatingRows.first().innerText(), /核对会话清单/);
   await progress.getByRole('button', { name: '展开其余 12 项' }).click();
   assert.equal(await floatingRows.count(), 16);
+  await checkProgressAlignment(progress);
   assert.ok(await progress.locator('.todo-dock-scroll').evaluate(el => el.scrollHeight > el.clientHeight && el.clientHeight <= 280));
   await button('固定到右栏').click();
   const resizer = page.getByRole('separator', { name: '调整右侧面板宽度' });
@@ -375,6 +400,7 @@ try {
   await pinned.getByRole('button', { name: '收起子智能体' }).click();
   await button('展开其余 12 项').click();
   assert.equal(await taskRows.count(), 16);
+  await checkProgressAlignment(pinned);
   assert.ok(await pinned.locator('.progress-task-scroll').evaluate(el => el.scrollHeight > el.clientHeight));
   await taskRows.last().scrollIntoViewIfNeeded();
   assert.ok(await pinned.evaluate(el => el.scrollWidth <= el.clientWidth + 1));
