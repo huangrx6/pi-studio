@@ -23,7 +23,9 @@
 .wallpaper-drag-edge.bottom { inset: auto 0 0; height: var(--shell-gutter); }
 .wallpaper-drag-edge.left { inset: var(--shell-top) auto var(--shell-gutter) 0; width: var(--shell-gutter); }
 .wallpaper-drag-edge.right { inset: var(--shell-top) 0 var(--shell-gutter) auto; width: var(--shell-gutter); }
-.app { position: relative; z-index: 1; }
+/* Keep the frame anchored to the viewport. Hidden overflow remains scrollable
+ * by focus/scrollIntoView; clip prevents descendant reflow from shifting gutters. */
+.app { position: fixed; inset: var(--shell-top) var(--shell-gutter) var(--shell-gutter); height: auto; margin: 0; overflow: clip; z-index: 1; }
 .app > .sidebar,
 .app > .content-region { z-index: 1; }
 

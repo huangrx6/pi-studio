@@ -151,6 +151,10 @@ export function FileChangeSummary({ files, gitDiff, onUndo, onOpenDiff, onOpenFi
         disabled={undoBusy || gitDiff?.undone} onClick={() => void undo()}>
         {gitDiff?.undone ? '已撤销' : undoBusy ? '正在撤销' : '撤销'}<Undo2 aria-hidden="true" />
       </button>}
+      {display.length > 4 && <button type="button" className="file-change-more" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
+        {expanded ? '收起' : '展开全部'}
+        <ChevronDown aria-hidden="true" />
+      </button>}
     </header>
     {confirmation.dialog}
     {undoError && <p className="file-change-missing-note" role="alert">{undoError}</p>}
@@ -183,11 +187,6 @@ export function FileChangeSummary({ files, gitDiff, onUndo, onOpenDiff, onOpenFi
             : <small>{statusLabel(file)}</small>}
       </button>;
     })}</div>
-
-    {display.length > 4 && <button type="button" className="file-change-more" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
-      {expanded ? '收起' : `全部 ${display.length} 个文件`}
-      <ChevronDown aria-hidden="true" />
-    </button>}
 
     {missingCount > 0 && <p className="file-change-missing-note" role="status">
       {missingCount} 个文件已不在磁盘上（可能被移动或删除），已从可打开列表中移除。

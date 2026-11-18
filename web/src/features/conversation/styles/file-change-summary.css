@@ -39,7 +39,8 @@
 .file-change-item.is-openable:hover, .file-change-more:hover { background: var(--surface-hover); }
 .file-change-item small { color: var(--muted); font-size: var(--text-xs); }
 .file-change-item.is-missing .file-change-path { color: var(--muted); text-decoration: line-through; }
-.file-change-more { width: 100%; justify-content: center; min-height: var(--control-sm); border-top: 1px solid var(--divider); color: var(--muted); }
+.file-change-more { flex: none; margin-inline-start: auto; justify-content: center; min-height: var(--control-sm); padding: 0 var(--space-2); border-radius: var(--radius-control); color: var(--muted); }
+.file-change-undo + .file-change-more { margin-inline-start: 0; }
 .file-change-more[aria-expanded="true"] svg { transform: rotate(180deg); }
 .file-change-incomplete-note, .file-change-missing-note { margin: 0; padding: var(--space-2) var(--space-4); color: var(--warning); font-size: var(--text-xs); }
 .file-change-incomplete-note { display: flex; align-items: center; gap: var(--space-2); }

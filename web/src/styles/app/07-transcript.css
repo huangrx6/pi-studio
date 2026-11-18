@@ -231,15 +231,21 @@
 }
 /* 灯箱按钮与全应用图标按钮同档：32 盒 + 16 图标 + 1.75 描边。 */
 .studio-lightbox .yarl__icon {
+  display: block;
+  flex: none;
   width: var(--icon-md);
   height: var(--icon-md);
   stroke-width: 1.75;
 }
 .studio-lightbox .yarl__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
   box-sizing: border-box;
   width: var(--control-sm);
   height: var(--control-sm);
-  padding: 8px;
+  padding: 0;
   border: 1px solid var(--background-border);
   border-radius: var(--radius-control);
   color: var(--text);
@@ -371,7 +377,7 @@
     --studio-lightbox-counter-left: 80px;
   }
   .studio-lightbox .yarl__toolbar { gap: 1px; padding: 3px; }
-  .studio-lightbox .yarl__button { width: 32px; height: 32px; padding: 7px; }
+  .studio-lightbox .yarl__button { width: 32px; height: 32px; padding: 0; }
   .studio-lightbox .yarl__counter { padding: 0 10px; line-height: 30px; }
   .studio-lightbox .yarl__navigation_prev { left: 8px; }
   .studio-lightbox .yarl__navigation_next { right: 8px; }
