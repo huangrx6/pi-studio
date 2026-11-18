@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { Select } from '../../../web/src/shared/Select';
 import { DatePicker } from '../../../web/src/shared/DatePicker';
 import { ActionMenu } from '../../../web/src/shared/ActionMenu';
+import { Accordion } from '../../../web/src/shared/Accordion';
 import { SettingsDialog } from '../../../web/src/shared/SettingsDialog';
 import { WorkspacePicker } from '../../../web/src/shell/WorkspacePicker';
 import { useActionConfirmation, ToolConfirmDialog } from '../../../web/src/shared/ConfirmDialog';
@@ -37,7 +38,7 @@ function Fixture() {
       <Select label="测试选择" value={selected} onChange={setSelected} options={[{ value: 'disabled', label: '已停用', disabled: true }, { value: 'a', label: '选项 A' }, { value: 'b', label: '选项 B' }, { value: 'c', label: '选项 C' }]} />
       <button onClick={() => void confirmation.confirm({ title: '嵌套确认', confirmLabel: '继续' })} type="button">打开嵌套确认</button>
       <DatePicker label="测试日期" value={date} onChange={setDate} />
-      <details><summary>展开高级选项</summary><button type="button">折叠内操作</button></details>
+      <Accordion summary="展开高级选项"><button type="button">折叠内操作</button></Accordion>
       <button type="button">表单末字段</button>
     </SettingsDialog>}
     <button onClick={() => setToolConfirm(true)}>工具确认</button>

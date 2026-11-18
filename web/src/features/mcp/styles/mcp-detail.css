@@ -25,9 +25,6 @@
 .mcp-detail-test p,
 .mcp-detail-section > p { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-body); white-space: pre-wrap; overflow-wrap: anywhere; }
 .mcp-detail-section { border-top: 1px solid var(--divider); padding-top: var(--space-3); }
-.mcp-detail-section > summary { cursor: pointer; color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-medium); }
-.mcp-detail-section[open] > summary { margin-bottom: var(--space-3); }
-.mcp-detail-section > summary:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 4px; border-radius: var(--radius-control); }
 .mcp-detail-facts { display: grid; margin: 0; gap: var(--space-3); }
 .mcp-detail-facts > div { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: var(--space-3); }
 .mcp-detail-facts dt { color: var(--muted); font-size: var(--text-xs); }

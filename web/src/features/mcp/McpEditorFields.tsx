@@ -1,3 +1,4 @@
+import { Accordion } from '../../shared/Accordion';
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import { LoadingIndicator } from '../../shared/LoadingState';
 import type { McpConnectionTestResult } from '../../types/global.d';
@@ -57,9 +58,8 @@ export function McpEditorFields({ draft, setDraft, editing, mcpTesting, settings
       </>}
     </div>
     <div className="settings-field field-wide"><span>工具暴露</span><Select label="工具暴露" disabled={settingsBusy} value={draft.exposure} onChange={value => update('exposure', value)} options={[{ value: 'deferred', label: '按需搜索 · tool_search' }, { value: 'direct', label: '直接提供' }, { value: 'hidden', label: '不提供给模型' }]} /></div>
-    <details className="mcp-editor-advanced field-wide" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}
-      onInvalidCapture={event => { event.currentTarget.open = true; setAdvancedOpen(true); }}>
-      <summary>高级选项{configured && <span>已配置</span>}</summary>
+    <Accordion className="mcp-editor-advanced field-wide" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}
+      onInvalidCapture={event => { event.currentTarget.open = true; setAdvancedOpen(true); }} summary="高级选项" badge={configured ? "已配置" : undefined}>
       <div className="settings-form-grid">
         {stdio && <div className="settings-field field-wide">
           <span className="settings-field-heading"><label htmlFor="mcp-cwd">工作目录</label><InfoHint label="MCP 连接由所有工作区共享，这里只接受绝对路径或 ~/ 路径，避免不同会话隐式复用错误目录。" /></span>
@@ -75,7 +75,7 @@ export function McpEditorFields({ draft, setDraft, editing, mcpTesting, settings
           <textarea id="mcp-tool-exposure" value={draft.toolExposure} onChange={event => update('toolExposure', event.target.value)} rows={3} placeholder={'search_*=deferred\ndelete_*=hidden\nstatus=direct'} />
         </div>
       </div>
-    </details>
+    </Accordion>
     <section className="mcp-editor-test field-wide" aria-label="MCP 草稿连接测试">
       <div className="mcp-editor-test-actions">
         <button type="button" className="settings-outline" disabled={mcpTesting || settingsBusy} onClick={event => {
@@ -98,15 +98,15 @@ function McpEditorTestResult({ result }: { result: McpConnectionTestResult }) {
     </div>
     {result.instructions && <p>{result.instructions}</p>}
     <small>Resources {result.capabilities.resources ? `已发现 ${result.resources.length}` : '未声明'}</small>
-    {result.tools.length > 0 && <details open={toolsOpen} onToggle={event => setToolsOpen(event.currentTarget.open)}>
-      <summary>测试工具 · {result.tools.length}</summary>
+    {result.tools.length > 0 && <Accordion open={toolsOpen} onToggle={event => setToolsOpen(event.currentTarget.open)} summary="测试工具" badge={result.tools.length}>
+
       {toolsOpen && <div className="mcp-editor-test-tools">{result.tools.map(tool => <div key={tool.name}>
         <code>{tool.name}</code><span>{tool.argumentCount} 参数 · {tool.exposure === 'deferred' ? '按需' : tool.exposure === 'direct' ? '直接' : '隐藏'}</span>
         {tool.description && <p>{tool.description}</p>}
       </div>)}</div>}
-    </details>}
-    {result.stderr && <details open={diagnosticsOpen} onToggle={event => setDiagnosticsOpen(event.currentTarget.open)}>
-      <summary>测试诊断信息</summary>{diagnosticsOpen && <pre>{result.stderr}</pre>}
-    </details>}
+    </Accordion>}
+    {result.stderr && <Accordion open={diagnosticsOpen} onToggle={event => setDiagnosticsOpen(event.currentTarget.open)} summary="测试诊断信息">
+      {diagnosticsOpen && <pre>{result.stderr}</pre>}
+    </Accordion>}
   </div>;
 }

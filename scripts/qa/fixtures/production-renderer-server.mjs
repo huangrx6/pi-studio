@@ -17,5 +17,9 @@ export async function serveProductionRenderer(root) {
     } catch { response.writeHead(404).end(); }
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
-  return { origin: `http://127.0.0.1:${server.address().port}`, close: () => new Promise((resolve) => server.close(resolve)) };
+  return { origin: `http://127.0.0.1:${server.address().port}`, close: () => new Promise((resolve) => {
+    server.close(resolve);
+    // Browser preconnects may leave incomplete requests after the guest exits.
+    server.closeAllConnections();
+  }) };
 }

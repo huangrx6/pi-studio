@@ -8,12 +8,6 @@
 .mcp-editor-fields .mcp-editor-secret-clear input { flex: none; width: 14px; height: 14px; margin-top: 2px; }
 .mcp-editor-fields .mcp-editor-clear-note { color: var(--warning); font-size: var(--text-xs); line-height: var(--leading-body); }
 .mcp-editor-advanced { min-width: 0; border-top: 1px solid var(--divider); padding-top: var(--space-4); }
-.mcp-editor-advanced > summary,
-.mcp-editor-test-result summary { cursor: pointer; color: var(--text); font-size: var(--text-sm); }
-.mcp-editor-advanced > summary > span { margin-left: var(--space-3); color: var(--muted); font-size: var(--text-xs); }
-.mcp-editor-advanced > summary:focus-visible,
-.mcp-editor-test-result summary:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 4px; border-radius: var(--radius-control); }
-.mcp-editor-advanced[open] > summary { margin-bottom: var(--space-4); }
 .mcp-editor-test { display: grid; min-width: 0; gap: var(--space-3); padding-top: var(--space-4); border-top: 1px solid var(--divider); }
 .mcp-editor-test-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .mcp-editor-test-actions > button { display: inline-flex; align-items: center; gap: 6px; }

@@ -62,7 +62,6 @@
 .extension-publisher-signature strong { font-size: var(--text-sm); font-weight: var(--weight-semibold); }
 .extension-publisher-signature p { margin: 5px 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-relaxed); }
 .extension-publisher-signature code { font: var(--text-xs)/var(--leading-body) var(--mono); overflow-wrap: anywhere; }
-.extension-integrity > summary { cursor: pointer; font-size: var(--text-sm); color: var(--muted); }
 .extension-integrity > div { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: var(--space-3); margin-top: var(--space-3); }
 .extension-integrity > div > span { font-size: var(--text-xs); color: var(--muted); }
 .extension-integrity code { min-width: 0; font: var(--text-xs)/var(--leading-body) var(--mono); overflow-wrap: anywhere; }
@@ -84,5 +83,4 @@
   .extension-integrity > div { grid-template-columns: 1fr; gap: var(--space-1); }
 }
 
-.extension-install-form button:focus-visible,
-.extension-integrity > summary:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; border-radius: var(--radius-control); }
+.extension-install-form button:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; border-radius: var(--radius-control); }

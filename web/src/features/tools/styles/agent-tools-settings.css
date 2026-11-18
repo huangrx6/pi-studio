@@ -15,7 +15,6 @@
 .agent-tool-rule-list p { margin: 3px 0 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-body); overflow-wrap: anywhere; }
 .agent-tool-rule-list button { flex: none; }
 .agent-tool-diagnostics { color: var(--warning); font-size: var(--text-sm); }
-.agent-tool-diagnostics summary { width: fit-content; cursor: pointer; }
 .agent-tool-diagnostic { margin-top: 12px; }
 .agent-tool-diagnostic code { color: var(--muted); font: var(--text-xs)/var(--leading-body) var(--mono); overflow-wrap: anywhere; }
 .agent-tool-diagnostic p { margin: 3px 0 0; line-height: var(--leading-body); overflow-wrap: anywhere; }
@@ -35,7 +34,6 @@
 .agent-tool-tabs button > span { flex: none; color: var(--faint); font-size: var(--text-xs); }
 .agent-tool-source-meta { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 16px; padding-block: 14px; color: var(--faint); font-size: var(--text-xs); }
 .agent-tool-source-meta details { min-width: 0; }
-.agent-tool-source-meta summary { width: fit-content; cursor: pointer; }
 .agent-tool-source-meta code { display: block; margin-top: 6px; font-family: var(--mono); overflow-wrap: anywhere; }
 .agent-tool-list { list-style: none; margin: 0; padding: 0; }
 .agent-tool-row { display: flex; align-items: flex-start; gap: 18px; padding: 14px 0; border-bottom: 1px solid var(--border); }
@@ -52,7 +50,7 @@
 .agent-tool-custom-control { display: flex; flex: 1 1 260px; align-items: center; gap: 10px; max-width: 420px; }
 .agent-tool-custom-control input { width: 0; min-width: 0; flex: 1; height: 36px; }
 .agent-tool-custom-control button { flex: none; }
-.agent-tools-settings button:focus-visible, .agent-tools-settings summary:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; border-radius: var(--radius-sm); }
+.agent-tools-settings button:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; border-radius: var(--radius-sm); }
 .agent-tool-detail-dialog { width: min(680px, 92vw); }
 .agent-tool-detail-dialog .detail-heading h2 code { color: var(--text); font: var(--weight-semibold) var(--text-lg)/var(--leading-normal) var(--mono); overflow-wrap: anywhere; }
 .agent-tool-detail-state { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 24px; }

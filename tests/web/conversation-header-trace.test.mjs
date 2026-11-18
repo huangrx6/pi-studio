@@ -31,6 +31,7 @@ const icons = new Proxy({}, { get: () => () => null });
 const shellLayout = compile('../../web/src/shell/ShellLayout.tsx', {
   'lucide-react': icons,
   './app-shell-config': { BrandMark: () => null },
+  '../shared/surface-visibility': compile('../../web/src/shared/surface-visibility.ts', {}),
 });
 function renderHeader(showTrace, isNewConversation = false, panelExpanded = false) {
   const { ConversationHeader } = compile('../../web/src/shell/ConversationHeader.tsx', {

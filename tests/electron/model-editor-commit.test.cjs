@@ -66,6 +66,24 @@ const provider = extra => ({ providerId: 'gateway', name: 'Gateway', api: 'opena
 const plain = value => JSON.parse(JSON.stringify(value));
 const noSecrets = value => assert.doesNotMatch(typeof value === 'string' ? value : JSON.stringify(value), new RegExp(SECRET));
 
+test('quota authentication and public headers survive save/reopen without projecting credentials', async t => {
+  const { db, call } = harness(t);
+  for (const auth of ['authorization', 'custom-header', 'query']) {
+    const quota = { enabled: true, endpoint: 'https://quota.example.test/usage', auth,
+      ...(auth === 'authorization' ? {} : { authName: auth === 'query' ? 'key' : 'X-Auth-Token' }),
+      headers: [{ name: 'anthropic-version', value: '2023-06-01' }],
+      fields: [{ label: '已用', path: 'data.used', format: 'percent', unit: '', translations: '', summary: true }],
+    };
+    await call('pi:add-provider', provider({ apiKey: SECRET, quota }));
+    const reopened = await call('pi:provider-config', 'gateway');
+    assert.deepEqual(plain(reopened.quota), quota);
+    assert.equal(db.readCredential('gateway').key, SECRET);
+    noSecrets(reopened);
+    await call('pi:add-provider', provider({ quota: { enabled: false } }));
+    assert.deepEqual(plain((await call('pi:provider-config', 'gateway')).quota), { ...quota, enabled: false });
+  }
+});
+
 test('provider configuration and encrypted API key commit together, with an explicit ready projection', async t => {
   const { db, call } = harness(t);
   const result = await call('pi:add-provider', provider({ apiKey: SECRET }));

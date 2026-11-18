@@ -1,5 +1,6 @@
+import { Accordion } from '../../shared/Accordion';
 import { useMemo, useReducer, useState, useSyncExternalStore } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, ListVideo, NotebookPen, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ListVideo, NotebookPen, Sparkles } from 'lucide-react';
 import { Select } from '../../shared/Select';
 import type { ShotPatch, StoryboardPlan, StoryboardShot, StoryboardWork } from '../../types/storyboard-types';
 import { shotWriter } from './storyboard-drafts';
@@ -42,11 +43,11 @@ function ShotEditor({ work, workspace, shot, index, plan, onWork, settingsOpen, 
           }} onBlur={() => { setSeconds(null); void writer.flush(); }} /></label>
       </div>
       <ShotComposition shot={draft} edit={edit} />
-      <details className="story-shot-disclosure"><summary><NotebookPen aria-hidden /><span>画面与声音设计</span><ChevronDown aria-hidden /></summary>
+      <Accordion className="story-shot-disclosure" summary={<><NotebookPen aria-hidden /><span>画面与声音设计</span></>}>
         <div className="story-shot-note-fields">{(Object.keys(fields) as (keyof typeof fields)[]).map(key => <label className="story-field" key={key}><span>{fields[key]}</span>
           <textarea rows={2} value={draft[key]} maxLength={16000} onChange={event => edit({ [key]: event.target.value })} onBlur={() => void writer.flush()} />
         </label>)}</div>
-      </details>
+      </Accordion>
       {writer.failed() ? <div className="story-shot-save"><p className="story-error" role="alert">{status}</p>
         <button className="secondary-button" onClick={() => void writer.flush()}>重试保存</button></div> : <small className="story-shot-saved" role="status">{status}</small>}
     </div>

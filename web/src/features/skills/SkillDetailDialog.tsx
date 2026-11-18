@@ -1,3 +1,4 @@
+import { Accordion } from '../../shared/Accordion';
 import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Folder, RotateCw, X } from 'lucide-react';
 import { LoadingState } from '../../shared/LoadingState';
@@ -40,7 +41,7 @@ export function SkillDetailDialog({ skill, busy, error, refreshing = false, onRe
       </div></div>
       <button type="button" className="icon-button" aria-label="关闭技能详情" onClick={onClose}><X /></button>
     </header>
-    <details className="skill-detail-location"><summary>文件位置</summary><code>{skill.path}</code></details>
+    <Accordion className="skill-detail-location" summary="文件位置" compact><code>{skill.path}</code></Accordion>
     {error && <div className="detail-error" role="alert"><p>{error}</p>{onRefresh && <button type="button" className="settings-outline" disabled={refreshing} onClick={onRefresh}>{refreshing ? '正在刷新…' : '刷新技能状态'}</button>}</div>}
     <div className="skill-detail-body">
       <aside className="skill-file-tree" aria-label="技能目录">

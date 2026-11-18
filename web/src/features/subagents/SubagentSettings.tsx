@@ -1,3 +1,4 @@
+import { Accordion } from '../../shared/Accordion';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   Bot,
@@ -481,7 +482,6 @@ export function SubagentSettings({
             <button type="button" className="settings-outline" onClick={onOpenAgentTools}>去启用</button>
           )}
         </div>}
-
         <div className="subagent-scope-block">
           <div className="subagent-section-label">
             <strong>配置范围 <InfoHint label="全局值适用于所有工作区；工作区值只覆盖所选工作区。" /></strong>
@@ -531,10 +531,8 @@ export function SubagentSettings({
               />
             </div>
           )}
-
         </div>
       </section>
-
       <section className="subagent-section">
         <div className="subagent-section-heading">
                     <div>
@@ -592,14 +590,7 @@ export function SubagentSettings({
             </span>
           </label>
         </div>
-        <details className="subagent-advanced">
-          <summary>
-            <span>
-              <strong>运行限制与预算</strong>
-              <small>{limitSummary}</small>
-            </span>
-            <ChevronRight className="subagent-advanced-chevron" />
-          </summary>
+        <Accordion className="subagent-advanced" summary="运行限制与预算" description={limitSummary}>
           <div className="subagent-field-grid">
           <label htmlFor={`${inputPrefix}-maxConcurrent`} className="subagent-field">
             <span className="subagent-label">最大并发 <InfoHint label="当前主会话中可以同时运行的后台任务数量。" /></span>
@@ -750,9 +741,8 @@ export function SubagentSettings({
             />
           </div>
           </div>
-        </details>
+        </Accordion>
       </section>
-
       <section className="subagent-section">
         <div className="subagent-section-heading">
                     <div>
@@ -798,7 +788,6 @@ export function SubagentSettings({
           </div>
         </div>
       </section>
-
       <section className="subagent-section subagent-worktrees">
         <div className="subagent-section-heading">
                     <div>
@@ -833,8 +822,7 @@ export function SubagentSettings({
                   {worktree.error ? ` · ${worktree.error}` : ''}
                 </small>
                 {Boolean(worktree.files?.length) && (
-                  <details>
-                    <summary>查看改动文件</summary>
+                  <Accordion summary="查看改动文件">
                     <ul>
                       {worktree.files!.map((file) => (
                         <li key={`${file.status}:${file.path}`}>
@@ -843,7 +831,7 @@ export function SubagentSettings({
                         </li>
                       ))}
                     </ul>
-                  </details>
+                  </Accordion>
                 )}
               </div>
               <div className="subagent-worktree-actions">
@@ -885,7 +873,6 @@ export function SubagentSettings({
           )}
         </div>
       </section>
-
       <section className="subagent-section">
         <div className="subagent-section-heading subagent-tools-heading">
                     <div>
@@ -1002,7 +989,6 @@ export function SubagentSettings({
           )}
         </div>
       </section>
-
       </fieldset>}
       {error && <div className="settings-error" role="alert">{error}</div>}
       {feedback && <p className="subagent-feedback" role="status">{feedback}</p>}
@@ -1011,7 +997,6 @@ export function SubagentSettings({
         <div>
           <strong>
             {dirty ? `${scopeLabel}有未保存的更改` : snapshot ? '配置从下一次子智能体任务生效' : '配置尚未加载'}
-
           </strong>
         </div>
         <button

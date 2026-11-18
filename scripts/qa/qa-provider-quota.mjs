@@ -18,7 +18,15 @@ const responseData = { usage: { week: { remaining: 120 }, hour: { used: 0.375 } 
 let status = 200, reads = 0;
 const quotaApi = createServer((req, res) => {
   reads++;
-  const allowed = req.method === 'GET' && req.url === '/quota' && req.headers.authorization === 'Bearer fixture-value';
+  const url = new URL(req.url, 'http://localhost');
+  const auth = url.pathname.split('/')[2] || 'bearer';
+  const allowed = req.method === 'GET' && url.pathname.startsWith('/quota') && (
+    auth === 'none' ? !req.headers.authorization
+      : auth === 'query' ? url.searchParams.get('access_key') === 'fixture-value'
+      : auth === 'authorization' ? req.headers.authorization === 'fixture-value'
+      : auth === 'bearer' ? req.headers.authorization === 'Bearer fixture-value'
+      : req.headers[auth === 'custom-header' ? 'ocp-apim-subscription-key' : auth] === 'fixture-value'
+  );
   res.writeHead(allowed ? status : 401, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(allowed && status === 200 ? responseData : { error: 'fixture' }));
 });
@@ -167,9 +175,23 @@ try {
   await toggle.waitFor();
   const compactWidth = (await editor.boundingBox()).width;
   await toggle.click();
+  // Exercise the real settings form and production service for every transport.
+  for (const [auth, label] of [
+    ['authorization', '来源 API Key · 原始 Authorization'], ['x-api-key', '来源 API Key · x-api-key'],
+    ['api-key', '来源 API Key · api-key'], ['x-goog-api-key', '来源 API Key · x-goog-api-key'],
+    ['custom-header', '来源 API Key · 自定义请求头'], ['query', '来源 API Key · 查询参数'], ['none', '无需凭据'],
+  ]) {
+    await editor.getByLabel('额度接口（GET）').fill(endpoint + '/' + auth);
+    await editor.getByRole('button', { name: '额度接口认证' }).click();
+    await page.getByRole('option', { name: new RegExp('^' + label) }).click();
+    if (auth === 'custom-header') await editor.getByLabel('认证请求头名称').fill('Ocp-Apim-Subscription-Key');
+    if (auth === 'query') await editor.getByLabel('认证查询参数名称').fill('access_key');
+    await editor.getByRole('button', { name: '读取接口字段' }).click();
+    await editor.getByRole('button', { name: '选择接口返回字段' }).waitFor();
+  }
   await editor.getByLabel('额度接口（GET）').fill(endpoint);
   await editor.getByRole('button', { name: '额度接口认证' }).click();
-  await page.getByRole('option', { name: /Bearer/ }).click();
+  await page.getByRole('option', { name: '来源 API Key · Bearer', exact: true }).click();
   await editor.getByRole('button', { name: '读取接口字段' }).click();
   await editor.getByRole('button', { name: '选择接口返回字段' }).click();
   await page.getByRole('option', { name: 'usage.week.remaining' }).click();
@@ -191,7 +213,7 @@ try {
   await group(3).getByRole('button', { name: /显示格式/ }).click();
   await page.getByRole('option', { name: '比例（0–1）' }).click();
   const desktop = await measureQuotaForm(editor);
-  assert.ok(desktop.width > compactWidth && desktop.beside && desktop.oddFieldSpans, 'paired fields share a row and an odd last field uses the full width');
+  assert.ok(desktop.width >= compactWidth && desktop.beside && desktop.oddFieldSpans, 'quota fields retain the wide provider editor, share rows and let an odd last field span the full width');
   await editor.locator('.quota-mapping-heading').evaluate(heading => heading.scrollIntoView({ block: 'start' }));
   await page.screenshot({ path: fileURLToPath(new URL('editor.png', output)) });
   const activeField = group(2).getByLabel('返回字段路径');
@@ -336,6 +358,51 @@ try {
   await nav.getByRole('button', { name: '模型配置', exact: true }).click();
   await edit.click();
   assert.equal(await group(1).getByLabel('返回字段路径').inputValue(), 'usage.week.remaining');
+  await editor.getByLabel('额度接口（GET）').fill(endpoint + '/authorization');
+  await editor.getByRole('button', { name: '额度接口认证' }).click();
+  await page.getByRole('option', { name: /^来源 API Key · 原始 Authorization/ }).click();
+  await editor.locator('.quota-request-options > summary').click();
+  await editor.getByRole('button', { name: '添加请求头', exact: true }).click();
+  await editor.getByRole('textbox', { name: '附加请求头 1 的值' }).fill('2023-06-01');
+  await editor.getByRole('button', { name: '保存更改' }).click();
+  await editor.waitFor({ state: 'detached' });
+  assert.equal(provider.quota.auth, 'authorization');
+  assert.deepEqual(provider.quota.headers, [{ name: 'anthropic-version', value: '2023-06-01' }]);
+  await edit.click();
+  assert.match(await editor.getByRole('button', { name: '额度接口认证' }).innerText(), /原始 Authorization/);
+  assert.equal(await editor.getByRole('textbox', { name: '附加请求头 1 的值' }).inputValue(), '2023-06-01');
+  await editor.getByRole('button', { name: '读取接口字段' }).click();
+  await editor.getByRole('button', { name: '选择接口返回字段' }).waitFor();
+  await page.screenshot({ path: fileURLToPath(new URL('auth-authorization.png', output)) });
+  const headersAccordion = editor.locator('.quota-request-options');
+  const headersTrigger = headersAccordion.locator('summary');
+  assert.equal(await headersTrigger.evaluate(node => getComputedStyle(node).listStyleType), 'none');
+  assert.equal(await headersAccordion.locator('.pi-accordion-badge').innerText(), '1');
+  await headersTrigger.focus();
+  await headersTrigger.press('Space');
+  await page.waitForFunction(() => !document.querySelector('.quota-request-options').open);
+  // A saved header used to force this section open again on every draft edit.
+  await editor.getByLabel('额度接口（GET）').fill(endpoint + '/authorization?view=compact');
+  assert.equal(await headersAccordion.evaluate(node => node.open), false, 'parent edits retain the collapsed state');
+  await editor.getByLabel('额度接口（GET）').fill(endpoint + '/authorization');
+  await headersTrigger.press('Enter');
+  await editor.getByRole('textbox', { name: '附加请求头 1 的值' }).waitFor();
+  assert.equal(await editor.getByRole('textbox', { name: '附加请求头 1 的值' }).inputValue(), '2023-06-01');
+  await editor.getByRole('textbox', { name: '附加请求头 1 的值' }).fill('');
+  await headersTrigger.click();
+  assert.equal(await editor.locator('form').evaluate(form => form.reportValidity()), false);
+  assert.equal(await headersAccordion.evaluate(node => node.open), true, 'invalid fields reveal their collapsed section before native validation focuses them');
+  await editor.getByRole('textbox', { name: '附加请求头 1 的值' }).fill('2023-06-01');
+  await editor.getByRole('textbox', { name: '附加请求头 1 的值' }).blur();
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
+    await headersAccordion.screenshot({ path: fileURLToPath(new URL(`accordion-${theme}.png`, output)) });
+  }
+  await page.setViewportSize({ width: 640, height: 760 });
+  assert.ok(await headersAccordion.evaluate(node => node.scrollWidth <= node.clientWidth + 1));
+  await headersAccordion.screenshot({ path: fileURLToPath(new URL('accordion-narrow.png', output)) });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   await toggle.click();
   await editor.getByRole('button', { name: '保存更改' }).click();
   await editor.waitFor({ state: 'detached' });

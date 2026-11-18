@@ -43,7 +43,8 @@ function createProviderQuotaMonitor({ getProvider, readKey, isAvailable = () => 
   async function queryEndpoint(config, controller, getKey, project) {
     const timeout = setTimeout(() => controller.abort(), 12_000);
     try {
-      const headers = { Accept: 'application/json' };
+      const headers = { Accept: 'application/json', ...Object.fromEntries((config.headers || []).map(row => [row.name, row.value])) };
+      let endpoint = config.endpoint;
       let key = '';
       if (config.auth !== 'none') {
         try { key = await getKey(); }
@@ -53,12 +54,24 @@ function createProviderQuotaMonitor({ getProvider, readKey, isAvailable = () => 
         }
         if (!key) throw new QuotaError('请先填写此来源的 API Key。');
         if (config.auth === 'bearer') headers.Authorization = `Bearer ${key}`;
-        else headers['x-api-key'] = key;
+        else if (config.auth === 'authorization') headers.Authorization = key;
+        else if (config.auth === 'query') {
+          const url = new URL(endpoint);
+          url.searchParams.set(config.authName, key);
+          endpoint = url.href;
+        } else headers[config.auth === 'custom-header' ? config.authName : config.auth] = key;
       }
       controller.signal.throwIfAborted();
-      const response = await fetcher(config.endpoint, { method: 'GET', headers, redirect: 'error', signal: controller.signal });
+      const response = await fetcher(endpoint, { method: 'GET', headers, redirect: 'error', signal: controller.signal });
       if (!response.ok) throw statusError(response.status);
-      return project(await readQuotaJson(response), key);
+      const data = await readQuotaJson(response);
+      // BigModel and some gateways report authentication failures inside HTTP 200.
+      // Never return their message: it may echo the key or authenticated URL.
+      if (data?.success === false) {
+        if ([401, 403, 1000].includes(Number(data.code))) throw new QuotaError('认证失败，请检查来源凭据与额度接口权限。');
+        throw new QuotaError('额度接口报告查询失败，请检查套餐状态、接口权限与请求参数。');
+      }
+      return project(data, key);
     } catch (error) {
       if (error instanceof QuotaError) throw error;
       throw new QuotaError(controller.signal.aborted ? '额度查询超时，请重试。' : '无法连接额度接口，请检查地址和网络。', true);

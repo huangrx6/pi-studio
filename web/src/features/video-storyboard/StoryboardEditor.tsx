@@ -1,3 +1,4 @@
+import { Accordion } from '../../shared/Accordion';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ArrowRight, Check, ChevronDown, ChevronRight, GitBranch, RotateCcw, Sparkles } from 'lucide-react';
 import { errorText } from '../../shared/error-text';
@@ -146,10 +147,10 @@ export function StoryboardEditor({ workspace, work, onRename, onWork, onProduce,
         {error && <div className="story-step-error" role="alert"><span className="story-error">{error}</span>
           {retry.current && <button className="secondary-button" disabled={blocked}
             onClick={() => { if (retry.current) void advance(retry.current.action); }}>重试此步</button>}</div>}
-        {children.length > 0 && <details key={selected.id} className="story-replies"><summary>此前的回复 <span>{children.length}</span></summary>
+        {children.length > 0 && <Accordion key={selected.id} className="story-replies" summary="此前的回复" badge={children.length} compact>
           {children.map(child => <button key={child.id} disabled={busy} onClick={() => select(child.id)}>
             <GitBranch aria-hidden /><span>{child.step?.reply || child.answer || stepLabels[child.kind]}</span><ChevronRight aria-hidden /></button>)}
-        </details>}
+        </Accordion>}
       </div>
     </div>
   </div>;

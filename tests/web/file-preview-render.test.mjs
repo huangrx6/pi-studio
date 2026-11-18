@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { Accordion } from './helpers/accordion.mjs';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import test from 'node:test';
@@ -23,6 +24,7 @@ function fixture() {
     exports: {},
     require(id) {
       if (id.endsWith('.css')) return {};
+      if (id === './Accordion') return { Accordion };
       if (id === './ArchivePreview') return { ArchivePreview: ({ data }) => React.createElement('div', null, data.format) };
       if (id === './LoadingState') return { LoadingIndicator: () => null, LoadingState: ({ children }) => React.createElement('span', null, children) };
       if (id === './file-preview.ts') return {

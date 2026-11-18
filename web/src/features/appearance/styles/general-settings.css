@@ -95,18 +95,6 @@
 .general-palette-option[data-palette-choice="amber"] { --general-swatch: var(--scheme-amber); }
 .general-palette-option[data-palette-choice="berry"] { --general-swatch: var(--scheme-berry); }
 .general-background-name { margin: var(--space-2) 0; color: var(--muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
-.general-background-settings summary {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  padding: var(--space-3) var(--space-5);
-  cursor: pointer;
-  color: var(--text);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-}
-.general-background-settings summary::marker { color: var(--muted); }
 .general-background-adjustments { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-5); padding-block: var(--space-3); align-items: center; }
 @media (max-width: 1100px) {
   .general-background-adjustments { grid-template-columns: minmax(0, 1fr); }

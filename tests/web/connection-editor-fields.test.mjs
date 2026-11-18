@@ -15,12 +15,13 @@ function harness(file, name, initial) {
     require(id) {
       if (id === 'react') return { useState(value) { const i = cursor++; if (!(i in slots)) slots[i] = value; return [slots[i], next => { slots[i] = typeof next === 'function' ? next(slots[i]) : next; }]; } };
       if (id === 'react/jsx-runtime') return { jsx, jsxs: jsx };
+      if (id.endsWith('/Accordion')) return { Accordion: 'Accordion' };
       if (id.endsWith('/Select')) return { Select: 'Select' };
       if (id.endsWith('/InfoHint')) return { InfoHint: 'InfoHint' };
       return {};
     },
   });
-  const text = node => Array.isArray(node) ? node.map(text).join('') : node && typeof node === 'object' ? text(node.props?.children) : String(node ?? '');
+  const text = node => Array.isArray(node) ? node.map(text).join('') : node && typeof node === 'object' ? text(node.type === 'Accordion' ? [node.props.summary, node.props.badge, node.props.children] : node.props?.children) : String(node ?? '');
   const nodes = node => Array.isArray(node) ? node.flatMap(nodes) : node && typeof node === 'object' ? [node, ...nodes(node.props?.children)] : [];
   const render = next => { props = { ...props, ...next }; cursor = 0; tree = module.exports[name](props); };
   render();
@@ -58,12 +59,12 @@ test('provider preserves unknown API types, explicit credential semantics and in
 
 test('configured provider advanced fields are discoverable; collapsed invalid field opens synchronously without cancelling validation', () => {
   const h = harness('models/ProviderEditorFields.tsx', 'ProviderEditorFields', { draft: { ...provider, modelsUrl: 'bad-url' }, setDraft() {}, editing: true, apiTypeOptions: [] });
-  let advanced = h.find(node => node.type === 'details'); assert.equal(advanced.props.open, true); assert.match(h.text(), /高级选项已配置/);
-  advanced.props.onToggle({ currentTarget: { open: false } }); h.render(); advanced = h.find(node => node.type === 'details');
+  let advanced = h.find(node => node.type === 'Accordion'); assert.equal(advanced.props.open, true); assert.match(h.text(), /高级选项已配置/);
+  advanced.props.onToggle({ currentTarget: { open: false } }); h.render(); advanced = h.find(node => node.type === 'Accordion');
   assert.equal(advanced.props.open, false); assert.equal(h.find(input('provider-models-url')).props.type, 'url');
   const nativeDetails = { open: false };
   advanced.props.onInvalidCapture({ currentTarget: nativeDetails, preventDefault() { assert.fail('must preserve native validation'); } });
-  assert.equal(nativeDetails.open, true); h.render(); assert.equal(h.find(node => node.type === 'details').props.open, true);
+  assert.equal(nativeDetails.open, true); h.render(); assert.equal(h.find(node => node.type === 'Accordion').props.open, true);
 });
 
 test('MCP retains explicit credential clearing after the text is erased and restores text after cancelling clear', () => {
@@ -86,7 +87,7 @@ test('MCP test respects native validation and busy state; advanced timeout remai
   button().props.onClick({ currentTarget: { form: { reportValidity: () => false } } }); assert.equal(tests, 0);
   button().props.onClick({ currentTarget: { form: { reportValidity: () => true } } }); assert.equal(tests, 1);
   const timeout = h.find(input('mcp-timeout')); assert.equal(timeout.props.min, '1'); assert.equal(timeout.props.max, '3600');
-  const advanced = h.find(node => node.type === 'details'), nativeDetails = { open: false };
+  const advanced = h.find(node => node.type === 'Accordion'), nativeDetails = { open: false };
   assert.equal(advanced.props.open, false); advanced.props.onInvalidCapture({ currentTarget: nativeDetails }); assert.equal(nativeDetails.open, true);
   h.render({ mcpTesting: true }); assert.equal(button().props.disabled, true); button().props.onClick({ currentTarget: {} }); assert.equal(tests, 1);
 });
@@ -96,7 +97,7 @@ test('MCP test failures stay failures and long result bodies mount only after ex
   const h = harness('mcp/McpEditorFields.tsx', 'McpEditorTestResult', { result });
   assert.match(h.text(), /连接测试未成功/); assert.doesNotMatch(h.text(), /连接成功|very long tool description|diagnostic stderr/);
   assert.ok(h.find(node => node.props?.role === 'alert')); assert.equal(h.all(node => node.type === 'pre').length, 0);
-  h.all(node => node.type === 'details').forEach(node => node.props.onToggle({ currentTarget: { open: true } })); h.render();
+  h.all(node => node.type === 'Accordion').forEach(node => node.props.onToggle({ currentTarget: { open: true } })); h.render();
   assert.match(h.text(), /very long tool description/); assert.match(h.text(), /diagnostic stderr/); assert.equal(h.all(node => node.type === 'pre').length, 1);
   h.render({ result: { ...result, ok: true } }); assert.match(h.text(), /连接成功/); assert.ok(h.find(node => node.props?.role === 'status'));
 });

@@ -1,3 +1,4 @@
+import { Accordion } from '../../shared/Accordion';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, FileCode2, Folder, Globe2, Layers3, Search, X } from 'lucide-react';
 import type { SkillCatalogItem } from '../../types/global.d';
@@ -101,10 +102,10 @@ export function SkillCatalogDialog({ catalog, catalogs, error, refreshing, onRef
         <span>{error || source?.lastError}</span>
         <button type="button" className="settings-outline" onClick={onRefresh} disabled={refreshing}>重新读取</button>
       </div>}
-      {diagnostics.length > 0 && <details className="skill-hub-diagnostics">
-        <summary>目录提示（{diagnostics.length}）</summary>
+      {diagnostics.length > 0 && <Accordion className="skill-hub-diagnostics" summary="目录提示" badge={diagnostics.length}>
+
         {diagnostics.map((entry, index) => <div key={`${entry.path}:${index}`}><code>{entry.path}</code><span>{entry.message}</span></div>)}
-      </details>}
+      </Accordion>}
       {source?.enabled === false ? <div className="skill-catalog-empty">
         <p>此技能源已停用。</p><button type="button" className="settings-outline" onClick={onManage}>管理源</button>
       </div> : matches.length > 0 ? <>

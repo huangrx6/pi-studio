@@ -546,5 +546,4 @@
 .file-preview-document.is-frame { height: 100%; min-height: 0; padding: 0; overflow: hidden; }
 .file-preview-frame { display: block; width: 100%; height: 100%; min-height: 320px; border: 0; background: var(--surface); }
 .file-preview-bytes { min-width: 0; max-width: 100%; text-align: start; }
-.file-preview-bytes summary { cursor: pointer; color: var(--text-2); font-size: var(--text-sm); }
 .file-preview-bytes pre { overflow-x: auto; margin-block: var(--space-2); font: var(--text-xs)/1.65 var(--mono); }

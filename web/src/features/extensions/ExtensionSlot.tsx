@@ -1,3 +1,4 @@
+import { Accordion } from '../../shared/Accordion';
 import { ExtensionStatusIcon } from './ExtensionStatusIcon';
 import { ProviderQuotaPanel } from '../models/ProviderQuotaView';
 import { QUOTA_EXTENSION_ID } from '../../types/provider-quota';
@@ -8,7 +9,6 @@ import {
   BarChart3,
   Check,
   CheckCircle2,
-  ChevronDown,
   Circle,
   CircleEllipsis,
   Clock3,
@@ -464,13 +464,9 @@ function ContentBlocks({
         sessionId={sessionId}
         modelRef={modelRef}
       />;
-      if (block.kind === 'disclosure') return <details className="extension-disclosure" key={index} open={block.open}>
-        <summary>
-          <span><strong>{block.title}</strong>{block.description && <small>{block.description}</small>}</span>
-          <ChevronDown />
-        </summary>
+      if (block.kind === 'disclosure') return <Accordion className="extension-disclosure" key={index} open={block.open} summary={block.title} description={block.description}>
         <ContentBlocks blocks={block.content} busyButton={busyButton} onAction={onAction} depth={depth + 1} cwd={cwd} sessionId={sessionId} modelRef={modelRef} />
-      </details>;
+      </Accordion>;
       if (block.kind === 'metricGrid') return <div className={`extension-metric-grid is-cols-${block.columns || 2}`} key={index}>
         {block.metrics.map((metric) => <MetricCard metric={metric} key={metric.id} />)}
       </div>;

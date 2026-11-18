@@ -110,13 +110,6 @@
 .extension-tab-list button.is-active { background: var(--surface); color: var(--text); box-shadow: 0 0 0 1px var(--border); }
 .extension-tab-panel { padding-top: var(--space-2); }
 .extension-disclosure { border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-soft); }
-.extension-disclosure > summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 38px; padding: 7px 10px; cursor: pointer; list-style: none; }
-.extension-disclosure > summary::-webkit-details-marker { display: none; }
-.extension-disclosure > summary > span { display: grid; gap: 1px; }
-.extension-disclosure > summary strong { color: var(--text); font-size: var(--text-sm); }
-.extension-disclosure > summary small { color: var(--faint); font-size: var(--text-xs); }
-.extension-disclosure > summary svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--faint); transition: transform var(--transition); }
-.extension-disclosure[open] > summary svg { transform: rotate(180deg); }
 .extension-disclosure > .extension-content { padding: 0 10px 10px; }
 .extension-metric-grid { display: grid; gap: var(--space-2); }
 .extension-metric-grid.is-cols-1 { grid-template-columns: minmax(0, 1fr); }

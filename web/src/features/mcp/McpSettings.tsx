@@ -1,3 +1,4 @@
+import { Accordion } from '../../shared/Accordion';
 import { ChevronRight, Pencil, Plug, Plus, Trash2 } from 'lucide-react';
 import { InfoHint } from '../../shared/InfoHint';
 import { EmptyStateArt } from '../../shared/EmptyStateArt';
@@ -52,10 +53,9 @@ export function McpSettings<T extends McpSettingsServer>({ servers, busy, recove
               <span>{server.exposure === 'deferred' ? '按需搜索' : server.exposure === 'direct' ? '直接提供' : '隐藏工具'}</span>
               <span className="mcp-server-state"><StatusGlyph state={status.state === 'connected' ? 'on' : status.state === 'error' ? 'attention' : 'off'} />{status.label}</span>
             </div>
-            {server.error.trim() && <details className="mcp-server-error">
-              <summary>{server.enabled ? '查看错误' : '查看上次连接错误'}</summary>
+            {server.error.trim() && <Accordion className="mcp-server-error" summary={<>{server.enabled ? '查看错误' : '查看上次连接错误'}</>}>
               <pre tabIndex={0}>{server.error}</pre>
-            </details>}
+            </Accordion>}
           </div>
           <div className="mcp-server-actions">
             <button type="button" className={`switch ${server.enabled ? 'is-on' : ''}`} role="switch" aria-checked={server.enabled}

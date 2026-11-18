@@ -1,4 +1,5 @@
-import { ChevronDown, SlidersHorizontal } from 'lucide-react';
+import { Accordion } from '../../shared/Accordion';
+import { SlidersHorizontal } from 'lucide-react';
 import type { ShotPatch, StoryboardShot } from '../../types/storyboard-types';
 import { Select } from '../../shared/Select';
 
@@ -17,7 +18,7 @@ export function ShotComposition({ shot, edit }: { shot: StoryboardShot; edit: (p
         }} />
       </label>;
     })}
-    <details className="story-shot-disclosure"><summary><SlidersHorizontal aria-hidden /><span>成片设置</span><ChevronDown aria-hidden /></summary>
+    <Accordion className="story-shot-disclosure" summary={<><SlidersHorizontal aria-hidden /><span>成片设置</span></>}>
       <div className="story-composition-fields">
         <label className="story-field story-composition-title"><span>画面标题（选填）</span><input maxLength={200} value={config.heading ?? ''}
           onChange={event => edit({ composition: { ...config, heading: event.target.value } })} /></label>
@@ -30,6 +31,6 @@ export function ShotComposition({ shot, edit }: { shot: StoryboardShot; edit: (p
         <label className="story-volume-field"><span>本镜音量</span><input aria-label="本镜音量" aria-valuetext={`${volume}%`} type="range" min="0" max="100" value={volume}
           onChange={event => edit({ composition: { ...config, volume: Number(event.target.value) / 100 } })} /><small>{volume}%</small></label>
       </div>
-    </details>
+    </Accordion>
   </>;
 }

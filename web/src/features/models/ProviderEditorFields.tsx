@@ -1,3 +1,4 @@
+import { Accordion } from '../../shared/Accordion';
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import { InfoHint } from '../../shared/InfoHint';
 import { Select, type SelectOption } from '../../shared/Select';
@@ -44,13 +45,12 @@ export function ProviderEditorFields({ draft, setDraft, editing, quotaAvailable,
       onChange={mediaModels => setDraft(current => ({ ...current, mediaModels }))} />
     {quotaAvailable && <ProviderQuotaFields config={draft.quota} providerId={draft.providerId} apiKey={draft.apiKey}
       onChange={quota => setDraft(current => ({ ...current, quota }))} />}
-    <details className="provider-editor-advanced field-wide" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}
+    <Accordion className="provider-editor-advanced field-wide" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}
       onInvalidCapture={event => {
         // Open synchronously before native form validation tries to focus a field.
         event.currentTarget.open = true;
         setAdvancedOpen(true);
-      }}>
-      <summary>高级选项{configured && <span>已配置</span>}</summary>
+      }} summary="高级选项" badge={configured ? "已配置" : undefined}>
       <div className="settings-form-grid">
         <div className="settings-field">
           <span className="settings-field-heading"><label htmlFor="provider-models-url">模型列表地址</label><InfoHint label="支持常见的 OpenAI /models 响应。保存来源后可获取并预览模型。" /></span>
@@ -58,6 +58,6 @@ export function ProviderEditorFields({ draft, setDraft, editing, quotaAvailable,
         </div>
         <label>图标 URL<input value={draft.icon} onChange={event => update('icon', event.target.value)} placeholder="可选，URL 或 data:image/…" /></label>
       </div>
-    </details>
+    </Accordion>
   </div>;
 }

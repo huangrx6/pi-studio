@@ -74,12 +74,6 @@
 .notification-item-copy p { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-relaxed); overflow-wrap: anywhere; }
 .notification-panel .notification-item-error { color: var(--error); }
 .notification-item-details { min-width: 0; }
-.notification-item-details summary {
-  width: max-content;
-  cursor: pointer;
-  color: var(--accent-foreground);
-  font-size: var(--text-sm);
-}
 .notification-item-details pre {
   max-height: 160px;
   margin: var(--space-2) 0 0;

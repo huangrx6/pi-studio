@@ -16,6 +16,7 @@ import { createPortal } from 'react-dom';
 import { Archive, Copy, GitFork, MoreHorizontal, Pencil, Pin, PinOff, SquarePen, Trash2, Undo2 } from 'lucide-react';
 import { SettingsDialog } from '../shared/SettingsDialog';
 import { errorText } from '../shared/error-text';
+import { useSurfaceActive } from '../shared/surface-visibility';
 import './styles/sidebar-actions.css';
 
 /** 侧边栏支持的操作类型，与 `pi:conversation-action` 的 action 参数一致。 */
@@ -44,6 +45,8 @@ export function SidebarActions({ kind, id, name, pinned, archived, sessionCount,
 }) {
   /** 菜单的 fixed 坐标；为 null 时菜单关闭。 */
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
+  const surfaceActive = useSurfaceActive();
+  useEffect(() => { if (!surfaceActive) { setPosition(null); setRestoringFocus(false); } }, [surfaceActive]);
   /** 重命名弹窗是否打开。 */
   const [renaming, setRenaming] = useState(false);
   /** 二次确认弹窗要确认的动作；三种破坏性操作互斥。 */
@@ -204,7 +207,7 @@ export function SidebarActions({ kind, id, name, pinned, archived, sessionCount,
     </>}
     {/* 更多操作菜单：portal 到 body，避免被侧边栏的 overflow 裁剪；
         菜单容器统一处理键盘循环，Esc 关闭并把焦点还给触发按钮。 */}
-    {position && createPortal(<div ref={menu} id={menuId} className="sidebar-action-menu" role="menu" aria-label={`${name}的操作`} style={position} onKeyDown={event => {
+    {surfaceActive && position && createPortal(<div ref={menu} id={menuId} className="sidebar-action-menu" role="menu" aria-label={`${name}的操作`} style={position} onKeyDown={event => {
       if (event.nativeEvent.isComposing) return;
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); dismissMenu(); }
       if (event.key === 'Tab') {
@@ -241,6 +244,6 @@ export function SidebarActions({ kind, id, name, pinned, archived, sessionCount,
       <p className="sidebar-confirm-name">{name}</p>
     </SettingsDialog>, document.body)}
     {/* 两个弹窗都关闭时，动作错误退化为浮动提示，避免失败信息被悄悄丢掉。 */}
-    {error && !renaming && !confirming && createPortal(<div className="sidebar-action-error" role="alert">{error}<button onClick={() => setError(null)} aria-label="关闭错误提示">关闭</button></div>, document.body)}
+    {surfaceActive && error && !renaming && !confirming && createPortal(<div className="sidebar-action-error" role="alert">{error}<button onClick={() => setError(null)} aria-label="关闭错误提示">关闭</button></div>, document.body)}
   </div>;
 }

@@ -1,3 +1,4 @@
+import { Accordion } from './helpers/accordion.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -12,6 +13,7 @@ const require = createRequire(import.meta.url);
 function compile(path, imports = {}) {
   const context = { exports: {}, setTimeout, clearTimeout, window: { piApi: {} }, require(id) {
     if (id.endsWith('.css')) return {};
+      if (id.endsWith('/Accordion')) return { Accordion };
     return imports[id] ?? require(id);
   } };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL(path, import.meta.url), 'utf8'), {
@@ -51,7 +53,7 @@ test('installation consent, source, execution boundary, dependencies and publish
 
 test('technical identity and full integrity hashes remain accessible in a closed details element', () => {
   const html = render();
-  assert.match(html, /<details class="extension-integrity"><summary>技术信息与完整性校验<\/summary>/);
+  assert.match(html, /<details class="pi-accordion extension-integrity"><summary[^>]*>[\s\S]*?技术信息与完整性校验[\s\S]*?<\/summary>/);
   const technical = html.match(/<details[\s\S]*?<\/details>/)?.[0];
   for (const text of ['qa.extension', 'complete-tree-sha256', 'complete-archive-sha256']) assert.ok(technical.includes(text), text);
   assert.match(technical, /不代表发布者签名或身份认证/);

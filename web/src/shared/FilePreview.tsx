@@ -1,3 +1,4 @@
+import { Accordion } from './Accordion';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
@@ -172,8 +173,8 @@ function PreviewBody({
       <FileKindIcon path={file.path} mime={file.mimeType} />
       <strong>{previewTypeLabel(file.path)} 暂不支持内嵌预览</strong>
       {file.unavailableReason && <p>{file.unavailableReason}</p>}
-      {file.byteSample && <details className="file-preview-bytes"><summary>查看前 {file.byteSample.length / 2} 字节</summary>
-        <pre>{formatByteSample(file.byteSample)}</pre></details>}
+      {file.byteSample && <Accordion className="file-preview-bytes" summary={<>查看前 {file.byteSample.length / 2} 字节</>} compact>
+        <pre>{formatByteSample(file.byteSample)}</pre></Accordion>}
       {onOpenExternal && <button type="button" className="settings-outline" onClick={() => onOpenExternal(file)}>
         <ExternalLink />用系统应用打开
       </button>}

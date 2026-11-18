@@ -11,6 +11,80 @@ const key = 'synthetic-private-key';
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const json = (body, status = 200) => Response.json(body, { status });
 
+test('quota auth modes reach an HTTP endpoint with the intended header or encoded query parameter', async t => {
+  const { createServer } = require('node:http');
+  const { once } = require('node:events');
+  const requests = [];
+  const server = createServer((req, res) => {
+    requests.push({ url: new URL(req.url, 'http://localhost'), headers: req.headers });
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ data: { balance: 42 } }));
+  });
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const current = provider();
+  const credential = 'synthetic +&=?/#%key';
+  const monitor = createProviderQuotaMonitor({ getProvider: () => current, readKey: () => credential });
+  const cases = [
+    ['none'], ['bearer', 'authorization', `Bearer ${credential}`],
+    ['authorization', 'authorization', credential], ['x-api-key', 'x-api-key', credential],
+    ['api-key', 'api-key', credential], ['x-goog-api-key', 'x-goog-api-key', credential],
+    ['custom-header', 'ocp-apim-subscription-key', credential], ['query'],
+  ];
+  for (const [auth, header, value] of cases) {
+    current.quota = normalizeProviderQuota({ ...config(), auth,
+      endpoint: `http://127.0.0.1:${server.address().port}/quota?period=weekly`,
+      authName: auth === 'query' ? 'key' : 'Ocp-Apim-Subscription-Key',
+      headers: [{ name: 'anthropic-version', value: '2023-06-01' }],
+    });
+    const result = await monitor.read('custom', true);
+    assert.equal(result.status, 'ready', auth);
+    assert.equal(result.metrics[0].value, '42 元');
+    const request = requests.at(-1);
+    assert.equal(request.headers['anthropic-version'], '2023-06-01');
+    if (header) assert.equal(request.headers[header], value);
+    else assert.equal(request.headers.authorization, undefined);
+    assert.equal(request.url.searchParams.get('period'), 'weekly');
+    assert.equal(request.url.searchParams.get('key'), auth === 'query' ? credential : null);
+    assert.ok(!JSON.stringify(current.quota).includes(credential));
+    const paths = await monitor.inspect('custom', current.quota);
+    assert.deepEqual(paths.map(item => item.path), ['data.balance']);
+  }
+});
+
+test('auth configuration rejects request injection, credential headers and query collisions', () => {
+  for (const authName of ['', 'bad\r\nInjected', 'Host', 'Cookie', 'Proxy-Authorization', 'Content-Type', 'sec-fetch-site']) {
+    assert.throws(() => normalizeProviderQuota({ ...config(), auth: 'custom-header', authName }));
+  }
+  for (const authName of ['key&secret', 'key=value', '', 'key\n']) {
+    assert.throws(() => normalizeProviderQuota({ ...config(), auth: 'query', authName }));
+  }
+  assert.throws(() => normalizeProviderQuota({ ...config(), auth: 'query', authName: 'period' }), /同名/);
+  for (const headers of [
+    [{ name: 'Authorization', value: key }], [{ name: 'cookie', value: key }],
+    [{ name: 'anthropic-version', value: '2023-06-01\nInjected: key' }],
+    [{ name: 'OpenAI-Project', value: 'one' }, { name: 'openai-project', value: 'two' }],
+  ]) assert.throws(() => normalizeProviderQuota({ ...config(), headers }));
+  assert.throws(() => normalizeProviderQuota({ ...config(), auth: 'custom-header', authName: 'New-Api-User', headers: [{ name: 'new-api-user', value: '123' }] }));
+});
+
+test('HTTP 200 quota authentication failures clear cached values without exposing response secrets', async () => {
+  const current = provider();
+  current.quota.auth = 'authorization';
+  let body = { data: { balance: 8 } };
+  const monitor = createProviderQuotaMonitor({ getProvider: () => current, readKey: () => key, fetcher: async () => json(body) });
+  assert.equal((await monitor.read('custom')).status, 'ready');
+  for (const code of [401, '403', 1000, 500]) {
+    body = { success: false, code, msg: key, data: { balance: 100 } };
+    const result = await monitor.read('custom', true);
+    assert.equal(result.status, 'error');
+    assert.deepEqual(result.metrics, []);
+    assert.ok(!JSON.stringify(result).includes(key));
+    await assert.rejects(monitor.inspect('custom', current.quota), error => !error.message.includes(key));
+  }
+});
+
 test('a window shared by different allowance types can be addressed by type and period in either order', () => {
   const limits = [
     { type: 'requests', unit: 6, remaining: 0 },

@@ -1,3 +1,4 @@
+import { Accordion } from '../../shared/Accordion';
 import { LoadingIndicator, LoadingState } from '../../shared/LoadingState';
 import { useSettingsDraftGuard } from '../../shared/SettingsDraftGuard';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent } from 'react';
@@ -328,10 +329,10 @@ export function AgentToolsSettings({ cwd, initialSelection, onSaved }: {
     </div>
     {error && <div className="settings-error" role="alert">{error}</div>}
     {notice && <p className="agent-tool-notice" role="status">{notice}</p>}
-    {(catalog?.errors.length || catalog?.warnings.length) ? <details className="agent-tool-diagnostics">
-      <summary>扩展诊断 · {(catalog?.errors.length || 0) + (catalog?.warnings.length || 0)} 项</summary>
+    {(catalog?.errors.length || catalog?.warnings.length) ? <Accordion className="agent-tool-diagnostics" summary="扩展诊断" badge={(catalog?.errors.length || 0) + (catalog?.warnings.length || 0)}>
+
       {[...(catalog?.errors || []), ...(catalog?.warnings || [])].map((item, index) => <div className="agent-tool-diagnostic" key={`${item.path}-${index}`}><code>{item.path || '扩展加载'}</code><p>{item.message}</p></div>)}
-    </details> : null}
+    </Accordion> : null}
     {wildcardRules.length > 0 && <section className="agent-tool-section" aria-label="批量工具规则">
       <h2>批量工具规则 <InfoHint label="通配符也允许以后出现的匹配工具。停用其中一个工具，会把该规则展开成当前检测到的其他工具。" /></h2>
       <ul className="agent-tool-rule-list">{wildcardRules.map(name => <li key={name}>
@@ -357,7 +358,7 @@ export function AgentToolsSettings({ cwd, initialSelection, onSaved }: {
             return <button id={`agent-tool-tab-${index}`} type="button" role="tab" aria-selected={active} aria-controls="agent-tool-source-panel" tabIndex={active ? 0 : -1} key={group.key} onClick={() => setActiveSourceKey(group.key)} onKeyDown={event => onSourceTabKeyDown(event, index)}>{group.source.label}<span>{group.tools.length + group.commands.length}</span></button>;
           })}</div>
           {activeGroup && <section id="agent-tool-source-panel" role="tabpanel" aria-labelledby={`agent-tool-tab-${groups.indexOf(activeGroup)}`}>
-            <div className="agent-tool-source-meta"><span>{SOURCE_KIND_LABEL[activeGroup.source.kind]} · {scopeLabel(activeGroup.source.scope)}</span>{(activeGroup.source.path || activeGroup.source.source) && <details><summary>来源位置</summary><code>{activeGroup.source.path || activeGroup.source.source}</code></details>}</div>
+            <div className="agent-tool-source-meta"><span>{SOURCE_KIND_LABEL[activeGroup.source.kind]} · {scopeLabel(activeGroup.source.scope)}</span>{(activeGroup.source.path || activeGroup.source.source) && <Accordion summary="来源位置"><code>{activeGroup.source.path || activeGroup.source.source}</code></Accordion>}</div>
             <ul className="agent-tool-list">
               {activeGroup.tools.map(tool => {
                 const enabled = selectionEnables(tool.name);

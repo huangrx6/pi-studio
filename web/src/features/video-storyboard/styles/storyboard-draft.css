@@ -30,7 +30,6 @@
 .story-draft-context strong, .story-draft-shot-title strong { font-size: var(--text-base); font-weight: var(--weight-semibold); overflow-wrap: anywhere; }
 .story-draft-context p { color: var(--muted); margin: var(--space-1) 0; overflow-wrap: anywhere; white-space: pre-line; font-size: var(--text-sm); }
 .story-draft-materials { color: var(--muted); font-size: var(--text-xs); }
-.story-draft-materials summary { cursor: pointer; }
 .story-draft-materials ul { margin: var(--space-2) 0 0; padding-inline-start: var(--space-4); overflow-wrap: anywhere; }
 .story-draft-disclosure, .story-draft-origin { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-relaxed); }
 .story-draft-empty { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
@@ -63,9 +62,6 @@
 .story-draft-fields dd { margin: 0; grid-column: 2; white-space: pre-line; line-height: var(--leading-relaxed); }
 .story-draft-fields dd small { padding-inline-end: var(--space-2); }
 .story-draft-fields dd:has(+ dd) { color: var(--muted); }
-.story-draft-details > summary { display: flex; align-items: center; justify-content: space-between; min-height: var(--control); color: var(--muted); font-size: var(--text-sm); cursor: pointer; }
-.story-draft-details summary svg { width: var(--icon-xs); height: var(--icon-xs); }
-.story-draft-details[open] summary svg { transform: rotate(180deg); }
 .story-draft-origin { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-1) var(--space-3); overflow-wrap: anywhere; }
 @container draft-review (min-width: 530px) {
   .story-draft-layout[data-sequence="true"] { grid-template-columns: minmax(160px, .75fr) minmax(0,1.4fr); }

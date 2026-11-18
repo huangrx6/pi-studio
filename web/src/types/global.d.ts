@@ -645,7 +645,7 @@ declare global {
       importProviderModels(payload: { providerId: string; models: Array<{ id: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean; thinkingLevels?: ConcreteThinkingLevel[] }>; cwd?: string }): Promise<CommittedProjection<ModelResourceSnapshot>>;
       /** 读取来源的 baseUrl、API 类型与图标。 */
       providerQuota(providerId: string, refresh?: boolean): Promise<ProviderQuotaSnapshot>;
-      providerQuotaFields(input: { providerId: string; endpoint: string; auth: ProviderQuotaConfig['auth']; apiKey?: string }): Promise<QuotaFieldSuggestion[]>;
+      providerQuotaFields(input: Pick<ProviderQuotaConfig, 'endpoint' | 'auth' | 'authName' | 'headers'> & { providerId: string; apiKey?: string }): Promise<QuotaFieldSuggestion[]>;
       previewQuotaMapping(input: { fields: QuotaField[]; sample: string }): Promise<QuotaMetric[]>;
       providerConfig(providerId: string): Promise<{ providerId: string; name: string; baseUrl: string; api: string; icon: string; modelsUrl: string; mediaModels?: { speech: string[]; image: string[] }; quota: ProviderQuotaConfig | null; builtin: boolean; enabled: boolean }>;
       /** 切换模型，返回新的选择快照。 */

@@ -76,22 +76,34 @@ async function assertShellAlignment(label) {
   const geometry = await page.evaluate(async () => {
     await Promise.all([...document.querySelectorAll('.shell-sidebar')].flatMap(sidebar =>
       sidebar.getAnimations().map(animation => animation.finished.catch(() => {}))));
-    const rect = selector => document.querySelector(selector).getBoundingClientRect();
-    const chat = rect('.main');
-    const settings = rect('.settings-content');
-    const notice = rect('.settings-saved-flash');
-    return {
-      sidebarWidth: [rect('.sidebar').width, rect('.settings-nav').width],
-      headerTop: [rect('.chat-header').top, rect('.settings-header').top],
-      headerBottom: [rect('.chat-header').bottom, rect('.settings-header').bottom],
-      canvasLeft: [chat.left, settings.left],
-      canvasRight: [chat.right, settings.right],
-      canvasTop: [chat.top, settings.top],
-      canvasBottom: [chat.bottom, settings.bottom],
-      columnLeft: [rect('.composer-wrap').left, rect('.settings-page-frame').left],
-      columnRight: [rect('.composer-wrap').right, rect('.settings-page-frame').right],
-      noticeCenter: [settings.left + settings.width / 2, notice.left + notice.width / 2],
-    };
+    // Settings now removes the retained workspace from layout. Measure its
+    // restored geometry synchronously, without painting it over settings.
+    const retained = [...document.querySelectorAll('.app > :is(.sidebar, .content-region)')];
+    const styles = retained.map(node => node.getAttribute('style'));
+    for (const node of retained) {
+      node.style.setProperty('display', node.classList.contains('sidebar') ? 'flex' : 'grid', 'important');
+      node.style.setProperty('visibility', 'hidden', 'important');
+    }
+    try {
+      const rect = selector => document.querySelector(selector).getBoundingClientRect();
+      const chat = rect('.main');
+      const settings = rect('.settings-content');
+      const notice = rect('.settings-saved-flash');
+      return {
+        sidebarWidth: [rect('.sidebar').width, rect('.settings-nav').width],
+        headerTop: [rect('.chat-header').top, rect('.settings-header').top],
+        headerBottom: [rect('.chat-header').bottom, rect('.settings-header').bottom],
+        canvasLeft: [chat.left, settings.left],
+        canvasRight: [chat.right, settings.right],
+        canvasTop: [chat.top, settings.top],
+        canvasBottom: [chat.bottom, settings.bottom],
+        columnLeft: [rect('.composer-wrap').left, rect('.settings-page-frame').left],
+        columnRight: [rect('.composer-wrap').right, rect('.settings-page-frame').right],
+        noticeCenter: [settings.left + settings.width / 2, notice.left + notice.width / 2],
+      };
+    } finally {
+      retained.forEach((node, index) => styles[index] === null ? node.removeAttribute('style') : node.setAttribute('style', styles[index]));
+    }
   });
   for (const [edge, [chat, settings]] of Object.entries(geometry)) {
     assert.ok(Math.abs(chat - settings) <= 1, `${label} ${edge}: chat ${chat}, settings ${settings}`);
@@ -145,10 +157,12 @@ try {
   assert.ok(result.coldResources.some((file) => /^index-.*\.js$/.test(file)), 'CDP observes the production entry script');
   for (const file of Object.values(chunks)) assert.equal(result.coldResources.includes(file), false, `${file} is not loaded on the cold conversation screen`);
 
-  const composer = page.getByRole('textbox', { name: '发送给 Pi 的消息', exact: true });
+  const composer = page.getByRole('textbox', { name: '发送给 Pi 的消息', exact: true, includeHidden: true });
   const draft = '保留这段草稿：检查设置时不发送给模型。';
   await composer.fill(draft);
+  assert.equal(await composerValue(composer), draft, 'draft is entered before opening settings');
   await page.locator('.sidebar-bottom button[title="设置"]').click();
+  assert.equal(await composerValue(composer), draft, 'opening settings preserves the hidden editor');
   const nav = page.locator('.settings-navigation');
   const content = page.locator('.settings-content');
   const settingsSearch = nav.getByRole('searchbox', { name: '搜索设置', exact: true });
@@ -342,6 +356,7 @@ try {
   assert.equal(await content.getByRole('slider').count(), 0, 'removal restores the compact empty state');
 
   for (const [index, route] of routes.entries()) {
+    assert.equal(await composerValue(composer), draft, `draft retained before ${route.label}`);
     await nav.getByRole('button', { name: route.label, exact: true }).click();
     await content.getByRole('heading', { name: route.title, exact: true, level: 1 }).waitFor();
     await assertShellAlignment(`${route.label} narrow`);

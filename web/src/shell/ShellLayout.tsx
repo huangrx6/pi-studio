@@ -1,21 +1,23 @@
 import type { ReactNode, Ref } from 'react';
 import { PanelLeft } from 'lucide-react';
 import { BrandMark } from './app-shell-config';
+import { SurfaceActiveContext } from '../shared/surface-visibility';
 
 /** The sidebar and title band surround the same inset canvas in both views. */
-export function ShellLayout({ sidebar, resizeHandle, isNewConversation, children }: {
+export function ShellLayout({ sidebar, resizeHandle, isNewConversation, active = true, children }: {
   sidebar: ReactNode;
   resizeHandle?: ReactNode;
   isNewConversation?: boolean;
+  active?: boolean;
   children: ReactNode;
 }) {
-  return <>
+  return <SurfaceActiveContext.Provider value={active}>
     {sidebar}
     {resizeHandle}
     <div className={isNewConversation ? 'content-region is-new-conversation' : 'content-region'}>
       {children}
     </div>
-  </>;
+  </SurfaceActiveContext.Provider>;
 }
 
 export function ShellSidebar({ className, label, onCollapse, collapseRef, children }: {

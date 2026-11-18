@@ -1,3 +1,4 @@
+import { Accordion } from './helpers/accordion.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -11,7 +12,7 @@ const require = createRequire(import.meta.url);
 function compile(relative, imports = {}) {
   const source = fs.readFileSync(new URL(relative, import.meta.url), 'utf8');
   const context = {
-    exports: {}, require: id => id.endsWith('.css') ? {} : imports[id] ?? require(id),
+    exports: {}, require: id => id.endsWith('.css') ? {} : id.endsWith('/Accordion') ? { Accordion } : imports[id] ?? require(id),
   };
   vm.runInNewContext(ts.transpileModule(source, {
     compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -51,7 +52,7 @@ test('empty permissions never imply safe declarative-only execution and trust es
 
 test('technical identity and full hashes remain available in a closed native disclosure', () => {
   const html = render();
-  assert.match(html, /<details class="extension-detail-technical"><summary>技术与运行信息<\/summary>/);
+  assert.match(html, /<details class="pi-accordion extension-detail-technical"><summary[^>]*>[\s\S]*?技术与运行信息[\s\S]*?<\/summary>/);
   const technical = html.match(/<details[\s\S]*?<\/details>/)?.[0];
   for (const content of ['qa.extension', 'qa-runtime', 'content-hash-123', 'version-hash-456', 'dependency.example']) {
     assert.ok(technical.includes(content), content);

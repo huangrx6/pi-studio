@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
+import { useSurfaceActive } from '../shared/surface-visibility';
 import { Activity, AlertCircle, Check, Clock3, Layers, ListTree, Search, Sparkles, SquareMinus, User, Wrench, X } from 'lucide-react';
 import { LoadingIndicator } from '../shared/LoadingState';
 import { SessionViewHeader } from './SessionViewHeader';
@@ -27,6 +28,8 @@ function TraceActivityMap({ items, selectedId, onSelect }: {
   onSelect: (item: ConversationTraceItem) => void;
 }) {
   const [hover, setHover] = useState<{ item: ConversationTraceItem; x: number; y: number } | null>(null);
+  const active = useSurfaceActive();
+  useEffect(() => { if (!active) setHover(null); }, [active]);
   const root = useRef<HTMLDivElement>(null);
   const [focusId, setFocusId] = useState<string>();
   const tabStop = items.some(item => item.id === focusId) ? focusId : selectedId ?? items[0]?.id;
@@ -59,7 +62,7 @@ function TraceActivityMap({ items, selectedId, onSelect }: {
         />)}
       </div>
     </div>
-    {hover && createPortal(<div className="trace-activity-tooltip" role="tooltip" style={{ left: hover.x, top: hover.y }}>
+    {active && hover && createPortal(<div className="trace-activity-tooltip" role="tooltip" style={{ left: hover.x, top: hover.y }}>
       <strong>{kindLabels[hover.item.kind]} · {hover.item.label}</strong>
       <span>{timeLabel(hover.item.at)}{hover.item.endedAt !== undefined ? ` → ${timeLabel(hover.item.endedAt)}` : ''}</span>
       <span>{statusLabels[hover.item.status]} · 耗时 {durationLabel(hover.item.durationMs)}</span>

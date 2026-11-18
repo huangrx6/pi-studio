@@ -1,3 +1,4 @@
+import { Accordion } from '../../shared/Accordion';
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { LoadingIndicator } from '../../shared/LoadingState';
@@ -152,7 +153,6 @@ function McpDetailScope({ server, workspace, onClose, onRefresh, onCommitted, on
       </div>
       <button type="button" className="icon-button" aria-label="关闭 MCP 详情" onClick={close}><X /></button>
     </header>
-
     <div className="mcp-detail-body">
       <div className="mcp-detail-target"><span>目标</span><code>{server.target}</code></div>
       {server.description && <p className="mcp-detail-description">{server.description}</p>}
@@ -180,9 +180,7 @@ function McpDetailScope({ server, workspace, onClose, onRefresh, onCommitted, on
         {testResult.instructions && <p>{testResult.instructions}</p>}
         <p>Tools {testResult.capabilities?.tools ? '已声明' : '未声明'} · Resources {testResult.capabilities?.resources ? '已声明' : '未声明'}</p>
       </section>}
-
-      <details className="mcp-detail-section">
-        <summary>连接参数</summary>
+      <Accordion className="mcp-detail-section" summary="连接参数">
         <dl className="mcp-detail-facts">
           <div><dt>作用域</dt><dd>全局 · 所有工作区使用同一份连接配置</dd></div>
           {server.transport === 'stdio' && <div><dt>工作目录</dt><dd><code>{server.cwd || 'Studio 应用数据目录'}</code></dd></div>}
@@ -191,9 +189,9 @@ function McpDetailScope({ server, workspace, onClose, onRefresh, onCommitted, on
           <div><dt>凭据名称</dt><dd>{(server.transport === 'stdio' ? envKeys : headerKeys).join('、') || '无'} <span>值始终隐藏</span></dd></div>
           {server.transport === 'http' && <div><dt>OAuth</dt><dd>{oauthConnected ? '已授权' : '未授权'}</dd></div>}
         </dl>
-      </details>
-      <details className="mcp-detail-section" open={toolsOpen} onToggle={event => setToolsOpen(event.currentTarget.open)}>
-        <summary>工具 · {tools.length}</summary>
+      </Accordion>
+      <Accordion className="mcp-detail-section" open={toolsOpen} onToggle={event => setToolsOpen(event.currentTarget.open)} summary="工具" badge={tools.length}>
+
         {toolsOpen && <>
           <p>按需工具通过 tool_search 在下一轮请求中加载。</p>
           {tools.length ? <div className="mcp-detail-tools">
@@ -204,11 +202,11 @@ function McpDetailScope({ server, workspace, onClose, onRefresh, onCommitted, on
             </div>)}
           </div> : <p>当前没有可列出的工具。</p>}
         </>}
-      </details>
-      {stderr && <details className="mcp-detail-section" open={diagnosticsOpen} onToggle={event => setDiagnosticsOpen(event.currentTarget.open)}>
-        <summary>诊断信息</summary>
+      </Accordion>
+      {stderr && <Accordion className="mcp-detail-section" open={diagnosticsOpen} onToggle={event => setDiagnosticsOpen(event.currentTarget.open)} summary="诊断信息">
+
         {diagnosticsOpen && <><p>凭据和已保存的 Header 值已脱敏。</p><pre className="mcp-stderr">{stderr}</pre></>}
-      </details>}
+      </Accordion>}
     </div>
     <footer className="detail-footer"><span /><button type="button" className="settings-outline" onClick={close}>关闭</button></footer>
   </DetailDialog>;

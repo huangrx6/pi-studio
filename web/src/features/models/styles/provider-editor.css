@@ -8,10 +8,6 @@
 .provider-media-kind textarea { box-sizing: border-box; width: 100%; min-width: 0; resize: vertical; font-family: var(--mono); }
 .provider-editor-fields .provider-editor-note { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-body); overflow-wrap: anywhere; }
 .provider-editor-advanced { min-width: 0; border-top: 1px solid var(--divider); padding-top: var(--space-4); }
-.provider-editor-advanced > summary { cursor: pointer; color: var(--text); font-size: var(--text-sm); }
-.provider-editor-advanced > summary > span { margin-left: var(--space-3); color: var(--muted); font-size: var(--text-xs); }
-.provider-editor-advanced > summary:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 4px; border-radius: var(--radius-control); }
-.provider-editor-advanced[open] > summary { margin-bottom: var(--space-4); }
 
 .quota-editor { min-width: 0; border-block-start: 1px solid var(--divider); padding-block-start: var(--space-4); }
 .quota-editor-heading, .quota-mapping-heading { display: flex; align-items: center; gap: 10px; }
@@ -35,10 +31,6 @@
 .quota-add-field { display: inline-flex; justify-self: start; align-items: center; gap: 4px; }
 .quota-add-field svg, .quota-field-footer svg { width: var(--icon-sm); height: var(--icon-sm); }
 .quota-sample { min-width: 0; border-top: 1px solid var(--divider); padding-top: var(--space-3); }
-.quota-sample > summary { display: flex; align-items: center; gap: 6px; width: fit-content; color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-medium); cursor: pointer; list-style: none; }
-.quota-sample > summary::-webkit-details-marker { display: none; }
-.quota-sample > summary svg { width: var(--icon-sm); height: var(--icon-sm); color: var(--muted); }
-.quota-sample[open] > summary svg { transform: rotate(90deg); }
 .quota-sample-columns { display: grid; min-width: 0; margin-top: var(--space-3); overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); }
 .quota-sample-source { display: flex; flex-direction: column; min-width: 0; background: color-mix(in srgb, var(--surface-hover) 35%, var(--surface)); }
 .quota-sample-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: 36px; padding: 0 var(--space-3); }

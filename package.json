@@ -1,6 +1,6 @@
 {
   "name": "pi-studio",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "private": true,
   "type": "module",
   "description": "Pi Studio — a native desktop workspace built on Pi Durable.",
@@ -50,6 +50,7 @@
     "qa:sidebar": "node scripts/qa/qa-sidebar-virtualization.mjs",
     "qa:performance": "node scripts/qa/qa-performance.mjs",
     "qa:settings-execution": "node scripts/qa/qa-settings-execution.mjs",
+    "qa:settings-isolation": "node scripts/qa/qa-settings-isolation.mjs",
     "qa:settings-resources": "node scripts/qa/qa-settings-resources.mjs",
     "qa:settings": "node scripts/qa/qa-settings-refinement.mjs && node scripts/qa/qa-settings-load-failure.mjs",
     "qa:startup": "node scripts/qa/qa-packaged-startup.mjs",

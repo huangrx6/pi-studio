@@ -2,6 +2,11 @@ const { normalizeSecureHttpUrl } = require('./external-url.cjs');
 
 const MAX_QUOTA_FIELDS = 24;
 const FORMATS = new Set(['number', 'percent', 'fraction', 'enum', 'time']);
+const AUTH_MODES = new Set(['none', 'bearer', 'authorization', 'x-api-key', 'api-key', 'x-goog-api-key', 'custom-header', 'query']);
+const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,80}$/;
+const RESERVED_HEADERS = /^(?:accept|content-.*|host|connection|cookie|set-cookie|proxy-.*|sec-.*|origin|referer|transfer-encoding|te|trailer|upgrade|user-agent)$/i;
+// These are public routing/version values, never alternative credential inputs.
+const METADATA_HEADERS = new Set(['anthropic-version', 'anthropic-beta', 'openai-organization', 'openai-project', 'x-goog-user-project', 'new-api-user']);
 const KEY = /^[\p{L}\p{N}_$-]+/u;
 const BLOCKED = new Set(['__proto__', 'constructor', 'prototype']);
 const numberFormat = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 8 });
@@ -112,8 +117,32 @@ function quotaConnection(input) {
   if ([...new URL(endpoint).searchParams.keys()].some(key => credentialParam.test(key))) {
     throw new Error('额度接口地址不能包含凭据，请使用认证选项。');
   }
-  if (!['none', 'bearer', 'x-api-key'].includes(input.auth)) throw new Error('请选择有效的额度接口认证方式。');
-  return { endpoint, auth: input.auth };
+  if (!AUTH_MODES.has(input.auth)) throw new Error('请选择有效的额度接口认证方式。');
+  const connection = { endpoint, auth: input.auth };
+  if (input.auth === 'custom-header' || input.auth === 'query') {
+    const authName = shortText(input.authName, 80, '认证字段名称');
+    if (input.auth === 'custom-header'
+      ? !HEADER_NAME.test(authName) || RESERVED_HEADERS.test(authName)
+      : !/^[A-Za-z][A-Za-z0-9_.-]{0,79}$/.test(authName)) throw new Error('请填写有效的认证请求头或查询参数名称。');
+    if (input.auth === 'query' && new URL(endpoint).searchParams.has(authName)) {
+      throw new Error('额度接口地址已包含同名认证参数，请移除地址中的参数，由认证选项自动添加。');
+    }
+    connection.authName = authName;
+  }
+  if (input.headers !== undefined) {
+    if (!Array.isArray(input.headers) || input.headers.length > METADATA_HEADERS.size) throw new Error('附加请求头数量无效。');
+    const seen = new Set();
+    connection.headers = input.headers.map(row => {
+      const name = shortText(row?.name, 80, '请求头名称').toLowerCase();
+      const value = shortText(row?.value, 256, '请求头值');
+      if (!METADATA_HEADERS.has(name) || seen.has(name) || name === connection.authName?.toLowerCase() || !value || /[^\x20-\x7E]/.test(value)) {
+        throw new Error('附加请求头仅支持不重复的版本、组织、项目或用户标识；凭据请使用认证选项。');
+      }
+      seen.add(name);
+      return { name, value };
+    });
+  }
+  return connection;
 }
 
 function normalizeProviderQuota(input) {

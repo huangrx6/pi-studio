@@ -106,7 +106,6 @@
 .skill-catalog-feedback { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); background: var(--error-soft); color: var(--error); }
 .skill-catalog-feedback button { flex: none; }
 .skill-hub-diagnostics { border: 1px solid var(--border); color: var(--muted); }
-.skill-hub-diagnostics summary { cursor: pointer; }
 .skill-hub-diagnostics > div { display: grid; gap: 2px; padding-top: var(--space-2); }
 .skill-hub-diagnostics code { font: var(--text-xs) var(--mono); }
 .skill-source-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }

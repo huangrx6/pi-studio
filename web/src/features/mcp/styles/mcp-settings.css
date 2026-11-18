@@ -17,10 +17,6 @@
 .mcp-server-actions .switch { flex: none; }
 .mcp-refresh-glyph { display: inline-block; width: var(--icon-sm); font-size: var(--text-md); line-height: 1; text-align: center; }
 .mcp-server-error { min-width: 0; font-size: var(--text-xs); line-height: var(--leading-body); color: var(--error); }
-.mcp-server-error summary { width: fit-content; cursor: pointer; }
 .mcp-server-error pre { max-height: 180px; overflow: auto; margin: 8px 0 0; padding: 8px 10px; border-radius: var(--radius-control); background: var(--surface-soft); color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; font: var(--text-xs)/var(--leading-body) var(--mono); }
-.mcp-server-open:focus-visible,
-.mcp-server-actions button:focus-visible,
-.mcp-server-error summary:focus-visible,
-.mcp-server-error pre:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; border-radius: var(--radius-control); }
+.mcp-server-open:focus-visible, .mcp-server-actions button:focus-visible, .mcp-server-error pre:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; border-radius: var(--radius-control); }
 .mcp-settings-empty { margin: 0; padding: 20px 16px; border: 1px dashed var(--border); border-radius: var(--radius-control); background: var(--surface-soft); color: var(--muted); font-size: var(--text-sm); }

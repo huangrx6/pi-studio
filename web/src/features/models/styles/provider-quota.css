@@ -19,3 +19,10 @@
 .quota-detail-metrics progress::-webkit-progress-value { background: var(--accent); }
 .quota-detail-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--divider); padding: 12px 20px; font-size: var(--text-xs); color: var(--muted); }
 .quota-detail-footer svg { width: var(--icon-sm); height: var(--icon-sm); }
+.quota-request-options { border-top: 1px solid var(--divider); padding-top: var(--space-4); }
+.quota-request-header { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); margin-block: var(--space-3); }
+.quota-request-header > :is(input, .pi-select) { min-width: 0; }
+@media (max-width: 600px) {
+  .quota-request-header { grid-template-columns: minmax(0, 1fr) auto; }
+  .quota-request-header > .pi-select { grid-column: 1 / -1; }
+}

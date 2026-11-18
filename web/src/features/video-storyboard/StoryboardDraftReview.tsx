@@ -1,3 +1,4 @@
+import { Accordion } from '../../shared/Accordion';
 import { useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { StoryboardAsset, StoryboardDraftPreview, StoryboardShot, StoryboardWork } from '../../types/storyboard-types';
@@ -59,9 +60,9 @@ export function StoryboardDraftReview({ workspace, work, planId, preview, shot, 
         {shot ? <>{rows.length ? <dl className="story-draft-fields">{rows.map(([label, value]) => <div key={label}>
             <dt>{label}</dt><dd><small>原来</small>{prior?.get(label) || '未设置'}</dd><dd><small>建议</small>{value || '清除'}</dd>
           </div>)}</dl> : <p className="story-draft-disclosure">建议与当前镜头相同。</p>}</>
-          : <details className="story-draft-details" key={selected.id}><summary>查看镜头设计<ChevronDown aria-hidden /></summary>
+          : <Accordion className="story-draft-details" key={selected.id} summary="查看镜头设计">
             <dl className="story-draft-fields">{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-          </details>}
+          </Accordion>}
       </div>
     </div>
     <p className="story-draft-origin">制作 Skill · {preview.skillNames.map(name => name === 'storyboard-director' ? '分镜导演' : name).join('、')}<span>{preview.modelRef}</span></p>

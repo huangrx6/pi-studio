@@ -16,7 +16,7 @@ export function installSettingsExecutionFixture() {
   async function respond(method, value, key) {
     const captured = clone(value);
     if (failures[method]) { delete failures[method]; throw new Error(`QA ${method} 保存失败，请重试`); }
-    if (holds[method] === true || holds[method] === key) await new Promise((resolve, reject) => (pending[method] ??= []).push({ resolve, reject }));
+    if (Object.hasOwn(holds, method) && (holds[method] === true || holds[method] === key)) await new Promise((resolve, reject) => (pending[method] ??= []).push({ resolve, reject }));
     return captured;
   }
   const policy = (preset = 'smart', decision = 'ask', label = '全局安全规则') => ({ version: 1, preset, default: decision, tools: { read: 'allow' }, rules: [{ id: 'protect', label, decision: 'deny', match: { tool: 'write', pathGlob: '**/.env*' } }] });

@@ -1,3 +1,4 @@
+import { Accordion } from '../shared/Accordion';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Bell, CheckCheck, CircleAlert, CircleCheck, Info, Trash2, TriangleAlert, X } from 'lucide-react';
 import { errorText } from '../shared/error-text';
@@ -224,10 +225,9 @@ export function NotificationCenter({
               <div className="notification-item-copy">
                 <div className="notification-item-heading"><strong>{item.title}</strong><time>{notificationTime(item.updatedAt ?? item.createdAt)}</time></div>
                 <p className="notification-item-message">{message.summary}</p>
-                {message.details && <details className="notification-item-details">
-                  <summary>查看详情</summary>
+                {message.details && <Accordion className="notification-item-details" summary="查看详情" compact>
                   <pre>{message.details}</pre>
-                </details>}
+                </Accordion>}
                 {item.action && onRunAction && <button
                   type="button"
                   className="notification-session-link"

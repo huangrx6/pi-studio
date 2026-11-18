@@ -1,5 +1,6 @@
+import { Accordion } from '../../shared/Accordion';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { ChevronRight, Gauge, Plus, Trash2 } from 'lucide-react';
+import { Gauge, Plus, Trash2 } from 'lucide-react';
 import { LoadingState } from '../../shared/LoadingState';
 import { Select } from '../../shared/Select';
 import { errorText } from '../../shared/error-text';
@@ -13,8 +14,14 @@ const formats = [
 ];
 const authOptions = [
   { value: 'none', label: '无需凭据' }, { value: 'bearer', label: '来源 API Key · Bearer' },
-  { value: 'x-api-key', label: '来源 API Key · x-api-key' },
+  { value: 'authorization', label: '来源 API Key · 原始 Authorization', description: '直接发送密钥，不加 Bearer；适用于 BigModel 额度接口。' },
+  { value: 'x-api-key', label: '来源 API Key · x-api-key', description: '常见于 Anthropic 等接口。' },
+  { value: 'api-key', label: '来源 API Key · api-key', description: '常见于 Azure 接口。' },
+  { value: 'x-goog-api-key', label: '来源 API Key · x-goog-api-key', description: '常见于 Google 接口。' },
+  { value: 'custom-header', label: '来源 API Key · 自定义请求头', description: '例如 Ocp-Apim-Subscription-Key、X-Auth-Token。' },
+  { value: 'query', label: '来源 API Key · 查询参数', description: '仅在接口要求时使用；密钥由主进程添加到请求地址。' },
 ];
+const metadataHeaders = ['anthropic-version', 'anthropic-beta', 'openai-organization', 'openai-project', 'x-goog-user-project', 'new-api-user'];
 const exampleFields: QuotaField[] = [{ ...emptyQuotaField(), label: '本周剩余', path: 'usage.week.remaining', unit: '次' }];
 function originOf(url: string) {
   try { return new URL(url).origin; } catch { return ''; }
@@ -36,11 +43,32 @@ export function ProviderQuotaFields({ config, providerId, apiKey, onChange }: {
         <label>额度接口（GET）<input type="url" required maxLength={2048} placeholder="https://api.example.com/usage" value={config.endpoint}
           onChange={e => onChange({ ...config, endpoint: e.target.value, auth: originOf(config.endpoint) === originOf(e.target.value) ? config.auth : 'none' })} /></label>
         <div className="settings-field"><span>接口认证</span><Select label="额度接口认证" options={authOptions} value={config.auth}
-          onChange={auth => onChange({ ...config, auth: auth as ProviderQuotaConfig['auth'] })} />
+          onChange={auth => onChange({ ...config, auth: auth as ProviderQuotaConfig['auth'], authName: auth === 'query' ? 'key' : '' })} />
           {config.auth !== 'none' && <small>查询时将向 {originOf(config.endpoint) || '所填接口'} 发送此来源的 API Key。</small>}
         </div>
+        {(config.auth === 'custom-header' || config.auth === 'query') && <label>
+          {config.auth === 'query' ? '认证查询参数名称' : '认证请求头名称'}
+          <input required maxLength={80} value={config.authName ?? ''}
+            placeholder={config.auth === 'query' ? 'key' : 'Ocp-Apim-Subscription-Key'}
+            onChange={e => onChange({ ...config, authName: e.target.value })} />
+          <small>这里只填名称，密钥自动使用此来源的 API Key。</small>
+        </label>}
       </div>
-      <QuotaMappingFields key={JSON.stringify([providerId, config.endpoint, config.auth])} providerId={providerId} apiKey={apiKey}
+      <Accordion className="quota-request-options" defaultOpen={Boolean(config.headers?.length)} summary="附加请求头" badge={config.headers?.length || undefined}>
+        <p className="provider-editor-note">仅填写版本、组织、项目或用户标识，密钥使用上方认证设置。</p>
+        {(config.headers ?? []).map((header, index) => <div className="quota-request-header" key={index} role="group" aria-label={`附加请求头 ${index + 1}`}>
+          <Select label={`附加请求头 ${index + 1} 的名称`} value={header.name}
+            options={metadataHeaders.map(name => ({ value: name, label: name, disabled: name !== header.name && config.headers?.some(row => row.name === name) }))}
+            onChange={name => onChange({ ...config, headers: config.headers!.map((row, i) => i === index ? { ...row, name } : row) })} />
+          <input required aria-label={`附加请求头 ${index + 1} 的值`} maxLength={256} value={header.value} placeholder="按厂商文档填写"
+            onChange={e => onChange({ ...config, headers: config.headers!.map((row, i) => i === index ? { ...row, value: e.target.value } : row) })} />
+          <button type="button" className="icon-button" aria-label={`移除附加请求头 ${index + 1}`}
+            onClick={() => onChange({ ...config, headers: config.headers!.filter((_, i) => i !== index) })}><Trash2 /></button>
+        </div>)}
+        <button type="button" className="quota-add-field" disabled={(config.headers?.length ?? 0) >= metadataHeaders.length}
+          onClick={() => onChange({ ...config, headers: [...(config.headers ?? []), { name: metadataHeaders.find(name => !config.headers?.some(row => row.name === name))!, value: '' }] })}><Plus />添加请求头</button>
+      </Accordion>
+      <QuotaMappingFields key={JSON.stringify([providerId, config.endpoint, config.auth, config.authName, config.headers])} providerId={providerId} apiKey={apiKey}
         config={config} onChange={fields => onChange({ ...config, fields })} />
     </div>}
   </section>;
@@ -66,7 +94,7 @@ function QuotaMappingFields({ config, providerId, apiKey, onChange }: {
     const request = ++probeRevision.current;
     setInspecting(true); setInspectMessage(''); setSuggestions([]);
     try {
-      const found = await window.piApi.providerQuotaFields({ providerId, endpoint: config.endpoint, auth: config.auth, apiKey });
+      const found = await window.piApi.providerQuotaFields({ providerId, endpoint: config.endpoint, auth: config.auth, authName: config.authName, headers: config.headers, apiKey });
       if (request !== probeRevision.current) return;
       setSuggestions(found);
       setInspectMessage(found.length ? `已读取 ${found.length} 个字段，可选择填入映射。` : '接口未返回可映射的字段。');
@@ -165,8 +193,7 @@ function QuotaSample({ fields }: { fields: QuotaField[] }) {
     }, 180);
     return () => { active = false; window.clearTimeout(timer); };
   }, [open, sample, fields, example]);
-  return <details className="quota-sample" onToggle={e => setOpen(e.currentTarget.open)}>
-    <summary><ChevronRight aria-hidden="true" />额度预览</summary>
+  return <Accordion className="quota-sample" onToggle={e => setOpen(e.currentTarget.open)} summary="额度预览">
     <div className="quota-sample-columns">
       <div className="quota-sample-source">
         <div className="quota-sample-toolbar">
@@ -188,5 +215,5 @@ function QuotaSample({ fields }: { fields: QuotaField[] }) {
       </section>
     </div>
     {example && <p className="quota-sample-hint">填写显示字段前，以「本周剩余」为例。</p>}
-  </details>;
+  </Accordion>;
 }

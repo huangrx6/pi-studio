@@ -1,3 +1,4 @@
+import { Accordion } from '../../shared/Accordion';
 import { X } from 'lucide-react';
 import { errorText } from '../../shared/error-text';
 import { conversationErrorPresentation } from './error-presentation';
@@ -24,10 +25,9 @@ export function ConversationError({
   const { summary, details } = conversationErrorPresentation(errorText(message));
   return <div className={`error-card conversation-error ${onDismiss ? 'has-dismiss' : ''} ${className}`.trim()} role={announce ? 'alert' : undefined}>
     <p>{summary}</p>
-    {details && <details key={message} className="conversation-error-details">
-      <summary>查看详情</summary>
+    {details && <Accordion key={message} className="conversation-error-details" summary="查看详情" compact>
       <pre>{details}</pre>
-    </details>}
+    </Accordion>}
     {onAction && actionLabel && <button
       type="button"
       className="conversation-error-action"

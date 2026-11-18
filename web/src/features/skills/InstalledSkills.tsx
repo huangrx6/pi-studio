@@ -1,3 +1,4 @@
+import { Accordion } from '../../shared/Accordion';
 import { ChevronRight, Trash2 } from 'lucide-react';
 import { EmptyStateArt } from '../../shared/EmptyStateArt';
 import { StatusGlyph } from '../../shared/StatusGlyph';
@@ -73,10 +74,9 @@ export function InstalledSkills<T extends InstalledSkill>({ skills, errors, path
         </ul>
       </section>;
     })}
-    {configuredDirectories.length > 0 && <details className="installed-skills-directories">
-      <summary>技能目录</summary>
+    {configuredDirectories.length > 0 && <Accordion className="installed-skills-directories" summary="技能目录">
       <dl>{configuredDirectories.map(group => <div key={group.key}><dt>{group.title}</dt><dd><code>{paths[group.key]}</code></dd></div>)}</dl>
-    </details>}
+    </Accordion>}
     {errors.length > 0 && <section className="installed-skill-diagnostics" aria-label="技能检查提示">
       <h3>检查提示</h3>
       <ul>{errors.map(error => <li key={`${error.path}:${error.message}`}><code>{error.path}</code><p>{error.message}</p></li>)}</ul>

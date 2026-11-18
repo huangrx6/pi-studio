@@ -29,6 +29,7 @@ function harness() {
       if (name.endsWith('mcp-status')) return { mcpConnectionStatus };
       if (name.endsWith('error-text')) return { errorText: error => error.message };
       if (name.endsWith('DetailDialog')) return { DetailDialog: 'dialog' };
+      if (name.endsWith('/Accordion')) return { Accordion: 'Accordion' };
       return {};
     },
   });
@@ -47,7 +48,7 @@ function harness() {
     text() { return nodeText(tree); },
     count(type) { return nodes(tree).filter(node => node.type === type).length; },
     section(label) { return nodes(tree).find(node => node.props?.['aria-label'] === label); },
-    details(label) { return nodes(tree).find(node => node.type === 'details' && nodeText(node.props.children?.[0]) === label); },
+    details(label) { return nodes(tree).find(node => node.type === 'Accordion' && nodeText(node.props.summary) === label); },
     unmount() { cleanup?.(); },
   };
 }
@@ -94,7 +95,8 @@ test('failed test is not reported as connected; saved tools and diagnostics rema
   assert.match(h.text(), /existing connection error/); assert.equal(h.count('pre'), 0); assert.doesNotMatch(h.text(), /saved description/);
   h.button('测试连接').props.onClick(); h.calls.test[0].resolve(testResult({ ok: false })); await flush(); h.render();
   assert.match(h.text(), /连接测试未成功/); assert.doesNotMatch(h.text(), /连接成功/); assert.equal(h.section('连接测试结果').props.role, 'alert');
-  h.details('工具 · 1').props.onToggle({ currentTarget: { open: true } }); h.details('诊断信息').props.onToggle({ currentTarget: { open: true } }); h.render();
+  assert.equal(h.details('工具').props.badge, 1);
+  h.details('工具').props.onToggle({ currentTarget: { open: true } }); h.details('诊断信息').props.onToggle({ currentTarget: { open: true } }); h.render();
   assert.match(h.text(), /saved description/); assert.equal(h.count('pre'), 1); assert.match(h.text(), /long diagnostic payload/);
 });
 

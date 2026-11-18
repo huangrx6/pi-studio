@@ -248,7 +248,6 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .ref-chip:hover { background: color-mix(in srgb, var(--info) 15%, transparent); }
 
 .ref-skill-body { margin: 6px 0 0; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-soft); }
-.ref-skill-body > summary { padding: 5px 10px; color: var(--muted); font-size: var(--text-xs); cursor: pointer; }
 .ref-skill-body > pre { max-height: 240px; margin: 0; padding: 0 10px 10px; overflow: auto; color: var(--muted); font: var(--text-xs)/var(--leading-body) var(--mono); white-space: pre-wrap; }
 .composer-attachment-remove:hover { color: var(--error); border-color: var(--border-hover); background: var(--surface-hover); }
 .composer-attachment-remove svg { display: block; width: var(--icon-xs); height: var(--icon-xs); }

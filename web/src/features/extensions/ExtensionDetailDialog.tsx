@@ -1,3 +1,4 @@
+import { Accordion } from '../../shared/Accordion';
 import {
   AlertTriangle,
   RotateCw,
@@ -76,7 +77,6 @@ export function ExtensionDetailDialog({
       </div>
       <button className="icon-button" aria-label="关闭扩展详情" onClick={onClose}><X /></button>
     </header>
-
     <div className="detail-body extension-detail-body">
       <dl className="extension-detail-facts">
         <div><dt>发布者</dt><dd>{publisher || '未注明'}</dd></div>
@@ -89,7 +89,6 @@ export function ExtensionDetailDialog({
         <AlertTriangle />
         <span>{item.blockedReason}</span>
       </div>}
-
       <section className="extension-detail-section">
         <div className="extension-detail-section-head">
           <h3>声明的权限</h3>
@@ -100,9 +99,7 @@ export function ExtensionDetailDialog({
         </ul> : <p className="extension-detail-empty-permissions">未声明扩展权限</p>}
         <p className="extension-detail-trust-note">权限声明不代表运行隔离；扩展的 Node 代码在 Electron 主进程执行，请仅信任可靠来源。</p>
       </section>
-
-      <details className="extension-detail-technical">
-        <summary>技术与运行信息</summary>
+      <Accordion className="extension-detail-technical" summary="技术与运行信息">
         <dl className="extension-detail-facts">
           <div><dt>扩展 ID</dt><dd><code>{item.id}</code></dd></div>
           <div><dt>层级</dt><dd>{extensionTierLabel(item.tier)}</dd></div>
@@ -117,7 +114,7 @@ export function ExtensionDetailDialog({
           </>}
           {requirements.length > 0 && <div><dt>依赖</dt><dd>{requirements.join(', ')}</dd></div>}
         </dl>
-      </details>
+      </Accordion>
 
       {item.installation && item.installation.versions.length > 0 && <section className="extension-detail-section">
         <div className="extension-detail-section-head">

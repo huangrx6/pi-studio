@@ -1,3 +1,4 @@
+import { Accordion } from '../../shared/Accordion';
 import { memo, useRef, useState } from 'react';
 import { PanelRightOpen } from 'lucide-react';
 import type { ChatMessage, ContentBlock } from '../../types/chat-types';
@@ -37,10 +38,9 @@ function formatBytes(bytes: number): string {
 function MessageReference({ reference }: { reference: Reference }) {
   return <>
     <ReferenceChip reference={reference} />
-    {reference.kind === 'skill' && reference.body && <details className="ref-skill-body">
-      <summary>技能内容</summary>
+    {reference.kind === 'skill' && reference.body && <Accordion className="ref-skill-body" summary="技能内容" compact>
       <pre>{reference.body}</pre>
-    </details>}
+    </Accordion>}
   </>;
 }
 

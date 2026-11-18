@@ -1,7 +1,8 @@
+import { Accordion } from '../../shared/Accordion';
 import { LoadingIndicator, LoadingState } from '../../shared/LoadingState';
 import { useSettingsDraftGuard } from '../../shared/SettingsDraftGuard';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { Check, ChevronRight, Code2, MoreHorizontal, Plus, RotateCcw, Save, Trash2, X } from 'lucide-react';
+import { Check, Code2, MoreHorizontal, Plus, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import { ActionMenu } from '../../shared/ActionMenu';
 import { SettingsDialog } from '../../shared/SettingsDialog';
 import { InfoHint } from '../../shared/InfoHint';
@@ -218,14 +219,11 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd
               <span className="harness-profile-tab-copy">
                 <strong>{profile.name}</strong>
               </span>
-
             </button>;
           })}
         </div>
       </div>
-      <details className="harness-global-instructions">
-        <summary>
-          <span className={`harness-global-instructions-status ${snapshot.globalInstructionsStatus === 'present'
+      <Accordion className="harness-global-instructions" summary={<><span className={`harness-global-instructions-status ${snapshot.globalInstructionsStatus === 'present'
             ? 'is-ready'
             : snapshot.globalInstructionsStatus === 'unreadable'
               ? 'is-pending'
@@ -240,19 +238,17 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd
                   : '未配置'}
             </strong>
           </span>
-          <span className="harness-global-instructions-action">查看路径<ChevronRight /></span>
-        </summary>
+          <span className="harness-global-instructions-action">查看路径</span></>}>
         <div className="harness-global-instructions-path">
           <span>文件</span>
           <code>{snapshot.globalInstructionsPath}</code>
         </div>
-      </details>
+      </Accordion>
     </section>
 
     {loadError && <div className="harness-load-error"><p role="alert">{loadError}</p><button type="button" className="settings-text-button" disabled={loading} onClick={() => void reload(readyScope === cwd)}>重新加载 Harness 配置</button></div>}
     {!newProfileOpen && (error || message) && <p className={`harness-notice ${error ? 'is-error' : ''}`} role={error ? 'alert' : 'status'}>{error || message}</p>}
     {loading && <LoadingState>正在刷新 Harness 配置…</LoadingState>}
-
     <fieldset
       disabled={blocked}
       className="harness-editor"
@@ -318,7 +314,6 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd
             </button>
           </div>
         </div>
-
           <div className="harness-section-heading">
             <div><h3>提示词组成 <InfoHint label="所选指令从下一次请求开始生效。" /></h3></div>
           </div>
@@ -350,16 +345,12 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd
               const enabled = draft.sections[section.id] !== false;
               const value = draft.sectionOverrides[section.id] || '';
               const state = !enabled ? '已关闭' : value.trim() ? '已覆盖' : '';
-              return <details className={`harness-section-override ${!enabled ? 'is-disabled' : ''}`} key={section.id}>
-                <summary>
-                  <span className="harness-section-override-main">
+              return <Accordion className={`harness-section-override ${!enabled ? 'is-disabled' : ''}`} key={section.id} summary={<><span className="harness-section-override-main">
                     <span className="harness-section-override-copy">
                       <strong>{section.label}</strong>
                       {state && <small className={!enabled ? 'is-off' : 'is-overridden'}>{state}</small>}
                     </span>
-                  </span>
-                  <ChevronRight className="harness-section-override-chevron" />
-                </summary>
+                  </span></>}>
                 <div className="harness-section-override-body">
                   <textarea
                     aria-label={`${section.label}覆盖内容`}
@@ -381,11 +372,10 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd
                     </button>
                   </div>
                 </div>
-              </details>;
+              </Accordion>;
             })}
           </div>
         </section>
-
         <section className="harness-block">
           <div className="harness-block-head">
             <div><h2>工具策略 <InfoHint label="自定义说明优先于内置策略，并且只应用于当前开放的 Tool。" /></h2></div>
@@ -424,7 +414,6 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd
             {guidance.error && <p className="harness-guidance-error" role="alert">{guidance.error}</p>}
           </div>
         </section>
-
         <section className="harness-block">
           <div className="harness-block-head">
             <div><h2>附加指令 <InfoHint label="追加在项目指令和其他提示词组成之后。" /></h2></div>
@@ -439,9 +428,7 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd
             onChange={(event) => setDraft((current) => ({ ...current, customInstructions: event.target.value }))}
           />
         </section>
-
     </fieldset>
-
     <fieldset className="harness-policy-editor" disabled={blocked}>
         <section className="harness-block harness-policy-block">
           <div className="harness-block-head harness-policy-head">
@@ -477,7 +464,6 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd
               </button>
             </div>
           </div>
-
           <div className="harness-policy-grid">
             <section className="harness-policy-group">
               <header><span className="harness-policy-heading"><strong>请求与重试</strong><InfoHint label="失败请求会按指数退避重试；首次等待是最初间隔，超时限制单次请求。" /></span></header>
@@ -552,7 +538,6 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd
                 </label>
               </div>
             </section>
-
             <section className="harness-policy-group">
               <header><span className="harness-policy-heading"><strong>工具调度与恢复</strong></span></header>
               <div className="harness-policy-fields">
@@ -602,7 +587,6 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd
                 </label>
               </div>
             </section>
-
             <section className="harness-policy-group is-wide">
               <header><span className="harness-policy-heading"><strong>上下文压缩</strong><InfoHint label="触发阈值按模型上下文窗口计算；保留最近决定摘要后原样保留的 tokens。窗口未知时使用回答预留，后台提前量可先启动压缩。关闭后仍可在输入区手动压缩。" /></span></header>
               <div className="harness-policy-row">
@@ -664,8 +648,7 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd
                 </label>
               </div>
               {/* 比例阈值按每个模型自己的窗口换算；这里保留 token 字段作为回退。 */}
-              <details className="harness-policy-details">
-                <summary>按 token 细调</summary>
+              <Accordion className="harness-policy-details" summary="按 token 细调">
                 <div className="harness-policy-fields is-three">
                   <label>
                     <span>回答预留</span>
@@ -704,9 +687,8 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd
                     />
                   </label>
                 </div>
-              </details>
+              </Accordion>
             </section>
-
             <section className="harness-policy-group is-wide">
               <header><span className="harness-policy-heading"><strong>长期目标安全阀</strong><InfoHint label="达到轮次上限后暂停并等待确认；连续无进展达到上限时也会停下。" /></span></header>
               <div className="harness-policy-fields">
@@ -744,7 +726,6 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd
                 </label>
               </div>
             </section>
-
             <section className="harness-policy-group is-wide">
               <header><span className="harness-policy-heading"><strong>内存缓存</strong></span></header>
               <div className="harness-policy-fields">
@@ -792,7 +773,6 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd
             </section>
           </div>
         </section>
-
     </fieldset>
 
     {profileMenu && <ActionMenu

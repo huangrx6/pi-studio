@@ -1,6 +1,6 @@
+import { Accordion } from '../../shared/Accordion';
 import { useId, type ReactNode } from 'react';
 import {
-  ChevronDown,
   Monitor,
   Moon,
   Settings,
@@ -106,12 +106,7 @@ export function GeneralSettings({ preferences, onChange, backgroundBusy, backgro
         {media && <button type="button" className="settings-outline" disabled={backgroundBusy} onClick={onRemoveBackground}>移除</button>}
       </SettingRow>
       {backgroundError && <div className="background-setting-error" role="alert">{backgroundError}</div>}
-      {media && <details className="general-background-settings" open>
-        <summary className="general-background-summary">
-          <span className="general-background-name" title={media.name}>{media.name}</span>
-          <small>{media.kind === 'video' ? '视频背景' : '图片背景'}</small>
-          <ChevronDown aria-hidden="true" />
-        </summary>
+      {media && <Accordion className="general-background-settings" defaultOpen summary={<span className="general-background-name" title={media.name}>{media.name}</span>} badge={media.kind === 'video' ? '视频背景' : '图片背景'} summaryClassName="general-background-summary">
         <div className="general-background-adjustments">
           <BackgroundMediaPreview media={media} onError={() => onBackgroundUnavailable(media.url)} />
           <div className="general-background-ranges">
@@ -121,7 +116,7 @@ export function GeneralSettings({ preferences, onChange, backgroundBusy, backgro
             <RangeControl id="background-inside" label="窗口内可见度" value={preferences.backgroundInsideVisibility} onChange={value => onChange('backgroundInsideVisibility', value)} />
           </div>
         </div>
-      </details>}
+      </Accordion>}
       </div>
     </section>
     <section className="general-settings-section" aria-labelledby={`${sectionId}-conversation`}>

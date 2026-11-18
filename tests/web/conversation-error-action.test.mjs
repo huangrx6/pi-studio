@@ -1,3 +1,4 @@
+import { Accordion } from './helpers/accordion.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -18,6 +19,7 @@ const context = {
   exports: {},
   require(id) {
     if (id.endsWith('.css')) return {};
+      if (id.endsWith('/Accordion')) return { Accordion };
     if (id.endsWith('/error-text')) return { errorText };
     if (id === './error-presentation') {
       return {

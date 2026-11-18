@@ -408,6 +408,7 @@ export function App() {
         onClose={() => setActionPaletteOpen(false)}
       />}
       <ShellLayout
+        active={!settingsOpen}
         isNewConversation={isNewConversation}
         resizeHandle={!settingsOpen && !(filesOpen && panelFullscreen) && sidebarResizeHandle}
         sidebar={<AppSidebar

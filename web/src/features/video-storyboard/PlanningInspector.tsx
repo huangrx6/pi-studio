@@ -1,3 +1,4 @@
+import { Accordion } from '../../shared/Accordion';
 import { useState } from 'react';
 import { ArrowRight, Check, ChevronRight, GitBranch, Paperclip } from 'lucide-react';
 import type { StoryboardNode, StoryboardReplyAction, StoryboardWork } from '../../types/storyboard-types';
@@ -36,8 +37,8 @@ function MaterialReply({ node, work, workspace, reply, onWork, busy, working, on
         onClick={() => reply({ action: 'materials', assetIds: selected })}>使用所选素材</button>}
       <button className="secondary-button" disabled={busy} onClick={() => reply({ action: 'defer' })}>记为待补</button>
     </div>
-    {ai && <details className="story-own-direction"><summary>讨论替代素材</summary>
-      <AnswerForm label="可用的替代素材或想法" submit="请 AI 建议" busy={busy} onAnswer={text => reply({ action: 'answer', text })} /></details>}
+    {ai && <Accordion className="story-own-direction" summary="讨论替代素材" compact>
+      <AnswerForm label="可用的替代素材或想法" submit="请 AI 建议" busy={busy} onAnswer={text => reply({ action: 'answer', text })} /></Accordion>}
   </>;
 }
 
@@ -60,8 +61,8 @@ export function PlanningInspector(props: Props) {
           <span><strong>{option.title}</strong><small>{option.beats.join(' → ')}</small>
             {option.need && <small className="story-direction-need"><Paperclip aria-hidden />{option.need.label}</small>}</span><ChevronRight aria-hidden />
         </button>)}</div>
-      <details className="story-own-direction"><summary>我有自己的讲法</summary>
-        <AnswerForm label="自定义叙事方向" submit="采用这个讲法" busy={busy} onAnswer={text => reply({ action: 'answer', text })} /></details>
+      <Accordion className="story-own-direction" summary="我有自己的讲法" compact>
+        <AnswerForm label="自定义叙事方向" submit="采用这个讲法" busy={busy} onAnswer={text => reply({ action: 'answer', text })} /></Accordion>
     </>}
     {node.kind === 'materials' && <MaterialReply {...props} />}
     {node.kind === 'review' && step.direction && <>
@@ -72,13 +73,13 @@ export function PlanningInspector(props: Props) {
         {step.direction.beats.length > 0 && <><dt>叙事顺序</dt><dd><ol>{step.direction.beats.map((beat, index) => <li key={index}>{beat}</li>)}</ol></dd></>}
         <dt>画幅</dt><dd>{step.brief.aspect === 'auto' ? '稍后决定' : step.brief.aspect}</dd>
         {used.length > 0 && <><dt>拟用素材</dt><dd>{used.length > 3
-          ? <details><summary>{used.length} 份素材</summary>{used.map(asset => <div key={asset.id}>{asset.name}</div>)}</details>
+          ? <Accordion summary={<>{used.length} 份素材</>} compact>{used.map(asset => <div key={asset.id}>{asset.name}</div>)}</Accordion>
           : used.map(asset => asset.name).join('、')}</dd></>}
         {step.deferred && <><dt>待补素材</dt><dd>{step.deferred}</dd></>}
       </dl>
-      {ai && <details className="story-own-direction"><summary>我想调整方案</summary>
+      {ai && <Accordion className="story-own-direction" summary="我想调整方案" compact>
         <AnswerForm label="修改方案的要求" submit="请 AI 调整方案" busy={busy}
-          onAnswer={text => reply({ action: 'answer', text })} /></details>}
+          onAnswer={text => reply({ action: 'answer', text })} /></Accordion>}
       <div className="story-actions">
         {ai && !(approved && produced) && <button className="primary-button" disabled={busy} onClick={() => reply({ action: 'approve' })}>
           <Check />{produced ? `采用第 ${plan.version} 版并继续制作` : '确认方案并生成分镜'}</button>}

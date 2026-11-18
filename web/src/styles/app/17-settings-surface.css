@@ -530,19 +530,6 @@
   border-top: 1px solid var(--divider);
 }
 
-.settings-content .general-background-summary {
-  display: flex;
-  width: 100%;
-  min-height: 56px;
-  align-items: center;
-  gap: var(--space-3);
-  padding: 0;
-  list-style: none;
-  cursor: pointer;
-}
-
-.settings-content .general-background-summary::-webkit-details-marker { display: none; }
-
 .settings-content .general-background-summary .general-background-name {
   flex: 1 1 auto;
   min-width: 0;
@@ -553,22 +540,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.settings-content .general-background-summary small {
-  flex: none;
-  color: var(--muted);
-  font-size: var(--text-13);
-}
-
-.settings-content .general-background-summary svg {
-  flex: none;
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--muted);
-  transition: transform var(--transition);
-}
-
-.settings-content .general-background-settings[open] .general-background-summary svg { transform: rotate(180deg); }
 
 .settings-content .general-background-adjustments {
   display: grid;
@@ -709,8 +680,6 @@
 }
 
 .settings-content .general-background-name { color: var(--muted); font-size: var(--text-13); }
-
-.settings-content .general-background-settings summary { font-size: var(--text-13); color: var(--muted); }
 
 .settings-content .general-background-settings {
   padding: 0 0 18px;
@@ -1294,10 +1263,6 @@
   border-color: var(--accent-border);
   background: var(--settings-selected-bg);
   box-shadow: var(--settings-selected-shadow);
-}
-
-.settings-content .general-background-summary {
-  min-height: 48px;
 }
 
 .settings-content .general-background-settings {

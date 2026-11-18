@@ -30,7 +30,19 @@ try {
   await page.getByRole('button', { name: '打开右侧面板', exact: true }).click(); await page.locator('.panel-start-tools').getByRole('button', { name: '浏览器', exact: true }).click(); await page.locator('webview').waitFor();
   const attributes = await page.locator('webview').evaluate(view => ({ partition: view.getAttribute('partition'), prefs: view.getAttribute('webpreferences'), popups: view.getAttribute('allowpopups') }));
   assert.equal(attributes.partition, 'persist:pi-browser'); assert.match(attributes.prefs, /nodeIntegration=no/); assert.equal(attributes.popups, 'false');
+  await loaded('about:blank');
   await navigate(`${origin}/first`); await loaded(`${origin}/first`); assert.equal(await address().inputValue(), `${origin}/first`);
+  const guestId = await page.locator('webview').evaluate(view => view.getWebContentsId());
+  // At this narrow size the panel backdrop covers the sidebar; use the app shortcut.
+  await page.keyboard.press('ControlOrMeta+,');
+  await page.locator('.settings-navigation').getByRole('button', { name: '模型配置', exact: true }).click();
+  assert.equal(await page.locator('webview').isVisible(), false, 'the real Electron guest is hidden behind settings');
+  await page.screenshot({ path: path.join(output, 'browser-settings.png'), animations: 'disabled' });
+  await page.locator('.settings-navigation').getByRole('button', { name: '返回对话', exact: true }).click();
+  await page.locator('webview').waitFor();
+  await loaded(`${origin}/first`);
+  assert.equal(await page.locator('webview').evaluate(view => view.getWebContentsId()), guestId, 'settings preserves the native guest and its loaded page');
+  result.checks.push('settings hides the native browser guest and restores the same webContents without navigation');
   await page.locator('webview').evaluate(view => view.executeJavaScript("document.getElementById('next').click()", true)); await loaded(`${origin}/second`); assert.equal(await address().inputValue(), `${origin}/second`);
   await page.locator('webview').evaluate(view => view.executeJavaScript("document.getElementById('frame').contentWindow.location.hash = 'frame-only'"));
   await page.waitForFunction(expected => document.querySelector('webview')?.getURL() === expected, `${origin}/second`);

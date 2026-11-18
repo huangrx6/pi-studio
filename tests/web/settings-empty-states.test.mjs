@@ -1,3 +1,4 @@
+import { Accordion } from './helpers/accordion.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -21,6 +22,7 @@ function compile(path, stubs) {
     exports: {},
     require(id) {
       if (id.endsWith('.css')) return {};
+      if (id.endsWith('/Accordion')) return { Accordion };
       if (id in stubs) return stubs[id];
       return require(id);
     },
@@ -88,7 +90,7 @@ test('installed skills render one empty state and only populated groups', () => 
   assert.doesNotMatch(empty, />0 个</);
   assert.doesNotMatch(empty, /暂无技能/);
   assert.equal((empty.match(/还没有已安装技能/g) || []).length, 1);
-  assert.equal((empty.match(/<summary>技能目录<\/summary>/g) || []).length, 1);
+  assert.equal((empty.match(/<summary[^>]*>[\s\S]*?技能目录[\s\S]*?<\/summary>/g) || []).length, 1);
   assert.doesNotMatch(empty, /项目技能需审查/);
 
   const userOnly = render([{

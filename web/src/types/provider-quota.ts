@@ -16,7 +16,9 @@ export type QuotaField = {
 export type ProviderQuotaConfig = {
   enabled: boolean;
   endpoint: string;
-  auth: 'none' | 'bearer' | 'x-api-key';
+  auth: 'none' | 'bearer' | 'authorization' | 'x-api-key' | 'api-key' | 'x-goog-api-key' | 'custom-header' | 'query';
+  authName?: string;
+  headers?: Array<{ name: string; value: string }>;
   fields: QuotaField[];
 };
 

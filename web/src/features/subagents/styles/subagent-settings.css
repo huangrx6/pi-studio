@@ -21,14 +21,6 @@
 .subagent-control-grid, .subagent-field-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 16px; }
 .subagent-field-grid { margin-top: 20px; }
 .subagent-advanced { margin-top: 24px; border-top: 1px solid var(--divider); border-bottom: 1px solid var(--divider); }
-.subagent-advanced > summary { display: flex; min-height: 58px; align-items: center; justify-content: space-between; gap: 16px; list-style: none; cursor: pointer; }
-.subagent-advanced > summary::-webkit-details-marker { display: none; }
-.subagent-advanced > summary:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; border-radius: var(--radius-sm); }
-.subagent-advanced > summary > span { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
-.subagent-advanced > summary strong { color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-medium); }
-.subagent-advanced > summary small { color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-normal); overflow-wrap: anywhere; }
-.subagent-advanced-chevron { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--faint); transition: transform var(--transition); }
-.subagent-advanced[open] .subagent-advanced-chevron { transform: rotate(90deg); }
 .subagent-advanced > .subagent-field-grid { padding-bottom: 18px; margin-top: 2px; }
 .subagent-control, .subagent-field { display: flex; min-width: 0; flex-direction: column; gap: 8px; }
 .subagent-control.is-disabled, .subagent-field.is-disabled { opacity: .6; }
@@ -73,7 +65,6 @@
 .subagent-worktree-copy > code { color: var(--muted); font: var(--text-xs) var(--mono); overflow-wrap: anywhere; }
 .subagent-worktree-copy > small { color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-normal); overflow-wrap: anywhere; }
 .subagent-worktree-copy details { color: var(--muted); font-size: var(--text-xs); }
-.subagent-worktree-copy summary { cursor: pointer; width: fit-content; }
 .subagent-worktree-copy ul { display: flex; max-height: 240px; flex-direction: column; gap: 4px; margin: 8px 0 0; padding: 0; overflow: auto; list-style: none; }
 .subagent-worktree-copy li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 6px; }
 .subagent-worktree-copy li > code { overflow-wrap: anywhere; }

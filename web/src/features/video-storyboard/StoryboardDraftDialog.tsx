@@ -1,3 +1,4 @@
+import { Accordion } from '../../shared/Accordion';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Clapperboard, LoaderCircle, Sparkles, X } from 'lucide-react';
 import { DetailDialog } from '../../shared/DetailDialog';
@@ -103,10 +104,9 @@ export function StoryboardDraftDialog({ workspace, work, plan, shotId, number, m
             <div className="story-draft-context"><Clapperboard aria-hidden /><div>
               <strong>{shot?.purpose || step?.direction?.title || work.document.title}</strong>
               <p>{shotId ? plan.summary : step?.brief.focus || step?.brief.idea || plan.summary}</p>
-              {materials.length ? <details className="story-draft-materials">
-                <summary>查看 {materials.length} 份关联素材</summary>
+              {materials.length ? <Accordion className="story-draft-materials" summary={<>查看 {materials.length} 份关联素材</>}>
                 <ul>{materials.map(asset => <li key={asset.id}>{asset.name}</li>)}</ul>
-              </details> : <small>将按已确认的想法与方案编排</small>}
+              </Accordion> : <small>将按已确认的想法与方案编排</small>}
             </div></div>
             <StoryboardTextModel label="分镜文本模型" state={model} onModel={onModel} disabled={Boolean(busy)}
               onConfigure={() => { onClose(); onConfigureModels(); }} />

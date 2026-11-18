@@ -14,6 +14,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { PopoverSurface } from './PopoverSurface';
+import { useSurfaceActive } from './surface-visibility';
 import { isComposingKey, menuFocusIndex } from './keyboard-navigation';
 
 /** 一个选项；description 作为次要说明展示在标签下方，也参与视觉分组。 */
@@ -62,6 +63,8 @@ const MENU_GAP = 5;
  */
 export function Select({ value, options, onChange, label, placeholder = '请选择', disabled = false, autoFocus = false, className = '', menuClassName = '', leadingIcon }: SelectProps) {
   const [open, setOpen] = useState(false);
+  const active = useSurfaceActive();
+  useEffect(() => { if (!active) setOpen(false); }, [active]);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const listId = useId();
@@ -225,7 +228,7 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
         <span className={selected ? 'pi-select-value' : 'pi-select-placeholder'}>{selected?.label ?? placeholder}</span>
         <ChevronDown className="pi-select-chevron" />
       </button>
-      {open && createPortal(
+      {open && active && createPortal(
         <PopoverSurface
           ref={menuRef}
           id={listId}

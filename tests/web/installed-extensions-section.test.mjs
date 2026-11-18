@@ -1,3 +1,4 @@
+import { Accordion } from './helpers/accordion.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -9,7 +10,7 @@ import ts from 'typescript';
 
 const require = createRequire(import.meta.url);
 function compile(relative, imports = {}) {
-  const context = { exports: {}, require: id => id.endsWith('.css') ? {} : imports[id] ?? require(id) };
+  const context = { exports: {}, require: id => id.endsWith('.css') ? {} : id.endsWith('/Accordion') ? { Accordion } : imports[id] ?? require(id) };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL(relative, import.meta.url), 'utf8'), {
     compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText, context);
@@ -76,10 +77,10 @@ test('user extensions stay visible while built-ins are grouped behind one closed
   }));
   assert.ok(html.indexOf('用户扩展') < html.indexOf('<details'));
   assert.ok(html.indexOf('项目扩展') < html.indexOf('<details'));
-  assert.match(html, /<details class="extension-list-section builtin-extension-section">/);
+  assert.match(html, /<details class="pi-accordion extension-list-section builtin-extension-section">/);
   assert.doesNotMatch(html, /<details[^>]* open/);
   assert.match(html, /内置能力/);
-  assert.match(html, /class="count-badge">2/);
+  assert.match(html, /class="pi-accordion-badge">2/);
   assert.match(html, /Pi Studio 自带，可查看和单独启停/);
   assert.match(html, /data-extension="core" data-compact="true"/);
   assert.match(html, /data-extension="system" data-compact="true"/);

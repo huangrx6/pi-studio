@@ -124,7 +124,6 @@
 .story-inspector header p, .story-inspector details { font-size: var(--text-sm); color: var(--muted); line-height: var(--leading-body); }
 .story-inspector header p { margin: var(--space-2) 0 0; }
 .story-prompt-excerpt { margin: 0; padding-inline-start: var(--space-3); border-inline-start: 2px solid var(--border-strong); white-space: pre-wrap; color: var(--muted); line-height: var(--leading-body); font-size: var(--text-sm); max-height: 5lh; overflow: auto; }
-.story-inspector summary, .story-replies summary { cursor: pointer; }
 .story-own-direction[open] .story-answer { margin-top: var(--space-2); }
 .story-directions { gap: 0; border-block: 1px solid var(--border); }
 .story-directions button {
@@ -141,7 +140,6 @@
 .story-planner .story-inspector > .story-explore { padding-inline-start: 0; }
 .story-answer .primary-button, .story-inspector > .primary-button { justify-self: start; }
 .story-replies { border-block-start: 1px solid var(--border); padding-block-start: var(--space-3); color: var(--muted); font-size: var(--text-sm); }
-.story-replies summary span { color: var(--faint); margin-inline-start: var(--space-1); }
 .story-replies button { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-width: 0; text-align: start; padding-block: var(--space-2); }
 .story-replies button:hover { color: var(--accent); }
 .story-replies button span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

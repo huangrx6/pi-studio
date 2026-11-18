@@ -1,3 +1,4 @@
+import { Accordion } from '../../shared/Accordion';
 import { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
@@ -195,7 +196,6 @@ export function ExtensionInstallDialog({
           </button>
         </div>
       </div>
-
       <div className="extension-install-section">
         <div className="extension-field-label-row">
           <span className="field-label">安装来源</span>
@@ -301,7 +301,6 @@ export function ExtensionInstallDialog({
           {preview.description && <p>{preview.description}</p>}
         </div>
       </header>
-
       <dl className="extension-preview-meta">
         <div><dt>发布者</dt><dd>{preview.publisher}</dd></div>
         <div><dt>范围</dt><dd>{preview.scope === 'project' ? '当前工作区' : '全局扩展'}</dd></div>
@@ -315,7 +314,6 @@ export function ExtensionInstallDialog({
         </div>
         {preview.resolvedRef && <div><dt>固定引用</dt><dd>{preview.resolvedRef}</dd></div>}
       </dl>
-
       <section className="extension-permission-preview">
         <div className="extension-preview-section-head">
           <div><h4>权限</h4><p>Agent contribution 和声明式 UI 能力受 Studio 契约限制；可执行扩展仍拥有受信任的主进程 Node 能力。</p></div>
@@ -372,7 +370,6 @@ export function ExtensionInstallDialog({
         <AlertTriangle />
         <span><strong>可执行能力发生变化</strong>这个升级会从纯声明式 UI 变为可运行的主进程代码，必须重新确认。</span>
       </div>}
-
       <section className={`extension-publisher-signature is-${preview.publisherTrust}`}>
         <span className="extension-publisher-signature-icon">
           {preview.publisherTrust === 'trusted'
@@ -399,9 +396,7 @@ export function ExtensionInstallDialog({
           {preview.signatureKeyId && <code title={preview.signatureKeyId}>{preview.signatureKeyId}</code>}
         </div>
       </section>
-
-      <details className="extension-integrity">
-        <summary>技术信息与完整性校验</summary>
+      <Accordion className="extension-integrity" summary="技术信息与完整性校验">
         <div><span>扩展 ID</span><code>{preview.id}</code></div>
         <div>
           <span>包 SHA-256</span>
@@ -412,7 +407,7 @@ export function ExtensionInstallDialog({
           <code title={preview.treeSha256}>{preview.treeSha256}</code>
         </div>
         <p>SHA-256 只证明下载内容与安装状态或 Registry 元数据一致，不代表发布者签名或身份认证。</p>
-      </details>
+      </Accordion>
 
       {!committed && consentRequired && <label className="extension-consent">
         <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
