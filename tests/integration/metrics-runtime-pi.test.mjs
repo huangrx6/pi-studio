@@ -79,3 +79,35 @@ test('collects live metrics through the official Pi AI and Durable telemetry pat
     runtime.close();
   }
 });
+
+test('Durable partial views publish changing metrics before the first text block finishes', async () => {
+  const view = require('../../electron/main/runtime/view.cjs');
+  const runtime = createMetricsRuntime();
+  const faux = fauxProvider({ provider: 'faux-stream', models: [{ id: 'slow' }], tokensPerSecond: 60, tokenSize: { min: 3, max: 3 } });
+  faux.setResponses([() => fauxAssistantMessage('A streamed response with enough chunks to measure progress before the text block has ended. '.repeat(3))]);
+  const models = createModels(); models.setProvider(faux.provider);
+  const harness = await Harness.open(new MemoryStorage(), { models, registry: createRegistry(), telemetry: runtime.telemetry, settings: { progress: { partialIntervalMs: 20 } } }, BACKGROUND_CONTEXT);
+  let watch;
+  try {
+    const conversation = await harness.root(BACKGROUND_CONTEXT, { agent: { model: { provider: 'faux-stream', modelId: 'slow' } } });
+    const id = String(conversation.id);
+    const frames = [];
+    runtime.recordConversationEvent({ type: 'run.started', conversationId: id });
+    watch = await conversation.watch(BACKGROUND_CONTEXT);
+    watch.start(async call => {
+      if (call.kind !== 'value') return;
+      const live = view.liveFromView(call.value);
+      const sample = view.streamingMetricSample(live.generation?.message);
+      if (!sample) return;
+      runtime.recordStreamProgress(id, sample);
+      const request = runtime.sessions.get(id)?.currentRequest;
+      if (request && !request.completed && request.outputChars === 0) {
+        const metric = flatten(runtime.provider.read({ sessionId: id })).find(value => value?.id === 'output-tokens');
+        frames.push(Number(metric.value));
+      }
+    });
+    const submission = await conversation.submit({ type: 'input', content: 'synthetic request' }, BACKGROUND_CONTEXT);
+    assert.equal((await submission.wait(BACKGROUND_CONTEXT)).status, 'done');
+    assert.ok(new Set(frames.filter(value => value > 0)).size >= 3, `expected several progress values before text_end; got ${frames}`);
+  } finally { await watch?.stop(); await harness.close(BACKGROUND_CONTEXT); runtime.close(); }
+});

@@ -397,6 +397,7 @@ class MetricsRuntime {
   clear() {
     for (const subscription of this.providerSubscriptions.values()) {
       if (subscription.timer) clearTimeout(subscription.timer);
+      if (subscription.heartbeat) clearInterval(subscription.heartbeat);
     }
     this.providerSubscriptions.clear();
     this.sessions.clear();
@@ -604,7 +605,7 @@ class MetricsRuntime {
     if (record.conversationId) {
       this.ensurePersistedMetricSession(record.conversationId);
       record.session = this.touchSession(record.conversationId);
-      if (record.name === 'pi.durable.phase') {
+      if (record.name === 'pi.durable.phase' && (!record.session.hasRunState || record.session.running)) {
         record.session.running = true;
         if (record.session.currentRun.status !== 'running') {
           record.session.currentRun = createRun(record.startedAt);
@@ -619,7 +620,7 @@ class MetricsRuntime {
     if (record.name === 'pi.ai.request' || record.name === 'pi.ai.poll') {
       this.beginRequest(record);
     }
-    if (record.name === 'pi.durable.phase' && record.session) {
+    if (record.name === 'pi.durable.phase' && record.session?.running) {
       record.session.activeTasks.set(taskId || spanId, {
         taskId: taskId || spanId,
         task: boundedText(startAttributes['task.name'] || 'task', 80),
@@ -676,7 +677,7 @@ class MetricsRuntime {
 
   beginRequest(record) {
     const session = record.session;
-    const startedAt = Date.now();
+    const startedAt = this.clock();
     const request = {
       id: record.id,
       provider: boundedText(record.attributes.provider, 120),
@@ -691,6 +692,8 @@ class MetricsRuntime {
       cacheWrite: 0,
       cost: 0,
       outputChars: 0,
+      streamedChars: 0,
+      streamTimestamp: undefined,
       liveTps: 0,
       stop: undefined,
       completed: false,
@@ -710,17 +713,6 @@ class MetricsRuntime {
       }
       this.requestsByModel.set(key, requests);
     }
-  }
-
-  latestRequestFor(attributes) {
-    const key = this.requestModelKey(attributes);
-    const requests = key ? this.requestsByModel.get(key) : undefined;
-    if (!requests) return undefined;
-    for (let index = requests.length - 1; index >= 0; index -= 1) {
-      const record = requests[index];
-      if (record && !record.settled) return record;
-    }
-    return undefined;
   }
 
   mergeSpanAttributes(record, attributes) {
@@ -749,7 +741,7 @@ class MetricsRuntime {
     request.stop = boundedText(attributes.stop, 40) || request.stop;
     request.durationMs = Math.max(
       nonNegative(request.durationMs),
-      elapsedMs(request.startedAtMonotonic),
+      elapsedMs(request.startedAtMonotonic, this.now()),
     );
   }
 
@@ -757,7 +749,7 @@ class MetricsRuntime {
     if (!this.enabled || record.settled) return;
     if (name === 'pi.ai.first_chunk' && record.request) {
       const request = record.request;
-      request.ttftMs = elapsedMs(request.startedAtMonotonic);
+      request.ttftMs = elapsedMs(request.startedAtMonotonic, this.now());
       request.durationMs = request.ttftMs;
       if (record.session) {
         record.session.stage = '生成中';
@@ -771,9 +763,9 @@ class MetricsRuntime {
       request.outputChars += chars;
       const generationMs = Math.max(
         100,
-        elapsedMs(request.startedAtMonotonic) - nonNegative(request.ttftMs),
+        elapsedMs(request.startedAtMonotonic, this.now()) - nonNegative(request.ttftMs),
       );
-      request.liveTps = (request.outputChars / 4) / (generationMs / 1_000);
+      request.liveTps = (Math.max(request.outputChars, request.streamedChars) / 4) / (generationMs / 1_000);
       if (record.session) {
         record.session.stage = attributes?.type === 'thinking' ? '思考中' : '生成中';
         this.pushTpsSample(record.session, request.liveTps);
@@ -809,7 +801,10 @@ class MetricsRuntime {
         : SAFE_TASK_METRIC_ATTRIBUTES,
     );
     let record = context ? this.contextRecord(context) : undefined;
-    let request = record?.request || this.latestRequestFor(safeAttributes)?.request;
+    // Global counters lack a span. With concurrent requests for the same model,
+    // choosing the newest one would charge another conversation's tokens/cost.
+    const matching = this.requestsByModel.get(this.requestModelKey(safeAttributes))?.filter(item => !item.settled) || [];
+    let request = record?.request || (matching.length === 1 ? matching[0].request : undefined);
     if (name === 'pi.ai.first_chunk.duration' && request) {
       request.ttftMs = nonNegative(value);
       request.durationMs = Math.max(nonNegative(request.durationMs), request.ttftMs);
@@ -941,6 +936,26 @@ class MetricsRuntime {
     return session.currentRun;
   }
 
+  recordStreamProgress(id, sample) {
+    if (!this.enabled || !sample) return;
+    const session = this.sessions.get(conversationId(id));
+    const request = session?.currentRequest;
+    if (!request || request.completed) return;
+    // Delayed view notifications from an older request must not enter a new one.
+    if (!Number.isFinite(sample.timestamp) || sample.timestamp < request.startedAt) return;
+    if (request.streamTimestamp !== undefined && request.streamTimestamp !== sample.timestamp) return;
+    request.streamTimestamp = sample.timestamp;
+    const chars = nonNegative(sample.chars);
+    if (chars <= request.streamedChars) return;
+    request.streamedChars = chars;
+    const duration = elapsedMs(request.startedAtMonotonic, this.now());
+    request.durationMs = duration;
+    request.liveTps = (Math.max(chars, request.outputChars) / 4) / (Math.max(100, duration - nonNegative(request.ttftMs)) / 1000);
+    session.stage = ['生成中', '思考中', '工具参数生成中'].includes(sample.phase) ? sample.phase : '生成中';
+    this.pushTpsSample(session, request.liveTps);
+    this.markChanged(session);
+  }
+
   recordConversationEvent(event) {
     if (!this.enabled || !event || typeof event !== 'object') return;
     const id = conversationId(event.conversationId);
@@ -948,6 +963,7 @@ class MetricsRuntime {
     this.ensurePersistedMetricSession(id);
     const session = this.touchSession(id);
     if (event.type === 'run.started' || event.type === 'run_start') {
+      session.hasRunState = true;
       if (!session.running || session.currentRun.status !== 'running') {
         session.currentRun = createRun(this.clock());
         session.usageBaseline = { ...session.usageTotal };
@@ -967,6 +983,7 @@ class MetricsRuntime {
       return;
     }
     if (event.type === 'snapshot') {
+      session.hasRunState = true;
       const running = Boolean(event.payload?.run);
       if (running && !session.running) {
         this.ensureRun(session);
@@ -1008,6 +1025,9 @@ class MetricsRuntime {
   }
 
   finishRun(session, status) {
+    // Durable may run housekeeping phases after the conversation has ended.
+    // Those phases must not reopen the round or replace its settled metrics.
+    if (session) session.hasRunState = true;
     if (!session || !session.running) return;
     const run = session.currentRun;
     const usageDelta = run.usageDelta || {};
@@ -1029,6 +1049,7 @@ class MetricsRuntime {
     }
     session.currentRun = createRun();
     session.currentRequest = undefined;
+    session.activeTasks.clear();
     this.markChanged(session);
   }
 
@@ -1070,7 +1091,7 @@ class MetricsRuntime {
     if (context.sourceId === METRICS_FOOTER_SOURCE_ID) {
       return this.renderFooterContent(session);
     }
-    return this.renderContent(session);
+    return [{ kind: 'text', text: `当前会话：${boundedText(context.sessionTitle, 160) || `会话 ${session.id}`} · ${session.running ? '本轮运行' : '最近一轮'}（不合并其他会话）` }, ...this.renderContent(session)];
   }
 
   subscribeDataSource(context = {}, emit) {
@@ -1087,17 +1108,27 @@ class MetricsRuntime {
         sourceId: context.sourceId,
         sessionId: runtimeConversationId(context),
         cwd: boundedText(context.cwd, 4_096),
+        sessionTitle: boundedText(context.sessionTitle, 160),
       }),
       emit,
       timer: undefined,
       closed: false,
       lastRevision: -1,
     };
+    subscription.heartbeat = setInterval(() => {
+      if (subscription.closed || !this.enabled) return;
+      const session = this.sessions.get(subscription.context.sessionId);
+      if (session?.running && session.currentRequest && !session.currentRequest.completed) {
+        subscription.emit(this.readDataSource(subscription.context));
+      }
+    }, 250);
+    subscription.heartbeat.unref?.();
     this.providerSubscriptions.set(id, subscription);
     return () => {
       if (subscription.closed) return;
       subscription.closed = true;
       if (subscription.timer) clearTimeout(subscription.timer);
+      if (subscription.heartbeat) clearInterval(subscription.heartbeat);
       this.providerSubscriptions.delete(id);
     };
   }
@@ -1120,21 +1151,27 @@ class MetricsRuntime {
     }
   }
 
+  liveRate(request) {
+    if (!request || request.completed) return 0;
+    const tokens = Math.max(request.streamedChars || 0, request.outputChars || 0) / 4;
+    return tokens / (Math.max(100, elapsedMs(request.startedAtMonotonic, this.now()) - nonNegative(request.ttftMs)) / 1000);
+  }
+
   renderContent(session) {
     const run = session.running ? session.currentRun : session.recentRuns[0];
     const request = session.currentRequest || session.lastRequest;
     if (!run && !request) return [];
 
     const tps = session.running
-      ? (request?.liveTps || run?.tps || 0)
+      ? this.liveRate(session.currentRequest)
       : (run?.tps || requestRate(request));
-    const ttft = request?.ttftMs
-      ?? run?.ttftMs;
+    const ttft = session.currentRequest ? session.currentRequest.ttftMs : (request?.ttftMs ?? run?.ttftMs);
     const duration = session.running
-      ? (request ? elapsedMs(request.startedAtMonotonic) : 0)
+      ? (session.currentRequest ? elapsedMs(session.currentRequest.startedAtMonotonic, this.now()) : request?.durationMs)
       : (request?.durationMs ?? run?.durationMs);
     const input = run?.input || 0;
-    const output = run?.output || 0;
+    const liveOutput = session.currentRequest ? Math.ceil(Math.max(session.currentRequest.streamedChars, session.currentRequest.outputChars) / 4) : 0;
+    const output = (run?.output || 0) + liveOutput;
     const cost = run?.cost || 0;
     const model = request
       ? `${request.provider || 'unknown'}/${request.model || 'unknown'}`
@@ -1233,13 +1270,13 @@ class MetricsRuntime {
           id: 'output-tokens',
           label: '输出 Token',
           value: outputMetric,
-          detail: session.running ? '本轮累计' : '最近一轮',
+          detail: liveOutput > 0 ? '本轮累计 · 含流式估算，完成后校准' : (session.running ? '本轮累计' : '最近一轮'),
         },
         {
           id: 'cost',
           label: '成本',
           value: costMetric,
-          detail: session.running ? '本轮累计' : '最近一轮',
+          detail: session.running ? '已结算请求；当前请求完成后更新' : '最近一轮',
         },
         {
           id: 'cache-hit-rate',
@@ -1283,9 +1320,9 @@ class MetricsRuntime {
     const request = session.currentRequest || session.lastRequest;
     if (!run && !request) return [];
     const tps = session.running
-      ? (request?.liveTps || run?.tps || 0)
+      ? this.liveRate(session.currentRequest)
       : (run?.tps || requestRate(request));
-    const ttft = request?.ttftMs ?? run?.ttftMs;
+    const ttft = session.currentRequest ? session.currentRequest.ttftMs : (request?.ttftMs ?? run?.ttftMs);
     const tpsMetric = compactRate(tps);
     return [{
       kind: 'text',

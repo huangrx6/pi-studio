@@ -587,3 +587,77 @@ test('disabling the extension clears telemetry and live subscriptions', () => {
   runtime.close();
   assert.deepEqual(runtime.provider.read({ sessionId: '9' }), []);
 });
+
+test('streaming counts stay scoped, deduplicate snapshots and reconcile with final usage', async () => {
+  let time = 0;
+  const runtime = createMetricsRuntime({ now: () => time, clock: () => 1000 + time });
+  const view = require('../../electron/main/runtime/view.cjs');
+  const sample = view.streamingMetricSample({ timestamp: 1000, content: [
+    { type: 'thinking', thinking: 'PRIVATE'.repeat(20) }, { type: 'text', text: 'PRIVATE'.repeat(20) },
+    { type: 'toolCall', arguments: { secret: 'PRIVATE' } },
+  ] });
+  assert.equal(JSON.stringify(sample).includes('PRIVATE'), false);
+  runtime.recordConversationEvent({ type: 'run.started', conversationId: '71' });
+  runtime.recordConversationEvent({ type: 'run.started', conversationId: '72' });
+  let finishA, finishB;
+  const run = (id, finish) => runtime.telemetry.startSpan({ name: 'pi.durable.submit', attributes: { 'conversation.id': id } }, parent =>
+    parent.startSpan({ name: 'pi.ai.request', attributes: { provider: 'same', model: 'same' } }, request => new Promise(resolve => finish(request, resolve))));
+  const a = run(71, (request, resolve) => { finishA = () => { request.setAttributes({ 'usage.output': 30, 'usage.input': 10 }); resolve(); }; request.addEvent('pi.ai.first_chunk'); });
+  const b = run(72, (request, resolve) => { finishB = resolve; request.addEvent('pi.ai.first_chunk'); });
+  time = 1000;
+  runtime.recordStreamProgress('71', { ...sample, chars: 400 });
+  runtime.recordStreamProgress('71', { ...sample, chars: 400 });
+  runtime.recordStreamProgress('71', { ...sample, chars: 200 });
+  const context = { sessionId: '71', sessionTitle: '项目 A' };
+  assert.match(runtime.provider.read(context)[0].text, /项目 A.*本轮运行/);
+  assert.equal(metric(runtime.provider.read(context), 'output-tokens').value, '100');
+  assert.equal(metric(runtime.provider.read(context), 'live-tps').value, '100');
+  assert.equal(metric(runtime.provider.read({ sessionId: '72' }), 'output-tokens').value, '0');
+  runtime.recordMetric('pi.ai.tokens', 999, { provider: 'same', model: 'same', kind: 'output' });
+  assert.equal(runtime.sessions.get('72').currentRequest.output, 0, 'unscoped counters cannot contaminate concurrent same-model requests');
+  finishA(); await a;
+  assert.equal(metric(runtime.provider.read(context), 'output-tokens').value, '30', 'replace estimates with provider usage, do not add them');
+  time = 2000;
+  let nextRequest;
+  const c = run(71, (request, resolve) => { nextRequest = resolve; });
+  runtime.recordStreamProgress('71', { ...sample, chars: 800 });
+  assert.equal(metric(runtime.provider.read(context), 'live-tps').value, '0', 'late previous request ignored');
+  assert.equal(metric(runtime.provider.read(context), 'output-tokens').value, '30');
+  nextRequest(); finishB(); await Promise.all([b, c]);
+  runtime.close();
+});
+
+test('request clock refreshes while waiting and stops when subscription closes', async () => {
+  const runtime = createMetricsRuntime();
+  runtime.recordConversationEvent({ type: 'run.started', conversationId: '81' });
+  let finish;
+  const pending = runtime.telemetry.startSpan({ name: 'pi.durable.submit', attributes: { 'conversation.id': 81 } }, parent =>
+    parent.startSpan({ name: 'pi.ai.request', attributes: { provider: 'same', model: 'same' } }, () => new Promise(resolve => { finish = resolve; })));
+  const frames = [];
+  const off = runtime.provider.subscribe({ sessionId: '81' }, content => frames.push(metric(content, 'request-duration').value));
+  await waitFor(() => frames.length >= 2, 1200);
+  assert.notEqual(frames[0], frames[1]);
+  off(); const count = frames.length;
+  await new Promise(resolve => setTimeout(resolve, 300));
+  assert.equal(frames.length, count);
+  finish(); await pending; runtime.close();
+});
+
+test('post-run Durable housekeeping cannot reopen a settled conversation', async () => {
+  const runtime = createMetricsRuntime();
+  runtime.recordConversationEvent({ type: 'run.started', conversationId: '42' });
+  await runtime.telemetry.startSpan({ name: 'pi.durable.submit', attributes: { 'conversation.id': 42 } }, parent =>
+    parent.startSpan({ name: 'pi.ai.request', attributes: { provider: 'qa', model: 'qa' } }, async span => {
+      span.setAttributes({ 'usage.input': 12, 'usage.output': 73 });
+    }));
+  runtime.recordConversationEvent({ type: 'run.completed', conversationId: '42' });
+  await runtime.telemetry.startSpan({ name: 'pi.durable.phase', attributes: { 'conversation.id': 42, 'task.id': 99, 'task.name': 'housekeeping', phase: 'cleanup' } }, async () => {
+    assert.equal(runtime.sessions.get('42').running, false);
+    assert.equal(metric(runtime.provider.read({ sessionId: '42' }), 'output-tokens').value, '73');
+  });
+  assert.equal(runtime.sessions.get('42').running, false);
+  runtime.recordConversationEvent({ type: 'run.started', conversationId: '42' });
+  assert.equal(runtime.sessions.get('42').running, true);
+  assert.equal(metric(runtime.provider.read({ sessionId: '42' }), 'output-tokens').value, '0');
+  runtime.clear();
+});

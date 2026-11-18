@@ -54,6 +54,22 @@ function liveFromView(view) {
   };
 }
 
+/** Only numeric progress leaves the live document for metrics; never retain content. */
+function streamingMetricSample(message) {
+  if (!message || !Array.isArray(message.content)) return undefined;
+  let chars = 0;
+  let phase = '生成中';
+  for (const block of message.content) {
+    if (block.type === 'text') { chars += (block.text || '').length; phase = '生成中'; }
+    else if (block.type === 'thinking') { chars += (block.thinking || '').length; phase = '思考中'; }
+    else if (block.type === 'toolCall') {
+      chars += JSON.stringify(block.arguments ?? {}).length;
+      phase = '工具参数生成中';
+    }
+  }
+  return { chars, phase, timestamp: message.timestamp };
+}
+
 /** 判断两次视图之间某个文档的值是否变了。 */
 function documentsDiffer(previous, next) {
   return previous !== next;
@@ -255,4 +271,5 @@ module.exports = {
   diffLive,
   liveFromView,
   seedEntryIds,
+  streamingMetricSample,
 };

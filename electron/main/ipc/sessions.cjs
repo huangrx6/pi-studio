@@ -262,13 +262,14 @@ function registerExtensionDataViewIpc(options = {}) {
         if (conversation?.model) {
           context = {
             durableSessionId: conversation.durableSessionId,
+            sessionTitle: conversation.title,
             model: {
               ...conversation.model,
               ...(requestedModelRef ? { modelRef: requestedModelRef } : {}),
             },
           };
         } else if (conversation?.durableSessionId) {
-          context = { durableSessionId: conversation.durableSessionId };
+          context = { durableSessionId: conversation.durableSessionId, sessionTitle: conversation.title };
         }
       } catch {
         // A newly created conversation may not have a Durable handle yet.

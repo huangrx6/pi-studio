@@ -2052,6 +2052,9 @@ async function applyView(view, entry, conversation, emit) {
 
   const previous = entry.snapshot;
   const next = durableView.liveFromView(view);
+  if (next.generation?.message && next.generation.message !== previous?.generation?.message) {
+    entry.metricsRuntime?.recordStreamProgress(String(conversation.id), durableView.streamingMetricSample(next.generation.message));
+  }
   entry.snapshot = next;
   if (next.generation?.message) entry.partial = next.generation.message;
 
@@ -2154,6 +2157,7 @@ async function ensureWatch(id, emit) {
     id: key,
     conversation,
     stream: watch,
+    metricsRuntime: runtime.metricsRuntime,
     snapshot,
     partial: snapshot.generation?.message,
     running: Boolean(snapshot.run),

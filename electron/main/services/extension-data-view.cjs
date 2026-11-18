@@ -111,6 +111,7 @@ class ExtensionDataViewService {
       ...(record.context?.durableSessionId
         ? { durableSessionId: record.context.durableSessionId }
         : {}),
+      ...(typeof record.context?.sessionTitle === 'string' ? { sessionTitle: record.context.sessionTitle } : {}),
       webContentsId: record.targetId,
       signal: record.abortController.signal,
       ...(record.context?.model
