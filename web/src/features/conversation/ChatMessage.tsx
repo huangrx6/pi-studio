@@ -1,6 +1,6 @@
 import { Accordion } from '../../shared/Accordion';
-import { memo, useRef, useState } from 'react';
-import { PanelRightOpen } from 'lucide-react';
+import { memo, useId, useLayoutEffect, useRef, useState } from 'react';
+import { ChevronDown, PanelRightOpen } from 'lucide-react';
 import type { ChatMessage, ContentBlock } from '../../types/chat-types';
 import { AttachmentIcon } from '../../shared/AttachmentIcon';
 import { LoadingIndicator } from '../../shared/LoadingState';
@@ -11,6 +11,7 @@ import { imagesFromBlocks, textBlocks } from './message-content';
 import { MessageActions } from './MessageActions';
 import { splitMessageText, type Reference } from './references';
 import { ReferenceChip } from './ReferenceChip';
+import './styles/user-message.css';
 
 /**
  * 内联图片列表。
@@ -47,10 +48,31 @@ function MessageReference({ reference }: { reference: Reference }) {
 /** 用户正文：普通文本原样输出，技能/文件引用替换成徽章（不改变消息本身）。 */
 function UserText({ text }: { text: string }) {
   const segments = splitMessageText(text);
-  return <div className="user-text">
+  const [expanded, setExpanded] = useState(false);
+  const [overflow, setOverflow] = useState(false);
+  const content = useRef<HTMLDivElement>(null);
+  const container = useRef<HTMLDivElement>(null);
+  const id = useId();
+  useLayoutEffect(() => {
+    setExpanded(false);
+    const node = content.current;
+    if (!node) return;
+    const measure = () => setOverflow(node.getBoundingClientRect().height > parseFloat(getComputedStyle(node).lineHeight) * 5 + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [text]);
+  return <div ref={container} className={`user-text-disclosure ${overflow && !expanded ? 'is-collapsed' : ''}`}>
+    <div id={id} className="user-text-viewport"><div ref={content} className="user-text">
     {segments.map((segment, index) => segment.kind === 'text'
       ? <span key={index}>{segment.text}</span>
       : <MessageReference key={index} reference={segment.reference} />)}
+    </div></div>
+    {overflow && <button type="button" className="user-text-toggle" aria-expanded={expanded} aria-controls={id} onClick={() => {
+      if (expanded && container.current && container.current.getBoundingClientRect().top < 0) container.current.scrollIntoView({ block: 'start' });
+      setExpanded(value => !value);
+    }}><span>{expanded ? '收起' : '展开更多'}</span><ChevronDown aria-hidden="true" /></button>}
   </div>;
 }
 

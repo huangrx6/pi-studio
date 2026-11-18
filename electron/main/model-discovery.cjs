@@ -6,6 +6,7 @@
  */
 
 const MAX_MODELS = 2000;
+const { systemFetch } = require('./core/http-fetch.cjs');
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const {
   effectiveThinkingLevels,
@@ -275,7 +276,7 @@ async function fetchProviderModelDiscovery({
   modelsUrl,
   api,
   apiKey,
-  fetcher = globalThis.fetch,
+  fetcher = systemFetch,
   timeoutMs = 15000,
   officialCatalog = [],
   metadataCatalogs = [],

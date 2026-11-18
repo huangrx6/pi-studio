@@ -13,6 +13,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { systemFetch } = require('./http-fetch.cjs');
 const {
   effectiveThinkingLevels,
   normalizeThinkingLevels,
@@ -391,7 +392,7 @@ async function responseTextLimited(response, limit) {
 
 async function fetchModelsDevCatalog({
   cacheDirectory,
-  fetcher = globalThis.fetch,
+  fetcher = systemFetch,
   force = false,
   maxAgeMs = MODELS_DEV_MAX_AGE_MS,
   now = Date.now(),

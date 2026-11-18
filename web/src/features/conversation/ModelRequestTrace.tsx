@@ -44,10 +44,10 @@ export function RequestTraceMessageView({ message, defaultOpen = false }: { mess
   const [open, setOpen] = useState(defaultOpen);
   return <details className={`request-message is-${message.role}`} open={open} onToggle={event => setOpen(event.currentTarget.open)}>
     <summary>
-      <span className="request-message-role">{requestRoleLabel(message.role)}</span>
+      <span className="request-message-heading"><span className="request-message-role">{requestRoleLabel(message.role)}</span>
+      {message.truncated && <span className="request-message-truncated">已截断</span>}</span>
       {!open && preview && <span className="request-message-preview">{preview}</span>}
-      {message.truncated && <span className="request-message-truncated">已截断</span>}
-      <ChevronDown className="request-message-chevron" />
+      <ChevronDown className="request-message-chevron" aria-hidden="true" />
     </summary>
     {open && <div className="request-message-body">
       {message.content.map((block, index) => {

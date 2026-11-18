@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { systemFetch } = require('../core/http-fetch.cjs');
 const {
   DEFAULT_ARCHIVE_LIMITS,
   extractZipArchive,
@@ -844,7 +845,7 @@ class ExtensionDistributionService {
     this.userDataPath = fs.realpathSync(this.userDataPath);
     this.appVersion = options.appVersion || '0.0.0';
     parseSemver(this.appVersion);
-    this.fetchImpl = options.fetchImpl || globalThis.fetch;
+    this.fetchImpl = options.fetchImpl || systemFetch;
     if (typeof this.fetchImpl !== 'function') throw new Error('当前运行时不支持 fetch');
     this.registryUrl = options.registryUrl;
     this.officialRoot = typeof options.officialRoot === 'string' && options.officialRoot

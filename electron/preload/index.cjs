@@ -29,6 +29,10 @@ contextBridge.exposeInMainWorld('piApi', {
   // 平台是编译期就确定的事实，交给主进程给，渲染层不用靠 navigator 猜。
   platform: process.platform,
   waitForStartup: () => ipcRenderer.invoke('pi:startup-ready'),
+  networkSettings: () => ipcRenderer.invoke('pi:network-settings'),
+  saveNetworkSettings: (settings) => ipcRenderer.invoke('pi:network-save', settings),
+  detectNetworkProxy: (settings) => ipcRenderer.invoke('pi:network-detect', settings),
+  testNetworkConnection: (settings) => ipcRenderer.invoke('pi:network-test', settings),
   workspaceReady: () => {
     workspaceReady = true;
     const deliver = pendingNavigation;

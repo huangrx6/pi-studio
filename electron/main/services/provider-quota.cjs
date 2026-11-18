@@ -1,4 +1,5 @@
 const { normalizeProviderQuota, projectQuota, quotaConnection, quotaFieldPaths } = require('../core/provider-quota.cjs');
+const { systemFetch } = require('../core/http-fetch.cjs');
 
 const MAX_BYTES = 512 * 1024;
 const FRESH_MS = 60_000;
@@ -32,7 +33,7 @@ function statusError(status) {
   return new QuotaError(`额度接口返回 HTTP ${status}。`, status >= 500);
 }
 
-function createProviderQuotaMonitor({ getProvider, readKey, isAvailable = () => true, fetcher = globalThis.fetch, clock = Date.now }) {
+function createProviderQuotaMonitor({ getProvider, readKey, isAvailable = () => true, fetcher = systemFetch, clock = Date.now }) {
   const entries = new Map();
 
   function invalidate(id) {

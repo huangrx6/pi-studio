@@ -98,6 +98,8 @@ export type McpInfo = SettingsSnapshot['mcp'][number];
 export type McpTestResult = Awaited<ReturnType<typeof window.piApi.testMcp>>;
 
 export type PanelFile = {
+  /** Actual successful preview source, retained across fallback and cache reuse. */
+  actionSource?: PanelFileSource;
   path: string;
   size: number;
   binary: boolean;

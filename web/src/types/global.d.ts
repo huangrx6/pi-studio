@@ -28,6 +28,7 @@ import type {
 } from './comparison-types';
 import type { AgentToolCatalog, AgentToolSelection } from './agent-tool-types';
 import type { ManagedWorktree, SubagentBudgetSnapshot, SubagentChild, SubagentConfig, SubagentSettingsSnapshot, SubagentTranscript } from './subagent-types';
+import type { NetworkSettings, NetworkRoute, NetworkTestResult } from './network-types';
 import type {
   HarnessProfileDraft,
   HarnessSettingsSnapshot,
@@ -352,6 +353,10 @@ declare global {
      * 所有 invoke 方法都是异步的；事件订阅方法返回取消订阅函数。
      */
     piApi: {
+      networkSettings(): Promise<NetworkSettings>;
+      saveNetworkSettings(settings: NetworkSettings): Promise<NetworkSettings>;
+      detectNetworkProxy(settings: NetworkSettings): Promise<NetworkRoute>;
+      testNetworkConnection(settings: NetworkSettings): Promise<NetworkTestResult>;
       /** 主进程的平台标识（process.platform），渲染层不再靠 navigator 猜。 */
       readonly platform: 'darwin' | 'win32' | 'linux' | string;
       // ---- 主题、状态与会话 ----

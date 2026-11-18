@@ -1,0 +1,16 @@
+.user-text-disclosure { min-width: 0; white-space: normal; }
+.user-text-viewport { overflow: hidden; }
+.user-text-disclosure.is-collapsed .user-text-viewport {
+  max-height: 5lh;
+  mask-image: linear-gradient(to bottom, var(--mask-opaque) 0%, var(--mask-opaque) 75%, transparent 115%);
+}
+.user-text-toggle {
+  display: flex; align-items: center; gap: 5px; margin-top: 8px;
+  padding: 3px 0; border: 0; background: transparent; color: var(--muted);
+  font: var(--text-xs)/var(--leading-normal) var(--font); cursor: pointer;
+}
+.user-text-toggle:hover { color: var(--text); }
+.user-text-toggle:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; border-radius: var(--radius-control); }
+.user-text-toggle svg { width: var(--icon-xs); height: var(--icon-xs); transition: transform 160ms ease; }
+.user-text-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .user-text-toggle svg { transition: none; } }

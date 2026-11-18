@@ -32,6 +32,7 @@ const { createWindow, showMainWindow, installMenu, watchSystemTheme } = require(
 const { BACKGROUND_SCHEME } = require('./background-media.cjs');
 const { registerBackgroundProtocol } = require('./services/background.cjs');
 const { installBrowserSessionGuards } = require('./services/browser-session.cjs');
+const { initializeNetwork } = require('./services/network.cjs');
 const { isAllowedLocalHtmlUrl } = require('./services/local-html.cjs');
 const {
   initializeMenuBar,
@@ -163,6 +164,7 @@ if (primaryInstance) {
       registerBackgroundProtocol();
       installBrowserSessionGuards();
       createWindow();
+      await initializeNetwork();
       // Database and credential paths depend on app.getPath('userData').
       await initializeStudioModels();
       try {

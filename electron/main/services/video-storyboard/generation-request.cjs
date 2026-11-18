@@ -1,4 +1,5 @@
 const mediaLimit = 32 * 1024 * 1024;
+const { systemFetch } = require('../../core/http-fetch.cjs');
 const jsonLimit = Math.ceil(mediaLimit / 3) * 4 + 65536;
 
 function endpointFor(baseUrl, kind) {
@@ -95,7 +96,7 @@ async function inspectAudio(bytes) {
   finally { input.dispose(); }
 }
 
-async function requestGeneration(model, input, fetcher = fetch) {
+async function requestGeneration(model, input, fetcher = systemFetch) {
   const endpoint = endpointFor(model.baseUrl, input.kind);
   const speech = input.kind === 'speech';
   const headers = { 'Content-Type': 'application/json', Accept: speech ? 'audio/*' : 'application/json' };

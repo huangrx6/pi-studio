@@ -34,7 +34,7 @@ export function TodoHistory({ sessionId, goalUpdatedAt }: { sessionId: string; g
       : page.items.map(plan => {
         const tasks = plan.tasks.filter(task => task.status !== 'deleted');
         return <details key={plan.planId}><summary><ChevronRight aria-hidden="true" />
-          <strong>{plan.title}</strong>{plan.scope === 'goal' && <Target aria-label="目标清单" />}
+          <strong title={plan.title}>{plan.title}</strong>{plan.scope === 'goal' && <Target aria-label="目标清单" />}
           <small>{tasks.length} 项</small></summary>
           <ul>{tasks.map(task => {
             const status = historyTaskStatus(plan, task), Icon = statusIcons[status];

@@ -16,6 +16,7 @@
  */
 
 const { registerSystemIpc } = require('./system.cjs');
+const { registerNetworkIpc } = require('./network.cjs');
 const { registerConversationIpc } = require('./sessions.cjs');
 const { registerFilesIpc } = require('./files.cjs');
 const { registerAttachmentsIpc } = require('./attachments.cjs');
@@ -35,6 +36,7 @@ const { registerStoryboardIpc } = require('./video-storyboard.cjs');
 function registerIpc(waitForStartup) {
   registerStoryboardIpc();
   registerSystemIpc(waitForStartup);
+  registerNetworkIpc(waitForStartup);
   registerConversationIpc();
   registerFilesIpc();
   registerAttachmentsIpc();

@@ -83,6 +83,10 @@ const GeneralSettings = lazy(async () => {
   const module = await import('../features/appearance/GeneralSettings');
   return { default: module.GeneralSettings };
 });
+const NetworkSettings = lazy(async () => {
+  const module = await import('../features/network/NetworkSettings');
+  return { default: module.NetworkSettings };
+});
 const GitSettings = lazy(async () => {
   const module = await import('../features/git/GitSettings');
   return { default: module.GitSettings };
@@ -419,11 +423,12 @@ export function SettingsOverlay({
                 </button>
               </div>
             )}
-            {!data && !error && tab !== 'general' && tab !== 'git' && tab !== 'usage' && tab !== 'archives' && tab !== 'permissions' && tab !== 'subagents' && (
+            {!data && !error && tab !== 'general' && tab !== 'network' && tab !== 'git' && tab !== 'usage' && tab !== 'archives' && tab !== 'permissions' && tab !== 'subagents' && (
               <LoadingState variant="section">正在加载设置…</LoadingState>
             )}
             {tab === 'shortcuts' && <ShortcutSettings preferences={appearance.preferences} onChange={appearance.onChange} />}
             {tab === 'general' && <GeneralSettings {...appearance} />}
+            {tab === 'network' && <NetworkSettings />}
             {tab === 'git' && <GitSettings cwd={workspace} workspaces={workspaces} preferences={appearance.preferences} onChange={appearance.onChange} onOpenWorktree={onOpenWorktree} />}
             {tab === 'permissions' && (
               <PermissionPolicySettings

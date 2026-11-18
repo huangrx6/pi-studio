@@ -74,11 +74,10 @@ that returns 404 reports `链接可能已失效` instead of a network stack trac
 
 ## System proxy and VPN
 
-Remote sources and GitHub archives are fetched through Electron's `net.fetch`,
-which uses Chromium's network stack and therefore honours the operating system
-proxy and PAC settings. Node's own `fetch` ignores them, which is why a VPN that
-only configures a system proxy used to leave GitHub downloads timing out while
-the rest of the application worked.
+Remote sources and GitHub archives use Studio's shared Chromium transport. By
+default it honours the operating system proxy and PAC settings. Settings →
+网络代理 also provides manual HTTP/HTTPS/SOCKS5 proxy and direct connection modes;
+changes apply to subsequent requests. See [Network proxy](network-proxy.md).
 
 ## Discovery and installation
 

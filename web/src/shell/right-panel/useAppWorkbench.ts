@@ -62,6 +62,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
   const treeRequestRef = useRef(0);
   const [fileMenuOpen, setFileMenuOpen] = useState(false);
   const [fileApps, setFileApps] = useState<Array<{ name: string; path: string; icon?: string }>>([]);
+  const [fileAppsError, setFileAppsError] = useState('');
   const [fileAppsLoading, setFileAppsLoading] = useState(false);
   const fileActionsRef = useRef<HTMLDivElement>(null);
 
@@ -220,6 +221,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
         binary: preview.kind === 'binary',
         text: preview.text || '',
         preview: { ...preview, path },
+        actionSource: 'workspace',
       };
     } catch (error) {
       // 预览服务拒绝（越界、无权限）时保留原有错误提示，不退化成"空文件"。
@@ -259,6 +261,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
       binary: preview.kind === 'binary',
       text: preview.text || '',
       preview: { ...preview, path },
+      actionSource: 'external',
     };
   }
 
@@ -334,7 +337,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
   ): Promise<boolean> {
     const cwd = options?.cwd || workspaceRef.current || sessionRef.current?.cwd;
     if (source === 'workspace' && !cwd) return false;
-    const identity = { path: target, source, cwd: source === 'workspace' || source === 'external' ? cwd : undefined, sessionId: source === 'workspace' ? undefined : accessSessionId };
+    const identity = { path: target, source, cwd: source !== 'attachment' ? cwd : undefined, sessionId: source === 'workspace' ? undefined : accessSessionId };
     const key = panelFileKey(identity);
     const id = `file:${key}`;
     const tab: PanelTab = { id, kind: 'file', title: target.split(/[\\/]/).pop() || target, tooltip: source === 'workspace' ? `${cwd}/${target}` : target, ...identity };
@@ -425,7 +428,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
   function currentFileRequest(appPath?: string) {
     const activePanelTab = panelTabs.find((tab) => tab.id === activePanelTabId) ?? panelTabs[0];
     if (!file || !activePanelTab || activePanelTab.kind !== 'file') return null;
-    const source = activePanelTab.source || (file.path.startsWith('/') ? 'diff' : 'workspace');
+    const source = file.actionSource || activePanelTab.source || (file.path.startsWith('/') ? 'diff' : 'workspace');
     if (source === 'workspace' && !activePanelTab.cwd) return null;
     return {
       cwd: activePanelTab.cwd || '',
@@ -443,13 +446,14 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     setFileMenuOpen(true);
     setFileApps([]);
     setFileAppsLoading(true);
+    setFileAppsError('');
     const owner = activePanelTabIdRef.current;
     const revision = fileReadRef.current;
     try {
       const result = await window.piApi.fileActions(request);
       if (owner === activePanelTabIdRef.current && revision === fileReadRef.current) setFileApps(result.apps);
     } catch (error) {
-      if (owner === activePanelTabIdRef.current && revision === fileReadRef.current) setFileError(errorText(error));
+      if (owner === activePanelTabIdRef.current && revision === fileReadRef.current) setFileAppsError(errorText(error));
     } finally {
       if (owner === activePanelTabIdRef.current && revision === fileReadRef.current) setFileAppsLoading(false);
     }
@@ -547,6 +551,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     setFileMenuOpen,
     fileApps,
     fileAppsLoading,
+    fileAppsError,
     setFileApps,
     fileActionsRef,
     loadTree,

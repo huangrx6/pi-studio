@@ -1,0 +1,37 @@
+.network-settings { width: 100%; min-width: 0; padding-bottom: var(--space-8); }
+.network-intro { margin: 0 0 var(--space-6); color: var(--muted); font-size: var(--text-sm); line-height: 1.6; }
+.network-settings form { display: grid; gap: var(--space-5); }
+.network-mode-fieldset { margin: 0; padding: 0; min-width: 0; border: 0; }
+.network-mode-fieldset legend { margin-bottom: var(--space-3); font-size: var(--text-base); font-weight: var(--weight-semibold); }
+.network-modes { display: grid; gap: var(--space-2); }
+.network-mode { display: flex; align-items: center; gap: var(--space-3); position: relative; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); cursor: pointer; }
+.network-mode.is-selected { border-color: var(--accent); background: var(--accent-soft); }
+.network-mode input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.network-mode:has(input:focus-visible) { outline: 2px solid var(--focus-color); outline-offset: 2px; }
+.network-mode svg { flex: none; width: var(--icon-md); height: var(--icon-md); color: var(--muted); }
+.network-mode.is-selected svg { color: var(--accent-foreground); }
+.network-mode > span { display: grid; gap: var(--space-1); min-width: 0; }
+.network-mode strong { font-size: var(--text-base); font-weight: var(--weight-semibold); }
+.network-mode small { font-size: var(--text-sm); color: var(--muted); line-height: 1.45; }
+.network-mode .network-mode-check { margin-left: auto; }
+.network-mode-fieldset:disabled .network-mode { cursor: wait; }
+.network-card { margin: 0; padding: var(--space-5); min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
+.network-card-heading { display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--space-3); justify-content: space-between; }
+.network-card-heading > div { flex: 1 1 16rem; min-width: 0; }
+.network-card h2 { margin: 0; font-size: var(--text-base); font-weight: var(--weight-semibold); }
+.network-card-heading p, .network-help { margin: var(--space-2) 0 0; font-size: var(--text-sm); line-height: 1.6; color: var(--muted); }
+.network-settings button svg { width: var(--icon-sm); height: var(--icon-sm); }
+.network-route { display: flex; align-items: flex-start; gap: var(--space-2); margin-top: var(--space-4); padding: var(--space-3); border-radius: var(--radius-control); background: var(--surface-soft); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.network-route svg { flex: none; width: var(--icon-md); height: var(--icon-md); }
+.network-manual { display: grid; gap: var(--space-4); }
+.network-manual > button { justify-self: start; }
+.network-field { display: grid; gap: var(--space-2); min-width: 0; font-size: var(--text-base); }
+.network-field small { color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
+.network-field input { box-sizing: border-box; width: 100%; min-width: 0; min-height: var(--control); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--text); font: inherit; }
+.network-field input:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 1px; }
+.network-message { display: grid; gap: var(--space-1); margin: var(--space-3) 0 0; padding: var(--space-3); border-radius: var(--radius-control); background: var(--surface-soft); font-size: var(--text-sm); line-height: 1.5; overflow-wrap: anywhere; }
+.network-message.is-success { color: var(--accent-foreground); }
+.network-message.is-error { color: var(--error); }
+.network-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.network-actions .network-help { margin: 0; }
+.network-scope { margin: 0; }

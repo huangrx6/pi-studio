@@ -111,6 +111,7 @@ export function WorkbenchPane({
     fileMenuOpen,
     fileApps,
     fileAppsLoading,
+    fileAppsError,
     fileActionsRef,
     loadTree,
     readTreeDirectory,
@@ -389,6 +390,7 @@ export function WorkbenchPane({
             <button className="file-action" role="menuitem" onClick={() => void openFileWith()}><Eye /><span>用默认应用打开</span></button>
             {(fileAppsLoading || fileApps.length > 0) && <div className="file-actions-sep" />}
             {fileAppsLoading && <LoadingState className="file-action-loading">正在读取可用应用…</LoadingState>}
+            {fileAppsError && <div className="file-action-loading" role="alert">{fileAppsError}</div>}
             {!fileAppsLoading && fileApps.map((app) => <button className="file-action" role="menuitem" key={app.path} onClick={() => void openFileWith(app.path)}>{app.icon ? <img src={app.icon} alt="" /> : <AppWindow />}<span>{app.name}</span></button>)}
             <div className="file-actions-sep" />
             <button className="file-action" role="menuitem" onClick={() => void revealCurrentFile()}><FolderOpen /><span>显示文件位置</span></button>

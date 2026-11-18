@@ -1,6 +1,6 @@
 import {
   ArchiveRestore, BarChart3, Bot, Code2, Cpu, FileCode2, Info, Keyboard,
-  GitBranch, Layers3, Plug, Settings, ShieldCheck, Wrench,
+  GitBranch, Globe, Layers3, Plug, Settings, ShieldCheck, Wrench,
 } from 'lucide-react';
 import appIcon from '../../../assets/icon.png';
 
@@ -20,6 +20,7 @@ export const settingsPages = [
   { id: 'skills', group: '资源与扩展', label: '技能', icon: FileCode2 },
   { id: 'extensions', group: '资源与扩展', label: '扩展', icon: Layers3 },
   { id: 'archives', group: '数据与应用', label: '归档会话', icon: ArchiveRestore },
+  { id: 'network', group: '数据与应用', label: '网络代理', icon: Globe, keywords: ['proxy', '代理', '网络', 'VPN', '连接', 'HTTP', 'SOCKS', '超时'] },
   { id: 'about', group: '数据与应用', label: '关于', icon: Info },
 ] as const;
 

@@ -35,6 +35,7 @@
     "release:dist": "bash scripts/release/build-signed-macos.sh",
     "release:package": "bash scripts/release/build-signed-macos.sh --current --dir",
     "qa:website": "node scripts/qa/qa-website.mjs",
+    "qa:network": "node scripts/qa/qa-network-settings.mjs",
     "qa:memory": "node scripts/qa/qa-memory-smoke.mjs",
     "qa:runtime-panel": "node scripts/qa/qa-runtime-panel.mjs",
     "qa:terminal-replay": "node scripts/qa/qa-terminal-replay.mjs",

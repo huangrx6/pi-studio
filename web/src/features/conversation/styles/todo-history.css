@@ -3,7 +3,7 @@
 .todo-history summary { display: flex; gap: 7px; align-items: center; min-height: 30px; padding: 4px 6px; list-style: none; cursor: pointer; border-radius: var(--radius-control); }
 .todo-history summary::-webkit-details-marker { display: none; }
 .todo-history summary:hover { background: var(--surface-hover); }
-.todo-history summary strong { flex: 1; min-width: 0; font-weight: var(--weight-medium); overflow-wrap: anywhere; }
+.todo-history summary strong { flex: 1; min-width: 0; font-weight: var(--weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .todo-history summary svg, .todo-history-task svg { width: var(--icon-xs); height: var(--icon-xs); flex: none; }
 .todo-history summary > svg:first-child, .todo-history small { color: var(--text-2); }
 .todo-history details[open] > summary > svg:first-child { transform: rotate(90deg); }
