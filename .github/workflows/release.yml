@@ -117,6 +117,13 @@ jobs:
       - name: Packaged startup regression
         run: pnpm run qa:startup
 
+      - name: Packaged vi interaction regression
+        shell: bash
+        run: |
+          app_dir=mac
+          if [ "$(uname -m)" = arm64 ]; then app_dir=mac-arm64; fi
+          PI_STUDIO_PACKAGED_APP="$PWD/release/$app_dir/Pi Studio.app/Contents/MacOS/Pi Studio" node tools/qa/qa-terminal-vi.mjs
+
       - name: Collect installers and updater metadata
         run: |
           mkdir -p artifacts

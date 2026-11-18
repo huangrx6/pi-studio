@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { _electron } from 'playwright-core';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
+const executablePath = process.env.PI_STUDIO_PACKAGED_APP;
 const profile = await mkdtemp(path.join(tmpdir(), 'pi-terminal-vi-'));
 const sample = path.join(profile, 'sample.txt');
 const env = {
@@ -25,9 +26,11 @@ try {
     await writeFile(path.join(profile, name), '');
   }
   await writeFile(sample, 'alpha\nbravo\ncharlie\n');
-  app = await _electron.launch({ args: [root], cwd: profile, env });
+  app = await _electron.launch({ executablePath, args: executablePath ? [] : [root], cwd: profile, env });
   const page = await app.firstWindow();
   page.setDefaultTimeout(15000);
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
   await app.evaluate(({ dialog }, directory) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] });
   }, profile);
@@ -45,6 +48,9 @@ try {
   await page.keyboard.type('/usr/bin/vi -Nu NONE -i NONE -n sample.txt');
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => window.viOutput.includes('charlie'));
+  // Vim sends DECRQM after its initial screen. Exiting too soon misses the
+  // production-bundle parser crash and only verifies that input reaches the PTY.
+  await page.waitForFunction(() => window.viOutput.includes('\u001b[?12$p'));
   await page.getByRole('button', { name: '打开工具', exact: true }).click();
   await page.getByRole('menuitem', { name: '运行服务', exact: true }).click();
   const terminalTab = page.getByRole('tab').filter({ hasText: '终端' });
@@ -61,6 +67,7 @@ try {
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => window.viOutput.includes('written'));
   assert.equal(await readFile(sample, 'utf8'), 'alpha\nbQXavo\ncharlie\n');
+  assert.deepEqual(errors, [], 'The built terminal must parse Vim mode queries without freezing');
   console.log('Passed vi arrows, undo/redo, insert, Escape and save after tab reactivation.');
 } finally {
   await app?.close();
