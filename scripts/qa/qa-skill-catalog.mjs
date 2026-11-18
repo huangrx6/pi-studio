@@ -39,6 +39,11 @@ function installCatalogFixture() {
     if (refresh) catalogs[3] = makeCatalog('unavailable', '离线目录', 1);
     return { sources: catalogs.map(entry => entry.source), catalogs };
   };
+  const prepare = window.piApi.prepareSkillInstall;
+  window.piApi.prepareSkillInstall = async request => ({
+    ...await prepare(request), resourceCount: 39, totalBytes: 4000,
+    files: Array.from({ length: 40 }, (_, i) => ({ path: i ? `references/工作流程-${i}.md` : 'SKILL.md', size: 100 })),
+  });
 }
 
 let browser;
@@ -81,6 +86,23 @@ try {
   await last.click();
   const preview = page.locator('.skill-install-dialog');
   await preview.getByRole('button', { name: '安装技能', exact: true }).waitFor();
+  const fileDetails = preview.locator('.skill-install-files');
+  assert.equal(await fileDetails.evaluate(node => node.open), false, 'large file manifests start collapsed');
+  await fileDetails.locator('summary').focus();
+  await fileDetails.locator('summary').press('Enter');
+  const files = preview.getByRole('group', { name: '技能文件列表' });
+  assert.equal(await files.locator('code').count(), 40);
+  assert.ok(await files.evaluate(node => node.scrollHeight > node.clientHeight && node.clientHeight <= 260));
+  await files.focus();
+  await files.press('End');
+  await page.waitForFunction(() => document.querySelector('.skill-install-file-list').scrollTop > 0);
+  for (const [theme, width] of [['dark', 1440], ['light', 430]]) {
+    await page.setViewportSize({ width, height: 820 });
+    await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
+    assert.ok(await preview.evaluate(node => node.scrollWidth <= node.clientWidth + 1));
+    await preview.screenshot({ path: `${output}/install-files-${theme}.png` });
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.keyboard.press('Escape');
   await preview.waitFor({ state: 'detached' });
   await focused(last);
@@ -120,6 +142,14 @@ try {
   await catalog.getByRole('button', { name: '管理源', exact: true }).click();
   const manager = page.getByRole('dialog', { name: '管理技能源' });
   await manager.waitFor();
+  for (const [theme, width] of [['light', 1440], ['dark', 600]]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
+    await manager.locator('.dialog-body').evaluate(node => { node.scrollTop = 0; });
+    assert.ok(await manager.locator('.dialog-body').evaluate(node => node.scrollWidth <= node.clientWidth + 1));
+    await manager.screenshot({ path: `${output}/source-manager-${theme}.png` });
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.keyboard.press('Escape');
   await manager.waitFor({ state: 'detached' });
   await page.keyboard.press('Escape');

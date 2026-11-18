@@ -27,37 +27,47 @@ export function ProviderEditorFields({ draft, setDraft, editing, quotaAvailable,
   const update = (key: Exclude<keyof ProviderEditorDraft, 'quota' | 'mediaModels'>, value: string) => setDraft(current => ({ ...current, [key]: value }));
   const options = apiTypeOptions.some(option => option.value === draft.api)
     ? apiTypeOptions : [...apiTypeOptions, { value: draft.api, label: draft.api }];
-  return <div className="settings-form-grid provider-editor-fields">
-    <p className="provider-editor-note field-wide">全局模型来源 · 所有工作区共享连接配置与凭据。</p>
-    <div className="settings-field">
-      <span className="settings-field-heading"><label htmlFor="provider-id">来源 ID</label><InfoHint label="用于区分模型来源和凭据，创建后不能修改。" /></span>
-      <input id="provider-id" autoFocus={!editing} required disabled={editing || settingsBusy} value={draft.providerId} onChange={event => update('providerId', event.target.value)} placeholder="my-provider" />
-    </div>
-    <label>显示名称<input required value={draft.name} onChange={event => update('name', event.target.value)} placeholder="例如 My Gateway" /></label>
-    <div className="settings-field"><span>API 类型</span><Select label="API 类型" disabled={settingsBusy} value={draft.api} onChange={value => update('api', value)} options={options} /></div>
-    <label>服务地址<input autoFocus={editing} required type="url" value={draft.baseUrl} onChange={event => update('baseUrl', event.target.value)} placeholder="https://api.example.com/v1" /></label>
-    <div className="settings-field field-wide">
-      <span className="settings-field-heading"><label htmlFor="provider-api-key">API Key</label><InfoHint label="只填写密钥值。Studio 使用自己的加密凭据库，并把环境变量名、shell 命令等按普通文本处理。" /></span>
-      <input id="provider-api-key" aria-describedby={editing ? 'provider-api-key-note' : undefined} type="password" autoComplete="new-password" value={draft.apiKey} onChange={event => update('apiKey', event.target.value)} placeholder={editing ? '输入新 API Key' : '粘贴 API Key'} />
-      {editing && <small id="provider-api-key-note" className="provider-editor-note">留空保留已保存的 API Key，不会清除凭据。</small>}
-    </div>
+  return <div className="settings-form-sections provider-editor-fields">
+    <p className="provider-editor-note">全局模型来源 · 所有工作区共享连接配置与凭据。</p>
+    <section className="settings-form-section provider-editor-section" aria-label="基本信息">
+      <h3>基本信息</h3>
+      <div className="settings-form-grid">
+        <div className="settings-field">
+          <span className="settings-field-heading"><label htmlFor="provider-id">来源 ID</label><InfoHint label="用于区分模型来源和凭据，创建后不能修改。" /></span>
+          <input id="provider-id" autoFocus={!editing} required disabled={editing || settingsBusy} value={draft.providerId} onChange={event => update('providerId', event.target.value)} placeholder="my-provider" />
+        </div>
+        <label>显示名称<input required value={draft.name} onChange={event => update('name', event.target.value)} placeholder="例如 My Gateway" /></label>
+      </div>
+    </section>
+    <section className="settings-form-section provider-editor-section" aria-label="连接配置">
+      <h3>连接配置</h3>
+      <div className="settings-form-grid">
+        <div className="settings-field"><span>API 类型</span><Select label="API 类型" disabled={settingsBusy} value={draft.api} onChange={value => update('api', value)} options={options} /></div>
+        <label>服务地址<input autoFocus={editing} required type="url" value={draft.baseUrl} onChange={event => update('baseUrl', event.target.value)} placeholder="https://api.example.com/v1" /></label>
+        <div className="settings-field field-wide">
+          <span className="settings-field-heading"><label htmlFor="provider-api-key">API Key</label><InfoHint label="只填写密钥值。Studio 使用自己的加密凭据库，并把环境变量名、shell 命令等按普通文本处理。" /></span>
+          <input id="provider-api-key" aria-describedby={editing ? 'provider-api-key-note' : undefined} type="password" autoComplete="new-password" value={draft.apiKey} onChange={event => update('apiKey', event.target.value)} placeholder={editing ? '输入新 API Key' : '粘贴 API Key'} />
+          {editing && <small id="provider-api-key-note" className="provider-editor-note">留空保留已保存的 API Key，不会清除凭据。</small>}
+        </div>
+      </div>
+      <Accordion compact className="provider-editor-advanced" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}
+        onInvalidCapture={event => {
+          // Open synchronously before native form validation tries to focus a field.
+          event.currentTarget.open = true;
+          setAdvancedOpen(true);
+        }} summary="高级选项" badge={configured ? "已配置" : undefined}>
+        <div className="settings-form-grid">
+          <div className="settings-field">
+            <span className="settings-field-heading"><label htmlFor="provider-models-url">模型列表地址</label><InfoHint label="支持常见的 OpenAI /models 响应。保存来源后可获取并预览模型。" /></span>
+            <input id="provider-models-url" type="url" value={draft.modelsUrl} onChange={event => update('modelsUrl', event.target.value)} placeholder="默认使用服务地址/models" />
+          </div>
+          <label>图标 URL<input value={draft.icon} onChange={event => update('icon', event.target.value)} placeholder="可选，URL 或 data:image/…" /></label>
+        </div>
+      </Accordion>
+    </section>
     <ProviderMediaFields models={draft.mediaModels} catalog={mediaCandidates}
       onChange={mediaModels => setDraft(current => ({ ...current, mediaModels }))} />
     {quotaAvailable && <ProviderQuotaFields config={draft.quota} providerId={draft.providerId} apiKey={draft.apiKey}
       onChange={quota => setDraft(current => ({ ...current, quota }))} />}
-    <Accordion className="provider-editor-advanced field-wide" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}
-      onInvalidCapture={event => {
-        // Open synchronously before native form validation tries to focus a field.
-        event.currentTarget.open = true;
-        setAdvancedOpen(true);
-      }} summary="高级选项" badge={configured ? "已配置" : undefined}>
-      <div className="settings-form-grid">
-        <div className="settings-field">
-          <span className="settings-field-heading"><label htmlFor="provider-models-url">模型列表地址</label><InfoHint label="支持常见的 OpenAI /models 响应。保存来源后可获取并预览模型。" /></span>
-          <input id="provider-models-url" type="url" value={draft.modelsUrl} onChange={event => update('modelsUrl', event.target.value)} placeholder="默认使用服务地址/models" />
-        </div>
-        <label>图标 URL<input value={draft.icon} onChange={event => update('icon', event.target.value)} placeholder="可选，URL 或 data:image/…" /></label>
-      </div>
-    </Accordion>
   </div>;
 }

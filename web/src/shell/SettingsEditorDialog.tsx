@@ -115,89 +115,102 @@ export function SettingsEditorDialog({
       apiTypeOptions={apiTypeOptions}
       settingsBusy={editorSaving || editorCommitted || editorUnavailable}
     />}
-    {editor.kind === 'model' && <div className="settings-form-grid model-editor-form">
-      <div className="settings-field field-wide">
-        <span className="settings-field-heading"><span>模型来源</span>{customModel.origin === 'builtin' && <InfoHint label="这是 Pi 内置模型。保存会为当前来源建立参数覆盖，不会替换同一来源的其他内置模型。" />}</span>
-        <Select label="模型来源" disabled value={customModel.providerId} onChange={() => {}} options={(settingsData?.providers ?? []).filter((provider) => provider.id === customModel.providerId).map((provider) => ({ value: provider.id, label: `${provider.name} · ${provider.id}` }))} />
-      </div>
-      <label>模型 ID<input autoFocus required disabled={Boolean(editor.editId)} value={customModel.modelId} onChange={(event) => setCustomModel({ ...customModel, modelId: event.target.value })} placeholder="model-id" /></label>
-      <label>显示名称<input value={customModel.name} onChange={(event) => setCustomModel({ ...customModel, name: event.target.value })} placeholder="可选，默认使用模型 ID" /></label>
-      <div className="model-token-field">
-        <label htmlFor="model-context-window">上下文长度</label>
-        <div className="model-token-input">
-          <input
-            id="model-context-window"
-            aria-label="上下文长度"
-            type="number"
-            inputMode="decimal"
-            min={tokenUnits.contextWindow === 'tokens' ? '1' : '0.000001'}
-            step={tokenUnits.contextWindow === 'tokens' ? '1' : 'any'}
-            value={customModel.contextWindow}
-            onChange={(event) => setCustomModel({ ...customModel, contextWindow: event.target.value })}
-            placeholder="接口与模型目录未提供"
-          />
-          <Select
-            label="上下文长度单位"
-            value={tokenUnits.contextWindow}
-            onChange={(value) => changeTokenUnit('contextWindow', value as TokenUnit)}
-            options={tokenUnitOptions}
-          />
+    {editor.kind === 'model' && <div className="settings-form-sections model-editor-form">
+      <section className="settings-form-section" aria-label="模型信息">
+        <h3>模型信息</h3>
+        <div className="settings-form-grid">
+          <div className="settings-field field-wide">
+            <span className="settings-field-heading"><span>模型来源</span>{customModel.origin === 'builtin' && <InfoHint label="这是 Pi 内置模型。保存会为当前来源建立参数覆盖，不会替换同一来源的其他内置模型。" />}</span>
+            <Select label="模型来源" disabled value={customModel.providerId} onChange={() => {}} options={(settingsData?.providers ?? []).filter((provider) => provider.id === customModel.providerId).map((provider) => ({ value: provider.id, label: `${provider.name} · ${provider.id}` }))} />
+          </div>
+          <label>模型 ID<input autoFocus required disabled={Boolean(editor.editId)} value={customModel.modelId} onChange={(event) => setCustomModel({ ...customModel, modelId: event.target.value })} placeholder="model-id" /></label>
+          <label>显示名称<input value={customModel.name} onChange={(event) => setCustomModel({ ...customModel, name: event.target.value })} placeholder="可选，默认使用模型 ID" /></label>
         </div>
-        {tokenInputAsInteger(String(customModel.contextWindow), tokenUnits.contextWindow)
-          ? <small className="model-token-exact">{tokenInputAsInteger(String(customModel.contextWindow), tokenUnits.contextWindow)?.toLocaleString()} tokens</small>
-          : null}
-      </div>
-      <div className="model-token-field">
-        <label htmlFor="model-max-tokens">最大输出</label>
-        <div className="model-token-input">
-          <input
-            id="model-max-tokens"
-            aria-label="最大输出"
-            type="number"
-            inputMode="decimal"
-            min={tokenUnits.maxTokens === 'tokens' ? '1' : '0.000001'}
-            step={tokenUnits.maxTokens === 'tokens' ? '1' : 'any'}
-            value={customModel.maxTokens}
-            onChange={(event) => setCustomModel({ ...customModel, maxTokens: event.target.value })}
-            placeholder="接口与模型目录未提供"
-          />
-          <Select
-            label="最大输出单位"
-            value={tokenUnits.maxTokens}
-            onChange={(value) => changeTokenUnit('maxTokens', value as TokenUnit)}
-            options={tokenUnitOptions}
-          />
+      </section>
+      <section className="settings-form-section" aria-label="容量限制">
+        <h3>容量限制</h3>
+        <div className="settings-form-grid">
+          <div className="model-token-field">
+            <label htmlFor="model-context-window">上下文长度</label>
+            <div className="model-token-input">
+              <input
+                id="model-context-window"
+                aria-label="上下文长度"
+                type="number"
+                inputMode="decimal"
+                min={tokenUnits.contextWindow === 'tokens' ? '1' : '0.000001'}
+                step={tokenUnits.contextWindow === 'tokens' ? '1' : 'any'}
+                value={customModel.contextWindow}
+                onChange={(event) => setCustomModel({ ...customModel, contextWindow: event.target.value })}
+                placeholder="接口与模型目录未提供"
+              />
+              <Select
+                label="上下文长度单位"
+                value={tokenUnits.contextWindow}
+                onChange={(value) => changeTokenUnit('contextWindow', value as TokenUnit)}
+                options={tokenUnitOptions}
+              />
+            </div>
+            {tokenInputAsInteger(String(customModel.contextWindow), tokenUnits.contextWindow)
+              ? <small className="model-token-exact">{tokenInputAsInteger(String(customModel.contextWindow), tokenUnits.contextWindow)?.toLocaleString()} tokens</small>
+              : null}
+          </div>
+          <div className="model-token-field">
+            <label htmlFor="model-max-tokens">最大输出</label>
+            <div className="model-token-input">
+              <input
+                id="model-max-tokens"
+                aria-label="最大输出"
+                type="number"
+                inputMode="decimal"
+                min={tokenUnits.maxTokens === 'tokens' ? '1' : '0.000001'}
+                step={tokenUnits.maxTokens === 'tokens' ? '1' : 'any'}
+                value={customModel.maxTokens}
+                onChange={(event) => setCustomModel({ ...customModel, maxTokens: event.target.value })}
+                placeholder="接口与模型目录未提供"
+              />
+              <Select
+                label="最大输出单位"
+                value={tokenUnits.maxTokens}
+                onChange={(value) => changeTokenUnit('maxTokens', value as TokenUnit)}
+                options={tokenUnitOptions}
+              />
+            </div>
+            {tokenInputAsInteger(String(customModel.maxTokens), tokenUnits.maxTokens)
+              ? <small className="model-token-exact">{tokenInputAsInteger(String(customModel.maxTokens), tokenUnits.maxTokens)?.toLocaleString()} tokens</small>
+              : null}
+          </div>
         </div>
-        {tokenInputAsInteger(String(customModel.maxTokens), tokenUnits.maxTokens)
-          ? <small className="model-token-exact">{tokenInputAsInteger(String(customModel.maxTokens), tokenUnits.maxTokens)?.toLocaleString()} tokens</small>
-          : null}
-      </div>
-      <div className="model-capability-options field-wide" role="group" aria-label="模型能力">
-        <label className={customModel.supportsImages ? 'is-selected' : ''}><input type="checkbox" checked={customModel.supportsImages} onChange={(event) => setCustomModel({ ...customModel, supportsImages: event.target.checked })} /><span><strong>图片输入</strong></span><ImageIcon /></label>
-        <label className={customModel.reasoning ? 'is-selected' : ''}><input type="checkbox" checked={customModel.reasoning} onChange={(event) => toggleModelReasoning(event.target.checked)} /><span><strong>推理模型</strong></span><Sparkles /></label>
-      </div>
-      {customModel.reasoning && <div className="model-thinking-levels field-wide">
-        <div className="model-thinking-levels-head">
-          <div><strong>可用推理等级 <InfoHint label="只勾选模型实际接受的强度；请求参数由对应的 Pi Provider 适配。模型目录没有声明时会尝试 models.dev、Pi 官方目录，最后回退到 Off–High。" /></strong></div>
-          <small>{customModel.thinkingLevels.length} / {concreteThinkingLevels.length}</small>
+      </section>
+      <section className="settings-form-section" aria-label="输入与推理">
+        <h3>输入与推理</h3>
+        <div className="model-capability-options" role="group" aria-label="模型能力">
+          <label className={customModel.supportsImages ? 'is-selected' : ''}><input type="checkbox" checked={customModel.supportsImages} onChange={(event) => setCustomModel({ ...customModel, supportsImages: event.target.checked })} /><span><strong>图片输入</strong></span><ImageIcon /></label>
+          <label className={customModel.reasoning ? 'is-selected' : ''}><input type="checkbox" checked={customModel.reasoning} onChange={(event) => toggleModelReasoning(event.target.checked)} /><span><strong>推理模型</strong></span><Sparkles /></label>
         </div>
-        <div className="model-thinking-level-options" role="group" aria-label="可用推理等级">
-          {concreteThinkingLevels.map((level) => {
-            const selected = customModel.thinkingLevels.includes(level);
-            return <button
-              type="button"
-              key={level}
-              className={selected ? 'is-selected' : ''}
-              role="checkbox"
-              aria-checked={selected}
-              onClick={() => toggleModelThinkingLevel(level)}
-            >
-              <span>{selected && <Check aria-hidden="true" />}</span>
-              {thinkingLabels[level]}
-            </button>;
-          })}
-        </div>
-      </div>}
+        {customModel.reasoning && <div className="model-thinking-levels field-wide">
+          <div className="model-thinking-levels-head">
+            <div><strong>可用推理等级 <InfoHint label="只勾选模型实际接受的强度；请求参数由对应的 Pi Provider 适配。模型目录没有声明时会尝试 models.dev、Pi 官方目录，最后回退到 Off–High。" /></strong></div>
+            <small>{customModel.thinkingLevels.length} / {concreteThinkingLevels.length}</small>
+          </div>
+          <div className="model-thinking-level-options" role="group" aria-label="可用推理等级">
+            {concreteThinkingLevels.map((level) => {
+              const selected = customModel.thinkingLevels.includes(level);
+              return <button
+                type="button"
+                key={level}
+                className={selected ? 'is-selected' : ''}
+                role="checkbox"
+                aria-checked={selected}
+                onClick={() => toggleModelThinkingLevel(level)}
+              >
+                <span>{selected && <Check aria-hidden="true" />}</span>
+                {thinkingLabels[level]}
+              </button>;
+            })}
+          </div>
+        </div>}
+      </section>
     </div>}
     {editor.kind === 'mcp' && <McpEditorFields
       key={editorRequestId}

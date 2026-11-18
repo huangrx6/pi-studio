@@ -28,6 +28,7 @@ import { DetailDialog } from '../../shared/DetailDialog';
 import { InfoHint } from '../../shared/InfoHint';
 import { Select } from '../../shared/Select';
 import { SettingsDialog } from '../../shared/SettingsDialog';
+import { Accordion } from '../../shared/Accordion';
 import { SkillCatalogDialog } from './SkillCatalogDialog';
 import { invocationLabel, skillSourceCatalogs, sourceTypeLabel } from './skill-catalog';
 
@@ -279,71 +280,78 @@ function SkillSourceManager({
     onSubmit={() => void add()}
     showBackdrop={false}
   >
-    <div className="skill-source-form">
-      <label>类型
-        <Select
-          label="技能源类型"
-          value={type}
-          onChange={(value) => {
-            setType(value as SkillSource['type']);
-          }}
-          options={[
-            { value: 'github', label: 'GitHub 仓库' },
-            { value: 'directory', label: '本地目录' },
-            { value: 'registry', label: '技能目录（JSON）' },
-          ]}
-        />
-      </label>
-      <label>显示名称<input value={name} aria-label="显示名称" onChange={(event) => setName(event.target.value)} placeholder="可选" /></label>
-      <label className="field-wide">位置
-        <div className="skill-source-location">
-          <input
-            aria-label="位置"
-            value={location}
-            onChange={(event) => {
-              const value = event.target.value;
-              setLocation(value);
-              if (/^https:\/\/github\.com\/[^/]+\/[^/?#]+\/?(?:[?#].*)?$/i.test(value.trim())) setType('github');
-            }}
-            placeholder={type === 'github' ? 'https://github.com/anthropics/skills' : type === 'directory' ? '/path/to/skills' : 'https://skills.internal/catalog.json'}
-          />
-          {type !== 'github' && <button type="button" className="settings-outline" onClick={() => void pick()}><FolderSearch />选择</button>}
+    <div className="settings-form-sections">
+      <section className="settings-form-section" aria-label="添加技能源">
+        <h3>添加来源</h3>
+        <div className="skill-source-form">
+          <label>类型
+            <Select
+              label="技能源类型"
+              value={type}
+              onChange={(value) => {
+                setType(value as SkillSource['type']);
+              }}
+              options={[
+                { value: 'github', label: 'GitHub 仓库' },
+                { value: 'directory', label: '本地目录' },
+                { value: 'registry', label: '技能目录（JSON）' },
+              ]}
+            />
+          </label>
+          <label>显示名称<input value={name} aria-label="显示名称" onChange={(event) => setName(event.target.value)} placeholder="可选" /></label>
+          <label className="field-wide">位置
+            <div className="skill-source-location">
+              <input
+                aria-label="位置"
+                value={location}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setLocation(value);
+                  if (/^https:\/\/github\.com\/[^/]+\/[^/?#]+\/?(?:[?#].*)?$/i.test(value.trim())) setType('github');
+                }}
+                placeholder={type === 'github' ? 'https://github.com/anthropics/skills' : type === 'directory' ? '/path/to/skills' : 'https://skills.internal/catalog.json'}
+              />
+              {type !== 'github' && <button type="button" className="settings-outline" onClick={() => void pick()}><FolderSearch />选择</button>}
+            </div>
+          </label>
+          {/* 说明放在 label 外面，否则会被算进“位置”输入框的无障碍名字。 */}
+          {type === 'registry' && <small className="skill-source-hint">
+            支持两种 JSON：带 sha256 的压缩包清单（schemaVersion 1），以及只有名称、说明和地址的链接清单（无版本号或 schemaVersion 2）。
+          </small>}
         </div>
-      </label>
-      {/* 说明放在 label 外面，否则会被算进“位置”输入框的无障碍名字。 */}
-      {type === 'registry' && <small className="skill-source-hint">
-        支持两种 JSON：带 sha256 的压缩包清单（schemaVersion 1），以及只有名称、说明和地址的链接清单（无版本号或 schemaVersion 2）。
-      </small>}
-    </div>
-    <div className="skill-source-existing">
-      <header><strong>已添加</strong><span>{snapshot?.sources.length || 0} 个</span></header>
-      {snapshot?.sources.map((source) => <div className="skill-source-row" key={source.id}>
-        <span className="skill-source-row-icon">{source.type === 'directory' ? <Folder /> : <Globe2 />}</span>
-        <span className="skill-source-row-copy">
-          <strong>{source.name}</strong>
-          <small>{sourceTypeLabel(source)} · {source.itemCount} 个技能{source.lastSyncedAt ? ` · ${new Date(source.lastSyncedAt).toLocaleString()}` : ''}</small>
-          <code title={source.location}>{source.location}</code>
-          {source.lastError && <small role="alert">{source.lastError}</small>}
-        </span>
-        <button
-          type="button"
-          className={`switch ${source.enabled ? 'is-on' : ''}`}
-          role="switch"
-          aria-checked={source.enabled}
-          disabled={Boolean(busyId)}
-          aria-label={`${source.enabled ? '停用' : '启用'}技能源 ${source.name}`}
-          onClick={() => void onToggle(source, !source.enabled)}
-        ><span /></button>
-        <button
-          type="button"
-          className="icon-button resource-delete"
-          aria-label={`移除技能源 ${source.name}`}
-          title="只移除源配置，不删除已安装技能"
-          disabled={Boolean(busyId)}
-          onClick={() => void onRemove(source)}
-        ><Trash2 /></button>
-      </div>)}
-      {!snapshot?.sources.length && <div className="settings-empty settings-empty--small">还没有源。</div>}
+      </section>
+      <section className="settings-form-section skill-source-existing" aria-label="已添加技能源">
+        <header><strong>已添加</strong><span>{snapshot?.sources.length || 0} 个</span></header>
+        <div className="skill-source-list" tabIndex={snapshot && snapshot.sources.length > 4 ? 0 : undefined} role="group" aria-label="技能源列表">
+          {snapshot?.sources.map((source) => <div className="skill-source-row" key={source.id}>
+            <span className="skill-source-row-icon">{source.type === 'directory' ? <Folder /> : <Globe2 />}</span>
+            <span className="skill-source-row-copy">
+              <strong>{source.name}</strong>
+              <small>{sourceTypeLabel(source)} · {source.itemCount} 个技能{source.lastSyncedAt ? ` · ${new Date(source.lastSyncedAt).toLocaleString()}` : ''}</small>
+              <code title={source.location}>{source.location}</code>
+              {source.lastError && <small role="alert">{source.lastError}</small>}
+            </span>
+            <button
+              type="button"
+              className={`switch ${source.enabled ? 'is-on' : ''}`}
+              role="switch"
+              aria-checked={source.enabled}
+              disabled={Boolean(busyId)}
+              aria-label={`${source.enabled ? '停用' : '启用'}技能源 ${source.name}`}
+              onClick={() => void onToggle(source, !source.enabled)}
+            ><span /></button>
+            <button
+              type="button"
+              className="icon-button resource-delete"
+              aria-label={`移除技能源 ${source.name}`}
+              title="只移除源配置，不删除已安装技能"
+              disabled={Boolean(busyId)}
+              onClick={() => void onRemove(source)}
+            ><Trash2 /></button>
+          </div>)}
+          {!snapshot?.sources.length && <div className="settings-empty settings-empty--small">还没有源。</div>}
+        </div>
+      </section>
     </div>
   </SettingsDialog>;
 }
@@ -517,10 +525,12 @@ function SkillInstallPreviewDialog({
               leadingIcon={<Folder />}
             />}
           </section>
-          <section className="skill-install-files">
-            <header><strong>文件预览</strong><span>{preview.files.length} 个文件 · SHA-256 {preview.sha256.slice(0, 12)}…</span></header>
-            {preview.files.map((file) => <div key={file.path}><code>{file.path}</code><span>{formatFileSize(file.size)}</span></div>)}
-          </section>
+          <Accordion compact className="skill-install-files" summary="文件预览" badge={`${preview.files.length} 个文件`} defaultOpen={preview.files.length <= 5}>
+            <p className="skill-install-file-hash">SHA-256 {preview.sha256.slice(0, 12)}…</p>
+            <div className="skill-install-file-list" tabIndex={preview.files.length > 5 ? 0 : undefined} role="group" aria-label="技能文件列表">
+              {preview.files.map((file) => <div key={file.path}><code>{file.path}</code><span>{formatFileSize(file.size)}</span></div>)}
+            </div>
+          </Accordion>
           {preview.requiresTrust && <div className="skill-install-note"><CheckCircle2 />安装后仍需在技能列表信任项目内容，之后才会进入下一次模型请求。</div>}
         </>}
     </div>

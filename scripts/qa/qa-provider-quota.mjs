@@ -173,6 +173,24 @@ try {
   const editor = page.getByRole('dialog', { name: '编辑模型来源' });
   const toggle = editor.getByRole('switch', { name: '开启额度监控' });
   await toggle.waitFor();
+  const media = editor.locator('.provider-media-fields');
+  assert.equal(await media.evaluate(node => node.open), false, 'unconfigured media starts collapsed');
+  await media.locator('summary').click();
+  await editor.getByLabel('图像生成模型 ID', { exact: true }).fill('image/draft');
+  await media.locator('summary').click();
+  await editor.getByLabel('服务地址', { exact: true }).fill(provider.baseUrl + '/');
+  assert.equal(await media.evaluate(node => node.open), false, 'parent edits keep optional media collapsed');
+  await media.locator('summary').click();
+  assert.equal(await editor.getByLabel('图像生成模型 ID', { exact: true }).inputValue(), 'image/draft');
+  await editor.getByLabel('图像生成模型 ID', { exact: true }).fill('');
+  await media.locator('summary').click();
+  await editor.getByLabel('服务地址', { exact: true }).fill(provider.baseUrl);
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
+    await editor.locator('.dialog-body').evaluate(body => { body.scrollTop = 0; });
+    await editor.screenshot({ path: fileURLToPath(new URL(`provider-sections-${theme}.png`, output)) });
+  }
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   const compactWidth = (await editor.boundingBox()).width;
   await toggle.click();
   // Exercise the real settings form and production service for every transport.
@@ -216,6 +234,8 @@ try {
   assert.ok(desktop.width >= compactWidth && desktop.beside && desktop.oddFieldSpans, 'quota fields retain the wide provider editor, share rows and let an odd last field span the full width');
   await editor.locator('.quota-mapping-heading').evaluate(heading => heading.scrollIntoView({ block: 'start' }));
   await page.screenshot({ path: fileURLToPath(new URL('editor.png', output)) });
+  await editor.getByRole('region', { name: '额度接口设置', exact: true }).scrollIntoViewIfNeeded();
+  await editor.screenshot({ path: fileURLToPath(new URL('quota-connection-section.png', output)) });
   const activeField = group(2).getByLabel('返回字段路径');
   await activeField.focus();
   await page.setViewportSize({ width: 432, height: 680 });
@@ -316,6 +336,27 @@ try {
   assert.equal(provider.quota.fields.length, 3);
   assert.equal(await source.locator('.provider-model-list').count(), 0, 'editing quota keeps the catalog collapsed');
   const quotaButton = source.getByRole('button', { name: /^查看 .* 额度$/ });
+  assert.equal(await quotaButton.locator('svg').count(), 0, 'quota action is text only');
+  const checkActions = async () => assert.ok(await quotaButton.evaluate(button => {
+    const actions = button.closest('.model-settings-actions');
+    const heading = button.closest('.model-settings-provider-heading').getBoundingClientRect();
+    const edit = actions?.querySelector('button[aria-label^="编辑 "]');
+    if (!edit) return false;
+    const style = getComputedStyle(button), other = getComputedStyle(edit);
+    return style.fontSize === other.fontSize && style.color === other.color && style.padding === other.padding
+      && [...actions.children].every(node => {
+        const box = node.getBoundingClientRect();
+        return box.left >= heading.left - 1 && box.right <= heading.right + 1;
+      });
+  }), 'provider actions share styling and fit their right-hand action area');
+  await checkActions();
+  for (const width of [1280, 432]) {
+    await page.setViewportSize({ width, height: 820 });
+    await source.scrollIntoViewIfNeeded();
+    await checkActions();
+    await source.screenshot({ path: fileURLToPath(new URL(`provider-actions-${width}.png`, output)) });
+  }
+  await page.setViewportSize({ width: 1280, height: 820 });
   await quotaButton.click();
   const detail = page.getByRole('dialog', { name: '额度监控' });
   await detail.getByText('120 次').waitFor();

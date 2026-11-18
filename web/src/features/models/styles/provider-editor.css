@@ -1,26 +1,27 @@
-.provider-editor-fields { align-items: start; }
-.provider-media-fields { display: grid; min-width: 0; gap: var(--space-2); padding-top: var(--space-4); border-top: 1px solid var(--divider); }
-.provider-media-fields h3 { margin: 0; font-size: var(--text-sm); font-weight: var(--weight-semibold); }
-.provider-media-columns { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); }
+.provider-editor-section h3 { color: var(--text); font-size: var(--text-13); font-weight: var(--weight-semibold); line-height: var(--leading-normal); }
+.provider-media-columns { display: grid; gap: var(--space-3); margin-top: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); }
 .provider-media-kind { min-width: 0; display: grid; align-content: start; gap: var(--space-2); }
 .provider-media-kind label > span { display: flex; align-items: center; gap: var(--space-2); }
 .provider-media-kind label svg { width: var(--icon-sm); height: var(--icon-sm); }
 .provider-media-kind textarea { box-sizing: border-box; width: 100%; min-width: 0; resize: vertical; font-family: var(--mono); }
 .provider-editor-fields .provider-editor-note { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-body); overflow-wrap: anywhere; }
-.provider-editor-advanced { min-width: 0; border-top: 1px solid var(--divider); padding-top: var(--space-4); }
+.provider-editor-advanced { min-width: 0; margin-top: var(--space-4); border-top: 1px solid var(--divider); padding-top: var(--space-2); }
 
-.quota-editor { min-width: 0; border-block-start: 1px solid var(--divider); padding-block-start: var(--space-4); }
+.quota-editor { min-width: 0; }
 .quota-editor-heading, .quota-mapping-heading { display: flex; align-items: center; gap: 10px; }
-.quota-editor-heading > svg { flex: none; width: 18px; height: 18px; color: var(--muted); }
-.quota-editor-heading > div, .quota-mapping-heading > strong { min-width: 0; flex: 1; }
+.quota-editor-heading > div, .quota-mapping-heading > div { min-width: 0; flex: 1; }
+.quota-editor-heading h3 { margin: 0 0 var(--space-1); }
+.quota-editor-heading .switch, .quota-mapping-heading > button { flex: none; }
+.quota-editor h4 { margin: 0; color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-medium); }
 .quota-editor strong { color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
 .quota-editor p, .quota-editor small { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-body); overflow-wrap: anywhere; }
-.quota-editor-body, .quota-connection, .quota-mapping-list, .quota-mapping-fields { display: grid; min-width: 0; gap: 12px; }
-.quota-editor-body { padding-top: 16px; }
-.quota-mapping-heading { padding-top: 12px; border-top: 1px solid var(--divider); }
+.quota-editor-body, .quota-editor-group, .quota-connection, .quota-mapping-list, .quota-mapping-fields { display: grid; min-width: 0; gap: var(--space-3); }
+.quota-editor-body { padding-top: var(--space-4); gap: var(--space-5); }
+.quota-editor-group { padding-top: var(--space-4); border-top: 1px solid var(--divider); }
+.quota-mapping-heading { flex-wrap: wrap; }
 .quota-editor label, .quota-editor .settings-field { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; color: var(--muted); font-size: var(--text-sm); }
 .quota-editor .pi-select, .quota-editor .pi-select-trigger { max-width: 100%; width: 100%; }
-.quota-mapping { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-control); }
+.quota-mapping { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); }
 .quota-mapping-fields { align-items: start; }
 .quota-field-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--divider); }
 .quota-field-footer .icon-button { flex: none; }

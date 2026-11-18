@@ -14,6 +14,7 @@ import { LoadingIndicator, LoadingState } from './LoadingState';
 import { InfoHint } from './InfoHint';
 import { useModalDialog } from './useModalDialog';
 import './styles/settings-dialog.css';
+import './styles/settings-form.css';
 
 /**
  * @param title 弹框标题（同时作为 aria-labelledby）

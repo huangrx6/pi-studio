@@ -81,6 +81,8 @@ try {
   await page.setViewportSize({ width: 980, height: 760 });
   await page.locator('[data-provider-id="qa-provider"]').getByRole('button', { name: '管理模型', exact: true }).click();
   await page.getByRole('button', { name: '编辑模型 隔离测试模型', exact: true }).click(); await dialog().getByRole('textbox', { name: '模型 ID', exact: true }).waitFor();
+  await capture('13-model-sections-light', 'light', { width: 1440, height: 900 });
+  await capture('14-model-sections-dark', 'dark', { width: 600, height: 760 });
   await dialog().getByRole('spinbutton', { name: '上下文长度', exact: true }).fill('256');
   await qa('hold', 'addCustomModel'); await qa('fail', 'providerModels', 'qa-provider'); await twice(dialog().getByRole('button', { name: '保存更改', exact: true })); await pending('addCustomModel'); assert.equal(await count('addCustomModel'), 1);
   await qa('release', 'addCustomModel'); await dialog().getByRole('button', { name: '重试刷新', exact: true }).waitFor(); await dialog().getByRole('button', { name: '重试刷新', exact: true }).click(); await dialog().waitFor({ state: 'detached' }); assert.equal(await count('addCustomModel'), 1);

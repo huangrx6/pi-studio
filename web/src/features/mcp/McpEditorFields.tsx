@@ -26,57 +26,73 @@ export function McpEditorFields({ draft, setDraft, editing, mcpTesting, settings
   const [advancedOpen, setAdvancedOpen] = useState(configured);
   const update = <K extends keyof McpEditorDraft>(key: K, value: McpEditorDraft[K]) => setDraft(current => ({ ...current, [key]: value }));
   const clearSecrets = stdio ? draft.clearEnv : draft.clearHeaders;
-  return <div className="settings-form-grid mcp-editor-fields">
-    <p className="mcp-editor-note field-wide">全局 MCP 连接 · 所有工作区共享配置与凭据。</p>
-    <label>名称<input autoFocus required value={draft.name} onChange={event => update('name', event.target.value)} placeholder="例如 filesystem" /></label>
-    <div className="settings-field"><span>传输方式</span><Select label="传输方式" disabled={settingsBusy} value={draft.transport} onChange={value => update('transport', value)} options={[{ value: 'stdio', label: '本地进程 · stdio' }, { value: 'http', label: 'Streamable HTTP' }]} /></div>
-    {stdio ? <>
-      <div className="settings-field field-wide">
-        <span className="settings-field-heading"><label htmlFor="mcp-command">启动命令</label><InfoHint label="只填写可执行文件，不要拼接 shell 命令。开头支持 ~/ 展开。" /></span>
-        <input id="mcp-command" required value={draft.command} onChange={event => update('command', event.target.value)} placeholder="npx" />
-      </div>
-      <div className="settings-field mcp-connection-field">
-        <span className="settings-field-heading"><label htmlFor="mcp-args">启动参数</label><InfoHint label="每行一个参数；路径中的空格会保留。" /></span>
-        <textarea id="mcp-args" value={draft.args} onChange={event => update('args', event.target.value)} rows={3} placeholder={'-y\n@modelcontextprotocol/server-filesystem\n/path/to/workspace'} />
-      </div>
-    </> : <div className="settings-field mcp-connection-field">
-      <span className="settings-field-heading"><label htmlFor="mcp-url">服务器地址</label><InfoHint label="远程服务必须使用 HTTPS；localhost、127.0.0.1 与 ::1 可使用 HTTP 做本机开发。" /></span>
-      <input id="mcp-url" required type="url" value={draft.url} onChange={event => update('url', event.target.value)} placeholder="https://example.com/mcp" />
-    </div>}
-    <div className="settings-field mcp-connection-field">
-      <span className="settings-field-heading"><label htmlFor={stdio ? 'mcp-env' : 'mcp-headers'}>{stdio ? '环境变量' : 'HTTP Headers'}</label>
-        <InfoHint label={stdio
-          ? '每行 KEY=value；支持 ${ENV_VAR} 引用。Studio 只传入 PATH、HOME 等运行所需变量，不会自动透传 shell 密钥；编辑时 KEY= 可保留已保存值。值只保存在主进程的加密存储中。'
-          : '每行 Header=value；支持 ${ENV_VAR} 引用。页面只接收 Header 名称，已保存的值不会回显；编辑时 Header= 可保留已保存值。'} />
-      </span>
-      <textarea id={stdio ? 'mcp-env' : 'mcp-headers'} disabled={clearSecrets} value={stdio ? draft.env : draft.headers}
-        onChange={event => update(stdio ? 'env' : 'headers', event.target.value)} rows={3}
-        placeholder={stdio ? 'TOKEN=值\nBASE_URL=${BASE_URL}' : 'Authorization=Bearer ${TOKEN}\nX-API-Key=...'} />
-      {editing && <>
-        <label className="mcp-editor-secret-clear"><input type="checkbox" checked={clearSecrets} onChange={event => update(stdio ? 'clearEnv' : 'clearHeaders', event.target.checked)} />{stdio ? '清除全部已保存环境变量' : '清除全部已保存 Headers'}</label>
-        {clearSecrets && <small className="mcp-editor-clear-note">保存或测试时将使用空{stdio ? '环境变量配置' : ' Headers 配置'}，上方输入不会生效。</small>}
-      </>}
-    </div>
-    <div className="settings-field field-wide"><span>工具暴露</span><Select label="工具暴露" disabled={settingsBusy} value={draft.exposure} onChange={value => update('exposure', value)} options={[{ value: 'deferred', label: '按需搜索 · tool_search' }, { value: 'direct', label: '直接提供' }, { value: 'hidden', label: '不提供给模型' }]} /></div>
-    <Accordion className="mcp-editor-advanced field-wide" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}
-      onInvalidCapture={event => { event.currentTarget.open = true; setAdvancedOpen(true); }} summary="高级选项" badge={configured ? "已配置" : undefined}>
+  return <div className="settings-form-sections mcp-editor-fields">
+    <p className="mcp-editor-note">全局 MCP 连接 · 所有工作区共享配置与凭据。</p>
+    <section className="settings-form-section" aria-label="基本信息">
+      <h3>基本信息</h3>
       <div className="settings-form-grid">
-        {stdio && <div className="settings-field field-wide">
-          <span className="settings-field-heading"><label htmlFor="mcp-cwd">工作目录</label><InfoHint label="MCP 连接由所有工作区共享，这里只接受绝对路径或 ~/ 路径，避免不同会话隐式复用错误目录。" /></span>
-          <input id="mcp-cwd" value={draft.cwd} onChange={event => update('cwd', event.target.value)} placeholder="可选；例如 /path/to/workspace 或 ~/projects/demo" />
+        <label>名称<input autoFocus required value={draft.name} onChange={event => update('name', event.target.value)} placeholder="例如 filesystem" /></label>
+        <div className="settings-field"><span>传输方式</span><Select label="传输方式" disabled={settingsBusy} value={draft.transport} onChange={value => update('transport', value)} options={[{ value: 'stdio', label: '本地进程 · stdio' }, { value: 'http', label: 'Streamable HTTP' }]} /></div>
+      </div>
+    </section>
+    <section className="settings-form-section" aria-label="连接与凭据">
+      <h3>连接与凭据</h3>
+      <div className="settings-form-grid">
+        {stdio ? <>
+          <div className="settings-field field-wide">
+            <span className="settings-field-heading"><label htmlFor="mcp-command">启动命令</label><InfoHint label="只填写可执行文件，不要拼接 shell 命令。开头支持 ~/ 展开。" /></span>
+            <input id="mcp-command" required value={draft.command} onChange={event => update('command', event.target.value)} placeholder="npx" />
+          </div>
+          <div className="settings-field mcp-connection-field">
+            <span className="settings-field-heading"><label htmlFor="mcp-args">启动参数</label><InfoHint label="每行一个参数；路径中的空格会保留。" /></span>
+            <textarea id="mcp-args" value={draft.args} onChange={event => update('args', event.target.value)} rows={3} placeholder={'-y\n@modelcontextprotocol/server-filesystem\n/path/to/workspace'} />
+          </div>
+        </> : <div className="settings-field mcp-connection-field">
+          <span className="settings-field-heading"><label htmlFor="mcp-url">服务器地址</label><InfoHint label="远程服务必须使用 HTTPS；localhost、127.0.0.1 与 ::1 可使用 HTTP 做本机开发。" /></span>
+          <input id="mcp-url" required type="url" value={draft.url} onChange={event => update('url', event.target.value)} placeholder="https://example.com/mcp" />
         </div>}
-        <div className="settings-field">
-          <span className="settings-field-heading"><label htmlFor="mcp-timeout">请求超时</label><InfoHint label="单位为秒，默认 60；收到进度通知会重新计时。" /></span>
-          <input id="mcp-timeout" type="number" min="1" max="3600" step="1" value={draft.timeoutSeconds} onChange={event => update('timeoutSeconds', event.target.value)} />
-        </div>
-        <label>描述<input value={draft.description} onChange={event => update('description', event.target.value)} placeholder="简要说明用途，可选" /></label>
-        <div className="settings-field field-wide">
-          <span className="settings-field-heading"><label htmlFor="mcp-tool-exposure">逐工具暴露覆盖</label><InfoHint label="每行一个“工具名或通配符=direct|deferred|hidden”。精确名称优先，随后按输入顺序匹配通配符。" /></span>
-          <textarea id="mcp-tool-exposure" value={draft.toolExposure} onChange={event => update('toolExposure', event.target.value)} rows={3} placeholder={'search_*=deferred\ndelete_*=hidden\nstatus=direct'} />
+        <div className="settings-field mcp-connection-field">
+          <span className="settings-field-heading"><label htmlFor={stdio ? 'mcp-env' : 'mcp-headers'}>{stdio ? '环境变量' : 'HTTP Headers'}</label>
+            <InfoHint label={stdio
+              ? '每行 KEY=value；支持 ${ENV_VAR} 引用。Studio 只传入 PATH、HOME 等运行所需变量，不会自动透传 shell 密钥；编辑时 KEY= 可保留已保存值。值只保存在主进程的加密存储中。'
+              : '每行 Header=value；支持 ${ENV_VAR} 引用。页面只接收 Header 名称，已保存的值不会回显；编辑时 Header= 可保留已保存值。'} />
+          </span>
+          <textarea id={stdio ? 'mcp-env' : 'mcp-headers'} disabled={clearSecrets} value={stdio ? draft.env : draft.headers}
+            onChange={event => update(stdio ? 'env' : 'headers', event.target.value)} rows={3}
+            placeholder={stdio ? 'TOKEN=值\nBASE_URL=${BASE_URL}' : 'Authorization=Bearer ${TOKEN}\nX-API-Key=...'} />
+          {editing && <>
+            <label className="mcp-editor-secret-clear"><input type="checkbox" checked={clearSecrets} onChange={event => update(stdio ? 'clearEnv' : 'clearHeaders', event.target.checked)} />{stdio ? '清除全部已保存环境变量' : '清除全部已保存 Headers'}</label>
+            {clearSecrets && <small className="mcp-editor-clear-note">保存或测试时将使用空{stdio ? '环境变量配置' : ' Headers 配置'}，上方输入不会生效。</small>}
+          </>}
         </div>
       </div>
-    </Accordion>
-    <section className="mcp-editor-test field-wide" aria-label="MCP 草稿连接测试">
+    </section>
+    <section className="settings-form-section" aria-label="工具与运行">
+      <h3>工具与运行</h3>
+      <div className="settings-form-grid">
+        <div className="settings-field field-wide"><span>工具暴露</span><Select label="工具暴露" disabled={settingsBusy} value={draft.exposure} onChange={value => update('exposure', value)} options={[{ value: 'deferred', label: '按需搜索 · tool_search' }, { value: 'direct', label: '直接提供' }, { value: 'hidden', label: '不提供给模型' }]} /></div>
+      </div>
+      <Accordion compact className="mcp-editor-advanced" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}
+        onInvalidCapture={event => { event.currentTarget.open = true; setAdvancedOpen(true); }} summary="高级选项" badge={configured ? "已配置" : undefined}>
+        <div className="settings-form-grid">
+          {stdio && <div className="settings-field field-wide">
+            <span className="settings-field-heading"><label htmlFor="mcp-cwd">工作目录</label><InfoHint label="MCP 连接由所有工作区共享，这里只接受绝对路径或 ~/ 路径，避免不同会话隐式复用错误目录。" /></span>
+            <input id="mcp-cwd" value={draft.cwd} onChange={event => update('cwd', event.target.value)} placeholder="可选；例如 /path/to/workspace 或 ~/projects/demo" />
+          </div>}
+          <div className="settings-field">
+            <span className="settings-field-heading"><label htmlFor="mcp-timeout">请求超时</label><InfoHint label="单位为秒，默认 60；收到进度通知会重新计时。" /></span>
+            <input id="mcp-timeout" type="number" min="1" max="3600" step="1" value={draft.timeoutSeconds} onChange={event => update('timeoutSeconds', event.target.value)} />
+          </div>
+          <label>描述<input value={draft.description} onChange={event => update('description', event.target.value)} placeholder="简要说明用途，可选" /></label>
+          <div className="settings-field field-wide">
+            <span className="settings-field-heading"><label htmlFor="mcp-tool-exposure">逐工具暴露覆盖</label><InfoHint label="每行一个“工具名或通配符=direct|deferred|hidden”。精确名称优先，随后按输入顺序匹配通配符。" /></span>
+            <textarea id="mcp-tool-exposure" value={draft.toolExposure} onChange={event => update('toolExposure', event.target.value)} rows={3} placeholder={'search_*=deferred\ndelete_*=hidden\nstatus=direct'} />
+          </div>
+        </div>
+      </Accordion>
+    </section>
+    <section className="settings-form-section mcp-editor-test" aria-label="MCP 草稿连接测试">
+      <h3>连接测试</h3>
       <div className="mcp-editor-test-actions">
         <button type="button" className="settings-outline" disabled={mcpTesting || settingsBusy} onClick={event => {
           if (mcpTesting || settingsBusy) return;

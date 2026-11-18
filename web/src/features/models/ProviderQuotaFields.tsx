@@ -1,6 +1,7 @@
 import { Accordion } from '../../shared/Accordion';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Gauge, Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
+import { InfoHint } from '../../shared/InfoHint';
 import { LoadingState } from '../../shared/LoadingState';
 import { Select } from '../../shared/Select';
 import { errorText } from '../../shared/error-text';
@@ -31,43 +32,45 @@ export function ProviderQuotaFields({ config, providerId, apiKey, onChange }: {
   config: ProviderQuotaConfig; providerId: string; apiKey: string; onChange: (value: ProviderQuotaConfig) => void;
 }) {
   const section = useId();
-  return <section className="quota-editor field-wide" aria-label="来源额度监控">
+  return <section className="settings-form-section provider-editor-section quota-editor" aria-label="来源额度监控">
     <div className="quota-editor-heading">
-      <Gauge aria-hidden="true" />
-      <div><strong>额度监控</strong><p>此来源的模型共享额度规则，可在会话工作区查看。</p></div>
+      <div><h3>额度监控</h3><p>查询此来源的余额或用量，在会话中查看。</p></div>
       <button type="button" className={`switch ${config.enabled ? 'is-on' : ''}`} role="switch" aria-label="开启额度监控"
         aria-checked={config.enabled} aria-controls={section} onClick={() => onChange({ ...config, enabled: !config.enabled })}><span /></button>
     </div>
     {config.enabled && <div id={section} className="quota-editor-body">
-      <div className="quota-connection">
-        <label>额度接口（GET）<input type="url" required maxLength={2048} placeholder="https://api.example.com/usage" value={config.endpoint}
-          onChange={e => onChange({ ...config, endpoint: e.target.value, auth: originOf(config.endpoint) === originOf(e.target.value) ? config.auth : 'none' })} /></label>
-        <div className="settings-field"><span>接口认证</span><Select label="额度接口认证" options={authOptions} value={config.auth}
-          onChange={auth => onChange({ ...config, auth: auth as ProviderQuotaConfig['auth'], authName: auth === 'query' ? 'key' : '' })} />
-          {config.auth !== 'none' && <small>查询时将向 {originOf(config.endpoint) || '所填接口'} 发送此来源的 API Key。</small>}
+      <section className="quota-editor-group" aria-label="额度接口设置">
+        <h4>接口设置</h4>
+        <div className="quota-connection">
+          <label>额度接口（GET）<input type="url" required maxLength={2048} placeholder="https://api.example.com/usage" value={config.endpoint}
+            onChange={e => onChange({ ...config, endpoint: e.target.value, auth: originOf(config.endpoint) === originOf(e.target.value) ? config.auth : 'none' })} /></label>
+          <div className="settings-field"><span>接口认证</span><Select label="额度接口认证" options={authOptions} value={config.auth}
+            onChange={auth => onChange({ ...config, auth: auth as ProviderQuotaConfig['auth'], authName: auth === 'query' ? 'key' : '' })} />
+            {config.auth !== 'none' && <small>查询时将向 {originOf(config.endpoint) || '所填接口'} 发送此来源的 API Key。</small>}
+          </div>
+          {(config.auth === 'custom-header' || config.auth === 'query') && <label>
+            {config.auth === 'query' ? '认证查询参数名称' : '认证请求头名称'}
+            <input required maxLength={80} value={config.authName ?? ''}
+              placeholder={config.auth === 'query' ? 'key' : 'Ocp-Apim-Subscription-Key'}
+              onChange={e => onChange({ ...config, authName: e.target.value })} />
+            <small>这里只填名称，密钥自动使用此来源的 API Key。</small>
+          </label>}
         </div>
-        {(config.auth === 'custom-header' || config.auth === 'query') && <label>
-          {config.auth === 'query' ? '认证查询参数名称' : '认证请求头名称'}
-          <input required maxLength={80} value={config.authName ?? ''}
-            placeholder={config.auth === 'query' ? 'key' : 'Ocp-Apim-Subscription-Key'}
-            onChange={e => onChange({ ...config, authName: e.target.value })} />
-          <small>这里只填名称，密钥自动使用此来源的 API Key。</small>
-        </label>}
-      </div>
-      <Accordion className="quota-request-options" defaultOpen={Boolean(config.headers?.length)} summary="附加请求头" badge={config.headers?.length || undefined}>
-        <p className="provider-editor-note">仅填写版本、组织、项目或用户标识，密钥使用上方认证设置。</p>
-        {(config.headers ?? []).map((header, index) => <div className="quota-request-header" key={index} role="group" aria-label={`附加请求头 ${index + 1}`}>
-          <Select label={`附加请求头 ${index + 1} 的名称`} value={header.name}
-            options={metadataHeaders.map(name => ({ value: name, label: name, disabled: name !== header.name && config.headers?.some(row => row.name === name) }))}
-            onChange={name => onChange({ ...config, headers: config.headers!.map((row, i) => i === index ? { ...row, name } : row) })} />
-          <input required aria-label={`附加请求头 ${index + 1} 的值`} maxLength={256} value={header.value} placeholder="按厂商文档填写"
-            onChange={e => onChange({ ...config, headers: config.headers!.map((row, i) => i === index ? { ...row, value: e.target.value } : row) })} />
-          <button type="button" className="icon-button" aria-label={`移除附加请求头 ${index + 1}`}
-            onClick={() => onChange({ ...config, headers: config.headers!.filter((_, i) => i !== index) })}><Trash2 /></button>
-        </div>)}
-        <button type="button" className="quota-add-field" disabled={(config.headers?.length ?? 0) >= metadataHeaders.length}
-          onClick={() => onChange({ ...config, headers: [...(config.headers ?? []), { name: metadataHeaders.find(name => !config.headers?.some(row => row.name === name))!, value: '' }] })}><Plus />添加请求头</button>
-      </Accordion>
+        <Accordion compact className="quota-request-options" defaultOpen={Boolean(config.headers?.length)} summary="附加请求头" badge={config.headers?.length || undefined}>
+          <p className="provider-editor-note">仅填写版本、组织、项目或用户标识，密钥使用上方认证设置。</p>
+          {(config.headers ?? []).map((header, index) => <div className="quota-request-header" key={index} role="group" aria-label={`附加请求头 ${index + 1}`}>
+            <Select label={`附加请求头 ${index + 1} 的名称`} value={header.name}
+              options={metadataHeaders.map(name => ({ value: name, label: name, disabled: name !== header.name && config.headers?.some(row => row.name === name) }))}
+              onChange={name => onChange({ ...config, headers: config.headers!.map((row, i) => i === index ? { ...row, name } : row) })} />
+            <input required aria-label={`附加请求头 ${index + 1} 的值`} maxLength={256} value={header.value} placeholder="按厂商文档填写"
+              onChange={e => onChange({ ...config, headers: config.headers!.map((row, i) => i === index ? { ...row, value: e.target.value } : row) })} />
+            <button type="button" className="icon-button" aria-label={`移除附加请求头 ${index + 1}`}
+              onClick={() => onChange({ ...config, headers: config.headers!.filter((_, i) => i !== index) })}><Trash2 /></button>
+          </div>)}
+          <button type="button" className="quota-add-field" disabled={(config.headers?.length ?? 0) >= metadataHeaders.length}
+            onClick={() => onChange({ ...config, headers: [...(config.headers ?? []), { name: metadataHeaders.find(name => !config.headers?.some(row => row.name === name))!, value: '' }] })}><Plus />添加请求头</button>
+        </Accordion>
+      </section>
       <QuotaMappingFields key={JSON.stringify([providerId, config.endpoint, config.auth, config.authName, config.headers])} providerId={providerId} apiKey={apiKey}
         config={config} onChange={fields => onChange({ ...config, fields })} />
     </div>}
@@ -109,11 +112,12 @@ function QuotaMappingFields({ config, providerId, apiKey, onChange }: {
     else if (fields.length < 24) onChange([...fields, { ...emptyQuotaField(summaryCount < 2), ...item }]);
   }
 
-  return <>
-    <div className="quota-mapping-heading"><strong>显示字段</strong>
+  return <section className="quota-editor-group quota-display-group" aria-label="额度显示字段">
+    <div className="quota-mapping-heading"><div className="settings-field-heading"><h4>显示字段</h4>
+      <InfoHint label="每个余额或周期单独添加一项。返回字段路径支持数组下标，或用 limits[period=week].remaining 匹配周期，多个条件用 & 连接。" /></div>
       <button type="button" className="settings-outline" disabled={inspecting || !providerId.trim() || !config.endpoint.trim()} onClick={inspect}>读取接口字段</button>
     </div>
-    <p className="provider-editor-note">每个周期单独添加一项，例如「5 小时剩余」或「本周已用」。数组可按下标取值，或用 <code>limits[period=week].remaining</code> 匹配周期。多个条件可用 <code>&amp;</code> 连接。</p>
+    <p className="provider-editor-note">每个余额或周期添加一项，最多选择两项显示在会话摘要。</p>
     {inspecting && <LoadingState>正在读取接口字段</LoadingState>}
     {inspectMessage && <small role="status">{inspectMessage}</small>}
     {suggestions.length > 0 && <Select label="选择接口返回字段" placeholder="选择接口返回字段…" value="" options={suggestions.map(item => ({ value: item.path, label: item.path }))}
@@ -139,7 +143,7 @@ function QuotaMappingFields({ config, providerId, apiKey, onChange }: {
     </div>
     <button type="button" className="settings-text-button quota-add-field" disabled={fields.length >= 24} onClick={() => onChange([...fields, emptyQuotaField(summaryCount < 2)])}><Plus />添加额度字段</button>
     <QuotaSample fields={fields} />
-  </>;
+  </section>;
 }
 
 const sampleLimit = 65536;
@@ -193,7 +197,7 @@ function QuotaSample({ fields }: { fields: QuotaField[] }) {
     }, 180);
     return () => { active = false; window.clearTimeout(timer); };
   }, [open, sample, fields, example]);
-  return <Accordion className="quota-sample" onToggle={e => setOpen(e.currentTarget.open)} summary="额度预览">
+  return <Accordion compact className="quota-sample" onToggle={e => setOpen(e.currentTarget.open)} summary="额度预览">
     <div className="quota-sample-columns">
       <div className="quota-sample-source">
         <div className="quota-sample-toolbar">

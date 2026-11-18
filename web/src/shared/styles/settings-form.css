@@ -1,0 +1,6 @@
+/* 复杂设置表单的分块层级；具体字段网格由所属功能负责。 */
+.settings-form-sections { display: grid; min-width: 0; gap: var(--space-4); align-items: start; }
+.settings-form-section { min-width: 0; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-card); background: color-mix(in srgb, var(--surface-hover) 20%, var(--surface)); }
+.settings-form-section > h3 { margin: 0 0 var(--space-4); color: var(--text); font-size: var(--text-13); font-weight: var(--weight-semibold); line-height: var(--leading-normal); }
+.settings-form-section > .pi-accordion-trigger { padding: 0; min-height: var(--control); border-radius: var(--radius-sm); }
+.settings-form-section > .pi-accordion-trigger .pi-accordion-label { font-weight: var(--weight-semibold); }

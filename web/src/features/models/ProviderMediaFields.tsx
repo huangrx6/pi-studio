@@ -1,5 +1,6 @@
 import { Images, Mic } from 'lucide-react';
 import { Select } from '../../shared/Select';
+import { Accordion } from '../../shared/Accordion';
 import type { MediaModelCandidate, ProviderMediaModels } from './model-settings-types';
 
 export function ProviderMediaFields({ models, catalog, onChange }: {
@@ -11,9 +12,10 @@ export function ProviderMediaFields({ models, catalog, onChange }: {
     if (id) candidates.set(id, id);
   }
   for (const item of catalog) candidates.set(item.id, item.name || item.id);
-  return <section className="provider-media-fields field-wide" aria-label="媒体生成模型">
-    <h3>媒体生成模型</h3>
-    <p className="provider-editor-note">分镜使用此来源的服务地址和 API Key。每行填写一个兼容 OpenAI 媒体接口的模型 ID。对话用途可在对话模型目录中单独管理。</p>
+  const count = [...models.speech, ...models.image].filter(id => id.trim()).length;
+  return <Accordion className="settings-form-section provider-editor-section provider-media-fields" aria-label="媒体生成模型"
+    summary="媒体生成模型" description="可选 · 为视频分镜配置语音与图像模型" badge={count ? `${count} 个` : undefined} defaultOpen={count > 0}>
+    <p className="provider-editor-note">共用上方连接配置。每行一个兼容 OpenAI 媒体接口的模型 ID，对话模型在「管理模型」中配置。</p>
     <div className="provider-media-columns">{(['speech', 'image'] as const).map(kind => {
       const speech = kind === 'speech';
       const title = speech ? '语音合成' : '图像生成';
@@ -33,5 +35,5 @@ export function ProviderMediaFields({ models, catalog, onChange }: {
         ]} onChange={id => onChange({ ...models, [kind]: [...ids.map(value => value.trim()).filter(Boolean), id] })} />}
       </div>;
     })}</div>
-  </section>;
+  </Accordion>;
 }
