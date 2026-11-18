@@ -16,9 +16,9 @@ Module._load = function (request, parent, isMain) {
   if (request === 'electron') return { safeStorage: { isEncryptionAvailable: () => true, encryptString: value => Buffer.from(value), decryptString: value => value.toString() } };
   return originalLoad.call(this, request, parent, isMain);
 };
-const { getStudioDatabase, closeStudioDatabase } = require('../../electron/core/studio-db.cjs');
-const skills = require('../../electron/capabilities/skills/index.cjs');
-const cleanup = require('../../electron/capabilities/skills/cleanup.cjs');
+const { getStudioDatabase, closeStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
+const skills = require('../../electron/main/capabilities/skills/index.cjs');
+const cleanup = require('../../electron/main/capabilities/skills/cleanup.cjs');
 const workspace = path.join(temporary, 'project'); fs.mkdirSync(workspace, { recursive: true });
 test.after(() => {
   closeStudioDatabase(); Module._load = originalLoad;
@@ -39,7 +39,7 @@ async function prepared(name, scope = 'project', version = '1.0.0') {
 function ipcHarness() {
   const calls = [], state = { fail: '', selected: '', canceled: false };
   const failure = phase => { if (state.fail === phase) throw new Error('raw-private-diagnostic'); };
-  const source = fs.readFileSync(path.resolve(__dirname, '../../electron/ipc/settings.cjs'), 'utf8'), handlers = new Map(), module = { exports: {} };
+  const source = fs.readFileSync(path.resolve(__dirname, '../../electron/main/ipc/settings.cjs'), 'utf8'), handlers = new Map(), module = { exports: {} };
   const dependencies = {
     electron: { ipcMain: { handle: (key, fn) => handlers.set(key, fn) }, dialog: { showOpenDialog: async () => ({ canceled: state.canceled, filePaths: [state.selected] }) }, webContents: { getAllWebContents: () => [{ isDestroyed: () => false, send() { failure('notify'); } }] } },
     '../core/state.cjs': { DEFAULT_CWD: workspace }, '../core/studio-db.cjs': { getStudioDatabase },

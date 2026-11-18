@@ -8,10 +8,10 @@ const {
   readSignature,
   signExtensionDirectory,
   verifyExtensionDirectory,
-} = require('../../electron/core/extension-signature.cjs');
+} = require('../../electron/main/core/extension-signature.cjs');
 const {
   walkPackageFiles,
-} = require('../../electron/core/extension-package.cjs');
+} = require('../../electron/main/core/extension-package.cjs');
 
 function extensionFixture(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-signature-'));

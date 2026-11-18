@@ -19,7 +19,7 @@ import type {
   SkillHubSnapshot,
   SkillInstallPreview,
   SkillSource,
-} from '../../global.d';
+} from '../../types/global.d';
 import { errorText } from '../../shared/error-text';
 import { formatFileSize } from '../../shared/filesize';
 import './styles/skill-hub.css';

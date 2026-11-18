@@ -12,10 +12,10 @@ installElectronSafeStorage(test);
 const {
   closeStudioDatabase,
   getStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 const {
   retireAutoSeededCatalog,
-} = require('../../electron/core/studio-models.cjs');
+} = require('../../electron/main/core/studio-models.cjs');
 
 test.after(() => {
   closeStudioDatabase();

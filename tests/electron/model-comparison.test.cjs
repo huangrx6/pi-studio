@@ -3,7 +3,7 @@ const test = require('node:test');
 
 const {
   createModelComparisonService,
-} = require('../../electron/services/model-comparison.cjs');
+} = require('../../electron/main/services/model-comparison.cjs');
 
 function branchIdentity(index) {
   return {

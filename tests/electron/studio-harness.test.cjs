@@ -27,8 +27,8 @@ const {
   selectHarnessProfile,
   normalizeToolGuidance,
   resetHarnessProfile,
-} = require('../../electron/core/app-settings.cjs');
-const { closeStudioDatabase } = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/app-settings.cjs');
+const { closeStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
 const {
   createStudioHarnessExtension,
   globalInstructionFile,
@@ -37,10 +37,10 @@ const {
   projectRoot,
   sectionOverride,
   toolGuidance,
-} = require('../../electron/capabilities/harness/index.cjs');
+} = require('../../electron/main/capabilities/harness/index.cjs');
 const {
   durableHarnessSettings,
-} = require('../../electron/runtime/durable-runtime.cjs');
+} = require('../../electron/main/runtime/durable-runtime.cjs');
 
 test.after(() => {
   closeStudioDatabase();
@@ -239,7 +239,7 @@ test('runtime policy persists in SQLite and is included in Harness snapshots', (
   assert.equal(after.toolExecution, 'sequential');
   assert.equal(after.retry.maxRetries, 1);
   assert.equal(after.compaction.backgroundTokens, 0);
-  const snapshot = require('../../electron/core/app-settings.cjs').getHarnessSettings();
+  const snapshot = require('../../electron/main/core/app-settings.cjs').getHarnessSettings();
   assert.deepEqual(snapshot.runtimePolicy, after);
   assert.deepEqual(snapshot.runtimePolicyDefaults, RUNTIME_POLICY_DEFAULTS);
   assert.match(snapshot.runtimePolicyPath, /studio\.runtime\.policy/);
@@ -251,7 +251,7 @@ test('runtime policy persists in SQLite and is included in Harness snapshots', (
 });
 
 test('Harness snapshots expose the global instruction path and status', () => {
-  const snapshot = require('../../electron/core/app-settings.cjs').getHarnessSettings();
+  const snapshot = require('../../electron/main/core/app-settings.cjs').getHarnessSettings();
   assert.equal(globalInstructionFile(), globalInstructionsPath);
   assert.equal(snapshot.globalInstructionsPath, globalInstructionsPath);
   assert.equal(snapshot.globalInstructionsStatus, 'present');

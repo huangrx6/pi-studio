@@ -8,8 +8,8 @@ const {
   STUDIO_DATA_ENTRIES,
   cleanLegacyChromiumData,
   migrateStudioData,
-} = require('../../electron/core/user-data.cjs');
-const { STUDIO_DATA_DIRECTORY, studioDataDirectory } = require('../../electron/core/studio-paths.cjs');
+} = require('../../electron/main/core/user-data.cjs');
+const { STUDIO_DATA_DIRECTORY, studioDataDirectory } = require('../../electron/main/core/studio-paths.cjs');
 
 function sandbox() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-data-'));

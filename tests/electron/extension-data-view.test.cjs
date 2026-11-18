@@ -6,10 +6,10 @@ const {
   closeAllExtensionDataViewServices,
   closeExtensionDataViewServices,
   registerExtensionDataViewService,
-} = require('../../electron/services/extension-data-view.cjs');
+} = require('../../electron/main/services/extension-data-view.cjs');
 const {
   registerExtensionDataViewIpc,
-} = require('../../electron/ipc/sessions.cjs');
+} = require('../../electron/main/ipc/sessions.cjs');
 
 const owner = { manifestId: 'metrics', scope: 'builtin' };
 const normalizeAction = () => undefined;

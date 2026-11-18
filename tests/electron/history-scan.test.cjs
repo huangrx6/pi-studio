@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { scanStopReason } = require('../../electron/runtime/conversations.cjs');
+const { scanStopReason } = require('../../electron/main/runtime/conversations.cjs');
 
 const base = { messageLimit: 200, hasMoreEntries: true };
 

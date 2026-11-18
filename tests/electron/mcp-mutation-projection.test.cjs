@@ -6,9 +6,9 @@ const vm = require('node:vm');
 const { test, after } = require('node:test');
 const { installElectronSafeStorage } = require('./helpers/electron-safe-storage.cjs');
 installElectronSafeStorage({ after });
-const { createStudioDatabase } = require('../../electron/core/studio-db.cjs');
-const { createExtensionInstallRecovery } = require('../../electron/services/extension-install-recovery.cjs');
-const source = fs.readFileSync(path.join(__dirname, '../../electron/ipc/settings.cjs'), 'utf8');
+const { createStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
+const { createExtensionInstallRecovery } = require('../../electron/main/services/extension-install-recovery.cjs');
+const source = fs.readFileSync(path.join(__dirname, '../../electron/main/ipc/settings.cjs'), 'utf8');
 
 function fixture(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-mcp-projection-'));
@@ -30,7 +30,7 @@ function fixture(t) {
   vm.runInNewContext(source, { module, exports: module.exports, console, require(id) {
     if (id.startsWith('node:')) return require(id);
     if (id === 'electron') return { ipcMain: { handle: (name, callback) => handlers.set(name, callback) }, webContents: { getAllWebContents: () => [] } };
-    if (id === '../core/external-url.cjs') return require('../../electron/core/external-url.cjs');
+    if (id === '../core/external-url.cjs') return require('../../electron/main/core/external-url.cjs');
     if (id === '../integrations/mcp/index.cjs') return {
       authorizeMcpServer: async server => {
         if (fail.credential) throw new Error('private access_token=synthetic-secret');

@@ -11,13 +11,13 @@ const {
   closeStudioDatabase,
   createStudioDatabase,
   getStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 const {
   currentStreak,
   longestStreak,
   usageAnalyticsSnapshot,
   usageModelMix,
-} = require('../../electron/services/usage-analytics.cjs');
+} = require('../../electron/main/services/usage-analytics.cjs');
 
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-usage-'));
 const previousDatabase = process.env.PI_STUDIO_DB;

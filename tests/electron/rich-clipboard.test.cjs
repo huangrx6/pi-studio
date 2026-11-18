@@ -5,7 +5,7 @@ const {
   MAX_HTML_CHARS,
   MAX_TEXT_CHARS,
   copyTextAndHtml,
-} = require('../../electron/services/rich-clipboard.cjs');
+} = require('../../electron/main/services/rich-clipboard.cjs');
 
 const image = 'data:image/png;base64,aGVsbG8=';
 

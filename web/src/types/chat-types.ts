@@ -1,7 +1,7 @@
 /**
  * 会话与输入区共享类型（渲染进程 ↔ 主进程的数据契约）。
  *
- * 这些字段对应 Durable transcript 的投影，以及 electron/preload.cjs 通过
+ * 这些字段对应 Durable transcript 的投影，以及 electron/preload/index.cjs 通过
  * `window.piApi` 返回的数据，因此不要随意改名或增删字段。会话历史会被持久化，
  * 破坏性字段变更必须带版本化迁移。
  *

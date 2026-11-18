@@ -15,7 +15,7 @@ Module._load = function loadWithElectronStub(request, parent, isMain) {
   if (request === 'electron') return { app: { getPath: () => userRoot } };
   return originalLoad.call(this, request, parent, isMain);
 };
-const { ExtensionDistributionService } = require('../../electron/services/extension-distribution.cjs');
+const { ExtensionDistributionService } = require('../../electron/main/services/extension-distribution.cjs');
 Module._load = originalLoad;
 
 const ID = 'relocate.fixture';

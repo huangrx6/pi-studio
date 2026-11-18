@@ -4,7 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
 
-const { createStudioDatabase } = require('../../electron/core/studio-db.cjs');
+const { createStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
 const {
   MAX_ACTIVE_SPANS,
   MAX_RECENT_RUNS,
@@ -14,7 +14,7 @@ const {
   METRICS_SOURCE_ID,
   compactFooterDuration,
   createMetricsRuntime,
-} = require('../../electron/capabilities/metrics/index.cjs');
+} = require('../../electron/main/capabilities/metrics/index.cjs');
 
 function flatten(value) {
   if (Array.isArray(value)) return value.flatMap(flatten);

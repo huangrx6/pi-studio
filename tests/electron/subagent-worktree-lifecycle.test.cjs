@@ -13,7 +13,7 @@ test('background worktrees remain active across supervisor waits and queued repo
     return original.call(this, request, ...args);
   };
   let createProtocol;
-  try { ({ createProtocol } = require('../../electron/capabilities/subagents/index.cjs')); }
+  try { ({ createProtocol } = require('../../electron/main/capabilities/subagents/index.cjs')); }
   finally { Module._load = original; }
   const protocol = createProtocol({ defineDoc: (value) => value, defineTask: (value) => value });
   const state = {

@@ -13,8 +13,8 @@ const {
   clearMcpOAuth,
   expandOAuthHeaders,
   stateStore,
-} = require('../../electron/integrations/mcp/index.cjs');
-const { closeStudioDatabase } = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/integrations/mcp/index.cjs');
+const { closeStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
 
 test.after(() => {
   closeStudioDatabase();
@@ -70,7 +70,7 @@ test('OAuth state survives a database reopen and logout removes it', () => {
 
 test('persisted OAuth tokens survive synchronous and asynchronous cleanup failures', async () => {
   const vm = require('node:vm');
-  const source = fs.readFileSync(path.join(__dirname, '../../electron/integrations/mcp/oauth.cjs'), 'utf8')
+  const source = fs.readFileSync(path.join(__dirname, '../../electron/main/integrations/mcp/oauth.cjs'), 'utf8')
     .replaceAll("await import('@earendil-works/pi-mcp/oauth')", 'await loadOAuth()')
     .replaceAll("await import('@earendil-works/pi-mcp')", 'await loadMcp()');
   const cleanup = [], opened = [], module = { exports: {} };
@@ -105,7 +105,7 @@ test('persisted OAuth tokens survive synchronous and asynchronous cleanup failur
     module, exports: module.exports, URL,
     loadOAuth: async () => oauth, loadMcp: async () => mcp,
     require(id) {
-      if (id === '../../core/studio-db.cjs') return require('../../electron/core/studio-db.cjs');
+      if (id === '../../core/studio-db.cjs') return require('../../electron/main/core/studio-db.cjs');
       if (id === 'electron') return { app: { getVersion: () => '0.0.0-test' } };
       throw new Error(`Unexpected test dependency ${id}`);
     },

@@ -13,14 +13,14 @@ process.env.HOME = path.join(temporary, 'home');
 process.env.PI_STUDIO_USER_DATA = path.join(temporary, 'user-data');
 process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
 
-const { closeStudioDatabase } = require('../../electron/core/studio-db.cjs');
+const { closeStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
 const {
   installPreparedSkill,
   prepareSkillInstall,
   refreshSkillCatalog,
   saveSkillSource,
   skillHubSnapshot,
-} = require('../../electron/capabilities/skills/index.cjs');
+} = require('../../electron/main/capabilities/skills/index.cjs');
 
 test.after(() => {
   closeStudioDatabase();

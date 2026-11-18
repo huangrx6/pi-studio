@@ -7,7 +7,7 @@ const vm = require('node:vm');
 function loadResolver() {
   const calls = [];
   const source = fs.readFileSync(
-    path.join(__dirname, '../../electron/ipc/files.cjs'),
+    path.join(__dirname, '../../electron/main/ipc/files.cjs'),
     'utf8',
   );
   const module = { exports: {} };
@@ -73,7 +73,7 @@ function loadResolver() {
       if (name === '../services/mac-apps.cjs') return {};
       return require(name);
     },
-  }, { filename: path.join(__dirname, '../../electron/ipc/files.cjs') });
+  }, { filename: path.join(__dirname, '../../electron/main/ipc/files.cjs') });
   return { resolveFileRequest: module.exports.resolveFileRequest, calls };
 }
 

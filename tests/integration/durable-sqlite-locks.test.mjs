@@ -7,7 +7,7 @@ import test from 'node:test';
 import { BACKGROUND_CONTEXT as context } from '@earendil-works/chord/context';
 import { StorageRequestError } from '@earendil-works/pi-durable';
 import { createStorageConformance } from '@earendil-works/pi-durable/testing';
-import { openDurableStorage } from '../../electron/runtime/durable-storage.cjs';
+import { openDurableStorage } from '../../electron/main/runtime/durable-storage.cjs';
 
 // Exercise the same upstream contract as the SQLite driver across the new message boundary.
 for (const scenario of createStorageConformance({

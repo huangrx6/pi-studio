@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/pi-studio.skill.registry.schema.json",
+  "$schema": "../../sdk/skills/schemas/pi-studio.skill.registry.schema.json",
   "schemaVersion": 1,
   "name": "Pi Studio Example Skill Registry",
   "updatedAt": "2026-11-03T00:00:00.000Z",

@@ -5,7 +5,7 @@ const path = require('node:path');
 
 const {
   copyImageToClipboard,
-} = require('../../electron/services/image-clipboard.cjs');
+} = require('../../electron/main/services/image-clipboard.cjs');
 
 function recordingAdapter({ decode } = {}) {
   const items = [];
@@ -65,7 +65,7 @@ test('copyImageToClipboard 拒绝非内联、无法解码与空图片', async ()
 });
 
 test('主进程不再调用 Electron 45 已删除的剪贴板方法', () => {
-  const root = path.join(__dirname, '..', '..', 'electron');
+  const root = path.join(__dirname, '../../electron/main');
   const offenders = [];
   for (const file of fs.readdirSync(root, { recursive: true })) {
     if (!file.endsWith('.cjs')) continue;

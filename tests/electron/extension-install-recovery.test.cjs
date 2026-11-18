@@ -4,7 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { EventEmitter } = require('node:events');
 const test = require('node:test');
-const { createExtensionInstallRecovery } = require('../../electron/services/extension-install-recovery.cjs');
+const { createExtensionInstallRecovery } = require('../../electron/main/services/extension-install-recovery.cjs');
 
 const installed = { id: 'qa', version: '2', contentChanged: true, activeCodePath: '/private/code', dataPath: '/private/data' };
 function ipcFixture() {
@@ -21,7 +21,7 @@ function ipcFixture() {
     },
   };
   const module = { exports: {} };
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../electron/ipc/settings.cjs'), 'utf8'), {
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../electron/main/ipc/settings.cjs'), 'utf8'), {
     module, exports: module.exports, console,
     require(id) {
       if (id.startsWith('node:')) return require(id);

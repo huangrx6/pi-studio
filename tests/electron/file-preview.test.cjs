@@ -6,7 +6,7 @@ const path = require('node:path');
 const {
   MAX_TEXT_BYTES,
   readFilePreview,
-} = require('../../electron/services/file-preview.cjs');
+} = require('../../electron/main/services/file-preview.cjs');
 
 test('file preview returns bounded text and inlines allowlisted images', (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-preview-'));
@@ -61,8 +61,8 @@ test('file preview clips large text and rejects binary or escaped paths', (t) =>
 });
 
 test('archive previews expose bounded file lists and only relevant Office parts', () => {
-  const { createZipArchive } = require('../../electron/core/extension-archive.cjs');
-  const { previewFromBytes, previewReadSize } = require('../../electron/services/file-preview.cjs');
+  const { createZipArchive } = require('../../electron/main/core/extension-archive.cjs');
+  const { previewFromBytes, previewReadSize } = require('../../electron/main/services/file-preview.cjs');
   const contents = createZipArchive([
     { path: 'word/document.xml', content: '<doc>示例</doc>' },
     { path: 'word/media/image.png', content: 'picture' },

@@ -562,7 +562,7 @@ export function SettingsOverlay({
                   title="扩展"
                   meta={<InfoHint label="全局扩展安装后默认信任；项目扩展必须手动信任后才能加载可执行代码。启停和信任从下一次请求开始生效。" />}
                   actions={<>
-                    <button type="button" className="settings-outline" onClick={() => void window.piApi.openExternal('https://github.com/huangrx6/pi-studio/blob/main/docs/extensions-distribution.md')}><BookOpen />开发与发布</button>
+                    <button type="button" className="settings-outline" onClick={() => void window.piApi.openExternal('https://github.com/huangrx6/pi-studio/blob/main/docs/extensions/distribution.md')}><BookOpen />开发与发布</button>
                     <button type="button" className="settings-outline" disabled={resourceBusy || notices.extensionRefreshBusy} onClick={() => void controller.reloadExtensions()}><RotateCw className={notices.extensionRefreshBusy ? 'spin' : ''} />重新加载</button>
                     <button type="button" className="settings-add-button" aria-label="安装扩展" disabled={resourceBusy || notices.extensionRefreshBusy || Boolean(notices.extensionRefreshError)} onClick={() => {
                       extensions.setExtensionInstallPreview(null);

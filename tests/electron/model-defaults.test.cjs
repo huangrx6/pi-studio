@@ -10,11 +10,11 @@ process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
 const {
   closeStudioDatabase,
   getStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 const {
   persistDefaultModel,
   persistDefaultThinkingLevel,
-} = require('../../electron/services/models.cjs');
+} = require('../../electron/main/services/models.cjs');
 
 const reasoningModel = {
   provider: 'fixture',

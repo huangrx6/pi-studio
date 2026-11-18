@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const {
   isLoopbackHostname,
   normalizeSecureHttpUrl,
-} = require('../../electron/core/external-url.cjs');
+} = require('../../electron/main/core/external-url.cjs');
 
 test('remote service URLs require HTTPS while loopback development may use HTTP', () => {
   assert.equal(

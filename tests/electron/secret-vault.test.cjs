@@ -9,8 +9,8 @@ const {
   redactSecretValues,
   secretReferences,
   createSecretRedactor,
-} = require('../../electron/core/secret-vault.cjs');
-const { createStudioDatabase } = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/secret-vault.cjs');
+const { createStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
 
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-secret-vault-'));
 installElectronSafeStorage(test);

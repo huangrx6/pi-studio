@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { createZipArchive, sha256 } = require('../../electron/core/extension-archive.cjs');
+const { createZipArchive, sha256 } = require('../../electron/main/core/extension-archive.cjs');
 const { installElectronSafeStorage } = require('./helpers/electron-safe-storage.cjs');
 
 installElectronSafeStorage(test);
@@ -14,7 +14,7 @@ process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
 
 const {
   closeStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 const {
   addSkillSource,
   listSkillSources,
@@ -26,7 +26,7 @@ const {
   skillHubSnapshot,
   setSkillSourceEnabled,
   __test,
-} = require('../../electron/capabilities/skills/index.cjs');
+} = require('../../electron/main/capabilities/skills/index.cjs');
 
 test.after(() => {
   closeStudioDatabase();
@@ -73,7 +73,7 @@ test('GitHub sources discover nested and root skills and install the catalog com
     assert.equal(fs.existsSync(path.join(process.env.PI_STUDIO_USER_DATA, 'skill-quarantine')), false);
     assert.ok(fs.existsSync(path.join(installed.baseDir, 'scripts/run.sh')));
     fs.rmSync(installed.baseDir, { recursive: true });
-    require('../../electron/core/studio-db.cjs').getStudioDatabase().removeSkillInstallation(installed.baseDir);
+    require('../../electron/main/core/studio-db.cjs').getStudioDatabase().removeSkillInstallation(installed.baseDir);
     await assert.rejects(addSkillSource({ type: 'github', location: source.location.toUpperCase() }), /已经添加/);
   }
 });
@@ -98,7 +98,7 @@ test('failed source additions do not persist and can be retried', async (t) => {
 });
 
 test('v17 migration preserves source metadata and installation ownership', () => {
-  const { createStudioDatabase } = require('../../electron/core/studio-db.cjs');
+  const { createStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
   const { DatabaseSync } = require('node:sqlite');
   const filename = path.join(temporary, 'migration.sqlite');
   const previous = createStudioDatabase(filename);

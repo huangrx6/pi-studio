@@ -6,7 +6,7 @@ const path = require('node:path');
 const {
   expandUserPath,
   resolveUserTarget,
-} = require('../../electron/services/file-target.cjs');
+} = require('../../electron/main/services/file-target.cjs');
 
 function fixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-target-'));

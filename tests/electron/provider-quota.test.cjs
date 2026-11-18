@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { normalizeProviderQuota, previewQuota, quotaFieldPaths } = require('../../electron/core/provider-quota.cjs');
-const { createProviderQuotaMonitor } = require('../../electron/services/provider-quota.cjs');
+const { normalizeProviderQuota, previewQuota, quotaFieldPaths } = require('../../electron/main/core/provider-quota.cjs');
+const { createProviderQuotaMonitor } = require('../../electron/main/services/provider-quota.cjs');
 
 const field = (label, path, format = 'number', options = {}) => ({ label, path, format, unit: '', translations: '', ...options });
 const config = (fields = [field('余额', 'data.balance', 'number', { unit: '元' })]) =>

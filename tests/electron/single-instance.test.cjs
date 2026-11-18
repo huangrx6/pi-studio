@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
-const { installSingleInstanceGuard } = require('../../electron/core/single-instance.cjs');
+const { installSingleInstanceGuard } = require('../../electron/main/core/single-instance.cjs');
 
 function appFixture(primary) {
   const app = new EventEmitter();

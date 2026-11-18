@@ -16,18 +16,18 @@ const {
   narrowApprovalRule,
   normalizePolicy,
   normalizePolicyStore,
-} = require('../../electron/capabilities/permissions/index.cjs');
+} = require('../../electron/main/capabilities/permissions/index.cjs');
 const {
   deletePermissionPoliciesForWorkspace,
   getPermissionMode,
   getPermissionPolicyStore,
   setPermissionMode,
   setPermissionPolicy,
-} = require('../../electron/core/app-settings.cjs');
+} = require('../../electron/main/core/app-settings.cjs');
 const {
   closeStudioDatabase,
   getStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 const {
   evaluateToolCall,
   previewToolCall,
@@ -35,8 +35,8 @@ const {
   resetPolicy,
   writeMode,
   writePolicy,
-} = require('../../electron/capabilities/permissions/index.cjs');
-const { createStudioBuiltins } = require('../../electron/runtime/builtin-registry.cjs');
+} = require('../../electron/main/capabilities/permissions/index.cjs');
+const { createStudioBuiltins } = require('../../electron/main/runtime/builtin-registry.cjs');
 
 const workspace = path.join(temporary, 'workspace');
 fs.mkdirSync(workspace, { recursive: true });

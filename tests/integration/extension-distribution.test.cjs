@@ -8,25 +8,25 @@ const {
   createZipArchive,
   inspectZipEntries,
   sha256,
-} = require('../../electron/core/extension-archive.cjs');
+} = require('../../electron/main/core/extension-archive.cjs');
 const {
   createExtensionPackage,
   INTEGRITY_NAME,
   MANIFEST_NAME,
-} = require('../../electron/core/extension-package.cjs');
+} = require('../../electron/main/core/extension-package.cjs');
 const {
   publicKeyFingerprint,
   signExtensionDirectory,
-} = require('../../electron/core/extension-signature.cjs');
+} = require('../../electron/main/core/extension-signature.cjs');
 const {
   createExtensionDistributionService,
-} = require('../../electron/services/extension-distribution.cjs');
+} = require('../../electron/main/services/extension-distribution.cjs');
 const {
   normalizeManifest: normalizeCoreManifest,
-} = require('../../electron/core/extension-manifest.cjs');
+} = require('../../electron/main/core/extension-manifest.cjs');
 const {
   normalizeManifest: normalizeRuntimeManifest,
-} = require('../../electron/services/studio-extensions.cjs');
+} = require('../../electron/main/services/studio-extensions.cjs');
 
 function temporaryRoot(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-distribution-'));

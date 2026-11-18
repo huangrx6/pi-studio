@@ -78,8 +78,8 @@ jobs:
       - name: Validate extension schema and official extension
         run: |
           pnpm run extension:schema
-          node tools/cli/pi-studio-extension.mjs validate examples/extensions/agent-starter --scope user --json
-          node tools/cli/pi-studio-extension.mjs validate extensions/pi-project-scripts --scope user --json
+          pnpm run extension validate examples/extensions/agent-starter --scope user --json
+          pnpm run extension validate extensions/pi-project-scripts --scope user --json
 
       - name: Validate macOS signing certificate
         shell: bash
@@ -122,7 +122,8 @@ jobs:
         run: |
           app_dir=mac
           if [ "$(uname -m)" = arm64 ]; then app_dir=mac-arm64; fi
-          PI_STUDIO_PACKAGED_APP="$PWD/release/$app_dir/Pi Studio.app/Contents/MacOS/Pi Studio" node tools/qa/qa-terminal-vi.mjs
+          qa_dir=$(node -p 'require("node:path").dirname(require("./package.json").scripts["qa:startup"].split(" ").at(-1))')
+          PI_STUDIO_PACKAGED_APP="$PWD/release/$app_dir/Pi Studio.app/Contents/MacOS/Pi Studio" node "$qa_dir/qa-terminal-vi.mjs"
 
       - name: Collect installers and updater metadata
         run: |
@@ -154,7 +155,15 @@ jobs:
       - name: Use current packaging tools with the tagged application
         if: github.event_name == 'workflow_dispatch'
         shell: bash
-        run: git restore --source="$GITHUB_SHA" --worktree -- tools/release tools/qa/qa-windows-installer.mjs
+        run: |
+          git restore --source="$GITHUB_SHA" --worktree -- scripts/release scripts/qa/qa-windows-installer.mjs
+          # Older tags keep their own package.json and script paths. Install the
+          # current release tooling at the path declared by that tagged app.
+          tagged_release_dir=$(node -p 'require("node:path").dirname(require("./package.json").build.afterPack)')
+          if [ "$tagged_release_dir" != scripts/release ]; then
+            mkdir -p "$tagged_release_dir"
+            cp -R scripts/release/. "$tagged_release_dir/"
+          fi
 
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -184,11 +193,11 @@ jobs:
             console.log(path.relative(process.cwd(), dir).split(path.sep).join("/"));
           ')
           version=$(node -p 'require(process.argv[1]).version' "./$builder/package.json")
-          patch="tools/release/patches/app-builder-lib@$version.patch"
+          patch="scripts/release/patches/app-builder-lib@$version.patch"
           if [[ -f "$patch" ]] && ! git apply --directory="$builder" --reverse --check "$patch" 2>/dev/null; then
             git apply --directory="$builder" "$patch"
           fi
-      - run: node tools/cli/pi-studio-extension.mjs validate extensions/pi-project-scripts --scope user --json
+      - run: pnpm run extension validate extensions/pi-project-scripts --scope user --json
       - name: Build Windows installer
         run: pnpm dist
 
@@ -205,7 +214,7 @@ jobs:
               Select-Object -First 4 -ExpandProperty Message | Write-Host
             throw ('Installer exited with {0} (0x{0:X8})' -f $process.ExitCode)
           }
-          node tools/qa/qa-windows-installer.mjs "$target/Pi Studio.exe"
+          node scripts/qa/qa-windows-installer.mjs "$target/Pi Studio.exe"
 
       - uses: actions/upload-artifact@v4
         with:

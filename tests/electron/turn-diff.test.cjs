@@ -11,7 +11,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { beginTurn, endTurn } = require('../../electron/services/turn-diff.cjs');
+const { beginTurn, endTurn } = require('../../electron/main/services/turn-diff.cjs');
 
 function git(dir, args) {
   return execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
@@ -25,7 +25,7 @@ test('git snapshot includes bash writes, new files, and deletions', async () => 
     git(dir, ['config', 'user.name', 'Test']);
     fs.writeFileSync(path.join(dir, 'changed.txt'), 'one\ntwo\n');
     fs.writeFileSync(path.join(dir, 'deleted.txt'), 'bye\n');
-    git(dir, ['add', '.']);
+    git(dir, ['add', './']);
     git(dir, ['commit', '-qm', 'init']);
 
     const token = await beginTurn(dir, 'test-request');
@@ -62,7 +62,7 @@ test('an unchanged turn produces an empty diff', async () => {
     git(dir, ['config', 'user.email', 'test@example.com']);
     git(dir, ['config', 'user.name', 'Test']);
     fs.writeFileSync(path.join(dir, 'a.txt'), 'a\n');
-    git(dir, ['add', '.']);
+    git(dir, ['add', './']);
     git(dir, ['commit', '-qm', 'init']);
 
     const token = await beginTurn(dir, 'no-change');
@@ -90,14 +90,14 @@ function storedTurnApi() {
     },
   };
   const module = { exports: {} };
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../electron/services/turn-diff.cjs'), 'utf8'), {
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../electron/main/services/turn-diff.cjs'), 'utf8'), {
     module,
     exports: module.exports,
     process,
     require: name => name === '../core/studio-db.cjs'
       ? { getStudioDatabase: () => database }
       : name.startsWith('./')
-        ? require(path.join(__dirname, '../../electron/services', name))
+        ? require(path.join(__dirname, '../../electron/main/services', name))
         : require(name),
   });
   return module.exports;
@@ -158,7 +158,7 @@ test('absolute file preview is limited to files recorded by that session', async
     },
   };
   const module = { exports: {} };
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../electron/services/turn-diff.cjs'), 'utf8'), {
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../electron/main/services/turn-diff.cjs'), 'utf8'), {
     module,
     exports: module.exports,
     process,
@@ -166,7 +166,7 @@ test('absolute file preview is limited to files recorded by that session', async
     require: name => name === '../core/studio-db.cjs'
       ? { getStudioDatabase: () => database }
       : name === './workspace.cjs'
-        ? require('../../electron/services/workspace.cjs')
+        ? require('../../electron/main/services/workspace.cjs')
         : require(name),
   });
   try {

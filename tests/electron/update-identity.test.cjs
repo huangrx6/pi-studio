@@ -7,7 +7,7 @@ const {
   attachBuildAwareUpdateCheck,
   isSameVersionBuildUpdate,
   readInstalledBuildIdentity,
-} = require('../../electron/services/update-identity.cjs');
+} = require('../../electron/main/services/update-identity.cjs');
 
 test('same-version rebuilds are detected from a changed remote build id', () => {
   assert.equal(isSameVersionBuildUpdate(

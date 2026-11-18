@@ -5,7 +5,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const test = require('node:test');
 
-const cli = path.resolve(__dirname, '../../tools/cli/pi-studio-extension.mjs');
+const cli = path.resolve(__dirname, '../../sdk/cli/pi-studio-extension.mjs');
 
 function run(args, cwd) {
   return spawnSync(process.execPath, [cli, ...args], {

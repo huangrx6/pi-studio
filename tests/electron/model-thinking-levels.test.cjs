@@ -10,8 +10,8 @@ const {
   normalizeThinkingLevels,
   thinkingLevelMapForLevels,
   thinkingLevelsFromMap,
-} = require('../../electron/core/thinking-levels.cjs');
-const { createStudioDatabase } = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/thinking-levels.cjs');
+const { createStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
 
 test('thinking levels normalize vendor aliases into Pi order', () => {
   assert.deepEqual(

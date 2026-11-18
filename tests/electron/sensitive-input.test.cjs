@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { scanSensitiveInput } = require('../../electron/core/sensitive-input.cjs');
+const { scanSensitiveInput } = require('../../electron/main/core/sensitive-input.cjs');
 
 test('high-confidence credentials yield stable fingerprints without the raw value', () => {
   const first = scanSensitiveInput([

@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/pi-studio.extension.schema.json",
+  "$schema": "../../sdk/extensions/schemas/pi-studio.extension.schema.json",
   "format": 1,
   "id": "pi-quota-status",
   "name": "额度状态",

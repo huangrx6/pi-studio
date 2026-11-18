@@ -13,7 +13,7 @@ const {
   centerWindowBounds,
   normalizeWindowBounds,
   resolveWindowBounds,
-} = require('../../electron/core/window-bounds.cjs');
+} = require('../../electron/main/core/window-bounds.cjs');
 
 const primary = { x: 0, y: 25, width: 1920, height: 1055 };
 const secondary = { x: 1440, y: 0, width: 1920, height: 1080 };

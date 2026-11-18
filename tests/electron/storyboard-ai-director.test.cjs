@@ -3,9 +3,9 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const { newDocument } = require('../../electron/services/video-storyboard/document.cjs');
-const { seedExample, sourcePath } = require('../../electron/services/video-storyboard/example.cjs');
-const { generateStoryboardDraft } = require('../../electron/services/video-storyboard/ai-director.cjs');
+const { newDocument } = require('../../electron/main/services/video-storyboard/document.cjs');
+const { seedExample, sourcePath } = require('../../electron/main/services/video-storyboard/example.cjs');
+const { generateStoryboardDraft } = require('../../electron/main/services/video-storyboard/ai-director.cjs');
 
 function sample() {
   const doc = newDocument();

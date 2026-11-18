@@ -12,17 +12,17 @@ installElectronSafeStorage(test);
 const {
   closeStudioDatabase,
   getStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 const {
   getStudioModelsRuntime,
   rebuildStudioModels,
-} = require('../../electron/core/studio-models.cjs');
+} = require('../../electron/main/core/studio-models.cjs');
 const {
   availableModels,
   modelInfo,
   resolveProviderApiKey,
-} = require('../../electron/services/models.cjs');
-const { listMediaModels, resolveMediaModel } = require('../../electron/services/media-models.cjs');
+} = require('../../electron/main/services/models.cjs');
+const { listMediaModels, resolveMediaModel } = require('../../electron/main/services/media-models.cjs');
 
 test.after(() => {
   closeStudioDatabase();

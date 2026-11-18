@@ -1,4 +1,4 @@
-import type { SettingsSnapshot } from '../global.d';
+import type { SettingsSnapshot } from './global.d';
 import type { MutationProjection } from './mutation-types';
 
 export type ExtensionMutationResult = {

@@ -12,10 +12,10 @@ process.env.PI_STUDIO_USER_DATA = path.join(temporary, 'user-data');
 const {
   closeStudioDatabase,
   getStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 const {
   getStudioModelsRuntime,
-} = require('../../electron/core/studio-models.cjs');
+} = require('../../electron/main/core/studio-models.cjs');
 
 const originalLoad = Module._load;
 Module._load = function loadWithElectronStub(request, parent, isMain) {
@@ -31,8 +31,8 @@ Module._load = function loadWithElectronStub(request, parent, isMain) {
   }
   return originalLoad.call(this, request, parent, isMain);
 };
-const { settingsSnapshot } = require('../../electron/services/settings.cjs');
-const { closeDurableRuntime } = require('../../electron/runtime/durable-runtime.cjs');
+const { settingsSnapshot } = require('../../electron/main/services/settings.cjs');
+const { closeDurableRuntime } = require('../../electron/main/runtime/durable-runtime.cjs');
 Module._load = originalLoad;
 
 test.after(async () => {

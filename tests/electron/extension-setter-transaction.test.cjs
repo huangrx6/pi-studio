@@ -5,7 +5,7 @@ const path = require('node:path');
 const { test, after } = require('node:test');
 const { installElectronSafeStorage } = require('./helpers/electron-safe-storage.cjs');
 installElectronSafeStorage({ after });
-const { createStudioDatabase } = require('../../electron/core/studio-db.cjs');
+const { createStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
 
 for (const method of ['setExtensionEnabled', 'setExtensionTrusted']) {
   test(`${method} rolls back UPDATE if the result read fails, then permits a deliberate retry`, t => {

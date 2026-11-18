@@ -3,8 +3,8 @@ const test = require('node:test');
 const { mkdtemp, rm, writeFile } = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
-const { newDocument } = require('../../electron/services/video-storyboard/document.cjs');
-const { generatePlanningStep } = require('../../electron/services/video-storyboard/ai-planner.cjs');
+const { newDocument } = require('../../electron/main/services/video-storyboard/document.cjs');
+const { generatePlanningStep } = require('../../electron/main/services/video-storyboard/ai-planner.cjs');
 
 function writer(respond, vision = false) {
   return async modelRef => ({ modelRef: modelRef ?? 'test/planner',

@@ -1,7 +1,7 @@
 /**
  * Release notes 的结构化解析。
  *
- * 更新器已经在上层把 HTML 降级成纯文本（`electron/update-state.cjs`），这里只负责
+ * 更新器已经在上层把 HTML 降级成纯文本（`electron/main/update-state.cjs`），这里只负责
  * 认回 markdown 的三种骨架——小节标题、列表项、段落——再把行内的粗体与代码标出来。
  * 渲染由 React 元素完成，任何标签都当普通文本转义，不会执行。
  */

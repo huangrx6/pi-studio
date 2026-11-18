@@ -15,10 +15,10 @@ const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-secret-bounda
 process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
 process.env.PI_STUDIO_USER_DATA = path.join(temporary, 'user-data');
 require('../electron/helpers/electron-safe-storage.cjs').installElectronSafeStorage({ after });
-const { getStudioDatabase, closeStudioDatabase } = require('../../electron/core/studio-db.cjs');
-const { setPermissionMode } = require('../../electron/core/app-settings.cjs');
-const { createStudioBuiltins } = require('../../electron/runtime/builtin-registry.cjs');
-const { createSecretAwareRegistry } = require('../../electron/services/secret-tool-runtime.cjs');
+const { getStudioDatabase, closeStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
+const { setPermissionMode } = require('../../electron/main/core/app-settings.cjs');
+const { createStudioBuiltins } = require('../../electron/main/runtime/builtin-registry.cjs');
+const { createSecretAwareRegistry } = require('../../electron/main/services/secret-tool-runtime.cjs');
 after(() => { closeStudioDatabase(); fs.rmSync(temporary, { recursive: true, force: true }); });
 
 test('credentials never enter Durable intent, progress, nested calls or transcript', { timeout: 10_000 }, async () => {

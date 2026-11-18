@@ -18,7 +18,7 @@ Module._load = function loadWithElectronStub(request, parent, isMain) {
   }
   return originalLoad.call(this, request, parent, isMain);
 };
-const studioExtensions = require('../../electron/services/studio-extensions.cjs');
+const studioExtensions = require('../../electron/main/services/studio-extensions.cjs');
 Module._load = originalLoad;
 
 const {
@@ -38,7 +38,7 @@ const {
   syncStudioExtensions,
   toolConflictDiagnostics,
 } = studioExtensions;
-const { openChildConversation } = require('../../electron/capabilities/subagents/index.cjs');
+const { openChildConversation } = require('../../electron/main/capabilities/subagents/index.cjs');
 
 after(() => fs.rmSync(userRoot, { recursive: true, force: true }));
 
@@ -684,7 +684,7 @@ test('project extensions are reported as untrusted by default', (t) => {
 });
 
 test('project extension trust is invalidated when code changes without a version bump', (t) => {
-  const { getStudioDatabase } = require('../../electron/core/studio-db.cjs');
+  const { getStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-project-trust-'));
   const directory = path.join(cwd, '.pi-studio', 'extensions', 'trust-fingerprint');
   const id = 'project:trust-fingerprint';
@@ -717,7 +717,7 @@ test('project extension trust is invalidated when code changes without a version
 });
 
 test('submission-time integrity verification unloads changed project extensions and dependents once', async (t) => {
-  const { getStudioDatabase } = require('../../electron/core/studio-db.cjs');
+  const { getStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-project-runtime-integrity-'));
   const root = path.join(cwd, '.pi-studio', 'extensions');
   const baseDirectory = path.join(root, 'runtime-base');
@@ -800,7 +800,7 @@ test('submission-time integrity verification unloads changed project extensions 
 });
 
 test('submission-time integrity verification rejects tampered managed project code', async (t) => {
-  const { getStudioDatabase } = require('../../electron/core/studio-db.cjs');
+  const { getStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-managed-integrity-'));
   const source = path.join(cwd, 'source-package');
   const extensionId = 'managed.integrity';
@@ -946,7 +946,7 @@ test('activate can return a Durable extension plus command handlers', async (t) 
 });
 
 test('provider credentials are exact, read-only and hot after credential changes', async (t) => {
-  const { getStudioDatabase } = require('../../electron/core/studio-db.cjs');
+  const { getStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
   const database = getStudioDatabase();
   const allowedProvider = 'quota-capability-allowed';
   const deniedProvider = 'quota-capability-denied';
@@ -1497,7 +1497,7 @@ test('an earlier system collision cannot mask a protected optional tool from a l
 });
 
 test('built-in enablement controls the live registry, allows optional disable, and protects core', async (t) => {
-  const { getStudioDatabase } = require('../../electron/core/studio-db.cjs');
+  const { getStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
   const db = getStudioDatabase();
   const install = (id, tier, requires = []) => studioExtensions.installBuiltinExtension(db, {
     id,
@@ -1606,7 +1606,7 @@ test('installed quota 0.5.5 exposes the settings switch without activating its a
   fs.mkdirSync(directory, { recursive: true });
   t.after(async () => {
     await studioExtensions.uninstallStudioExtensions();
-    require('../../electron/core/studio-db.cjs').getStudioDatabase().removeExtension(id);
+    require('../../electron/main/core/studio-db.cjs').getStudioDatabase().removeExtension(id);
     fs.rmSync(directory, { recursive: true, force: true });
   });
   fs.writeFileSync(path.join(directory, 'pi-studio.extension.json'), JSON.stringify(manifest({

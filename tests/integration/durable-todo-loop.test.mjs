@@ -19,15 +19,15 @@ import {
   fauxProvider,
   fauxToolCall,
 } from '@earendil-works/pi-ai';
-import toolSchema from '../../electron/runtime/tool-schema.cjs';
+import toolSchema from '../../electron/main/runtime/tool-schema.cjs';
 
 const require = createRequire(import.meta.url);
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-todo-loop-'));
 process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
 
-const { closeStudioDatabase } = require('../../electron/core/studio-db.cjs');
-const { readTodoDetails, readTodoHistory } = require('../../electron/capabilities/todo/index.cjs');
-const { createStudioBuiltins } = require('../../electron/runtime/builtin-registry.cjs');
+const { closeStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
+const { readTodoDetails, readTodoHistory } = require('../../electron/main/capabilities/todo/index.cjs');
+const { createStudioBuiltins } = require('../../electron/main/runtime/builtin-registry.cjs');
 
 after(() => {
   closeStudioDatabase();
@@ -167,8 +167,8 @@ test('the todo tool result reaches the UI contract and its Durable document surv
 
 test('old tasks and more than 100 new tasks remain pageable across runs, Goal resumes and a storage reopen', async () => {
   const durable = await import('@earendil-works/pi-durable');
-  const { createStudioTodoExtension } = require('../../electron/capabilities/todo/index.cjs');
-  const { createLongTaskContract, replaceLongTaskState, editLongTaskState } = require('../../electron/capabilities/long-task/index.cjs');
+  const { createStudioTodoExtension } = require('../../electron/main/capabilities/todo/index.cjs');
+  const { createLongTaskContract, replaceLongTaskState, editLongTaskState } = require('../../electron/main/capabilities/long-task/index.cjs');
   const todo = createStudioTodoExtension(durable);
   const { LongTask } = createLongTaskContract(durable);
   const context = BACKGROUND_CONTEXT;

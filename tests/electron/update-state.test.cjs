@@ -4,7 +4,7 @@ const {
   initialUpdateState,
   normalizeReleaseNotes,
   reduceUpdateState,
-} = require('../../electron/update-state.cjs');
+} = require('../../electron/main/update-state.cjs');
 
 test('update state follows check, availability and download lifecycle', () => {
   let state = initialUpdateState('1.2.3', 'aaaaaaaaaaaaaaaa');

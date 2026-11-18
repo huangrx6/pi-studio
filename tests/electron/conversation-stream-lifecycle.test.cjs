@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
   trackConversationStream,
-} = require('../../electron/runtime/conversation-stream-lifecycle.cjs');
+} = require('../../electron/main/runtime/conversation-stream-lifecycle.cjs');
 
 function deferred() {
   let resolve;

@@ -4,7 +4,7 @@ const { pathToFileURL } = require('node:url');
 const {
   isTrustedRendererUrl,
   rendererContentSecurityPolicy,
-} = require('../../electron/core/web-security.cjs');
+} = require('../../electron/main/core/web-security.cjs');
 
 test('production renderer CSP enables only the capabilities Pi Studio uses', () => {
   const policy = rendererContentSecurityPolicy();
@@ -24,7 +24,7 @@ test('development renderer permits the marked Vite preamble without permitting a
 });
 
 test('renderer navigation is limited to the app URL', () => {
-  const productionUrl = pathToFileURL('/Applications/Pi Studio.app/web-dist/index.html').href;
+  const productionUrl = pathToFileURL('/Applications/Pi Studio.app/dist/renderer/index.html').href;
   assert.equal(isTrustedRendererUrl(productionUrl, { productionUrl }), true);
   assert.equal(isTrustedRendererUrl('https://example.com', { productionUrl }), false);
   assert.equal(isTrustedRendererUrl(`${productionUrl}?x=1`, { productionUrl }), false);

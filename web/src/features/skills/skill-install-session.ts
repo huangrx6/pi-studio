@@ -1,4 +1,4 @@
-import type { SettingsSnapshot } from '../../global.d';
+import type { SettingsSnapshot } from '../../types/global.d';
 
 export type SkillInstallResult = Awaited<ReturnType<typeof window.piApi.installPreparedSkill>>;
 export type SkillInstallState = { busy: boolean; attempted: boolean; result: SkillInstallResult | null; error: string; complete: boolean };

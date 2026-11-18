@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { getGitWorkspaceStatus } = require('../../electron/services/git-workspace.cjs');
+const { getGitWorkspaceStatus } = require('../../electron/main/services/git-workspace.cjs');
 
 function git(cwd, args) {
   return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();

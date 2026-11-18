@@ -32,7 +32,7 @@ test('credential storage encrypts at the SQLite boundary and reads legacy values
 
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-secure-value-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
-  const { StudioDatabase } = require('../../electron/core/studio-db.cjs');
+  const { StudioDatabase } = require('../../electron/main/core/studio-db.cjs');
   const database = new StudioDatabase(path.join(directory, 'studio.sqlite'));
   t.after(() => database.db.close());
 
@@ -68,7 +68,7 @@ test('credential storage encrypts at the SQLite boundary and reads legacy values
 
 test('credential storage fails closed when Electron safeStorage is unavailable', (t) => {
   mockElectron(t, {});
-  const { encryptValue, SECURE_STORAGE_UNAVAILABLE } = require('../../electron/core/secure-value.cjs');
+  const { encryptValue, SECURE_STORAGE_UNAVAILABLE } = require('../../electron/main/core/secure-value.cjs');
   const value = { type: 'api_key', key: 'headless-secret' };
   assert.throws(
     () => encryptValue(value),
@@ -89,7 +89,7 @@ test('encrypted read projections stay available while safeStorage is temporarily
   };
   mockElectron(t, { safeStorage });
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-secure-read-'));
-  const { StudioDatabase } = require('../../electron/core/studio-db.cjs');
+  const { StudioDatabase } = require('../../electron/main/core/studio-db.cjs');
   const database = new StudioDatabase(path.join(directory, 'studio.sqlite'));
   t.after(() => { database.db.close(); fs.rmSync(directory, { recursive: true, force: true }); });
   database.upsertMcpServer({

@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { chatAttachments } = require('../../electron/core/attachment-markers.cjs');
+const { chatAttachments } = require('../../electron/main/core/attachment-markers.cjs');
 
 test('Durable submitted paths become renderable attachment summaries on reopen', () => {
   const paths = ['/studio/attachments/session/report.txt', 'C:\\studio\\attachments\\report.pdf'];

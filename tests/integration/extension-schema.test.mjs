@@ -6,15 +6,15 @@ import { fileURLToPath } from 'node:url';
 
 import {
   normalizeContentList,
-} from '../../electron/services/studio-extension-ui.cjs';
+} from '../../electron/main/services/studio-extension-ui.cjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const schema = JSON.parse(fs.readFileSync(
-  path.join(repositoryRoot, 'schemas', 'pi-studio.extension.schema.json'),
+  path.join(repositoryRoot, 'sdk/extensions/schemas', 'pi-studio.extension.schema.json'),
   'utf8',
 ));
 const authoringTypes = fs.readFileSync(
-  path.join(repositoryRoot, 'types', 'pi-studio-extension-authoring.d.ts'),
+  path.join(repositoryRoot, 'sdk/extensions/types', 'pi-studio-extension-authoring.d.ts'),
   'utf8',
 );
 

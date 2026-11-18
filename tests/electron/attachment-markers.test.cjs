@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { chatAttachments } = require('../../electron/core/attachment-markers.cjs');
+const { chatAttachments } = require('../../electron/main/core/attachment-markers.cjs');
 
 const stored = '/studio/attachments/s/session-a/87292872-5d46-4d6a-8ba1-baacf7933acf-long-message-2026-11-09T11-16-45-454Z.txt';
 const marked = {

@@ -3,9 +3,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const { createStudioDatabase } = require('../../electron/core/studio-db.cjs');
-const { archiveNextEntry, prepareAssetArchive } = require('../../electron/services/conversation-asset-archive.cjs');
-const { assetOwner, bindConversationUploads, removeConversationAssets } = require('../../electron/services/conversation-assets.cjs');
+const { createStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
+const { archiveNextEntry, prepareAssetArchive } = require('../../electron/main/services/conversation-asset-archive.cjs');
+const { assetOwner, bindConversationUploads, removeConversationAssets } = require('../../electron/main/services/conversation-assets.cjs');
 
 test('a restarted Studio archives exact parent and nested-agent inputs and delivered outputs in their owning session', async t => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'studio-owned-attachments-')));

@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
-const { installApplicationShutdown } = require('../../electron/core/app-lifecycle.cjs');
+const { installApplicationShutdown } = require('../../electron/main/core/app-lifecycle.cjs');
 
 function fixture(overrides = {}) {
   const app = new EventEmitter();

@@ -1,9 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { newDocument, validateDocument } = require('../../electron/services/video-storyboard/document.cjs');
-const { seedExample } = require('../../electron/services/video-storyboard/example.cjs');
-const { prepareDraft, applyDraft } = require('../../electron/services/video-storyboard/ai-draft.cjs');
-const { editShot } = require('../../electron/services/video-storyboard/production.cjs');
+const { newDocument, validateDocument } = require('../../electron/main/services/video-storyboard/document.cjs');
+const { seedExample } = require('../../electron/main/services/video-storyboard/example.cjs');
+const { prepareDraft, applyDraft } = require('../../electron/main/services/video-storyboard/ai-draft.cjs');
+const { editShot } = require('../../electron/main/services/video-storyboard/production.cjs');
 
 function example() {
   const doc = newDocument();

@@ -4,7 +4,7 @@ import { useEffect, useMemo } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { ActionConfirmOptions, useActionConfirmation } from '../shared/ConfirmDialog';
 import type { CommittedProjection, MutationProjection } from '../types/mutation-types';
-import type { ModelResourceSnapshot } from '../global.d';
+import type { ModelResourceSnapshot } from '../types/global.d';
 import type {
   SettingsEditor,
   SettingsSnapshot,

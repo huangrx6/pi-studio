@@ -3,11 +3,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { createStudioDatabase } = require('../../electron/core/studio-db.cjs');
-const { storyboardStore } = require('../../electron/services/video-storyboard/store.cjs');
-const { requestGeneration } = require('../../electron/services/video-storyboard/generation-request.cjs');
-const { generateMedia, applyGeneratedMedia } = require('../../electron/services/video-storyboard/generation.cjs');
-const render = require('../../electron/services/video-storyboard/render-files.cjs');
+const { createStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
+const { storyboardStore } = require('../../electron/main/services/video-storyboard/store.cjs');
+const { requestGeneration } = require('../../electron/main/services/video-storyboard/generation-request.cjs');
+const { generateMedia, applyGeneratedMedia } = require('../../electron/main/services/video-storyboard/generation.cjs');
+const render = require('../../electron/main/services/video-storyboard/render-files.cjs');
 
 const pixel = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7ZKaYAAAAASUVORK5CYII=';
 const model = { modelId: 'test', baseUrl: 'https://configured.invalid/v1/', apiKey: 'fixture-key' };

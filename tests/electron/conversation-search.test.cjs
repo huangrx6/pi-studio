@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { createStudioDatabase } = require('../../electron/core/studio-db.cjs');
+const { createStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
 
 function sandbox() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-search-'));

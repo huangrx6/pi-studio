@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/pi-studio.extension.registry.schema.json",
+  "$schema": "../../sdk/extensions/schemas/pi-studio.extension.registry.schema.json",
   "schemaVersion": 1,
   "name": "Pi Studio Example Registry",
   "updatedAt": "2026-10-29T00:00:00.000Z",

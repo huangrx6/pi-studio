@@ -10,10 +10,10 @@ const {
   mergeDiscoveredModelMetadata,
   resolveOfficialModel,
   storedModelMetadata,
-} = require('../../electron/core/model-metadata.cjs');
+} = require('../../electron/main/core/model-metadata.cjs');
 const {
   normalizeDiscoveredModels,
-} = require('../../electron/model-discovery.cjs');
+} = require('../../electron/main/model-discovery.cjs');
 
 test('official metadata resolves a custom provider by its base URL', async () => {
   const catalog = await loadOfficialCatalog();

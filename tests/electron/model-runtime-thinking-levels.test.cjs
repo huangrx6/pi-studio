@@ -10,12 +10,12 @@ process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
 const {
   closeStudioDatabase,
   getStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 const {
   closeStudioModelsRuntime,
   getStudioModelsRuntime,
-} = require('../../electron/core/studio-models.cjs');
-const { availableModels } = require('../../electron/services/models.cjs');
+} = require('../../electron/main/core/studio-models.cjs');
+const { availableModels } = require('../../electron/main/services/models.cjs');
 
 test.after(() => {
   closeStudioModelsRuntime();

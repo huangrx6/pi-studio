@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { createStartupGate } = require('../../electron/core/startup-gate.cjs');
+const { createStartupGate } = require('../../electron/main/core/startup-gate.cjs');
 
 test('activation is deferred until initialization has completed', async () => {
   let release;

@@ -11,12 +11,12 @@ The same feature can use both concepts. For example, `studio-subagents` is an ex
 
 | Area | Owns | Does not own |
 | --- | --- | --- |
-| `electron/core/` | Stable primitives, SQLite, model metadata, extension contracts | Agent-loop assembly or capability-specific behavior |
-| `electron/runtime/` | Durable startup, explicit built-in registry, shared runtime contracts | Product UI or external service implementations |
-| `electron/capabilities/<name>/` | One Agent capability and its public `index.cjs` | Other capabilities' internals |
-| `electron/integrations/<name>/` | External systems and adapters | Product distribution or feature UI |
-| `electron/services/` | General application services | Capabilities that participate directly in the Agent loop |
-| `electron/ipc/` | Thin typed transport boundaries | Domain implementation |
+| `electron/main/core/` | Stable primitives, SQLite, model metadata, extension contracts | Agent-loop assembly or capability-specific behavior |
+| `electron/main/runtime/` | Durable startup, explicit built-in registry, shared runtime contracts | Product UI or external service implementations |
+| `electron/main/capabilities/<name>/` | One Agent capability and its public `index.cjs` | Other capabilities' internals |
+| `electron/main/integrations/<name>/` | External systems and adapters | Product distribution or feature UI |
+| `electron/main/services/` | General application services | Capabilities that participate directly in the Agent loop |
+| `electron/main/ipc/` | Thin typed transport boundaries | Domain implementation |
 | `web/src/features/<name>/` | UI, hooks, styles, and renderer-safe helpers for one capability | Electron-only state or credentials |
 | `web/src/shared/` | Reusable UI primitives with no capability ownership | Feature-specific business logic |
 | `web/src/shell/` | Frame, navigation, and global page structure | Individual feature screens |
@@ -36,7 +36,7 @@ module.exports = {
 };
 ```
 
-`electron/runtime/builtin-registry.cjs` imports capability modules in an explicit order. It validates that:
+`electron/main/runtime/builtin-registry.cjs` imports capability modules in an explicit order. It validates that:
 
 - every manifest maps to exactly one extension;
 - every extension is produced by exactly one manifest;
@@ -51,22 +51,22 @@ Runtime directory scanning is intentionally unsupported. Explicit imports make p
 | --- | --- | --- | --- |
 | Coding tools | Tool provider | Tool task | Durable CodingTools |
 | Tool search | Tool discovery | Tool task | Durable tool search |
-| Filesystem | Read-only tools | Tool task | `electron/capabilities/filesystem/` |
-| Permissions | Tool guard | Tool task hook | `electron/capabilities/permissions/` |
-| Harness | Prompt assembly | Section | `electron/capabilities/harness/` |
-| Skills | Progressive disclosure | Section | `electron/capabilities/skills/` |
-| Todo | Planning state | Tool task and projection | `electron/capabilities/todo/` |
-| Long task | Continuation policy | Generation task | `electron/capabilities/long-task/` |
-| Request trace | Observation | Section and generation hook | `electron/capabilities/request-trace/` |
-| Image fit | Request image guard | Generation hook | `electron/capabilities/image-fit/` |
-| Subagents | Orchestration | Tool task, owned conversation, background task | `electron/capabilities/subagents/` |
-| Metrics | Observation and UI projection | Telemetry plus extension data source | `electron/capabilities/metrics/` |
-| MCP | External tool source and adapter | Tool registration and section | `electron/integrations/mcp/` |
-| Auto compaction | Runtime policy | Generation request boundary | Pi Durable, configured through `electron/runtime/durable-runtime.cjs` |
-| Provider quota | Model-source configuration | Main-process HTTP query and mapped metrics | `electron/services/provider-quota.cjs` |
+| Filesystem | Read-only tools | Tool task | `electron/main/capabilities/filesystem/` |
+| Permissions | Tool guard | Tool task hook | `electron/main/capabilities/permissions/` |
+| Harness | Prompt assembly | Section | `electron/main/capabilities/harness/` |
+| Skills | Progressive disclosure | Section | `electron/main/capabilities/skills/` |
+| Todo | Planning state | Tool task and projection | `electron/main/capabilities/todo/` |
+| Long task | Continuation policy | Generation task | `electron/main/capabilities/long-task/` |
+| Request trace | Observation | Section and generation hook | `electron/main/capabilities/request-trace/` |
+| Image fit | Request image guard | Generation hook | `electron/main/capabilities/image-fit/` |
+| Subagents | Orchestration | Tool task, owned conversation, background task | `electron/main/capabilities/subagents/` |
+| Metrics | Observation and UI projection | Telemetry plus extension data source | `electron/main/capabilities/metrics/` |
+| MCP | External tool source and adapter | Tool registration and section | `electron/main/integrations/mcp/` |
+| Auto compaction | Runtime policy | Generation request boundary | Pi Durable, configured through `electron/main/runtime/durable-runtime.cjs` |
+| Provider quota | Model-source configuration | Main-process HTTP query and mapped metrics | `electron/main/services/provider-quota.cjs` |
 | Project scripts | Official extension | Workspace script summary and copy actions | `extensions/pi-project-scripts/` |
-| Extension distribution | Trust and installation | Application service | `electron/services/` |
-| Credentials | Platform security | Main process storage | `electron/core/` and `electron/services/` |
+| Extension distribution | Trust and installation | Application service | `electron/main/services/` |
+| Credentials | Platform security | Main process storage | `electron/main/core/` and `electron/main/services/` |
 
 ## Migration rules
 

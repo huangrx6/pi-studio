@@ -11,7 +11,7 @@ const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-skill-linked-
 process.env.PI_STUDIO_USER_DATA = path.join(temporary, 'user-data');
 process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
 
-const { closeStudioDatabase } = require('../../electron/core/studio-db.cjs');
+const { closeStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
 const {
   installPreparedSkill,
   prepareSkillInstall,
@@ -19,8 +19,8 @@ const {
   saveSkillSource,
   skillHubSnapshot,
   __test,
-} = require('../../electron/capabilities/skills/index.cjs');
-const { parseGithubLink } = require('../../electron/capabilities/skills/linked-source.cjs');
+} = require('../../electron/main/capabilities/skills/index.cjs');
+const { parseGithubLink } = require('../../electron/main/capabilities/skills/linked-source.cjs');
 
 test.after(() => {
   closeStudioDatabase();

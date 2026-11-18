@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/pi-studio.extension.schema.json",
+  "$schema": "../../sdk/extensions/schemas/pi-studio.extension.schema.json",
   "format": 1,
   "id": "pi-project-scripts",
   "name": "项目脚本速查",

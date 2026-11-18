@@ -7,12 +7,12 @@ const test = require('node:test');
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-subagent-budget-'));
 process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
 
-const { evaluateSubagentBudget } = require('../../electron/core/subagent-budget.cjs');
+const { evaluateSubagentBudget } = require('../../electron/main/core/subagent-budget.cjs');
 const {
   closeStudioDatabase,
   getStudioDatabase,
   createStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 
 test.after(() => {
   closeStudioDatabase();

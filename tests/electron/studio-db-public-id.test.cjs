@@ -7,7 +7,7 @@ const { DatabaseSync } = require('node:sqlite');
 
 const {
   createStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-public-id-'));
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;

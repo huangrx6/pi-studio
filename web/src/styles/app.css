@@ -1,0 +1,37 @@
+/**
+ * Pi Studio 工作台的全局样式入口。
+ *
+ * 规则按原 app.css 的行顺序拆到 styles/app/。导入顺序就是层叠顺序：越靠后的
+ * 文件优先级越高。新增样式应放进对应的模块；只有在跨模块的最终覆盖确实需要
+ * 最后生效时，才追加新的顺序模块。
+ */
+
+@import './app/01-shell-foundation.css';
+@import './loading.css';
+@import './app/02-conversation.css';
+@import './app/03-file-browser.css';
+@import './app/04-settings.css';
+@import './app/05-shell-refinements.css';
+@import './app/06-workbench.css';
+@import './app/07-transcript.css';
+@import './app/08-conversation-details.css';
+@import './app/09-theme-surfaces.css';
+@import './app/10-app-chrome.css';
+@import './app/11-agents.css';
+@import './app/12-background.css';
+@import './app/13-extensions.css';
+@import './app/14-extension-density.css';
+@import './app/15-settings-resources.css';
+@import './app/16-window-chrome.css';
+@import './app/17-settings-surface.css';
+@import './app/18-selection.css';
+@import './app/19-actions.css';
+@import './app/20-header.css';
+@import './app/21-top-row.css';
+@import './app/22-composer.css';
+@import './app/23-wallpaper-inside.css';
+@import './app/24-extension-chip.css';
+@import './app/25-workspace-menu.css';
+@import '../shell/styles/shell-layout.css';
+@import '../features/git/styles/git-settings.css';
+@import '../features/conversation/styles/conversation-surfaces.css';

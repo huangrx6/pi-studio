@@ -15,7 +15,7 @@ import {
 } from '@earendil-works/pi-ai';
 
 const require = createRequire(import.meta.url);
-const { createMetricsRuntime } = require('../../electron/capabilities/metrics/index.cjs');
+const { createMetricsRuntime } = require('../../electron/main/capabilities/metrics/index.cjs');
 
 function flatten(value) {
   if (Array.isArray(value)) return value.flatMap(flatten);

@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const Module = require('node:module');
-const { systemFetch, resetSystemFetch } = require('../../electron/core/http-fetch.cjs');
+const { systemFetch, resetSystemFetch } = require('../../electron/main/core/http-fetch.cjs');
 
 function withElectronMock(mock, run) {
   const load = Module._load;

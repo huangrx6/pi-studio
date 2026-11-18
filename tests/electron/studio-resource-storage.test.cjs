@@ -27,7 +27,7 @@ Module._load = function loadWithSafeStorage(request, parent, isMain) {
 const {
   SCHEMA_VERSION,
   createStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 
 function createV2Database() {
   const db = new DatabaseSync(databaseFile);

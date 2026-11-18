@@ -4,7 +4,7 @@ const {
   fetchProviderModelDiscovery,
   modelListEndpoint,
   normalizeDiscoveredModels,
-} = require('../../electron/model-discovery.cjs');
+} = require('../../electron/main/model-discovery.cjs');
 
 test('model discovery derives /models and accepts an explicit endpoint', () => {
   assert.equal(modelListEndpoint('https://api.example.test/v1/'), 'https://api.example.test/v1/models');

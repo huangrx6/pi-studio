@@ -1,11 +1,11 @@
-name: Docs Pages
+name: Website Pages
 
-# Publishes docs/ and its reviewed screenshots to GitHub Pages.
+# Publishes website/ and its reviewed screenshots to GitHub Pages.
 on:
   push:
     branches: [main, master]
     paths:
-      - "docs/**"
+      - "website/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -31,7 +31,7 @@ jobs:
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: docs
+          path: website
 
       - id: deployment
         uses: actions/deploy-pages@v4

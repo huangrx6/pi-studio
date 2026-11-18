@@ -6,7 +6,7 @@ const {
   MACOS_AFPLAY,
   MACOS_COMPLETION_SOUND,
   playCompletionSound,
-} = require('../../electron/completion-sound.cjs');
+} = require('../../electron/main/completion-sound.cjs');
 
 test('macOS completion sound uses the fixed system player and falls back once on spawn failure', () => {
   const calls = [];

@@ -4,7 +4,7 @@ const { execFileSync } = require('node:child_process');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
-const { manageWorktree } = require('../../electron/services/git-worktrees.cjs');
+const { manageWorktree } = require('../../electron/main/services/git-worktrees.cjs');
 
 async function fixture(t) {
   const dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'studio-trees-')));

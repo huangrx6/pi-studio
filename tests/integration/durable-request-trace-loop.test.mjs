@@ -18,17 +18,17 @@ import {
   fauxProvider,
   fauxToolCall,
 } from '@earendil-works/pi-ai';
-import Type from '../../electron/runtime/tool-schema.cjs';
+import Type from '../../electron/main/runtime/tool-schema.cjs';
 
 const require = createRequire(import.meta.url);
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-request-trace-'));
 process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
 
-const { closeStudioDatabase } = require('../../electron/core/studio-db.cjs');
+const { closeStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
 const {
   createStudioRequestTraceExtension,
   onRequestTrace,
-} = require('../../electron/capabilities/request-trace/index.cjs');
+} = require('../../electron/main/capabilities/request-trace/index.cjs');
 
 test.after(() => {
   closeStudioDatabase();

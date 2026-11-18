@@ -9,7 +9,7 @@ const deferred = () => { let resolve, reject; const promise = new Promise((a, b)
 const tick = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 function harness() {
   const builds = [], db = { isOpen: () => true };
-  const file = path.resolve(__dirname, '../../electron/core/studio-models.cjs');
+  const file = path.resolve(__dirname, '../../electron/main/core/studio-models.cjs');
   const source = fs.readFileSync(file, 'utf8');
   const module = { exports: {} }, sourceRequire = Module.createRequire(file);
   // Exercise production initialize/rebuild/close and publication state. Only the

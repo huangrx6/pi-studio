@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, FileCode2, Folder, Globe2, Layers3, Search, X } from 'lucide-react';
-import type { SkillCatalogItem } from '../../global.d';
+import type { SkillCatalogItem } from '../../types/global.d';
 import { DetailDialog } from '../../shared/DetailDialog';
 import { SettingsResourceCard, SettingsResourceCardIcon, SettingsResourceCardMain } from '../../shared/SettingsResourceCard';
 import { invocationLabel, sourceTypeLabel, type SkillSourceCatalog } from './skill-catalog';

@@ -7,7 +7,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 function loadAttachments(userData, { randomUUID, now } = {}) {
-  const filename = path.join(__dirname, '../../electron/services/attachments.cjs');
+  const filename = path.join(__dirname, '../../electron/main/services/attachments.cjs');
   const source = fs.readFileSync(filename, 'utf8');
   const nativeRequire = createRequire(filename);
   const NativeDate = Date;

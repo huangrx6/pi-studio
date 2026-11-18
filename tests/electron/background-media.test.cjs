@@ -11,7 +11,7 @@ const {
   parseByteRange,
   resolveBackgroundMediaPath,
   urlForFileName,
-} = require('../../electron/background-media.cjs');
+} = require('../../electron/main/background-media.cjs');
 
 test('background media accepts supported static, animated image, and video extensions', () => {
   assert.equal(mediaKindForPath('/tmp/wallpaper.PNG'), 'image');

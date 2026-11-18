@@ -13,7 +13,7 @@ const {
   redactCommand,
   selectRegisteredRoots,
   terminateProcess,
-} = require('../../electron/services/runtime-services.cjs');
+} = require('../../electron/main/services/runtime-services.cjs');
 
 test('lsof listener parsing handles localhost, wildcard and IPv6 listeners', () => {
   const listeners = parseLsofListeners([

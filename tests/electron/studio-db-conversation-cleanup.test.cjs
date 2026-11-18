@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const { createStudioDatabase } = require('../../electron/core/studio-db.cjs');
+const { createStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
 
 function createDurableSchema(database) {
   database.db.exec(`

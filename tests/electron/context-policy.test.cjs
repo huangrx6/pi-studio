@@ -6,7 +6,7 @@ const {
   autoCompactOverrides,
   autoCompactReserveTokens,
   normalizeAutoCompactPercent,
-} = require('../../electron/core/context-policy.cjs');
+} = require('../../electron/main/core/context-policy.cjs');
 
 test('auto compact percent keeps 0 as "off" and clamps everything else into range', () => {
   assert.equal(normalizeAutoCompactPercent(undefined), DEFAULT_AUTO_COMPACT_PERCENT);

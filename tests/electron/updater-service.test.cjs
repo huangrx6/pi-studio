@@ -4,7 +4,7 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 const { EventEmitter } = require('node:events');
-const updateState = require('../../electron/update-state.cjs');
+const updateState = require('../../electron/main/update-state.cjs');
 
 // Load the actual service, replacing only Electron, updater transport and build
 // identity IO. No network, real windows, notifications or app data are used.
@@ -29,7 +29,7 @@ function fixture() {
     close() { this.emit('close'); }
   }
   const module = { exports: {} };
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../electron/services/updater.cjs'), 'utf8'), {
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../electron/main/services/updater.cjs'), 'utf8'), {
     module, exports: module.exports, console,
     process: { resourcesPath: '/synthetic/resources' },
     setTimeout: () => assert.fail('No startup timer in the synthetic development app'),

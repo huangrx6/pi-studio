@@ -3,9 +3,9 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const { createStudioDatabase } = require('../../electron/core/studio-db.cjs');
-const { storyboardStore } = require('../../electron/services/video-storyboard/store.cjs');
-const { createPlanningSession } = require('../../electron/services/video-storyboard/planning-session.cjs');
+const { createStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
+const { storyboardStore } = require('../../electron/main/services/video-storyboard/store.cjs');
+const { createPlanningSession } = require('../../electron/main/services/video-storyboard/planning-session.cjs');
 
 function fixture(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-plan-'));

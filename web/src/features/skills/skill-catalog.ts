@@ -1,4 +1,4 @@
-import type { SkillCatalogItem, SkillHubSnapshot, SkillSource } from '../../global.d';
+import type { SkillCatalogItem, SkillHubSnapshot, SkillSource } from '../../types/global.d';
 
 export type SkillSourceCatalog = SkillHubSnapshot['catalogs'][number] & { count: number };
 

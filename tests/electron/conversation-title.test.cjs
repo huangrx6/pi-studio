@@ -5,7 +5,7 @@ const {
   generateConversationTitle,
   normalizeGeneratedTitle,
   temporaryTitle,
-} = require('../../electron/services/conversation-title.cjs');
+} = require('../../electron/main/services/conversation-title.cjs');
 
 const answer = (text) => ({
   stopReason: 'stop',

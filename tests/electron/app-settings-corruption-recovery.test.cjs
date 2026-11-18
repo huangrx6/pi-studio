@@ -20,11 +20,11 @@ const {
   getSubagentConfig,
   getTheme,
   setSubagentConfig,
-} = require('../../electron/core/app-settings.cjs');
+} = require('../../electron/main/core/app-settings.cjs');
 const {
   closeStudioDatabase,
   getStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 
 const RESERVED_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 

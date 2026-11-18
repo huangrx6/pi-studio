@@ -20,7 +20,7 @@ function harness(t) {
     decryptString(value) { return Buffer.from(value).toString().slice('protected:'.length); },
   };
   Module._load = function (request, parent, isMain) { return request === 'electron' ? { safeStorage } : originalLoad.call(this, request, parent, isMain); };
-  const { StudioDatabase } = require('../../electron/core/studio-db.cjs');
+  const { StudioDatabase } = require('../../electron/main/core/studio-db.cjs');
   const db = new StudioDatabase(path.join(directory, 'studio.sqlite'));
   t.after(() => { db.db.close(); Module._load = originalLoad; fs.rmSync(directory, { recursive: true, force: true }); });
   for (const [method, count] of [['upsertProvider', 'providerWrites'], ['upsertModel', 'modelWrites'], ['writeCredential', 'credentialWrites']]) {
@@ -30,7 +30,7 @@ function harness(t) {
   // Load the real credential queue/store implementation, without building a
   // provider runtime or contacting a service. Runtime rebuilds are controlled IPC
   // dependencies below; all transaction/credential persistence uses real SQLite.
-  const corePath = path.resolve(__dirname, '../../electron/core/studio-models.cjs');
+  const corePath = path.resolve(__dirname, '../../electron/main/core/studio-models.cjs');
   const coreModule = { exports: {} }, coreRequire = Module.createRequire(corePath);
   vm.runInNewContext(fs.readFileSync(corePath, 'utf8') + '\nmodule.exports.testCredentialStore = createCredentialStore;', {
     module: coreModule, exports: coreModule.exports,
@@ -39,7 +39,7 @@ function harness(t) {
   const credentials = coreModule.exports.testCredentialStore(db);
   const fail = stage => { if (control.fail === stage) throw new Error(`${stage}: ${SECRET}`); };
   const handlers = new Map();
-  const ipcPath = path.resolve(__dirname, '../../electron/ipc/models.cjs'), ipcRequire = Module.createRequire(ipcPath), ipcModule = { exports: {} };
+  const ipcPath = path.resolve(__dirname, '../../electron/main/ipc/models.cjs'), ipcRequire = Module.createRequire(ipcPath), ipcModule = { exports: {} };
   const dependencies = {
     electron: { ipcMain: { handle: (name, action) => handlers.set(name, action) } },
     '../core/studio-db.cjs': { getStudioDatabase: () => db },

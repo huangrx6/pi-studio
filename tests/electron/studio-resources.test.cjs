@@ -11,7 +11,7 @@ process.env.HOME = path.join(temporary, 'home');
 
 const {
   closeStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 const {
   directoryFingerprint,
   discoverSkills,
@@ -21,20 +21,20 @@ const {
   setSkillTrusted,
   sharedUserSkillsDirectory,
   skillInstructions,
-} = require('../../electron/capabilities/skills/index.cjs');
+} = require('../../electron/main/capabilities/skills/index.cjs');
 const {
   DEFAULT_AGENT_TOOLS,
   matches,
   normalizeSelection,
   readAgentToolSelection,
-} = require('../../electron/runtime/tool-selection.cjs');
+} = require('../../electron/main/runtime/tool-selection.cjs');
 const {
   mcpSnapshot,
   reloadMcpServers,
   toolExposureFor,
   toolName,
   __test: mcpTest,
-} = require('../../electron/integrations/mcp/index.cjs');
+} = require('../../electron/main/integrations/mcp/index.cjs');
 
 after(() => {
   closeStudioDatabase();

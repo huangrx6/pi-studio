@@ -7,7 +7,7 @@ const {
   fitMessages,
   imageSize,
   inspectImage,
-} = require('../../electron/capabilities/image-fit/fit.cjs');
+} = require('../../electron/main/capabilities/image-fit/fit.cjs');
 
 /** 只带签名与 IHDR 的 PNG 头，够图片尺寸解析用。 */
 function pngOf(width, height) {

@@ -10,23 +10,23 @@ process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
 const {
   closeStudioDatabase,
   getStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 const {
   DEFAULT_AGENT_TOOLS,
   readAgentToolSelection,
   saveInstalledToolSelection,
-} = require('../../electron/runtime/tool-selection.cjs');
+} = require('../../electron/main/runtime/tool-selection.cjs');
 const {
   OfficialExtensionService,
-} = require('../../electron/services/official-extensions.cjs');
+} = require('../../electron/main/services/official-extensions.cjs');
 const {
   rememberSessionExemptions,
   sessionExemptions,
-} = require('../../electron/services/sensitive-input-guard.cjs');
+} = require('../../electron/main/services/sensitive-input-guard.cjs');
 const {
   defaultModelRef,
   modelInfoFor,
-} = require('../../electron/services/models.cjs');
+} = require('../../electron/main/services/models.cjs');
 
 const MODEL_REF_KEY = 'studio.models.defaultModelRef';
 const THINKING_BY_MODEL_KEY = 'studio.models.thinkingByModel';

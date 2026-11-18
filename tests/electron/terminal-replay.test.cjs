@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { createTerminalReplay } = require('../../electron/services/terminal-replay.cjs');
+const { createTerminalReplay } = require('../../electron/main/services/terminal-replay.cjs');
 
 test('replay preserves data and dimension ordering, coalescing only adjacent data', () => {
   const replay = createTerminalReplay({ cols: 80, rows: 24 });

@@ -5,7 +5,7 @@ const {
   MAX_DEPTH,
   normalizeContent,
   normalizeContentList,
-} = require('../../electron/services/studio-extension-ui.cjs');
+} = require('../../electron/main/services/studio-extension-ui.cjs');
 
 const owner = { manifestId: 'demo-extension', scope: 'user' };
 const actionNormalizer = (raw) => (

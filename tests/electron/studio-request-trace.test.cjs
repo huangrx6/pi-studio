@@ -9,10 +9,10 @@ const {
   boundMessages,
   normalizeRequestMessages,
   sanitizeValue,
-} = require('../../electron/capabilities/request-trace/index.cjs');
+} = require('../../electron/main/capabilities/request-trace/index.cjs');
 const {
   createStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 
 test('request snapshots expand Durable system sections, omit image bytes, and redact credentials', () => {
   const messages = normalizeRequestMessages([

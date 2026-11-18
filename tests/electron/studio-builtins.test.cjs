@@ -10,20 +10,20 @@ process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
 const {
   BUILTIN_MANIFESTS,
   createStudioBuiltins,
-} = require('../../electron/runtime/builtin-registry.cjs');
+} = require('../../electron/main/runtime/builtin-registry.cjs');
 const {
   createFilesystemTools,
   resolveWorkspacePath,
   walkFiles,
-} = require('../../electron/capabilities/filesystem/index.cjs');
+} = require('../../electron/main/capabilities/filesystem/index.cjs');
 const {
   normalizeManifest,
-} = require('../../electron/core/extension-manifest.cjs');
-const { setSubagentConfig } = require('../../electron/core/app-settings.cjs');
+} = require('../../electron/main/core/extension-manifest.cjs');
+const { setSubagentConfig } = require('../../electron/main/core/app-settings.cjs');
 const {
   closeStudioDatabase,
   getStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 
 function schemaFactory() {
   return new Proxy({}, {

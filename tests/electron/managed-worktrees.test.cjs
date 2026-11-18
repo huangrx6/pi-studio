@@ -7,7 +7,7 @@ const { installElectronSafeStorage } = require('./helpers/electron-safe-storage.
 const {
   SCHEMA_VERSION,
   createStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-worktrees-'));
 installElectronSafeStorage(test);

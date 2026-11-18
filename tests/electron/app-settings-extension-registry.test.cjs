@@ -10,8 +10,8 @@ process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
 const {
   getExtensionRegistryUrl,
   setExtensionRegistryUrl,
-} = require('../../electron/core/app-settings.cjs');
-const { closeStudioDatabase } = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/app-settings.cjs');
+const { closeStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
 
 test.after(() => {
   closeStudioDatabase();

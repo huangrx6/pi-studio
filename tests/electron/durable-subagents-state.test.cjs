@@ -10,7 +10,7 @@ process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
 
 const {
   resolveSubagentStatus,
-} = require('../../electron/capabilities/subagents/index.cjs');
+} = require('../../electron/main/capabilities/subagents/index.cjs');
 
 test.after(() => {
   fs.rmSync(temporary, { recursive: true, force: true });
@@ -63,7 +63,7 @@ test('a stale pending supervisor request cannot reopen a terminal child', () => 
 });
 
 test('the child list exposes only its own still-pending supervisor questions with their reply IDs', async t => {
-  const { listSubagentChildren } = require('../../electron/capabilities/subagents/index.cjs');
+  const { listSubagentChildren } = require('../../electron/main/capabilities/subagents/index.cjs');
   const durable = { defineDoc: doc => doc, defineTask: task => task, LiveDoc: {}, UsageDoc: {} };
   const registry = {
     agents: { first: { conversationId: 2, avatarId: 'panda-rose' }, second: { conversationId: 3 } },
@@ -74,10 +74,10 @@ test('the child list exposes only its own still-pending supervisor questions wit
       path: { childConversationId: 3, status: 'pending', question: 'Which path?', createdAt: 3 },
     },
   };
-  const conversations = require('../../electron/runtime/conversations.cjs');
+  const conversations = require('../../electron/main/runtime/conversations.cjs');
   t.mock.method(conversations, 'getConversationHandle', async () => ({ id: 1 }));
   t.mock.method(conversations, 'fullDisplayMessages', async () => []);
-  t.mock.method(require('../../electron/runtime/durable-runtime.cjs'), 'getDurableRuntime', async () => ({
+  t.mock.method(require('../../electron/main/runtime/durable-runtime.cjs'), 'getDurableRuntime', async () => ({
     durable,
     harness: {
       snapshot: async doc => doc.kind === 'studio.subagents' ? registry : {},
@@ -98,7 +98,7 @@ test('the child list exposes only its own still-pending supervisor questions wit
 });
 
 test('existing registries replay the same migration and use all available portraits before repeating', () => {
-  const { createProtocol } = require('../../electron/capabilities/subagents/index.cjs');
+  const { createProtocol } = require('../../electron/main/capabilities/subagents/index.cjs');
   const { Subagents } = createProtocol({ defineDoc: doc => doc, defineTask: task => task });
   const agents = Object.fromEntries(Array.from({ length: 13 }, (_, i) => [`worker-${i}`, { conversationId: 6 * (i + 1) }]));
   const v1 = { agents, reporters: {}, supervisorRequests: {} };

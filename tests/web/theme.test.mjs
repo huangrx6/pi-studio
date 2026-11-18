@@ -16,7 +16,7 @@
  *   createRequire(import.meta.resolve('vite')) 从 Vite 的依赖树里加载，
  *   这样在 pnpm 的严格 node_modules 布局下也能找到；
  * - web/src 下的 CSS / TSX 源码；
- * - electron/theme.cjs（原生窗口背景色）。
+ * - electron/main/theme.cjs（原生窗口背景色）。
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -262,7 +262,7 @@ test('the four shared surfaces stay opaque in both themes', () => {
 // Electron 侧从同一份 palette.css 读取外框的 --surface-chrome：窗口四角、边缘
 // 与首帧都属于外框，不能是中间那块内容画布的 --bg。
 test('Electron reads the shell frame colour from the same palette', () => {
-  const { themeBackground } = createRequire(import.meta.url)('../../electron/theme.cjs');
+  const { themeBackground } = createRequire(import.meta.url)('../../electron/main/theme.cjs');
   assert.equal(themeBackground('light', true), tokens('light')['--surface-chrome']);
   assert.equal(themeBackground('dark', false), tokens('dark')['--surface-chrome']);
   assert.equal(themeBackground('system', true), tokens('dark')['--surface-chrome']);

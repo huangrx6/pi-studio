@@ -21,8 +21,8 @@ const require = createRequire(import.meta.url);
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-image-fit-'));
 process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
 
-const { closeStudioDatabase } = require('../../electron/core/studio-db.cjs');
-const { createStudioImageFitExtension } = require('../../electron/capabilities/image-fit/index.cjs');
+const { closeStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
+const { createStudioImageFitExtension } = require('../../electron/main/capabilities/image-fit/index.cjs');
 
 test.after(() => {
   closeStudioDatabase();

@@ -16,13 +16,13 @@ Module._load = function(request, parent, isMain) {
   if (request === 'electron') return { app: { getPath: () => userRoot } };
   return originalLoad.call(this, request, parent, isMain);
 };
-const studio = require('../../electron/services/studio-extensions.cjs');
+const studio = require('../../electron/main/services/studio-extensions.cjs');
 Module._load = originalLoad;
-const { getStudioDatabase } = require('../../electron/core/studio-db.cjs');
+const { getStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
 const {
   ExtensionDistributionService,
   removeManagedExtensionPaths,
-} = require('../../electron/services/extension-distribution.cjs');
+} = require('../../electron/main/services/extension-distribution.cjs');
 after(() => fs.rmSync(userRoot, { recursive: true, force: true }));
 let nextId = 0;
 
@@ -88,7 +88,7 @@ function directInstall(root, id) {
 }
 
 function crashAfterStaging(root, id) {
-  const distributionModule = require.resolve('../../electron/services/extension-distribution.cjs');
+  const distributionModule = require.resolve('../../electron/main/services/extension-distribution.cjs');
   const source = `
     const { createExtensionDistributionService } = require(${JSON.stringify(distributionModule)});
     const service = createExtensionDistributionService({

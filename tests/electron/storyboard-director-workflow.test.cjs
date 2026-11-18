@@ -3,10 +3,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { createStudioDatabase } = require('../../electron/core/studio-db.cjs');
-const { storyboardStore } = require('../../electron/services/video-storyboard/store.cjs');
-const { createDirectorDrafts } = require('../../electron/services/video-storyboard/director-drafts.cjs');
-const { loadDirectorSkills } = require('../../electron/services/video-storyboard/director-skills.cjs');
+const { createStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
+const { storyboardStore } = require('../../electron/main/services/video-storyboard/store.cjs');
+const { createDirectorDrafts } = require('../../electron/main/services/video-storyboard/director-drafts.cjs');
+const { loadDirectorSkills } = require('../../electron/main/services/video-storyboard/director-skills.cjs');
 
 function workspace(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-director-workflow-'));

@@ -1,6 +1,6 @@
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import { LoadingIndicator } from '../../shared/LoadingState';
-import type { McpConnectionTestResult } from '../../global.d';
+import type { McpConnectionTestResult } from '../../types/global.d';
 import { InfoHint } from '../../shared/InfoHint';
 import { Select } from '../../shared/Select';
 import './styles/mcp-editor.css';

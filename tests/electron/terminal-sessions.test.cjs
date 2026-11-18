@@ -6,7 +6,7 @@ const test = require('node:test');
 const {
   createTerminalSessionManager,
   shellArgsForPlatform,
-} = require('../../electron/services/terminal-sessions.cjs');
+} = require('../../electron/main/services/terminal-sessions.cjs');
 
 class FakePty {
   constructor() {

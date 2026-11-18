@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { gitRead, gitWrite } = require('../../electron/services/git-tools.cjs');
+const { gitRead, gitWrite } = require('../../electron/main/services/git-tools.cjs');
 
 process.env.GIT_CONFIG_GLOBAL = os.devNull;
 process.env.GIT_CONFIG_NOSYSTEM = '1';
@@ -35,7 +35,7 @@ function seed(repo) {
 
 test('workspace repositories distinguish independent roots, initialized submodules and linked worktrees', async t => {
   const { repo, base } = fixture(t);
-  const { listGitRepositories, resolveGitRepository } = require('../../electron/services/git-repositories.cjs');
+  const { listGitRepositories, resolveGitRepository } = require('../../electron/main/services/git-repositories.cjs');
   seed(repo);
   const a = 'apps/client', b = 'services/client';
   for (const id of [a, b]) {

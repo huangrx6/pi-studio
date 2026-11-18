@@ -17,7 +17,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
 const ROOT = path.join(__dirname, '../..');
-const ELECTRON_DIR = path.join(ROOT, 'electron');
+const ELECTRON_DIR = path.join(ROOT, 'electron/main');
 // 名称部分不允许出现 } ; =，避免跨语句匹配到下一个 require。
 const REQUIRE_PATTERN = /const\s*\{([^};=]*)\}\s*=\s*require\(\s*'(\.[^']+)'\s*\)/g;
 const LOCAL_REQUIRE_PATTERN = /require\(\s*'(\.[^']+)'\s*\)/g;
@@ -109,13 +109,13 @@ test('local destructured imports point at real exports', () => {
   // ipc/index is included so a domain file accidentally no longer required by
   // main still fails loudly during the refactor.
   const entries = [
-    path.join(ELECTRON_DIR, 'main.cjs'),
-    path.join(ELECTRON_DIR, 'preload.cjs'),
+    path.join(ELECTRON_DIR, 'index.cjs'),
+    path.join(ELECTRON_DIR, '../preload/index.cjs'),
     path.join(ELECTRON_DIR, 'ipc', 'index.cjs'),
   ];
   const sources = reachableSources(entries);
   const imports = sources.flatMap(collectImports);
-  assert.ok(imports.length > 0, 'expected to find local imports in electron/');
+  assert.ok(imports.length > 0, 'expected to find local imports in electron/main/');
 
   const checked = [];
   for (const { file, target, names } of imports) {
@@ -166,7 +166,7 @@ test('capability internals are imported only through their public index', () => 
     }
   }
 
-  assert.ok(checked > 0, 'expected capability imports in electron/');
+  assert.ok(checked > 0, 'expected capability imports in electron/main/');
   assert.deepEqual(
     violations,
     [],

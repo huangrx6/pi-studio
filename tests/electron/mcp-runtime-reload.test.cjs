@@ -16,7 +16,7 @@ process.env.PI_STUDIO_MCP_LEAK_FIXTURE = 'must-not-reach-child';
 const {
   closeStudioDatabase,
   getStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 const {
   __test,
   closeMcpRuntime,
@@ -24,7 +24,7 @@ const {
   reloadMcpServers,
   testMcpConnection,
   toolName,
-} = require('../../electron/integrations/mcp/index.cjs');
+} = require('../../electron/main/integrations/mcp/index.cjs');
 
 const serverFile = path.join(temporary, 'mcp-server.mjs');
 fs.writeFileSync(serverFile, String.raw`

@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { readHistoryPage } = require('../../electron/runtime/history-page.cjs');
+const { readHistoryPage } = require('../../electron/main/runtime/history-page.cjs');
 
 function readEntries(entries) {
   return async (query, limit, cursor) => {

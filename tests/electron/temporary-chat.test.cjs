@@ -183,7 +183,7 @@ Module._load = function patchedLoad(request, parent, isMain) {
   return originalLoad.call(this, request, parent, isMain);
 };
 
-const temporaryChat = require('../../electron/services/temporary-chat.cjs');
+const temporaryChat = require('../../electron/main/services/temporary-chat.cjs');
 
 test.after(async () => {
   Module._load = originalLoad;

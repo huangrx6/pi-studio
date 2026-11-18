@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { LoadingIndicator } from '../../shared/LoadingState';
-import type { McpConnectionTestResult, SettingsSnapshot } from '../../global.d';
+import type { McpConnectionTestResult, SettingsSnapshot } from '../../types/global.d';
 import type { CommittedProjection } from '../../types/mutation-types';
 import { errorText } from '../../shared/error-text';
 import { DetailDialog } from '../../shared/DetailDialog';

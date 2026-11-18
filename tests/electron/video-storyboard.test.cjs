@@ -3,10 +3,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { createStudioDatabase } = require('../../electron/core/studio-db.cjs');
-const { storyboardStore } = require('../../electron/services/video-storyboard/store.cjs');
-const { applyMediaPreferences } = require('../../electron/services/video-storyboard/document.cjs');
-const render = require('../../electron/services/video-storyboard/render-files.cjs');
+const { createStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
+const { storyboardStore } = require('../../electron/main/services/video-storyboard/store.cjs');
+const { applyMediaPreferences } = require('../../electron/main/services/video-storyboard/document.cjs');
+const render = require('../../electron/main/services/video-storyboard/render-files.cjs');
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-storyboard-'));

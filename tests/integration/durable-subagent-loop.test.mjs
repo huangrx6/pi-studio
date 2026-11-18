@@ -22,7 +22,7 @@ import {
   fauxProvider,
   fauxToolCall,
 } from '@earendil-works/pi-ai';
-import toolSchema from '../../electron/runtime/tool-schema.cjs';
+import toolSchema from '../../electron/main/runtime/tool-schema.cjs';
 
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-subagent-loop-'));
 process.env.PI_STUDIO_USER_DATA = path.join(temporary, 'user-data');
@@ -31,18 +31,18 @@ process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
 const require = createRequire(import.meta.url);
 const {
   closeStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 const {
   setSubagentConfig,
-} = require('../../electron/core/app-settings.cjs');
+} = require('../../electron/main/core/app-settings.cjs');
 const {
   createStudioBuiltins,
-} = require('../../electron/runtime/builtin-registry.cjs');
+} = require('../../electron/main/runtime/builtin-registry.cjs');
 const {
   createProtocol,
   discardManagedWorktree,
   listManagedWorktrees,
-} = require('../../electron/capabilities/subagents/index.cjs');
+} = require('../../electron/main/capabilities/subagents/index.cjs');
 
 after(() => {
   closeStudioDatabase();
@@ -305,8 +305,8 @@ test('two background subagents complete and each reports its own answer with Stu
   registry.install(subagentChannel);
   const models = createModels();
   models.setProvider(faux.provider);
-  const studio = require('../../electron/core/studio-db.cjs').getStudioDatabase();
-  const { openDurableStorage } = require('../../electron/runtime/durable-storage.cjs');
+  const studio = require('../../electron/main/core/studio-db.cjs').getStudioDatabase();
+  const { openDurableStorage } = require('../../electron/main/runtime/durable-storage.cjs');
   const storage = await openDurableStorage(process.env.PI_STUDIO_DB, { prefix: 'durable_', busyTimeoutMs: 1500 });
   const harness = await Harness.open(storage, { models, registry }, BACKGROUND_CONTEXT);
   studio.db.exec('CREATE TABLE subagent_projection_probe(value INTEGER)');

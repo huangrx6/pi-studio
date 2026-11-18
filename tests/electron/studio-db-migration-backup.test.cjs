@@ -8,7 +8,7 @@ const { DatabaseSync } = require('node:sqlite');
 const {
   SCHEMA_VERSION,
   createStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-migration-backup-'));
 
@@ -134,7 +134,7 @@ test('v22 sources retain their chat model selection when media catalogs are intr
 });
 
 test('organizing older migration backups preserves collisions, active SQLite companions and unrelated files', () => {
-  const { organizeDatabaseBackups } = require('../../electron/core/database-backups.cjs');
+  const { organizeDatabaseBackups } = require('../../electron/main/core/database-backups.cjs');
   const dir = fs.mkdtempSync(path.join(temporary, 'layout-'));
   const db = path.join(dir, 'pi-studio.sqlite');
   const name = 'pi-studio.sqlite.migration-backup-v18-to-v19.sqlite';

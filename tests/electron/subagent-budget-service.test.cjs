@@ -7,8 +7,8 @@ const Module = require('node:module');
 
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-budget-service-'));
 process.env.PI_STUDIO_DB = path.join(temporary, 'studio.sqlite');
-const { getStudioDatabase, closeStudioDatabase } = require('../../electron/core/studio-db.cjs');
-const { setSubagentConfig } = require('../../electron/core/app-settings.cjs');
+const { getStudioDatabase, closeStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
+const { setSubagentConfig } = require('../../electron/main/core/app-settings.cjs');
 test.after(() => { closeStudioDatabase(); fs.rmSync(temporary, { recursive: true, force: true }); });
 
 test('budget endpoint resolves public IDs and uses the stored workspace scope', async () => {
@@ -32,7 +32,7 @@ test('budget endpoint resolves public IDs and uses the stored workspace scope', 
   };
   let result;
   try {
-    const service = require('../../electron/capabilities/subagents/index.cjs');
+    const service = require('../../electron/main/capabilities/subagents/index.cjs');
     result = await service.subagentBudgetSnapshot(parent.publicId, '/unrelated-workspace');
   }
   finally { Module._load = original; }

@@ -7,10 +7,10 @@ const test = require('node:test');
 const {
   ExtensionTrustStore,
   TRUST_STORE_NAME,
-} = require('../../electron/core/extension-trust.cjs');
+} = require('../../electron/main/core/extension-trust.cjs');
 const {
   publicKeyFingerprint,
-} = require('../../electron/core/extension-signature.cjs');
+} = require('../../electron/main/core/extension-signature.cjs');
 
 function storeFixture(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-trust-'));

@@ -7,7 +7,7 @@ const { execFileSync } = require('node:child_process');
 const { installElectronSafeStorage } = require('./helpers/electron-safe-storage.cjs');
 const {
   createStudioDatabase,
-} = require('../../electron/core/studio-db.cjs');
+} = require('../../electron/main/core/studio-db.cjs');
 const {
   applyManagedWorktree,
   cleanupManagedWorktrees,
@@ -18,7 +18,7 @@ const {
   inspectManagedWorktree,
   listManagedWorktrees,
   reactivateManagedWorktree,
-} = require('../../electron/capabilities/subagents/index.cjs');
+} = require('../../electron/main/capabilities/subagents/index.cjs');
 
 installElectronSafeStorage(test);
 

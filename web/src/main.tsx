@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { desktopPlatform } from './shared/desktop-platform';
 import { loadPreferences, resolveTheme } from './shared/preferences';
 import './styles/dsh-scrollbar.css';
-import './app.css';
+import './styles/app.css';
 import './shell/styles/session-view.css';
 import './shell/right-panel/styles/right-panel.css';
 

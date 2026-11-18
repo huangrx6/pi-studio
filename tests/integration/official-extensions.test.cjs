@@ -5,13 +5,13 @@ const path = require('node:path');
 const test = require('node:test');
 const {
   createExtensionDistributionService,
-} = require('../../electron/services/extension-distribution.cjs');
+} = require('../../electron/main/services/extension-distribution.cjs');
 const {
   createOfficialExtensionService,
-} = require('../../electron/services/official-extensions.cjs');
+} = require('../../electron/main/services/official-extensions.cjs');
 const {
   normalizeManifest,
-} = require('../../electron/core/extension-manifest.cjs');
+} = require('../../electron/main/core/extension-manifest.cjs');
 
 function temporaryRoot(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-official-'));

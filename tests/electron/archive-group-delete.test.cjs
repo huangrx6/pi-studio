@@ -8,12 +8,12 @@ test('group deletion validates the confirmed archived IDs and preserves the proj
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-archive-'));
   process.env.PI_STUDIO_USER_DATA = directory;
   process.env.PI_STUDIO_DB = path.join(directory, 'studio.sqlite');
-  const { getStudioDatabase, closeStudioDatabase } = require('../../electron/core/studio-db.cjs');
+  const { getStudioDatabase, closeStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
   t.after(() => {
     closeStudioDatabase();
     fs.rmSync(directory, { recursive: true, force: true });
   });
-  const { conversationAction } = require('../../electron/runtime/conversations.cjs');
+  const { conversationAction } = require('../../electron/main/runtime/conversations.cjs');
   const db = getStudioDatabase();
   for (const [id, publicId, workspace, archived] of [
     [1, 'selected', '/A', true], [2, 'restored', '/A', false],

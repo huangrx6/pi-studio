@@ -7,7 +7,7 @@ const { after, test } = require('node:test');
 const { installElectronSafeStorage } = require('./helpers/electron-safe-storage.cjs');
 
 installElectronSafeStorage({ after });
-const { createStudioDatabase } = require('../../electron/core/studio-db.cjs');
+const { createStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
 
 const originalLoad = Module._load;
 let studioDatabase;
@@ -161,7 +161,7 @@ Module._load = function loadConversationFixture(request, parent, isMain) {
   }
   return originalLoad.call(this, request, parent, isMain);
 };
-conversationModule = require('../../electron/runtime/conversations.cjs');
+conversationModule = require('../../electron/main/runtime/conversations.cjs');
 Module._load = originalLoad;
 
 function createFixture(t, { title = 'Ready conversation' } = {}) {

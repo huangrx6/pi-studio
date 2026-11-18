@@ -7,8 +7,8 @@ const YAML = require('yaml');
 const {
   stampUpdateMetadata,
   stampUpdateMetadataFiles,
-} = require('../../tools/release/stamp-update-metadata.cjs');
-const { buildNumberAt } = require('../../tools/release/build-identity.cjs');
+} = require('../../scripts/release/stamp-update-metadata.cjs');
+const { buildNumberAt } = require('../../scripts/release/build-identity.cjs');
 
 test('updater metadata receives a build id without losing artifact fields', () => {
   const source = [

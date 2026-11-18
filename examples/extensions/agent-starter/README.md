@@ -8,8 +8,8 @@ This example demonstrates both extension layers:
 From the Pi Studio repository:
 
 ```sh
-node tools/cli/pi-studio-extension.mjs validate examples/extensions/agent-starter
-node tools/cli/pi-studio-extension.mjs pack examples/extensions/agent-starter --out release
+node sdk/cli/pi-studio-extension.mjs validate examples/extensions/agent-starter
+node sdk/cli/pi-studio-extension.mjs pack examples/extensions/agent-starter --out release
 ```
 
 Install the generated `.pi-extension.zip` through the Studio extension installer.
