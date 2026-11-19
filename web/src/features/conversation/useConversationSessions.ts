@@ -97,7 +97,6 @@ type ConversationSessionsDependencies = {
   setOutlineItems: Setter<OutlineItem[]>;
   setOutlineTotalMessages: Setter<number>;
   setOutlineActive: Setter<number>;
-  setOutlineHover: Setter<number | null>;
   setComposerMenu: Setter<ComposerMenuState | null>;
   setModelPickerRequest: Setter<ModelPickerRequest | null>;
   setBusy: Setter<boolean>;
@@ -153,7 +152,6 @@ export function useConversationSessions({
   setOutlineItems,
   setOutlineTotalMessages,
   setOutlineActive,
-  setOutlineHover,
   setComposerMenu,
   setModelPickerRequest,
   setBusy,
@@ -199,7 +197,6 @@ export function useConversationSessions({
     setOutlineItems([]);
     setOutlineTotalMessages(0);
     setOutlineActive(0);
-    setOutlineHover(null);
     setError(null);
     changeWorkspace(cwd);
     const nextKey = composerDraftKeyForNew(cwd);
@@ -238,7 +235,6 @@ export function useConversationSessions({
     setOutlineItems([]);
     setOutlineTotalMessages(0);
     setOutlineActive(0);
-    setOutlineHover(null);
     changeWorkspace(cwd);
     const nextKey = composerDraftKeyForNew(cwd);
     if (hasPending) {

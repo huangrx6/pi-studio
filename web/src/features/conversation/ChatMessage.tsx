@@ -53,8 +53,14 @@ function UserText({ text }: { text: string }) {
   const content = useRef<HTMLDivElement>(null);
   const container = useRef<HTMLDivElement>(null);
   const id = useId();
+  // Short replies never need a disclosure; skip ResizeObserver cost on long histories.
+  const maybeLong = text.length > 160 || text.includes('\n');
   useLayoutEffect(() => {
     setExpanded(false);
+    if (!maybeLong) {
+      setOverflow(false);
+      return;
+    }
     const node = content.current;
     if (!node) return;
     const measure = () => setOverflow(node.getBoundingClientRect().height > parseFloat(getComputedStyle(node).lineHeight) * 5 + 1);
@@ -62,7 +68,7 @@ function UserText({ text }: { text: string }) {
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
-  }, [text]);
+  }, [text, maybeLong]);
   return <div ref={container} className={`user-text-disclosure ${overflow && !expanded ? 'is-collapsed' : ''}`}>
     <div id={id} className="user-text-viewport"><div ref={content} className="user-text">
     {segments.map((segment, index) => segment.kind === 'text'

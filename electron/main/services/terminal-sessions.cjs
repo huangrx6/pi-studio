@@ -177,11 +177,15 @@ function createTerminalSessionManager(options = {}) {
     if (!batch) return;
     if (batch.timer) clearTimeout(batch.timer);
     session.outputBatch = undefined;
-    if (sessions.get(session.id) !== session || !batch.data) return;
+    if (sessions.get(session.id) !== session || batch.chunks.length === 0) return;
+    // Join once on flush so high-frequency PTY chunks avoid quadratic string growth.
+    const data = batch.chunks.length === 1
+      ? batch.chunks[0].data
+      : batch.chunks.map((chunk) => chunk.data).join('');
     emit(session, {
       id: session.id,
       type: 'data',
-      data: batch.data,
+      data,
       sequence: batch.sequence,
       ...(batch.chunks.length > 1 ? { chunks: batch.chunks } : {}),
       ...(batch.sequenceStart === batch.sequence ? {} : { sequenceStart: batch.sequenceStart }),
@@ -196,13 +200,19 @@ function createTerminalSessionManager(options = {}) {
     }
     const previous = session.outputBatch;
     if (previous) {
-      previous.data += data;
       previous.chunks.push({ sequence, data });
       previous.sequence = sequence;
-      if (previous.data.length >= OUTPUT_BATCH_CHARS) flushOutput(session);
+      previous.charCount += data.length;
+      if (previous.charCount >= OUTPUT_BATCH_CHARS) flushOutput(session);
       return;
     }
-    const batch = { data, chunks: [{ sequence, data }], sequenceStart: sequence, sequence, timer: undefined };
+    const batch = {
+      chunks: [{ sequence, data }],
+      sequenceStart: sequence,
+      sequence,
+      charCount: data.length,
+      timer: undefined,
+    };
     batch.timer = setTimeout(() => flushOutput(session), OUTPUT_BATCH_DELAY_MS);
     session.outputBatch = batch;
     if (data.length >= OUTPUT_BATCH_CHARS) flushOutput(session);

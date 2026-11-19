@@ -79,6 +79,16 @@
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .turn-trace .activity-tool-code.is-error { border-color: var(--error); color: var(--error); }
+.turn-trace .activity-tool-code.is-long {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 160px;
+}
+.activity-output-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 0 0 6px;
+}
 .activity-earlier, .activity-open-file {
   display: inline-flex; align-items: center; gap: 5px; min-height: 26px; padding: 2px 0;
   background: transparent; color: var(--muted); font-size: var(--text-xs);
@@ -97,6 +107,7 @@
 .tool-result-images { margin: 8px 0; min-width: 0; }
 .tool-result-images-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0; background: transparent; color: var(--text-2); font-size: var(--text-sm); }
 .tool-result-images-toggle svg { width: 13px; height: 13px; }
+.tool-result-images-toggle:hover { color: var(--text-1); background: transparent; }
 .tool-result-images .conversation-image-gallery { margin: 4px 0 0; }
 .assistant-turn-main .conversation-image-tile:only-child { width: fit-content; height: auto; max-width: 100%; flex: 0 1 auto; }
 .assistant-turn-main .conversation-image-tile:only-child img { width: auto; height: auto; max-width: min(100%, 420px); max-height: 280px; }
@@ -104,3 +115,14 @@
 .conversation-markdown-image img { display: block; max-width: 100%; max-height: 420px; object-fit: contain; }
 .conversation-markdown-image:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
 .conversation-image-placeholder { color: var(--muted); font-size: var(--text-sm); }
+
+/* Finished steps off-screen stay cheap while a long live sequence is open. */
+.turn-trace .activity-disclosure.is-done {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 36px;
+}
+.turn-trace .activity-disclosure.is-live,
+.turn-trace .activity-disclosure[open] {
+  content-visibility: visible;
+  contain-intrinsic-size: none;
+}

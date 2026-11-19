@@ -4,7 +4,7 @@ import { LoadingIndicator } from '../shared/LoadingState';
 import type { ConversationSummary } from '../types/durable-types';
 import { SidebarActions, type SidebarAction } from './SidebarActions';
 import { SessionRecency } from './SessionRecency';
-import { focusNeighborIndices, sessionWindowSegments, SIDEBAR_VIRTUAL_THRESHOLD, visibleSessionIndices } from './sidebar-virtualization.ts';
+import { focusNeighborIndices, sessionWindowSegments, SIDEBAR_VIRTUAL_THRESHOLD, sidebarGroupsEqual, visibleSessionIndices } from './sidebar-virtualization.ts';
 import './styles/sidebar-workspace-list.css';
 
 export type SidebarWorkspace = { cwd: string; name: string; sessions: ConversationSummary[]; sessionCount?: number; archivedCount?: number };
@@ -67,8 +67,25 @@ export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ workspa
     const rowHeight = element.querySelector<HTMLElement>('.session-row')?.getBoundingClientRect().height || Number.parseFloat(getComputedStyle(element).getPropertyValue('--control')) || 36;
     setViewport((previous) => {
       const next = { top: element.scrollTop, height: element.clientHeight, rowHeight, groups };
-      return previous.top === next.top && previous.height === next.height && previous.rowHeight === next.rowHeight && JSON.stringify(previous.groups) === JSON.stringify(groups) ? previous : next;
+      return previous.top === next.top
+        && previous.height === next.height
+        && previous.rowHeight === next.rowHeight
+        && sidebarGroupsEqual(previous.groups, groups)
+        ? previous
+        : next;
     });
+  }, [visible]);
+  /** Scroll only changes offsets; reuse cached group tops until layout invalidates. */
+  const measureScroll = useCallback(() => {
+    const element = root.current;
+    if (!element || !visible || element.clientHeight === 0) return;
+    const top = element.scrollTop;
+    const height = element.clientHeight;
+    setViewport((previous) => (
+      previous.top === top && previous.height === height
+        ? previous
+        : { ...previous, top, height }
+    ));
   }, [visible]);
   useLayoutEffect(measure, [measure, workspaces, expanded, searchCollapsed, filtering, viewport.rowHeight]);
   useEffect(() => {
@@ -148,15 +165,17 @@ export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ workspa
     if (!changed || !visible || !activeSessionId || !root.current) return;
     const row = logicalRows.find((item) => item.sessionId === activeSessionId);
     if (!row || row.index === undefined) return;
-    const group = [...root.current.querySelectorAll<HTMLElement>('[data-session-group]')].find((element) => element.dataset.sessionGroup === row.cwd);
-    if (!group) return;
     const element = root.current;
-    const groupTop = group.getBoundingClientRect().top - element.getBoundingClientRect().top - element.clientTop + element.scrollTop;
+    const groupTop = viewport.groups[row.cwd];
+    if (groupTop === undefined) {
+      measure();
+      return;
+    }
     const rowTop = groupTop + row.index * viewport.rowHeight;
     if (rowTop < element.scrollTop) element.scrollTop = rowTop;
     else if (rowTop + viewport.rowHeight > element.scrollTop + element.clientHeight) element.scrollTop = rowTop + viewport.rowHeight - element.clientHeight;
     measure();
-  }, [activeSessionId, visible, logicalRows, viewport.rowHeight, measure]);
+  }, [activeSessionId, visible, logicalRows, viewport.groups, viewport.rowHeight, measure]);
   const previousFilter = useRef(filterKey);
   useLayoutEffect(() => {
     if (previousFilter.current === filterKey) return;
@@ -198,7 +217,7 @@ export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ workspa
 
   return <div ref={root} className="workspace-list" onScroll={() => {
     if (!visible || scrollFrame.current) return;
-    scrollFrame.current = requestAnimationFrame(() => { scrollFrame.current = 0; measure(); });
+    scrollFrame.current = requestAnimationFrame(() => { scrollFrame.current = 0; measureScroll(); });
   }} onDragOver={trackDrag} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) dragPointer.current = null; }} onDrop={clearDrag} onDragEnd={clearDrag}
     onBlurCapture={(event) => {
       if (event.relatedTarget instanceof Node && root.current?.contains(event.relatedTarget)) return;

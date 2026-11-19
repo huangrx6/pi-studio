@@ -102,3 +102,14 @@ test('saving an empty draft removes the stored value', () => {
   assert.equal(changes, 2);
   unsubscribe();
 });
+
+test('identical drafts do not notify subscribers again', () => {
+  const drafts = new Map();
+  const key = composerDraftKeyForSession('session-a');
+  let changes = 0;
+  const unsubscribe = subscribeComposerDraftStore(drafts, () => { changes += 1; });
+  saveComposerDraft(drafts, key, { text: 'same', attachments: [] });
+  saveComposerDraft(drafts, key, { text: 'same', attachments: [] });
+  assert.equal(changes, 1);
+  unsubscribe();
+});

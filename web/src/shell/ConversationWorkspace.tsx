@@ -1,21 +1,13 @@
-import { Fragment, lazy, Suspense, useEffect, useMemo, useState, type ComponentProps } from 'react';
+import { lazy, memo, Suspense, useEffect, useMemo, type ComponentProps } from 'react';
 import { ChevronLeft } from 'lucide-react';
-import { JumpToLatestButton } from '../shared/JumpToLatestButton';
 import { LoadingState } from '../shared/LoadingState';
-import { ChatMessageView } from '../features/conversation/ChatMessage';
-import { AssistantTurnView } from '../features/conversation/AssistantTurn';
 import { ComposerDock } from '../features/conversation/ComposerDock';
-import { ConversationError } from '../features/conversation/ConversationError';
-import { ConversationOutline } from '../features/conversation/ConversationOutline';
 import { useConversationSearch } from '../features/conversation/useConversationSearch';
 import { ConversationSearchBar } from './ConversationSearchBar';
-import {
-  findTurnDiff,
-} from '../features/conversation/file-changes';
+import { ConversationTranscriptPane } from './ConversationTranscriptPane';
 import type { useSubagentWorkspace } from '../features/subagents/useSubagentWorkspace';
 import type { useTranscriptNavigation } from '../features/conversation/useTranscriptNavigation';
 import {
-  NO_ANSWER_TEXT,
   type OutlineItem,
 } from '../features/conversation/outline-model';
 import {
@@ -39,11 +31,6 @@ import { ConversationHeader } from './ConversationHeader';
 import { scopedExtensionChips } from '../features/extensions/extension-chip-scope';
 import { ConversationTracePage } from './ConversationTraceMenu';
 import { buildTraceSummary } from '../features/conversation/trace-model';
-import {
-  isNearBottom,
-  nestedScrollableConsumesWheel,
-  shouldReleaseFollowOnWheel,
-} from '../features/conversation/chat-scroll.ts';
 
 const GitWorkspacePage = lazy(() => import('../features/git/GitWorkspacePage'));
 const ConversationTasksPage = lazy(() => import('../features/conversation/ConversationTasksPage'));
@@ -136,8 +123,6 @@ type OutlineState = {
   items: OutlineItem[];
   samples: ReturnType<typeof useTranscriptNavigation>['outlineSamples'];
   active: number;
-  hover: number | null;
-  setHover: (index: number | null) => void;
   jump: (index: number) => void;
 };
 
@@ -166,7 +151,7 @@ export type ConversationWorkspaceProps = {
   composer: ComponentProps<typeof ComposerDock>;
 };
 
-export function ConversationWorkspace({
+function ConversationWorkspaceComponent({
   shell,
   header,
   actions,
@@ -202,52 +187,12 @@ export function ConversationWorkspace({
     settingsOpen,
   } = shell;
   const {
-    scrollRef,
-    topSentinelRef,
-    bottomSentinelRef,
-    chatContentRef,
-    turnWindowFrom,
-    visibleTurns,
     toolResultMap,
     transcriptTurns,
     lastAssistantTurnIndex,
-    nextUserTimestamps,
     requestPlacement,
-    pendingAssistantVisible,
-    pendingTurnError,
-    markUserScrollIntent,
-    pauseTranscriptFollow,
-    resumeTranscriptFollow,
-    handleTranscriptScroll,
-    jumpToOutline,
     jumpToMessage,
-    resetToLatest,
-    transcriptTruncated,
   } = transcript;
-
-  const [atBottom, setAtBottom] = useState(true);
-  const [returningToLatest, setReturningToLatest] = useState(false);
-  useEffect(() => {
-    const viewport = scrollRef.current;
-    if (!viewport) return;
-    // Keep this state event-driven. The transcript navigation hook already
-    // owns the ResizeObserver that pins the viewport while streaming. Reading
-    // layout from a second observer and setting state on every token briefly
-    // toggles the return bar while the composer or markdown grows, which makes
-    // the conversation appear to jump while the user is typing.
-    setAtBottom(isNearBottom(viewport));
-  }, [session?.id, agentView.kind, scrollRef, chatContentRef]);
-
-  async function returnToLatest() {
-    if (returningToLatest) return;
-    if (!transcriptTruncated) {
-      resumeTranscriptFollow(true);
-      return;
-    }
-    setReturningToLatest(true);
-    try { await resetToLatest(); }
-    finally { setReturningToLatest(false); }
-  }
 
   const search = useConversationSearch({ sessionId: session?.id, onJump: jumpToMessage });
   const searchOpen = search.state.open;
@@ -342,119 +287,27 @@ export function ConversationWorkspace({
         onStep={(direction) => { void search.step(direction); }}
         onClose={search.close}
       />}
-      {!isNewConversation && transcriptVisible && <div className="transcript-viewport"><div
-        className="chat-scroll"
-        ref={scrollRef}
-        onWheel={(event) => {
-          if (!event.deltaY) return;
-          if (nestedScrollableConsumesWheel(event.target, event.currentTarget, event.deltaY)) return;
-          markUserScrollIntent(event.deltaY);
-          if (shouldReleaseFollowOnWheel({ deltaX: event.deltaX, deltaY: event.deltaY, nestedScrollable: false })) {
-            pauseTranscriptFollow();
-          } else if (event.deltaY > 0 && isNearBottom(event.currentTarget)) {
-            resumeTranscriptFollow();
-          }
-        }}
-        onTouchMove={() => {
-          markUserScrollIntent();
-          pauseTranscriptFollow();
-        }}
-        onPointerDown={() => {
-          markUserScrollIntent();
-          pauseTranscriptFollow();
-        }}
-        onPointerMove={(event) => {
-          if (event.buttons !== 0) markUserScrollIntent();
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'PageUp' || event.key === 'ArrowUp' || event.key === 'Home') {
-            markUserScrollIntent(-1);
-            pauseTranscriptFollow();
-          } else if (event.key === 'PageDown' || event.key === 'ArrowDown' || event.key === 'End') {
-            markUserScrollIntent(1);
-          }
-        }}
-        onScroll={(event) => {
-          setAtBottom(isNearBottom(event.currentTarget));
-          handleTranscriptScroll(event);
-        }}
-      >
-        <div className="chat-column" ref={chatContentRef}>
-          {messageCount > 0 && (
-            <div className="messages">
-              {/* 顶部哨兵：读取相邻历史并保留当前阅读位置 */}
-              <div ref={topSentinelRef} className="transcript-window-sentinel" aria-hidden="true" />
-              {visibleTurns.map((turn, offset) => {
-                const index = offset + turnWindowFrom;
-                if (turn.kind === 'user') {
-                  return <Fragment key={`user-${turn.message.sourceIndex ?? turn.message.timestamp ?? index}`}>
-                    <ChatMessageView
-                      id={`chat-turn-${turn.message.sourceIndex ?? `pending-${turn.message.timestamp ?? index}`}`}
-                      message={turn.message}
-                      onOpenFile={actions.openAttachment}
-                      onEdit={actions.editMessage}
-                      editDisabled={turnActive || busy || compaction.active}
-                    />
-                    {requestPlacement.unansweredByUserTurn.has(index) && <AssistantTurnView messages={[]} toolResults={toolResultMap} requestTraces={requestPlacement.unansweredByUserTurn.get(index)} cwd={session?.cwd} busy={false} turnError={NO_ANSWER_TEXT} stepDisplay={preferences.stepDisplay} stepCollapse={preferences.stepCollapse} showCodeView={false} />}
-                  </Fragment>;
-                }
-                return <AssistantTurnView
-                  key={`assistant-${turn.messages[0]?.sourceIndex ?? turn.messages[0]?.timestamp ?? index}`}
-                  id={turn.messages[0]?.sourceIndex !== undefined ? `chat-assistant-turn-${turn.messages[0].sourceIndex}` : undefined}
-                  messages={turn.messages}
-                  toolResults={toolResultMap}
-                  requestTraces={requestPlacement.byAssistantTurn.get(index)}
-                  cwd={session?.cwd}
-                  busy={turnActive && index === transcriptTurns.length - 1}
-                  retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined}
-                  stepDisplay={preferences.stepDisplay}
-                  stepCollapse={preferences.stepCollapse}
-                  showCodeView={preferences.showCodeView}
-                  gitDiff={index === lastAssistantTurnIndex && liveDiff ? liveDiff : findTurnDiff(session?.turnDiffs, { from: turn.messages.at(-1)?.timestamp, until: nextUserTimestamps[index] })}
-                  onUndo={turnActive || busy ? undefined : actions.undoTurnDiff}
-                  onOpenDiff={actions.openChanges}
-                  onOpenFile={actions.openFile}
-                />;
-              })}
-              {pendingAssistantVisible && (
-                <AssistantTurnView
-                  key={`assistant-pending-${requestPlacement.pending[0]?.id || messageCount}`}
-                  messages={[]}
-                  toolResults={toolResultMap}
-                  requestTraces={requestPlacement.pending}
-                  cwd={session?.cwd}
-                  busy={turnActive}
-                  turnError={pendingTurnError}
-                  retry={turnActive ? retryInfo ?? undefined : undefined}
-                  stepDisplay={preferences.stepDisplay}
-                  stepCollapse={preferences.stepCollapse}
-                  showCodeView={false}
-                />
-              )}
-              <div ref={bottomSentinelRef} className="transcript-window-sentinel" aria-hidden="true" />
-            </div>
-          )}
-          {conversationSubscriptionError && conversationSubscriptionError.sessionId === session?.id && <ConversationError
-            message={conversationSubscriptionError.message}
-            actionLabel="重新连接"
-            actionBusy={conversationSubscriptionError.retrying}
-            onAction={retryConversationSubscription}
-          />}
-          {showSessionError && (!pendingAssistantVisible || turnActive) && <ConversationError message={error!} onDismiss={() => setError(null)} />}
-        </div>
-      </div>
-      {(transcriptTruncated || !atBottom) && <JumpToLatestButton busy={returningToLatest} onClick={() => void returnToLatest()} />}
-      {!settingsOpen && outline.items.length > 1 && (
-        <ConversationOutline
-          items={outline.items}
-          samples={outline.samples}
-          activeIndex={outline.active}
-          hoverIndex={outline.hover}
-          onHover={outline.setHover}
-          onJump={outline.jump}
-        />
-      )}
-      </div>}
+      {!isNewConversation && transcriptVisible && <ConversationTranscriptPane
+        sessionId={session?.id}
+        sessionCwd={session?.cwd}
+        messageCount={messageCount}
+        turnActive={turnActive}
+        busy={busy}
+        compactionActive={compaction.active}
+        error={error}
+        setError={setError}
+        retryInfo={retryInfo}
+        liveDiff={liveDiff}
+        turnDiffs={session?.turnDiffs}
+        preferences={preferences}
+        settingsOpen={settingsOpen}
+        conversationSubscriptionError={conversationSubscriptionError}
+        retryConversationSubscription={retryConversationSubscription}
+        showSessionError={showSessionError}
+        transcript={transcript}
+        outline={outline}
+        actions={actions}
+      />}
 
       {!isNewConversation && agentView.kind === 'extensions' && <div className="conversation-extension-scroll">
         <div className="conversation-extension-column">
@@ -566,3 +419,6 @@ export function ConversationWorkspace({
     </>
   );
 }
+
+/** Prefer stable prop bags from App; shallow memo still skips pure chrome-only parent renders. */
+export const ConversationWorkspace = memo(ConversationWorkspaceComponent);

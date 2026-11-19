@@ -6,6 +6,7 @@
  *     Pi 在发送前会把它展开成 `<skill name="..." location="...">正文</skill>`，
  *     所以会话历史里读到的是展开后的块；气泡显示时再还原成一枚徽章 + 可折叠正文。
  *  2. 文件引用：`@src/App.tsx`，原样保留在文本里。
+ *     只有「像路径」的 @token 才会变成徽章；`@file-viewer`、`@babel/core` 这类 npm 包名保持普通文本。
  *
  * 这里只做「文本 → 片段」的纯函数，不修改任何发送给模型的内容；
  * 输入框与消息气泡共用同一套解析，保证两处显示一致。
@@ -40,7 +41,8 @@ export type TextSegment = { kind: 'text'; text: string } | { kind: 'reference'; 
 const SKILL_BLOCK = /<skill\s+name="([^"]+)"(?:\s+location="([^"]*)")?\s*>([\s\S]*?)<\/skill>/g;
 // 含空格、引号或 @ 的路径用 JSON 字符串包在 @ 后，避免路径在第一个空格处被截断。
 // 标点一律算分隔符：`@README.md、@package.json` 里中文顿号属于正文，不是路径。
-const AT_REFERENCE_SOURCE = String.raw`@(?:"(?:\\.|[^"\\])*"|[^\s@，。、；：！？,;:!?()\[\]{}（）【】「」『』]+)`;
+// 撇号也分开，避免把 `@react's` 整段当成路径。
+const AT_REFERENCE_SOURCE = String.raw`@(?:"(?:\\.|[^"\\])*"|[^\s@'’‘，。、；：！？,;:!?()\[\]{}（）【】「」『』]+)`;
 // 未展开的行内引用：`/skill:name` 或 `@path`；允许出现在文本中间（前面需是行首或非单词字符）。
 const INLINE_REF = new RegExp(
   String.raw`(^|[^A-Za-z0-9_])(\/skill:[\w.-]+|${AT_REFERENCE_SOURCE})`,
@@ -49,6 +51,28 @@ const INLINE_REF = new RegExp(
 // 发送时只提取真实路径并交给主进程读取文件上下文。前导边界与高亮一致：
 // `看 @a、@b` 里的顿号后面同样是引用，而 email 里的 @ 前面是字母，不会被误判。
 const INLINE_MENTION = new RegExp(String.raw`(?:^|[^A-Za-z0-9_])(${AT_REFERENCE_SOURCE})`, 'g');
+
+// npm 包名片段：小写、数字、点/下划线/连字符；用于识别 `@scope/name` 这类不是文件的写法。
+const NPM_PACKAGE_SEGMENT = /^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/;
+
+/** 无扩展名但常见的裸文件名（Dockerfile 等），仍按文件引用处理。 */
+const BARE_FILENAMES = new Set([
+  'dockerfile',
+  'makefile',
+  'gemfile',
+  'procfile',
+  'rakefile',
+  'license',
+  'licence',
+  'changelog',
+  'authors',
+  'contributors',
+  'copying',
+  'notice',
+  'readme',
+  'todo',
+  'cmakelists.txt',
+]);
 
 /** 文件路径的短标签：取最后一段（目录保留尾部斜杠的语义）。 */
 function fileLabel(path: string): string {
@@ -67,6 +91,58 @@ function atReferencePath(token: string): string {
   }
 }
 
+/** 路径最后一段是否带「像扩展名」的后缀（`App.tsx`、`archive.tar.gz`）。 */
+function hasFilenameExtension(name: string): boolean {
+  const base = name.replace(/[/\\]+$/, '').split(/[/\\]/).pop() || '';
+  const dot = base.lastIndexOf('.');
+  return dot > 0 && dot < base.length - 1;
+}
+
+/**
+ * 判断去掉 @ 后的内容是否像工作区文件/目录，而不是 npm 包名。
+ *
+ * `@file-viewer`、`@babel/core` 这类包名常出现在说明文字里，不应变成文件徽章。
+ * 真正的文件引用通常带路径分隔符、扩展名、目录尾斜杠，或来自选择器的引号路径。
+ */
+export function isFileReferencePath(path: string): boolean {
+  if (!path) return false;
+  // 选择器给出的目录会保留尾部斜杠。
+  if (/[/\\]$/u.test(path)) return true;
+  // 隐藏文件/相对前缀：`.env`、`./src`、`../pkg`。
+  if (path.startsWith('.') || path.startsWith('~/')) return true;
+  if (path.startsWith('/') || /^[a-zA-Z]:[\\/]/u.test(path)) return true;
+
+  const slash = /[/\\]/u.test(path);
+  if (slash) {
+    // 单段 scope/name、两侧都是包名形态且无扩展名 → 当作 scoped npm 包，不是文件。
+    const parts = path.split(/[/\\]/u);
+    if (
+      parts.length === 2
+      && NPM_PACKAGE_SEGMENT.test(parts[0])
+      && NPM_PACKAGE_SEGMENT.test(parts[1])
+      && !hasFilenameExtension(parts[1])
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  // 裸名：有扩展名（含 unknown.weird）或常见无扩展名文件。
+  if (hasFilenameExtension(path)) return true;
+  if (BARE_FILENAMES.has(path.toLowerCase())) return true;
+  // Dockerfile 这类大小写混合的裸文件名。
+  if (/[A-Z]/u.test(path) && !path.includes('@')) return true;
+  return false;
+}
+
+/** `@…` token 是否应渲染/提取为文件引用（引号路径视为用户显式插入）。 */
+function isAtFileToken(token: string): boolean {
+  if (!token.startsWith('@')) return false;
+  const source = token.slice(1);
+  if (source.startsWith('"')) return Boolean(atReferencePath(token));
+  return isFileReferencePath(source);
+}
+
 function inlineReference(token: string): Reference {
   if (token.startsWith('/skill:')) {
     return { kind: 'skill', token, label: token.slice('/skill:'.length) };
@@ -75,18 +151,31 @@ function inlineReference(token: string): Reference {
   return { kind: 'file', token, label: fileLabel(path), location: path };
 }
 
+/** 追加普通文本；与上一段文本合并，避免假阳性拆碎正文。 */
+function pushText(out: TextSegment[], text: string): void {
+  if (!text) return;
+  const previous = out[out.length - 1];
+  if (previous?.kind === 'text') previous.text += text;
+  else out.push({ kind: 'text', text });
+}
+
 /** 把一段纯文本拆成「文本 + 行内引用」。 */
 function pushInline(chunk: string, out: TextSegment[]): void {
   if (!chunk) return;
   let last = 0;
   for (const match of chunk.matchAll(INLINE_REF)) {
     const start = match.index + match[1].length;
-    if (start > last) out.push({ kind: 'text', text: chunk.slice(last, start) });
+    if (start > last) pushText(out, chunk.slice(last, start));
     const token = match[2];
-    out.push({ kind: 'reference', reference: inlineReference(token) });
+    if (token.startsWith('/skill:') || isAtFileToken(token)) {
+      out.push({ kind: 'reference', reference: inlineReference(token) });
+    } else {
+      // npm 包名等假阳性：保持原文，不当成选中的文件。
+      pushText(out, token);
+    }
     last = start + token.length;
   }
-  if (last < chunk.length) out.push({ kind: 'text', text: chunk.slice(last) });
+  if (last < chunk.length) pushText(out, chunk.slice(last));
 }
 
 /**
@@ -130,7 +219,9 @@ export function formatFileReference(path: string): string {
 /** 从一段将要发送的文本中提取 @ 文件路径，供主进程注入文件上下文。 */
 export function extractComposerMentions(text: string): string[] {
   return [...text.matchAll(INLINE_MENTION)].flatMap((match) => {
-    const path = atReferencePath(match[1]);
+    const token = match[1];
+    if (!isAtFileToken(token)) return [];
+    const path = atReferencePath(token);
     return path ? [path] : [];
   });
 }
@@ -170,14 +261,22 @@ export function splitComposerText(text: string, commandNames: ReadonlySet<string
     String.raw`(^|[^A-Za-z0-9_])(\/[A-Za-z][\w:.-]*|${AT_REFERENCE_SOURCE})`,
     'g',
   );
+  const pushComposerText = (value: string) => {
+    if (!value) return;
+    const previous = segments[segments.length - 1];
+    if (previous?.kind === 'text') previous.text += value;
+    else segments.push({ kind: 'text', text: value });
+  };
   let last = 0;
   for (const match of text.matchAll(pattern)) {
     const start = match.index + match[1].length;
-    if (start > last) segments.push({ kind: 'text', text: text.slice(last, start) });
+    if (start > last) pushComposerText(text.slice(last, start));
     const token = match[2];
     const name = token.slice(1);
-    if (token.startsWith('@')) {
+    if (token.startsWith('@') && isAtFileToken(token)) {
       segments.push({ kind: 'token', text: token, tokenKind: 'file', reference: inlineReference(token) });
+    } else if (token.startsWith('@')) {
+      pushComposerText(token);
     } else if (name.startsWith('skill:') || commandNames.has(name)) {
       segments.push({
         kind: 'token',
@@ -187,10 +286,10 @@ export function splitComposerText(text: string, commandNames: ReadonlySet<string
       });
     } else {
       // 未识别的斜杠（常见于 /Users/... 这类路径）保持普通文本。
-      segments.push({ kind: 'text', text: token });
+      pushComposerText(token);
     }
     last = start + token.length;
   }
-  if (last < text.length) segments.push({ kind: 'text', text: text.slice(last) });
+  if (last < text.length) pushComposerText(text.slice(last));
   return segments;
 }

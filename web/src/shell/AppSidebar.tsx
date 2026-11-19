@@ -2,6 +2,7 @@ import {
   ChevronsDown, ChevronsUp, FolderOpen, MessageCirclePlus,
   Search, Settings, SquarePen,
 } from 'lucide-react';
+import { memo } from 'react';
 import { ExtensionSlot, type ExtensionNotice } from '../features/extensions/ExtensionSlot';
 import type { SettingsTab } from './app-shell-config';
 import { ShellSidebar } from './ShellLayout';
@@ -48,7 +49,7 @@ type AppSidebarProps = {
   onCollapse: () => void;
 };
 
-export function AppSidebar({
+function AppSidebarView({
   onStartSession,
   onOpenTemporaryChat,
   onOpenSettings,
@@ -139,3 +140,6 @@ export function AppSidebar({
     </ShellSidebar>
   );
 }
+
+/** Isolate sidebar from conversation stream/composer re-renders when its props are stable. */
+export const AppSidebar = memo(AppSidebarView);

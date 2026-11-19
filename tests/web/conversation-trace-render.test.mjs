@@ -10,6 +10,7 @@ import * as content from '../../web/src/features/conversation/turn-content.ts';
 import * as messageContent from '../../web/src/features/conversation/message-content.ts';
 import * as fileChanges from '../../web/src/features/conversation/file-changes.ts';
 import * as follow from '../../web/src/features/conversation/chat-scroll.ts';
+import * as activityWindow from '../../web/src/features/conversation/activity-window.ts';
 
 const require = createRequire(import.meta.url);
 function component(name, imports) {
@@ -30,10 +31,11 @@ const summary = component('ActivitySummary', {
 });
 const details = component('ActivityDetails', {
   '../../shared/Markdown': { Markdown: ({ children }) => { markdownRenders++; return React.createElement('p', null, children); } },
-  './message-content': messageContent, './chat-scroll': follow,
+  './message-content': messageContent, './chat-scroll': follow, './activity-window': activityWindow,
 });
 const { TurnActivity } = component('TurnActivity', {
   './ActivityDetails': details, './ActivitySummary': summary,
+  './activity-window': activityWindow,
   '../../shared/LoadingState': { LoadingIndicator: () => null },
   './ConversationImageGallery': { ConversationImageGallery: () => null },
 });

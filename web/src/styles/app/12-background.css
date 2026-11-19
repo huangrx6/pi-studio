@@ -16,6 +16,14 @@
   opacity: var(--background-media-opacity, 68%);
   filter: blur(var(--background-media-blur, 0));
 }
+/* Zero blur: skip filter paint and bleed expansion (cheaper full-viewport media). */
+.background-layer.is-sharp .background-layer-media {
+  --background-media-bleed: 0px;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  filter: none;
+}
 .background-layer-soften { position: absolute; inset: 0; background: var(--surface-chrome); opacity: var(--background-media-scrim, .3); }
 /* Electron uses rectangular drag regions. Keep each one outside the interactive shell. */
 .wallpaper-drag-edge { position: absolute; pointer-events: auto; -webkit-app-region: drag; }

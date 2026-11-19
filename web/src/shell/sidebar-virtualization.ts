@@ -2,6 +2,17 @@
 export const SIDEBAR_VIRTUAL_THRESHOLD = 80;
 export const SIDEBAR_OVERSCAN = 6;
 
+/** Shallow map equality for group scroll offsets without JSON serialization. */
+export function sidebarGroupsEqual(a: Record<string, number>, b: Record<string, number>) {
+  if (a === b) return true;
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  for (const key of keys) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
+}
+
 export function visibleSessionIndices(count: number, scrollTop: number, viewportHeight: number, groupTop: number, rowHeight: number, retainedIndices: number[] = []) {
   if (count <= SIDEBAR_VIRTUAL_THRESHOLD) return Array.from({ length: count }, (_, index) => index);
   const height = Math.max(1, rowHeight);

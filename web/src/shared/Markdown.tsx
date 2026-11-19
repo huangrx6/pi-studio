@@ -9,6 +9,7 @@
 import { Component, Suspense, lazy, memo, type ReactNode } from 'react';
 import { loadMarkdownHighlighter } from './markdown-highlighter-loader';
 import { copyMarkdownSource } from './markdown-copy';
+import { splitStreamingMarkdown, useStreamingMarkdownText } from './streaming-markdown-text';
 
 export function preloadMarkdownRenderer() {
   return import('./MarkdownRenderer');
@@ -35,14 +36,35 @@ class MarkdownBoundary extends Component<{ children: ReactNode; fallback: ReactN
   }
 }
 
-export const Markdown = memo(function Markdown({ children, codeChrome = true }: { children: string; codeChrome?: boolean }) {
-  return <MarkdownBoundary fallback={
-    <div className="markdown markdown-plain" onCopy={(event) => copyMarkdownSource(event, children)}>{children}</div>
-  }>
-    <Suspense fallback={
-      <div className="markdown markdown-plain" aria-busy="true" onCopy={(event) => copyMarkdownSource(event, children)}>{children}</div>
-    }>
-      <LazyMarkdownRenderer codeChrome={codeChrome}>{children}</LazyMarkdownRenderer>
-    </Suspense>
-  </MarkdownBoundary>;
+type MarkdownProps = {
+  children: string;
+  codeChrome?: boolean;
+  /** While true, parse updates are coalesced so long streaming answers stay smooth. */
+  streaming?: boolean;
+};
+
+export const Markdown = memo(function Markdown({
+  children,
+  codeChrome = true,
+  streaming = false,
+}: MarkdownProps) {
+  const text = useStreamingMarkdownText(children, streaming);
+  const parts = streaming ? splitStreamingMarkdown(text) : null;
+  const plain = (value: string, busy = false) => (
+    <div className="markdown markdown-plain" aria-busy={busy || undefined} onCopy={(event) => copyMarkdownSource(event, value)}>{value}</div>
+  );
+  const render = (value: string, live: boolean) => (
+    <MarkdownBoundary fallback={plain(value)}>
+      <Suspense fallback={plain(value, true)}>
+        <LazyMarkdownRenderer codeChrome={codeChrome} streaming={live}>{value}</LazyMarkdownRenderer>
+      </Suspense>
+    </MarkdownBoundary>
+  );
+  if (parts?.frozen) {
+    return <>
+      {render(parts.frozen, false)}
+      {parts.live ? render(parts.live, true) : null}
+    </>;
+  }
+  return render(text, streaming);
 });

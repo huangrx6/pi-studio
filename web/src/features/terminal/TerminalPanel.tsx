@@ -223,7 +223,7 @@ export function TerminalPanel({
   }, []);
 
   const writeToPty = useCallback((data: string) => {
-    void window.piApi.terminalWrite(id, data).catch((cause) => setError(errorText(cause)));
+    window.piApi.terminalWrite(id, data);
   }, [id]);
 
   const interrupt = useCallback(() => {
@@ -398,9 +398,6 @@ export function TerminalPanel({
     let restoredSequence = 0;
     let frame = 0;
     const pending: TerminalEvent[] = [];
-    const outputQueue: string[] = [];
-    let outputQueuedChars = 0;
-    let writingOutput = false;
     let pendingChars = 0;
     let droppedSequence = 0;
     const custom = themedTerminal(appearance.themeId);
@@ -415,11 +412,13 @@ export function TerminalPanel({
       cursorStyle: appearance.cursorStyle,
       // macOS 上默认按 ⌥ 会输入特殊字符，shell 的 ⌥←/⌥→ 就用不了。
       macOptionIsMeta: true,
-      // 暗色 ANSI 颜色直接压在背景上会糊，交给 xterm 抬到可读对比度。
-      minimumContrastRatio: 4.5,
+      // Contrast boosting recolors every cell and is a common source of scroll jank.
+      // Theme palettes already target readable pairs; keep this off for interactive use.
+      minimumContrastRatio: 1,
       fastScrollSensitivity: 3,
       scrollSensitivity: 1,
-      smoothScrollDuration: 40,
+      // Animated scroll feels laggy on dense output; jump immediately.
+      smoothScrollDuration: 0,
       fontFamily: fontFamilyOf(appearance.fontFamily),
       fontSize,
       lineHeight: appearance.lineHeight,
@@ -537,7 +536,7 @@ export function TerminalPanel({
           const size = `${term.cols}:${term.rows}`;
           if (ready && size !== lastSize) {
             lastSize = size;
-            void window.piApi.terminalResize(id, term.cols, term.rows).catch(() => {});
+            window.piApi.terminalResize(id, term.cols, term.rows);
           }
         } catch {
           // A hidden tab has no measurable geometry; the observer retries on show.
@@ -604,36 +603,23 @@ export function TerminalPanel({
       ready = false;
       pending.length = 0;
       pendingChars = 0;
-      outputQueue.length = 0;
-      outputQueuedChars = 0;
       stopWatchingFocus();
       setConnecting(false);
       setError('终端输出同步中断，请重新连接以恢复最近内容。');
     };
-    const drainOutput = () => {
-      if (disposed || failed || writingOutput) return;
-      const next = outputQueue.shift();
-      if (!next) return;
-      outputQueuedChars -= next.length;
-      writingOutput = true;
-      try {
-        term.write(next);
-        writingOutput = false;
-        if (outputQueue.length > 0) void Promise.resolve().then(drainOutput);
-      } catch {
-        writingOutput = false;
-        failSynchronization();
-      }
-    };
     const enqueueOutput = (output: string) => {
       if (!output || disposed || failed) return;
-      outputQueue.push(output);
-      outputQueuedChars += output.length;
-      if (outputQueuedChars > MAX_PENDING_CHARS) {
+      // Main-process batching already merges high-frequency PTY chunks. Write
+      // immediately so attach/replay and sequence checks stay deterministic.
+      if (output.length > MAX_PENDING_CHARS) {
         failSynchronization();
         return;
       }
-      drainOutput();
+      try {
+        term.write(output);
+      } catch {
+        failSynchronization();
+      }
     };
     const applyEvent = (event: TerminalEvent) => {
       if (disposed || failed || event.id !== id) return;
@@ -660,7 +646,11 @@ export function TerminalPanel({
           if (chunk.sequence <= restoredSequence) continue;
           // Applying an ANSI continuation after missing output corrupts the
           // screen/parser. Keep the last intact display and offer a fresh attach.
-          if (chunk.sequence !== restoredSequence + 1) { failSynchronization(); return; }
+          if (chunk.sequence !== restoredSequence + 1) {
+            if (output) enqueueOutput(output);
+            failSynchronization();
+            return;
+          }
           restoredSequence = chunk.sequence;
           output += chunk.data;
         }
@@ -673,9 +663,7 @@ export function TerminalPanel({
     const unsubscribe = window.piApi.onTerminalEvent(applyEvent);
     const input = term.onData((data) => {
       if (disposed || !ready) return;
-      void window.piApi.terminalWrite(id, data).catch((cause) => {
-        if (!disposed) setError(errorText(cause));
-      });
+      window.piApi.terminalWrite(id, data);
     });
     const selection = term.onSelectionChange(() => {
       setHasSelection(term.hasSelection());
@@ -749,8 +737,6 @@ export function TerminalPanel({
     return () => {
       disposed = true;
       ready = false;
-      outputQueue.length = 0;
-      outputQueuedChars = 0;
       stopWatchingFocus();
       document.removeEventListener('visibilitychange', onVisibility);
       cancelAnimationFrame(frame);

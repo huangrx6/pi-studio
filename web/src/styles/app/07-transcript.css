@@ -8,6 +8,19 @@
 语义令牌。 */
 
 .message.assistant { align-items: stretch; }
+
+/* Off-screen turns skip layout/paint (variable-height virtualization). */
+.messages > .message.user,
+.messages > .assistant-turn {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 160px;
+}
+/* Live answer stays fully painted while tokens arrive. */
+.messages > .assistant-turn.is-live {
+  content-visibility: visible;
+  contain-intrinsic-size: none;
+}
+
 .assistant-content { max-width: 100%; min-width: 0; font-size: var(--text-md); line-height: var(--chat-line-height); overflow-wrap: anywhere; }
 .assistant-content > .markdown + .markdown { margin-top: 10px; }
 /* Keep prose line boxes on whole pixels. Fractional line heights make the

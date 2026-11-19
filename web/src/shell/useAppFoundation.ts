@@ -95,7 +95,6 @@ export function useAppFoundation() {
   const queueAdmissionPendingRef = useRef<Record<string, string>>({});
   const queuedEditContextsRef = useRef<Record<string, QueuedEditContext>>({});
   const [outlineActive, setOutlineActive] = useState(0);
-  const [outlineHover, setOutlineHover] = useState<number | null>(null);
   const [outlineItems, setOutlineItems] = useState<OutlineItem[]>([]);
   const [, setOutlineTotalMessages] = useState(0);
   const outlineRequestRef = useRef(0);
@@ -354,8 +353,6 @@ export function useAppFoundation() {
     queuedEditContextsRef,
     outlineActive,
     setOutlineActive,
-    outlineHover,
-    setOutlineHover,
     outlineItems,
     setOutlineItems,
     setOutlineTotalMessages,

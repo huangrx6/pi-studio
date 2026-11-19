@@ -5,7 +5,6 @@ import { loadPreferences, resolveTheme } from './shared/preferences';
 import './styles/dsh-scrollbar.css';
 import './styles/app.css';
 import './shell/styles/session-view.css';
-import './shell/right-panel/styles/right-panel.css';
 
 const preferences = loadPreferences();
 document.documentElement.dataset.platform = desktopPlatform();

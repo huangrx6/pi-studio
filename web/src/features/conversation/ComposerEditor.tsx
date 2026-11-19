@@ -54,14 +54,19 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, Props>(function C
     const expectedTokens = segments
       .filter(segment => segment.kind === 'token')
       .map(segment => segment.text);
-    const actualTokens = Array.from(root.current.querySelectorAll<HTMLElement>('[data-reference-token]'))
-      .map(node => node.dataset.referenceToken || '');
     const hasExpectedTail = !value || value.endsWith('\n');
     const hasActualTail = Boolean(root.current.querySelector('[data-editor-tail="true"]'));
-    const shapeMatches = readEditorText(root.current) === value
-      && expectedTokens.length === actualTokens.length
-      && expectedTokens.every((token, index) => token === actualTokens[index])
-      && hasExpectedTail === hasActualTail;
+    let shapeMatches = readEditorText(root.current) === value && hasExpectedTail === hasActualTail;
+    if (shapeMatches) {
+      if (expectedTokens.length === 0) {
+        shapeMatches = !root.current.querySelector('[data-reference-token]');
+      } else {
+        const actualTokens = Array.from(root.current.querySelectorAll<HTMLElement>('[data-reference-token]'))
+          .map(node => node.dataset.referenceToken || '');
+        shapeMatches = expectedTokens.length === actualTokens.length
+          && expectedTokens.every((token, index) => token === actualTokens[index]);
+      }
+    }
     const scrollTop = root.current.scrollTop;
     if (!shapeMatches) {
       root.current.replaceChildren(...Array.from(template.current.childNodes, node => node.cloneNode(true)));

@@ -570,8 +570,10 @@ declare global {
         /** 是否注入 OSC 133 shell 集成钩子（目前仅 zsh）。 */
         shellIntegration?: boolean;
       }): Promise<TerminalSessionSnapshot>;
-      terminalWrite(id: string, data: string): Promise<{ ok: boolean; status?: string }>;
-      terminalResize(id: string, cols: number, rows: number): Promise<{ ok: boolean; status?: string }>;
+      /** 单向写入 PTY，不阻塞按键路径。 */
+      terminalWrite(id: string, data: string): void;
+      /** 单向同步几何，失败时主进程静默丢弃。 */
+      terminalResize(id: string, cols: number, rows: number): void;
       terminalClose(id: string): Promise<{ ok: boolean }>;
       /** 拖放文件的真实路径；非 Electron 环境返回空串。 */
       filePathOf(file: File): string;

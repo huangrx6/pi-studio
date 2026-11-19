@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import { Bot, FileText, Globe, Image as ImageIcon, ListTree, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
 import type { ChatMessage, ToolCallBlock } from '../../types/chat-types';
 import { FileKindIcon } from '../../shared/FileKindIcon';
@@ -64,7 +64,7 @@ const agentActions: Record<string, string> = {
   stop: '停止子智能体', wait: '等待子智能体', pending: '查看待答问题', reply: '回复子智能体',
 };
 
-export function ActivitySummary({ entries, results, expanded = false, onOpenFile }: {
+function ActivitySummaryComponent({ entries, results, expanded = false, onOpenFile }: {
   entries: ActivityEntry[]; results: Map<string, ChatMessage>; expanded?: boolean; onOpenFile?: (path: string) => void;
 }) {
   const first = entries[0];
@@ -108,3 +108,5 @@ export function ActivitySummary({ entries, results, expanded = false, onOpenFile
   }
   return label(<Wrench />, call.name.split('__').at(-1) || call.name, short(args.name || args.description || args.path), false, call.name);
 }
+
+export const ActivitySummary = memo(ActivitySummaryComponent);

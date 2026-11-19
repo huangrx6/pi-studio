@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { memo, useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { BackgroundMedia } from '../shared/preferences';
 
 type MediaProps = {
@@ -6,6 +6,8 @@ type MediaProps = {
   className: string;
   onReady?: (url: string) => void;
   onError?: () => void;
+  /** Capture one video frame instead of looping — used for the outer layer when the inside also plays. */
+  still?: boolean;
 };
 
 function BackgroundImage({ media, className, onReady, onError }: MediaProps) {
@@ -23,10 +25,66 @@ function BackgroundImage({ media, className, onReady, onError }: MediaProps) {
     onError={onError} />;
 }
 
-export function BackgroundMediaNode({ media, className, onReady, onError }: MediaProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+function VideoStill({ media, className, onReady, onError }: MediaProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.src = media.url;
+
+    const fail = () => {
+      if (!cancelled) onError?.();
+    };
+
+    const capture = () => {
+      if (cancelled) return;
+      const canvas = canvasRef.current;
+      if (!canvas || video.videoWidth <= 0 || video.videoHeight <= 0) {
+        fail();
+        return;
+      }
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext('2d');
+      if (!context) {
+        fail();
+        return;
+      }
+      context.drawImage(video, 0, 0);
+      setReady(true);
+      onReady?.(media.url);
+      video.removeAttribute('src');
+      video.load();
+    };
+
+    video.addEventListener('loadeddata', capture, { once: true });
+    video.addEventListener('error', fail, { once: true });
+    return () => {
+      cancelled = true;
+      video.removeAttribute('src');
+      video.load();
+    };
+  }, [media.url, onError, onReady]);
+
+  return <canvas
+    ref={canvasRef}
+    className={className}
+    aria-hidden="true"
+    style={{ visibility: ready ? undefined : 'hidden' }}
+  />;
+}
+
+function BackgroundMediaNodeComponent({ media, className, onReady, onError, still = false }: MediaProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [stillFailed, setStillFailed] = useState(false);
+
+  useEffect(() => {
+    if (still && !stillFailed) return;
     const video = videoRef.current;
     if (!video) return;
     const syncPlayback = () => {
@@ -39,7 +97,22 @@ export function BackgroundMediaNode({ media, className, onReady, onError }: Medi
     syncPlayback();
     document.addEventListener('visibilitychange', syncPlayback);
     return () => document.removeEventListener('visibilitychange', syncPlayback);
+  }, [media.url, still, stillFailed]);
+
+  useEffect(() => {
+    setStillFailed(false);
   }, [media.url]);
+
+  if (media.kind === 'video' && still && !stillFailed) {
+    return <VideoStill
+      media={media}
+      className={className}
+      onReady={onReady}
+      onError={() => {
+        setStillFailed(true);
+      }}
+    />;
+  }
 
   if (media.kind === 'video') {
     return (
@@ -61,13 +134,16 @@ export function BackgroundMediaNode({ media, className, onReady, onError }: Medi
   return <BackgroundImage key={media.url} media={media} className={className} onReady={onReady} onError={onError} />;
 }
 
-export function BackgroundLayer({
+export const BackgroundMediaNode = memo(BackgroundMediaNodeComponent);
+
+function BackgroundLayerComponent({
   media,
   opacity,
   blur,
   scrim,
   onReady,
   onError,
+  still = false,
 }: {
   media: BackgroundMedia;
   opacity: number;
@@ -76,6 +152,7 @@ export function BackgroundLayer({
   scrim: number;
   onReady?: (url: string) => void;
   onError?: () => void;
+  still?: boolean;
 }) {
   // 对外统一使用 0–100 的强度。40px 已能充分柔化照片，同时避免 100% 直接变成
   // 100px 后产生明显性能开销与图像边缘发虚。
@@ -87,8 +164,8 @@ export function BackgroundLayer({
   } as CSSProperties;
 
   return (
-    <div className="background-layer" style={style} aria-hidden="true">
-      <BackgroundMediaNode key={media.url} media={media} className="background-layer-media" onReady={onReady} onError={onError} />
+    <div className={`background-layer${blurPixels === 0 ? ' is-sharp' : ''}`} style={style} aria-hidden="true">
+      <BackgroundMediaNode key={media.url} media={media} className="background-layer-media" still={still} onReady={onReady} onError={onError} />
       <div className="background-layer-soften" />
       <div className="wallpaper-drag-edge top" />
       <div className="wallpaper-drag-edge left" />
@@ -97,6 +174,8 @@ export function BackgroundLayer({
     </div>
   );
 }
+
+export const BackgroundLayer = memo(BackgroundLayerComponent);
 
 export function BackgroundMediaPreview({ media, onError }: { media: BackgroundMedia; onError?: () => void }) {
   return (

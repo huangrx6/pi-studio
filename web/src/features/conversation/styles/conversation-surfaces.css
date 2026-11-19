@@ -35,8 +35,8 @@
   .attachment-card.is-openable, .conversation-image-tile,
   .composer-attachment.is-openable, .message-action:not(:disabled),
   .message-edit-cancel:not(:disabled),
-  .tool-result-images-toggle, .file-change-item.is-openable,
-  .file-change-more, .file-change-summary > header button:not(:disabled),
+  .file-change-item.is-openable,
+  .file-change-more:not(:disabled), .file-change-undo:not(:disabled),
   .todo-dock-head, .queued-panel-head, .queued-item,
   .queued-actions button:not(:disabled), .ref-skill-body > summary,
   .composer-model-hint-action, .composer-model-hint-close

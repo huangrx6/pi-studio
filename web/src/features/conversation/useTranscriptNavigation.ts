@@ -290,8 +290,8 @@ export function useTranscriptNavigation({
     : undefined;
   // 缩略导航显示全部提问：刻度全量渲染，超出高度时在轨道内滚动。
   const outlineSamples = useMemo(
-    () => outlineItems.map((_, index) => index),
-    [outlineItems],
+    () => Array.from({ length: outlineItems.length }, (_, index) => index),
+    [outlineItems.length],
   );
 
   function syncOutlineActive() {
@@ -347,7 +347,7 @@ export function useTranscriptNavigation({
     outlineSyncRef.current = window.setTimeout(() => {
       outlineSyncRef.current = null;
       syncOutlineActive();
-    }, 80);
+    }, 120);
   }
 
   /** 只有明确的用户滚动意图才能离开或重新进入贴底跟随。 */

@@ -5,6 +5,7 @@ import {
   extractComposerMentions,
   formatFileReference,
   insertComposerToken,
+  isFileReferencePath,
   normalizeComposerText,
   splitComposerText,
   splitMessageText,
@@ -93,3 +94,38 @@ test('selected composer tokens gain safe surrounding spacing', () => {
     caret: 13,
   });
 });
+
+test('npm package names stay plain text instead of file chips', () => {
+  const sample = "Install @file-viewer @renderer-pdf and @babel/core; see @react's plugin and web/node_modules/@file-viewer.";
+  const segments = splitMessageText(sample);
+  assert.equal(segments.some((segment) => segment.kind === 'reference'), false);
+  assert.equal(segments.map((segment) => segment.kind === 'text' ? segment.text : '').join(''), sample);
+  assert.deepEqual(extractComposerMentions(sample), []);
+
+  const mixed = splitComposerText('use @file-viewer with @src/App.tsx', new Set());
+  assert.deepEqual(
+    mixed.map((segment) => segment.kind === 'token' ? `token:${segment.text}` : `text:${segment.text}`),
+    ['text:use @file-viewer with ', 'token:@src/App.tsx'],
+  );
+  assert.deepEqual(extractComposerMentions('use @file-viewer with @src/App.tsx'), ['src/App.tsx']);
+});
+
+test('real file paths still become reference chips', () => {
+  assert.equal(isFileReferencePath('src/App.tsx'), true);
+  assert.equal(isFileReferencePath('file-viewer'), false);
+  assert.equal(isFileReferencePath('babel/core'), false);
+  assert.equal(isFileReferencePath('docs/'), true);
+  assert.equal(isFileReferencePath('Dockerfile'), true);
+  assert.equal(isFileReferencePath('package.json'), true);
+  const parts = splitMessageText('Open @src/App.tsx and @docs/ then @Dockerfile')
+    .map((segment) => segment.kind === 'reference' ? `ref:${segment.reference.location}` : `text:${segment.text}`);
+  assert.deepEqual(parts, [
+    'text:Open ',
+    'ref:src/App.tsx',
+    'text: and ',
+    'ref:docs/',
+    'text: then ',
+    'ref:Dockerfile',
+  ]);
+});
+

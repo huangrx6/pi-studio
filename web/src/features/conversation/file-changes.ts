@@ -98,3 +98,23 @@ export function findTurnDiff(
     .filter((diff) => diff.at > start && diff.at < upper)
     .sort((left, right) => left.at - right.at)[0];
 }
+
+/**
+ * Precompute turn → git diff once per transcript change so the message list does
+ * not re-scan the whole diff array on every assistant bubble render.
+ */
+export function indexTurnDiffs(
+  turns: Array<{ kind: string; messages?: ChatMessage[] }>,
+  diffs: TurnDiff[] | undefined,
+  nextUserTimestamps: number[],
+): Map<number, TurnDiff | undefined> {
+  const map = new Map<number, TurnDiff | undefined>();
+  if (!Array.isArray(diffs) || diffs.length === 0) return map;
+  for (let index = 0; index < turns.length; index += 1) {
+    const turn = turns[index];
+    if (turn.kind !== 'assistant' || !turn.messages?.length) continue;
+    const from = turn.messages.at(-1)?.timestamp;
+    map.set(index, findTurnDiff(diffs, { from, until: nextUserTimestamps[index] }));
+  }
+  return map;
+}

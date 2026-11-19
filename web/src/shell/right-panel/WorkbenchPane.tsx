@@ -1,4 +1,6 @@
 import { FileKindIcon } from '../../shared/FileKindIcon';
+import './styles/right-panel.css';
+import './styles/panel-file.css';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { MutableRefObject, ReactNode } from 'react';
 import {

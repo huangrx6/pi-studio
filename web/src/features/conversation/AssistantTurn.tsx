@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useRef } from 'react';
 import { Markdown } from '../../shared/Markdown';
 import { MarkdownImageRenderer } from '../../shared/markdown-actions';
 import type { StepCollapse, StepDisplay } from '../../shared/preferences';
@@ -11,7 +11,7 @@ import { collectFileChanges } from './file-changes';
 import { formatTime } from './message-content';
 import { MessageActions } from './MessageActions';
 import { TurnActivity, ToolResultImages } from './TurnActivity';
-import { buildTurnContent } from './turn-content';
+import { buildTurnContent, type BuiltTurnContent } from './turn-content';
 import { WebSources } from './WebSources';
 import './styles/execution-trace.css';
 
@@ -42,7 +42,10 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
   const interrupted = Boolean(error && /aborted/i.test(error));
   const failed = Boolean(error) && !interrupted;
 
-  const { segments, answerText, activeTool, lastBlock, sources } = buildTurnContent(messages, toolResults, live);
+  const builtRef = useRef<BuiltTurnContent | null>(null);
+  const built = buildTurnContent(messages, toolResults, live, builtRef.current);
+  builtRef.current = built;
+  const { segments, answerText, activeTool, lastBlock, sources } = built;
   const phase = retry ? `正在重试 ${retry.attempt}/${retry.maxAttempts}`
     : activeTool ? '正在执行'
       : lastBlock?.type === 'thinking' ? '正在思考'
@@ -63,16 +66,20 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
         {latest?.timestamp && <time>{formatTime(latest.timestamp)}</time>}
       </div>
 
-      {segments.map(segment => {
-        if (segment.kind === 'activity') return <TurnActivity key={segment.key} entries={segment.entries}
-          results={toolResults} live={live} active={segment === segments.at(-1) || segment.entries.some(entry => entry.live)}
-          policy={stepCollapse} density={stepDisplay} onOpenFile={onOpenFile} />;
-        if (segment.kind === 'tool-images') return <ToolResultImages key={segment.key} callId={segment.callId} images={segment.images} />;
-        if (segment.kind === 'images') return <ConversationImageGallery key={segment.key} images={segment.images} />;
-        return <div className="assistant-response" key={segment.key}><MarkdownImageRenderer.Provider value={ConversationMarkdownImage}>
-          <Markdown>{segment.text}</Markdown>
-        </MarkdownImageRenderer.Provider></div>;
-      })}
+      <MarkdownImageRenderer.Provider value={ConversationMarkdownImage}>
+        {segments.map((segment, segmentIndex) => {
+          const isTail = segmentIndex === segments.length - 1;
+          if (segment.kind === 'activity') return <TurnActivity key={segment.key} entries={segment.entries}
+            results={toolResults} live={live} active={isTail || segment.entries.some(entry => entry.live)}
+            policy={stepCollapse} density={stepDisplay} onOpenFile={onOpenFile} />;
+          if (segment.kind === 'tool-images') return <ToolResultImages key={segment.key} callId={segment.callId} images={segment.images} />;
+          if (segment.kind === 'images') return <ConversationImageGallery key={segment.key} images={segment.images} />;
+          // Only the growing tail needs coalesced parsing; finished segments stay memo-stable.
+          return <div className="assistant-response" key={segment.key}>
+            <Markdown streaming={live && isTail}>{segment.text}</Markdown>
+          </div>;
+        })}
+      </MarkdownImageRenderer.Provider>
       {/* 失败卡片只在非 live 时出现，避免自动重试过程中闪错误。 */}
       {!live && error && (interrupted
         ? <div className="assistant-interrupted" role="status">本轮已中断</div>

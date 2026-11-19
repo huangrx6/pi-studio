@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { lazy, Suspense, useCallback, useMemo, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import { ExtensionSlot } from './features/extensions/ExtensionSlot';
 import { ExtensionAppearanceContext } from './features/extensions/ExtensionStatusIcon';
@@ -19,10 +19,13 @@ import { useWindowChrome } from './shell/useWindowChrome';
 import { useLaunchScreen } from './shell/useLaunchScreen';
 import { useConversationController } from './shell/useConversationController';
 import { ComparisonWorkbench } from './features/comparison/ComparisonWorkbench';
-import { WorkbenchPane } from './shell/right-panel/WorkbenchPane';
 import { MarkdownActions } from './shared/markdown-actions';
 import { errorText } from './shared/error-text';
-import './shell/right-panel/styles/panel-file.css';
+
+const WorkbenchPane = lazy(async () => {
+  const module = await import('./shell/right-panel/WorkbenchPane');
+  return { default: module.WorkbenchPane };
+});
 
 /** Application composition root: foundation state, conversation runtime, then layout. */
 export function App() {
@@ -99,8 +102,6 @@ export function App() {
     settingsError,
     outlineItems,
     outlineActive,
-    outlineHover,
-    setOutlineHover,
     setError,
     error,
     agentView,
@@ -296,7 +297,7 @@ export function App() {
   } = conversation;
 
   /** 选择工作区文件夹；新对话里只切换草稿工作区，已有对话则直接开始新会话。 */
-  function chooseFile() {
+  const chooseFile = useCallback(() => {
     void window.piApi.chooseWorkspace().then((selected) => {
       if (selected) {
         if (isNewConversation) selectDraftWorkspace(selected);
@@ -304,9 +305,9 @@ export function App() {
         void loadState();
       }
     }).catch(error => setError(errorText(error)));
-  }
+  }, [isNewConversation, loadState, selectDraftWorkspace, setError, startSession]);
 
-  const queuedPreviews: QueuedPreview[] = queuedPrompts.map((item) => ({
+  const queuedPreviews: QueuedPreview[] = useMemo(() => queuedPrompts.map((item) => ({
     id: item.id,
     text: item.text.trim() || (item.attachments.some((attachment) => attachment.kind === 'image') ? '图片消息' : '附件消息'),
     images: item.attachments.filter((attachment) => attachment.kind === 'image').length,
@@ -316,7 +317,7 @@ export function App() {
       session?.id
       && queueAdmissionPendingBySession[session.id] === item.submission.requestId,
     ),
-  }));
+  })), [queuedPrompts, queueAdmissionPendingBySession, session?.id]);
   const queueAdmissionPending = Boolean(
     session?.id && queueAdmissionPendingBySession[session.id],
   );
@@ -329,45 +330,591 @@ export function App() {
   const progressPinned = workbench.panelTabs.some(tab => tab.kind === 'progress');
   const dismissProgress = useCallback(() => setProgressView(view => view.floating
     ? { ...view, floating: false } : view), [setProgressView]);
-  function navigateFromProgress(action: () => void) {
+  const navigateFromProgress = useCallback((action: () => void) => {
     dismissProgress();
     if (workbench.panelFullscreen) workbench.setPanelFullscreen(false);
     action();
-  }
-  function openProgressPage(action: () => void) {
+  }, [dismissProgress, workbench.panelFullscreen, workbench.setPanelFullscreen]);
+  const openProgressPage = useCallback((action: () => void) => {
     navigateFromProgress(action);
     if (filesOpen && window.matchMedia('(max-width: 1100px)').matches) workbench.closePanel();
-  }
-  function openGit(tab: import('./types/git-types').GitTab) {
+  }, [filesOpen, navigateFromProgress, workbench.closePanel]);
+  const openGit = useCallback((tab: import('./types/git-types').GitTab) => {
     openProgressPage(() => {
       conversation.rememberMainScrollPosition();
       foundation.setAgentView({ kind: 'git', tab });
     });
-  }
-  const progressContent = <ConversationProgress key={session?.id} sessionId={session?.id} pinned={progressPinned}
-    onPinChange={() => {
-      setProgressView(view => ({ ...view, floating: progressPinned && Boolean(session) }));
-      if (progressPinned) {
-        workbench.setPanelFullscreen(false);
-        workbench.closePanelTab('progress');
-      } else workbench.openProgressTab();
-      requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('.conversation-progress .progress-pin')?.focus());
-    }}
-    git={gitStatus} onGitSettings={() => navigateFromProgress(() => void openSettings('git'))}
-    onOpenGit={openGit}
-    goal={session?.longTask} running={turnActive} goalBusy={longTaskBusy} onGoalAction={changeLongTaskStatus}
-    onEditGoal={() => navigateFromProgress(() => { returnToMainAgent(); sendPromptFromExtension('/goal ', false); })}
-    onOpenTasks={() => openProgressPage(() => {
+  }, [conversation.rememberMainScrollPosition, foundation.setAgentView, openProgressPage]);
+  const onProgressPinChange = useCallback(() => {
+    setProgressView(view => ({ ...view, floating: progressPinned && Boolean(session) }));
+    if (progressPinned) {
+      workbench.setPanelFullscreen(false);
+      workbench.closePanelTab('progress');
+    } else workbench.openProgressTab();
+    requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('.conversation-progress .progress-pin')?.focus());
+  }, [progressPinned, session, setProgressView, workbench.closePanelTab, workbench.openProgressTab, workbench.setPanelFullscreen]);
+  const onProgressGitSettings = useCallback(() => {
+    navigateFromProgress(() => void openSettings('git'));
+  }, [navigateFromProgress, openSettings]);
+  const onProgressEditGoal = useCallback(() => {
+    navigateFromProgress(() => { returnToMainAgent(); sendPromptFromExtension('/goal ', false); });
+  }, [navigateFromProgress, returnToMainAgent, sendPromptFromExtension]);
+  const onProgressOpenTasks = useCallback(() => {
+    openProgressPage(() => {
       conversation.rememberMainScrollPosition();
       foundation.setAgentView({ kind: 'tasks' });
-    })}
-    tasks={todoDetails} history={progressView.history} onToggleHistory={() => setProgressView(view => ({ ...view, history: !view.history }))}
-    agents={subagentWorkspace.subagentChildren} onAgents={() => openProgressPage(subagentWorkspace.openAgentOverview)}
-    onAgent={child => openProgressPage(() => subagentWorkspace.openAgentTranscript(child))} />;
-  /** Latest browser opener, read through a ref so the context value stays stable. */
+    });
+  }, [conversation.rememberMainScrollPosition, foundation.setAgentView, openProgressPage]);
+  const onProgressToggleHistory = useCallback(() => {
+    setProgressView(view => ({ ...view, history: !view.history }));
+  }, [setProgressView]);
+  const onProgressAgents = useCallback(() => {
+    openProgressPage(subagentWorkspace.openAgentOverview);
+  }, [openProgressPage, subagentWorkspace.openAgentOverview]);
+  const onProgressAgent = useCallback((child: import('./types/subagent-types').SubagentChild) => {
+    openProgressPage(() => subagentWorkspace.openAgentTranscript(child));
+  }, [openProgressPage, subagentWorkspace.openAgentTranscript]);
+  const progressVisible = progressPinned || progressView.floating;
+  const progressContent = useMemo(() => {
+    if (!progressVisible) return null;
+    return (
+      <ConversationProgress
+        key={session?.id}
+        sessionId={session?.id}
+        pinned={progressPinned}
+        onPinChange={onProgressPinChange}
+        git={gitStatus}
+        onGitSettings={onProgressGitSettings}
+        onOpenGit={openGit}
+        goal={session?.longTask}
+        running={turnActive}
+        goalBusy={longTaskBusy}
+        onGoalAction={changeLongTaskStatus}
+        onEditGoal={onProgressEditGoal}
+        onOpenTasks={onProgressOpenTasks}
+        tasks={todoDetails}
+        history={progressView.history}
+        onToggleHistory={onProgressToggleHistory}
+        agents={subagentWorkspace.subagentChildren}
+        onAgents={onProgressAgents}
+        onAgent={onProgressAgent}
+      />
+    );
+  }, [
+    changeLongTaskStatus,
+    gitStatus,
+    longTaskBusy,
+    onProgressAgent,
+    onProgressAgents,
+    onProgressEditGoal,
+    onProgressGitSettings,
+    onProgressOpenTasks,
+    onProgressPinChange,
+    onProgressToggleHistory,
+    openGit,
+    progressPinned,
+    progressView.history,
+    progressVisible,
+    session?.id,
+    session?.longTask,
+    subagentWorkspace.subagentChildren,
+    todoDetails,
+    turnActive,
+  ]);
+    /** Latest browser opener, read through a ref so the context value stays stable. */
   const markdownLinkRef = useRef<(url: string) => void>(() => {});
   markdownLinkRef.current = (url: string) => openBrowserTab(url);
+  const onSidebarStartSession = useCallback(() => { void startSession(); }, [startSession]);
+  const onSidebarOpenSettings = useCallback((page?: Parameters<typeof openSettings>[0]) => { void openSettings(page); }, [openSettings]);
+  const onSidebarOpenSearch = useCallback(() => setWorkspaceSearchOpen(true), [setWorkspaceSearchOpen]);
+  const onSidebarRefreshList = useCallback(() => { void refreshConversationList(); }, [refreshConversationList]);
+  const onSidebarCollapse = useCallback(() => setSidebarCollapsed(true), [setSidebarCollapsed]);
+  const sidebarFilterKey = useMemo(
+    () => `${workspaceQuery}\u0000${sidebarSessionFilter}`,
+    [workspaceQuery, sidebarSessionFilter],
+  );
+  const sidebarNode = useMemo(() => (
+    <AppSidebar
+      onStartSession={onSidebarStartSession}
+      onOpenTemporaryChat={openTemporaryChat}
+      onOpenSettings={onSidebarOpenSettings}
+      workspace={workspace}
+      sessionId={session?.id}
+      modelRef={modelSelection.modelRef}
+      onSendPrompt={sendPromptFromExtension}
+      onNotify={notifyExtension}
+      workspaces={workspaces}
+      allExpanded={allExpanded}
+      onToggleAllExpanded={toggleAllExpanded}
+      workspaceSearchOpen={workspaceSearchOpen}
+      workspaceSearchTrigger={workspaceSearchTrigger}
+      onOpenWorkspaceSearch={onSidebarOpenSearch}
+      onCloseWorkspaceSearch={closeSidebarSearch}
+      onChooseFile={chooseFile}
+      workspaceQuery={workspaceQuery}
+      sidebarSessionFilter={sidebarSessionFilter}
+      onWorkspaceQueryChange={changeWorkspaceQuery}
+      onSidebarFilterChange={changeSidebarFilter}
+      conversationListRefreshError={conversationListRefreshError}
+      stateLoading={stateLoading}
+      settingsOpen={settingsOpen}
+      onRefreshConversationList={onSidebarRefreshList}
+      sidebarMutating={sidebarMutating}
+      visibleWorkspaces={visibleWorkspaces}
+      expanded={expanded}
+      sidebarFiltering={sidebarFiltering}
+      searchCollapsed={searchCollapsed}
+      filterKey={sidebarFilterKey}
+      sidebarCollapsed={sidebarCollapsed}
+      sidebarActions={sidebarActions}
+      onCollapse={onSidebarCollapse}
+    />
+  ), [
+    allExpanded,
+    changeSidebarFilter,
+    changeWorkspaceQuery,
+    chooseFile,
+    closeSidebarSearch,
+    conversationListRefreshError,
+    expanded,
+    modelSelection.modelRef,
+    notifyExtension,
+    onSidebarCollapse,
+    onSidebarOpenSearch,
+    onSidebarOpenSettings,
+    onSidebarRefreshList,
+    onSidebarStartSession,
+    openTemporaryChat,
+    searchCollapsed,
+    sendPromptFromExtension,
+    session?.id,
+    settingsOpen,
+    sidebarActions,
+    sidebarCollapsed,
+    sidebarFilterKey,
+    sidebarFiltering,
+    sidebarMutating,
+    sidebarSessionFilter,
+    stateLoading,
+    toggleAllExpanded,
+    visibleWorkspaces,
+    workspace,
+    workspaceQuery,
+    workspaceSearchOpen,
+    workspaceSearchTrigger,
+    workspaces,
+  ]);
+
   const sidebarResizeHandle = !sidebarCollapsed && <SidebarResizeHandle onResize={setSidebarWidth} />;
+
+
+  const openGitFile = useCallback((root: string, path: string) => {
+    void openFile(path, session?.id, 'workspace', { cwd: root, refresh: true });
+  }, [openFile, session?.id]);
+  const openSettingsPage = useCallback((page?: Parameters<typeof openSettings>[0]) => {
+    void openSettings(page);
+  }, [openSettings]);
+  const openModelsSettings = useCallback(() => {
+    void openSettings('models');
+  }, [openSettings]);
+  const resetTranscriptToLatest = useCallback(() => resetToLatest(), [resetToLatest]);
+  const toggleProgressFloating = useCallback(() => {
+    if (progressPinned) workbench.openProgressTab();
+    else setProgressView(view => ({ ...view, floating: !view.floating }));
+  }, [progressPinned, setProgressView, workbench.openProgressTab]);
+
+  const notificationCount = useMemo(
+    () => notifications.filter((item) => !item.read).length,
+    [notifications],
+  );
+
+  const workspaceShell = useMemo(() => ({
+    isNewConversation,
+    sessionLoading,
+    messageCount: messages.length,
+    sidebarCollapsed,
+    setSidebarCollapsed,
+    agentView,
+    session,
+    modelSelection,
+    preferences,
+    turnActive,
+    busy,
+    error,
+    setError,
+    compaction,
+    retryInfo,
+    liveDiff,
+    notificationCount,
+    notifications,
+    setNotifications,
+    markAllRead: markAllNotificationsRead,
+    clearNotifications,
+    conversationSubscriptionError,
+    retryConversationSubscription,
+    settingsOpen,
+  }), [
+    agentView,
+    busy,
+    clearNotifications,
+    compaction,
+    conversationSubscriptionError,
+    error,
+    isNewConversation,
+    liveDiff,
+    markAllNotificationsRead,
+    messages.length,
+    modelSelection,
+    notificationCount,
+    notifications,
+    preferences,
+    retryConversationSubscription,
+    retryInfo,
+    session,
+    sessionLoading,
+    setError,
+    setNotifications,
+    setSidebarCollapsed,
+    settingsOpen,
+    sidebarCollapsed,
+    turnActive,
+  ]);
+
+  const headerUpdate = useMemo(() => (
+    updateSnapshot.state === 'available'
+    || updateSnapshot.state === 'downloading'
+    || updateSnapshot.state === 'downloaded'
+      ? {
+        state: updateSnapshot.state,
+        latestVersion: updateSnapshot.latestVersion,
+        onOpen: openUpdateDialog,
+      }
+      : null
+  ), [openUpdateDialog, updateSnapshot.latestVersion, updateSnapshot.state]);
+
+  const progressTrigger = useMemo(() => (
+    <ProgressTrigger
+      open={!progressPinned && progressView.floating}
+      pinned={progressPinned}
+      active={progressPinned && workbench.panelEntered && workbench.activePanelTabId === 'progress'}
+      onDismiss={dismissProgress}
+      onToggle={toggleProgressFloating}
+    >
+      {progressContent}
+    </ProgressTrigger>
+  ), [
+    dismissProgress,
+    progressContent,
+    progressPinned,
+    progressView.floating,
+    toggleProgressFloating,
+    workbench.activePanelTabId,
+    workbench.panelEntered,
+  ]);
+
+  const workspaceHeader = useMemo(() => ({
+    update: headerUpdate,
+    conversationDetailExtensionCount: conversationDetailExtensionItems.length,
+    quotaProvider,
+    openNotificationSession,
+    runNotificationAction,
+    panelExpanded: workbench.panelEntered,
+    openPanel,
+    returnToMainAgent,
+    gitStatus,
+    openGit,
+    progressTrigger,
+    openConversationExtensionHub,
+    openTrace,
+  }), [
+    conversationDetailExtensionItems.length,
+    gitStatus,
+    headerUpdate,
+    openConversationExtensionHub,
+    openGit,
+    openNotificationSession,
+    openPanel,
+    openTrace,
+    progressTrigger,
+    quotaProvider,
+    returnToMainAgent,
+    runNotificationAction,
+    workbench.panelEntered,
+  ]);
+
+  const workspaceActions = useMemo(() => ({
+    openAttachment: handleOpenAttachment,
+    openFile: handleOpenFile,
+    openGitFile,
+    openChanges: handleOpenChanges,
+    undoTurnDiff,
+    editMessage: handleEditMessage,
+  }), [
+    handleEditMessage,
+    handleOpenAttachment,
+    handleOpenChanges,
+    handleOpenFile,
+    openGitFile,
+    undoTurnDiff,
+  ]);
+
+  const workspaceTranscript = useMemo(() => ({
+    scrollRef,
+    topSentinelRef,
+    bottomSentinelRef,
+    chatContentRef,
+    turnWindowFrom,
+    visibleTurns,
+    todoDetails,
+    toolResultMap,
+    transcriptTurns,
+    lastAssistantTurnIndex,
+    jumpToMessage,
+    resetToLatest: resetTranscriptToLatest,
+    transcriptTruncated,
+    nextUserTimestamps,
+    requestPlacement,
+    pendingAssistantVisible,
+    pendingTurnError,
+    outlineSamples,
+    markUserScrollIntent,
+    pauseTranscriptFollow,
+    resumeTranscriptFollow,
+    handleTranscriptScroll,
+    jumpToOutline,
+  }), [
+    bottomSentinelRef,
+    chatContentRef,
+    handleTranscriptScroll,
+    jumpToMessage,
+    jumpToOutline,
+    lastAssistantTurnIndex,
+    markUserScrollIntent,
+    nextUserTimestamps,
+    outlineSamples,
+    pauseTranscriptFollow,
+    pendingAssistantVisible,
+    pendingTurnError,
+    requestPlacement,
+    resetTranscriptToLatest,
+    resumeTranscriptFollow,
+    scrollRef,
+    todoDetails,
+    toolResultMap,
+    topSentinelRef,
+    transcriptTruncated,
+    transcriptTurns,
+    turnWindowFrom,
+    visibleTurns,
+  ]);
+
+  const workspaceExtensions = useMemo(() => ({
+    chipItems: conversationExtensionChipItems,
+    openChip: openConversationExtensionChip,
+    openItem: openConversationExtension,
+    surface: conversationExtensionSurface,
+    hubItems: conversationExtensionHubItems,
+    activeItem: activeExtensionItem,
+    preferences: conversationExtensionUiPreferences,
+    orderScope: conversationExtensionOrderScope,
+    setOrderScope: setConversationExtensionOrderScope,
+    hasSessionOrder: hasConversationExtensionSessionOrder,
+    updateUi: updateConversationExtensionUi,
+    openSettings: openSettingsPage,
+    sendPrompt: sendPromptFromExtension,
+    notify: notifyExtension,
+    openHub: openConversationExtensionHub,
+  }), [
+    activeExtensionItem,
+    conversationExtensionChipItems,
+    conversationExtensionHubItems,
+    conversationExtensionOrderScope,
+    conversationExtensionSurface,
+    conversationExtensionUiPreferences,
+    hasConversationExtensionSessionOrder,
+    notifyExtension,
+    openConversationExtension,
+    openConversationExtensionChip,
+    openConversationExtensionHub,
+    openSettingsPage,
+    sendPromptFromExtension,
+    setConversationExtensionOrderScope,
+    updateConversationExtensionUi,
+  ]);
+
+  const workspaceOutline = useMemo(() => ({
+    items: outlineItems,
+    samples: outlineSamples,
+    active: outlineActive,
+    jump: jumpToOutline,
+  }), [
+    jumpToOutline,
+    outlineActive,
+    outlineItems,
+    outlineSamples,
+  ]);
+
+  const modelPickerContextKey = `${workspace}:${session?.id ?? 'draft'}:${sessionLoadRef.current}`;
+
+  const workspaceComposer = useMemo(() => ({
+    open: agentView.kind === 'conversation',
+    isNewConversation,
+    workspace,
+    workspaces,
+    session,
+    modelSelection,
+    prompt,
+    setPrompt,
+    composerAttachments,
+    composerImages,
+    composerImageIndexes,
+    composerDraftKeyRef,
+    composerDraftsRef,
+    composerEditorRef,
+    composerWrapRef,
+    composerComposingRef,
+    composerMenu,
+    composerMenuIndex,
+    composerMenuLoading,
+    composerMenuError,
+    composerCommandOptions,
+    composerFileOptions,
+    composerCommands,
+    updateComposerMenu,
+    setComposerMenu: foundation.setComposerMenu,
+    setComposerMenuIndex: foundation.setComposerMenuIndex,
+    selectComposerOption,
+    retryComposerSuggestions,
+    addComposerFiles,
+    attachPastedText,
+    removeComposerAttachment,
+    pickComposerAttachments,
+    openFile,
+    send,
+    stopGeneration,
+    sendQueuedNow,
+    sendAllQueued,
+    editQueued,
+    deleteQueued,
+    reorderQueued,
+    queuedPrompts,
+    queuedPreviews,
+    queuedEditContext,
+    queueAdmissionPending,
+    sendPromptFromExtension,
+    turnActive,
+    stopping,
+    busy,
+    stateLoading,
+    sessionLoading,
+    preparing,
+    compaction,
+    composerFeedback,
+    setComposerFeedback,
+    visiblePermission,
+    changePermission,
+    retryPermissionMode,
+    contextUsageInfo,
+    activeContextPolicy,
+    compactContext,
+    settingsOpen,
+    loadModelCatalog,
+    selectModel,
+    selectThinking,
+    modelPickerRequest,
+    modelPickerContextKey,
+    setModelPickerRequest,
+    onConfigureModels: openModelsSettings,
+    onOpenSettings: openSettingsPage,
+    selectDraftWorkspace,
+    chooseFile,
+    setActionPaletteOpen,
+    error,
+    setError,
+    conversationFooterExtensionItems,
+    extensionPlacements: preferences.extensionPlacements,
+    extensionSurface: conversationExtensionSurface,
+    notifyExtension,
+  }), [
+    activeContextPolicy,
+    addComposerFiles,
+    agentView.kind,
+    attachPastedText,
+    busy,
+    changePermission,
+    chooseFile,
+    compactContext,
+    compaction,
+    composerAttachments,
+    composerCommandOptions,
+    composerCommands,
+    composerComposingRef,
+    composerDraftKeyRef,
+    composerDraftsRef,
+    composerEditorRef,
+    composerFeedback,
+    composerFileOptions,
+    composerImageIndexes,
+    composerImages,
+    composerMenu,
+    composerMenuError,
+    composerMenuIndex,
+    composerMenuLoading,
+    composerWrapRef,
+    contextUsageInfo,
+    conversationExtensionSurface,
+    conversationFooterExtensionItems,
+    deleteQueued,
+    editQueued,
+    error,
+    foundation.setComposerMenu,
+    foundation.setComposerMenuIndex,
+    isNewConversation,
+    loadModelCatalog,
+    modelPickerContextKey,
+    modelPickerRequest,
+    modelSelection,
+    notifyExtension,
+    openFile,
+    openModelsSettings,
+    openSettingsPage,
+    pickComposerAttachments,
+    preferences.extensionPlacements,
+    preparing,
+    prompt,
+    queueAdmissionPending,
+    queuedEditContext,
+    queuedPreviews,
+    queuedPrompts,
+    removeComposerAttachment,
+    reorderQueued,
+    retryComposerSuggestions,
+    retryPermissionMode,
+    selectComposerOption,
+    selectDraftWorkspace,
+    selectModel,
+    selectThinking,
+    send,
+    sendAllQueued,
+    sendPromptFromExtension,
+    sendQueuedNow,
+    session,
+    sessionLoading,
+    setActionPaletteOpen,
+    setComposerFeedback,
+    setError,
+    setModelPickerRequest,
+    setPrompt,
+    settingsOpen,
+    stateLoading,
+    stopGeneration,
+    stopping,
+    turnActive,
+    updateComposerMenu,
+    visiblePermission,
+    workspace,
+    workspaces,
+  ]);
 
   const markdownActionsValue = useMemo(() => ({
     cwd: panelWorkspace,
@@ -386,6 +933,7 @@ export function App() {
       opacity={preferences.backgroundOpacity}
       blur={preferences.backgroundBlur}
       scrim={preferences.backgroundSurfaceOpacity}
+      still={preferences.backgroundInsideVisibility > 0 && preferences.backgroundMedia.kind === 'video'}
       onReady={setOuterReady}
       onError={() => handleBackgroundUnavailable(preferences.backgroundMedia!.url)}
     />}
@@ -411,237 +959,20 @@ export function App() {
         active={!settingsOpen}
         isNewConversation={isNewConversation}
         resizeHandle={!settingsOpen && !(filesOpen && panelFullscreen) && sidebarResizeHandle}
-        sidebar={<AppSidebar
-        onStartSession={() => void startSession()}
-        onOpenTemporaryChat={openTemporaryChat}
-        onOpenSettings={(page) => { void openSettings(page); }}
-        workspace={workspace}
-        sessionId={session?.id}
-        modelRef={modelSelection.modelRef}
-        onSendPrompt={sendPromptFromExtension}
-        onNotify={notifyExtension}
-        workspaces={workspaces}
-        allExpanded={allExpanded}
-        onToggleAllExpanded={toggleAllExpanded}
-        workspaceSearchOpen={workspaceSearchOpen}
-        workspaceSearchTrigger={workspaceSearchTrigger}
-        onOpenWorkspaceSearch={() => setWorkspaceSearchOpen(true)}
-        onCloseWorkspaceSearch={closeSidebarSearch}
-        onChooseFile={chooseFile}
-        workspaceQuery={workspaceQuery}
-        sidebarSessionFilter={sidebarSessionFilter}
-        onWorkspaceQueryChange={changeWorkspaceQuery}
-        onSidebarFilterChange={changeSidebarFilter}
-        conversationListRefreshError={conversationListRefreshError}
-        stateLoading={stateLoading}
-        settingsOpen={settingsOpen}
-        onRefreshConversationList={() => void refreshConversationList()}
-        sidebarMutating={sidebarMutating}
-        visibleWorkspaces={visibleWorkspaces}
-        expanded={expanded}
-        sidebarFiltering={sidebarFiltering}
-        searchCollapsed={searchCollapsed}
-        filterKey={`${workspaceQuery}\u0000${sidebarSessionFilter}`}
-        sidebarCollapsed={sidebarCollapsed}
-        sidebarActions={sidebarActions}
-        onCollapse={() => setSidebarCollapsed(true)}
-        />}
+        sidebar={sidebarNode}
       >
       <ConversationWorkspace
-        shell={{
-          isNewConversation,
-          sessionLoading,
-          messageCount: messages.length,
-          sidebarCollapsed,
-          setSidebarCollapsed,
-          agentView,
-          session,
-          modelSelection,
-          preferences,
-          turnActive,
-          busy,
-          error,
-          setError,
-          compaction,
-          retryInfo,
-          liveDiff,
-          notificationCount: notifications.filter((item) => !item.read).length,
-          notifications,
-          setNotifications,
-          markAllRead: markAllNotificationsRead,
-          clearNotifications,
-          conversationSubscriptionError,
-          retryConversationSubscription,
-          settingsOpen,
-        }}
-        header={{
-          update: updateSnapshot.state === 'available' || updateSnapshot.state === 'downloading' || updateSnapshot.state === 'downloaded'
-            ? {
-              state: updateSnapshot.state,
-              latestVersion: updateSnapshot.latestVersion,
-              onOpen: openUpdateDialog,
-            }
-            : null,
-          conversationDetailExtensionCount: conversationDetailExtensionItems.length,
-          quotaProvider,
-          openNotificationSession,
-          runNotificationAction,
-          panelExpanded: workbench.panelEntered,
-          openPanel,
-          returnToMainAgent,
-          gitStatus,
-          openGit,
-          progressTrigger: <ProgressTrigger open={!progressPinned && progressView.floating} pinned={progressPinned}
-            active={progressPinned && workbench.panelEntered && workbench.activePanelTabId === 'progress'}
-            onDismiss={dismissProgress} onToggle={() => {
-              if (progressPinned) workbench.openProgressTab();
-              else setProgressView(view => ({ ...view, floating: !view.floating }));
-            }}>{progressContent}</ProgressTrigger>,
-          openConversationExtensionHub,
-          openTrace,
-        }}
-        actions={{
-          openAttachment: handleOpenAttachment,
-          openFile: handleOpenFile,
-          openGitFile: (root, path) => { void openFile(path, session?.id, 'workspace', { cwd: root, refresh: true }); },
-          openChanges: handleOpenChanges,
-          undoTurnDiff,
-          editMessage: handleEditMessage,
-        }}
-        transcript={{
-          scrollRef,
-          topSentinelRef,
-          bottomSentinelRef,
-          chatContentRef,
-          turnWindowFrom,
-          visibleTurns,
-          todoDetails,
-          toolResultMap,
-          transcriptTurns,
-          lastAssistantTurnIndex,
-          jumpToMessage,
-          resetToLatest: () => resetToLatest(),
-          transcriptTruncated,
-          nextUserTimestamps,
-          requestPlacement,
-          pendingAssistantVisible,
-          pendingTurnError,
-          outlineSamples,
-          markUserScrollIntent,
-          pauseTranscriptFollow,
-          resumeTranscriptFollow,
-          handleTranscriptScroll,
-          jumpToOutline,
-        }}
-        extensions={{
-          chipItems: conversationExtensionChipItems,
-          openChip: openConversationExtensionChip,
-          openItem: openConversationExtension,
-          surface: conversationExtensionSurface,
-          hubItems: conversationExtensionHubItems,
-          activeItem: activeExtensionItem,
-          preferences: conversationExtensionUiPreferences,
-          orderScope: conversationExtensionOrderScope,
-          setOrderScope: setConversationExtensionOrderScope,
-          hasSessionOrder: hasConversationExtensionSessionOrder,
-          updateUi: updateConversationExtensionUi,
-          openSettings: (page) => { void openSettings(page); },
-          sendPrompt: sendPromptFromExtension,
-          notify: notifyExtension,
-          openHub: openConversationExtensionHub,
-        }}
+        shell={workspaceShell}
+        header={workspaceHeader}
+        actions={workspaceActions}
+        transcript={workspaceTranscript}
+        extensions={workspaceExtensions}
         subagents={subagentWorkspace}
-        outline={{
-          items: outlineItems,
-          samples: outlineSamples,
-          active: outlineActive,
-          hover: outlineHover,
-          setHover: setOutlineHover,
-          jump: jumpToOutline,
-        }}
-        composer={{
-          open: agentView.kind === 'conversation',
-          isNewConversation,
-          workspace,
-          workspaces,
-          session,
-          modelSelection,
-          prompt,
-          setPrompt,
-          composerAttachments,
-          composerImages,
-          composerImageIndexes,
-          composerDraftKeyRef,
-          composerDraftsRef,
-          composerEditorRef,
-          composerWrapRef,
-          composerComposingRef,
-          composerMenu,
-          composerMenuIndex,
-          composerMenuLoading,
-          composerMenuError,
-          composerCommandOptions,
-          composerFileOptions,
-          composerCommands,
-          updateComposerMenu,
-          setComposerMenu: foundation.setComposerMenu,
-          setComposerMenuIndex: foundation.setComposerMenuIndex,
-          selectComposerOption,
-          retryComposerSuggestions,
-          addComposerFiles,
-          attachPastedText,
-          removeComposerAttachment,
-          pickComposerAttachments,
-          openFile,
-          send,
-          stopGeneration,
-          sendQueuedNow,
-          sendAllQueued,
-          editQueued,
-          deleteQueued,
-          reorderQueued,
-          queuedPrompts,
-          queuedPreviews,
-          queuedEditContext,
-          queueAdmissionPending,
-          sendPromptFromExtension,
-          turnActive,
-          stopping,
-          busy,
-          stateLoading,
-          sessionLoading,
-          preparing,
-          compaction,
-          composerFeedback,
-          setComposerFeedback,
-          visiblePermission,
-          changePermission,
-          retryPermissionMode,
-          contextUsageInfo,
-          activeContextPolicy,
-          compactContext,
-          settingsOpen,
-          loadModelCatalog,
-          selectModel,
-          selectThinking,
-          modelPickerRequest,
-          modelPickerContextKey: `${workspace}:${session?.id ?? 'draft'}:${sessionLoadRef.current}`,
-          setModelPickerRequest,
-          onConfigureModels: () => { void openSettings('models'); },
-          onOpenSettings: (page) => { void openSettings(page); },
-          selectDraftWorkspace,
-          chooseFile,
-          setActionPaletteOpen,
-          error,
-          setError,
-          conversationFooterExtensionItems,
-          extensionPlacements: preferences.extensionPlacements,
-          extensionSurface: conversationExtensionSurface,
-          notifyExtension,
-        }}
+        outline={workspaceOutline}
+        composer={workspaceComposer}
       />
 
-      {filesOpen && <WorkbenchPane
+      {filesOpen && <Suspense fallback={null}><WorkbenchPane
         controller={workbench}
         settingsOpen={settingsOpen}
         progressPanel={progressContent}
@@ -686,7 +1017,7 @@ export function App() {
           onSendPrompt={sendPromptFromExtension}
           onNotify={notifyExtension}
         />}
-      />}
+      /></Suspense>}
       </ShellLayout>
 
       <SettingsOverlay

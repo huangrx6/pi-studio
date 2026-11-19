@@ -44,8 +44,33 @@ export function saveComposerDraft(
     if (changed) notify(store);
     return;
   }
+  const existing = store.get(key);
+  if (
+    existing
+    && existing.text === draft.text
+    && sameAttachments(existing.attachments, draft.attachments)
+  ) {
+    return;
+  }
   store.set(key, { ...draft, attachments: [...draft.attachments] });
   notify(store);
+}
+
+function sameAttachments(left: ComposerAttachment[], right: ComposerAttachment[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((item, index) => {
+    const other = right[index];
+    return item === other
+      || (item.id === other.id
+        && item.kind === other.kind
+        && item.name === other.name
+        && item.bytes === other.bytes
+        && item.mime === other.mime
+        && item.path === other.path
+        && item.data === other.data
+        && item.lines === other.lines
+        && item.marker === other.marker);
+  });
 }
 
 export function moveComposerDraft(

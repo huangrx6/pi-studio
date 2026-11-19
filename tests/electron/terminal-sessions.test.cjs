@@ -159,3 +159,35 @@ test('POSIX terminals use a login shell while Windows and unknown shells do not'
   assert.deepEqual(shellArgsForPlatform('/custom/terminal-shell', 'linux'), []);
   assert.deepEqual(shellArgsForPlatform('C:\\Windows\\System32\\cmd.exe', 'win32'), []);
 });
+
+test('batched terminal output merges PTY chunks without losing sequence metadata', async () => {
+  const events = [];
+  const processes = [];
+  const manager = createTerminalSessionManager({
+    spawnPty: () => {
+      const pty = new FakePty();
+      processes.push(pty);
+      return pty;
+    },
+    send: (_ownerId, channel, payload) => events.push({ channel, payload }),
+    batchOutput: true,
+    platform: 'darwin',
+    environment: { SHELL: '/bin/zsh' },
+  });
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-terminal-batch-'));
+  manager.create({ ownerId: 3, id: 'batched', cwd, cols: 80, rows: 24 });
+  processes[0].emitData('hello ');
+  processes[0].emitData('world');
+  assert.equal(events.length, 0, 'small chunks stay buffered for one frame');
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(events.length, 1);
+  assert.equal(events[0].payload.data, 'hello world');
+  assert.equal(events[0].payload.sequence, 2);
+  assert.equal(events[0].payload.sequenceStart, 1);
+  assert.deepEqual(events[0].payload.chunks, [
+    { sequence: 1, data: 'hello ' },
+    { sequence: 2, data: 'world' },
+  ]);
+  manager.closeOwner(3);
+  fs.rmSync(cwd, { recursive: true, force: true });
+});

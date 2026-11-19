@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ChevronDown, CircleAlert, CircleX, Image as ImageIcon } from 'lucide-react';
 import type { StepCollapse, StepDisplay } from '../../shared/preferences';
 import { LoadingIndicator } from '../../shared/LoadingState';
@@ -7,6 +7,7 @@ import { ActivityDetails } from './ActivityDetails';
 import { ActivitySummary } from './ActivitySummary';
 import { ConversationImageGallery, type ConversationImage } from './ConversationImageGallery';
 import type { ActivityEntry } from './turn-content';
+import { selectVisibleActivityEntries } from './activity-window';
 
 type ActivityProps = {
   entries: ActivityEntry[];
@@ -34,7 +35,7 @@ function ActivityStatus({ failed, incomplete, running, grouped = false }: { fail
   </span>;
 }
 
-function ActivityRow({ entry, results, defaultOpen, boundary, onOpenFile, onInspect }: {
+function ActivityRowComponent({ entry, results, defaultOpen, boundary, onOpenFile, onInspect }: {
   entry: ActivityEntry; results: Map<string, ChatMessage>; defaultOpen: boolean; boundary: string;
   onOpenFile?: (path: string) => void;
   onInspect?: (key: string) => void;
@@ -57,7 +58,9 @@ function ActivityRow({ entry, results, defaultOpen, boundary, onOpenFile, onInsp
   </details>;
 }
 
-export function TurnActivity({ entries, results, live, active, policy, density, onOpenFile }: ActivityProps) {
+const ActivityRow = memo(ActivityRowComponent);
+
+function TurnActivityComponent({ entries, results, live, active, policy, density, onOpenFile }: ActivityProps) {
   const boundary = [density, policy, policy === 'after-answer' && live].join('/');
   const showDuringTurn = policy !== 'after-answer' || (live && active);
   const [open, toggle] = useDisclosure(showDuringTurn && (density !== 'compact' || policy === 'keep-open'), boundary);
@@ -71,11 +74,18 @@ export function TurnActivity({ entries, results, live, active, policy, density, 
   const failed = entries.filter(e => e.kind === 'tool' && results.get(e.call.id)?.isError).length;
   const incomplete = entries.filter(e => e.kind === 'tool' && !e.live && !results.has(e.call.id)).length;
   const running = entries.some(e => e.live);
-  // In a long live sequence keep unfinished work visible even when results arrive out of order.
-  const limitHistory = live && active && density !== 'detailed' && !expandedHistory && entries.length > 5;
-  const visible = limitHistory
-    ? entries.filter((entry, index) => entry.live || inspected.has(entry.key) || index >= entries.length - 3 || (entry.kind === 'tool' && results.get(entry.call.id)?.isError)) : entries;
-  const hidden = entries.length - visible.length;
+  // Long live or completed sequences only mount the steps the reader needs right now.
+  const { visible, hiddenCount: hidden } = useMemo(() => selectVisibleActivityEntries(entries, {
+    live,
+    active,
+    expandedHistory,
+    density,
+    inspected,
+    results,
+  }), [active, density, entries, expandedHistory, inspected, live, results]);
+  const inspectEntry = useCallback((key: string) => {
+    setInspected((previous) => (previous.has(key) ? previous : new Set(previous).add(key)));
+  }, []);
   return <section className={'turn-trace' + (grouped ? ' is-grouped' : ' is-single')} aria-label="执行记录">
     {grouped && <button type="button" ref={heading} className="turn-trace-toggle" aria-expanded={open} aria-controls={id} onClick={toggle}>
       <ActivitySummary entries={entries} results={results} />
@@ -86,7 +96,7 @@ export function TurnActivity({ entries, results, live, active, policy, density, 
       {(!grouped || open || visited) && <>
         {hidden > 0 && <button type="button" className="activity-earlier" onClick={() => setExpandedHistory(true)}>查看此前 {hidden} 个步骤</button>}
         {visible.map(entry => <ActivityRow key={entry.key} entry={entry} results={results} boundary={boundary} onOpenFile={onOpenFile}
-          onInspect={live ? key => setInspected(previous => previous.has(key) ? previous : new Set(previous).add(key)) : undefined}
+          onInspect={live ? inspectEntry : undefined}
           defaultOpen={showDuringTurn && (density === 'detailed' || (density !== 'compact' && entry.kind === 'thinking' && entry.live))} />)}
         {visible.length > 5 && open && <button type="button" className="activity-earlier turn-trace-collapse"
           onClick={() => { toggle(); heading.current?.focus(); }}>收起执行过程</button>}
@@ -94,6 +104,8 @@ export function TurnActivity({ entries, results, live, active, policy, density, 
     </div>
   </section>;
 }
+
+export const TurnActivity = memo(TurnActivityComponent);
 
 export function ToolResultImages({ callId, images }: { callId: string; images: ConversationImage[] }) {
   const [open, setOpen] = useState(true);

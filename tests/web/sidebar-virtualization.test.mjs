@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { visibleSessionIndices, sessionWindowSegments, focusNeighborIndices } from '../../web/src/shell/sidebar-virtualization.ts';
+import { visibleSessionIndices, sessionWindowSegments, focusNeighborIndices, sidebarGroupsEqual } from '../../web/src/shell/sidebar-virtualization.ts';
 
 test('small lists preserve all rows and large lists mount only viewport with overscan', () => {
   assert.equal(visibleSessionIndices(80, 0, 600, 36, 30).length, 80);
@@ -33,4 +33,13 @@ test('groups outside viewport stay empty except explicit owners; edge indices st
   assert.deepEqual(visibleSessionIndices(1200, 0, 600, 40_000, 30, [-1, 1199, 1200]), [1199]);
   assert.deepEqual(focusNeighborIndices(0, 1200), [0, 1]);
   assert.deepEqual(focusNeighborIndices(1199, 1200), [1198, 1199]);
+});
+
+test('sidebar group offset maps compare by value without serialization', () => {
+  const left = { a: 10, b: 20 };
+  assert.equal(sidebarGroupsEqual(left, left), true);
+  assert.equal(sidebarGroupsEqual(left, { a: 10, b: 20 }), true);
+  assert.equal(sidebarGroupsEqual(left, { a: 10, b: 21 }), false);
+  assert.equal(sidebarGroupsEqual(left, { a: 10 }), false);
+  assert.equal(sidebarGroupsEqual({}, {}), true);
 });

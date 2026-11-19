@@ -63,3 +63,18 @@ test('the last whole-file write wins when a path is written twice', () => {
   assert.equal(files.length, 1);
   assert.equal(files[0].lines, 1);
 });
+
+test('indexTurnDiffs maps each assistant turn once', async () => {
+  const { indexTurnDiffs } = await import('../../web/src/features/conversation/file-changes.ts');
+  const diff = (at) => ({ at, files: [], totalAdded: 0, totalRemoved: 0 });
+  const turns = [
+    { kind: 'user', message: { timestamp: 1 } },
+    { kind: 'assistant', messages: [{ timestamp: 500 }] },
+    { kind: 'user', message: { timestamp: 900 } },
+    { kind: 'assistant', messages: [{ timestamp: 950 }] },
+  ];
+  const map = indexTurnDiffs(turns, [diff(500), diff(960)], [900, 900, Infinity, Infinity]);
+  assert.equal(map.get(1)?.at, 500);
+  assert.equal(map.get(3)?.at, 960);
+  assert.equal(map.has(0), false);
+});

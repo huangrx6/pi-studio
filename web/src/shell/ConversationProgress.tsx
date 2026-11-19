@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { memo, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowDownUp, ChevronDown, ChevronRight, ChevronUp, FileDiff, GitBranch, GitCommitHorizontal, History, ListChecks, Pin, PinOff, Settings2, Target } from 'lucide-react';
 import { LongTaskDock } from '../features/conversation/LongTaskDock';
 import { longTaskPresentation } from '../features/conversation/long-task-presentation';
@@ -14,7 +14,7 @@ import { useGitRepositories } from '../features/git/useWorkspaceRepositories';
 import type { SubagentChild } from '../types/subagent-types';
 import './styles/conversation-progress.css';
 
-export function ProgressTrigger({ open, pinned, active, onToggle, onDismiss, children }: {
+function ProgressTriggerComponent({ open, pinned, active, onToggle, onDismiss, children }: {
   open: boolean;
   pinned: boolean;
   active: boolean;
@@ -80,9 +80,55 @@ function ViewAll({ label, onClick }: { label: string; onClick: () => void }) {
   return <button type="button" className="progress-view-all" aria-label={label} onClick={onClick}>查看全部<ChevronRight aria-hidden="true" /></button>;
 }
 
-export function ConversationProgress(props: ProgressProps) {
-  const { pinned, git, sessionId, goal, running, tasks, agents, history } = props;
+const ProgressAgentRow = memo(function ProgressAgentRow({
+  child,
+  onAgent,
+}: {
+  child: SubagentChild;
+  onAgent: (child: SubagentChild) => void;
+}) {
+  return <button type="button" className="progress-row progress-agent"
+    data-status={child.status} onClick={() => onAgent(child)}>
+    <SubagentAvatar id={child.avatarId} /><span title={child.task}>{child.name || child.agent}</span>
+    <small>{STATUS_LABEL[child.status]}</small>
+  </button>;
+});
+
+const ProgressGitSection = memo(function ProgressGitSection({
+  git,
+  onGitSettings,
+  onOpenGit,
+}: {
+  git: GitWorkspaceStatus | null;
+  onGitSettings: () => void;
+  onOpenGit: (tab: GitTab) => void;
+}) {
   const scope = useGitRepositories();
+  const branch = git?.branch || git?.commit || '当前仓库';
+  const project = scope.selected?.id === '.' ? (scope.repositories.length > 1 ? scope.selected.name : '') : scope.selected?.id;
+  let repositoryLabel = [project, branch].filter(Boolean).join(' · ');
+  if (!scope.selected) repositoryLabel = scope.loading ? '正在查找项目仓库…' : scope.error ? '仓库读取失败' : '没有 Git 仓库';
+  else if (!git) repositoryLabel = '正在读取 Git 状态…';
+  else if (!git.available) repositoryLabel = 'Git 不可用';
+  return <section className="workspace-menu-section progress-git" aria-label="Git 工具" data-available={git?.available || undefined}>
+    <header className="progress-git-repo">
+      <div className="progress-git-identity">
+        <div className="progress-git-title"><GitBranch aria-hidden="true" /><span className={git?.available ? 'progress-git-branch' : undefined} title={[repositoryLabel, git?.repositoryRoot].filter(Boolean).join('\n')}>{repositoryLabel}</span></div>
+        {git?.available && <small>{git.statusReadFailed ? '未能读取变更' : git.dirty.total ? `${git.dirty.total} 项变更` : '工作区干净'}</small>}
+      </div>
+      <button className="icon-button" type="button" aria-label="Git 设置" title="Git 设置" onClick={onGitSettings}><Settings2 aria-hidden="true" /></button>
+    </header>
+    {git?.available ? <nav className="progress-git-links" aria-label="Git 操作">
+      <button type="button" onClick={() => onOpenGit('changes')}><FileDiff aria-hidden="true" />变更</button>
+      <button type="button" onClick={() => onOpenGit('commit')}><GitCommitHorizontal aria-hidden="true" />提交</button>
+      <button type="button" onClick={() => onOpenGit('history')}><History aria-hidden="true" />提交历史</button>
+      <button type="button" onClick={() => onOpenGit('sync')}><ArrowDownUp aria-hidden="true" />远程同步</button>
+    </nav> : !!scope.cwd && !scope.loading && <button type="button" className="progress-row" onClick={() => onOpenGit('changes')}><GitBranch /><span>查看项目仓库</span><ChevronRight /></button>}
+  </section>;
+});
+
+function ConversationProgressView(props: ProgressProps) {
+  const { pinned, git, sessionId, goal, running, tasks, agents, history } = props;
   const [agentsExpanded, setAgentsExpanded] = useState(false);
   const agentsId = useId();
   const historyId = useId();
@@ -90,29 +136,9 @@ export function ConversationProgress(props: ProgressProps) {
   const previewLimit = 3;
   const visibleAgents = agentsExpanded ? orderedAgents : orderedAgents.slice(0, previewLimit);
   const pinLabel = pinned ? '取消固定，返回浮层' : '固定到右栏';
-  const branch = git?.branch || git?.commit || '当前仓库';
-  const project = scope.selected?.id === '.' ? (scope.repositories.length > 1 ? scope.selected.name : '') : scope.selected?.id;
-  let repositoryLabel = [project, branch].filter(Boolean).join(' · ');
-  if (!scope.selected) repositoryLabel = scope.loading ? '正在查找项目仓库…' : scope.error ? '仓库读取失败' : '没有 Git 仓库';
-  else if (!git) repositoryLabel = '正在读取 Git 状态…';
-  else if (!git.available) repositoryLabel = 'Git 不可用';
-  const gitSection = <section className="workspace-menu-section progress-git" aria-label="Git 工具" data-available={git?.available || undefined}>
-    <header className="progress-git-repo">
-      <div className="progress-git-identity">
-        <div className="progress-git-title"><GitBranch aria-hidden="true" /><span className={git?.available ? 'progress-git-branch' : undefined} title={[repositoryLabel, git?.repositoryRoot].filter(Boolean).join('\n')}>{repositoryLabel}</span></div>
-        {git?.available && <small>{git.statusReadFailed ? '未能读取变更' : git.dirty.total ? `${git.dirty.total} 项变更` : '工作区干净'}</small>}
-      </div>
-      <button className="icon-button" type="button" aria-label="Git 设置" title="Git 设置" onClick={props.onGitSettings}><Settings2 aria-hidden="true" /></button>
-    </header>
-    {git?.available ? <nav className="progress-git-links" aria-label="Git 操作">
-      <button type="button" onClick={() => props.onOpenGit('changes')}><FileDiff aria-hidden="true" />变更</button>
-      <button type="button" onClick={() => props.onOpenGit('commit')}><GitCommitHorizontal aria-hidden="true" />提交</button>
-      <button type="button" onClick={() => props.onOpenGit('history')}><History aria-hidden="true" />提交历史</button>
-      <button type="button" onClick={() => props.onOpenGit('sync')}><ArrowDownUp aria-hidden="true" />远程同步</button>
-    </nav> : !!scope.cwd && !scope.loading && <button type="button" className="progress-row" onClick={() => props.onOpenGit('changes')}><GitBranch /><span>查看项目仓库</span><ChevronRight /></button>}
-  </section>;
   const historyLabel = history ? '收起历史' : '查看历史';
   const allTasks = <ViewAll label="查看全部任务" onClick={props.onOpenTasks} />;
+  const gitSection = <ProgressGitSection git={git} onGitSettings={props.onGitSettings} onOpenGit={props.onOpenGit} />;
   return <div className={`conversation-progress ${pinned ? 'is-pinned' : ''}`}>
     <header className="workspace-menu-head progress-head">
       <strong>会话进展</strong>
@@ -140,11 +166,7 @@ export function ConversationProgress(props: ProgressProps) {
           <ViewAll label="查看全部子智能体" onClick={props.onAgents} />
         </header>
         {!!agents.length && <div className="progress-agent-list" id={agentsId} tabIndex={agentsExpanded ? 0 : undefined}>
-          {visibleAgents.map(child => <button key={child.key} type="button" className="progress-row progress-agent"
-            data-status={child.status} onClick={() => props.onAgent(child)}>
-            <SubagentAvatar id={child.avatarId} /><span title={child.task}>{child.name || child.agent}</span>
-            <small>{STATUS_LABEL[child.status]}</small>
-          </button>)}
+          {visibleAgents.map(child => <ProgressAgentRow key={child.key} child={child} onAgent={props.onAgent} />)}
         </div>}
         {agents.length > previewLimit && <button type="button" className="progress-text-action progress-agents-more"
           aria-controls={agentsId} aria-expanded={agentsExpanded} onClick={() => setAgentsExpanded(value => !value)}>
@@ -156,3 +178,8 @@ export function ConversationProgress(props: ProgressProps) {
     </>}
   </div>;
 }
+
+
+export const ProgressTrigger = memo(ProgressTriggerComponent);
+
+export const ConversationProgress = memo(ConversationProgressView);

@@ -32,12 +32,22 @@ function registerTerminalIpc() {
     watchSender(event.sender);
     return manager().create({ ...payload, ownerId: event.sender.id });
   });
-  ipcMain.handle('pi:terminal-write', (event, { id, data } = {}) => (
-    manager().write({ ownerId: event.sender.id, id, data })
-  ));
-  ipcMain.handle('pi:terminal-resize', (event, { id, cols, rows } = {}) => (
-    manager().resize({ ownerId: event.sender.id, id, cols, rows })
-  ));
+  // Keystrokes and resizes are latency-sensitive. A one-way channel avoids the
+  // invoke round-trip that otherwise serializes every character behind a reply.
+  ipcMain.on('pi:terminal-write', (event, { id, data } = {}) => {
+    try {
+      manager().write({ ownerId: event.sender.id, id, data });
+    } catch {
+      // Drop input for foreign or already-closed sessions instead of crashing.
+    }
+  });
+  ipcMain.on('pi:terminal-resize', (event, { id, cols, rows } = {}) => {
+    try {
+      manager().resize({ ownerId: event.sender.id, id, cols, rows });
+    } catch {
+      // Geometry updates are best-effort while a session is exiting.
+    }
+  });
   ipcMain.handle('pi:terminal-close', (event, id) => (
     manager().close({ ownerId: event.sender.id, id })
   ));

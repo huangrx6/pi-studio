@@ -1,4 +1,5 @@
 import type { AgentView } from './app-types';
+import { memo } from 'react';
 import {
   ArrowLeft, ArrowUp, Download, PanelRightOpen,
 } from 'lucide-react';
@@ -58,7 +59,7 @@ type ConversationHeaderProps = {
   showTrace: boolean;
 };
 
-export function ConversationHeader({
+function ConversationHeaderComponent({
   sidebarCollapsed,
   onExpandSidebar,
   isNewConversation,
@@ -156,3 +157,6 @@ export function ConversationHeader({
       </ShellHeader>
   );
 }
+
+/** Stable chrome while only the composer or transcript updates underneath. */
+export const ConversationHeader = memo(ConversationHeaderComponent);

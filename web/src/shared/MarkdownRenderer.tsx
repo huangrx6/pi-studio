@@ -4,7 +4,7 @@
  * 这个模块由 `Markdown.tsx` 按需加载；语法高亮器只在源码实际包含代码块时
  * 再加载。安全边界与链接行为仍由这个单一实现负责。
  */
-import { createContext, memo, useContext, useEffect, useState } from 'react';
+import { createContext, memo, useContext, useEffect, useMemo, useState } from 'react';
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getActivePreferences } from './preferences';
@@ -20,6 +20,10 @@ import {
   loadedMarkdownHighlighter,
   type MarkdownHighlighterPlugin,
 } from './markdown-highlighter-loader';
+
+/** Stable plugin lists — ReactMarkdown re-parses the tree when these array identities change. */
+const MARKDOWN_REMARK_PLUGINS = [remarkGfm];
+const MARKDOWN_REHYPE_BASE = [rehypeLocalPaths];
 
 /**
  * 代码块外壳：语言标签 + 复制。文件源码视图会关闭这层 chrome，保留同一套
@@ -132,12 +136,23 @@ const components: Components = {
  * 正文会先以无高亮但完整可读的形式渲染。检测到代码块后才加载
  * rehypeHighlight；未标注语言仍会自动检测，未知语言静默跳过。
  */
-export const MarkdownRenderer = memo(function MarkdownRenderer({ children, codeChrome = true }: { children: string; codeChrome?: boolean }) {
+export const MarkdownRenderer = memo(function MarkdownRenderer({
+  children,
+  codeChrome = true,
+  streaming = false,
+}: {
+  children: string;
+  codeChrome?: boolean;
+  /** Live turns skip syntax highlighting until the answer settles. */
+  streaming?: boolean;
+}) {
   const [highlighter, setHighlighter] = useState<MarkdownHighlighterPlugin | null>(loadedMarkdownHighlighter);
   const [highlighterStatus, setHighlighterStatus] = useState<'idle' | 'loading' | 'failed'>('idle');
 
   useEffect(() => {
-    if (highlighter || highlighterStatus !== 'idle' || !hasMarkdownCode(children)) return;
+    // Highlighting is deferred until the turn finishes so streaming tokens only
+    // pay for GFM parse, not a second rehype pass that rebuilds every code node.
+    if (streaming || highlighter || highlighterStatus !== 'idle' || !hasMarkdownCode(children)) return;
     setHighlighterStatus('loading');
     void loadMarkdownHighlighter()
       .then((plugin) => {
@@ -148,15 +163,16 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ children, codeC
         // Plain Markdown remains readable when the optional chunk is unavailable.
         setHighlighterStatus('failed');
       });
-  }, [children, highlighter, highlighterStatus]);
+  }, [children, highlighter, highlighterStatus, streaming]);
 
-  const rehypePlugins = highlighter
-    ? [rehypeLocalPaths, highlighter]
-    : [rehypeLocalPaths];
+  const rehypePlugins = useMemo(
+    () => (highlighter ? [...MARKDOWN_REHYPE_BASE, highlighter] : MARKDOWN_REHYPE_BASE),
+    [highlighter],
+  );
 
   return <MarkdownCodeChromeContext.Provider value={codeChrome}>
     <div className="markdown" onCopy={(event) => copyMarkdownSource(event, children)}>
-      <ReactMarkdown urlTransform={markdownUrl} components={components} remarkPlugins={[remarkGfm]} rehypePlugins={rehypePlugins} skipHtml>
+      <ReactMarkdown urlTransform={markdownUrl} components={components} remarkPlugins={MARKDOWN_REMARK_PLUGINS} rehypePlugins={rehypePlugins} skipHtml>
         {children}
       </ReactMarkdown>
     </div>

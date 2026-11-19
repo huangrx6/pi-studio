@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import {
   PanelRightOpen,
@@ -17,7 +17,6 @@ import type { ModelCatalog, ModelSelection } from '../../types/model-types';
 import type { SessionStateForPersistence } from './useMessageDelivery';
 import type { QueuedEditContext, QueuedPrompt } from './composer-types';
 import type { ComposerDraft, ComposerDraftStore } from './composer-drafts';
-import { readComposerDraft, saveComposerDraft } from './composer-drafts';
 import type { ComposerMenuState } from './useComposerSuggestions';
 import type { ModelPickerRequest } from '../models/ModelPicker';
 import type {
@@ -137,7 +136,7 @@ export type ComposerDockProps = {
   notifyExtension: (notice: ExtensionNotice) => void;
 };
 
-export function ComposerDock({
+function ComposerDockComponent({
   open,
   isNewConversation,
   workspace,
@@ -370,11 +369,8 @@ export function ComposerDock({
             scope={composerDraftKeyRef.current}
             commandNames={composerCommandNames}
             onChange={(value, cursor) => {
-              const key = composerDraftKeyRef.current;
-              saveComposerDraft(composerDraftsRef.current, key, {
-                ...readComposerDraft(composerDraftsRef.current, key),
-                text: value,
-              });
+              // Draft persistence is owned by the prompt effect so typing does not
+              // double-notify the draft store on every keystroke.
               setPrompt(value);
               updateComposerMenu(value, cursor);
             }}
@@ -522,3 +518,6 @@ export function ComposerDock({
     {isNewConversation && error && <ConversationError className="new-conversation-error" message={error} onDismiss={() => setError(null)} />}
   </div>;
 }
+
+/** Skip chrome-only parent renders when the prop bag is referentially stable. */
+export const ComposerDock = memo(ComposerDockComponent);

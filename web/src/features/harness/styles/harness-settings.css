@@ -36,7 +36,7 @@
 .harness-global-instructions-status strong { color: var(--muted); font-weight: var(--weight-medium); }
 .harness-global-instructions-status.is-ready strong { color: var(--accent-foreground); }
 .harness-global-instructions-status.is-pending strong { color: var(--warning); }
-.harness-global-instructions-action { display: inline-flex; align-items: center; gap: 3px; color: var(--faint); font-size: var(--text-xs); white-space: nowrap; }
+.harness-global-instructions-action { display: inline-flex; align-items: center; gap: 3px; color: var(--faint); font-size: inherit; white-space: nowrap; }
 .harness-global-instructions-path { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 0 0 12px; color: var(--faint); font-size: var(--text-xs); }
 .harness-global-instructions-path code { min-width: 0; color: var(--muted); font: var(--text-xs)/var(--leading-body) var(--mono); overflow-wrap: anywhere; }
 .harness-section-heading { margin-bottom: 10px; }

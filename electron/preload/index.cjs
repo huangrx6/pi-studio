@@ -146,8 +146,10 @@ contextBridge.exposeInMainWorld('piApi', {
   openExternal: (url) => ipcRenderer.invoke('pi:open-external', url),
   openLink: (url, mode) => ipcRenderer.invoke('pi:open-link', { url, mode }),
   terminalCreate: (payload) => ipcRenderer.invoke('pi:terminal-create', payload),
-  terminalWrite: (id, data) => ipcRenderer.invoke('pi:terminal-write', { id, data }),
-  terminalResize: (id, cols, rows) => ipcRenderer.invoke('pi:terminal-resize', { id, cols, rows }),
+  // Fire-and-forget: waiting for an invoke ack on every keystroke is a major
+  // source of interactive terminal lag in Electron.
+  terminalWrite: (id, data) => { ipcRenderer.send('pi:terminal-write', { id, data }); },
+  terminalResize: (id, cols, rows) => { ipcRenderer.send('pi:terminal-resize', { id, cols, rows }); },
   terminalClose: (id) => ipcRenderer.invoke('pi:terminal-close', id),
   // 拖进终端的文件要真实路径：浏览器 File 对象只有文件名。
   filePathOf: (file) => {

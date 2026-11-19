@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { AgentView } from '../../shell/app-types';
 import type { NotificationTone } from '../../shell/NotificationCenter';
@@ -273,7 +273,36 @@ export function useSubagentWorkspace({
     }
   }
 
-  return {
+  const subagentApiRef = useRef({
+    refreshSubagentChildren,
+    openAgentOverview,
+    openAgentTranscript,
+    deleteSubagent,
+    replySubagentSupervisor,
+  });
+  subagentApiRef.current.refreshSubagentChildren = refreshSubagentChildren;
+  subagentApiRef.current.openAgentOverview = openAgentOverview;
+  subagentApiRef.current.openAgentTranscript = openAgentTranscript;
+  subagentApiRef.current.deleteSubagent = deleteSubagent;
+  subagentApiRef.current.replySubagentSupervisor = replySubagentSupervisor;
+
+  const stableRefreshSubagentChildren = useCallback((showSpinner = false) => (
+    subagentApiRef.current.refreshSubagentChildren(showSpinner)
+  ), []);
+  const stableOpenAgentOverview = useCallback(() => {
+    subagentApiRef.current.openAgentOverview();
+  }, []);
+  const stableOpenAgentTranscript = useCallback((child: SubagentChild) => {
+    subagentApiRef.current.openAgentTranscript(child);
+  }, []);
+  const stableDeleteSubagent = useCallback((child: SubagentChild) => (
+    subagentApiRef.current.deleteSubagent(child)
+  ), []);
+  const stableReplySubagentSupervisor = useCallback((child: SubagentChild, requestId: string, message: string) => (
+    subagentApiRef.current.replySubagentSupervisor(child, requestId, message)
+  ), []);
+
+  return useMemo(() => ({
     subagentChildren,
     setSubagentChildren,
     subagentBudget,
@@ -291,11 +320,29 @@ export function useSubagentWorkspace({
     subagentDeletingKey,
     subagentReplyingKey,
     subagentRequestRef,
-    refreshSubagentChildren,
-    openAgentOverview,
-    openAgentTranscript,
-    deleteSubagent,
-    replySubagentSupervisor,
+    refreshSubagentChildren: stableRefreshSubagentChildren,
+    openAgentOverview: stableOpenAgentOverview,
+    openAgentTranscript: stableOpenAgentTranscript,
+    deleteSubagent: stableDeleteSubagent,
+    replySubagentSupervisor: stableReplySubagentSupervisor,
     hasActiveSubagents,
-  };
+  }), [
+    hasActiveSubagents,
+    stableDeleteSubagent,
+    stableOpenAgentOverview,
+    stableOpenAgentTranscript,
+    stableRefreshSubagentChildren,
+    stableReplySubagentSupervisor,
+    subagentBudget,
+    subagentChildren,
+    subagentDeletingKey,
+    subagentError,
+    subagentListError,
+    subagentLoading,
+    subagentOverviewMode,
+    subagentRefreshing,
+    subagentReplyingKey,
+    subagentRequestRef,
+    subagentTranscript,
+  ]);
 }
