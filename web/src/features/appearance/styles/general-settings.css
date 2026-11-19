@@ -124,15 +124,20 @@
 }
 .general-background-adjustments {
   display: grid;
-  grid-template-columns: minmax(12rem, 0.95fr) minmax(0, 1.15fr);
-  gap: var(--space-5);
-  align-items: start;
+  gap: var(--space-4);
+  align-items: stretch;
   padding-block: var(--space-2) 0;
 }
 .general-background-ranges {
   display: grid;
   gap: var(--space-1);
   min-width: 0;
+}
+
+.general-background-range-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
 }
 
 .general-background-range-head {
@@ -150,7 +155,7 @@
   padding: 0;
 }
 @media (max-width: 1100px) {
-  .general-background-adjustments { grid-template-columns: minmax(0, 1fr); }
+  .general-background-range-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 760px) {
   .general-section-head { align-items: flex-start; }

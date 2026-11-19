@@ -216,34 +216,36 @@ export function GeneralSettings({
                         </button>
                       )}
                     </div>
-                    <RangeControl
-                      id="background-opacity"
-                      label="透明度"
-                      description="四周留白里的背景浓度"
-                      value={preferences.backgroundOpacity}
-                      onChange={(value) => onChange('backgroundOpacity', value)}
-                    />
-                    <RangeControl
-                      id="background-blur"
-                      label="柔化"
-                      description="背景模糊程度"
-                      value={preferences.backgroundBlur}
-                      onChange={(value) => onChange('backgroundBlur', value)}
-                    />
-                    <RangeControl
-                      id="background-surface"
-                      label="遮罩"
-                      description="内容背后的遮罩强度"
-                      value={preferences.backgroundSurfaceOpacity}
-                      onChange={(value) => onChange('backgroundSurfaceOpacity', value)}
-                    />
-                    <RangeControl
-                      id="background-inside"
-                      label="窗口内"
-                      description="侧栏与对话区透出的背景"
-                      value={preferences.backgroundInsideVisibility}
-                      onChange={(value) => onChange('backgroundInsideVisibility', value)}
-                    />
+                    <div className="general-background-range-grid">
+                      <RangeControl
+                        id="background-opacity"
+                        label="透明度"
+                        description="四周留白里的背景浓度"
+                        value={preferences.backgroundOpacity}
+                        onChange={(value) => onChange('backgroundOpacity', value)}
+                      />
+                      <RangeControl
+                        id="background-blur"
+                        label="柔化"
+                        description="背景模糊程度"
+                        value={preferences.backgroundBlur}
+                        onChange={(value) => onChange('backgroundBlur', value)}
+                      />
+                      <RangeControl
+                        id="background-surface"
+                        label="遮罩"
+                        description="内容背后的遮罩强度"
+                        value={preferences.backgroundSurfaceOpacity}
+                        onChange={(value) => onChange('backgroundSurfaceOpacity', value)}
+                      />
+                      <RangeControl
+                        id="background-inside"
+                        label="窗口内"
+                        description="侧栏与对话区透出的背景"
+                        value={preferences.backgroundInsideVisibility}
+                        onChange={(value) => onChange('backgroundInsideVisibility', value)}
+                      />
+                    </div>
                   </div>
                 </div>
               </Accordion>

@@ -524,7 +524,7 @@
 }
 
 /* 背景媒体：摘要是一条 56px 行，展开后左预览、右滑杆同顶对齐；
-   滑杆不再各自做灰卡片，只保留分隔线，避免和上方设置行抢层级。 */
+   展开后改为「上预览横幅、下双列调节」，避免左列预览矮、右列滑杆高造成大块留白。 */
 .settings-content .general-background-settings {
   width: 100%;
   margin: 0;
@@ -545,40 +545,46 @@
 
 .settings-content .general-background-adjustments {
   display: grid;
-  grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
-  gap: var(--space-5);
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: stretch;
   padding: 0;
 }
 
 .settings-content .general-background-adjustments .background-media-preview {
-  /* 固定横幅比例，贴近桌面壁纸观感；不要被右侧滑杆列高拉成竖图。 */
+  /* 全宽横幅预览，贴近桌面壁纸观感，并限制过高以免压住调节区。 */
   width: 100%;
   height: auto;
   min-height: 0;
-  aspect-ratio: 16 / 10;
+  max-height: 220px;
+  aspect-ratio: 21 / 9;
   border-radius: var(--radius-control);
 }
 
-.settings-content .general-background-ranges { display: grid; align-content: start; }
+.settings-content .general-background-ranges {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  min-width: 0;
+}
+
+.settings-content .general-background-range-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
 
 .settings-content .general-background-ranges .settings-range-control {
-  padding: 14px 0;
-  border-top: 1px solid var(--divider);
-  border-radius: 0;
-  background: var(--transparent);
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--surface-soft) 72%, transparent);
 }
 
-/* 「调节」标题后的第一根滑杆：去掉顶部分割，与预览上沿对齐。 */
-.settings-content .general-background-ranges .general-background-range-head + .settings-range-control,
-.settings-content .general-background-ranges .settings-range-control:first-of-type {
-  padding-top: 0;
-  border-top: 0;
+.settings-content .general-background-ranges .settings-range-control:hover:not(.is-disabled) {
+  background: color-mix(in srgb, var(--surface-hover) 80%, transparent);
 }
-
-.settings-content .general-background-ranges .settings-range-control:last-child { padding-bottom: 0; }
-
-.settings-content .general-background-ranges .settings-range-control:hover:not(.is-disabled) { background: var(--transparent); }
 
 .settings-content .general-background-ranges .settings-range-copy strong {
   color: var(--text);
@@ -848,8 +854,11 @@
 /* ---- 10. 窄窗 ---------------------------------------------------------- */
 
 @media (max-width: 900px) {
-  .settings-content .general-background-adjustments { grid-template-columns: minmax(0, 1fr); }
-  .settings-content .general-background-adjustments .background-media-preview { height: auto; aspect-ratio: 16 / 10; }
+  .settings-content .general-background-range-grid { grid-template-columns: minmax(0, 1fr); }
+  .settings-content .general-background-adjustments .background-media-preview {
+    max-height: none;
+    aspect-ratio: 16 / 10;
+  }
 }
 
 /* ---- 11. 状态、悬停与反馈 ---------------------------------------------- */
