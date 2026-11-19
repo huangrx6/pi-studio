@@ -83,8 +83,11 @@ export function NetworkSettings() {
   }
 
   return <div className="network-settings">
-    <SettingsPageHeader icon={<Globe />} title="网络代理" />
-    <p className="network-intro">为所有工作区设置连接方式，适用于模型请求、模型列表、技能与扩展下载。</p>
+    <SettingsPageHeader
+      icon={<Globe />}
+      title="网络代理"
+      meta={<span>作用于模型请求、模型列表以及技能与扩展下载</span>}
+    />
     {!draft && busy && <LoadingState variant="section">正在读取代理设置…</LoadingState>}
     {!draft && !busy && <button type="button" className="settings-outline" onClick={() => void load()}>重新加载</button>}
     {draft && <form onSubmit={event => { event.preventDefault(); void act('save'); }}>

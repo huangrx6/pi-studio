@@ -452,7 +452,10 @@ export function SubagentSettings({
       <SettingsPageHeader
         icon={<Bot />}
         title="子智能体"
-        meta={<InfoHint label="新任务继承当前 Harness 配置；运行中的任务保持不变。" />}
+        meta={<>
+          <span>并行任务、模型覆盖与隔离工作树</span>
+          <InfoHint label="新任务继承当前 Harness 配置；运行中的任务保持不变。" />
+        </>}
         actions={
           <div className="subagent-overview-actions">
             <button

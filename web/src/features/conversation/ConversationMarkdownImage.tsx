@@ -18,6 +18,7 @@ export function ConversationMarkdownImage({ src, alt, cwd, linked }: { src: stri
   const [local, setLocal] = useState('');
   const [failed, setFailed] = useState(false);
   const [zoom, setZoom] = useState(false);
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!path || !cwd) return;
     let current = true;
@@ -31,11 +32,28 @@ export function ConversationMarkdownImage({ src, alt, cwd, linked }: { src: stri
   }, [cwd, path]);
 
   const url = remote || local;
-  if (failed || !url) return <span className="conversation-image-placeholder">{alt || path || '图片'}{failed ? '（无法预览）' : ''}</span>;
-  const image = <img src={url} alt={alt} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(true)} />;
+  useEffect(() => { setReady(false); }, [url]);
+
+  if (failed || !url) {
+    return <span className="conversation-image-placeholder">{alt || path || '图片'}{failed ? '（无法预览）' : ''}</span>;
+  }
+  const image = <img
+    src={url}
+    alt={alt}
+    loading="lazy"
+    decoding="async"
+    referrerPolicy="no-referrer"
+    onLoad={() => setReady(true)}
+    onError={() => setFailed(true)}
+  />;
   if (linked) return image;
   return <>
-    <button className="conversation-markdown-image" type="button" aria-label={`放大预览：${alt || '图片'}`} onClick={() => setZoom(true)}>{image}</button>
+    <button
+      className={`conversation-markdown-image${ready ? ' is-ready' : ''}`}
+      type="button"
+      aria-label={`放大预览：${alt || '图片'}`}
+      onClick={() => setZoom(true)}
+    >{image}</button>
     {zoom && <ConversationImagePreview images={[{ src: url, alt }]} index={0} onIndexChange={() => {}} onClose={() => setZoom(false)} />}
   </>;
 }

@@ -33,19 +33,21 @@ type SettingsNavigationGroup = {
 };
 
 const PAGE_SEARCH_ALIASES: Record<string, readonly string[]> = {
-  general: ['外观', '主题', '字体', '字号', '背景', '圆角', '颜色', '深色', '浅色', '菜单栏', '托盘'],
+  general: ['外观', '主题', '字体', '字号', '背景', '壁纸', '圆角', '颜色', '深色', '浅色', '菜单栏', '托盘', '终端', '透明度', '柔化', '遮罩', '链接'],
   shortcuts: ['快捷键', '键盘', '热键', 'shortcut'],
   models: ['API', '密钥', '供应商', '模型来源', 'provider', 'thinking', '推理'],
-  usage: ['统计', '费用', '成本', 'token', '用量'],
-  archives: ['历史', '恢复', '归档'],
+  usage: ['统计', '费用', '成本', 'token', '用量', 'Metrics', '采集', '已移除', '项目'],
   tools: ['工具', '命令', 'bash', '终端'],
-  permissions: ['授权', '批准', '安全', '权限', '凭据', '密钥'],
+  permissions: ['授权', '批准', '安全', '权限', '凭据', '密钥', '策略'],
   harness: ['提示词', '指令', 'prompt', 'AGENTS', '上下文', '重试', '超时', '压缩'],
   subagents: ['子代理', '多智能体', '并行', 'agent'],
   mcp: ['连接', '服务器', '集成', 'OAuth', '授权', 'API'],
   skills: ['技能', 'skill', '安装'],
   extensions: ['插件', '扩展', 'extension', '安装'],
-  about: ['版本', '更新', '帮助'],
+  git: ['Git', '仓库', '分支', '工作树', 'worktree', '差异'],
+  network: ['proxy', '代理', '网络', 'VPN', '连接', 'HTTP', 'SOCKS', '超时'],
+  archives: ['历史', '恢复', '归档'],
+  about: ['版本', '更新', '帮助', '许可', '诊断'],
 };
 
 /**

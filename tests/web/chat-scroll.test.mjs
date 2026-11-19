@@ -4,8 +4,10 @@ import {
   FOLLOW_BOTTOM_THRESHOLD,
   distanceFromBottom,
   isNearBottom,
+  readingPinDelta,
   resolveAutoFollow,
   resolveLiveFollow,
+  shouldCorrectReadingPin,
   shouldReleaseFollowOnWheel,
 } from '../../web/src/features/conversation/chat-scroll.ts';
 
@@ -67,4 +69,13 @@ test('a streaming thinking panel follows tokens only while the reader stays at i
   assert.equal(resolveLiveFollow({ nearBottom: false }), false);
   // 自己滚回底部后恢复跟随。
   assert.equal(resolveLiveFollow({ nearBottom: true, wheelUp: false }), true);
+});
+
+test('reading pin delta reports how far a node drifted from its saved offset', () => {
+  assert.equal(readingPinDelta({ viewportTop: 100, nodeTop: 140, offset: 40 }), 0);
+  assert.equal(readingPinDelta({ viewportTop: 100, nodeTop: 180, offset: 40 }), 40);
+  assert.equal(readingPinDelta({ viewportTop: 100, nodeTop: 110, offset: 40 }), -30);
+  assert.equal(shouldCorrectReadingPin(0.4), false);
+  assert.equal(shouldCorrectReadingPin(0.6), true);
+  assert.equal(shouldCorrectReadingPin(-1), true);
 });

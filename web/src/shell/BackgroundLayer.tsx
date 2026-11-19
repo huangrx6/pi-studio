@@ -48,14 +48,18 @@ function VideoStill({ media, className, onReady, onError }: MediaProps) {
         fail();
         return;
       }
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      // Cap the still frame so a 4K loop does not keep a full-resolution canvas texture.
+      const maxEdge = 2560;
+      const edge = Math.max(video.videoWidth, video.videoHeight);
+      const scale = edge > maxEdge ? maxEdge / edge : 1;
+      canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+      canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
       const context = canvas.getContext('2d');
       if (!context) {
         fail();
         return;
       }
-      context.drawImage(video, 0, 0);
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
       setReady(true);
       onReady?.(media.url);
       video.removeAttribute('src');

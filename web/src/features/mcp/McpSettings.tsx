@@ -32,8 +32,12 @@ export function McpSettings<T extends McpSettingsServer>({ servers, busy, recove
   onDelete: (name: string) => void;
 }) {
   return <div className="settings-sections mcp-settings">
-    <SettingsPageHeader icon={<Plug />} title="MCP 服务器"
-      meta={servers.length ? <><span>{servers.length} 个服务器</span><InfoHint label="默认通过 tool_search 按需发现工具；连接变更从下一次请求开始生效。" /></> : undefined}
+    <SettingsPageHeader
+      icon={<Plug />}
+      title="MCP 服务器"
+      meta={servers.length
+        ? <><span>{servers.length} 个服务器</span><InfoHint label="默认通过 tool_search 按需发现工具；连接变更从下一次请求开始生效。" /></>
+        : <span>连接外部工具服务，启停从下一次请求生效</span>}
       actions={<>
         <button type="button" className="settings-outline" disabled={busy || refreshBusy || recoveryPending} aria-label="刷新 MCP 服务器状态" onClick={onRefresh}><span className={`mcp-refresh-glyph ${refreshBusy ? 'spin' : ''}`} aria-hidden="true">↻</span>{refreshBusy ? '正在刷新…' : '刷新状态'}</button>
         <button type="button" className="settings-add-button" disabled={busy || refreshBusy} aria-label="添加 MCP 服务器" onClick={onAdd}><Plus />添加服务器</button>

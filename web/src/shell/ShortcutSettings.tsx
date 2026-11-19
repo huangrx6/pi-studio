@@ -102,7 +102,7 @@ export function ShortcutSettings({ preferences, onChange }: {
   }
 
   return <div className="settings-sections shortcut-settings">
-    <SettingsPageHeader icon={<Keyboard />} title="快捷键" actions={
+    <SettingsPageHeader icon={<Keyboard />} title="快捷键" meta={<span>全局与对话相关快捷键</span>} actions={
       hasCustomShortcuts
         ? <button type="button" className="secondary-button" onClick={reset}><RotateCcw />恢复默认</button>
         : undefined
@@ -119,29 +119,45 @@ export function ShortcutSettings({ preferences, onChange }: {
             <strong>{action.label}</strong>
             {action.hint && <small>{action.hint}</small>}
           </span>
-          <button
-            type="button"
-            className={`shortcut-key ${isRecording ? 'is-recording' : ''} ${isDefault ? '' : 'is-custom'}`}
-            aria-label={`${action.label}：${formatShortcut(combo)}，${isRecording ? '正在录制，点击取消' : '点击录制新组合'}`}
-            aria-pressed={isRecording}
-            aria-describedby={`${helpId} ${statusId}`}
-            onBlur={() => { if (isRecording) cancelRecording(); }}
-            onClick={(event) => {
-              if (isRecording) { cancelRecording(); return; }
-              recordingButton.current = event.currentTarget;
-              setConflict('');
-              setRecording(action.id);
-              setStatus(`正在录制「${action.label}」，请按下新组合。`);
-            }}
-          >
-            {isRecording
-              ? '按下新组合…'
-              : <span className="shortcut-keys" aria-hidden="true">
-                  {formatShortcutParts(combo).map((part, index, all) => (
-                    <kbd key={`${part}-${index}`} className={index === all.length - 1 ? 'is-key' : 'is-mod'}>{part}</kbd>
-                  ))}
-                </span>}
-          </button>
+          <div className="shortcut-controls">
+            {!isDefault && !isRecording && (
+              <button
+                type="button"
+                className="settings-text-button shortcut-reset-one"
+                aria-label={`将「${action.label}」恢复为默认`}
+                onClick={() => {
+                  setConflict('');
+                  setStatus(`已将「${action.label}」恢复为默认 ${formatShortcut(action.default)}。`);
+                  onChange('shortcuts', { ...shortcuts, [action.id]: action.default });
+                }}
+              >
+                恢复
+              </button>
+            )}
+            <button
+              type="button"
+              className={`shortcut-key ${isRecording ? 'is-recording' : ''} ${isDefault ? '' : 'is-custom'}`}
+              aria-label={`${action.label}：${formatShortcut(combo)}，${isRecording ? '正在录制，点击取消' : '点击录制新组合'}`}
+              aria-pressed={isRecording}
+              aria-describedby={`${helpId} ${statusId}`}
+              onBlur={() => { if (isRecording) cancelRecording(); }}
+              onClick={(event) => {
+                if (isRecording) { cancelRecording(); return; }
+                recordingButton.current = event.currentTarget;
+                setConflict('');
+                setRecording(action.id);
+                setStatus(`正在录制「${action.label}」，请按下新组合。`);
+              }}
+            >
+              {isRecording
+                ? '按下新组合…'
+                : <span className="shortcut-keys" aria-hidden="true">
+                    {formatShortcutParts(combo).map((part, index, all) => (
+                      <kbd key={`${part}-${index}`} className={index === all.length - 1 ? 'is-key' : 'is-mod'}>{part}</kbd>
+                    ))}
+                  </span>}
+            </button>
+          </div>
         </div>;
       })}
     </div>

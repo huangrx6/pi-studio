@@ -318,7 +318,7 @@ export function AgentToolsSettings({ cwd, initialSelection, onSaved }: {
   }
 
   return <div className="settings-sections agent-tools-settings">
-    <SettingsPageHeader icon={<Wrench />} title="智能体工具" actions={<button type="button" className="settings-outline" disabled={loading || saving} onClick={() => void loadCatalog(true)}>{loading && <LoadingIndicator />}刷新目录</button>} />
+    <SettingsPageHeader icon={<Wrench />} title="智能体工具" meta={<span>控制对话中可调用的工具与扩展命令</span>} actions={<button type="button" className="settings-outline" disabled={loading || saving} onClick={() => void loadCatalog(true)}>{loading && <LoadingIndicator />}刷新目录</button>} />
     <div className="agent-tool-save-bar">
       <div><p>全局配置 · 保存后应用于所有工作区。</p><span role="status">{saving ? '正在保存…' : dirty ? '有未保存的更改' : '与已保存配置一致'}</span></div>
       <div className="agent-tool-toolbar-actions">

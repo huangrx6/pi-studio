@@ -9,7 +9,9 @@ import { outlineIndexAt } from './outline-sync.ts';
 import {
   SCROLL_INTENT_WINDOW_MS,
   isNearBottom,
+  readingPinDelta,
   resolveAutoFollow,
+  shouldCorrectReadingPin,
 } from './chat-scroll.ts';
 
 type Setter<T> = React.Dispatch<React.SetStateAction<T>>;
@@ -60,7 +62,12 @@ export function useTranscriptNavigation({
   const topSentinelRef = useRef<HTMLDivElement | null>(null);
   const bottomSentinelRef = useRef<HTMLDivElement | null>(null);
   const chatContentRef = useRef<HTMLDivElement>(null);
-  const pageAnchorRef = useRef<{ session: string; anchors: Array<{ id: string; offset: number }> } | null>(null);
+  const pageAnchorRef = useRef<{
+    session: string;
+    anchors: Array<{ id: string; offset: number }>;
+    /** Keep correcting after prepend while images/markdown finish layout. */
+    sticky?: boolean;
+  } | null>(null);
   const jumpingRef = useRef(false);
   const hasNewerRef = useRef(hasNewer);
   hasNewerRef.current = hasNewer;
@@ -166,7 +173,8 @@ export function useTranscriptNavigation({
   }
 
   function resumeTranscriptFollow(force = false) {
-    if (!force && (hasNewerRef.current || olderLoadingRef.current || pageAnchorRef.current)) return;
+    if (!force && (hasNewerRef.current || olderLoadingRef.current)) return;
+    pageAnchorRef.current = null;
     followBottomRef.current = true;
     scheduleTranscriptPin();
   }
@@ -219,12 +227,57 @@ export function useTranscriptNavigation({
       const box = node.getBoundingClientRect();
       return box.bottom > rect.top && box.top < rect.bottom;
     });
+    // Keep several anchors so a recycled DOM id still has a fallback, but the
+    // first visible node is the reading pin re-applied while images settle.
     pageAnchorRef.current = {
       session: windowSession,
       anchors: visible
         .map(node => ({ id: node.id, offset: node.getBoundingClientRect().top - rect.top })),
+      sticky: true,
     };
     return visible.map(node => Number(node.id.split('-').at(-1))).filter(Number.isFinite);
+  }
+
+  function applyPageAnchor() {
+    const anchor = pageAnchorRef.current;
+    const root = scrollRef.current;
+    if (!anchor || !root || anchor.session !== windowSession) return false;
+    for (const item of anchor.anchors) {
+      const node = document.getElementById(item.id);
+      if (!node || !root.contains(node)) continue;
+      const delta = readingPinDelta({
+        viewportTop: root.getBoundingClientRect().top,
+        nodeTop: node.getBoundingClientRect().top,
+        offset: item.offset,
+      });
+      if (shouldCorrectReadingPin(delta)) {
+        root.scrollTop += delta;
+      }
+      programmedTopRef.current = root.scrollTop;
+      lastTranscriptScrollTopRef.current = root.scrollTop;
+      return true;
+    }
+    return false;
+  }
+
+  /** While the reader browses history, rebind the pin to what is on screen. */
+  function rebindPageAnchorFromViewport() {
+    const root = scrollRef.current;
+    if (!root || followBottomRef.current || olderLoadingRef.current) return;
+    const rect = root.getBoundingClientRect();
+    const nodes = Array.from(root.querySelectorAll<HTMLElement>('.messages > [id]'));
+    const visible = nodes.filter(node => {
+      const box = node.getBoundingClientRect();
+      return box.bottom > rect.top + 8 && box.top < rect.bottom - 8;
+    });
+    if (!visible.length) return;
+    pageAnchorRef.current = {
+      session: windowSession,
+      anchors: visible
+        .slice(0, 4)
+        .map(node => ({ id: node.id, offset: node.getBoundingClientRect().top - rect.top })),
+      sticky: true,
+    };
   }
 
   async function loadWithAnchor(direction: 'older' | 'newer') {
@@ -248,18 +301,12 @@ export function useTranscriptNavigation({
 
   useLayoutEffect(() => {
     const anchor = pageAnchorRef.current;
-    const root = scrollRef.current;
-    if (!anchor || !root || anchor.session !== windowSession) return;
-    pageAnchorRef.current = null;
-    for (const item of anchor.anchors) {
-      const node = document.getElementById(item.id);
-      if (!node || !root.contains(node)) continue;
-      root.scrollTop += node.getBoundingClientRect().top - root.getBoundingClientRect().top - item.offset;
-      break;
-    }
+    if (!anchor || anchor.session !== windowSession) return;
+    applyPageAnchor();
     pageIntentRef.current = null;
-    programmedTopRef.current = root.scrollTop;
-    lastTranscriptScrollTopRef.current = root.scrollTop;
+    // Sticky anchors survive so late image/markdown growth can be corrected.
+    // Non-sticky one-shots (none today) would clear here.
+    if (!anchor.sticky) pageAnchorRef.current = null;
   }, [messages[0]?.sourceIndex, messages[0]?.sourceOffset, messages.at(-1)?.sourceIndex, messages.at(-1)?.sourceOffset, windowSession]);
 
   const lastAssistantTurnIndex = useMemo(
@@ -372,7 +419,7 @@ export function useTranscriptNavigation({
     }
     const nextFollow = resolveAutoFollow({
       following: followBottomRef.current,
-      nearBottom: !hasNewer && !olderLoadingRef.current && !pageAnchorRef.current && isNearBottom(node),
+      nearBottom: !hasNewer && !olderLoadingRef.current && isNearBottom(node),
       userInitiated: userScrollIntentRef.current,
       movedTowardStart: nextTop < lastTranscriptScrollTopRef.current - 0.5,
     });
@@ -381,6 +428,11 @@ export function useTranscriptNavigation({
       else pauseTranscriptFollow();
     }
     lastTranscriptScrollTopRef.current = nextTop;
+    // After the user moves, pin whatever is now on screen so a later image
+    // decode holds that reading place instead of an obsolete pre-scroll node.
+    if (!followBottomRef.current && userScrollIntentRef.current) {
+      rebindPageAnchorFromViewport();
+    }
     scheduleOutlineSync();
   }
 
@@ -512,7 +564,14 @@ export function useTranscriptNavigation({
       // transcript's natural height. Those updates still need the normal
       // coalesced follow-to-bottom pass while the reader is following live
       // output.
-      if (contentChanged) scheduleTranscriptPin();
+      if (contentChanged) {
+        if (followBottomRef.current) {
+          scheduleTranscriptPin();
+        } else if (pageAnchorRef.current?.sticky && !userScrollIntentRef.current) {
+          // Hold the reading place while lazy images and markdown finish.
+          applyPageAnchor();
+        }
+      }
     });
     observer.observe(content);
     observer.observe(viewport);

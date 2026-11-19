@@ -116,7 +116,7 @@ export function ModelSettings({ providers, quotaAvailable, models, enabledModels
   }), [useModelDirectory, defaultModelSelection.modelRef, defaultModelSelection.label, enabledModels, modelById]);
   const thinkingOptions = defaultModelSelection.thinkingLevels.map((level) => ({ value: level, label: thinkingLabels[level], description: level === 'default' ? '跟随模型和 Pi 的默认推理等级' : `固定使用 ${thinkingLabels[level]}` }));
   if (providers.length === 0) return <div className="settings-sections model-settings">
-    <SettingsPageHeader icon={<Cpu />} title="模型配置" />
+    <SettingsPageHeader icon={<Cpu />} title="模型配置" meta={<span>连接模型来源并管理对话模型</span>} />
     <section className="model-settings-first-run" aria-labelledby="model-first-run-heading">
       <div>
         <h2 id="model-first-run-heading">连接一个模型来源</h2>
@@ -128,7 +128,7 @@ export function ModelSettings({ providers, quotaAvailable, models, enabledModels
     </section>
   </div>;
   return <div className="settings-sections model-settings">
-    <SettingsPageHeader icon={<Cpu />} title="模型配置" actions={<button type="button" className="settings-add-button" disabled={settingsBusy} onClick={actions.onAddProvider}>添加模型来源</button>} />
+    <SettingsPageHeader icon={<Cpu />} title="模型配置" meta={<span>连接模型来源并管理对话模型</span>} actions={<button type="button" className="settings-add-button" disabled={settingsBusy} onClick={actions.onAddProvider}>添加模型来源</button>} />
     <section className="model-settings-section model-default-card" aria-labelledby="model-default-heading"><div className="model-settings-section-heading"><div><h2 id="model-default-heading">新对话默认</h2><p>只影响新对话，当前会话保持原设置。</p></div>{defaultModelBusy && <LoadingState>同步中</LoadingState>}</div>
       {useModelDirectory || defaultOptions.length > 0 ? <div className="model-settings-default-fields">
         <label><span>默认模型</span>{useModelDirectory

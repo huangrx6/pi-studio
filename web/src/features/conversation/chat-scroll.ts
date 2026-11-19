@@ -73,3 +73,25 @@ export function resolveAutoFollow({ following, nearBottom, userInitiated, movedT
   if (nearBottom) return true;
   return following;
 }
+
+
+/**
+ * How far a pinned transcript node has drifted from its saved viewport offset.
+ * Positive means the node moved down and scrollTop should increase to hold it.
+ */
+export function readingPinDelta({
+  viewportTop,
+  nodeTop,
+  offset,
+}: {
+  viewportTop: number;
+  nodeTop: number;
+  offset: number;
+}) {
+  return nodeTop - viewportTop - offset;
+}
+
+/** Ignore sub-pixel drift from fractional layout and device pixel rounding. */
+export function shouldCorrectReadingPin(delta: number, threshold = 0.5) {
+  return Math.abs(delta) > threshold;
+}

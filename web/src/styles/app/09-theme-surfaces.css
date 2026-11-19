@@ -291,15 +291,42 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 
 /* A round of changes shares one scroll surface, with lightweight file disclosures. */
 .changes-view { flex: 1; width: 100%; min-width: 0; height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--surface); }
-.changes-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 12px; border-bottom: 1px solid var(--border); }
-.changes-round, .changes-tools { display: flex; align-items: center; gap: 6px; }
-.changes-round { background: var(--surface-soft); border-radius: var(--radius-round); padding: 5px 12px 5px 6px; }
-.changes-round .pi-select { width: 165px; max-width: 165px; }
-.changes-round .pi-select-trigger { height: 28px; padding: 0 5px; border: 0; background: var(--transparent); color: var(--text); gap: 4px; font-size: var(--text-sm); }
+.changes-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: 8px;
+  height: var(--toolbar-height);
+  min-height: var(--toolbar-height);
+  max-height: var(--toolbar-height);
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+}
+.changes-round, .changes-tools { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* Compact chip aligned to the 36px toolbar — even padding, control radius, no pill. */
+.changes-round {
+  height: 28px;
+  padding: 0 8px 0 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+}
+.changes-round .pi-select { width: min(168px, 42cqi); max-width: 180px; min-width: 0; }
+.changes-round .pi-select-trigger {
+  height: 26px;
+  padding: 0 4px;
+  border: 0;
+  background: var(--transparent);
+  color: var(--text);
+  gap: 4px;
+  font-size: var(--text-sm);
+}
 .changes-round .pi-select-trigger:hover:not(:disabled) { border: 0; background: var(--transparent); color: var(--text); }
 .changes-round .pi-select-trigger.is-open,
 .changes-round .pi-select-trigger:focus-visible { border: 0; box-shadow: none; outline: none; }
-.changes-tools { gap: 3px; }
+.changes-round .diff-view-counts { gap: 6px; font-variant-numeric: tabular-nums; }
+.changes-tools { gap: 2px; flex: none; }
 .changes-tools [aria-pressed=true] { color: var(--text); background: var(--surface-hover); }
 .changes-workspace { flex: 1; min-height: 0; display: flex; }
 .changes-scroll { flex: 1; min-width: 0; overflow: auto; scroll-padding-top: 6px; }
@@ -359,16 +386,13 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .brand .brand-mark { width: 26px; height: 26px; }
 .chat-header { border-bottom: 0; }
 .panel-tabbar { border-bottom: 0; }
-.chat-tabs, .changes-toolbar { height: var(--toolbar-height); min-height: var(--toolbar-height); max-height: var(--toolbar-height); flex: none; }
-.chat-tabs { border-bottom-color: var(--border); }
+.chat-tabs { height: var(--toolbar-height); min-height: var(--toolbar-height); max-height: var(--toolbar-height); flex: none; border-bottom-color: var(--border); }
 .changes-view { container-type: inline-size; }
-.changes-toolbar { flex-wrap: nowrap; padding: 0 10px; gap: 6px; }
-.changes-round { border-radius: var(--radius-card); padding: 2px 9px 2px 4px; min-width: 0; }
-.changes-round .pi-select-trigger { height: 28px; }
+.changes-toolbar { flex: none; }
 @container (max-width: 480px) {
-  .changes-toolbar { padding-inline: 8px; }
+  .changes-toolbar { padding-inline: 8px; gap: 4px; }
   .changes-round { padding-inline: 4px; gap: 4px; }
-  .changes-round .pi-select { width: 112px; }
+  .changes-round .pi-select { width: 112px; max-width: 112px; }
   .changes-round .pi-select-trigger { font-size: var(--text-xs); }
   .changes-round .diff-view-counts { font-size: var(--text-xs); gap: 4px; }
   .changes-tools { gap: 0; }

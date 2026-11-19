@@ -3,6 +3,8 @@ import type { CSSProperties } from 'react';
 type RangeControlProps = {
   id: string;
   label: string;
+  /** Optional one-line help under the label. */
+  description?: string;
   value: number;
   min?: number;
   max?: number;
@@ -19,6 +21,7 @@ type RangeControlProps = {
 export function RangeControl({
   id,
   label,
+  description,
   value,
   min = 0,
   max = 100,
@@ -36,7 +39,10 @@ export function RangeControl({
   return (
     <label className={`settings-range-control ${disabled ? 'is-disabled' : ''}`} htmlFor={id}>
       <span className="settings-range-copy">
-        <strong>{label}</strong>
+        <span className="settings-range-heading">
+          <strong>{label}</strong>
+          {description && <small className="settings-range-description">{description}</small>}
+        </span>
         <output htmlFor={id}>{value}{unit}</output>
       </span>
       <input

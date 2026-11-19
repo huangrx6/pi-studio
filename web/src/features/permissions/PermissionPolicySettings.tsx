@@ -385,12 +385,12 @@ function PermissionPolicyEditor({
     </div>;
   }
 
-  return <div className={`settings-sections permission-policy ${className}`.trim()} aria-label="智能体权限策略">
+  return <div className={`settings-sections permission-policy ${className}`.trim()} aria-label="权限策略">
     <SettingsPageHeader
       className="permission-policy-page-head"
       icon={<ShieldCheck />}
-      title="智能体权限"
-      meta={<span>保存后从下一次工具调用生效</span>}
+      title="权限策略"
+      meta={<span>保存后从下一次工具调用开始生效</span>}
       actions={(scope === 'user' || Boolean(snapshot.scopes[scope]))
         ? <button type="button" className="settings-outline permission-policy-reset" disabled={busy} onClick={() => void resetPolicy()}>
           <RotateCcw />{operation === 'reset' ? '恢复中…' : scope === 'user' ? '恢复默认' : '恢复继承'}

@@ -4,8 +4,12 @@
 .usage-project-filter { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-4); }
 .usage-project-filter .pi-select { width: min(100%, 270px); }
 .usage-project-menu .pi-select-option :is(.pi-select-option-label, small) { overflow-wrap: anywhere; }
-.usage-project-filter label { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--muted); font-size: var(--text-sm); cursor: pointer; }
+.usage-project-filter label,
+.usage-include-removed { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--muted); font-size: var(--text-sm); cursor: pointer; }
 .usage-project-filter input { margin: 0; accent-color: var(--accent); }
+.usage-include-removed span { display: grid; gap: 1px; line-height: 1.25; }
+.usage-include-removed strong { color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.usage-include-removed small { color: var(--faint); font-size: var(--text-xs); }
 .usage-summary-section, .usage-models-card { min-width: 0; }
 .usage-models-card { padding-top: var(--space-5); border-top: 1px solid var(--divider); }
 .usage-section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
@@ -14,14 +18,25 @@
 .usage-window-label, .usage-cumulative, .usage-models-meta { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-relaxed); font-variant-numeric: tabular-nums; }
 .usage-window-label { margin-bottom: var(--space-4); }
 .usage-cumulative { margin-top: var(--space-4); }
-.usage-empty-state { display: grid; gap: 6px; padding: 26px 0 22px; }
+.usage-empty-state { display: grid; gap: 6px; justify-items: start; padding: 26px 0 22px; }
 .usage-empty-state strong { color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-medium); }
 .usage-empty-state span { color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-relaxed); }
+.usage-empty-state .settings-outline { margin-top: var(--space-2); }
 .usage-loading { margin-bottom: var(--space-4); }
 .usage-loading .loading-state-label { white-space: normal; }
 .usage-read-error { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-2) var(--space-3); margin-bottom: var(--space-4); color: var(--error); font-size: var(--text-sm); line-height: var(--leading-body); }
 .usage-read-error > span { min-width: 0; overflow-wrap: anywhere; }
-.usage-collection-note { margin: 0 0 var(--space-4); color: var(--warning); font-size: var(--text-sm); line-height: var(--leading-body); }
+.usage-collection-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+  margin: 0 0 var(--space-4);
+  color: var(--warning);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+.usage-collection-note .settings-text-button { color: inherit; }
 .usage-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: var(--space-6); }
 .usage-hero-copy { min-width: 0; }
 .usage-hero h3 { margin: 0; color: var(--text); font-size: clamp(var(--text-display), 4cqi, var(--text-hero)); font-weight: var(--weight-medium); line-height: 1.2; font-variant-numeric: tabular-nums; letter-spacing: -.03em; }

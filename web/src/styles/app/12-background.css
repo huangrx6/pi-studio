@@ -192,7 +192,14 @@
 }
 .settings-range-control.is-disabled .settings-range-copy strong { color: var(--disabled-text); }
 .settings-range-copy { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
+.settings-range-heading { display: grid; min-width: 0; gap: 2px; }
 .settings-range-copy strong { color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.settings-range-description {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-regular);
+  line-height: 1.4;
+}
 .settings-range-copy output {
   min-width: 50px;
   padding: 4px 8px;

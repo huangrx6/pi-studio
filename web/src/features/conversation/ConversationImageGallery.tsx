@@ -38,6 +38,7 @@ export function ConversationImageGallery({ images, className = '' }: {
 }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [contextMenu, setContextMenu] = useState<ImageContextMenuState | null>(null);
+  const [ready, setReady] = useState<Record<number, true>>({});
 
   if (images.length === 0) return null;
 
@@ -51,7 +52,7 @@ export function ConversationImageGallery({ images, className = '' }: {
       {images.map((image, index) => <button
         key={`${index}-${image.src.slice(-32)}`}
         type="button"
-        className="conversation-image-tile"
+        className={`conversation-image-tile${ready[index] ? ' is-ready' : ' is-pending'}`}
         aria-label={`放大预览图片 ${index + 1}${image.alt ? `：${image.alt}` : ''}`}
         title="点击放大预览"
         onFocus={() => { void loadImagePreview(); }}
@@ -59,7 +60,14 @@ export function ConversationImageGallery({ images, className = '' }: {
         onClick={() => setActiveIndex(index)}
         onContextMenu={(event) => setContextMenu(imageContextMenuState(event, image))}
       >
-        <img src={image.src} alt={image.alt || ''} loading="lazy" decoding="async" draggable={false} />
+        <img
+          src={image.src}
+          alt={image.alt || ''}
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          onLoad={() => setReady((current) => (current[index] ? current : { ...current, [index]: true }))}
+        />
         {images.length > 1 && <span className="conversation-image-index" aria-hidden="true">{index + 1}</span>}
         <span className="conversation-image-expand" aria-hidden="true"><Maximize2 /></span>
       </button>)}

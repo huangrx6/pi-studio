@@ -133,8 +133,11 @@ function UsageHeatmap({ snapshot, modelFilter, onModelFilterChange }: {
   </>;
 }
 
-export function UsageSettings({ active, includeRemoved, onIncludeRemovedChange }: {
-  active: boolean; includeRemoved: boolean; onIncludeRemovedChange: (value: boolean) => void;
+export function UsageSettings({ active, includeRemoved, onIncludeRemovedChange, onOpenExtensions }: {
+  active: boolean;
+  includeRemoved: boolean;
+  onIncludeRemovedChange: (value: boolean) => void;
+  onOpenExtensions?: () => void;
 }) {
   const [days, setDays] = useState<number>(365);
   const [project, setProject] = useState('all');
@@ -183,11 +186,17 @@ export function UsageSettings({ active, includeRemoved, onIncludeRemovedChange }
     <div className="usage-project-filter">
       <Select label="按项目筛选使用量" leadingIcon={<Folder />} value={project} onChange={setProject}
         menuClassName="usage-project-menu" options={projectOptions} />
-      {projects.some(p => p.removed) && <label><input type="checkbox" checked={includeRemoved} onChange={event => {
-        const checked = event.target.checked;
-        if (!checked && projects.some(p => p.workspace === project && p.removed)) setProject('all');
-        onIncludeRemovedChange(checked);
-      }} />包括已移除项目</label>}
+      {projects.some(p => p.removed) && <label className="usage-include-removed" title="已从侧栏移除但仍保留用量记录的项目">
+        <input type="checkbox" checked={includeRemoved} onChange={event => {
+          const checked = event.target.checked;
+          if (!checked && projects.some(p => p.workspace === project && p.removed)) setProject('all');
+          onIncludeRemovedChange(checked);
+        }} />
+        <span>
+          <strong>包括已移除项目</strong>
+          <small>侧栏里已不在，但仍有历史用量</small>
+        </span>
+      </label>}
     </div>
     <section className="usage-summary-section" aria-label="Token 使用概览" aria-busy={summary.pending}>
       <header className="usage-section-head"><h2>近期用量</h2>{!empty && <div className="usage-range-switch" role="group" aria-label="热力图日期范围">{RANGE_OPTIONS.map(option => <button type="button" key={option} aria-pressed={days === option} className={days === option ? 'is-active' : ''} onClick={() => setDays(option)}>{option === 365 ? '1 年' : `${option} 天`}</button>)}</div>}</header>
@@ -195,10 +204,20 @@ export function UsageSettings({ active, includeRemoved, onIncludeRemovedChange }
       {snapshot && (empty
         ? <div className="usage-empty-state" role="status">
             <strong>{snapshot.collection.enabled ? '还没有使用记录' : '用量采集已关闭'}</strong>
-            <span>{snapshot.collection.enabled ? '开始对话后，这里会显示按本地日期汇总的 Token 和请求。' : '历史数据会保留；重新启用 Studio Metrics 后继续记录。'}</span>
+            <span>{snapshot.collection.enabled
+              ? '开始对话后，这里会显示按本地日期汇总的 Token 和请求。'
+              : '历史数据会保留。可在扩展页重新开启内置的 Studio Metrics。'}</span>
+            {!snapshot.collection.enabled && onOpenExtensions && (
+              <button type="button" className="settings-outline" onClick={onOpenExtensions}>前往扩展</button>
+            )}
           </div>
         : <>
-            {!snapshot.collection.enabled && <p className="usage-collection-note">用量采集已关闭。历史数据保留；重新启用 Studio Metrics 后继续记录。</p>}
+            {!snapshot.collection.enabled && (
+              <div className="usage-collection-note" role="status">
+                <span>用量采集已关闭。历史数据会保留；重新开启内置 Studio Metrics 后继续记录。</span>
+                {onOpenExtensions && <button type="button" className="settings-text-button" onClick={onOpenExtensions}>前往扩展</button>}
+              </div>
+            )}
             <p className="usage-window-label">{snapshot.sinceDay} 至 {dayKey(new Date(snapshot.generatedAt))} · {snapshot.days} 天 · 全部模型</p>
             <div className="usage-hero">
               <div className="usage-hero-copy"><h3 title={`${exactNumber(snapshot.range.totalTokens)} tokens`}>{tokenNumber(snapshot.range.totalTokens)} <small>tokens</small></h3><TokenSplit totals={snapshot.range} /><UsageSparkline daily={snapshot.daily} /></div>

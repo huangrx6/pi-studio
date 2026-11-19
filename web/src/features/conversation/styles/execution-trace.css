@@ -109,12 +109,50 @@
 .tool-result-images-toggle svg { width: 13px; height: 13px; }
 .tool-result-images-toggle:hover { color: var(--text-1); background: transparent; }
 .tool-result-images .conversation-image-gallery { margin: 4px 0 0; }
-.assistant-turn-main .conversation-image-tile:only-child { width: fit-content; height: auto; max-width: 100%; flex: 0 1 auto; }
-.assistant-turn-main .conversation-image-tile:only-child img { width: auto; height: auto; max-width: min(100%, 420px); max-height: 280px; }
-.conversation-markdown-image { display: inline-block; max-width: 100%; padding: 0; background: transparent; cursor: zoom-in; vertical-align: middle; }
+/* Keep a stable box before decode. height:auto alone collapses to 0 then jumps. */
+.assistant-turn-main .conversation-image-tile:only-child {
+  width: min(100%, 420px);
+  height: auto;
+  min-height: 160px;
+  max-width: 100%;
+  flex: 0 1 auto;
+  aspect-ratio: 4 / 3;
+}
+.assistant-turn-main .conversation-image-tile:only-child.is-ready {
+  aspect-ratio: auto;
+  min-height: 0;
+}
+.assistant-turn-main .conversation-image-tile:only-child img {
+  width: auto;
+  height: auto;
+  max-width: min(100%, 420px);
+  max-height: 280px;
+}
+.conversation-markdown-image {
+  display: inline-grid;
+  max-width: 100%;
+  min-width: min(100%, 240px);
+  min-height: 120px;
+  padding: 0;
+  background: var(--surface-soft);
+  cursor: zoom-in;
+  vertical-align: middle;
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+.conversation-markdown-image.is-ready { background: transparent; min-height: 0; min-width: 0; }
 .conversation-markdown-image img { display: block; max-width: 100%; max-height: 420px; object-fit: contain; }
 .conversation-markdown-image:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
-.conversation-image-placeholder { color: var(--muted); font-size: var(--text-sm); }
+.conversation-image-placeholder {
+  display: grid;
+  place-items: center;
+  min-height: 120px;
+  padding: 12px 14px;
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-size: var(--text-sm);
+}
 
 /* Finished steps off-screen stay cheap while a long live sequence is open. */
 .turn-trace .activity-disclosure.is-done {

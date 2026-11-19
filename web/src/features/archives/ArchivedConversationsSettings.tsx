@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Ellipsis, FolderClosed, ListFilter, Search, Trash2, X } from 'lucide-react';
+import { ArchiveRestore, Ellipsis, FolderClosed, ListFilter, Search, Trash2, X } from 'lucide-react';
 import { ActionMenu } from '../../shared/ActionMenu';
 import { Select } from '../../shared/Select';
 import { LoadingIndicator } from '../../shared/LoadingState';
@@ -115,7 +115,7 @@ export function ArchivedConversationsSettings({ workspaces, onRestore, onDelete,
   }
 
   return <div className="settings-sections archived-conversations-settings" ref={rootRef} tabIndex={-1} aria-label="归档会话">
-    <SettingsPageHeader title="归档会话" />
+    <SettingsPageHeader icon={<ArchiveRestore />} title="归档会话" meta={<span>已归档的会话可在此恢复或永久删除</span>} />
     {total > 0 && <div className="archive-search-row">
       <div className="archive-search" role="search" aria-label="搜索归档会话">
         <Search aria-hidden="true" />

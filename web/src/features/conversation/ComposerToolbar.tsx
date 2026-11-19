@@ -1,15 +1,18 @@
 import type { ReactNode } from 'react';
-import { ArrowUp, MoreHorizontal, Plus, Square } from 'lucide-react';
+import { ArrowUp, ListPlus, Plus, Square } from 'lucide-react';
 import { LoadingIndicator } from '../../shared/LoadingState';
-import { getActivePreferences } from '../../shared/preferences';
 import { formatShortcut } from '../../shared/shortcuts';
+import { resolveComposerPrimaryAction } from './composer-primary-action';
 import './styles/composer-toolbar.css';
+
+export { resolveComposerPrimaryAction } from './composer-primary-action';
+export type { ComposerPrimaryAction } from './composer-primary-action';
 
 /** Presentation only: request, attachment and queue ownership stays with the conversation. */
 export function ComposerToolbar({
   context, model, isNewConversation, attachingDisabled, attachmentTitle,
   running, stopping, compacting, hasWorkspace, hasModel, isCommand, hasContent, loading, preparing = false,
-  onAttach, onActions, onSend, onStop,
+  onAttach, onSend, onStop, onQueue,
 }: {
   context: ReactNode;
   model: ReactNode;
@@ -26,38 +29,63 @@ export function ComposerToolbar({
   loading: boolean;
   preparing?: boolean;
   onAttach: () => void;
-  onActions: () => void;
   onSend: () => void;
   onStop: () => void;
+  onQueue: () => void;
 }) {
-  // Stopping clears the visible run state optimistically, but the stop action
-  // must remain in place until the main process acknowledges the request.
-  const showStop = running || stopping;
-  const sendTitle = preparing ? '正在准备消息，草稿仍可编辑' : stopping ? '正在停止当前任务' : loading ? '正在加载会话'
-    : !isCommand && !hasWorkspace ? '请先选择工作区'
-      : !isCommand && !hasModel ? '请先选择可用模型'
-      : compacting ? '正在压缩我们的对话内容，以便继续对话'
-        : running ? `补充当前任务 · ${formatShortcut('Mod+Enter')} 排队` : '发送消息';
+  const primary = resolveComposerPrimaryAction({ running, stopping, preparing, hasContent });
+  const canDispatch = !loading && !stopping && !preparing && !compacting
+    && (isCommand || (hasWorkspace && hasModel));
+  const sendDisabled = !canDispatch || !hasContent;
+  const queueTitle = `排队下一条 · ${formatShortcut('Mod+Enter')}`;
+  const sendTitle = preparing ? '正在准备消息，草稿仍可编辑'
+    : stopping ? '正在停止当前任务'
+      : loading ? '正在加载会话'
+        : !isCommand && !hasWorkspace ? '请先选择工作区'
+          : !isCommand && !hasModel ? '请先选择可用模型'
+            : compacting ? '正在压缩我们的对话内容，以便继续对话'
+              : '发送消息';
   const stopTitle = stopping ? '正在停止当前任务' : '停止当前任务';
+
   return <div className="composer-bar composer-toolbar">
     <div className={`composer-left ${isNewConversation ? 'is-new-conversation' : ''}`}>
       <button type="button" className="composer-attach-button" disabled={attachingDisabled} onClick={onAttach} aria-label="添加图片或文件" title={attachmentTitle}><Plus aria-hidden="true" /></button>
       <div className="composer-context-group">{context}</div>
     </div>
     <div className="composer-right">
-      <button type="button" className="composer-more-button" aria-label="更多会话动作" title={`会话动作 · ${formatShortcut(getActivePreferences().shortcuts.palette)}`} onClick={onActions}><MoreHorizontal aria-hidden="true" /></button>
       {model}
-      {showStop && (
-        <button type="button" className="send-button is-stop" disabled={stopping}
-          onClick={onStop} aria-label={stopTitle} title={stopTitle}>
-          {stopping ? <LoadingIndicator /> : <Square fill="currentColor" aria-hidden="true" />}
+      {primary === 'stop' || primary === 'stopping' ? (
+        <button
+          type="button"
+          className="send-button is-stop"
+          disabled={primary === 'stopping'}
+          onClick={onStop}
+          aria-label={stopTitle}
+          title={stopTitle}
+        >
+          {primary === 'stopping' ? <LoadingIndicator /> : <Square fill="currentColor" aria-hidden="true" />}
         </button>
-      )}
-      {(!showStop || hasContent) && (
-        <button type="button" className="send-button" onClick={onSend} title={sendTitle}
-          disabled={preparing || loading || stopping || (!isCommand && (!hasWorkspace || !hasModel)) || !hasContent || compacting}
-          aria-label={preparing ? '正在准备消息' : compacting ? '正在压缩对话内容' : running ? '补充当前任务' : '发送消息'}>
-          {preparing ? <LoadingIndicator /> : <ArrowUp aria-hidden="true" />}
+      ) : primary === 'queue' ? (
+        <button
+          type="button"
+          className="send-button is-queue"
+          disabled={!canDispatch || !hasContent}
+          onClick={onQueue}
+          aria-label="排队下一条"
+          title={queueTitle}
+        >
+          <ListPlus aria-hidden="true" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="send-button"
+          onClick={onSend}
+          title={sendTitle}
+          disabled={sendDisabled}
+          aria-label={preparing ? '正在准备消息' : compacting ? '正在压缩对话内容' : '发送消息'}
+        >
+          {primary === 'preparing' ? <LoadingIndicator /> : <ArrowUp aria-hidden="true" />}
         </button>
       )}
     </div>

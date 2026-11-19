@@ -208,7 +208,7 @@ function ComposerDockComponent({
   onOpenSettings,
   selectDraftWorkspace,
   chooseFile,
-  setActionPaletteOpen,
+  setActionPaletteOpen: _setActionPaletteOpen,
   error,
   setError,
   conversationFooterExtensionItems,
@@ -454,8 +454,8 @@ function ComposerDockComponent({
           loading={stateLoading || sessionLoading}
           preparing={preparing}
           onAttach={() => void pickComposerAttachments()}
-          onActions={() => { setComposerMenu(null); setActionPaletteOpen(true); }}
           onSend={() => void send()}
+          onQueue={() => void send(undefined, 'queue')}
           onStop={() => void stopGeneration()}
           context={<>
             {isNewConversation && <WorkspacePicker value={workspace} workspaces={workspaces} onChange={selectDraftWorkspace} onBrowse={chooseFile} />}

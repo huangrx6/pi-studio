@@ -337,11 +337,27 @@ function readModelsDevCache(file) {
   try {
     const cached = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (cached?.version !== MODELS_DEV_CACHE_VERSION || !cached.payload) return undefined;
+    // Drop the raw multi-megabyte payload after building the compact catalog so
+    // long-lived process memory only keeps the normalized provider/model index.
+    const catalog = createModelsDevCatalog(cached.payload);
     return {
-      catalog: createModelsDevCatalog(cached.payload),
+      catalog,
       etag: typeof cached.etag === 'string' ? cached.etag : '',
       fetchedAt: Number(cached.fetchedAt) || 0,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function readModelsDevPayload(file) {
+  try {
+    const cached = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (cached?.version !== MODELS_DEV_CACHE_VERSION || !cached.payload) return undefined;
+    return {
       payload: cached.payload,
+      etag: typeof cached.etag === 'string' ? cached.etag : '',
+      fetchedAt: Number(cached.fetchedAt) || 0,
     };
   } catch {
     return undefined;
@@ -413,7 +429,10 @@ async function fetchModelsDevCatalog({
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (response.status === 304 && cached) {
-      await writeModelsDevCache(file, cached.payload, cached.etag, now);
+      const previous = readModelsDevPayload(file);
+      if (previous?.payload) {
+        await writeModelsDevCache(file, previous.payload, previous.etag || cached.etag, now);
+      }
       return cached.catalog;
     }
     if (!response.ok) return cached?.catalog || [];

@@ -7,13 +7,21 @@
  * imported sources separately. Both stream range requests from the filesystem.
  */
 
+const fs = require('node:fs');
+const path = require('node:path');
 const { mediaResponse } = require('./media-response.cjs');
 const { storyboardMediaResponse } = require('./video-storyboard/media.cjs');
+const {
+  displayCachePath,
+  optimizeImportedBackgroundImage,
+  resolveBackgroundDisplayFile,
+} = require('./background-display.cjs');
 const { app, dialog, protocol } = require('electron');
 const { getWindow } = require('../core/state.cjs');
 const { studioDataDirectory } = require('../core/studio-paths.cjs');
 const {
   BACKGROUND_SCHEME,
+  backgroundDirectory,
   discardBackgroundMedia,
   importBackgroundMedia,
   mimeTypeForPath,
@@ -21,6 +29,22 @@ const {
 } = require('../background-media.cjs');
 
 let protocolInstalled = false;
+
+async function warmBackgroundDisplayCache() {
+  try {
+    const directory = backgroundDirectory(studioDataDirectory());
+    const entries = await fs.promises.readdir(directory, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      if (!entry.isFile() || entry.name.includes('.display.')) continue;
+      const filePath = path.join(directory, entry.name);
+      const mime = mimeTypeForPath(filePath);
+      if (!mime) continue;
+      await resolveBackgroundDisplayFile(filePath, mime).catch(() => null);
+    }
+  } catch {
+    // Wallpaper warm-up is best-effort and must never block startup.
+  }
+}
 
 async function registerBackgroundProtocol() {
   if (protocolInstalled) return;
@@ -32,10 +56,20 @@ async function registerBackgroundProtocol() {
       }
       if (new URL(request.url).hostname === 'storyboard') return await storyboardMediaResponse(request);
       const filePath = resolveBackgroundMediaPath(studioDataDirectory(), request.url);
-      return await mediaResponse(request, filePath, mimeTypeForPath(filePath), 'private, max-age=31536000, immutable');
+      const mime = mimeTypeForPath(filePath);
+      const display = await resolveBackgroundDisplayFile(filePath, mime).catch(() => null);
+      return await mediaResponse(
+        request,
+        display?.path || filePath,
+        display?.mime || mime,
+        'private, max-age=31536000, immutable',
+      );
     } catch {
       return new Response('Background media not found', { status: 404 });
     }
+  });
+  setImmediate(() => {
+    void warmBackgroundDisplayCache();
   });
 }
 
@@ -51,15 +85,34 @@ async function chooseBackgroundMedia(payload = {}) {
   if (result.canceled || !result.filePaths[0]) return null;
 
   const media = await importBackgroundMedia(studioDataDirectory(), result.filePaths[0]);
+  const filePath = resolveBackgroundMediaPath(studioDataDirectory(), media.url);
+  const optimized = await optimizeImportedBackgroundImage(filePath, {
+    kind: media.kind,
+    mime: media.mime,
+  }).catch(() => null);
+  if (optimized?.rewritten) {
+    media.mime = optimized.mime;
+    media.bytes = optimized.bytes;
+  }
+  // Non-rewritten results leave a sibling .display.jpg cache for the protocol handler.
   const previousUrl = typeof payload.replaceUrl === 'string' ? payload.replaceUrl : '';
   if (previousUrl && previousUrl !== media.url) {
-    await discardBackgroundMedia(studioDataDirectory(), previousUrl).catch(() => {});
+    await removeBackgroundMedia(previousUrl).catch(() => {});
   }
   return media;
 }
 
 async function removeBackgroundMedia(value) {
+  let displayPath;
+  try {
+    displayPath = displayCachePath(resolveBackgroundMediaPath(studioDataDirectory(), value));
+  } catch {
+    displayPath = undefined;
+  }
   const removed = await discardBackgroundMedia(studioDataDirectory(), value);
+  if (displayPath) {
+    await fs.promises.rm(displayPath, { force: true }).catch(() => {});
+  }
   return { removed };
 }
 

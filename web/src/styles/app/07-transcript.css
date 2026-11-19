@@ -9,14 +9,13 @@
 
 .message.assistant { align-items: stretch; }
 
-/* Off-screen turns skip layout/paint (variable-height virtualization). */
+/* The transcript keeps a short in-memory window (about a dozen turns).
+ * content-visibility with a short intrinsic estimate made upward paging jump
+ * when real turns—especially image-heavy ones—measured far taller than 160px.
+ * With so few mounted nodes, full layout is cheaper than correcting the jump.
+ */
 .messages > .message.user,
 .messages > .assistant-turn {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 160px;
-}
-/* Live answer stays fully painted while tokens arrive. */
-.messages > .assistant-turn.is-live {
   content-visibility: visible;
   contain-intrinsic-size: none;
 }
@@ -135,6 +134,12 @@
 .conversation-image-tile:focus-visible { border-color: var(--accent-border); background: var(--background-card-strong-surface); box-shadow: var(--shadow-card); }
 .conversation-image-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .conversation-image-tile img { display: block; width: 100%; height: 100%; border-radius: calc(var(--radius-card) - 5px); object-fit: contain; }
+/* Reserve the tile box before decode so lazy images do not reflow the strip. */
+.conversation-image-tile.is-pending {
+  background:
+    linear-gradient(90deg, var(--surface-soft) 25%, var(--surface-raised) 37%, var(--surface-soft) 63%);
+  background-size: 400% 100%;
+}
 .conversation-image-index {
   position: absolute;
   top: 6px;

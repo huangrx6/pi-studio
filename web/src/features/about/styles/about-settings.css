@@ -18,3 +18,22 @@
   .about-versions { grid-template-columns: minmax(0, 1fr); }
   .about-versions > div, .about-facts > div { grid-template-columns: 5.5rem minmax(0, 1fr); }
 }
+
+.about-path-row {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.about-path-row code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.about-path-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+.about-path-actions .settings-text-button {
+  min-height: auto;
+  padding: 0;
+}

@@ -459,8 +459,12 @@ export function SettingsOverlay({
               enabledAgentTools={data?.agentTools.enabled}
               onOpenAgentTools={() => select('tools')}
             />}
-            {tab === 'usage' && <UsageSettings active={open} includeRemoved={appearance.preferences.usageIncludeRemovedProjects}
-              onIncludeRemovedChange={value => appearance.onChange('usageIncludeRemovedProjects', value)} />}
+            {tab === 'usage' && <UsageSettings
+              active={open}
+              includeRemoved={appearance.preferences.usageIncludeRemovedProjects}
+              onIncludeRemovedChange={value => appearance.onChange('usageIncludeRemovedProjects', value)}
+              onOpenExtensions={() => select('extensions')}
+            />}
             {data && tab === 'models' && <ModelSettings
               providers={data.providers}
               quotaAvailable={quotaExtensionAvailable(data.extensions)}

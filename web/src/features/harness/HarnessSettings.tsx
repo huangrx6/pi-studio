@@ -180,6 +180,7 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated }: { cwd
     <SettingsPageHeader
       icon={<Code2 />}
       title="Harness 配置"
+      meta={<span>提示词组成、重试与上下文策略</span>}
     />
     <section className="harness-overview">
       <div className="harness-profile-switcher">

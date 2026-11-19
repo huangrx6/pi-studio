@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from 'react';
-import { Columns2, GitCommitHorizontal, PanelsTopLeft, RotateCw, Rows3 } from 'lucide-react';
+import { GitBranch, Columns2, GitCommitHorizontal, PanelsTopLeft, RotateCw, Rows3 } from 'lucide-react';
 import { LoadingState } from '../../shared/LoadingState';
 import { Select } from '../../shared/Select';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
@@ -86,24 +86,11 @@ export function GitSettings({ cwd, workspaces, preferences, onChange, onOpenWork
   const loading = repositories.loading || Boolean(repository && current?.revision !== revision);
   const status = current?.status;
   return <div className="settings-sections git-settings">
-    <SettingsPageHeader title="Git 工作流" />
-    <section className="general-settings-section" aria-labelledby="git-review-settings-title">
-      <h2 id="git-review-settings-title">差异审阅</h2>
-      <div className="general-settings-card">
-        <div className="general-setting-row">
-          <div className="general-setting-label">默认布局<small className="general-setting-description">用于所有工作区的 Git 变更和提交详情。窄栏下，自适应使用单列。</small></div>
-          <div className="general-theme-options" role="group" aria-label="默认差异布局">
-            {layouts.map(({ value, label, Icon }) => <button type="button" key={value} aria-pressed={preferences.gitDiffLayout === value}
-              onClick={() => onChange('gitDiffLayout', value)}><Icon aria-hidden="true" />{label}</button>)}
-          </div>
-        </div>
-        <div className="general-setting-row">
-          <span className="general-setting-label">长行自动换行</span>
-          <button type="button" role="switch" aria-label="长行自动换行" aria-checked={preferences.gitDiffWrap}
-            className={'switch' + (preferences.gitDiffWrap ? ' is-on' : '')} onClick={() => onChange('gitDiffWrap', !preferences.gitDiffWrap)}><span /></button>
-        </div>
-      </div>
-    </section>
+    <SettingsPageHeader
+      icon={<GitBranch />}
+      title="Git 工作流"
+      meta={<span>先看当前仓库，再调整差异阅读习惯</span>}
+    />
     <GitRepositoryContext.Provider value={repositories}><section className="git-settings-project" aria-labelledby="git-project-title">
       <div className="git-settings-project-head">
         <h2 id="git-project-title">仓库状态</h2>
@@ -121,5 +108,25 @@ export function GitSettings({ cwd, workspaces, preferences, onChange, onOpenWork
           onChange={() => setRevision(value => value + 1)} />
       </>}
     </section></GitRepositoryContext.Provider>
+    <section className="general-settings-section" aria-labelledby="git-review-settings-title">
+      <header className="general-section-head">
+        <h2 id="git-review-settings-title">差异审阅</h2>
+        <p className="general-section-description">作用于所有工作区的变更与提交详情。</p>
+      </header>
+      <div className="general-settings-card">
+        <div className="general-setting-row">
+          <div className="general-setting-label">默认布局<small className="general-setting-description">窄栏下，自适应会改用单列。</small></div>
+          <div className="general-theme-options" role="group" aria-label="默认差异布局">
+            {layouts.map(({ value, label, Icon }) => <button type="button" key={value} aria-pressed={preferences.gitDiffLayout === value}
+              onClick={() => onChange('gitDiffLayout', value)}><Icon aria-hidden="true" />{label}</button>)}
+          </div>
+        </div>
+        <div className="general-setting-row">
+          <span className="general-setting-label">长行自动换行</span>
+          <button type="button" role="switch" aria-label="长行自动换行" aria-checked={preferences.gitDiffWrap}
+            className={'switch' + (preferences.gitDiffWrap ? ' is-on' : '')} onClick={() => onChange('gitDiffWrap', !preferences.gitDiffWrap)}><span /></button>
+        </div>
+      </div>
+    </section>
   </div>;
 }

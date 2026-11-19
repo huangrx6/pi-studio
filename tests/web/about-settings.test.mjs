@@ -18,6 +18,7 @@ function component(react = React, api = {}) {
     if (id.endsWith('.css')) return {};
     if (id === 'react') return react;
     if (id.endsWith('/error-text')) return { errorText };
+    if (id.endsWith('/desktop-platform')) return { revealFileLabel: () => '在访达中显示', desktopPlatform: () => 'darwin' };
     return require(id);
   } };
   vm.runInNewContext(compiled, context);
@@ -27,6 +28,8 @@ const snapshot = { state: 'idle', currentVersion: '1.2.3', currentBuildId: 'full
 const runtime = { durable: '1.5.2', electron: '42.1.0', chromium: '148.0.10', node: '24.1.0', sqlite: '3.53.0', platform: 'darwin', arch: 'arm64' };
 const paths = {
   databasePath: '/synthetic/user-data/a-very-long-path/studio.sqlite',
+  attachmentsPath: '/synthetic/user-data/attachments/complete-directory',
+  backupsPath: '/synthetic/user-data/backups/complete-directory',
   skillsPath: '/synthetic/user-data/skills/complete-directory',
   extensionsPath: '/synthetic/user-data/extensions/complete-directory',
 };
@@ -43,7 +46,10 @@ function harness(overrides = {}) {
     },
     useRef(initial) { const index = cursor++; return slots[index] ??= { current: initial }; },
     useEffect(effect) { if (!initialized) setup = effect; },
-  }, { openExternal: url => new Promise((resolve, reject) => requests.push({ url, resolve, reject })) });
+  }, {
+    openExternal: url => new Promise((resolve, reject) => requests.push({ type: 'open', url, resolve, reject })),
+    revealFile: payload => new Promise((resolve, reject) => requests.push({ type: 'reveal', payload, resolve, reject })),
+  });
   function refresh() {
     cursor = 0;
     tree = Component({ snapshot: { ...snapshot, ...overrides }, paths, runtime, onOpenUpdates() { opens++; } });

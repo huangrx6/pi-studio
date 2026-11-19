@@ -3,6 +3,7 @@ import { ExternalLink, Info, RotateCw } from 'lucide-react';
 import type { UpdateSnapshot } from '../../types/update-types';
 import type { StudioRuntimeVersions } from '../../types/runtime-types';
 import { errorText } from '../../shared/error-text';
+import { revealFileLabel } from '../../shared/desktop-platform';
 import '../../shared/styles/settings-page-header.css';
 import './styles/about-settings.css';
 
@@ -21,6 +22,24 @@ export function AboutSettings({ snapshot, paths, runtime, onOpenUpdates }: {
     setLinkError(null);
     try { await window.piApi.openExternal(url); }
     catch (cause) { if (active.current && id === request.current) setLinkError(errorText(cause)); }
+  }
+  async function revealPath(target: string) {
+    const id = ++request.current;
+    setLinkError(null);
+    try {
+      await window.piApi.revealFile({ path: target, source: 'external' });
+    } catch (cause) {
+      if (active.current && id === request.current) setLinkError(errorText(cause));
+    }
+  }
+  async function copyPath(target: string) {
+    const id = ++request.current;
+    setLinkError(null);
+    try {
+      await navigator.clipboard.writeText(target);
+    } catch (cause) {
+      if (active.current && id === request.current) setLinkError(errorText(cause));
+    }
   }
   const updateLabel = snapshot.state === 'downloaded' ? '重启与更新'
     : snapshot.state === 'downloading' ? '查看下载进度'
@@ -68,11 +87,24 @@ export function AboutSettings({ snapshot, paths, runtime, onOpenUpdates }: {
       <h2 id="about-storage-title">本地存储与诊断信息</h2>
       <dl className="about-facts">
         {snapshot.currentBuildId && <div><dt>构建标识</dt><dd><code>{snapshot.currentBuildId}</code></dd></div>}
-        <div><dt>SQLite 数据库</dt><dd><code>{paths.databasePath}</code></dd></div>
-        <div><dt>会话附件与输出</dt><dd><code>{paths.attachmentsPath}</code></dd></div>
-        <div><dt>数据库升级备份</dt><dd><code>{paths.backupsPath}</code></dd></div>
-        <div><dt>技能目录</dt><dd><code>{paths.skillsPath}</code></dd></div>
-        <div><dt>扩展目录</dt><dd><code>{paths.extensionsPath}</code></dd></div>
+        {([
+          ['SQLite 数据库', paths.databasePath],
+          ['会话附件与输出', paths.attachmentsPath],
+          ['数据库升级备份', paths.backupsPath],
+          ['技能目录', paths.skillsPath],
+          ['扩展目录', paths.extensionsPath],
+        ] as const).map(([label, target]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd className="about-path-row">
+              <code title={target}>{target}</code>
+              <span className="about-path-actions">
+                <button type="button" className="settings-text-button" onClick={() => void copyPath(target)}>复制</button>
+                <button type="button" className="settings-text-button" onClick={() => void revealPath(target)}>{revealFileLabel()}</button>
+              </span>
+            </dd>
+          </div>
+        ))}
       </dl>
     </section>
   </div>;

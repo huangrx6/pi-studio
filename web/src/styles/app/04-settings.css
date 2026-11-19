@@ -35,6 +35,11 @@
   max-width: var(--content);
   min-width: 0;
   margin-inline: auto;
+  display: grid;
+  gap: var(--space-5);
+}
+.settings-page-frame > .settings-page-header {
+  margin-bottom: 0;
 }
 .settings-page-frame :is(.settings-sections, .general-settings, .about-page) {
   max-width: none;

@@ -38,7 +38,15 @@ export function InstalledExtensionsSection({ items, busy, placements, onPlacemen
         />)}
       </div>
     </section>}
-    {builtins.length > 0 && <Accordion className="extension-list-section builtin-extension-section" summary="内置能力" badge={builtins.length} description="Pi Studio 自带，可查看和单独启停" summaryClassName="builtin-extension-summary">
+    {builtins.length > 0 && <Accordion
+      className="extension-list-section builtin-extension-section"
+      summary="内置能力"
+      badge={builtins.length}
+      description="Pi Studio 自带，可查看和单独启停"
+      summaryClassName="builtin-extension-summary"
+      // Open when something is off so users arriving from usage/settings can re-enable it quickly.
+      defaultOpen={builtins.some((item) => !item.enabled)}
+    >
       <div className="extension-list installed-extension-grid">
         {builtins.map((item) => <InstalledExtensionCard
           key={`${item.scope}:${item.id}`}

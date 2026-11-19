@@ -93,9 +93,11 @@ export function useAppAppearance(setSettingsError: Setter<string | null>) {
     if (!media) return;
     setBackgroundBusy(true);
     setBackgroundError(null);
-    updatePreference('backgroundMedia', null);
     try {
       await window.piApi.removeBackgroundMedia(media.url);
+      // Only clear the preference after the app-owned file is gone, so a failed
+      // delete leaves the preview and settings in a recoverable state.
+      updatePreference('backgroundMedia', null);
     } catch (error) {
       setBackgroundError(errorText(error));
     } finally {

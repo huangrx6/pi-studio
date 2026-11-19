@@ -7,21 +7,22 @@ import appIcon from '../../../assets/icon.png';
 // Keep navigation to the noun labels users need to scan; each page's controls
 // and layout carry the detail rather than repeating it as a sidebar subtitle.
 export const settingsPages = [
-  { id: 'general', group: '外观与输入', label: '通用', icon: Settings },
-  { id: 'git', group: '工作区', label: 'Git 工作流', icon: GitBranch, keywords: ['Git 与 Worktree', '工作树', 'Git workflow', 'gitworkflow', '差异', '换行', '分支'] },
+  // 先外观与输入，再模型与执行，再资源，最后工作区与应用数据。
+  { id: 'general', group: '外观与输入', label: '通用', icon: Settings, keywords: ['外观', '主题', '背景', '壁纸', '终端', '托盘', '菜单栏', '字号', '圆角', '强调色'] },
   { id: 'shortcuts', group: '外观与输入', label: '快捷键', icon: Keyboard },
   { id: 'models', group: '模型与用量', label: '模型配置', icon: Cpu },
-  { id: 'usage', group: '模型与用量', label: '使用量', icon: BarChart3 },
+  { id: 'usage', group: '模型与用量', label: '使用量', icon: BarChart3, keywords: ['Token', '用量', '成本', '统计', 'Metrics', '采集', '已移除'] },
   { id: 'tools', group: '执行与权限', label: '智能体工具', icon: Wrench },
-  { id: 'permissions', group: '执行与权限', label: '权限策略', icon: ShieldCheck },
+  { id: 'permissions', group: '执行与权限', label: '权限策略', icon: ShieldCheck, keywords: ['批准', '规则', '安全'] },
   { id: 'harness', group: '执行与权限', label: 'Harness 配置', icon: Code2 },
   { id: 'subagents', group: '执行与权限', label: '子智能体', icon: Bot },
   { id: 'mcp', group: '资源与扩展', label: 'MCP 服务器', icon: Plug },
   { id: 'skills', group: '资源与扩展', label: '技能', icon: FileCode2 },
   { id: 'extensions', group: '资源与扩展', label: '扩展', icon: Layers3 },
-  { id: 'archives', group: '数据与应用', label: '归档会话', icon: ArchiveRestore },
+  { id: 'git', group: '工作区', label: 'Git 工作流', icon: GitBranch, keywords: ['Git 与 Worktree', '工作树', 'Git workflow', 'gitworkflow', '差异', '换行', '分支'] },
   { id: 'network', group: '数据与应用', label: '网络代理', icon: Globe, keywords: ['proxy', '代理', '网络', 'VPN', '连接', 'HTTP', 'SOCKS', '超时'] },
-  { id: 'about', group: '数据与应用', label: '关于', icon: Info },
+  { id: 'archives', group: '数据与应用', label: '归档会话', icon: ArchiveRestore },
+  { id: 'about', group: '数据与应用', label: '关于', icon: Info, keywords: ['版本', '更新', '许可', '诊断'] },
 ] as const;
 
 export type SettingsTab = typeof settingsPages[number]['id'];
