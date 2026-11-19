@@ -527,6 +527,8 @@
    滑杆不再各自做灰卡片，只保留分隔线，避免和上方设置行抢层级。 */
 .settings-content .general-background-settings {
   width: 100%;
+  margin: 0;
+  padding: 10px 0 14px;
   border-top: 1px solid var(--divider);
 }
 
@@ -543,18 +545,19 @@
 
 .settings-content .general-background-adjustments {
   display: grid;
-  grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
-  gap: var(--space-6);
-  align-items: stretch;
-  padding: 0 0 var(--space-5);
+  grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+  padding: 0;
 }
 
 .settings-content .general-background-adjustments .background-media-preview {
-  /* 与右侧滑杆同高：预览铺满列高，裁切交给 object-fit。 */
-  height: 100%;
-  min-height: 200px;
+  /* 固定横幅比例，贴近桌面壁纸观感；不要被右侧滑杆列高拉成竖图。 */
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 16 / 10;
   border-radius: var(--radius-control);
-  aspect-ratio: auto;
 }
 
 .settings-content .general-background-ranges { display: grid; align-content: start; }
@@ -566,8 +569,9 @@
   background: var(--transparent);
 }
 
-/* 第一行不要顶部内边距：标签与左侧预览图的上沿对齐，而不是低 14px。 */
-.settings-content .general-background-ranges .settings-range-control:first-child {
+/* 「调节」标题后的第一根滑杆：去掉顶部分割，与预览上沿对齐。 */
+.settings-content .general-background-ranges .general-background-range-head + .settings-range-control,
+.settings-content .general-background-ranges .settings-range-control:first-of-type {
   padding-top: 0;
   border-top: 0;
 }
@@ -680,12 +684,6 @@
 }
 
 .settings-content .general-background-name { color: var(--muted); font-size: var(--text-13); }
-
-.settings-content .general-background-settings {
-  padding: 0 0 18px;
-  border-top: 1px solid var(--divider);
-  padding-top: 18px;
-}
 
 /* ---- 9. 其它页面 ------------------------------------------------------- */
 /* 快捷键、工具、权限等页面共用同一套行节奏与分割线，只调整各自的容器。 */
@@ -1263,10 +1261,6 @@
   border-color: var(--accent-border);
   background: var(--settings-selected-bg);
   box-shadow: var(--settings-selected-shadow);
-}
-
-.settings-content .general-background-settings {
-  padding-block: 14px;
 }
 
 /* 滑杆行的焦点提示收回到滑块上：整行是透明背景、直角、无边框的结构，

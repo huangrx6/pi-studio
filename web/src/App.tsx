@@ -587,10 +587,11 @@ export function App() {
       ? {
         state: updateSnapshot.state,
         latestVersion: updateSnapshot.latestVersion,
+        progress: updateProgress,
         onOpen: openUpdateDialog,
       }
       : null
-  ), [openUpdateDialog, updateSnapshot.latestVersion, updateSnapshot.state]);
+  ), [openUpdateDialog, updateProgress, updateSnapshot.latestVersion, updateSnapshot.state]);
 
   const progressTrigger = useMemo(() => (
     <ProgressTrigger

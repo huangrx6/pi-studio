@@ -111,8 +111,8 @@
 .general-palette-option[data-palette-choice="amber"] { --general-swatch: var(--scheme-amber); }
 .general-palette-option[data-palette-choice="berry"] { --general-swatch: var(--scheme-berry); }
 .general-background-panel {
-  border-top: 1px solid var(--border);
-  padding: var(--space-3) var(--space-5) var(--space-5);
+  /* 与「媒体文件」行的分隔只保留一条，交给 settings-surface 里的 accordion 顶边。 */
+  padding: 0;
 }
 .general-background-settings {
   margin: 0;
@@ -124,10 +124,10 @@
 }
 .general-background-adjustments {
   display: grid;
-  grid-template-columns: minmax(11rem, 0.9fr) minmax(0, 1.1fr);
+  grid-template-columns: minmax(12rem, 0.95fr) minmax(0, 1.15fr);
   gap: var(--space-5);
-  padding-block: var(--space-3) var(--space-1);
   align-items: start;
+  padding-block: var(--space-2) 0;
 }
 .general-background-ranges {
   display: grid;
@@ -154,7 +154,6 @@
 }
 @media (max-width: 760px) {
   .general-section-head { align-items: flex-start; }
-  .general-background-panel { padding-inline: var(--space-4); }
   .general-setting-control,
   .general-theme-modes,
   .general-palette-options,

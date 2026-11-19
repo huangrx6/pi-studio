@@ -109,6 +109,12 @@
   background: var(--conversation-hover-surface);
 }
 
+.app .chat-scroll .markdown-code-copy.is-copied,
+.app .chat-scroll .markdown-code-copy.is-copied:hover {
+  background: transparent;
+  color: var(--success);
+}
+
 .app.is-wallpaper-inside .terminal-panel:not(.has-custom-theme) :is(.terminal-toolbar, .terminal-search) {
   background: transparent;
 }

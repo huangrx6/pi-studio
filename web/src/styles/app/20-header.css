@@ -84,9 +84,53 @@
   height: 6px;
   border-radius: var(--radius-round);
   background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+  animation: update-entry-dot 1.8s ease-out infinite;
 }
-.update-entry.is-downloading { color: var(--muted); }
-.update-entry.is-downloaded { color: var(--accent); }
+
+.update-entry-ring {
+  position: absolute;
+  inset: 2px;
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+
+.update-entry-ring-track,
+.update-entry-ring-value {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.update-entry-ring-track {
+  stroke: color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.update-entry-ring-value {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 240ms ease;
+}
+
+.update-entry.is-downloading {
+  color: var(--accent-foreground);
+}
+
+.update-entry.is-downloaded {
+  background: color-mix(in srgb, var(--accent-soft) 70%, transparent);
+}
+
+@keyframes update-entry-dot {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 35%, transparent); }
+  70% { box-shadow: 0 0 0 7px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-entry.is-available::after { animation: none; }
+  .update-entry-ring-value { transition: none; }
+}
 
 .markdown-code {
   margin: 12px 0;
@@ -101,8 +145,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  height: 28px;
-  padding: 0 8px 0 12px;
+  height: 32px;
+  padding: 0 6px 0 12px;
   border-bottom: 1px solid var(--border);
   background: var(--surface-chrome);
 }
@@ -116,16 +160,34 @@
 }
 
 .markdown-code-copy {
-  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
   flex: none;
-  padding: 0 6px;
+  padding: 0;
+  border: 0;
   border-radius: var(--radius-tag);
-  background: var(--transparent);
+  background: transparent;
   color: var(--text-3);
-  font-size: var(--text-xs);
+  line-height: 0;
 }
 
-.markdown-code-copy:hover { background: var(--surface-hover); color: var(--text-1); }
+.markdown-code-copy svg {
+  width: 14px;
+  height: 14px;
+}
+
+.markdown-code-copy:hover {
+  background: var(--surface-hover);
+  color: var(--text-1);
+}
+
+.markdown-code-copy.is-copied,
+.markdown-code-copy.is-copied:hover {
+  background: transparent;
+  color: var(--success);
+}
 
 .markdown .markdown-code > pre {
   margin: 0;

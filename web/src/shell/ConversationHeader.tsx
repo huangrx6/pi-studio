@@ -24,6 +24,8 @@ type ConversationHeaderProps = {
   update?: {
     state: UpdateEntryState;
     latestVersion?: string;
+    /** 0–100；下载中用于环形进度。未知时不传。 */
+    progress?: number | null;
     onOpen: () => void;
   } | null;
   sidebarCollapsed: boolean;
@@ -133,6 +135,21 @@ function ConversationHeaderComponent({
                 : `发现新版本${update.latestVersion ? ` v${update.latestVersion}` : ''}`}
             onClick={update.onOpen}
           >
+            {update.state === 'downloading' && (
+              <svg className="update-entry-ring" viewBox="0 0 32 32" aria-hidden="true">
+                <circle className="update-entry-ring-track" cx="16" cy="16" r="13" />
+                <circle
+                  className="update-entry-ring-value"
+                  cx="16"
+                  cy="16"
+                  r="13"
+                  style={{
+                    strokeDasharray: `${2 * Math.PI * 13}`,
+                    strokeDashoffset: `${2 * Math.PI * 13 * (1 - Math.min(1, Math.max(0, (update.progress ?? 8) / 100)))}`,
+                  }}
+                />
+              </svg>
+            )}
             {update.state === 'downloading' ? <LoadingIndicator /> : update.state === 'downloaded' ? <ArrowUp /> : <Download />}
           </button>}
           <NotificationCenter

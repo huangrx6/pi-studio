@@ -7,6 +7,7 @@
 import { createContext, memo, useContext, useEffect, useMemo, useState } from 'react';
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { Check, Copy } from 'lucide-react';
 import { getActivePreferences } from './preferences';
 import { safeMarkdownImageSource } from './safe-url.ts';
 import rehypeLocalPaths from './rehype-local-paths.ts';
@@ -44,12 +45,14 @@ function MarkdownCodeBlock({ language, children }: { language: string; children:
       <span className="markdown-code-language">{language || 'text'}</span>
       <button
         type="button"
-        className="markdown-code-copy"
+        className={`markdown-code-copy${copied ? ' is-copied' : ''}`}
+        aria-label={copied ? '已复制' : '复制代码'}
+        title={copied ? '已复制' : '复制代码'}
         onClick={(event) => {
           const text = event.currentTarget.closest('.markdown-code')?.querySelector('pre')?.textContent ?? '';
           void navigator.clipboard.writeText(text).then(() => setCopied(true)).catch(() => setCopied(false));
         }}
-      >{copied ? '已复制' : '复制'}</button>
+      >{copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}</button>
     </div>
     {children}
   </div>;

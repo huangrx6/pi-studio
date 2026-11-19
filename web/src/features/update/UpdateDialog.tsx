@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, X } from 'lucide-react';
+import {
+  ArrowUpCircle,
+  Check,
+  ChevronDown,
+  CircleAlert,
+  Download,
+  RefreshCw,
+  ShieldCheck,
+  Sparkles,
+  X,
+} from 'lucide-react';
 import { DetailDialog } from '../../shared/DetailDialog';
 import { errorText } from '../../shared/error-text';
 import type { UpdateSnapshot } from '../../types/update-types';
@@ -43,6 +53,24 @@ function headlineFor(snapshot: UpdateSnapshot): string {
   const showsLatest = ['available', 'downloading', 'downloaded'].includes(snapshot.state);
   if (showsLatest && snapshot.latestVersion) return `v${snapshot.latestVersion}`;
   return snapshot.currentVersion ? `v${snapshot.currentVersion}` : 'Pi Studio';
+}
+
+function markTone(state: UpdateSnapshot['state']): string {
+  if (state === 'available' || state === 'downloaded') return 'is-accent';
+  if (state === 'downloading' || state === 'checking') return 'is-busy';
+  if (state === 'error' || state === 'unsupported') return 'is-warn';
+  if (state === 'up-to-date') return 'is-ok';
+  return 'is-quiet';
+}
+
+function MarkIcon({ state }: { state: UpdateSnapshot['state'] }) {
+  if (state === 'downloaded') return <Check aria-hidden="true" />;
+  if (state === 'available') return <Sparkles aria-hidden="true" />;
+  if (state === 'downloading') return <Download aria-hidden="true" />;
+  if (state === 'checking') return <RefreshCw aria-hidden="true" className="is-spinning" />;
+  if (state === 'up-to-date') return <ShieldCheck aria-hidden="true" />;
+  if (state === 'error' || state === 'unsupported') return <CircleAlert aria-hidden="true" />;
+  return <ArrowUpCircle aria-hidden="true" />;
 }
 
 function renderInline(text: string) {
@@ -96,6 +124,7 @@ export function UpdateDialog({ snapshot, onClose, onCheck, onDownload, onInstall
 
   // 进度到 100% 之后更新器还要校验整包，这段时间没有流量，需要单独一句话。
   const verifying = snapshot.state === 'downloading' && progress !== null && progress >= 100;
+  const connecting = snapshot.state === 'downloading' && progress === null;
   // 差分下载只传变化的块：总量远小于整包时，说明这是一次增量更新。
   const incremental = typeof snapshot.total === 'number' && typeof snapshot.packageSize === 'number'
     && snapshot.total > 0 && snapshot.total < snapshot.packageSize * 0.9;
@@ -111,6 +140,14 @@ export function UpdateDialog({ snapshot, onClose, onCheck, onDownload, onInstall
   const subline = sameVersionBuild
     ? `构建 ${snapshot.currentBuildId || '未知'} → ${snapshot.latestBuildId || '未知'}`
     : latestVersion && snapshot.currentVersion ? `当前 v${snapshot.currentVersion}` : '';
+
+  const phaseLabel = verifying
+    ? '校验安装包'
+    : connecting
+      ? '建立连接'
+      : snapshot.state === 'downloading'
+        ? '下载中'
+        : '';
 
   async function run(action: UpdateAction, callback: () => Promise<void>) {
     // Event handlers can run twice before React commits the disabled button.
@@ -128,8 +165,11 @@ export function UpdateDialog({ snapshot, onClose, onCheck, onDownload, onInstall
     }
   }
 
-  return <DetailDialog className="update-dialog" onClose={onClose}>
+  return <DetailDialog className={`update-dialog is-${snapshot.state}`} onClose={onClose}>
     <header className="update-header">
+      <div className={`update-mark ${markTone(snapshot.state)}`} aria-hidden="true">
+        <MarkIcon state={snapshot.state} />
+      </div>
       <div className="update-heading">
         <p className="update-kicker" aria-live="polite">{kickerFor(snapshot)}</p>
         <h2 className="update-title">{headlineFor(snapshot)}</h2>
@@ -140,18 +180,52 @@ export function UpdateDialog({ snapshot, onClose, onCheck, onDownload, onInstall
     </header>
 
     <div className="update-body">
-      {snapshot.state === 'downloading' && <section className={`update-download${verifying ? ' is-verifying' : ''}`} aria-label="更新下载进度">
+      {snapshot.state === 'checking' && <section className="update-panel is-busy" aria-live="polite">
+        <span className="update-panel-pulse" aria-hidden="true" />
+        <div>
+          <p className="update-panel-title">正在向更新服务查询</p>
+          <p className="update-description">通常只需几秒。可随时关闭此窗口，检查会在后台继续。</p>
+        </div>
+      </section>}
+
+      {snapshot.state === 'up-to-date' && <section className="update-panel is-ok">
+        <div>
+          <p className="update-panel-title">当前安装已是最新</p>
+          <p className="update-description">
+            {snapshot.checkedAt
+              ? `最近检查于 ${shortDate(new Date(snapshot.checkedAt).toISOString()) || '刚才'}。有新版本时会在顶栏提醒你。`
+              : '有新版本时会在顶栏提醒你，也可随时再检查一次。'}
+          </p>
+        </div>
+      </section>}
+
+      {snapshot.state === 'idle' && <section className="update-panel is-quiet">
+        <div>
+          <p className="update-panel-title">保持 Pi Studio 处于最新构建</p>
+          <p className="update-description">检查不会上传聊天内容。发现新版本后，可先阅读说明再决定是否下载。</p>
+        </div>
+      </section>}
+
+      {snapshot.state === 'downloading' && <section className={`update-download${verifying ? ' is-verifying' : ''}${connecting ? ' is-connecting' : ''}`} aria-label="更新下载进度">
         <div className="update-download-head">
-          <span className="update-download-size">{transferred && total ? `${transferred} / ${total}` : transferred || '正在建立下载连接'}</span>
+          <div className="update-download-copy">
+            {phaseLabel && <span className="update-phase-label">{phaseLabel}</span>}
+            <span className="update-download-size">{transferred && total ? `${transferred} / ${total}` : transferred || '正在建立下载连接'}</span>
+          </div>
           <span className="update-download-percent">{progress === null ? '正在获取进度' : `${Math.round(progress)}%`}</span>
         </div>
         <div className="update-progress-track" role="progressbar" aria-label="更新下载进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress ?? undefined}>
           <span style={{ width: `${progress ?? 0}%` }} />
         </div>
         <div className="update-download-foot">
-          <span>{verifying ? '正在校验安装包…' : speed ? `${speed}/s` : ' '}</span>
+          <span>{verifying ? '正在校验安装包…' : speed ? `${speed}/s` : connecting ? '连接更新源…' : ' '}</span>
           <span>关闭此窗口后，下载仍会继续</span>
         </div>
+        <ol className="update-flow" aria-hidden="true">
+          <li className={!connecting && !verifying ? 'is-current' : progress !== null ? 'is-done' : 'is-current'}>下载</li>
+          <li className={verifying ? 'is-current' : progress !== null && progress >= 100 ? 'is-done' : undefined}>校验</li>
+          <li>安装</li>
+        </ol>
       </section>}
 
       {snapshot.state === 'downloaded' && <section className="update-ready" aria-label="更新已就绪">
@@ -159,6 +233,13 @@ export function UpdateDialog({ snapshot, onClose, onCheck, onDownload, onInstall
         <div>
           <p className="update-ready-title">下次启动即为 v{snapshot.latestVersion || snapshot.currentVersion}</p>
           <p className="update-description">立即安装会重启 Pi Studio；选择稍后安装，将在下次正常退出应用时安装。</p>
+        </div>
+      </section>}
+
+      {snapshot.state === 'available' && !notes.length && <section className="update-panel is-accent">
+        <div>
+          <p className="update-panel-title">可以开始下载</p>
+          <p className="update-description">下载在后台进行，可继续聊天。完成后顶栏会提示你重启安装。</p>
         </div>
       </section>}
 
