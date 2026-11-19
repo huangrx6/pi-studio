@@ -240,7 +240,7 @@ jobs:
         if: ${{ !inputs.windows_only }}
         with:
           ref: ${{ format('refs/tags/{0}', env.RELEASE_TAG) }}
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: pi-studio-*
           path: artifacts
