@@ -97,7 +97,8 @@
 /* 会话图片：固定盒子、完整等比显示，图片多时横向滚动而不撑高正文。 */
 .conversation-image-gallery { width: 100%; max-width: 100%; margin: 10px 0; }
 .message-images { margin: 8px 0 0; }
-.user-bubble .conversation-image-gallery { margin: 0 0 10px; }
+/* 用户气泡内的附件条由 22-composer 接管；助手消息仍可用默认 gallery 间距。 */
+.assistant-content .conversation-image-gallery { margin: 10px 0; }
 .conversation-image-strip {
   display: flex;
   align-items: stretch;
