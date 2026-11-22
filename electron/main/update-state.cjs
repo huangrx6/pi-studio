@@ -167,14 +167,23 @@ function reduceUpdateState(current, event = {}) {
   }
 
   if (type === 'progress') {
-    const nextProgress = clampPercent(event.progress?.percent);
+    const transferred = Number(event.progress?.transferred) || 0;
+    const totalRaw = Number(event.progress?.total);
+    const total = Number.isFinite(totalRaw) && totalRaw > 0 ? totalRaw : undefined;
+    let nextProgress = clampPercent(event.progress?.percent);
+    // electron-updater often ends just under 100, then spends time on checksum
+    // verification with no further progress events. Treat an effectively complete
+    // transfer as 100% so the dialog can show the verifying step.
+    const complete = nextProgress >= 99.5
+      || (typeof total === 'number' && transferred >= total * 0.995);
+    if (complete) nextProgress = 100;
     return {
       ...base,
       state: 'downloading',
       progress: Math.max(base.progress ?? 0, nextProgress),
-      transferred: Number(event.progress?.transferred) || 0,
-      total: Number(event.progress?.total) || undefined,
-      bytesPerSecond: Number(event.progress?.bytesPerSecond) || 0,
+      transferred,
+      total: total ?? (Number(event.progress?.total) || undefined),
+      bytesPerSecond: complete ? 0 : (Number(event.progress?.bytesPerSecond) || 0),
       error: undefined,
     };
   }

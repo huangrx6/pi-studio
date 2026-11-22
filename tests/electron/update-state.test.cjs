@@ -76,3 +76,20 @@ test('release notes are plain text with script contents removed', () => {
   );
   assert.match(normalizeReleaseNotes([{ note: 'First' }, { note: 'Second' }]), /First\n\nSecond/);
 });
+
+test('near-complete download progress becomes verifying-ready 100%', () => {
+  let state = reduceUpdateState(initialUpdateState('1.0.0'), {
+    type: 'progress',
+    progress: { percent: 99.7, transferred: 997, total: 1000, bytesPerSecond: 50 },
+  });
+  assert.equal(state.state, 'downloading');
+  assert.equal(state.progress, 100);
+  assert.equal(state.bytesPerSecond, 0);
+
+  state = reduceUpdateState(initialUpdateState('1.0.0'), {
+    type: 'progress',
+    progress: { percent: 80, transferred: 995, total: 1000, bytesPerSecond: 40 },
+  });
+  assert.equal(state.progress, 100);
+  assert.equal(state.bytesPerSecond, 0);
+});

@@ -13,7 +13,11 @@ import {
 import { DetailDialog } from '../../shared/DetailDialog';
 import { errorText } from '../../shared/error-text';
 import type { UpdateSnapshot } from '../../types/update-types';
-import { normalizeUpdateProgress } from './update-presentation';
+import {
+  normalizeUpdateProgress,
+  resolveUpdateFlowPhase,
+  type UpdateFlowPhase,
+} from './update-presentation';
 import {
   parseReleaseNoteInline,
   parseReleaseNotes,
@@ -81,6 +85,31 @@ function renderInline(text: string) {
   });
 }
 
+
+function flowStepClass(phase: UpdateFlowPhase | null, step: 'download' | 'verify' | 'install'): string | undefined {
+  if (!phase) return undefined;
+  if (step === 'download') {
+    if (phase === 'connecting' || phase === 'downloading') return 'is-current';
+    return 'is-done';
+  }
+  if (step === 'verify') {
+    if (phase === 'verifying') return 'is-current';
+    if (phase === 'ready' || phase === 'installing') return 'is-done';
+    return undefined;
+  }
+  if (phase === 'ready' || phase === 'installing') return 'is-current';
+  return undefined;
+}
+
+function UpdateFlowSteps({ phase }: { phase: UpdateFlowPhase | null }) {
+  if (!phase) return null;
+  return <ol className="update-flow" aria-hidden="true">
+    <li className={flowStepClass(phase, 'download')}>下载</li>
+    <li className={flowStepClass(phase, 'verify')}>校验</li>
+    <li className={flowStepClass(phase, 'install')}>安装</li>
+  </ol>;
+}
+
 function ReleaseNoteBlocks({ blocks }: { blocks: ReleaseNoteBlock[] }) {
   return <>{blocks.map((block, index) => {
     if (block.kind === 'heading') return <h4 key={index} className="update-note-heading">{renderInline(block.text)}</h4>;
@@ -122,9 +151,11 @@ export function UpdateDialog({ snapshot, onClose, onCheck, onDownload, onInstall
   const snapshotError = (snapshot.state === 'error' || snapshot.state === 'unsupported') && snapshot.error;
   const visibleError = actionError || snapshotError;
 
-  // 进度到 100% 之后更新器还要校验整包，这段时间没有流量，需要单独一句话。
-  const verifying = snapshot.state === 'downloading' && progress !== null && progress >= 100;
-  const connecting = snapshot.state === 'downloading' && progress === null;
+  // 下载字节到齐后，更新器还会校验安装包；这段时间没有流量，需要单独展示校验步骤。
+  const flowPhase = resolveUpdateFlowPhase(snapshot.state, snapshot, pendingAction);
+  const verifying = flowPhase === 'verifying';
+  const connecting = flowPhase === 'connecting';
+  const showDownloadProgress = snapshot.state === 'downloading';
   // 差分下载只传变化的块：总量远小于整包时，说明这是一次增量更新。
   const incremental = typeof snapshot.total === 'number' && typeof snapshot.packageSize === 'number'
     && snapshot.total > 0 && snapshot.total < snapshot.packageSize * 0.9;
@@ -145,9 +176,11 @@ export function UpdateDialog({ snapshot, onClose, onCheck, onDownload, onInstall
     ? '校验安装包'
     : connecting
       ? '建立连接'
-      : snapshot.state === 'downloading'
+      : showDownloadProgress
         ? '下载中'
         : '';
+  // 校验阶段强制显示满格，避免还停在 99%。
+  const barProgress = verifying ? 100 : progress;
 
   async function run(action: UpdateAction, callback: () => Promise<void>) {
     // Event handlers can run twice before React commits the disabled button.
@@ -206,33 +239,40 @@ export function UpdateDialog({ snapshot, onClose, onCheck, onDownload, onInstall
         </div>
       </section>}
 
-      {snapshot.state === 'downloading' && <section className={`update-download${verifying ? ' is-verifying' : ''}${connecting ? ' is-connecting' : ''}`} aria-label="更新下载进度">
+      {showDownloadProgress && <section className={`update-download${verifying ? ' is-verifying' : ''}${connecting ? ' is-connecting' : ''}`} aria-label="更新下载进度">
         <div className="update-download-head">
           <div className="update-download-copy">
             {phaseLabel && <span className="update-phase-label">{phaseLabel}</span>}
             <span className="update-download-size">{transferred && total ? `${transferred} / ${total}` : transferred || '正在建立下载连接'}</span>
           </div>
-          <span className="update-download-percent">{progress === null ? '正在获取进度' : `${Math.round(progress)}%`}</span>
+          <span className="update-download-percent">{barProgress === null ? '正在获取进度' : `${Math.round(barProgress)}%`}</span>
         </div>
-        <div className="update-progress-track" role="progressbar" aria-label="更新下载进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress ?? undefined}>
-          <span style={{ width: `${progress ?? 0}%` }} />
+        <div className="update-progress-track" role="progressbar" aria-label="更新下载进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={barProgress ?? undefined}>
+          <span style={{ width: `${barProgress ?? 0}%` }} />
         </div>
         <div className="update-download-foot">
           <span>{verifying ? '正在校验安装包…' : speed ? `${speed}/s` : connecting ? '连接更新源…' : ' '}</span>
           <span>关闭此窗口后，下载仍会继续</span>
         </div>
-        <ol className="update-flow" aria-hidden="true">
-          <li className={!connecting && !verifying ? 'is-current' : progress !== null ? 'is-done' : 'is-current'}>下载</li>
-          <li className={verifying ? 'is-current' : progress !== null && progress >= 100 ? 'is-done' : undefined}>校验</li>
-          <li>安装</li>
-        </ol>
+        <UpdateFlowSteps phase={flowPhase} />
       </section>}
 
       {snapshot.state === 'downloaded' && <section className="update-ready" aria-label="更新已就绪">
-        <span className="update-ready-icon" aria-hidden="true"><Check /></span>
-        <div>
-          <p className="update-ready-title">下次启动即为 v{snapshot.latestVersion || snapshot.currentVersion}</p>
-          <p className="update-description">立即安装会重启 Pi Studio；选择稍后安装，将在下次正常退出应用时安装。</p>
+        <UpdateFlowSteps phase={flowPhase} />
+        <div className="update-ready-body">
+          <span className="update-ready-icon" aria-hidden="true"><Check /></span>
+          <div>
+            <p className="update-ready-title">
+              {pendingAction === 'install'
+                ? '正在重启并安装更新…'
+                : `下次启动即为 v${snapshot.latestVersion || snapshot.currentVersion}`}
+            </p>
+            <p className="update-description">
+              {pendingAction === 'install'
+                ? '安装程序启动后会关闭当前窗口。请稍候，不要强制退出。'
+                : '下载与校验已完成。立即安装会重启 Pi Studio；选择稍后安装，将在下次正常退出应用时安装。'}
+            </p>
+          </div>
         </div>
       </section>}
 

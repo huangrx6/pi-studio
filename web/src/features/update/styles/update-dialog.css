@@ -378,15 +378,24 @@
 
 .update-ready {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
   gap: var(--space-3);
-  align-items: start;
   padding: 14px 16px;
   border: 1px solid color-mix(in srgb, var(--success-border) 80%, var(--border));
   border-radius: var(--radius-card);
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--success-soft) 70%, transparent), transparent 60%),
     var(--surface-raised);
+}
+
+.update-ready-body {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.update-ready .update-flow {
+  margin: 0;
 }
 
 .update-ready-icon {

@@ -7,7 +7,10 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import { errorText } from '../../web/src/shared/error-text.ts';
-import { normalizeUpdateProgress } from '../../web/src/features/update/update-presentation.ts';
+import {
+  normalizeUpdateProgress,
+  resolveUpdateFlowPhase,
+} from '../../web/src/features/update/update-presentation.ts';
 
 const require = createRequire(import.meta.url);
 const source = fs.readFileSync(new URL('../../web/src/features/update/UpdateDialog.tsx', import.meta.url), 'utf8');
@@ -27,7 +30,7 @@ function component(react = React) {
     if (id === 'react') return react;
     if (id.endsWith('/DetailDialog')) return { DetailDialog: ({ children }) => React.createElement('section', null, children) };
     if (id.endsWith('/error-text')) return { errorText };
-    if (id === './update-presentation') return { normalizeUpdateProgress };
+    if (id === './update-presentation') return { normalizeUpdateProgress, resolveUpdateFlowPhase };
     if (id === './update-notes') return notesContext.exports;
     return require(id);
   } };
@@ -141,4 +144,35 @@ test('synchronous callback exceptions become a local visible error', async () =>
   const h = harness({}, { onCheck() { throw new Error('sync failure'); } });
   h.button('检查更新').props.onClick(); await tick(); h.refresh();
   assert.deepEqual(h.alerts(), ['sync failure']);
+});
+
+test('three-step update flow advances through download, verify and install', () => {
+  const downloading = render({ state: 'downloading', progress: 42, transferred: 420, total: 1000 });
+  assert.match(downloading, /update-flow/);
+  assert.match(downloading, /class="is-current">下载</);
+  assert.doesNotMatch(downloading, /class="is-current">校验</);
+  assert.doesNotMatch(downloading, /class="is-current">安装</);
+
+  const verifying = render({ state: 'downloading', progress: 99.7, transferred: 997, total: 1000 });
+  assert.match(verifying, /校验安装包/);
+  assert.match(verifying, /正在校验安装包/);
+  assert.match(verifying, /class="is-done">下载</);
+  assert.match(verifying, /class="is-current">校验</);
+  assert.match(verifying, /aria-valuenow="100"/);
+
+  const ready = render({ state: 'downloaded', progress: 100 });
+  assert.match(ready, /下载与校验已完成/);
+  assert.match(ready, /class="is-done">下载</);
+  assert.match(ready, /class="is-done">校验</);
+  assert.match(ready, /class="is-current">安装</);
+});
+
+test('resolveUpdateFlowPhase maps installer snapshots without inventing a mid-download verify', () => {
+  assert.equal(resolveUpdateFlowPhase('downloading', {}), 'connecting');
+  assert.equal(resolveUpdateFlowPhase('downloading', { progress: 40 }), 'downloading');
+  assert.equal(resolveUpdateFlowPhase('downloading', { progress: 99.6 }), 'verifying');
+  assert.equal(resolveUpdateFlowPhase('downloading', { transferred: 1000, total: 1000 }), 'verifying');
+  assert.equal(resolveUpdateFlowPhase('downloaded', { progress: 100 }), 'ready');
+  assert.equal(resolveUpdateFlowPhase('downloaded', { progress: 100 }, 'install'), 'installing');
+  assert.equal(resolveUpdateFlowPhase('available', { progress: 0 }), null);
 });
