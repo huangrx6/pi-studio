@@ -75,13 +75,13 @@ const ACTION_OPTIONS = [
   { value: 'dialog', label: '对话框' },
   { value: 'evaluate', label: '脚本' },
   { value: 'cdp', label: 'CDP' },
-] as const;
+];
 
 const DECISION_OPTIONS = [
   { value: 'allow', label: '允许' },
   { value: 'ask', label: '需要批准' },
   { value: 'deny', label: '拒绝' },
-] as const;
+];
 
 const emptyPrefs = (): BrowserPreferences => ({
   agentControlEnabled: true,
