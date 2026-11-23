@@ -47,7 +47,7 @@ try {
   const bounds = await page.locator('.file-panel').boundingBox();
   await page.mouse.move(handle.x + handle.width / 2, handle.y + 100); await page.mouse.down();
   await page.mouse.move(bounds.x + bounds.width - 320, handle.y + 100, { steps: 8 }); await page.mouse.up();
-  await page.locator('.panel-tool').filter({ hasText: '终端' }).click();
+  await page.locator('.panel-launcher-tile, .panel-tool').filter({ hasText: /新建终端|终端/ }).first().click();
   await page.locator('.xterm-helper-textarea').waitFor();
   await page.waitForTimeout(400);
   // A finite background process reproduces asynchronous shell output without any listener or leftover child.

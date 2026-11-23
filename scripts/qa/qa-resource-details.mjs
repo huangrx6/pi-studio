@@ -105,7 +105,7 @@ try {
   const stopCount = () => page.evaluate(() => window.__resourceDetailsQa.calls.filter(call => call.method === 'runtimeServiceStop').length);
   await qa('failUntilClear', 'runtimeServices', 'A');
   await page.getByRole('button', { name: '打开右侧面板', exact: true }).click();
-  await page.locator('.panel-tool').filter({ hasText: '运行服务' }).click(); await services().getByRole('alert').waitFor();
+  await page.locator('.panel-launcher-tile, .panel-tool').filter({ hasText: '运行服务' }).first().click(); await services().getByRole('alert').waitFor();
   assert.equal(await services().getByText('当前任务还没有监听服务', { exact: true }).count(), 0, 'first scan failure is not a successful empty result');
   await qa('clearFailure', 'runtimeServices', 'A'); await services().getByRole('button', { name: '重试', exact: true }).click(); await serviceRow(43001).waitFor();
   assert.equal(await services().locator('.runtime-service-row').count(), 2);

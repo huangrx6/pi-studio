@@ -87,7 +87,7 @@ try {
  await page.screenshot({path:output+'aligned-headers.png',animations:'disabled'});
  await page.evaluate(()=>{window.temporaryModelShouldFail=true;});
  await page.getByRole('button',{name:'打开工具',exact:true}).click();
- await page.locator('.panel-tool').filter({hasText:'临时聊天'}).click();
+ await page.locator('.panel-launcher-tile, .panel-tool').filter({ hasText: '临时聊天' }).first().click();
  await page.getByRole('region',{name:'临时聊天',exact:true}).waitFor();
  const tempTab=page.getByRole('tab').filter({hasText:'临时聊天'});
  await page.locator('.temporary-composer-dock .composer-feedback').getByText(/临时模型暂时不可用/).waitFor();

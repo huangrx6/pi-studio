@@ -36,7 +36,7 @@ try {
   }, profile);
   await page.getByRole('button', { name: '打开工作区', exact: true }).click();
   await page.getByRole('button', { name: '打开右侧面板', exact: true }).click();
-  await page.locator('.panel-tool').filter({ hasText: '终端' }).click();
+  await page.locator('.panel-launcher-tile, .panel-tool').filter({ hasText: /新建终端|终端/ }).first().click();
   await page.locator('.terminal-live-state').filter({ hasText: '运行中' }).waitFor();
   await page.locator('.terminal-host').click();
   await page.evaluate(() => {

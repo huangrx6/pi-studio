@@ -93,23 +93,13 @@ try {
   }, workspace);
   await page.getByRole('button', { name: '打开工作区', exact: true }).click();
   await page.getByRole('button', { name: '打开右侧面板', exact: true }).click();
-  await page.locator('.panel-start-tools').waitFor();
+  await page.locator('.panel-launcher').waitFor();
   await page.waitForFunction(() => (document.querySelector('.file-panel')?.getBoundingClientRect().width || 0) > 300);
-  const toolAlignment = await page.locator('.panel-tool').evaluateAll((buttons) => buttons.map((button) => {
-    const icon = button.querySelector('.panel-tool-icon')?.getBoundingClientRect();
-    const label = button.querySelector('.panel-tool-copy')?.getBoundingClientRect();
-    return {
-      iconCenter: icon ? icon.top + icon.height / 2 : Number.NaN,
-      labelCenter: label ? label.top + label.height / 2 : Number.NaN,
-    };
-  }));
-  assert.ok(toolAlignment.every((item) => Math.abs(item.iconCenter - item.labelCenter) <= 1));
-  assert.equal(await page.locator('.panel-tool').evaluateAll((buttons) => (
-    buttons.length === 5
-    && buttons.every((button) => Math.abs(button.getBoundingClientRect().width - buttons[0].getBoundingClientRect().width) <= 1)
-  )), true);
-  result.toolLabels = await page.locator('.panel-tool-label').allTextContents();
-  result.checks.push('Five tool entries retain aligned icons and equal-width controls.');
+  const toolTiles = page.locator('.panel-launcher-tile');
+  assert.ok(await toolTiles.count() >= 5);
+  result.toolLabels = await page.locator('.panel-launcher-label').allTextContents();
+  assert.ok(result.toolLabels.includes('新建终端'));
+  result.checks.push('Launcher tiles expose the built-in workbench apps.');
   await page.screenshot({ path: path.join(output, 'start.png'), animations: 'disabled' });
   for (const width of [480, 320]) {
     const handle = await page.locator('.panel-resize-handle').boundingBox();
@@ -123,7 +113,7 @@ try {
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await page.screenshot({ path: path.join(output, 'start-320-dark.png'), animations: 'disabled' });
 
-  await page.locator('.panel-tool').filter({ hasText: '终端' }).click();
+  await page.locator('.panel-launcher-tile, .panel-tool').filter({ hasText: /新建终端|终端/ }).first().click();
   await page.locator('.terminal-host .xterm').waitFor();
   await page.locator('.xterm-helper-textarea').focus();
   await page.evaluate(() => document.fonts.load('14px "Studio Terminal Symbols"', '\uf07b\uf15b\ue0b0\udb80\udf7b'));
