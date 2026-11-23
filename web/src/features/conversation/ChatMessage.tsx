@@ -151,7 +151,9 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
   async function saveEdit() {
     if (!onEdit || !canEdit || savingEdit || editDisabled) return;
     const next = draft.trim();
-    if (!next || next === copyText) {
+    // Empty draft cannot be sent. Unchanged text still resubmits so a failed
+    // turn can be retried without forcing a cosmetic rewrite.
+    if (!next) {
       setEditing(false);
       return;
     }
@@ -198,7 +200,7 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
         <button type="button" className="message-edit-cancel" disabled={savingEdit} onClick={cancelEdit}>取消</button>
         <button type="button" className="message-edit-send" disabled={savingEdit || !draft.trim()} onClick={() => void saveEdit()}>
           {savingEdit ? <LoadingIndicator /> : null}
-          {savingEdit ? '发送中' : '发送'}
+          {savingEdit ? '发送中' : (draft.trim() === copyText ? '重新发送' : '发送')}
         </button>
       </div>
     </div>
