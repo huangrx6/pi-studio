@@ -12,6 +12,8 @@ import { formatTime } from './message-content';
 import { MessageActions } from './MessageActions';
 import { TurnActivity, ToolResultImages } from './TurnActivity';
 import { buildTurnContent, type BuiltTurnContent } from './turn-content';
+import { ThinkingMap } from './ThinkingMap';
+import { collectActivityEntries } from './thinking-map-model.ts';
 import { WebSources } from './WebSources';
 import './styles/execution-trace.css';
 
@@ -46,6 +48,7 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
   const built = buildTurnContent(messages, toolResults, live, builtRef.current);
   builtRef.current = built;
   const { segments, answerText, activeTool, lastBlock, sources } = built;
+  const activityEntries = collectActivityEntries(segments);
   const phase = retry ? `正在重试 ${retry.attempt}/${retry.maxAttempts}`
     : activeTool ? '正在执行'
       : lastBlock?.type === 'thinking' ? '正在思考'
@@ -86,6 +89,7 @@ function AssistantTurnViewComponent({ messages, toolResults, requestTraces = [],
         : <ConversationError className="assistant-error" message={error} announce={false} />)}
       {(codeFiles.length > 0 || (turnDiff?.files.length ?? 0) > 0) && <FileChangeSummary key={turnDiff?.at} onUndo={onUndo} files={codeFiles} gitDiff={turnDiff} onOpenDiff={onOpenDiff && ((file, turn) => onOpenDiff(file, { ...turn, at: turn.at || messages.at(-1)?.timestamp || 0 }))} onOpenFile={onOpenFile} />}
       <MessageActions text={live ? '' : answerText} time={live ? undefined : latest?.timestamp} label="复制回答">
+        {activityEntries.length > 0 && <ThinkingMap entries={activityEntries} results={toolResults} live={live} />}
         {sources.length > 0 && <WebSources sources={sources} />}
       </MessageActions>
     </div>

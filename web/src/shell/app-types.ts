@@ -133,6 +133,10 @@ export type PanelTab = {
   diff?: TurnDiffFile;
   turnAt?: number;
   url?: string;
+  /** 浏览器面板：递增后通知内部打开新的网页标签。 */
+  openNonce?: number;
+  /** Agent browser_open ack token while the guest is attaching. */
+  commandRequestId?: string;
   /** 终端重启计数：变化后以同一个 id 重新挂载并重建 PTY。 */
   restart?: number;
   /** 用户手动改过标题：shell 的 OSC 标题不再覆盖它。 */

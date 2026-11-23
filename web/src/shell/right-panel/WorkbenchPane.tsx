@@ -470,12 +470,9 @@ export function WorkbenchPane({
       </Suspense>;
     }
     if (activePanelTab.kind === 'browser') {
-      return <BrowserPanel
-        key={activePanelTab.id}
-        url={activePanelTab.url || ''}
-        onUrlChange={(next) => setPanelTabs((current) => current.map((tab) => tab.id === activePanelTab.id ? { ...tab, url: next } : tab))}
-        onClose={() => closePanelTab(activePanelTab.id)}
-      />;
+      // Browser shell stays mounted via persistentBrowserContent so guest tabs
+      // survive switching to files/terminal and back.
+      return null;
     }
     if (activePanelTab.kind === 'files') return renderFileTree();
     if (activePanelTab.kind === 'changes' && activePanelTab.review) {
@@ -495,7 +492,34 @@ export function WorkbenchPane({
     return renderFilePreview();
   }
 
+  const browserTab = panelTabs.find((tab) => tab.kind === 'browser');
+  const persistentBrowserContent = browserTab ? (
+    <div className={`browser-tab-stack ${activePanelTab?.kind === 'browser' ? 'is-active' : 'is-background'}`} aria-hidden={activePanelTab?.kind !== 'browser'}>
+      <BrowserPanel
+        key={browserTab.id}
+        url={browserTab.url || ''}
+        openNonce={browserTab.openNonce || 0}
+        commandRequestId={browserTab.commandRequestId || ''}
+        onUrlChange={(next) => setPanelTabs((current) => current.map((tab) => tab.id === browserTab.id ? { ...tab, url: next } : tab))}
+        onTitleChange={(title) => setPanelTabs((current) => current.map((tab) => (
+          tab.id === browserTab.id && !tab.customTitle
+            ? { ...tab, title: title || '浏览器' }
+            : tab
+        )))}
+        onCommandHandled={(requestId) => setPanelTabs((current) => current.map((tab) => (
+          tab.id === browserTab.id && tab.commandRequestId === requestId
+            ? { ...tab, commandRequestId: undefined }
+            : tab
+        )))}
+        onClose={() => closePanelTab(browserTab.id)}
+      />
+    </div>
+  ) : null;
   const persistentTerminalContent = renderTerminalStack(activePanelTab?.kind === 'terminal');
+  const persistentPanelContent = <>
+    {persistentTerminalContent}
+    {persistentBrowserContent}
+  </>;
 
   return <>
     {tabMenu && <ActionMenu x={tabMenu.x} y={tabMenu.y} onClose={closeTabMenu} items={[
@@ -524,7 +548,7 @@ export function WorkbenchPane({
       toolActions={toolActions}
       fileTree={renderFileTree()}
       panelContent={renderPanelContent()}
-      persistentPanelContent={persistentTerminalContent}
+      persistentPanelContent={persistentPanelContent}
       extensionDock={extensionDock}
       onClose={closePanel}
       onActivate={(tab) => {

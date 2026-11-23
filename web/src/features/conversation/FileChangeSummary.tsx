@@ -6,13 +6,14 @@
  *    脚本、删除/新增等改动，并带统一 diff；
  *  - 工具参数（write/edit）：用于非 Git 仓库，或 Git 仓库之外的临时文件。
  *
- * 两者按绝对路径合并，Git 优先。点击有补丁的文件会在右栏打开 diff 标签页。
+ * 两者按绝对路径合并，Git 优先。点击文件会在右栏打开变更标签页。
  */
 
 import { useState } from 'react';
 import { AlertTriangle, ChevronDown, Undo2 } from 'lucide-react';
 import type { TurnDiff, TurnDiffFile } from '../../types/chat-types';
 import type { FileChange } from './file-changes';
+import { sameChangePath, toolFilePatch, toolResultDiff } from './file-changes';
 import { useActionConfirmation } from '../../shared/ConfirmDialog';
 import { FileKindIcon } from '../../shared/FileKindIcon';
 import './styles/file-change-summary.css';
@@ -66,23 +67,46 @@ function mergeFiles(git: TurnDiff | undefined, toolFiles: FileChange[]): Display
       truncated: file.truncated,
     });
   }
-  const labels = new Set([...merged.values()].map((file) => file.label));
   for (const file of toolFiles) {
-    // Git 路径与工具路径可能因符号链接写法不同，标签相同也视为同一文件。
-    if (merged.has(file.path) || labels.has(file.label)) continue;
-    const patch = file.operations.map((operation) => operation.diff).filter(Boolean).join('\n');
+    const patch = toolFilePatch(file);
+    const existing = [...merged.values()].find((item) => sameChangePath(item, file));
+    if (existing) {
+      // Git 优先保留路径/状态；缺补丁时用工具 diff 或整文件写入内容补上。
+      if (!existing.patch && patch) {
+        existing.patch = patch;
+        if (!existing.complete || (existing.added === 0 && existing.removed === 0)) {
+          const counted = countPatch(patch);
+          if (counted) {
+            existing.added = counted.added;
+            existing.removed = counted.removed;
+            existing.complete = true;
+          } else if (file.lines !== undefined) {
+            existing.lines = file.lines;
+          }
+        }
+      } else if (!existing.complete && existing.lines === undefined && file.lines !== undefined) {
+        existing.lines = file.lines;
+      }
+      continue;
+    }
+    const counted = patch ? countPatch(patch) : undefined;
     merged.set(file.path, {
       path: file.path,
       label: file.label,
-      added: file.added,
-      removed: file.removed,
-      complete: file.completeCounts,
-      status: 'written',
+      added: counted?.added ?? file.added,
+      removed: counted?.removed ?? file.removed,
+      complete: counted ? true : file.completeCounts,
+      status: counted && counted.removed === 0 && /\/dev\/null/.test(patch || '') ? 'added' : 'written',
       lines: file.lines,
-      patch: patch || undefined,
+      patch,
     });
   }
   return [...merged.values()];
+}
+
+function countPatch(patch: string) {
+  const delta = toolResultDiff({ details: { patch } } as import('../../types/chat-types').ChatMessage);
+  return delta ? { added: delta.added, removed: delta.removed } : undefined;
 }
 
 export function FileChangeSummary({ files, gitDiff, onUndo, onOpenDiff, onOpenFile }: {
@@ -109,7 +133,7 @@ export function FileChangeSummary({ files, gitDiff, onUndo, onOpenDiff, onOpenFi
   const visible = expanded ? display : display.slice(0, 4);
   const missingCount = display.filter((file) => missing.has(file.path)).length;
   const sourceHint = gitDiff
-    ? '基于本轮 Git 工作树快照；有补丁的文件查看 diff，其余文件打开预览。'
+    ? '基于本轮 Git 工作树快照；点击文件在右侧查看本轮变更。'
     : '仅汇总工具确认的写入；非 Git 仓库无法统计命令产生的文件。';
 
   /** 打开预览；文件已经不在了就把这一行标记为失效，而不是让错误弹到主界面。 */
@@ -160,9 +184,9 @@ export function FileChangeSummary({ files, gitDiff, onUndo, onOpenDiff, onOpenFi
     {undoError && <p className="file-change-missing-note" role="alert">{undoError}</p>}
 
     <div className="file-change-list">{visible.map((file, index) => {
-      // 有补丁先看 diff；没有补丁但路径可读时，直接打开右侧文件预览。
+      // 只要本轮有变更记录，就进「变更」页；没有 onOpenDiff 时再退回文件预览。
       const gone = missing.has(file.path);
-      const canDiff = Boolean(file.patch && onOpenDiff);
+      const canDiff = Boolean(onOpenDiff);
       const canView = Boolean(onOpenFile && /^(?:\/|[a-z]:[\\/]|\\\\)/i.test(file.path));
       const openable = !gone && (canDiff || canView);
       return <button
@@ -173,8 +197,21 @@ export function FileChangeSummary({ files, gitDiff, onUndo, onOpenDiff, onOpenFi
         disabled={!openable}
         onClick={() => {
           if (!openable) return;
-          if (!canDiff) { void openPreview(file.path); return; }
-          onOpenDiff?.(review.files.find(item => item.path === file.path), review);
+          if (canDiff) {
+            onOpenDiff?.(review.files.find(item => item.path === file.path) || {
+              path: file.path,
+              label: file.label,
+              status: file.status === 'written' ? 'modified' : file.status,
+              added: file.added,
+              removed: file.removed,
+              completeCounts: file.complete,
+              patch: file.patch,
+              binary: file.binary,
+              truncated: file.truncated,
+            }, review);
+            return;
+          }
+          void openPreview(file.path);
         }}
       >
         <FileKindIcon path={file.path} />

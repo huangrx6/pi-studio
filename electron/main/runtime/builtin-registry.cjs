@@ -1,6 +1,7 @@
 const capabilityModules = Object.freeze([
   require('../capabilities/coding-tools/index.cjs'),
   require('../capabilities/filesystem/index.cjs'),
+  require('../capabilities/browser/index.cjs'),
   require('../capabilities/todo/index.cjs'),
   require('../capabilities/long-task/index.cjs'),
   require('../capabilities/harness/index.cjs'),

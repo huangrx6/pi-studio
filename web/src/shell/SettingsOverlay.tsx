@@ -96,6 +96,11 @@ const AboutSettings = lazy(async () => {
   return { default: module.AboutSettings };
 });
 
+const BrowserSettings = lazy(async () => {
+  const module = await import('../features/browser/BrowserSettings');
+  return { default: module.BrowserSettings };
+});
+
 type WorkspaceNotices = {
   conversationListRefreshError: boolean;
   stateLoading: boolean;
@@ -423,12 +428,13 @@ export function SettingsOverlay({
                 </button>
               </div>
             )}
-            {!data && !error && tab !== 'general' && tab !== 'network' && tab !== 'git' && tab !== 'usage' && tab !== 'archives' && tab !== 'permissions' && tab !== 'subagents' && (
+            {!data && !error && tab !== 'general' && tab !== 'network' && tab !== 'browser' && tab !== 'git' && tab !== 'usage' && tab !== 'archives' && tab !== 'permissions' && tab !== 'subagents' && (
               <LoadingState variant="section">正在加载设置…</LoadingState>
             )}
             {tab === 'shortcuts' && <ShortcutSettings preferences={appearance.preferences} onChange={appearance.onChange} />}
             {tab === 'general' && <GeneralSettings {...appearance} />}
             {tab === 'network' && <NetworkSettings />}
+            {tab === 'browser' && <BrowserSettings />}
             {tab === 'git' && <GitSettings cwd={workspace} workspaces={workspaces} preferences={appearance.preferences} onChange={appearance.onChange} onOpenWorktree={onOpenWorktree} />}
             {tab === 'permissions' && (
               <PermissionPolicySettings

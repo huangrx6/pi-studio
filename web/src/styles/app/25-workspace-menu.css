@@ -243,20 +243,26 @@
   background: var(--transparent);
 }
 
-.file-panel .panel-start-tools {
-  grid-template-columns: 1fr;
+.app.is-wallpaper-inside .file-panel .panel-launcher-tile {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--conversation-reading-surface) 88%, transparent), transparent 50%),
+    var(--conversation-reading-surface);
 }
 
-.file-panel .panel-start-tools .panel-tool {
-  border-radius: var(--radius-card);
+.app.is-wallpaper-inside .file-panel .panel-launcher-icon {
+  background:
+    radial-gradient(circle at 30% 22%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 58%),
+    var(--conversation-inset-surface);
 }
 
-.app.is-wallpaper-inside .file-panel .panel-start-tools .panel-tool {
-  background: var(--conversation-reading-surface);
+.app.is-wallpaper-inside .file-panel .panel-tool-count,
+.app.is-wallpaper-inside .file-panel .panel-launcher-badge {
+  background: var(--accent);
+  color: var(--accent-contrast, var(--surface));
 }
 
-.app.is-wallpaper-inside .file-panel .panel-tool-count {
-  background: var(--conversation-inset-surface);
+.app.is-wallpaper-inside .file-panel .panel-workspace-prompt {
+  background: color-mix(in srgb, var(--conversation-reading-surface) 86%, transparent);
 }
 
 .app.is-wallpaper-inside .file-panel :is(.browser-panel, .browser-toolbar, .browser-stage) {

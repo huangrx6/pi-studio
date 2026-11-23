@@ -164,19 +164,35 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
   }
 
   /**
-   * Open (or reuse) the in-app browser panel. A second call with a URL
-   * navigates the existing tab instead of stacking duplicates.
+   * Open (or reuse) the in-app browser panel. Extra calls open a new guest tab
+   * inside the shell instead of stacking another workbench tab.
    */
-  function openBrowserTab(url = '') {
+  function openBrowserTab(url = '', options: { commandRequestId?: string } = {}) {
     const existing = panelTabsRef.current.find((tab) => tab.kind === 'browser');
     if (existing) {
-      if (url) setPanelTabs((current) => current.map((tab) => tab.id === existing.id ? { ...tab, url } : tab));
+      setPanelTabs((current) => current.map((tab) => (
+        tab.id === existing.id
+          ? {
+              ...tab,
+              url,
+              openNonce: (tab.openNonce ?? 0) + 1,
+              commandRequestId: options.commandRequestId || tab.commandRequestId,
+            }
+          : tab
+      )));
       setActivePanelTabId(existing.id);
       if (filesOpen) setPanelEntered(true); else openPanel();
       return;
     }
     const id = `browser:${crypto.randomUUID()}`;
-    setPanelTabs((current) => [...current, { id, kind: 'browser', title: '浏览器', url }]);
+    setPanelTabs((current) => [...current, {
+      id,
+      kind: 'browser',
+      title: '浏览器',
+      url,
+      openNonce: 0,
+      commandRequestId: options.commandRequestId,
+    }]);
     setActivePanelTabId(id);
     if (filesOpen) setPanelEntered(true); else openPanel();
   }
@@ -492,6 +508,17 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     if (treeVisible && workspace) void loadTree('');
     return () => { ++treeRequestRef.current; };
   }, [treeVisible, workspace]);
+
+  // Agent browser_open arrives as a main-process command; ensure the shell is up.
+  useEffect(() => {
+    const stop = window.piApi.onBrowserCommand((command) => {
+      if (command?.type !== 'open') return;
+      openBrowserTab(command.url || '', { commandRequestId: command.requestId });
+    });
+    return () => stop();
+  // openBrowserTab closes over latest setters; mount once.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => () => {
     ++fileReadRef.current;

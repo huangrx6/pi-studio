@@ -31,21 +31,39 @@ export function ChangesView({ sessionId, initial, turns, focusPath, onOpenFile, 
     requestAnimationFrame(() => [...(list.current?.querySelectorAll<HTMLElement>('[data-diff-path]') ?? [])].find(node => node.dataset.diffPath === path)?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
   }, []);
   useEffect(() => { setHistory(turns); }, [turns]);
-  useEffect(() => { setSelectedAt(initial.at); setExpanded(new Set(focusPath ? [focusPath] : [])); if (focusPath) reveal(focusPath); }, [initial.at, focusPath, reveal]);
+  useEffect(() => { setSelectedAt(initial.at); setExpanded(new Set(focusPath ? [focusPath] : [])); setLoaded({}); if (focusPath) reveal(focusPath); }, [initial.at, focusPath, reveal]);
   useEffect(() => {
     if (!jump) return;
     const outside = (event: PointerEvent) => { if (!jumpHost.current?.contains(event.target as Node)) setJump(false); };
     document.addEventListener('pointerdown', outside); return () => document.removeEventListener('pointerdown', outside);
   }, [jump]);
   // Only read the selected immutable snapshot; late responses cannot replace another round.
+  // Also re-read when a stored patch is empty so write-created files can still show a real diff.
   useEffect(() => {
-    let cancelled = false; setLoaded({}); setError(''); setLoading(false);
-    if (!(full || ignoreWhitespace) || !turn.snapshot) return;
-    const paths = turn.files.filter(file => expanded.has(file.path));
-    if (!paths.length) return;
+    let cancelled = false; setError(''); setLoading(false);
+    if (!turn.snapshot) { setLoaded({}); return; }
+    const paths = turn.files.filter((file) => {
+      if (!expanded.has(file.path) || file.binary) return false;
+      if (full || ignoreWhitespace) return true;
+      return !file.patch;
+    });
+    if (!paths.length) {
+      if (full || ignoreWhitespace) setLoaded({});
+      return;
+    }
     setLoading(true);
     Promise.allSettled(paths.map(async file => [file.path, await window.piApi.turnDiffFile({ sessionId, at: turn.at, path: file.path, full, ignoreWhitespace })] as const))
-      .then(items => { if (cancelled) return; const files: Record<string, TurnDiffFile> = {}; const failures: string[] = []; for (const item of items) { if (item.status === 'fulfilled') files[item.value[0]] = item.value[1]; else failures.push(String(item.reason)); } setLoaded(files); if (failures.length) setError(failures[0]); })
+      .then(items => {
+        if (cancelled) return;
+        const files: Record<string, TurnDiffFile> = {};
+        const failures: string[] = [];
+        for (const item of items) {
+          if (item.status === 'fulfilled') files[item.value[0]] = item.value[1];
+          else failures.push(String(item.reason));
+        }
+        setLoaded((current) => (full || ignoreWhitespace ? files : { ...current, ...files }));
+        if (failures.length) setError(failures[0]);
+      })
       .catch(err => { if (!cancelled) setError(String(err)); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -86,7 +104,7 @@ export function ChangesView({ sessionId, initial, turns, focusPath, onOpenFile, 
   const chooseSnapshotFeature = (apply: () => void) => { if (!turn.snapshot) { setError('这条历史记录未保存完整快照，只能查看已保存的差异。新产生的 Git 变更支持完整文件和忽略空白字符。'); return; } apply(); };
   return <section className="changes-view" aria-label="轮次变更">
     <div className="changes-toolbar">
-      <div className="changes-round"><Select className="changes-round-select" label="选择变更轮次" value={String(turn.at)} options={roundOptions} onChange={value => { setSelectedAt(Number(value)); setExpanded(new Set()); setPreview(false); setFull(false); setIgnoreWhitespace(false); }} /><span className="diff-view-counts"><span>+{totals.added}</span><span>−{totals.removed}</span></span></div>
+      <div className="changes-round"><Select className="changes-round-select" label="选择变更轮次" value={String(turn.at)} options={roundOptions} onChange={value => { setSelectedAt(Number(value)); setExpanded(new Set()); setLoaded({}); setPreview(false); setFull(false); setIgnoreWhitespace(false); }} /><span className="diff-view-counts"><span>+{totals.added}</span><span>−{totals.removed}</span></span></div>
       <div className="changes-tools">
         <button className="icon-button" title="差异选项" aria-label="差异选项" onClick={event => menuAt(event, [
           { label: '加载完整文件', checked: full, run: () => chooseSnapshotFeature(() => setFull(!full)) },
@@ -126,9 +144,15 @@ export function ChangesView({ sessionId, initial, turns, focusPath, onOpenFile, 
               { label: '复制文件补丁', run: () => safe(navigator.clipboard.writeText(file.patch || '')) },
             ])}><MoreHorizontal /></button>
           </header>
-          {open && (turn.snapshot && (preview || prefersFilePreview(file.label, file.binary))
-            ? <TurnFilePreview key={turn.at} sessionId={sessionId} at={turn.at} file={file} />
-            : <DiffView file={file} options={options} embedded />)}
+          {open && (() => {
+            const preferPreview = turn.snapshot && (preview || prefersFilePreview(file.label, file.binary));
+            const emptyTextDiff = !file.binary && !file.patch;
+            // Snapshot preview is more useful than an empty “no patch” panel for writes/mode-only rows.
+            if (preferPreview || (turn.snapshot && emptyTextDiff && !loading)) {
+              return <TurnFilePreview key={`${turn.at}:${file.path}`} sessionId={sessionId} at={turn.at} file={file} />;
+            }
+            return <DiffView file={file} options={options} embedded />;
+          })()}
         </article>; })}
         {!turn.files.length && <div className="diff-empty">本轮没有文件变更</div>}
         {turn.truncated && <p className="diff-note">本轮文件过多，列表仅包含已保存的部分文件。</p>}

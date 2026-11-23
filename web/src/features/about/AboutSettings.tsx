@@ -7,13 +7,16 @@ import { revealFileLabel } from '../../shared/desktop-platform';
 import '../../shared/styles/settings-page-header.css';
 import './styles/about-settings.css';
 
-export function AboutSettings({ snapshot, paths, runtime, onOpenUpdates }: {
+export function AboutSettings({ snapshot, paths, runtime, onOpenUpdates, onOpenBrowserSettings }: {
   snapshot: UpdateSnapshot;
   paths: { attachmentsPath: string; backupsPath: string; databasePath: string; skillsPath: string; extensionsPath: string };
   runtime?: StudioRuntimeVersions;
   onOpenUpdates: () => void;
+  onOpenBrowserSettings?: () => void;
 }) {
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [browserMessage, setBrowserMessage] = useState<string | null>(null);
+  const [clearingBrowser, setClearingBrowser] = useState(false);
   const active = useRef(false);
   const request = useRef(0);
   useEffect(() => { active.current = true; return () => { active.current = false; request.current++; }; }, []);
@@ -32,6 +35,23 @@ export function AboutSettings({ snapshot, paths, runtime, onOpenUpdates }: {
       if (active.current && id === request.current) setLinkError(errorText(cause));
     }
   }
+
+  async function clearBrowserData() {
+    const id = ++request.current;
+    setLinkError(null);
+    setBrowserMessage(null);
+    if (!window.confirm('清除内嵌浏览器的 Cookie、缓存和站点数据？下载的文件会保留。')) return;
+    setClearingBrowser(true);
+    try {
+      await window.piApi.browserClearData();
+      if (active.current && id === request.current) setBrowserMessage('已清除内嵌浏览器数据');
+    } catch (cause) {
+      if (active.current && id === request.current) setLinkError(errorText(cause));
+    } finally {
+      if (active.current && id === request.current) setClearingBrowser(false);
+    }
+  }
+
   async function copyPath(target: string) {
     const id = ++request.current;
     setLinkError(null);
@@ -82,6 +102,20 @@ export function AboutSettings({ snapshot, paths, runtime, onOpenUpdates }: {
       {runtime ? <dl className="about-versions">{versions.map(([label, value]) => <div key={label}>
         <dt>{label}</dt><dd>{value || '未提供'}</dd>
       </div>)}</dl> : <p>运行环境信息尚未加载</p>}
+    </section>
+
+    <section className="about-section" aria-labelledby="about-browser-title">
+      <h2 id="about-browser-title">内嵌浏览器</h2>
+      <p>工作台右侧浏览器使用独立配置文件（Cookie 与缓存不与系统浏览器共享）。完整偏好、网站权限、CDP 与外接 Chrome 请在「设置 → 浏览器」中管理。</p>
+      <div className="about-browser-actions">
+        <button type="button" className="settings-outline" disabled={clearingBrowser} onClick={() => void clearBrowserData()}>
+          {clearingBrowser ? '正在清除…' : '清除浏览器数据'}
+        </button>
+        {onOpenBrowserSettings && (
+          <button type="button" className="settings-outline" onClick={onOpenBrowserSettings}>浏览器设置</button>
+        )}
+        {browserMessage && <span className="about-browser-note">{browserMessage}</span>}
+      </div>
     </section>
     <section className="about-section about-diagnostics" aria-labelledby="about-storage-title">
       <h2 id="about-storage-title">本地存储与诊断信息</h2>

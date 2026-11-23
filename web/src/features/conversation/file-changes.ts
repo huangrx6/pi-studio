@@ -27,6 +27,73 @@ function normalizedPath(path: string) {
   return `${path.startsWith('/') ? '/' : ''}${parts.join('/')}`;
 }
 
+/** Slash-normalize for comparisons across tool args and Git labels. */
+export function normalizePathKey(value: string) {
+  return String(value || '').replace(/\\/g, '/').replace(/\/+/g, '/');
+}
+
+/**
+ * Tool paths and Git snapshot paths often disagree on workspace root / cwd.
+ * Treat equal paths, equal labels, or boundary-aligned suffixes as the same file.
+ */
+export function sameChangePath(
+  left: { path?: string; label?: string },
+  right: { path?: string; label?: string },
+) {
+  const pairs: Array<[string, string]> = [
+    [left.path || '', right.path || ''],
+    [left.label || '', right.label || ''],
+    [left.path || '', right.label || ''],
+    [left.label || '', right.path || ''],
+  ];
+  for (const [rawA, rawB] of pairs) {
+    const a = normalizePathKey(rawA).replace(/\/$/, '');
+    const b = normalizePathKey(rawB).replace(/\/$/, '');
+    if (!a || !b) continue;
+    if (a === b) return true;
+    const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+    if (longer.endsWith(`/${shorter}`)) return true;
+  }
+  return false;
+}
+
+/** Build a unified diff for a whole-file write when the tool result omitted one. */
+export function synthesizeWritePatch(label: string, content: string) {
+  const relative = normalizePathKey(label).replace(/^\//, '') || 'file';
+  const text = String(content ?? '').replace(/\r\n/g, '\n');
+  const body = text.replace(/\n$/, '');
+  const lines = body.length ? body.split('\n') : [];
+  if (!lines.length) {
+    return [
+      `diff --git a/${relative} b/${relative}`,
+      'new file mode 100644',
+      '--- /dev/null',
+      `+++ b/${relative}`,
+      '@@ -0,0 +1 @@',
+      '+',
+    ].join('\n');
+  }
+  return [
+    `diff --git a/${relative} b/${relative}`,
+    'new file mode 100644',
+    '--- /dev/null',
+    `+++ b/${relative}`,
+    `@@ -0,0 +1,${lines.length} @@`,
+    ...lines.map((line) => `+${line}`),
+  ].join('\n');
+}
+
+/** Prefer an explicit tool diff; otherwise synthesize from the last write body. */
+export function toolFilePatch(file: Pick<FileChange, 'label' | 'operations'>) {
+  const joined = file.operations.map((operation) => operation.diff).filter(Boolean).join('\n');
+  if (joined) return joined;
+  for (let index = file.operations.length - 1; index >= 0; index -= 1) {
+    const content = file.operations[index]?.content;
+    if (typeof content === 'string') return synthesizeWritePatch(file.label, content);
+  }
+  return undefined;
+}
+
 /** A write's content length alone does not say how many lines changed. */
 export function toolResultDiff(result: ChatMessage) {
   const details = result.details as { patch?: unknown; diff?: unknown } | undefined;

@@ -423,7 +423,33 @@ export function App() {
   ]);
     /** Latest browser opener, read through a ref so the context value stays stable. */
   const markdownLinkRef = useRef<(url: string) => void>(() => {});
-  markdownLinkRef.current = (url: string) => openBrowserTab(url);
+  markdownLinkRef.current = (url: string) => {
+    void (async () => {
+      try {
+        const settings = await window.piApi.browserAdvancedSettings?.();
+        const raw = String(url || '').trim();
+        let local = false;
+        try {
+          const parsed = new URL(raw);
+          local = parsed.protocol === 'file:'
+            || parsed.hostname === 'localhost'
+            || parsed.hostname === '127.0.0.1'
+            || parsed.hostname === '[::1]'
+            || parsed.hostname.endsWith('.localhost');
+        } catch {
+          local = raw.startsWith('file:') || raw.startsWith('/');
+        }
+        const target = local ? settings?.localLinkOpenTarget : settings?.webLinkOpenTarget;
+        if (target === 'system' && /^https?:\/\//i.test(raw)) {
+          await window.piApi.openLink(raw, 'external');
+          return;
+        }
+      } catch {
+        // Fall back to workbench browser.
+      }
+      openBrowserTab(url);
+    })();
+  };
   const onSidebarStartSession = useCallback(() => { void startSession(); }, [startSession]);
   const onSidebarOpenSettings = useCallback((page?: Parameters<typeof openSettings>[0]) => { void openSettings(page); }, [openSettings]);
   const onSidebarOpenSearch = useCallback(() => setWorkspaceSearchOpen(true), [setWorkspaceSearchOpen]);
@@ -1076,6 +1102,7 @@ export function App() {
           paths: settingsData!,
           runtime: settingsData?.runtimeVersions,
           onOpenUpdates: openUpdateDialog,
+          onOpenBrowserSettings: () => { void openSettings('browser'); },
         }}
       />
 

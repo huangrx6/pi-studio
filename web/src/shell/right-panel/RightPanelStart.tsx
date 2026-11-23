@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react';
 import { pollServiceCount } from './service-count-polling';
-import { Activity, Clapperboard, Columns2, ChevronRight, Folder, FolderOpen, Globe, MessageCirclePlus, PanelRight, Terminal, type LucideIcon } from 'lucide-react';
+import {
+  Activity,
+  Clapperboard,
+  Columns2,
+  Folder,
+  FolderOpen,
+  Globe,
+  LayoutGrid,
+  MessageCirclePlus,
+  Terminal,
+  type LucideIcon,
+} from 'lucide-react';
 
 export type RightPanelToolId = 'files' | 'terminal' | 'services' | 'browser' | 'temporary' | 'comparison' | 'storyboard';
 
@@ -22,6 +33,7 @@ const TOOL_ICONS: Record<RightPanelToolId, LucideIcon> = {
   temporary: MessageCirclePlus,
 };
 
+/** Compact list for the tab-bar overflow menu; launcher grid for the start page. */
 export function RightPanelToolList({
   actions,
   serviceCount,
@@ -31,26 +43,52 @@ export function RightPanelToolList({
   serviceCount?: number;
   menu?: boolean;
 }) {
-  return <div className={menu ? 'panel-tool-menu-list' : 'panel-start-tools'} role={menu ? 'menu' : undefined}>
+  if (menu) {
+    return <div className="panel-tool-menu-list" role="menu">
+      {actions.map((action) => {
+        const Icon = TOOL_ICONS[action.id];
+        return <button
+          key={action.id}
+          type="button"
+          className="panel-tool"
+          aria-label={action.label}
+          role="menuitem"
+          tabIndex={-1}
+          disabled={action.disabled}
+          onClick={action.onSelect}
+        >
+          <span className="panel-tool-icon"><Icon aria-hidden /></span>
+          <span className="panel-tool-copy">
+            <span className="panel-tool-label">{action.label}</span>
+          </span>
+          {action.id === 'services' && Boolean(serviceCount) && (
+            <span className="panel-tool-count" aria-label={`${serviceCount} 个运行服务`}>{serviceCount}</span>
+          )}
+        </button>;
+      })}
+    </div>;
+  }
+
+  return <div className="panel-launcher-grid" role="list">
     {actions.map((action) => {
       const Icon = TOOL_ICONS[action.id];
       return <button
         key={action.id}
         type="button"
-        className="panel-tool"
-        aria-label={action.label}
-        role={menu ? 'menuitem' : undefined}
-        tabIndex={menu ? -1 : undefined}
+        className="panel-launcher-tile"
+        role="listitem"
+        aria-label={action.description ? `${action.label}：${action.description}` : action.label}
         disabled={action.disabled}
         onClick={action.onSelect}
       >
-        <span className="panel-tool-icon"><Icon aria-hidden /></span>
-        <span className="panel-tool-copy">
-          <span className="panel-tool-label">{action.label}</span>
-          {action.description && <span className="panel-tool-description">{action.description}</span>}
+        <span className="panel-launcher-icon" aria-hidden>
+          <Icon />
+          {action.id === 'services' && Boolean(serviceCount) && (
+            <span className="panel-launcher-badge">{serviceCount}</span>
+          )}
         </span>
-        {action.id === 'services' && Boolean(serviceCount) && <span className="panel-tool-count" aria-label={`${serviceCount} 个运行服务`}>{serviceCount}</span>}
-        {!menu && <ChevronRight className="panel-tool-arrow" aria-hidden />}
+        <span className="panel-launcher-label">{action.label}</span>
+        {action.description && <span className="panel-launcher-description">{action.description}</span>}
       </button>;
     })}
   </div>;
@@ -68,6 +106,7 @@ export function RightPanelStart({
   onChooseWorkspace: () => void;
 }) {
   const [serviceCount, setServiceCount] = useState(0);
+  const hasWorkspace = Boolean(workspace || cwd);
 
   useEffect(() => {
     if (!workspace && !cwd) {
@@ -92,18 +131,25 @@ export function RightPanelStart({
   }, [cwd, workspace]);
 
   return <div className="panel-start">
-    <div className="panel-start-intro">
-      <span className="panel-start-mark"><PanelRight aria-hidden /></span>
+    <header className="panel-start-intro">
+      <span className="panel-start-mark"><LayoutGrid aria-hidden /></span>
       <div>
-        <strong>工作台</strong>
-        <span>{workspace || cwd ? '快速打开当前工作区的工具' : '打开工作区后开始使用工具'}</span>
+        <strong>启动台</strong>
+        <span>{hasWorkspace ? '打开工具，继续当前工作区的事' : '先选择工作区，再启动工具'}</span>
       </div>
-    </div>
-    <span className="panel-start-section-label">快速访问</span>
-    {!workspace && !cwd && <button type="button" className="panel-workspace-prompt" onClick={onChooseWorkspace}>
-      <FolderOpen aria-hidden />
-      <span>选择工作区</span>
+    </header>
+
+    {!hasWorkspace && <button type="button" className="panel-workspace-prompt" onClick={onChooseWorkspace}>
+      <span className="panel-workspace-prompt-icon" aria-hidden><FolderOpen /></span>
+      <span className="panel-workspace-prompt-copy">
+        <strong>选择工作区</strong>
+        <span>文件、终端和服务需要工作区后才能使用</span>
+      </span>
     </button>}
-    <RightPanelToolList actions={actions} serviceCount={serviceCount} />
+
+    <section className="panel-launcher" aria-label="工作台应用">
+      <div className="panel-start-section-label">应用</div>
+      <RightPanelToolList actions={actions} serviceCount={serviceCount} />
+    </section>
   </div>;
 }

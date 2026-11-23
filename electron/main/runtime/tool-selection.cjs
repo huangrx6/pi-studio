@@ -18,9 +18,13 @@ const {
 
 const SETTING_KEY = 'studio.agent.tools';
 const SETTING_VERSION_KEY = 'studio.agent.tools.version';
-const SETTING_VERSION = 3;
+const SETTING_VERSION = 6;
 const DEFAULT_AGENT_TOOLS = Object.freeze([
-  'read', 'write', 'edit', 'bash', 'grep', 'find', 'ls', 'todo', 'tool_search', 'mcp__*',
+  'read', 'write', 'edit', 'bash', 'grep', 'find', 'ls', 'todo', 'tool_search',
+  'browser_tabs', 'browser_open', 'browser_navigate', 'browser_snapshot', 'browser_screenshot',
+  'browser_click', 'browser_type', 'browser_scroll', 'browser_wait', 'browser_select',
+  'browser_dialog', 'browser_download', 'browser_highlight',
+  'mcp__*',
 ]);
 const MAX_AGENT_TOOLS = 256;
 const RESERVED = new Set(['__proto__', 'prototype', 'constructor']);
@@ -116,6 +120,41 @@ function readAgentToolSelection(db = getStudioDatabase()) {
     }
     if (version < 3 && !selection.enabled.some((pattern) => matches(pattern, 'todo'))) {
       if (selection.enabled.length < MAX_AGENT_TOOLS) selection.enabled.push('todo');
+    }
+    if (version < 4) {
+      const browserTools = [
+        'browser_tabs',
+        'browser_open',
+        'browser_navigate',
+        'browser_snapshot',
+        'browser_screenshot',
+      ];
+      for (const name of browserTools) {
+        if (selection.enabled.some((pattern) => matches(pattern, name))) continue;
+        if (selection.enabled.length >= MAX_AGENT_TOOLS) break;
+        selection.enabled.push(name);
+      }
+    }
+    if (version < 5) {
+      const actTools = [
+        'browser_click',
+        'browser_type',
+        'browser_scroll',
+        'browser_wait',
+        'browser_select',
+        'browser_dialog',
+        'browser_download',
+      ];
+      for (const name of actTools) {
+        if (selection.enabled.some((pattern) => matches(pattern, name))) continue;
+        if (selection.enabled.length >= MAX_AGENT_TOOLS) break;
+        selection.enabled.push(name);
+      }
+    }
+    if (version < 6) {
+      if (!selection.enabled.some((pattern) => matches(pattern, 'browser_highlight'))) {
+        if (selection.enabled.length < MAX_AGENT_TOOLS) selection.enabled.push('browser_highlight');
+      }
     }
     const migrated = normalizeSelection(selection);
     try {

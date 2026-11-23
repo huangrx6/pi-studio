@@ -225,3 +225,26 @@ test('undo restores only the turn, preserves staging, and rejects conflicts befo
   assert.equal(api.readTurnDiffs('one')[0].undone, true);
   await undo();
 });
+
+
+test('rebuilds empty tree patches from blob contents for added text files', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-turn-rebuild-'));
+  try {
+    git(dir, ['init', '-q']);
+    git(dir, ['config', 'user.email', 'test@example.com']);
+    git(dir, ['config', 'user.name', 'Test']);
+    fs.writeFileSync(path.join(dir, 'keep.txt'), 'keep\n');
+    git(dir, ['add', './']);
+    git(dir, ['commit', '-qm', 'init']);
+    const token = await beginTurn(dir, 'rebuild');
+    fs.mkdirSync(path.join(dir, 'docs'));
+    fs.writeFileSync(path.join(dir, 'docs', 'PLAN.md'), '# Plan\n\n- one\n- two\n');
+    const diff = await endTurn(token);
+    const plan = diff.files.find((file) => file.label === 'docs/PLAN.md' || file.label.endsWith('PLAN.md'));
+    assert.ok(plan, 'plan file recorded');
+    assert.ok(plan.patch && plan.patch.includes('+# Plan'), plan.patch);
+    assert.ok(plan.added >= 3, plan.added);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

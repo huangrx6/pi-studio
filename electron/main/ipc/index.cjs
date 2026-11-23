@@ -13,6 +13,7 @@
  *  - terminal     每个窗口独占的交互式 PTY 会话
  *  - runtime-services 只读监听端口与服务进程发现
  *  - git-workspace 当前目录的 Git 分支、提交、改动与 worktree
+ *  - browser       内嵌浏览器下载与站点数据
  */
 
 const { registerSystemIpc } = require('./system.cjs');
@@ -32,6 +33,7 @@ const { registerRuntimeServicesIpc } = require('./runtime-services.cjs');
 const { registerGitWorkspaceIpc } = require('./git-workspace.cjs');
 
 const { registerStoryboardIpc } = require('./video-storyboard.cjs');
+const { registerBrowserIpc } = require('./browser.cjs');
 
 function registerIpc(waitForStartup) {
   registerStoryboardIpc();
@@ -50,6 +52,7 @@ function registerIpc(waitForStartup) {
   registerTerminalIpc();
   registerRuntimeServicesIpc();
   registerGitWorkspaceIpc();
+  registerBrowserIpc();
 }
 
 module.exports = { registerIpc };

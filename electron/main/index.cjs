@@ -31,7 +31,7 @@ const { shutdownTerminalSessions } = require('./ipc/terminal.cjs');
 const { createWindow, showMainWindow, installMenu, watchSystemTheme } = require('./window.cjs');
 const { BACKGROUND_SCHEME } = require('./background-media.cjs');
 const { registerBackgroundProtocol } = require('./services/background.cjs');
-const { installBrowserSessionGuards } = require('./services/browser-session.cjs');
+const { initializeBrowserService } = require('./services/browser/index.cjs');
 const { initializeNetwork } = require('./services/network.cjs');
 const { isAllowedLocalHtmlUrl } = require('./services/local-html.cjs');
 const {
@@ -162,7 +162,7 @@ if (primaryInstance) {
       }
       // Paint the launch screen in the actual window while its runtime starts.
       registerBackgroundProtocol();
-      installBrowserSessionGuards();
+      initializeBrowserService();
       createWindow();
       await initializeNetwork();
       // Database and credential paths depend on app.getPath('userData').

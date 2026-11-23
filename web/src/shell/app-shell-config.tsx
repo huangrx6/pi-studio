@@ -1,6 +1,6 @@
 import {
   ArchiveRestore, BarChart3, Bot, Code2, Cpu, FileCode2, Info, Keyboard,
-  GitBranch, Globe, Layers3, Plug, Settings, ShieldCheck, Wrench,
+  GitBranch, Globe, Layers3, Plug, Settings, ShieldCheck, Wrench, AppWindow,
 } from 'lucide-react';
 import appIcon from '../../../assets/icon.png';
 
@@ -21,6 +21,7 @@ export const settingsPages = [
   { id: 'extensions', group: '资源与扩展', label: '扩展', icon: Layers3 },
   { id: 'git', group: '工作区', label: 'Git 工作流', icon: GitBranch, keywords: ['Git 与 Worktree', '工作树', 'Git workflow', 'gitworkflow', '差异', '换行', '分支'] },
   { id: 'network', group: '数据与应用', label: '网络代理', icon: Globe, keywords: ['proxy', '代理', '网络', 'VPN', '连接', 'HTTP', 'SOCKS', '超时'] },
+  { id: 'browser', group: '数据与应用', label: '浏览器', icon: AppWindow, keywords: ['Browser', 'CDP', 'Chrome', '下载', '历史', '网站权限', 'webview', '内嵌浏览器'] },
   { id: 'archives', group: '数据与应用', label: '归档会话', icon: ArchiveRestore },
   { id: 'about', group: '数据与应用', label: '关于', icon: Info, keywords: ['版本', '更新', '许可', '诊断'] },
 ] as const;

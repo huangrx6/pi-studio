@@ -145,6 +145,53 @@ contextBridge.exposeInMainWorld('piApi', {
   revealFile: (payload) => ipcRenderer.invoke('pi:reveal-file', payload),
   openExternal: (url) => ipcRenderer.invoke('pi:open-external', url),
   openLink: (url, mode) => ipcRenderer.invoke('pi:open-link', { url, mode }),
+  browserDownloads: () => ipcRenderer.invoke('pi:browser-downloads'),
+  browserDownloadCancel: (id) => ipcRenderer.invoke('pi:browser-download-cancel', id),
+  browserDownloadClear: (id) => ipcRenderer.invoke('pi:browser-download-clear', id),
+  browserDownloadReveal: (id) => ipcRenderer.invoke('pi:browser-download-reveal', id),
+  browserDownloadOpen: (id) => ipcRenderer.invoke('pi:browser-download-open', id),
+  browserDownloadsFolder: () => ipcRenderer.invoke('pi:browser-downloads-folder'),
+  browserClearData: () => ipcRenderer.invoke('pi:browser-clear-data'),
+  browserTabs: () => ipcRenderer.invoke('pi:browser-tabs'),
+  browserTabRegister: (payload) => ipcRenderer.invoke('pi:browser-tab-register', payload),
+  browserTabUpdate: (payload) => ipcRenderer.invoke('pi:browser-tab-update', payload),
+  browserTabUnregister: (id) => ipcRenderer.invoke('pi:browser-tab-unregister', id),
+  browserTabActivate: (id) => ipcRenderer.invoke('pi:browser-tab-activate', id),
+  browserCommandAck: (payload) => ipcRenderer.invoke('pi:browser-command-ack', payload),
+  browserControlState: () => ipcRenderer.invoke('pi:browser-control-state'),
+  browserControlPause: (payload) => ipcRenderer.invoke('pi:browser-control-pause', payload),
+  browserSitePolicies: () => ipcRenderer.invoke('pi:browser-site-policies'),
+  browserSitePolicyUpsert: (payload) => ipcRenderer.invoke('pi:browser-site-policy-upsert', payload),
+  browserSitePolicyRemove: (payload) => ipcRenderer.invoke('pi:browser-site-policy-remove', payload),
+  browserSitePolicyResolve: (payload) => ipcRenderer.invoke('pi:browser-site-policy-resolve', payload),
+  browserAdvancedSettings: () => ipcRenderer.invoke('pi:browser-advanced-settings'),
+  browserSetEvaluateEnabled: (payload) => ipcRenderer.invoke('pi:browser-set-evaluate-enabled', payload),
+  browserSetPreferences: (payload) => ipcRenderer.invoke('pi:browser-set-preferences', payload),
+  browserPickDownloadDirectory: () => ipcRenderer.invoke('pi:browser-pick-download-directory'),
+  browserExternalTargets: () => ipcRenderer.invoke('pi:browser-external-targets'),
+  browserExternalAttach: (payload) => ipcRenderer.invoke('pi:browser-external-attach', payload),
+  browserExternalDetach: (payload) => ipcRenderer.invoke('pi:browser-external-detach', payload),
+  browserExternalSessions: () => ipcRenderer.invoke('pi:browser-external-sessions'),
+  browserPasswords: () => ipcRenderer.invoke('pi:browser-passwords'),
+  browserPasswordUpsert: (payload) => ipcRenderer.invoke('pi:browser-password-upsert', payload),
+  browserPasswordRemove: (payload) => ipcRenderer.invoke('pi:browser-password-remove', payload),
+  browserPasswordReveal: (payload) => ipcRenderer.invoke('pi:browser-password-reveal', payload),
+  browserContacts: () => ipcRenderer.invoke('pi:browser-contacts'),
+  browserContactUpsert: (payload) => ipcRenderer.invoke('pi:browser-contact-upsert', payload),
+  browserContactRemove: (payload) => ipcRenderer.invoke('pi:browser-contact-remove', payload),
+  browserExtensions: () => ipcRenderer.invoke('pi:browser-extensions'),
+  browserExtensionLoad: (payload) => ipcRenderer.invoke('pi:browser-extension-load', payload || {}),
+  browserExtensionRemove: (payload) => ipcRenderer.invoke('pi:browser-extension-remove', payload),
+  onBrowserEvent: (listener) => {
+    const handler = (_event, payload) => listener(payload);
+    ipcRenderer.on('pi:browser-event', handler);
+    return () => ipcRenderer.removeListener('pi:browser-event', handler);
+  },
+  onBrowserCommand: (listener) => {
+    const handler = (_event, payload) => listener(payload);
+    ipcRenderer.on('pi:browser-command', handler);
+    return () => ipcRenderer.removeListener('pi:browser-command', handler);
+  },
   terminalCreate: (payload) => ipcRenderer.invoke('pi:terminal-create', payload),
   // Fire-and-forget: waiting for an invoke ack on every keystroke is a major
   // source of interactive terminal lag in Electron.

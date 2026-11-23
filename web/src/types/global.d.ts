@@ -346,6 +346,22 @@ interface NativeWindowState {
   fullscreen: boolean;
 }
 
+type BrowserPreferences = {
+  agentControlEnabled: boolean;
+  showFullUrl: boolean;
+  webLinkOpenTarget: 'workbench' | 'system' | string;
+  localLinkOpenTarget: 'workbench' | 'system' | string;
+  annotatedScreenshots: 'always' | 'never' | string;
+  askDownloadPath: boolean;
+  downloadDirectory: string;
+  historyAccess: 'allow' | 'ask' | 'deny' | string;
+  evaluateEnabled: boolean;
+  cdpEnabled: boolean;
+  externalChromeEnabled: boolean;
+  externalChromeEndpoint: string;
+  defaultDownloadDirectory?: string;
+};
+
 declare global {
   interface Window {
     /**
@@ -561,6 +577,147 @@ declare global {
       openExternal(url: string): Promise<{ ok: boolean }>;
       /** 按偏好打开链接：external 走系统浏览器，window 走应用内子窗口。 */
       openLink(url: string, mode: 'external' | 'window'): Promise<{ ok: boolean }>;
+      /** 内嵌浏览器下载列表与目录。 */
+      browserDownloads(): Promise<{
+        downloads: Array<{
+          id: string;
+          url: string;
+          filename: string;
+          path: string;
+          state: string;
+          receivedBytes: number;
+          totalBytes: number;
+          mimeType: string;
+          risky: boolean;
+          error: string;
+          startedAt: number;
+          endedAt: number | null;
+        }>;
+        directory: string;
+      }>;
+      browserDownloadCancel(id: string): Promise<{ ok: boolean; error?: string; download?: unknown }>;
+      browserDownloadClear(id?: string): Promise<{ ok: boolean; error?: string; downloads?: unknown }>;
+      browserDownloadReveal(id: string): Promise<{ ok: boolean }>;
+      browserDownloadOpen(id: string): Promise<{ ok: boolean }>;
+      browserDownloadsFolder(): Promise<{ ok: boolean; path?: string }>;
+      /** 清除内嵌浏览器 Cookie、缓存与站点存储（不删下载文件）。 */
+      browserClearData(): Promise<{ ok: boolean }>;
+      browserTabs(): Promise<{ tabs: Array<{
+        id: string;
+        url: string;
+        title: string;
+        active: boolean;
+        loading: boolean;
+        webContentsId: number | null;
+      }> }>;
+      browserTabRegister(payload: {
+        id?: string;
+        webContentsId: number;
+        url?: string;
+        title?: string;
+        loading?: boolean;
+        active?: boolean;
+      }): Promise<{ ok: boolean; tab?: unknown }>;
+      browserTabUpdate(payload: {
+        id: string;
+        url?: string;
+        title?: string;
+        loading?: boolean;
+        active?: boolean;
+      }): Promise<{ ok: boolean; tab?: unknown }>;
+      browserTabUnregister(id: string): Promise<{ ok: boolean }>;
+      browserTabActivate(id: string): Promise<{ ok: boolean; tab?: unknown }>;
+      browserCommandAck(payload: {
+        requestId: string;
+        tabId?: string;
+        tab?: {
+          id?: string;
+          webContentsId?: number;
+          url?: string;
+          title?: string;
+          loading?: boolean;
+        };
+        error?: string;
+      }): Promise<{ ok: boolean; tab?: unknown }>;
+      browserControlState(): Promise<{ paused: boolean; pausedTabs: string[] }>;
+      browserControlPause(payload: { paused?: boolean; tabId?: string }): Promise<{ paused: boolean; pausedTabs: string[] }>;
+      browserSitePolicies(): Promise<{ policies: Array<{
+        id: string;
+        originPattern: string;
+        actionClass: string;
+        decision: string;
+        note?: string;
+        updatedAt?: number;
+      }> }>;
+      browserSitePolicyUpsert(payload: {
+        originPattern: string;
+        actionClass: string;
+        decision: 'allow' | 'ask' | 'deny' | string;
+        note?: string;
+      }): Promise<{ policies: unknown }>;
+      browserSitePolicyRemove(payload: {
+        id?: string;
+        originPattern?: string;
+        actionClass?: string;
+      }): Promise<{ policies: unknown }>;
+      browserSitePolicyResolve(payload: {
+        url?: string;
+        actionClass?: string;
+      }): Promise<{ decision: string; source?: string; origin?: string }>;
+      browserAdvancedSettings(): Promise<BrowserPreferences>;
+      browserSetEvaluateEnabled(payload: { enabled?: boolean }): Promise<BrowserPreferences & { evaluateEnabled: boolean }>;
+      browserSetPreferences(payload: Partial<BrowserPreferences>): Promise<{ ok: boolean; preferences: BrowserPreferences } & BrowserPreferences>;
+      browserPickDownloadDirectory(): Promise<{ ok: boolean; cancelled?: boolean; path?: string; preferences?: BrowserPreferences }>;
+      browserExternalTargets(): Promise<{
+        ok: boolean;
+        endpoint?: string;
+        browser?: string;
+        targets?: Array<{ id: string; type: string; title: string; url: string; webSocketDebuggerUrl?: string }>;
+        attached?: Array<{ sessionId: string; targetId: string; title: string; url: string }>;
+        warning?: string;
+      }>;
+      browserExternalAttach(payload: { targetId: string }): Promise<{ ok: boolean; session?: unknown; warning?: string }>;
+      browserExternalDetach(payload?: { sessionId?: string }): Promise<{ ok: boolean; sessionId?: string; detached?: string; error?: string }>;
+      browserExternalSessions(): Promise<{ sessions: Array<{ sessionId: string; targetId: string; title: string; url: string; attachedAt?: number }> }>;
+      browserPasswords(): Promise<{ ok: boolean; available?: boolean; passwords: Array<{ id: string; origin: string; username: string; note?: string; updatedAt?: number }> }>;
+      browserPasswordUpsert(payload: { id?: string; origin: string; username: string; password?: string; note?: string }): Promise<{ ok: boolean; passwords?: unknown }>;
+      browserPasswordRemove(payload: { id: string }): Promise<{ ok: boolean; passwords?: unknown }>;
+      browserPasswordReveal(payload: { id: string }): Promise<{ ok: boolean; password?: { id: string; origin: string; username: string; password: string } }>;
+      browserContacts(): Promise<{ ok: boolean; contacts: Array<{ id: string; name: string; phone?: string; email?: string; address?: string; updatedAt?: number }> }>;
+      browserContactUpsert(payload: { id?: string; name: string; phone?: string; email?: string; address?: string }): Promise<{ ok: boolean; contacts?: unknown }>;
+      browserContactRemove(payload: { id: string }): Promise<{ ok: boolean; contacts?: unknown }>;
+      browserExtensions(): Promise<{ ok: boolean; supported?: boolean; extensions: Array<{ id: string; name: string; version?: string; path?: string; enabled?: boolean; loaded?: boolean }> }>;
+      browserExtensionLoad(payload?: { path?: string }): Promise<{ ok: boolean; cancelled?: boolean; extensions?: unknown }>;
+      browserExtensionRemove(payload: { id?: string; path?: string }): Promise<{ ok: boolean; extensions?: unknown }>;
+      onBrowserEvent(listener: (event: {
+        type: string;
+        preferences?: BrowserPreferences;
+        sessions?: Array<{ sessionId: string; targetId: string; title: string; url: string; attachedAt?: number }>;
+        reason?: string;
+        download?: {
+          id: string;
+          url: string;
+          filename: string;
+          path: string;
+          state: string;
+          receivedBytes: number;
+          totalBytes: number;
+          mimeType: string;
+          risky: boolean;
+          error: string;
+          startedAt: number;
+          endedAt: number | null;
+        };
+        tab?: unknown;
+        tabs?: unknown;
+      }) => void): () => void;
+      onBrowserCommand(listener: (command: {
+        type: 'open' | 'focus' | string;
+        requestId?: string;
+        url?: string;
+        tabId?: string;
+        newTab?: boolean;
+      }) => void): () => void;
       /** 创建或重新连接当前窗口独占的 PTY 会话。 */
       terminalCreate(payload: {
         id: string;

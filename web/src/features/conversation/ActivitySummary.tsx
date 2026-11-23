@@ -91,10 +91,31 @@ function ActivitySummaryComponent({ entries, results, expanded = false, onOpenFi
     }
     if (kind === 'command') return label(<Terminal />, '运行命令', calls.length + ' 条');
     if (kind === 'search' || kind === 'fetch') return label(<Globe />, kind === 'fetch' ? '读取网页' : '搜索网页', calls.length + ' 次');
+    if (kind === 'browser') return label(<Globe />, '浏览器', calls.length + ' 步');
     return label(<ListTree />, '执行过程', calls.length + ' 次工具调用');
   }
   if (kind === 'command') return label(<Terminal />, '运行命令', !expanded && short(args.command), true, call.name);
   if (kind === 'search' || kind === 'fetch') return label(<Globe />, kind === 'fetch' ? '读取网页' : '搜索网页', short(args.query || args.url));
+  if (kind === 'browser') {
+    const names: Record<string, string> = {
+      browser_tabs: '浏览器标签',
+      browser_open: '打开网页',
+      browser_navigate: '浏览导航',
+      browser_snapshot: '页面快照',
+      browser_screenshot: '页面截图',
+      browser_click: '点击页面',
+      browser_type: '输入文本',
+      browser_scroll: '滚动页面',
+      browser_wait: '等待页面',
+      browser_select: '选择选项',
+      browser_dialog: '处理对话框',
+      browser_download: '浏览器下载',
+      browser_highlight: '标注页面',
+      browser_evaluate: '页面脚本',
+    };
+    const preview = short(args.url || args.ref || args.text || args.tabId || args.action || args.query);
+    return label(<Globe />, names[call.name] || '浏览器', preview, true, call.name);
+  }
   if (kind === 'agent') {
     const action = call.name === 'bg_wait' ? 'wait' : call.name === 'subagent_stop' ? 'stop' : String(args.action || 'run');
     return label(<Bot />, agentActions[action] || '子智能体', short(args.name || args.agent || args.task || args.action), false, call.name);

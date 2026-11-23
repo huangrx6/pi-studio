@@ -46,6 +46,7 @@ const PAGE_SEARCH_ALIASES: Record<string, readonly string[]> = {
   extensions: ['插件', '扩展', 'extension', '安装'],
   git: ['Git', '仓库', '分支', '工作树', 'worktree', '差异'],
   network: ['proxy', '代理', '网络', 'VPN', '连接', 'HTTP', 'SOCKS', '超时'],
+  browser: ['浏览器', 'Browser', 'CDP', 'Chrome', '下载', '历史', '网站权限', 'webview', '内嵌'],
   archives: ['历史', '恢复', '归档'],
   about: ['版本', '更新', '帮助', '许可', '诊断'],
 };

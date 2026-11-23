@@ -37,3 +37,12 @@
   min-height: auto;
   padding: 0;
 }
+
+.about-browser-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+}
+.about-browser-note { color: var(--muted); font-size: var(--text-xs); }

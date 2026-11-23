@@ -34,12 +34,18 @@ const SNAPSHOT_TIMEOUT = 5_000;
 const snapshots = new Map();
 
 async function git(cwd, args, env, timeout = GIT_TIMEOUT) {
-  const { stdout } = await execFileAsync('git', ['-C', cwd, ...args], {
-    env: { ...process.env, ...env },
-    timeout,
-    maxBuffer: 16 * 1024 * 1024,
-  });
-  return stdout;
+  try {
+    const { stdout } = await execFileAsync('git', ['-C', cwd, ...args], {
+      env: { ...process.env, ...env },
+      timeout,
+      maxBuffer: 16 * 1024 * 1024,
+    });
+    return stdout;
+  } catch (error) {
+    // git diff --no-index exits 1 on changes; treat stdout as success when present.
+    if (error && error.stdout != null && String(error.stdout).length) return String(error.stdout);
+    throw error;
+  }
 }
 
 /** 读取某会话已持久化的回合 diff，供打开历史会话时展示。 */
@@ -120,8 +126,8 @@ async function endTurn(requestId) {
       const file = rest.join('\t');
       if (!file) continue;
       const binary = addedRaw === '-';
-      const added = binary ? 0 : Number(addedRaw) || 0;
-      const removed = binary ? 0 : Number(removedRaw) || 0;
+      let added = binary ? 0 : Number(addedRaw) || 0;
+      let removed = binary ? 0 : Number(removedRaw) || 0;
       totalAdded += added;
       totalRemoved += removed;
       // 用 realpath 对齐 /var → /private/var 这类符号链接，避免展示路径变成 ../..。
@@ -137,6 +143,19 @@ async function endTurn(requestId) {
         try {
           patch = await git(snap.root, ['--literal-pathspecs', 'diff', '--no-ext-diff', '--no-textconv', '--no-color', '--unified=3', snap.startTree, endTree, '--', file]);
         } catch { /* 单个文件 diff 失败不影响汇总 */ }
+        // 个别环境下 tree diff 会给出 numstat 却吐出空补丁；用 blob 内容再生成一次。
+        if (!patch) {
+          try {
+            patch = await rebuildPatchFromTrees(snap.root, snap.startTree, endTree, file, status.get(file) || 'modified');
+          } catch { /* 保持空补丁，渲染层可回退到快照预览 */ }
+        }
+        if (patch && added === 0 && removed === 0) {
+          const counted = countUnifiedPatch(patch);
+          added = counted.added;
+          removed = counted.removed;
+          totalAdded += added;
+          totalRemoved += removed;
+        }
       }
       files.push({
         path: absolute,
@@ -263,6 +282,63 @@ function resolveTurnDiffAbsoluteFile({ sessionId, path: requested } = {}) {
 
 function readTurnDiffAbsoluteFile(payload = {}) {
   return readAbsoluteFile(resolveTurnDiffAbsoluteFile(payload));
+}
+
+/** Count +/- lines inside unified hunks. */
+function countUnifiedPatch(patch) {
+  let added = 0;
+  let removed = 0;
+  let inHunk = false;
+  for (const line of String(patch || '').split('\n')) {
+    if (line.startsWith('@@ ')) { inHunk = true; continue; }
+    if (!inHunk) continue;
+    if (line.startsWith('+')) added += 1;
+    else if (line.startsWith('-')) removed += 1;
+  }
+  return { added, removed };
+}
+
+/**
+ * When `git diff tree tree -- path` returns empty, rebuild from blob contents.
+ * Uses a private no-index diff so we never touch the user index.
+ */
+async function rebuildPatchFromTrees(root, beforeTree, afterTree, relative, status) {
+  const show = async (tree) => {
+    try {
+      return await git(root, ['--literal-pathspecs', 'show', `${tree}:${relative}`]);
+    } catch {
+      return null;
+    }
+  };
+  const before = status === 'added' ? null : await show(beforeTree);
+  const after = status === 'deleted' ? null : await show(afterTree);
+  if (before === after) return '';
+  if (before == null && after == null) return '';
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-patch-'));
+  try {
+    const leftFile = path.join(dir, 'before');
+    const rightFile = path.join(dir, 'after');
+    fs.writeFileSync(leftFile, before == null ? '' : before);
+    fs.writeFileSync(rightFile, after == null ? '' : after);
+    let patch = await git(dir, [
+      '--literal-pathspecs', 'diff', '--no-ext-diff', '--no-textconv', '--no-color',
+      '--no-index', '--unified=3', leftFile, rightFile,
+    ]);
+    const safe = String(relative).replace(/\\/g, '/');
+    patch = patch
+      .replace(/^diff --git .*$/m, `diff --git a/${safe} b/${safe}`)
+      .replace(/^--- .*$/m, before == null ? '--- /dev/null' : `--- a/${safe}`)
+      .replace(/^\+\+\+ .*$/m, after == null ? '+++ /dev/null' : `+++ b/${safe}`);
+    if (before == null && !/new file mode/.test(patch)) {
+      patch = patch.replace(/^diff --git .*\n/, (line) => `${line}new file mode 100644\n`);
+    }
+    if (after == null && !/deleted file mode/.test(patch)) {
+      patch = patch.replace(/^diff --git .*\n/, (line) => `${line}deleted file mode 100644\n`);
+    }
+    return patch;
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 module.exports = {

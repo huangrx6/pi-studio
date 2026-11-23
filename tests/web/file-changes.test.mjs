@@ -78,3 +78,24 @@ test('indexTurnDiffs maps each assistant turn once', async () => {
   assert.equal(map.get(3)?.at, 960);
   assert.equal(map.has(0), false);
 });
+
+
+test('path matching aligns tool labels with git snapshot paths', async () => {
+  const { sameChangePath, synthesizeWritePatch, toolFilePatch } = await import('../../web/src/features/conversation/file-changes.ts');
+  assert.equal(sameChangePath({ path: '/repo/docs/PLAN.md', label: 'docs/PLAN.md' }, { path: '/work/docs/PLAN.md', label: 'PLAN.md' }), true);
+  assert.equal(sameChangePath({ label: 'dsh-workbench/docs/PLAN.md' }, { label: 'PLAN.md' }), true);
+  assert.equal(sameChangePath({ label: 'src/a.ts' }, { label: 'lib/a.ts' }), false);
+
+  const patch = synthesizeWritePatch('docs/PLAN.md', 'one\ntwo\nthree\n');
+  assert.match(patch, /\+one/);
+  assert.match(patch, /\+three/);
+  assert.match(patch, /@@ -0,0 \+1,3 @@/);
+
+  const file = {
+    label: 'notes.md',
+    operations: [{ id: 'w', content: 'hello\nworld\n' }],
+  };
+  const synthesized = toolFilePatch(file);
+  assert.match(synthesized, /\+hello/);
+  assert.match(synthesized, /\+world/);
+});
