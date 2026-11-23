@@ -258,7 +258,7 @@
 .app.is-wallpaper-inside .file-panel .panel-tool-count,
 .app.is-wallpaper-inside .file-panel .panel-launcher-badge {
   background: var(--accent);
-  color: var(--accent-contrast, var(--surface));
+  color: var(--accent-foreground);
 }
 
 .app.is-wallpaper-inside .file-panel .panel-workspace-prompt {

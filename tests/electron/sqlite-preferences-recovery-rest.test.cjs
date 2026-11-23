@@ -311,7 +311,25 @@ test('tool-selection saves and migrations commit their value and version togethe
     db.db.exec('DROP TRIGGER fail_agent_tool_version_write');
     db.setSetting(AGENT_TOOLS_VERSION_KEY, 1);
     db.db.exec(failingVersionTrigger);
-    assert.deepEqual(readAgentToolSelection(db).enabled, ['read', 'write', 'mcp__*', 'todo']);
+    assert.deepEqual(readAgentToolSelection(db).enabled, [
+      'read',
+      'write',
+      'mcp__*',
+      'todo',
+      'browser_tabs',
+      'browser_open',
+      'browser_navigate',
+      'browser_snapshot',
+      'browser_screenshot',
+      'browser_click',
+      'browser_type',
+      'browser_scroll',
+      'browser_wait',
+      'browser_select',
+      'browser_dialog',
+      'browser_download',
+      'browser_highlight',
+    ]);
     assert.deepEqual(readSetting(AGENT_TOOLS_KEY).value, {
       enabled: ['read', 'write'],
       sources: {},
@@ -344,27 +362,61 @@ test('agent tool recovery repairs the latest payload and keeps explicit empty se
     },
   }));
   const migrated = readAgentToolSelection(db);
-  assert.deepEqual(migrated.enabled, ['read', 'mcp__*', 'todo']);
+  assert.deepEqual(migrated.enabled, [
+    'read',
+    'mcp__*',
+    'todo',
+    'browser_tabs',
+    'browser_open',
+    'browser_navigate',
+    'browser_snapshot',
+    'browser_screenshot',
+    'browser_click',
+    'browser_type',
+    'browser_scroll',
+    'browser_wait',
+    'browser_select',
+    'browser_dialog',
+    'browser_download',
+    'browser_highlight',
+  ]);
   assert.deepEqual(Object.keys(migrated.sources), ['read']);
   assert.deepEqual(readSetting(AGENT_TOOLS_KEY).value, migrated);
-  assert.equal(readSetting(AGENT_TOOLS_VERSION_KEY).value, 3);
+  assert.equal(readSetting(AGENT_TOOLS_VERSION_KEY).value, 6);
 
   db.setSetting(AGENT_TOOLS_KEY, { enabled: [], sources: {} });
-  db.setSetting(AGENT_TOOLS_VERSION_KEY, 3);
+  db.setSetting(AGENT_TOOLS_VERSION_KEY, 6);
   assert.deepEqual(readAgentToolSelection(db), { enabled: [], sources: {} });
   assert.deepEqual(readSetting(AGENT_TOOLS_KEY).value, { enabled: [], sources: {} });
 
   db.setSetting(AGENT_TOOLS_VERSION_KEY, 'invalid-version');
   db.setSetting(AGENT_TOOLS_KEY, { enabled: ['read'], sources: {} });
-  assert.deepEqual(readAgentToolSelection(db).enabled, ['read', 'mcp__*', 'todo']);
-  assert.equal(readSetting(AGENT_TOOLS_VERSION_KEY).value, 3);
+  assert.deepEqual(readAgentToolSelection(db).enabled, [
+    'read',
+    'mcp__*',
+    'todo',
+    'browser_tabs',
+    'browser_open',
+    'browser_navigate',
+    'browser_snapshot',
+    'browser_screenshot',
+    'browser_click',
+    'browser_type',
+    'browser_scroll',
+    'browser_wait',
+    'browser_select',
+    'browser_dialog',
+    'browser_download',
+    'browser_highlight',
+  ]);
+  assert.equal(readSetting(AGENT_TOOLS_VERSION_KEY).value, 6);
   const updatedAt = readRawSetting(AGENT_TOOLS_KEY).updated_at;
   readAgentToolSelection(db);
   assert.equal(readRawSetting(AGENT_TOOLS_KEY).updated_at, updatedAt);
 
   const oversized = Array.from({ length: 300 }, (_, index) => `tool_${index}`);
   db.setSetting(AGENT_TOOLS_KEY, { enabled: oversized, sources: {} });
-  db.setSetting(AGENT_TOOLS_VERSION_KEY, 3);
+  db.setSetting(AGENT_TOOLS_VERSION_KEY, 6);
   assert.equal(readAgentToolSelection(db).enabled.length, 256);
   assertJsonRoundTrip(readSetting(AGENT_TOOLS_KEY).value);
 });

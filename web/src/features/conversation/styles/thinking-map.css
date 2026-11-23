@@ -18,8 +18,8 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 12px;
-  padding: 18px 20px;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--border);
   background:
     radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 55%),
@@ -29,8 +29,8 @@
 .thinking-map-emblem {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 2.75rem;
+  height: 2.75rem;
   border-radius: calc(var(--radius-card) + 2px);
   color: var(--accent);
   background:
@@ -39,8 +39,8 @@
 }
 
 .thinking-map-emblem svg {
-  width: 22px;
-  height: 22px;
+  width: var(--icon-md);
+  height: var(--icon-md);
   stroke-width: 1.6;
 }
 
@@ -51,7 +51,7 @@
 }
 
 .thinking-map-header p {
-  margin: 3px 0 0;
+  margin: var(--space-1) 0 0;
   color: var(--muted);
   font-size: var(--text-xs);
 }
@@ -59,13 +59,13 @@
 .thinking-map-header-actions {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   margin-inline-start: auto;
 }
 
 .thinking-map-header-actions .text-button {
-  min-height: 28px;
-  padding: 0 8px;
+  min-height: var(--control-sm);
+  padding: 0 var(--space-2);
   color: var(--muted);
   font-size: var(--text-xs);
 }
@@ -79,7 +79,7 @@
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: 16px 18px 22px;
+  padding: var(--space-4) var(--space-4) var(--space-5);
   background:
     radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--border) 55%, transparent) 1px, transparent 0) 0 0 / 18px 18px;
 }
@@ -88,26 +88,27 @@
   --map-line: color-mix(in srgb, var(--border-strong) 70%, transparent);
   list-style: none;
   margin: 0;
-  padding: 4px 2px 8px;
+  padding: var(--space-1) 2px var(--space-2);
   display: grid;
   gap: 0;
 }
 
 .thinking-map-node {
   --map-accent: var(--accent);
+  --map-index: 0;
   position: relative;
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
-  gap: 10px;
-  padding-bottom: 14px;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
 }
 
 .thinking-map-node:last-child {
   padding-bottom: 0;
 }
 
-.thinking-map-node.is-thinking { --map-accent: color-mix(in srgb, var(--accent) 70%, #a78bfa); }
-.thinking-map-node.is-command { --map-accent: color-mix(in srgb, var(--warning, #d4a017) 80%, var(--accent)); }
+.thinking-map-node.is-thinking { --map-accent: color-mix(in srgb, var(--accent) 55%, var(--text)); }
+.thinking-map-node.is-command { --map-accent: color-mix(in srgb, var(--warning) 80%, var(--accent)); }
 .thinking-map-node.is-write,
 .thinking-map-node.is-edit { --map-accent: color-mix(in srgb, var(--success) 75%, var(--accent)); }
 .thinking-map-node.is-error { --map-accent: var(--error); }
@@ -122,11 +123,11 @@
   content: '';
   position: absolute;
   top: 28px;
-  bottom: -14px;
+  bottom: calc(var(--space-3) * -1);
   left: 50%;
   width: 2px;
   transform: translateX(-50%);
-  border-radius: 999px;
+  border-radius: var(--radius-round);
   background: linear-gradient(180deg, color-mix(in srgb, var(--map-accent) 45%, var(--map-line)), var(--map-line));
 }
 
@@ -141,7 +142,7 @@
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 999px;
+  border-radius: var(--radius-round);
   color: var(--map-accent);
   background: color-mix(in srgb, var(--map-accent) 14%, var(--surface));
   box-shadow:
@@ -177,10 +178,10 @@
 .thinking-map-card-head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
   width: 100%;
   min-height: 44px;
-  padding: 10px 12px;
+  padding: var(--space-3);
   background: transparent;
   color: inherit;
   text-align: start;
@@ -193,7 +194,7 @@
 
 .thinking-map-card-copy {
   display: grid;
-  gap: 3px;
+  gap: var(--space-1);
   min-width: 0;
   flex: 1;
 }
@@ -219,16 +220,16 @@
   gap: 4px;
   min-height: 22px;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-round);
   background: var(--surface-soft);
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-xs);
   white-space: nowrap;
 }
 
 .thinking-map-badge svg {
-  width: 12px;
-  height: 12px;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
 }
 
 .thinking-map-badge.is-running {
@@ -259,13 +260,13 @@
 }
 
 .thinking-map-card-body {
-  padding: 0 12px 12px;
+  padding: 0 var(--space-3) var(--space-3);
   border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
 }
 
 .thinking-map-prose,
 .thinking-map-card-body pre {
-  margin: 10px 0 0;
+  margin: var(--space-3) 0 0;
   max-height: min(280px, 36vh);
   overflow: auto;
   overscroll-behavior: contain;
@@ -277,7 +278,7 @@
 }
 
 .thinking-map-card-body pre {
-  padding: 10px 12px;
+  padding: var(--space-3);
   border-radius: var(--radius-control);
   background: var(--surface-soft);
   font-family: var(--mono);
@@ -285,7 +286,7 @@
 }
 
 .thinking-map-empty {
-  margin: 24px 0;
+  margin: var(--space-6) 0;
   color: var(--muted);
   text-align: center;
   font-size: var(--text-sm);

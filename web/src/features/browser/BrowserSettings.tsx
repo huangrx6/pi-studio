@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
 import { LoadingState } from '../../shared/LoadingState';
+import { Select } from '../../shared/Select';
 import { errorText } from '../../shared/error-text';
 import './styles/browser-settings.css';
 
@@ -502,30 +503,32 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: () => void 
                 title="网页 URL 打开位置"
                 description="对话与文档中的 http(s) 链接默认打开位置"
                 control={(
-                  <select
+                  <Select
                     value={prefs.webLinkOpenTarget}
                     disabled={disabled}
-                    aria-label="网页 URL 打开位置"
-                    onChange={(event) => void patch({ webLinkOpenTarget: event.target.value })}
-                  >
-                    <option value="workbench">工作台浏览器</option>
-                    <option value="system">系统浏览器</option>
-                  </select>
+                    label="网页 URL 打开位置"
+                    options={[
+                      { value: 'workbench', label: '工作台浏览器' },
+                      { value: 'system', label: '系统浏览器' },
+                    ]}
+                    onChange={(value) => void patch({ webLinkOpenTarget: value })}
+                  />
                 )}
               />
               <Row
                 title="本地 URL 打开位置"
                 description="本地开发站点与 file:// HTML 的默认打开位置"
                 control={(
-                  <select
+                  <Select
                     value={prefs.localLinkOpenTarget}
                     disabled={disabled}
-                    aria-label="本地 URL 打开位置"
-                    onChange={(event) => void patch({ localLinkOpenTarget: event.target.value })}
-                  >
-                    <option value="workbench">工作台浏览器</option>
-                    <option value="system">系统浏览器</option>
-                  </select>
+                    label="本地 URL 打开位置"
+                    options={[
+                      { value: 'workbench', label: '工作台浏览器' },
+                      { value: 'system', label: '系统浏览器' },
+                    ]}
+                    onChange={(value) => void patch({ localLinkOpenTarget: value })}
+                  />
                 )}
               />
               <Row
@@ -562,15 +565,16 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: () => void 
                 title="批注截图"
                 description="Agent 操作前在页面上圈出目标，便于你确认它在点哪里"
                 control={(
-                  <select
+                  <Select
                     value={prefs.annotatedScreenshots}
                     disabled={disabled}
-                    aria-label="批注截图"
-                    onChange={(event) => void patch({ annotatedScreenshots: event.target.value })}
-                  >
-                    <option value="always">始终包含</option>
-                    <option value="never">关闭</option>
-                  </select>
+                    label="批注截图"
+                    options={[
+                      { value: 'always', label: '始终包含' },
+                      { value: 'never', label: '关闭' },
+                    ]}
+                    onChange={(value) => void patch({ annotatedScreenshots: value })}
+                  />
                 )}
               />
             </div>
@@ -812,16 +816,17 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: () => void 
                 title="历史记录"
                 description="选择 Agent 是否可访问你的内置浏览器历史记录"
                 control={(
-                  <select
+                  <Select
                     value={prefs.historyAccess}
                     disabled={disabled}
-                    aria-label="历史记录访问"
-                    onChange={(event) => void patch({ historyAccess: event.target.value })}
-                  >
-                    <option value="ask">始终询问</option>
-                    <option value="allow">始终允许</option>
-                    <option value="deny">拒绝</option>
-                  </select>
+                    label="历史记录访问"
+                    options={[
+                      { value: 'ask', label: '始终询问' },
+                      { value: 'allow', label: '始终允许' },
+                      { value: 'deny', label: '拒绝' },
+                    ]}
+                    onChange={(value) => void patch({ historyAccess: value })}
+                  />
                 )}
               />
               <div className="browser-settings-policy-block">
@@ -839,26 +844,20 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: () => void 
                     aria-label="网站或模式"
                     onChange={(event) => setPolicyDraft((current) => ({ ...current, originPattern: event.target.value }))}
                   />
-                  <select
+                  <Select
                     value={policyDraft.actionClass}
                     disabled={disabled}
-                    aria-label="动作类型"
-                    onChange={(event) => setPolicyDraft((current) => ({ ...current, actionClass: event.target.value }))}
-                  >
-                    {ACTION_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                  <select
+                    label="动作类型"
+                    options={ACTION_OPTIONS}
+                    onChange={(value) => setPolicyDraft((current) => ({ ...current, actionClass: value }))}
+                  />
+                  <Select
                     value={policyDraft.decision}
                     disabled={disabled}
-                    aria-label="决策"
-                    onChange={(event) => setPolicyDraft((current) => ({ ...current, decision: event.target.value }))}
-                  >
-                    {DECISION_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
+                    label="决策"
+                    options={DECISION_OPTIONS}
+                    onChange={(value) => setPolicyDraft((current) => ({ ...current, decision: value }))}
+                  />
                   <button type="button" className="settings-outline" disabled={disabled} onClick={() => void addPolicy()}>
                     <Link2 aria-hidden="true" />添加
                   </button>
