@@ -78,13 +78,13 @@ test('missing preferences use defaults without creating rows or rewriting valid 
   for (const key of Object.values(KEYS)) db.deleteSetting(key);
 
   assert.equal(getTheme(), 'light');
-  assert.equal(getPalette(), 'lime');
+  assert.equal(getPalette(), 'ocean');
   assert.equal(getRadiusStyle(), 'standard');
   assert.equal(getMenuBarEnabled(), true);
   assert.equal(getRuntimePolicy().toolExecution, 'parallel');
   assert.equal(getHarnessStore().activeProfileId, 'studio-coding');
   assert.deepEqual(getSubagentConfig(), {});
-  assert.equal(getConversationExtensionUiPreferences().layout, 'grid');
+  assert.deepEqual(getConversationExtensionUiPreferences(), { version: 1, globalOrder: [] });
   assert.equal(getExtensionRegistryUrl(), '');
   assert.equal(
     db.db.prepare('SELECT COUNT(*) AS count FROM settings').get().count,
@@ -106,11 +106,11 @@ test('malformed and wrong appearance values are repaired idempotently', () => {
   db.setSetting('studio.test.sentinel', { untouched: true });
 
   assert.equal(getTheme(), 'light');
-  assert.equal(getPalette(), 'lime');
+  assert.equal(getPalette(), 'ocean');
   assert.equal(getRadiusStyle(), 'standard');
   assert.equal(getMenuBarEnabled(), true);
   assert.equal(readStoredSetting(KEYS.theme).value, 'light');
-  assert.equal(readStoredSetting(KEYS.palette).value, 'lime');
+  assert.equal(readStoredSetting(KEYS.palette).value, 'ocean');
   assert.equal(readStoredSetting(KEYS.radiusStyle).value, 'standard');
   assert.equal(readStoredSetting(KEYS.menuBarEnabled).value, true);
   assert.deepEqual(readStoredSetting('studio.test.sentinel').value, { untouched: true });
@@ -118,6 +118,15 @@ test('malformed and wrong appearance values are repaired idempotently', () => {
   db.db.prepare('UPDATE settings SET updated_at = 7 WHERE key = ?').run(KEYS.theme);
   assert.equal(getTheme(), 'light');
   assert.equal(readStoredSetting(KEYS.theme).updatedAt, 7);
+});
+
+test('retired teal is replaced in native storage and the remaining palettes round-trip', () => {
+  const db = getStudioDatabase();
+  for (const [saved, expected] of [['lime', 'ocean'], ['ocean', 'ocean'], ['amber', 'amber'], ['berry', 'berry']]) {
+    db.setSetting(KEYS.palette, saved);
+    assert.equal(getPalette(), expected);
+    assert.equal(readStoredSetting(KEYS.palette).value, expected);
+  }
 });
 
 test('valid permission policy synchronizes its preset while missing or invalid policy uses legacy mode', () => {
@@ -375,7 +384,7 @@ test('runtime policy distinguishes corrupt types from numeric out-of-range value
   assertJsonRoundTrip(readStoredSetting(KEYS.runtimePolicy).value);
 });
 
-test('extension session order maps reject reserved keys and registry URLs canonicalize', () => {
+test('obsolete extension UI preferences are removed and registry URLs canonicalize', () => {
   const db = getStudioDatabase();
   const sessionOrders = Object.fromEntries([
     ['session', ['project:beta', 'project:beta', 'invalid']],
@@ -392,29 +401,26 @@ test('extension session order maps reject reserved keys and registry URLs canoni
   db.setSetting(KEYS.extensionRegistryUrl, 'http://registry.example/catalog.json');
 
   const extensionUi = getConversationExtensionUiPreferences();
-  assert.equal(extensionUi.layout, 'grid');
-  assert.deepEqual(extensionUi.globalOrder, ['user:alpha']);
-  assert.deepEqual(extensionUi.sessionOrders, {
-    session: ['project:beta'],
-  });
+  assert.deepEqual(extensionUi, { version: 1, globalOrder: ['user:alpha'] });
   assert.equal(getExtensionRegistryUrl(), '');
   assertJsonRoundTrip(readStoredSetting(KEYS.conversationExtensionUi).value);
+  assert.deepEqual(readStoredSetting(KEYS.conversationExtensionUi).value, extensionUi);
   assert.equal(readStoredSetting(KEYS.extensionRegistryUrl).value, '');
 });
 
 test('a compare-and-set repair never overwrites a concurrently replaced value', () => {
   const db = getStudioDatabase();
-  db.setSetting(KEYS.palette, 'amber');
+  db.setSetting(KEYS.palette, 'lime');
   const result = db.getSettingWithRecovery(
     KEYS.palette,
-    'lime',
+    'ocean',
     () => {
-      db.setSetting(KEYS.palette, 'ocean');
-      return 'lime';
+      db.setSetting(KEYS.palette, 'amber');
+      return 'ocean';
     },
   );
-  assert.equal(result, 'lime');
-  assert.equal(readStoredSetting(KEYS.palette).value, 'ocean');
+  assert.equal(result, 'ocean');
+  assert.equal(readStoredSetting(KEYS.palette).value, 'amber');
 });
 
 test('a failed repair still returns a safe preference value', () => {

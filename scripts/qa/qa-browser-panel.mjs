@@ -22,12 +22,20 @@ const server = createServer((request, response) => {
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); const origin = `http://127.0.0.1:${server.address().port}`;
 let app; let page;
 const address = () => page.getByRole('textbox', { name: '浏览器地址', exact: true });
-async function navigate(url) { await address().fill(url); await address().press('Enter'); }
+async function navigate(url) {
+  const field = address();
+  await field.focus();
+  await field.fill(url);
+  assert.equal(await field.inputValue(), url);
+  await field.press('Enter');
+}
 async function loaded(url) { await page.waitForFunction(expected => { try { const view = document.querySelector('webview'); return view?.getURL() === expected && !view.isLoading(); } catch { return false; } }, url); }
 try {
   app = await _electron.launch({ args: [root], env }); page = await app.firstWindow(); await page.emulateMedia({ reducedMotion: 'reduce' }); page.setDefaultTimeout(20000); page.on('pageerror', error => result.errors.push(error.message));
   await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].setSize(980, 640); });
-  await page.getByRole('button', { name: '打开右侧面板', exact: true }).click(); await page.locator('.panel-start-tools').getByRole('button', { name: '浏览器', exact: true }).click(); await page.locator('webview').waitFor();
+  await page.getByRole('button', { name: '打开右侧面板', exact: true }).click();
+  await page.locator('.panel-launcher-grid').getByRole('button', { name: '浏览器', exact: true }).click();
+  await page.locator('webview').waitFor();
   const attributes = await page.locator('webview').evaluate(view => ({ partition: view.getAttribute('partition'), prefs: view.getAttribute('webpreferences'), popups: view.getAttribute('allowpopups') }));
   assert.equal(attributes.partition, 'persist:pi-browser'); assert.match(attributes.prefs, /nodeIntegration=no/); assert.equal(attributes.popups, 'false');
   await loaded('about:blank');
@@ -52,9 +60,23 @@ try {
     return { url: read('getURL'), back: read('canGoBack'), forward: read('canGoForward'), id: read('getWebContentsId'), src: view.getAttribute('src') };
   });
   result.mainHistory = await app.evaluate(({ webContents }, id) => { const guest = webContents.fromId(id); return { back: guest.navigationHistory.canGoBack(), activeIndex: guest.navigationHistory.getActiveIndex(), entries: guest.navigationHistory.getAllEntries().map(({ url, title }) => ({ url, title })) }; }, result.historyProbe.id);
-  await page.getByRole('button', { name: '后退', exact: true }).click();
-  // The frame hash can consume one history entry. A second Back reaches /first.
-  await page.waitForTimeout(150); if (await address().inputValue() === `${origin}/second`) await page.getByRole('button', { name: '后退', exact: true }).click();
+  const back = page.getByRole('button', { name: '后退', exact: true });
+  let index = result.mainHistory.activeIndex;
+  while (result.mainHistory.entries[index]?.url === `${origin}/second`) {
+    await back.click();
+    // A same-document iframe entry has the same top-level URL. Let Chromium
+    // commit that entry before issuing the next Back action.
+    index = await app.evaluate(async ({ webContents }, { id, before }) => {
+      const history = webContents.fromId(id).navigationHistory;
+      const until = Date.now() + 3000;
+      while (Date.now() < until) {
+        const current = history.getActiveIndex();
+        if (current < before) return current;
+        await new Promise(resolve => setTimeout(resolve, 30));
+      }
+      throw new Error(`Browser history did not move back from entry ${before}`);
+    }, { id: guestId, before: index });
+  }
   await loaded(`${origin}/first`); await page.getByRole('button', { name: '前进', exact: true }).click(); await loaded(`${origin}/second`);
   result.checks.push('real isolated webview main navigation/back/forward and iframe hash cannot corrupt main address');
   await navigate(`${origin}/slow`); await page.waitForFunction(() => document.querySelector('webview')?.isLoading());
@@ -67,7 +89,11 @@ try {
   await page.locator('webview').evaluate(async view => { try { await view.loadURL('file:///qa/synthetic-forbidden-browser-target.txt'); } catch {} });
   assert.equal(await page.locator('webview').evaluate(view => view.getURL()), `${origin}/recovered`, 'non-http request refused');
   await page.getByRole('button', { name: '收起右侧面板', exact: true }).click(); await page.locator('webview').waitFor({ state: 'detached' });
-  await page.getByRole('button', { name: '打开右侧面板', exact: true }).click(); await loaded(`${origin}/recovered`); assert.equal(await address().inputValue(), `${origin}/recovered`);
+  await page.getByRole('button', { name: '打开右侧面板', exact: true }).click();
+  await loaded(`${origin}/recovered`);
+  await address().focus();
+  assert.equal(await address().inputValue(), `${origin}/recovered`);
+  await address().blur();
   result.checks.push('collapse/reopen preserves stored browser tab URL; main-process guard refuses non-http guest request');
   await page.screenshot({ path: path.join(output, 'browser-light.png'), animations: 'disabled' }); await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; }); await page.screenshot({ path: path.join(output, 'browser-dark.png'), animations: 'disabled' });
   assert.deepEqual(result.errors, []); await rm(path.join(output, 'failure.png'), { force: true });

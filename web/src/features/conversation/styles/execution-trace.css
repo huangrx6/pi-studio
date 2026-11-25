@@ -70,6 +70,7 @@
   .tool-result-images-toggle .activity-disclosure-chevron { transition: none; }
 }
 .turn-trace .activity-thinking-body { max-height: 220px; overflow: auto; overscroll-behavior: auto; }
+.activity-thinking.is-live .activity-thinking-body { overflow-anchor: none; }
 .turn-trace .activity-thinking-body .markdown { color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-relaxed); }
 .turn-trace .activity-tool-label { margin: 4px 0; display: block; font-size: var(--text-xs); color: var(--muted); }
 .turn-trace .activity-tool-code {

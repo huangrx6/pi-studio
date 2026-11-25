@@ -1,3 +1,5 @@
+const { builtinToolContributions } = require('../../core/builtin-tool-contributions.cjs');
+
 module.exports = Object.freeze([
   {
 id: 'studio-filesystem-tools',
@@ -10,7 +12,7 @@ id: 'studio-filesystem-tools',
     permissions: ['agent.tools'],
     requires: ['builtin:studio-permissions'],
     contributes: {
-      tools: ['ls', 'find', 'grep'].map((name) => ({ name })),
+      tools: builtinToolContributions(['ls', 'find', 'grep']),
     }
   },
 ]);

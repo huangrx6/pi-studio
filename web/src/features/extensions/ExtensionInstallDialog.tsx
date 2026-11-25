@@ -17,6 +17,7 @@ import type {
 } from '../../types/extension-types';
 import { InfoHint } from '../../shared/InfoHint';
 import { SettingsDialog } from '../../shared/SettingsDialog';
+import { useSettingsToast } from '../../shared/SettingsToast';
 import { createExtensionInstallSession, extensionInstallOwnerKey, type InstallSessionState } from './extension-install-session';
 import './styles/extension-install.css';
 
@@ -95,7 +96,9 @@ export function ExtensionInstallDialog({
   const preview = sessionState.owner === contextKey ? sessionState.preview : null;
   const source = sessionState.owner === contextKey ? sessionState.source : '';
   const busy = sessionState.phase !== null;
-  const error = inputError || sessionState.error;
+  const showToast = useSettingsToast();
+  const error = inputError || (sessionState.owner === contextKey ? sessionState.error : null);
+  useEffect(() => { if (error) showToast(error, 'error'); }, [error, showToast]);
   const committed = sessionState.committed && sessionState.owner === contextKey;
   useEffect(() => {
     session.activate();
@@ -150,6 +153,8 @@ export function ExtensionInstallDialog({
   function back() { session.back(); setAccepted(false); setInputError(null); }
 
   return <SettingsDialog
+    wide
+    className="plugin-form-dialog"
     title={committed ? '扩展已安装' : preview ? '确认扩展安装' : '安装扩展'}
     closeLabel={committed ? '关闭' : '取消'}
     hint={preview
@@ -161,11 +166,10 @@ export function ExtensionInstallDialog({
     busyAction={sessionState.phase === 'pick' ? '正在选择…' : sessionState.phase === 'prepare' ? '正在校验…' : sessionState.phase === 'apply' ? '正在刷新…' : '正在安装…'}
     loading={false}
     unavailable={Boolean(!committed && preview && !canSubmitPreview)}
-    error={error}
+    error={null}
     autoFocusFirstField={!preview}
-    showBackdrop={false}
     scrollResetKey={preview ? preview.token : `${sourceMode}:${scope}`}
-    footerHint={committed ? '安装已完成，重试只刷新设置，不会再次安装。' : footerHint}
+    footerHint={committed ? null : footerHint}
     onClose={() => session.close()}
     onSubmit={() => { setInputError(null); void (committed ? session.retryApply() : preview ? session.install(accepted) : prepare()); }}
   >
@@ -201,12 +205,11 @@ export function ExtensionInstallDialog({
           <span className="field-label">安装来源</span>
           <InfoHint align="end" label="开发目录必须包含 pi-studio.extension.json；安装包必须是 .pi-extension.zip，并会逐文件校验摘要。" />
         </div>
-        <div className="extension-source-tabs" role="group" aria-label="扩展安装来源">
+        <div className="settings-segments extension-source-tabs" role="group" aria-label="扩展安装来源">
           <button
             type="button"
             aria-pressed={sourceMode === 'local'}
             aria-controls="extension-local-source-panel"
-            className={sourceMode === 'local' ? 'is-active' : ''}
             onClick={() => {
               setSourceMode('local');
               setInputError(null);
@@ -218,7 +221,6 @@ export function ExtensionInstallDialog({
             type="button"
             aria-pressed={sourceMode === 'remote'}
             aria-controls="extension-remote-source-panel"
-            className={sourceMode === 'remote' ? 'is-active' : ''}
             onClick={() => {
               setSourceMode('remote');
               setInputError(null);
@@ -239,8 +241,8 @@ export function ExtensionInstallDialog({
             title="目录必须包含 pi-studio.extension.json"
             onClick={() => { setInputError(null); void session.pick('directory'); }}
           >
-            <FolderOpen />
-            <span><strong>开发目录</strong></span>
+            <span className="extension-picker-icon" aria-hidden="true"><FolderOpen /></span>
+            <span><strong>开发目录</strong><small>含 pi-studio.extension.json</small></span>
           </button>
           <button
             type="button"
@@ -249,8 +251,8 @@ export function ExtensionInstallDialog({
             title="选择 .pi-extension.zip"
             onClick={() => { setInputError(null); void session.pick('package'); }}
           >
-            <FileArchive />
-            <span><strong>安装包</strong></span>
+            <span className="extension-picker-icon" aria-hidden="true"><FileArchive /></span>
+            <span><strong>安装包</strong><small>.pi-extension.zip 归档</small></span>
           </button>
           {source && <div className="extension-selected-source">
             <PackageCheck />

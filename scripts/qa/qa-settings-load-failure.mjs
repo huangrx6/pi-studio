@@ -45,7 +45,7 @@ async function assertDraft(composer, label) {
 }
 
 try {
-  app = await _electron.launch({ args: [root], env });
+  app = await _electron.launch({ args: [root, '--disable-background-networking', '--use-mock-keychain'], env });
   page = await app.firstWindow();
   page.setDefaultTimeout(20_000);
   page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -55,7 +55,8 @@ try {
   await app.evaluate(({ dialog }, directory) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] });
   }, workspace);
-  await page.locator('.new-conversation-welcome').getByRole('button', { name: '选择工作区', exact: true }).click();
+  await page.getByRole('button', { name: '新对话工作区', exact: true }).click();
+  await page.getByRole('option', { name: /打开其他文件夹/ }).click();
   await page.locator('.workspace-choice.has-selection').waitFor();
   // Settings intentionally hides the conversation from the accessibility tree;
   // use the DOM locator to verify its mounted, preserved draft behind the overlay.
@@ -114,7 +115,7 @@ try {
   await page.locator('.sidebar-bottom button[title="设置"]').click();
   await navigation.getByRole('button', { name: '快捷键', exact: true }).click();
   await page.locator('.settings-content').getByRole('heading', { name: '快捷键', exact: true }).waitFor();
-  await page.locator('.shortcut-list').waitFor();
+  await page.getByRole('list', { name: '快捷键绑定' }).getByRole('button', { name: /^命令面板：/ }).waitFor();
   assert.equal(await failure.count(), 0, 'another deferred page can load after the first page fails');
   assert.equal(await page.locator('.shortcut-row').count() > 0, true, 'the other page rendered its real controls');
   await page.screenshot({ path: path.join(output, '02-other-lazy-page.png'), animations: 'disabled' });

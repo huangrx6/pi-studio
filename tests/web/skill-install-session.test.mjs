@@ -27,6 +27,7 @@ test('one token causes one install even with repeated clicks, and reports its fi
 test('committed projection failure retries only refresh, then callback; repeated retry is synchronously locked', async () => {
   const h = harness(), result = { ...ready(), projection: { status: 'error', message: 'runtime failed' } };
   const pending = h.session.install('token', '/B'); h.writes[0].resolve(result); await pending;
+  assert.equal(h.session.state.error, '技能已安装。runtime failed');
   assert.equal(h.commits.length, 1); assert.equal(h.reads.length, 0); assert.equal(h.callbacks.length, 0);
   const retry = h.session.retry(); await h.session.retry(); assert.equal(h.reads.length, 1); assert.equal(h.reads[0].cwd, '/B');
   h.reads[0].reject(new Error('still unavailable')); await retry; assert.match(h.session.state.error, /技能已安装，但刷新未完成/);

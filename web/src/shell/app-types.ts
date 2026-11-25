@@ -4,9 +4,7 @@ import type { ConversationSummary } from '../types/durable-types';
 import type { ExtensionHostSnapshot } from '../types/extension-types';
 import type { FilePreviewResult } from '../types/file-preview-types';
 import type { HarnessSettingsSnapshot } from '../types/harness-types';
-import type { ThinkingLevel } from '../types/model-types';
 import type { RuntimeRefreshSnapshot, StudioRuntimeVersions } from '../types/runtime-types';
-import type { SubagentChild } from '../types/subagent-types';
 import type { CustomModelConfig, ModelProvider } from '../features/models/model-settings-types';
 
 export type PiSessionSummary = ConversationSummary;
@@ -44,12 +42,38 @@ export type SettingsSnapshot = {
     timeoutSeconds: number;
     envKeys: string[];
     headerKeys: string[];
+    ownerPluginId?: string;
+    origin?: 'plugin' | 'user' | 'builtin';
+    managed?: boolean;
+    userOverride?: boolean;
     oauthConnected: boolean;
     connected: boolean;
     toolCount: number;
     error: string;
     stderr: string;
-    tools: Array<{ name: string; originalName: string; description: string; exposure: 'direct' | 'deferred' | 'hidden' }>;
+    tools: Array<{ name: string; originalName: string; description: string; exposure: 'direct' | 'deferred' | 'hidden'; enabled: boolean }>;
+  }>;
+  plugins?: Array<{
+    id: string;
+    name: string;
+    version: string;
+    publisher: string;
+    description: string;
+    icon: string;
+    category: string;
+    homepage: string;
+    sourcePath: string;
+    installPath: string;
+    provides: {
+      mcp?: Array<{ name: string; transport?: string; description?: string }>;
+      skills?: Array<{ path: string; name?: string }>;
+      cli?: Array<{ id: string; name: string; kind?: string; description?: string; pathEnv?: boolean; commands?: Array<{ summary?: string; example?: string }> }>;
+      extension?: { path: string } | null;
+    };
+    enabled: boolean;
+    contentHash: string;
+    installedAt: number;
+    updatedAt: number;
   }>;
   skills: Array<{
     name: string;
@@ -57,7 +81,10 @@ export type SettingsSnapshot = {
     path: string;
     baseDir: string;
     scope: 'user' | 'project';
-    origin: 'studio' | 'agents';
+    origin: 'studio' | 'agents' | 'plugin';
+    ownerPluginId?: string;
+    managed?: boolean;
+    userOverride?: boolean;
     bytes: number;
     version: string;
     promptTokens: number;
@@ -100,6 +127,7 @@ export type McpTestResult = Awaited<ReturnType<typeof window.piApi.testMcp>>;
 export type PanelFile = {
   /** Actual successful preview source, retained across fallback and cache reuse. */
   actionSource?: PanelFileSource;
+  changeKey?: string;
   path: string;
   size: number;
   binary: boolean;
@@ -110,20 +138,10 @@ export type PanelFile = {
 
 export type PanelFileSource = 'workspace' | 'attachment' | 'diff' | 'external';
 
-export type ModelComparisonContext = {
-  parentId: string;
-  cwd: string;
-  prompt: string;
-  mentions: string[];
-  attachments: string[];
-  images: Array<{ type: 'image'; data: string; mimeType: string; name?: string }>;
-  initialModelRef: string;
-  initialThinkingLevel: ThinkingLevel;
-};
-
 export type PanelTab = {
   id: string;
-  kind: 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services' | 'browser' | 'comparison' | 'storyboard' | 'progress';
+  kind: 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services' | 'browser'
+    | 'progress' | 'trace' | 'subagents' | 'git' | 'extension';
   title: string;
   tooltip?: string;
   path?: string;
@@ -137,17 +155,14 @@ export type PanelTab = {
   openNonce?: number;
   /** Agent browser_open ack token while the guest is attaching. */
   commandRequestId?: string;
+  browserLibrary?: { id: string; view: import('../features/browser/browser-history').BrowserLibraryView };
   /** 终端重启计数：变化后以同一个 id 重新挂载并重建 PTY。 */
   restart?: number;
   /** 用户手动改过标题：shell 的 OSC 标题不再覆盖它。 */
   customTitle?: boolean;
   review?: { sessionId: string; initial: TurnDiff; turns: TurnDiff[]; focusPath?: string };
+  progressPage?: 'summary' | 'tasks' | 'history';
+  childKey?: string;
+  gitPage?: import('../types/git-types').GitTab;
+  extensionPanel?: { extensionId: string; panelId: string; global?: boolean };
 };
-
-export type AgentView =
-  | { kind: 'git'; tab: import('../types/git-types').GitTab }
-  | { kind: 'conversation' }
-  | { kind: 'extensions'; itemId?: string }
-  | { kind: 'agents'; child?: SubagentChild }
-  | { kind: 'trace' }
-  | { kind: 'tasks' };

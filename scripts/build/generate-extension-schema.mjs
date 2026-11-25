@@ -97,6 +97,7 @@ const statusItem = object({
   status,
 }, ['id', 'label']);
 
+const summarySlots = ['status.chip', 'composer.above', 'composer.below'];
 const contributors = {
   tools: array(object({
     name: {
@@ -120,24 +121,23 @@ const contributors = {
     id,
     title: text(120, 1),
     description: text(1200),
-    slot: {
-      enum: [
-        'workspace.sidebar',
-        'conversation.header',
-        'conversation.detail',
-        'conversation.footer',
-        'composer.before',
-        'settings.panel',
-        'panel.side',
-        'status.bar',
-      ],
-    },
+    slot: { enum: [...summarySlots, 'panel.side'] },
+    slots: { ...array({ enum: summarySlots }, summarySlots.length, 1), uniqueItems: true },
     icon: { $ref: '#/$defs/icon' },
     size: { enum: ['compact', 'regular'] },
     color: { enum: ['neutral', 'accent', 'info', 'success', 'warning', 'error'] },
     priority: { type: 'integer', minimum: -1000, maximum: 1000 },
     content: array(content, 64),
-  }, ['id', 'title', 'slot']), 256),
+    details: contributionId,
+    visibility: { enum: ['always', 'while-active'] },
+    canvas: object({ sourceId: { $ref: '#/$defs/contributionRef' } }),
+    taskBoard: object({ sourceId: { $ref: '#/$defs/contributionRef' } }),
+  }, ['id', 'title'], {
+    oneOf: [{ required: ['slot'] }, { required: ['slots'] }],
+    not: { required: ['canvas', 'taskBoard'] },
+    if: { anyOf: [{ required: ['canvas'] }, { required: ['taskBoard'] }] },
+    then: { required: ['slot'], properties: { slot: { const: 'panel.side' }, content: { maxItems: 0 } } },
+  }), 256),
   settings: array(object({
     id,
     title: text(120, 1),

@@ -14,7 +14,7 @@ export function ProviderMediaFields({ models, catalog, onChange }: {
   for (const item of catalog) candidates.set(item.id, item.name || item.id);
   const count = [...models.speech, ...models.image].filter(id => id.trim()).length;
   return <Accordion className="settings-form-section provider-editor-section provider-media-fields" aria-label="媒体生成模型"
-    summary="媒体生成模型" description="可选 · 为视频分镜配置语音与图像模型" badge={count ? `${count} 个` : undefined} defaultOpen={count > 0}>
+    summary="媒体生成模型" description="可选 · 配置语音与图像生成模型" badge={count ? `${count} 个` : undefined} defaultOpen={count > 0}>
     <p className="provider-editor-note">共用上方连接配置。每行一个兼容 OpenAI 媒体接口的模型 ID，对话模型在「管理模型」中配置。</p>
     <div className="provider-media-columns">{(['speech', 'image'] as const).map(kind => {
       const speech = kind === 'speech';

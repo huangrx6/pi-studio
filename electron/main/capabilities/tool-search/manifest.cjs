@@ -1,3 +1,5 @@
+const { builtinToolContributions } = require('../../core/builtin-tool-contributions.cjs');
+
 module.exports = Object.freeze([
   {
 id: 'studio-tool-search',
@@ -10,7 +12,7 @@ id: 'studio-tool-search',
     permissions: ['agent.tools'],
     requires: ['builtin:studio-permissions'],
     contributes: {
-      tools: [{ name: 'tool_search', description: '搜索并按需加载 deferred 工具。' }],
+      tools: builtinToolContributions(['tool_search']),
     }
   },
 ]);

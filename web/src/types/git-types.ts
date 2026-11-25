@@ -16,13 +16,13 @@ export type GitWorktree = {
 export type WorktreeReview = { version: string; dirty: GitDirtyStatus; ignored: boolean; missing: boolean; head: string };
 export type WorktreeInputs = {
   options: object;
-  create: { mode: 'existing' | 'new'; name: string; folder: string; parent?: string; head: string };
+  create: { mode: 'existing' | 'new'; name: string; folder: string; parent?: string; head: string; baseBranch?: string };
   open: { path: string };
   inspect: { path: string; activeCwd: string };
   remove: { path: string; activeCwd: string; version: string };
 };
 export type WorktreeResults = {
-  options: { head: string; branch: string; branches: { name: string; occupied: boolean }[] };
+  options: { head: string; branch: string; branches: { name: string; head: string; occupied: boolean }[] };
   create: string;
   open: string;
   inspect: WorktreeReview;
@@ -49,9 +49,9 @@ export type GitWorkspaceStatus = {
   worktrees: GitWorktree[];
 };
 
-export type GitTab = 'changes' | 'commit' | 'history' | 'sync';
+export type GitTab = 'changes' | 'history' | 'sync';
 export type GitHead = { branch: string; head: string };
-export type GitBranchRef = { name: string; remote: boolean; worktree: string; upstreamRemote: string; upstreamBranch: string };
+export type GitBranchRef = { name: string; head: string; remote: boolean; worktree: string; upstreamRemote: string; upstreamBranch: string };
 export type GitFile = { path: string; previousPath?: string; index: string; worktree: string; conflict: boolean };
 export type GitState = GitHead & { root: string; files: GitFile[]; filesVersion: string; filesUnchanged: boolean; merging: boolean; mergeHead: string; indexVersion: string; remotes: string[]; upstreamRemote: string; upstreamBranch: string; ahead: number; behind: number; gone: boolean };
 export type GitHistoryRow = { hash: string; graph: string; connectors: string[]; author: string; date: string; refs: string; subject: string };

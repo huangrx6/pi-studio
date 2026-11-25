@@ -14,12 +14,11 @@ import { normalizeAppearanceOverrides, type AppearanceOverrides } from './extens
 
 /** 主题偏好；system 表示跟随 macOS 外观。 */
 export type ThemePreference = 'light' | 'dark' | 'system';
-/** 全局强调色方案；中性背景和语义状态色不随它改变。 */
+/** ID 用于主窗口和菜单栏的持久化偏好。更新色板时沿用已有 ID。 */
 export const PALETTE_PRESETS = [
-  { id: 'lime', label: '玉石', description: '克制的玉石青，与黑白界面形成高级对比。' },
-  { id: 'ocean', label: '海蓝', description: '冷静、清晰，适合长时间阅读。' },
-  { id: 'amber', label: '琥珀', description: '温暖、专注，强调当前操作。' },
-  { id: 'berry', label: '莓果', description: '柔和、鲜明，增加界面辨识度。' },
+  { id: 'ocean', label: '海蓝', description: '明亮的海蓝色' },
+  { id: 'amber', label: '珊瑚', description: '带橙调的珊瑚红' },
+  { id: 'berry', label: '鸢尾', description: '带蓝调的紫色' },
 ] as const;
 export type PalettePreference = typeof PALETTE_PRESETS[number]['id'];
 /** 工作步骤（工具调用/思考）的展示密度。 */
@@ -32,9 +31,9 @@ export type LinkPreference = 'external' | 'window';
  * 扩展在会话界面的落点偏好。
  *
  * 扩展自己声明可以落在哪些位置（`slots`），用户只决定最终出现在哪一处；
- * both 是默认值，表示按扩展声明的全部落点渲染。
+ * chip 是默认值（只显示顶栏）；both 表示按扩展声明的 chip+footer 两处都渲染。
  */
-export type ExtensionPlacement = 'both' | 'chip' | 'footer' | 'hidden';
+export type ExtensionPlacement = 'header' | 'above' | 'below' | 'menu' | 'hidden';
 /** 全局圆角风格，映射到 RADIUS_PRESETS。 */
 export type RadiusStyle = 'square' | 'compact' | 'standard' | 'soft';
 /** 终端光标形状。 */
@@ -100,6 +99,7 @@ export type Preferences = {
   /** 扩展落点偏好：panel contribution id → 落点；缺省表示按扩展声明全部渲染。 */
   extensionPlacements: Record<string, ExtensionPlacement>;
   extensionAppearances: AppearanceOverrides;
+  workbenchLauncherOrder: string[];
 };
 
 export type GitDiffPreferences = Pick<Preferences, 'gitDiffLayout' | 'gitDiffWrap'>;
@@ -110,7 +110,7 @@ const STORAGE_KEY = 'pi-studio:preferences';
 /** 首次启动或存储损坏时使用的默认偏好。 */
 export const DEFAULT_PREFERENCES: Preferences = {
   theme: 'light',
-  palette: 'lime',
+  palette: 'ocean',
   fontSize: 14,
   terminalFontSize: 12,
   terminalTheme: 'studio',
@@ -134,6 +134,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   shortcuts: { ...DEFAULT_SHORTCUTS },
   extensionPlacements: {},
   extensionAppearances: {},
+  workbenchLauncherOrder: [],
 };
 
 const THEMES = new Set<ThemePreference>(['light', 'dark', 'system']);
@@ -141,7 +142,7 @@ const STEP_DISPLAYS = new Set<StepDisplay>(['compact', 'standard', 'detailed']);
 const STEP_COLLAPSES = new Set<StepCollapse>(['after-answer', 'keep-open', 'manual']);
 const LINK_PREFERENCES = new Set<LinkPreference>(['external', 'window']);
 const RADIUS_STYLES = new Set<RadiusStyle>(['square', 'compact', 'standard', 'soft']);
-const EXTENSION_PLACEMENTS = new Set<ExtensionPlacement>(['both', 'chip', 'footer', 'hidden']);
+const EXTENSION_PLACEMENTS = new Set<ExtensionPlacement>(['header', 'above', 'below', 'menu', 'hidden']);
 const TERMINAL_CURSOR_STYLES = new Set<TerminalCursorStyle>(['bar', 'block', 'underline']);
 const MAX_MEDIA_FIELD_LENGTH = 4_096;
 
@@ -296,18 +297,22 @@ export function normalizePreferences(value: unknown): Preferences {
     shortcuts: normalizeShortcuts(source.shortcuts) as Record<string, string>,
     extensionPlacements: normalizeExtensionPlacements(source.extensionPlacements),
     extensionAppearances: normalizeAppearanceOverrides(source.extensionAppearances),
+    workbenchLauncherOrder: Array.isArray(source.workbenchLauncherOrder)
+      ? [...new Set<string>(source.workbenchLauncherOrder.filter(id => typeof id === 'string'
+        && /^(?:[a-z][a-z-]{0,32}|(?:builtin|user|project):[a-z0-9][a-z0-9._-]{1,63})$/.test(id)))]
+      : [],
   };
 }
 
 /**
- * 只保存非默认的落点：both 等于「没用过这个设置」，不写进存储，
- * 这样以后再给扩展加落点时，老用户不会因为一条空记录被锁在旧行为上。
+ * 只保存非默认的落点：chip 等于「产品默认 / 没用过这个设置」，不写进存储。
+ * 用户显式选择 both / footer / hidden 时才持久化。
  */
 function normalizeExtensionPlacements(value: unknown): Record<string, ExtensionPlacement> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>)
-      .filter(([key, item]) => key.length > 0 && item !== 'both' && EXTENSION_PLACEMENTS.has(item as ExtensionPlacement))
+      .filter(([key, item]) => key.length > 0 && EXTENSION_PLACEMENTS.has(item as ExtensionPlacement))
       .map(([key, item]) => [key, item as ExtensionPlacement]),
   );
 }
@@ -373,18 +378,18 @@ export function loadPreferences(
 
 /**
  * 持久化偏好。
- * 隐私模式或存储配额不足时 localStorage 会抛错，这里静默忽略：
- * 偏好只在本次会话生效，不影响主流程。
+ * 存储不可用时返回 false，应用仍可在当前窗口使用偏好。
  */
 export function savePreferences(
   preferences: Preferences,
   storage: KeyValueStorage | null = browserStorage(),
-): void {
-  if (!storage) return;
+): boolean {
+  if (!storage) return false;
   try {
     storage.setItem(STORAGE_KEY, JSON.stringify(normalizePreferences(preferences)));
+    return true;
   } catch {
-    // 存储不可用（隐私模式或配额不足）时，偏好仅在当前会话生效。
+    return false;
   }
 }
 

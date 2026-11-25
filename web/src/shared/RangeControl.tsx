@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import './styles/range-control.css';
 
 type RangeControlProps = {
   id: string;
@@ -40,8 +41,8 @@ export function RangeControl({
     <label className={`settings-range-control ${disabled ? 'is-disabled' : ''}`} htmlFor={id}>
       <span className="settings-range-copy">
         <span className="settings-range-heading">
-          <strong>{label}</strong>
-          {description && <small className="settings-range-description">{description}</small>}
+          <strong id={`${id}-label`}>{label}</strong>
+          {description && <small id={`${id}-description`} className="settings-range-description">{description}</small>}
         </span>
         <output htmlFor={id}>{value}{unit}</output>
       </span>
@@ -53,6 +54,8 @@ export function RangeControl({
         step={step}
         value={value}
         disabled={disabled}
+        aria-labelledby={`${id}-label`}
+        aria-describedby={description ? `${id}-description` : undefined}
         aria-valuetext={`${value}${unit}`}
         style={style}
         onChange={(event) => onChange(Number(event.target.value))}

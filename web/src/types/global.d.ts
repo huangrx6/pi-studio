@@ -10,25 +10,15 @@
  */
 
 export {};
-import type { AssetPreview, MediaGenerationInput, MediaModelCatalog, MediaPreferences, ProductionInput, ShotPatch, StoryboardDraftPreview, StoryboardDraftRequest, StoryboardReply, StoryboardBrief, StoryboardSummary, StoryboardWork } from './storyboard-types';
-import type { ProviderQuotaConfig, ProviderQuotaSnapshot, QuotaField, QuotaFieldSuggestion, QuotaMetric } from './provider-quota';
+import type { ProviderQuotaConfig, ProviderQuotaSnapshot, QuotaFieldSuggestion, QuotaMetric, QuotaPreviewInput } from './provider-quota';
 import type { CommittedProjection, MutationProjection } from './mutation-types';
 import type { ExtensionInstallResult, ExtensionMutationResult } from './extension-types';
-import type { ChatAttachment, ChatMessage, ComposerAttachment, ComposerCommand, ComposerFile, RequestTrace, TurnDiff, UploadedAttachment } from './chat-types';
+import type { ChatAttachment, ChatMessage, ComposerAttachment, ComposerCapability, ComposerCommand, ComposerFile, RequestTrace, TurnDiff, UploadedAttachment } from './chat-types';
 import type { ConcreteThinkingLevel, ModelCatalog, ModelSelection, ThinkingLevel } from './model-types';
-import type {
-  ModelComparisonInput,
-  ModelComparisonAdoptInput,
-  ModelComparisonAdoptResult,
-  ModelComparisonDiscardInput,
-  ModelComparisonDiscardResult,
-  ModelComparisonSnapshot,
-  ModelComparisonSnapshotInput,
-  ModelComparisonStartResult,
-} from './comparison-types';
 import type { AgentToolCatalog, AgentToolSelection } from './agent-tool-types';
-import type { ManagedWorktree, SubagentBudgetSnapshot, SubagentChild, SubagentConfig, SubagentSettingsSnapshot, SubagentTranscript } from './subagent-types';
+import type { ManagedWorktree, SubagentBudgetSnapshot, SubagentChild, SubagentConfig, SubagentProfile, SubagentProfileResources, SubagentSettingsSnapshot, SubagentTranscript } from './subagent-types';
 import type { NetworkSettings, NetworkRoute, NetworkTestResult } from './network-types';
+import type { DeviceStorageSnapshot } from './device-storage';
 import type {
   HarnessProfileDraft,
   HarnessSettingsSnapshot,
@@ -52,6 +42,7 @@ import type {
 } from './durable-types';
 import type { BackgroundMedia } from '../shared/preferences';
 import type { FilePreviewResult } from './file-preview-types';
+import type { TaskBoardMutation, TaskBoardTask } from './task-board';
 import type { UpdateSnapshot } from './update-types';
 import type { RuntimeRefreshSnapshot, StudioRuntimeVersions } from './runtime-types';
 import type { GitAction, GitHead, GitReadParams, GitReadResult, GitRepository, GitWorkspaceStatus, WorktreeInputs, WorktreeResults } from './git-types';
@@ -64,6 +55,8 @@ import type {
 import type { UsageAnalyticsSnapshot, UsageModelMix, UsageProjectScope } from './usage-types';
 import type {
   ExtensionCommandResult,
+  ExtensionCanvasScene,
+  ExtensionCanvasSnapshot,
   ExtensionDataViewEvent,
   ExtensionDataViewOpenRequest,
   ExtensionDataViewOpenResult,
@@ -72,7 +65,6 @@ import type {
   ExtensionInstallScope,
   ExtensionUpdateCheckSnapshot,
   ExtensionUiSnapshot,
-  ConversationExtensionLayout,
   ConversationExtensionUiPreferences,
 } from './extension-types';
 import type {
@@ -248,6 +240,120 @@ interface PiSessionOutline {
 }
 
 /** 设置面板一次性读取的快照，覆盖模型、来源、MCP、技能、扩展等配置。 */
+
+export type StudioPluginSummary = {
+  id: string;
+  name: string;
+  version: string;
+  publisher: string;
+  description: string;
+  icon: string;
+  iconDataUrl?: string;
+  category: string;
+  homepage: string;
+  sourcePath: string;
+  installPath: string;
+  provides: {
+    mcp?: Array<{ name: string; transport?: string; description?: string }>;
+    skills?: Array<{ path: string; name?: string }>;
+    cli?: Array<{ id: string; name: string; kind?: string; description?: string; pathEnv?: boolean; commands?: Array<{ summary?: string; example?: string }> }>;
+    extension?: { path: string; tools?: string[] } | null;
+  };
+  enabled: boolean;
+  contentHash: string;
+  installedAt: number;
+  updatedAt: number;
+};
+
+export type PluginMarketSource = {
+  id: string;
+  name: string;
+  type: 'official' | 'registry' | 'directory';
+  location: string;
+  enabled: boolean;
+  builtin?: boolean;
+};
+
+export type PluginMarketItem = {
+  id: string;
+  name: string;
+  publisher: string;
+  summary: string;
+  description: string;
+  category: string;
+  icon: string;
+  iconDataUrl?: string;
+  homepage: string;
+  repository: string;
+  keywords: string[];
+  provides: {
+    mcp: number;
+    skills: number;
+    cli: number;
+    extension: boolean;
+    mcpNames?: string[];
+    skillNames?: string[];
+    cliNames?: string[];
+  };
+  versions: Array<{
+    version: string;
+    packagePath?: string;
+    download?: string;
+    sha256?: string;
+    size?: number;
+    publishedAt?: string;
+  }>;
+  latestVersion: string;
+  sourceId: string;
+  sourceName: string;
+  sourceType: string;
+  installed: boolean;
+  installedVersion: string | null;
+  installedEnabled: boolean | null;
+  updateAvailable: boolean;
+};
+
+export type PluginMarketSnapshot = {
+  sources: PluginMarketSource[];
+  catalogs: Array<{
+    source: PluginMarketSource;
+    count: number;
+    name?: string;
+    updatedAt?: string;
+    diagnostics?: Array<{ path: string; message: string }>;
+    error: string;
+    plugins: PluginMarketItem[];
+  }>;
+  plugins: PluginMarketItem[];
+  categories: string[];
+  errors: Array<{ sourceId: string; message: string }>;
+  query: string;
+  category: string;
+  sourceId: string;
+  updatedAt: number;
+};
+
+export type PluginInstallPreview = {
+  token: string;
+  sourceKind: string;
+  source: string;
+  id: string;
+  name: string;
+  version: string;
+  publisher: string;
+  description: string;
+  category: string;
+  icon: string;
+  iconDataUrl?: string;
+  contentHash: string;
+  provides: StudioPluginSummary['provides'];
+  existingVersion: string | null;
+  upgrade: boolean;
+  alreadyInstalled: boolean;
+  collisions: Array<{ kind: string; name: string; origin?: string; ownerPluginId?: string }>;
+  canInstall: boolean;
+};
+
 export interface SettingsSnapshot {
   /** 用户手动添加的模型。 */
   customModels: Array<{ providerId: string; modelId: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean; thinkingLevels?: ConcreteThinkingLevel[]; enabled?: boolean; origin?: 'configured' | 'override' }>;
@@ -266,13 +372,19 @@ export interface SettingsSnapshot {
     timeoutSeconds: number;
     envKeys: string[];
     headerKeys: string[];
+    ownerPluginId: string;
+    origin: 'plugin' | 'user' | 'builtin';
+    managed: boolean;
+    userOverride: boolean;
     oauthConnected: boolean;
     connected: boolean;
     toolCount: number;
     error: string;
     stderr: string;
-    tools: Array<{ name: string; originalName: string; description: string; exposure: 'direct' | 'deferred' | 'hidden' }>;
+    tools: Array<{ name: string; originalName: string; description: string; exposure: 'direct' | 'deferred' | 'hidden'; enabled: boolean }>;
   }>;
+  /** 已安装插件包。 */
+  plugins: StudioPluginSummary[];
   /** 已安装技能。 */
   skills: Array<{
     name: string;
@@ -280,7 +392,10 @@ export interface SettingsSnapshot {
     path: string;
     baseDir: string;
     scope: 'user' | 'project';
-    origin: 'studio' | 'agents';
+    origin: 'studio' | 'agents' | 'plugin';
+    ownerPluginId?: string;
+    managed?: boolean;
+    userOverride?: boolean;
     bytes: number;
     version: string;
     promptTokens: number;
@@ -351,6 +466,8 @@ type BrowserPreferences = {
   showFullUrl: boolean;
   webLinkOpenTarget: 'workbench' | 'system' | string;
   localLinkOpenTarget: 'workbench' | 'system' | string;
+  linkOpenInstructAgent?: boolean;
+  linkOpenBlockExternal?: boolean;
   annotatedScreenshots: 'always' | 'never' | string;
   askDownloadPath: boolean;
   downloadDirectory: string;
@@ -360,6 +477,54 @@ type BrowserPreferences = {
   externalChromeEnabled: boolean;
   externalChromeEndpoint: string;
   defaultDownloadDirectory?: string;
+};
+
+type DesktopAllowApp = {
+  id: string;
+  name: string;
+  bundleId?: string;
+  path?: string;
+  icon?: string;
+  blocked?: boolean;
+  running?: boolean;
+};
+
+type DesktopActivityEntry = {
+  id: string;
+  at: number;
+  tool: string;
+  ok: boolean;
+  code?: string;
+  appName?: string;
+  bundleId?: string;
+  windowId?: number | null;
+  title?: string;
+  detail?: string;
+};
+
+type DesktopPermissionStatus = {
+  platform: string;
+  supported: boolean;
+  screenRecording: string;
+  accessibility: boolean;
+  ready: boolean;
+  message?: string;
+};
+
+type DesktopControlPreferences = {
+  enabled: boolean;
+  allowAnyApp: boolean;
+  alwaysAllow: DesktopAllowApp[];
+};
+
+type DesktopControlStatus = DesktopControlPreferences & {
+  alwaysAllowCount: number;
+  permission: DesktopPermissionStatus;
+  platform: string;
+  supported: boolean;
+  ready: boolean;
+  self?: { name?: string; bundleId?: string; path?: string };
+  activity?: DesktopActivityEntry[];
 };
 
 declare global {
@@ -379,11 +544,13 @@ declare global {
       /** 切换原生窗口、菜单栏与全局组件圆角。 */
       setAppearance(
         theme: 'light' | 'dark' | 'system',
-        palette: 'lime' | 'ocean' | 'amber' | 'berry',
+        palette: import('../shared/preferences').PalettePreference,
         radiusStyle: 'square' | 'compact' | 'standard' | 'soft',
       ): Promise<void>;
       /** Read the native window chrome state used by the shell layout. */
       windowState(): Promise<NativeWindowState>;
+      deviceStorage(): Promise<DeviceStorageSnapshot>;
+      deviceStorageLocation(id: string, action: 'open' | 'copy'): Promise<void>;
       /** Follow native fullscreen changes; returns an unsubscribe function. */
       onWindowState(listener: (state: NativeWindowState) => void): () => void;
       /** Read the current updater snapshot. */
@@ -447,6 +614,7 @@ declare global {
       /** 当前会话目录的 Git 分支、提交、改动和 worktree 状态。 */
       gitRepositories(cwd: string): Promise<GitRepository[]>;
       gitWorkspaceStatus(cwd?: string, repository?: string): Promise<GitWorkspaceStatus>;
+      gitWorkspaceChanges(cwd: string, repository: string): Promise<import('./git-types').GitFile[]>;
       gitWorktree<K extends keyof WorktreeInputs>(cwd: string, input: { kind: K; repository?: string } & WorktreeInputs[K]): Promise<WorktreeResults[K]>;
       gitRead<K extends keyof GitReadResult>(id: string, input: { kind: K; repository?: string } & GitReadParams[K]): Promise<GitReadResult[K]>;
       gitWrite(id: string, input: GitAction & GitHead & { repository?: string }): Promise<void>;
@@ -488,14 +656,6 @@ declare global {
       conversationSubmit(payload: ConversationSubmitInput): Promise<ConversationSubmitResult>;
       /** 原位编辑一条用户消息，并重新生成该分支。 */
       conversationEdit(payload: ConversationEditInput): Promise<ConversationEditResult>;
-      /** 从同一父会话分叉两次，用相同输入并行请求两个模型。 */
-      conversationCompareStart(payload: ModelComparisonInput): Promise<ModelComparisonStartResult>;
-      /** 轮询两个普通会话分支的运行状态、结果与用量。 */
-      conversationCompareSnapshot(payload: ModelComparisonSnapshotInput): Promise<ModelComparisonSnapshot>;
-      /** 应用选中分支的隔离改动，并把该会话移回原工作区。 */
-      conversationCompareAdopt(payload: ModelComparisonAdoptInput): Promise<ModelComparisonAdoptResult>;
-      /** 永久删除一个不再需要的对比分支及其托管工作树。 */
-      conversationCompareDiscard(payload: ModelComparisonDiscardInput): Promise<ModelComparisonDiscardResult>;
       /** 热切换模型与 thinking；繁忙时只影响下一请求。 */
       conversationConfigure(payload: {
         id: string;
@@ -532,6 +692,8 @@ declare global {
         longTask?: LongTaskState;
         wasRunning?: boolean;
         started?: boolean;
+        deletedSessionIds?: string[];
+        pendingFileCleanups?: number;
       }>;
       conversationTaskGraph(id: string): Promise<ConversationTaskGraph>;
       /** 读取当前会话的子智能体总览，包含已完成记录与实时快照。 */
@@ -539,7 +701,7 @@ declare global {
       /** 读取一个受信任子智能体 session 的只读 transcript。 */
       subagentTranscript(payload: { sessionId: string; childKey: string; limit?: number; cursor?: string }): Promise<SubagentTranscript>;
       /** 永久删除当前父会话中的一个子智能体及其独立上下文。 */
-      deleteSubagent(payload: { sessionId: string; childKey: string }): Promise<{ ok: boolean; name: string; deletedConversations: number }>;
+      deleteSubagent(payload: { sessionId: string; childKey: string }): Promise<{ ok: boolean; name: string; deletedConversations: number; pendingFileCleanups?: number }>;
       replySubagentSupervisor(payload: { sessionId: string; childKey: string; requestId: string; message: string }): Promise<{ ok: boolean; requestId: string; childKey: string; reporterTaskId: string }>;
       // ---- 聊天发送 ----
       // ---- 文件浏览 ----
@@ -549,7 +711,8 @@ declare global {
       file(cwd: string, path: string): Promise<{ path: string; size: number; binary: boolean; text: string }>;
       /** 读取有大小上限、可直接交给统一预览组件的数据。 */
       filePreview(cwd: string, path: string): Promise<FilePreviewResult>;
-      writeFile(payload: { cwd: string; path: string; text: string }): Promise<{ ok: boolean; path: string; size: number }>;
+      onFilesChanged(listener: (keys: string[]) => void): () => void;
+      writeFile(payload: { cwd: string; path: string; text: string; expectedText: string }): Promise<{ ok: boolean; path: string; size: number }>;
       /** 只读打开当前会话已记录的轮次变更文件。 */
       temporaryModel(payload?: { modelRef?: string; thinkingLevel?: import('./model-types').ThinkingLevel }): Promise<import('./model-types').ModelSelection>;
       temporaryPrompt(payload: { id: string; text: string; images: { data: string; mimeType: string }[]; modelRef: string; thinkingLevel: string }): Promise<{ ok: boolean }>;
@@ -562,7 +725,7 @@ declare global {
       undoTurnDiff(payload: { sessionId: string; at: number }): Promise<void>;
       turnDiffFile(payload: { sessionId: string; at: number; path: string; full?: boolean; ignoreWhitespace?: boolean }): Promise<import('./chat-types').TurnDiffFile>;
       turnFilePreview(payload: { sessionId: string; at: number; path: string; side: 'before' | 'after' }): Promise<import('./file-preview-types').FilePreviewResult>;
-      turnDiffAbsoluteFile(payload: { sessionId: string; path: string }): Promise<{ path: string; size: number; binary: boolean; text: string }>;
+      turnDiffAbsoluteFile(payload: { sessionId: string; path: string }): Promise<{ path: string; size: number; binary: boolean; text: string; changeKey: string }>;
       /** 打开聊天里出现的任意文件引用：`~`、相对路径与工作区外绝对路径都由主进程解析。 */
       filePreviewAbsolute(payload: { path: string; cwd?: string; sessionId?: string }): Promise<FilePreviewResult>;
       /** 只读打开 Studio 自己管理的附件文件；主进程会拒绝附件目录之外的路径。 */
@@ -689,6 +852,16 @@ declare global {
       browserExtensions(): Promise<{ ok: boolean; supported?: boolean; extensions: Array<{ id: string; name: string; version?: string; path?: string; enabled?: boolean; loaded?: boolean }> }>;
       browserExtensionLoad(payload?: { path?: string }): Promise<{ ok: boolean; cancelled?: boolean; extensions?: unknown }>;
       browserExtensionRemove(payload: { id?: string; path?: string }): Promise<{ ok: boolean; extensions?: unknown }>;
+      desktopControlStatus(): Promise<DesktopControlStatus>;
+      desktopControlPreferences(): Promise<DesktopControlPreferences>;
+      desktopControlSetPreferences(payload: Partial<DesktopControlPreferences>): Promise<{ ok: boolean; preferences: DesktopControlPreferences; status?: DesktopControlStatus }>;
+      desktopControlPermissions(): Promise<DesktopPermissionStatus>;
+      desktopControlOpenPermissionSettings(payload?: { kind?: 'screen' | 'accessibility' | string } | string): Promise<{ ok: boolean; kind?: string; url?: string }>;
+      desktopControlInstalledApps(): Promise<{ ok: boolean; apps: DesktopAllowApp[]; error?: string; code?: string }>;
+      desktopControlAlwaysAllowAdd(payload: Partial<DesktopAllowApp>): Promise<{ ok: boolean; preferences: DesktopControlPreferences; status?: DesktopControlStatus }>;
+      desktopControlAlwaysAllowRemove(payload: { id?: string } | string): Promise<{ ok: boolean; preferences: DesktopControlPreferences; status?: DesktopControlStatus }>;
+      desktopControlActivity(payload?: { limit?: number } | number): Promise<{ ok: boolean; activity: DesktopActivityEntry[] }>;
+      desktopControlActivityClear(): Promise<{ ok: boolean; activity: DesktopActivityEntry[]; status?: DesktopControlStatus }>;
       onBrowserEvent(listener: (event: {
         type: string;
         preferences?: BrowserPreferences;
@@ -736,31 +909,6 @@ declare global {
       filePathOf(file: File): string;
       onTerminalEvent(listener: (event: TerminalEvent) => void): () => void;
       /** 扫描 TCP 监听端口，并按当前任务/工作区标记归属依据。 */
-      storyboardList(workspace: string): Promise<StoryboardSummary[]>;
-      storyboardCreate(workspace: string, example?: 'web-sources'): Promise<StoryboardWork>;
-      storyboardRenderBegin(workspace: string, id: string, plan: string, revision: number): Promise<{ id: string; sizes: Record<string, number> }>;
-      storyboardRenderRead(workspace: string, id: string, token: string, asset: string, start: number, size: number): Promise<string>;
-      storyboardRenderWrite(workspace: string, id: string, token: string, position: number, data: string): Promise<void>;
-      storyboardRenderFinish(workspace: string, id: string, token: string): Promise<string>;
-      storyboardRenderDiscard(workspace: string, id: string, token: string): Promise<void>;
-      storyboardRenderSave(workspace: string, id: string, token: string): Promise<string | null>;
-      storyboardRead(workspace: string, id: string): Promise<StoryboardWork>;
-      storyboardGenerateDraft(workspace: string, id: string, input: StoryboardDraftRequest): Promise<StoryboardDraftPreview>;
-      storyboardApplyDraft(workspace: string, id: string, token: string): Promise<StoryboardWork>;
-      storyboardDiscardDraft(workspace: string, id: string, token: string): Promise<void>;
-      storyboardMediaModels(): Promise<MediaModelCatalog>;
-      storyboardMediaPreferences(workspace: string, id: string, patch: MediaPreferences): Promise<StoryboardWork>;
-      storyboardGenerateMedia(workspace: string, id: string, input: MediaGenerationInput): Promise<{ work: StoryboardWork; assetId: string }>;
-      storyboardApplyMedia(workspace: string, id: string, input: { shotId: string; assetId: string }): Promise<StoryboardWork>;
-      storyboardEditBrief(workspace: string, id: string, patch: Partial<StoryboardBrief>): Promise<{ revision: number; updatedAt: number }>;
-      storyboardAdvance(workspace: string, id: string, input: StoryboardReply): Promise<StoryboardWork>;
-      storyboardProduce(workspace: string, id: string, input: ProductionInput): Promise<StoryboardWork>;
-      storyboardEditShot(workspace: string, id: string, shotId: string, patch: ShotPatch): Promise<StoryboardWork>;
-      storyboardPreview(workspace: string, id: string, assetId: string): Promise<AssetPreview>;
-      storyboardRelink(workspace: string, id: string, assetId: string): Promise<StoryboardWork>;
-      storyboardPick(workspace: string, id: string): Promise<StoryboardWork>;
-      storyboardDrop(workspace: string, id: string, files: File[]): Promise<StoryboardWork>;
-      storyboardRemoveFile(workspace: string, id: string, assetId: string): Promise<StoryboardWork>;
       runtimeServices(payload: { cwd?: string; roots?: string[] }): Promise<RuntimeServiceSnapshot>;
       /** 终止已经通过主进程身份与操作系统用户校验的服务。 */
       runtimeServiceStop(payload: {
@@ -771,9 +919,10 @@ declare global {
 
       // ---- 输入框辅助 ----
       /** 读取斜杠命令、提示词、技能等输入资源。 */
-      composerResources(payload: { sessionId?: string; cwd?: string }): Promise<{
+      composerResources(payload: { sessionId?: string; cwd?: string; includeCapabilities?: boolean }): Promise<{
         commands: ComposerCommand[];
         skills: ComposerCommand[];
+        capabilities?: ComposerCapability[];
       }>;
       /** 按关键字搜索工作区文件，供 @ 提及补全。 */
       searchFiles(payload: { cwd: string; query: string }): Promise<{ files: ComposerFile[] }>;
@@ -809,8 +958,9 @@ declare global {
       importProviderModels(payload: { providerId: string; models: Array<{ id: string; name: string; contextWindow?: number; maxTokens?: number; supportsImages: boolean; reasoning: boolean; thinkingLevels?: ConcreteThinkingLevel[] }>; cwd?: string }): Promise<CommittedProjection<ModelResourceSnapshot>>;
       /** 读取来源的 baseUrl、API 类型与图标。 */
       providerQuota(providerId: string, refresh?: boolean): Promise<ProviderQuotaSnapshot>;
+      onProviderQuotaInvalidated(listener: (providerId: string) => void): () => void;
       providerQuotaFields(input: Pick<ProviderQuotaConfig, 'endpoint' | 'auth' | 'authName' | 'headers'> & { providerId: string; apiKey?: string }): Promise<QuotaFieldSuggestion[]>;
-      previewQuotaMapping(input: { fields: QuotaField[]; sample: string }): Promise<QuotaMetric[]>;
+      previewQuotaMapping(input: QuotaPreviewInput): Promise<QuotaMetric[]>;
       providerConfig(providerId: string): Promise<{ providerId: string; name: string; baseUrl: string; api: string; icon: string; modelsUrl: string; mediaModels?: { speech: string[]; image: string[] }; quota: ProviderQuotaConfig | null; builtin: boolean; enabled: boolean }>;
       /** 切换模型，返回新的选择快照。 */
       setModel(modelRef: string, cwd?: string): Promise<ModelSelection>;
@@ -830,16 +980,10 @@ declare global {
       // ---- 设置：MCP / 技能 / 扩展 / 包 ----
       /** 读取完整设置快照。 */
       settings(cwd?: string): Promise<SettingsSnapshot>;
-      /** 读取会话扩展的全局顺序、布局和会话级覆盖。 */
+      /** 读取扩展的全局显示顺序。 */
       conversationExtensionUiPreferences(): Promise<ConversationExtensionUiPreferences>;
-      /** 保存全局或单个会话的扩展顺序，并更新全局卡片布局。 */
-      saveConversationExtensionUiPreferences(payload: {
-        layout?: ConversationExtensionLayout;
-        globalOrder?: string[];
-        sessionId?: string;
-        /** null 删除当前会话覆盖，恢复全局顺序。 */
-        sessionOrder?: string[] | null;
-      }): Promise<ConversationExtensionUiPreferences>;
+      /** 保存扩展的全局显示顺序。 */
+      saveConversationExtensionUiPreferences(payload: { globalOrder: string[] }): Promise<ConversationExtensionUiPreferences>;
       /** 扫描当前工作区可用的核心、扩展包与本地扩展工具。 */
       agentToolCatalog(payload?: { cwd?: string; refresh?: boolean }): Promise<AgentToolCatalog>;
       /** 保存智能体工具白名单与来源快照。 */
@@ -849,6 +993,7 @@ declare global {
       /** 保存当前 profile；变更在下一请求生效。 */
       saveHarnessProfile(payload: {
         cwd?: string;
+        mode?: 'create' | 'edit';
         profile: HarnessProfileDraft;
       }): Promise<HarnessSettingsSnapshot>;
       /** 为全局默认或当前工作区选择 profile。 */
@@ -874,6 +1019,10 @@ declare global {
       }): Promise<HarnessSettingsSnapshot>;
       /** 读取 Studio 子智能体的模型、thinking 与工具权限。 */
       subagentSettings(cwd?: string): Promise<SubagentSettingsSnapshot>;
+      subagentProfiles(): Promise<SubagentProfile[]>;
+      subagentProfileResources(cwd: string): Promise<SubagentProfileResources>;
+      saveSubagentProfile(profile: SubagentProfile): Promise<SubagentProfile[]>;
+      removeSubagentProfile(payload: Pick<SubagentProfile, 'id' | 'revision'>): Promise<SubagentProfile[]>;
       subagentBudget(payload: { id: string; cwd?: string }): Promise<SubagentBudgetSnapshot>;
       /** 保存一个范围的模型、thinking 与子智能体工具白名单。 */
       saveSubagentSettings(payload: { cwd: string; scope: 'user' | 'project'; settings: SubagentConfig }): Promise<SubagentSettingsSnapshot>;
@@ -941,6 +1090,7 @@ declare global {
       }): Promise<CommittedProjection<SettingsSnapshot>>;
       /** 启用/停用 MCP 服务器。 */
       setMcpEnabled(payload: { name: string; enabled: boolean; cwd?: string }): Promise<CommittedProjection<SettingsSnapshot>>;
+      setMcpMethodEnabled(payload: { server: string; method: string; enabled: boolean; cwd?: string }): Promise<CommittedProjection<SettingsSnapshot>>;
       /** 只重建 MCP 运行时并读取状态，不重复保存或删除配置。 */
       refreshMcp(cwd?: string): Promise<SettingsSnapshot>;
       /** 删除 MCP 服务器。 */
@@ -985,6 +1135,22 @@ declare global {
       setSkillTrusted(payload: { path: string; trusted: boolean; cwd?: string }): Promise<CommittedProjection<SettingsSnapshot>>;
       /** 添加扩展。 */
       addExtension(payload: { scope: string; cwd?: string }): Promise<any>;
+      pickPluginSource(kind: 'directory' | 'package'): Promise<string | undefined>;
+      preparePluginInstall(payload: { source: string }): Promise<PluginInstallPreview>;
+      installPlugin(payload: { token: string; cwd?: string }): Promise<{ plugin: StudioPluginSummary; installed: { mcp: string[]; skills: Array<{ name: string; path: string }>; extension: string[]; cli: string[] }; settings: SettingsSnapshot }>;
+      disposePluginInstall(token: string): Promise<{ ok: boolean }>;
+      uninstallPlugin(payload: { id: string; cwd?: string; keepOverrides?: boolean }): Promise<{ id: string; removed: unknown; settings: SettingsSnapshot }>;
+      setPluginEnabled(payload: { id: string; enabled: boolean; cwd?: string }): Promise<{ plugin: StudioPluginSummary; settings: SettingsSnapshot }>;
+      listPlugins(): Promise<StudioPluginSummary[]>;
+      pluginMarket(payload?: { query?: string; category?: string; sourceId?: string }): Promise<PluginMarketSnapshot>;
+      pluginSources(): Promise<PluginMarketSource[]>;
+      addPluginSource(payload: { name?: string; type: 'registry' | 'directory'; location: string }): Promise<PluginMarketSource>;
+      setPluginSourceEnabled(payload: { id: string; enabled: boolean }): Promise<PluginMarketSource>;
+      removePluginSource(id: string): Promise<{ ok: boolean; id: string }>;
+      prepareMarketPlugin(payload: { id: string; version?: string; sourceId?: string }): Promise<PluginInstallPreview>;
+      pickPluginRegistryFile(): Promise<string | undefined>;
+      pickPluginSourceDirectory(): Promise<string | undefined>;
+
       /** 打开系统选择器，返回扩展目录或 `.pi-extension.zip` 的本地路径。 */
       pickExtensionSource(kind: 'directory' | 'package'): Promise<string | undefined>;
       /** 在 quarantine 中校验来源并生成安装预览；此时不会修改活动版本。 */
@@ -1057,6 +1223,13 @@ declare global {
       closeExtensionDataView(subscriptionId: string): Promise<{ closed: boolean }>;
       /** 扩展实时数据更新；调用方按 subscriptionId 或 sourceId 过滤。 */
       onExtensionDataView(listener: (event: ExtensionDataViewEvent) => void): () => void;
+      writeExtensionCanvas(payload: {
+        subscriptionId: string;
+        revision: number;
+        scene: ExtensionCanvasScene;
+      }): Promise<ExtensionCanvasSnapshot>;
+      writeExtensionTaskBoard(payload: { subscriptionId: string; mutation: TaskBoardMutation }): Promise<TaskBoardTask>;
+      onExtensionPanelRequested(listener: (event: { sessionId: string; panelId: string }) => void): () => void;
       /** 执行扩展命令；命令内声明的 UI 动作仍由白名单校验。 */
       runExtensionCommand(payload: {
         commandId: string;

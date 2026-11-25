@@ -29,7 +29,9 @@ function harness() {
     workspaces: [{ cwd: '/A', sessions: [{ id: 'A', archived: true }] }],
     setSidebarMutating(value) { h.busy = value; },
     setConversationListRefreshError(value) { h.refreshError = value; },
+    removeWorkspaceFromList(cwd) { h.workspaces = h.workspaces.filter(item => item.cwd !== cwd); },
     clearSessionQueuedPrompts(id) { calls.queues.push(id); },
+    persistDeletedComposerSessions: async () => {},
     clearComposerDraft(_store, key) { calls.drafts.push(key); },
     composerDraftKeyForSession: id => `session:${id}`, composerDraftKeyForNew: cwd => `new:${cwd}`,
     setSession(update) { h.sessionRef.current = update(h.sessionRef.current); },
@@ -159,6 +161,19 @@ test('late workspace deletion leaves a newly selected workspace in place and cle
   assert.deepEqual(calls.navigation, []);
   assert.deepEqual(calls.drafts, ['session:A', 'new:/A']);
   assert.deepEqual(calls.queues, ['A']);
+});
+
+test('a committed empty workspace deletion removes its row even when the list refresh fails', async () => {
+  const { h, calls } = harness();
+  h.workspaces = [{ cwd: '/A', sessions: [] }, { cwd: '/B', sessions: [] }];
+  h.mutation = async () => ({ ok: true, deletedSessions: 0 });
+  h.refresh = async () => { throw new Error('offline'); };
+  await h.action('workspace', '/A', 'remove');
+  assert.deepEqual(h.workspaces.map(item => item.cwd), ['/B']);
+  assert.deepEqual(calls.navigation, [['start', '']]);
+  assert.equal(calls.notifications.at(-1)[2], '工作区已从 Studio 删除');
+  assert.equal(h.refreshError, true);
+  assert.equal(calls.writes.length, 1);
 });
 
 test('late fork completion preserves new navigation and links the created conversation in its notice', async () => {

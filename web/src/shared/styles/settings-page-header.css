@@ -1,109 +1,109 @@
-/* Page chrome owns its layout directly, without the settings-card surface or
- * custom-background card overlays. Actual forms keep their own card styling. */
 .settings-page-header {
   display: flex;
-  width: 100%;
   min-width: 0;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: var(--space-3) var(--space-5);
-  margin: 0 auto var(--space-4);
-  padding-block: var(--space-2);
-}
-
-.settings-sections > .settings-page-header { margin-bottom: 0; }
-
-/* These page layouts already provide spacing between their direct children. */
-:is(.extensions-settings, .subagent-settings, .permission-policy, .usage-settings) > .settings-page-header {
-  margin-bottom: 0;
+  gap: var(--settings-heading-gap) var(--space-4);
+  margin: 0;
 }
 
 .settings-page-header-copy {
-  flex: 1 1 220px;
+  display: flex;
+  flex: 1 1 224px;
+  align-items: flex-start;
+  gap: var(--space-3);
   min-width: 0;
 }
 
 .settings-page-header-title {
-  display: flex;
+  display: grid;
+  flex: 1;
   min-width: 0;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-3);
+  align-content: center;
+  gap: var(--space-1);
+  min-height: var(--settings-title-mark);
 }
 
 .settings-page-header-icon {
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: var(--settings-title-mark);
+  height: var(--settings-title-mark);
   flex: none;
   place-items: center;
-  border: 1px solid var(--accent-border);
-  border-radius: var(--radius-control);
-  background: var(--accent-soft);
-  color: var(--accent-foreground);
+  border: 1px solid var(--settings-accent-border);
+  border-radius: var(--radius-card);
+  background: var(--settings-accent-soft);
+  color: var(--accent);
 }
 
 .settings-page-header-icon svg {
-  width: var(--icon-md);
-  height: var(--icon-md);
+  width: var(--icon-lg);
+  height: var(--icon-lg);
   stroke-width: 1.75;
 }
 
-.settings-page-header-title > * {
-  min-width: 0;
-  max-width: 100%;
+.settings-page-header-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
+
+.settings-page-header.has-trailing-icon { margin-bottom: var(--settings-group-gap); }
+.settings-page-header.has-trailing-icon .settings-page-header-copy {
+  flex-direction: row-reverse;
+  align-items: center;
+}
+.settings-page-header.has-trailing-icon .settings-page-header-icon {
+  width: calc(var(--settings-title-mark) - var(--space-2));
+  height: auto;
+  aspect-ratio: 1;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+.settings-page-header.has-trailing-icon .settings-page-header-icon > svg { width: 100%; height: 100%; }
 
 .settings-page-header-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-2);
+  min-width: 0;
   color: var(--muted);
-  line-height: 1.2;
+  font-size: var(--settings-description-size);
+  line-height: var(--leading-normal);
 }
 
-.settings-page-header-meta > span {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.settings-page-header-meta .info-hint {
-  align-self: center;
-  vertical-align: middle;
-}
+.settings-page-header-meta > span { overflow-wrap: anywhere; }
+.settings-page-header-meta .info-hint { align-self: center; }
 
 .settings-page-header h1 {
   margin: 0;
-  color: var(--text);
-  font-size: var(--text-xl);
-  font-weight: var(--weight-semibold);
+  color: var(--settings-title);
+  font-size: var(--settings-title-size);
+  font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
-  letter-spacing: -.015em;
+  letter-spacing: -.022em;
   overflow-wrap: anywhere;
 }
 
 .settings-page-header-actions {
   display: flex;
   min-width: 0;
+  min-height: var(--settings-title-mark);
   max-width: 100%;
   align-items: center;
-  justify-content: flex-end;
   flex-wrap: wrap;
   gap: var(--space-2);
-  margin-left: auto;
 }
 
-.settings-page-header-actions > * {
-  min-width: 0;
-  max-width: 100%;
-}
+.settings-page-header-actions > * { max-width: 100%; min-width: 0; }
 
 .settings-page-header-actions button:not(.icon-button) {
-  min-height: var(--control);
-  height: auto;
+  min-height: var(--settings-control-height);
   white-space: normal;
   overflow-wrap: anywhere;
 }

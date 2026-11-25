@@ -8,6 +8,7 @@
  */
 import {
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -15,7 +16,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock3 } from 'lucide-react';
 import {
   DATE_PICKER_WEEKDAYS,
   addPickerDays,
@@ -25,17 +26,18 @@ import {
   isPickerDayDisabled,
   isSamePickerMonth,
   monthStart,
+  normalizePickerTime,
   parseIsoDay,
   pickerCalendarDays,
   pickerWeekday,
   todayIsoDay,
 } from './date-picker.ts';
-import { PopoverSurface } from './PopoverSurface';
+import { PopoverSurface, popoverPortalTarget } from './PopoverSurface';
 import { isComposingKey } from './keyboard-navigation';
 import './styles/date-picker.css';
 
 type DatePickerProps = {
-  /** Current YYYY-MM-DD value. An empty string shows the placeholder. */
+  /** YYYY-MM-DD, or local YYYY-MM-DDTHH:mm with includeTime. Empty shows the placeholder. */
   value: string;
   onChange: (value: string) => void;
   /** Accessible name. The popover title is derived from it. */
@@ -45,6 +47,7 @@ type DatePickerProps = {
   max?: string;
   disabled?: boolean;
   className?: string;
+  includeTime?: boolean;
 };
 
 type Placement = {
@@ -52,10 +55,12 @@ type Placement = {
   top?: number;
   bottom?: number;
   width: number;
+  maxHeight?: number;
 };
 
 const POPOVER_WIDTH = 296;
 const POPOVER_HEIGHT = 346;
+const TIME_POPOVER_HEIGHT = 398;
 
 function monthEnd(month: string): string {
   return addPickerDays(addPickerMonths(month, 1), -1);
@@ -70,25 +75,32 @@ export function DatePicker({
   max = '',
   disabled = false,
   className = '',
+  includeTime = false,
 }: DatePickerProps) {
+  const [valueDay, valueTime = ''] = includeTime ? value.split('T') : [value];
   const [open, setOpen] = useState(false);
   const [placement, setPlacement] = useState<Placement | null>(null);
-  const [visibleMonth, setVisibleMonth] = useState(() => monthStart(value || min || max));
+  const [visibleMonth, setVisibleMonth] = useState(() => monthStart(valueDay || min || max));
+  const [draft, setDraft] = useState({ day: '', time: '' });
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverId = useId();
   const popoverRef = useRef<HTMLDivElement>(null);
   const focusDayRef = useRef('');
   const days = useMemo(() => pickerCalendarDays(visibleMonth), [visibleMonth]);
-  const currentValue = parseIsoDay(value) ? value : '';
-  const displayValue = formatPickerDay(currentValue);
+  const committedDay = parseIsoDay(valueDay) ? valueDay : '';
+  const selectedDay = includeTime && open ? draft.day : committedDay;
+  const displayDay = formatPickerDay(committedDay);
+  const displayValue = displayDay && valueTime ? displayDay + ' ' + valueTime : displayDay;
+  const draftTime = normalizePickerTime(draft.time);
   const today = todayIsoDay();
   const currentMonthKey = visibleMonth.slice(0, 7);
   const previousMonth = addPickerMonths(visibleMonth, -1);
   const nextMonth = addPickerMonths(visibleMonth, 1);
-  const canGoPrevious = !min || monthEnd(previousMonth) >= min;
-  const canGoNext = !max || nextMonth <= max;
+  const canGoPrevious = Boolean(parseIsoDay(previousMonth)) && (!min || monthEnd(previousMonth) >= min);
+  const canGoNext = Boolean(parseIsoDay(nextMonth)) && (!max || nextMonth <= max);
   const todayDisabled = isPickerDayDisabled(today, min, max);
-  const tabStopDay = currentValue && !isPickerDayDisabled(currentValue, min, max) && isSamePickerMonth(currentValue, visibleMonth)
-    ? currentValue
+  const tabStopDay = selectedDay && !isPickerDayDisabled(selectedDay, min, max) && isSamePickerMonth(selectedDay, visibleMonth)
+    ? selectedDay
     : days.find((day) => (
       day.startsWith(currentMonthKey)
       && !isPickerDayDisabled(day, min, max)
@@ -104,10 +116,12 @@ export function DatePicker({
       const width = Math.min(POPOVER_WIDTH, window.innerWidth - 16);
       const roomBelow = window.innerHeight - rect.bottom - 10;
       const roomAbove = rect.top - 10;
-      const showAbove = roomBelow < POPOVER_HEIGHT && roomAbove > roomBelow;
+      const height = includeTime ? TIME_POPOVER_HEIGHT : POPOVER_HEIGHT;
+      const showAbove = roomBelow < height && roomAbove > roomBelow;
       setPlacement({
         left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
         width,
+        maxHeight: Math.max(0, showAbove ? roomAbove : roomBelow),
         ...(showAbove
           ? { bottom: window.innerHeight - rect.top + 5 }
           : { top: rect.bottom + 5 }),
@@ -120,13 +134,10 @@ export function DatePicker({
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
     };
-  }, [open]);
+  }, [includeTime, open]);
 
   useEffect(() => {
-    if (!open) {
-      setVisibleMonth(monthStart(currentValue || min || max));
-      return;
-    }
+    if (!open) return;
     const frame = requestAnimationFrame(() => {
       const preferred = popoverRef.current?.querySelector<HTMLButtonElement>(
         `[data-date="${tabStopDay}"]:not(:disabled)`,
@@ -166,9 +177,11 @@ export function DatePicker({
   }, [open]);
 
   function openPicker(): void {
-    if (disabled) return;
-    setVisibleMonth(monthStart(currentValue || min || max));
-    setOpen((current) => !current);
+    if (disabled || open) return;
+    const initialDay = committedDay || (includeTime && !todayDisabled ? today : '');
+    setVisibleMonth(monthStart(initialDay || min || max));
+    if (includeTime) setDraft({ day: initialDay, time: valueTime });
+    setOpen(true);
   }
 
   function closePicker(): void {
@@ -178,7 +191,17 @@ export function DatePicker({
 
   function choose(day: string): void {
     if (disabled || isPickerDayDisabled(day, min, max)) return;
+    if (includeTime) {
+      setDraft(current => ({ ...current, day }));
+      return;
+    }
     onChange(day);
+    closePicker();
+  }
+
+  function applyDateTime(): void {
+    if (disabled || !draftTime || isPickerDayDisabled(draft.day, min, max)) return;
+    onChange(draft.day + 'T' + draftTime);
     closePicker();
   }
 
@@ -223,7 +246,7 @@ export function DatePicker({
 
   useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
 
-  const portalTarget = triggerRef.current?.closest('dialog') ?? document.body;
+  const portalTarget = popoverPortalTarget(triggerRef.current);
 
   return <div className={`pi-date-picker ${className}`}>
     <button
@@ -234,7 +257,8 @@ export function DatePicker({
       aria-label={`${label}${displayValue ? `，当前 ${displayValue}` : ''}`}
       aria-haspopup="dialog"
       aria-expanded={open}
-      onClick={openPicker}
+      aria-controls={open ? popoverId : undefined}
+      onClick={open ? closePicker : openPicker}
       onBlur={(event) => {
           const next = event.relatedTarget as Node | null;
           if (next && !popoverRef.current?.contains(next)) setOpen(false);
@@ -242,10 +266,7 @@ export function DatePicker({
       onKeyDown={(event) => {
         if (disabled || event.key !== 'ArrowDown' || isComposingKey(event.nativeEvent)) return;
         event.preventDefault();
-        if (!open) {
-          setVisibleMonth(monthStart(currentValue || min || max));
-          setOpen(true);
-        }
+        openPicker();
       }}
     >
       <CalendarDays className="pi-date-leading" />
@@ -257,7 +278,9 @@ export function DatePicker({
     {open && placement && createPortal(
       <PopoverSurface
         ref={popoverRef}
-        className="pi-date-popover"
+        id={popoverId}
+        topLayer={portalTarget.matches('dialog, .settings-overlay')}
+        className={`pi-date-popover${includeTime ? ' has-time' : ''}`}
         onBlurCapture={(event) => {
           const next = event.relatedTarget as Node | null;
           if (next && !popoverRef.current?.contains(next) && !triggerRef.current?.contains(next)) setOpen(false);
@@ -270,6 +293,7 @@ export function DatePicker({
           width: placement.width,
           top: placement.top,
           bottom: placement.bottom,
+          maxHeight: placement.maxHeight,
         }}
       >
         <div className="pi-date-calendar-head">
@@ -296,7 +320,7 @@ export function DatePicker({
         </div>
         <div className="pi-date-grid" role="group" aria-label="选择日期" onKeyDown={onCalendarKeyDown}>
           {days.map((day) => {
-            const isSelected = day === currentValue;
+            const isSelected = day === selectedDay;
             const isToday = day === today;
             const outsideMonth = !isSamePickerMonth(day, visibleMonth);
             return <button
@@ -318,7 +342,33 @@ export function DatePicker({
             >{Number(day.slice(-2))}</button>;
           })}
         </div>
-        <footer className="pi-date-footer">
+        {includeTime ? <>
+          <label className="pi-date-time">
+            <Clock3 aria-hidden="true" />
+            <span>时间</span>
+            <input
+              aria-label="时分"
+              title="输入 24 小时制时间，例如 09:30"
+              inputMode="numeric"
+              placeholder="HH:mm"
+              maxLength={5}
+              value={draft.time}
+              onChange={event => setDraft(current => ({ ...current, time: event.target.value }))}
+              onKeyDown={event => {
+                if (event.key !== 'Enter' || isComposingKey(event.nativeEvent)) return;
+                event.preventDefault();
+                applyDateTime();
+              }}
+            />
+          </label>
+          <footer className="pi-date-footer">
+            <button type="button" className="pi-date-footer-action" disabled={!value}
+              onClick={() => { onChange(''); closePicker(); }}>清除</button>
+            <button type="button" className="pi-date-time-confirm"
+              disabled={!draftTime || isPickerDayDisabled(draft.day, min, max)}
+              onClick={applyDateTime}>确定</button>
+          </footer>
+        </> : <footer className="pi-date-footer">
           <button type="button" className="pi-date-footer-action" onClick={closePicker}>取消</button>
           <button
             type="button"
@@ -326,7 +376,7 @@ export function DatePicker({
             disabled={todayDisabled}
             onClick={() => choose(today)}
           >今天</button>
-        </footer>
+        </footer>}
       </PopoverSurface>,
       portalTarget,
     )}

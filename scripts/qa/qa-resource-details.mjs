@@ -22,7 +22,11 @@ async function settle() { await page.evaluate(() => new Promise(resolve => reque
 async function qa(method, ...args) { await page.evaluate(({ method, args }) => window.__resourceDetailsQa[method](...args), { method, args }); await settle(); }
 async function pending(method, scope, target = '') { await page.waitForFunction(({ method, scope, target }) => window.__resourceDetailsQa.pending(method, scope, target) > 0, { method, scope, target }); }
 async function opener(scope) { const name = await page.evaluate(scope => window.__resourceDetailsQa.names[scope], scope); return page.getByRole('button', { name: `查看技能 ${name}`, exact: true }); }
-async function open(scope) { await (await opener(scope)).click(); await dialog().waitFor(); }
+async function open(scope) {
+  await (await opener(scope)).click();
+  await dialog().waitFor();
+  assert.equal(await dialog().evaluate(node => getComputedStyle(node.closest('dialog'), '::backdrop').backdropFilter), 'blur(3px)');
+}
 async function close() { await dialog().getByRole('button', { name: '关闭技能详情', exact: true }).click(); await dialog().waitFor({ state: 'detached' }); }
 async function content(scope, target = 'SKILL.md') { await preview().getByRole('heading', { name: `${scope} ${target}`, exact: true }).waitFor(); }
 async function capture(name, theme, viewport, selector) {
@@ -39,7 +43,9 @@ try {
   await page.addInitScript({ content: `(${installPerformanceFixture.toString()})({sessionCount:2,turnCount:4});(${installResourceDetailsFixture.toString()})();` });
   await page.goto(server.origin); await page.locator('.session-row').filter({ hasText: '性能会话 0000' }).click(); await page.locator('.assistant-response').first().waitFor();
   const draft = '查看资源详情时保留的会话草稿'; await composer().fill(draft);
-  await page.locator('.sidebar-bottom button[title="设置"]').click(); await page.locator('.settings-navigation').getByRole('button', { name: '技能', exact: true }).click();
+  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.settings-navigation').getByRole('button', { name: '插件', exact: true }).click();
+  await page.getByRole('tablist', { name: '插件与资源' }).getByRole('tab', { name: '技能', exact: true }).click();
   await (await opener('A')).waitFor();
   // Closing a resource must invalidate both successful and rejected old reads.
   for (const [method, target] of [['files', ''], ['filePreview', 'SKILL.md']]) {
@@ -82,19 +88,62 @@ try {
   await qa('release', 'openWith', 'A', 'artifact.bin'); assert.equal(await dialog().locator('[role="alert"]').count(), 0); await close();
   result.checks.push('late external-open failure from A does not leak into B');
 
-  await page.locator('.settings-navigation').getByRole('button', { name: '扩展', exact: true }).click();
+  await page.getByRole('tablist', { name: '插件与资源' }).getByRole('tab', { name: '扩展', exact: true }).click();
   const extensionName = await page.evaluate(() => window.__resourceDetailsQa.extensionName);
-  const extensionOpener = page.getByRole('article', { name: extensionName, exact: true }).getByRole('button', { name: `查看 ${extensionName} 详情`, exact: true });
+  const extensionOpener = page.getByRole('button', { name: `打开 ${extensionName} 设置`, exact: true });
   await extensionOpener.click(); const extension = page.locator('.extension-detail-dialog'); await extension.waitFor();
-  await extension.getByText('未声明扩展权限', { exact: true }).waitFor(); assert.doesNotMatch(await extension.innerText(), /仅声明式界面/); assert.match(await extension.innerText(), /Electron 主进程/);
+  const source = extension.locator('details.extension-detail-source');
+  assert.equal(await source.getAttribute('open'), null);
+  await source.locator('summary').press('Enter');
+  await source.getByText('未声明扩展权限', { exact: true }).waitFor(); assert.doesNotMatch(await source.innerText(), /仅声明式界面/); assert.match(await source.innerText(), /Electron 主进程/);
+  await source.locator('summary').press('Enter');
   const technical = extension.locator('details.extension-detail-technical'); assert.equal(await technical.getAttribute('open'), null); const summary = technical.locator('summary'); await summary.focus(); await page.keyboard.press('Enter'); await technical.getByText('qa.permissionless-runtime', { exact: true }).first().waitFor(); assert.notEqual(await technical.getAttribute('open'), null);
-  await technical.getByText('abcdef0123456789'.repeat(4), { exact: true }).waitFor(); await page.keyboard.press('Tab'); assert.equal(await extension.getByRole('button', { name: '回滚版本', exact: true }).evaluate(node => node === document.activeElement), true, 'Tab from expanded technical summary reaches next footer action'); assert.equal(await extension.locator('.extension-version-list').getByText('v1.0.0', { exact: true }).count(), 1);
+  await technical.getByText('abcdef0123456789'.repeat(4), { exact: true }).waitFor();
+  await page.keyboard.press('Tab');
+  assert.equal(await extension.getByRole('button', { name: '回滚版本', exact: true }).evaluate(node => node === document.activeElement), true);
+  await page.keyboard.press('Tab');
+  assert.equal(await extension.getByRole('button', { name: `卸载 ${extensionName}`, exact: true }).evaluate(node => node === document.activeElement), true);
+  assert.equal(await extension.locator('.extension-version-list').getByText('v1.0.0', { exact: true }).count(), 1);
   assert.equal(await extension.getByRole('button', { name: '回滚版本', exact: true }).isEnabled(), true);
   await capture('05-extension-wide-light', 'light', { width: 1440, height: 900 }, '.extension-detail-dialog');
   await capture('06-extension-980-dark', 'dark', { width: 980, height: 760 }, '.extension-detail-dialog');
   await capture('07-extension-980-light', 'light', { width: 980, height: 760 }, '.extension-detail-dialog');
+  await source.locator('summary').click();
+  const headingAppearance = () => summary.evaluate(trigger => {
+    const body = trigger.closest('.extension-detail-body');
+    const edge = body.querySelector('.extension-enable-row').getBoundingClientRect();
+    const label = trigger.querySelector('.pi-accordion-label');
+    const arrow = trigger.querySelector('.pi-accordion-chevron');
+    const labels = [label, body.querySelector('.extension-detail-source h3')];
+    if (trigger.parentElement.open) labels.push(body.querySelector('.extension-detail-technical dt'));
+    return {
+      offsets: [...labels.map(node => node.getBoundingClientRect().left - edge.left), arrow.getBoundingClientRect().right - edge.right],
+      background: getComputedStyle(trigger).backgroundColor, title: getComputedStyle(label).color, arrow: getComputedStyle(arrow).color,
+    };
+  });
+  for (const [theme, width] of [['dark', 600], ['light', 980]]) {
+    await page.setViewportSize({ width, height: 760 });
+    await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+    await page.mouse.move(0, 0);
+    const idle = await headingAppearance();
+    assert.ok(idle.offsets.every(offset => Math.abs(offset) < 1), JSON.stringify(idle));
+    await summary.hover();
+    const hovered = await headingAppearance();
+    assert.deepEqual(hovered.offsets, idle.offsets);
+    assert.equal(hovered.background, 'rgba(0, 0, 0, 0)');
+    assert.notEqual(hovered.title, idle.title);
+    assert.equal(hovered.arrow, hovered.title);
+    const name = `technical-heading-${theme}`;
+    await extension.screenshot({ path: path.join(output, name + '.png'), animations: 'disabled' });
+    result.screenshots.push(name);
+  }
+  await summary.press('Space');
+  assert.equal(await technical.getAttribute('open'), null);
+  assert.ok((await headingAppearance()).offsets.every(offset => Math.abs(offset) < 1));
+  assert.ok(await summary.evaluate(node => node.matches(':focus-visible') && getComputedStyle(node).outlineStyle !== 'none'));
+  result.checks.push('technical and permission headings align with facts in both themes; hover highlights text and chevron, and keyboard collapse preserves focus');
   await page.keyboard.press('Escape'); await extension.waitFor({ state: 'detached' }); await settle(); assert.equal(await extensionOpener.evaluate(node => node === document.activeElement), true);
-  result.checks.push('zero declared permissions does not imply declarative isolation; technical details keyboard expand and Tab continues to rollback, full ID/hash and versions retained, Escape restores opener');
+  result.checks.push('source and technical disclosures open by keyboard, preserve execution and version information, and Tab reaches rollback then uninstall; Escape restores opener');
   await page.getByRole('button', { name: '返回对话', exact: true }).click(); assert.equal(await composerValue(composer()), draft);
   // Service scope lifecycle uses only the fixture's synthetic process identities.
   const services = () => page.locator('.runtime-services-panel');

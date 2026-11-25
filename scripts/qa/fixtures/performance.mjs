@@ -40,9 +40,10 @@ export function installPerformanceFixture({ sessionCount, turnCount }) {
     unsubscribeConversation: async () => ({ ok: true }),
     conversationSubmit: async () => { qa.submitCalls++; throw new Error('Performance fixture never submits model requests'); },
     sessionSubagents: async () => [],
+    subagentProfiles: async () => [],
     modeGet: async () => ({ available: true, mode: 'smart' }),
     composerResources: async () => ({ commands: [], skills: [] }),
     extensionsUi: async () => ({ items: [], errors: [], syncedAt: now, apiVersion: 1 }),
-    conversationExtensionUiPreferences: async () => ({ version: 1, layout: 'grid', globalOrder: [], sessionOrders: {} }),
+    conversationExtensionUiPreferences: async () => ({ version: 1, globalOrder: [] }),
   }, { get(target, key) { if (key in target) return target[key]; if (String(key).startsWith('on')) return () => () => {}; return async () => undefined; } });
 }

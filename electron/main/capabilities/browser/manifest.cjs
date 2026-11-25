@@ -1,3 +1,5 @@
+const { builtinToolContributions } = require('../../core/builtin-tool-contributions.cjs');
+
 module.exports = Object.freeze([
   {
     id: 'studio-browser-tools',
@@ -10,24 +12,11 @@ module.exports = Object.freeze([
     permissions: ['agent.tools'],
     requires: ['builtin:studio-permissions'],
     contributes: {
-      tools: [
-        { name: 'browser_tabs', description: '列出或聚焦内嵌浏览器标签。' },
-        { name: 'browser_open', description: '打开或复用内嵌浏览器标签。' },
-        { name: 'browser_navigate', description: '在内嵌浏览器中导航、后退、前进或刷新。' },
-        { name: 'browser_snapshot', description: '读取当前页面的结构化快照。' },
-        { name: 'browser_screenshot', description: '截取当前页面视口。' },
-        { name: 'browser_click', description: '点击快照中的元素。' },
-        { name: 'browser_type', description: '向快照中的元素输入文本。' },
-        { name: 'browser_scroll', description: '滚动页面或滚到元素。' },
-        { name: 'browser_wait', description: '等待元素、URL 或文本。' },
-        { name: 'browser_select', description: '选择下拉选项。' },
-        { name: 'browser_dialog', description: '处理页面对话框。' },
-        { name: 'browser_download', description: '查看内嵌浏览器下载。' },
-        { name: 'browser_highlight', description: '在页面上标注 Agent 目标元素。' },
-        { name: 'browser_evaluate', description: '在页面中执行脚本（默认关闭，需高级设置）。' },
-        { name: 'browser_cdp', description: '向内嵌标签发送 CDP 方法（默认关闭，风险升高）。' },
-        { name: 'browser_external', description: '连接本机调试 Chrome（默认关闭，风险升高）。' },
-      ],
+      tools: builtinToolContributions([
+        'browser_tabs', 'browser_open', 'browser_navigate', 'browser_snapshot', 'browser_screenshot',
+        'browser_click', 'browser_type', 'browser_scroll', 'browser_wait', 'browser_select',
+        'browser_dialog', 'browser_download', 'browser_highlight', 'browser_evaluate', 'browser_cdp', 'browser_external',
+      ]),
     },
   },
 ]);

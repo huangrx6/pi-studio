@@ -28,13 +28,14 @@ import { prefersFilePreview } from '../../shared/file-preview';
 import { DeferredFilePreview } from '../../shared/DeferredFilePreview';
 import { ActionMenu } from '../../shared/ActionMenu';
 import { formatFileSize } from '../../shared/filesize';
+import { SurfaceActiveContext } from '../../shared/surface-visibility';
+import type { ExtensionPanelPickerProps } from '../../features/extensions/ExtensionPanelPicker';
 import { AppWorkbench } from './AppWorkbench';
 import { BrowserPanel } from './BrowserPanel';
 import { RightPanelStart, type RightPanelToolAction } from './RightPanelStart';
 import type { useAppWorkbenchController } from './useAppWorkbench';
 import type { TerminalAppearance } from '../../features/terminal/TerminalPanel';
 
-const StoryboardWorkbench = lazy(() => import('../../features/video-storyboard/StoryboardWorkbench'));
 const LazyTerminalPanel = lazy(async () => {
   const module = await import('../../features/terminal/TerminalPanel');
   return { default: module.TerminalPanel };
@@ -53,10 +54,11 @@ type WorkbenchPaneProps = {
   session: SessionStateForPersistence;
   modelSelection: ModelSelection;
   workspaceName: string;
-  extensionDock: ReactNode;
-  comparisonPanel: ReactNode;
-  progressPanel: ReactNode;
-  onOpenComparison: () => void;
+  renderToolPanel: (tab: PanelTab) => ReactNode;
+  extensionPicker: ExtensionPanelPickerProps;
+  launcherOrder: string[];
+  onLauncherOrderChange: (order: string[]) => void;
+  showTrace: boolean;
   dragPreviewRef: MutableRefObject<HTMLDivElement | null>;
   onChooseWorkspace: () => void;
   onOpenSettings: (page: 'models') => void;
@@ -73,10 +75,11 @@ export function WorkbenchPane({
   session,
   modelSelection,
   workspaceName,
-  extensionDock,
-  comparisonPanel,
-  progressPanel,
-  onOpenComparison,
+  renderToolPanel,
+  extensionPicker,
+  launcherOrder,
+  onLauncherOrderChange,
+  showTrace,
   dragPreviewRef,
   onChooseWorkspace,
   onOpenSettings,
@@ -99,6 +102,7 @@ export function WorkbenchPane({
     setPanelFullscreen,
     panelWidth,
     panelMaxWidth,
+    panelOverlay,
     resizePanel,
     panelResizing,
     setPanelResizing,
@@ -123,6 +127,10 @@ export function WorkbenchPane({
     openBrowserTab,
     openFilesTab,
     openServicesTab,
+    openProgressTab,
+    openTraceTab,
+    openGitTab,
+    openSubagentsTab,
     loadFileToTab,
     activatePanelTab,
     openFile,
@@ -149,6 +157,7 @@ export function WorkbenchPane({
   const [treeSearchResults, setTreeSearchResults] = useState<Array<{ name: string; path: string; type: 'file' | 'directory'; size?: number }>>([]);
   const [treeSearchBusy, setTreeSearchBusy] = useState(false);
   const panelWorkspace = session?.cwd || workspace;
+  const fileView = activePanelTab && ['files', 'file', 'changes', 'diff'].includes(activePanelTab.kind);
 
   useEffect(() => {
     setExpandedPaths(new Set());
@@ -191,10 +200,11 @@ export function WorkbenchPane({
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [treeSearchOpen, treeSearchQuery, workspace]);
 
-  /** 重命名标签：空标题回退到原名，避免出现没有文字的标签。 */
-  function renamePanelTab(id: string, title: string) {
-    const next = title.trim();
-    if (next) setPanelTabs((current) => current.map((tab) => tab.id === id ? { ...tab, title: next, customTitle: true } : tab));
+  function renamePanelTab(id: string, title?: string) {
+    const next = title?.trim();
+    if (next) setPanelTabs((current) => current.map((tab) =>
+      tab.id === id && tab.title !== next ? { ...tab, title: next, customTitle: true } : tab
+    ));
     setRenamingId(null);
   }
 
@@ -229,9 +239,14 @@ export function WorkbenchPane({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [activatePanelTab, activePanelTabId, closePanelTab, filesOpen, panelTabs]);
+  const sessionTools: RightPanelToolAction[] = session ? [
+    { id: 'progress', label: '进展', description: '查看目标、任务与子智能体', group: 'conversation', onSelect: () => openProgressTab() },
+    { id: 'trace', label: '轨迹', description: '查看请求与工具调用过程', group: 'conversation', onSelect: openTraceTab },
+    { id: 'subagents', label: '子智能体', description: '查看子智能体与运行记录', group: 'conversation', onSelect: () => openSubagentsTab() },
+    { id: 'git', label: 'Git', description: '查看当前仓库的变更、历史与同步状态', group: 'conversation', onSelect: () => openGitTab() },
+  ] : [];
   const toolActions: RightPanelToolAction[] = [
-    { id: 'comparison', label: '模型双跑', description: '独立评估两个模型的回答与性能', onSelect: onOpenComparison },
-    { id: 'storyboard', label: '视频分镜', description: '记录创作想法，整理视频素材', onSelect: controller.openStoryboardTab },
+    ...sessionTools.filter(action => action.id !== 'trace' || showTrace),
     { id: 'files', label: '工作区文件', description: '浏览和预览项目文件', disabled: !panelWorkspace, onSelect: openFilesTab },
     { id: 'terminal', label: '新建终端', description: '在当前工作区运行命令', disabled: !panelWorkspace, onSelect: openTerminalTab },
     { id: 'services', label: '运行服务', description: '查看正在运行的服务', disabled: !panelWorkspace, onSelect: openServicesTab },
@@ -354,10 +369,11 @@ export function WorkbenchPane({
   }
 
   function renderFilePreview() {
-    if (fileError) {
+    const retry = () => { if (activePanelTab) void loadFileToTab(activePanelTab); };
+    if (fileError && !file) {
       return <div className="panel-file-error" role="alert">
         <p>{fileError}</p>
-        <button className="text-button" onClick={() => { if (activePanelTab) void loadFileToTab(activePanelTab); }}>重试读取文件</button>
+        <button className="text-button" onClick={retry}>重试读取文件</button>
       </div>;
     }
     if (!file) {
@@ -375,13 +391,16 @@ export function WorkbenchPane({
     };
     const canEdit = activePanelTab?.kind === 'file'
       && (activePanelTab.source || 'workspace') === 'workspace'
+      && file.actionSource !== 'external'
       && preview.kind === 'text'
       && !preview.truncated;
     // 文件标签复用共享预览组件：Markdown/HTML 可切换渲染与源码，PDF 走内置阅读器。
     return <div className="panel-file-preview">
       <DeferredFilePreview
+        key={activePanelTab?.id}
         file={preview}
         loading={fileBusy}
+        refreshError={fileError ? { message: fileError, onRetry: retry } : undefined}
         editable={canEdit}
         onSave={saveCurrentFileText}
         onOpenExternal={() => void openFileWith()}
@@ -442,18 +461,14 @@ export function WorkbenchPane({
         workspace={workspace}
         cwd={session?.cwd}
         actions={toolActions}
+        extensionPanels={extensionPicker.groups.map(group => group.panels[0])}
+        onOpenExtension={extensionPicker.onOpenPanel}
+        order={launcherOrder}
+        onOrderChange={onLauncherOrderChange}
         onChooseWorkspace={onChooseWorkspace}
       />;
     }
-    if (activePanelTab.kind === 'storyboard') {
-      const owner = workspace || panelWorkspace;
-      return <Suspense fallback={<LoadingState variant="panel">正在打开视频分镜…</LoadingState>}>
-        <StoryboardWorkbench key={owner} workspace={owner} onChooseWorkspace={onChooseWorkspace}
-          settingsOpen={settingsOpen} onConfigureModels={() => onOpenSettings('models')} />
-      </Suspense>;
-    }
-    if (activePanelTab.kind === 'progress') return progressPanel;
-    if (activePanelTab.kind === 'comparison') return comparisonPanel;
+    if (isToolPanel(activePanelTab)) return null;
     if (activePanelTab.kind === 'temporary') {
       return <TemporaryChat key={activePanelTab.id} id={activePanelTab.id} selection={modelSelection} onManage={() => onOpenSettings('models')} />;
     }
@@ -500,6 +515,12 @@ export function WorkbenchPane({
         url={browserTab.url || ''}
         openNonce={browserTab.openNonce || 0}
         commandRequestId={browserTab.commandRequestId || ''}
+        libraryRequest={browserTab.browserLibrary}
+        onLibraryOpened={(requestId) => setPanelTabs(current => current.map(tab =>
+          tab.id === browserTab.id && tab.browserLibrary?.id === requestId
+            ? { ...tab, browserLibrary: undefined }
+            : tab
+        ))}
         onUrlChange={(next) => setPanelTabs((current) => current.map((tab) => tab.id === browserTab.id ? { ...tab, url: next } : tab))}
         onTitleChange={(title) => setPanelTabs((current) => current.map((tab) => (
           tab.id === browserTab.id && !tab.customTitle
@@ -519,6 +540,14 @@ export function WorkbenchPane({
   const persistentPanelContent = <>
     {persistentTerminalContent}
     {persistentBrowserContent}
+    {panelTabs.filter(isToolPanel).map(tab => {
+      const selected = activePanelTab?.id === tab.id;
+      return <SurfaceActiveContext.Provider key={tab.id} value={selected && panelEntered && !settingsOpen}>
+        <div className="workbench-tool-pane" role="tabpanel" hidden={!selected} aria-label={tab.title}>
+          {renderToolPanel(tab)}
+        </div>
+      </SurfaceActiveContext.Provider>;
+    })}
   </>;
 
   return <>
@@ -536,7 +565,8 @@ export function WorkbenchPane({
     <AppWorkbench
       open={filesOpen}
       fullscreen={panelFullscreen}
-      split={panelSplit}
+      overlay={panelOverlay}
+      split={Boolean(fileView && panelSplit)}
       resizing={panelResizing}
       panelWidth={panelWidth}
       panelMaxWidth={panelMaxWidth}
@@ -546,10 +576,10 @@ export function WorkbenchPane({
       activeTabId={activePanelTabId}
       activeTab={activePanelTab}
       toolActions={toolActions}
+      extensionPicker={extensionPicker}
       fileTree={renderFileTree()}
       panelContent={renderPanelContent()}
       persistentPanelContent={persistentPanelContent}
-      extensionDock={extensionDock}
       onClose={closePanel}
       onActivate={(tab) => {
         activatePanelTab(tab);
@@ -561,7 +591,7 @@ export function WorkbenchPane({
       renamingId={renamingId}
       onStartRename={setRenamingId}
       onRename={renamePanelTab}
-      onToggleSplit={() => setPanelSplit((value) => !value)}
+      onToggleSplit={fileView ? () => setPanelSplit((value) => !value) : undefined}
       onToggleFullscreen={() => setPanelFullscreen((value) => !value)}
       onMakeDragPreview={(event, title) => makeDragPreview(event, title, '标签')}
       onClearDragPreview={() => {
@@ -595,4 +625,9 @@ export function WorkbenchPane({
       }}
     />
   </>;
+}
+
+function isToolPanel(tab: PanelTab) {
+  return tab.kind === 'progress' || tab.kind === 'trace' || tab.kind === 'subagents'
+    || tab.kind === 'git' || tab.kind === 'extension';
 }

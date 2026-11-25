@@ -13,11 +13,17 @@ function harness(file, name, initial) {
   vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText, {
     module, exports: module.exports,
     require(id) {
-      if (id === 'react') return { useState(value) { const i = cursor++; if (!(i in slots)) slots[i] = value; return [slots[i], next => { slots[i] = typeof next === 'function' ? next(slots[i]) : next; }]; } };
+      if (id === 'react') return {
+        useState(value) { const i = cursor++; if (!(i in slots)) slots[i] = value; return [slots[i], next => { slots[i] = typeof next === 'function' ? next(slots[i]) : next; }]; },
+        useRef(value) { const i = cursor++; return slots[i] ??= { current: value }; },
+        useEffect() {},
+      };
       if (id === 'react/jsx-runtime') return { jsx, jsxs: jsx };
       if (id.endsWith('/Accordion')) return { Accordion: 'Accordion' };
       if (id.endsWith('/Select')) return { Select: 'Select' };
       if (id.endsWith('/InfoHint')) return { InfoHint: 'InfoHint' };
+      if (id.endsWith('/SettingsToast')) return { SettingsToast: 'SettingsToast', useSettingsToast: () => () => {} };
+      if (id.endsWith('/error-text')) return { errorText: error => error.message };
       return {};
     },
   });

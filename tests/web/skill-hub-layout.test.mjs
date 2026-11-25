@@ -6,7 +6,7 @@ const css = readFileSync('web/src/features/skills/styles/skill-hub.css', 'utf8')
 const source = readFileSync('web/src/features/skills/SkillHub.tsx', 'utf8');
 const catalog = readFileSync('web/src/features/skills/SkillCatalogDialog.tsx', 'utf8');
 
-test('the skill hub loading state stays frameless inside its own card', () => {
+test('the skill hub loading state stays frameless in the overview and install preview', () => {
   assert.match(source, /<LoadingState variant="section">正在读取技能源/);
   assert.match(source, /<LoadingState variant="section">正在准备技能预览/);
   const loadingCss = readFileSync('web/src/styles/loading.css', 'utf8');
@@ -27,8 +27,10 @@ test('the settings overview opens a bounded, independently scrollable card catal
 
 test('empty source setup keeps one action and omits search, management and refresh', () => {
   assert.match(source, /const hasSources = Boolean\(snapshot\?\.sources\.length\)/);
-  assert.match(source, /\(hasSources \|\| error\) && <div className="skill-hub-actions">/);
-  assert.match(source, /\{hasSources && <button[^>]*aria-haspopup="dialog" onClick=\{\(\) => setBrowse\(\{\}\)\}>/);
-  assert.match(source, /\{hasSources && <button type="button" className="settings-outline" onClick=\{\(\) => setManagerOpen\(true\)\}>/);
-  assert.match(source, /<h2>技能源 \{hasSources &&/);
+  const actions = source.match(/\{hasSources && <div className="skill-hub-actions">([\s\S]+?)<\/div>\}/)?.[1];
+  assert.ok(actions);
+  assert.match(actions, /搜索技能/);
+  assert.match(actions, /管理源/);
+  assert.match(actions, /aria-label="刷新技能源"/);
+  assert.match(source, /<h2>技能源\{hasSources &&/);
 });

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { DetailDialog } from '../../shared/DetailDialog';
 import { errorText } from '../../shared/error-text';
+import { useSettingsToast } from '../../shared/SettingsToast';
 import type { UpdateSnapshot } from '../../types/update-types';
 import {
   normalizeUpdateProgress,
@@ -129,8 +130,8 @@ export function UpdateDialog({ snapshot, onClose, onCheck, onDownload, onInstall
   onDownload: () => Promise<void>;
   onInstall: () => Promise<void>;
 }) {
+  const showToast = useSettingsToast();
   const [pendingAction, setPendingAction] = useState<UpdateAction | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
   const [notesExpanded, setNotesExpanded] = useState(false);
   const pendingRef = useRef<UpdateAction | null>(null);
   const mountedRef = useRef(false);
@@ -138,6 +139,9 @@ export function UpdateDialog({ snapshot, onClose, onCheck, onDownload, onInstall
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
+  useEffect(() => {
+    if (snapshot.state === 'error' && snapshot.error) showToast(snapshot.error, 'error');
+  }, [snapshot, showToast]);
 
   const progress = normalizeUpdateProgress(snapshot.progress);
   const speed = formatBytes(snapshot.bytesPerSecond);
@@ -148,8 +152,6 @@ export function UpdateDialog({ snapshot, onClose, onCheck, onDownload, onInstall
   const showRelease = ['available', 'downloading', 'downloaded'].includes(snapshot.state);
   const sameVersionBuild = showRelease && snapshot.updateKind === 'same-version';
   const latestVersion = showRelease && snapshot.latestVersion;
-  const snapshotError = (snapshot.state === 'error' || snapshot.state === 'unsupported') && snapshot.error;
-  const visibleError = actionError || snapshotError;
 
   // 下载字节到齐后，更新器还会校验安装包；这段时间没有流量，需要单独展示校验步骤。
   const flowPhase = resolveUpdateFlowPhase(snapshot.state, snapshot, pendingAction);
@@ -187,18 +189,17 @@ export function UpdateDialog({ snapshot, onClose, onCheck, onDownload, onInstall
     if (!mountedRef.current || pendingRef.current) return;
     pendingRef.current = action;
     setPendingAction(action);
-    setActionError(null);
     try {
       await callback();
     } catch (cause) {
-      if (mountedRef.current) setActionError(errorText(cause));
+      if (mountedRef.current) showToast(errorText(cause), 'error');
     } finally {
       pendingRef.current = null;
       if (mountedRef.current) setPendingAction(null);
     }
   }
 
-  return <DetailDialog className={`update-dialog is-${snapshot.state}`} onClose={onClose}>
+  return <DetailDialog className={`update-dialog is-${snapshot.state}`} onClose={onClose} label="应用更新">{close => <>
     <header className="update-header">
       <div className={`update-mark ${markTone(snapshot.state)}`} aria-hidden="true">
         <MarkIcon state={snapshot.state} />
@@ -209,7 +210,7 @@ export function UpdateDialog({ snapshot, onClose, onCheck, onDownload, onInstall
         {subline && <p className="update-subline">{subline}</p>}
         {meta && <p className="update-meta">{meta}</p>}
       </div>
-      <button className="icon-button update-close" type="button" aria-label="关闭更新窗口" onClick={onClose}><X /></button>
+      <button className="icon-button update-close" type="button" aria-label="关闭更新窗口" onClick={close}><X /></button>
     </header>
 
     <div className="update-body">
@@ -283,16 +284,16 @@ export function UpdateDialog({ snapshot, onClose, onCheck, onDownload, onInstall
         </div>
       </section>}
 
-      {visibleError && <p className="update-error" role="alert">{visibleError}</p>}
+      {snapshot.state === 'unsupported' && snapshot.error && <p className="update-error">{snapshot.error}</p>}
 
       {showRelease && notes.length > 0 && <section className="update-notes" aria-label="发行说明">
         <div className="update-notes-head">
           <h3>更新内容</h3>
         </div>
-        <div className={`update-notes-body${notesCollapsed ? ' is-collapsed' : ''}`}>
+        <div id="update-release-notes" className={`update-notes-body${notesCollapsed ? ' is-collapsed' : ''}`}>
           <ReleaseNoteBlocks blocks={notes} />
         </div>
-        {folded && <button type="button" className="update-notes-toggle" aria-expanded={notesExpanded} onClick={() => setNotesExpanded((value) => !value)}>
+        {folded && <button type="button" className="update-notes-toggle" aria-controls="update-release-notes" aria-expanded={notesExpanded} onClick={() => setNotesExpanded((value) => !value)}>
           {notesExpanded ? '收起' : '展开全部'}
           <ChevronDown className={notesExpanded ? 'is-flipped' : undefined} aria-hidden="true" />
         </button>}
@@ -300,7 +301,7 @@ export function UpdateDialog({ snapshot, onClose, onCheck, onDownload, onInstall
     </div>
 
     <footer className="update-footer">
-      <button type="button" className="settings-outline" onClick={onClose}>{snapshot.state === 'downloaded' ? '稍后安装' : snapshot.state === 'available' ? '稍后' : '关闭'}</button>
+      <button type="button" className="settings-outline" onClick={close}>{snapshot.state === 'downloaded' ? '稍后安装' : snapshot.state === 'available' ? '稍后' : '关闭'}</button>
       {snapshot.state === 'downloaded' ? <button type="button" className="settings-save" disabled={pendingAction !== null} onClick={() => void run('install', onInstall)}>
         {pendingAction === 'install' ? '正在重启…' : '立即重启并更新'}
       </button> : snapshot.state === 'available' ? <button type="button" className="settings-save" disabled={pendingAction !== null} onClick={() => void run('download', onDownload)}>
@@ -309,5 +310,5 @@ export function UpdateDialog({ snapshot, onClose, onCheck, onDownload, onInstall
         {pendingAction === 'check' ? '正在检查…' : snapshot.state === 'error' ? '重新检查' : '检查更新'}
       </button>}
     </footer>
-  </DetailDialog>;
+  </>}</DetailDialog>;
 }

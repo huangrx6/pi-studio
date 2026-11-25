@@ -17,6 +17,7 @@
   line-height: var(--leading-normal);
   list-style: none;
   cursor: pointer;
+  user-select: none;
   transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 .pi-accordion > .pi-accordion-trigger::marker { content: ''; }
@@ -46,6 +47,23 @@
 .pi-accordion[open] > .pi-accordion-trigger > .pi-accordion-chevron { transform: rotate(90deg); }
 .pi-accordion.is-compact > .pi-accordion-trigger { min-height: var(--control); padding-block: var(--space-1); font-size: var(--text-sm); }
 .pi-accordion.is-compact[open] > .pi-accordion-trigger { margin-bottom: var(--space-2); }
+
+:where(.settings-overlay, .settings-dialog, .detail-overlay) .pi-accordion > .pi-accordion-trigger {
+  min-height: var(--settings-row-height);
+  font: var(--settings-label-font);
+}
+:where(.settings-overlay, .settings-dialog, .detail-overlay) .pi-accordion.is-compact > .pi-accordion-trigger {
+  min-height: var(--settings-control-height);
+}
+:where(.settings-overlay, .settings-dialog, .detail-overlay) .pi-accordion-description {
+  font: var(--settings-description-font);
+}
+:where(.settings-overlay, .settings-dialog, .detail-overlay) .pi-accordion-badge {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: var(--settings-description-size);
+}
 @media (prefers-reduced-motion: reduce) {
   .pi-accordion > .pi-accordion-trigger,
   .pi-accordion > .pi-accordion-trigger > .pi-accordion-chevron { transition: none; }

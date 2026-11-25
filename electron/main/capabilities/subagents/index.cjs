@@ -14,6 +14,7 @@ function create({ durable, piAi, chordContext }) {
 }
 
 module.exports = {
+  ...require('./profiles.cjs'),
   ...require('./protocol.cjs'),
   ...require('./settings.cjs'),
   ...require('./transcripts.cjs'),

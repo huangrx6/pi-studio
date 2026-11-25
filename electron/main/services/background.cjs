@@ -3,14 +3,12 @@
  *
  * Selected files are copied into userData/background-media. The renderer only
  * receives a pi-media:// URL; the protocol handler resolves that URL back into the
- * app-owned directory. The storyboard host on the same scheme resolves its
- * imported sources separately. Both stream range requests from the filesystem.
+ * app-owned directory. The protocol handler streams range requests from the filesystem.
  */
 
 const fs = require('node:fs');
 const path = require('node:path');
 const { mediaResponse } = require('./media-response.cjs');
-const { storyboardMediaResponse } = require('./video-storyboard/media.cjs');
 const {
   displayCachePath,
   optimizeImportedBackgroundImage,
@@ -54,7 +52,6 @@ async function registerBackgroundProtocol() {
       if (request.method !== 'GET' && request.method !== 'HEAD') {
         return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
       }
-      if (new URL(request.url).hostname === 'storyboard') return await storyboardMediaResponse(request);
       const filePath = resolveBackgroundMediaPath(studioDataDirectory(), request.url);
       const mime = mimeTypeForPath(filePath);
       const display = await resolveBackgroundDisplayFile(filePath, mime).catch(() => null);

@@ -70,9 +70,10 @@ try {
     await page.getByRole('option', { name, exact: true }).click();
   };
   await button('切换分支，当前 design').waitFor();
-  await button('打开会话进展').click();
-  await page.locator('.progress-git-branch').getByText('apps/client · design', { exact: true }).waitFor();
-  await button('变更').click();
+  await button('切换分支，当前 design').click();
+  await button('打开 Git').click();
+  await page.locator('.file-panel .git-workspace-page').waitFor();
+  assert.ok(await page.locator('.composer-editor').isVisible());
   await page.locator('.session-view-head p').getByText('产品工作区', { exact: true }).waitFor();
   const work = page.getByRole('region', { name: '工作区', exact: true });
   const index = page.getByRole('region', { name: '暂存区', exact: true });
@@ -100,6 +101,11 @@ try {
   await page.locator('.git-history-row').filter({ hasText: '更新截图' }).click(); await checkImage(540);
   await button('父提交版本').click(); await checkImage(480);
   assert.equal(await button('用系统应用打开文件').count(), 0);
+  const back = button('返回提交历史');
+  assert.ok(await back.evaluate(node => node.title === node.getAttribute('aria-label') && !node.textContent.trim()
+    && Math.abs(node.getBoundingClientRect().right - node.parentElement.getBoundingClientRect().right) <= 1));
+  await back.click();
+  await page.locator('.git-history-row').filter({ hasText: '更新截图' }).click();
   await choose('选择项目仓库', 'services/api');
   await button('切换分支，当前 api-main').waitFor();
   await page.locator('.git-history-row').filter({ hasText: '服务端初版' }).waitFor();
@@ -119,6 +125,18 @@ try {
   await button('提交历史').click(); await page.locator('.git-history-row').filter({ hasText: '更新截图' }).waitFor();
   const positions = await page.evaluate(() => window.headerPositions);
   assert.ok(positions.length > 5 && positions.every(([top, hasName]) => hasName && Math.abs(top - positions[0][0]) <= 1), JSON.stringify(positions));
+  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.settings-navigation').getByRole('button', { name: 'Git 工作流', exact: true }).click();
+  const settings = page.locator('.git-settings');
+  await choose('设置中的项目仓库', 'services/api');
+  await settings.locator('.git-settings-refs').getByText('api-main', { exact: true }).waitFor();
+  await settings.getByRole('button', { name: /个文件有变更/ }).click();
+  const changed = settings.getByRole('list', { name: '变更文件', exact: true });
+  await changed.waitFor();
+  assert.equal(await changed.getByText(image, { exact: true }).count(), 0);
+  await settings.getByRole('button', { name: '打开版本控制' }).click();
+  await work.getByText('说明.docx', { exact: true }).waitFor();
+  await button('切换分支，当前 api-main').waitFor();
   assert.deepEqual(errors, []);
   console.log('Verified project switching, branches, history, remotes, stable loading geometry, four image versions and document previews.');
 } finally {

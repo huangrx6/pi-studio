@@ -1,0 +1,93 @@
+.preference-group-head, .preference-disclosure > summary {
+  min-height: var(--settings-row-height);
+  padding: var(--settings-row-padding) var(--settings-group-inset);
+}
+.preference-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.preference-group-head > div:first-child { flex: 1 1 12rem; min-width: 0; }
+.preference-group-head h2, .preference-disclosure-heading { margin: 0; }
+.preference-group-head p { margin: var(--space-1) 0 0; color: var(--muted); font: var(--settings-description-font); }
+.preference-group-actions { margin-inline-start: auto; display: flex; flex-wrap: wrap; max-width: 100%; align-items: center; gap: var(--space-2); }
+.preference-group-body { padding-inline: var(--settings-group-inset); }
+.preference-group-body:empty { display: none; }
+
+.preference-disclosure > summary {
+  display: grid;
+  align-content: center;
+  user-select: none;
+  list-style: none;
+  cursor: pointer;
+  border-radius: calc(var(--radius-card) - 1px);
+  transition: background-color var(--transition-fast);
+}
+.preference-disclosure > summary::-webkit-details-marker { display: none; }
+.preference-disclosure > summary:hover { background: var(--surface-hover); }
+.settings-overlay .preference-disclosure > summary:focus-visible { outline-offset: -2px; }
+.preference-disclosure[open] > summary { border-end-start-radius: 0; border-end-end-radius: 0; }
+.preference-disclosure .preference-disclosure-heading {
+  display: grid;
+  grid-template-columns: minmax(min-content, auto) minmax(0, 1fr) var(--icon-sm);
+  align-items: center;
+  gap: var(--space-3);
+}
+.preference-disclosure .preference-disclosure-heading { min-height: var(--space-6); }
+.preference-current-value {
+  color: var(--muted);
+  font: var(--settings-preference-body-font);
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+.preference-disclosure-heading > svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--muted);
+  transition: transform var(--settings-dialog-enter) var(--settings-motion-out);
+}
+.preference-disclosure[open] > summary svg { transform: rotate(90deg); }
+.preference-disclosure::details-content {
+  interpolate-size: allow-keywords;
+  block-size: 0;
+  overflow: clip;
+  transition: block-size var(--settings-dialog-enter) var(--settings-motion-out), content-visibility var(--settings-dialog-enter) allow-discrete;
+}
+.preference-disclosure[open]::details-content { block-size: auto; }
+
+.preference-group-row + .preference-group-row { position: relative; }
+.preference-group-row + .preference-group-row::before {
+  content: ''; position: absolute; inset: 0 var(--settings-group-inset) auto;
+  border-top: 1px solid var(--divider); pointer-events: none;
+}
+.preference-group-row:not(:first-child) > details > summary { border-start-start-radius: 0; border-start-end-radius: 0; }
+.preference-group-row:not(:last-child) > details > summary { border-end-start-radius: 0; border-end-end-radius: 0; }
+.preference-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2) var(--settings-row-gap);
+  min-height: var(--settings-row-height);
+  padding-block: var(--settings-field-gap);
+  border-top: 1px solid var(--divider);
+  font: var(--settings-preference-body-font);
+}
+.preference-row-copy { min-width: 0; overflow-wrap: anywhere; }
+.preference-row:has(.preference-row-copy p) { padding-block: var(--settings-row-padding); }
+.preference-row-copy h3 { margin: 0; font: var(--settings-label-font); color: var(--text); }
+.preference-row-copy p { margin: var(--space-1) 0 0; font: var(--settings-description-font); color: var(--muted); }
+.preference-row-control {
+  display: flex; align-items: center; justify-content: flex-end;
+  min-width: 0; max-width: 100%; gap: var(--space-2); flex-wrap: wrap;
+}
+.preference-row-control .pi-select { min-width: 0; max-width: 100%; }
+.preference-row-control button svg, .preference-group-actions button svg { width: var(--icon-sm); height: var(--icon-sm); }
+@container settings-preferences (max-width: 355px) {
+  .preference-row:has(.pi-select) { grid-template-columns: minmax(0, 1fr); }
+  .preference-row:has(.pi-select) .preference-row-control { justify-self: start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .preference-disclosure::details-content { transition: none; }
+}

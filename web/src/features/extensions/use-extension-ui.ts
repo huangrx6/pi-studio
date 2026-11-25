@@ -31,11 +31,11 @@ function safeSnapshot(value: unknown): ExtensionUiSnapshot {
  * snapshot to ExtensionSlot.
  */
 export function useExtensionUiSnapshot(cwd?: string, enabled = true) {
-  const [snapshot, setSnapshot] = useState<ExtensionUiSnapshot>(EMPTY_SNAPSHOT);
+  const [loaded, setLoaded] = useState<{ cwd?: string; snapshot: ExtensionUiSnapshot }>();
 
   useEffect(() => {
     if (!enabled) {
-      setSnapshot(EMPTY_SNAPSHOT);
+      setLoaded(undefined);
       return;
     }
     let disposed = false;
@@ -44,10 +44,10 @@ export function useExtensionUiSnapshot(cwd?: string, enabled = true) {
       const request = ++revision;
       void window.piApi.extensionsUi(cwd)
         .then((next) => {
-          if (!disposed && request === revision) setSnapshot(safeSnapshot(next));
+          if (!disposed && request === revision) setLoaded({ cwd, snapshot: safeSnapshot(next) });
         })
         .catch(() => {
-          if (!disposed && request === revision) setSnapshot(EMPTY_SNAPSHOT);
+          if (!disposed && request === revision) setLoaded({ cwd, snapshot: EMPTY_SNAPSHOT });
         });
     };
     load();
@@ -58,5 +58,5 @@ export function useExtensionUiSnapshot(cwd?: string, enabled = true) {
     };
   }, [cwd, enabled]);
 
-  return snapshot;
+  return enabled && loaded && loaded.cwd === cwd ? loaded.snapshot : EMPTY_SNAPSHOT;
 }

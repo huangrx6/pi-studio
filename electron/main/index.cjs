@@ -25,6 +25,7 @@ const { getStudioDatabase } = require('./core/studio-db.cjs');
 const { closeDurableRuntime, initializeDurableRuntime } = require('./runtime/durable-runtime.cjs');
 const { closeConversationWatches } = require('./runtime/conversations.cjs');
 const { cleanupOrphanedAttachmentDirectories } = require('./services/attachments.cjs');
+const { flushConversationFileCleanup } = require('./services/conversation-file-cleanup.cjs');
 const { shutdownTemporaryChats } = require('./services/temporary-chat.cjs');
 const { registerIpc } = require('./ipc/index.cjs');
 const { shutdownTerminalSessions } = require('./ipc/terminal.cjs');
@@ -176,6 +177,11 @@ if (primaryInstance) {
         // Attachment cleanup is best effort and must not make saved chat data
         // or an otherwise healthy startup unavailable.
         console.warn('[pi-studio] attachment cleanup skipped', error);
+      }
+      try {
+        flushConversationFileCleanup(getStudioDatabase());
+      } catch (error) {
+        console.warn('[pi-studio] 会话文件清理将在下次启动时重试', error.code || error.name);
       }
       await initializeDurableRuntime();
     },

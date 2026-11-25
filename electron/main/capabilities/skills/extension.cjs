@@ -6,9 +6,9 @@ function createStudioSkillsExtension(durable) {
     name: 'studio-skills',
     sections: [
       durable.section('studio-skills', (input) => {
-        const cwd = input.env?.cwd || input.agent?.cwd;
+        const cwd = input.rolePrompt?.workspace || input.env?.cwd || input.agent?.cwd;
         return renderSection(input, 'skills', () => (
-          cwd ? skillInstructions(cwd, input.agent?.tools) : undefined
+          cwd ? skillInstructions(cwd, input.agent?.tools, input.rolePrompt?.skills) : undefined
         ));
       }),
     ],

@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ExtensionStatusIcon } from '../extensions/ExtensionStatusIcon';
 import type { StatusPanel } from '../../shared/extension-appearance';
-import { ChevronRight, Gauge, RefreshCw, X } from 'lucide-react';
+import { Gauge, RefreshCw, X } from 'lucide-react';
 import { DetailDialog } from '../../shared/DetailDialog';
 import { LoadingIndicator, LoadingState } from '../../shared/LoadingState';
 import { errorText } from '../../shared/error-text';
 import type { ProviderQuotaSnapshot, QuotaMetric } from '../../types/provider-quota';
+import { useSurfaceActive } from '../../shared/surface-visibility';
 import './styles/provider-quota.css';
 
 function useProviderQuota(id: string) {
+  const active = useSurfaceActive();
   const [snapshot, setSnapshot] = useState<ProviderQuotaSnapshot | null>(null);
   const [busy, setBusy] = useState(true);
   const request = useRef(0);
@@ -17,19 +19,43 @@ function useProviderQuota(id: string) {
     setBusy(true);
     try {
       const value = await window.piApi.providerQuota(id, refresh);
-      if (revision === request.current) setSnapshot(value);
+      if (revision === request.current) {
+        setSnapshot(value);
+        if (refresh) window.dispatchEvent(new CustomEvent('pi-studio:quota-refreshed', { detail: { id, snapshot: value } }));
+      }
     } catch (error) {
       if (revision === request.current) setSnapshot({ status: 'error', metrics: [], message: errorText(error) });
     } finally { if (revision === request.current) setBusy(false); }
   }, [id]);
   useEffect(() => {
-    setSnapshot(null);
-    const readWhenVisible = () => { if (!document.hidden) void read(); };
+    const readWhenVisible = () => { if (active && !document.hidden) void read(); };
+    const unsubscribe = window.piApi.onProviderQuotaInvalidated(changedId => {
+      if (changedId !== id) return;
+      ++request.current;
+      setSnapshot(null);
+      setBusy(true);
+      readWhenVisible();
+    });
+    if (!active) return unsubscribe;
+    const onRefreshed = (event: Event) => {
+      const detail = (event as CustomEvent<{ id: string; snapshot: ProviderQuotaSnapshot }>).detail;
+      if (detail?.id !== id) return;
+      ++request.current;
+      setSnapshot(detail.snapshot);
+      setBusy(false);
+    };
+    document.addEventListener('visibilitychange', readWhenVisible);
+    window.addEventListener('pi-studio:quota-refreshed', onRefreshed);
     readWhenVisible();
     const timer = window.setInterval(readWhenVisible, 60_000);
-    document.addEventListener('visibilitychange', readWhenVisible);
-    return () => { ++request.current; window.clearInterval(timer); document.removeEventListener('visibilitychange', readWhenVisible); };
-  }, [read]);
+    return () => {
+      ++request.current;
+      unsubscribe();
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', readWhenVisible);
+      window.removeEventListener('pi-studio:quota-refreshed', onRefreshed);
+    };
+  }, [active, id, read]);
   return { snapshot, busy, read };
 }
 
@@ -45,21 +71,25 @@ export function quotaSummary(metrics: QuotaMetric[]) {
   return metrics.filter(metric => metric.summary && metric.value !== null).map(metric => `${metric.label} ${metric.value}`).join(' · ') || `查看全部 ${metrics.length} 项额度`;
 }
 
-export function ProviderQuotaMenuRow({ id, name, item, onOpen }: { id: string; name: string; item: StatusPanel; onOpen: () => void }) {
+export function ProviderQuotaSummary({ id, name }: { id: string; name: string }) {
   const { snapshot } = useProviderQuota(id);
-  const summary = snapshot && (snapshot.status === 'ready' || snapshot.status === 'stale'
+  const metrics = snapshot?.metrics.filter(metric => metric.summary && metric.value !== null).slice(0, 2) ?? [];
+  const notice = snapshot && (snapshot.status === 'ready' || snapshot.status === 'stale'
     ? quotaSummary(snapshot.metrics) : quotaNotice(snapshot));
-  return <button type="button" className="workspace-menu-row quota-menu-row" onClick={onOpen} aria-label={`查看 ${name} 额度`}>
-    <span className="workspace-menu-row-icon"><ExtensionStatusIcon item={item} /></span>
-    <span className="quota-menu-copy"><strong>{name} 额度</strong>
-      {!snapshot ? <LoadingState>正在查询额度</LoadingState> : <small>{snapshot.status === 'stale' && '上次读数 · '}{summary}</small>}
-    </span><ChevronRight className="workspace-menu-row-arrow" aria-hidden="true" />
-  </button>;
+  return <div className="provider-quota-summary">
+    <div className="provider-quota-summary-source">
+      <span title={name}>{name}</span>
+      {snapshot?.status === 'stale' && <small>上次读数</small>}
+    </div>
+    {metrics.length > 0 ? <QuotaMetricList metrics={metrics} />
+      : snapshot ? <p role="status">{notice || '额度待更新'}</p>
+        : <LoadingState variant="inline">正在查询额度</LoadingState>}
+  </div>;
 }
 
 export function QuotaMetricList({ metrics }: { metrics: QuotaMetric[] }) {
   return <dl className="quota-detail-metrics">
-    {metrics.map((metric, i) => <div key={i}><dt>{metric.label}</dt><dd>{metric.value ?? <small>{metric.issue}</small>}</dd>
+    {metrics.map((metric, i) => <div key={i}><dt title={metric.label}>{metric.label}</dt><dd>{metric.value ?? <small>{metric.issue}</small>}</dd>
       {metric.percent !== undefined && <progress aria-label={metric.label} max={100} value={metric.percent} />}
     </div>)}
   </dl>;
@@ -75,8 +105,16 @@ function QuotaMetrics({ snapshot }: { snapshot: ProviderQuotaSnapshot | null }) 
 }
 
 export function ProviderQuotaPanel({ id }: { id: string }) {
-  const { snapshot } = useProviderQuota(id);
-  return <QuotaMetrics snapshot={snapshot} />;
+  const { snapshot, busy, read } = useProviderQuota(id);
+  return <>
+    <QuotaMetrics snapshot={snapshot} />
+    <div className="provider-quota-panel-actions">
+      {snapshot?.updatedAt && <span>{snapshot.status === 'stale' ? '上次成功' : '更新于'} {new Date(snapshot.updatedAt).toLocaleTimeString()}</span>}
+      <button type="button" className="settings-outline" disabled={busy || snapshot?.status === 'disabled'} onClick={() => void read(true)}>
+        {busy ? <LoadingIndicator /> : <RefreshCw />}刷新额度
+      </button>
+    </div>
+  </>;
 }
 
 export function ProviderQuotaDialog({ id, name, item, onClose }: { id: string; name: string; item?: StatusPanel; onClose: () => void }) {

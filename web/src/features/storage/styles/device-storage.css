@@ -1,0 +1,87 @@
+.device-storage-settings .settings-page-header-icon .lucide-hard-drive line:last-child { stroke: var(--accent); }
+.storage-breakdown { padding-bottom: var(--space-4); }
+.storage-reading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  font-variant-numeric: tabular-nums;
+}
+.storage-reading strong {
+  color: var(--text);
+  font-size: var(--text-display);
+  line-height: var(--leading-tight);
+  font-weight: var(--weight-semibold);
+}
+.storage-reading span {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-round);
+  background: var(--settings-page-bg);
+  color: var(--muted);
+  font: var(--settings-description-font);
+}
+.storage-partial, .storage-legend { color: var(--muted); font: var(--settings-description-font); }
+
+.storage-meter {
+  display: flex;
+  gap: 2px;
+  height: var(--space-3);
+  margin-block: var(--space-3) var(--space-4);
+  overflow: hidden;
+  border-radius: var(--radius-round);
+  background: var(--surface-active);
+}
+.storage-meter span { flex-basis: 0; min-width: 3px; background: var(--storage-color); }
+
+/* Structured category legend tiles. */
+.storage-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+.storage-legend > div {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-control);
+  background: var(--settings-page-bg);
+}
+.storage-legend dt { display: flex; align-items: center; gap: var(--space-2); }
+.storage-legend i { flex: none; width: var(--space-2); height: var(--space-2); border-radius: 50%; background: var(--storage-color); }
+.storage-legend dd {
+  margin: 0 0 0 var(--space-4);
+  color: var(--text);
+  font: var(--settings-label-font);
+  font-variant-numeric: tabular-nums;
+}
+.storage-breakdown [data-category=database] { --storage-color: var(--scheme-ocean); }
+.storage-breakdown [data-category=attachments] { --storage-color: var(--scheme-lime); }
+.storage-breakdown [data-category=worktrees] { --storage-color: var(--success); }
+.storage-breakdown [data-category=resources] { --storage-color: var(--scheme-berry); }
+.storage-breakdown [data-category=media] { --storage-color: var(--scheme-amber); }
+.storage-breakdown [data-category=client] { --storage-color: var(--info); }
+.storage-breakdown [data-category=other] { --storage-color: var(--faint); }
+
+.storage-partial { margin: var(--space-3) 0 0; }
+.storage-error { margin: 0; padding-bottom: var(--space-4); color: var(--error); }
+.storage-location-size {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-tag);
+  background: var(--settings-page-bg);
+  font: var(--settings-description-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.storage-locations .preference-row-copy p { font: var(--settings-mono-font); }
+.storage-locations .preference-row-control { flex-wrap: nowrap; }
+.storage-management-action { min-inline-size: 9em; }
+
+@container settings-preferences (max-width: 450px) {
+  .storage-locations .preference-row { grid-template-columns: minmax(0, 1fr); }
+  .storage-location-size { margin-inline-end: auto; }
+}

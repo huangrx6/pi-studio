@@ -167,6 +167,17 @@ test('MCP tools/list_changed refreshes only the connected catalog and clears sta
   assert.match(server.stderr, /\[redacted\]/);
   assert.doesNotMatch(server.stderr, /must-not-reach-child/);
   assert.match(server.stderr, /fixture private env missing/);
+
+  const method = toolName('reload', 'new_tool');
+  const registered = () => runtime.registry.snapshot().tools().some(({ tool }) => tool.name === method);
+  assert.equal(registered(), true);
+  getStudioDatabase().setMcpMethodEnabled('reload', 'new_tool', false);
+  await reloadMcpServers(runtime);
+  assert.equal(registered(), false);
+  assert.equal(mcpSnapshot().tools.find(tool => tool.name === method).enabledOverride, false);
+  getStudioDatabase().setMcpMethodEnabled('reload', 'new_tool', true);
+  await reloadMcpServers(runtime);
+  assert.equal(registered(), true);
 });
 
 test('saved MCP connections expose a test result with tools and actionable stderr', async () => {

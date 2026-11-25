@@ -5,8 +5,9 @@ import test from 'node:test';
 import ts from 'typescript';
 import { errorText } from '../../web/src/shared/error-text.ts';
 import { composerKeyAction } from '../../web/src/features/conversation/composer-submit.ts';
+import { composerMenuAt } from '../../web/src/features/conversation/composer-menu.ts';
 
-function harness(api) {
+function harness(api, profiles = []) {
   const states = []; let cursor = 0, previousDeps, effect, cleanup, timer;
   const react = {
     useState(initial) { const index = cursor++; if (!(index in states)) states[index] = initial; return [states[index], update => { states[index] = typeof update === 'function' ? update(states[index]) : update; }]; },
@@ -18,7 +19,14 @@ function harness(api) {
   vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
     module, exports: module.exports, window: { piApi: api },
     setTimeout(fn) { timer = fn; return 1; }, clearTimeout() { timer = undefined; },
-    require(name) { if (name === 'react') return react; assert.equal(name, '../../shared/error-text'); return { errorText }; },
+    require(name) {
+      if (name === 'react') return react;
+      if (name === '../subagents/useSubagentProfiles') return {
+        useSubagentProfiles: () => ({ rows: profiles, ready: true, error: '' }), refreshSubagentProfiles: async () => {},
+      };
+      assert.equal(name, '../../shared/error-text');
+      return { errorText };
+    },
   });
   return {
     render(menu, cwd = '/a', sessionId = 'a') { cursor = 0; return module.exports.useComposerSuggestions(menu, cwd, sessionId); },
@@ -32,14 +40,52 @@ const flush = async () => { await Promise.resolve(); await Promise.resolve(); aw
 const file = query => ({ kind: 'file', query, start: 0, end: query.length + 1 });
 const slash = { kind: 'slash', query: '', start: 0, end: 1 };
 
+test('sigils dispatch to distinct pickers and keep emails, issue numbers and shell syntax literal', () => {
+  for (const [text, kind] of [['请@README','file'], ['#审阅','agent'], ['$工具','capability'], ['/model','slash']]) {
+    assert.equal(composerMenuAt(text, text.length)?.kind, kind);
+  }
+  for (const text of ['user@example.org', '#123', '# 标题', '$PATH', '$1', '$(', '$$', 'cost$9', '@"draft #name.md"']) {
+    assert.equal(composerMenuAt(text, text.length), null, text);
+  }
+  assert.equal(composerMenuAt('$echo', 5, { kind: 'capability', start: 0, capabilityType: 'mcp' }).capabilityType, 'mcp');
+  const menu = composerMenuAt('$Toolkit', 8);
+  assert.equal(composerMenuAt('$Toolkit Starter', 16, menu).query, 'Toolkit Starter');
+  assert.equal(composerMenuAt('$MCP', 4).kind, 'capability');
+});
+
+test('dollar suggestions wait for a category and filter resources within that category', async () => {
+  let calls = 0;
+  const caps = [{ type: 'skill', id: 'a', name: 'echo', description: '', source: '插件 · 同源' },
+    { type: 'mcp', id: 'b', name: 'echo', description: '', server: 'api', source: '插件 · 同源' },
+    { type: 'plugin', id: 'studio.shared', name: '同源', description: '', source: 'Studio' }];
+  const h = harness({ composerResources: async () => { calls++; return { commands: [], skills: [], capabilities: caps }; },
+    searchFiles: async () => ({ files: [{ name: 'README', path: 'README', type: 'file' }] }) }, [
+    { id: 'role', name: '审阅', description: '', avatarId: 'indigo-bob' }]);
+  h.render(file('')); h.commit(); h.debounce(); await flush();
+  assert.deepEqual(Array.from(h.render(file('')).mentions, x => x.type), ['file']);
+  assert.deepEqual(Array.from(h.render({ ...file(''), kind: 'agent' }).mentions, x => x.type), ['agent']);
+  const menu = { ...file('同源'), kind: 'capability' };
+  h.render(menu); h.commit(); await flush();
+  assert.equal(calls, 0);
+  assert.equal(h.render(menu).loading, false);
+  assert.equal(h.render(menu).mentions.length, 0);
+  const mcp = { ...menu, capabilityType: 'mcp' };
+  assert.equal(h.render(mcp).loading, true);
+  h.commit(); await flush();
+  assert.deepEqual(Array.from(h.render(mcp).mentions, x => x.id), ['b']);
+  assert.deepEqual(Array.from(h.render({ ...menu, query: 'studio.shared', capabilityType: 'plugin' }).mentions, x => x.id), ['studio.shared']);
+  assert.equal(calls, 1);
+  assert.equal(h.render(menu).mentions.length, 0);
+});
+
 test('changed file query hides old options before effects and ignores late completion', async () => {
   const old = deferred(), fresh = deferred();
   const h = harness({ searchFiles: ({ query }) => query === 'old' ? old.promise : fresh.promise });
   h.render(file('old')); h.commit(); h.debounce();
-  const pending = h.render(file('fresh')); assert.equal(pending.files.length, 0); assert.equal(pending.loading, true); h.commit(); h.debounce();
+  const pending = h.render(file('fresh')); assert.equal(pending.mentions.length, 0); assert.equal(pending.loading, true); h.commit(); h.debounce();
   fresh.resolve({ files: [{ path: 'fresh.md' }] }); await flush(); old.resolve({ files: [{ path: 'old.md' }] }); await flush();
-  assert.equal(h.render(file('fresh')).files[0].path, 'fresh.md');
-  assert.equal(h.render(file('third')).files.length, 0);
+  assert.equal(h.render(file('fresh')).mentions[0].path, 'fresh.md');
+  assert.equal(h.render(file('third')).mentions.length, 0);
 });
 
 test('closing invalidates command request and cannot clear another menu loading state', async () => {
@@ -49,7 +95,7 @@ test('closing invalidates command request and cannot clear another menu loading 
   commands.resolve({ commands: [{ name: 'obsolete' }], skills: [] }); await flush();
   assert.equal(h.render(file('read')).loading, true); assert.equal(h.render(file('read')).commands.length, 0);
   h.render(null); h.commit(); files.resolve({ files: [{ path: 'late.md' }] }); await flush();
-  assert.equal(h.render(null).files.length, 0); assert.equal(h.render(null).loading, false);
+  assert.equal(h.render(null).mentions.length, 0); assert.equal(h.render(null).loading, false);
 });
 
 test('context changes hide commands and failed reads expose a real retry without old choices', async () => {

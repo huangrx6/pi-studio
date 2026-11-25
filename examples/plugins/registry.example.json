@@ -1,0 +1,32 @@
+{
+  "$schema": "../../sdk/plugins/schemas/pi-studio.plugin.registry.schema.json",
+  "schemaVersion": 1,
+  "name": "Pi Studio 官方插件",
+  "updatedAt": "2026-11-23T00:00:00.000Z",
+  "plugins": [
+    {
+      "id": "example.toolkit-starter",
+      "name": "Toolkit Starter",
+      "publisher": "pi-studio-examples",
+      "summary": "一次安装示例 MCP、技能与本地 CLI，演示插件包形态。",
+      "description": "官方精选示例插件：stdio MCP（echo）、一条可发现技能，以及注入 Studio 终端 PATH 的 toolkit 命令。适合验证本地与市场安装路径。",
+      "category": "productivity",
+      "homepage": "https://github.com/huangrx6/pi-studio",
+      "repository": "https://github.com/huangrx6/pi-studio",
+      "keywords": ["mcp", "skill", "cli", "starter"],
+      "provides": {
+        "mcp": ["toolkit-demo"],
+        "skills": ["toolkit-demo"],
+        "cli": ["toolkit"],
+        "extension": false
+      },
+      "versions": [
+        {
+          "version": "0.1.0",
+          "packagePath": "packages/toolkit-starter",
+          "publishedAt": "2026-11-23T00:00:00.000Z"
+        }
+      ]
+    }
+  ]
+}

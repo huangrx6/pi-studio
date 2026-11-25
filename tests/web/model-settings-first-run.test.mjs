@@ -9,7 +9,11 @@ import ts from 'typescript';
 
 const require = createRequire(import.meta.url);
 function compile(relative, imports = {}) {
-  const context = { exports: {}, require: id => id.endsWith('.css') ? {} : imports[id] ?? require(id) };
+  const context = { exports: {}, require(id) {
+    if (id.endsWith('.css')) return {};
+    if (id.endsWith('.webp')) return id;
+    return imports[id] ?? require(id);
+  } };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL(relative, import.meta.url), 'utf8'), {
     compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText, context);
@@ -18,6 +22,7 @@ function compile(relative, imports = {}) {
 
 const { ModelSettings } = compile('../../web/src/features/models/ModelSettings.tsx', {
   '../../shared/LoadingState': compile('../../web/src/shared/LoadingState.tsx'),
+  '../../shared/ActionMenu': { ActionMenu: () => null },
   '../../shared/SettingsPageHeader': {
     SettingsPageHeader: ({ title, actions }) => React.createElement(
       'header',

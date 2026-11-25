@@ -33,7 +33,8 @@ Studio 优先服务开发与项目交付，不把「替用户逛全网」当作�
 
 | 能力 | 约定 |
 | --- | --- |
-| 链接打开目标 | `webLinkOpenTarget` / `localLinkOpenTarget`：`workbench` 或 `system`；对话 Markdown 链接按此分流。 |
+| 链接打开目标 | `webLinkOpenTarget` / `localLinkOpenTarget`：全部网页 / 全部本地链接。`workbench`=在 Studio 内打开（可浏览页面→右侧浏览器，其他文件→预览，**不是** HTML 专用项）；`system`=系统浏览器或默认应用。 |
+| 打开约束 | `linkOpenInstructAgent`（默认开）：会话 instructions + 浏览器 section 说明规则。`linkOpenBlockExternal`（默认开）：bash `beforeTool` 拦截 open/Playwright/系统浏览器。二者均可在设置中关闭。 |
 | 下载询问路径 | `askDownloadPath` 为真时，内嵌分区下载先弹出保存位置；默认仍写入 Studio 托管下载目录。 |
 | 偏好热更新 | `setBrowserPreferences` 通过 `subscribeBrowserPreferences` 广播 `{ type: 'preferences' }`，工作台壳即时刷新（如完整网址）。 |
 | 密码 | 主进程 `safeStorage` 信封；列表不含明文；仅显式「显示」IPC 可揭密；不向模型暴露。 |
@@ -113,7 +114,8 @@ Studio 优先服务开发与项目交付，不把「替用户逛全网」当作�
 | Cookie / 存储 | 默认**不**导入系统浏览器 Cookie；用户若需登录，在内嵌浏览器内显式登录。 |
 | 工作区可选配置（后期） | 可为工作区提供独立 partition 前缀，避免项目 A 的登录态污染项目 B；默认仍是用户级 Studio 浏览器配置文件。 |
 | 本地文件 | 仅显式 `file://` HTML 文档 + 同目录资源；不得变成通用文件管理器。 |
-| 外链 | 「在系统浏览器打开」保持显式动作；Agent 默认不得调用系统浏览器完成敏感流程。 |
+| 外链 | 「在系统浏览器打开」保持显式动作；Agent 打开外链须遵循打开位置设置；默认工作台，不得擅自用系统浏览器完成敏感流程。 |
+| 链接预览 | 由 `webLinkOpenTarget` / `localLinkOpenTarget` 决定。默认工作台：`browser_open` 打开可浏览页面，其他本地文件进应用内预览。`linkOpenBlockExternal` 只拦截 **bash** 里的 open / Playwright / 终端起浏览器；**MCP 工具（含 Chrome DevTools MCP）不在此拦截范围内**。 |
 
 ## 4. 能力分层（L0–L4）
 

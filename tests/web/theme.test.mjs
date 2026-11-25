@@ -23,9 +23,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { PALETTE_PRESETS } from '../../web/src/shared/preferences.ts';
 const require = createRequire(import.meta.resolve('vite'));
 const postcss = require('postcss');
 const palette = postcss.parse(fs.readFileSync('web/src/styles/palette.css', 'utf8'));
+const paletteIds = PALETTE_PRESETS.map(preset => preset.id);
 const sourceFiles = fs.readdirSync('web/src', { recursive: true })
   .filter((file) => /\.(css|tsx|ts)$/.test(file))
   .map((file) => path.join('web/src', file));
@@ -38,13 +40,13 @@ const sourceFiles = fs.readdirSync('web/src', { recursive: true })
  * var() 引用会递归展开（例如 --accent → --color-accent），并用 seen 检测循环，
  * 任何缺失或循环都会让断言失败。
  */
-function tokens(mode, paletteName = 'lime') {
+function tokens(mode, paletteName = '') {
   const result = {};
   palette.walkRules((rule) => {
     const isBase = rule.selector === ':root';
     const isDarkOverride = mode === 'dark' && rule.selector === ':root[data-theme="dark"]';
-    const isPaletteOverride = paletteName !== 'lime' && rule.selector === `:root[data-palette="${paletteName}"]`;
-    const isDarkPaletteOverride = mode === 'dark' && paletteName !== 'lime' && rule.selector === `:root[data-theme="dark"][data-palette="${paletteName}"]`;
+    const isPaletteOverride = rule.selector === `:root[data-palette="${paletteName}"]`;
+    const isDarkPaletteOverride = mode === 'dark' && rule.selector === `:root[data-theme="dark"][data-palette="${paletteName}"]`;
     if (!isBase && !isDarkOverride && !isPaletteOverride && !isDarkPaletteOverride) return;
     rule.walkDecls((decl) => {
       if (decl.prop.startsWith('--')) result[decl.prop] = decl.value;
@@ -179,7 +181,7 @@ test('all page typography consumes shared size and weight tokens', () => {
 //    （四级表面规范是 #17191D 这类冷灰），不能跟着品牌色被染色；
 // 2. 前景/背景组合的 WCAG 对比度至少 4.5:1，覆盖正文、弱化文字、按钮、
 //    错误/警告/成功状态、代码语法色与选区文字。
-for (const paletteName of ['lime', 'ocean', 'amber', 'berry']) {
+for (const paletteName of paletteIds) {
   for (const mode of ['light', 'dark']) {
     test(`${mode} ${paletteName} has neutral surfaces and readable semantic color pairs`, () => {
       const t = tokens(mode, paletteName);
@@ -192,10 +194,16 @@ for (const paletteName of ['lime', 'ocean', 'amber', 'berry']) {
         ['--text', '--bg'],
         ['--muted', '--surface'],
         ['--faint', '--surface-soft'],
+        ['--settings-title', '--settings-page-bg'],
+        ['--settings-muted', '--settings-nav-bg'],
+        ['--settings-muted', '--settings-card-bg'],
+        ['--settings-muted', '--settings-art-surface'],
         ['--accent-foreground', '--accent-soft'],
         ['--on-button', '--button-bg'],
         ['--on-button', '--button-hover'],
         ['--error', '--error-soft'],
+        ['--bg', '--error-button-hover'],
+        ['--bg', '--error-button-active'],
         ['--warning', '--warning-soft'],
         ['--success', '--success-soft'],
         ['--syntax-keyword', '--code-bg'],
@@ -224,7 +232,7 @@ for (const paletteName of ['lime', 'ocean', 'amber', 'berry']) {
 }
 
 test('solid controls keep white foregrounds across every theme', () => {
-  for (const paletteName of ['lime', 'ocean', 'amber', 'berry']) {
+  for (const paletteName of paletteIds) {
     for (const mode of ['light', 'dark']) {
       const t = tokens(mode, paletteName);
       assert.equal(t['--on-button'], '#ffffff', `${mode} ${paletteName} button foreground`);
@@ -235,8 +243,9 @@ test('solid controls keep white foregrounds across every theme', () => {
 
 test('palette presets keep semantic status colors stable', () => {
   for (const mode of ['light', 'dark']) {
-    const base = tokens(mode, 'lime');
-    for (const paletteName of ['ocean', 'amber', 'berry']) {
+    const base = tokens(mode);
+    assert.equal(base['--accent'], base['--scheme-ocean'], 'the initial document uses ocean blue');
+    for (const paletteName of paletteIds) {
       const current = tokens(mode, paletteName);
       for (const token of ['--success', '--success-soft', '--error', '--error-soft', '--warning', '--warning-soft', '--info', '--info-soft']) {
         assert.equal(current[token], base[token], `${mode} ${paletteName} must not change ${token}`);
@@ -248,7 +257,7 @@ test('palette presets keep semantic status colors stable', () => {
 // 换壁纸不改变窗口内颜色：四级表面必须是实色，不能是 rgba 或 color-mix。
 test('the four shared surfaces stay opaque in both themes', () => {
   for (const mode of ['light', 'dark']) {
-    const t = tokens(mode, 'lime');
+    const t = tokens(mode);
     for (const key of ['--surface-canvas', '--surface-chrome', '--surface-raised', '--surface-floating']) {
       assert.match(t[key], /^#[\da-f]{6}$/i, `${mode} ${key} must be an opaque hex color`);
     }
@@ -271,7 +280,7 @@ test('Electron reads the shell frame colour from the same palette', () => {
 
 
 test('each palette has one solid accent shared by buttons, focus and previews', () => {
-  for (const name of ['lime', 'ocean', 'amber', 'berry']) {
+  for (const name of paletteIds) {
     for (const mode of ['light', 'dark']) {
       const t = tokens(mode, name);
       for (const role of ['--accent', '--accent-hover', '--accent-border', '--button-bg', '--button-hover', '--focus-color', '--data-model-fill']) {
@@ -280,6 +289,16 @@ test('each palette has one solid accent shared by buttons, focus and previews', 
       assert.equal(t['--accent-soft'], t['--surface-soft']);
       const values = [luminance(t['--accent']), luminance(t['--accent-soft'])].sort((a, b) => b - a);
       assert.ok((values[0] + .05) / (values[1] + .05) >= 3, 'graphical accent contrast');
+    }
+  }
+});
+
+test('wallpaper slider tracks remain distinguishable at rest and on hover', () => {
+  for (const mode of ['light', 'dark']) {
+    const t = tokens(mode);
+    for (const surface of ['--settings-card-bg', '--settings-hover-bg']) {
+      const values = [luminance(t['--settings-range-track']), luminance(t[surface])].sort((a, b) => b - a);
+      assert.ok((values[0] + .05) / (values[1] + .05) >= 3, `${mode} slider track on ${surface}`);
     }
   }
 });

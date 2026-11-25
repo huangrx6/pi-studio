@@ -7,6 +7,7 @@ import { chromium } from 'playwright-core';
 import quotaMapping from '../../electron/main/core/provider-quota.cjs';
 import quotaService from '../../electron/main/services/provider-quota.cjs';
 import { serveProductionRenderer } from './fixtures/production-renderer-server.mjs';
+import { assertSettingsRowLinkHover } from './fixtures/isolated-desktop.mjs';
 import { installPerformanceFixture } from './fixtures/performance.mjs';
 import { installSettingsResourcesFixture } from './fixtures/settings-resources.mjs';
 
@@ -71,10 +72,10 @@ async function measureQuotaForm(editor) {
 
 // Use the production mapping and query service behind an in-memory provider.
 function installQuotaFixture(baseUrl) {
-  window.__legacyQuotaReads = 0;
   const base = window.piApi;
   const fixtures = window.__settingsResourcesQa;
   fixtures.failNextCatalog = false;
+  const quotaListeners = new Set();
   const extensionEnabled = () => localStorage.getItem('quota-extension') !== 'off';
   const project = async () => {
     const { models, settings } = fixtures.projection();
@@ -83,10 +84,10 @@ function installQuotaFixture(baseUrl) {
     const providers = settings.providers.map(source => ({ ...source, quotaEnabled: source.id === 'qa' && config?.enabled === true }));
     return { models: { ...models, enabled: all }, settings: { ...settings, enabledModels: all, providers, extensions: [{ id: 'user:pi-quota-status', available: extensionEnabled() }] } };
   };
-  const legacy = {
-    id: 'user:pi-quota-status/chip', contributionId: 'chip', extensionId: 'user:pi-quota-status',
-    extensionName: '旧额度扩展', scope: 'user', slot: 'status.chip', details: 'detail', title: '旧额度状态', size: 'compact',
-    content: [{ kind: 'dataView', sourceId: 'user:pi-quota-status/live' }],
+  const quotaChip = {
+    id: 'user:pi-quota-status/quota-chip', contributionId: 'quota-chip', extensionId: 'user:pi-quota-status',
+    extensionName: '额度状态', scope: 'user', slot: 'status.chip', details: 'quota-detail', title: '额度状态', size: 'compact',
+    content: [],
   };
   const withSessionModel = read => async input => {
     const result = await read(input);
@@ -100,7 +101,12 @@ function installQuotaFixture(baseUrl) {
     providerConfig: async id => ({ ...(await base.providerConfig(id)), baseUrl, quota: id === 'qa' ? await window.readQuotaConfig() : null }),
     addProvider: async draft => {
       await window.saveQuotaConfig(draft.quota);
+      for (const listener of quotaListeners) listener(draft.providerId);
       return { committed: true, projection: { status: 'ready', value: await project() } };
+    },
+    onProviderQuotaInvalidated: listener => {
+      quotaListeners.add(listener);
+      return () => quotaListeners.delete(listener);
     },
     providerQuota: (id, force) => window.readQuota(id, force),
     providerQuotaFields: draft => window.inspectQuota(draft),
@@ -108,11 +114,9 @@ function installQuotaFixture(baseUrl) {
     conversationPage: withSessionModel(base.conversationPage),
     conversationSnapshot: withSessionModel(base.conversationSnapshot),
     subscribeConversation: withSessionModel(base.subscribeConversation),
-    openExtensionDataView: async payload => {
-      if (payload.sourceId.startsWith('user:pi-quota-status/')) window.__legacyQuotaReads++;
-      return base.openExtensionDataView(payload);
-    },
-    extensionsUi: async () => ({ items: extensionEnabled() ? [legacy, { ...legacy, id: 'user:pi-quota-status/detail', contributionId: 'detail', slot: 'conversation.detail', size: 'regular' }] : [], errors: [], syncedAt: Date.now(), apiVersion: 1 }),
+    extensionsUi: async () => ({ items: extensionEnabled() ? [quotaChip,
+      { ...quotaChip, id: 'user:pi-quota-status/quota-detail', contributionId: 'quota-detail', slot: 'panel.side', size: 'regular' },
+    ] : [], errors: [], syncedAt: Date.now(), apiVersion: 1 }),
   }, { get: (target, key) => key in target ? target[key] : base[key] });
 }
 
@@ -135,17 +139,17 @@ try {
   await page.goto(server.origin);
   await page.locator('.session-row').first().click();
   await page.locator('.assistant-response').first().waitFor();
-  const workspace = page.getByRole('button', { name: '打开扩展与轨迹' });
-  await workspace.click();
-  await page.getByRole('dialog', { name: '扩展与轨迹' }).waitFor();
-  assert.equal(await page.getByText('旧额度状态', { exact: true }).count(), 0);
-  assert.equal(await page.locator('.quota-menu-row').count(), 0);
-  const views = page.getByRole('group', { name: '会话视图' });
-  await views.getByRole('button', { name: /^扩展/ }).click();
-  await page.getByText('暂无会话扩展').waitFor();
+  const header = page.locator('.chat-header');
+  const picker = page.getByRole('dialog', { name: '扩展', exact: true });
+  const quotaCard = picker.getByRole('article', { name: '额度状态', exact: true });
+  const openExtensions = async () => {
+    await header.getByRole('button', { name: '扩展', exact: true }).click();
+    await picker.waitFor();
+  };
+  await openExtensions();
+  assert.equal(await quotaCard.count(), 0);
   assert.equal(reads, 0);
-  assert.equal(await page.evaluate(() => window.__legacyQuotaReads), 0);
-  await page.getByRole('button', { name: '返回对话', exact: true }).click();
+  await page.keyboard.press('Escape');
 
   const nav = page.locator('.settings-navigation');
   await page.locator('.sidebar-bottom button[title="设置"]').click();
@@ -168,6 +172,17 @@ try {
   await page.screenshot({ path: fileURLToPath(new URL('models.png', output)) });
 
   const source = page.locator('[data-provider-id="qa"]');
+  assert.equal(await source.locator('.model-source-actions > button').count(), 2);
+  const manage = source.getByRole('button', { name: /个对话模型，/, expanded: false });
+  assert.match(await manage.textContent(), /\d+ 个对话模型/);
+  await assertSettingsRowLinkHover(page, manage, '.model-settings-provider');
+  await manage.focus();
+  await page.keyboard.press('Enter');
+  const collapse = source.getByRole('button', { name: /个对话模型，/, expanded: true });
+  await collapse.waitFor();
+  assert.ok(await collapse.evaluate(el => document.activeElement === el));
+  await page.keyboard.press('Space');
+  await manage.waitFor();
   const edit = source.getByRole('button', { name: /^编辑 / });
   await edit.click();
   const editor = page.getByRole('dialog', { name: '编辑模型来源' });
@@ -248,11 +263,36 @@ try {
   await page.setViewportSize({ width: 1280, height: 820 });
   assert.equal((await measureQuotaForm(editor)).width, desktop.width);
   const preview = editor.locator('.quota-sample');
+  const readsBeforePreview = reads;
   await editor.getByText('额度预览', { exact: true }).click();
+  const rendered = preview.getByRole('region', { name: '映射预览' });
+  await rendered.getByText('示例数据', { exact: true }).waitFor();
+  await rendered.getByText('可用', { exact: true }).waitFor();
+  assert.deepEqual(await rendered.locator('dt').allTextContents(), ['每周剩余', '套餐状态', '小时已用']);
+  assert.equal(await rendered.getByRole('progressbar').count(), 1);
+  assert.ok(await preview.evaluate(el => Boolean(el.compareDocumentPosition(el.parentElement.querySelector('.quota-mapping-list')) & Node.DOCUMENT_POSITION_FOLLOWING)));
+  const verifyTab = preview.getByRole('tab', { name: '验证 JSON' });
+  await verifyTab.click();
   const sample = editor.getByLabel('JSON 返回样例');
   const format = editor.getByRole('button', { name: '格式化 JSON' });
-  const rendered = editor.getByRole('region', { name: '映射预览' });
-  const readsBeforePreview = reads;
+  assert.equal(await sample.inputValue(), '');
+  const sampleFocusStyle = () => sample.evaluate(input => {
+    const style = getComputedStyle(input.parentElement);
+    const panelStyle = getComputedStyle(input.closest('.quota-sample-columns'));
+    return {
+      outline: style.outlineStyle,
+      offset: style.outlineOffset,
+      radii: [style.borderTopLeftRadius, style.borderTopRightRadius, style.borderBottomLeftRadius, style.borderBottomRightRadius],
+      innerRadius: `${parseFloat(panelStyle.borderTopLeftRadius) - parseFloat(panelStyle.borderLeftWidth)}px`,
+    };
+  });
+  await page.keyboard.press('Tab');
+  assert.ok(await sample.evaluate(input => input === document.activeElement));
+  const wideFocus = await sampleFocusStyle();
+  assert.equal(wideFocus.outline, 'solid');
+  assert.equal(wideFocus.offset, '-1px');
+  assert.deepEqual(wideFocus.radii, [wideFocus.innerRadius, '0px', wideFocus.innerRadius, '0px']);
+  await preview.locator('.quota-sample-columns').screenshot({ path: fileURLToPath(new URL('json-input-focus.png', output)) });
   await sample.fill(JSON.stringify({ note: '用于检查横向滚动的长字段'.repeat(80), ...responseData }));
   await sample.press('ControlOrMeta+a');
   await sample.press('ArrowLeft');
@@ -271,7 +311,12 @@ try {
   await sample.fill('');
   await rendered.getByText('输入 JSON 后查看显示效果。').waitFor();
   await sample.fill('{}');
-  await rendered.getByText(/返回值与映射不匹配/).waitFor();
+  await rendered.getByText(/没有匹配到额度字段/).waitFor();
+  await rendered.getByText('查看 3 个字段问题').click();
+  await rendered.getByText('usage.week.remaining', { exact: true }).waitFor();
+  await sample.fill('{"status":"active"}');
+  await rendered.getByText('已匹配 1 / 3 项').waitFor();
+  assert.deepEqual(await rendered.locator('dt').allTextContents(), ['套餐状态']);
   const escaped = JSON.stringify('一,二:\n"三"');
   const literal = '{"x":9007199254740993123456,"x":[{},[],1.20e+3],"escape":' + escaped + '}';
   await sample.fill(literal);
@@ -287,6 +332,12 @@ try {
   await rendered.getByText('120 次', { exact: true }).waitFor();
   await rendered.getByText('可用', { exact: true }).waitFor();
   assert.equal(await rendered.getByRole('progressbar', { name: '小时已用' }).getAttribute('value'), '37.5');
+  await preview.getByRole('tab', { name: '显示示例' }).click();
+  await rendered.getByText('示例数据', { exact: true }).waitFor();
+  await verifyTab.click();
+  await preview.locator(':scope > summary').click();
+  await preview.locator(':scope > summary').click();
+  assert.equal(await sample.inputValue(), JSON.stringify(responseData, null, 2));
   await group(1).getByLabel('显示名称').fill('本周可用');
   await rendered.getByText('本周可用 120 次 · 小时已用 37.5%', { exact: true }).waitFor();
   await group(1).getByLabel('显示名称').fill('每周剩余');
@@ -321,6 +372,10 @@ try {
   await page.setViewportSize({ width: 432, height: 680 });
   assert.ok((await layout()).stacked, 'the result follows the editable sample on narrow windows');
   assert.equal(await sample.inputValue(), JSON.stringify(responseData, null, 2));
+  await sample.focus();
+  const narrowFocus = await sampleFocusStyle();
+  assert.equal(narrowFocus.outline, 'solid');
+  assert.deepEqual(narrowFocus.radii, [narrowFocus.innerRadius, narrowFocus.innerRadius, '0px', '0px']);
   const lastMetric = rendered.getByRole('progressbar', { name: '小时已用' });
   await lastMetric.evaluate(el => el.scrollIntoView({ block: 'center' }));
   assert.ok(await lastMetric.evaluate(el => el.getBoundingClientRect().bottom <= el.closest('dialog').querySelector('.dialog-footer').getBoundingClientRect().top));
@@ -335,28 +390,26 @@ try {
   await editor.waitFor({ state: 'detached' });
   assert.equal(provider.quota.fields.length, 3);
   assert.equal(await source.locator('.provider-model-list').count(), 0, 'editing quota keeps the catalog collapsed');
-  const quotaButton = source.getByRole('button', { name: /^查看 .* 额度$/ });
-  assert.equal(await quotaButton.locator('svg').count(), 0, 'quota action is text only');
-  const checkActions = async () => assert.ok(await quotaButton.evaluate(button => {
-    const actions = button.closest('.model-settings-actions');
-    const heading = button.closest('.model-settings-provider-heading').getBoundingClientRect();
-    const edit = actions?.querySelector('button[aria-label^="编辑 "]');
-    if (!edit) return false;
-    const style = getComputedStyle(button), other = getComputedStyle(edit);
-    return style.fontSize === other.fontSize && style.color === other.color && style.padding === other.padding
-      && [...actions.children].every(node => {
-        const box = node.getBoundingClientRect();
-        return box.left >= heading.left - 1 && box.right <= heading.right + 1;
-      });
-  }), 'provider actions share styling and fit their right-hand action area');
-  await checkActions();
+  const more = source.getByRole('button', { name: /更多操作$/ });
+  const quotaButton = page.getByRole('menuitem', { name: '查看额度', exact: true });
   for (const width of [1280, 432]) {
     await page.setViewportSize({ width, height: 820 });
-    await source.scrollIntoViewIfNeeded();
-    await checkActions();
-    await source.screenshot({ path: fileURLToPath(new URL(`provider-actions-${width}.png`, output)) });
+    await more.click();
+    await quotaButton.waitFor();
+    assert.equal(await quotaButton.locator('svg').count(), 0, 'quota action is text only');
+    const menu = page.getByRole('menu', { name: await more.getAttribute('aria-label'), exact: true });
+    assert.ok(await menu.evaluate(menu => {
+      const box = menu.getBoundingClientRect();
+      return box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight;
+    }), 'all source actions fit the viewport');
+    const labelEdges = await menu.locator('button > span').evaluateAll(labels => labels.map(node => node.getBoundingClientRect().left));
+    assert.ok(Math.max(...labelEdges) - Math.min(...labelEdges) < 1, 'all action labels use the same left edge');
+    await page.screenshot({ path: fileURLToPath(new URL(`provider-actions-${width}.png`, output)) });
+    await page.keyboard.press('Escape');
+    assert.equal(await more.evaluate(node => document.activeElement === node), true);
   }
   await page.setViewportSize({ width: 1280, height: 820 });
+  await more.click();
   await quotaButton.click();
   const detail = page.getByRole('dialog', { name: '额度监控' });
   await detail.getByText('120 次').waitFor();
@@ -371,30 +424,45 @@ try {
   await page.screenshot({ path: fileURLToPath(new URL('quota.png', output)) });
   await page.keyboard.press('Escape');
   await nav.getByRole('button', { name: '返回对话' }).click();
-  await workspace.click();
-  const row = page.locator('.quota-menu-row');
-  await row.getByText('每周剩余 120 次 · 小时已用 37.5%').waitFor();
-  assert.equal(await page.locator('.workspace-menu-extension-row').filter({ hasText: '旧额度状态' }).count(), 0);
-  await row.click(); await detail.getByText('可用').waitFor(); await page.keyboard.press('Escape');
-  await page.waitForFunction(() => document.activeElement?.classList.contains('workspace-menu-trigger'));
-  await workspace.click();
-  await views.getByRole('button', { name: /^扩展/ }).click();
-  await page.locator('.extension-hub-card').getByText('120 次').waitFor();
-  await page.getByRole('button', { name: '打开 旧额度状态 详情' }).click();
-  await page.locator('.extension-page').getByText('可用').waitFor();
-  assert.equal(await page.evaluate(() => window.__legacyQuotaReads), 0);
+  await page.setViewportSize({ width: 1440, height: 920 });
+  assert.equal(await header.getByText('每周剩余', { exact: true }).count(), 0);
+  await openExtensions();
+  await quotaCard.getByText('120 次', { exact: true }).waitFor();
+  await quotaCard.getByText('37.5%', { exact: true }).waitFor();
+  assert.deepEqual(await quotaCard.locator('dt').allTextContents(), ['每周剩余', '小时已用']);
+  const quotaPanel = page.getByRole('tabpanel', { name: '额度状态', exact: true });
+  await quotaCard.getByText('120 次', { exact: true }).click();
+  assert.equal(await quotaPanel.count(), 0, 'quota metrics are a preview');
+  await quotaCard.getByRole('button', { name: '查看 额度状态 详情', exact: true }).click();
+  await quotaPanel.getByText('可用').waitFor();
+  await picker.waitFor({ state: 'hidden' });
+  await openExtensions();
+  await quotaCard.getByText('120 次', { exact: true }).waitFor();
+  const savedQuota = provider.quota;
+  const saveQuota = quota => page.evaluate(quota => window.piApi.addProvider({ providerId: 'qa', quota }), quota);
+  const beforeLiveUpdate = reads;
+  await saveQuota({ ...savedQuota, fields: savedQuota.fields.map((field, index) => index === 0
+    ? { ...field, label: '短周期额度', path: 'usage.hour.used', format: 'fraction', unit: '' } : field) });
+  await quotaCard.getByText('短周期额度', { exact: true }).waitFor();
+  await quotaPanel.getByText('短周期额度', { exact: true }).waitFor();
+  assert.equal(await quotaCard.getByText('37.5%', { exact: true }).count(), 2);
+  assert.equal(await quotaPanel.getByText('120 次', { exact: true }).count(), 0);
+  assert.equal(reads, beforeLiveUpdate + 1, 'visible quota surfaces share one new read after the commit');
+  await saveQuota(savedQuota);
+  await quotaCard.getByText('120 次', { exact: true }).waitFor();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '收起右侧面板', exact: true }).click();
   await page.evaluate(() => window.__settingsResourcesQa.openSecondSession());
   await page.locator('.model-label').getByText('第二来源模型').waitFor();
-  await workspace.click();
-  await page.getByRole('dialog', { name: '扩展与轨迹' }).waitFor();
-  assert.equal(await page.getByText('旧额度状态', { exact: true }).count(), 0);
-  assert.equal(await row.count(), 0);
+  await openExtensions();
+  assert.equal(await quotaCard.count(), 0);
   await page.reload();
   await page.locator('.session-row').filter({ hasText: '性能会话 0000' }).click();
   await page.locator('.model-label').getByText('当前会话模型').waitFor();
-  await workspace.click();
-  await row.getByText('每周剩余 120 次 · 小时已用 37.5%').waitFor();
-  await workspace.click();
+  await openExtensions();
+  await quotaCard.getByText('120 次', { exact: true }).waitFor();
+  await quotaCard.getByText('37.5%', { exact: true }).waitFor();
+  await page.keyboard.press('Escape');
   await page.locator('.sidebar-bottom button[title="设置"]').click();
   await nav.getByRole('button', { name: '模型配置', exact: true }).click();
   await edit.click();
@@ -405,10 +473,26 @@ try {
   await editor.locator('.quota-request-options > summary').click();
   await editor.getByRole('button', { name: '添加请求头', exact: true }).click();
   await editor.getByRole('textbox', { name: '附加请求头 1 的值' }).fill('2023-06-01');
+  await group(1).getByLabel('显示名称').fill('小时额度');
+  await group(1).getByLabel('返回字段路径').fill('usage.hour.used');
+  await group(1).getByLabel('单位（可选）').fill('');
+  await group(1).getByRole('button', { name: /显示格式/ }).click();
+  await page.getByRole('option', { name: '比例（0–1）' }).click();
+  await group(3).getByRole('checkbox').uncheck();
+  await group(2).getByRole('checkbox').check();
+  await group(2).getByLabel('值翻译').fill('active=生效');
   await editor.getByRole('button', { name: '保存更改' }).click();
   await editor.waitFor({ state: 'detached' });
   assert.equal(provider.quota.auth, 'authorization');
   assert.deepEqual(provider.quota.headers, [{ name: 'anthropic-version', value: '2023-06-01' }]);
+  await nav.getByRole('button', { name: '返回对话' }).click();
+  await openExtensions();
+  await quotaCard.getByText('生效', { exact: true }).waitFor();
+  assert.deepEqual(await quotaCard.locator('dt').allTextContents(), ['小时额度', '套餐状态']);
+  assert.deepEqual(await quotaCard.locator('dd').allTextContents(), ['37.5%', '生效']);
+  await page.keyboard.press('Escape');
+  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await nav.getByRole('button', { name: '模型配置', exact: true }).click();
   await edit.click();
   assert.match(await editor.getByRole('button', { name: '额度接口认证' }).innerText(), /原始 Authorization/);
   assert.equal(await editor.getByRole('textbox', { name: '附加请求头 1 的值' }).inputValue(), '2023-06-01');
@@ -447,27 +531,29 @@ try {
   await toggle.click();
   await editor.getByRole('button', { name: '保存更改' }).click();
   await editor.waitFor({ state: 'detached' });
+  await more.click();
   assert.equal(await quotaButton.count(), 0);
+  await page.keyboard.press('Escape');
   const before = reads;
-  await nav.getByRole('button', { name: '返回对话' }).click(); await workspace.click();
-  await page.getByRole('dialog', { name: '扩展与轨迹' }).waitFor();
-  assert.equal(await page.getByText('旧额度状态', { exact: true }).count(), 0);
-  assert.equal(await row.count(), 0); assert.equal(reads, before);
+  await nav.getByRole('button', { name: '返回对话' }).click();
+  await openExtensions();
+  assert.equal(await quotaCard.count(), 0);
+  assert.equal(reads, before);
   // A saved, enabled source still needs the extension to expose any quota UI.
   provider.quota = { ...provider.quota, enabled: true };
   await page.evaluate(() => localStorage.setItem('quota-extension', 'off'));
   await page.reload();
   await page.locator('.session-row').first().click();
-  await workspace.click();
-  await views.waitFor();
-  assert.equal(await row.count(), 0);
-  await workspace.click();
+  await openExtensions();
+  assert.equal(await quotaCard.count(), 0);
   await page.locator('.sidebar-bottom button[title="设置"]').click();
   await nav.getByRole('button', { name: '模型配置', exact: true }).click();
+  await more.click();
+  assert.equal(await quotaButton.count(), 0);
+  await page.keyboard.press('Escape');
   await edit.click();
   await editor.getByLabel('显示名称', { exact: true }).waitFor();
   assert.equal(await toggle.count(), 0);
-  assert.equal(await quotaButton.count(), 0);
   assert.equal(reads, before);
   assert.deepEqual(errors, []);
   console.log('350-model directory, quota mapping, stale/auth/retry, saved preferences, keyboard focus and existing extension verified.');

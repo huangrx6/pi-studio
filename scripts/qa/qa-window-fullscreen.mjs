@@ -183,7 +183,7 @@ try {
   assert.equal(title.y + title.height, canvas.y);
   await settings.getByRole('button', { name: '深色', exact: true }).click();
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark'
-    && getComputedStyle(document.querySelector('.settings-saved-flash')).opacity === '0');
+    && !document.querySelector('.settings-toast-stack .settings-toast'));
   await page.screenshot({ path: path.join(output, '04-settings-fullscreen.png') });
   await settings.getByRole('button', { name: '返回对话', exact: true }).click();
   await page.getByRole('button', { name: '退出全屏', exact: true }).click();

@@ -41,7 +41,7 @@ function harness(kind = 'provider') {
     skillWorkspace: '/B', workspaces: [{ cwd: '/B', name: 'Project B' }],
     setEditorSaving: value => { h.saving = value; }, setEditorError: value => { h.error = value; }, setEditorCommitted: value => { h.committed = value; },
     setSettingsData: value => { h.settingsData=typeof value === 'function' ? value(h.settingsData) : value; applied.push(['settings', h.settingsData]); }, setModels: value => applied.push(['models', value]), setEnabledModels: value => applied.push(['enabled', value]),
-    pushNotification: (...args) => notices.push(args), setSkillRefreshSummary: value => {h.skillRefreshSummary=value;}, setSkillRefreshError: value => {h.skillRefreshError=value;},
+    showToast: (...args) => notices.push(args), setSkillRefreshSummary: value => {h.skillRefreshSummary=value;}, setSkillRefreshError: value => {h.skillRefreshError=value;},
     setExpandedProvider: value => { h.expanded = value; }, setModelQuery() {},
     acceptRuntimeSnapshot: (value, notice) => applied.push(['snapshot', value, notice]),
     discardEditor: () => { h.closed = (h.closed || 0) + 1; h.editorRequestRef.current++; h.editorRecoveryRef.current = null; h.editorSaveRef.current = false; h.saving = false; },

@@ -50,13 +50,13 @@ function fixture(overrides = {}) {
 }
 
 test('owner changes advance only when slot, workspace, session, or model changes', () => {
-  const initial = { key: extensionSlotOwnerKey('composer.before', '/a', 'one', 'model:a'), generation: 0 };
+  const initial = { key: extensionSlotOwnerKey('composer.above', '/a', 'one', 'model:a'), generation: 0 };
   assert.equal(advanceExtensionSlotOwner(initial, initial.key), initial);
   for (const key of [
-    extensionSlotOwnerKey('status.bar', '/a', 'one', 'model:a'),
-    extensionSlotOwnerKey('composer.before', '/b', 'one', 'model:a'),
-    extensionSlotOwnerKey('composer.before', '/a', 'two', 'model:a'),
-    extensionSlotOwnerKey('composer.before', '/a', 'one', 'model:b'),
+    extensionSlotOwnerKey('composer.below', '/a', 'one', 'model:a'),
+    extensionSlotOwnerKey('composer.above', '/b', 'one', 'model:a'),
+    extensionSlotOwnerKey('composer.above', '/a', 'two', 'model:a'),
+    extensionSlotOwnerKey('composer.above', '/a', 'one', 'model:b'),
   ]) {
     assert.notEqual(key, initial.key);
     const next = advanceExtensionSlotOwner(initial, key);

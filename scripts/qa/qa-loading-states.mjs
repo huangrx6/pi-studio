@@ -12,7 +12,7 @@ await mkdir(output, { recursive: true });
 const scripts = JSON.parse(await readFile(new URL('extensions/pi-project-scripts/pi-studio.extension.json', root), 'utf8'));
 const items = [[scripts, 'user'], [metrics.manifests[0], 'builtin']].flatMap(([manifest, scope]) =>
   manifest.contributes.panels.map((panel, sourceOrder) => ({
-    ...panel, id: `${scope}:${manifest.id}/${panel.id}`, contributionId: panel.id,
+    ...panel, visibility: 'always', id: `${scope}:${manifest.id}/${panel.id}`, contributionId: panel.id,
     extensionId: manifest.id, extensionName: manifest.name, scope, sourceOrder,
     slot: panel.slot ?? panel.slots[0], slots: panel.slots ?? [panel.slot],
   })),
@@ -82,10 +82,10 @@ try {
     await page.locator('.assistant-response').first().waitFor();
     assert.equal(await page.evaluate(() => window.__performanceQa.pageCalls.length), 1);
     await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
-    const trigger = page.getByRole('button', { name: '打开扩展与轨迹' });
-    const menu = page.getByRole('dialog', { name: '扩展与轨迹' });
-    const row = menu.locator('.workspace-menu-extension-row').filter({ hasText: '实时指标' });
-    const scriptsRow = menu.locator('.workspace-menu-extension-row').filter({ hasText: '项目脚本' });
+    const trigger = page.getByRole('button', { name: '扩展' });
+    const menu = page.getByRole('dialog', { name: '扩展' });
+    const row = menu.locator('.extension-picker-row').filter({ hasText: '实时指标' });
+    const scriptsRow = menu.locator('.extension-picker-row').filter({ hasText: '项目脚本' });
     const status = row.getByRole('status');
     const height = locator => locator.evaluate(el => el.getBoundingClientRect().height);
     await trigger.click();

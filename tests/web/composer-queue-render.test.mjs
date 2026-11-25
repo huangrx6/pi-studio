@@ -6,6 +6,7 @@ import vm from 'node:vm';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
+import * as references from '../../web/src/features/conversation/references.ts';
 
 const require = createRequire(import.meta.url);
 const source = fs.readFileSync(
@@ -37,6 +38,7 @@ function load(react) {
     require(id) {
       if (id === 'react') return react;
       if (id === 'lucide-react') return icons;
+      if (id === './references') return references;
       return require(id);
     },
   });

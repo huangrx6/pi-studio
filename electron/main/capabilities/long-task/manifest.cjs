@@ -1,3 +1,5 @@
+const { builtinToolContributions } = require('../../core/builtin-tool-contributions.cjs');
+
 module.exports = Object.freeze([
   {
 id: 'studio-long-task',
@@ -10,10 +12,7 @@ id: 'studio-long-task',
     permissions: ['agent.tools', 'agent.sections', 'agent.hooks'],
     requires: ['builtin:studio-permissions'],
     contributes: {
-      tools: [{
-        name: 'long_task',
-        description: '记录长期目标的实质进展、已验证完成或阻塞原因。',
-      }],
+      tools: builtinToolContributions(['long_task']),
     }
   },
 ]);

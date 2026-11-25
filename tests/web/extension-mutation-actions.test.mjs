@@ -25,7 +25,7 @@ function harness() {
     setResourceWriteBusy(value) { h.writeBusy = value; }, setExtensionRefreshBusy(value) { h.refreshBusy = value; },
     setSettingsError(value) { errors.push(value); }, setExtensionRefreshError(value) { notices.push(value); },
     invalidateResourceReads() { h.settingsRequestRef.current++; h.extensionRefreshRequestRef.current++; },
-    errorText: error => String(error.message || error), pushNotification: (...args) => calls.push(['notification', ...args]),
+    errorText: error => String(error.message || error), showToast: (...args) => calls.push(['toast', ...args]),
     actionConfirmation: { confirm: async value => { confirmations.push(value); return true; } },
     window: { piApi: {} },
   };
@@ -98,8 +98,9 @@ test('late recovery keeps completed receipt across changed scope/revision and it
 });
 
 test('mutation rejects before commit without creating receipt and explicit retry can commit', async () => {
-  const { h, errors } = harness(); h.window.piApi.setExtensionEnabled = async () => { throw new Error('not committed'); };
-  await h.toggleExtension(item, false); assert.equal(h.extensionMutationReceiptsRef.current.size, 0); assert.equal(errors.at(-1), 'not committed');
+  const { h, calls, errors } = harness(); h.window.piApi.setExtensionEnabled = async () => { throw new Error('not committed'); };
+  await h.toggleExtension(item, false); assert.equal(h.extensionMutationReceiptsRef.current.size, 0); assert.equal(errors.at(-1), null);
+  assert.deepEqual(calls.at(-1), ['toast', 'not committed', 'error']);
   h.window.piApi.setExtensionEnabled = async () => ready(); await h.toggleExtension(item, false); assert.equal(h.settings.extensions[0].version, '2');
 });
 

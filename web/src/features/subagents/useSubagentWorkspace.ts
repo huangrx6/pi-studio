@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
-import type { AgentView } from '../../shell/app-types';
+import type { MutableRefObject } from 'react';
 import type { NotificationTone } from '../../shell/NotificationCenter';
 import type {
   SubagentBudgetSnapshot,
@@ -12,13 +11,12 @@ import { mergeSubagentChild, mergeSubagentChildren } from './subagent-state.ts';
 import type { SubagentOverviewMode } from './SubagentViews';
 import type { SessionStateForPersistence } from '../conversation/useMessageDelivery';
 
-type Setter<T> = Dispatch<SetStateAction<T>>;
-
 type SubagentWorkspaceDependencies = {
   session: SessionStateForPersistence;
   sessionRef: MutableRefObject<SessionStateForPersistence>;
-  agentView: AgentView;
-  setAgentView: Setter<AgentView>;
+  childKey?: string;
+  visible: boolean;
+  openSubagentsTab: (childKey?: string) => void;
   turnActive: boolean;
   actionConfirmation: {
     confirm: (options: {
@@ -35,19 +33,18 @@ type SubagentWorkspaceDependencies = {
     sessionId?: string,
   ) => void;
   loadState: () => Promise<void>;
-  rememberMainScrollPosition: () => void;
 };
 
 export function useSubagentWorkspace({
   session,
   sessionRef,
-  agentView,
-  setAgentView,
+  childKey,
+  visible,
+  openSubagentsTab,
   turnActive,
   actionConfirmation,
   pushNotification,
   loadState,
-  rememberMainScrollPosition,
 }: SubagentWorkspaceDependencies) {
   const [subagentChildren, setSubagentChildren] = useState<SubagentChild[]>([]);
   const [subagentBudget, setSubagentBudget] = useState<SubagentBudgetSnapshot | null>(null);
@@ -62,16 +59,16 @@ export function useSubagentWorkspace({
   const [subagentReplyingKey, setSubagentReplyingKey] = useState<string | null>(null);
   const subagentRequestRef = useRef(0);
   const subagentListRequestRef = useRef(0);
+  const [transcriptRetry, setTranscriptRetry] = useState(0);
 
   useEffect(() => {
     ++subagentRequestRef.current;
     ++subagentListRequestRef.current;
     setSubagentListError(null);
     setSubagentRefreshing(false);
-    setAgentView({ kind: 'conversation' });
     // openSession owns child-session hydration; clearing here would erase the
     // children that were loaded in the same session transition.
-  }, [session?.id, setAgentView]);
+  }, [session?.id]);
 
   async function refreshSubagentChildren(showSpinner = false): Promise<void> {
     const currentSession = sessionRef.current;
@@ -105,81 +102,63 @@ export function useSubagentWorkspace({
 
   function openAgentOverview() {
     if (!session?.id) return;
-    rememberMainScrollPosition();
-    setAgentView({ kind: 'agents' });
+    openSubagentsTab();
     void refreshSubagentChildren(true);
   }
 
   function openAgentTranscript(child: SubagentChild) {
     if (!session?.id) return;
-    rememberMainScrollPosition();
-    const request = ++subagentRequestRef.current;
-    const sessionId = session.id;
-    setAgentView({ kind: 'agents', child });
-    setSubagentTranscript(current => agentView.kind === 'agents' && agentView.child?.key === child.key && current?.child.key === child.key ? current : null);
-    setSubagentError(null);
-    setSubagentLoading(child.hasTranscript);
-    if (!child.hasTranscript) return;
-    void window.piApi.subagentTranscript({ sessionId, childKey: child.key })
-      .then((transcript) => {
-        if (request !== subagentRequestRef.current || sessionRef.current?.id !== sessionId) return;
-        setSubagentTranscript((current) => current
-          ? { ...transcript, child: mergeSubagentChild(current.child, transcript.child) }
-          : transcript);
-        setAgentView((current) => current.kind === 'agents' && current.child?.key === child.key
-          ? { kind: 'agents', child: mergeSubagentChild(current.child, transcript.child) }
-          : current);
-      })
-      .catch((cause) => {
-        if (request === subagentRequestRef.current && sessionRef.current?.id === sessionId) {
-          setSubagentError(errorText(cause));
-        }
-      })
-      .finally(() => {
-        if (request === subagentRequestRef.current && sessionRef.current?.id === sessionId) setSubagentLoading(false);
-      });
+    openSubagentsTab(child.key);
+    setTranscriptRetry(value => value + 1);
   }
 
-  const activeChild = agentView.kind === 'agents' ? agentView.child : undefined;
+  const activeChild = subagentChildren.find(child => child.key === childKey);
 
   useEffect(() => {
-    if (!activeChild?.hasTranscript || !session?.id || subagentLoading) return;
-    if (!['pending', 'running', 'waiting', 'paused'].includes(activeChild.status)) return;
-    let disposed = false;
+    setSubagentLoading(false);
+    setSubagentError(null);
+    if (!visible || !activeChild?.hasTranscript || !session?.id) return;
+    const request = ++subagentRequestRef.current;
     let fetching = false;
     const sessionId = session.id;
     const childKey = activeChild.key;
-    const timer = window.setInterval(() => {
+    const isCurrent = () => request === subagentRequestRef.current && sessionRef.current?.id === sessionId;
+    setSubagentLoading(true);
+    const read = () => {
       if (fetching) return;
       fetching = true;
       void window.piApi.subagentTranscript({ sessionId, childKey })
         .then((transcript) => {
-          if (disposed || sessionRef.current?.id !== sessionId) return;
-          setSubagentTranscript((current) => current
+          if (!isCurrent()) return;
+          setSubagentTranscript((current) => current?.child.key === childKey
             ? { ...transcript, child: mergeSubagentChild(current.child, transcript.child) }
             : transcript);
+          setSubagentChildren(current => current.map(child => child.key === childKey
+            ? mergeSubagentChild(child, transcript.child) : child));
           setSubagentError(null);
-          setAgentView((current) => current.kind === 'agents' && current.child?.key === childKey
-            ? { kind: 'agents', child: transcript.child }
-            : current);
         })
         .catch((cause) => {
-          if (!disposed) setSubagentError(errorText(cause));
+          if (isCurrent()) setSubagentError(errorText(cause));
         })
-        .finally(() => { fetching = false; });
-    }, 900);
+        .finally(() => {
+          fetching = false;
+          if (isCurrent()) setSubagentLoading(false);
+        });
+    };
+    read();
+    const timer = ['pending', 'running', 'waiting', 'paused'].includes(activeChild.status)
+      ? window.setInterval(read, 900) : undefined;
     return () => {
-      disposed = true;
+      if (request === subagentRequestRef.current) ++subagentRequestRef.current;
       window.clearInterval(timer);
     };
   }, [
-    agentView.kind,
+    visible,
     activeChild?.key,
     activeChild?.status,
     activeChild?.hasTranscript,
     session?.id,
-    subagentLoading,
-    setAgentView,
+    transcriptRetry,
   ]);
 
   const hasActiveSubagents = subagentChildren.some((child) => (
@@ -188,7 +167,7 @@ export function useSubagentWorkspace({
 
   useEffect(() => {
     if (!session?.id) return;
-    const shouldPoll = turnActive || hasActiveSubagents || agentView.kind === 'agents';
+    const shouldPoll = turnActive || hasActiveSubagents || visible;
     if (!shouldPoll) return;
     let disposed = false;
     let fetching = false;
@@ -203,7 +182,7 @@ export function useSubagentWorkspace({
       disposed = true;
       window.clearInterval(timer);
     };
-  }, [agentView.kind, hasActiveSubagents, session?.id, turnActive]);
+  }, [visible, hasActiveSubagents, session?.id, turnActive]);
 
   async function deleteSubagent(child: SubagentChild) {
     const sessionId = session?.id;
@@ -223,14 +202,15 @@ export function useSubagentWorkspace({
         sessionId,
         childKey: child.key,
       });
+      if (sessionRef.current?.id !== sessionId) return;
       setSubagentChildren((current) => current.filter((item) => item.key !== child.key));
       setSubagentTranscript((current) => current?.child.key === child.key ? null : current);
-      setAgentView((current) => (
-        current.kind === 'agents' && current.child?.key === child.key
-          ? { kind: 'agents' }
-          : current
-      ));
-      pushNotification(`${result.name || child.name || '子智能体'} 已永久删除`, 'success');
+      const name = result.name || child.name || '子智能体';
+      if (result.pendingFileCleanups) {
+        pushNotification(`${name} 已删除。部分本地文件会在下次启动时重试清理。`, 'warning');
+      } else {
+        pushNotification(`${name} 已永久删除`, 'success');
+      }
       await loadState();
     } catch (error) {
       const message = errorText(error);
@@ -303,11 +283,12 @@ export function useSubagentWorkspace({
   ), []);
 
   return useMemo(() => ({
+    activeChild,
     subagentChildren,
     setSubagentChildren,
     subagentBudget,
     setSubagentBudget,
-    subagentTranscript,
+    subagentTranscript: subagentTranscript?.child.key === childKey ? subagentTranscript : null,
     setSubagentTranscript,
     subagentOverviewMode,
     setSubagentOverviewMode,
@@ -327,6 +308,8 @@ export function useSubagentWorkspace({
     replySubagentSupervisor: stableReplySubagentSupervisor,
     hasActiveSubagents,
   }), [
+    activeChild,
+    childKey,
     hasActiveSubagents,
     stableDeleteSubagent,
     stableOpenAgentOverview,

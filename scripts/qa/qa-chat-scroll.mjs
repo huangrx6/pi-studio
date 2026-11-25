@@ -56,6 +56,14 @@ await page.addInitScript(() => {
   };
   window.__submitArguments = null;
   window.__conversationListeners = new Set();
+  const temporaryListeners = new Set();
+  window.__streamTemporaryThinking = thinking => {
+    for (const listener of temporaryListeners) listener({
+      id: window.__temporaryChatId,
+      type: 'message',
+      message: { role: 'assistant', timestamp: 9002, streaming: true, content: [{ type: 'thinking', thinking }] },
+    });
+  };
   const snapshot = () => ({
     ...summary,
     model,
@@ -101,6 +109,12 @@ await page.addInitScript(() => {
       window.__submitArguments = args;
       window.__resolveSubmit = resolve;
     }),
+    onTemporary: listener => {
+      temporaryListeners.add(listener);
+      return () => temporaryListeners.delete(listener);
+    },
+    temporaryModel: async () => model,
+    temporaryPrompt: ({ id }) => new Promise(() => { window.__temporaryChatId = id; }),
     sessionSubagents: async () => [],
     extensionsUi: async () => ({ items: [], errors: [], syncedAt: Date.now(), apiVersion: 1 }),
   };
@@ -122,13 +136,12 @@ function metrics() {
   }));
 }
 
-async function emitStream(text) {
-  await page.evaluate(nextText => {
-    const requestId = window.__submitArguments.requestId;
+async function emitStream(text, kind = 'text') {
+  await page.evaluate(({ text, kind }) => {
     const message = {
       role: 'assistant',
       timestamp: 9001,
-      content: [{ type: 'text', text: nextText }],
+      content: [kind === 'thinking' ? { type: 'thinking', thinking: text } : { type: 'text', text }],
     };
     for (const listener of window.__conversationListeners) listener({
       type: 'assistant.updated',
@@ -136,8 +149,26 @@ async function emitStream(text) {
       revision: Date.now(),
       payload: { message },
     });
-  }, text);
-  await page.waitForTimeout(80);
+  }, { text, kind });
+  if (kind === 'text') {
+    const lastLine = text.trimEnd().split('\n').at(-1);
+    await page.locator('.chat-scroll .assistant-turn.is-live .assistant-response').filter({ hasText: lastLine }).waitFor();
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  }
+}
+
+async function verifyLiveThinkingCode(viewportSelector, updateThinking) {
+  const selector = `${viewportSelector} .activity-thinking.is-live .activity-thinking-body`;
+  for (const count of [24, 42]) {
+    const lines = Array.from({ length: count }, (_, index) => `     - entry-${index + 1}\n`).join('');
+    await updateThinking('推理正文\n\n1. 配置示例\n\n   ```yaml\n   entries:\n' + lines);
+    await page.waitForFunction(({ selector, line }) => {
+      const node = document.querySelector(selector);
+      return node?.querySelector('.markdown-code > pre code')?.textContent.includes(line)
+        && node.scrollHeight > node.clientHeight + 120
+        && node.scrollHeight - node.clientHeight - node.scrollTop <= 1;
+    }, { selector, line: `entry-${count}` });
+  }
 }
 
 try {
@@ -160,6 +191,7 @@ try {
   await page.waitForFunction(() => Boolean(window.__submitArguments));
   await page.waitForTimeout(50);
   assert.ok((await metrics()).distance <= 36, 'the optimistic user message should pin before thinking begins');
+  await verifyLiveThinkingCode('.chat-scroll', thinking => emitStream(thinking, 'thinking'));
 
   let streamedText = '## 实时回复\n\n';
   for (let index = 0; index < 12; index += 1) {
@@ -226,8 +258,14 @@ try {
   await emitStream(streamedText);
   assert.ok((await metrics()).distance <= 36, 'a wheel consumed by a nested scroller must preserve follow');
 
+  await page.getByRole('button', { name: '临时聊天', exact: true }).click();
+  await page.getByRole('textbox', { name: '临时聊天消息', exact: true }).fill('检查临时对话的流式滚动');
+  await page.getByRole('button', { name: '发送临时消息', exact: true }).click();
+  await page.waitForFunction(() => Boolean(window.__temporaryChatId));
+  await verifyLiveThinkingCode('.temporary-scroll', thinking => page.evaluate(text => window.__streamTemporaryThinking(text), thinking));
+
   assert.deepEqual(errors, []);
-  console.log('PASS: immediate send pin, streaming follow, first small gesture release, bottom re-arm, no-op and nested wheel handling.');
+  console.log('PASS: code follows in regular and temporary chats; main transcript follows prose, releases on upward gestures, and re-arms at the bottom.');
 } finally {
   await browser.close();
 }

@@ -58,7 +58,7 @@ export function useComposerInputState({
   const {
     commands: composerCommands,
     commandOptions: composerCommandOptions,
-    files: composerFileOptions,
+    mentions: composerMentionOptions,
     loading: composerMenuLoading,
     error: composerMenuError,
     retry: retryComposerSuggestions,
@@ -67,7 +67,7 @@ export function useComposerInputState({
 
   useEffect(() => {
     setComposerMenuIndex(0);
-  }, [composerCommandOptions, composerFileOptions, composerMenu?.kind, composerMenu?.query]);
+  }, [composerCommandOptions, composerMentionOptions, composerMenu?.kind, composerMenu?.query]);
 
   useEffect(() => {
     if (!composerMenu) return;
@@ -98,7 +98,7 @@ export function useComposerInputState({
     setComposerMenuIndex,
     composerCommands,
     composerCommandOptions,
-    composerFileOptions,
+    composerMentionOptions,
     composerMenuLoading,
     composerMenuError,
     retryComposerSuggestions,

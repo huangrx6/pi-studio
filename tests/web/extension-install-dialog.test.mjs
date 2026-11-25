@@ -24,6 +24,7 @@ function compile(path, imports = {}) {
 const helper = compile('../../web/src/features/extensions/extension-install-session.ts', { '../../shared/error-text': { errorText } });
 const { ExtensionInstallDialog } = compile('../../web/src/features/extensions/ExtensionInstallDialog.tsx', {
   './extension-install-session': helper,
+  '../../shared/SettingsToast': { useSettingsToast: () => () => {} },
   '../../shared/InfoHint': { InfoHint: () => null },
   '../../shared/SettingsDialog': { SettingsDialog: ({ title, action, unavailable, children, footerHint }) => React.createElement('section', null,
     React.createElement('h2', null, title), children, footerHint && React.createElement('p', null, footerHint), React.createElement('button', { disabled: unavailable }, action)) },

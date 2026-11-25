@@ -57,9 +57,6 @@
   .agent-overview,
   .agent-context-view,
   .agent-context-toolbar,
-  .conversation-extension-scroll,
-  .model-comparison-workspace,
-  .model-comparison,
   .conversation-trace-page
 ) {
   background: var(--transparent);
@@ -77,13 +74,14 @@
 /* 所有单值控件共用同一块玻璃表面：输入框、多行文本、自定义下拉、步进器和分段轨。
    自定义下拉是 <button>，漏掉它就会在背景图下变成唯一一块不透明黑底。 */
 .app.has-custom-background :is(
-  .settings-content input:not([type="checkbox"]):not([type="radio"]),
+  .settings-content input:not([type="checkbox"]):not([type="radio"], [type="range"]),
   .settings-content select,
   .settings-content textarea:not(:where(.quota-sample-input)),
   .settings-content .pi-select-trigger,
   .settings-content .settings-stepper,
-  .settings-content :is(.general-theme-options, .usage-range-switch, .permission-policy-scopes),
-  .dialog-body input:not([type="checkbox"]),
+  .settings-segments,
+  .settings-tabs,
+  .dialog-body input:not([type="checkbox"], [type="range"]),
   .dialog-body select,
   .dialog-body textarea:not(:where(.quota-sample-input)),
   .dialog-body .pi-select-trigger,
@@ -100,10 +98,7 @@
    跳回不透明表面。 */
 .app.has-custom-background .settings-content :is(
   .pi-select-trigger,
-  .settings-stepper,
-  .general-theme-options,
-  .usage-range-switch,
-  .permission-policy-scopes
+  .settings-stepper
 ):is(:hover, :focus-visible, :focus-within, .is-open) {
   background: var(--surface-floating);
 }
@@ -180,97 +175,3 @@
 }
 .background-media-preview-content { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center center; }
 .background-media-preview-kind { position: absolute; right: var(--space-2); bottom: var(--space-2); padding: 3px 7px; border: 1px solid var(--border); border-radius: var(--radius-round); background: var(--overlay-surface); color: var(--muted); font-size: var(--text-xs); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-.background-setting-error { padding: 8px 10px; border: 1px solid var(--error-border); border-radius: var(--radius-control); background: var(--error-soft); color: var(--error); font-size: var(--text-xs); line-height: var(--leading-normal); }
-.settings-range-control {
-  position: relative;
-  display: block;
-  padding: 12px 13px 11px;
-  border-radius: var(--radius-control);
-  background: var(--surface-soft);
-  cursor: pointer;
-  transition: background var(--transition), box-shadow var(--transition);
-}
-.settings-range-control:hover:not(.is-disabled) { background: var(--surface-hover); }
-/* Keep the outer focus ring above adjacent controls when rows touch. */
-.settings-range-control:focus-within:not(.is-disabled) { z-index: 1; box-shadow: var(--focus-ring); }
-.settings-range-control.is-disabled {
-  --accent: var(--disabled-text);
-  --accent-border: var(--border-strong);
-  --accent-foreground: var(--disabled-text);
-  cursor: not-allowed;
-}
-.settings-range-control.is-disabled .settings-range-copy strong { color: var(--disabled-text); }
-.settings-range-copy { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
-.settings-range-heading { display: grid; min-width: 0; gap: 2px; }
-.settings-range-copy strong { color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
-.settings-range-description {
-  color: var(--muted);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-regular);
-  line-height: 1.4;
-}
-.settings-range-copy output {
-  min-width: 50px;
-  padding: 4px 8px;
-  border: 1px solid var(--accent-border);
-  border-radius: var(--radius-round);
-  background: var(--accent-soft);
-  color: var(--accent-foreground);
-  font: var(--weight-semibold) var(--text-xs)/1 var(--mono);
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-.settings-range-control input[type="range"] {
-  width: 100%;
-  height: 22px;
-  margin: 7px 0 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: var(--transparent);
-  box-shadow: none;
-  appearance: none;
-  -webkit-appearance: none;
-  cursor: pointer;
-}
-.settings-range-control input[type="range"]::-webkit-slider-runnable-track {
-  height: 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-round);
-  background: linear-gradient(90deg, var(--accent) 0 var(--range-progress), var(--surface-active) var(--range-progress) 100%);
-}
-.settings-range-control input[type="range"]::-webkit-slider-thumb {
-  width: 16px;
-  height: 16px;
-  margin-top: -6px;
-  border: 3px solid var(--surface);
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent-border), var(--shadow-thumb);
-  appearance: none;
-  -webkit-appearance: none;
-  transition: box-shadow var(--transition), transform var(--transition);
-}
-.settings-range-control input[type="range"]:hover::-webkit-slider-thumb {
-  box-shadow: 0 0 0 4px var(--accent-soft), 0 0 0 1px var(--accent-border), var(--shadow-thumb);
-  transform: scale(1.04);
-}
-.settings-range-control input[type="range"]:active::-webkit-slider-thumb { transform: scale(.94); }
-.settings-range-control input[type="range"]::-moz-range-track {
-  height: 4px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-round);
-  background: var(--surface-active);
-}
-.settings-range-control input[type="range"]::-moz-range-progress { height: 4px; border-radius: var(--radius-round); background: var(--accent); }
-.settings-range-control input[type="range"]::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border: 3px solid var(--surface);
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent-border), var(--shadow-thumb);
-}
-.settings-range-control input[type="range"]:focus { box-shadow: none; }
-.settings-range-control input[type="range"]:focus-visible { outline: none; }
-.settings-range-control input[type="range"]:disabled { cursor: not-allowed; }

@@ -15,6 +15,7 @@ const {
   createManagedWorktree,
   discardManagedWorktree,
   discardManagedWorktreesForConversations,
+  externalWorktreeStorageRoots,
   inspectManagedWorktree,
   listManagedWorktrees,
   reactivateManagedWorktree,
@@ -220,11 +221,13 @@ test('external worktrees stay registered while disconnected and still apply afte
     await assert.rejects(createManagedWorktree({ ...input, worktreeParent: repository }, options), /仓库以外/);
     const tree = await createManagedWorktree(input, options);
     assert.equal(tree.storageRoot, path.join(disk, 'Pi-Studio-worktrees'));
+    assert.deepEqual(externalWorktreeStorageRoots(database), [tree.storageRoot]);
     assert.equal(path.dirname(path.dirname(tree.path)), tree.storageRoot);
     assert.match(runGit(repository, ['worktree', 'list', '--porcelain']), /locked/);
     fs.writeFileSync(path.join(tree.path, 'child.txt'), 'external');
     await completeManagedWorktree(tree.id, { status: 'finished' }, options);
     fs.renameSync(disk, disk + '-offline');
+    assert.deepEqual(externalWorktreeStorageRoots(database), [tree.storageRoot]);
     await cleanupManagedWorktrees(options);
     assert.equal(database.getManagedWorktree(tree.id).status, 'finished');
     await assert.rejects(createManagedWorktree(input, options), /重新连接/);
@@ -232,6 +235,7 @@ test('external worktrees stay registered while disconnected and still apply afte
     fs.renameSync(disk + '-offline', disk);
     await applyManagedWorktree(tree.id, options);
     assert.equal(fs.readFileSync(path.join(repository, 'child.txt'), 'utf8'), 'external');
+    assert.deepEqual(externalWorktreeStorageRoots(database), []);
     assert.equal(fs.existsSync(tree.path), false);
   } finally { database.close(); }
 });

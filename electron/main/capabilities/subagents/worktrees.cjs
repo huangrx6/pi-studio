@@ -121,6 +121,16 @@ async function isGitRepository(workspace) {
 
 const EXTERNAL_ROOT_NAME = 'Pi-Studio-worktrees';
 
+function externalWorktreeStorageRoots(database) {
+  const roots = new Set();
+  for (const item of database.listManagedWorktrees()) {
+    const root = item.storageRoot;
+    if (root && path.isAbsolute(root) && path.basename(root) === EXTERNAL_ROOT_NAME
+        && path.dirname(item.path) === path.join(root, workspaceKey(item.repositoryRoot))) roots.add(root);
+  }
+  return [...roots];
+}
+
 function externalRootUnavailable(record) {
   return record.storageRoot && !fs.existsSync(record.storageRoot);
 }
@@ -676,6 +686,7 @@ async function cleanupManagedWorktrees(options = {}) {
 
 module.exports = {
   DEFAULT_PENDING_LIMIT,
+  externalWorktreeStorageRoots,
   applyManagedWorktree: (id, options) => serialized(() => applyManagedWorktree(id, options), options),
   bindManagedWorktree: (id, childId, options) => serialized(() => bindManagedWorktree(id, childId, options), options),
   cleanupManagedWorktrees: (options) => serialized(() => cleanupManagedWorktrees(options), options),

@@ -29,11 +29,54 @@ const {
 const { activeProjectIds, addDailyUsage, listUsageProjects, migrateUsageProjects, usageWorkspace } = require('./usage-projects.cjs');
 
 const DATABASE_NAME = 'pi-studio.sqlite';
-const SCHEMA_VERSION = 23;
+const SCHEMA_VERSION = 27;
 const USAGE_REQUEST_LEDGER_LIMIT = 8_192;
 const USAGE_REQUEST_PRUNE_BATCH = 256;
 const METRIC_REQUEST_HISTORY_LIMIT = 8;
 const REQUEST_TRACE_HISTORY_LIMIT = 48;
+
+
+const OWNERSHIP_ORIGINS = new Set(['plugin', 'user', 'builtin']);
+
+function projectOwnership(row = {}) {
+  const origin = OWNERSHIP_ORIGINS.has(row.origin) ? row.origin : 'user';
+  const ownerPluginId = typeof row.owner_plugin_id === 'string'
+    ? row.owner_plugin_id
+    : (typeof row.ownerPluginId === 'string' ? row.ownerPluginId : '');
+  return {
+    ownerPluginId: ownerPluginId.trim(),
+    origin,
+    managed: Boolean(row.managed),
+    userOverride: Boolean(row.user_override ?? row.userOverride),
+  };
+}
+
+function resolveOwnership(input = {}, current) {
+  const hasOrigin = OWNERSHIP_ORIGINS.has(input.origin);
+  const hasOwner = typeof input.ownerPluginId === 'string';
+  const hasManaged = input.managed === true || input.managed === false;
+  const hasOverride = input.userOverride === true || input.userOverride === false;
+  const origin = hasOrigin
+    ? input.origin
+    : (current?.origin && OWNERSHIP_ORIGINS.has(current.origin) ? current.origin : 'user');
+  let ownerPluginId = hasOwner
+    ? input.ownerPluginId.trim()
+    : (current?.ownerPluginId || '');
+  if (origin !== 'plugin') ownerPluginId = hasOwner ? ownerPluginId : '';
+  const managed = hasManaged
+    ? Boolean(input.managed)
+    : (current ? Boolean(current.managed) : origin === 'plugin');
+  const userOverride = hasOverride
+    ? Boolean(input.userOverride)
+    : Boolean(current?.userOverride);
+  return {
+    ownerPluginId: origin === 'plugin' ? ownerPluginId : '',
+    origin,
+    managed: origin === 'plugin' ? managed : false,
+    userOverride,
+  };
+}
+
 
 /** Strip the heavy arrays, keep everything the trace header needs. */
 function requestTraceSummary(trace) {
@@ -362,23 +405,6 @@ class StudioDatabase {
           updated_at INTEGER NOT NULL
         );
 
-        CREATE TABLE IF NOT EXISTS video_storyboards (
-          id TEXT PRIMARY KEY,
-          workspace TEXT NOT NULL,
-          revision INTEGER NOT NULL,
-          updated_at INTEGER NOT NULL,
-          document TEXT NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS video_storyboards_workspace_idx
-          ON video_storyboards(workspace, updated_at DESC);
-        CREATE TABLE IF NOT EXISTS video_storyboard_sources (
-          work_id TEXT NOT NULL REFERENCES video_storyboards(id) ON DELETE CASCADE,
-          asset_id TEXT NOT NULL,
-          source_path TEXT NOT NULL,
-          PRIMARY KEY (work_id, asset_id),
-          UNIQUE (work_id, source_path)
-        );
-
         CREATE TABLE IF NOT EXISTS conversations (
           id TEXT PRIMARY KEY,
           public_id TEXT NOT NULL UNIQUE,
@@ -453,6 +479,12 @@ class StudioDatabase {
         CREATE TABLE IF NOT EXISTS studio_asset_pending (
           entry_id INTEGER PRIMARY KEY, historical INTEGER NOT NULL, retry_after INTEGER NOT NULL DEFAULT 0
         );
+
+        CREATE TABLE IF NOT EXISTS studio_conversation_file_cleanup (
+          conversation_id INTEGER PRIMARY KEY,
+          public_id TEXT NOT NULL,
+          attachment_owner TEXT
+        );
         CREATE INDEX IF NOT EXISTS studio_asset_pending_order ON studio_asset_pending(historical, entry_id);
 
         CREATE TABLE IF NOT EXISTS managed_worktrees (
@@ -498,6 +530,10 @@ class StudioDatabase {
           name TEXT NOT NULL,
           version TEXT NOT NULL DEFAULT '0.0.0',
           sha256 TEXT NOT NULL,
+          owner_plugin_id TEXT NOT NULL DEFAULT '',
+          origin TEXT NOT NULL DEFAULT 'user',
+          managed INTEGER NOT NULL DEFAULT 0,
+          user_override INTEGER NOT NULL DEFAULT 0,
           installed_at INTEGER NOT NULL
         );
         CREATE INDEX IF NOT EXISTS skill_installations_source_idx
@@ -522,6 +558,10 @@ class StudioDatabase {
           enabled INTEGER NOT NULL DEFAULT 1,
           trusted INTEGER NOT NULL DEFAULT 0,
           content_hash TEXT NOT NULL DEFAULT '',
+          owner_plugin_id TEXT NOT NULL DEFAULT '',
+          origin TEXT NOT NULL DEFAULT 'user',
+          managed INTEGER NOT NULL DEFAULT 0,
+          user_override INTEGER NOT NULL DEFAULT 0,
           installed_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL
         );
@@ -540,11 +580,36 @@ class StudioDatabase {
           headers TEXT NOT NULL DEFAULT '{}',
           exposure TEXT NOT NULL DEFAULT 'deferred',
           tool_exposure TEXT NOT NULL DEFAULT '{}',
+          method_access TEXT NOT NULL DEFAULT '{}',
           timeout_seconds INTEGER NOT NULL DEFAULT 60,
           enabled INTEGER NOT NULL DEFAULT 1,
+          owner_plugin_id TEXT NOT NULL DEFAULT '',
+          origin TEXT NOT NULL DEFAULT 'user',
+          managed INTEGER NOT NULL DEFAULT 0,
+          user_override INTEGER NOT NULL DEFAULT 0,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS studio_plugins (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          version TEXT NOT NULL,
+          publisher TEXT NOT NULL DEFAULT '',
+          description TEXT NOT NULL DEFAULT '',
+          icon TEXT NOT NULL DEFAULT '',
+          category TEXT NOT NULL DEFAULT '',
+          homepage TEXT NOT NULL DEFAULT '',
+          source_path TEXT NOT NULL DEFAULT '',
+          install_path TEXT NOT NULL DEFAULT '',
+          provides TEXT NOT NULL DEFAULT '{}',
+          enabled INTEGER NOT NULL DEFAULT 1,
+          content_hash TEXT NOT NULL DEFAULT '',
+          installed_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS studio_plugins_enabled_idx
+          ON studio_plugins(enabled, name);
 
         CREATE TABLE IF NOT EXISTS project_resource_trust (
           workspace TEXT NOT NULL,
@@ -647,6 +712,18 @@ class StudioDatabase {
         moveTurnDiff.run(row.public_id, row.id);
         deleteOldTurnDiffs.run(row.id);
       }
+      if (this.hasDurableConversations()) {
+        this.db.exec(`
+          DELETE FROM turn_diffs AS diff
+          WHERE NOT EXISTS (
+            SELECT 1 FROM conversations
+            WHERE id = diff.conversation_id OR public_id = diff.conversation_id
+          ) AND NOT EXISTS (
+            SELECT 1 FROM durable_conversations
+            WHERE id = CAST(diff.conversation_id AS INTEGER) AND CAST(id AS TEXT) = diff.conversation_id
+          )
+        `);
+      }
       const policyRow = this.db.prepare(
         "SELECT value FROM settings WHERE key = 'studio.permissions.policy'",
       ).get();
@@ -681,8 +758,13 @@ class StudioDatabase {
       addColumn('headers', "TEXT NOT NULL DEFAULT '{}'");
       addColumn('exposure', "TEXT NOT NULL DEFAULT 'deferred'");
       addColumn('tool_exposure', "TEXT NOT NULL DEFAULT '{}'");
+      addColumn('method_access', "TEXT NOT NULL DEFAULT '{}'");
       addColumn('timeout_seconds', 'INTEGER NOT NULL DEFAULT 60');
       addColumn('cwd', "TEXT NOT NULL DEFAULT ''");
+      addColumn('owner_plugin_id', "TEXT NOT NULL DEFAULT ''");
+      addColumn('origin', "TEXT NOT NULL DEFAULT 'user'");
+      addColumn('managed', 'INTEGER NOT NULL DEFAULT 0');
+      addColumn('user_override', 'INTEGER NOT NULL DEFAULT 0');
 
       const extensionColumns = new Set(
         this.db.prepare('PRAGMA table_info(studio_extensions)').all().map((row) => row.name),
@@ -693,6 +775,32 @@ class StudioDatabase {
         // extensions must be reviewed again before the host can load them.
         this.db.exec("UPDATE studio_extensions SET trusted = 0 WHERE scope = 'project'");
       }
+      const addExtensionColumn = (name, definition) => {
+        if (!extensionColumns.has(name)) {
+          this.db.exec(`ALTER TABLE studio_extensions ADD COLUMN ${name} ${definition}`);
+          extensionColumns.add(name);
+        }
+      };
+      addExtensionColumn('owner_plugin_id', "TEXT NOT NULL DEFAULT ''");
+      addExtensionColumn('origin', "TEXT NOT NULL DEFAULT 'user'");
+      addExtensionColumn('managed', 'INTEGER NOT NULL DEFAULT 0');
+      addExtensionColumn('user_override', 'INTEGER NOT NULL DEFAULT 0');
+      // Builtin-scoped rows are product-owned, not marketplace plugins.
+      this.db.exec("UPDATE studio_extensions SET origin = 'builtin' WHERE scope = 'builtin' AND (origin = '' OR origin = 'user')");
+
+      const skillInstallColumns = new Set(
+        this.db.prepare('PRAGMA table_info(skill_installations)').all().map((row) => row.name),
+      );
+      const addSkillInstallColumn = (name, definition) => {
+        if (!skillInstallColumns.has(name)) {
+          this.db.exec(`ALTER TABLE skill_installations ADD COLUMN ${name} ${definition}`);
+          skillInstallColumns.add(name);
+        }
+      };
+      addSkillInstallColumn('owner_plugin_id', "TEXT NOT NULL DEFAULT ''");
+      addSkillInstallColumn('origin', "TEXT NOT NULL DEFAULT 'user'");
+      addSkillInstallColumn('managed', 'INTEGER NOT NULL DEFAULT 0');
+      addSkillInstallColumn('user_override', 'INTEGER NOT NULL DEFAULT 0');
 
       const modelColumns = new Set(
         this.db.prepare('PRAGMA table_info(model_catalog)').all().map((row) => row.name),
@@ -1180,6 +1288,7 @@ class StudioDatabase {
         name: row.name,
         version: row.version,
         sha256: row.sha256,
+        ...projectOwnership(row),
         installedAt: row.installed_at,
       }));
   }
@@ -1191,16 +1300,23 @@ class StudioDatabase {
   upsertSkillInstallation(input) {
     const at = Date.now();
     const pathValue = path.resolve(input.path);
+    const current = this.getSkillInstallation(pathValue);
+    const ownership = resolveOwnership(input, current);
     this.db.prepare(`
       INSERT INTO skill_installations(
-        path, source_id, listing_id, name, version, sha256, installed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        path, source_id, listing_id, name, version, sha256,
+        owner_plugin_id, origin, managed, user_override, installed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(path) DO UPDATE SET
         source_id = excluded.source_id,
         listing_id = excluded.listing_id,
         name = excluded.name,
         version = excluded.version,
         sha256 = excluded.sha256,
+        owner_plugin_id = excluded.owner_plugin_id,
+        origin = excluded.origin,
+        managed = excluded.managed,
+        user_override = excluded.user_override,
         installed_at = excluded.installed_at
     `).run(
       pathValue,
@@ -1209,7 +1325,29 @@ class StudioDatabase {
       input.name,
       input.version || '0.0.0',
       input.sha256,
+      ownership.ownerPluginId,
+      ownership.origin,
+      ownership.managed ? 1 : 0,
+      ownership.userOverride ? 1 : 0,
       at,
+    );
+    return this.getSkillInstallation(pathValue);
+  }
+
+  setSkillInstallationOwnership(pathValue, ownershipInput = {}) {
+    const current = this.getSkillInstallation(pathValue);
+    if (!current) throw new Error('技能安装记录不存在');
+    const ownership = resolveOwnership({ ...current, ...ownershipInput }, current);
+    this.db.prepare(`
+      UPDATE skill_installations
+      SET owner_plugin_id = ?, origin = ?, managed = ?, user_override = ?
+      WHERE path = ?
+    `).run(
+      ownership.ownerPluginId,
+      ownership.origin,
+      ownership.managed ? 1 : 0,
+      ownership.userOverride ? 1 : 0,
+      path.resolve(pathValue),
     );
     return this.getSkillInstallation(pathValue);
   }
@@ -1323,10 +1461,19 @@ class StudioDatabase {
 
   attachmentSessionIds() {
     const ids = this.db.prepare('SELECT id, public_id FROM conversations').all().flatMap(row => [row.id, row.public_id]);
-    if (this.db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'durable_conversations' AND type = 'table'").get()) {
+    if (this.hasDurableConversations()) {
       for (const row of this.db.prepare('SELECT id FROM durable_conversations').iterate()) ids.push(String(row.id));
     }
     return ids;
+  }
+
+  hasDurableConversations() {
+    return Boolean(this.db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'durable_conversations' AND type = 'table'").get());
+  }
+
+  hasDurableConversation(id) {
+    return this.hasDurableConversations()
+      && Boolean(this.db.prepare('SELECT 1 FROM durable_conversations WHERE id = ?').get(id));
   }
 
   insertConversation(input) {
@@ -1401,23 +1548,31 @@ class StudioDatabase {
     const current = this.getConversation(id);
     if (!current) return;
     this.transaction(() => {
-      this.db.prepare(
-        'DELETE FROM turn_diffs WHERE conversation_id = ? OR conversation_id = ?',
-      ).run(current.id, current.publicId);
-      this.db.prepare(
-        'DELETE FROM conversation_metric_requests WHERE conversation_id = ? OR conversation_id = ?',
-      ).run(current.id, current.publicId);
-      this.db.prepare(
-        'DELETE FROM conversation_metric_ledger WHERE conversation_id = ? OR conversation_id = ?',
-      ).run(current.id, current.publicId);
-      this.db.prepare(
-        'DELETE FROM conversation_request_traces WHERE conversation_id = ?',
-      ).run(current.id);
-      this.db.prepare(
-        'DELETE FROM conversation_request_traces WHERE conversation_id = ?',
-      ).run(current.publicId);
+      this.deleteConversationProjections([current.id, current.publicId]);
       this.db.prepare('DELETE FROM conversations WHERE id = ?').run(current.id);
     });
+  }
+
+  deleteConversationProjections(ids) {
+    const encodedIds = JSON.stringify(ids);
+    for (const table of ['turn_diffs', 'conversation_metric_requests', 'conversation_metric_ledger', 'conversation_request_traces']) {
+      this.db.prepare(`DELETE FROM ${table} WHERE conversation_id IN (SELECT value FROM json_each(?))`).run(encodedIds);
+    }
+    for (const [key, property] of [
+      ['studio.permissions.policy', 'sessions'],
+      ['studio.sensitive-input-exemptions', ''],
+    ]) {
+      const setting = this.getSetting(key);
+      const sessions = property ? setting?.[property] : setting;
+      if (!sessions || typeof sessions !== 'object' || Array.isArray(sessions)) continue;
+      let changed = false;
+      for (const id of ids) {
+        if (!Object.hasOwn(sessions, id)) continue;
+        delete sessions[id];
+        changed = true;
+      }
+      if (changed) this.setSetting(key, setting);
+    }
   }
 
   /**
@@ -1429,22 +1584,7 @@ class StudioDatabase {
     const roots = [...new Set(rootIds
       .map((value) => Number(value))
       .filter((value) => Number.isSafeInteger(value) && value > 0))];
-    if (roots.length === 0) {
-      return {
-        conversationIds: [],
-        entryIds: [],
-        submissionIds: [],
-        taskIds: [],
-        documentIds: [],
-        publicIds: [],
-        workspaces: [],
-      };
-    }
-    const hasTable = this.db.prepare(`
-      SELECT 1 AS found FROM sqlite_master
-      WHERE type = 'table' AND name = 'durable_conversations'
-    `).get();
-    if (!hasTable) {
+    if (roots.length === 0 || !this.hasDurableConversations()) {
       return {
         conversationIds: [],
         entryIds: [],
@@ -1536,6 +1676,21 @@ class StudioDatabase {
     };
   }
 
+  assertNoRetainedConversationForks(ids) {
+    if (!ids.length || !this.hasDurableConversations()) return;
+    const selected = JSON.stringify(ids);
+    const retainedFork = this.db.prepare(`
+      WITH removed(id) AS (SELECT value FROM json_each(?))
+      SELECT 1 FROM durable_conversations
+      WHERE id NOT IN (SELECT id FROM removed)
+        AND json_extract(record, '$.parent.conversationId') IN (SELECT id FROM removed)
+      LIMIT 1
+    `).get(selected);
+    if (retainedFork) {
+      throw new Error('仍有分叉会话引用这些消息。请先删除相关分叉，或将它们与原会话一起删除。');
+    }
+  }
+
   /**
    * Permanently remove Durable conversation trees and the Studio projection.
    * All dependent records are deleted in one SQLite transaction, while global
@@ -1544,9 +1699,37 @@ class StudioDatabase {
   deleteConversationTrees(rootIds = [], options = {}) {
     return this.transaction(() => {
       const tree = this.durableConversationTree(rootIds, options);
-      if (tree.conversationIds.length === 0) return tree;
+      const ids = [...new Set([...rootIds.map(Number), ...tree.conversationIds])]
+        .filter(id => Number.isSafeInteger(id) && id > 0);
+      if (!ids.length) return tree;
+      const encodedIds = JSON.stringify(ids.map(String));
+      const rows = this.db.prepare(`
+        SELECT * FROM conversations WHERE id IN (SELECT value FROM json_each(?))
+      `).all(encodedIds).map(normalizeConversationRow);
+      this.assertNoRetainedConversationForks(tree.conversationIds);
       const encodedConversations = JSON.stringify(tree.conversationIds);
       const encodedTasks = JSON.stringify(tree.taskIds);
+      if (tree.taskIds.length && this.db.prepare(`
+        SELECT 1 FROM durable_tasks WHERE id IN (SELECT value FROM json_each(?))
+          AND status <> 'terminal' LIMIT 1
+      `).get(encodedTasks)) throw new Error('仍有任务没有停止，暂时无法安全删除会话');
+      options.queueFileCleanup?.(ids, rows, tree);
+
+      const publicIds = rows.map(row => row.publicId).filter(Boolean);
+      this.deleteConversationProjections([...new Set([...ids.map(String), ...publicIds])]);
+      if (tree.conversationIds.length) {
+        this.deleteDurableConversationRecords(tree, encodedConversations, encodedTasks);
+      }
+      this.db.prepare('DELETE FROM conversations WHERE id IN (SELECT value FROM json_each(?))').run(encodedIds);
+      return {
+        ...tree,
+        publicIds,
+        workspaces: [...new Set(rows.map(row => row.workspace).filter(Boolean))],
+      };
+    });
+  }
+
+  deleteDurableConversationRecords(tree, encodedConversations, encodedTasks) {
       const encodedDocuments = JSON.stringify(tree.documentIds);
       const encodedRecordIds = JSON.stringify([
         ...tree.conversationIds,
@@ -1555,9 +1738,6 @@ class StudioDatabase {
         ...tree.taskIds,
         ...tree.documentIds,
       ]);
-      const studioIds = [...new Set([...tree.conversationIds.map(String), ...tree.publicIds])];
-      const encodedStudioIds = JSON.stringify(studioIds);
-
       this.db.prepare('DELETE FROM studio_asset_pending WHERE entry_id IN (SELECT value FROM json_each(?))').run(JSON.stringify(tree.entryIds));
       this.db.prepare(`
         DELETE FROM durable_document_revisions
@@ -1587,30 +1767,6 @@ class StudioDatabase {
         DELETE FROM durable_record_ids
         WHERE id IN (SELECT value FROM json_each(?))
       `).run(encodedRecordIds);
-      this.db.prepare(`
-        DELETE FROM turn_diffs
-        WHERE conversation_id IN (SELECT value FROM json_each(?))
-      `).run(encodedStudioIds);
-      this.db.prepare(`
-        DELETE FROM conversation_metric_requests
-        WHERE conversation_id IN (SELECT value FROM json_each(?))
-      `).run(encodedStudioIds);
-      this.db.prepare(`
-        DELETE FROM conversation_metric_ledger
-        WHERE conversation_id IN (SELECT value FROM json_each(?))
-      `).run(encodedStudioIds);
-      this.db.prepare(`
-        DELETE FROM conversation_request_traces
-        WHERE conversation_id IN (SELECT value FROM json_each(?))
-      `).run(encodedStudioIds);
-      this.db.prepare(`
-        DELETE FROM conversations
-        WHERE CAST(id AS TEXT) IN (
-          SELECT CAST(value AS TEXT) FROM json_each(?)
-        )
-      `).run(encodedConversations);
-      return tree;
-    });
   }
 
   listProviders() {
@@ -2281,6 +2437,9 @@ class StudioDatabase {
       enabled: Boolean(row.enabled),
       trusted: Boolean(row.trusted),
       contentHash: row.content_hash || '',
+      ...projectOwnership(row.scope === 'builtin' && (!row.origin || row.origin === 'user')
+        ? { ...row, origin: 'builtin' }
+        : row),
       installedAt: row.installed_at,
       updatedAt: row.updated_at,
     }));
@@ -2293,11 +2452,27 @@ class StudioDatabase {
   upsertExtension(input) {
     const at = Date.now();
     const current = this.getExtension(input.id);
+    const defaultOrigin = input.scope === 'builtin' ? 'builtin' : 'user';
+    const ownership = resolveOwnership(
+      {
+        origin: input.origin ?? current?.origin ?? defaultOrigin,
+        ownerPluginId: input.ownerPluginId,
+        managed: input.managed,
+        userOverride: input.userOverride,
+      },
+      current || { origin: defaultOrigin, ownerPluginId: '', managed: false, userOverride: false },
+    );
+    if (input.scope === 'builtin' && ownership.origin === 'user') {
+      ownership.origin = 'builtin';
+      ownership.ownerPluginId = '';
+      ownership.managed = false;
+    }
     this.db.prepare(`
       INSERT INTO studio_extensions(
         id, name, version, scope, source, manifest, enabled, trusted, content_hash,
+        owner_plugin_id, origin, managed, user_override,
         installed_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         version = excluded.version,
@@ -2307,6 +2482,10 @@ class StudioDatabase {
         enabled = excluded.enabled,
         trusted = excluded.trusted,
         content_hash = excluded.content_hash,
+        owner_plugin_id = excluded.owner_plugin_id,
+        origin = excluded.origin,
+        managed = excluded.managed,
+        user_override = excluded.user_override,
         updated_at = excluded.updated_at
     `).run(
       input.id,
@@ -2318,10 +2497,38 @@ class StudioDatabase {
       input.enabled === false ? 0 : 1,
       input.trusted ? 1 : 0,
       typeof input.contentHash === 'string' ? input.contentHash : '',
+      ownership.ownerPluginId,
+      ownership.origin,
+      ownership.managed ? 1 : 0,
+      ownership.userOverride ? 1 : 0,
       current?.installedAt || at,
       at,
     );
     return this.getExtension(input.id);
+  }
+
+  setExtensionOwnership(id, ownershipInput = {}) {
+    const current = this.getExtension(id);
+    if (!current) throw new Error('扩展不存在');
+    const ownership = resolveOwnership({ ...current, ...ownershipInput }, current);
+    if (current.scope === 'builtin' && ownership.origin === 'user') {
+      ownership.origin = 'builtin';
+      ownership.ownerPluginId = '';
+      ownership.managed = false;
+    }
+    this.db.prepare(`
+      UPDATE studio_extensions
+      SET owner_plugin_id = ?, origin = ?, managed = ?, user_override = ?, updated_at = ?
+      WHERE id = ?
+    `).run(
+      ownership.ownerPluginId,
+      ownership.origin,
+      ownership.managed ? 1 : 0,
+      ownership.userOverride ? 1 : 0,
+      Date.now(),
+      id,
+    );
+    return this.getExtension(id);
   }
 
   setExtensionEnabled(id, enabled) {
@@ -2352,6 +2559,99 @@ class StudioDatabase {
     this.db.prepare('DELETE FROM studio_extensions WHERE id = ?').run(id);
   }
 
+
+  projectPlugin(row) {
+    return {
+      id: row.id,
+      name: row.name,
+      version: row.version,
+      publisher: row.publisher || '',
+      description: row.description || '',
+      icon: row.icon || '',
+      category: row.category || '',
+      homepage: row.homepage || '',
+      sourcePath: row.source_path || '',
+      installPath: row.install_path || '',
+      provides: json(row.provides, {}),
+      enabled: Boolean(row.enabled),
+      contentHash: row.content_hash || '',
+      installedAt: row.installed_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  listPlugins() {
+    return this.db.prepare(`
+      SELECT * FROM studio_plugins
+      ORDER BY enabled DESC, name COLLATE NOCASE ASC, id
+    `).all().map((row) => this.projectPlugin(row));
+  }
+
+  getPlugin(id) {
+    const row = this.db.prepare('SELECT * FROM studio_plugins WHERE id = ?').get(id);
+    return row ? this.projectPlugin(row) : undefined;
+  }
+
+  upsertPlugin(input) {
+    const at = Date.now();
+    const current = this.getPlugin(input.id);
+    this.db.prepare(`
+      INSERT INTO studio_plugins(
+        id, name, version, publisher, description, icon, category, homepage,
+        source_path, install_path, provides, enabled, content_hash,
+        installed_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        name = excluded.name,
+        version = excluded.version,
+        publisher = excluded.publisher,
+        description = excluded.description,
+        icon = excluded.icon,
+        category = excluded.category,
+        homepage = excluded.homepage,
+        source_path = excluded.source_path,
+        install_path = excluded.install_path,
+        provides = excluded.provides,
+        enabled = excluded.enabled,
+        content_hash = excluded.content_hash,
+        updated_at = excluded.updated_at
+    `).run(
+      input.id,
+      input.name,
+      input.version,
+      input.publisher || '',
+      input.description || '',
+      input.icon || '',
+      input.category || '',
+      input.homepage || '',
+      input.sourcePath || '',
+      input.installPath || '',
+      encode(input.provides || {}),
+      input.enabled === false ? 0 : 1,
+      typeof input.contentHash === 'string' ? input.contentHash : '',
+      current?.installedAt || at,
+      at,
+    );
+    return this.getPlugin(input.id);
+  }
+
+  setPluginEnabled(id, enabled) {
+    const current = this.getPlugin(id);
+    if (!current) return undefined;
+    this.db.prepare('UPDATE studio_plugins SET enabled = ?, updated_at = ? WHERE id = ?')
+      .run(enabled ? 1 : 0, Date.now(), id);
+    return this.getPlugin(id);
+  }
+
+  removePlugin(id) {
+    this.db.prepare('DELETE FROM studio_plugins WHERE id = ?').run(id);
+  }
+
+  listEnabledMcpServerNames() {
+    return this.db.prepare('SELECT name FROM mcp_servers WHERE enabled = 1 ORDER BY name COLLATE NOCASE')
+      .all().map(row => row.name);
+  }
+
   listMcpServers({ includeSecrets = false } = {}) {
     return this.db.prepare('SELECT * FROM mcp_servers ORDER BY name COLLATE NOCASE').all().map((row) => {
       const env = decodeSecretMap(row.env);
@@ -2374,8 +2674,10 @@ class StudioDatabase {
           ? row.exposure
           : 'deferred',
         toolExposure: json(row.tool_exposure, {}),
+        methodAccess: json(row.method_access, {}),
         timeoutSeconds: Math.max(1, Number(row.timeout_seconds) || 60),
         enabled: Boolean(row.enabled),
+        ...projectOwnership(row),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       };
@@ -2405,8 +2707,10 @@ class StudioDatabase {
           ? row.exposure
           : 'deferred',
         toolExposure: json(row.tool_exposure, {}),
+        methodAccess: json(row.method_access, {}),
         timeoutSeconds: Math.max(1, Number(row.timeout_seconds) || 60),
         enabled: Boolean(row.enabled),
+        ...projectOwnership(row),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       };
@@ -2423,12 +2727,20 @@ class StudioDatabase {
 
   upsertMcpServer(input) {
     const at = Date.now();
-    const current = this.getMcpServer(input.name, { includeSecrets: true });
+    const current = this.db.prepare('SELECT * FROM mcp_servers WHERE name = ?').get(input.name);
+    const ownership = resolveOwnership(input, current && projectOwnership(current));
+    // Plugin manifests only supply connection metadata. Keep existing envelopes
+    // byte-for-byte and use the schema's empty maps on first registration.
+    const storedMap = key => input[key] && typeof input[key] === 'object'
+      ? encodeSecretMap(input[key])
+      : current?.[key] ?? '{}';
     this.db.prepare(`
       INSERT INTO mcp_servers(
         name, transport, command, args, cwd, url, description, env, headers,
-        exposure, tool_exposure, timeout_seconds, enabled, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        exposure, tool_exposure, timeout_seconds, enabled,
+        owner_plugin_id, origin, managed, user_override,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(name) DO UPDATE SET
         transport = excluded.transport,
         command = excluded.command,
@@ -2442,6 +2754,10 @@ class StudioDatabase {
         tool_exposure = excluded.tool_exposure,
         timeout_seconds = excluded.timeout_seconds,
         enabled = excluded.enabled,
+        owner_plugin_id = excluded.owner_plugin_id,
+        origin = excluded.origin,
+        managed = excluded.managed,
+        user_override = excluded.user_override,
         updated_at = excluded.updated_at
     `).run(
       input.name,
@@ -2451,32 +2767,39 @@ class StudioDatabase {
       input.cwd || '',
       input.url || '',
       input.description || '',
-      encodeSecretMap(input.env && typeof input.env === 'object' ? input.env : current?.env),
-      encodeSecretMap(input.headers && typeof input.headers === 'object' ? input.headers : current?.headers),
+      storedMap('env'),
+      storedMap('headers'),
       ['direct', 'deferred', 'hidden'].includes(input.exposure) ? input.exposure : 'deferred',
       encode(input.toolExposure && typeof input.toolExposure === 'object' ? input.toolExposure : {}),
       Math.max(1, Math.min(3_600, Number(input.timeoutSeconds) || 60)),
       input.enabled === false ? 0 : 1,
-      current?.createdAt || at,
+      ownership.ownerPluginId,
+      ownership.origin,
+      ownership.managed ? 1 : 0,
+      ownership.userOverride ? 1 : 0,
+      current?.created_at || at,
       at,
     );
     return this.getMcpServer(input.name);
   }
 
-  async upsertMcpServerAsync(input) {
+  async upsertMcpServerAsync(input, originalName = input.name) {
     const at = Date.now();
-    const current = await this.getMcpServerAsync(input.name, { includeSecrets: true });
+    const current = await this.getMcpServerAsync(originalName, { includeSecrets: true });
+    const ownership = resolveOwnership(input, current);
     const env = await encodeSecretMapAsync(
       input.env && typeof input.env === 'object' ? input.env : current?.env,
     );
     const headers = await encodeSecretMapAsync(
       input.headers && typeof input.headers === 'object' ? input.headers : current?.headers,
     );
-    this.db.prepare(`
+    const statement = this.db.prepare(`
       INSERT INTO mcp_servers(
         name, transport, command, args, cwd, url, description, env, headers,
-        exposure, tool_exposure, timeout_seconds, enabled, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        exposure, tool_exposure, timeout_seconds, enabled,
+        owner_plugin_id, origin, managed, user_override,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(name) DO UPDATE SET
         transport = excluded.transport,
         command = excluded.command,
@@ -2490,8 +2813,13 @@ class StudioDatabase {
         tool_exposure = excluded.tool_exposure,
         timeout_seconds = excluded.timeout_seconds,
         enabled = excluded.enabled,
+        owner_plugin_id = excluded.owner_plugin_id,
+        origin = excluded.origin,
+        managed = excluded.managed,
+        user_override = excluded.user_override,
         updated_at = excluded.updated_at
-    `).run(
+    `);
+    const save = () => statement.run(
       input.name,
       input.transport,
       input.command || '',
@@ -2505,10 +2833,42 @@ class StudioDatabase {
       encode(input.toolExposure && typeof input.toolExposure === 'object' ? input.toolExposure : {}),
       Math.max(1, Math.min(3_600, Number(input.timeoutSeconds) || 60)),
       input.enabled === false ? 0 : 1,
+      ownership.ownerPluginId,
+      ownership.origin,
+      ownership.managed ? 1 : 0,
+      ownership.userOverride ? 1 : 0,
       current?.createdAt || at,
       at,
     );
+    if (originalName === input.name) save();
+    else this.transaction(() => {
+      if (this.db.prepare('SELECT 1 FROM mcp_servers WHERE name = ?').get(input.name)) {
+        throw new Error('目标 MCP 名称已被使用，请换一个名称。');
+      }
+      if (!this.db.prepare('SELECT 1 FROM mcp_servers WHERE name = ?').get(originalName)) throw new Error('MCP 不存在');
+      save();
+      this.removeMcpServer(originalName, input.name);
+    });
     return this.getMcpServerAsync(input.name);
+  }
+
+  setMcpOwnership(name, ownershipInput = {}) {
+    const current = this.getMcpServer(name, { includeSecrets: true });
+    if (!current) throw new Error('MCP 不存在');
+    const ownership = resolveOwnership({ ...current, ...ownershipInput }, current);
+    this.db.prepare(`
+      UPDATE mcp_servers
+      SET owner_plugin_id = ?, origin = ?, managed = ?, user_override = ?, updated_at = ?
+      WHERE name = ?
+    `).run(
+      ownership.ownerPluginId,
+      ownership.origin,
+      ownership.managed ? 1 : 0,
+      ownership.userOverride ? 1 : 0,
+      Date.now(),
+      name,
+    );
+    return this.getMcpServer(name);
   }
 
   setMcpEnabled(name, enabled) {
@@ -2523,7 +2883,18 @@ class StudioDatabase {
     return this.getMcpServerAsync(name);
   }
 
-  removeMcpServer(name) {
+  setMcpMethodEnabled(name, method, enabled) {
+    const row = this.db.prepare('SELECT method_access FROM mcp_servers WHERE name = ?').get(name);
+    if (!row || typeof method !== 'string' || !method || typeof enabled !== 'boolean') throw new Error('无效的 MCP 方法');
+    const access = { ...json(row.method_access, {}), [method]: enabled };
+    this.db.prepare('UPDATE mcp_servers SET method_access = ?, updated_at = ? WHERE name = ?')
+      .run(encode(access), Date.now(), name);
+  }
+
+  removeMcpServer(name, renamedTo) {
+    if (renamedTo) {
+      this.db.prepare('UPDATE mcp_servers SET method_access = (SELECT method_access FROM mcp_servers WHERE name = ?) WHERE name = ?').run(name, renamedTo);
+    }
     this.db.prepare('DELETE FROM mcp_servers WHERE name = ?').run(name);
   }
 

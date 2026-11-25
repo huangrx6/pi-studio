@@ -454,22 +454,19 @@ function rebuildRegistry(current, durable, piAi, Mcp) {
       const exposure = toolExposureFor(entry.server, tool.name);
       const registeredName = toolName(entry.server.name, tool.name, (candidate) => usedNames.has(candidate));
       usedNames.add(registeredName);
-      registrations.push(mcpToolRegistration(
-        entry,
-        tool,
-        registeredName,
-        exposure,
-        durable,
-        piAi,
-        Mcp,
-      ));
+      const enabledOverride = entry.server.methodAccess?.[tool.name];
       catalogTools.push({
         name: registeredName,
         originalName: tool.name,
         description: tool.description || tool.title || tool.name,
         server: entry.server.name,
+        ownerPluginId: entry.server.ownerPluginId || '',
         exposure,
+        enabledOverride,
       });
+      // Keep disabled methods in server discovery so they can be re-enabled.
+      if (enabledOverride === false) continue;
+      registrations.push(mcpToolRegistration(entry, tool, registeredName, exposure, durable, piAi, Mcp));
       entry.registeredTools.push({ name: registeredName, originalName: tool.name, exposure });
     }
     const extension = durable.defineExtension({
@@ -794,6 +791,7 @@ function mcpSnapshot() {
       ? [...state.entries.values()]
           .map((entry) => ({
             name: entry.server.name,
+            description: entry.server.description || '',
             exposure: entry.server.exposure,
             connected: entry.client.connectionState === 'connected',
             toolCount: entry.tools.length,

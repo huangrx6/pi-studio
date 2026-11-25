@@ -23,7 +23,12 @@ function harness() {
   const reads = [], directories = [], diffs = [], externals = [];
   const h = {
     panelFileKey, fileCacheRef: { current: createPanelFileCache() }, fileReadRef: { current: 0 },
+    fileActionsRequestRef: { current: 0 }, deferredFileRefreshRef: { current: null },
+    changesDuringFileReads: { current: new Set() }, filesOpenRef: { current: true },
     workspaceRef: { current: '/A' }, sessionRef: { current: { id: 'A', cwd: '/A' } },
+    get contextKey() { return this.sessionRef.current.id; },
+    lastTabByContext: { current: new Map() },
+    tabIsVisible: () => true, closePanel() {},
     panelTabsRef: { current: [] }, activePanelTabIdRef: { current: '' }, treeRequestRef: { current: 0 },
     filesOpen: true, setPanelTabsState() {}, setActivePanelTabIdState() {},
     setPanelEntered() {}, setPanelSplit() {}, setFileMenuOpen() {}, setFileApps() {}, setFileAppsLoading() {},
@@ -39,7 +44,7 @@ function harness() {
     } },
   };
   vm.runInNewContext(code, h);
-  const reply = (index, text) => reads[index].resolve({ path: reads[index].path, kind: 'text', size: text.length, text });
+  const reply = (index, text, changeKey) => reads[index].resolve({ path: reads[index].path, kind: 'text', size: text.length, text, changeKey });
   const replyDiff = (index, text) => diffs[index].resolve({ path: diffs[index].payload.path, kind: 'text', size: text.length, text });
   const replyExternal = (index, text) => externals[index].resolve({ path: externals[index].payload.path, kind: 'text', size: text.length, text });
   return { h, reads, reply, directories, diffs, externals, replyDiff, replyExternal };
@@ -77,6 +82,20 @@ test('inactive file errors never replace a selected preview or its loading state
   reads[0].reject(new Error('A unavailable')); await a;
   assert.equal(h.error, null); assert.equal(h.busy, true);
   reply(1, 'B'); await b; assert.equal(h.file.text, 'B');
+});
+
+test('a mutation during the first read reloads only the matching preview', async () => {
+  const { h, reads, reply } = harness();
+  const pending = h.openFile('same.txt', undefined, 'workspace');
+  for (const changes of h.changesDuringFileReads.current) changes.add('updated-file');
+  reply(0, 'old content', 'updated-file');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reads.length, 2);
+  assert.equal(h.file, null);
+  reply(1, 'new content', 'updated-file');
+  await pending;
+  assert.equal(h.file.text, 'new content');
+  assert.equal(h.changesDuringFileReads.current.size, 0);
 });
 
 test('directory requests are separate from preview state and ignore old scopes and old paths', async () => {

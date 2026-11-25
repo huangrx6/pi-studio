@@ -136,6 +136,38 @@
   --loading-spin-duration: 1s;
   --loading-skeleton-duration: 1.8s;
   --shell-transition: 300ms cubic-bezier(.22, .8, .2, 1);
+  /* Settings pages, forms, dialogs and navigation share one global scale. */
+  --settings-title-size: var(--text-title);
+  --settings-section-title-size: var(--text-md);
+  --settings-copy-size: var(--text-13);
+  --settings-label-size: var(--text-13);
+  --settings-description-size: var(--text-sm);
+  --settings-section-title-font: var(--weight-semibold) var(--settings-section-title-size)/var(--leading-tight) var(--font);
+  --settings-preference-body-font: var(--weight-regular) var(--settings-copy-size)/var(--leading-normal) var(--font);
+  --settings-label-font: var(--weight-medium) var(--settings-label-size)/var(--leading-normal) var(--font);
+  --settings-description-font: var(--weight-regular) var(--settings-description-size)/var(--leading-normal) var(--font);
+  --settings-mono-font: var(--weight-regular) var(--settings-description-size)/var(--leading-normal) var(--mono);
+  --settings-group-gap: var(--space-5);
+  --settings-section-gap: var(--settings-group-gap);
+  --settings-heading-gap: var(--space-3);
+  --settings-field-gap: 6px;
+  --settings-panel-padding: var(--space-4);
+  --settings-row-padding-x: var(--settings-panel-padding);
+  --settings-group-inset: var(--settings-row-padding-x);
+  --settings-row-gap: var(--space-3);
+  --settings-row-padding: var(--space-2);
+  --settings-row-height: 52px;
+  --settings-control-height: var(--space-10);
+  --settings-compact-control-height: var(--space-8);
+  --settings-icon-hit: var(--settings-control-height);
+  --settings-title-mark: var(--space-10);
+  --settings-art-size: 120px;
+  --settings-art-size-compact: 96px;
+  --settings-motion-out: cubic-bezier(.22, 1, .36, 1);
+  --settings-motion-in: cubic-bezier(.4, 0, 1, 1);
+  --settings-page-enter: 180ms;
+  --settings-dialog-enter: 200ms;
+  --settings-dialog-exit: 140ms;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --display-font: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "Times New Roman", serif;
   --mono: "SF Mono", "JetBrains Mono", "Fira Code", Consolas, monospace;
@@ -159,6 +191,10 @@
     --sidebar-min-width: 212px;
     --sidebar-max-width: 252px;
     --session-gutter: var(--space-4);
+    --settings-title-size: var(--text-xl);
+    --settings-title-mark: var(--row-height);
+    --settings-art-size: 104px;
+    --settings-art-size-compact: 80px;
   }
 }
 

@@ -61,6 +61,7 @@ test('the default harness profile enables every baseline section', () => {
   const profile = getHarnessProfile();
   assert.equal(profile.id, 'studio-coding');
   assert.equal(profile.builtin, true);
+  assert.equal(profile.icon, null);
   assert.deepEqual(profile.sections, DEFAULT_HARNESS_SECTIONS);
 });
 
@@ -98,6 +99,19 @@ test('custom profiles persist, validate section switches, and can be workspace s
   const inherited = selectHarnessProfile({ cwd: workspace, scope: 'inherit', id: 'review-first' });
   assert.equal(inherited.workspaceProfileId, '');
   assert.equal(inherited.activeProfileId, inherited.globalProfileId);
+});
+
+test('a stale create or edit dialog cannot overwrite or recreate a saved profile', () => {
+  const profile = { id: 'shared-dialog', name: 'Original' };
+  saveHarnessProfile({ mode: 'create', profile });
+  assert.throws(
+    () => saveHarnessProfile({ mode: 'create', profile: { ...profile, name: 'Duplicate' } }),
+    /ID 已存在/,
+  );
+  const renamed = saveHarnessProfile({ mode: 'edit', profile: { ...profile, name: 'Renamed' } });
+  assert.equal(renamed.profiles.find(row => row.id === profile.id).name, 'Renamed');
+  deleteHarnessProfile({ id: profile.id });
+  assert.throws(() => saveHarnessProfile({ mode: 'edit', profile }), /已被删除/);
 });
 
 test('Harness selection rejects invalid scopes and unsafe workspace paths', () => {
@@ -148,6 +162,7 @@ test('profiles are versioned and prototype-sensitive ids are rejected', () => {
   assert.equal(normalized.activeProfileId, 'studio-coding');
   assert.equal(Object.hasOwn(normalized.profiles, 'constructor'), false);
   assert.equal(normalized.profiles['review-first'].sections.rules, false);
+  assert.equal(normalized.profiles['review-first'].icon, null);
   assert.equal(normalizeHarnessProfile({ id: '_invalid' }).id, 'studio-coding');
   assert.throws(
     () => saveHarnessProfile({ profile: { id: '_invalid' } }),
@@ -156,10 +171,12 @@ test('profiles are versioned and prototype-sensitive ids are rejected', () => {
 });
 
 test('custom profiles can be reset and deleted without losing the default baseline', () => {
+  const icon = { shape: 'stagger', ink: 'berry' };
   saveHarnessProfile({
     profile: {
       id: 'temporary-profile',
       name: 'Temporary',
+      icon,
       sections: { rules: false },
       customInstructions: 'temporary only',
     },
@@ -167,11 +184,29 @@ test('custom profiles can be reset and deleted without losing the default baseli
   const reset = resetHarnessProfile({ id: 'temporary-profile' });
   const profile = reset.profiles.find((item) => item.id === 'temporary-profile');
   assert.equal(profile.name, 'Temporary');
+  assert.deepEqual(profile.icon, icon);
   assert.equal(profile.sections.rules, true);
   assert.equal(profile.customInstructions, '');
   const deleted = deleteHarnessProfile({ id: 'temporary-profile' });
   assert.equal(deleted.profiles.some((item) => item.id === 'temporary-profile'), false);
   assert.throws(() => deleteHarnessProfile({ id: 'studio-coding' }), /不能删除/);
+});
+
+test('Harness icon choices round-trip through storage, accept partial profile edits and can return to automatic', () => {
+  const id = 'profile-icon';
+  const icon = { shape: 'ascending', ink: 'ocean' };
+  saveHarnessProfile({ mode: 'create', profile: { id, name: '原方案', icon } });
+  const renamed = saveHarnessProfile({ mode: 'edit', profile: { id, name: '新名称' } });
+  assert.deepEqual(renamed.profiles.find(profile => profile.id === id).icon, icon);
+  assert.deepEqual(selectHarnessProfile({ id, scope: 'global' }).activeProfile.icon, icon);
+  closeStudioDatabase();
+  assert.deepEqual(getHarnessProfile().icon, icon);
+  saveHarnessProfile({ mode: 'edit', profile: { id, icon: null } });
+  assert.equal(getHarnessProfile().icon, null);
+  for (const invalid of [{ shape: 'unknown', ink: 'ocean' }, { shape: 'baseline', ink: '__proto__' }, 'blue']) {
+    assert.equal(normalizeHarnessProfile({ id, icon: invalid }).icon, null);
+  }
+  deleteHarnessProfile({ id });
 });
 
 test('runtime policy normalizes nested Durable settings and clamps unsafe values', () => {

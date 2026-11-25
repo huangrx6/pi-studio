@@ -52,6 +52,7 @@ export function createPanelFileCache<T>(limit = 8, maxEstimatedBytes = PANEL_FIL
       if (entry) { values.delete(key); values.set(key, entry); }
       return entry?.value;
     },
+    peek(key: string) { return values.get(key)?.value; },
     begin(key: string) { const token = Symbol(key); requests.set(key, token); return token; },
     current(key: string, token: symbol) { return requests.get(key) === token; },
     put(key: string, token: symbol, value: T) {

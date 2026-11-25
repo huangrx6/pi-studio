@@ -1,0 +1,101 @@
+.settings-range-control {
+  --range-track-size: var(--space-1);
+  --range-thumb-size: 14px;
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-2) var(--range-inset, var(--space-3));
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.settings-range-control:not(.is-disabled):is(:hover, :has(input:focus-visible)) {
+  background: var(--settings-hover-bg);
+}
+
+.settings-range-copy { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); }
+.settings-range-heading { display: grid; min-width: 0; gap: var(--space-1); }
+.settings-range-heading strong { color: var(--text); font: var(--settings-label-font); }
+.settings-range-description { color: var(--muted); font: var(--settings-description-font); }
+.settings-range-copy output {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--settings-description-size);
+  font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-range-control input[type="range"] {
+  display: block;
+  width: 100%;
+  height: var(--space-6);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  appearance: none;
+  cursor: inherit;
+}
+
+.settings-range-control input[type="range"]:focus { box-shadow: none; }
+.settings-range-control input::-webkit-slider-runnable-track {
+  height: var(--range-track-size);
+  border-radius: var(--radius-round);
+  background: linear-gradient(to right, var(--accent) var(--range-progress), var(--settings-range-track) var(--range-progress));
+}
+.settings-range-control input::-moz-range-track {
+  height: var(--range-track-size);
+  border-radius: var(--radius-round);
+  background: var(--settings-range-track);
+}
+.settings-range-control input::-moz-range-progress {
+  height: var(--range-track-size);
+  border-radius: var(--radius-round);
+  background: var(--accent);
+}
+
+/* Keep the native input's full hit area around the narrow visible track. */
+.settings-range-control input::-webkit-slider-thumb {
+  appearance: none;
+  width: var(--range-thumb-size);
+  height: var(--range-thumb-size);
+  margin-top: calc((var(--range-track-size) - var(--range-thumb-size)) / 2);
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--on-button);
+  box-shadow: var(--settings-thumb-shadow);
+}
+.settings-range-control input::-moz-range-thumb {
+  box-sizing: border-box;
+  width: var(--range-thumb-size);
+  height: var(--range-thumb-size);
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--on-button);
+  box-shadow: var(--settings-thumb-shadow);
+}
+
+.settings-range-control input:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--focus-color); outline-offset: 2px; }
+.settings-range-control input:focus-visible::-moz-range-thumb { outline: 2px solid var(--focus-color); outline-offset: 2px; }
+.settings-range-control input:active::-webkit-slider-thumb { background: var(--accent); }
+.settings-range-control input:active::-moz-range-thumb { background: var(--accent); }
+.settings-range-control.is-disabled { --accent: var(--disabled-text); cursor: not-allowed; }
+.settings-range-control.is-disabled .settings-range-heading strong { color: var(--disabled-text); }
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-range-control { transition: none; }
+}
+
+@media (forced-colors: active) {
+  .settings-range-control input[type="range"] {
+    forced-color-adjust: none;
+    --settings-range-track: GrayText;
+    --accent: Highlight;
+    --focus-color: Highlight;
+    --on-button: Canvas;
+  }
+  .settings-range-control input:disabled { --accent: GrayText; }
+}

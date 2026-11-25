@@ -26,13 +26,13 @@ export function EnabledModelsDialog({ enabledModels, modelById, defaultId, view,
   const start = page * ENABLED_MODELS_PAGE_SIZE;
   const visible = matches.slice(start, start + ENABLED_MODELS_PAGE_SIZE);
   useLayoutEffect(() => { if (scroller.current) scroller.current.scrollTop = 0; }, [page, needle, view]);
-  return <DetailDialog className="enabled-models-dialog" onClose={onClose}>
+  return <DetailDialog label="已启用模型" className={`enabled-models-dialog${enabledModels.length <= 6 ? ' is-compact' : ''}`} onClose={onClose}>{close => <>
     <header className="detail-header"><div className="detail-heading"><span className="detail-icon"><Layers3 /></span>
       <div><h2>已启用模型</h2><p>{enabledModels.length} 个模型</p></div>
-    </div><button type="button" className="icon-button" aria-label="关闭已启用模型" onClick={onClose}><X /></button></header>
+    </div><button type="button" className="icon-button" aria-label="关闭已启用模型" onClick={close}><X /></button></header>
     <div className="enabled-models-toolbar">
       <label className="model-list-search"><Search aria-hidden="true" /><input autoFocus type="search" aria-label="搜索已启用模型" placeholder="搜索模型名称、ID 或来源…" value={query} onChange={e => { setQuery(e.target.value); setPage(0); }} /></label>
-      <div className="model-settings-view" role="group" aria-label="模型查看方式">
+      <div className="settings-segments model-settings-view" role="group" aria-label="模型查看方式">
         {(['all', 'provider'] as const).map(mode => <button key={mode} type="button" aria-pressed={mode === view} onClick={() => { actions.onModelViewChange(mode); setPage(0); }}>{mode === 'all' ? '全部' : '按来源'}</button>)}
       </div>
     </div>
@@ -55,5 +55,5 @@ export function EnabledModelsDialog({ enabledModels, modelById, defaultId, view,
       {totalPages > 1 && <><button type="button" className="icon-button" aria-label="上一页模型" disabled={page === 0} onClick={() => setPage(page - 1)}><ChevronLeft /></button>
         <button type="button" className="icon-button" aria-label="下一页模型" disabled={page + 1 >= totalPages} onClick={() => setPage(page + 1)}><ChevronRight /></button></>}
     </footer>
-  </DetailDialog>;
+  </>}</DetailDialog>;
 }

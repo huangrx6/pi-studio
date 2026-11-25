@@ -69,10 +69,11 @@ function sectionOverride(cwd, section) {
 
 function renderSection(input, section, fallback) {
   const cwd = input?.env?.cwd || input?.agent?.cwd;
-  const profile = profileFor(cwd);
+  const profile = input?.rolePrompt?.harness || profileFor(cwd);
   if (profile.sections[section] === false) return undefined;
   const override = profile.sectionOverrides?.[section];
-  if (typeof override === 'string' && override.trim()) return override.trim();
+  const explicitSkills = section === 'skills' && Array.isArray(input?.rolePrompt?.skills);
+  if (!explicitSkills && typeof override === 'string' && override.trim()) return override.trim();
   return fallback(profile, input);
 }
 

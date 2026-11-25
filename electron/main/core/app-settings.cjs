@@ -6,6 +6,7 @@
  */
 
 const path = require('node:path');
+const harnessIcons = require('../../../assets/settings/harness-profile-icons.json');
 const { getStudioDatabase } = require('./studio-db.cjs');
 const { normalizeWindowBounds } = require('./window-bounds.cjs');
 const {
@@ -43,7 +44,8 @@ const KEYS = Object.freeze({
 });
 
 const THEMES = new Set(['light', 'dark', 'system']);
-const PALETTES = new Set(['lime', 'ocean', 'amber', 'berry']);
+const DEFAULT_PALETTE = 'ocean';
+const PALETTES = new Set([DEFAULT_PALETTE, 'amber', 'berry']);
 const RADIUS_STYLES = new Set(['square', 'compact', 'standard', 'soft']);
 const RADIUS_PRESETS = Object.freeze({
   square: Object.freeze({ tag: 0, control: 0, card: 0, panel: 0, round: 0 }),
@@ -111,6 +113,7 @@ const DEFAULT_HARNESS_PROFILE = Object.freeze({
   id: 'studio-coding',
   name: 'Studio 编码基线',
   builtin: true,
+  icon: null,
   sections: DEFAULT_HARNESS_SECTIONS,
   sectionOverrides: {},
   customInstructions: '',
@@ -144,7 +147,6 @@ const RUNTIME_POLICY_DEFAULTS = Object.freeze({
 const AFTER_FAILED_RUN_MODES = new Set(['keep', 'continue', 'withdraw']);
 const MAX_SESSION_POLICY_ID = 256;
 const MAX_EXTENSION_ORDER = 256;
-const MAX_EXTENSION_SESSION_ORDERS = 512;
 const EXTENSION_ORDER_ID = /^(?:builtin|user|project):[a-z0-9][a-z0-9._-]{1,63}$/;
 const RESERVED_OBJECT_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 const SUBAGENT_MODEL_REF = /^[A-Za-z0-9][A-Za-z0-9._-]*\/.+$/;
@@ -170,7 +172,7 @@ function normalizeTheme(value) {
 }
 
 function normalizePalette(value) {
-  return PALETTES.has(value) ? value : 'lime';
+  return PALETTES.has(value) ? value : DEFAULT_PALETTE;
 }
 
 function normalizeMenuBarEnabled(value) {
@@ -239,10 +241,14 @@ function normalizeHarnessProfile(value, fallback) {
   const customInstructions = typeof source.customInstructions === 'string'
     ? source.customInstructions.slice(0, MAX_HARNESS_INSTRUCTIONS)
     : fallbackProfile.customInstructions;
+  const icon = source.icon === undefined ? fallbackProfile.icon : source.icon;
   return {
     id,
     name,
     builtin: id === DEFAULT_HARNESS_PROFILE.id,
+    icon: icon && typeof icon.shape === 'string' && Object.hasOwn(harnessIcons.shapes, icon.shape)
+      && typeof icon.ink === 'string' && Object.hasOwn(harnessIcons.inks, icon.ink)
+      ? { shape: icon.shape, ink: icon.ink } : null,
     sections: normalizeHarnessSections(source.sections, fallbackProfile.sections),
     sectionOverrides: normalizeSectionOverrides(
       source.sectionOverrides === undefined
@@ -388,30 +394,9 @@ function normalizeExtensionOrder(value) {
 }
 
 function normalizeConversationExtensionUiPreferences(value) {
-  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-  const sessionOrders = {};
-  const rawSessions = source.sessionOrders
-    && typeof source.sessionOrders === 'object'
-    && !Array.isArray(source.sessionOrders)
-    ? Object.entries(source.sessionOrders)
-    : [];
-  for (const [rawSessionId, rawOrder] of rawSessions) {
-    if (Object.keys(sessionOrders).length >= MAX_EXTENSION_SESSION_ORDERS) break;
-    const sessionId = typeof rawSessionId === 'string' ? rawSessionId.trim() : '';
-    if (
-      !sessionId
-      || RESERVED_OBJECT_KEYS.has(sessionId)
-      || sessionId.length > MAX_SESSION_POLICY_ID
-      || !Array.isArray(rawOrder)
-    ) continue;
-    const order = normalizeExtensionOrder(rawOrder);
-    if (order.length > 0) sessionOrders[sessionId] = order;
-  }
   return {
     version: 1,
-    layout: source.layout === 'list' ? 'list' : 'grid',
-    globalOrder: normalizeExtensionOrder(source.globalOrder),
-    sessionOrders,
+    globalOrder: normalizeExtensionOrder(value?.globalOrder),
   };
 }
 
@@ -423,40 +408,9 @@ function getConversationExtensionUiPreferences() {
   );
 }
 
-/**
- * Persist the global extension order/layout and optional per-conversation
- * overrides. Passing `sessionOrder: null` removes one override.
- */
-function saveConversationExtensionUiPreferences(input = {}) {
-  const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
-  const current = getConversationExtensionUiPreferences();
-  const next = {
-    ...current,
-    sessionOrders: { ...current.sessionOrders },
-  };
-  if (source.layout === 'grid' || source.layout === 'list') next.layout = source.layout;
-  if (Array.isArray(source.globalOrder)) {
-    next.globalOrder = normalizeExtensionOrder(source.globalOrder);
-  }
-  const sessionId = typeof source.sessionId === 'string' ? source.sessionId.trim() : '';
-  if (
-    sessionId
-    && !RESERVED_OBJECT_KEYS.has(sessionId)
-    && sessionId.length <= MAX_SESSION_POLICY_ID
-    && Object.hasOwn(source, 'sessionOrder')
-  ) {
-    if (source.sessionOrder === null) {
-      delete next.sessionOrders[sessionId];
-    } else {
-      const order = normalizeExtensionOrder(source.sessionOrder);
-      if (order.length > 0) next.sessionOrders[sessionId] = order;
-      else delete next.sessionOrders[sessionId];
-    }
-  }
-  while (Object.keys(next.sessionOrders).length > MAX_EXTENSION_SESSION_ORDERS) {
-    delete next.sessionOrders[Object.keys(next.sessionOrders)[0]];
-  }
-  const normalized = normalizeConversationExtensionUiPreferences(next);
+function saveConversationExtensionUiPreferences(input) {
+  if (!Array.isArray(input?.globalOrder)) return getConversationExtensionUiPreferences();
+  const normalized = normalizeConversationExtensionUiPreferences(input);
   getStudioDatabase().setSetting(KEYS.conversationExtensionUi, normalized);
   return normalized;
 }
@@ -527,7 +481,7 @@ function getTheme() {
 }
 
 function getPalette() {
-  return readSettingWithRecovery(KEYS.palette, 'lime', normalizePalette);
+  return readSettingWithRecovery(KEYS.palette, DEFAULT_PALETTE, normalizePalette);
 }
 
 function normalizeRadiusStyle(value, fallback = DEFAULT_RADIUS_STYLE) {
@@ -793,20 +747,6 @@ function resetPermissionPolicy({ scope = 'user', cwd = '', sessionId = '' } = {}
   return store;
 }
 
-function deletePermissionSessionPolicy(sessionId) {
-  const id = canonicalPermissionSessionId(sessionId);
-  if (
-    !id
-    || id.length > MAX_SESSION_POLICY_ID
-    || RESERVED_OBJECT_KEYS.has(id)
-  ) return false;
-  const store = getPermissionPolicyStore();
-  if (!Object.hasOwn(store.sessions, id)) return false;
-  delete store.sessions[id];
-  savePermissionPolicyStore(store);
-  return true;
-}
-
 function deletePermissionPoliciesForWorkspace(cwd, sessionIds = []) {
   let workspace;
   try {
@@ -867,18 +807,6 @@ function deleteWorkspaceScopedSettings(cwd, sessionIds = []) {
     const harnessStore = getHarnessStore();
     delete harnessStore.workspaceProfiles[workspace];
     db.setSetting(KEYS.harness, harnessStore);
-
-    const conversationExtensions = getConversationExtensionUiPreferences();
-    let extensionPreferencesChanged = false;
-    for (const value of sessionIds) {
-      const id = typeof value === 'string' ? value.trim() : '';
-      if (!id || !Object.hasOwn(conversationExtensions.sessionOrders, id)) continue;
-      delete conversationExtensions.sessionOrders[id];
-      extensionPreferencesChanged = true;
-    }
-    if (extensionPreferencesChanged) {
-      db.setSetting(KEYS.conversationExtensionUi, conversationExtensions);
-    }
     return true;
   });
 }
@@ -1181,7 +1109,10 @@ function saveHarnessProfile(input = {}) {
   if (!HARNESS_PROFILE_ID.test(requestedId) || RESERVED_HARNESS_PROFILE_IDS.has(requestedId)) {
     throw new Error('Harness profile id 需要 2–64 个小写字母、数字、点、横线或下划线');
   }
-  if (!Object.hasOwn(store.profiles, requestedId) && Object.keys(store.profiles).length >= MAX_HARNESS_PROFILES) {
+  const exists = Object.hasOwn(store.profiles, requestedId);
+  if (payload.mode === 'create' && exists) throw new Error('这个配置 ID 已存在，请使用其他 ID。');
+  if (payload.mode === 'edit' && !exists) throw new Error('这份 Harness 配置已被删除。');
+  if (!exists && Object.keys(store.profiles).length >= MAX_HARNESS_PROFILES) {
     throw new Error(`最多保存 ${MAX_HARNESS_PROFILES} 个 Harness profile`);
   }
   const current = store.profiles[requestedId] || {
@@ -1240,14 +1171,14 @@ function resetHarnessProfile(payload = {}) {
   const id = typeof input.id === 'string' ? input.id : DEFAULT_HARNESS_PROFILE.id;
   const store = getHarnessStore();
   if (!Object.hasOwn(store.profiles, id)) throw new Error('Harness profile 不存在');
-  store.profiles[id] = id === DEFAULT_HARNESS_PROFILE.id
-    ? clone(DEFAULT_HARNESS_PROFILE)
-    : {
-        ...clone(DEFAULT_HARNESS_PROFILE),
-        id,
-        name: store.profiles[id].name,
-        builtin: false,
-      };
+  const current = store.profiles[id];
+  store.profiles[id] = {
+    ...clone(DEFAULT_HARNESS_PROFILE),
+    id,
+    name: current.builtin ? DEFAULT_HARNESS_PROFILE.name : current.name,
+    builtin: current.builtin,
+    icon: current.icon,
+  };
   getStudioDatabase().setSetting(KEYS.harness, store);
   return getHarnessSettings(input.cwd);
 }
@@ -1328,7 +1259,6 @@ module.exports = {
   THEMES,
   defaultHarnessStore,
   deletePermissionPoliciesForWorkspace,
-  deletePermissionSessionPolicy,
   deleteWorkspaceScopedSettings,
   deleteHarnessProfile,
   getHarnessProfile,

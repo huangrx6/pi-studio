@@ -1,3 +1,9 @@
 .session-view-head { display: flex; flex: none; margin-bottom: var(--space-4); align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
 .session-view-head h2 { margin: 0; color: var(--text); font-size: var(--text-xl); font-weight: var(--weight-semibold); line-height: var(--leading-tight); }
 .session-view-head p { margin: var(--space-1) 0 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-normal); }
+.session-view-head.has-back { justify-content: flex-start; flex-wrap: nowrap; gap: var(--space-2); }
+.session-view-head.has-back > div { min-width: 0; }
+.session-view-head.has-back h2 { font-size: var(--text-base); overflow-wrap: anywhere; }
+.session-view-head.has-back p { margin-top: 2px; font-size: var(--text-xs); }
+.session-view-head .session-view-back { margin-inline-start: auto; }
+.session-view-head .session-view-back:is(:hover, :focus-visible) { background: var(--conversation-hover-surface); color: var(--text-1); }

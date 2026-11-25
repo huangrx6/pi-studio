@@ -1,13 +1,19 @@
 import { lazy, Suspense, useCallback, useMemo, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import { ExtensionSlot } from './features/extensions/ExtensionSlot';
+import { ExtensionSummaries } from './features/extensions/ExtensionSummaries';
+import type { ExtensionPanelPickerProps } from './features/extensions/ExtensionPanelPicker';
+import { ConversationExtensionsMenu } from './shell/ConversationExtensionsMenu';
+import { SessionWorkbenchPanel } from './shell/right-panel/SessionWorkbenchPanel';
+import { useSettingsToast } from './shared/SettingsToast';
+import { SurfaceActiveContext } from './shared/surface-visibility';
 import { ExtensionAppearanceContext } from './features/extensions/ExtensionStatusIcon';
 import { ConversationActionPalette } from './features/conversation/ConversationActionPalette';
 import type { QueuedPreview } from './features/conversation/QueuedMessages';
 import { AppSidebar } from './shell/AppSidebar';
 import { AppDialogs } from './shell/AppDialogs';
 import { BackgroundLayer, BackgroundMediaNode } from './shell/BackgroundLayer';
-import { ConversationProgress, ProgressTrigger } from './shell/ConversationProgress';
+import { ConversationProgress } from './shell/ConversationProgress';
 import { useGitWorkspaceStatus } from './shell/useGitWorkspaceStatus';
 import { GitRepositoryContext, useWorkspaceRepositories } from './features/git/useWorkspaceRepositories';
 import { ConversationWorkspace } from './shell/ConversationWorkspace';
@@ -18,7 +24,6 @@ import { useAppFoundation } from './shell/useAppFoundation';
 import { useWindowChrome } from './shell/useWindowChrome';
 import { useLaunchScreen } from './shell/useLaunchScreen';
 import { useConversationController } from './shell/useConversationController';
-import { ComparisonWorkbench } from './features/comparison/ComparisonWorkbench';
 import { MarkdownActions } from './shared/markdown-actions';
 import { errorText } from './shared/error-text';
 
@@ -30,6 +35,7 @@ const WorkbenchPane = lazy(async () => {
 /** Application composition root: foundation state, conversation runtime, then layout. */
 export function App() {
   useWindowChrome();
+  const showSettingsToast = useSettingsToast();
   const foundation = useAppFoundation();
   const conversation = useConversationController(foundation);
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
@@ -47,7 +53,6 @@ export function App() {
     shortcutsOpen,
     setShortcutsOpen,
     notifications,
-    setNotifications,
     markAllNotificationsRead,
     clearNotifications,
     workspaces,
@@ -104,7 +109,6 @@ export function App() {
     outlineActive,
     setError,
     error,
-    agentView,
     turnActive,
     compaction,
     retryInfo,
@@ -123,8 +127,6 @@ export function App() {
     setModelPickerRequest,
     sessionLoadRef,
     longTaskBusy,
-    progressView,
-    setProgressView,
     prompt,
     setPrompt,
     composerAttachments,
@@ -140,7 +142,7 @@ export function App() {
     composerMenuLoading,
     composerMenuError,
     composerCommandOptions,
-    composerFileOptions,
+    composerMentionOptions,
     composerCommands,
     retryComposerSuggestions,
     queuedEditContext,
@@ -185,7 +187,6 @@ export function App() {
     extensionDetail,
     setExtensionDetail,
     skillDetail,
-    skillDetailError,
     toggleSkillTrust,
     closeSkillDetail,
     mcpDetail,
@@ -227,31 +228,13 @@ export function App() {
     resetToLatest,
     transcriptTruncated,
     notifyExtension,
-    comparisonByParent,
-    setComparisonByParent,
-    comparisonStartPending,
-    comparisonStarting,
-    setComparisonStarting,
-    comparisonPanelContext,
-    setComparisonPanelContext,
-    returnToMainAgent,
-    openModelComparison,
+    focusConversation,
     openTrace,
-    conversationExtensionSurface,
-    conversationExtensionUiPreferences,
-    conversationExtensionOrderScope,
-    setConversationExtensionOrderScope,
-    conversationDetailExtensionItems,
-    conversationFooterExtensionItems,
-    conversationExtensionChipItems,
-    openConversationExtensionChip,
-    openConversationExtension,
-    conversationExtensionHubItems,
-    activeExtensionItem,
-    hasConversationExtensionSessionOrder,
-    updateConversationExtensionUi,
-    openConversationExtensionHub,
-    quotaProvider,
+    conversationExtensions,
+    extensionMenuOpen,
+    setExtensionMenuOpen,
+    openExtensionPanel,
+    quotaSource,
     liveDiff,
     handleOpenFile,
     handleOpenAttachment,
@@ -327,107 +310,41 @@ export function App() {
     || '工具';
   const repositories = useWorkspaceRepositories(session?.cwd, workspaces.find(item => item.cwd === session?.cwd)?.name);
   const { status: gitStatus } = useGitWorkspaceStatus(session?.cwd, repositories.selected?.id);
-  const progressPinned = workbench.panelTabs.some(tab => tab.kind === 'progress');
-  const dismissProgress = useCallback(() => setProgressView(view => view.floating
-    ? { ...view, floating: false } : view), [setProgressView]);
-  const navigateFromProgress = useCallback((action: () => void) => {
-    dismissProgress();
-    if (workbench.panelFullscreen) workbench.setPanelFullscreen(false);
-    action();
-  }, [dismissProgress, workbench.panelFullscreen, workbench.setPanelFullscreen]);
-  const openProgressPage = useCallback((action: () => void) => {
-    navigateFromProgress(action);
-    if (filesOpen && window.matchMedia('(max-width: 1100px)').matches) workbench.closePanel();
-  }, [filesOpen, navigateFromProgress, workbench.closePanel]);
-  const openGit = useCallback((tab: import('./types/git-types').GitTab) => {
-    openProgressPage(() => {
-      conversation.rememberMainScrollPosition();
-      foundation.setAgentView({ kind: 'git', tab });
-    });
-  }, [conversation.rememberMainScrollPosition, foundation.setAgentView, openProgressPage]);
-  const onProgressPinChange = useCallback(() => {
-    setProgressView(view => ({ ...view, floating: progressPinned && Boolean(session) }));
-    if (progressPinned) {
-      workbench.setPanelFullscreen(false);
-      workbench.closePanelTab('progress');
-    } else workbench.openProgressTab();
-    requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('.conversation-progress .progress-pin')?.focus());
-  }, [progressPinned, session, setProgressView, workbench.closePanelTab, workbench.openProgressTab, workbench.setPanelFullscreen]);
-  const onProgressGitSettings = useCallback(() => {
-    navigateFromProgress(() => void openSettings('git'));
-  }, [navigateFromProgress, openSettings]);
-  const onProgressEditGoal = useCallback(() => {
-    navigateFromProgress(() => { returnToMainAgent(); sendPromptFromExtension('/goal ', false); });
-  }, [navigateFromProgress, returnToMainAgent, sendPromptFromExtension]);
-  const onProgressOpenTasks = useCallback(() => {
-    openProgressPage(() => {
-      conversation.rememberMainScrollPosition();
-      foundation.setAgentView({ kind: 'tasks' });
-    });
-  }, [conversation.rememberMainScrollPosition, foundation.setAgentView, openProgressPage]);
-  const onProgressToggleHistory = useCallback(() => {
-    setProgressView(view => ({ ...view, history: !view.history }));
-  }, [setProgressView]);
-  const onProgressAgents = useCallback(() => {
-    openProgressPage(subagentWorkspace.openAgentOverview);
-  }, [openProgressPage, subagentWorkspace.openAgentOverview]);
-  const onProgressAgent = useCallback((child: import('./types/subagent-types').SubagentChild) => {
-    openProgressPage(() => subagentWorkspace.openAgentTranscript(child));
-  }, [openProgressPage, subagentWorkspace.openAgentTranscript]);
-  const progressVisible = progressPinned || progressView.floating;
-  const progressContent = useMemo(() => {
-    if (!progressVisible) return null;
-    return (
-      <ConversationProgress
-        key={session?.id}
-        sessionId={session?.id}
-        pinned={progressPinned}
-        onPinChange={onProgressPinChange}
-        git={gitStatus}
-        onGitSettings={onProgressGitSettings}
-        onOpenGit={openGit}
-        goal={session?.longTask}
-        running={turnActive}
-        goalBusy={longTaskBusy}
-        onGoalAction={changeLongTaskStatus}
-        onEditGoal={onProgressEditGoal}
-        onOpenTasks={onProgressOpenTasks}
-        tasks={todoDetails}
-        history={progressView.history}
-        onToggleHistory={onProgressToggleHistory}
-        agents={subagentWorkspace.subagentChildren}
-        onAgents={onProgressAgents}
-        onAgent={onProgressAgent}
-      />
-    );
-  }, [
-    changeLongTaskStatus,
-    gitStatus,
-    longTaskBusy,
-    onProgressAgent,
-    onProgressAgents,
-    onProgressEditGoal,
-    onProgressGitSettings,
-    onProgressOpenTasks,
-    onProgressPinChange,
-    onProgressToggleHistory,
-    openGit,
-    progressPinned,
-    progressView.history,
-    progressVisible,
-    session?.id,
-    session?.longTask,
-    subagentWorkspace.subagentChildren,
-    todoDetails,
+  const openGit = workbench.openGitTab;
+  const progressContent = (
+    <ConversationProgress
+      key={session?.id}
+      sessionId={session?.id}
+      goal={session?.longTask}
+      running={turnActive}
+      goalBusy={longTaskBusy}
+      onGoalAction={changeLongTaskStatus}
+      onEditGoal={() => {
+        focusConversation();
+        sendPromptFromExtension('/goal ', false);
+      }}
+      tasks={todoDetails}
+      onOpenTasks={() => workbench.openProgressTab('tasks')}
+      onOpenHistory={() => workbench.openProgressTab('history')}
+      agents={subagentWorkspace.subagentChildren}
+      onAgents={subagentWorkspace.openAgentOverview}
+      onAgent={subagentWorkspace.openAgentTranscript}
+    />
+  );
+  const workbenchTrace = useMemo(() => ({
+    turns: transcriptTurns,
+    toolResults: toolResultMap,
+    requestPlacement,
     turnActive,
-  ]);
-    /** Latest browser opener, read through a ref so the context value stays stable. */
+  }), [transcriptTurns, toolResultMap, requestPlacement, turnActive]);
+  /** Latest browser opener, read through a ref so the context value stays stable. */
   const markdownLinkRef = useRef<(url: string) => void>(() => {});
   markdownLinkRef.current = (url: string) => {
     void (async () => {
+      const raw = String(url || '').trim();
+      if (!raw) return;
       try {
         const settings = await window.piApi.browserAdvancedSettings?.();
-        const raw = String(url || '').trim();
         let local = false;
         try {
           const parsed = new URL(raw);
@@ -437,19 +354,69 @@ export function App() {
             || parsed.hostname === '[::1]'
             || parsed.hostname.endsWith('.localhost');
         } catch {
-          local = raw.startsWith('file:') || raw.startsWith('/');
+          // Absolute/relative filesystem paths and bare localhost hosts.
+          local = raw.startsWith('file:')
+            || raw.startsWith('/')
+            || raw.startsWith('~/')
+            || raw.startsWith('./')
+            || raw.startsWith('../')
+            || /^[A-Za-z]:[\\/]/.test(raw)
+            || /^localhost(?::\d+)?(?:[/?#].*)?$/i.test(raw)
+            || /^127\.0\.0\.1(?::\d+)?(?:[/?#].*)?$/i.test(raw);
         }
-        const target = local ? settings?.localLinkOpenTarget : settings?.webLinkOpenTarget;
-        if (target === 'system' && /^https?:\/\//i.test(raw)) {
-          await window.piApi.openLink(raw, 'external');
-          return;
+        const target = (local ? settings?.localLinkOpenTarget : settings?.webLinkOpenTarget) === 'system'
+          ? 'system'
+          : 'workbench';
+
+        if (target === 'system') {
+          if (/^https?:\/\//i.test(raw)) {
+            await window.piApi.openLink(raw, 'external');
+            return;
+          }
+          if (local) {
+            const filePath = (() => {
+              try {
+                if (/^file:/i.test(raw)) return decodeURIComponent(new URL(raw).pathname || '');
+              } catch {
+                // fall through
+              }
+              return raw.replace(/^file:\/\//i, '');
+            })();
+            if (filePath) {
+              await window.piApi.openWith({ path: filePath, source: 'external' });
+              return;
+            }
+          }
+        }
+
+        // workbench: browsable pages → side browser; other local files → in-app preview.
+        const browsable = raw === 'about:blank'
+          || /^https?:\/\//i.test(raw)
+          || /^file:.*\.html?([?#].*)?$/i.test(raw)
+          || /\.html?([?#].*)?$/i.test(raw)
+          || /^localhost(?::\d+)?(?:[/?#].*)?$/i.test(raw)
+          || /^127\.0\.0\.1(?::\d+)?(?:[/?#].*)?$/i.test(raw);
+        if (local && !browsable) {
+          const filePath = (() => {
+            try {
+              if (/^file:/i.test(raw)) return decodeURIComponent(new URL(raw).pathname || '');
+            } catch {
+              // fall through
+            }
+            return raw.replace(/^file:\/\//i, '');
+          })();
+          if (filePath) {
+            void openFile(filePath, session?.id, 'external');
+            return;
+          }
         }
       } catch {
-        // Fall back to workbench browser.
+        // Fall through to workbench browser.
       }
-      openBrowserTab(url);
+      openBrowserTab(raw);
     })();
   };
+
   const onSidebarStartSession = useCallback(() => { void startSession(); }, [startSession]);
   const onSidebarOpenSettings = useCallback((page?: Parameters<typeof openSettings>[0]) => { void openSettings(page); }, [openSettings]);
   const onSidebarOpenSearch = useCallback(() => setWorkspaceSearchOpen(true), [setWorkspaceSearchOpen]);
@@ -466,9 +433,6 @@ export function App() {
       onOpenSettings={onSidebarOpenSettings}
       workspace={workspace}
       sessionId={session?.id}
-      modelRef={modelSelection.modelRef}
-      onSendPrompt={sendPromptFromExtension}
-      onNotify={notifyExtension}
       workspaces={workspaces}
       allExpanded={allExpanded}
       onToggleAllExpanded={toggleAllExpanded}
@@ -503,8 +467,6 @@ export function App() {
     closeSidebarSearch,
     conversationListRefreshError,
     expanded,
-    modelSelection.modelRef,
-    notifyExtension,
     onSidebarCollapse,
     onSidebarOpenSearch,
     onSidebarOpenSettings,
@@ -512,7 +474,6 @@ export function App() {
     onSidebarStartSession,
     openTemporaryChat,
     searchCollapsed,
-    sendPromptFromExtension,
     session?.id,
     settingsOpen,
     sidebarActions,
@@ -524,10 +485,10 @@ export function App() {
     stateLoading,
     toggleAllExpanded,
     visibleWorkspaces,
-    workspace,
     workspaceQuery,
     workspaceSearchOpen,
     workspaceSearchTrigger,
+    workspace,
     workspaces,
   ]);
 
@@ -544,25 +505,13 @@ export function App() {
     void openSettings('models');
   }, [openSettings]);
   const resetTranscriptToLatest = useCallback(() => resetToLatest(), [resetToLatest]);
-  const toggleProgressFloating = useCallback(() => {
-    if (progressPinned) workbench.openProgressTab();
-    else setProgressView(view => ({ ...view, floating: !view.floating }));
-  }, [progressPinned, setProgressView, workbench.openProgressTab]);
-
-  const notificationCount = useMemo(
-    () => notifications.filter((item) => !item.read).length,
-    [notifications],
-  );
-
   const workspaceShell = useMemo(() => ({
     isNewConversation,
     sessionLoading,
     messageCount: messages.length,
     sidebarCollapsed,
     setSidebarCollapsed,
-    agentView,
     session,
-    modelSelection,
     preferences,
     turnActive,
     busy,
@@ -571,16 +520,14 @@ export function App() {
     compaction,
     retryInfo,
     liveDiff,
-    notificationCount,
     notifications,
-    setNotifications,
     markAllRead: markAllNotificationsRead,
     clearNotifications,
     conversationSubscriptionError,
     retryConversationSubscription,
     settingsOpen,
+    visible: !settingsOpen && !panelFullscreen,
   }), [
-    agentView,
     busy,
     clearNotifications,
     compaction,
@@ -590,16 +537,14 @@ export function App() {
     liveDiff,
     markAllNotificationsRead,
     messages.length,
-    modelSelection,
-    notificationCount,
     notifications,
+    panelFullscreen,
     preferences,
     retryConversationSubscription,
     retryInfo,
     session,
     sessionLoading,
     setError,
-    setNotifications,
     setSidebarCollapsed,
     settingsOpen,
     sidebarCollapsed,
@@ -619,60 +564,40 @@ export function App() {
       : null
   ), [openUpdateDialog, updateProgress, updateSnapshot.latestVersion, updateSnapshot.state]);
 
-  const progressTrigger = useMemo(() => (
-    <ProgressTrigger
-      open={!progressPinned && progressView.floating}
-      pinned={progressPinned}
-      active={progressPinned && workbench.panelEntered && workbench.activePanelTabId === 'progress'}
-      onDismiss={dismissProgress}
-      onToggle={toggleProgressFloating}
-    >
-      {progressContent}
-    </ProgressTrigger>
-  ), [
-    dismissProgress,
-    progressContent,
-    progressPinned,
-    progressView.floating,
-    toggleProgressFloating,
-    workbench.activePanelTabId,
-    workbench.panelEntered,
-  ]);
-
-  const workspaceHeader = useMemo(() => ({
+  const extensionPicker: ExtensionPanelPickerProps = {
+    surface: conversationExtensions.surface,
+    groups: conversationExtensions.groups,
+    cwd: panelWorkspace,
+    sessionId: session?.id,
+    modelRef: modelSelection.modelRef,
+    quotaSource,
+    onOpenPanel: panelId => { void openExtensionPanel(panelId); },
+    onOpenSettings: openSettingsPage,
+    onSendPrompt: sendPromptFromExtension,
+    onNotify: notifyExtension,
+    onManage: () => openSettingsPage('extensions'),
+  };
+  const selectedTool = workbench.panelEntered ? workbench.activePanelTab?.kind : undefined;
+  const workspaceHeader = {
     update: headerUpdate,
-    conversationDetailExtensionCount: conversationDetailExtensionItems.length,
-    quotaProvider,
-    openNotificationSession,
-    runNotificationAction,
+    gitStatus,
     panelExpanded: workbench.panelEntered,
-    openPanel,
-    returnToMainAgent,
-    gitStatus,
-    openGit,
-    progressTrigger,
-    openConversationExtensionHub,
-    openTrace,
-  }), [
-    conversationDetailExtensionItems.length,
-    gitStatus,
-    headerUpdate,
-    openConversationExtensionHub,
-    openGit,
-    openNotificationSession,
-    openPanel,
-    openTrace,
-    progressTrigger,
-    quotaProvider,
-    returnToMainAgent,
-    runNotificationAction,
-    workbench.panelEntered,
-  ]);
-
+    onOpenPanel: openPanel,
+    onOpenProgress: workbench.openProgressTab,
+    onOpenTrace: openTrace,
+    onOpenGit: openGit,
+    onOpenNotificationSession: openNotificationSession,
+    onRunNotificationAction: runNotificationAction,
+    activeTool: selectedTool === 'progress' || selectedTool === 'trace' ? selectedTool : undefined,
+    status: !panelFullscreen && conversationExtensions.headerItems.length > 0 ?
+      <ExtensionSummaries {...extensionPicker} slot="status.chip" items={conversationExtensions.headerItems} />
+      : undefined,
+    extensionMenu: <ConversationExtensionsMenu {...extensionPicker}
+      open={extensionMenuOpen} onOpenChange={setExtensionMenuOpen} />,
+  };
   const workspaceActions = useMemo(() => ({
     openAttachment: handleOpenAttachment,
     openFile: handleOpenFile,
-    openGitFile,
     openChanges: handleOpenChanges,
     undoTurnDiff,
     editMessage: handleEditMessage,
@@ -681,7 +606,6 @@ export function App() {
     handleOpenAttachment,
     handleOpenChanges,
     handleOpenFile,
-    openGitFile,
     undoTurnDiff,
   ]);
 
@@ -735,40 +659,6 @@ export function App() {
     visibleTurns,
   ]);
 
-  const workspaceExtensions = useMemo(() => ({
-    chipItems: conversationExtensionChipItems,
-    openChip: openConversationExtensionChip,
-    openItem: openConversationExtension,
-    surface: conversationExtensionSurface,
-    hubItems: conversationExtensionHubItems,
-    activeItem: activeExtensionItem,
-    preferences: conversationExtensionUiPreferences,
-    orderScope: conversationExtensionOrderScope,
-    setOrderScope: setConversationExtensionOrderScope,
-    hasSessionOrder: hasConversationExtensionSessionOrder,
-    updateUi: updateConversationExtensionUi,
-    openSettings: openSettingsPage,
-    sendPrompt: sendPromptFromExtension,
-    notify: notifyExtension,
-    openHub: openConversationExtensionHub,
-  }), [
-    activeExtensionItem,
-    conversationExtensionChipItems,
-    conversationExtensionHubItems,
-    conversationExtensionOrderScope,
-    conversationExtensionSurface,
-    conversationExtensionUiPreferences,
-    hasConversationExtensionSessionOrder,
-    notifyExtension,
-    openConversationExtension,
-    openConversationExtensionChip,
-    openConversationExtensionHub,
-    openSettingsPage,
-    sendPromptFromExtension,
-    setConversationExtensionOrderScope,
-    updateConversationExtensionUi,
-  ]);
-
   const workspaceOutline = useMemo(() => ({
     items: outlineItems,
     samples: outlineSamples,
@@ -784,7 +674,6 @@ export function App() {
   const modelPickerContextKey = `${workspace}:${session?.id ?? 'draft'}:${sessionLoadRef.current}`;
 
   const workspaceComposer = useMemo(() => ({
-    open: agentView.kind === 'conversation',
     isNewConversation,
     workspace,
     workspaces,
@@ -805,7 +694,7 @@ export function App() {
     composerMenuLoading,
     composerMenuError,
     composerCommandOptions,
-    composerFileOptions,
+    composerMentionOptions,
     composerCommands,
     updateComposerMenu,
     setComposerMenu: foundation.setComposerMenu,
@@ -858,14 +747,14 @@ export function App() {
     setActionPaletteOpen,
     error,
     setError,
-    conversationFooterExtensionItems,
-    extensionPlacements: preferences.extensionPlacements,
-    extensionSurface: conversationExtensionSurface,
+    extensionAboveItems: conversationExtensions.aboveItems,
+    extensionBelowItems: conversationExtensions.belowItems,
+    extensionSurface: conversationExtensions.surface,
+    openExtensionPanel,
     notifyExtension,
   }), [
     activeContextPolicy,
     addComposerFiles,
-    agentView.kind,
     attachPastedText,
     busy,
     changePermission,
@@ -880,7 +769,7 @@ export function App() {
     composerDraftsRef,
     composerEditorRef,
     composerFeedback,
-    composerFileOptions,
+    composerMentionOptions,
     composerImageIndexes,
     composerImages,
     composerMenu,
@@ -889,8 +778,9 @@ export function App() {
     composerMenuLoading,
     composerWrapRef,
     contextUsageInfo,
-    conversationExtensionSurface,
-    conversationFooterExtensionItems,
+    conversationExtensions.aboveItems,
+    conversationExtensions.belowItems,
+    conversationExtensions.surface,
     deleteQueued,
     editQueued,
     error,
@@ -906,7 +796,7 @@ export function App() {
     openModelsSettings,
     openSettingsPage,
     pickComposerAttachments,
-    preferences.extensionPlacements,
+    openExtensionPanel,
     preparing,
     prompt,
     queueAdmissionPending,
@@ -946,7 +836,28 @@ export function App() {
   const markdownActionsValue = useMemo(() => ({
     cwd: panelWorkspace,
     openFile: handleOpenFile,
-    openLocalFile: (path: string) => { void openFile(path, session?.id, 'external'); },
+    openLocalFile: (path: string) => {
+      // All local links honor localLinkOpenTarget (one setting; Studio picks the surface).
+      void (async () => {
+        const raw = String(path || '').trim();
+        if (!raw) return;
+        try {
+          const settings = await window.piApi.browserAdvancedSettings?.();
+          if (settings?.localLinkOpenTarget === 'system') {
+            await window.piApi.openWith({ path: raw, source: 'external' });
+            return;
+          }
+        } catch {
+          // Fall through to workbench / in-app preview.
+        }
+        // App-internal: pages the browser can load → side browser; other files → preview.
+        if (/\.html?$/i.test(raw.split(/[?#]/)[0] || '')) {
+          markdownLinkRef.current(raw);
+          return;
+        }
+        void openFile(raw, session?.id, 'external');
+      })();
+    },
     openLink: (url: string) => markdownLinkRef.current(url),
   }), [panelWorkspace, session?.id, handleOpenFile, openFile]);
 
@@ -975,7 +886,7 @@ export function App() {
         <BackgroundMediaNode media={preferences.backgroundMedia} className="window-wallpaper-media" onReady={setInnerSettled}
           onError={() => setInnerSettled(preferences.backgroundMedia!.url)} />
       </div>}
-      {actionPaletteOpen && <ConversationActionPalette
+      {!settingsOpen && actionPaletteOpen && <ConversationActionPalette
         actions={availableConversationActions}
         loading={actionResourcesLoading}
         resourceError={actionResourcesError}
@@ -988,42 +899,39 @@ export function App() {
         resizeHandle={!settingsOpen && !(filesOpen && panelFullscreen) && sidebarResizeHandle}
         sidebar={sidebarNode}
       >
+      <SurfaceActiveContext.Provider value={workspaceShell.visible}>
       <ConversationWorkspace
         shell={workspaceShell}
         header={workspaceHeader}
         actions={workspaceActions}
         transcript={workspaceTranscript}
-        extensions={workspaceExtensions}
-        subagents={subagentWorkspace}
         outline={workspaceOutline}
         composer={workspaceComposer}
       />
+      </SurfaceActiveContext.Provider>
 
       {filesOpen && <Suspense fallback={null}><WorkbenchPane
         controller={workbench}
         settingsOpen={settingsOpen}
-        progressPanel={progressContent}
-        onOpenComparison={openModelComparison}
-        comparisonPanel={<ComparisonWorkbench
-          context={comparisonPanelContext}
-          starting={comparisonStarting}
-          onStartingChange={setComparisonStarting}
-          startPending={comparisonStartPending}
-          onContextChange={setComparisonPanelContext}
-          history={comparisonByParent}
-          setHistory={setComparisonByParent}
-          workspace={workspace}
+        renderToolPanel={tab => <SessionWorkbenchPanel
+          tab={tab}
+          session={session}
+          preferences={preferences}
           modelSelection={modelSelection}
-          onOpenSettings={() => void openSettings('models')}
-          onAdopt={id => {
-            void loadState().catch(() => {});
-            void openSession({
-              id, cwd: comparisonPanelContext?.cwd || workspace, title: '模型评估',
-              kind: 'durable', goal: '', pinned: false, archived: false,
-              createdAt: Date.now(), updatedAt: Date.now(), messageCount: 0,
-            });
-          }}
+          progress={progressContent}
+          trace={workbenchTrace}
+          subagents={subagentWorkspace}
+          extensions={extensionPicker}
+          onOpenProgress={workbench.openProgressTab}
+          onOpenGit={openGit}
+          onOpenGitFile={openGitFile}
+          onOpenFile={handleOpenFile}
+          onFocusConversation={focusConversation}
         />}
+        extensionPicker={extensionPicker}
+        launcherOrder={preferences.workbenchLauncherOrder}
+        onLauncherOrderChange={(order) => foundation.updatePreference('workbenchLauncherOrder', order)}
+        showTrace={preferences.showCodeView}
         workspace={workspace}
         session={session}
         modelSelection={modelSelection}
@@ -1035,20 +943,14 @@ export function App() {
         terminalAppearance={terminalAppearance}
         terminalShellIntegration={preferences.terminalShellIntegration}
         onTerminalFontSize={(size) => foundation.updatePreference('terminalFontSize', size)}
-        extensionDock={<ExtensionSlot
-          slot="panel.side"
-          cwd={workspace}
-          sessionId={session?.id}
-          modelRef={modelSelection.modelRef}
-          onOpenSettings={(page) => void openSettings(page as typeof settingsTab)}
-          onSendPrompt={sendPromptFromExtension}
-          onNotify={notifyExtension}
-        />}
       /></Suspense>}
       </ShellLayout>
 
       <SettingsOverlay
         onOpenWorktree={async cwd => { await loadState(); await startSession(cwd); }}
+        onOpenGitChanges={() => openGit('changes')}
+        onChooseWorkspace={chooseFile}
+        onOpenBrowser={(view) => openBrowserTab('', { library: view })}
         sidebar={{ collapsed: sidebarCollapsed, setCollapsed: setSidebarCollapsed, resizeHandle: sidebarResizeHandle }}
         workspace={workspace}
         workspaces={workspaces}
@@ -1065,11 +967,17 @@ export function App() {
           stateLoading,
           onRefreshConversations: () => void refreshConversationList(),
         }}
+        extensionOrder={{
+          items: conversationExtensions.orderableItems,
+          order: conversationExtensions.order,
+          saving: conversationExtensions.savingOrder,
+          onSave: conversationExtensions.saveOrder,
+          onRetry: conversationExtensions.retryOrder,
+        }}
         appearance={{
           preferences,
           onChange: foundation.updatePreference,
           backgroundBusy: foundation.backgroundBusy,
-          backgroundError: foundation.backgroundError,
           onChooseBackground: () => void foundation.chooseBackground(),
           onRemoveBackground: () => void foundation.removeBackground(),
           onBackgroundUnavailable: handleBackgroundUnavailable,
@@ -1088,14 +996,6 @@ export function App() {
           onRestore: restoreArchivedConversation,
           onDelete: permanentlyDeleteArchivedConversation,
           onDeleteGroup: deleteArchivedGroup,
-        }}
-        skillActions={{
-          notify: foundation.pushNotification,
-        }}
-        extensionContext={{
-          sendPrompt: sendPromptFromExtension,
-          notify: notifyExtension,
-          modelRef: modelSelection.modelRef,
         }}
         about={{
           snapshot: updateSnapshot,
@@ -1120,8 +1020,23 @@ export function App() {
         }}
         extensions={{
           detail: extensionDetail,
+          display: { preferences, onChange: foundation.updatePreference },
+          settingsPanel: extensionDetail?.available && extensionDetail.manifest?.contributes?.settings?.length ? <ExtensionSlot
+            key={extensionDetail.id}
+            slot="settings.panel"
+            extensionId={extensionDetail.id}
+            cwd={workspace}
+            sessionId={session?.cwd === workspace ? session?.id : undefined}
+            modelRef={modelSelection.modelRef}
+            onOpenSettings={openSettingsPage}
+            onOpenPanel={extensionPicker.onOpenPanel}
+            onSendPrompt={sendPromptFromExtension}
+            onNotify={({ message, tone }) => showSettingsToast(message, tone === 'error' || tone === 'success' ? tone : 'info')}
+          /> : undefined,
           setDetail: setExtensionDetail,
           busy: settingsBusy || resourceWriteBusy || extensionRefreshBusy || Boolean(extensionRefreshError),
+          refreshError: extensionRefreshError,
+          refreshing: extensionRefreshBusy || resourceWriteBusy,
           installerOpen: extensionInstallerOpen,
           installPreview: extensionInstallPreview,
           setInstallerOpen: setExtensionInstallerOpen,
@@ -1154,7 +1069,7 @@ export function App() {
         skills={{
           detail: skillDetail,
           busy: settingsBusy || resourceWriteBusy || resourcePendingRef.current.skills,
-          error: skillDetailError || (skillRefreshError ? `${skillRefreshSummary}，刷新尚未完成。${skillRefreshError}` : null),
+          error: skillRefreshError ? `${skillRefreshSummary}，刷新尚未完成。${skillRefreshError}` : null,
           refreshing: skillRefreshBusy,
           onRefresh: skillRefreshError ? () => void refreshSavedSkillConfiguration() : undefined,
           onClose: closeSkillDetail,

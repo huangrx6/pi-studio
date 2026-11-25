@@ -1,3 +1,5 @@
+const { builtinToolContributions } = require('../../core/builtin-tool-contributions.cjs');
+
 module.exports = Object.freeze([
   {
     id: 'durable-coding-tools',
@@ -10,7 +12,7 @@ module.exports = Object.freeze([
     permissions: ['agent.tools'],
     requires: ['builtin:studio-permissions'],
     contributes: {
-      tools: ['read', 'write', 'edit', 'bash'].map((name) => ({ name })),
+      tools: builtinToolContributions(['read', 'write', 'edit', 'bash']),
     }
   },
 ]);

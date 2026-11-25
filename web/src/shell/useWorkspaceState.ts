@@ -32,10 +32,10 @@ export function useWorkspaceState({
 }: WorkspaceStateOptions) {
   const [workspaces, setWorkspaces] = useState<PiWorkspace[]>([]);
   const [stateLoading, setStateLoading] = useState(true);
+  const [workspacesLoaded, setWorkspacesLoaded] = useState(false);
   const [initialStateSettled, setInitialStateSettled] = useState(false);
   const [workspace, setWorkspace] = useState('');
   const workspaceRef = useRef(workspace);
-  workspaceRef.current = workspace;
   const stateRequestRef = useRef(0);
 
   const sidebar = useSidebarWorkspace({ workspaces, setWorkspaces, workspace });
@@ -56,10 +56,16 @@ export function useWorkspaceState({
     setStateLoading(false);
   }
 
+  function removeWorkspaceFromList(cwd: string) {
+    setWorkspaces((current) => current.filter((item) => item.cwd !== cwd));
+  }
+
   const loadState = useCallback(async () => {
+    const cwd = workspaceRef.current;
+    const modelKey = `default:${cwd}`;
     const loadGeneration = sessionLoadRef.current;
     const request = ++stateRequestRef.current;
-    const revision = modelRevisionRef.current.get(`default:${workspace}`) ?? 0;
+    const revision = modelRevisionRef.current.get(modelKey) ?? 0;
     setStateLoading(true);
     // 兜底：任何异常路径（IPC 未返回、主进程忙）都不该让「正在载入」永远挂着。
     const release = setTimeout(() => {
@@ -67,8 +73,8 @@ export function useWorkspaceState({
       if (request === stateRequestRef.current) setStateLoading(false);
     }, 8000);
     try {
-      const next = await window.piApi.state(workspace);
-      if (request !== stateRequestRef.current || workspace !== workspaceRef.current) return;
+      const next = await window.piApi.state(cwd);
+      if (request !== stateRequestRef.current || cwd !== workspaceRef.current) return;
       const savedWorkspaceOrder = workspaceOrderRef.current;
       const savedWorkspaceCwds = new Set(savedWorkspaceOrder);
       const savedSessionOrder = sessionOrderRef.current;
@@ -94,6 +100,7 @@ export function useWorkspaceState({
       setWorkspaceOrder(ordered.map((item) => item.cwd));
       setSessionOrder(nextSessionOrder);
       setWorkspaces(orderedSessions);
+      setWorkspacesLoaded(true);
       conversationListNeedsRefreshRef.current = false;
       setConversationListRefreshError(false);
       setSession((current) => {
@@ -104,17 +111,17 @@ export function useWorkspaceState({
         return title && title !== current.title ? { ...current, title } : current;
       });
       if (
-        revision === (modelRevisionRef.current.get(`default:${workspace}`) ?? 0)
-        && !modelWritesRef.current.has(`default:${workspace}`)
+        revision === (modelRevisionRef.current.get(modelKey) ?? 0)
+        && !modelWritesRef.current.has(modelKey)
       ) {
-        defaultModelWorkspaceRef.current = workspace;
+        defaultModelWorkspaceRef.current = cwd;
         setDefaultModelSelection(next.model);
         if (!sessionRef.current && sessionLoadRef.current === loadGeneration) {
           setModelSelection(next.model);
         }
       }
     } catch (error) {
-      if (request === stateRequestRef.current && workspace === workspaceRef.current) {
+      if (request === stateRequestRef.current && cwd === workspaceRef.current) {
         if (conversationListNeedsRefreshRef.current) setConversationListRefreshError(true);
         throw error;
       }
@@ -143,17 +150,18 @@ export function useWorkspaceState({
     setSessionOrder,
     setWorkspaceOrder,
     workspaceOrderRef,
-    workspace,
   ]);
 
   return {
     workspaces,
     stateLoading,
+    workspacesLoaded,
     initialStateSettled,
     workspace,
     workspaceRef,
     stateRequestRef,
     changeWorkspace,
+    removeWorkspaceFromList,
     loadState,
     ...sidebar,
   };

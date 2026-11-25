@@ -6,6 +6,7 @@
  * the new selection up before their next request.
  */
 
+const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { dialog, ipcMain, shell, webContents } = require('electron');
@@ -37,9 +38,26 @@ const {
 } = require('./sessions.cjs');
 const { settingsSnapshot } = require('../services/settings.cjs');
 const { createExtensionInstallRecovery } = require('../services/extension-install-recovery.cjs');
+const {
+  preparePluginInstall,
+  installPreparedPlugin,
+  uninstallPlugin,
+  setPluginEnabled,
+  disposePreparedPlugin,
+  listInstalledPlugins,
+} = require('../services/plugin-distribution.cjs');
+const {
+  pluginMarketSnapshot,
+  addPluginSource,
+  setPluginSourceEnabled,
+  removePluginSource,
+  resolveMarketInstallSource,
+  listPluginSources,
+} = require('../services/plugin-catalog.cjs');
 const { createExtensionMutationRecovery } = require('../services/extension-mutation-recovery.cjs');
 const {
   invalidateMcpConnection,
+  mcpSnapshot,
   testMcpConnection,
 } = require('../integrations/mcp/index.cjs');
 const {
@@ -51,6 +69,7 @@ const {
   saveInstalledToolSelection,
 } = require('../runtime/tool-selection.cjs');
 const {
+  listSubagentProfiles, removeSubagentProfile, roleResources, saveSubagentProfile,
   saveSubagentSettings,
   subagentBudgetSnapshot,
   subagentSettings,
@@ -370,6 +389,14 @@ function registerSettingsIpc() {
   ipcMain.handle('pi:subagent-settings', async (_event, cwd) => (
     subagentSettings(typeof cwd === 'string' ? cwd : DEFAULT_CWD)
   ));
+  ipcMain.handle('pi:subagent-profiles', () => listSubagentProfiles());
+  ipcMain.handle('pi:subagent-profile-resources', async (_event, cwd) => {
+    const workspace = typeof cwd === 'string' ? cwd : '';
+    await reconcileRuntimeForWorkspace(workspace);
+    return roleResources(workspace);
+  });
+  ipcMain.handle('pi:save-subagent-profile', (_event, profile) => saveSubagentProfile(profile));
+  ipcMain.handle('pi:remove-subagent-profile', (_event, payload) => removeSubagentProfile(payload));
 
   ipcMain.handle('pi:subagent-budget', async (_event, { id, cwd } = {}) => (
     subagentBudgetSnapshot(id, typeof cwd === 'string' ? cwd : DEFAULT_CWD)
@@ -546,7 +573,7 @@ function registerSettingsIpc() {
           throw new Error(`MCP 名称「${next.name}」与「${collision.name}」会映射到同一工具命名空间，请换一个名称`);
         }
         db.upsertMcpServer(next);
-        if (input?.originalName && input.originalName !== next.name) db.removeMcpServer(input.originalName);
+        if (input?.originalName && input.originalName !== next.name) db.removeMcpServer(input.originalName, next.name);
       });
       return committedMcpProjection(typeof input?.cwd === 'string' ? input.cwd : DEFAULT_CWD);
     }
@@ -564,8 +591,7 @@ function registerSettingsIpc() {
     if (collision) {
       throw new Error(`MCP 名称「${next.name}」与「${collision.name}」会映射到同一工具命名空间，请换一个名称`);
     }
-    await db.upsertMcpServerAsync(next);
-    if (input?.originalName && input.originalName !== next.name) db.removeMcpServer(input.originalName);
+    await db.upsertMcpServerAsync(next, input?.originalName || next.name);
     return committedMcpProjection(typeof input?.cwd === 'string' ? input.cwd : DEFAULT_CWD);
   });
 
@@ -580,6 +606,14 @@ function registerSettingsIpc() {
     }
     if (!await db.getMcpServerAsync(name)) throw new Error('MCP 不存在');
     db.removeMcpServer(name);
+    return committedMcpProjection(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
+  });
+
+  ipcMain.handle('pi:set-mcp-method-enabled', async (_event, { server, method, enabled, cwd } = {}) => {
+    const known = mcpSnapshot().tools.some(tool => tool.server === server && tool.originalName === method);
+    if (!known || typeof enabled !== 'boolean') throw new Error('方法目录已变化，请刷新 MCP 服务器后重试。');
+    const db = getStudioDatabase();
+    db.transaction(() => db.setMcpMethodEnabled(server, method, enabled));
     return committedMcpProjection(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
   });
 
@@ -695,6 +729,117 @@ function registerSettingsIpc() {
       '扩展',
     );
   });
+
+
+  ipcMain.handle('pi:pick-plugin-source', async (_event, { kind } = {}) => {
+    const directory = kind !== 'package';
+    const result = await dialog.showOpenDialog({
+      properties: directory ? ['openDirectory'] : ['openFile'],
+      filters: directory
+        ? undefined
+        : [{ name: 'Pi Studio Plugin', extensions: ['zip', 'pi-plugin'] }],
+    });
+    return result.canceled ? undefined : result.filePaths[0];
+  });
+
+  ipcMain.handle('pi:plugin-prepare', async (_event, payload = {}) => {
+    const source = typeof payload.source === 'string' ? payload.source.trim() : '';
+    if (!source) throw new Error('请选择插件目录或插件包');
+    return preparePluginInstall(source, payload);
+  });
+
+  ipcMain.handle('pi:plugin-install', async (_event, payload = {}) => {
+    const token = typeof payload.token === 'string' ? payload.token : '';
+    if (!token) throw new Error('缺少安装预览');
+    const result = installPreparedPlugin(token, payload);
+    const cwd = typeof payload.cwd === 'string' ? payload.cwd : DEFAULT_CWD;
+    try {
+      await refreshExtensionRuntime(cwd);
+    } catch {
+      // Projection refresh is best-effort; install already committed.
+    }
+    notifyExtensionsChanged();
+    return {
+      ...result,
+      settings: await settingsSnapshot(cwd),
+    };
+  });
+
+  ipcMain.handle('pi:plugin-dispose', async (_event, { token } = {}) => (
+    disposePreparedPlugin(token)
+  ));
+
+  ipcMain.handle('pi:plugin-uninstall', async (_event, payload = {}) => {
+    const id = typeof payload.id === 'string' ? payload.id.trim() : '';
+    if (!id) throw new Error('插件 ID 无效');
+    const result = uninstallPlugin(id, payload);
+    const cwd = typeof payload.cwd === 'string' ? payload.cwd : DEFAULT_CWD;
+    try {
+      await refreshExtensionRuntime(cwd);
+    } catch { /* ignore */ }
+    notifyExtensionsChanged();
+    return {
+      ...result,
+      settings: await settingsSnapshot(cwd),
+    };
+  });
+
+  ipcMain.handle('pi:plugin-set-enabled', async (_event, payload = {}) => {
+    const id = typeof payload.id === 'string' ? payload.id.trim() : '';
+    if (!id || typeof payload.enabled !== 'boolean') throw new Error('参数无效');
+    const plugin = setPluginEnabled(id, payload.enabled);
+    const cwd = typeof payload.cwd === 'string' ? payload.cwd : DEFAULT_CWD;
+    try {
+      await refreshExtensionRuntime(cwd);
+    } catch { /* ignore */ }
+    notifyExtensionsChanged();
+    return {
+      plugin,
+      settings: await settingsSnapshot(cwd),
+    };
+  });
+
+  ipcMain.handle('pi:plugins-list', async () => listInstalledPlugins());
+
+  ipcMain.handle('pi:plugin-market', async (_event, payload = {}) => pluginMarketSnapshot(payload || {}));
+  ipcMain.handle('pi:plugin-sources', async () => listPluginSources());
+  ipcMain.handle('pi:plugin-source-add', async (_event, payload = {}) => addPluginSource(payload || {}));
+  ipcMain.handle('pi:plugin-source-set-enabled', async (_event, payload = {}) => {
+    const id = typeof payload.id === 'string' ? payload.id.trim() : '';
+    if (!id || typeof payload.enabled !== 'boolean') throw new Error('参数无效');
+    return setPluginSourceEnabled(id, payload.enabled);
+  });
+  ipcMain.handle('pi:plugin-source-remove', async (_event, id) => {
+    const sourceId = typeof id === 'string' ? id.trim() : '';
+    if (!sourceId) throw new Error('源 ID 无效');
+    return removePluginSource(sourceId);
+  });
+  ipcMain.handle('pi:plugin-market-prepare', async (_event, payload = {}) => {
+    const pluginId = typeof payload.id === 'string' ? payload.id.trim() : '';
+    if (!pluginId) throw new Error('插件 ID 无效');
+    const resolved = await resolveMarketInstallSource(pluginId, payload);
+    try {
+      return await preparePluginInstall(resolved.source, {
+        expectedSha256: resolved.expectedSha256 || undefined,
+      });
+    } finally {
+      if (resolved.cleanup) {
+        try { fs.rmSync(resolved.cleanup, { recursive: true, force: true }); } catch { /* ignore */ }
+      }
+    }
+  });
+  ipcMain.handle('pi:pick-plugin-registry-file', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'Plugin registry', extensions: ['json'] }],
+    });
+    return result.canceled ? undefined : result.filePaths[0];
+  });
+  ipcMain.handle('pi:pick-plugin-source-directory', async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
+    return result.canceled ? undefined : result.filePaths[0];
+  });
+
 
   ipcMain.handle('pi:pick-extension-source', async (_event, { kind } = {}) => {
     const directory = kind === 'directory';

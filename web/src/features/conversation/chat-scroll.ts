@@ -51,16 +51,14 @@ export function nestedScrollableConsumesWheel(target: EventTarget | null, viewpo
 }
 
 /**
- * A live panel (the streaming thinking body) follows its newest line only while
- * the reader stays at that bottom edge.
- *
- * An upward wheel is an immediate release, because the next token arrives before
- * the browser has even applied the scroll; a scroll that leaves the bottom
- * (scrollbar drag) releases too. Coming back to the bottom re-arms following.
+ * Re-evaluate following after a live panel scrolls. Pinning records its new
+ * position before the queued scroll event. When content shrinks, the browser
+ * can also clamp scrollTop to the new bottom.
  */
-export function resolveLiveFollow({ nearBottom = false, wheelUp = false }: { nearBottom?: boolean; wheelUp?: boolean }) {
-  if (wheelUp) return false;
-  return nearBottom;
+export function resolveLiveFollow(following: boolean, previousTop: number, metrics: ScrollMetrics) {
+  const moved = metrics.scrollTop - previousTop;
+  if (moved < -0.5 && !isNearBottom(metrics, 1)) return false;
+  return following || (moved > 0.5 && isNearBottom(metrics));
 }
 
 /**

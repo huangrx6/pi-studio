@@ -1,9 +1,13 @@
 import { Accordion } from '../../shared/Accordion';
+import type { ReactNode } from 'react';
 import {
   AlertTriangle,
+  Info,
+  Package,
   RotateCw,
   ShieldCheck,
   ShieldX,
+  Trash2,
   X,
 } from 'lucide-react';
 import type { ExtensionHostItem } from '../../types/extension-types';
@@ -15,6 +19,9 @@ import {
   extensionTierLabel,
 } from './extension-presentation';
 import { DetailDialog } from '../../shared/DetailDialog';
+import { PackageIcon } from '../../shared/PackageIcon';
+import { SettingsToast } from '../../shared/SettingsToast';
+import { isPluginOwnedResource } from '../../shared/plugin-ownership.ts';
 import './styles/extension-detail.css';
 
 const PERMISSION_LABELS: Record<string, string> = {
@@ -40,109 +47,158 @@ function dateText(timestamp: number | undefined) {
 
 export function ExtensionDetailDialog({
   item,
+  displaySettings,
+  settingsPanel,
   busy,
+  refreshError,
+  refreshing,
+  onRefresh,
   onClose,
   onRollback,
   onTrust,
+  onToggle,
+  onDelete,
+  onOpenPlugins,
 }: {
   item: ExtensionHostItem;
+  displaySettings?: ReactNode;
+  settingsPanel?: ReactNode;
   busy: boolean;
+  refreshError: string | null;
+  refreshing: boolean;
+  onRefresh: () => void;
   onClose: () => void;
   onRollback: (item: ExtensionHostItem) => void;
   onTrust: (item: ExtensionHostItem, trusted: boolean) => void;
+  onToggle: (item: ExtensionHostItem, enabled: boolean) => void;
+  onDelete: (id: string, name: string) => void;
+  onOpenPlugins: () => void;
 }) {
   const stateTone = extensionStateTone(item);
   const contributions = extensionContributionCount(item);
   const permissions = item.manifest?.permissions || [];
   const requirements = item.requirements || [];
   const runtimeNames = item.runtimeNames || [];
-  const publisher = item.installation?.publisher || item.manifest?.publisher || item.manifest?.author;
-  const source = item.installation?.source || item.source || item.manifest?.source;
-  const trustBlockedReason = item.scope === 'project' && item.enabled && !item.canDisable
-    ? item.disableBlockedReason : '';
+  const installation = item.installation;
+  const publisher = installation?.publisher || item.manifest?.publisher || item.manifest?.author;
+  const source = installation?.source || item.source || item.manifest?.source;
+  const disableBlocked = item.enabled && !item.canDisable;
+  const pluginOwned = isPluginOwnedResource(item);
+  const pluginManaged = pluginOwned && item.managed && !item.userOverride && !item.canRemove;
+  const trustStatus = item.trusted ? '已信任' : '未信任';
+  const permissionSummary = permissions.length ? `${permissions.length} 项声明权限` : '未声明权限';
+  const contentHash = item.contentHash?.trim();
+  const versionHash = installation?.sha256?.trim();
 
   return <DetailDialog className="extension-detail-dialog" onClose={onClose}>
     <header className="detail-header">
       <div className="detail-heading">
+        <span className="detail-icon" aria-hidden="true"><PackageIcon source={item.iconDataUrl} /></span>
         <div>
-          <div className="extension-detail-title">
-            <h2>{item.name}</h2>
-          </div>
-          <div className="extension-detail-meta">
-            <span>v{item.version}</span>
-            <span className={`extension-detail-state is-${stateTone}`}>{extensionStateLabel(item)}</span>
-          </div>
+          <h2>{item.name}</h2>
+          <div className="extension-detail-meta">{[`v${item.version}`, publisher, extensionScopeLabel(item.scope)].filter(Boolean).join(' · ')}</div>
           {item.manifest?.description && <p>{item.manifest.description}</p>}
         </div>
       </div>
-      <button className="icon-button" aria-label="关闭扩展详情" onClick={onClose}><X /></button>
+      <button type="button" className="icon-button" aria-label="关闭扩展详情" onClick={onClose}><X aria-hidden="true" /></button>
     </header>
+    {refreshError && <SettingsToast tone="error" message={refreshError}>
+      <button type="button" className="settings-outline" disabled={refreshing} onClick={onRefresh}>
+        {refreshing ? '正在刷新…' : '刷新扩展状态'}
+      </button>
+    </SettingsToast>}
     <div className="detail-body extension-detail-body">
-      <dl className="extension-detail-facts">
-        <div><dt>发布者</dt><dd>{publisher || '未注明'}</dd></div>
-        <div><dt>来源</dt><dd>{source || '未注明'}</dd></div>
-        <div><dt>生效范围</dt><dd>{extensionScopeLabel(item.scope)}</dd></div>
-        <div><dt>信任状态</dt><dd>{item.trusted ? '已信任' : '未信任'}</dd></div>
-      </dl>
-
+      <div className="extension-enable-row">
+        <div><strong>启用扩展</strong>
+          {disableBlocked && item.disableBlockedReason && <p className="extension-detail-action-note">{item.disableBlockedReason}</p>}
+        </div>
+        <div className="extension-enable-controls">
+          <span className={`extension-detail-state is-${stateTone}`}>{extensionStateLabel(item)}</span>
+          <button type="button" className={`switch ${item.enabled ? 'is-on' : ''}`} role="switch" aria-checked={item.enabled}
+            aria-label={`${item.enabled ? '停用' : '启用'} ${item.name}`} disabled={busy || disableBlocked}
+            title={disableBlocked ? item.disableBlockedReason : undefined} onClick={() => onToggle(item, !item.enabled)}><span /></button>
+        </div>
+      </div>
       {item.blockedReason && <div className="extension-detail-notice is-error" role="status">
-        <AlertTriangle />
-        <span>{item.blockedReason}</span>
+        <AlertTriangle aria-hidden="true" /><span>{item.blockedReason}</span>
       </div>}
-      <section className="extension-detail-section">
-        <div className="extension-detail-section-head">
-          <h3>声明的权限</h3>
-          <span>{permissions.length} 项</span>
-        </div>
-        {permissions.length > 0 ? <ul className="extension-detail-permissions">
-          {permissions.map((permission) => <li key={permission}>{PERMISSION_LABELS[permission] || permission}</li>)}
-        </ul> : <p className="extension-detail-empty-permissions">未声明扩展权限</p>}
-        <p className="extension-detail-trust-note">权限声明不代表运行隔离；扩展的 Node 代码在 Electron 主进程执行，请仅信任可靠来源。</p>
-      </section>
-      <Accordion className="extension-detail-technical" summary="技术与运行信息">
-        <dl className="extension-detail-facts">
-          <div><dt>扩展 ID</dt><dd><code>{item.id}</code></dd></div>
-          <div><dt>层级</dt><dd>{extensionTierLabel(item.tier)}</dd></div>
-          <div><dt>贡献能力</dt><dd>{contributions} 项</dd></div>
-          <div><dt>运行时</dt><dd>{runtimeNames.length > 0 ? <code>{runtimeNames.join(', ')}</code> : '没有运行时名称'}</dd></div>
-          <div><dt>安装时间</dt><dd>{dateText(item.installedAt)}</dd></div>
-          <div><dt>最后更新</dt><dd>{dateText(item.updatedAt)}</dd></div>
-          <div><dt>内容哈希</dt><dd><code>{item.contentHash}</code></dd></div>
-          {item.installation && <>
-            <div><dt>来源类型</dt><dd>{item.installation.sourceKind}</dd></div>
-            <div><dt>版本哈希</dt><dd><code>{item.installation.sha256}</code></dd></div>
-          </>}
-          {requirements.length > 0 && <div><dt>依赖</dt><dd>{requirements.join(', ')}</dd></div>}
-        </dl>
-      </Accordion>
-
-      {item.installation && item.installation.versions.length > 0 && <section className="extension-detail-section">
-        <div className="extension-detail-section-head">
-          <h3>版本记录</h3>
-          <span>{item.installation.versions.length} 个版本</span>
-        </div>
-        <div className="extension-version-list">
-          {item.installation.versions.map((version) => <div className={version.active ? 'is-active' : ''} key={`${version.version}:${version.activatedAt}`}>
-            <span><strong>v{version.version}</strong>{version.active && <em>当前</em>}</span>
-            <small>{version.sourceKind} · {dateText(version.activatedAt)}</small>
-          </div>)}
-        </div>
+      {settingsPanel && <section className="extension-detail-section" aria-label="扩展设置">
+        <h3>扩展设置</h3>
+        {settingsPanel}
       </section>}
-      {trustBlockedReason && <p className="extension-detail-action-note">{trustBlockedReason}</p>}
+      {displaySettings}
+      <div className="extension-detail-disclosures">
+        <Accordion className="extension-detail-source" summary="来源与权限" badge={`${trustStatus} · ${permissionSummary}`}
+          compact defaultOpen={item.scope === 'project' && !item.trusted}>
+          <div className="extension-detail-disclosure-body">
+            <dl className="extension-detail-code-facts">
+              <div><dt>安装来源</dt><dd>{source ? <code>{source}</code> : <span>未注明</span>}</dd></div>
+              {pluginOwned && <div><dt>所属插件</dt><dd><code>{item.ownerPluginId}</code>{item.managed && !item.userOverride ? <span className="extension-detail-pill">插件托管</span> : null}</dd></div>}
+            </dl>
+            <section className="extension-detail-subsection">
+              <h4>声明的权限</h4>
+              {permissions.length > 0 ? <ul className="extension-detail-permissions">
+                {permissions.map((permission) => <li key={permission}>{PERMISSION_LABELS[permission] || permission}</li>)}
+              </ul> : <p className="extension-detail-action-note">未声明扩展权限</p>}
+            </section>
+            <p className="extension-detail-callout">
+              <Info aria-hidden="true" />
+              <span>权限声明不代表运行隔离。扩展的 Node 代码在 Electron 主进程执行。</span>
+            </p>
+            {item.scope !== 'builtin' && !item.canRemove && item.removeBlockedReason && <p className="extension-detail-action-note">{item.removeBlockedReason}</p>}
+          </div>
+        </Accordion>
+        <Accordion className="extension-detail-technical" summary="技术与运行信息" compact>
+          <div className="extension-detail-disclosure-body">
+            <dl className="extension-detail-specs">
+              <div><dt>层级</dt><dd>{extensionTierLabel(item.tier)}</dd></div>
+              <div><dt>贡献能力</dt><dd>{contributions} 项</dd></div>
+              {installation && <div><dt>来源类型</dt><dd>{installation.sourceKind}</dd></div>}
+              <div><dt>安装时间</dt><dd>{dateText(item.installedAt)}</dd></div>
+              <div><dt>最后更新</dt><dd>{dateText(item.updatedAt)}</dd></div>
+            </dl>
+            <dl className="extension-detail-code-facts">
+              <div><dt>扩展 ID</dt><dd><code>{item.id}</code></dd></div>
+              <div><dt>运行时</dt><dd>{runtimeNames.length > 0 ? <code>{runtimeNames.join(', ')}</code> : <span>没有运行时名称</span>}</dd></div>
+              {contentHash && <div><dt>内容哈希</dt><dd><code>{contentHash}</code></dd></div>}
+              {versionHash && <div><dt>版本哈希</dt><dd><code>{versionHash}</code></dd></div>}
+              {requirements.length > 0 && <div><dt>依赖</dt><dd><code>{requirements.join(', ')}</code></dd></div>}
+            </dl>
+            {installation && (installation.versions.length > 0 || installation.canRollback) && <section className="extension-detail-subsection">
+              <div className="extension-detail-section-head">
+                <h4>版本记录 <span>{installation.versions.length}</span></h4>
+                {installation.canRollback && <button type="button" className="settings-outline extension-version-rollback" disabled={busy} onClick={() => onRollback(item)}>
+                  <RotateCw aria-hidden="true" />回滚版本
+                </button>}
+              </div>
+              <div className="extension-version-list">
+                {installation.versions.map((version) => <div key={`${version.version}:${version.activatedAt}`} className={version.active ? 'is-active' : undefined}>
+                  <span><strong>v{version.version}</strong>{version.active && <em>当前</em>}</span>
+                  <small>{version.sourceKind} · {dateText(version.activatedAt)}</small>
+                </div>)}
+              </div>
+            </section>}
+          </div>
+        </Accordion>
+      </div>
     </div>
-    {(item.installation?.canRollback || item.scope === 'project') && <footer className="detail-footer">
-      <span />
-      {item.installation?.canRollback && <button
-        className="settings-outline"
-        disabled={busy}
-        onClick={() => onRollback(item)}
-      ><RotateCw />回滚版本</button>}
-      {item.scope === 'project' && <button
-        className="settings-outline"
-        disabled={busy || (item.enabled && !item.canDisable)}
-        title={item.enabled && !item.canDisable ? item.disableBlockedReason : undefined}
-        onClick={() => onTrust(item, !item.trusted)}
-      >{item.trusted ? <ShieldX /> : <ShieldCheck />}{item.trusted ? '撤销信任' : '信任扩展'}</button>}
-    </footer>}
+    <footer className="detail-footer extension-detail-footer">
+      <div className="extension-detail-footer-start">
+        {pluginManaged ? <button type="button" className="settings-outline extension-detail-manage" disabled={busy}
+          onClick={onOpenPlugins}><Package aria-hidden="true" />前往插件页</button> : item.scope !== 'builtin' && <button type="button" className="extension-detail-remove" disabled={busy || !item.canRemove}
+          aria-label={`卸载 ${item.name}`} title={item.canRemove ? '卸载扩展' : item.removeBlockedReason}
+          onClick={() => onDelete(item.id, item.name)}><Trash2 aria-hidden="true" />卸载</button>}
+      </div>
+      <div className="extension-detail-footer-end">
+        {item.scope === 'project' && <button
+          type="button"
+          className="settings-outline"
+          disabled={busy || (item.enabled && !item.canDisable)}
+          title={item.enabled && !item.canDisable ? item.disableBlockedReason : undefined}
+          onClick={() => onTrust(item, !item.trusted)}
+        >{item.trusted ? <ShieldX aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}{item.trusted ? '撤销信任' : '信任扩展'}</button>}
+        <button type="button" className="settings-outline extension-detail-done" onClick={onClose}>完成</button>
+      </div>
+    </footer>
   </DetailDialog>;
 }

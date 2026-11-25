@@ -19,59 +19,31 @@ test.after(() => {
   fs.rmSync(temporary, { recursive: true, force: true });
 });
 
-test('conversation extension UI preferences persist global and session order', () => {
+test('conversation extension UI preferences persist a validated global order', () => {
   assert.deepEqual(getConversationExtensionUiPreferences(), {
     version: 1,
-    layout: 'grid',
     globalOrder: [],
-    sessionOrders: {},
   });
 
   const saved = saveConversationExtensionUiPreferences({
-    layout: 'list',
     globalOrder: [
       'user:alpha',
       'project:beta',
       'user:alpha',
       'invalid',
     ],
-    sessionId: 'session-a',
-    sessionOrder: ['project:beta', 'user:alpha'],
   });
   assert.deepEqual(saved, {
     version: 1,
-    layout: 'list',
     globalOrder: ['user:alpha', 'project:beta'],
-    sessionOrders: {
-      'session-a': ['project:beta', 'user:alpha'],
-    },
   });
 
-  const cleared = saveConversationExtensionUiPreferences({
-    sessionId: 'session-a',
-    sessionOrder: null,
-  });
-  assert.deepEqual(cleared.sessionOrders, {});
-  assert.deepEqual(cleared.globalOrder, ['user:alpha', 'project:beta']);
+  assert.deepEqual(getConversationExtensionUiPreferences(), saved);
+  assert.deepEqual(saveConversationExtensionUiPreferences({ globalOrder: 'invalid' }), saved);
 });
 
-test('removing a workspace clears only its conversation overrides', () => {
-  saveConversationExtensionUiPreferences({
-    sessionId: 'session-a',
-    sessionOrder: ['user:alpha', 'project:beta'],
-  });
-  saveConversationExtensionUiPreferences({
-    sessionId: 'session-b',
-    sessionOrder: ['project:beta', 'user:alpha'],
-  });
-  saveConversationExtensionUiPreferences({
-    sessionId: 'session-other',
-    sessionOrder: ['user:alpha', 'project:beta'],
-  });
-
+test('removing a workspace retains the global display preference', () => {
+  const saved = saveConversationExtensionUiPreferences({ globalOrder: ['project:beta', 'user:alpha'] });
   deleteWorkspaceScopedSettings(temporary, ['session-a', 'session-b']);
-  assert.deepEqual(
-    getConversationExtensionUiPreferences().sessionOrders,
-    { 'session-other': ['user:alpha', 'project:beta'] },
-  );
+  assert.deepEqual(getConversationExtensionUiPreferences(), saved);
 });

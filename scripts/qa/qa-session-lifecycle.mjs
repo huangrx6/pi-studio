@@ -26,17 +26,15 @@ async function launch() {
   page.on('pageerror', e => pageErrors.push(e.message));
 }
 
-async function pin() {
-  if (!await panel().isVisible()) {
-    await button('打开会话进展').click();
-    if (await button('固定到右栏').isVisible()) await button('固定到右栏').click();
-  }
+async function openProgress() {
+  if (!await panel().isVisible()) await button('进展').click();
+  if (await button('返回进展').isVisible()) await button('返回进展').click();
   await panel().getByRole('button', { name: '查看全部任务' }).waitFor();
 }
 
 async function select(id) {
   await selectTestSession(page, workspace, id);
-  await pin();
+  await openProgress();
 }
 
 async function start(tag) {
@@ -94,7 +92,7 @@ async function verifyHistory(id, expected) {
   }
   assert.deepEqual(saved, expected);
   assert.equal(await taskPage().locator('li').count(), Object.keys(expected).length * 2);
-  await button('返回对话').click();
+  await button('返回进展').click();
   await emptyPanel();
   return plans;
 }

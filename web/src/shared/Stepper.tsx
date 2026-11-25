@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { isComposingKey } from './keyboard-navigation';
 import './styles/stepper.css';
 
 type StepperProps = {
@@ -34,10 +35,12 @@ export function Stepper({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const repeatRef = useRef<{ delay?: number; interval?: number }>({});
+  const valueButtonRef = useRef<HTMLButtonElement>(null);
   const valueRef = useRef(value);
   valueRef.current = value;
 
-  const clamp = (next: number) => Math.min(max, Math.max(min, Math.round(next)));
+  const precision = String(step).split('.')[1]?.length ?? 0;
+  const clamp = (next: number) => Math.min(max, Math.max(min, Number(next.toFixed(precision))));
   const canDecrease = !disabled && value > min;
   const canIncrease = !disabled && value < max;
 
@@ -78,7 +81,7 @@ export function Stepper({
   function commit() {
     const parsed = Number(draft.trim());
     setEditing(false);
-    if (Number.isFinite(parsed)) apply(parsed);
+    if (draft.trim() && Number.isFinite(parsed)) apply(parsed);
   }
 
   return <div className={`settings-stepper ${disabled ? 'is-disabled' : ''}`}>
@@ -87,7 +90,7 @@ export function Stepper({
       className="settings-stepper-step"
       aria-label={`减少${label}`}
       disabled={!canDecrease}
-      onPointerDown={() => startRepeat(-1)}
+      onPointerDown={event => { if (event.button === 0) startRepeat(-1); }}
       onPointerUp={stopRepeat}
       onPointerLeave={stopRepeat}
       onPointerCancel={stopRepeat}
@@ -97,17 +100,22 @@ export function Stepper({
       ? <input
         className="settings-stepper-input"
         aria-label={`${label}数值`}
-        inputMode="numeric"
+        inputMode={precision ? 'decimal' : 'numeric'}
         value={draft}
         autoFocus
         onChange={(event) => setDraft(event.target.value)}
         onBlur={commit}
         onKeyDown={(event) => {
-          if (event.key === 'Enter') { event.preventDefault(); commit(); }
-          else if (event.key === 'Escape') { event.preventDefault(); setEditing(false); }
+          if (isComposingKey(event.nativeEvent) || (event.key !== 'Enter' && event.key !== 'Escape')) return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (event.key === 'Enter') commit();
+          else setEditing(false);
+          requestAnimationFrame(() => valueButtonRef.current?.focus({ preventScroll: true }));
         }}
       />
       : <button
+        ref={valueButtonRef}
         type="button"
         className="settings-stepper-value"
         aria-label={`${label}：${value}${unit}，点击输入`}
@@ -123,7 +131,7 @@ export function Stepper({
       className="settings-stepper-step"
       aria-label={`增加${label}`}
       disabled={!canIncrease}
-      onPointerDown={() => startRepeat(1)}
+      onPointerDown={event => { if (event.button === 0) startRepeat(1); }}
       onPointerUp={stopRepeat}
       onPointerLeave={stopRepeat}
       onPointerCancel={stopRepeat}

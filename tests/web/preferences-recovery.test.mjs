@@ -10,11 +10,12 @@ const {
 const {
   loadStoredActiveSession,
   loadStoredExpandedWorkspaces,
-  loadStoredModelComparisons,
   loadStoredSessionOrder,
   loadStoredWorkspaceOrder,
-  normalizeStoredModelComparisons,
   normalizeStoredSessionOrder,
+  loadStoredPluginWorkspaceSection,
+  saveStoredPluginWorkspaceSection,
+  normalizePluginWorkspaceSection,
 } = await import('../../web/src/shared/stored-ui-state.ts');
 const { DEFAULT_SHORTCUTS } = await import('../../web/src/shared/shortcuts.ts');
 
@@ -89,6 +90,19 @@ test('preferences recover invalid JSON and unavailable storage without throwing'
   assert.equal(writeFailure.values.get('pi-studio:preferences'), '{bad-json');
 });
 
+test('previous accent selections survive reload and the retired teal moves to ocean blue', () => {
+  const key = 'pi-studio:preferences';
+  for (const [saved, expected] of [['lime', 'ocean'], ['ocean', 'ocean'], ['amber', 'amber'], ['berry', 'berry']]) {
+    const previous = { ...normalizePreferences({ theme: 'dark' }), palette: saved };
+    const storage = memoryStorage({ [key]: JSON.stringify(previous) });
+    const preferences = loadPreferences(storage);
+    assert.deepEqual(preferences, { ...previous, palette: expected });
+    assert.deepEqual(JSON.parse(storage.getItem(key)), preferences);
+    assert.deepEqual(loadPreferences(storage), preferences);
+    assert.equal(storage.writes.length, saved === 'lime' ? 1 : 0);
+  }
+});
+
 test('saving preferences writes the same canonical object loaded next time', () => {
   const storage = memoryStorage();
   savePreferences({
@@ -143,7 +157,6 @@ test('stored UI loaders repair bad values and leave canonical values untouched',
       cwd: '/workspace/a',
       extra: true,
     }),
-    'pi-studio:model-comparisons': JSON.stringify({ broken: {} }),
   });
 
   assert.deepEqual(loadStoredExpandedWorkspaces(storage), []);
@@ -155,15 +168,13 @@ test('stored UI loaders repair bad values and leave canonical values untouched',
     id: 'session-a',
     cwd: '/workspace/a',
   });
-  assert.deepEqual(loadStoredModelComparisons(storage), {});
-  assert.equal(storage.writes.length, 5);
+  assert.equal(storage.writes.length, 4);
 
   const writeCount = storage.writes.length;
   loadStoredExpandedWorkspaces(storage);
   loadStoredWorkspaceOrder(storage);
   loadStoredSessionOrder(storage);
   loadStoredActiveSession(storage);
-  loadStoredModelComparisons(storage);
   assert.equal(storage.writes.length, writeCount);
 });
 
@@ -173,58 +184,19 @@ test('missing UI state returns defaults without creating storage entries', () =>
   assert.deepEqual(loadStoredWorkspaceOrder(storage), []);
   assert.deepEqual(loadStoredSessionOrder(storage), {});
   assert.equal(loadStoredActiveSession(storage), null);
-  assert.deepEqual(loadStoredModelComparisons(storage), {});
+  assert.equal(loadStoredPluginWorkspaceSection(storage), 'plugins');
   assert.equal(storage.writes.length, 0);
   assert.equal(storage.values.size, 0);
 });
 
-test('model comparison validation drops incomplete or mismatched entries', () => {
-  const valid = {
-    result: {
-      id: 'comparison-1',
-      parentId: 'parent-1',
-      prompt: 'Compare this',
-      createdAt: Date.now(),
-      branches: [
-        {
-          sessionId: 'session-a',
-          label: 'A',
-          modelRef: 'provider/a',
-          thinkingLevel: 'medium',
-          worktreeId: 'worktree-a',
-        },
-        {
-          sessionId: 'session-b',
-          label: 'B',
-          modelRef: 'provider/b',
-          thinkingLevel: 'high',
-          worktreeId: 'worktree-b',
-        },
-      ],
-    },
-    cwd: '/workspace/a',
-    initialModelRef: 'provider/a',
-    initialThinkingLevel: 'medium',
-  };
-  const normalized = normalizeStoredModelComparisons(Object.fromEntries([
-    ['parent-1', valid],
-    ['wrong-parent', {
-      ...valid,
-      result: { ...valid.result, id: 'comparison-2' },
-    }],
-    ['parent-2', {
-      ...valid,
-      result: {
-        ...valid.result,
-        parentId: 'parent-2',
-        branches: [valid.result.branches[0]],
-      },
-    }],
-    ['__proto__', valid],
-  ]));
-
-  assert.deepEqual(Object.keys(normalized), ['parent-1']);
-  assert.equal(normalized['parent-1'].result.parentId, 'parent-1');
-  assert.equal(Object.getPrototypeOf(normalized), Object.prototype);
-  assert.equal(Object.hasOwn(normalized, '__proto__'), false);
+test('plugin workspace section remembers the last hub tab and rejects unknown values', () => {
+  const storage = memoryStorage();
+  assert.equal(normalizePluginWorkspaceSection('skills'), 'skills');
+  assert.equal(normalizePluginWorkspaceSection('nope'), 'plugins');
+  saveStoredPluginWorkspaceSection('mcp', storage);
+  assert.equal(loadStoredPluginWorkspaceSection(storage), 'mcp');
+  storage.setItem('pi-studio:plugin-workspace-section', JSON.stringify('extensions'));
+  assert.equal(loadStoredPluginWorkspaceSection(storage), 'extensions');
+  storage.setItem('pi-studio:plugin-workspace-section', JSON.stringify('weird'));
+  assert.equal(loadStoredPluginWorkspaceSection(storage), 'plugins');
 });

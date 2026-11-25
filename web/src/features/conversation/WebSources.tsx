@@ -3,7 +3,6 @@ import { useContext, useState } from 'react';
 import { siGithub, siMdnwebdocs, siNodedotjs, siPython, siReact, siTypescript } from 'simple-icons';
 import { DetailDialog } from '../../shared/DetailDialog';
 import { MarkdownActions } from '../../shared/markdown-actions';
-import { getActivePreferences } from '../../shared/preferences';
 import type { WebSource } from './web-sources';
 import './styles/web-sources.css';
 
@@ -36,7 +35,7 @@ export function WebSources({ sources }: { sources: WebSource[] }) {
             event.preventDefault();
             setOpen(false);
             if (openLink) openLink(site.href);
-            else void window.piApi.openLink(site.href, getActivePreferences().linkOpen);
+            else void window.piApi.openLink(site.href, 'external');
           }}>
             <span className="web-source-mark" aria-hidden="true">{mark
               ? <svg viewBox="0 0 24 24" fill="currentColor"><path d={mark.path} /></svg>

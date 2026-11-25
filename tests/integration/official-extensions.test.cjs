@@ -203,7 +203,7 @@ test('official auto-update repairs a legacy manifest rejected by the current sch
       panels: [{
         id: 'legacy-footer',
         title: 'Legacy footer',
-        slot: 'conversation.footer',
+        slot: 'composer.below',
         size: 'compact',
         content: [
           { kind: 'text', text: 'legacy' },
@@ -248,7 +248,7 @@ test('official auto-update repairs a legacy manifest rejected by the current sch
       panels: [{
         id: 'footer',
         title: 'Footer',
-        slot: 'conversation.footer',
+        slot: 'composer.below',
         size: 'compact',
         content: [{ kind: 'text', text: '0.6.0' }],
       }],

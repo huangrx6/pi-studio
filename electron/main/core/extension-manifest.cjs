@@ -7,6 +7,7 @@ const {
 const {
   isValidSemverRange,
   parseSemver,
+  satisfiesSemver,
 } = require('./extension-semver.cjs');
 const { normalizeExternalHttpUrl } = require('./external-url.cjs');
 
@@ -46,17 +47,8 @@ const MANIFEST_KEYS = new Set([
   'runtime',
   'contributes',
 ]);
-const UI_SLOTS = new Set([
-  'workspace.sidebar',
-  'conversation.detail',
-  'conversation.footer',
-  'composer.before',
-  'settings.panel',
-  'panel.side',
-  'status.bar',
-  'status.chip',
-]);
-/** chip 与 footer 是单行摘要；visibility 决定它在会话生命周期里出现多久。 */
+const SUMMARY_SLOTS = new Set(['status.chip', 'composer.above', 'composer.below']);
+const UI_SLOTS = new Set([...SUMMARY_SLOTS, 'panel.side']);
 const UI_VISIBILITIES = new Set(['always', 'while-active']);
 const PANEL_COLORS = new Set(['neutral', 'accent', 'info', 'success', 'warning', 'error']);
 const PLACEMENTS = new Set(['composer', 'command-menu', 'session', 'workspace']);
@@ -85,7 +77,7 @@ const SETTINGS_PAGES = new Set([
   'extensions',
   'about',
 ]);
-const COMPACT_FOOTER_KINDS = new Set([
+const COMPACT_SUMMARY_KINDS = new Set([
   'text',
   'badge',
   'keyValue',
@@ -296,7 +288,7 @@ function assertUiActionPolicies({
   owner,
 }) {
   const prefix = `${owner.scope}:${owner.manifestId}/`;
-  const panelIds = new Set(panels.map((panel) => `${prefix}${panel.id}`));
+  const panelIds = new Set(panels.filter(panel => panel.slot === 'panel.side').map(panel => `${prefix}${panel.id}`));
   const commandById = new Map(commands.map((command) => [
     `${prefix}${command.id}`,
     command,
@@ -307,7 +299,7 @@ function assertUiActionPolicies({
         throw new Error('openPanel action 需要 ui.panels 权限');
       }
       if (!panelIds.has(action.panelId)) {
-        throw new Error(`openPanel action 引用了未声明的 panel：${action.panelId}`);
+        throw new Error(`openPanel action 必须指向本扩展声明的 panel.side 面板：${action.panelId}`);
       }
     }
     if (action?.kind === 'runCommand') {
@@ -397,7 +389,7 @@ function normalizeContentList(value, owner) {
   return normalizeUiContentList(value, owner, normalizeUiAction, MAX_CONTENT_BLOCKS);
 }
 
-function normalizeManifest(raw, source, scope) {
+function normalizeManifest(raw, source, scope, { appVersion } = {}) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('manifest 必须是对象');
   for (const key of Object.keys(raw)) {
     if (!MANIFEST_KEYS.has(key)) throw new Error(`manifest 包含未知字段：${key}`);
@@ -434,6 +426,11 @@ function normalizeManifest(raw, source, scope) {
   const piStudioRange = engines.piStudio === undefined ? undefined : text(engines.piStudio, 120);
   if (piStudioRange !== undefined && !isValidSemverRange(piStudioRange)) {
     throw new Error(`engines.piStudio 版本范围无效：${piStudioRange}`);
+  }
+  if (appVersion && piStudioRange && !satisfiesSemver(appVersion, piStudioRange)) {
+    const error = new Error(`${name} 需要 Pi Studio ${piStudioRange}，当前版本为 ${appVersion}。`);
+    error.code = 'INCOMPATIBLE_EXTENSION';
+    throw error;
   }
   const keywords = normalizeKeywords(raw.keywords);
   const icon = normalizePackagePath(raw.icon, 'icon');
@@ -574,16 +571,13 @@ function normalizeManifest(raw, source, scope) {
       ...(action ? { action } : {}),
     };
   });
-  // chip 的 details 只能指向同一份 manifest 里声明的详情面板。
-  const detailPanelIds = new Set(requestedPanels
-    .filter((panel) => panel
-      && (panel.slot === 'conversation.detail' || (Array.isArray(panel.slots) && panel.slots.includes('conversation.detail')))
-      && typeof panel.id === 'string')
+  const workbenchPanelIds = new Set(requestedPanels
+    .filter((panel) => panel?.slot === 'panel.side' && typeof panel.id === 'string')
     .map((panel) => panel.id));
   const panels = requestedPanels.map((item, index) => {
     assertAllowedKeys(
       item,
-      new Set(['id', 'title', 'description', 'slot', 'slots', 'icon', 'color', 'size', 'priority', 'content', 'details', 'visibility']),
+      new Set(['id', 'title', 'description', 'slot', 'slots', 'icon', 'color', 'size', 'priority', 'content', 'details', 'visibility', 'canvas', 'taskBoard']),
       `panels[${index}]`,
     );
     const id = text(item?.id, 64);
@@ -593,10 +587,11 @@ function normalizeManifest(raw, source, scope) {
     if (item.slot !== undefined && item.slots !== undefined) {
       throw contributionError('panels', index, 'slot 与 slots 只能声明一个');
     }
-    // slots 让同一份摘要声明多个落点（例如既进顶栏 chip 又进底部状态区），
-    // 只给其中一个位置的扩展仍然可以只用 slot。
+    if (item.slots !== undefined && !Array.isArray(item.slots)) {
+      throw contributionError('panels', index, 'slots 必须是数组');
+    }
     const declaredSlots = item.slots !== undefined
-      ? (Array.isArray(item.slots) ? item.slots : [item.slots])
+      ? item.slots
       : [text(item?.slot, 64)];
     if (declaredSlots.length === 0 || declaredSlots.length > 3) {
       throw contributionError('panels', index, 'slots 必须声明一至三个位置');
@@ -605,6 +600,9 @@ function normalizeManifest(raw, source, scope) {
     for (const rawSlot of declaredSlots) {
       const value = text(rawSlot, 64);
       if (!UI_SLOTS.has(value)) throw contributionError('panels', index, `未知 slot：${value || '(empty)'}`);
+      if (item.slots !== undefined && !SUMMARY_SLOTS.has(value)) {
+        throw contributionError('panels', index, 'slots 仅用于声明摘要可显示的位置');
+      }
       if (slots.includes(value)) throw contributionError('panels', index, `slots 重复：${value}`);
       slots.push(value);
     }
@@ -621,51 +619,59 @@ function normalizeManifest(raw, source, scope) {
       throw contributionError('panels', index, 'priority 必须是数字');
     }
     const content = normalizeContentList(item?.content, owner);
+    const viewKinds = ['canvas', 'taskBoard'].filter(kind => item[kind] !== undefined);
+    if (viewKinds.length > 1) throw contributionError('panels', index, 'canvas 与 taskBoard 只能声明一个');
+    const [viewKind] = viewKinds;
+    let view;
+    if (viewKind) {
+      if (slot !== 'panel.side' || content.length || !hasPermission(permissions, 'ui.data')) {
+        throw contributionError('panels', index, `${viewKind} 需要 panel.side 和 ui.data，且不能与 content 混用`);
+      }
+      if (viewKind === 'taskBoard' && scope === 'project') {
+        throw contributionError('panels', index, '全局任务看板需要用户级安装');
+      }
+      const declaration = item[viewKind];
+      if (!declaration || typeof declaration !== 'object' || Array.isArray(declaration)) {
+        throw contributionError('panels', index, `${viewKind} 必须是对象`);
+      }
+      assertAllowedKeys(declaration, new Set(['sourceId']), `panels[${index}].${viewKind}`);
+      const sourceId = contributionReference(declaration.sourceId, owner);
+      if (!sourceId) throw contributionError('panels', index, `${viewKind}.sourceId 无效`);
+      view = { [viewKind]: { sourceId } };
+    }
     const details = optionalStrictText(item?.details, 64, COMMAND_PATTERN, `panels[${index}].details`);
-    if (details && !detailPanelIds.has(details)) {
-      throw contributionError('panels', index, `details 必须指向本扩展的 conversation.detail 面板：${details}`);
+    if (details && !workbenchPanelIds.has(details)) {
+      throw contributionError('panels', index, `details 必须指向本扩展的 panel.side 面板：${details}`);
     }
     if (item.visibility !== undefined && !UI_VISIBILITIES.has(item.visibility)) {
       throw contributionError('panels', index, `visibility 无效：${String(item.visibility)}`);
     }
-    const visibilitySlots = slots.filter((value) => value === 'conversation.footer' || value === 'status.chip' || value === 'status.bar');
-    if (item.visibility !== undefined && visibilitySlots.length === 0) {
-      throw contributionError('panels', index, '只有 conversation.footer、status.chip 与 status.bar 可以声明 visibility');
+    const isSummary = SUMMARY_SLOTS.has(slot);
+    if (details && !isSummary) {
+      throw contributionError('panels', index, '只有顶栏或输入框摘要可以声明 details');
+    }
+    if (item.visibility !== undefined && !isSummary) {
+      throw contributionError('panels', index, '只有顶栏或输入框摘要可以声明 visibility');
     }
     const visibility = item.visibility === 'while-active' ? 'while-active' : 'always';
-    const summarySlots = slots.filter((value) => value === 'status.chip' || value === 'conversation.footer' || value === 'status.bar');
-    if (summarySlots.length > 0) {
+    if (isSummary) {
       if (content.length > 2) {
-        throw contributionError('panels', index, `${summarySlots[0]} 最多声明两个单行摘要 block`);
+        throw contributionError('panels', index, `${slot} 最多声明两个单行摘要 block`);
       }
-      const unsupported = content.find((block) => !COMPACT_FOOTER_KINDS.has(block.kind));
+      const unsupported = content.find((block) => !COMPACT_SUMMARY_KINDS.has(block.kind));
       if (unsupported) {
         throw contributionError(
           'panels',
           index,
-          `${summarySlots[0]} 不支持 ${unsupported.kind}；完整内容请使用 conversation.detail`,
+          `${slot} 不支持 ${unsupported.kind}；完整内容请使用 panel.side`,
         );
       }
     }
     if (slots.includes('status.chip') && !details) {
-      throw contributionError('panels', index, 'status.chip 必须用 details 指向本扩展的详情面板');
+      throw contributionError('panels', index, 'status.chip 必须用 details 指向本扩展的工作台面板');
     }
-    if (slot === 'conversation.footer') {
-      if (content.length === 0 || content.length > 2) {
-        throw contributionError(
-          'panels',
-          index,
-          'conversation.footer 必须声明一至两个单行摘要 block',
-        );
-      }
-      const unsupported = content.find((block) => !COMPACT_FOOTER_KINDS.has(block.kind));
-      if (unsupported) {
-        throw contributionError(
-          'panels',
-          index,
-          `conversation.footer 不支持 ${unsupported.kind}；完整内容请使用 conversation.detail`,
-        );
-      }
+    if (isSummary && !slots.includes('status.chip') && content.length === 0) {
+      throw contributionError('panels', index, `${slot} 必须声明至少一个摘要 block`);
     }
     return {
       id,
@@ -682,6 +688,7 @@ function normalizeManifest(raw, source, scope) {
       ...(item.color ? { color: item.color } : {}),
       ...(details ? { details } : {}),
       ...(visibility === 'while-active' ? { visibility } : {}),
+      ...view,
     };
   });
   const settings = requestedSettings.map((item, index) => {
@@ -761,11 +768,20 @@ function normalizeManifest(raw, source, scope) {
       throw new Error(`composer ${item.id} 引用了未声明的 command：${item.action}`);
     }
   }
+  const panelSources = new Set();
   for (const panel of panels) {
-    assertDataViewSources(panel.content, owner, dataSources);
+    const source = panel.canvas?.sourceId ?? panel.taskBoard?.sourceId;
+    if (source) {
+      if (panelSources.has(source)) throw new Error(`数据源已被其他专用面板使用：${source}`);
+      assertDataViewSources([{ kind: 'dataView', sourceId: source }], owner, dataSources);
+      panelSources.add(source);
+    }
   }
-  for (const setting of settings) {
-    assertDataViewSources(setting.content, owner, dataSources);
+  for (const item of [...panels, ...settings]) {
+    assertDataViewSources(item.content, owner, dataSources);
+    for (const source of dataViewSourceIds(item.content)) {
+      if (panelSources.has(source)) throw new Error(`专用面板数据源不能用在通用数据视图：${source}`);
+    }
   }
   assertUiActionPolicies({
     commands,

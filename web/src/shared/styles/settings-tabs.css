@@ -1,0 +1,27 @@
+.settings-tabs {
+  --tab-count: 1;
+  --active-tab: 0;
+  --tab-gap: var(--segment-inset);
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--tab-count), minmax(0, 1fr));
+  gap: var(--tab-gap);
+  justify-self: start;
+  width: fit-content;
+}
+
+.settings-tabs::before {
+  position: absolute;
+  inset-block: var(--segment-inset);
+  inset-inline-start: var(--segment-inset);
+  width: calc((100% - 2 * var(--segment-inset) - (var(--tab-count) - 1) * var(--tab-gap)) / var(--tab-count));
+  border-radius: var(--radius-tag);
+  transform: translateX(calc(var(--active-tab) * (100% + var(--tab-gap))));
+  transition: transform var(--settings-page-enter) var(--settings-motion-out);
+  content: '';
+  pointer-events: none;
+}
+
+.settings-tabs > button { position: relative; }
+
+@media (prefers-reduced-motion: reduce) { .settings-tabs::before { transition: none; } }

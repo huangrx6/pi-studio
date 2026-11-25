@@ -4,7 +4,7 @@ import { Markdown } from '../../shared/Markdown';
 import type { ChatMessage } from '../../types/chat-types';
 import { textBlocks } from './message-content';
 import type { ActivityEntry } from './turn-content';
-import { isNearBottom, resolveLiveFollow } from './chat-scroll';
+import { isNearBottom, nestedScrollableConsumesWheel, resolveLiveFollow } from './chat-scroll';
 import {
   ACTIVITY_OUTPUT_EXPAND_STEP,
   ACTIVITY_OUTPUT_SOFT_LIMIT,
@@ -13,17 +13,44 @@ import {
 
 function ThinkingBody({ entry }: { entry: Extract<ActivityEntry, { kind: 'thinking' }> }) {
   const body = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
   const following = useRef(true);
+  const lastScrollTop = useRef(0);
   useLayoutEffect(() => {
-    if (entry.live && body.current && following.current) body.current.scrollTop = body.current.scrollHeight;
-  }, [entry.live, entry.block.thinking]);
+    const viewport = body.current;
+    const inner = content.current;
+    if (!entry.live || !viewport || !inner) return;
+    const pinToBottom = () => {
+      if (!following.current) return;
+      const target = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+      if (Math.abs(viewport.scrollTop - target) > 0.5) viewport.scrollTop = target;
+      lastScrollTop.current = viewport.scrollTop;
+    };
+    // Streamed Markdown may commit later, even after the viewport hits max-height.
+    const observer = new ResizeObserver(pinToBottom);
+    observer.observe(inner);
+    observer.observe(viewport);
+    pinToBottom();
+    return () => observer.disconnect();
+  }, [entry.live]);
   return <div ref={body} className="activity-thinking-body activity-disclosure-body"
-    onWheel={event => { if (event.deltaY < 0) following.current = resolveLiveFollow({ wheelUp: true }); }}
+    onWheel={event => {
+      const viewport = event.currentTarget;
+      if (nestedScrollableConsumesWheel(event.target, viewport, event.deltaY)) return;
+      if (event.deltaY < 0 && viewport.scrollTop > 0.5) following.current = false;
+      else if (event.deltaY > 0 && isNearBottom(viewport)) following.current = true;
+    }}
     onTouchMove={() => { following.current = false; }}
-    onScroll={event => { following.current = resolveLiveFollow({ nearBottom: isNearBottom(event.currentTarget) }); }}>
-    {entry.block.redacted
-      ? <p>模型未提供思考正文。</p>
-      : <Markdown streaming={entry.live}>{entry.block.thinking}</Markdown>}
+    onScroll={event => {
+      const viewport = event.currentTarget;
+      following.current = resolveLiveFollow(following.current, lastScrollTop.current, viewport);
+      lastScrollTop.current = viewport.scrollTop;
+    }}>
+    <div ref={content}>
+      {entry.block.redacted
+        ? <p>模型未提供思考正文。</p>
+        : <Markdown streaming={entry.live}>{entry.block.thinking}</Markdown>}
+    </div>
   </div>;
 }
 

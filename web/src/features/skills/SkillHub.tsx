@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  BookOpen,
   CheckCircle2,
   ChevronRight,
   Download,
@@ -20,8 +21,10 @@ import type {
   SkillInstallPreview,
   SkillSource,
 } from '../../types/global.d';
+import { useSettingsToast } from '../../shared/SettingsToast';
 import { errorText } from '../../shared/error-text';
 import { formatFileSize } from '../../shared/filesize';
+import './styles/skill-library.css';
 import './styles/skill-hub.css';
 import { createSkillInstallSession, type SkillInstallState } from './skill-install-session';
 import { DetailDialog } from '../../shared/DetailDialog';
@@ -70,15 +73,21 @@ function SkillHubScope({
   const loadRequest = useRef(0);
   useEffect(() => { live.current = true; return () => { live.current = false; loadRequest.current++; }; }, []);
 
-  async function load(refresh = false) {
+  async function load(refresh = false, completion?: string) {
     const request = ++loadRequest.current;
     setLoading(true);
     setError('');
     try {
       const next = await window.piApi.skillHub({ refresh });
-      if (live.current && request === loadRequest.current) setSnapshot(next);
+      if (live.current && request === loadRequest.current) {
+        setSnapshot(next);
+        if (completion) onNotify(completion, 'success');
+      }
     } catch (loadError) {
-      if (live.current && request === loadRequest.current) setError(errorText(loadError));
+      if (live.current && request === loadRequest.current) {
+        if (snapshot || completion) onNotify(completion ? `${completion}，列表刷新失败。${errorText(loadError)}` : errorText(loadError), 'error');
+        else setError(errorText(loadError));
+      }
     } finally {
       if (live.current && request === loadRequest.current) setLoading(false);
     }
@@ -100,9 +109,9 @@ function SkillHubScope({
     setError('');
     try {
       await window.piApi.setSkillSourceEnabled({ id: source.id, enabled });
-      await load(true);
+      await load(true, enabled ? '技能源已启用' : '技能源已停用');
     } catch (toggleError) {
-      setError(errorText(toggleError));
+      if (live.current) onNotify(errorText(toggleError), 'error');
     } finally {
       setSourceBusyId('');
     }
@@ -113,48 +122,47 @@ function SkillHubScope({
     setError('');
     try {
       await window.piApi.removeSkillSource(source.id);
-      await load(true);
-      onNotify(`已移除技能源「${source.name}」`, 'success');
+      await load(true, `已移除技能源「${source.name}」`);
     } catch (removeError) {
-      setError(errorText(removeError));
+      if (live.current) onNotify(errorText(removeError), 'error');
     } finally {
       setSourceBusyId('');
     }
   }
 
-  return <section className="settings-card skill-hub-card">
-    <div className="settings-card-head skill-hub-head">
-      <div>
-        <h2>技能源 {hasSources && <span className="count-badge">{sourceRows.length} 个</span>}</h2>
-      </div>
-      {(hasSources || error) && <div className="skill-hub-actions">
-        {hasSources && <button type="button" className="settings-outline" aria-haspopup="dialog" onClick={() => setBrowse({})}>
+  return <section className="skill-hub-card" aria-label="技能源">
+    <header className="skill-library-heading">
+      <h2>技能源{hasSources && <span>{sourceRows.length}</span>}</h2>
+      {hasSources && <div className="skill-hub-actions">
+        <button type="button" className="skill-library-action" aria-haspopup="dialog" onClick={() => setBrowse({})}>
           <Search aria-hidden="true" />搜索技能
-        </button>}
-        {hasSources && <button type="button" className="settings-outline" onClick={() => setManagerOpen(true)}>
-          <Settings2 />管理源
-        </button>}
-        <button type="button" className="settings-outline" disabled={loading} onClick={() => void load(true)}>
-          <RefreshCw className={loading ? 'spin' : ''} />刷新
+        </button>
+        <button type="button" className="skill-library-action" aria-haspopup="dialog" onClick={() => setManagerOpen(true)}>
+          <Settings2 aria-hidden="true" />管理源
+        </button>
+        <button type="button" className="icon-button" aria-label="刷新技能源" title="刷新技能源" disabled={loading} onClick={() => void load(true)}>
+          <RefreshCw aria-hidden="true" className={loading ? 'spin' : ''} />
         </button>
       </div>}
-    </div>
+    </header>
 
-    {error && <div className="settings-error skill-hub-error" role="alert">{error}</div>}
     {loading && !snapshot ? <LoadingState variant="section">正在读取技能源…</LoadingState>
-      : !snapshot && error ? <div className="skill-hub-empty is-error">
-        <div><strong>无法读取技能源</strong></div>
+      : !snapshot && error ? <div className="skill-hub-empty is-error" role="alert">
+        <div><strong>无法读取技能源</strong><p>{error}</p></div>
         <button type="button" className="settings-outline" disabled={loading} onClick={() => void load(true)}>
           <RefreshCw />重新加载
         </button>
       </div>
-      : !snapshot?.sources.length ? <div className="skill-hub-empty">
-        <span><Globe2 /></span>
-        <div><strong>还没有技能源</strong></div>
-        <button type="button" className="settings-add-button" onClick={() => setManagerOpen(true)}><Plus />添加技能源</button>
+      : !snapshot?.sources.length ? <div className="plugin-hub-empty">
+        <span className="plugin-hub-empty-mark" aria-hidden="true"><BookOpen /></span>
+        <h3>还没有技能源</h3>
+        <p>添加 GitHub 仓库、本地目录或清单后，即可浏览并安装其中的技能。</p>
+        <div className="plugin-hub-empty-actions">
+          <button type="button" className="settings-outline" onClick={() => setManagerOpen(true)}><Plus aria-hidden="true" />添加技能源</button>
+        </div>
       </div>
-      : <div className="skill-hub-overview" role="group" aria-label="技能源列表">
-        {sourceRows.map(({ source, count, items }) => <button
+      : <div className="skill-library-list skill-hub-overview" role="group" aria-label="技能源列表">
+        {sourceRows.map(({ source, count }) => <button
           type="button"
           key={source.id}
           className="skill-hub-overview-row"
@@ -162,13 +170,14 @@ function SkillHubScope({
           aria-label={`浏览技能源 ${source.name}`}
           onClick={() => setBrowse({ sourceId: source.id })}
         >
-          <span className="skill-hub-source-icon">{source.type === 'directory' ? <Folder /> : <Globe2 />}</span>
+          <span className="skill-hub-source-icon" aria-hidden="true">{source.type === 'directory' ? <Folder /> : <Globe2 />}</span>
           <span className="skill-hub-overview-copy">
             <strong>{source.name}</strong>
-            <small>{sourceTypeLabel(source)}{source.enabled && ` · ${count} 个技能`}</small>
-            {items.length > 0 && <span className="skill-hub-overview-samples">{items.slice(0, 3).map(item => item.name).join(' · ')}{items.length > 3 && ' …'}</span>}
+            <small>{sourceTypeLabel(source)}</small>
           </span>
-          {source.lastError ? <span className="skill-hub-overview-error">读取失败</span> : !source.enabled && <span className="skill-hub-source-status">已停用</span>}
+          <span className="skill-hub-source-status" data-error={Boolean(source.lastError)}>
+            {source.lastError ? '读取失败' : source.enabled ? `${count} 个技能` : '已停用'}
+          </span>
           <ChevronRight aria-hidden="true" />
         </button>)}
       </div>}
@@ -187,12 +196,8 @@ function SkillHubScope({
     {managerOpen && <SkillSourceManager
       snapshot={snapshot}
       busyId={sourceBusyId}
-      sourceError={error}
       onClose={() => setManagerOpen(false)}
-      onChange={async () => {
-        setSnapshot(await window.piApi.skillHub());
-        setError('');
-      }}
+      onChange={() => load(false, '技能源已添加')}
       onToggle={toggleSource}
       onRemove={removeSource}
     />}
@@ -216,7 +221,6 @@ function SkillHubScope({
 function SkillSourceManager({
   snapshot,
   busyId,
-  sourceError,
   onClose,
   onChange,
   onToggle,
@@ -224,7 +228,6 @@ function SkillSourceManager({
 }: {
   snapshot: SkillHubSnapshot | null;
   busyId: string;
-  sourceError: string;
   onClose: () => void;
   onChange: () => Promise<void>;
   onToggle: (source: SkillSource, enabled: boolean) => Promise<void>;
@@ -234,24 +237,22 @@ function SkillSourceManager({
   const [type, setType] = useState<SkillSource['type']>('github');
   const [location, setLocation] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const showToast = useSettingsToast();
 
   async function pick() {
-    setError('');
     try {
       const value = type === 'directory'
         ? await window.piApi.pickSkillSourceDirectory()
         : await window.piApi.pickSkillRegistryFile();
       if (value) setLocation(value);
     } catch (pickError) {
-      setError(errorText(pickError));
+      showToast(errorText(pickError), 'error');
     }
   }
 
   async function add() {
     if (!location.trim() || busy) return;
     setBusy(true);
-    setError('');
     try {
       await window.piApi.addSkillSource({
         name: name.trim() || undefined,
@@ -262,26 +263,28 @@ function SkillSourceManager({
       setName('');
       setLocation('');
     } catch (addError) {
-      setError(errorText(addError));
+      showToast(errorText(addError), 'error');
     } finally {
       setBusy(false);
     }
   }
 
   return <SettingsDialog
+    wide
+    className="plugin-form-dialog"
     title="管理技能源"
+    description="添加 GitHub 仓库、本地目录或 JSON 目录清单作为技能来源。"
     action="添加源"
     busyAction="正在添加…"
     busy={busy || Boolean(busyId)}
     loading={false}
     unavailable={!location.trim()}
-    error={error || (busy ? '' : sourceError)}
+    error={null}
     onClose={onClose}
     onSubmit={() => void add()}
-    showBackdrop={false}
   >
-    <div className="settings-form-sections">
-      <section className="settings-form-section" aria-label="添加技能源">
+    <div className="plugin-flat-form">
+      <section className="plugin-flat-section" aria-label="添加技能源">
         <h3>添加来源</h3>
         <div className="skill-source-form">
           <label>类型
@@ -315,13 +318,16 @@ function SkillSourceManager({
             </div>
           </label>
           {/* 说明放在 label 外面，否则会被算进“位置”输入框的无障碍名字。 */}
-          {type === 'registry' && <small className="skill-source-hint">
+          {type === 'registry' && <small className="skill-source-hint field-wide">
             支持两种 JSON：带 sha256 的压缩包清单（schemaVersion 1），以及只有名称、说明和地址的链接清单（无版本号或 schemaVersion 2）。
           </small>}
         </div>
       </section>
-      <section className="settings-form-section skill-source-existing" aria-label="已添加技能源">
-        <header><strong>已添加</strong><span>{snapshot?.sources.length || 0} 个</span></header>
+      <section className="plugin-flat-section skill-source-existing" aria-label="已添加技能源">
+        <div className="plugin-flat-section-head">
+          <h3>已添加</h3>
+          <span>{snapshot?.sources.length || 0} 个</span>
+        </div>
         <div className="skill-source-list" tabIndex={snapshot && snapshot.sources.length > 4 ? 0 : undefined} role="group" aria-label="技能源列表">
           {snapshot?.sources.map((source) => <div className="skill-source-row" key={source.id}>
             <span className="skill-source-row-icon">{source.type === 'directory' ? <Folder /> : <Globe2 />}</span>
@@ -380,6 +386,7 @@ function SkillInstallPreviewDialog({
   onInstalled: (result: InstallResult, cwd: string) => void | Promise<void>;
   onCommitted?: (result: InstallResult, cwd: string) => void;
 }) {
+  const showToast = useSettingsToast();
   const [scope, setScope] = useState<SkillInstallPreview['scope']>('user');
   const [targetWorkspace, setTargetWorkspace] = useState(workspace || workspaces[0]?.cwd || '');
   const [preview, setPreview] = useState<SkillInstallPreview | null>(null);
@@ -396,10 +403,14 @@ function SkillInstallPreviewDialog({
     refresh: cwd => window.piApi.refreshSkills(cwd),
     onCommitted: (result, cwd) => callbacks.current.onCommitted?.(result, cwd),
     onInstalled: (result, cwd) => callbacks.current.onInstalled(result, cwd),
-    onChange: state => { if (live.current) { setInstallState(state); if (state.complete) callbacks.current.onClose(); } },
+    onChange: state => {
+      if (!live.current) return;
+      setInstallState(state);
+      if (state.error && !state.busy) showToast(state.error, 'error');
+      if (state.complete) callbacks.current.onClose();
+    },
   });
   if (!sessionRef.current) sessionRef.current = makeSession();
-  const [error, setError] = useState('');
   const tokenRef = useRef('');
   const requestRef = useRef(0);
 
@@ -413,7 +424,6 @@ function SkillInstallPreviewDialog({
     tokenRef.current = '';
     if (previousToken) void window.piApi.disposePreparedSkill(previousToken).catch(() => {});
     setLoading(true);
-    setError('');
     setPreview(null);
     try {
       const result = await window.piApi.prepareSkillInstall({
@@ -429,7 +439,7 @@ function SkillInstallPreviewDialog({
       tokenRef.current = result.token;
       setPreview(result);
     } catch (prepareError) {
-      if (live.current && request === requestRef.current) setError(errorText(prepareError));
+      if (live.current && request === requestRef.current) showToast(errorText(prepareError), 'error');
     } finally {
       if (live.current && request === requestRef.current) setLoading(false);
     }
@@ -480,42 +490,38 @@ function SkillInstallPreviewDialog({
     if (!session.state.result) void window.piApi.disposePreparedSkill(token).catch(() => {});
   }
 
+  const version = preview?.version ?? item.version;
+  const sourceName = preview?.sourceName ?? item.sourceName;
+
   return <DetailDialog className="skill-install-dialog" onClose={close}>
     <header className="detail-header">
-      <div className="detail-heading">
-        <span className="detail-icon is-skill"><Download /></span>
-        <div><h2>{item.name}</h2><p>{item.sourceName}{item.version ? ` · v${item.version}` : ' · 链接型技能'}</p></div>
+      <div className="detail-heading skill-install-heading">
+        <h2>{item.name}</h2>
+        <p>{sourceName} · {version ? `v${version}` : '未声明版本'}</p>
       </div>
-      <button type="button" className="icon-button" aria-label="关闭技能预览" disabled={installing} onClick={close}><X /></button>
+      <button type="button" className="icon-button" aria-label="关闭技能预览" disabled={installing} onClick={close}><X aria-hidden="true" /></button>
     </header>
     <div className="skill-install-body">
-      {(error || installState.error) && <div className="settings-error" role="alert">{installState.error || error}</div>}
-      {committed && <p className="skill-install-note" role="status">技能已安装。恢复操作只更新运行时与页面，不会重新安装。</p>}
       {loading ? <LoadingState variant="section">正在准备技能预览…</LoadingState>
         : preview && <>
-          <section className="skill-install-overview">
-            <div><span>来源</span><strong>{preview.sourceName}</strong></div>
-            <div><span>版本</span><strong>{preview.version ? `v${preview.version}` : '未声明'}</strong></div>
-            <div><span>调用</span><strong>{invocationLabel(preview.invocation)}</strong></div>
-            <div><span>提示词</span><strong>~{preview.promptTokens} tokens/请求</strong></div>
-            <div><span>资源</span><strong>{preview.resourceCount} 个 · {formatFileSize(preview.totalBytes)}</strong></div>
-          </section>
-          <p className="skill-install-description">{preview.description}</p>
+          {preview.description && <p className="skill-install-description">{preview.description}</p>}
+          <dl className="skill-install-overview">
+            <div><dt>调用</dt><dd>{invocationLabel(preview.invocation)}</dd></div>
+            <div><dt>提示词</dt><dd>~{preview.promptTokens} tokens/请求</dd></div>
+            <div><dt>资源</dt><dd>{preview.resourceCount} 个 · {formatFileSize(preview.totalBytes)}</dd></div>
+          </dl>
           <section className="skill-install-scope">
-            <div className="skill-install-scope-heading">
-              <strong>安装范围</strong>
-              <InfoHint align="end" label="全局技能写入 Studio 应用数据目录；共享技能写入 ~/.agents/skills，与其它 Agent 工具共用；项目技能写入所选工作区的 .pi-studio/skills，只对该工作区生效。" />
+            <div className="skill-install-scope-row">
+              <div className="skill-install-scope-heading">
+                <h3>安装范围</h3>
+                <InfoHint label="全局技能写入 Studio 应用数据目录。共享技能写入 ~/.agents/skills，与其他 Agent 工具共用。项目技能写入所选工作区的 .pi-studio/skills，只对该工作区生效。" />
+              </div>
+              <div className="settings-segments skill-install-scope-options" role="group" aria-label="安装范围">
+                <button type="button" disabled={installing || committed} aria-pressed={scope === 'user'} onClick={() => changeScope('user')} title="Studio 应用数据目录，只对本应用生效">全局</button>
+                <button type="button" disabled={installing || committed} aria-pressed={scope === 'shared'} onClick={() => changeScope('shared')} title="~/.agents/skills，与其他 Agent 工具共用">共享</button>
+                <button type="button" disabled={installing || committed || !workspaces.length} aria-pressed={scope === 'project'} onClick={() => changeScope('project')}>项目</button>
+              </div>
             </div>
-            <div className="skill-install-scope-options">
-              <button type="button" disabled={installing || committed} aria-pressed={scope === 'user'} className={scope === 'user' ? 'is-active' : ''} onClick={() => changeScope('user')} title="Studio 应用数据目录，只对本应用生效">全局</button>
-              <button type="button" disabled={installing || committed} aria-pressed={scope === 'shared'} className={scope === 'shared' ? 'is-active' : ''} onClick={() => changeScope('shared')} title="~/.agents/skills，与其它 Agent 工具共用">共享</button>
-              <button type="button" disabled={installing || committed || !workspaces.length} aria-pressed={scope === 'project'} className={scope === 'project' ? 'is-active' : ''} onClick={() => changeScope('project')}>项目</button>
-            </div>
-            <code className="skill-install-scope-path">{
-              scope === 'project'
-                ? targetWorkspace
-                : scope === 'shared' ? sharedSkillsPath : userSkillsPath
-            }</code>
             {scope === 'project' && <Select
               disabled={installing || committed}
               label="项目技能工作区"
@@ -524,23 +530,30 @@ function SkillInstallPreviewDialog({
               onChange={changeWorkspace}
               leadingIcon={<Folder />}
             />}
+            <code className="skill-install-scope-path">{
+              scope === 'project'
+                ? targetWorkspace
+                : scope === 'shared' ? sharedSkillsPath : userSkillsPath
+            }</code>
           </section>
           <Accordion compact className="skill-install-files" summary="文件预览" badge={`${preview.files.length} 个文件`} defaultOpen={preview.files.length <= 5}>
-            <p className="skill-install-file-hash">SHA-256 {preview.sha256.slice(0, 12)}…</p>
             <div className="skill-install-file-list" tabIndex={preview.files.length > 5 ? 0 : undefined} role="group" aria-label="技能文件列表">
               {preview.files.map((file) => <div key={file.path}><code>{file.path}</code><span>{formatFileSize(file.size)}</span></div>)}
             </div>
+            <p className="skill-install-file-hash">SHA-256 {preview.sha256.slice(0, 12)}…</p>
           </Accordion>
-          {preview.requiresTrust && <div className="skill-install-note"><CheckCircle2 />安装后仍需在技能列表信任项目内容，之后才会进入下一次模型请求。</div>}
+          {preview.requiresTrust && <div className="skill-install-note"><CheckCircle2 aria-hidden="true" />安装后仍需在技能列表信任项目内容，之后才会进入下一次模型请求。</div>}
         </>}
     </div>
     <footer className="detail-footer">
-      <span>{preview?.canUpdate ? `将更新已安装的 v${preview.installedVersion}` : ''}</span>
-      <button type="button" className="settings-outline" disabled={installing} onClick={close}>{committed ? '关闭' : '取消'}</button>
-      <button type="button" className="settings-save" disabled={loading || installing || (!preview && !error)} onClick={() => void install()}>
-        {installing ? <LoadingIndicator /> : <Download />}
-        {installing ? committed ? '正在恢复…' : '正在安装…' : committed ? installState.result?.projection.status === 'error' ? '重试刷新' : '重试页面更新' : installState.attempted || !preview ? '重新预览' : preview?.canUpdate ? '更新技能' : '安装技能'}
-      </button>
+      {preview?.canUpdate && <small className="skill-install-update-note">将更新已安装的 v{preview.installedVersion}</small>}
+      <div className="skill-install-footer-actions">
+        <button type="button" className="settings-outline" disabled={installing} onClick={close}>{committed ? '关闭' : '取消'}</button>
+        <button type="button" className="settings-save" disabled={loading || installing} onClick={() => void install()}>
+          {installing ? <LoadingIndicator /> : <Download aria-hidden="true" />}
+          {installing ? committed ? '正在恢复…' : '正在安装…' : committed ? installState.result?.projection.status === 'error' ? '重试刷新' : '重试页面更新' : installState.attempted || !preview ? '重新预览' : preview?.canUpdate ? '更新技能' : '安装技能'}
+        </button>
+      </div>
     </footer>
   </DetailDialog>;
 }

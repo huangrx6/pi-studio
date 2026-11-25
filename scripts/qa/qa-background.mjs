@@ -130,9 +130,7 @@ await page.addInitScript(() => {
     composerResources: async () => ({ commands: [] }),
     conversationExtensionUiPreferences: async () => ({
       version: 1,
-      layout: 'grid',
       globalOrder: [],
-      sessionOrders: {},
     }),
     extensionsUi: async () => ({ items: [], errors: [], syncedAt: Date.now(), apiVersion: 1 }),
     files: async () => ({ path: '', entries: [] }),
@@ -150,14 +148,14 @@ async function openGeneralSettings() {
   if (!await page.locator('.settings-overlay').count()) await page.locator('.bottom-row').click();
   await page.getByRole('button', { name: '通用', exact: true }).click();
   await page.getByRole('heading', { name: /外观/ }).waitFor();
-  const adjustments = page.locator('.general-background-settings details');
+  const adjustments = page.locator('details.general-background-settings');
   if (await adjustments.count() && await adjustments.getAttribute('open') === null) {
     await adjustments.locator('summary').click();
   }
 }
 
 async function assertNoHorizontalOverflow() {
-  const overflow = await page.locator('.settings-content, .general-settings-section, .general-background-adjustments')
+  const overflow = await page.locator('.settings-content, .general-settings > .settings-preference-card, .general-background-adjustments')
     .evaluateAll((elements) => elements
       .filter((element) => element.clientWidth && element.scrollWidth > element.clientWidth + 2)
       .map((element) => element.className));
@@ -271,19 +269,19 @@ try {
   assert.ok(layerFrame.right >= layerFrame.viewportWidth, 'background media must cover the right viewport edge');
   assert.ok(layerFrame.bottom >= layerFrame.viewportHeight, 'background media must cover the bottom viewport edge');
   assert.equal(await backgroundAlpha(page.locator('.settings-page-header')), 0, 'page titles do not add a card surface');
-  assert.equal(await backgroundAlpha(page.locator('.general-settings-section').first()), 0, 'appearance rows use the settings surface');
+  assert.equal(await backgroundAlpha(page.locator('.general-settings > .settings-preference-card').first()), 1, 'appearance controls have their own readable surface over wallpaper');
   // Navigation selection adds a tint over the shared background.
   const selectedAlpha = await backgroundAlpha(page.locator('.settings-nav-row.is-active'));
   assert.ok(selectedAlpha > 0.02 && selectedAlpha < 0.2, `selected rows use a light tint, got ${selectedAlpha}`);
   const idleAlpha = await backgroundAlpha(page.locator('.settings-nav-row:not(.is-active)').first());
   assert.equal(idleAlpha, 0, `idle rows stay transparent, got ${idleAlpha}`);
-  const themeStates = await page.locator('.general-theme-options').first().evaluate(element => {
+  const themeStates = await page.getByRole('group', { name: '界面模式' }).evaluate(element => {
     const active = element.querySelector('button[aria-pressed="true"]');
     const inactive = element.querySelector('button[aria-pressed="false"]');
     return { active: getComputedStyle(active).backgroundColor, inactive: getComputedStyle(inactive).backgroundColor };
   });
   assert.notEqual(themeStates.active, themeStates.inactive, 'the chosen theme is visibly distinct');
-  const inactiveTheme = page.locator('.general-theme-options button[aria-pressed="false"]').first();
+  const inactiveTheme = page.getByRole('group', { name: '界面模式' }).getByRole('button', { pressed: false }).first();
   await inactiveTheme.hover();
   await page.waitForTimeout(220);
   assert.notEqual(await inactiveTheme.evaluate(element => getComputedStyle(element).backgroundColor), themeStates.inactive, 'theme hover gives visible feedback');
@@ -325,11 +323,12 @@ try {
     };
   });
   await page.getByRole('button', { name: '更换媒体', exact: true }).click();
-  const video = page.locator('.background-layer video');
+  const video = page.locator('.window-wallpaper video');
   await video.waitFor();
   await page.waitForFunction(() => {
-    const element = document.querySelector('.background-layer video');
-    return element instanceof HTMLVideoElement && element.readyState >= 1;
+    const player = document.querySelector('.window-wallpaper video');
+    const still = document.querySelector('.background-layer canvas');
+    return player instanceof HTMLVideoElement && player.readyState >= 2 && still?.width === player.videoWidth;
   });
   assert.deepEqual(await video.evaluate((element) => ({
     autoplay: element.autoplay,
@@ -338,6 +337,11 @@ try {
     paused: element.paused,
   })), { autoplay: true, loop: true, muted: true, paused: false });
   await page.screenshot({ path: `${output}dark-video.png`, animations: 'disabled' });
+  await page.locator('.general-background-summary').click();
+  await page.locator('.background-media-preview video').waitFor({ state: 'detached' });
+  assert.ok(await video.evaluate(player => !player.paused));
+  await page.locator('.general-background-summary').click();
+  await page.locator('.background-media-preview video').waitFor();
 
   await page.locator('#background-opacity').fill('100');
   await page.locator('#background-blur').fill('100');
@@ -350,12 +354,12 @@ try {
       && stored.backgroundSurfaceOpacity === 100 && stored.backgroundInsideVisibility === 32;
   });
   await page.reload();
-  await page.locator('.background-layer video').waitFor();
+  await video.waitFor();
   await page.waitForFunction(() => {
-    const element = document.querySelector('.background-layer video');
     const inside = document.querySelector('.window-wallpaper');
-    return element instanceof HTMLVideoElement && element.readyState >= 1
-      && inside?.querySelector('video')?.readyState >= 1 && Number(getComputedStyle(inside).opacity) === 0.32;
+    const player = inside?.querySelector('video');
+    const still = document.querySelector('.background-layer canvas');
+    return player?.readyState >= 2 && still?.width === player.videoWidth && Number(getComputedStyle(inside).opacity) === 0.32;
   });
 
   await openGeneralSettings();

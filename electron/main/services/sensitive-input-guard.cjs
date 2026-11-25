@@ -97,13 +97,14 @@ async function guardSensitiveInput({ sessionId, text }) {
     rememberScopes: ['session'],
   });
   if (!result.accepted) throw new Error('已取消发送包含敏感信息的消息');
-  if (result.remember === 'session') {
+  const remember = result.remember === 'session' && Boolean(getStudioDatabase().getConversation(sessionId));
+  if (remember) {
     rememberSessionExemptions(sessionId, findings.map(item => item.fingerprint));
   }
   return {
     accepted: true,
     findings,
-    remembered: result.remember === 'session',
+    remembered: remember,
   };
 }
 

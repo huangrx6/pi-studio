@@ -14,6 +14,8 @@ import {
   defineExtension,
 } from '@earendil-works/pi-durable';
 import { createToolSearchExtension } from '@earendil-works/pi-durable/tool-search';
+import { CodingTools } from '@earendil-works/pi-durable/tools';
+import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node';
 import { openNodeJsonlStorage } from '@earendil-works/pi-durable/storage/jsonl/node';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import {
@@ -353,5 +355,194 @@ test('two background subagents complete and each reports its own answer with Stu
   } finally {
     clearInterval(timer);
     await harness.close(BACKGROUND_CONTEXT);
+  }
+});
+
+test('a referenced role receives its saved model, Harness, skill subset and allowed MCP service', async () => {
+  const { saveSubagentProfile, removeSubagentProfile, resolveProfileMentions } = require('../../electron/main/capabilities/subagents/index.cjs');
+  const { saveHarnessProfile } = require('../../electron/main/core/app-settings.cjs');
+  const { getStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
+  const { discoverSkills, skillReferenceId } = require('../../electron/main/capabilities/skills/index.cjs');
+  const workspace = path.join(temporary, 'role-workspace');
+  fs.mkdirSync(workspace);
+  const db = getStudioDatabase();
+  db.upsertProvider({ id: 'faux', name: 'Faux', enabled: true });
+  db.upsertModel({ providerId: 'faux', modelId: 'specialist', enabled: true });
+  for (const name of ['role-selected', 'role-unselected']) {
+    const dir = path.join(process.env.PI_STUDIO_USER_DATA, 'skills', name);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'SKILL.md'), ['---', 'name: ' + name, 'description: ' + name, '---', 'Instructions'].join('\n'));
+  }
+  const skill = discoverSkills(workspace).skills.find(row => row.name === 'role-selected');
+  saveHarnessProfile({ id: 'review-probe', name: '评审', sectionOverrides: { preamble: 'ROLE_HARNESS_CANARY' } });
+  setSubagentConfig('user', '', { defaultMode: 'foreground', worktreeIsolation: 'off', allowedTools: [], defaultModel: '', defaultThinking: '' });
+  const role = saveSubagentProfile({ name: '评审专员', avatarId: 'olive-braids', description: '审阅指定改动',
+    instructions: 'ROLE_INSTRUCTIONS_CANARY', model: 'faux/specialist', skills: [skillReferenceId(skill)],
+    mcpServers: ['docs'], harnessId: 'review-probe' }).at(-1);
+  const durable = await import('@earendil-works/pi-durable');
+  const tool = name => durable.defineTool({ name, description: name, parameters: toolSchema.Object({}),
+    replay: 'safe', async execute() { return { output: [{ type: 'text', text: 'ok' }] }; } });
+  const coding = defineExtension({ name: 'coding-tools', tools: [tool('read')] });
+  const docs = defineExtension({ name: 'studio-mcp:docs', tools: [tool('mcp__docs__find')] });
+  const other = defineExtension({ name: 'studio-mcp:other', tools: [tool('mcp__other__find')] });
+  const builtins = createStudioBuiltins({ durable, piAi: { Type: toolSchema }, codingTools: coding,
+    toolSearch: createToolSearchExtension(), chordContext: BACKGROUND_CONTEXT });
+  const manager = builtins.get('builtin:studio-subagents');
+  const extensions = [coding, docs, other, builtins.get('builtin:studio-harness'), builtins.get('builtin:studio-skills'),
+    manager, builtins.get('builtin:studio-subagent-channel')];
+  const registry = createRegistry();
+  extensions.forEach(extension => registry.install(extension));
+  const faux = fauxProvider({ provider: 'faux', models: [{ id: 'parent', name: 'Parent' }, { id: 'specialist', name: 'Specialist' }] });
+  const models = createModels();
+  models.setProvider(faux.provider);
+  let childRequest;
+  faux.setResponses([
+    () => fauxAssistantMessage(fauxToolCall('subagent', { profileId: role.id, action: 'run', task: '审阅样例。' },
+      { id: 'invoke-role' }), { stopReason: 'toolUse' }),
+    (context, _options, _state, model) => {
+      childRequest = { model: model.id, transcript: JSON.stringify(context.messages.filter(m => m.role === 'system')) };
+      return fauxAssistantMessage('审阅完成');
+    },
+    () => fauxAssistantMessage('收到角色结果'),
+  ]);
+  const harness = await Harness.open(new MemoryStorage(), { models, registry }, BACKGROUND_CONTEXT);
+  try {
+    const parent = await harness.root(BACKGROUND_CONTEXT, { agent: { cwd: workspace, model: { provider: 'faux', modelId: 'parent' },
+      extensions, tools: [...coding.tools, ...docs.tools, ...other.tools, manager.tools.find(item => item.name === 'subagent')] } });
+    const mention = resolveProfileMentions('@[agent:' + role.id + '|olive-braids|旧称] 请审阅', true);
+    const submission = await parent.submit({ type: 'input', content: mention.readable + '\n' + mention.routing }, BACKGROUND_CONTEXT);
+    assert.equal((await submission.wait(BACKGROUND_CONTEXT)).status, 'done');
+    const token = createProtocol(durable).Subagents;
+    const children = await harness.snapshot(token, parent.id, BACKGROUND_CONTEXT);
+    const child = Object.values(children.agents)[0];
+    assert.ok(child?.conversationId);
+    assert.equal(childRequest?.model, 'specialist');
+    assert.match(childRequest.transcript, /ROLE_HARNESS_CANARY/);
+    assert.match(childRequest.transcript, /ROLE_INSTRUCTIONS_CANARY/);
+    assert.match(childRequest.transcript, /role-selected/);
+    assert.doesNotMatch(childRequest.transcript, /role-unselected|mcp__other__find/);
+    assert.match(childRequest.transcript, /mcp__docs__find/);
+    const existing = await harness.conversation(child.conversationId, BACKGROUND_CONTEXT);
+    const agent = await existing.agent(BACKGROUND_CONTEXT);
+    assert.ok(agent.tools.some(t => t.name === 'mcp__docs__find'));
+    assert.ok(![...agent.tools, ...agent.callable, ...agent.deferred].some(t => t.name === 'mcp__other__find' || t.name === 'subagent'));
+    assert.equal(child.profileId, role.id);
+    assert.equal(child.displayName, role.name);
+    assert.equal(child.avatarId, role.avatarId);
+    db.upsertModel({ providerId: 'faux', modelId: 'specialist', enabled: false });
+    faux.setResponses([
+      () => fauxAssistantMessage(fauxToolCall('subagent', { profileId: role.id, task: '再次审阅。' },
+        { id: 'disabled-model' }), { stopReason: 'toolUse' }),
+      () => fauxAssistantMessage('需要重新选择模型'),
+    ]);
+    await (await parent.submit({ type: 'input', content: '再调用同一角色。' }, BACKGROUND_CONTEXT)).wait(BACKGROUND_CONTEXT);
+    const entries = await parent.entries({ order: 'ascending' }, 100, undefined, BACKGROUND_CONTEXT);
+    const failure = entries.items.flatMap(entry => entry.model || []).find(message => message.role === 'toolResult' && message.toolCallId === 'disabled-model');
+    assert.equal(failure?.isError, true);
+    assert.match(JSON.stringify(failure.content), /模型已停用或移除/);
+    assert.equal(Object.keys((await harness.snapshot(token, parent.id, BACKGROUND_CONTEXT)).agents).length, 1);
+    const changed = saveSubagentProfile({ ...role, name: '已改名', avatarId: 'black-hime', instructions: 'NEW_ROLE_INSTRUCTIONS' }).at(-1);
+    removeSubagentProfile(changed);
+    const replay = await manager.tools.find(item => item.name === 'subagent').execute({
+      action: 'run', profileId: role.id, task: '审阅样例。',
+    }, {
+      taskId: child.ownerTaskId, conversationId: parent.id, now: Date.now, details: async () => {},
+      snapshot: harness.snapshot.bind(harness), commit: harness.commit.bind(harness), conversation: harness.conversation.bind(harness),
+    }, BACKGROUND_CONTEXT);
+    assert.equal(replay.output[0].text, '审阅完成');
+    const stored = (await harness.snapshot(token, parent.id, BACKGROUND_CONTEXT)).agents[child.name];
+    assert.equal(stored.displayName, role.name);
+    assert.equal(stored.avatarId, role.avatarId);
+    assert.equal(stored.profileRevision, 1);
+  } finally {
+    await harness.close(BACKGROUND_CONTEXT);
+  }
+});
+
+test('Durable enforces different file access for two roles and revokes write on the next background message', { timeout: 18000 }, async () => {
+  const { saveSubagentProfile } = require('../../electron/main/capabilities/subagents/index.cjs');
+  const workspace = path.join(temporary, 'role-permissions');
+  fs.mkdirSync(workspace);
+  fs.writeFileSync(path.join(workspace, 'source.txt'), 'FILE_READ_PROBE');
+  const role = (name, allowedTools) => saveSubagentProfile({ name, avatarId: 'indigo-bob', description: '文件访问核验',
+    instructions: '', model: 'parent', harnessId: '', skills: [], mcpServers: null,
+    runtimeOverrides: { allowedTools, maxThinking: 'off' } }).at(-1);
+  const reader = role('读取资料', 'read-only'), writer = role('编写资料', 'read-write');
+  setSubagentConfig('user', '', { allowedTools: ['read'], defaultModel: 'faux/other', defaultMode: 'foreground',
+    worktreeIsolation: 'off', backgroundEnabled: true, supervisorEnabled: false });
+  const durable = await import('@earendil-works/pi-durable');
+  const piAi = await import('@earendil-works/pi-ai');
+  const builtins = createStudioBuiltins({ durable, piAi: { ...piAi, Type: toolSchema }, codingTools: CodingTools,
+    toolSearch: createToolSearchExtension(), chordContext: BACKGROUND_CONTEXT });
+  const manager = builtins.get('builtin:studio-subagents');
+  const extensions = [CodingTools, manager, builtins.get('builtin:studio-subagent-channel')];
+  const registry = createRegistry();
+  extensions.forEach(ext => registry.install(ext));
+  const faux = fauxProvider({ provider: 'faux', models: [{ id: 'main', name: 'Main' }, { id: 'other', name: 'Other' }] });
+  const models = createModels();
+  models.setProvider(faux.provider);
+  const ctx = BACKGROUND_CONTEXT;
+  const harness = await Harness.open(new MemoryStorage(), { models, registry, env: ({ cwd }) => new NodeExecutionEnv({ cwd }) }, ctx);
+  const call = (tool, args, id) => () => fauxAssistantMessage(fauxToolCall(tool, args, { id }), { stopReason: 'toolUse' });
+  const answer = () => fauxAssistantMessage('完成');
+  try {
+    const parent = await harness.root(ctx, { agent: { cwd: workspace, model: { provider: 'faux', modelId: 'main' }, extensions,
+      tools: [...CodingTools.tools, manager.tools.find(t => t.name === 'subagent')] } });
+    const submit = async text => assert.equal((await (await parent.submit({ type: 'input', content: text }, ctx)).wait(ctx)).status, 'done');
+    const state = () => harness.snapshot(createProtocol(durable).Subagents, parent.id, ctx);
+    for (const profile of [reader, writer]) {
+      const filename = profile.id + '.txt';
+      faux.setResponses([call('subagent', { profileId: profile.id, action: 'run', task: '检验读写' }, filename),
+        call('read', { path: 'source.txt' }, 'try-read'), call('write', { path: filename, content: 'FILE_WRITE_PROBE' }, 'try-write'),
+        answer, answer]);
+      await submit(filename);
+      const registered = Object.values((await state()).agents).find(r => r.profileId === profile.id);
+      assert.ok(registered?.conversationId);
+      const child = await harness.conversation(registered.conversationId, ctx);
+      const agent = await child.agent(ctx);
+      assert.equal(agent.model.modelId, 'main');
+      assert.equal(agent.thinkingLevel, 'off');
+      assert.ok(![...agent.tools, ...agent.callable, ...agent.deferred].some(t => t.name === 'bash'));
+      const results = (await child.entries({ order: 'ascending' }, 100, undefined, ctx)).items.flatMap(entry => entry.model || []);
+      assert.match(JSON.stringify(results.find(r => r.toolCallId === 'try-read')?.content), /FILE_READ_PROBE/);
+      assert.equal(results.find(r => r.toolCallId === 'try-write')?.isError, profile.id === reader.id);
+      assert.equal(fs.existsSync(path.join(workspace, filename)), profile.id === writer.id);
+      if (profile.id === writer.id) assert.equal(fs.readFileSync(path.join(workspace, filename), 'utf8'), 'FILE_WRITE_PROBE');
+    }
+    const name = 'ongoing-role';
+    async function background(args, id) {
+      faux.setResponses([call('subagent', { name, ...args }, id), ...Array.from({ length: 7 }, () => answer)]);
+      await submit(id);
+      const agent = (await state()).agents[name];
+      await harness.waitForTask(agent.lastReporterTaskId, ctx);
+      await parent.waitForIdle(ctx);
+      const finished = (await state()).agents[name];
+      assert.equal(finished.lastStatus, 'completed', finished.lastReport);
+      return (await harness.conversation(agent.conversationId, ctx)).agent(ctx);
+    }
+    const before = await background({ action: 'spawn', task: '首轮', profileId: writer.id, instructions: 'CALL_INSTRUCTION' }, 'background-start');
+    assert.ok(before.tools.some(tool => tool.name === 'write'));
+    saveSubagentProfile({ ...writer, instructions: 'UPDATED_ROLE_INSTRUCTION', runtimeOverrides: { ...writer.runtimeOverrides, allowedTools: 'read-only' } });
+    const after = await background({ action: 'send', message: '继续' }, 'background-continue');
+    assert.ok(after.tools.some(tool => tool.name === 'read'));
+    assert.ok(![...after.tools, ...after.callable, ...after.deferred].some(tool => tool.name === 'write' || tool.name === 'edit'));
+    assert.match(after.instructions, /UPDATED_ROLE_INSTRUCTION/);
+    assert.match(after.instructions, /CALL_INSTRUCTION/);
+
+    const inherited = saveSubagentProfile({ ...reader, id: '', name: '随工作区运行', model: '', runtimeOverrides: { maxThinking: 'off' } }).at(-1);
+    for (const grantWrite of [false, true]) {
+      if (grantWrite) setSubagentConfig('project', workspace, { allowedTools: ['read', 'write'] });
+      const id = grantWrite ? 'updated-common-defaults' : 'original-common-defaults';
+      faux.setResponses([call('subagent', { profileId: inherited.id, task: '检查当前工具' }, id), answer, answer]);
+      await submit(id);
+      const registered = Object.values((await state()).agents).filter(r => r.profileId === inherited.id).at(-1);
+      const agent = await (await harness.conversation(registered.conversationId, ctx)).agent(ctx);
+      assert.equal(agent.model.modelId, 'other');
+      assert.equal(agent.thinkingLevel, 'off');
+      assert.ok(agent.tools.some(t => t.name === 'read'));
+      assert.equal(agent.tools.some(t => t.name === 'write'), grantWrite);
+    }
+  } finally {
+    await harness.close(ctx);
   }
 });

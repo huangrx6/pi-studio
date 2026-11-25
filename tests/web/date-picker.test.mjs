@@ -7,6 +7,7 @@ import {
   formatPickerMonth,
   isPickerDayDisabled,
   monthStart,
+  normalizePickerTime,
   parseIsoDay,
   pickerCalendarDays,
   pickerWeekday,
@@ -40,4 +41,16 @@ test('date picker shifts across leap days and respects inclusive bounds', () => 
   assert.equal(isPickerDayDisabled('2026-10-05', '2026-10-05', '2026-10-10'), false);
   assert.equal(isPickerDayDisabled('2026-10-10', '2026-10-05', '2026-10-10'), false);
   assert.equal(isPickerDayDisabled('2026-10-11', '2026-10-05', '2026-10-10'), true);
+});
+
+test('date-time picker retains early supported dates and validates 24-hour times', () => {
+  assert.equal(formatPickerDay('0001-01-04'), '0001/01/04');
+  assert.ok(pickerCalendarDays('0001-01-04').includes('0001-01-04'));
+  assert.equal(addPickerMonths('0099-12-01', 1), '0100-01-01');
+  assert.equal(normalizePickerTime('9:30'), '09:30');
+  assert.equal(normalizePickerTime('0930'), '09:30');
+  assert.equal(normalizePickerTime('00:00'), '00:00');
+  assert.equal(normalizePickerTime('23:59'), '23:59');
+  assert.equal(normalizePickerTime('24:00'), '');
+  assert.equal(normalizePickerTime('09:60'), '');
 });

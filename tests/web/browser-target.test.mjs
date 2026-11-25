@@ -13,3 +13,19 @@ test('accepts full URLs and bare hosts, refuses other schemes', () => {
   assert.equal(normalizeBrowserTarget(''), '');
   assert.equal(normalizeBrowserTarget('   '), '');
 });
+
+test('accepts absolute HTML paths and file:// HTML URLs', () => {
+  assert.equal(
+    normalizeBrowserTarget('file:///tmp/demo/index.html'),
+    'file:///tmp/demo/index.html',
+  );
+  assert.equal(
+    normalizeBrowserTarget('/tmp/demo/index.html'),
+    'file:///tmp/demo/index.html',
+  );
+  assert.equal(
+    normalizeBrowserTarget('/tmp/知识问答/index.html'),
+    'file:///tmp/%E7%9F%A5%E8%AF%86%E9%97%AE%E7%AD%94/index.html',
+  );
+  assert.equal(normalizeBrowserTarget('/tmp/demo/notes.md'), '');
+});

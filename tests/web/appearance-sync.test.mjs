@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { nativeAppearanceChange, nativeAppearanceKey } from '../../web/src/shared/appearance-sync.ts';
 
-const base = { theme: 'light', palette: 'lime', radiusStyle: 'standard' };
+const base = { theme: 'light', palette: 'ocean', radiusStyle: 'standard' };
 
 test('native appearance changes only for theme, palette and radius', () => {
   const initial = nativeAppearanceChange('', base);
@@ -20,7 +20,7 @@ test('native appearance changes only for theme, palette and radius', () => {
   }
 
   assert.equal(nativeAppearanceChange(initial.key, { ...base, theme: 'dark' }).changed, true);
-  assert.equal(nativeAppearanceChange(initial.key, { ...base, palette: 'ocean' }).changed, true);
+  assert.equal(nativeAppearanceChange(initial.key, { ...base, palette: 'amber' }).changed, true);
   assert.equal(nativeAppearanceChange(initial.key, { ...base, radiusStyle: 'soft' }).changed, true);
 });
 

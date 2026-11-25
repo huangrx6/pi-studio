@@ -28,7 +28,7 @@ function harness() {
     modelRevisionRef:{current:new Map()},modelWritesRef:{current:new Set()},modelWriteResultsRef:{current:new Map()},sessionLoadRef:{current:1},sessionRef:{current:null},defaultModelWorkspaceRef:{current:'/A'},turnActiveRef:{current:false},transcriptCacheRef:{current:new Map()},
     providerDiscoveryRequestsRef:{current:new Map()},providerCatalogRequestsRef:{current:new Map()},providerModels:{},providerCatalogState:{},defaultModelSelection:selection('initial'),modelSelection:selection('initial'),
     actionConfirmation:{confirm(options){const d=deferred();confirms.push({...d,options});return d.promise;}},
-    errorText:error=>error.message,pushNotification:(...args)=>notices.push(args),acceptRuntimeSnapshot:value=>{h.settingsData=value;},
+    errorText:error=>error.message,showToast:(...args)=>notices.push(args),acceptRuntimeSnapshot:value=>{h.settingsData=value;},
     discardEditor:()=>{h.editor=null;h.editorRequestRef.current++;h.editorSaveRef.current=false;h.editorRecoveryRef.current=null;h.editorSaving=false;},
     window:{piApi:Object.fromEntries(['setEnabledModels','setProviderEnabled','removeProvider','removeCustomModel','importProviderModels','setMcpEnabled','removeMcp','refreshModels','refreshMcp','setDefaultModel','setDefaultThinkingLevel','conversationConfigure'].map(method=>[method,(...args)=>{const d=deferred();calls.push({...d,method,args});return d.promise;}]))},
   };
@@ -49,7 +49,7 @@ test('one synchronous resource lock spans confirmation across domains; cancel pe
 test('uncommitted resource rejection is an error without success fact and allows deliberate retry',async()=>{
  const {h,notices}=harness();let writes=0;
  const options={summary:'deleted',write:async()=>{writes++;throw new Error('write rejected');},apply:()=>assert.fail('must not project')};
- await h.runResourceWrite('models',options);assert.equal(h.settingsError,'write rejected');assert.equal(h.resourcePendingRef.current.models,false);assert.equal(notices.length,0);
+ await h.runResourceWrite('models',options);assert.equal(h.settingsError,null);assert.equal(h.resourcePendingRef.current.models,false);assert.deepEqual(notices,[['write rejected','error']]);
  await h.runResourceWrite('models',options);assert.equal(writes,2);
 });
 

@@ -4,6 +4,31 @@ import type { RuntimeRefreshSnapshot } from './runtime-types';
 /** Pi Durable 支持的 thinking 强度。空字符串表示沿用父智能体。 */
 export type SubagentThinking = '' | 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
+export type SubagentProfile = {
+  id: string;
+  revision: number;
+  name: string;
+  description: string;
+  instructions: string;
+  avatarId: string;
+  /** Empty inherits the shared default, 'parent' uses the caller's model, otherwise a provider/model reference. */
+  model: string;
+  /** null inherits the parent's available resources, [] explicitly selects none. */
+  mcpServers: string[] | null;
+  skills: string[] | null;
+  harnessId: string;
+  runtimeOverrides: SubagentRuntimeOverrides;
+};
+
+export type SubagentProfileResources = {
+  models: { id: string; name: string; thinkingLevels: SubagentThinking[] }[];
+  mcpServers: string[];
+  skills: { id: string; name: string }[];
+  harnesses: { id: string; name: string }[];
+  defaults: SubagentConfig;
+  tools: string[];
+};
+
 export type SubagentConfig = {
   defaultModel: string;
   defaultProvider: string;
@@ -27,6 +52,10 @@ export type SubagentConfig = {
   /** 0 disables the reference-cost budget. */
   budgetCostUsd: number;
   budgetAction: 'warn' | 'stop';
+};
+
+export type SubagentRuntimeOverrides = Partial<Omit<SubagentConfig, 'defaultModel' | 'defaultProvider' | 'allowedTools'>> & {
+  allowedTools?: 'read-only' | 'read-write' | 'parent' | string[];
 };
 
 export type SubagentModelOption = {

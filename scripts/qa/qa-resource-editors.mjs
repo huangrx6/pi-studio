@@ -18,7 +18,11 @@ async function qa(method, ...args) { await page.evaluate(({ method, args }) => w
 async function pending(method, scope = '') { await page.waitForFunction(({ method, scope }) => window.__resourceEditorsQa.pending(method, scope), { method, scope }); }
 async function count(method, scope) { return page.evaluate(({ method, scope }) => window.__resourceEditorsQa.calls.filter(item => item.method === method && (scope === undefined || scope === item.scope)).length, { method, scope }); }
 async function twice(locator) { await locator.evaluate(node => { node.click(); node.click(); }); }
-async function nav(name) { await page.locator('.settings-navigation').getByRole('button', { name, exact: true }).click(); }
+async function nav(name) {
+  const hubTab = { 'MCP 服务器': 'MCP', '技能': '技能', '扩展': '扩展' }[name];
+  await page.locator('.settings-navigation').getByRole('button', { name: hubTab ? '插件' : name, exact: true }).click();
+  if (hubTab) await page.getByRole('tablist', { name: '插件与资源' }).getByRole('tab', { name: hubTab, exact: true }).click();
+}
 async function close() { await dialog().getByRole('button', { name: '关闭弹框', exact: true }).click(); await dialog().waitFor({ state: 'detached' }); }
 async function capture(name, theme, viewport, resetScroll = true) {
   await page.setViewportSize(viewport); await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme); await settle();
@@ -79,7 +83,7 @@ try {
   console.log('CHECK', result.checks.length + 1); result.checks.push('Provider read failure explicitly retries; credentials remain blank; synchronous duplicate save is one write; success plus catalog-read failure shows completed fact and retries read only');
 
   await page.setViewportSize({ width: 980, height: 760 });
-  await page.locator('[data-provider-id="qa-provider"]').getByRole('button', { name: '管理模型', exact: true }).click();
+  await page.locator('[data-provider-id="qa-provider"]').getByRole('button', { name: /个对话模型，/, expanded: false }).click();
   await page.getByRole('button', { name: '编辑模型 隔离测试模型', exact: true }).click(); await dialog().getByRole('textbox', { name: '模型 ID', exact: true }).waitFor();
   await capture('13-model-sections-light', 'light', { width: 1440, height: 900 });
   await capture('14-model-sections-dark', 'dark', { width: 600, height: 760 });

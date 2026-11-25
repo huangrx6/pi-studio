@@ -3,14 +3,14 @@
   "format": 1,
   "id": "pi-quota-status",
   "name": "额度状态",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "按当前会话模型来源保存的接口和字段显示额度。",
   "author": "huangrx6",
   "publisher": "Pi Studio",
   "license": "MIT",
   "repository": "https://github.com/huangrx6/pi-studio",
   "engines": {
-    "piStudio": ">=0.0.6 <0.2.0"
+    "piStudio": ">=0.0.13 <0.2.0"
   },
   "permissions": [
     "ui.panels"
@@ -20,7 +20,8 @@
       {
         "id": "quota-detail",
         "title": "额度状态",
-        "slot": "conversation.detail",
+        "slot": "panel.side",
+        "icon": "gauge",
         "size": "regular",
         "priority": 20,
         "content": []

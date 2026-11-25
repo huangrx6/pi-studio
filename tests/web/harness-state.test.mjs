@@ -22,6 +22,9 @@ test('tool guidance retains an empty editable row and detects collisions without
   assert.deepEqual(guidanceDraft([{ key: 1, name: 'renamed-tool', guidance: '' }]), { value: { 'renamed-tool': '' }, error: null });
   assert.match(guidanceDraft([{ key: 1, name: 'read', guidance: 'one' }, { key: 2, name: ' read ', guidance: 'two' }]).error, /已有说明/);
   assert.match(guidanceDraft([{ key: 1, name: ' ', guidance: 'keep me' }]).error, /工具名称/);
+  for (const name of ['bad name', 'constructor', '__proto__']) {
+    assert.match(guidanceDraft([{ key: 1, name, guidance: 'keep me' }]).error, /有效的工具标识/);
+  }
 });
 
 test('policy draft clones every mutable nested group including long-task limits', () => {

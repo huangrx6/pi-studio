@@ -1,19 +1,20 @@
 import { Accordion } from '../../shared/Accordion';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
-  Bot,
-  Check,
   ChevronRight,
   FolderOpen,
   GitMerge,
   RotateCw,
-  Save,
+  SlidersHorizontal,
   Trash2,
   Undo2,
 } from 'lucide-react';
-import { LoadingIndicator, LoadingState } from '../../shared/LoadingState';
+import { SettingsDialog } from '../../shared/SettingsDialog';
+import { isComposingKey } from '../../shared/keyboard-navigation';
+import type { ModalDismiss } from '../../shared/useModalDialog';
 import { revealFileLabel } from '../../shared/desktop-platform';
 import type { AgentToolInfo, AgentToolSource } from '../../types/agent-tool-types';
+import type { ModelOption } from '../../types/model-types';
 import type {
   SubagentConfig,
   SubagentSettingsSnapshot,
@@ -21,9 +22,11 @@ import type {
 } from '../../types/subagent-types';
 import { InfoHint } from '../../shared/InfoHint';
 import { Select } from '../../shared/Select';
-import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
+import { SubagentProfileLibrary } from './SubagentProfileLibrary';
+import './styles/subagent-profiles.css';
 import { runtimeRefreshFailure } from '../../shared/runtime-refresh';
 import { useActionConfirmation } from '../../shared/ConfirmDialog';
+import { SettingsToast, useSettingsToast } from '../../shared/SettingsToast';
 import { useSettingsDraftGuard } from '../../shared/SettingsDraftGuard';
 import { createSubagentSettingsOwner, createSubagentSettingsWrites, toggleSubagentAllowedTool } from './subagent-settings-state';
 import './styles/subagent-settings.css';
@@ -128,33 +131,73 @@ function matchesTool(pattern: string, name: string): boolean {
   return new RegExp(`^${escaped}$`).test(name);
 }
 
-export function SubagentSettings({
-  cwd,
-  workspaces,
-  enabledAgentTools,
-  onOpenAgentTools,
-}: {
+type SubagentSettingsProps = {
   cwd: string;
   workspaces: WorkspaceOption[];
+  models?: Pick<ModelOption, 'id' | 'name'>[];
   enabledAgentTools?: string[];
   onOpenAgentTools?: () => void;
-}) {
+  onWorktreesRevealed?: () => void;
+};
+
+export function SubagentSettings(props: SubagentSettingsProps) {
+  const [defaultsOpen, setDefaultsOpen] = useState(false);
+  const defaultsButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (props.onWorktreesRevealed) {
+      defaultsButton.current?.focus({ preventScroll: true });
+      setDefaultsOpen(true);
+    }
+  }, [props.onWorktreesRevealed]);
+  return <div className="settings-preference-page role-settings-page">
+    <SubagentProfileLibrary cwd={props.cwd}
+      models={props.models}
+      canDelegate={props.enabledAgentTools?.some(pattern => matchesTool(pattern, 'subagent'))}
+      onOpenAgentTools={props.onOpenAgentTools} defaultsAction={
+        <button ref={defaultsButton} type="button" className="settings-outline" aria-haspopup="dialog" onClick={() => setDefaultsOpen(true)}>
+          <SlidersHorizontal aria-hidden="true" />共用运行默认值
+        </button>
+      } />
+    {defaultsOpen && <SubagentDefaultsDialog {...props} onClose={() => {
+      setDefaultsOpen(false);
+      props.onWorktreesRevealed?.();
+    }} />}
+  </div>;
+}
+
+function SubagentDefaultsDialog({
+  cwd, workspaces, enabledAgentTools, onOpenAgentTools, onWorktreesRevealed, onClose,
+}: SubagentSettingsProps & { onClose: () => void }) {
+  const showToast = useSettingsToast();
   const inputPrefix = useId();
   const [snapshot, setSnapshot] = useState<SubagentSettingsSnapshot | null>(null);
+  const worktreesHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (!snapshot || !onWorktreesRevealed) return;
+    const frame = requestAnimationFrame(() => {
+      if (!worktreesHeading.current) return;
+      worktreesHeading.current.focus({ preventScroll: true });
+      worktreesHeading.current.closest('section')?.scrollIntoView({ block: 'start', behavior: 'instant' });
+      onWorktreesRevealed();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [snapshot, onWorktreesRevealed]);
   const [catalogTools, setCatalogTools] = useState<AgentToolInfo[]>([]);
   const [scope, setScope] = useState<Scope>('user');
   const [targetWorkspace, setTargetWorkspace] = useState(cwd || workspaces[0]?.cwd || '');
   const [draft, setDraft] = useState<SubagentConfig>(emptyConfig);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [worktreeBusy, setWorktreeBusy] = useState('');
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState('');
   const [toolFilter, setToolFilter] = useState('');
   const [collapsedToolGroups, setCollapsedToolGroups] = useState<string[]>([]);
+  const [collapsedSearchGroups, setCollapsedSearchGroups] = useState<string[]>([]);
+  const filteringTools = Boolean(toolFilter.trim());
+  const collapsedGroups = filteringTools ? collapsedSearchGroups : collapsedToolGroups;
+  const setCollapsedGroups = filteringTools ? setCollapsedSearchGroups : setCollapsedToolGroups;
   const [worktreeLoadError, setWorktreeLoadError] = useState<string | null>(null);
-  const confirmation = useActionConfirmation();
+  const confirmation = useActionConfirmation('subagent-confirm');
   const worktrees = Array.isArray(snapshot?.worktrees) ? snapshot.worktrees : [];
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
@@ -177,8 +220,6 @@ export function SubagentSettings({
     setDraft(emptyConfig());
     setLoadError(null);
     setWorktreeLoadError(null);
-    setError(null);
-    setFeedback('');
     try {
       await settingsWrites.wait();
       if (!owner.current(request)) return;
@@ -231,8 +272,7 @@ export function SubagentSettings({
     ? selectedModel.thinkingLevels
     : snapshot?.thinkingLevels || [];
   const parentTools = useMemo(() => catalogTools.filter((tool) => (
-    !enabledAgentTools
-    || enabledAgentTools.some((pattern) => matchesTool(pattern, tool.name))
+    tool.enabled ?? (!enabledAgentTools || enabledAgentTools.some((pattern) => matchesTool(pattern, tool.name)))
   )), [catalogTools, enabledAgentTools]);
   const availableNames = useMemo(() => new Set(parentTools.map((tool) => tool.name)), [parentTools]);
   const explicitTools = draft.allowedTools.length > 0;
@@ -288,15 +328,14 @@ export function SubagentSettings({
   function toggleTool(name: string) {
     const next = toggleSubagentAllowedTool(draft.allowedTools, parentTools.map((tool) => tool.name), name);
     if (!next) {
-      setError('至少保留一个工具。空白名单表示继承父智能体；如需恢复继承，请使用“恢复继承”。');
+      showToast('至少保留一个工具。空白名单表示继承父智能体；如需恢复继承，请使用“恢复继承”。', 'error');
       return;
     }
-    setError(null);
     setDraft((current) => ({ ...current, allowedTools: next }));
   }
 
   function toggleToolGroup(label: string) {
-    setCollapsedToolGroups((current) => (
+    setCollapsedGroups((current) => (
       current.includes(label) ? current.filter((entry) => entry !== label) : [...current, label]
     ));
   }
@@ -308,10 +347,9 @@ export function SubagentSettings({
       ? allNames.filter((name) => base.includes(name) || names.includes(name))
       : base.filter((name) => !names.includes(name));
     if (!next.length) {
-      setError('至少保留一个工具。空白名单表示继承父智能体；如需恢复继承，请使用“恢复继承”。');
+      showToast('至少保留一个工具。空白名单表示继承父智能体；如需恢复继承，请使用“恢复继承”。', 'error');
       return;
     }
-    setError(null);
     setDraft((current) => ({ ...current, allowedTools: next }));
   }
 
@@ -329,8 +367,6 @@ export function SubagentSettings({
     if (busy || nextScope === scope || !await allowDiscard()) return;
     setScope(nextScope);
     if (snapshot) setDraft(configFor(snapshot, nextScope));
-    setError(null);
-    setFeedback('');
   }
 
   async function changeWorkspace(nextWorkspace: string) {
@@ -344,23 +380,24 @@ export function SubagentSettings({
     await load();
   }
 
-  async function save() {
+  async function save(dismiss: ModalDismiss) {
     if (!snapshot || busy || !dirty) return;
     const ticket = owner.begin();
     const input = { cwd: effectiveWorkspace, scope, settings: cloneConfig(draft) };
     setSaving(true);
-    setError(null);
-    setFeedback('');
     try {
       const next = await settingsWrites.run(() => window.piApi.saveSubagentSettings(input));
       if (!owner.current(ticket)) return;
       const refreshFailure = runtimeRefreshFailure(next.runtimeRefresh);
       setSnapshot(next);
       setDraft(configFor(next, input.scope));
-      if (refreshFailure) setError(`配置已保存；${refreshFailure}`);
-      else setFeedback('配置已保存，将用于下一次子智能体任务。');
+      if (refreshFailure) showToast(refreshFailure, 'error');
+      else {
+        await dismiss(onClose);
+        showToast('配置已保存，将用于下一次子智能体任务。');
+      }
     } catch (cause) {
-      if (owner.current(ticket)) setError(cause instanceof Error ? cause.message : String(cause));
+      if (owner.current(ticket)) showToast(cause instanceof Error ? cause.message : String(cause), 'error');
     } finally {
       if (owner.current(ticket)) setSaving(false);
     }
@@ -390,8 +427,6 @@ export function SubagentSettings({
           });
     if (!accepted || !owner.current(ticket)) return;
     setWorktreeBusy(id || 'cleanup');
-    setError(null);
-    setFeedback('');
     setWorktreeLoadError(null);
     let applied = false;
     try {
@@ -405,12 +440,12 @@ export function SubagentSettings({
       const next = await window.piApi.managedWorktrees({ cwd: effectiveWorkspace });
       if (!owner.current(ticket)) return;
       setSnapshot((current) => current ? { ...current, worktrees: next } : current);
-      setFeedback('工作树操作已完成。');
+      showToast('工作树操作已完成。');
     } catch (cause) {
       if (owner.current(ticket)) {
         const message = cause instanceof Error ? cause.message : String(cause);
         if (applied) setWorktreeLoadError(`操作已完成，但列表刷新失败：${message}`);
-        else setError(message);
+        else showToast(message, 'error');
       }
     } finally {
       if (owner.current(ticket)) setWorktreeBusy('');
@@ -438,84 +473,52 @@ export function SubagentSettings({
     if (busy) return;
     const ticket = owner.begin();
     try { await window.piApi.revealManagedWorktree(id); }
-    catch (cause) { if (owner.current(ticket)) setError(cause instanceof Error ? cause.message : String(cause)); }
+    catch (cause) { if (owner.current(ticket)) showToast(cause instanceof Error ? cause.message : String(cause), 'error'); }
   }
 
-  if (loading && !snapshot) {
-    return (
-      <LoadingState variant="section">正在读取子智能体运行配置…</LoadingState>
-    );
-  }
-
-  return (
-    <div className="settings-sections subagent-settings">
-      <SettingsPageHeader
-        icon={<Bot />}
-        title="子智能体"
-        meta={<>
-          <span>并行任务、模型覆盖与隔离工作树</span>
-          <InfoHint label="新任务继承当前 Harness 配置；运行中的任务保持不变。" />
-        </>}
-        actions={
-          <div className="subagent-overview-actions">
-            <button
-              type="button"
-              className="icon-button"
-              disabled={busy}
-              aria-label="刷新子智能体配置"
-              title="刷新"
-              onClick={() => void refresh()}
-            >
-              <RotateCw className={loading ? 'spin' : ''} />
-            </button>
-          </div>
-        }
-      />
+  return <><SettingsDialog wide className="subagent-form-dialog subagent-defaults-dialog" title="共用运行默认值"
+    description="工作区可覆盖全局默认值，每个角色也可以单独调整。"
+    action="保存配置" closeLabel="关闭" busy={saving || Boolean(worktreeBusy)} busyAction={saving ? '正在保存…' : '处理中…'}
+    loading={loading && !snapshot} unavailable={!snapshot || !dirty} error={null} autoFocusFirstField={false}
+    onSubmit={dismiss => void save(dismiss)} onClose={onClose}
+    onRequestClose={async dismiss => { if (await allowDiscard()) await dismiss(onClose); }}
+    footerHint={snapshot && (() => <div className="subagent-defaults-footer-tools">
+      <button type="button" className="icon-button" disabled={busy} aria-label="刷新子智能体配置" title="刷新配置" onClick={() => void refresh()}><RotateCw /></button>
+      {dirty && <><button type="button" className="settings-outline" disabled={busy} onClick={() => setDraft(cloneConfig(savedDraft))}>撤销更改</button>
+        <span role="status">{scopeLabel}有未保存的更改</span></>}
+    </div>)}>
+    <div className="subagent-form subagent-settings">
       {loadError && <div className="settings-error" role="alert">
         <span>无法读取子智能体配置：{loadError}</span>
         <button type="button" className="settings-outline" onClick={() => void load()}>重新加载</button>
       </div>}
-      {snapshot && <fieldset className="subagent-settings-fields" disabled={busy}>
-      <section className="subagent-overview">
-        {!runtimeReady && <div className={`subagent-runtime-status is-${runtimeState}`}>
-          <div>
-            <strong>{runtimeLabel} <InfoHint label="在智能体工具中开放 subagent 后即可使用；已保存的模型、思考强度和工具限制会保留。" /></strong>
+      {snapshot && <div className="subagent-defaults-sections">
+      <section className="subagent-defaults-section" aria-labelledby="subagent-scope">
+        <div className="subagent-scope-block subagent-default-row">
+          <div className="subagent-section-heading">
+            <h3 id="subagent-scope">配置范围</h3>
+            <InfoHint label="这里配置角色共用的默认值。工作区可以覆盖全局值，每个角色也可以在编辑框里逐项指定。" />
           </div>
-          {snapshot?.installed && toolsReady === false && onOpenAgentTools && (
-            <button type="button" className="settings-outline" onClick={onOpenAgentTools}>去启用</button>
-          )}
-        </div>}
-        <div className="subagent-scope-block">
-          <div className="subagent-section-label">
-            <strong>配置范围 <InfoHint label="全局值适用于所有工作区；工作区值只覆盖所选工作区。" /></strong>
-          </div>
-          <div className="subagent-scope-grid" role="group" aria-label="子智能体配置范围">
+          <div className="settings-segments subagent-scope-grid" role="group" aria-label="子智能体配置范围">
             <button
               type="button"
               aria-pressed={scope === 'user'}
-              className={scope === 'user' ? 'is-active' : ''}
+              disabled={busy}
               onClick={() => changeScope('user')}
             >
-                            <div>
-                <strong>所有工作区</strong>
-              </div>
-              {scope === 'user' && <Check />}
+              所有工作区
             </button>
             <button
               type="button"
               aria-pressed={scope === 'project'}
               disabled={busy || (workspaces.length === 0 && !effectiveWorkspace)}
-              className={scope === 'project' ? 'is-active' : ''}
               onClick={() => changeScope('project')}
             >
-                            <div>
-                <strong>指定工作区</strong>
-              </div>
-              {scope === 'project' && <Check />}
+              指定工作区
             </button>
           </div>
           {scope === 'project' && (
-            <div className="subagent-workspace-target">
+            <div className="subagent-workspace-target subagent-default-row">
               <div>
                 <span>目标工作区</span>
               </div>
@@ -535,32 +538,42 @@ export function SubagentSettings({
             </div>
           )}
         </div>
+        {!runtimeReady && <div className={`subagent-runtime-status is-${runtimeState}`}>
+          <strong>{runtimeLabel} <InfoHint label="在智能体工具中开放 subagent 后即可使用；已保存的模型、思考强度和工具限制会保留。" /></strong>
+          {snapshot?.installed && toolsReady === false && onOpenAgentTools && (
+            <button type="button" className="settings-outline" onClick={onOpenAgentTools}>去启用</button>
+          )}
+        </div>}
       </section>
-      <section className="subagent-section">
+      <section className="subagent-defaults-section" aria-labelledby="subagent-execution">
         <div className="subagent-section-heading">
-                    <div>
-            <h2>运行方式 <InfoHint label="前台任务等待结果；后台任务由 Durable 管理，主智能体可以继续工作。" /></h2>
-          </div>
+          <h3 id="subagent-execution">运行方式</h3>
+          <InfoHint label="前台任务等待结果；后台任务由 Durable 管理，主智能体可以继续工作。" />
         </div>
-        <div className="subagent-control-grid">
-          <label htmlFor={`${inputPrefix}-backgroundEnabled`} className={`subagent-control ${draft.backgroundEnabled ? 'is-enabled' : ''}`}>
-            <span className="subagent-label">允许后台子智能体 <InfoHint label="关闭后只接受前台调用；已经运行的后台任务不会被中断。" /></span>
-            <span className="subagent-toggle-row">
-              <input
-                id={`${inputPrefix}-backgroundEnabled`}
-                aria-label="允许后台子智能体"
-                type="checkbox"
-                checked={draft.backgroundEnabled}
-                onChange={(event) => setDraft((current) => ({
+        <div className="subagent-default-rows">
+          <div className="subagent-default-row subagent-switch-row">
+            <span className="subagent-label"><span>允许后台子智能体</span> <InfoHint label="关闭后只接受前台调用；已经运行的后台任务不会被中断。" /></span>
+            <button
+              type="button"
+              role="switch"
+              className={`switch ${draft.backgroundEnabled ? 'is-on' : ''}`}
+              aria-label="允许后台子智能体"
+              aria-checked={draft.backgroundEnabled}
+              disabled={busy || !snapshot}
+              onClick={() => setDraft((current) => {
+                const nextEnabled = !current.backgroundEnabled;
+                return {
                   ...current,
-                  backgroundEnabled: event.target.checked,
-                  defaultMode: event.target.checked ? current.defaultMode : 'foreground',
-                  supervisorEnabled: event.target.checked && current.supervisorEnabled,
-                }))}
-              />
-            </span>
-          </label>
-          <div className={`subagent-control subagent-control-field ${draft.backgroundEnabled ? '' : 'is-disabled'}`}>
+                  backgroundEnabled: nextEnabled,
+                  defaultMode: nextEnabled ? current.defaultMode : 'foreground',
+                  supervisorEnabled: nextEnabled && current.supervisorEnabled,
+                };
+              })}
+            >
+              <span />
+            </button>
+          </div>
+          <div className={`subagent-default-row ${draft.backgroundEnabled ? '' : 'is-disabled'}`}>
             <span className="subagent-label">默认运行模式</span>
             <Select
               label="默认子智能体运行模式"
@@ -576,183 +589,143 @@ export function SubagentSettings({
               }))}
             />
           </div>
-          <label htmlFor={`${inputPrefix}-supervisorEnabled`} className={`subagent-control ${draft.supervisorEnabled ? 'is-enabled' : ''} ${draft.backgroundEnabled ? '' : 'is-disabled'}`}>
-            <span className="subagent-label">允许联系主智能体 <InfoHint align="end" label="后台任务可向主智能体提问；收到回复后会继续执行。" /></span>
-            <span className="subagent-toggle-row">
-              <input
-                id={`${inputPrefix}-supervisorEnabled`}
-                aria-label="允许联系主智能体"
-                type="checkbox"
-                disabled={busy || !snapshot || !draft.backgroundEnabled}
-                checked={draft.supervisorEnabled}
-                onChange={(event) => setDraft((current) => ({
-                  ...current,
-                  supervisorEnabled: event.target.checked,
-                }))}
-              />
-            </span>
-          </label>
+          <div className={`subagent-default-row subagent-switch-row ${draft.backgroundEnabled ? '' : 'is-disabled'}`}>
+            <span className="subagent-label"><span>允许联系主智能体</span> <InfoHint label="后台任务可向主智能体提问；收到回复后会继续执行。" /></span>
+            <button
+              type="button"
+              role="switch"
+              className={`switch ${draft.supervisorEnabled ? 'is-on' : ''}`}
+              aria-label="允许联系主智能体"
+              aria-checked={draft.supervisorEnabled}
+              disabled={busy || !snapshot || !draft.backgroundEnabled}
+              onClick={() => setDraft((current) => ({
+                ...current,
+                supervisorEnabled: !current.supervisorEnabled,
+              }))}
+            >
+              <span />
+            </button>
+          </div>
         </div>
-        <Accordion className="subagent-advanced" summary="运行限制与预算" description={limitSummary}>
-          <div className="subagent-field-grid">
-          <label htmlFor={`${inputPrefix}-maxConcurrent`} className="subagent-field">
-            <span className="subagent-label">最大并发 <InfoHint label="当前主会话中可以同时运行的后台任务数量。" /></span>
-            <input
-                id={`${inputPrefix}-maxConcurrent`}
-                aria-label="最大并发"
-              type="number"
-              min={1}
-              max={16}
-              value={draft.maxConcurrent}
-              onChange={(event) => setDraft((current) => ({
-                ...current,
-                maxConcurrent: Number(event.target.value),
-              }))}
-            />
-          </label>
-          <label htmlFor={`${inputPrefix}-maxSpawns`} className="subagent-field">
-            <span className="subagent-label">最多创建 <InfoHint label="一个主会话累计可创建的子会话数量。" /></span>
-            <input
-                id={`${inputPrefix}-maxSpawns`}
-                aria-label="最多创建"
-              type="number"
-              min={1}
-              max={100}
-              value={draft.maxSpawns}
-              onChange={(event) => setDraft((current) => ({
-                ...current,
-                maxSpawns: Number(event.target.value),
-              }))}
-            />
-          </label>
-          <label htmlFor={`${inputPrefix}-waitTimeoutMs`} className="subagent-field">
-            <span className="subagent-label">默认等待时间 <InfoHint align="end" label="超时只结束本次等待，不会停止子智能体。" /></span>
-            <div className="subagent-input-unit">
-              <input
-                id={`${inputPrefix}-waitTimeoutMs`}
-                aria-label="默认等待时间"
-                type="number"
-                min={1}
-                max={600}
-                step={1}
-                value={Math.round(draft.waitTimeoutMs / 1_000)}
-                onChange={(event) => setDraft((current) => ({
-                  ...current,
-                  waitTimeoutMs: Number(event.target.value) * 1_000,
-                }))}
-              />
-              <span>秒</span>
-            </div>
-          </label>
-          <div className="subagent-field">
-            <span className="subagent-label">工作树隔离 <InfoHint label="隔离任务只修改 Studio 管理的 Git 工作树，结束前不接触项目文件。" /></span>
-            <Select
-              disabled={busy || !snapshot}
-              label="子智能体工作树隔离方式"
-              value={draft.worktreeIsolation}
-              options={[
-                { value: 'background', label: '后台任务 · 推荐' },
-                { value: 'always', label: '所有子智能体' },
-                { value: 'off', label: '关闭 · 共享工作区' },
-              ]}
-              onChange={(value) => setDraft((current) => ({
-                ...current,
-                worktreeIsolation: value as SubagentConfig['worktreeIsolation'],
-              }))}
-            />
-          </div>
-          <label htmlFor={`${inputPrefix}-worktreeLimit`} className={`subagent-field ${draft.worktreeIsolation === 'off' ? 'is-disabled' : ''}`}>
-            <span className="subagent-label">工作树保留上限 <InfoHint label="达到上限后会阻止新建隔离任务，直到合并或丢弃已有改动。" /></span>
-            <input
-                id={`${inputPrefix}-worktreeLimit`}
-                aria-label="工作树保留上限"
-              type="number"
-              min={1}
-              max={50}
-              disabled={draft.worktreeIsolation === 'off'}
-              value={draft.worktreeLimit}
-              onChange={(event) => setDraft((current) => ({
-                ...current,
-                worktreeLimit: Number(event.target.value),
-              }))}
-            />
-          </label>
-          <div className="subagent-field">
-            <span className="subagent-label">隔离工作树位置 <InfoHint label="只影响新建工作树。可以选择其他磁盘，已有工作树仍在原位置。" /></span>
-            <button type="button" className="settings-outline subagent-storage-path" disabled={busy || draft.worktreeIsolation === 'off'}
-              title={draft.worktreeParent || 'Studio 数据目录下的 worktrees'}
-              onClick={async () => {
-                try {
-                  const directory = await window.piApi.pickWorktreeParent();
-                  if (directory) setDraft(current => ({ ...current, worktreeParent: directory }));
-                } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
-              }}>{draft.worktreeParent || '选择位置 · 当前使用 Studio 数据目录'}</button>
-            {draft.worktreeParent && <button type="button" className="settings-text-button" disabled={busy}
-              onClick={() => setDraft(current => ({ ...current, worktreeParent: '' }))}>恢复默认位置</button>}
-          </div>
-          <label htmlFor={`${inputPrefix}-budgetTokens`} className="subagent-field">
-            <span className="subagent-label">Token 预算 <InfoHint align="end" label="按当前会话内所有子智能体的模型请求累计；0 表示不限制。" /></span>
-            <input
-                id={`${inputPrefix}-budgetTokens`}
-                aria-label="Token 预算"
-              type="number"
-              min={0}
-              max={100_000_000}
-              step={1_000}
-              value={draft.budgetTokens}
-              placeholder="0 · 不限制"
-              onChange={(event) => setDraft((current) => ({
-                ...current,
-                budgetTokens: Number(event.target.value),
-              }))}
-            />
-          </label>
-          <label htmlFor={`${inputPrefix}-budgetCostUsd`} className="subagent-field">
-            <span className="subagent-label">参考成本预算 <InfoHint label="使用模型返回的参考价格；没有返回价格时不会估算。" /></span>
-            <div className="subagent-input-unit">
-              <input
-                id={`${inputPrefix}-budgetCostUsd`}
-                aria-label="参考成本预算"
-                type="number"
-                min={0}
-                max={100_000}
-                step={0.01}
-                value={draft.budgetCostUsd}
-                placeholder="0 · 不限制"
-                onChange={(event) => setDraft((current) => ({
-                  ...current,
-                  budgetCostUsd: Number(event.target.value),
-                }))}
-              />
-              <span>USD</span>
-            </div>
-          </label>
-          <div className={`subagent-field ${draft.budgetTokens || draft.budgetCostUsd ? '' : 'is-disabled'}`}>
-            <span className="subagent-label">达到预算后 <InfoHint align="end" label="不会中断正在执行的任务；策略从下一安全请求边界开始生效。" /></span>
-            <Select
-              label="子智能体预算超限策略"
-              value={draft.budgetAction}
-              options={[
-                { value: 'warn', label: '仅提醒' },
-                { value: 'stop', label: '阻止新任务' },
-              ]}
-              disabled={busy || !snapshot || (!draft.budgetTokens && !draft.budgetCostUsd)}
-              onChange={(value) => setDraft((current) => ({
-                ...current,
-                budgetAction: value === 'stop' ? 'stop' : 'warn',
-              }))}
-            />
-          </div>
+        <Accordion className="subagent-form-disclosure subagent-advanced" summary="运行限制与预算" description={limitSummary}>
+          <div className="role-runtime-content">
+            <section className="role-runtime-group">
+              <h4>后台与调度</h4>
+              <div className="role-runtime-fields">
+                <div className="subagent-field">
+                  <div className="subagent-label"><label htmlFor={`${inputPrefix}-maxConcurrent`}>最大并发</label>
+                    <InfoHint label="当前主会话中可以同时运行的后台任务数量。" /></div>
+                  <div className="role-number">
+                    <input id={`${inputPrefix}-maxConcurrent`} type="number" inputMode="numeric" min={1} max={16}
+                      aria-describedby={`${inputPrefix}-maxConcurrent-unit`} value={draft.maxConcurrent}
+                      onChange={event => setDraft(current => ({ ...current, maxConcurrent: Number(event.target.value) }))} />
+                    <small id={`${inputPrefix}-maxConcurrent-unit`}>个</small>
+                  </div>
+                </div>
+                <div className="subagent-field">
+                  <div className="subagent-label"><label htmlFor={`${inputPrefix}-maxSpawns`}>最多创建</label>
+                    <InfoHint label="一个主会话累计可创建的子会话数量。" /></div>
+                  <div className="role-number">
+                    <input id={`${inputPrefix}-maxSpawns`} type="number" inputMode="numeric" min={1} max={100}
+                      aria-describedby={`${inputPrefix}-maxSpawns-unit`} value={draft.maxSpawns}
+                      onChange={event => setDraft(current => ({ ...current, maxSpawns: Number(event.target.value) }))} />
+                    <small id={`${inputPrefix}-maxSpawns-unit`}>个</small>
+                  </div>
+                </div>
+                <div className="subagent-field">
+                  <div className="subagent-label"><label htmlFor={`${inputPrefix}-waitTimeoutMs`}>默认等待时间</label>
+                    <InfoHint align="end" label="超时只结束本次等待，不会停止子智能体。" /></div>
+                  <div className="role-number">
+                    <input id={`${inputPrefix}-waitTimeoutMs`} type="number" inputMode="numeric" min={1} max={600} step={1}
+                      aria-describedby={`${inputPrefix}-waitTimeoutMs-unit`} value={Math.round(draft.waitTimeoutMs / 1_000)}
+                      onChange={event => setDraft(current => ({ ...current, waitTimeoutMs: Number(event.target.value) * 1_000 }))} />
+                    <small id={`${inputPrefix}-waitTimeoutMs-unit`}>秒</small>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section className="role-runtime-group">
+              <h4>工作树</h4>
+              <div className="role-runtime-fields">
+                <div className="subagent-field">
+                  <span className="subagent-label">工作树隔离 <InfoHint label="隔离任务只修改 Studio 管理的 Git 工作树，结束前不接触项目文件。" /></span>
+                  <Select label="子智能体工作树隔离方式" value={draft.worktreeIsolation} disabled={busy || !snapshot}
+                    options={[
+                      { value: 'background', label: '后台任务 · 推荐' },
+                      { value: 'always', label: '所有子智能体' },
+                      { value: 'off', label: '关闭 · 共享工作区' },
+                    ]}
+                    onChange={value => setDraft(current => ({ ...current, worktreeIsolation: value as SubagentConfig['worktreeIsolation'] }))} />
+                </div>
+                <div className={`subagent-field ${draft.worktreeIsolation === 'off' ? 'is-disabled' : ''}`}>
+                  <div className="subagent-label"><label htmlFor={`${inputPrefix}-worktreeLimit`}>工作树保留上限</label>
+                    <InfoHint label="达到上限后会阻止新建隔离任务，直到合并或丢弃已有改动。" /></div>
+                  <div className="role-number">
+                    <input id={`${inputPrefix}-worktreeLimit`} type="number" inputMode="numeric" min={1} max={50}
+                      aria-describedby={`${inputPrefix}-worktreeLimit-unit`} disabled={draft.worktreeIsolation === 'off'} value={draft.worktreeLimit}
+                      onChange={event => setDraft(current => ({ ...current, worktreeLimit: Number(event.target.value) }))} />
+                    <small id={`${inputPrefix}-worktreeLimit-unit`}>个</small>
+                  </div>
+                </div>
+                <div className="subagent-field role-runtime-wide-field">
+                  <span className="subagent-label">隔离工作树位置 <InfoHint label="只影响新建工作树。可以选择其他磁盘，已有工作树仍在原位置。" /></span>
+                  <button type="button" className="settings-outline subagent-storage-path" disabled={busy || draft.worktreeIsolation === 'off'}
+                    title={draft.worktreeParent || 'Studio 数据目录下的 worktrees'}
+                    onClick={async () => {
+                      try {
+                        const directory = await window.piApi.pickWorktreeParent();
+                        if (directory) setDraft(current => ({ ...current, worktreeParent: directory }));
+                      } catch (cause) { showToast(cause instanceof Error ? cause.message : String(cause), 'error'); }
+                    }}>
+                    <FolderOpen aria-hidden="true" />
+                    <span>{draft.worktreeParent || '选择位置 · 当前使用 Studio 数据目录'}</span>
+                  </button>
+                  {draft.worktreeParent && <button type="button" className="settings-text-button" disabled={busy}
+                    onClick={() => setDraft(current => ({ ...current, worktreeParent: '' }))}>恢复默认位置</button>}
+                </div>
+              </div>
+            </section>
+            <section className="role-runtime-group">
+              <h4>运行预算</h4>
+              <div className="role-runtime-fields">
+                <div className="subagent-field">
+                  <div className="subagent-label"><label htmlFor={`${inputPrefix}-budgetTokens`}>Token 预算</label>
+                    <InfoHint label="按当前会话内所有子智能体的模型请求累计；0 表示不限制。" /></div>
+                  <div className="role-number">
+                    <input id={`${inputPrefix}-budgetTokens`} type="number" inputMode="numeric" min={0} max={100_000_000} step={1_000}
+                      aria-describedby={`${inputPrefix}-budgetTokens-unit`} value={draft.budgetTokens} placeholder="0 · 不限制"
+                      onChange={event => setDraft(current => ({ ...current, budgetTokens: Number(event.target.value) }))} />
+                    <small id={`${inputPrefix}-budgetTokens-unit`}>tokens</small>
+                  </div>
+                </div>
+                <div className="subagent-field">
+                  <div className="subagent-label"><label htmlFor={`${inputPrefix}-budgetCostUsd`}>参考成本预算</label>
+                    <InfoHint label="使用模型返回的参考价格；没有返回价格时不会估算。" /></div>
+                  <div className="role-number">
+                    <input id={`${inputPrefix}-budgetCostUsd`} type="number" inputMode="decimal" min={0} max={100_000} step={0.01}
+                      aria-describedby={`${inputPrefix}-budgetCostUsd-unit`} value={draft.budgetCostUsd} placeholder="0 · 不限制"
+                      onChange={event => setDraft(current => ({ ...current, budgetCostUsd: Number(event.target.value) }))} />
+                    <small id={`${inputPrefix}-budgetCostUsd-unit`}>USD</small>
+                  </div>
+                </div>
+                <div className={`subagent-field ${draft.budgetTokens || draft.budgetCostUsd ? '' : 'is-disabled'}`}>
+                  <span className="subagent-label">达到预算后 <InfoHint align="end" label="不会中断正在执行的任务；策略从下一安全请求边界开始生效。" /></span>
+                  <Select label="子智能体预算超限策略" value={draft.budgetAction}
+                    disabled={busy || !snapshot || (!draft.budgetTokens && !draft.budgetCostUsd)}
+                    options={[{ value: 'warn', label: '仅提醒' }, { value: 'stop', label: '阻止新任务' }]}
+                    onChange={value => setDraft(current => ({ ...current, budgetAction: value === 'stop' ? 'stop' : 'warn' }))} />
+                </div>
+              </div>
+            </section>
           </div>
         </Accordion>
       </section>
-      <section className="subagent-section">
+      <section className="subagent-defaults-section" aria-labelledby="subagent-model">
         <div className="subagent-section-heading">
-                    <div>
-            <h2>模型与思考 <InfoHint label="用于下一次子智能体会话。优先级：调用参数 → 指定工作区 → 所有工作区 → 父智能体。" /></h2>
-          </div>
+          <h3 id="subagent-model">模型与思考</h3>
+          <InfoHint label="角色可以固定模型。其余角色会使用调用时指定的模型，或依次从当前工作区、所有工作区和父智能体取得默认模型。" />
         </div>
-        <div className="subagent-field-grid">
+        <div className="subagent-model-grid">
           <div className="subagent-field">
             <span className="subagent-label">默认模型 <InfoHint label="留空时跟随父智能体。" /></span>
             <Select
@@ -764,10 +737,10 @@ export function SubagentSettings({
             />
           </div>
           <div className="subagent-field">
-            <span className="subagent-label">默认 thinking</span>
+            <span className="subagent-label">默认思考强度</span>
             <Select
               disabled={busy || !snapshot}
-              label="子智能体默认 thinking"
+              label="子智能体默认思考强度"
               value={draft.defaultThinking}
               options={thinkingOptions(thinkingLevels, '跟随父智能体')}
               onChange={(value) => setDraft((current) => ({
@@ -776,26 +749,25 @@ export function SubagentSettings({
               }))}
             />
           </div>
-          <div className="subagent-field">
-            <span className="subagent-label">thinking 上限 <InfoHint align="end" label="阻止子智能体使用更高成本的推理强度。" /></span>
-            <Select
-              disabled={busy || !snapshot}
-              label="子智能体 thinking 上限"
-              value={draft.maxThinking}
-              options={thinkingOptions(snapshot?.thinkingLevels || [], '不限制')}
-              onChange={(value) => setDraft((current) => ({
-                ...current,
-                maxThinking: value as SubagentThinking,
-              }))}
-            />
-          </div>
+        </div>
+        <div className="subagent-default-row subagent-thinking-limit">
+          <span className="subagent-label">思考强度上限 <InfoHint label="阻止子智能体使用更高成本的推理强度。" /></span>
+          <Select
+            disabled={busy || !snapshot}
+            label="子智能体思考强度上限"
+            value={draft.maxThinking}
+            options={thinkingOptions(snapshot?.thinkingLevels || [], '不限制')}
+            onChange={(value) => setDraft((current) => ({
+              ...current,
+              maxThinking: value as SubagentThinking,
+            }))}
+          />
         </div>
       </section>
-      <section className="subagent-section subagent-worktrees">
+      <section className="subagent-defaults-section subagent-worktrees" aria-labelledby="subagent-worktrees">
         <div className="subagent-section-heading">
-                    <div>
-            <h2>隔离工作树 <InfoHint label="在应用、丢弃或清理前，子智能体产生的文件改动会保留在 Studio 私有目录中。" /></h2>
-          </div>
+          <h3 id="subagent-worktrees" ref={worktreesHeading} tabIndex={-1}>隔离工作树</h3>
+          <InfoHint label="在应用、丢弃或清理前，子智能体产生的文件改动会保留在 Studio 私有目录中。" />
           <button
             type="button"
             className="settings-outline"
@@ -806,10 +778,9 @@ export function SubagentSettings({
             清理已结束
           </button>
         </div>
-        {worktreeLoadError && <div className="settings-error" role="alert">
-          <span>{worktreeLoadError}</span>
+        {worktreeLoadError && <SettingsToast tone="error" message={worktreeLoadError}>
           <button type="button" className="settings-outline" disabled={busy} onClick={() => void reloadWorktrees()}>重新读取工作树</button>
-        </div>}
+        </SettingsToast>}
         <div className="subagent-worktree-list">
           {worktrees.map((worktree) => (
             <article className={`subagent-worktree-row is-${worktree.status}`} key={worktree.id} data-worktree-id={worktree.id}>
@@ -870,17 +841,14 @@ export function SubagentSettings({
             </article>
           ))}
           {!worktrees.length && (
-            <div className="settings-empty">
-              没有待处理工作树
-            </div>
+            <p className="subagent-empty">没有待处理工作树</p>
           )}
         </div>
       </section>
-      <section className="subagent-section">
-        <div className="subagent-section-heading subagent-tools-heading">
-                    <div>
-            <h2>工具权限 <InfoHint label="默认继承父智能体当前工具；也可以保存一份更窄的白名单。" /></h2>
-          </div>
+      <section className="subagent-defaults-section" aria-labelledby="subagent-tools">
+        <div className="subagent-section-heading">
+          <h3 id="subagent-tools">工具权限</h3>
+          <InfoHint label="默认继承父智能体当前工具；也可以保存一份更窄的白名单。" />
           <button
             type="button"
             className="settings-text-button"
@@ -909,7 +877,11 @@ export function SubagentSettings({
               value={toolFilter}
               placeholder="搜索工具名或说明…"
               aria-label="搜索工具"
-              onChange={(event) => setToolFilter(event.target.value)}
+              onKeyDown={event => { if (event.key === 'Enter' && !isComposingKey(event.nativeEvent)) event.preventDefault(); }}
+              onChange={event => {
+                setToolFilter(event.target.value);
+                setCollapsedSearchGroups([]);
+              }}
             />
             <span className="subagent-tool-total">
               {toolFilter.trim() ? `${toolGroups.reduce((sum, group) => sum + group.tools.length, 0)} / ${parentTools.length}` : `${parentTools.length} 个工具`}
@@ -917,19 +889,20 @@ export function SubagentSettings({
             <button
               type="button"
               className="settings-text-button"
-              onClick={() => setCollapsedToolGroups(
-                toolGroups.every((group) => collapsedToolGroups.includes(group.label))
+              disabled={!toolGroups.length}
+              onClick={() => setCollapsedGroups(
+                toolGroups.every((group) => collapsedGroups.includes(group.label))
                   ? []
                   : toolGroups.map((group) => group.label),
               )}
             >
-              {toolGroups.every((group) => collapsedToolGroups.includes(group.label)) ? '全部展开' : '全部折叠'}
+              {toolGroups.length && toolGroups.every((group) => collapsedGroups.includes(group.label)) ? '全部展开' : '全部折叠'}
             </button>
           </div>
         )}
         <div className="subagent-tool-groups">
           {toolGroups.map((group) => {
-            const open = !collapsedToolGroups.includes(group.label);
+            const open = !collapsedGroups.includes(group.label);
             const names = group.tools.map((tool) => tool.name);
             const selectedInGroup = names.filter((name) => !explicitTools || selectedTools.has(name)).length;
             return (
@@ -937,18 +910,17 @@ export function SubagentSettings({
                 <header className="subagent-tool-group-head">
                   <button
                     type="button"
-                    className="subagent-tool-group-toggle"
+                    className="subagent-tool-group-toggle settings-row-link"
                     aria-expanded={open}
                     onClick={() => toggleToolGroup(group.label)}
                   >
-                    <ChevronRight aria-hidden="true" />
+                    <ChevronRight className="settings-row-link-indicator" aria-hidden="true" />
                     <strong>{group.label}</strong>
                     <span className="subagent-tool-group-count">{selectedInGroup}/{group.tools.length}</span>
                   </button>
                   <button
                     type="button"
                     className="settings-text-button"
-                    disabled={selectedInGroup === 0 && explicitTools}
                     onClick={() => setToolsEnabled(names, selectedInGroup < group.tools.length)}
                   >
                     {selectedInGroup < group.tools.length ? '全选' : '清除'}
@@ -981,39 +953,14 @@ export function SubagentSettings({
             );
           })}
           {!parentTools.length && (
-            <div className="settings-empty">
-              当前父智能体没有可用工具
-            </div>
+            <p className="subagent-empty">当前父智能体没有可用工具</p>
           )}
           {parentTools.length > 0 && !toolGroups.length && (
-            <div className="settings-empty">
-              没有匹配「{toolFilter.trim()}」的工具
-            </div>
+            <p className="subagent-empty">没有匹配「{toolFilter.trim()}」的工具</p>
           )}
         </div>
       </section>
-      </fieldset>}
-      {error && <div className="settings-error" role="alert">{error}</div>}
-      {feedback && <p className="subagent-feedback" role="status">{feedback}</p>}
-      {confirmation.dialog}
-      {snapshot && <div className="subagent-savebar">
-        <div>
-          <strong>
-            {dirty ? `${scopeLabel}有未保存的更改` : snapshot ? '配置从下一次子智能体任务生效' : '配置尚未加载'}
-          </strong>
-        </div>
-        <button
-          className="settings-outline"
-          disabled={!dirty || busy || !snapshot}
-          onClick={() => setDraft(cloneConfig(savedDraft))}
-        >
-          撤销更改
-        </button>
-        <button className="settings-save" disabled={!dirty || busy || !snapshot} onClick={() => void save()}>
-          {saving ? <LoadingIndicator /> : <Save />}
-          {saving ? '正在保存…' : '保存配置'}
-        </button>
       </div>}
     </div>
-  );
+  </SettingsDialog>{confirmation.dialog}</>;
 }

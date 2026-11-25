@@ -7,3 +7,4 @@
   object-fit: cover;
 }
 .agent-flow-head .subagent-avatar { --subagent-avatar-size: 16px; border-radius: var(--radius-tag); }
+.composer-option-icon.is-agent .subagent-avatar { --subagent-avatar-size: 24px; }

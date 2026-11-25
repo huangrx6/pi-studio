@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { desktopPlatform } from './shared/desktop-platform';
 import { loadPreferences, resolveTheme } from './shared/preferences';
+import { SettingsToastProvider } from './shared/SettingsToast';
 import './styles/dsh-scrollbar.css';
 import './styles/app.css';
 import './shell/styles/session-view.css';
@@ -14,7 +15,9 @@ document.documentElement.dataset.palette = preferences.palette;
 async function start() {
   try {
     const [{ App }] = await Promise.all([import('./App'), window.piApi.waitForStartup?.()]);
-    ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
+    ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode>
+      <SettingsToastProvider><App /></SettingsToastProvider>
+    </React.StrictMode>);
   } catch (error) {
     console.error('[pi-studio] renderer startup failed', error);
     document.getElementById('launch-screen')?.remove();

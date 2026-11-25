@@ -1,0 +1,47 @@
+/* Portaled options retain the same reading rhythm as their trigger. */
+.popover-surface.action-menu > button.is-danger {
+  justify-content: flex-start;
+  color: var(--error);
+}
+.popover-surface.action-menu > button.is-danger:is(:hover, :focus-visible):not(:disabled) {
+  background: var(--error-soft);
+}
+.popover-surface.action-menu > button.is-danger:disabled {
+  color: var(--disabled-text);
+}
+
+:is(.settings-overlay, .settings-dialog, .detail-overlay, .confirm-native-dialog) .popover-surface:is(.pi-select-menu, .action-menu) {
+  max-width: calc(100vw - var(--space-4));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+:is(.settings-overlay, .settings-dialog, .detail-overlay, .confirm-native-dialog) .popover-surface > :is(.pi-select-option, [role="menuitem"], [role="menuitemcheckbox"]) {
+  min-height: var(--settings-control-height);
+  padding: var(--space-1) var(--space-2);
+  gap: var(--space-2);
+  font: var(--settings-preference-body-font);
+  overflow-wrap: anywhere;
+}
+
+:is(.settings-overlay, .settings-dialog, .detail-overlay, .confirm-native-dialog) .action-menu > button {
+  justify-content: flex-start;
+}
+:is(.settings-overlay, .settings-dialog, .detail-overlay, .confirm-native-dialog) .action-menu > button > span {
+  flex: 1;
+  min-width: 0;
+}
+
+:is(.settings-overlay, .settings-dialog, .detail-overlay, .confirm-native-dialog) .popover-surface .pi-select-option-label {
+  font: var(--settings-preference-body-font);
+}
+
+:is(.settings-overlay, .settings-dialog, .detail-overlay, .confirm-native-dialog) .pi-select-option small {
+  color: var(--muted);
+  font: var(--settings-description-font);
+}
+
+:is(.settings-overlay, .settings-dialog, .detail-overlay, .confirm-native-dialog) .popover-surface > button:focus-visible {
+  outline: 1px solid var(--focus-color);
+  outline-offset: -1px;
+}

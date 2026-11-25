@@ -12,20 +12,27 @@ async function checkProgressAlignment(panel) {
     const start = box('.progress-head strong').left;
     const end = box('.progress-agents .progress-view-all').right;
     const bounds = container.getBoundingClientRect();
-    const pinned = container.classList.contains('is-pinned');
-    const list = box(pinned ? '.progress-task-scroll' : '.todo-dock-body');
+    const list = box('.progress-task-scroll');
+    const agent = container.querySelector('.progress-agent');
+    const agentStyle = getComputedStyle(agent);
+    const buttons = container.querySelectorAll('.progress-view-all, .progress-history-toggle, .progress-agent');
     return {
       insets: [start - bounds.left, bounds.right - end],
       left: [list.left, box('.progress-tasks h3').left, box('.progress-history-toggle').left,
-        box('.progress-agent .subagent-avatar').left, box('.progress-git-title svg').left,
-        box('.progress-git-links button svg').left].map(value => value - start),
-      right: [list.right, box('.progress-agent small').right, box('.progress-pin svg').right,
-        box('.progress-git-repo button svg').right].map(value => end - value),
+        agent.getBoundingClientRect().left].map(value => value - start),
+      right: [list.right, agent.getBoundingClientRect().right].map(value => end - value),
+      agentContent: [box('.progress-agent .subagent-avatar').left - start - parseFloat(agentStyle.paddingLeft),
+        end - box('.progress-agent small').right - parseFloat(agentStyle.paddingRight)],
+      padded: Array.from(buttons, button => {
+        const { paddingLeft, paddingRight } = getComputedStyle(button);
+        return parseFloat(paddingLeft) >= 8 && paddingLeft === paddingRight;
+      }).every(Boolean),
       overflow: container.scrollWidth - container.clientWidth,
     };
   });
   assert.ok(Math.abs(metrics.insets[0] - metrics.insets[1]) <= 1, JSON.stringify(metrics));
-  assert.ok([...metrics.left, ...metrics.right].every(offset => Math.abs(offset) <= 1), JSON.stringify(metrics));
+  assert.ok([...metrics.left, ...metrics.right, ...metrics.agentContent].every(offset => Math.abs(offset) <= 1), JSON.stringify(metrics));
+  assert.ok(metrics.padded, JSON.stringify(metrics));
   assert.ok(metrics.overflow <= 1, JSON.stringify(metrics));
 }
 
@@ -39,73 +46,67 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 920 } });
   page.setDefaultTimeout(6500);
   const errors = [];
-  page.on('pageerror', error => errors.push(error.message));
+  page.on('pageerror', error => { errors.push(error.message); console.error(error); });
   await page.route('**/*', route => route.request().url().startsWith(server.origin) ? route.continue() : route.abort());
   await page.addInitScript({ content: `(${installPerformanceFixture})({sessionCount:2,turnCount:2});(${installSessionViewsFixture})();` });
   await page.goto(server.origin);
-  await page.locator('.session-row').first().click();
+  await page.locator('.session-row').filter({ hasText: '工作区交互审查' }).click();
   await page.locator('.assistant-response').first().waitFor();
 
   const button = name => page.getByRole('button', { name, exact: true });
+  const headerTools = await page.locator('.chat-header .chat-actions').locator(
+    'button:is([title="进展"], [title="轨迹"], [title="扩展"], [title="通知"], [title="打开右侧面板"])',
+  ).evaluateAll(nodes => nodes.map(node => {
+    const { width, height } = node.getBoundingClientRect();
+    return { title: node.title, text: node.textContent.trim(), width, height, radius: getComputedStyle(node).borderRadius };
+  }));
+  assert.deepEqual(headerTools.map(tool => tool.title), ['进展', '轨迹', '扩展', '通知', '打开右侧面板']);
+  assert.ok(headerTools.every(tool => tool.width === tool.height && tool.width === headerTools[3].width && tool.radius === headerTools[3].radius));
+  assert.ok(headerTools.slice(0, 3).every(tool => !tool.text), 'header tools use tooltips for their labels');
+  async function openProgress() {
+    await page.locator('.chat-header').getByRole('button', { name: '进展', exact: true }).click();
+    if (await button('返回进展').isVisible()) await button('返回进展').click();
+  }
   async function openView(name) {
     if (name === '子智能体') {
-      await button('打开会话进展').click();
+      await openProgress();
       await button('查看全部子智能体').click();
-      return;
+    } else {
+      await page.locator('.chat-header').getByRole('button', { name, exact: true }).click();
     }
-    await button('打开扩展与轨迹').click();
-    await page.getByRole('group', { name: '会话视图' }).getByRole('button', { name: new RegExp(`^${name}`) }).click();
   }
   async function returnToChat() {
-    assert.equal(await page.locator('.session-view-head').getByRole('button', { name: '返回对话' }).count(), 0);
-    await button('返回对话').click();
+    if (await button('收起右侧面板').isVisible()) await button('收起右侧面板').click();
+    await page.locator('.file-panel').waitFor({ state: 'hidden' });
     await page.locator('.assistant-response').first().waitFor();
   }
   async function capture(name) {
     await page.mouse.move(12, 12);
     await page.screenshot({ path: fileURLToPath(new URL(`${name}.png`, output)), animations: 'disabled' });
   }
-  const progress = page.getByRole('dialog', { name: '会话进展', exact: true });
-  const progressButton = button('打开会话进展');
-  const progressTab = page.getByRole('tab', { name: /^会话进展/ });
   const pinned = page.locator('.file-panel .conversation-progress');
+  const progressTab = page.getByRole('tab', { name: '进展', exact: true });
   const composer = page.locator('.composer-editor');
   await composer.fill('检查面板后继续的草稿');
-  await progressButton.click();
-  await progress.getByText('核对会话清单', { exact: true }).last().waitFor();
+  await openProgress();
+  await pinned.waitFor();
+  await pinned.getByText('核对会话清单', { exact: true }).waitFor();
   assert.equal(await page.locator('.composer-dock :is(.todo-dock,.long-task-dock)').count(), 0);
-  await progress.getByRole('button', { name: '继续', exact: true }).waitFor();
-  assert.deepEqual(await progress.locator('.progress-agent > span').allTextContents(), ['接口核对', '索引整理', '回归检查']);
-  assert.equal(await progress.locator('.subagent-avatar').first().evaluate(el => el.getBoundingClientRect().width), 18);
-  await progress.getByRole('button', { name: '展开其余 1 个子智能体' }).click();
-  assert.equal(await progress.locator('.progress-agent').count(), 4);
-  await progress.getByRole('button', { name: '收起子智能体' }).click();
-  assert.match(await progress.innerText(), /2 项变更/);
-  assert.doesNotMatch(await page.locator('.chat-heading').innerText(), /项变更/);
-  await page.keyboard.press('Escape');
-  assert.equal(await progress.count(), 0);
-  assert.equal(await progressButton.evaluate(el => el === document.activeElement), true);
-  await progressButton.click();
-  await button('打开扩展与轨迹').click();
-  assert.equal(await progress.count(), 0);
-  assert.doesNotMatch(await page.getByRole('dialog', { name: '扩展与轨迹' }).innerText(), /子智能体|目标任务|任务列表/);
-  await page.keyboard.press('Escape');
-  await button('打开右侧面板').click();
-  await button('工作区文件').click();
+  await pinned.getByRole('button', { name: '继续', exact: true }).waitFor();
+  assert.deepEqual(await pinned.locator('.progress-agent > span').allTextContents(), ['接口核对', '索引整理', '回归检查']);
+  assert.equal(await pinned.locator('.subagent-avatar').first().evaluate(el => el.getBoundingClientRect().width), 20);
+  await pinned.getByRole('button', { name: '展开其余 1 个子智能体' }).click();
+  assert.equal(await pinned.locator('.progress-agent').count(), 4);
+  await pinned.getByRole('button', { name: '收起子智能体' }).click();
   await button('打开工具').click();
-  await page.getByRole('menuitem', { name: '新建终端' }).click();
+  await page.getByRole('menuitem', { name: '工作区文件', exact: true }).click();
+  await button('打开工具').click();
+  await page.getByRole('menuitem', { name: '新建终端', exact: true }).click();
   await page.waitForFunction(() => window.sessionViewsQa.terminals.length === 1);
-  await progressButton.click();
-  await button('固定到右栏').click();
-  await pinned.getByText('核对会话清单', { exact: true }).last().waitFor();
-  await checkProgressAlignment(pinned);
-  assert.equal(await pinned.locator('.progress-agent .subagent-avatar').first().evaluate(el => el.getBoundingClientRect().width), 20);
-  assert.equal(await progress.count(), 0);
-  assert.equal(await progressTab.count(), 1);
   const filesTab = page.getByRole('tab', { name: /^文件/ });
   await filesTab.click();
   await page.getByRole('tab', { name: /^终端/ }).click();
-  await progressButton.click();
+  await openProgress();
   assert.equal(await progressTab.getAttribute('aria-selected'), 'true');
   assert.equal(await page.evaluate(() => window.sessionViewsQa.terminals.length), 1);
   assert.equal(await composer.innerText(), '检查面板后继续的草稿');
@@ -122,7 +123,22 @@ try {
   const taskPage = page.getByRole('region', { name: '本会话全部任务' });
   await pinned.getByRole('button', { name: '查看全部任务' }).click();
   await taskPage.getByRole('heading', { name: '全部任务', exact: true }).waitFor();
-  await taskPage.getByText('结束时未完成', { exact: true }).waitFor();
+  const taskBack = taskPage.locator('.session-view-head').getByRole('button', { name: '返回进展', exact: true });
+  assert.ok(await taskBack.evaluate(node => {
+    const end = node.closest('header').getBoundingClientRect().right;
+    return Math.abs(node.getBoundingClientRect().right - end) <= 1 && node.title === '返回进展' && !node.textContent.trim();
+  }), 'the back icon sits at the right edge of the heading');
+  await taskPage.getByRole('img', { name: '结束时未完成', exact: true }).waitFor();
+  const completedTask = taskPage.locator('li[data-status="completed"]').first();
+  assert.ok(await completedTask.evaluate(row => {
+    const icon = row.querySelector('.task-status-icon');
+    const mark = icon.querySelector('svg');
+    return parseFloat(getComputedStyle(row.querySelector('strong')).fontSize) < 14
+      && icon.getAttribute('aria-label') === '已完成'
+      && getComputedStyle(icon).backgroundColor === 'rgba(0, 0, 0, 0)'
+      && mark.getBoundingClientRect().height < icon.getBoundingClientRect().height
+      && getComputedStyle(mark.querySelector('path:last-child')).strokeWidth === getComputedStyle(mark).strokeWidth;
+  }));
   assert.equal(await progressTab.getAttribute('aria-selected'), 'true');
   await taskPage.getByRole('button', { name: '按目标', exact: true }).click();
   await taskPage.getByRole('heading', { name: '普通对话任务' }).waitFor();
@@ -142,9 +158,9 @@ try {
   for (const name of ['进行中', '待开始', '阻塞', '已完成', '结束时未完成']) {
     await taskPage.getByRole('heading', { name, exact: true }).waitFor();
   }
-  await taskPage.evaluate(node => { node.scrollTop = 0; });
+  await taskPage.getByRole('region', { name: '任务结果' }).evaluate(node => { node.scrollTop = 0; });
   await capture('all-tasks-dark');
-  await returnToChat();
+  await button('返回进展').click();
   assert.equal(await composer.innerText(), '检查面板后继续的草稿');
   await capture('progress-pinned');
   await pinned.screenshot({ path: fileURLToPath(new URL('progress-sidebar-dark.png', output)), animations: 'disabled' });
@@ -156,47 +172,43 @@ try {
   assert.equal(await page.locator('.agent-context-head img').getAttribute('src'), samePortrait);
   await button('返回列表').click();
   assert.equal(await page.locator('.agent-list-row').filter({ hasText: '接口核对' }).locator('img').getAttribute('src'), samePortrait);
+  await openProgress();
   await pinned.getByRole('button', { name: /回归检查/ }).click();
   await page.locator('.agent-context-view').getByText('暂无会话记录').waitFor();
   await returnToChat();
   await openView('轨迹');
   await page.locator('.conversation-trace-list').waitFor();
-  assert.equal(await pinned.isVisible(), true);
-  await returnToChat();
+  assert.equal(await pinned.isVisible(), false);
+  assert.equal(await composer.innerText(), '检查面板后继续的草稿');
+  await button('全屏').click();
+  await page.locator('.file-panel.is-fullscreen .conversation-trace-list').waitFor();
+  await button('退出全屏').click();
+  assert.ok(await composer.isVisible());
   await filesTab.click();
   await composer.fill('/todos');
   await composer.press('Enter');
-  await pinned.getByText('perf-0 历史清单').waitFor();
+  const history = page.locator('.file-panel .todo-history');
+  await history.getByText('perf-0 历史清单').waitFor();
   await page.locator('.session-row').filter({ hasText: '性能会话 0001' }).click();
   await page.locator('.chat-heading h1').getByText('性能会话 0001').waitFor();
-  assert.doesNotMatch(await pinned.innerText(), /核对会话清单|整理会话进展|接口核对|perf-0/);
-  async function checkViewAllButtons(panel) {
-    const appearance = name => panel.getByRole('button', { name }).evaluate(el => {
-      const css = getComputedStyle(el);
-      return [css.font, css.color, css.padding, el.clientHeight];
-    });
-    assert.deepEqual(await appearance('查看全部任务'), await appearance('查看全部子智能体'));
-  }
-  await checkViewAllButtons(pinned);
-  await pinned.getByRole('button', { name: '查看历史' }).click();
-  await pinned.getByText('perf-1 历史清单').waitFor();
-  await button('取消固定，返回浮层').click();
-  await progress.getByText('perf-1 历史清单').waitFor();
-  await checkViewAllButtons(progress);
-  await page.waitForFunction(() => document.activeElement?.matches('.progress-popover .progress-pin'));
+  await history.waitFor({ state: 'hidden' });
   assert.equal(await progressTab.count(), 0);
-  assert.equal(await filesTab.count(), 1);
-  await progress.locator('.todo-history summary').first().click();
-  await progress.locator('.todo-history-task').getByRole('img', { name: '结束时未完成' }).waitFor();
-  await capture('progress-floating');
-  await composer.click();
-  assert.equal(await progress.count(), 0);
-  await composer.fill('/todos');
-  await composer.press('Enter');
-  await progress.getByText('perf-1 历史清单').waitFor();
-  await page.keyboard.press('Escape');
-  await button('收起右侧面板').click();
+  await openProgress();
+  const setGoal = pinned.getByRole('button', { name: '设置目标' });
+  const idleGoalBackground = await setGoal.evaluate(node => getComputedStyle(node).backgroundColor);
+  await setGoal.hover();
+  await page.waitForFunction(idle => getComputedStyle(document.querySelector('.progress-goal > .progress-row')).backgroundColor !== idle, idleGoalBackground);
+  assert.ok(await setGoal.evaluate(node => {
+    const { paddingLeft, paddingRight } = getComputedStyle(node);
+    return parseFloat(paddingLeft) >= 8 && paddingLeft === paddingRight;
+  }));
+  await setGoal.screenshot({ path: fileURLToPath(new URL('progress-goal-hover.png', output)) });
+  await pinned.getByRole('button', { name: '历史清单' }).click();
+  await history.locator('.session-view-head').getByRole('button', { name: '返回进展' }).waitFor();
+  await history.getByText('perf-1 历史清单').waitFor();
+  assert.doesNotMatch(await history.innerText(), /perf-0/);
   await page.locator('.session-row').filter({ hasText: '工作区交互审查' }).click();
+  await history.getByText('perf-0 历史清单').waitFor();
   await openView('子智能体');
   const tasks = page.locator('.agent-list-row');
   const agentSearch = page.getByRole('textbox', { name: '搜索子智能体' });
@@ -296,7 +308,6 @@ try {
   await rows.filter({ hasText: 'src/modules/0.ts' }).first().click();
   await capture('trace-dark');
   await page.setViewportSize({ width: 1176, height: 740 });
-  await button('打开右侧面板').click();
   await page.waitForFunction(() => getComputedStyle(document.querySelector('.conversation-trace-list')).visibility === 'hidden');
   assert.equal(await detail.isVisible(), true);
   assert.ok(await detail.evaluate(node => node.scrollWidth <= node.clientWidth + 1));
@@ -309,81 +320,73 @@ try {
   await button('关闭轨迹详情').click();
   assert.equal(await rows.first().isVisible(), true);
   await page.setViewportSize({ width: 1440, height: 920 });
-  await button('收起右侧面板').click();
   await returnToChat();
 
   await openView('扩展');
-  const groups = page.locator('.extension-hub-card');
-  await groups.first().waitFor();
-  const manage = button('管理扩展');
-  const [control, icon, label] = await Promise.all([manage, manage.locator('svg'), manage.locator('span')].map(part => part.boundingBox()));
-  const centerY = rect => rect.y + rect.height / 2;
-  assert.ok(Math.abs(centerY(icon) - centerY(control)) <= 1 && Math.abs(centerY(label) - centerY(control)) <= 1);
-  assert.ok(Math.abs((icon.x - control.x) - (control.x + control.width - label.x - label.width)) <= 1);
-  assert.ok(label.x - icon.x - icon.width >= 8);
-  await capture('extensions-dark');
-  assert.equal(await groups.count(), 2);
-  assert.equal(await groups.first().locator('.extension-hub-panel').count(), 2);
-  await button('打开 会话用量 详情').click();
-  await page.locator('.extension-page').waitFor();
-  await button('扩展中心').click();
-  await button('下移 运行监测').click();
-  await page.waitForFunction(() => window.sessionViewsQa.order.globalOrder[0] === 'workspace');
-  await button('当前会话').click();
-  await button('上移 运行监测').click();
-  await page.waitForFunction(() => window.sessionViewsQa.order.sessionOrders['perf-0']?.[0] === 'monitor');
-  await button('恢复全局').click();
-  await page.waitForFunction(() => !window.sessionViewsQa.order.sessionOrders['perf-0']);
+  const picker = page.getByRole('dialog', { name: '扩展', exact: true });
+  const rowsInPicker = picker.getByRole('article');
+  assert.equal(await rowsInPicker.count(), 2);
+  const pickedNames = () => rowsInPicker.evaluateAll(items => items.map(item => item.getAttribute('aria-label')));
+  assert.deepEqual(await pickedNames(), ['运行监测', '工作区工具']);
+  assert.equal(await picker.getByRole('button', { name: /上移|下移/ }).count(), 0);
+  await picker.getByRole('button', { name: '管理扩展', exact: true }).click();
+  const displayOrder = page.locator('.extension-display-order');
+  await button('对话显示顺序').click();
+  const orderNames = () => displayOrder.locator('li > span').allTextContents();
+  assert.deepEqual(await orderNames(), ['运行监测', '工作区工具']);
+  await page.evaluate(() => { window.sessionViewsQa.failOrderSave = true; });
+  await displayOrder.getByRole('button', { name: '下移 运行监测', exact: true }).click();
+  await page.getByText(/扩展顺序保存失败/).waitFor();
+  assert.deepEqual(await orderNames(), ['运行监测', '工作区工具']);
+  await page.evaluate(() => { window.sessionViewsQa.failOrderSave = false; });
   await page.evaluate(() => { window.sessionViewsQa.holdNextWrite = true; });
-  await button('紧凑列表').click();
-  assert.match(await page.locator('.extension-hub-items').getAttribute('class'), /is-list/);
-  await button('卡片布局').click();
-  await page.evaluate(async () => {
-    window.sessionViewsQa.releaseWrite();
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  });
-  assert.match(await page.locator('.extension-hub-items').getAttribute('class'), /is-grid/, 'a late acknowledgement cannot restore an old layout');
+  await displayOrder.getByRole('button', { name: '下移 运行监测', exact: true }).click();
+  await page.waitForFunction(() => window.sessionViewsQa.order.globalOrder[0] === 'project:workspace');
+  assert.equal(await displayOrder.getByRole('button', { name: '下移 运行监测', exact: true }).isDisabled(), true);
+  await page.evaluate(() => window.sessionViewsQa.releaseWrite());
+  await page.waitForFunction(() => document.querySelector('.extension-order-row > span')?.textContent === '工作区工具');
+  assert.deepEqual(await orderNames(), ['工作区工具', '运行监测']);
+  await button('关闭对话显示顺序').click();
+  await page.getByRole('button', { name: '返回对话', exact: true }).click();
+  await page.locator('.session-row').filter({ hasText: '性能会话 0001' }).click();
+  await openView('扩展');
+  assert.deepEqual(await pickedNames(), ['工作区工具', '运行监测']);
+  await page.keyboard.press('Escape');
+  await page.locator('.session-row').filter({ hasText: '工作区交互审查' }).click();
+  await openView('扩展');
+  await picker.getByRole('button', { name: '查看 运行监测 详情', exact: true }).click();
+  const extension = page.getByRole('tabpanel', { name: '运行监测', exact: true });
+  await extension.getByText('18 次').waitFor();
+  await extension.getByRole('button', { name: '请求耗时', exact: true }).click();
+  await extension.getByText('1.42 秒').waitFor();
+  assert.equal(await page.getByRole('tab', { name: '运行监测', exact: true }).count(), 1);
+  await capture('extensions-dark');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   await capture('extensions-light');
   await page.setViewportSize({ width: 1176, height: 740 });
-  await button('打开右侧面板').click();
-  assert.ok(await groups.first().evaluate(node => node.scrollWidth <= node.clientWidth + 1));
-  await returnToChat();
+  assert.ok(await extension.evaluate(node => node.scrollWidth <= node.clientWidth + 1));
   await openView('子智能体');
   await page.locator('.agent-list-row').first().waitFor();
   assert.ok(await page.locator('.agent-overview').evaluate(node => node.scrollWidth <= node.clientWidth + 1));
   await capture('subagents-narrow');
   await page.goto(`${server.origin}/?empty`);
-  await page.locator('.session-row').first().click();
-  await progressButton.click();
-  await progress.getByRole('button', { name: '查看全部任务' }).click();
+  await page.locator('.session-row').filter({ hasText: '工作区交互审查' }).click();
+  await openProgress();
+  await pinned.getByRole('button', { name: '查看全部任务' }).click();
   await taskPage.getByText('本次会话还没有任务').waitFor();
   await openView('子智能体');
   await page.getByText('这次对话还没有子智能体').waitFor();
   await openView('轨迹');
   await page.getByText('还没有执行记录').waitFor();
   await openView('扩展');
-  await page.getByText('暂无会话扩展').waitFor();
+  await picker.getByText('当前工作区没有可打开的扩展面板。').waitFor();
   await button('管理扩展').click();
-  await page.locator('.settings-overlay [data-settings-page="extensions"][aria-current="page"]').waitFor();
+  await page.getByRole('tab', { name: '扩展', selected: true }).waitFor();
   await page.getByText('还没有安装扩展', { exact: true }).waitFor();
   await page.setViewportSize({ width: 1060, height: 640 });
   await page.goto(server.origin + '/?long-plan');
-  await page.locator('.session-row').first().click();
-  await progressButton.click();
-  await progress.getByRole('button', { name: '展开其余 9 个子智能体' }).click();
-  assert.equal(await progress.locator('.progress-agent').count(), 12);
-  assert.ok(await progress.locator('.progress-agent-list').evaluate(el => el.scrollHeight > el.clientHeight && el.clientHeight <= 280));
-  await progress.getByRole('button', { name: '收起子智能体' }).click();
-  const floatingRows = progress.locator('.todo-row');
-  await floatingRows.first().waitFor();
-  assert.equal(await floatingRows.count(), 4);
-  assert.match(await floatingRows.first().innerText(), /核对会话清单/);
-  await progress.getByRole('button', { name: '展开其余 12 项' }).click();
-  assert.equal(await floatingRows.count(), 16);
-  await checkProgressAlignment(progress);
-  assert.ok(await progress.locator('.todo-dock-scroll').evaluate(el => el.scrollHeight > el.clientHeight && el.clientHeight <= 280));
-  await button('固定到右栏').click();
+  await page.locator('.session-row').filter({ hasText: '工作区交互审查' }).click();
+  await openProgress();
   const resizer = page.getByRole('separator', { name: '调整右侧面板宽度' });
   await resizer.focus();
   await resizer.press('ArrowRight');
@@ -406,7 +409,6 @@ try {
   assert.ok(await pinned.evaluate(el => el.scrollWidth <= el.clientWidth + 1));
   await button('收起任务').click();
   assert.equal(await taskRows.count(), 4);
-  await pinned.getByRole('button', { name: 'Git 设置' }).scrollIntoViewIfNeeded();
   await page.evaluate(() => { window.sessionViewsQa.failHistory = true; });
   await pinned.getByRole('button', { name: '查看全部任务' }).click();
   await taskPage.getByRole('alert').filter({ hasText: '暂时无法读取清单' }).waitFor();
@@ -419,17 +421,123 @@ try {
   await taskPage.getByText('核对会话清单', { exact: true }).waitFor();
   await page.evaluate(() => window.sessionViewsQa.finishGoal());
   await taskPage.getByText('没有符合此状态的任务').waitFor();
-  await progressButton.click();
+  await openProgress();
   await pinned.getByRole('button', { name: '查看全部任务' }).waitFor();
   assert.equal(await pinned.locator('.todo-row').count(), 0);
   await pinned.getByRole('button', { name: '查看全部任务' }).click();
   await page.locator('.session-row').filter({ hasText: '性能会话 0001' }).click();
-  await progressButton.click();
+  await openProgress();
   await pinned.getByRole('button', { name: '查看全部任务' }).click();
   await taskPage.getByText('perf-1 历史清单').waitFor();
   assert.doesNotMatch(await taskPage.innerText(), /perf-0|整理会话进展/);
+
+  await page.goto(server.origin + '/?many-tasks');
+  await page.locator('.session-row').filter({ hasText: '工作区交互审查' }).click();
+  await openProgress();
+  await pinned.getByRole('button', { name: '查看全部任务' }).click();
+  const newest = taskPage.getByRole('region', { name: '发布前的交互检查', exact: true });
+  const previousPlan = taskPage.getByRole('region', { name: '接入 PDF 原文预览', exact: true });
+  const pageGroups = taskPage.getByRole('navigation', { name: '任务分组翻页' });
+  await newest.getByText('1–8 / 100').waitFor();
+  assert.equal(await taskPage.locator('.session-tasks-group').count(), 12);
+  assert.equal(await taskPage.locator('li').count(), 24, 'three open groups render eight rows each');
+  assert.equal(await previousPlan.locator('.session-task-state').allTextContents().then(labels => labels.join()), '已归档');
+  const toggle = newest.getByRole('button', { name: '发布前的交互检查', exact: true });
+  await toggle.press('Space');
+  assert.equal(await newest.locator('li').count(), 0);
+  await toggle.press('Enter');
+  assert.equal(await newest.locator('li').count(), 8);
+  await button('全屏').click();
+  await page.mouse.move(12, 12);
+  await taskPage.screenshot({ path: fileURLToPath(new URL('tasks-catalog-dark.png', output)), animations: 'disabled' });
+  await button('退出全屏').click();
+  await resizer.focus();
+  await resizer.press('ArrowRight');
+  await resizer.press('ArrowRight');
+  await page.waitForFunction(() => document.querySelector('.panel-resize-handle')?.getAttribute('aria-valuenow') === '320');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  await newest.getByRole('button', { name: '下一页任务' }).click();
+  await newest.getByText('9–16 / 100').waitFor();
+  const results = taskPage.getByRole('region', { name: '任务结果' });
+  assert.ok(await results.evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'long unbroken task paths wrap at minimum width');
+  const search = taskPage.getByRole('searchbox', { name: '搜索清单或任务' });
+  await search.fill('  ARCHIVENeedle  ');
+  await taskPage.getByText('旧清单中的 ArchiveNeedle').waitFor();
+  assert.equal(await taskPage.locator('li').count(), 1, 'search reaches the last task of the oldest, initially unloaded plan');
+  await search.fill('首批目录');
+  await taskPage.getByText('12 份清单 · 12 项任务').waitFor();
+  assert.equal(await pageGroups.count(), 0, 'exactly one page of matches has no empty next page');
+  await search.fill('');
+  await newest.getByText('1–8 / 100').waitFor();
+  const filterPosition = await taskPage.locator('.session-tasks-toolbar').boundingBox();
+  await pageGroups.getByRole('button', { name: '下一页清单' }).scrollIntoViewIfNeeded();
+  assert.deepEqual(await taskPage.locator('.session-tasks-toolbar').boundingBox(), filterPosition);
+  await pageGroups.getByRole('button', { name: '下一页清单' }).click();
+  await pageGroups.getByText('清单 13–24').waitFor();
+  assert.equal(await taskPage.locator('.session-tasks-group').count(), 12);
+  await pageGroups.getByRole('button', { name: '下一页清单' }).click();
+  await pageGroups.getByText('清单 25–36').waitFor();
+  assert.ok(await pageGroups.getByRole('button', { name: '下一页清单' }).isDisabled());
+  await pageGroups.getByRole('button', { name: '上一页清单' }).click();
+  await pageGroups.getByText('清单 13–24').waitFor();
+
+  await search.fill('发布前的交互检查');
+  await newest.getByText('1–8 / 100').waitFor();
+  const jump = newest.getByRole('spinbutton', { name: '跳至任务页' });
+  await jump.fill('14');
+  await jump.press('Enter');
+  assert.ok(await jump.evaluate(input => input.validity.rangeOverflow));
+  await jump.fill('13');
+  await jump.press('Enter');
+  await newest.getByText('97–100 / 100').waitFor();
+  assert.equal(await newest.locator('li').count(), 4);
+  assert.ok(await newest.getByRole('button', { name: '下一页任务' }).isDisabled());
+  await search.fill('无此任务名称');
+  await taskPage.getByText('没有找到匹配的任务').waitFor();
+  await taskPage.getByRole('button', { name: '查看全部任务', exact: true }).click();
+  await newest.getByText('1–8 / 100').waitFor();
+  await page.mouse.move(12, 12);
+  await taskPage.screenshot({ path: fileURLToPath(new URL('tasks-catalog-narrow-light.png', output)), animations: 'disabled' });
+  await taskPage.getByRole('button', { name: '按状态', exact: true }).click();
+  const doneGroup = taskPage.getByRole('region', { name: '已完成', exact: true });
+  await doneGroup.getByRole('button', { name: '已完成', exact: true }).click();
+  await doneGroup.getByText('1–8 / 1197').waitFor();
+  await taskPage.getByRole('button', { name: '加载更多清单' }).click();
+  await doneGroup.getByText('1–8 / 2397').waitFor();
+  assert.equal(await doneGroup.locator('li').count(), 8);
+
+  await page.setViewportSize({ width: 1060, height: 900 });
+  await page.goto(server.origin + '/?completed-tasks');
+  await page.locator('.session-row').filter({ hasText: '工作区交互审查' }).click();
+  await openProgress();
+  await pinned.getByRole('button', { name: '查看全部任务' }).click();
+  await button('全屏').click();
+  await taskPage.getByText('3 份清单 · 14 项任务').waitFor();
+  assert.equal(await taskPage.getByRole('img', { name: '已完成' }).count(), 14);
+  assert.equal(await taskPage.locator('.session-task-state, .session-tasks-pager').count(), 0);
+  await page.mouse.move(12, 12);
+  await taskPage.screenshot({ path: fileURLToPath(new URL('tasks-completed-dark.png', output)), animations: 'disabled' });
+  const firstGroup = taskPage.locator('.session-tasks-group').first();
+  const disclosure = firstGroup.locator('.session-tasks-disclosure');
+  for (const theme of ['dark', 'light']) {
+    await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+    await disclosure.locator('.session-tasks-count').hover();
+    await page.waitForFunction(() => {
+      const heading = document.querySelector('.session-tasks-disclosure:hover');
+      return heading && getComputedStyle(heading).backgroundColor === 'rgba(0, 0, 0, 0)'
+        && getComputedStyle(heading.querySelector('svg')).backgroundColor !== 'rgba(0, 0, 0, 0)';
+    });
+    await firstGroup.screenshot({ path: fileURLToPath(new URL(`tasks-group-hover-${theme}.png`, output)), animations: 'disabled' });
+  }
+  await disclosure.locator('.session-tasks-count').click();
+  assert.equal(await disclosure.getAttribute('aria-expanded'), 'false');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Shift+Tab');
+  assert.ok(await disclosure.evaluate(node => node.matches(':focus-visible') && getComputedStyle(node).outlineStyle !== 'none'));
+  await page.keyboard.press('Space');
+  assert.equal(await disclosure.getAttribute('aria-expanded'), 'true');
   assert.deepEqual(errors, []);
-  console.log('Passed floating/pinned progress, terminal focus, session task history, session navigation, task filters and retries, per-question drafts, keyboard graph and transcript, long trace jumps, deferred snapshots, extension grouping and ordering, light/dark and split layouts.');
+  console.log('Passed docked progress, terminal retention, scoped task history, task filters and retries, large task catalog paging and search, narrow task rows, subagent replies, trace jumps and snapshots, grouped extension tabs and fullscreen.');
 } finally {
   await browser?.close();
   await server.close();

@@ -1,6 +1,7 @@
 import type { ComponentProps, Dispatch, MutableRefObject, ReactNode, RefObject, SetStateAction } from 'react';
 import { Keyboard, X } from 'lucide-react';
 import { ExtensionDetailDialog } from '../features/extensions/ExtensionDetailDialog';
+import { ExtensionDisplaySettings } from '../features/extensions/ExtensionDisplaySettings';
 import { ExtensionInstallDialog } from '../features/extensions/ExtensionInstallDialog';
 import { McpDetailDialog } from '../features/mcp/McpDetailDialog';
 import { SkillDetailDialog } from '../features/skills/SkillDetailDialog';
@@ -30,8 +31,12 @@ export type AppDialogsProps = {
   };
   extensions: {
     detail: ExtensionHostItem | null;
+    display: Omit<ComponentProps<typeof ExtensionDisplaySettings>, 'item'>;
+    settingsPanel?: ReactNode;
     setDetail: (item: ExtensionHostItem | null) => void;
     busy: boolean;
+    refreshError: string | null;
+    refreshing: boolean;
     installerOpen: boolean;
     installPreview: ExtensionInstallPreview | null;
     setInstallerOpen: (open: boolean) => void;
@@ -113,16 +118,21 @@ export function AppDialogs({
       />}
       {extensions.detail && <ExtensionDetailDialog
         item={extensions.detail}
+        displaySettings={<ExtensionDisplaySettings item={extensions.detail} {...extensions.display} />}
+        settingsPanel={extensions.settingsPanel}
         busy={extensions.busy}
+        refreshError={extensions.refreshError}
+        refreshing={extensions.refreshing}
+        onRefresh={() => void controller.refreshSavedExtensionConfiguration()}
         onClose={() => extensions.setDetail(null)}
-        onRollback={(item) => {
+        onOpenPlugins={() => {
           extensions.setDetail(null);
-          void controller.rollbackExtension(item);
+          void controller.selectPluginSection('plugins');
         }}
-        onTrust={(item, trusted) => {
-          extensions.setDetail(null);
-          void controller.trustExtension(item, trusted);
-        }}
+        onToggle={(item, enabled) => void controller.toggleExtension(item, enabled)}
+        onDelete={(id, name) => void controller.deleteExtension(id, name)}
+        onRollback={item => void controller.rollbackExtension(item)}
+        onTrust={(item, trusted) => void controller.trustExtension(item, trusted)}
       />}
       {extensions.installerOpen && <ExtensionInstallDialog
         cwd={extensions.workspace}
@@ -153,7 +163,7 @@ export function AppDialogs({
         server={mcp.server}
         workspace={mcp.workspace}
         onClose={mcp.close}
-        onCommitted={(_result, cwd) => {
+        onCommitted={(_result, cwd, summary) => {
           controller.invalidateResourceReads();
           mcp.recoveryRef.current = {
             cwd,
@@ -161,7 +171,7 @@ export function AppDialogs({
             generation: mcp.ownerGeneration,
           };
           mcp.pendingRef.current.mcp = true;
-          mcp.setSummary('MCP 授权状态已更新');
+          mcp.setSummary(summary);
           mcp.setError('请刷新当前 MCP 状态。');
         }}
         onRecovered={(_snapshot, cwd) => {

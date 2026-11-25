@@ -5,6 +5,8 @@ export type ArchivePreviewData =
 /** Renderer-safe payload for a read-only file preview. */
 export type FilePreviewResult = {
   path: string;
+  /** Process-local identity for change notifications on a live file. */
+  changeKey?: string;
   name: string;
   size: number;
   mimeType: string;

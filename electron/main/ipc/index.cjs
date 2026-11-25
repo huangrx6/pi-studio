@@ -14,6 +14,7 @@
  *  - runtime-services 只读监听端口与服务进程发现
  *  - git-workspace 当前目录的 Git 分支、提交、改动与 worktree
  *  - browser       内嵌浏览器下载与站点数据
+ *  - desktop-control macOS 电脑操控设置、权限与活动日志
  */
 
 const { registerSystemIpc } = require('./system.cjs');
@@ -32,11 +33,10 @@ const { registerTerminalIpc } = require('./terminal.cjs');
 const { registerRuntimeServicesIpc } = require('./runtime-services.cjs');
 const { registerGitWorkspaceIpc } = require('./git-workspace.cjs');
 
-const { registerStoryboardIpc } = require('./video-storyboard.cjs');
 const { registerBrowserIpc } = require('./browser.cjs');
+const { registerDesktopControlIpc } = require('./desktop-control.cjs');
 
 function registerIpc(waitForStartup) {
-  registerStoryboardIpc();
   registerSystemIpc(waitForStartup);
   registerNetworkIpc(waitForStartup);
   registerConversationIpc();
@@ -53,6 +53,7 @@ function registerIpc(waitForStartup) {
   registerRuntimeServicesIpc();
   registerGitWorkspaceIpc();
   registerBrowserIpc();
+  registerDesktopControlIpc();
 }
 
 module.exports = { registerIpc };

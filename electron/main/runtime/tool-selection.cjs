@@ -19,6 +19,7 @@ const {
 const SETTING_KEY = 'studio.agent.tools';
 const SETTING_VERSION_KEY = 'studio.agent.tools.version';
 const SETTING_VERSION = 6;
+const MCP_RULES_KEY = 'studio.mcp.methodRules.v1';
 const DEFAULT_AGENT_TOOLS = Object.freeze([
   'read', 'write', 'edit', 'bash', 'grep', 'find', 'ls', 'todo', 'tool_search',
   'browser_tabs', 'browser_open', 'browser_navigate', 'browser_snapshot', 'browser_screenshot',
@@ -171,12 +172,33 @@ function readAgentToolSelection(db = getStudioDatabase()) {
   return selection;
 }
 
-function saveInstalledToolSelection(input, db = getStudioDatabase()) {
-  const next = normalizeSelection(input, true);
-  db.transaction(() => {
+// Keep historical MCP decisions, including overlapping wildcards and offline servers.
+// After the two editors split, a local tool edit must never change this baseline.
+function mcpRulesFrom(selection) {
+  return selection.enabled.filter(name => name.startsWith('mcp__') || name.includes('*'));
+}
+
+function enabledMcpMethodNames(methods, selection, db = getStudioDatabase()) {
+  const rules = db.getSetting(MCP_RULES_KEY, mcpRulesFrom(selection));
+  return new Set(methods.filter(method => typeof method.enabledOverride === 'boolean'
+    ? method.enabledOverride
+    : Array.isArray(rules) && rules.some(rule => typeof rule === 'string' && matches(rule, method.name))
+  ).map(method => method.name));
+}
+
+function saveInstalledToolSelection(input, db = getStudioDatabase(), { inTransaction = false } = {}) {
+  const selection = normalizeSelection(input, true);
+  // Old callers may echo a mixed snapshot. Only the local part belongs to this editor.
+  const enabled = selection.enabled.filter(name => !name.startsWith('mcp__'));
+  const next = { enabled, sources: normalizeSources(selection.sources, enabled) };
+  const inherited = db.getSetting(MCP_RULES_KEY, null) === null ? mcpRulesFrom(readAgentToolSelection(db)) : null;
+  const write = () => {
+    if (inherited !== null) db.setSetting(MCP_RULES_KEY, inherited);
     db.setSetting(SETTING_KEY, next);
     db.setSetting(SETTING_VERSION_KEY, SETTING_VERSION);
-  });
+  };
+  if (inTransaction) write();
+  else db.transaction(write);
   return next;
 }
 
@@ -254,6 +276,11 @@ function sourceForExtension(runtimeName, mcp, extensionRows) {
   };
 }
 
+function catalogDescription(...candidates) {
+  const available = candidates.filter(text => typeof text === 'string' && text.trim());
+  return available.find(text => /\p{Script=Han}/u.test(text)) || available[0] || '';
+}
+
 async function agentToolCatalog(refresh = false) {
   if (refresh) await getDurableRuntime();
   const runtime = await getDurableRuntime();
@@ -261,23 +288,30 @@ async function agentToolCatalog(refresh = false) {
   const extensionSnapshot = extensionHostSnapshot();
   const mcp = mcpSnapshot();
   const rows = extensionSnapshot.extensions;
-  const tools = snapshot.tools().map(({ extension, tool }) => ({
-    name: tool.name,
-    description: tool.description || '',
-    exposure: tool.deferred
-      ? 'on-demand'
-      : Array.isArray(tool.callers) && !tool.callers.includes('model')
-        ? 'hidden'
-        : 'direct',
-    source: sourceForExtension(extension.name, mcp, rows),
-  })).sort((left, right) => (
+  const enabledMcp = enabledMcpMethodNames(mcp.tools, readAgentToolSelection());
+  const manifests = new Map(rows.map(row => [row.id, row.manifest]));
+  const tools = snapshot.tools().map(({ extension, tool }) => {
+    const source = sourceForExtension(extension.name, mcp, rows);
+    const declared = manifests.get(source.key)?.contributes?.tools?.find(item => item.name === tool.name);
+    return {
+      name: tool.name,
+      description: catalogDescription(declared?.description, tool.description),
+      exposure: tool.deferred
+        ? 'on-demand'
+        : Array.isArray(tool.callers) && !tool.callers.includes('model')
+          ? 'hidden'
+          : 'direct',
+      source,
+      ...(source.kind === 'mcp' ? { enabled: enabledMcp.has(tool.name) } : {}),
+    };
+  }).sort((left, right) => (
     left.source.label.localeCompare(right.source.label)
     || left.name.localeCompare(right.name)
   ));
   const commands = rows.flatMap((row) => (
     (row.manifest?.contributes?.commands || []).map((command) => ({
       name: command.id,
-      description: command.description || command.title,
+      description: catalogDescription(command.description, command.title),
       source: {
         key: row.id,
         source: row.source,
@@ -310,8 +344,15 @@ async function agentToolCatalog(refresh = false) {
 async function enabledRuntimeToolNames() {
   const runtime = await getDurableRuntime();
   const selected = readAgentToolSelection();
-  const installed = runtime.registry.snapshot().tools().map(({ tool }) => tool.name);
-  return installed.filter((name) => selected.enabled.some((pattern) => matches(pattern, name)));
+  const allowed = runtimeToolFilter(selected, mcpSnapshot());
+  return runtime.registry.snapshot().tools().filter(allowed).map(({ tool }) => tool.name);
+}
+
+function runtimeToolFilter(selection, mcp) {
+  const enabledMcp = enabledMcpMethodNames(mcp.tools, selection);
+  return ({ extension, tool }) => extension.name.startsWith('studio-mcp:')
+    ? enabledMcp.has(tool.name)
+    : selection.enabled.some(pattern => matches(pattern, tool.name));
 }
 
 async function runtimeSelection(options = {}) {
@@ -336,41 +377,39 @@ async function runtimeSelection(options = {}) {
     activeRuntimeNames.add(LONG_TASK_EXTENSION_NAME);
   }
   const selected = readAgentToolSelection();
-  const enabledMcpEntries = snapshot.tools().filter(({ extension, tool }) => (
-    extension.name.startsWith('studio-mcp:')
-    && selected.enabled.some((pattern) => matches(pattern, tool.name))
+  const allowed = runtimeToolFilter(selected, mcp);
+  const enabledMcpEntries = snapshot.tools().filter(entry => (
+    entry.extension.name.startsWith('studio-mcp:') && allowed(entry)
   ));
   for (const { extension } of enabledMcpEntries) activeRuntimeNames.add(extension.name);
-  const needsToolSearch = snapshot.tools().some(({ extension, tool }) => (
-    activeRuntimeNames.has(extension.name)
-    && tool.deferred
-    && selected.enabled.some((pattern) => matches(pattern, tool.name))
+  const needsToolSearch = snapshot.tools().some(entry => (
+    activeRuntimeNames.has(entry.extension.name) && entry.tool.deferred && allowed(entry)
   ));
   if (needsToolSearch) activeRuntimeNames.add('tool-search');
   if (needsToolSearch && enabledMcpEntries.some(({ tool }) => tool.deferred)) {
     activeRuntimeNames.add(mcp.catalogRuntimeName);
   }
-  const tools = snapshot.tools()
+  const toolEntries = snapshot.tools()
     .filter(({ extension, tool }) => (
       activeRuntimeNames.has(extension.name)
       && (
-        selected.enabled.some((pattern) => matches(pattern, tool.name))
+        allowed({ extension, tool })
         || (needsToolSearch && tool.name === 'tool_search')
         || (
           extension.name === LONG_TASK_EXTENSION_NAME
           && tool.name === LONG_TASK_TOOL_NAME
         )
       )
-    ))
-    .map(({ tool }) => tool);
+    ));
   const extensions = snapshot.installed().filter((extension) => activeRuntimeNames.has(extension.name));
-  return { extensions, tools };
+  return { extensions, tools: toolEntries.map(({ tool }) => tool), toolEntries };
 }
 
 module.exports = {
   DEFAULT_AGENT_TOOLS,
   agentToolCatalog,
   enabledRuntimeToolNames,
+  enabledMcpMethodNames,
   isValidToolName,
   matches,
   normalizeSelection,

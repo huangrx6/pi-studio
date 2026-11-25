@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Check, CircleCheck, FileCheck2, FilePenLine, Files, GitBranch, GitCommitHorizontal, History, Minus, Plus, TriangleAlert } from 'lucide-react';
 import { FileKindIcon } from '../../shared/FileKindIcon';
 import { SettingsDialog } from '../../shared/SettingsDialog';
@@ -12,15 +12,13 @@ type Layer = 'index' | 'worktree';
 type Selection = { layer: Layer; path: string };
 const changeNames: Record<string, string> = { A: '新增', D: '删除', M: '修改', R: '重命名', C: '复制', T: '类型变更', '?': '未跟踪' };
 
-function CommitForm({ sessionId, state, focus, disabled, busy, staged, conflicts, execute }: {
-  sessionId: string; state: GitState; focus: boolean; disabled: boolean; busy: boolean; staged: number; conflicts: boolean; execute: Execute;
+function CommitForm({ sessionId, state, disabled, busy, staged, conflicts, execute }: {
+  sessionId: string; state: GitState; disabled: boolean; busy: boolean; staged: number; conflicts: boolean; execute: Execute;
 }) {
   const repository = useGitRepositories().selected!.id;
   const key = repository === '.' ? 'pi-studio:git-message:' + sessionId + '/' + state.branch
     : 'pi-studio:git-message:' + JSON.stringify([sessionId, repository, state.branch]);
   const [message, setMessage] = useState(() => sessionStorage.getItem(key) || '');
-  const input = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { if (focus) input.current?.focus(); }, [focus]);
   function update(value: string) {
     setMessage(value);
     if (value) sessionStorage.setItem(key, value);
@@ -33,7 +31,7 @@ function CommitForm({ sessionId, state, focus, disabled, busy, staged, conflicts
     <div className="git-commit-caption"><label htmlFor="git-commit-message">提交说明</label>
       <span className="git-commit-target" title={state.branch || state.head}><GitBranch />{state.branch || '游离 HEAD'}</span>
     </div>
-    <textarea id="git-commit-message" ref={input} value={message} maxLength={32000} rows={2}
+    <textarea id="git-commit-message" value={message} maxLength={32000} rows={2}
       placeholder="简述本次修改…" readOnly={busy} onChange={e => update(e.target.value)} />
     <div className="git-commit-footer">
       <small>{staged ? `已暂存 ${staged} 项` : '暂无暂存修改'}</small>
@@ -45,8 +43,8 @@ function CommitForm({ sessionId, state, focus, disabled, busy, staged, conflicts
   </form>;
 }
 
-export function GitChanges({ state, sessionId, revision, focusCommit, disabled, busy, execute, openHistory, openFile, actionError }: {
-  state: GitState; sessionId: string; revision: number; focusCommit: boolean; disabled: boolean; busy: boolean; execute: Execute; openHistory: () => void;
+export function GitChanges({ state, sessionId, revision, disabled, busy, execute, openHistory, openFile, actionError }: {
+  state: GitState; sessionId: string; revision: number; disabled: boolean; busy: boolean; execute: Execute; openHistory: () => void;
   openFile: (root: string, path: string) => void; actionError: string;
 }) {
   const [selection, setSelection] = useState<Selection>();
@@ -62,7 +60,7 @@ export function GitChanges({ state, sessionId, revision, focusCommit, disabled, 
     || groups.find(group => group.files.some(file => file.path === selection.path)))) || groups.find(group => group.files.length);
   const selectedFile = (selection && selectedGroup?.files.find(file => file.path === selection.path)) || selectedGroup?.files[0];
   const clean = !state.files.length && !state.merging;
-  if (clean && !focusCommit) return <div className="git-clean">
+  if (clean) return <div className="git-clean">
     <CircleCheck aria-hidden="true" /><h3>工作区干净</h3>
     <p>{state.head ? '所有修改均已提交。' : '仓库中还没有可提交的文件。'}</p>
     {state.head && <button type="button" onClick={openHistory}><History />查看提交历史</button>}
@@ -111,7 +109,7 @@ export function GitChanges({ state, sessionId, revision, focusCommit, disabled, 
             }}</GitFileList>
           </section>;
         })}</div>
-        <CommitForm sessionId={sessionId} state={state} staged={groups[2].files.length} conflicts={!!groups[0].files.length} focus={focusCommit} disabled={disabled} busy={busy} execute={execute} />
+        <CommitForm sessionId={sessionId} state={state} staged={groups[2].files.length} conflicts={!!groups[0].files.length} disabled={disabled} busy={busy} execute={execute} />
       </div>
       <div className="git-review-preview">{selectedGroup && selectedFile
         ? <GitFileDiff sessionId={sessionId} source={{ layer: selectedGroup.layer, path: selectedFile.path, previousPath: selectedFile.previousPath || '' }} revision={revision} />

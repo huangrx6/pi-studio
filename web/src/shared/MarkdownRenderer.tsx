@@ -8,7 +8,6 @@ import { createContext, memo, useContext, useEffect, useMemo, useState } from 'r
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Check, Copy } from 'lucide-react';
-import { getActivePreferences } from './preferences';
 import { safeMarkdownImageSource } from './safe-url.ts';
 import rehypeLocalPaths from './rehype-local-paths.ts';
 import { MarkdownActions, MarkdownImageRenderer } from './markdown-actions';
@@ -110,11 +109,10 @@ const components: Components = {
         (actions.openLocalFile || actions.openFile)?.(localTarget);
         return;
       }
-      // http(s) 优先交给宿主：有内嵌浏览器面板时开在侧边栏，否则回落到
-      // 主进程按偏好打开系统浏览器或应用内窗口。
+      // http(s)：宿主 openLink 走浏览器设置（工作台/系统）；无宿主时回落系统浏览器。
       if (/^https?:\/\//i.test(href)) {
         if (actions.openLink) actions.openLink(href);
-        else void window.piApi.openLink(href, getActivePreferences().linkOpen);
+        else void window.piApi.openLink(href, 'external');
       }
     }}>{content}</a>;
   },

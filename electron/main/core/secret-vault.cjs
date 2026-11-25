@@ -33,7 +33,7 @@ function expandSecretReferences(value, secrets) {
   const names = secretReferences(value);
   const missing = names.filter((name) => typeof secrets?.[name] !== 'string');
   if (missing.length > 0) {
-    throw new Error(`未找到测试凭据：${missing.join('、')}。请先在权限策略中添加对应凭据。`);
+    throw new Error(`未找到测试凭据：${missing.join('、')}。请在「设置 → 数据与应用 → 测试凭据」中添加。`);
   }
   const expanded = mapStrings(value, (text) => text.replace(
     SECRET_REFERENCE,

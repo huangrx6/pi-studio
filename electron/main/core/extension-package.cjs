@@ -90,7 +90,7 @@ function loadHostNormalizer() {
 
 function normalizeDistributionManifest(raw, source, scope = 'user', options = {}) {
   const normalizeManifest = options.normalizeManifest || loadHostNormalizer();
-  const normalized = normalizeManifest(raw, source, scope);
+  const normalized = normalizeManifest(raw, source, scope, { appVersion: options.appVersion });
   const publisher = normalized.publisher;
   if (options.requirePublisher !== false && !safePublisher(publisher)) {
     throw new Error('扩展必须提供 1–80 字符的安全 publisher，或提供同样格式的 author');

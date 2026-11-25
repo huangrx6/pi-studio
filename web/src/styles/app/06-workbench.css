@@ -96,7 +96,7 @@
 /* 右栏开关只做宽度：内部保持目标宽度，动画期间由外层裁切，标签、树和预览
  * 不会随外层宽度重排。位移与透明度都会在半途留下空隙或半透明的一层
  * —— 右移 18px 会让面板左侧空出一条壁纸，所以只保留宽度。
- * ≤1100px 时仍是绝对定位抽屉。 */
+ * 可用宽度不足时由工作台切换为抽屉。 */
 
 .file-panel { width: 0; overflow: hidden; transition: width var(--shell-transition); will-change: width; }
 .file-panel.is-open { width: var(--panel-w); }
@@ -105,7 +105,6 @@
 .file-panel-inner { display: flex; flex-direction: column; width: var(--panel-w); min-width: var(--panel-w); height: 100%; }
 .file-panel.is-split:not(.is-fullscreen) .file-panel-inner { width: min(760px, 64vw); min-width: min(760px, 64vw); }
 .file-panel.is-fullscreen .file-panel-inner { width: 100%; min-width: 100%; }
-@media (max-width: 1100px) { .file-panel { position: absolute; top: 0; right: 0; bottom: 0; } }
 
 /* File actions: open with an installed app or reveal in Finder. */
 /* 文件工具栏右侧的打开方式与在 Finder 中显示菜单，绝对定位在按钮下方，
@@ -178,11 +177,9 @@ z-index 40，宽度和最大高度都受限并可内部滚动；每个操作行�
 .detail-code { flex: 1; margin: 0; padding: 16px; overflow: auto; color: var(--text); background: var(--surface); font: var(--text-sm)/var(--leading-relaxed) var(--mono); white-space: pre; }
 
 .detail-dialog { padding: 0; margin: auto; }
-.detail-dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
 
 .detail-overlay { z-index: 200; }
 .detail-overlay:not([open]) { display: none; }
-.detail-overlay::backdrop { background: transparent; }
 
 /* Tabs flow horizontally by wheel; no rail divider, just breathing room. */
 /* 标签栏支持滚轮横向滚动：去掉底部分隔线，让 tabs 自己把 overscroll 限制在

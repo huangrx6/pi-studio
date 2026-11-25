@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { ChevronLeft, Search, X } from 'lucide-react';
 import { isComposingKey, menuFocusIndex } from '../shared/keyboard-navigation';
+import { isTextEntry, matchesShortcut } from '../shared/shortcuts';
 import { ShellSidebar } from './ShellLayout';
 import './styles/settings-navigation.css';
 
@@ -18,11 +19,14 @@ export type SettingsNavigationPage = {
 
 export type SettingsNavigationProps = {
   pages: readonly SettingsNavigationPage[];
+  searchPages?: readonly SettingsNavigationPage[];
   activeId: string;
+  searchActiveId?: string;
+  searchShortcut: string;
   onSelect: (id: string) => void;
   onBack: () => void;
   collapsed: boolean;
-  onCollapse: () => void;
+  onCollapsedChange: (collapsed: boolean) => void;
   backLabel?: string;
   ariaLabel?: string;
 };
@@ -38,12 +42,10 @@ const PAGE_SEARCH_ALIASES: Record<string, readonly string[]> = {
   models: ['API', '密钥', '供应商', '模型来源', 'provider', 'thinking', '推理'],
   usage: ['统计', '费用', '成本', 'token', '用量', 'Metrics', '采集', '已移除', '项目'],
   tools: ['工具', '命令', 'bash', '终端'],
-  permissions: ['授权', '批准', '安全', '权限', '凭据', '密钥', '策略'],
+  permissions: ['授权', '批准', '安全', '权限', '策略', '工具覆盖', '高级规则'],
   harness: ['提示词', '指令', 'prompt', 'AGENTS', '上下文', '重试', '超时', '压缩'],
   subagents: ['子代理', '多智能体', '并行', 'agent'],
-  mcp: ['连接', '服务器', '集成', 'OAuth', '授权', 'API'],
-  skills: ['技能', 'skill', '安装'],
-  extensions: ['插件', '扩展', 'extension', '安装'],
+  plugins: ['集成', 'Plugin', '市场', '安装'],
   git: ['Git', '仓库', '分支', '工作树', 'worktree', '差异'],
   network: ['proxy', '代理', '网络', 'VPN', '连接', 'HTTP', 'SOCKS', '超时'],
   browser: ['浏览器', 'Browser', 'CDP', 'Chrome', '下载', '历史', '网站权限', 'webview', '内嵌'],
@@ -60,21 +62,25 @@ const PAGE_SEARCH_ALIASES: Record<string, readonly string[]> = {
  */
 export function SettingsNavigation({
   pages,
+  searchPages = [],
   activeId,
+  searchActiveId,
+  searchShortcut,
   onSelect,
   onBack,
   collapsed,
-  onCollapse,
+  onCollapsedChange,
   backLabel = '返回对话',
   ariaLabel = '设置导航',
 }: SettingsNavigationProps) {
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   const collapseRef = useRef<HTMLButtonElement>(null);
+  const focusSearchOnExpand = useRef(false);
   const pagesRef = useRef<HTMLElement>(null);
   const navigationId = useId();
   const terms = normalizeSearch(query).split(/\s+/).filter(Boolean);
-  const visiblePages = terms.length === 0 ? pages : pages.filter((page) => {
+  const visiblePages = terms.length === 0 ? pages : [...pages, ...searchPages].filter((page) => {
     const searchable = normalizeSearch([
       page.label,
       page.id,
@@ -85,14 +91,37 @@ export function SettingsNavigation({
     return terms.every((term) => searchable.includes(term));
   });
   const groups = groupPages(visiblePages);
-  const focusablePageId = visiblePages.some((page) => page.id === activeId)
-    ? activeId
+  const currentId = terms.length ? (searchActiveId ?? activeId) : activeId;
+  const focusablePageId = visiblePages.some((page) => page.id === currentId)
+    ? currentId
     : visiblePages[0]?.id;
 
-  // Opening or expanding the navigation leaves search one Tab away.
+  // Normal expansion leaves search one Tab away.
   useEffect(() => {
-    if (!collapsed) collapseRef.current?.focus({ preventScroll: true });
+    if (collapsed) return;
+    const target = focusSearchOnExpand.current ? searchRef.current : collapseRef.current;
+    focusSearchOnExpand.current = false;
+    target?.focus({ preventScroll: true });
   }, [collapsed]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || !matchesShortcut(event, searchShortcut)) return;
+      if (isTextEntry(event.target) && !event.metaKey && !event.ctrlKey) return;
+      if (document.querySelector('dialog[open]')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (collapsed) {
+        focusSearchOnExpand.current = true;
+        onCollapsedChange(false);
+      } else {
+        searchRef.current?.focus({ preventScroll: true });
+      }
+    };
+    // A custom shortcut can use a key handled by the navigation itself.
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [collapsed, onCollapsedChange, searchShortcut]);
 
   function clearSearch() {
     setQuery('');
@@ -104,11 +133,11 @@ export function SettingsNavigation({
   }
 
   function focusPageAt(index: number) {
-    pageButtons()[index]?.focus();
+    pageButtons().at(index)?.focus();
   }
 
   return (
-    <ShellSidebar className="settings-nav settings-navigation" label={ariaLabel} onCollapse={onCollapse} collapseRef={collapseRef}>
+    <ShellSidebar className="settings-nav settings-navigation" label={ariaLabel} onCollapse={() => onCollapsedChange(true)} collapseRef={collapseRef}>
       <div className="settings-search settings-navigation-search" role="search" aria-label="搜索设置">
         <Search aria-hidden="true" />
         <input
@@ -142,7 +171,7 @@ export function SettingsNavigation({
             {group.label && <div className="nav-section-label">{group.label}</div>}
             {group.pages.map((page) => {
               const Icon = page.icon;
-              const active = activeId === page.id;
+              const active = currentId === page.id;
               return (
                 <button
                   key={page.id}

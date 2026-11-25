@@ -11,7 +11,7 @@ const { getWindow, DEFAULT_CWD } = require('../core/state.cjs');
 const { manageWorktree, contains } = require('../services/git-worktrees.cjs');
 const { getGitWorkspaceStatus } = require('../services/git-workspace.cjs');
 const { listGitRepositories, resolveGitRepository } = require('../services/git-repositories.cjs');
-const { gitRead, gitWrite } = require('../services/git-tools.cjs');
+const { gitRead, gitWrite, listGitChanges } = require('../services/git-tools.cjs');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
 
 function assertMainWindow(event) {
@@ -31,6 +31,11 @@ function registerGitWorkspaceIpc() {
     assertMainWindow(event);
     checkWorkspace(cwd);
     return listGitRepositories(cwd);
+  });
+  ipcMain.handle('pi:git-workspace-changes', async (event, cwd, repository) => {
+    assertMainWindow(event);
+    checkWorkspace(cwd);
+    return listGitChanges(await resolveGitRepository(cwd, repository));
   });
   for (const [channel, handler] of [['pi:git-read', gitRead], ['pi:git-write', gitWrite]]) {
     ipcMain.handle(channel, async (event, sessionId, input) => {

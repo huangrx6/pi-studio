@@ -1,10 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArchiveRestore, Ellipsis, FolderClosed, ListFilter, Search, Trash2, X } from 'lucide-react';
+import { Ellipsis, FolderClosed, ListFilter, Search, Trash2, X } from 'lucide-react';
 import { ActionMenu } from '../../shared/ActionMenu';
 import { Select } from '../../shared/Select';
 import { LoadingIndicator } from '../../shared/LoadingState';
 import type { ConversationSummary } from '../../types/durable-types';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
+import { SettingsSpotlight } from '../../shared/SettingsSpotlight';
+import { useSettingsToast } from '../../shared/SettingsToast';
 import { errorText } from '../../shared/error-text';
 import { isComposingKey } from '../../shared/keyboard-navigation';
 import { filterArchivedWorkspaces, workspaceLabel, type ArchivedWorkspace, type PinFilter } from './archive-filter';
@@ -32,6 +34,7 @@ export function ArchivedConversationsSettings({ workspaces, onRestore, onDelete,
   onDeleteGroup: (cwd: string, label: string, sessionIds: string[]) => Promise<void>;
   actionsDisabled?: boolean;
 }) {
+  const showToast = useSettingsToast();
   const [query, setQuery] = useState('');
   const [pins, setPins] = useState<PinFilter>('all');
   const [project, setProject] = useState('all');
@@ -39,7 +42,6 @@ export function ArchivedConversationsSettings({ workspaces, onRestore, onDelete,
   const [pending, setPending] = useState<Pending | null>(null);
   const pendingRef = useRef<Pending | null>(null);
   const mounted = useRef(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const rootRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const focusAfter = useRef<{ id: string; action: ArchiveAction; order: string[]; opener?: HTMLButtonElement } | null>(null);
@@ -96,11 +98,10 @@ export function ArchivedConversationsSettings({ workspaces, onRestore, onDelete,
       order: groups.flatMap(group => group.sessions.map(item => item.id)),
     };
     setPending(request);
-    setErrors(current => { const next = { ...current }; delete next[request.id]; return next; });
     try {
       await perform();
     } catch (cause) {
-      if (mounted.current && pendingRef.current === request) setErrors(current => ({ ...current, [request.id]: errorText(cause) }));
+      if (mounted.current && pendingRef.current === request) showToast(errorText(cause), 'error');
     } finally {
       if (pendingRef.current === request) {
         pendingRef.current = null;
@@ -114,81 +115,86 @@ export function ArchivedConversationsSettings({ workspaces, onRestore, onDelete,
     searchRef.current?.focus();
   }
 
-  return <div className="settings-sections archived-conversations-settings" ref={rootRef} tabIndex={-1} aria-label="归档会话">
-    <SettingsPageHeader icon={<ArchiveRestore />} title="归档会话" meta={<span>已归档的会话可在此恢复或永久删除</span>} />
-    {total > 0 && <div className="archive-search-row">
-      <div className="archive-search" role="search" aria-label="搜索归档会话">
-        <Search aria-hidden="true" />
-        <input ref={searchRef} type="search" aria-label="搜索归档会话" placeholder="搜索已归档的会话" value={query}
-          onChange={event => setQuery(event.target.value)}
-          onKeyDown={event => {
-            if (event.key !== 'Escape' || isComposingKey(event.nativeEvent)) return;
-            event.preventDefault(); event.stopPropagation(); clearSearch();
-          }} />
-        {query && <button type="button" className="icon-button" aria-label="清除搜索" onClick={clearSearch}><X aria-hidden="true" /></button>}
-      </div>
-      <Select value={pins} options={pinOptions} label="按置顶状态筛选" leadingIcon={<ListFilter />}
-        onChange={value => setPins(value as PinFilter)} />
-      <Select value={selectedProject} options={projects} label="按项目筛选" leadingIcon={<FolderClosed />} onChange={setProject} />
-      <span className="sr-only" role="status">{matched} 个归档会话</span>
-    </div>}
-    {groups.length === 0
-      ? <div className="archive-settings-empty">
-          <p>{total ? '没有匹配的归档会话' : '还没有归档会话'}</p>
-          {!total && <span>归档的会话会保留在这里，可随时恢复。</span>}
-          {total > 0 && <button type="button" className="settings-text-button" onClick={() => {
-            setPins('all'); setProject('all'); clearSearch();
-          }}>重置筛选</button>}
+  return <div className="settings-preference-page archived-conversations-settings" ref={rootRef} tabIndex={-1} aria-label="归档会话">
+    <SettingsPageHeader title="归档会话" iconPosition="end" meta="按项目查找、恢复或永久删除已归档的会话。"
+      icon={<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3.5" y="5.5" width="25" height="6" rx="2" /><path d="M6 12v12.5a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V12" />
+        <path d="M13 16h6" stroke="var(--accent)" />
+      </svg>} />
+    <div className="settings-preference-groups">
+      {total > 0 && <div className="archive-search-row">
+        <div className="archive-search" role="search" aria-label="搜索归档会话">
+          <Search aria-hidden="true" />
+          <input ref={searchRef} type="search" aria-label="搜索归档会话" placeholder="搜索已归档的会话" value={query}
+            onChange={event => setQuery(event.target.value)}
+            onKeyDown={event => {
+              if (event.key !== 'Escape' || isComposingKey(event.nativeEvent)) return;
+              event.preventDefault(); event.stopPropagation(); clearSearch();
+            }} />
+          {query && <button type="button" className="icon-button" aria-label="清除搜索" onClick={clearSearch}><X aria-hidden="true" /></button>}
         </div>
-      : groups.map(workspace => {
-          const label = workspaceLabel(workspace);
-          return <section className="archive-workspace-section" key={workspace.cwd} aria-label={label}>
-            <header className="archive-workspace-heading">
-              <FolderClosed aria-hidden="true" />
-              <h2 title={workspace.cwd}>{label}</h2>
-              <span>{workspace.sessions.length} 个会话</span>
-              <button type="button" className="icon-button" aria-label={`${label} 的归档操作`} title="更多操作"
-                aria-haspopup="menu" aria-expanded={menu?.cwd === workspace.cwd} disabled={locked}
-                onClick={event => {
-                  if (menu?.cwd === workspace.cwd) { setMenu(null); return; }
-                  const box = event.currentTarget.getBoundingClientRect();
-                  setMenu({ cwd: workspace.cwd, x: box.right, y: box.bottom + 4, anchor: event.currentTarget });
-                }}>
-                {pending?.action === 'delete-group' && pending.id === workspace.cwd ? <LoadingIndicator /> : <Ellipsis />}
-              </button>
-            </header>
-            {errors[workspace.cwd] && <p className="archive-session-error" role="alert">{errors[workspace.cwd]}</p>}
-            <ul className="archive-session-list">
-              {workspace.sessions.map(session => {
-                const active = pending?.id === session.id;
-                const restoring = active && pending.action === 'restore';
-                const deleting = active && pending.action === 'delete';
-                const title = session.title || '未命名会话';
-                return <li className="archive-session-card" key={session.id} data-session-id={session.id} aria-busy={active}>
-                  <div className="archive-session-copy">
-                    <h3 title={title}>{title}</h3>
-                    <div className="archive-session-meta">
-                      <span>{updatedLabel(session.updatedAt)}</span>
-                      {session.pinned && <span>已置顶</span>}
+        <Select value={pins} options={pinOptions} label="按置顶状态筛选" leadingIcon={<ListFilter />}
+          onChange={value => setPins(value as PinFilter)} />
+        <Select value={selectedProject} options={projects} label="按项目筛选" leadingIcon={<FolderClosed />} onChange={setProject} />
+        <span className="sr-only" role="status">{matched} 个归档会话</span>
+      </div>}
+      {total === 0
+        ? <SettingsSpotlight className="archive-spotlight settings-preference-card" compact art="archives" title="还没有归档会话" description="归档的会话会保留在这里，可随时恢复。" />
+        : groups.length === 0
+        ? <div className="settings-preference-card archive-settings-empty">
+            <p>没有匹配的归档会话</p>
+            <button type="button" className="settings-outline" onClick={() => {
+              setPins('all'); setProject('all'); clearSearch();
+            }}>重置筛选</button>
+          </div>
+        : groups.map(workspace => {
+            const label = workspaceLabel(workspace);
+            return <section className="settings-preference-card archive-workspace-section" key={workspace.cwd} aria-label={label}>
+              <header className="archive-workspace-heading">
+                <FolderClosed aria-hidden="true" />
+                <h2 title={workspace.cwd}>{label}</h2>
+                <span className="archive-workspace-count">{workspace.sessions.length} 个会话</span>
+                <button type="button" className="icon-button" aria-label={`${label} 的归档操作`} title="更多操作"
+                  aria-haspopup="menu" aria-expanded={menu?.cwd === workspace.cwd} disabled={locked}
+                  onClick={event => {
+                    if (menu?.cwd === workspace.cwd) { setMenu(null); return; }
+                    const box = event.currentTarget.getBoundingClientRect();
+                    setMenu({ cwd: workspace.cwd, x: box.right, y: box.bottom + 4, anchor: event.currentTarget });
+                  }}>
+                  {pending?.action === 'delete-group' && pending.id === workspace.cwd ? <LoadingIndicator /> : <Ellipsis />}
+                </button>
+              </header>
+              <ul className="archive-session-list">
+                {workspace.sessions.map(session => {
+                  const active = pending?.id === session.id;
+                  const restoring = active && pending.action === 'restore';
+                  const deleting = active && pending.action === 'delete';
+                  const title = session.title || '未命名会话';
+                  return <li className="archive-session-card" key={session.id} data-session-id={session.id} aria-busy={active}>
+                    <div className="archive-session-copy">
+                      <h3 title={title}>{title}</h3>
+                      <div className="archive-session-meta">
+                        <span>{updatedLabel(session.updatedAt)}</span>
+                        {session.pinned && <span className="archive-pinned-pill">已置顶</span>}
+                      </div>
                     </div>
-                  </div>
-                  <div className="archive-session-actions">
-                    <button type="button" className="icon-button archive-delete-button" data-action="delete" disabled={locked}
-                      title={`永久删除「${title}」`} aria-label="永久删除"
-                      onClick={() => void run({ id: session.id, action: 'delete' }, () => onDelete(session))}>
-                      {deleting ? <LoadingIndicator /> : <Trash2 aria-hidden="true" />}
-                    </button>
-                    <button type="button" className="archive-restore-button" data-action="restore" disabled={locked}
-                      onClick={() => void run({ id: session.id, action: 'restore' }, () => onRestore(session))}>
-                      {restoring && <LoadingIndicator />}{restoring ? '恢复中…' : '取消归档'}
-                    </button>
-                  </div>
-                  {errors[session.id] && <p className="archive-session-error" role="alert">{errors[session.id]}</p>}
-                </li>;
-              })}
-            </ul>
-          </section>;
-        })}
+                    <div className="archive-session-actions">
+                      <button type="button" className="icon-button archive-delete-button" data-action="delete" disabled={locked}
+                        title={`永久删除「${title}」`} aria-label="永久删除"
+                        onClick={() => void run({ id: session.id, action: 'delete' }, () => onDelete(session))}>
+                        {deleting ? <LoadingIndicator /> : <Trash2 aria-hidden="true" />}
+                      </button>
+                      <button type="button" className="settings-outline archive-restore-button" data-action="restore" disabled={locked}
+                        onClick={() => void run({ id: session.id, action: 'restore' }, () => onRestore(session))}>
+                        {restoring && <LoadingIndicator />}{restoring ? '恢复中…' : '取消归档'}
+                      </button>
+                    </div>
+                  </li>;
+                })}
+              </ul>
+            </section>;
+          })}
+    </div>
     {menu && menuGroup && <ActionMenu x={menu.x} y={menu.y} anchor={menu.anchor} align="end" onClose={() => setMenu(null)} items={[{
       label: filtered ? `删除筛选出的 ${menuGroup.sessions.length} 个会话` : '删除项目中的全部归档会话',
       destructive: true, disabled: locked,

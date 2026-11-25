@@ -18,9 +18,12 @@ export function splitPanelWidth(panelWidth: number, panelMaxWidth: number) {
   return Math.min(maximum, MAX_SPLIT_PANEL_WIDTH, Math.max(MIN_SPLIT_PANEL_WIDTH, preferred));
 }
 
-/** Below 1100px the existing panel is an overlay; above it reserve a usable chat column. */
+export function panelUsesOverlay(viewportWidth: number, sidebarWidth: number) {
+  return viewportWidth - sidebarWidth < MIN_PANEL_WIDTH + 360;
+}
+
 export function maximumPanelWidth(viewportWidth: number, sidebarWidth: number) {
-  return Math.max(MIN_PANEL_WIDTH, Math.floor(viewportWidth <= 1100
+  return Math.max(MIN_PANEL_WIDTH, Math.floor(panelUsesOverlay(viewportWidth, sidebarWidth)
     ? viewportWidth - 48
     : viewportWidth - sidebarWidth - 480));
 }

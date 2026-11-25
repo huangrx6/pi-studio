@@ -6,6 +6,7 @@
  * state are owned by Durable under the `durable_` table prefix.
  */
 
+const path = require('node:path');
 const {
   closeStudioDatabase,
   databasePath,
@@ -49,6 +50,7 @@ const {
   cleanupManagedWorktrees,
 } = require('../capabilities/subagents/index.cjs');
 const { createSecretAwareRegistry } = require('../services/secret-tool-runtime.cjs');
+const { publishFileChanges } = require('../services/file-change-events.cjs');
 
 const DURABLE_PREFIX = 'durable_';
 const DEFAULT_PAGE_SIZE = 500;
@@ -61,11 +63,23 @@ function sanitizedShellEnv() {
     'HOME', 'PATH', 'SHELL', 'TMPDIR', 'TEMP', 'TMP', 'USER', 'LOGNAME',
     'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM', 'COLORTERM',
   ]);
-  return Object.fromEntries(
+  const env = Object.fromEntries(
     Object.entries(process.env)
       .filter(([key, value]) => value !== undefined && (allowed.has(key) || key.startsWith('XDG_')))
       .map(([key, value]) => [key, value]),
   );
+  try {
+    const { pluginPathEnvPrefixes } = require('../services/plugin-distribution.cjs');
+    const prefixes = pluginPathEnvPrefixes();
+    if (prefixes.length) {
+      const pathKey = Object.keys(env).find((key) => key.toUpperCase() === 'PATH') || 'PATH';
+      const current = env[pathKey] || '';
+      env[pathKey] = [...prefixes, current].filter(Boolean).join(path.delimiter);
+    }
+  } catch {
+    // Plugin service optional during early boot / unit isolation.
+  }
+  return env;
 }
 
 /**
@@ -135,7 +149,7 @@ async function createRuntime() {
     loadMetricRequests: (conversationId) => db.listMetricRequests({ conversationId }),
     onRequestCompleted: (request) => {
       db.recordUsageRequest(request);
-      db.recordMetricRequest(request);
+      if (db.hasDurableConversation(request.conversationId)) db.recordMetricRequest(request);
     },
   });
   const registry = createSecretAwareRegistry(durable.createRegistry());
@@ -152,6 +166,16 @@ async function createRuntime() {
     busyTimeoutMs: 15_000,
   });
   const shellEnv = sanitizedShellEnv();
+  class StudioExecutionEnv extends durableEnv.NodeExecutionEnv {
+    async writeFile(target, content, context) {
+      const result = await super.writeFile(target, content, context);
+      if (result.ok) {
+        const resolved = await this.absolutePath(target, context);
+        if (resolved.ok) publishFileChanges([resolved.value], { resolveAliases: true });
+      }
+      return result;
+    }
+  }
   const reports = [];
   const harness = await durable.Harness.open(storage, {
     models: () => {
@@ -170,7 +194,7 @@ async function createRuntime() {
     },
     settings: durableHarnessSettings,
     telemetry: metricsRuntime.telemetry,
-    env: ({ cwd }) => new durableEnv.NodeExecutionEnv({
+    env: ({ cwd }) => new StudioExecutionEnv({
       cwd: cwd || process.cwd(),
       shellEnv,
     }),

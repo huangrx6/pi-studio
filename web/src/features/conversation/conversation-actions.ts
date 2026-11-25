@@ -19,16 +19,19 @@ export type ConversationActionContext = {
   hasMessages: boolean;
   hasChildren: boolean;
   hasExtensions: boolean;
+  traceEnabled?: boolean;
 };
 
 export function conversationActions(ctx: ConversationActionContext, commands: ComposerCommand[] = []): ConversationAction[] {
   const sessionReason = ctx.loading ? '正在读取会话' : !ctx.sessionId ? '请先开始一个会话' : undefined;
   const actions: ConversationAction[] = [
     { id: 'fork', title: '分叉当前会话', description: '从当前进度建立独立会话', group: 'conversation', keywords: ['fork', 'branch', '分支'], disabledReason: sessionReason || (!ctx.hasMessages ? '会话还没有消息' : ctx.running ? '请等待任务结束或先停止任务' : undefined) },
-    { id: 'compare', title: '模型同题双跑', description: '在右侧工作台独立评估两个模型', group: 'workspace', keywords: ['compare', '模型', '对比', '双跑'], disabledReason: !ctx.workspace ? '请先选择工作区' : undefined },
     { id: 'goal', title: '设置目标', description: '在输入框中填写持续执行的目标', group: 'conversation', keywords: ['goal', '任务', '长期'], disabledReason: ctx.loading ? '正在读取会话' : !ctx.workspace ? '请先选择工作区' : undefined },
     { id: 'subagents', title: '查看子智能体', description: '运行状态、上下文和执行结果', group: 'conversation', keywords: ['agent', '并行'], disabledReason: sessionReason || (!ctx.hasChildren ? '当前会话还没有子智能体' : undefined) },
-    { id: 'extensions', title: '查看会话扩展', description: '当前会话的扩展内容与布局', group: 'conversation', keywords: ['extension', '指标', '额度'], disabledReason: sessionReason || (!ctx.hasExtensions ? '没有可展示的会话扩展' : undefined) },
+    { id: 'progress', title: '查看进展', description: '在右侧查看目标和任务', group: 'conversation', keywords: ['任务', 'progress'], disabledReason: sessionReason },
+    ...(ctx.traceEnabled ? [{ id: 'trace', title: '查看轨迹', description: '在右侧查看请求和工具步骤', group: 'conversation' as const, keywords: ['trace', '请求'], disabledReason: sessionReason }] : []),
+    { id: 'git', title: '打开 Git', description: '在右侧查看工作树变更', group: 'workspace', keywords: ['版本控制', '分支'], disabledReason: sessionReason || (!ctx.workspace ? '请先选择工作区' : undefined) },
+    { id: 'extensions', title: '打开扩展', description: '选择工作台中的扩展面板', group: 'conversation', keywords: ['extension', '指标', '额度'], disabledReason: !ctx.hasExtensions ? '没有可打开的扩展面板' : undefined },
     { id: 'temporary', title: '临时聊天', description: '在右侧打开独立的临时聊天', group: 'workspace', keywords: ['temporary', 'chat'] },
     { id: 'files', title: '浏览工作区文件', description: '在右侧打开文件面板', group: 'workspace', keywords: ['file', '目录'], disabledReason: !ctx.workspace ? '请先选择工作区' : undefined },
     { id: 'models', title: '模型配置', description: '管理模型来源与可用模型', group: 'workspace', keywords: ['model', 'provider'] },

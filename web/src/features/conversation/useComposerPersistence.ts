@@ -5,6 +5,7 @@ import type { PiWorkspace } from '../../shell/app-types';
 import type { ComposerDraft } from './composer-drafts';
 import {
   clearComposerDraft,
+  composerDraftKeyForSession,
   saveComposerDraft,
   subscribeComposerDraftStore,
 } from './composer-drafts';
@@ -24,6 +25,7 @@ type ComposerPersistenceDependencies = {
   workspace: string;
   workspaces: PiWorkspace[];
   stateLoading: boolean;
+  workspacesLoaded: boolean;
   prompt: string;
   composerAttachments: ComposerAttachment[];
   composerDraftKeyRef: MutableRefObject<string>;
@@ -47,6 +49,7 @@ export function useComposerPersistence({
   workspace,
   workspaces,
   stateLoading,
+  workspacesLoaded,
   prompt,
   composerAttachments,
   composerDraftKeyRef,
@@ -65,6 +68,8 @@ export function useComposerPersistence({
   loadStateRef,
 }: ComposerPersistenceDependencies) {
   const prunedDrafts = useRef(false);
+  const removedSessionIds = useRef(new Set<string>());
+  const removedDraftKeys = useRef(new Set<string>());
   const persistComposerStateNow = useCallback((): Promise<void> => {
     if (!composerPersistenceReadyRef.current) {
       return Promise.resolve();
@@ -78,6 +83,9 @@ export function useComposerPersistence({
       queuedPromptsRef.current,
       composerDraftKeyRef.current,
     );
+    snapshot.drafts = snapshot.drafts.filter(draft => !removedDraftKeys.current.has(draft.key));
+    snapshot.queues = snapshot.queues.filter(queue => !removedSessionIds.current.has(queue.sessionId));
+    if (removedDraftKeys.current.has(snapshot.activeDraftKey)) snapshot.activeDraftKey = '';
     const write = composerPersistenceWriteRef.current
       .catch(() => {})
       .then(() => savePersistedComposerInputState(snapshot));
@@ -90,6 +98,14 @@ export function useComposerPersistence({
       });
     return composerPersistenceWriteRef.current;
   }, [composerDraftKeyRef, composerDraftsRef, composerPersistenceErrorRef, composerPersistenceReadyRef, composerPersistenceTimerRef, composerPersistenceWriteRef, queuedPromptsRef, showComposerFeedback]);
+
+  function persistDeletedComposerSessions(ids: string[]) {
+    for (const id of ids) {
+      removedSessionIds.current.add(id);
+      removedDraftKeys.current.add(composerDraftKeyForSession(id));
+    }
+    return persistComposerStateNow();
+  }
 
   const scheduleComposerStatePersistence = useCallback(() => {
     if (
@@ -147,7 +163,7 @@ export function useComposerPersistence({
   }, [composerPersistenceReady, persistComposerStateNow]);
 
   useEffect(() => {
-    if (!composerPersistenceReady || stateLoading || prunedDrafts.current || workspaces.length === 0) return;
+    if (!composerPersistenceReady || stateLoading || prunedDrafts.current || !workspacesLoaded) return;
     prunedDrafts.current = true;
     const sessions = workspaces.flatMap((item) => item.sessions);
     const knownSessionIds = new Set(sessions.map((item) => item.id));
@@ -168,7 +184,7 @@ export function useComposerPersistence({
         clearComposerDraft(composerDraftsRef.current, key);
       }
     }
-  }, [composerDraftsRef, composerPersistenceReady, queuedPromptsRef, setQueuedPromptsBySession, stateLoading, workspaces]);
+  }, [composerDraftsRef, composerPersistenceReady, queuedPromptsRef, setQueuedPromptsBySession, stateLoading, workspaces, workspacesLoaded]);
 
   useEffect(() => {
     if (!composerPersistenceReady) return;
@@ -177,4 +193,6 @@ export function useComposerPersistence({
       attachments: composerAttachments,
     });
   }, [composerAttachments, composerDraftKeyRef, composerDraftsRef, composerPersistenceReady, prompt]);
+
+  return { persistDeletedComposerSessions };
 }

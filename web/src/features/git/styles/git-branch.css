@@ -23,6 +23,20 @@
 .git-branch-trigger svg:last-child { width: 10px; color: var(--text-3); }
 .git-branch-trigger[aria-expanded="true"] svg:last-child { transform: rotate(180deg); }
 .git-workspace-summary.git-branch-trigger:is(:hover, [aria-expanded="true"]) { background: var(--surface-hover); border-color: var(--border); color: var(--text-1); }
+.chat-heading .git-branch-trigger { max-width: min(100%, 220px); }
+
+@container conversation-header (max-width: 420px) {
+  .chat-heading { gap: var(--space-1); }
+  .chat-heading :is(.git-repository-picker, .git-branch-picker) { flex: none; }
+  .chat-heading :is(.git-repository-picker .pi-select-trigger, .git-branch-trigger) {
+    width: var(--icon-button);
+    min-height: var(--icon-button);
+    justify-content: center;
+    padding-inline: 0;
+  }
+  .chat-heading .git-repository-picker :is(.pi-select-value, .pi-select-chevron),
+  .chat-heading .git-branch-trigger > :is(span, svg:last-child) { display: none; }
+}
 
 .git-branch-menu {
   position: absolute;

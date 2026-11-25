@@ -17,29 +17,30 @@ id: 'studio-metrics',
     contributes: {
       panels: [
         {
-          /* 一份摘要声明两个落点：顶栏图标给的入口，底部那行只在生成中出现。 */
           id: 'metrics-chip',
           title: '实时指标',
-          description: '顶栏与底部的实时指标入口，点击打开完整面板。',
-          slots: ['status.chip', 'conversation.footer'],
+          description: '生成速率、首包耗时和运行阶段。',
+          slots: ['status.chip', 'composer.above', 'composer.below'],
           icon: 'activity',
           color: 'info',
           size: 'compact',
           priority: 20,
           details: 'metrics-detail',
-          /* 只约束底部那行：顶栏 chip 是常驻入口，不随回合出现/消失。 */
+          // 固定在会话上的摘要随回合显示，弹框卡片也显示最近请求的读数。
           visibility: 'while-active',
           content: [{
             kind: 'dataView',
             sourceId: METRICS_FOOTER_SOURCE_ID,
-            emptyText: '空闲',
+            emptyText: '等待首次模型请求',
           }],
         },
         {
           id: 'metrics-detail',
           title: '实时指标',
           description: '当前会话的模型请求和 Durable 任务指标。',
-          slot: 'conversation.detail',
+          slot: 'panel.side',
+          icon: 'activity',
+          color: 'info',
           size: 'regular',
           content: [{
             kind: 'dataView',
@@ -62,7 +63,7 @@ id: 'studio-metrics',
         {
           id: 'summary',
           title: '实时会话指标摘要',
-          description: '面向会话底部的紧凑实时指标。',
+          description: '扩展卡片和会话摘要使用的紧凑指标。',
         },
       ],
     },

@@ -18,7 +18,7 @@ function visit(node) {
 visit(tree); assert.equal(functions.length, names.size);
 const code = ts.transpileModule(functions.join('\n') + '\nObject.assign(globalThis, { openSkillDetail, closeSkillDetail, toggleSkillTrust, deleteSkill, refreshSavedSkillConfiguration, runResourceWrite, acceptSkillResources, reportSkillRefresh });', { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 function harness() {
-  const writes = [], confirms = [];
+  const writes = [], confirms = [], toasts = [];
   const h = {
     resourceCommitRef: { current: null },
     resourceWriteRef:{current:null},resourcePendingRef:{current:{models:false,mcp:false,skills:false}},editorSaveRef:{current:false},settingsBusy:false,
@@ -27,9 +27,9 @@ function harness() {
     modelRevisionRef:{current:new Map()},sessionLoadRef:{current:1},defaultModelWorkspaceRef:{current:'/A'},
     setModelRefreshBusy(){},setMcpRefreshBusy(){},setSkillRefreshBusy(value){h.refreshBusy=value;},setResourceWriteBusy(value){h.busy=value;},
     setSkillRefreshSummary(value){h.refreshSummary=value;},setSkillRefreshError(value){h.refreshError=value;},
-    setSettingsData(value){h.snapshot=typeof value==='function'?value(h.snapshot):value;},pushNotification(){},
+    setSettingsData(value){h.snapshot=typeof value==='function'?value(h.snapshot):value;},showToast:(...args) => toasts.push(args),
     workspaceRef: { current: '/A' }, skillDetailRef: { current: null }, skillDetailGenerationRef: { current: 0 },
-    setSkillDetailState(value) { h.detail = value; }, setSkillDetailError(value) { h.detailError = value; }, setSettingsError(value) { h.error = value; }, setSettingsBusy(value) { h.busy = value; },
+    setSkillDetailState(value) { h.detail = value; }, setSettingsError(value) { h.error = value; }, setSettingsBusy(value) { h.busy = value; },
     acceptRuntimeSnapshot(value) { h.snapshot = value; }, errorText: error => error.message,
     actionConfirmation: { confirm: () => new Promise(resolve => confirms.push(resolve)) },
     window: { piApi: Object.fromEntries(['removeSkill', 'setSkillTrusted', 'refreshSkills', 'settings'].map(method => [method, (...args) => new Promise((resolve, reject) => writes.push({ method, args, resolve, reject }))])) },
@@ -39,7 +39,7 @@ function harness() {
     runResourceWrite: (...args) => h.runResourceWrite(...args),
     acceptSkillResources: (...args) => h.acceptSkillResources(...args),
   };
-  return { h, writes, confirms };
+  return { h, writes, confirms, toasts };
 }
 const ready = value => ({committed:true,projection:{status:'ready',value}});
 const a = { name: 'A', path: '/A/SKILL.md' }, b = { name: 'B', path: '/B/SKILL.md' };
@@ -58,7 +58,7 @@ test('late trust completion cannot replace a newer detail even with the same pat
   const { h, writes } = harness(); h.openSkillDetail(a); const old = h.toggleSkillTrust(a, false);
   h.closeSkillDetail(); h.openSkillDetail({ ...a, name: 'reopened' });
   writes[0].resolve(ready({ skills: [{ ...a, trusted: false }] })); await old;
-  assert.equal(h.detail.name, 'reopened'); assert.equal(h.detailError, null);
+  assert.equal(h.detail.name, 'reopened');
 });
 
 test('a scope change during confirmation cancels the write; late old-scope results stay out of settings', async () => {
@@ -77,11 +77,12 @@ test('one synchronous mutation lock prevents duplicate confirmation and duplicat
   writes[0].resolve(ready({ skills: [a] })); await retry; assert.equal(h.resourceWriteRef.current, null);
 });
 
-test('current failures stay local but an obsolete detail never receives another skill error', async () => {
-  const { h, writes } = harness(); h.openSkillDetail(a); let pending = h.toggleSkillTrust(a, false);
-  writes[0].reject(new Error('local')); await pending; assert.equal(h.detailError, 'local');
+test('skill write failures use the shared toast and never replace the current detail', async () => {
+  const { h, writes, toasts } = harness(); h.openSkillDetail(a); let pending = h.toggleSkillTrust(a, false);
+  writes[0].reject(new Error('local')); await pending; assert.deepEqual(toasts.at(-1), ['local', 'error']);
   pending = h.toggleSkillTrust(a, false); h.openSkillDetail(b);
-  writes[1].reject(new Error('A failed')); await pending; assert.equal(h.detailError, null); assert.equal(h.error, 'A failed');
+  writes[1].reject(new Error('A failed')); await pending; assert.equal(h.detail, b); assert.deepEqual(toasts.at(-1), ['A failed', 'error']);
+  assert.equal(h.error, null);
 });
 
 

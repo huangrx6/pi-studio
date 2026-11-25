@@ -16,43 +16,6 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .workspace-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-actions { display: flex; gap: var(--space-1); flex: none; }
 
-.chat-tabs { height: var(--toolbar-height); min-width: 0; flex: none; display: flex; align-items: stretch; gap: var(--space-4); padding: 0 var(--space-6); overflow: visible; border-bottom: 1px solid var(--border); }
-.chat-tab-list { display: flex; min-width: 0; align-items: stretch; gap: var(--space-4); overflow-x: auto; scrollbar-width: none; }
-.chat-tab-list::-webkit-scrollbar { display: none; }
-.tab { position: relative; display: inline-flex; flex: none; align-items: center; gap: 6px; padding: 0 var(--space-1); border: 0; background: var(--transparent); font-size: var(--text-13); color: var(--muted); white-space: nowrap; }
-.chat-tab-list .tab > svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--faint); transition: color var(--transition); }
-.chat-tab-list .tab:hover > svg,
-.chat-tab-list .tab.is-active > svg { color: var(--accent); }
-.conversation-trace-tab > svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; color: var(--faint); transition: color var(--transition); }
-.conversation-trace-tab:hover > svg { color: var(--accent); }
-.tab-label { display: inline-flex; align-items: center; gap: 5px; }
-.tab-count {
-  display: inline-grid;
-  place-items: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: var(--radius-round);
-  background: var(--accent-soft);
-  color: var(--accent-foreground);
-  font: var(--weight-semibold) var(--text-xs)/1 var(--mono);
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-.agent-tab-count { color: var(--faint); background: var(--surface-active); }
-.agent-tab-count.is-live {
-  background: var(--button-bg);
-  color: var(--on-button);
-  animation: agent-tab-count-live 1.9s ease-in-out infinite;
-}
-@keyframes agent-tab-count-live {
-  0%, 100% { box-shadow: 0 0 0 0 var(--transparent); transform: scale(1); }
-  50% { box-shadow: 0 0 0 3px var(--accent-soft); transform: scale(1.06); }
-}
-.tab > i { width: 5px; height: 5px; flex: none; border-radius: 50%; background: var(--live); box-shadow: var(--live-ring); animation: pulse 1.5s ease-in-out infinite; }
-.tab.is-active { color: var(--text); font-weight: var(--weight-medium); }
-.tab.is-active::after { position: absolute; content: ''; height: 2px; bottom: -1px; left: 0; right: 0; border-radius: var(--radius-tag); background: var(--accent); }
-.conversation-trace-tab { -webkit-app-region: no-drag; cursor: pointer; }
 /* Trace inspector uses one stable frame. Its list and inspector scroll independently. */
 .conversation-trace-page { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; padding: 16px var(--session-gutter) 20px; background: var(--bg); }
 .conversation-trace-page-inner { width: min(var(--session-view-width), 100%); flex: 1; min-height: 0; margin-inline: auto; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-control); overflow: hidden; background: var(--surface); }
@@ -126,8 +89,8 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .trace-detail-content .markdown { font-size: var(--text-13); }
 .trace-detail-note, .conversation-trace-empty { color: var(--faint); font-size: var(--text-sm); }
 .conversation-trace-empty { padding: 24px; text-align: center; }
-@container main-pane (max-width: 700px) {
-  .conversation-trace-page { padding-inline: var(--session-gutter); }
+@container file-panel (max-width: 700px) {
+  .conversation-trace-page { padding-inline: var(--space-3); }
   .conversation-trace-workspace.has-detail { grid-template-columns: minmax(0, 1fr); }
   .conversation-trace-workspace.has-detail .conversation-trace-list { visibility: hidden; }
   .conversation-trace-workspace.has-detail .conversation-trace-detail { position: absolute; inset: 0; border-left: 0; }
@@ -164,7 +127,7 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .trace-payload header button:hover { background: var(--surface-hover); color: var(--text); }
 .trace-payload header svg { width: var(--icon-sm); height: var(--icon-sm); }
 .trace-detail-content .request-message + .request-message { margin-top: var(--space-1); }
-@container main-pane (max-width: 560px) {
+@container file-panel (max-width: 560px) {
   .conversation-trace-search { flex: 1 1 160px; }
   .conversation-trace-page > .session-view-head { gap: var(--space-1); }
 }

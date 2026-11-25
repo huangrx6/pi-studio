@@ -39,10 +39,12 @@ type AppCommandPaletteDependencies = {
   openBrowserTab: () => void;
   openTerminalTab: () => void;
   stopGeneration: () => Promise<void>;
-  openModelComparison: () => void;
-  returnToMainAgent: () => void;
+  focusConversation: () => void;
   openAgentOverview: () => void;
-  openConversationExtensionHub: () => void;
+  openExtensions: () => void;
+  openProgress: () => void;
+  openTrace: () => void;
+  openGit: () => void;
   openTemporaryChat: () => void;
   openFilesTab: () => void;
   sendPromptFromExtension: (prompt: string, submit: boolean) => void;
@@ -81,10 +83,12 @@ export function useAppCommandPalette({
   openBrowserTab,
   openTerminalTab,
   stopGeneration,
-  openModelComparison,
-  returnToMainAgent,
+  focusConversation,
   openAgentOverview,
-  openConversationExtensionHub,
+  openExtensions,
+  openProgress,
+  openTrace,
+  openGit,
   openTemporaryChat,
   openFilesTab,
   sendPromptFromExtension,
@@ -189,6 +193,7 @@ export function useAppCommandPalette({
     hasMessages: messageCount > 0,
     hasChildren: subagentCount > 0,
     hasExtensions: extensionCount > 0,
+    traceEnabled: preferences.showCodeView,
   }, actionCommands);
 
   async function executeConversationAction(action: ConversationAction) {
@@ -209,13 +214,15 @@ export function useAppCommandPalette({
     }
     switch (current.id) {
       case 'fork': await sidebarAction('session', session!.id, 'fork'); break;
-      case 'compare': openModelComparison(); break;
       case 'goal':
-        returnToMainAgent();
+        focusConversation();
         sendPromptFromExtension(prompt.trimStart().startsWith('/goal ') ? prompt : `/goal ${prompt}`, false);
         break;
       case 'subagents': openAgentOverview(); break;
-      case 'extensions': openConversationExtensionHub(); break;
+      case 'extensions': openExtensions(); break;
+      case 'progress': openProgress(); break;
+      case 'trace': openTrace(); break;
+      case 'git': openGit(); break;
       case 'temporary': openTemporaryChat(); break;
       case 'files': openFilesTab(); openPanel(); break;
       case 'models': await openSettingsPage('models'); break;

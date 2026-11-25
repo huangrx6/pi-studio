@@ -11,6 +11,8 @@ Pi Studio 的扩展分为两层：
 
 两层可以写在同一个扩展中，也可以只实现其中一层。扩展契约面向普通主进程和 renderer；扩展不应读取 `~/.pi`、Pi CLI 配置或另一套宿主 API。
 
+产品层的插件包装、目录源与会话落点治理见 [插件、原语与界面落点](../guides/plugins.md)。面板 slot 的推荐与默认展示以该文 §6 为准；本文保留协议枚举与校验细节。
+
 ## 1. 目录与清单
 
 扩展作者在开发目录中至少提供：
@@ -34,6 +36,8 @@ my-extension/
 ```
 
 清单必须位于所选目录根部。`runtime.durableEntry` 必须指向扩展目录内的 `.js` 或 `.mjs` 文件；`..`、绝对路径和通过符号链接逃出扩展目录的入口都会被拒绝。扩展不得把缓存或用户数据写入版本代码目录，`activate()` 提供的 `dataDirectory` 才是可持久化目录。
+
+插件包内的扩展使用同一个 `dataDirectory` 接口。Studio 为它分配 `<Studio userData>/plugin-data/<plugin-id>/<manifest-id>/`，详见[插件目录约定](../guides/plugins.md)。
 
 Studio 先把本地目录、ZIP、HTTPS、GitHub 或 registry 来源复制到 quarantine，完成清单、依赖、兼容性、权限差异和逐文件摘要校验后才展示安装预览。安装器使用版本目录和活动指针原子切换；同一版本不可覆盖。升级通过同一套 `prepare → consent → installPrepared` 流程完成，并保留历史版本供回滚，不需要先卸载。完整流程见 [扩展发行规范](./distribution.md)。
 
@@ -66,7 +70,7 @@ Studio 先把本地目录、ZIP、HTTPS、GitHub 或 registry 来源复制到 qu
       {
         "id": "checklist-detail",
         "title": "发布检查",
-        "slot": "conversation.detail",
+        "slot": "panel.side",
         "size": "regular",
         "content": [
           { "kind": "heading", "text": "发布前" },
@@ -80,7 +84,7 @@ Studio 先把本地目录、ZIP、HTTPS、GitHub 或 registry 来源复制到 qu
       {
         "id": "checklist-summary",
         "title": "检查进度",
-        "slot": "conversation.footer",
+        "slot": "composer.below",
         "size": "compact",
         "content": [
           { "kind": "text", "text": "发布检查 · 2 项待完成" }
@@ -352,27 +356,21 @@ button tone：`default`、`primary`、`danger`。
 
 内容只会映射到 Pi Studio 的统一组件和全局设计令牌，扩展不能绕过尺寸、颜色、圆角和可访问性规则。UI 规范还定义了实时订阅的节流、引用清理、数量和嵌套上限。
 
-## 8. UI slots
+## 8. UI 位置
 
-| slot | 用途与约束 |
+| 声明 | 用途 |
 | --- | --- |
-| `workspace.sidebar` | 侧边栏内的工作区相关短内容；必须适应窄宽度 |
-| `conversation.detail` | 会话扩展标签页中的完整详情卡；展示指标、表格、时间线和说明 |
-| `conversation.footer` | 输入框附近的单行摘要；最多两个紧凑 block，不承载完整详情 |
-| `composer.before` | 输入框上方，用于上下文提示或待办摘要 |
-| `settings.panel` | 设置页内容；适合说明、状态和命令，不替代完整表单 |
-| `panel.side` | 右侧工具面板中的摘要；不创建新导航体系 |
-| `status.bar` | 底部状态栏；只放短文本和简单动作 |
-| `status.chip` | 会话顶栏状态入口；图标 + 最多两块紧凑摘要，`details` 指向本扩展的 `conversation.detail`；新会话不渲染 |
-| `slots`（字段） | 一份摘要声明多个落点，例如 `["status.chip", "conversation.footer"]`；与 `slot` 二选一 |
+| `status.chip` | 扩展卡片或顶栏的简要状态。`details` 必须指向本扩展的 `panel.side`。 |
+| `composer.above` | 输入框上方的单行摘要。 |
+| `composer.below` | 输入框下方的单行摘要。 |
+| `panel.side` | 右侧工作台中的完整面板，可展示指标、表格、时间线和操作。 |
+| `contributes.settings` | 当前扩展自己的设置区，需要 `ui.settings` 权限。 |
 
-扩展不能指定像素、绝对定位、z-index、动画或覆盖层。同一扩展可以同时声明 `conversation.detail` 与 `conversation.footer`：前者负责完整、清晰的页面卡片，后者只保留用户执行任务时需要持续看到的一行状态。Studio 会按稳定扩展 ID 把同一扩展的视图归组，使全局排序和会话级排序一起移动。
+使用 `slot` 声明一个位置，或用 `slots` 声明最多三个可选的摘要位置。用户可为每项摘要选择一个位置或隐藏它。摘要最多两个区块，可用 `text`、`badge`、`keyValue`、`notice` 和 `dataView`。完整布局和操作由工作台面板承载。
 
-`conversation.footer` 最多允许两个 block，且只接受 `text`、`badge`、`keyValue`、`notice`、`dataView`。`heading`、`list`、`section`、`metricGrid`、`table` 以及操作按钮都会被拒绝。Footer 固定单行且不纵向滚动，由宿主省略超出内容；扩展应将完整数据和操作放入 `conversation.detail`。
+工作台按扩展 ID 归组。同一扩展的多个面板在一个标签内切换。`priority` 和声明顺序决定初始顺序。用户在「设置 → 插件 → 扩展 → 对话显示顺序」调整扩展菜单和状态摘要里的排列，顺序适用于所有会话。
 
-`priority` 决定不同扩展在同一 slot 中的排序；相同优先级按 manifest 声明顺序排序。会话扩展中心允许用户覆盖全局顺序，也可以为单个会话保存独立顺序。`compact` 与 `regular` 只影响 Studio 提供的布局上限，不是任意尺寸声明。
-
-未知 slot、未知 contribution 或非法 UI content 会让该 manifest 在扫描阶段失败，并在设置页报告精确诊断。已经运行的其他扩展不受影响，应用也不会因此崩溃。
+未知位置和非法内容会在清单扫描时产生诊断。完整规范和示例见 [声明式 UI](ui.md)。
 
 ## 9. UI actions
 
@@ -393,7 +391,7 @@ type ExtensionUiAction =
 - `openUrl` 只接受 `http://` 或 `https://`。
 - `sendPrompt` 只填充或提交输入框，不能伪造 assistant 消息。
 - `runCommand` 必须指向同一扩展中带 runtime handler 的命令，并要求 `ui.commands` 权限。
-- `openPanel` 必须指向同一扩展中声明的 panel，并要求 `ui.panels` 权限。
+- `openPanel` 必须指向同一扩展声明的 `panel.side` 面板，并要求 `ui.panels` 权限。
 - UI 不能直接读写文件、数据库、凭据或任意 IPC。需要这些能力时由 Agent extension/tool 完成。
 
 ## 10. Scope、信任与来源

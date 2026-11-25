@@ -11,6 +11,7 @@
 @import './app/02-conversation.css';
 @import './app/03-file-browser.css';
 @import './app/04-settings.css';
+@import '../shared/styles/settings-segments.css';
 @import './app/05-shell-refinements.css';
 @import './app/06-workbench.css';
 @import './app/07-transcript.css';

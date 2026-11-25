@@ -134,7 +134,7 @@ export function ContextUsageChip({
             {compacting ? <LoadingIndicator /> : <Minimize2 />}
             立即压缩
           </button>
-          <button type="button" className="text-button" onClick={() => { setOpen(false); onOpenSettings(); }}>
+          <button type="button" className="text-button" onClick={() => { close(true); onOpenSettings(); }}>
             <Settings2 />
             自动压缩设置
           </button>

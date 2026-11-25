@@ -27,7 +27,12 @@ export function matchesStatus(status: TaskStatus, filter: TaskFilter) {
   return filter === 'all' || status === filter || (filter === 'incomplete' && status !== 'completed');
 }
 
-export function matchesTaskFilter(plan: TodoHistoryPlan, filter: TaskFilter) {
+export function matchesTaskQuery(plan: TodoHistoryPlan, task: TodoTask, query: string) {
+  return !query || task.subject.toLowerCase().includes(query) || plan.title.toLowerCase().includes(query);
+}
+
+export function matchesTaskFilter(plan: TodoHistoryPlan, filter: TaskFilter, query = '') {
   return plan.tasks.some(task => task.status !== 'deleted'
-    && matchesStatus(historyTaskStatus(plan, task), filter));
+    && matchesTaskQuery(plan, task, query)
+    && (filter === 'all' || matchesStatus(historyTaskStatus(plan, task), filter)));
 }

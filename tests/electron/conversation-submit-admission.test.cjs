@@ -142,7 +142,11 @@ Module._load = function loadConversationFixture(request, parent, isMain) {
     return { onRequestTrace: () => () => {} };
   }
   if (request === '../capabilities/subagents/index.cjs') {
-    return { discardManagedWorktreesForConversations: async () => {} };
+    return {
+      discardManagedWorktreesForConversations: async () => {},
+      readableRoleMentions: text => text,
+      resolveProfileMentions: text => ({ display: text, readable: text, routing: '' }),
+    };
   }
   if (request === '../services/turn-diff.cjs') {
     return { beginTurn: () => {}, endTurn: () => {}, saveTurnDiff: () => {} };

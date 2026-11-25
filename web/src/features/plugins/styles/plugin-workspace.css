@@ -1,0 +1,271 @@
+.settings-dialog.plugin-form-dialog[data-size="wide"] {
+  width: 44rem;
+}
+
+.plugin-form-dialog .icon-button,
+.plugin-package-dialog .icon-button,
+.mcp-detail-dialog .icon-button,
+.skill-install-dialog .icon-button,
+.skill-catalog-dialog .icon-button,
+.extension-detail-dialog .icon-button,
+.publisher-trust-dialog .icon-button,
+.skill-directories-dialog .icon-button,
+.extension-display-order .icon-button {
+  width: var(--settings-icon-hit);
+  height: var(--settings-icon-hit);
+}
+
+.plugin-workspace {
+  display: grid;
+  gap: var(--settings-group-gap);
+}
+.plugin-workspace > .settings-page-header.has-trailing-icon {
+  margin-block-end: 0;
+}
+.plugin-workspace .settings-page-header-icon > svg {
+  stroke-width: 1.4;
+}
+.plugin-workspace .settings-page-header-icon > svg path:first-child {
+  stroke: var(--accent);
+}
+.plugin-workspace-panel {
+  min-width: 0;
+}
+.plugin-workspace-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.plugin-workspace-toolbar > .settings-tabs {
+  min-width: 0;
+}
+.plugin-workspace-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+.plugin-workspace-actions svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  flex: none;
+}
+.settings-content .plugin-workspace-actions > .settings-add-button {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-button);
+  font-weight: var(--weight-semibold);
+}
+.settings-content .plugin-workspace-actions > .settings-add-button:hover:not(:disabled) {
+  border-color: var(--button-hover);
+  background: var(--button-hover);
+  color: var(--on-button);
+}
+.settings-content .plugin-workspace-actions > .settings-add-button:disabled {
+  border-color: var(--border);
+  background: var(--settings-control-bg);
+  color: var(--muted);
+}
+
+@container settings-preferences (max-width: 550px) {
+  .plugin-workspace-toolbar .plugin-workspace-actions > .settings-outline {
+    inline-size: var(--settings-control-height);
+    padding-inline: 0;
+  }
+  .plugin-workspace-actions > .settings-outline > span {
+    display: none;
+  }
+}
+
+@container settings-preferences (max-width: 420px) {
+  .plugin-workspace-toolbar {
+    gap: var(--space-2);
+  }
+  .plugin-workspace-toolbar .settings-tabs > button {
+    padding-inline: var(--space-1);
+  }
+  .plugin-workspace-toolbar .plugin-workspace-actions > .settings-add-button {
+    inline-size: var(--settings-control-height);
+    padding-inline: 0;
+  }
+  .plugin-workspace-actions > .settings-add-button > span {
+    display: none;
+  }
+}
+
+/* 共享的空状态面板：统一视觉语言，避免各子页拼贴风格不一的插图。 */
+.plugin-hub-empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--settings-card-bg);
+  box-shadow: var(--settings-card-shadow);
+  text-align: center;
+}
+.plugin-hub-empty-mark {
+  display: grid;
+  place-items: center;
+  width: var(--settings-row-height);
+  height: var(--settings-row-height);
+  margin-bottom: var(--space-1);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-card);
+  background: var(--settings-accent-soft);
+  color: var(--accent);
+}
+.plugin-hub-empty-mark svg {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  stroke-width: 1.65;
+}
+.plugin-hub-empty h3 {
+  margin: 0;
+  color: var(--text);
+  font: var(--weight-semibold) var(--settings-section-title-size)/var(--leading-tight) var(--font);
+}
+.plugin-hub-empty p {
+  max-width: 34ch;
+  margin: 0;
+  color: var(--muted);
+  font: var(--settings-description-font);
+}
+.plugin-hub-empty-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.plugin-hub-empty-actions svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+/* 子页底部跨页提示条：收口成轻盈的一行指引，不散落成孤立段落。 */
+.plugin-workspace-crosslink {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-control);
+  background: var(--settings-page-bg);
+  color: var(--muted);
+  font: var(--settings-description-font);
+}
+.plugin-workspace-crosslink > button {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-tag);
+  color: var(--accent);
+  font-weight: var(--weight-medium);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* 弹框扁平化表单规范：去卡片套娃，只用轻分割线划分区块。 */
+.plugin-flat-form {
+  display: grid;
+  gap: var(--settings-group-gap);
+  min-width: 0;
+}
+.plugin-flat-section {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.plugin-flat-section + .plugin-flat-section {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--divider);
+}
+.plugin-flat-section > h3,
+.plugin-flat-section-head h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-13);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-normal);
+}
+.plugin-flat-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.plugin-flat-section-head > span {
+  color: var(--muted);
+  font: var(--settings-description-font);
+  font-variant-numeric: tabular-nums;
+}
+.plugin-flat-disclosure {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+.plugin-flat-disclosure > .pi-accordion-trigger {
+  padding: var(--space-3) var(--settings-row-padding-x);
+  background: var(--settings-page-bg);
+}
+.plugin-flat-disclosure[open] > .pi-accordion-trigger {
+  margin: 0;
+  border-bottom: 1px solid var(--divider);
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+.plugin-flat-disclosure-body {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--settings-row-padding-x);
+}
+
+/* 添加技能弹框（扁平单层） */
+.skill-import-scope-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+}
+.skill-import-scope-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.skill-import-scope-copy .field-label-row { margin: 0; }
+.skill-import-label {
+  color: var(--text);
+  font: var(--settings-label-font);
+}
+.skill-import-scope-copy p {
+  margin: 0;
+  color: var(--muted);
+  font: var(--settings-description-font);
+}
+.skill-import-segments > label {
+  position: relative;
+  min-width: 4.5rem;
+  cursor: pointer;
+}
+.skill-import-segments > label > input[type="radio"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.skill-import-segments > label > input[type="radio"]:disabled {
+  cursor: not-allowed;
+}
+.skill-import-workspace {
+  gap: var(--settings-field-gap);
+}
+@container settings-form (max-width: 420px) {
+  .skill-import-scope-row { grid-template-columns: minmax(0, 1fr); }
+  .skill-import-segments { justify-self: start; }
+}

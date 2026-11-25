@@ -6,7 +6,7 @@ export function installSettingsCompletionFixture() {
   const calls = []; const holds = {}; const pending = {}; const failures = {};
   const mainListeners = new Set(); const settingsListeners = new Set();
   const qa = window.__settingsCompletionQa = {
-    calls, zeroUsage: false,
+    calls, clipboardWrites: [], zeroUsage: false,
     hold(method, key = true) { holds[method] = key; },
     fail(method) { failures[method] = true; },
     pending(method) { return pending[method]?.length || 0; },
@@ -22,6 +22,10 @@ export function installSettingsCompletionFixture() {
     if (holds[method] === true || holds[method] === key) await new Promise((resolve, reject) => (pending[method] ??= []).push({ resolve, reject }));
     return captured;
   }
+  navigator.clipboard.writeText = async (text) => {
+    qa.clipboardWrites.push(text);
+    await respond('clipboardWrite', null, text);
+  };
   const config = (overrides = {}) => ({ defaultModel: '', defaultProvider: '', defaultThinking: '', maxThinking: '', allowedTools: [], backgroundEnabled: true, defaultMode: 'foreground', supervisorEnabled: true, maxConcurrent: 4, maxSpawns: 32, waitTimeoutMs: 30000, worktreeIsolation: 'background', worktreeLimit: 8, budgetTokens: 0, budgetCostUsd: 0, budgetAction: 'warn', ...overrides });
   let user = config(); const projects = { [a]: config(), [b]: config({ maxConcurrent: 7, budgetTokens: 22222, allowedTools: ['read', 'missing_legacy_tool'] }) };
   const worktree = (id, status, name) => ({ id, status, name, parentConversationId: 'perf-0', childConversationId: `child-${id}`, workspace: a, repositoryRoot: a, path: `/qa/private/worktrees/${id}/特别长的任务路径用于验证窄窗口展示`, baseCommit: 'qa-base', createdAt: Date.now() - 10000, updatedAt: Date.now(), error: '', changed: true, changedFiles: 1, files: [{ path: 'src/long-path/long-feature-name-with-configuration-handling.ts', status: 'modified', added: 3, removed: 1, binary: false }], totalAdded: 3, totalRemoved: 1, sizeBytes: 10240, fileEntries: 3, sizeTruncated: false, directoryExists: true });
@@ -37,6 +41,9 @@ export function installSettingsCompletionFixture() {
   function summary(days = 365) { const total = totals(qa.zeroUsage); return { projects: [], generatedAt: Date.now(), days, sinceDay: dayOffset(1 - days), collection: { enabled: true, store: 'studio-sqlite' }, allTime: { ...total, totalTokens: total.totalTokens * 2, requests: total.requests * 2, currentStreak: qa.zeroUsage ? 0 : 1, longestStreak: qa.zeroUsage ? 0 : 3 }, range: total, daily: qa.zeroUsage ? [] : [{ ...total, day: dayOffset(0) }], dailyModels: qa.zeroUsage ? [] : [{ ...modelA, ...total, output: 0, totalTokens: 9999, day: dayOffset(0) }, { ...modelB, ...totals(true), output: 1, totalTokens: 1, requests: 1, day: dayOffset(0) }], filterModels: [modelA, modelB].map((model) => ({ ...model, enabled: true, inUse: true })) }; }
   function mix(input = {}) { const total = totals(qa.zeroUsage); return { generatedAt: Date.now(), window: { all: Boolean(input.all), days: input.days || null, sinceDay: input.all ? null : input.sinceDay || dayOffset(1 - (input.days || 1)), untilDay: input.all ? null : input.untilDay || dayOffset(0) }, totals: total, models: qa.zeroUsage ? [] : [{ ...modelA, ...total, output: 0, totalTokens: 9999 }, { ...modelB, ...totals(true), output: 1, totalTokens: 1, requests: 1 }] }; }
   window.piApi = new Proxy({
+    listSecrets: async () => Array.from({ length: 20 }, (_, index) => ({
+      name: `QA_COPY_${String(index + 1).padStart(2, '0')}`, updatedAt: 1780000000000,
+    })),
     setSecret: async () => { calls.push({ method: 'setSecret' }); throw new Error('Secret writes are not part of this QA'); },
     settings: async (cwd) => ({ ...await base.settings(cwd), agentTools: { enabled: ['read', 'write', 'bash', 'subagent'] } }),
     onOpenMain: (listener) => { mainListeners.add(listener); return () => mainListeners.delete(listener); },

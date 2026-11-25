@@ -1,0 +1,40 @@
+{
+  "format": 1,
+  "id": "studio.task-board",
+  "name": "任务看板",
+  "version": "1.0.0",
+  "author": "Pi Studio",
+  "publisher": "Pi Studio",
+  "license": "MIT",
+  "engines": { "piStudio": ">=0.0.14" },
+  "description": "在任意会话中管理同一个全局任务看板，让 AI 按状态或日期查询。",
+  "permissions": ["agent.tools", "ui.panels", "ui.data", "ui.commands"],
+  "runtime": { "durableEntry": "extension.mjs" },
+  "contributes": {
+    "tools": [
+      { "name": "task_board_list", "description": "按状态和本地日期查询全局任务。" },
+      { "name": "task_board_get", "description": "按任务 ID 查看详情以及计划和实际时间。" }
+    ],
+    "panels": [
+      {
+        "id": "board",
+        "title": "任务看板",
+        "slot": "panel.side",
+        "description": "跨工作区与会话管理同一份任务。",
+        "icon": "layers",
+        "color": "info",
+        "taskBoard": { "sourceId": "board-data" }
+      }
+    ],
+    "commands": [
+      {
+        "id": "taskboard",
+        "title": "打开任务看板",
+        "description": "在工作台打开全局任务看板。",
+        "placement": "composer",
+        "action": { "kind": "openPanel", "panelId": "board" }
+      }
+    ],
+    "dataSources": [{ "id": "board-data", "title": "全局任务" }]
+  }
+}

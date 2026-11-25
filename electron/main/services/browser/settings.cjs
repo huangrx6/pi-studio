@@ -26,8 +26,18 @@ const DEFAULT_PREFERENCES = Object.freeze({
   showFullUrl: false,
   /** Where http(s) links open by default. */
   webLinkOpenTarget: 'workbench',
-  /** Where local file:// HTML opens by default. */
+  /** Where all local links open by default (localhost / file / paths). */
   localLinkOpenTarget: 'workbench',
+  /**
+   * Tell the Agent (session instructions + browser section) to follow
+   * web/local open targets. Off = soft preference only in the UI.
+   */
+  linkOpenInstructAgent: true,
+  /**
+   * Hard-block bash open / Playwright / system browser when the matching
+   * open target is workbench. Off = Agent may still launch system apps.
+   */
+  linkOpenBlockExternal: true,
   /** Whether Agent actions draw on-page highlights. */
   annotatedScreenshots: 'always',
   /** Ask where to save each download. */
@@ -97,6 +107,8 @@ function normalizePreferences(input, legacyEvaluate) {
     showFullUrl: normalizeBoolean(source.showFullUrl, DEFAULT_PREFERENCES.showFullUrl),
     webLinkOpenTarget: normalizeOpenTarget(source.webLinkOpenTarget, DEFAULT_PREFERENCES.webLinkOpenTarget),
     localLinkOpenTarget: normalizeOpenTarget(source.localLinkOpenTarget, DEFAULT_PREFERENCES.localLinkOpenTarget),
+    linkOpenInstructAgent: normalizeBoolean(source.linkOpenInstructAgent, DEFAULT_PREFERENCES.linkOpenInstructAgent),
+    linkOpenBlockExternal: normalizeBoolean(source.linkOpenBlockExternal, DEFAULT_PREFERENCES.linkOpenBlockExternal),
     annotatedScreenshots: normalizeAnnotated(source.annotatedScreenshots, DEFAULT_PREFERENCES.annotatedScreenshots),
     askDownloadPath: normalizeBoolean(source.askDownloadPath, DEFAULT_PREFERENCES.askDownloadPath),
     downloadDirectory: normalizeDownloadDirectory(source.downloadDirectory),
@@ -143,19 +155,9 @@ function subscribeBrowserPreferences(listener) {
 
 function resolveLinkOpenTarget(url, db = getStudioDatabase()) {
   const preferences = getBrowserPreferences(db);
-  const raw = String(url || '').trim();
-  let kind = 'web';
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol === 'file:') kind = 'local';
-    else if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '[::1]' || parsed.hostname.endsWith('.localhost')) {
-      kind = 'local';
-    }
-  } catch {
-    if (/^https?:\/\//i.test(raw) === false && (raw.startsWith('/') || raw.startsWith('file:'))) kind = 'local';
-  }
-  const target = kind === 'local' ? preferences.localLinkOpenTarget : preferences.webLinkOpenTarget;
-  return target === 'system' ? 'system' : 'workbench';
+  // Same classification + preference rules as Agent intercept / instructions.
+  const { resolveOpenDestination } = require('./open-target.cjs');
+  return resolveOpenDestination(url, preferences).target;
 }
 
 function isBrowserEvaluateEnabled(db = getStudioDatabase()) {

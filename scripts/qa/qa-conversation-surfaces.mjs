@@ -57,7 +57,7 @@ try {
       const sessionTitle = transcript ? '精准目标' : '运行中的构建检查';
       await page.getByRole('searchbox', { name: '搜索工作区或会话', exact: true }).fill(sessionTitle);
       await page.locator('.session-row').filter({ hasText: sessionTitle }).click();
-      await page.locator(transcript ? '.user-bubble' : '.run-live-status').waitFor();
+      await page.locator(transcript ? '.user-bubble' : '.send-button.is-stop').waitFor();
       await page.locator('.composer-editor').focus();
       await page.mouse.move(1400, 20);
       await page.waitForTimeout(250);
@@ -67,15 +67,13 @@ try {
       }
       const surfaces = await page.evaluate(() => {
         const color = selector => document.querySelector(selector) ? getComputedStyle(document.querySelector(selector)).backgroundColor : null;
-        return Object.fromEntries(['.chat-header', '.chat-tabs', '.composer-dock', '.composer', '.new-chat', '.nav-row.is-active', '.session-row.is-active', '.run-live-status'].map(selector => [selector, color(selector)]));
+        return Object.fromEntries(['.chat-header', '.composer-dock', '.composer', '.new-chat', '.session-row.is-active'].map(selector => [selector, color(selector)]));
       });
       assert.equal(surfaces['.composer-dock'], 'rgba(0, 0, 0, 0)', 'dock must not stack another canvas wash');
       if (visibility > 0) {
         assert.equal(surfaces['.chat-header'], 'rgba(0, 0, 0, 0)');
-        assert.equal(surfaces['.chat-tabs'], 'rgba(0, 0, 0, 0)');
       }
-      if (!transcript) assert.equal(surfaces['.new-chat'], surfaces['.run-live-status'], 'inset controls share a surface');
-      assert.equal(surfaces['.nav-row.is-active'], surfaces['.session-row.is-active'], 'selection stays neutral and consistent');
+      assert.ok(surfaces['.session-row.is-active'], 'the selected conversation remains visible');
       await page.screenshot({ path: `${output}/${theme}-${visibility}.png` });
       if (markdown) await page.locator('.assistant-response').screenshot({ path: `${output}/${theme}-${visibility}-content.png` });
       if (transcript) {
@@ -92,22 +90,27 @@ try {
         await page.locator('.message-edit-cancel').click();
         await page.locator('.attachment-card').hover();
         await page.screenshot({ path: `${output}/${theme}-${visibility}-hover.png` });
-        await page.locator('.todo-dock-head').click();
+        await page.getByRole('button', { name: '进展', exact: true }).click();
         await page.locator('.file-change-summary').scrollIntoViewIfNeeded();
         await page.screenshot({ path: `${output}/${theme}-${visibility}-changes.png` });
         await page.locator('.todo-row.is-active').waitFor();
         await page.mouse.move(1400, 20);
         await page.screenshot({ path: `${output}/${theme}-${visibility}-plan.png` });
-        await page.locator('.todo-dock-head').click();
+        await page.getByRole('button', { name: '收起右侧面板', exact: true }).click();
       }
-      await page.locator('.chat-tab-list').screenshot({ path: `${output}/${theme}-${visibility}-tabs.png` });
-      await page.getByRole('tab', { name: '子智能体', exact: true }).hover();
-      await page.waitForTimeout(200);
-      await page.locator('.chat-tab-list').screenshot({ path: `${output}/${theme}-${visibility}-tabs-hover.png` });
-      await page.getByRole('tab', { name: '子智能体', exact: true }).click();
+      const toolbar = page.locator('.chat-actions');
+      const hoverSurfaces = [];
+      for (const name of ['进展', '扩展', '通知', '打开右侧面板']) {
+        const button = toolbar.getByTitle(name, { exact: true });
+        await button.hover();
+        hoverSurfaces.push(await button.evaluate(async node => {
+          await Promise.allSettled(node.getAnimations().map(animation => animation.finished));
+          return getComputedStyle(node).backgroundColor;
+        }));
+      }
+      assert.ok(new Set(hoverSurfaces).size === 1 && hoverSurfaces[0] !== 'rgba(0, 0, 0, 0)', 'header icons share a hover surface');
       await page.mouse.move(1400, 20);
-      await page.waitForTimeout(200);
-      await page.locator('.chat-tab-list').screenshot({ path: `${output}/${theme}-${visibility}-tabs-selected.png` });
+      await toolbar.screenshot({ path: `${output}/${theme}-${visibility}-tools.png` });
       results.push({ theme, visibility, surfaces });
       await page.close();
     }

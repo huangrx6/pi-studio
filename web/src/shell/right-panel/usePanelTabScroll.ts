@@ -1,112 +1,78 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 
 const EDGE_TOLERANCE = 1;
-const MIN_TAB_WIDTH = 96;
-const MAX_TAB_WIDTH = 140;
 
 type PanelTabScrollOptions = {
   activeId: string;
-  tabCount: number;
+  tabs: readonly { id: string }[];
   resizing: boolean;
   split: boolean;
 };
 
-function reducedMotion() {
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
-/**
- * Keeps the active tab readable while retaining a meaningful slice of its
- * neighbour. The neighbour is context: showing only a tab's empty tail makes
- * the overflow look like a layout hole instead of another selectable tab.
- */
-export function usePanelTabScroll({ activeId, tabCount, resizing, split }: PanelTabScrollOptions) {
+export function usePanelTabScroll({ activeId, tabs, resizing, split }: PanelTabScrollOptions) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [hasOverflow, setHasOverflow] = useState(false);
   const resizingRef = useRef(resizing);
   resizingRef.current = resizing;
-
-  const updateMetrics = useCallback(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    const maxScroll = Math.max(0, root.scrollWidth - root.clientWidth);
-    root.dataset.overflowStart = String(maxScroll > EDGE_TOLERANCE && root.scrollLeft > EDGE_TOLERANCE);
-    root.dataset.overflowEnd = String(maxScroll > EDGE_TOLERANCE && root.scrollLeft < maxScroll - EDGE_TOLERANCE);
-
-    const visibleTabs = Math.max(1, Math.min(2, tabCount));
-    const proposed = Math.floor((root.clientWidth - Math.max(0, visibleTabs - 1) * 2) / visibleTabs);
-    const width = Math.max(MIN_TAB_WIDTH, Math.min(MAX_TAB_WIDTH, proposed));
-    root.style.setProperty('--panel-tab-width', `${width}px`);
-  }, [tabCount]);
+  const tabCount = tabs.length;
+  const activeIndex = tabs.findIndex(tab => tab.id === activeId);
 
   const revealTab = useCallback((tab: HTMLElement, behavior?: ScrollBehavior) => {
     const root = rootRef.current;
     if (!root) return;
-    const rootRect = root.getBoundingClientRect();
-    const tabRect = tab.getBoundingClientRect();
-    const left = tabRect.left - rootRect.left + root.scrollLeft;
-    const right = left + tabRect.width;
-    const nextBehavior = behavior ?? (resizingRef.current || reducedMotion() ? 'auto' : 'smooth');
-
-    if (left < root.scrollLeft) {
-      root.scrollTo({ left, behavior: nextBehavior });
-      return;
-    }
-    if (right > root.scrollLeft + root.clientWidth) {
-      const availableContext = Math.max(0, root.clientWidth - tabRect.width);
-      const leadingContext = Math.min(88, availableContext);
-      root.scrollTo({ left: Math.max(0, left - leadingContext), behavior: nextBehavior });
-    }
+    const viewport = root.getBoundingClientRect();
+    const bounds = tab.getBoundingClientRect();
+    const offset = bounds.left < viewport.left ? bounds.left - viewport.left : Math.max(0, bounds.right - viewport.right);
+    if (Math.abs(offset) <= EDGE_TOLERANCE) return;
+    const instant = resizingRef.current || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    root.scrollBy({ left: offset, behavior: behavior ?? (instant ? 'auto' : 'smooth') });
   }, []);
 
   useLayoutEffect(() => {
     const root = rootRef.current;
-    if (!root || !activeId) return;
-    const active = root.querySelector<HTMLElement>('.panel-tab.is-active');
-    if (active) revealTab(active);
-  }, [activeId, revealTab, split, tabCount]);
+    const track = trackRef.current;
+    const navigation = root?.parentElement;
+    if (!root || !track || !navigation) {
+      setHasOverflow(false);
+      return;
+    }
 
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    let frame: number | null = null;
-    let revealAfterResize = false;
-    const schedule = (reveal = false) => {
-      revealAfterResize ||= reveal;
-      if (frame !== null) return;
-      frame = requestAnimationFrame(() => {
-        frame = null;
-        updateMetrics();
-        const active = root.querySelector<HTMLElement>('.panel-tab.is-active');
-        // A ResizeObserver callback may run just after pointer-up, when the
-        // React resizing flag is already false. Size changes still need an
-        // immediate correction so the active tab cannot be clipped.
-        if (active && revealAfterResize) revealTab(active, 'auto');
-        revealAfterResize = false;
-      });
+    const updateEdges = () => {
+      root.dataset.overflowStart = String(root.scrollLeft > EDGE_TOLERANCE);
+      root.dataset.overflowEnd = String(root.scrollWidth - root.clientWidth - root.scrollLeft > EDGE_TOLERANCE);
     };
-    const observer = new ResizeObserver(() => schedule(true));
-    const onScroll = () => schedule();
-    observer.observe(root);
-    root.addEventListener('scroll', onScroll, { passive: true });
-    schedule(true);
-    return () => {
-      if (frame !== null) cancelAnimationFrame(frame);
-      observer.disconnect();
-      root.removeEventListener('scroll', onScroll);
+    const measure = () => {
+      // Measure against the space for the whole navigation, including the switcher itself.
+      setHasOverflow(tabCount > 1 && track.getBoundingClientRect().width > navigation.clientWidth + EDGE_TOLERANCE);
+      const active = track.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (active) revealTab(active, 'auto');
+      updateEdges();
     };
-  }, [revealTab, updateMetrics]);
 
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
     const onWheel = (event: WheelEvent) => {
-      if (root.scrollWidth <= root.clientWidth || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+      if (event.ctrlKey || root.scrollWidth <= root.clientWidth || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
       event.preventDefault();
       root.scrollLeft += event.deltaY;
     };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(navigation);
+    observer.observe(track);
+    observer.observe(root);
+    root.addEventListener('scroll', updateEdges, { passive: true });
     root.addEventListener('wheel', onWheel, { passive: false });
-    return () => root.removeEventListener('wheel', onWheel);
-  }, [tabCount]);
+    return () => {
+      observer.disconnect();
+      root.removeEventListener('scroll', updateEdges);
+      root.removeEventListener('wheel', onWheel);
+    };
+  }, [tabCount, revealTab]);
 
-  return { rootRef, revealTab };
+  useLayoutEffect(() => {
+    const active = trackRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (active) revealTab(active);
+  }, [activeId, activeIndex, split, revealTab]);
+
+  return { rootRef, trackRef, hasOverflow, revealTab };
 }

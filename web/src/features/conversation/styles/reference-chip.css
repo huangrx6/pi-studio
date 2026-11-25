@@ -1,0 +1,35 @@
+/* 文件图标、头像和线性图标共用一个尺寸，整枚引用按正文中线参与行内排版。 */
+.ref-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 1.65em;
+  max-width: min(100%, 34ch);
+  gap: .35em;
+  padding-inline: .5em;
+  border-radius: var(--radius-control);
+  background: var(--tint-neutral);
+  color: var(--text);
+  font-size: .93em;
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-tight);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.ref-chip > :is(img, svg) {
+  display: block;
+  flex: none;
+  width: 1.15em;
+  height: 1.15em;
+  color: var(--muted);
+}
+
+.ref-chip > svg { stroke-width: 1.75; }
+.ref-chip > .subagent-avatar { border-radius: var(--radius-tag); }
+.ref-chip-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+@media (forced-colors: active) {
+  .ref-chip { outline: 1px solid GrayText; outline-offset: -1px; }
+}

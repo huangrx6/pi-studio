@@ -1,0 +1,40 @@
+{
+  "format": 1,
+  "kind": "plugin",
+  "id": "example.toolkit-starter",
+  "name": "Toolkit Starter",
+  "version": "0.1.0",
+  "publisher": "pi-studio-examples",
+  "description": "演示插件包：一次安装 MCP 连接、技能说明与本地 CLI。",
+  "category": "productivity",
+  "homepage": "https://github.com/huangrx6/pi-studio",
+  "provides": {
+    "mcp": [
+      {
+        "name": "toolkit-demo",
+        "transport": "stdio",
+        "command": "node",
+        "args": ["mcp-server.mjs"],
+        "description": "示例 stdio MCP（echo 工具）",
+        "exposure": "deferred"
+      }
+    ],
+    "skills": [
+      { "path": "skills/toolkit-demo" }
+    ],
+    "cli": [
+      {
+        "id": "toolkit",
+        "name": "Toolkit CLI",
+        "bin": "bin/toolkit",
+        "version": "0.1.0",
+        "description": "包内示例命令行，安装后加入 Studio 终端 PATH。",
+        "pathEnv": true,
+        "commands": [
+          { "summary": "打印问候", "example": "toolkit hello" },
+          { "summary": "显示版本", "example": "toolkit --version" }
+        ]
+      }
+    ]
+  }
+}

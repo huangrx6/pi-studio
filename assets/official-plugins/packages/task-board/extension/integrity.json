@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "algorithm": "sha256",
+  "files": [
+    {
+      "path": "extension.mjs",
+      "sha256": "11da25b1979e95d8c27ae4e8211af89502c3347c308b80dd60c863b1a99d334b",
+      "size": 3322
+    },
+    {
+      "path": "pi-studio.extension.json",
+      "sha256": "177615fd2cab0d61a658ae528bd705dd087de85f3ff0dde822e2e4ca32f84f55",
+      "size": 1332
+    },
+    {
+      "path": "store.mjs",
+      "sha256": "fd905c6a5c3375755f8d1fb285a9a84a810d2b8569f89fd5836d41c8771e3a69",
+      "size": 5984
+    }
+  ]
+}

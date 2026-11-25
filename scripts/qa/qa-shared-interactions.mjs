@@ -29,7 +29,20 @@ try {
   await page.getByRole('button', { name: '打开表单', exact: true }).click();
   const outer = page.getByRole('dialog', { name: '测试表单', exact: true });
   const imeInput = outer.getByRole('textbox', { name: '编辑名称', exact: true });
-  await imeInput.focus();
+  await focusIs(imeInput);
+  const dimensions = await outer.evaluate(dialog => {
+    const height = selector => dialog.querySelector(selector).getBoundingClientRect().height;
+    return {
+      text: height('input[aria-label="编辑名称"]'),
+      select: height('.pi-select-trigger'),
+      date: height('.pi-date-trigger'),
+      stepper: height('.settings-stepper'),
+      action: height('.dialog-footer > button[type="submit"]'),
+      disclosure: height('.pi-accordion-trigger'),
+    };
+  });
+  assert.deepEqual(dimensions, { text: 32, select: 32, date: 32, stepper: 32, action: 32, disclosure: 44 });
+  result.checks.push('single-line fields, date, select, stepper and action have equal hit heights; a disclosure retains its larger row');
   await page.evaluate(() => {
     window.__nativeImeLog = [];
     for (const type of ['compositionstart', 'compositionend', 'keydown', 'cancel']) document.addEventListener(type, event => {
@@ -64,7 +77,7 @@ try {
   await page.keyboard.press('Escape'); await modal.waitFor({ state: 'detached' }); await focusIs(nestedOpener); assert.equal(await outer.count(), 1);
   const dateTrigger = outer.getByRole('button', { name: /^测试日期/ }); await dateTrigger.click(); const calendar = page.getByRole('dialog', { name: '选择测试日期', exact: true }); await calendar.waitFor();
   await ime(calendar, 'Escape'); assert.equal(await calendar.count(), 1); await page.keyboard.press('Escape'); await calendar.waitFor({ state: 'detached' }); await focusIs(dateTrigger);
-  const summary = outer.locator('summary');
+  const summary = outer.locator('summary').filter({ hasText: '展开高级选项' });
   await page.keyboard.press('Tab'); await focusIs(summary);
   await page.keyboard.press('Tab'); await focusIs(outer.getByRole('button', { name: '表单末字段', exact: true }));
   await page.keyboard.press('Shift+Tab'); await focusIs(summary);
@@ -72,6 +85,16 @@ try {
   await page.keyboard.press('Shift+Tab'); await focusIs(summary);
   await page.keyboard.press('Shift+Tab'); await focusIs(dateTrigger);
   result.checks.push('native summary participates in forward and reverse modal Tab order; collapsed content is skipped and expanded controls remain reachable');
+  const stepValue = outer.getByRole('button', { name: /^行高：/ });
+  await outer.getByRole('button', { name: '增加行高', exact: true }).click();
+  assert.equal(await stepValue.innerText(), '1.3');
+  await stepValue.click();
+  const stepInput = outer.getByRole('textbox', { name: '行高数值' });
+  await stepInput.fill('1.7'); await stepInput.press('Escape'); await focusIs(stepValue);
+  assert.equal(await stepValue.innerText(), '1.3');
+  await stepValue.click(); await stepInput.fill(''); await stepInput.press('Enter'); await focusIs(stepValue);
+  assert.equal(await stepValue.innerText(), '1.3');
+  result.checks.push('form skips collapsed fields on entry; fractional steppers preserve values, cancel on Escape and return focus after keyboard editing');
   await page.keyboard.press('Escape'); await outer.waitFor({ state: 'detached' });
   result.checks.push('nested native confirmation is reachable above parent and restores its opener; DatePicker IME and ordinary Escape keep outer form');
   const menuOpener = page.getByRole('button', { name: '打开操作', exact: true }); await menuOpener.click();
@@ -84,10 +107,22 @@ try {
   await menuOpener.click(); await page.keyboard.press('Shift+Tab'); await menu.waitFor({ state: 'detached' }); await focusIs(openConfirm);
   result.checks.push('ActionMenu activation retains deliberate destination focus; Tab exits in either direction; IME Escape ignored');
   await page.getByRole('button', { name: '工具确认', exact: true }).click();
-  const toolDialog = page.getByRole('dialog', { name: '工具权限确认', exact: true });
+  const toolDialog = page.getByRole('dialog', { name: '修改工作区文件', exact: true });
+  await toolDialog.waitFor();
+  const centerOffsets = await toolDialog.evaluate(dialog => ['.confirm-target', '.confirm-risk'].map(selector => {
+    const [leading, text] = dialog.querySelector(selector).children;
+    const center = node => {
+      const { top, height } = node.getBoundingClientRect();
+      return top + height / 2;
+    };
+    return Math.abs(center(leading) - center(text));
+  }));
+  assert.ok(centerOffsets.every(offset => offset <= 0.5), `confirmation row center offsets: ${centerOffsets}`);
+  await toolDialog.locator('.confirm-card').screenshot({ path: path.join(output, 'tool-confirmation-alignment.png') });
+  result.checks.push('tool name and target share a center line, as do the warning icon and risk label');
   await toolDialog.getByRole('button', { name: '记住选择范围', exact: true }).click();
   const remember = page.getByRole('listbox', { name: '记住选择范围', exact: true }); await remember.waitFor();
-  assert.equal(await remember.evaluate(node => node.closest('dialog')?.getAttribute('aria-label')), '工具权限确认');
+  assert.equal(await remember.evaluate(node => node.closest('dialog')?.getAttribute('aria-label')), '修改工作区文件');
   await page.keyboard.press('Escape'); await remember.waitFor({ state: 'detached' }); assert.equal(await toolDialog.count(), 1);
   await toolDialog.getByRole('button', { name: '取消', exact: true }).click(); await toolDialog.waitFor({ state: 'detached' });
   result.checks.push('permission confirmation Select portals into its native modal; first Escape dismisses only the Select');

@@ -11,6 +11,7 @@ const {
   readAttachmentFile,
 } = require('../services/attachments.cjs');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
+const { conversationAvailable } = require('../runtime/conversations.cjs');
 const { copyImageToClipboard } = require('../services/image-clipboard.cjs');
 const { copyTextAndHtml } = require('../services/rich-clipboard.cjs');
 const { getWindow } = require('../core/state.cjs');
@@ -24,15 +25,17 @@ function assertMainWindow(event) {
 
 function uploadPayload(payload) {
   const id = typeof payload?.sessionId === 'string' ? payload.sessionId : '';
-  const owner = id && id !== 'draft' ? getStudioDatabase().getConversation(id) : undefined;
-  return { ...payload, sessionId: owner || 'draft' };
+  if (!id || id === 'draft') return { ...payload, sessionId: 'draft' };
+  const owner = getStudioDatabase().getConversation(id);
+  if (!owner || !conversationAvailable(owner.id)) throw new Error('会话不存在或正在删除');
+  return { ...payload, sessionId: owner };
 }
 
 function registerAttachmentsIpc() {
   // 打开文件选择框，返回可直接发送的附件
   ipcMain.handle('pi:pick-attachments', async (event, payload) => {
     assertMainWindow(event);
-    return pickAttachments(uploadPayload(payload));
+    return pickAttachments(payload || {}, () => uploadPayload(payload).sessionId);
   });
 
   // 保存拖拽上传的文件（base64）

@@ -18,27 +18,22 @@ function compile(relative, imports = {}) {
 }
 
 const icon = props => React.createElement('svg', props);
-const card = ({ item, compact }) => React.createElement('article', {
-  'data-extension': item.id,
-  'data-compact': compact ? 'true' : 'false',
-}, item.name);
+const card = ({ item }) => React.createElement('article', { 'data-extension': item.id }, item.name);
 const sectionApi = compile('../../web/src/features/extensions/InstalledExtensionsSection.tsx', {
-  'lucide-react': { ChevronRight: icon },
+  '../../shared/DetailDialog': { DetailDialog: () => null },
+  '../../shared/error-text': { errorText: String },
+  '../../shared/LoadingState': { LoadingState: () => null },
+  '../../shared/SettingsToast': { useSettingsToast: () => () => {} },
+  '../conversation/conversation-extension-order': { moveConversationExtension: () => [] },
+  './ExtensionStatusIcon': { ExtensionStatusIcon: icon },
   './InstalledExtensionCard': { InstalledExtensionCard: card },
 });
+const displayOrder = { items: [], order: [], saving: false, onSave: async () => {}, onRetry() {} };
 const cardApi = compile('../../web/src/features/extensions/InstalledExtensionCard.tsx', {
-  './ExtensionAppearancePicker': { ExtensionAppearancePicker: () => null },
-  './extension-presentation': {
-    extensionScopeLabel: scope => scope === 'builtin' ? '内置' : scope === 'project' ? '当前工作区' : '全局',
-    extensionStateLabel: () => '不可用',
-    extensionStateTone: () => 'pending',
-  },
-  '../../shared/Select': { Select: props => React.createElement('div', { 'data-select': props.value }) },
-  './extension-placement': {
-    EXTENSION_PLACEMENT_OPTIONS: [],
-    placeablePanels: () => [],
-    placementFor: () => 'both',
-  },
+  './ExtensionStatusIcon': { ExtensionStatusIcon: icon },
+  './extension-presentation': compile('../../web/src/features/extensions/extension-presentation.ts'),
+  '../../shared/plugin-ownership.ts': compile('../../web/src/shared/plugin-ownership.ts'),
+  './extension-placement': { configurablePanels: () => [] },
 });
 const base = {
   id: 'qa.extension',
@@ -70,46 +65,40 @@ test('user extensions stay visible while built-ins are grouped behind one closed
   ];
   const html = renderToStaticMarkup(React.createElement(sectionApi.InstalledExtensionsSection, {
     items,
-    busy: false,
+    displayOrder,
     onOpenDetail() {},
-    onToggle() {},
-    onDelete() {},
   }));
   assert.ok(html.indexOf('用户扩展') < html.indexOf('<details'));
   assert.ok(html.indexOf('项目扩展') < html.indexOf('<details'));
-  assert.match(html, /<details class="pi-accordion extension-list-section builtin-extension-section">/);
+  assert.match(html, /<details\b[^>]*\bextension-disclosure-card builtin-extension-section\b/);
   assert.doesNotMatch(html, /<details[^>]* open/);
   assert.match(html, /内置能力/);
   assert.match(html, /class="pi-accordion-badge">2/);
   assert.match(html, /Pi Studio 自带，可查看和单独启停/);
-  assert.match(html, /data-extension="core" data-compact="true"/);
-  assert.match(html, /data-extension="system" data-compact="true"/);
+  assert.match(html, /data-extension="core"/);
+  assert.match(html, /data-extension="system"/);
+  assert.doesNotMatch(html, /列表视图|扩展排列方式/);
 });
 
-test('compact built-in rows remove repeated publisher and capability copy while retaining actions', () => {
+test('each extension has one keyboard-accessible settings entry and shows its status', () => {
   const builtin = { ...base, scope: 'builtin', tier: 'core', manifest: { ...base.manifest, author: undefined } };
   const html = renderToStaticMarkup(React.createElement(cardApi.InstalledExtensionCard, {
     item: builtin,
-    busy: false,
-    compact: true,
     onOpenDetail() {},
-    onToggle() {},
-    onDelete() {},
   }));
   assert.match(html, /Pi Studio 内置/);
-  assert.doesNotMatch(html, /QA Publisher|用户需要快速理解|主进程 Node 代码|网络访问/);
-  assert.match(html, /查看 QA 扩展 详情/);
-  assert.match(html, /aria-label="停用 QA 扩展"/);
-  assert.doesNotMatch(html, /卸载/);
+  assert.match(html, /用户需要快速理解/);
+  assert.match(html, /运行中/);
+  assert.match(html, /aria-label="打开 QA 扩展 设置" aria-haspopup="dialog"/);
+  assert.equal((html.match(/<button/g) || []).length, 1);
+  assert.doesNotMatch(html, /role="switch"|卸载/);
 });
 
 test('an empty extension list still has one ordinary empty state', () => {
   const html = renderToStaticMarkup(React.createElement(sectionApi.InstalledExtensionsSection, {
     items: [],
-    busy: false,
+    displayOrder,
     onOpenDetail() {},
-    onToggle() {},
-    onDelete() {},
   }));
   assert.match(html, /已安装/);
   assert.match(html, /还没有安装扩展/);

@@ -183,15 +183,15 @@ export function SidebarActions({ kind, id, name, pinned, archived, sessionCount,
   const workspaceSessions = Math.max(0, Number(sessionCount) || 0);
   const workspaceArchived = Math.min(workspaceSessions, Math.max(0, Number(archivedCount) || 0));
   const workspaceDescription = workspaceSessions > 0
-    ? `将永久删除此工作区下的 ${workspaceSessions} 个会话${workspaceArchived > 0 ? `，其中 ${workspaceArchived} 个已归档` : ''}，并清理所有关联子智能体、附件和 Studio 设置。磁盘中的项目文件夹不会被删除。`
+    ? `将永久删除此工作区下的 ${workspaceSessions} 个会话${workspaceArchived > 0 ? `，其中 ${workspaceArchived} 个已归档` : ''}，并清理关联子智能体、附件、画布和 Studio 设置。磁盘中的项目文件夹会保留。`
     : '这个工作区没有会话。将清理它的 Studio 设置、项目扩展状态和归档记录，磁盘中的项目文件夹不会被删除。';
   const confirmation = confirming === 'archive'
     ? { title: archived ? '恢复这个会话？' : '归档这个会话？', action: archived ? '恢复会话' : '归档会话', description: archived ? '会话将回到工作区的会话列表。' : '归档后会从当前列表隐藏，历史记录会保留，可在“设置 → 归档会话”中恢复。' }
     : confirming === 'fork'
-      ? { title: '分叉这个会话？', action: '创建分叉', description: '将复制当前历史记录，创建并打开一个独立的新会话。原会话保持不变。' }
+      ? { title: '分叉这个会话？', action: '创建分叉', description: '新会话会引用当前消息历史，并从分叉点继续。永久删除原会话时，需要先删除引用它的分叉，或一起删除。' }
       : kind === 'workspace'
         ? { title: '永久删除这个工作区？', action: '永久删除', description: workspaceDescription }
-        : { title: '永久删除这个会话？', action: '永久删除', description: '将停止并删除这个会话及其所有子智能体，同时清理消息、任务、附件和关联设置。此操作无法恢复。' };
+        : { title: '永久删除这个会话？', action: '永久删除', description: '将停止并删除这个会话及其所有子智能体，同时清理消息、任务、附件、画布和会话设置。此操作无法恢复。' };
   return <div className={`sidebar-row-actions ${interacting ? 'is-open' : ''}`} data-interaction-active={interacting || undefined}>
     <button ref={trigger} type="button" disabled={busy || disabled} aria-label={`${name}的更多操作`} title="更多" aria-haspopup="menu" aria-controls={position ? menuId : undefined} aria-expanded={Boolean(position)} onClick={() => {
       if (position) dismissMenu(); else openMenu();

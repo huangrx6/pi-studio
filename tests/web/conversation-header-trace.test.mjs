@@ -42,23 +42,13 @@ function renderHeader(showTrace, isNewConversation = false, panelExpanded = fals
     './ShellLayout': shellLayout,
     '../features/git/GitBranchPicker': { GitBranchPicker: () => null },
     '../features/git/GitRepositoryPicker': { GitRepositoryPicker: () => null },
-    '../features/extensions/ExtensionChips': { ExtensionChips: () => null },
-    './ConversationWorkspaceMenu': {
-      ConversationWorkspaceMenu: ({ onOpenTrace }) => React.createElement(
-        'div', { className: 'workspace-menu-trigger' },
-        onOpenTrace && React.createElement('span', { className: 'fake-trace-tab' }, '轨迹'),
-      ),
-    },
-    '../../types/extension-types': {},
   });
   return renderToStaticMarkup(React.createElement(ConversationHeader, {
     sidebarCollapsed: false,
     onExpandSidebar() {},
     isNewConversation,
     title: '会话',
-    agentKind: 'conversation',
-    progressTrigger: React.createElement('button', { 'aria-label': '打开会话进展' }),
-    extensionCount: 0,
+    extensionMenu: React.createElement('button', { 'aria-label': '扩展' }),
     notifications: [],
     onMarkAllRead() {},
     onClearNotifications() {},
@@ -66,27 +56,24 @@ function renderHeader(showTrace, isNewConversation = false, panelExpanded = fals
     onRunNotificationAction: async () => {},
     panelExpanded,
     onOpenPanel() {},
-    onReturnToMainAgent() {},
-    onOpenConversationExtensionHub() {},
-    chips: [],
-    extensionSurface: { items: [], errors: [], syncedAt: 0, apiVersion: 1 },
-    onOpenChip() {},
+    onOpenProgress() {},
     onOpenTrace() {},
+    onOpenGit() {},
     showTrace,
-    traceSummary: { steps: 3, requests: 1, tools: 2, state: 'done', items: [], errors: 0 },
   }));
 }
 
-test('the trace tab only exists while the code work view setting is on', () => {
-  assert.doesNotMatch(renderHeader(false), /fake-trace-tab/, 'disabled setting hides the trace tab');
-  assert.match(renderHeader(true), /fake-trace-tab/, 'enabled setting shows the trace tab');
+test('the trace entry follows the code work view setting independently of extensions', () => {
+  assert.doesNotMatch(renderHeader(false), /aria-label="轨迹"/);
+  assert.match(renderHeader(true), /aria-label="轨迹"/);
+  assert.match(renderHeader(false), /aria-label="扩展"/);
 });
 
-test('only existing conversations show the two session menus', () => {
-  assert.doesNotMatch(renderHeader(true, true), /workspace-menu-trigger/);
-  assert.match(renderHeader(true, false), /workspace-menu-trigger/);
-  assert.doesNotMatch(renderHeader(true, true), /打开会话进展/);
-  assert.match(renderHeader(true, false), /打开会话进展/);
+test('drafts retain extensions while progress and trace require a conversation', () => {
+  const draft = renderHeader(true, true);
+  assert.match(draft, /aria-label="扩展"/);
+  assert.doesNotMatch(draft, /aria-label="(?:进展|轨迹)"/);
+  assert.match(renderHeader(true), /aria-label="进展"/);
 });
 
 test('draft and existing conversations can both open the right sidebar', () => {

@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { getGitWorkspaceStatus } = require('../../electron/main/services/git-workspace.cjs');
+const { listGitChanges } = require('../../electron/main/services/git-tools.cjs');
 
 function git(cwd, args) {
   return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -36,6 +37,10 @@ test('Git workspace status reports branch, commit, dirty counts and worktree ide
   assert.deepEqual(status.dirty, { total: 2, staged: 1, unstaged: 1, untracked: 1 });
   assert.equal(status.worktree.isWorktree, false);
   assert.equal(status.worktrees.length, 1);
+  const changed = await listGitChanges(root);
+  assert.deepEqual(changed.map(({ path, index, worktree }) => [path, index, worktree]), [
+    ['tracked.txt', 'M', 'M'], ['new.txt', '?', '?'],
+  ]);
 
   const child = path.join(path.dirname(root), `${path.basename(root)}-feature`);
   git(root, ['worktree', 'add', '-q', '-b', 'feature', child, 'HEAD']);
@@ -69,4 +74,7 @@ test('Git settings report local upstream distance and count renamed paths once',
   assert.deepEqual(status.upstream, { name: 'baseline', ahead: 1, behind: 0 });
   assert.deepEqual(status.dirty, { total: 1, staged: 1, unstaged: 0, untracked: 0 });
   assert.equal(status.statusReadFailed, false);
+  assert.deepEqual(await listGitChanges(root), [
+    { path: '新文件.txt', previousPath: 'tracked.txt', index: 'R', worktree: ' ', conflict: false },
+  ]);
 });

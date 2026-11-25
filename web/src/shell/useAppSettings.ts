@@ -3,13 +3,15 @@ import { emptyProviderQuota, quotaExtensionAvailable } from '../types/provider-q
 import { useEffect, useMemo } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { ActionConfirmOptions, useActionConfirmation } from '../shared/ConfirmDialog';
+import type { ModalDismiss } from '../shared/useModalDialog';
 import type { CommittedProjection, MutationProjection } from '../types/mutation-types';
 import type { ModelResourceSnapshot } from '../types/global.d';
 import type {
   SettingsEditor,
   SettingsSnapshot,
 } from './app-types';
-import type { SettingsTab } from './app-shell-config';
+import type { PluginWorkspaceSection, SettingsDestination, SettingsTab } from './app-shell-config';
+import { resolveSettingsDestination } from './app-shell-config';
 import type {
   ConcreteThinkingLevel,
   ModelOption,
@@ -43,7 +45,6 @@ import type {
 } from './app-types';
 import type { ChatMessage, ComposerAttachment } from '../types/chat-types';
 import type { ContextPolicy } from '../features/conversation/ContextUsageChip';
-import type { AppNotificationAction, NotificationTone } from './NotificationCenter';
 import { contextUsage } from '../features/conversation/context-usage';
 import { errorText } from '../shared/error-text';
 import { runtimeRefreshFailure } from '../shared/runtime-refresh';
@@ -84,8 +85,12 @@ type AppSettingsDependencies = {
   setEnabledModels: Setter<string[]>;
   setSettingsOpen: Setter<boolean>;
   setSettingsTab: Setter<SettingsTab>;
+  setSettingsAnchor: Setter<SettingsDestination['anchor']>;
+  pluginSection: PluginWorkspaceSection;
+  setPluginSection: Setter<PluginWorkspaceSection>;
   setSettingsData: Setter<SettingsSnapshot | null>;
   setSettingsError: Setter<string | null>;
+  showToast: (message: string, tone?: 'success' | 'error' | 'info') => void;
   setExtensionDetail: Setter<ExtensionHostItem | null>;
   setOfficialExtensions: Setter<OfficialExtensionCatalogSnapshot | null>;
   setOfficialExtensionsBusy: Setter<boolean>;
@@ -127,7 +132,6 @@ type AppSettingsDependencies = {
   setTokenUnits: Setter<Record<TokenField, TokenUnit>>;
   setMcpDetailState: Setter<McpInfo | null>;
   setSkillDetail: (value: SkillInfo | null) => void;
-  setSkillDetailError: Setter<string | null>;
   setCompaction: Setter<{ active: boolean; reason?: string }>;
   setContextPolicy: Setter<ContextPolicy | null>;
   setComposerFeedback: Setter<{ message: string; tone: 'info' | 'warning' } | null>;
@@ -171,6 +175,9 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     setSettingsOpen,
     settingsTab,
     setSettingsTab,
+    setSettingsAnchor,
+    pluginSection,
+    setPluginSection,
     settingsData,
     setSettingsData,
     setSettingsError,
@@ -260,7 +267,6 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     skillDetailGenerationRef,
     setSkillDetail,
     closeSkillDetail,
-    setSkillDetailError,
     messages,
     compaction,
     setCompaction,
@@ -271,7 +277,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     composerAttachments,
     setComposerFeedback,
     showComposerFeedback,
-    pushNotification,
+    showToast,
     officialCatalogRequestRef,
     originalMcpArgsRef,
     mcpTestRequestRef,
@@ -282,10 +288,10 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     setSettingsData(snapshot);
     const failure = runtimeRefreshFailure(snapshot.runtimeRefresh);
     if (failure) {
-      setSettingsError(failure);
+      showToast(failure, 'error');
     } else if (successMessage) {
       setSettingsError(null);
-      pushNotification(successMessage, 'success');
+      showToast(successMessage, 'success');
     }
   }
 
@@ -297,6 +303,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     if (!settingsOpen) return true;
     const allowed = await settingsDraftGuard.canLeave((labels) => settingsLeaveConfirmation.confirm({
       title: '丢弃未保存的设置更改？',
+      cardClassName: settingsTab === 'subagents' ? 'subagent-confirm' : undefined,
       description: `尚未保存：${labels.join('、')}。离开会丢弃这些编辑；已提交的保存仍会继续。`,
       confirmLabel: '丢弃并离开',
       cancelLabel: '继续编辑',
@@ -306,21 +313,43 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     return allowed;
   }
 
-  async function selectSettingsTab(tab: SettingsTab) {
-    if (tab === settingsTab) return;
-    if (!await canLeaveSettings()) return;
-    setSettingsTab(tab);
-    setModelQuery('');
+  function applySettingsDestination(tab: SettingsTab) {
+    const destination = resolveSettingsDestination(tab);
+    setSettingsTab(destination.tab);
+    setSettingsAnchor(destination.anchor);
+    if (destination.pluginSection) setPluginSection(destination.pluginSection);
   }
 
-  async function closeSettings() {
-    if (await canLeaveSettings()) setSettingsOpen(false);
+  async function selectSettingsTab(tab: SettingsTab) {
+    const destination = resolveSettingsDestination(tab);
+    const sameTab = destination.tab === settingsTab;
+    const sameSection = !destination.pluginSection || destination.pluginSection === pluginSection;
+    if (sameTab && sameSection && !destination.anchor) return;
+    // Switching plugin hub sections stays on the same page; only leave-check when the nav tab changes.
+    if (!sameTab && !await canLeaveSettings()) return;
+    applySettingsDestination(tab);
+    if (!sameTab) setModelQuery('');
+  }
+
+  async function closeSettings({ restoreFocus = true }: { restoreFocus?: boolean } = {}) {
+    if (!await canLeaveSettings()) return false;
+    if (!restoreFocus) settingsReturnFocusRef.current = null;
+    setSettingsAnchor(undefined);
+    setSettingsOpen(false);
+    return true;
   }
 
   async function openSettings(tab?: SettingsTab) {
-    if (settingsOpen && tab && tab !== settingsTab && !await canLeaveSettings()) return;
-    if (!settingsOpen) settingsReturnFocusRef.current = document.activeElement as HTMLElement;
-    if (tab) setSettingsTab(tab);
+    if (tab) {
+      const destination = resolveSettingsDestination(tab);
+      const leavingPage = settingsOpen && destination.tab !== settingsTab;
+      if (leavingPage && !await canLeaveSettings()) return;
+      if (!settingsOpen) settingsReturnFocusRef.current = document.activeElement as HTMLElement;
+      applySettingsDestination(tab);
+    } else if (!settingsOpen) {
+      settingsReturnFocusRef.current = document.activeElement as HTMLElement;
+      setSettingsAnchor(undefined);
+    }
     setSettingsOpen(true);
     setSettingsError(null);
     const request = ++settingsRequestRef.current;
@@ -399,8 +428,9 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
         ...current,
         extensions: current.extensions.map((entry) => entry.id === updated.id ? updated : entry),
       } : current);
+      showToast('自动更新设置已保存');
     } catch (error) {
-      setOfficialExtensionsError(errorText(error));
+      showToast(errorText(error), 'error');
     } finally {
       setOfficialExtensionBusyId(null);
     }
@@ -429,7 +459,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     });
   }
 
-  async function closeEditor() {
+  async function closeEditor(dismiss?: ModalDismiss) {
     if (editorSaveRef.current || editorCloseRef.current) return;
     const owner = editorRequestRef.current;
     editorCloseRef.current = true;
@@ -438,7 +468,10 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
         title: '丢弃未保存的更改？', description: '关闭后将丢弃本次编辑。',
         confirmLabel: '丢弃更改', cancelLabel: '继续编辑', tone: 'danger',
       })) return;
-      if (owner === editorRequestRef.current && !editorSaveRef.current) discardEditor();
+      const finish = () => {
+        if (owner === editorRequestRef.current && !editorSaveRef.current) discardEditor();
+      };
+      if (dismiss) await dismiss(finish); else finish();
     } finally { editorCloseRef.current = false; }
   }
 
@@ -448,16 +481,22 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     return { cwd, current: () => generation === editorRequestRef.current && cwd === workspaceRef.current };
   }
 
-  async function finishEditorRefresh(owner: ReturnType<typeof editorOwner>, refresh: () => Promise<void>) {
+  async function finishEditorRefresh(owner: ReturnType<typeof editorOwner>, refresh: () => Promise<void>, dismiss?: ModalDismiss) {
     try {
       await refresh();
-      if (owner.current()) discardEditor();
+      if (!owner.current()) return;
+      const finish = () => {
+        if (!owner.current()) return;
+        if (editor?.kind !== 'skill') showToast('已保存');
+        discardEditor();
+      };
+      if (dismiss) await dismiss(finish); else finish();
     } catch (error) {
       if (owner.current()) setEditorError(`保存已完成，但列表刷新失败。${errorText(error)}`);
     }
   }
 
-  async function runEditorWrite(write: (owner: ReturnType<typeof editorOwner>) => Promise<(() => Promise<void>) | null>) {
+  async function runEditorWrite(write: (owner: ReturnType<typeof editorOwner>) => Promise<(() => Promise<void>) | null>, dismiss?: ModalDismiss) {
     if (!editor || editorLoading || editorSaveRef.current || editorRecoveryRef.current || resourceWriteRef.current || resourceCommitRef.current || settingsBusy) return;
     const owner = editorOwner();
     if (!owner.current()) return;
@@ -479,7 +518,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
       editorRecoveryRef.current = refresh;
       setEditorCommitted(true);
       editorDirtyRef.current = false;
-      await finishEditorRefresh(owner, refresh);
+      await finishEditorRefresh(owner, refresh, dismiss);
     } catch (error) {
       if (owner.current()) setEditorError(errorText(error));
     } finally {
@@ -487,7 +526,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     }
   }
 
-  async function retryEditorRefresh() {
+  async function retryEditorRefresh(dismiss?: ModalDismiss) {
     const refresh = editorRecoveryRef.current;
     if (!refresh || editorSaveRef.current) return;
     const owner = editorOwner();
@@ -495,7 +534,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     editorSaveRef.current = true;
     setEditorSaving(true);
     setEditorError(null);
-    try { await finishEditorRefresh(owner, refresh); }
+    try { await finishEditorRefresh(owner, refresh, dismiss); }
     finally { if (owner.current()) { editorSaveRef.current = false; setEditorSaving(false); } }
   }
 
@@ -729,8 +768,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     confirm?: ActionConfirmOptions;
     write: (cwd: string) => Promise<CommittedProjection<T>>;
     apply: (value: T, owner: ReturnType<typeof modelProjectionOwner>) => void;
-    onCommitted?: () => void;
-    onError?: (message: string) => void;
+    onCommitted?: (projection: MutationProjection<T>) => void;
   }) {
     if (resourceWriteRef.current || resourceCommitRef.current || editorSaveRef.current || settingsBusy || resourcePendingRef.current[domain]) return;
     const owner = { cwd: workspaceRef.current };
@@ -765,14 +803,13 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
       committed = true;
       settingsRequestRef.current += 1;
       if (domain === 'models') { catalogRequestRef.current += 1; defaultModelWorkspaceRef.current = ''; }
-      options.onCommitted?.();
+      options.onCommitted?.(result.projection);
       if (result.projection.status === 'error') report(result.projection.message);
-      else { options.apply(result.projection.value, modelOwner); pushNotification(options.summary, 'success'); }
+      else { options.apply(result.projection.value, modelOwner); showToast(options.summary, 'success'); }
     } catch (error) {
       if (!current()) return;
       if (committed) report('操作已完成，列表暂时无法更新。请重试刷新。');
-      else if (options.onError) options.onError(errorText(error));
-      else setSettingsError(errorText(error));
+      else showToast(errorText(error), 'error');
     } finally {
       if (resourceCommitRef.current === owner) resourceCommitRef.current = null;
       if (resourceWriteRef.current === owner) resourceWriteRef.current = null;
@@ -788,7 +825,10 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     setMcpRefreshBusy(true);
     try {
       const snapshot = await window.piApi.refreshMcp(cwd);
-      if (request === mcpRefreshRequestRef.current && cwd === workspaceRef.current) acceptMcpResources(snapshot);
+      if (request === mcpRefreshRequestRef.current && cwd === workspaceRef.current) {
+        acceptMcpResources(snapshot);
+        showToast('MCP 状态已刷新');
+      }
     } catch (error) {
       if (request === mcpRefreshRequestRef.current && cwd === workspaceRef.current) setMcpRefreshError(errorText(error));
     } finally {
@@ -835,10 +875,10 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
       acceptSkillResources(snapshot);
       if (skillDetailGenerationRef.current === detailGeneration && skillDetailRef.current) {
         const updated = snapshot.skills.find(item => item.path === skillDetailRef.current?.path);
-        setSkillDetailError(null);
         if (updated) setSkillDetail(updated);
         else closeSkillDetail();
       }
+      showToast('技能状态已刷新');
     } catch (error) {
       if (current()) setSkillRefreshError(errorText(error));
     } finally {
@@ -889,6 +929,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
       setProviderModels({});
       setProviderCatalogState({});
       setExpandedProvider(null);
+      showToast('模型配置已刷新');
     } catch (error) {
       if (request === modelRefreshRequestRef.current && cwd === workspaceRef.current) setModelRefreshError(errorText(error));
     } finally {
@@ -950,7 +991,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
   }
 
   /** 保存自定义模型，并刷新设置快照与模型目录。 */
-  async function saveCustomModel() {
+  async function saveCustomModel(dismiss?: ModalDismiss) {
     if (customModel.reasoning && customModel.thinkingLevels.length === 0) {
       setEditorError('推理模型至少需要选择一个可用等级。');
       return;
@@ -969,7 +1010,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
         origin: customModel.origin, cwd: owner.cwd,
       });
       return modelEditorRecovery(owner, providerId, result.projection, selectionOwner);
-    });
+    }, dismiss);
   }
 
   async function deleteMcp(name: string) {
@@ -1021,13 +1062,13 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
         extensionMutationReceiptsRef.current.delete(result.recoveryToken);
         void window.piApi.disposeExtensionMutationRecovery(result.recoveryToken).catch(() => {});
         setExtensionRefreshError(null);
-        pushNotification(options.summary, 'success');
+        showToast(options.summary, 'success');
       } else {
         setExtensionRefreshError(`${options.summary}。${result.projection.status === 'error' ? result.projection.message : '请刷新当前扩展状态。'}`);
       }
     } catch (error) {
       if (committed) setExtensionRefreshError(`${options.summary}，页面更新未完成。请重试刷新。`);
-      else if (current()) setSettingsError(errorText(error));
+      else if (current()) showToast(errorText(error), 'error');
     } finally {
       if (resourceCommitRef.current === owner) resourceCommitRef.current = null;
       if (resourceWriteRef.current === owner) resourceWriteRef.current = null;
@@ -1059,6 +1100,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
         void window.piApi.disposeExtensionMutationRecovery(token).catch(() => {});
       }
       setExtensionRefreshError(null);
+      showToast('扩展状态已刷新');
     } catch (error) {
       if (current()) setExtensionRefreshError(errorText(error));
     } finally {
@@ -1115,9 +1157,9 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
       const snapshot = await window.piApi.settings(cwd);
       if (cwd !== workspaceRef.current || request !== extensionRefreshRequestRef.current) return;
       acceptExtensionResources(snapshot);
-      setSettingsError(null);
+      showToast('扩展已重新加载');
     } catch (error) {
-      if (cwd === workspaceRef.current && request === extensionRefreshRequestRef.current) setSettingsError(errorText(error));
+      if (cwd === workspaceRef.current && request === extensionRefreshRequestRef.current) showToast(errorText(error), 'error');
     } finally { extensionRefreshLockRef.current = false; setExtensionRefreshBusy(false); }
   }
 
@@ -1172,16 +1214,21 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
       summary: `已添加 ${discovered.length} 个模型`,
       write: cwd => window.piApi.importProviderModels({ providerId, models: discovered, cwd }),
       apply: acceptModelResources,
-      onCommitted: () => {
+      onCommitted: projection => {
         invalidateProviderCatalog(providerId);
-        setExpandedProvider(current => current === providerId ? null : current);
         setProviderDiscovery(current => { const next = { ...current }; delete next[providerId]; return next; });
+        if (projection.status === 'ready') {
+          // Keep the current source and search in place. The catalog owns its read error and retry.
+          void refreshProviderModels(providerId).catch(() => {});
+        } else {
+          setExpandedProvider(current => current === providerId ? null : current);
+        }
       },
     });
   }
 
   /** 保存模型来源（新建或编辑），完成后重建模型目录。 */
-  async function saveProvider() {
+  async function saveProvider(dismiss?: ModalDismiss) {
     await runEditorWrite(async owner => {
       invalidateModelRefresh();
       const providerId = providerDraft.providerId.trim();
@@ -1198,7 +1245,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
         setProviderDiscovery(current => { const next = { ...current }; delete next[providerId]; return next; });
       }
       return modelEditorRecovery(owner, providerId, result.projection, selectionOwner, !editor?.editId);
-    });
+    }, dismiss);
   }
 
   async function toggleProvider(provider: SettingsSnapshot['providers'][number], enabled: boolean) {
@@ -1298,7 +1345,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     }
   }
 
-  async function saveMcp() {
+  async function saveMcp(dismiss?: ModalDismiss) {
     await runEditorWrite(async owner => {
       invalidateMcpRefresh();
       mcpTestRequestRef.current += 1;
@@ -1330,11 +1377,11 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
           needsRefresh = false;
         }
       };
-    });
+    }, dismiss);
   }
 
   /** Cancelled folder selection is not a committed import. */
-  async function importSkillResource(scope: 'user' | 'project') {
+  async function importSkillResource(scope: 'user' | 'project', dismiss?: ModalDismiss) {
     const targetCwd = scope === 'project' ? skillWorkspace : workspaceRef.current;
     if (scope === 'project' && !targetCwd) { setEditorError('请选择要添加项目技能的工作区。'); return; }
     await runEditorWrite(async owner => {
@@ -1358,13 +1405,13 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
           const currentSnapshot = targetCwd === owner.cwd ? snapshot : await window.piApi.settings(owner.cwd);
           if (!owner.current()) return;
           acceptSkillResources(currentSnapshot, targetCwd);
-          pushNotification(summary, 'success');
+          showToast(summary, 'success');
         } catch (error) {
           if (owner.current()) reportSkillRefresh(targetCwd, summary, errorText(error));
           throw error;
         }
       };
-    });
+    }, dismiss);
   }
 
   async function toggleMcp(name: string, enabled: boolean) {
@@ -1391,6 +1438,28 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     const next = snapshot.mcp.find((server) => server.name === name) || null;
     mcpDetailRef.current = next;
     setMcpDetailState(next);
+    return true;
+  }
+
+  function reportMcpOAuthCommitted(summary: string) {
+    invalidateResourceReads();
+    resourcePendingRef.current.mcp = true;
+    setMcpRefreshSummary(summary);
+    setMcpRefreshError('请刷新当前 MCP 状态。');
+  }
+
+  async function refreshMcpEditorOAuth(ownerWorkspace: string, ownerRequestId: number) {
+    const revision = settingsRequestRef.current;
+    const isCurrent = () => editorRequestRef.current === ownerRequestId
+      && workspaceRef.current === ownerWorkspace
+      && revision === settingsRequestRef.current;
+    if (!isCurrent()) return false;
+    const snapshot = await window.piApi.settings(ownerWorkspace).catch(error => {
+      if (isCurrent()) throw error;
+      return null;
+    });
+    if (!snapshot || !isCurrent()) return false;
+    acceptMcpResources(snapshot);
     return true;
   }
 
@@ -1506,8 +1575,9 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     setSettingsError(null);
     try {
       await writeModelSelection(change, true);
+      if (cwd === workspaceRef.current && request === settingsRequestRef.current) showToast('默认模型设置已保存');
     } catch (error) {
-      if (cwd === workspaceRef.current && request === settingsRequestRef.current) setSettingsError(errorText(error));
+      if (cwd === workspaceRef.current && request === settingsRequestRef.current) showToast(errorText(error), 'error');
     } finally {
       setDefaultModelBusy(modelWritesRef.current.has(`default:${workspaceRef.current}`));
     }
@@ -1523,10 +1593,18 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
 
   // __SETTINGS_ACTIONS_CONTINUE__
 
+  async function selectPluginSection(section: PluginWorkspaceSection) {
+    if (section === pluginSection && settingsTab === 'plugins') return;
+    if (settingsTab !== 'plugins' && !await canLeaveSettings()) return;
+    applySettingsDestination('plugins');
+    setPluginSection(section);
+  }
+
   return {
     acceptRuntimeSnapshot,
     canLeaveSettings,
     selectSettingsTab,
+    selectPluginSection,
     closeSettings,
     openSettings,
     loadOfficialExtensions,
@@ -1582,6 +1660,8 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     importSkillResource,
     toggleMcp,
     refreshMcpDetail,
+    reportMcpOAuthCommitted,
+    refreshMcpEditorOAuth,
     loadModelCatalog,
     writeModelSelection,
     selectModel,

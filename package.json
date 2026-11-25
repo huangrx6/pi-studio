@@ -1,6 +1,6 @@
 {
   "name": "pi-studio",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "private": true,
   "type": "module",
   "description": "Pi Studio — a native desktop workspace built on Pi Durable.",
@@ -20,7 +20,8 @@
   "packageManager": "pnpm@11.28.5",
   "main": "electron/main/index.cjs",
   "bin": {
-    "pi-studio-extension": "sdk/cli/pi-studio-extension.mjs"
+    "pi-studio-extension": "sdk/cli/pi-studio-extension.mjs",
+    "pi-studio-plugin": "sdk/cli/pi-studio-plugin.mjs"
   },
   "scripts": {
     "dev": "concurrently -k \"pnpm run web\" \"wait-on tcp:5180 && cross-env PI_STUDIO_DEV=1 node scripts/dev/launch.mjs\"",
@@ -36,6 +37,7 @@
     "release:package": "bash scripts/release/build-signed-macos.sh --current --dir",
     "qa:website": "node scripts/qa/qa-website.mjs",
     "qa:network": "node scripts/qa/qa-network-settings.mjs",
+    "qa:device-storage": "node scripts/qa/qa-device-storage.mjs",
     "qa:memory": "node scripts/qa/qa-memory-smoke.mjs",
     "qa:runtime-panel": "node scripts/qa/qa-runtime-panel.mjs",
     "qa:terminal-replay": "node scripts/qa/qa-terminal-replay.mjs",
@@ -68,15 +70,20 @@
     "qa:panel-lifecycle": "node scripts/qa/qa-panel-lifecycle.mjs",
     "qa:browser-panel": "node scripts/qa/qa-browser-panel.mjs",
     "qa:window-fullscreen": "node scripts/qa/qa-window-fullscreen.mjs",
-    "qa:window-bounds": "node scripts/qa/qa-window-bounds.mjs"
+    "qa:window-bounds": "node scripts/qa/qa-window-bounds.mjs",
+    "pi-studio-plugin": "sdk/cli/pi-studio-plugin.mjs",
+    "plugin": "node sdk/cli/pi-studio-plugin.mjs"
   },
   "dependencies": {
+    "@caldwell619/react-kanban": "0.0.12",
     "@dagrejs/dagre": "^3.1.3",
     "@earendil-works/chord": "1.5.2",
     "@earendil-works/pi-ai": "1.5.2",
     "@earendil-works/pi-durable": "1.5.2",
     "@earendil-works/pi-mcp": "1.5.2",
     "@earendil-works/pi-telemetry": "1.5.2",
+    "@excalidraw/excalidraw": "0.18.1",
+    "@hello-pangea/dnd": "18.0.1",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-search": "^0.16.0",
     "@xterm/addon-serialize": "^0.14.0",
@@ -120,8 +127,7 @@
     "productName": "Pi Studio",
     "afterPack": "scripts/release/electron-builder-after-pack.cjs",
     "asarUnpack": [
-      "node_modules/node-pty/**",
-      "assets/storyboard/web-sources/**"
+      "node_modules/node-pty/**"
     ],
     "directories": {
       "output": "release"
@@ -141,6 +147,10 @@
       {
         "from": "extensions",
         "to": "official-extensions"
+      },
+      {
+        "from": "assets/official-plugins",
+        "to": "official-plugins"
       }
     ],
     "mac": {

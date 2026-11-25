@@ -3,14 +3,46 @@ import test from 'node:test';
 import {
   REFERENCE_GAP,
   extractComposerMentions,
+  formatAgentReference,
+  formatCapabilityReference,
   formatFileReference,
   insertComposerToken,
   isFileReferencePath,
   normalizeComposerText,
+  readableComposerReferences,
   splitComposerText,
   splitMessageText,
 } from '../../web/src/features/conversation/references.ts';
 
+test('role references round-trip as atomic chips alongside files, including escaped names', () => {
+  const id = '81a1c938-91b8-4a09-9622-ae1b2ec32ef5';
+  const name = '检视 | 100% [A]';
+  const role = formatAgentReference({ id, avatarId: 'indigo-bob', name });
+  const ref = { kind: 'agent', label: name, profileId: id, avatarId: 'indigo-bob', token: role };
+  const file = formatFileReference('docs/' + role + ' (draft).md');
+  const text = '请' + role + ' 查看 ' + file + '、@README.md';
+  assert.deepEqual(splitComposerText(text, new Set())[1].reference, ref);
+  assert.deepEqual(splitMessageText(text)[1].reference, ref);
+  assert.deepEqual(extractComposerMentions(text), ['docs/' + role + ' (draft).md', 'README.md']);
+  assert.equal(readableComposerReferences(text), '请#' + name + ' 查看 ' + file + '、@README.md');
+  const legacy = '@' + role.slice(1);
+  assert.equal(splitMessageText(legacy)[0].reference.profileId, id);
+  assert.equal(readableComposerReferences(legacy), '@' + name);
+});
+
+test('typed capabilities preserve exact identity across drafts, transcript, plain previews and file extraction', () => {
+  const skill = formatCapabilityReference({ type: 'skill', id: 'echo#123', name: '同名 | [技能]', source: '插件 · 示例', description: '' });
+  const mcp = formatCapabilityReference({ type: 'mcp', id: '["id","server","echo"]', server: '示例', name: 'echo', source: '插件 · 示例', description: '' });
+  const plugin = formatCapabilityReference({ type: 'plugin', id: 'studio.excalidraw', name: 'Excalidraw', source: 'Pi Studio', description: '' });
+  const path = 'docs/' + skill + '.md';
+  const file = formatFileReference(path);
+  const text = skill + ' ' + mcp + ' ' + plugin + ' ' + file;
+  const references = splitMessageText(text).filter(item => item.kind === 'reference').map(item => item.reference);
+  assert.deepEqual(references.map(ref => ref.capabilityId), ['echo#123', '["id","server","echo"]', 'studio.excalidraw', undefined]);
+  assert.deepEqual(splitComposerText(text, new Set()).filter(s => s.kind === 'token').map(s => s.reference), references);
+  assert.deepEqual(extractComposerMentions(text), [path]);
+  assert.equal(readableComposerReferences(text), '$同名 | [技能] $示例/echo $Excalidraw ' + file);
+});
 test('composer references keep paths with spaces inside one highlighted token', () => {
   const token = formatFileReference('02 Areas/饭撒的发生地/');
   assert.equal(token, '@"02 Areas/饭撒的发生地/"');
@@ -83,16 +115,22 @@ test('selected composer tokens gain safe surrounding spacing', () => {
   // 插入引用只需要普通分隔空格，图标不再占用原文字符。
   assert.deepEqual(insertComposerToken('Use @src tail', 4, 8, '@src/App.tsx'), {
     text: `Use @src/App.tsx tail`,
-    caret: 16,
+    caret: 17,
   });
   assert.deepEqual(insertComposerToken('use@g tail', 3, 5, '@goal.md'), {
     text: `use @goal.md tail`,
-    caret: 12,
+    caret: 13,
   });
   assert.deepEqual(insertComposerToken('@src', 0, 4, '@src/App.tsx'), {
     text: '@src/App.tsx ',
     caret: 13,
   });
+  const plugin = '$[plugin:studio.excalidraw|Excalidraw]';
+  for (const suffix of ['', ' 继续', '继续', '\n下一行']) {
+    const { text, caret } = insertComposerToken('$' + suffix, 0, 1, plugin);
+    assert.equal(text.slice(0, caret), plugin + ' ');
+    assert.equal(text.slice(caret), suffix.replace(/^ /u, ''));
+  }
 });
 
 test('npm package names stay plain text instead of file chips', () => {

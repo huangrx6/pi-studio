@@ -3,14 +3,11 @@ import { useSettingsDraftGuard } from '../../shared/SettingsDraftGuard';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
-  ChevronRight,
   Plus,
-  RotateCcw,
-  Save,
-  ShieldCheck,
   Trash2,
 } from 'lucide-react';
 import { errorText } from '../../shared/error-text';
+import { useSettingsToast } from '../../shared/SettingsToast';
 import type {
   PermissionDecision,
   PermissionEvaluation,
@@ -21,9 +18,8 @@ import type {
   PermissionScope,
 } from '../../types/permission-types';
 import { useActionConfirmation } from '../../shared/ConfirmDialog';
-import { InfoHint } from '../../shared/InfoHint';
+import { Accordion } from '../../shared/Accordion';
 import { Select } from '../../shared/Select';
-import { SecretVaultSettings } from './SecretVaultSettings';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
 import { matchForCondition, permissionDraftError, permissionScopeKey, permissionWrites, ruleCondition, type RuleCondition } from './permission-policy-editor';
 import { isComposingKey } from '../../shared/keyboard-navigation';
@@ -137,17 +133,28 @@ function PermissionPolicyEditor({
   const operationRef = useRef(false);
   const generation = useRef(0);
   const [reload, setReload] = useState(0);
-  const [dirty, setDirty] = useState(false);
+  const [edited, setEdited] = useState(false);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const showToast = useSettingsToast();
   const [newTool, setNewTool] = useState('');
   const [newDecision, setNewDecision] = useState<PermissionDecision>('ask');
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [previewTool, setPreviewTool] = useState('bash');
   const [previewCommand, setPreviewCommand] = useState('git status');
   const [previewPath, setPreviewPath] = useState('src/App.tsx');
+  const previewUsesPath = ['read', 'write', 'edit'].includes(previewTool);
   const [preview, setPreview] = useState<PermissionEvaluation | null>(null);
+  const [previewError, setPreviewError] = useState('');
 
+  // A previously inherited policy can be saved as an explicit override, even with identical values.
+  const savedPolicy = snapshot?.scopes[scope];
+  const dirty = edited && (!savedPolicy || JSON.stringify(draft) !== JSON.stringify(savedPolicy));
   useSettingsDraftGuard({ label: '权限策略', dirty });
+
+  function clearPreview() {
+    setPreview(null);
+    setPreviewError('');
+  }
 
   function adoptSnapshot(next: PermissionPolicyState, preferredScope = scope) {
     setSnapshot(next);
@@ -156,8 +163,8 @@ function PermissionPolicyEditor({
       : 'user';
     setScope(selected);
     setDraft(clonePolicy(policyForScope(next, selected)));
-    setDirty(false);
-    setPreview(null);
+    setEdited(false);
+    clearPreview();
   }
 
   useEffect(() => {
@@ -166,9 +173,8 @@ function PermissionPolicyEditor({
     setLoading(true);
     setSnapshot(null);
     setDraft(null);
-    setDirty(false);
-    setNotice('');
-    setPreview(null);
+    setEdited(false);
+    clearPreview();
     setError('');
     void permissionWrites.waitForContext(cwd, sessionId)
       .then(() => current() ? window.piApi.permissionPolicyGet({ cwd, sessionId }) : null)
@@ -191,10 +197,9 @@ function PermissionPolicyEditor({
   function patchDraft(patch: Partial<PermissionPolicy>) {
     if (operationRef.current) return;
     setDraft((current) => current ? { ...current, ...patch } : current);
-    setPreview(null);
-    setDirty(true);
+    clearPreview();
+    setEdited(true);
     setError('');
-    setNotice('');
   }
 
   async function selectScope(nextScope: PermissionScope) {
@@ -204,7 +209,7 @@ function PermissionPolicyEditor({
     if (dirty) {
       const accepted = await actionConfirmation.confirm({
         title: '丢弃未保存的权限更改？',
-        description: '切换作用域会重新读取已保存的策略，当前草稿中的工具覆盖和高级规则将丢失。',
+        description: '切换后会载入所选范围的策略，当前未保存的模式和规则将丢失。',
         confirmLabel: '丢弃并切换',
         tone: 'danger',
       });
@@ -214,9 +219,8 @@ function PermissionPolicyEditor({
     setNewTool('');
     setNewDecision('ask');
     setDraft(clonePolicy(policyForScope(snapshot, nextScope)));
-    setPreview(null);
-    setDirty(false);
-    setNotice('');
+    clearPreview();
+    setEdited(false);
     setError('');
   }
 
@@ -243,7 +247,6 @@ function PermissionPolicyEditor({
     operationRef.current = true;
     setOperation(kind);
     setError('');
-    setNotice('');
     const ticket = generation.current;
     return {
       current: () => generation.current === ticket,
@@ -257,7 +260,10 @@ function PermissionPolicyEditor({
 
   function validateDraft() {
     const message = draft ? permissionDraftError(draft) : '权限策略不可用';
-    if (message) setError(message);
+    if (message) {
+      showToast(message, 'error');
+      setRulesOpen(true);
+    }
     return !message;
   }
 
@@ -271,9 +277,9 @@ function PermissionPolicyEditor({
       if (!request.current()) return;
       adoptSnapshot(next, scope);
       onPolicyChanged?.(next);
-      setNotice('权限策略已保存，并从下一次工具调用开始生效。');
+      showToast('权限策略已保存，并从下一次工具调用开始生效。');
     } catch (reason) {
-      if (request.current()) setError(errorText(reason));
+      if (request.current()) showToast(errorText(reason), 'error');
     } finally { request.finish(); }
   }
 
@@ -298,9 +304,9 @@ function PermissionPolicyEditor({
       if (!request.current()) return;
       adoptSnapshot(next, scope);
       onPolicyChanged?.(next);
-      setNotice(scope === 'user' ? '已恢复默认权限策略。' : '已恢复继承。');
+      showToast(scope === 'user' ? '已恢复默认权限策略。' : '已恢复继承。');
     } catch (reason) {
-      if (request.current()) setError(errorText(reason));
+      if (request.current()) showToast(errorText(reason), 'error');
     } finally { request.finish(); }
   }
 
@@ -350,11 +356,11 @@ function PermissionPolicyEditor({
     if (!draft || !validateDraft()) return;
     const request = beginOperation('preview');
     if (!request) return;
-    setPreview(null);
+    clearPreview();
     try {
       const args = previewTool === 'bash'
         ? { command: previewCommand }
-        : ['read', 'write', 'edit', 'ls', 'find', 'grep'].includes(previewTool)
+        : previewUsesPath
           ? { path: previewPath }
           : {};
       // Preview calls the same policy engine as the runtime, but only returns
@@ -368,319 +374,283 @@ function PermissionPolicyEditor({
       });
       if (request.current()) setPreview(result);
     } catch (reason) {
-      if (request.current()) setError(errorText(reason));
+      if (request.current()) setPreviewError(errorText(reason));
     } finally { request.finish(); }
   }
 
-  if (loading) {
-    return <div className={`settings-sections permission-policy is-loading ${className}`.trim()}>
-      <LoadingState variant="section">正在读取权限策略…</LoadingState>
+  const header = <SettingsPageHeader title="权限策略" iconPosition="end" meta="设置工具调用何时需要批准。保存后从下一次调用起生效。"
+    icon={<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M16 2.5c3.3 2.3 7.4 3.8 12 4.5v8c0 6.2-4.7 11-12 14.5C8.7 26 4 21.2 4 15V7c4.6-.7 8.7-2.2 12-4.5Z" />
+      <path d="m11 15.5 3.4 3.4 6.8-7.1" stroke="var(--accent)" />
+    </svg>} />;
+  const pageClass = `settings-preference-page permission-policy ${className}`.trim();
+  if (loading || !snapshot || !draft) {
+    return <div className={pageClass}>{header}
+      {loading ? <LoadingState variant="section">正在读取权限策略…</LoadingState> : <div className="permission-load-error">
+        <p className="settings-error" role="alert">{error || '权限策略不可用'}</p>
+        <button type="button" className="settings-outline" onClick={() => setReload((value) => value + 1)}>重新加载</button>
+      </div>}
     </div>;
   }
 
-  if (!snapshot || !draft) {
-    return <div className={`settings-sections permission-policy ${className}`.trim()}>
-      <div className="permission-policy-error" role="alert">{error || '权限策略不可用'}</div>
-      <button type="button" className="settings-outline" onClick={() => setReload((value) => value + 1)}>重新加载</button>
-    </div>;
-  }
+  const scopeNote = scope === 'user' ? '适用于所有工作区和会话。工作区与会话可以单独配置。'
+    : snapshot.scopes[scope] ? '此范围已单独配置。恢复继承后将使用上一级策略。'
+      : `当前继承${scope === 'session' && snapshot.scopes.workspace ? '工作区' : '全局'}策略。保存后将为此范围创建独立配置。`;
+  return <div className={pageClass} aria-label="权限策略">
+    {header}
+    <fieldset className="settings-preference-groups permission-policy-editor" disabled={busy} aria-label="权限策略编辑" aria-busy={busy}>
+      <section className="settings-preference-card permission-policy-card" aria-labelledby="permission-scope-title">
+        <header className="permission-policy-section-head">
+          <h2 id="permission-scope-title">作用范围</h2>
+          <p>{scopeNote}</p>
+        </header>
 
-  return <div className={`settings-sections permission-policy ${className}`.trim()} aria-label="权限策略">
-    <SettingsPageHeader
-      className="permission-policy-page-head"
-      icon={<ShieldCheck />}
-      title="权限策略"
-      meta={<span>保存后从下一次工具调用开始生效</span>}
-      actions={(scope === 'user' || Boolean(snapshot.scopes[scope]))
-        ? <button type="button" className="settings-outline permission-policy-reset" disabled={busy} onClick={() => void resetPolicy()}>
-          <RotateCcw />{operation === 'reset' ? '恢复中…' : scope === 'user' ? '恢复默认' : '恢复继承'}
-        </button>
-        : undefined}
-    />
-
-    <fieldset className="permission-policy-editor" disabled={busy} aria-label="权限策略编辑" aria-busy={busy}>
-    <section className="permission-policy-card permission-policy-scope-card">
-      <div className="permission-policy-section-head">
-        <div>
-          <h2>作用范围 <InfoHint label="更窄作用域决定默认模式；各层显式规则仍参与判断。保存会创建独立覆盖，删除覆盖后重新继承。" /></h2>
+        <div className="settings-segments permission-policy-scopes" role="group" aria-label="权限作用域">
+          {(Object.keys(SCOPE_LABELS) as PermissionScope[]).map((item) => {
+            const available = scopeAvailable(item, snapshot.cwd, snapshot.sessionId);
+            const configured = item === 'user' || Boolean(snapshot.scopes[item]);
+            return <button
+              type="button"
+              aria-pressed={scope === item}
+              disabled={!available || busy}
+              title={!available ? item === 'workspace' ? '打开工作区后可配置' : '打开会话后可配置' : undefined}
+              key={item}
+              onClick={() => void selectScope(item)}
+            >
+              <span>{SCOPE_LABELS[item]}</span>
+              <small>{item === 'user' ? '默认' : !available ? '未打开' : configured ? '已覆盖' : '继承'}</small>
+            </button>;
+          })}
         </div>
-        <span className="permission-policy-effective">
-          默认模式来源
-          <strong>{SCOPE_LABELS[snapshot.effectiveScope]}</strong>
-        </span>
-      </div>
 
-      <div className="permission-policy-scopes" role="group" aria-label="权限作用域">
-        {(Object.keys(SCOPE_LABELS) as PermissionScope[]).map((item) => {
-          const available = scopeAvailable(item, snapshot.cwd, snapshot.sessionId);
-          const configured = item === 'user' || Boolean(snapshot.scopes[item]);
-          return <button
-            type="button"
-            aria-pressed={scope === item}
-            className={scope === item ? 'is-active' : ''}
-            disabled={!available || busy}
-            key={item}
-            onClick={() => void selectScope(item)}
-          >
-            <span>{SCOPE_LABELS[item]}</span>
-            <small>{item === 'user' ? '所有工作区' : configured ? '已覆盖' : '继承'}</small>
-          </button>;
-        })}
-      </div>
+        <Accordion className="permission-policy-chain permission-disclosure" summary="当前生效"
+          badge={`${SCOPE_LABELS[snapshot.effectiveScope]} · ${modeLabel(snapshot, snapshot.effectivePolicy.preset)}`}>
+          <div className="permission-chain-details">
+            <p>最具体的范围决定基础模式，各层的显式规则都参与判断。</p>
+            <dl>{snapshot.layers.map(layer => <div key={layer.scope}>
+              <dt>{SCOPE_LABELS[layer.scope]}</dt>
+              <dd>{modeLabel(snapshot, layer.policy.preset)} · 默认{DECISION_LABELS[layer.policy.default]}</dd>
+            </div>)}</dl>
+          </div>
+        </Accordion>
+      </section>
 
-      <p className="permission-policy-scope-note">{scope === 'user' ? '全局策略适用于所有工作区；更窄作用域中的策略与规则仍会参与判断。' : snapshot.scopes[scope] ? '正在编辑独立覆盖。恢复继承会删除此作用域的覆盖。' : `当前继承${SCOPE_LABELS[scope === 'session' && snapshot.scopes.workspace ? 'workspace' : 'user']}。保存会创建独立覆盖。`}</p>
-      <div className="permission-policy-chain" aria-label="权限策略生效链">
-        <span className="permission-policy-chain-label">生效链</span>
-        {snapshot.layers.map((layer, index) => <span className="permission-policy-chain-part" key={layer.scope}>
-          {index > 0 && <ChevronRight aria-hidden="true" />}
-          <span className="permission-policy-chain-node">
-            <small>{SCOPE_LABELS[layer.scope]}</small>
-            <strong>{modeLabel(snapshot, layer.policy.preset)}</strong>
-            <em className={`is-${layer.policy.default}`}>{DECISION_LABELS[layer.policy.default]}</em>
-          </span>
-        </span>)}
-      </div>
-
-    </section>
-
-    <section className="permission-policy-card">
-      <div className="permission-policy-section-head">
-        <div>
-          <h2>基础模式 <InfoHint label="默认决定仅在显式规则、保护检查和基础模式的自动允许均未决定时使用。" /></h2>
+      <section className="settings-preference-card permission-policy-card" aria-labelledby="permission-mode-title">
+        <header className="permission-policy-section-head"><h2 id="permission-mode-title">基础模式</h2></header>
+        <div className="permission-policy-presets" role="group" aria-labelledby="permission-mode-title">
+          {snapshot.catalog.modes.map((mode) => {
+            const selected = draft.preset === mode.id;
+            const customDefault = selected && draft.default !== snapshot.catalog.presetDefaults[mode.id];
+            const description = !customDefault ? mode.description
+              : mode.id === 'ask' ? `已自定义默认决定为${DECISION_LABELS[draft.default]}；显式规则与保护检查仍生效。`
+                : mode.id === 'smart' ? `读取、检索和长期任务管理工具自动允许，其他调用默认${DECISION_LABELS[draft.default]}；显式规则与保护检查优先。`
+                  : `读取、检索和长期任务管理工具自动允许，其他调用默认${DECISION_LABELS[draft.default]}；跨工作区与脚本检查不再额外要求确认，显式规则和高危命令拦截仍生效。`;
+            const tierLabel = mode.id === 'ask' ? '严格' : mode.id === 'smart' ? '推荐' : '高权限';
+            return <button
+              type="button"
+              aria-pressed={selected}
+              className={`permission-preset${selected ? ' is-active' : ''}`}
+              key={mode.id}
+              onClick={() => void applyPreset(mode.id)}
+            >
+              <span className="permission-preset-copy">
+                <span className="permission-preset-head">
+                  <strong>{mode.label}</strong>
+                  <span className={`permission-preset-tier is-${mode.id}`}>{tierLabel}</span>
+                </span>
+                <small>{description}</small>
+              </span>
+              <span className="permission-preset-check" aria-hidden="true">{selected && <Check />}</span>
+            </button>;
+          })}
         </div>
-        <label className="permission-policy-select">
-          <span>默认决定</span>
-          <Select
-            disabled={busy}
-            label="未命中时的权限决定"
-            value={draft.default}
-            options={DECISION_OPTIONS}
-            onChange={(value) => patchDraft({ default: value as PermissionDecision })}
-          />
-        </label>
-      </div>
-      <div className="permission-policy-presets">
-        {snapshot.catalog.modes.map((mode) => {
-          const selected = draft.preset === mode.id;
-          const customDefault = selected && draft.default !== snapshot.catalog.presetDefaults[mode.id];
-          const description = !customDefault ? mode.description
-            : mode.id === 'ask' ? `已自定义默认决定为${DECISION_LABELS[draft.default]}；显式规则与保护检查仍生效。`
-              : mode.id === 'smart' ? `读取、检索和长期任务管理工具自动允许，其他调用默认${DECISION_LABELS[draft.default]}；显式规则与保护检查优先。`
-                : `读取、检索和长期任务管理工具自动允许，其他调用默认${DECISION_LABELS[draft.default]}；跨工作区与脚本检查不再额外要求确认，显式规则和高危命令拦截仍生效。`;
-          return <button
-            type="button"
-            aria-pressed={selected}
-            className={`permission-preset ${selected ? 'is-active' : ''} ${mode.id === 'full' ? 'is-sensitive' : ''}`}
-            key={mode.id}
-            onClick={() => void applyPreset(mode.id)}
-          >
-            <span className="permission-preset-check" aria-hidden="true">{selected && <Check />}</span>
-            <span className="permission-preset-copy">
-              <strong>{mode.label}</strong>
-              <small>{description}</small>
-            </span>
-          </button>;
-        })}
-      </div>
-    </section>
-
-    <section className="permission-policy-card">
-      <div className="permission-policy-section-head">
-        <div>
-          <h2>工具覆盖 <InfoHint label="支持精确名称与通配符，例如 mcp__github__*。工具覆盖优先于默认模式。" /></h2>
+        <div className="permission-policy-default">
+          <div><span>默认决定</span><p>规则、保护检查和基础模式均未决定时使用。</p></div>
+          <Select disabled={busy} label="未命中时的权限决定" value={draft.default} options={DECISION_OPTIONS}
+            onChange={(value) => patchDraft({ default: value as PermissionDecision })} />
         </div>
-        {toolOverrides.length > 0 && <span className="permission-policy-count" aria-label={`${toolOverrides.length} 条工具覆盖`}>
-          {toolOverrides.length}
-        </span>}
-      </div>
+      </section>
 
-      {toolOverrides.length === 0
-        ? <div className="permission-policy-empty">
-          <span><strong>没有工具覆盖</strong></span>
-        </div>
-        : <div className="permission-policy-rows">
-          {toolOverrides.map(([pattern, decision]) => <div className="permission-policy-row" key={pattern}>
-            <span className="permission-policy-row-key"><code>{pattern}</code></span>
-            <Select
-              disabled={busy}
-              label={`${pattern} 的权限决定`}
-              value={decision}
-              options={DECISION_OPTIONS}
-              onChange={(value) => updateToolOverride(pattern, value as PermissionDecision)}
-            />
-            <button type="button" className="icon-button resource-delete" aria-label={`删除 ${pattern} 的覆盖`} onClick={() => removeToolOverride(pattern)}>
-              <Trash2 />
-            </button>
-          </div>)}
-        </div>}
-
-      <div className="permission-policy-add">
-        <label>
-          <span>工具或通配符</span>
-          <input
-            value={newTool}
-            onChange={(event) => setNewTool(event.target.value)}
-            placeholder="例如 mcp__service__*"
-            onKeyDown={(event) => { if (event.key === 'Enter' && !isComposingKey(event.nativeEvent)) addToolOverride(); }}
-          />
-        </label>
-        <label>
-          <span>决定</span>
-          <Select
-            disabled={busy}
-            label="新工具覆盖的权限决定"
-            value={newDecision}
-            options={DECISION_OPTIONS}
-            onChange={(value) => setNewDecision(value as PermissionDecision)}
-          />
-        </label>
-        <button type="button" className="settings-add-button" onClick={addToolOverride} disabled={!newTool.trim()}><Plus />添加覆盖</button>
-      </div>
-    </section>
-
-    <section className="permission-policy-card permission-policy-rules">
-      <div className="permission-policy-section-head">
-        <div>
-          <h2>高级规则 {draft.rules.length > 0 && <span className="count-badge">{draft.rules.length}</span>}<InfoHint label="拒绝优先于询问，询问优先于允许。路径规则相对当前工作区解析。" /></h2>
-        </div>
-        <button type="button" className="settings-add-button" onClick={addRule}><Plus />新规则</button>
-      </div>
-
-      {draft.rules.length === 0
-        ? <div className="permission-policy-empty">
-          <span><strong>没有高级规则</strong></span>
-        </div>
-        : <div className="permission-rule-list">
-          {draft.rules.map((rule) => {
-            const condition = ruleCondition(rule);
-            const supported = conditionsForTool(rule.match.tool);
-            const conditions = supported.includes(condition) ? supported : [condition, ...supported];
-            return <article className="permission-rule" key={rule.id}>
-              <div className="permission-rule-title">
-                <input
-                  aria-label="规则说明"
-                  value={rule.label}
-                  placeholder="规则名称"
-                  onChange={(event) => updateRule(rule.id, (current) => ({ ...current, label: event.target.value }))}
-                />
+      <section className="settings-preference-card permission-policy-card" aria-labelledby="permission-exceptions-title">
+        <header className="permission-policy-section-head"><h2 id="permission-exceptions-title">例外规则</h2></header>
+        <Accordion className="permission-disclosure permission-overrides" summary="工具覆盖" badge={toolOverrides.length ? `${toolOverrides.length} 条` : '未设置'}>
+          <div className="permission-disclosure-body">
+            <p>按工具名称或通配符设置决定，匹配时优先于基础模式。</p>
+            {toolOverrides.length > 0 && <div className="permission-policy-rows">
+              {toolOverrides.map(([pattern, decision]) => <div className="permission-policy-row" key={pattern}>
+                <span className="permission-policy-row-key"><code>{pattern}</code></span>
                 <Select
                   disabled={busy}
-                  label={`${rule.label || '自定义规则'}的权限决定`}
-                  className={`permission-rule-decision is-${rule.decision}`}
-                  value={rule.decision}
+                  label={`${pattern} 的权限决定`}
+                  value={decision}
                   options={DECISION_OPTIONS}
-                  onChange={(value) => updateRule(rule.id, (current) => ({
-                    ...current,
-                    decision: value as PermissionDecision,
-                  }))}
+                  onChange={(value) => updateToolOverride(pattern, value as PermissionDecision)}
                 />
-                <button type="button" className="icon-button resource-delete" aria-label="删除规则" onClick={() => removeRule(rule.id)}><Trash2 /></button>
-              </div>
-              <div className="permission-rule-match">
-                <label>
-                  <span>工具</span>
-                  <input
-                    value={rule.match.tool}
-                    onChange={(event) => updateRule(rule.id, (current) => {
-                      // Editing a tool name must not silently discard a restrictive condition.
-                      return { ...current, match: { ...current.match, tool: event.target.value } };
-                    })}
-                  />
-                </label>
-                <label>
-                  <span>条件</span>
-                  <Select
-                    disabled={busy}
-                    label={`${rule.label || '自定义规则'}的条件`}
-                    value={condition}
-                    options={conditions.map((item) => ({ value: item, label: CONDITION_LABELS[item] }))}
-                    onChange={(value) => updateRule(rule.id, (current) => ({
-                      ...current,
-                      match: matchForCondition(current.match.tool, value as RuleCondition, ''),
-                    }))}
-                  />
-                </label>
-                {condition !== 'tool' && condition !== 'pathWithin' && <label className="is-wide">
-                  <span>{condition.startsWith('command') ? '命令' : '路径'}</span>
-                  <input
-                    value={conditionValue(rule)}
-                    placeholder={conditionPlaceholder(condition)}
-                    onChange={(event) => updateRule(rule.id, (current) => ({
-                      ...current,
-                      match: matchForCondition(
-                        current.match.tool,
-                        ruleCondition(current),
-                        event.target.value,
-                      ),
-                    }))}
-                  />
-                </label>}
-              </div>
-            </article>;
-          })}
-        </div>}
-    </section>
+                <button type="button" className="icon-button resource-delete" aria-label={`删除 ${pattern} 的覆盖`} onClick={() => removeToolOverride(pattern)}>
+                  <Trash2 />
+                </button>
+              </div>)}
+            </div>}
 
-    <section className="permission-policy-card permission-policy-preview">
-      <div className="permission-policy-section-head">
-        <div>
-          <h2>策略预览 <InfoHint label="使用与运行时相同的规则引擎；只验证结果，不执行工具。" /></h2>
+            <div className="permission-policy-add">
+              <label>
+                <span>工具或通配符</span>
+                <input
+                  value={newTool}
+                  onChange={(event) => setNewTool(event.target.value)}
+                  placeholder="例如 mcp__service__*"
+                  onKeyDown={(event) => { if (event.key === 'Enter' && !isComposingKey(event.nativeEvent)) addToolOverride(); }}
+                />
+              </label>
+              <label>
+                <span>决定</span>
+                <Select
+                  disabled={busy}
+                  label="新工具覆盖的权限决定"
+                  value={newDecision}
+                  options={DECISION_OPTIONS}
+                  onChange={(value) => setNewDecision(value as PermissionDecision)}
+                />
+              </label>
+              <button type="button" className="settings-add-button" onClick={addToolOverride} disabled={!newTool.trim()}><Plus />添加覆盖</button>
+            </div>
+          </div>
+        </Accordion>
+        <Accordion className="permission-disclosure permission-policy-rules" open={rulesOpen} onToggle={event => setRulesOpen(event.currentTarget.open)}
+          summary="高级规则" badge={draft.rules.length ? `${draft.rules.length} 条` : '未设置'}>
+          <div className="permission-disclosure-body">
+            <p>按命令或工作区路径细分条件。多条规则命中时，依次优先采用拒绝、询问、允许。</p>
+            {draft.rules.length > 0 && <div className="permission-rule-list">
+              {draft.rules.map((rule) => {
+                const condition = ruleCondition(rule);
+                const supported = conditionsForTool(rule.match.tool);
+                const conditions = supported.includes(condition) ? supported : [condition, ...supported];
+                return <article className="permission-rule" key={rule.id}>
+                  <div className="permission-rule-title">
+                    <label>
+                      <span>规则名称</span>
+                      <input
+                        value={rule.label}
+                        onChange={(event) => updateRule(rule.id, (current) => ({ ...current, label: event.target.value }))}
+                      />
+                    </label>
+                    <button type="button" className="icon-button resource-delete" aria-label="删除规则" onClick={() => removeRule(rule.id)}><Trash2 /></button>
+                  </div>
+                  <div className="permission-rule-fields">
+                    <label className="permission-rule-tool">
+                      <span>工具</span>
+                      <input
+                        value={rule.match.tool}
+                        onChange={(event) => updateRule(rule.id, (current) => {
+                          // Editing a tool name must not silently discard a restrictive condition.
+                          return { ...current, match: { ...current.match, tool: event.target.value } };
+                        })}
+                      />
+                    </label>
+                    <label>
+                      <span>条件</span>
+                      <Select
+                        disabled={busy}
+                        label={`${rule.label || '自定义规则'}的条件`}
+                        value={condition}
+                        options={conditions.map((item) => ({ value: item, label: CONDITION_LABELS[item] }))}
+                        onChange={(value) => updateRule(rule.id, (current) => ({
+                          ...current,
+                          match: matchForCondition(current.match.tool, value as RuleCondition, ''),
+                        }))}
+                      />
+                    </label>
+                    <label>
+                      <span>权限决定</span>
+                      <Select
+                        disabled={busy}
+                        label={`${rule.label || '自定义规则'}的权限决定`}
+                        value={rule.decision}
+                        options={DECISION_OPTIONS}
+                        onChange={(value) => updateRule(rule.id, (current) => ({
+                          ...current,
+                          decision: value as PermissionDecision,
+                        }))}
+                      />
+                    </label>
+                    {condition !== 'tool' && condition !== 'pathWithin' && <label className="permission-rule-value">
+                      <span>{condition.startsWith('command') ? '命令' : '路径'}</span>
+                      <input
+                        value={conditionValue(rule)}
+                        placeholder={conditionPlaceholder(condition)}
+                        onChange={(event) => updateRule(rule.id, (current) => ({
+                          ...current,
+                          match: matchForCondition(
+                            current.match.tool,
+                            ruleCondition(current),
+                            event.target.value,
+                          ),
+                        }))}
+                      />
+                    </label>}
+                  </div>
+                </article>;
+              })}
+            </div>}
+            <button type="button" className="settings-outline permission-add-rule" onClick={addRule}><Plus />新规则</button>
+          </div>
+        </Accordion>
+      </section>
+
+      <Accordion className="settings-preference-card permission-policy-preview" summary="策略预览"
+        description="模拟一次工具调用，查看当前草稿的决定和命中规则。">
+        <div className="permission-preview-body">
+          <div className="permission-preview-form">
+            <label>
+              <span>工具</span>
+              <Select
+                disabled={busy}
+                label="预览工具"
+                value={previewTool}
+                options={PREVIEW_TOOL_OPTIONS}
+                onChange={(value) => { setPreviewTool(value); clearPreview(); }}
+              />
+            </label>
+            {previewTool === 'bash' && <label>
+              <span>命令</span>
+              <input value={previewCommand} onChange={event => { setPreviewCommand(event.target.value); clearPreview(); }} placeholder="例如 git status" />
+            </label>}
+            {previewUsesPath && <label>
+              <span>路径</span>
+              <input value={previewPath} onChange={event => { setPreviewPath(event.target.value); clearPreview(); }} placeholder="例如 src/App.tsx" />
+            </label>}
+            <button type="button" className="settings-outline" disabled={busy} onClick={() => void evaluatePreview()}>{operation === 'preview' ? '预览中…' : '预览结果'}</button>
+          </div>
+          {previewError && <p className="settings-error" role="alert">{previewError}</p>}
+          {preview && <div className="permission-preview-result" role="status">
+            <header><strong>{DECISION_LABELS[preview.decision]}</strong>
+              <small>{dirty ? '未保存草稿' : '当前编辑策略'} · {SCOPE_LABELS[preview.previewScope || scope]}</small></header>
+            <span>{preview.explanation}</span>
+            <code>{preview.risk.title}{preview.risk.detail ? ` · ${preview.risk.detail}` : ''}</code>
+            {preview.matches.length > 0 && <div className="permission-preview-matches">
+              <span>命中规则</span><ul>{preview.matches.map((match, index) => <li
+                key={`${match.scope}:${match.source}:${match.ruleId || match.pattern}:${index}`}>
+                <code>{match.label || match.ruleId || match.pattern}</code>
+                <span>{SCOPE_LABELS[match.scope]} · {DECISION_LABELS[match.decision]}</span>
+              </li>)}</ul>
+            </div>}
+          </div>}
         </div>
-      </div>
-      <div className="permission-preview-form">
-        <label>
-          <span>工具</span>
-          <Select
-            disabled={busy}
-            label="预览工具"
-            value={previewTool}
-            options={PREVIEW_TOOL_OPTIONS}
-            onChange={(value) => { setPreviewTool(value); setPreview(null); }}
-          />
-        </label>
-        <label className="is-wide">
-          <span>{previewTool === 'bash' ? '命令' : ['read', 'write', 'edit'].includes(previewTool) ? '路径' : '调用参数'}</span>
-          {previewTool === 'bash'
-            ? <input value={previewCommand} onChange={(event) => { setPreviewCommand(event.target.value); setPreview(null); }} placeholder="command" />
-            : ['read', 'write', 'edit'].includes(previewTool)
-              ? <input value={previewPath} onChange={(event) => { setPreviewPath(event.target.value); setPreview(null); }} placeholder="path" />
-              : <span className="permission-preview-empty-args">无路径或命令参数</span>}
-        </label>
-        <button type="button" className="settings-outline" disabled={busy} onClick={() => void evaluatePreview()}>{operation === 'preview' ? '预览中…' : '预览结果'}</button>
-      </div>
-      {preview && <div className={`permission-preview-result is-${preview.decision}`} role="status">
-        <strong>{DECISION_LABELS[preview.decision]}</strong>
-        <small className="permission-preview-draft">{dirty ? '未保存草稿' : '当前编辑策略'} · {SCOPE_LABELS[preview.previewScope || scope]}</small>
-        <span>{preview.explanation}</span>
-        <code>{preview.risk.title}{preview.risk.detail ? ` · ${preview.risk.detail}` : ''}</code>
-        {preview.matches.length > 0 && <div className="permission-preview-matches">
-          <span>命中规则</span>
-          {preview.matches.map((match, index) => <span
-            className={`permission-preview-match is-${match.decision}`}
-            key={`${match.scope}:${match.source}:${match.ruleId || match.pattern}:${index}`}
-            title={match.label || match.ruleId || match.pattern}
-          >
-            <small>{SCOPE_LABELS[match.scope]}</small>
-            <strong>{DECISION_LABELS[match.decision]}</strong>
-            <code>{match.label || match.ruleId || match.pattern}</code>
-          </span>)}
-        </div>}
-      </div>}
-    </section>
+      </Accordion>
 
+      <footer className={`settings-preference-card permission-policy-actions${dirty ? ' is-dirty' : ''}`}>
+        <div className="permission-save-state"><strong>{SCOPE_LABELS[scope]}策略</strong>
+          <span>{dirty ? '有未保存的更改' : savedPolicy ? '与已保存策略一致' : '正在继承上一级策略'}</span></div>
+        <div className="permission-save-buttons">
+          {(scope === 'user' || snapshot.scopes[scope]) && <button type="button" className="settings-outline" disabled={busy} onClick={() => void resetPolicy()}>
+            {operation === 'reset' ? '恢复中…' : scope === 'user' ? '恢复默认' : '恢复继承'}
+          </button>}
+          <button type="button" className="settings-save" disabled={!dirty || busy} onClick={() => void savePolicy()}>
+            {operation === 'save' ? '保存中…' : '保存权限策略'}
+          </button>
+        </div>
+      </footer>
     </fieldset>
-
-    {error && <div className="permission-policy-message is-error" role="alert">{error}</div>}
-    {notice && <div className="permission-policy-message is-success" role="status">{notice}</div>}
-    <footer className="permission-policy-actions">
-      <span>
-        <strong>{dirty ? '有未保存更改' : '策略已同步'}</strong>
-      </span>
-      <button type="button" className="settings-save" disabled={!dirty || busy} onClick={() => void savePolicy()}>
-        <Save />{operation === 'save' ? '保存中…' : '保存权限策略'}
-      </button>
-    </footer>
-    <SecretVaultSettings />
     {actionConfirmation.dialog}
   </div>;
 }

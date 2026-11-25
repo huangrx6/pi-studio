@@ -44,6 +44,7 @@ function harness() {
     setProviderDraft(value) { h.providerDraft = typeof value === 'function' ? value(h.providerDraft) : value; },
     setSettingsData(value) { h.settingsData=typeof value==='function'?value(h.settingsData):value; snapshots.push(h.settingsData); },
     acceptRuntimeSnapshot(snapshot) { snapshots.push(snapshot); }, errorText: error => error.message,
+    showToast() {},
     window: { piApi: {
       testMcp(payload) { const pending = deferred(); tests.push({ ...pending, payload }); return pending.promise; },
       addMcp(payload) { const pending = deferred(); saves.push({ ...pending, payload }); return pending.promise; },

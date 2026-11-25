@@ -1,0 +1,12 @@
+.task-status-icon {
+  display: inline-grid;
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  flex: none;
+  place-items: center;
+  color: var(--text-2);
+}
+.task-status-icon > svg { display: block; width: var(--icon-md); height: var(--icon-md); }
+.task-status-icon[data-status="active"] { color: var(--accent); }
+.task-status-icon[data-status="completed"] { color: color-mix(in srgb, var(--success) 75%, var(--text-2)); }
+.task-status-icon[data-status="blocked"] { color: var(--warning); }

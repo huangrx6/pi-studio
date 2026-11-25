@@ -23,7 +23,7 @@ async function fixture(t) {
 test('create and open worktrees using new or available local branches without changing the source checkout', async t => {
   const { dir, repo, git, head, act } = await fixture(t);
   const options = await act('options');
-  assert.deepEqual(options.branches, [{ name: 'available', occupied: false }, { name: 'main', occupied: true }]);
+  assert.deepEqual(options.branches, [{ name: 'available', head, occupied: false }, { name: 'main', head, occupied: true }]);
   const tree = await act('create', { mode: 'existing', name: 'available', folder: '已有 分支', head });
   assert.equal(await act('open', { path: tree }), tree);
   assert.equal(git('-C', tree, 'branch', '--show-current'), 'available');
@@ -37,6 +37,26 @@ test('create and open worktrees using new or available local branches without ch
   assert.equal(added, path.join(dir, args.folder));
   assert.equal(git('-C', added, 'branch', '--show-current'), args.name);
   assert.equal(git('branch', '--show-current'), 'main');
+});
+
+test('create from the selected local branch tip, including an occupied branch, and reject moved or missing bases', async t => {
+  const { dir, repo, git, head, act } = await fixture(t);
+  const occupied = path.join(dir, 'other-checkout');
+  git('worktree', 'add', occupied, 'available');
+  git('-C', occupied, 'commit', '--allow-empty', '-m', 'branch tip');
+  const base = (await act('options')).branches.find(branch => branch.name === 'available');
+  assert.ok(base.occupied);
+  assert.notEqual(base.head, head);
+  const input = { mode: 'new', name: 'review', folder: 'review', baseBranch: base.name, head: base.head };
+  const added = await act('create', input);
+  assert.equal(git('-C', added, 'rev-parse', 'HEAD'), base.head);
+  assert.equal(git('-C', repo, 'rev-parse', 'HEAD'), head);
+  git('-C', occupied, 'commit', '--allow-empty', '-m', 'later');
+  const stale = { ...input, name: 'stale', folder: 'stale' };
+  await assert.rejects(act('create', stale), /起点/);
+  await assert.rejects(act('create', { ...stale, baseBranch: 'absent' }), /起点/);
+  assert.equal(git('branch', '--list', 'stale'), '');
+  await assert.rejects(fs.stat(path.join(dir, 'stale')), { code: 'ENOENT' });
 });
 
 test('preview and confirm removal of the exact checkout; retain files in trash and keep the branch', async t => {

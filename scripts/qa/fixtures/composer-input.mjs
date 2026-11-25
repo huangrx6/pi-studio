@@ -7,13 +7,13 @@ export function installComposerInputFixture() {
   const extensionItems = [
     {
       id: 'project:qa-extension/scope-launcher',
-      extensionId: 'qa-extension',
+      extensionId: 'project:qa-extension',
       extensionName: 'QA Extension',
       scope: 'project',
       contributionId: 'scope-launcher',
       title: '扩展归属测试',
       description: '验证切换会话后旧结果不会进入新范围',
-      slot: 'composer.before',
+      slot: 'panel.side',
       size: 'compact',
       priority: 10,
       sourceOrder: 0,
@@ -27,13 +27,13 @@ export function installComposerInputFixture() {
     },
     {
       id: 'project:qa-extension/scope-panel',
-      extensionId: 'qa-extension',
+      extensionId: 'project:qa-extension',
       extensionName: 'QA Extension',
       scope: 'project',
       contributionId: 'scope-panel',
       title: 'QA 范围面板',
       description: '只属于打开它的会话',
-      slot: 'composer.before',
+      slot: 'panel.side',
       size: 'compact',
       priority: 5,
       sourceOrder: 1,
@@ -41,16 +41,22 @@ export function installComposerInputFixture() {
     },
     {
       id: 'project:qa-extension/live-data',
-      extensionId: 'qa-extension',
+      extensionId: 'project:qa-extension',
       extensionName: 'QA Extension',
       scope: 'project',
       contributionId: 'live-data',
       title: '实时扩展数据',
       description: '验证订阅切换与重连',
-      slot: 'composer.before',
+      slot: 'composer.above',
       size: 'compact',
       priority: 1,
       sourceOrder: 2,
+      content: [{ kind: 'dataView', sourceId: 'project:qa-extension/live-data' }],
+    },
+    {
+      id: 'project:qa-extension/live-detail', extensionId: 'project:qa-extension', extensionName: 'QA Extension',
+      scope: 'project', contributionId: 'live-detail', title: '实时数据详情', slot: 'panel.side',
+      size: 'regular', priority: 1, sourceOrder: 3,
       content: [{ kind: 'dataView', sourceId: 'project:qa-extension/live-data' }],
     },
   ];
@@ -82,7 +88,15 @@ export function installComposerInputFixture() {
     composerResources: async (input) => {
       calls.push({ method: 'composerResources', ...input });
       const scope = input.sessionId === 'perf-1' ? 'b' : 'a';
-      return respond('composerResources', { commands: [{ name: 'qa-extension', description: '只返回合成内容的 QA 命令', source: 'extension', commandId: 'qa:composer-late' }, { name: `qa-review-${scope}`, description: `QA workspace ${scope} revision ${qa.resourceRevision}`, source: 'prompt', argumentHint: '<目标>' }, { name: `qa-check-${scope}`, description: '执行前检查输入，不会自动发送', source: 'prompt', argumentHint: '<范围>' }], skills: [{ name: `qa-skill-${scope}`, description: 'QA 隔离技能说明', source: 'skill', argumentHint: '<任务>' }] }, input.sessionId || input.cwd);
+      return respond('composerResources', {
+        commands: [{ name: 'qa-extension', description: '只返回合成内容的 QA 命令', source: 'extension', commandId: 'qa:composer-late' }, { name: `qa-review-${scope}`, description: `QA workspace ${scope} revision ${qa.resourceRevision}`, source: 'prompt', argumentHint: '<目标>' }, { name: `qa-check-${scope}`, description: '执行前检查输入，不会自动发送', source: 'prompt', argumentHint: '<范围>' }],
+        skills: [{ name: `qa-skill-${scope}`, description: 'QA 隔离技能说明', source: 'skill', argumentHint: '<任务>' }],
+        ...(input.includeCapabilities && { capabilities: [
+          { type: 'skill', id: 'qa-skill', name: 'QA Skill', description: '', source: 'QA' },
+          { type: 'mcp', id: 'qa-mcp', server: 'QA', name: 'qa_method', description: '', source: 'QA' },
+          { type: 'plugin', id: 'qa.canvas', name: 'QA Canvas', description: '', source: 'QA' },
+        ] }),
+      }, input.sessionId || input.cwd);
     },
     searchFiles: async (input) => { calls.push({ method: 'searchFiles', ...input }); return respond('searchFiles', { files: [{ name: `${input.query || 'index'}.txt`, path: `docs/${input.query || 'index'}.txt`, type: 'file' }, { name: 'QA notes.md', path: 'docs/QA notes.md', type: 'file' }] }, input.query); },
     saveAttachment: async (input) => { calls.push({ method: 'saveAttachment', sessionId: input.sessionId, text: input.text }); const name = `long-paste-${calls.filter(item => item.method === 'saveAttachment').length}.txt`; return respond('saveAttachment', { ...file(name), kind: 'text', bytes: new TextEncoder().encode(input.text).length, lines: input.text.split('\n').length, notice: '已作为文本附件保留', promptText: `@/qa/attachments/${name}`, marker: `@/qa/attachments/${name}` }, input.sessionId); },

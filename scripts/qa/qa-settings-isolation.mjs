@@ -61,7 +61,7 @@ try {
     console.log(`verified: ${name}`);
     await handle.dispose();
   }
-  const progress = async () => page.getByRole('button', { name: '打开会话进展', exact: true }).click();
+  const progress = async () => page.getByRole('button', { name: '进展', exact: true }).click();
   await check('conversation', '.assistant-response');
   await page.locator('.session-row-shell').first().hover();
   await page.locator('.session-row-shell').first().locator('.sidebar-row-actions button').first().click();
@@ -82,27 +82,23 @@ try {
   await page.getByRole('button', { name: '查看全部任务', exact: true }).click();
   await page.getByRole('button', { name: '筛选任务状态', exact: true }).click();
   await check('tasks', '.session-tasks-page', true);
-  await progress();
-  await page.getByRole('button', { name: '查看项目仓库', exact: true }).click();
-  await check('git', '.git-workspace-page');
-  await page.getByRole('button', { name: '打开扩展与轨迹', exact: true }).click();
-  await page.getByRole('group', { name: '会话视图' }).getByRole('button', { name: /^扩展/ }).click();
-  await check('extensions', '.conversation-extension-scroll');
-  await page.getByRole('button', { name: '打开扩展与轨迹', exact: true }).click();
-  await page.getByRole('group', { name: '会话视图' }).getByRole('button', { name: /^轨迹/ }).click();
-  await check('trace', '.conversation-trace-page');
-  await page.getByRole('button', { name: '打开右侧面板', exact: true }).click();
   async function tool(label) {
-    const opener = page.getByRole('button', { name: '打开工具', exact: true });
-    if (await opener.count()) { await opener.click(); await page.getByRole('menuitem', { name: label, exact: true }).click(); }
-    else await page.locator('.panel-start').getByRole('button', { name: label, exact: true }).click();
+    await page.getByRole('button', { name: '打开工具', exact: true }).click();
+    await page.getByRole('menuitem', { name: label, exact: true }).click();
   }
+  await tool('Git');
+  await check('git', '.git-workspace-page');
+  await page.locator('.chat-header').getByRole('button', { name: '扩展', exact: true }).click();
+  await page.getByRole('dialog', { name: '扩展', exact: true }).getByRole('button', { name: /^查看 .* 详情$/ }).first().click();
+  await check('extensions', '.extension-workbench-panel');
+  await page.locator('.chat-header').getByRole('button', { name: '轨迹', exact: true }).click();
+  await check('trace', '.conversation-trace-page');
   await tool('工作区文件');
   await check('files', '.panel-file-browser');
   await page.locator('.file-row').filter({ hasText: 'shared.txt' }).click();
   await check('file-preview', '.panel-file-preview');
   await tool('新建终端');
-  await page.getByText('运行中', { exact: true }).waitFor();
+  await page.locator('.terminal-panel').getByText('运行中', { exact: true }).waitFor();
   await check('terminal', '.terminal-panel');
   await page.locator('.panel-tab').filter({ hasText: '终端' }).click({ button: 'right' });
   await check('panel-context-menu', '.terminal-panel', true);

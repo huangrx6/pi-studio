@@ -177,6 +177,12 @@ try {
       conversationSnapshot: async id => snapshot(id),
       subscribeConversation: async id => snapshot(id),
       unsubscribeConversation: async () => ({ ok: true }),
+      conversationAction: async ({ id, kind, action }) => {
+        const index = sessions.findIndex(item => item.id === id);
+        if (kind !== 'session' || action !== 'remove' || index < 0) throw new Error('Unexpected test deletion');
+        sessions.splice(index, 1);
+        return { ok: true, deletedSessions: 1, deletedSessionIds: [id] };
+      },
       sessionSubagents: async () => [],
       conversationSubmit: async payload => {
         window.qaComposerPersistence.calls.push(payload);
@@ -195,15 +201,11 @@ try {
       extensionsUi: async () => ({ items: [], errors: [], syncedAt: Date.now(), apiVersion: 1 }),
       conversationExtensionUiPreferences: async () => ({
         version: 1,
-        layout: 'grid',
         globalOrder: [],
-        sessionOrders: {},
       }),
       saveConversationExtensionUiPreferences: async value => ({
         version: 1,
-        layout: value?.layout || 'grid',
         globalOrder: value?.globalOrder || [],
-        sessionOrders: {},
       }),
     }, {
       get: (target, key) => (
@@ -304,8 +306,15 @@ try {
   assert.equal(call.requestId, queuedItem.submission.requestId);
   await queuePanel.waitFor({ state: 'detached' });
   assert.equal(await page.evaluate(() => window.qaComposerPersistence.calls.length), 1);
+  await sessionA.hover();
+  await page.getByRole('button', { name: '持久化会话 A的更多操作', exact: true }).click();
+  await page.getByRole('menuitem', { name: '永久删除会话', exact: true }).click();
+  await page.getByRole('button', { name: '永久删除', exact: true }).click();
+  await sessionA.waitFor({ state: 'detached' });
+  const afterDelete = await waitForSnapshot(page, snapshot => !snapshot.drafts.some(draft => draft.key === 'session:persist-session-a'));
+  assert.ok(afterDelete.drafts.some(draft => draft.key === 'new:/workspace'));
   assert.deepEqual(errors, []);
-  console.log('PASS: drafts and attachments survive reloads; restored queues wait for one explicit confirmation before submitting.');
+  console.log('PASS: drafts survive reloads, restored queues wait for confirmation, and permanent deletion clears the selected draft.');
 } catch (error) {
   const page = browser.contexts()[0]?.pages()[0];
   if (page) {

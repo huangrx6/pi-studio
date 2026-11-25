@@ -1,5 +1,5 @@
 import { Accordion } from '../../shared/Accordion';
-import { memo, useId, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { ChevronDown, PanelRightOpen } from 'lucide-react';
 import type { ChatMessage, ContentBlock } from '../../types/chat-types';
 import { AttachmentIcon } from '../../shared/AttachmentIcon';
@@ -9,9 +9,12 @@ import { isComposingKey } from '../../shared/keyboard-navigation';
 import { ConversationImageGallery } from './ConversationImageGallery';
 import { imagesFromBlocks, textBlocks } from './message-content';
 import { MessageActions } from './MessageActions';
-import { splitMessageText, type Reference } from './references';
+import { readableComposerReferences, splitMessageText, type Reference } from './references';
 import { ReferenceChip } from './ReferenceChip';
+import { ComposerEditor, type ComposerEditorHandle } from './ComposerEditor';
 import './styles/user-message.css';
+
+const editCommands = new Set<string>();
 
 /**
  * 内联图片列表。
@@ -71,9 +74,13 @@ function UserText({ text }: { text: string }) {
   }, [text, maybeLong]);
   return <div ref={container} className={`user-text-disclosure ${overflow && !expanded ? 'is-collapsed' : ''}`}>
     <div id={id} className="user-text-viewport"><div ref={content} className="user-text">
-    {segments.map((segment, index) => segment.kind === 'text'
-      ? <span key={index}>{segment.text}</span>
-      : <MessageReference key={index} reference={segment.reference} />)}
+    {segments.map((segment, index) => {
+      if (segment.kind === 'reference') return <MessageReference key={index} reference={segment.reference} />;
+      const before = segments[index - 1];
+      // Older messages can have prose immediately after an inline reference.
+      const gap = before?.kind === 'reference' && !before.reference.body && /^[\p{L}\p{N}]/u.test(segment.text) ? ' ' : '';
+      return <span key={index}>{gap + segment.text}</span>;
+    })}
     </div></div>
     {overflow && <button type="button" className="user-text-toggle" aria-expanded={expanded} aria-controls={id} onClick={() => {
       if (expanded && container.current && container.current.getBoundingClientRect().top < 0) container.current.scrollIntoView({ block: 'start' });
@@ -105,15 +112,18 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState('');
   const editRef = useRef<HTMLTextAreaElement>(null);
+  const roleEditRef = useRef<ComposerEditorHandle>(null);
   // 兜底：同一组件被误用于其他角色时不渲染，避免出现空气泡。
   if (message.role !== 'user') return null;
   const text = textBlocks(message.content);
   const messageImages = imagesFromBlocks(message.content).map((image) => image.src);
   // 历史里技能命令已被展开成 <skill> 块；复制时还原成用户实际输入的命令形式。
-  const copyText = splitMessageText(text)
+  const segments = splitMessageText(text);
+  const hasReferenceChip = segments.some(part => part.kind === 'reference' && (part.reference.kind === 'agent' || part.reference.capabilityId));
+  const copyText = segments
     .map((segment) => segment.kind === 'text'
       ? segment.text
-      : segment.reference.kind === 'skill'
+      : segment.reference.kind === 'skill' && !segment.reference.capabilityId
         ? `/skill:${segment.reference.label}`
         : segment.reference.token)
     .join('')
@@ -134,6 +144,12 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
     setEditError('');
     setEditing(true);
     requestAnimationFrame(() => {
+      const editor = roleEditRef.current;
+      if (editor) {
+        editor.focus();
+        editor.setSelectionRange(editor.value.length, editor.value.length);
+        return;
+      }
       resizeEdit();
       const node = editRef.current;
       if (!node) return;
@@ -169,11 +185,24 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
     }
   }
 
+  function onEditKey(event: KeyboardEvent<HTMLElement>) {
+    if (isComposingKey(event.nativeEvent)) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      cancelEdit();
+    } else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      void saveEdit();
+    }
+  }
+
   return <div id={id} className={`message user ${editing ? 'is-editing' : ''}`}>
   {editing
     ? <div className="message-edit">
       <div className="message-edit-body">
-        <textarea
+        {hasReferenceChip ? <ComposerEditor ref={roleEditRef} value={draft} scope={id || 'edit'} readOnly={savingEdit}
+          aria-label="编辑消息" placeholder="编辑消息" commandNames={editCommands}
+          onChange={setDraft} onKeyDown={onEditKey} /> : <textarea
           ref={editRef}
           value={draft}
           aria-label="编辑消息"
@@ -182,17 +211,8 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
             setDraft(event.target.value);
             requestAnimationFrame(resizeEdit);
           }}
-          onKeyDown={(event) => {
-            if (isComposingKey(event.nativeEvent)) return;
-            if (event.key === 'Escape') {
-              event.preventDefault();
-              cancelEdit();
-            } else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-              event.preventDefault();
-              void saveEdit();
-            }
-          }}
-        />
+          onKeyDown={onEditKey}
+        />}
         {preservedCount > 0 && <div className="message-edit-preserved">保留 {preservedCount} 个图片或附件</div>}
         {editError && <div className="message-edit-error" role="alert">{editError}</div>}
       </div>
@@ -227,7 +247,7 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
   </div>}
   {/* 用户消息同样在悬浮时显示复制、编辑与发送时间；复制时带上消息里的图片。 */}
   {!editing && <MessageActions
-    text={copyText}
+    text={readableComposerReferences(copyText)}
     images={messageImages}
     time={message.timestamp}
     label="复制消息"

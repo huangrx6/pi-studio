@@ -31,11 +31,14 @@ const {
 const {
   closeAllExtensionDataViewServices,
 } = require('./extension-data-view.cjs');
+const { normalizeCanvasScene } = require('./extension-canvas.cjs');
+const { taskBoardProtocol } = require('../core/task-board-contract.cjs');
 const {
   createOfficialExtensionService,
 } = require('./official-extensions.cjs');
 const { normalizeExternalHttpUrl } = require('../core/external-url.cjs');
-const { studioDataDirectory } = require('../core/studio-paths.cjs');
+const { pluginDataDirectory, studioDataDirectory } = require('../core/studio-paths.cjs');
+const { readPluginIcon } = require('./plugin-icon.cjs');
 
 const MANIFEST_NAME = 'pi-studio.extension.json';
 const API_VERSION = 1;
@@ -369,6 +372,10 @@ function syncStudioExtensions(cwd) {
     }
     seen.add(key);
     const current = db.getExtension(key);
+    if (current?.origin === 'plugin' && current.source !== manifest.path && fs.existsSync(current.source)) {
+      snapshot.errors.push({ path: manifest.path, message: `扩展已由插件提供：${key}` });
+      continue;
+    }
     let contentHash = '';
     if (manifest.scope === 'project') {
       try {
@@ -480,7 +487,7 @@ function extensionContentFingerprint(manifest) {
 }
 
 function installedExtension(row, cwd) {
-  if (row.scope === 'builtin') return undefined;
+  if (row.scope === 'builtin' || row.origin === 'plugin') return undefined;
   return extensionDistributionService().getInstalled(
     row.manifest.id,
     row.scope,
@@ -489,12 +496,16 @@ function installedExtension(row, cwd) {
 }
 
 function fingerprintForRow(row, cwd) {
-  return extensionContentFingerprint({
+  const fingerprint = extensionContentFingerprint({
     ...row.manifest,
     path: row.source,
     scope: row.scope,
     installation: installedExtension(row, cwd),
   });
+  if (row.origin === 'plugin' && row.contentHash && fingerprint !== row.contentHash) {
+    throw new Error('插件扩展代码已改变，请重新安装插件');
+  }
+  return fingerprint;
 }
 
 function normalizedExtensionError(error, row) {
@@ -670,6 +681,18 @@ function normalizeDataSources(value, row) {
     if (provider.subscribe !== undefined && typeof provider.subscribe !== 'function') {
       throw new Error(`数据源 ${id} 的 subscribe 必须是函数`);
     }
+    if (provider.writeCanvas !== undefined && (
+      typeof provider.writeCanvas !== 'function'
+      || !row.manifest.contributes.panels.some(panel => panel.canvas?.sourceId === contributionId(row, row.scope, id))
+    )) {
+      throw new Error(`数据源 ${id} 只能为已声明的 canvas 提供 writeCanvas`);
+    }
+    if (provider.writeTaskBoard !== undefined && (
+      typeof provider.writeTaskBoard !== 'function'
+      || !row.manifest.contributes.panels.some(panel => panel.taskBoard?.sourceId === contributionId(row, row.scope, id))
+    )) {
+      throw new Error(`数据源 ${id} 只能为已声明的 taskBoard 提供 writeTaskBoard`);
+    }
     providers.set(id, provider);
   }
   const missing = [...declared].filter((id) => !providers.has(id));
@@ -680,6 +703,9 @@ function normalizeDataSources(value, row) {
 }
 
 function extensionDataDirectory(row, cwd, extensionRoot) {
+  if (row.origin === 'plugin' && row.ownerPluginId) {
+    return pluginDataDirectory(row.ownerPluginId, row.manifest.id, { create: true });
+  }
   const installs = extensionDistributionService();
   const installed = row.scope === 'builtin'
     ? undefined
@@ -698,6 +724,22 @@ function extensionDataDirectory(row, cwd, extensionRoot) {
     throw new Error('扩展数据目录通过符号链接越过了受管目录');
   }
   return fs.realpathSync(dataDirectory);
+}
+
+function revealExtensionPanel(row, panelId, durableConversationId) {
+  if (!Number.isSafeInteger(durableConversationId) || durableConversationId < 1) return;
+  const id = contributionReference(panelId, { manifestId: row.manifest.id, scope: row.scope });
+  const db = getStudioDatabase();
+  const current = db.getExtension(row.id);
+  if (!current?.enabled || !current.trusted
+    || !current.manifest.contributes.panels.some(panel => panel.slot === 'panel.side'
+      && contributionId(current, current.scope, panel.id) === id)) return;
+  const conversation = db.getConversation(String(durableConversationId));
+  if (!conversation || conversation.archived) return;
+  const sessionId = String(conversation.publicId || conversation.id);
+  for (const target of require('electron').webContents?.getAllWebContents() ?? []) {
+    if (!target.isDestroyed()) target.send('pi:extension-panel-requested', { sessionId, panelId: id });
+  }
 }
 
 function providerCredentialCapability(row) {
@@ -740,7 +782,7 @@ async function loadRuntimeExtension(row, cwd, options = {}) {
   const extensionRoot = path.dirname(row.source);
   let contentHash = typeof options.contentHash === 'string' ? options.contentHash : '';
   if (row.scope !== 'builtin') {
-    if (!contentHash && (row.scope === 'project' || installedExtension(row, cwd))) {
+    if (!contentHash && (row.scope === 'project' || row.origin === 'plugin' || installedExtension(row, cwd))) {
       contentHash = fingerprintForRow(row, cwd);
     }
     if (row.scope === 'project' && row.trusted && row.contentHash !== contentHash) {
@@ -793,6 +835,11 @@ async function loadRuntimeExtension(row, cwd, options = {}) {
         scope: row.scope,
         manifest: structuredClone(row.manifest),
         dataDirectory,
+        ...(hasPermission(row.manifest.permissions, 'ui.panels')
+          ? { revealPanel: (panelId, conversationId) => revealExtensionPanel(row, panelId, conversationId) } : {}),
+        ...(row.manifest.contributes?.panels?.some(panel => panel.canvas)
+          ? { canvasVersion: 1, canvasPlaybackVersion: 1, normalizeCanvasScene } : {}),
+        ...(row.manifest.contributes?.panels?.some(panel => panel.taskBoard) ? { taskBoard: taskBoardProtocol } : {}),
         ...(providerCredentials ? { providerCredentials } : {}),
       });
     }
@@ -1064,6 +1111,13 @@ function managementState(row, graph) {
   }
   const removable = tier === 'user' || tier === 'project';
   if (removable) removeBlockedReason = dependentReason;
+  if (removable && row.origin === 'plugin' && row.managed && !row.userOverride) {
+    const owner = typeof row.ownerPluginId === 'string' && row.ownerPluginId.trim()
+      ? row.ownerPluginId.trim()
+      : '所属插件';
+    removeBlockedReason = dependentReason
+      || `由插件「${owner}」托管，请在「插件」页卸载`;
+  }
   return {
     canDisable: !disableBlockedReason,
     canRemove: removable && !removeBlockedReason,
@@ -1535,11 +1589,16 @@ function extensionRowsForRuntime(cwd) {
 
 function extensionUiSnapshot() {
   const snapshot = extensionHostSnapshot();
+  const plugins = new Map(getStudioDatabase().listPlugins().map(plugin => [plugin.id, plugin]));
   const items = [];
   let sourceOrder = 0;
   for (const row of snapshot.extensions) {
-    if (!row.available || !hasPermission(row.manifest.permissions || [], 'ui.panels')) continue;
-    for (const panel of row.manifest.contributes?.panels || []) {
+    if (!row.available) continue;
+    const permissions = row.manifest.permissions || [];
+    const panels = hasPermission(permissions, 'ui.panels') ? row.manifest.contributes?.panels || [] : [];
+    const plugin = plugins.get(row.ownerPluginId);
+    const iconDataUrl = plugin && panels.length ? readPluginIcon(plugin.installPath, plugin.icon) : '';
+    for (const panel of panels) {
       items.push({
         id: contributionId(row, row.scope, panel.id),
         extensionId: row.id,
@@ -1551,6 +1610,10 @@ function extensionUiSnapshot() {
         slot: panel.slot,
         ...(panel.icon ? { icon: panel.icon } : {}),
         ...(panel.color ? { color: panel.color } : {}),
+        ...(plugin ? { ownerPluginId: plugin.id } : {}),
+        ...(iconDataUrl && panel.slot === 'panel.side' ? { iconDataUrl } : {}),
+        ...(panel.canvas ? { canvas: panel.canvas } : {}),
+        ...(panel.taskBoard ? { taskBoard: panel.taskBoard } : {}),
         size: panel.size || 'regular',
         priority: panel.priority || 0,
         sourceOrder,
@@ -1561,7 +1624,7 @@ function extensionUiSnapshot() {
       });
       sourceOrder += 1;
     }
-    if (hasPermission(row.manifest.permissions || [], 'ui.settings')) {
+    if (hasPermission(permissions, 'ui.settings')) {
       for (const setting of row.manifest.contributes?.settings || []) {
         items.push({
           id: contributionId(row, row.scope, setting.id),
@@ -1609,6 +1672,9 @@ function normalizeCommandResult(value, row) {
   const promptText = text(value.promptText, 100_000);
   const panelId = text(value.panelId, 220);
   const settingsPage = text(value.settingsPage, 32);
+  const hasPanel = (id) => hasPermission(row.manifest.permissions || [], 'ui.panels')
+    && (row.manifest.contributes?.panels || []).some(panel =>
+      panel.slot === 'panel.side' && contributionId(row, row.scope, panel.id) === id);
   if (message) result.message = message;
   if (promptText) result.promptText = promptText;
   if (value.submit === true) result.submit = true;
@@ -1618,13 +1684,8 @@ function normalizeCommandResult(value, row) {
       scope: row.scope,
     });
     if (!action) throw new Error('扩展命令返回了不受支持的 UI action');
-    if (action.kind === 'openPanel') {
-      const declared = hasPermission(row.manifest.permissions || [], 'ui.panels')
-        && (row.manifest.contributes?.panels || [])
-          .some((panel) => contributionId(row, row.scope, panel.id) === action.panelId);
-      if (!declared) {
-        throw new Error('扩展命令返回了未声明的 openPanel UI action');
-      }
+    if (action.kind === 'openPanel' && !hasPanel(action.panelId)) {
+      throw new Error('扩展命令返回的 openPanel 必须指向本扩展声明的 panel.side 面板');
     }
     if (action.kind === 'runCommand') {
       const target = (row.manifest.contributes?.commands || [])
@@ -1638,12 +1699,7 @@ function normalizeCommandResult(value, row) {
     result.action = action;
   }
   if (panelId) {
-    const declaredPanel = hasPermission(row.manifest.permissions || [], 'ui.panels')
-      && (row.manifest.contributes?.panels || [])
-        .some((panel) => contributionId(row, row.scope, panel.id) === panelId);
-    if (!declaredPanel) {
-      throw new Error('扩展命令返回了未在本扩展声明且具备 ui.panels 权限的 panelId');
-    }
+    if (!hasPanel(panelId)) throw new Error('扩展命令返回的 panelId 必须指向本扩展声明的 panel.side 面板');
     result.panelId = panelId;
   }
   if (settingsPage) {

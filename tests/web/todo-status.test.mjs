@@ -17,3 +17,15 @@ test('task history distinguishes the owner ending from task completion and expli
   assert.equal(matchesTaskFilter({ lifecycle: 'ended', tasks }, 'incomplete'), true);
   assert.equal(matchesTaskFilter({ lifecycle: 'ended', tasks: [tasks[2]] }, 'incomplete'), false);
 });
+
+test('task catalog search matches a checklist or a visible task with the requested status', () => {
+  const plan = { title: 'PDF 引用', lifecycle: 'open', tasks: [
+    { id: 1, subject: '核对 Renderer', status: 'in_progress' },
+    { id: 2, subject: '迁移引用', status: 'pending', blockedBy: [1] },
+    { id: 3, subject: '移除过期方案', status: 'deleted' },
+  ] };
+  assert.ok(matchesTaskFilter(plan, 'blocked', 'pdf'));
+  assert.ok(matchesTaskFilter(plan, 'active', 'renderer'));
+  assert.equal(matchesTaskFilter(plan, 'blocked', 'renderer'), false);
+  assert.equal(matchesTaskFilter(plan, 'all', '过期'), false);
+});

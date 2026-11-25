@@ -33,7 +33,7 @@ pi-studio/
 │   ├── scripts/            # 网站 JavaScript
 │   └── assets/             # 官网插图与精选产品截图
 ├── docs/                   # Markdown：架构、指南、扩展、维护、发布
-├── assets/                 # 桌面应用图标与内置分镜资源
+├── assets/                 # 桌面应用图标与内置资源
 ├── extensions/             # 随应用发布的官方扩展
 ├── examples/extensions/    # 扩展作者示例
 ├── sdk/

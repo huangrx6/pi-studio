@@ -240,6 +240,7 @@ function createRun(startedAt = Date.now()) {
     requests: 0,
     usageDelta: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
     status: 'running',
+    observed: false,
     finishedAt: undefined,
     tps: 0,
     ttftMs: undefined,
@@ -272,6 +273,20 @@ function requestRate(request) {
     nonNegative(request.durationMs) - nonNegative(request.ttftMs),
   );
   return request.output / (generationMs / 1_000);
+}
+
+function estimateRequestRate(request, durationMs) {
+  const estimatedTokens = Math.max(request.streamedChars, request.outputChars) / 4;
+  const generationMs = Math.max(100, durationMs - nonNegative(request.ttftMs));
+  return estimatedTokens / (generationMs / 1_000);
+}
+
+function displayedTps(session, run) {
+  return session.tpsSamples.at(-1)
+    ?? session.currentRequest?.liveTps
+    ?? run?.tps
+    ?? session.lastRequest?.liveTps
+    ?? 0;
 }
 
 function createInstrument(runtime, name, kind) {
@@ -486,11 +501,11 @@ class MetricsRuntime {
         run.model = boundedText(row.modelId, 240);
         run.status = row.status === 'failed' ? 'failed' : 'done';
         run.finishedAt = nonNegative(row.finishedAt) || run.startedAt;
-        run.tps = nonNegative(row.tps);
         run.ttftMs = Number.isFinite(row.ttftMs) ? nonNegative(row.ttftMs) : undefined;
         run.durationMs = nonNegative(row.durationMs);
         run.input = input + cacheRead + cacheWrite;
         run.output = output;
+        run.tps = nonNegative(row.tps) || requestRate(run);
         run.cacheRead = cacheRead;
         run.cacheWrite = cacheWrite;
         run.cost = cost;
@@ -761,11 +776,7 @@ class MetricsRuntime {
       const chars = nonNegative(attributes?.chars);
       const request = record.request;
       request.outputChars += chars;
-      const generationMs = Math.max(
-        100,
-        elapsedMs(request.startedAtMonotonic, this.now()) - nonNegative(request.ttftMs),
-      );
-      request.liveTps = (Math.max(request.outputChars, request.streamedChars) / 4) / (generationMs / 1_000);
+      request.liveTps = estimateRequestRate(request, elapsedMs(request.startedAtMonotonic, this.now()));
       if (record.session) {
         record.session.stage = attributes?.type === 'thinking' ? '思考中' : '生成中';
         this.pushTpsSample(record.session, request.liveTps);
@@ -784,7 +795,9 @@ class MetricsRuntime {
       }
       return;
     }
-    if (name === 'pi.durable.submission' && record.session) {
+    // The conversation view settles observed runs. Submission events also
+    // cover writes and queued inputs, which can settle while a run continues.
+    if (name === 'pi.durable.submission' && record.session && !record.session.currentRun.observed) {
       const status = boundedText(attributes?.status, 40);
       if (status === 'done' || status === 'unanswered') {
         this.finishRun(record.session, status === 'done' ? 'done' : 'failed');
@@ -864,10 +877,7 @@ class MetricsRuntime {
     request.ttftMs = request.ttftMs === undefined
       ? undefined
       : Math.min(request.ttftMs, request.durationMs);
-    const actualTps = requestRate(request);
-    if (actualTps > 0) {
-      request.liveTps = actualTps;
-    }
+    request.liveTps = requestRate(request) || request.liveTps;
 
     if (this.onRequestCompleted) {
       try {
@@ -879,7 +889,7 @@ class MetricsRuntime {
           status: record.status === 'error' ? 'failed' : 'done',
           providerId: request.provider,
           modelId: request.model,
-          tps: actualTps || request.liveTps,
+          tps: request.liveTps,
           ttftMs: request.ttftMs,
           durationMs: request.durationMs,
           input: request.input,
@@ -912,7 +922,7 @@ class MetricsRuntime {
     run.cacheWrite += request.cacheWrite;
     run.cost += request.cost;
     run.requests += 1;
-    run.tps = actualTps || request.liveTps;
+    run.tps = request.liveTps || run.tps;
     if (request.ttftMs !== undefined) run.ttftMs = request.ttftMs;
     run.durationMs = request.durationMs;
     session.lastRequest = { ...request };
@@ -928,9 +938,10 @@ class MetricsRuntime {
   }
 
   ensureRun(session) {
-    if (!session.currentRun || session.currentRun.status !== 'running') {
-      session.currentRun = createRun();
+    if (!session.running || session.currentRun.status !== 'running') {
+      session.currentRun = createRun(this.clock());
       session.usageBaseline = { ...session.usageTotal };
+      session.tpsSamples = [];
     }
     session.running = true;
     return session.currentRun;
@@ -950,7 +961,7 @@ class MetricsRuntime {
     request.streamedChars = chars;
     const duration = elapsedMs(request.startedAtMonotonic, this.now());
     request.durationMs = duration;
-    request.liveTps = (Math.max(chars, request.outputChars) / 4) / (Math.max(100, duration - nonNegative(request.ttftMs)) / 1000);
+    request.liveTps = estimateRequestRate(request, duration);
     session.stage = ['生成中', '思考中', '工具参数生成中'].includes(sample.phase) ? sample.phase : '生成中';
     this.pushTpsSample(session, request.liveTps);
     this.markChanged(session);
@@ -960,16 +971,16 @@ class MetricsRuntime {
     if (!this.enabled || !event || typeof event !== 'object') return;
     const id = conversationId(event.conversationId);
     if (!id) return;
+    if (event.type === 'stream.closed') {
+      const session = this.sessions.get(id);
+      if (session) session.currentRun.observed = false;
+      return;
+    }
     this.ensurePersistedMetricSession(id);
     const session = this.touchSession(id);
     if (event.type === 'run.started' || event.type === 'run_start') {
       session.hasRunState = true;
-      if (!session.running || session.currentRun.status !== 'running') {
-        session.currentRun = createRun(this.clock());
-        session.usageBaseline = { ...session.usageTotal };
-        session.tpsSamples = [];
-      }
-      session.running = true;
+      this.ensureRun(session).observed = true;
       session.stage = '运行开始';
       this.markChanged(session);
       return;
@@ -984,10 +995,13 @@ class MetricsRuntime {
     }
     if (event.type === 'snapshot') {
       session.hasRunState = true;
+      if (event.payload?.usage && !session.running) {
+        session.usageTotal = usageTotals(event.payload.usage);
+      }
       const running = Boolean(event.payload?.run);
-      if (running && !session.running) {
-        this.ensureRun(session);
-        session.stage = '恢复运行';
+      if (running) {
+        if (!session.running) session.stage = '恢复运行';
+        this.ensureRun(session).observed = true;
       } else if (!running && session.running && session.activeTasks.size === 0) {
         this.finishRun(session, 'done');
       }
@@ -998,9 +1012,7 @@ class MetricsRuntime {
       const total = usageTotals(event.payload?.usage);
       if (totalsTotal(total) === 0 && total.cost === 0) return;
       session.usageTotal = total;
-      const run = session.currentRun.status === 'running'
-        ? session.currentRun
-        : session.recentRuns[0];
+      const run = session.running ? session.currentRun : undefined;
       if (run) {
         const usageDelta = {
           input: Math.max(0, total.input - session.usageBaseline.input),
@@ -1151,20 +1163,12 @@ class MetricsRuntime {
     }
   }
 
-  liveRate(request) {
-    if (!request || request.completed) return 0;
-    const tokens = Math.max(request.streamedChars || 0, request.outputChars || 0) / 4;
-    return tokens / (Math.max(100, elapsedMs(request.startedAtMonotonic, this.now()) - nonNegative(request.ttftMs)) / 1000);
-  }
-
   renderContent(session) {
     const run = session.running ? session.currentRun : session.recentRuns[0];
     const request = session.currentRequest || session.lastRequest;
     if (!run && !request) return [];
 
-    const tps = session.running
-      ? this.liveRate(session.currentRequest)
-      : (run?.tps || requestRate(request));
+    const tps = displayedTps(session, run);
     const ttft = session.currentRequest ? session.currentRequest.ttftMs : (request?.ttftMs ?? run?.ttftMs);
     const duration = session.running
       ? (session.currentRequest ? elapsedMs(session.currentRequest.startedAtMonotonic, this.now()) : request?.durationMs)
@@ -1176,6 +1180,10 @@ class MetricsRuntime {
     const model = request
       ? `${request.provider || 'unknown'}/${request.model || 'unknown'}`
       : '';
+    let tpsDetail = model || '最近请求';
+    if (session.currentRequest?.liveTps > 0) tpsDetail = `${model} · 流式估算`;
+    else if (tps > 0 && (session.running || !request?.liveTps)) tpsDetail = '最近采样';
+    else if (session.running && tps === 0) tpsDetail = '等待 TPS 采样';
     const tpsMetric = compactRate(tps);
     const ttftMetric = compactDuration(ttft);
     const durationMetric = compactDuration(duration);
@@ -1241,9 +1249,7 @@ class MetricsRuntime {
           label: '实时 TPS',
           value: tpsMetric.value,
           unit: tpsMetric.unit,
-          detail: model
-            ? `${model}${session.running ? ' · 流式估算' : ''}`
-            : (session.running ? '流式估算' : '最近请求'),
+          detail: tpsDetail,
           tone: tps > 0 ? 'success' : 'neutral',
         },
         {
@@ -1319,9 +1325,7 @@ class MetricsRuntime {
     const run = session.running ? session.currentRun : session.recentRuns[0];
     const request = session.currentRequest || session.lastRequest;
     if (!run && !request) return [];
-    const tps = session.running
-      ? this.liveRate(session.currentRequest)
-      : (run?.tps || requestRate(request));
+    const tps = displayedTps(session, run);
     const ttft = session.currentRequest ? session.currentRequest.ttftMs : (request?.ttftMs ?? run?.ttftMs);
     const tpsMetric = compactRate(tps);
     return [{

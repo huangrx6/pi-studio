@@ -11,26 +11,25 @@ import type {
   ChatMessage,
   ComposerAttachment,
   ComposerCommand,
-  ComposerFile,
+  ComposerMentionOption,
 } from '../../types/chat-types';
 import type { ModelCatalog, ModelSelection } from '../../types/model-types';
 import type { SessionStateForPersistence } from './useMessageDelivery';
 import type { QueuedEditContext, QueuedPrompt } from './composer-types';
 import type { ComposerDraft, ComposerDraftStore } from './composer-drafts';
 import type { ComposerMenuState } from './useComposerSuggestions';
+import { composerCapabilityCategories } from './composer-menu';
 import type { ModelPickerRequest } from '../models/ModelPicker';
 import type {
-  ExtensionSettingsPage,
   ExtensionUiItem,
   ExtensionUiSnapshot,
 } from '../../types/extension-types';
 import type { ContextPolicy } from './ContextUsageChip';
 import type { ContextUsage } from './context-usage';
-import type { PermissionMode, PermissionUiState } from '../../shell/app-shell-config';
+import type { PermissionMode, PermissionUiState, SettingsTab } from '../../shell/app-shell-config';
 import { permissionOptions } from '../../shell/app-shell-config';
-import { ExtensionSlot, type ExtensionNotice } from '../extensions/ExtensionSlot';
-import { placementAllowsSlot, placementForItem } from '../extensions/extension-placement';
-import type { ExtensionPlacement } from '../../shared/preferences';
+import type { ExtensionNotice } from '../extensions/ExtensionSlot';
+import { ExtensionSummaries } from '../extensions/ExtensionSummaries';
 import { AttachmentIcon } from '../../shared/AttachmentIcon';
 import { formatShortcut } from '../../shared/shortcuts';
 import { WorkspacePicker } from '../../shell/WorkspacePicker';
@@ -49,14 +48,10 @@ import { QueuedMessages, type QueuedPreview } from './QueuedMessages';
 import { ConversationError } from './ConversationError';
 import { ContextUsageChip } from './ContextUsageChip';
 import { ModelPicker } from '../models/ModelPicker';
-import {
-  ConversationExtensionDock,
-} from '../extensions/ConversationExtensionHub';
 
 type Setter<T> = Dispatch<SetStateAction<T>>;
 
 export type ComposerDockProps = {
-  open: boolean;
   isNewConversation: boolean;
   workspace: string;
   workspaces: Array<{ cwd: string; name: string }>;
@@ -77,7 +72,7 @@ export type ComposerDockProps = {
   composerMenuLoading: boolean;
   composerMenuError: string | null;
   composerCommandOptions: ComposerCommand[];
-  composerFileOptions: ComposerFile[];
+  composerMentionOptions: ComposerMentionOption[];
   composerCommands: ComposerCommand[];
   updateComposerMenu: (value: string, cursor: number) => void;
   setComposerMenu: Setter<ComposerMenuState | null>;
@@ -124,20 +119,20 @@ export type ComposerDockProps = {
   modelPickerContextKey: string;
   setModelPickerRequest: Setter<ModelPickerRequest | null>;
   onConfigureModels: () => void;
-  onOpenSettings: (page?: ExtensionSettingsPage) => void;
+  onOpenSettings: (page?: SettingsTab) => void;
   selectDraftWorkspace: (cwd: string) => void;
   chooseFile: () => void;
   setActionPaletteOpen: Setter<boolean>;
   error: string | null;
   setError: Setter<string | null>;
-  conversationFooterExtensionItems: ExtensionUiItem[];
-  extensionPlacements?: Record<string, ExtensionPlacement>;
+  extensionAboveItems: ExtensionUiItem[];
+  extensionBelowItems: ExtensionUiItem[];
+  openExtensionPanel: (panelId: string) => void;
   extensionSurface: ExtensionUiSnapshot;
   notifyExtension: (notice: ExtensionNotice) => void;
 };
 
 function ComposerDockComponent({
-  open,
   isNewConversation,
   workspace,
   workspaces,
@@ -158,7 +153,7 @@ function ComposerDockComponent({
   composerMenuLoading,
   composerMenuError,
   composerCommandOptions,
-  composerFileOptions,
+  composerMentionOptions,
   composerCommands,
   updateComposerMenu,
   setComposerMenu,
@@ -211,14 +206,16 @@ function ComposerDockComponent({
   setActionPaletteOpen: _setActionPaletteOpen,
   error,
   setError,
-  conversationFooterExtensionItems,
-  extensionPlacements,
+  extensionAboveItems,
+  extensionBelowItems,
+  openExtensionPanel,
   extensionSurface,
   notifyExtension,
 }: ComposerDockProps) {
+  const choosingCapabilityCategory = composerMenu?.kind === 'capability' && !composerMenu.capabilityType;
   const composerOptionsCount = composerMenu?.kind === 'slash'
     ? composerCommandOptions.length
-    : composerFileOptions.length;
+    : choosingCapabilityCategory ? composerCapabilityCategories.length : composerMentionOptions.length;
   const composerCommandNames = useMemo(
     () => new Set(composerCommands.map((command) => command.name)),
     [composerCommands],
@@ -231,31 +228,26 @@ function ComposerDockComponent({
   // 模型没配置时，发送按钮只会禁用；点击输入框时给一条可见的配置入口，
   // 而不是把用户挡在输入框外。
   const hasUsableModel = Boolean(modelSelection.modelRef) && !modelSelection.unavailable;
-  // status 里的 footer 摘要可以声明 while-active：只有回合进行中才占位。
-  // 兜底再校验一次落点：用户把扩展设为「顶栏」时，底部这条必须消失，
-  // 不论上游 items 是否已经过滤过。
-  const footerExtensionItems = conversationFooterExtensionItems.filter((item) => (
-    item.content.length > 0
-    && (item.visibility !== 'while-active' || turnActive)
-    && placementAllowsSlot(placementForItem(extensionPlacements, item), 'conversation.footer')
-  ));
   const [modelHintOpen, setModelHintOpen] = useState(false);
+  const extensionContext = {
+    surface: extensionSurface,
+    cwd: session?.cwd || workspace,
+    sessionId: session?.id,
+    modelRef: modelSelection.modelRef,
+    onOpenSettings,
+    onSendPrompt: sendPromptFromExtension,
+    onNotify: notifyExtension,
+    onOpenPanel: openExtensionPanel,
+  };
 
-  return <div className="composer-dock" hidden={!open}>
+  function backToCapabilityCategories() {
+    if (composerMenu?.kind !== 'capability') return;
+    setComposerMenu({ ...composerMenu, capabilityType: undefined });
+    setComposerMenuIndex(0);
+  }
+
+  return <div className="composer-dock">
     {isNewConversation && <NewConversationWelcome loading={stateLoading} />}
-    {!isNewConversation && footerExtensionItems.length > 0 && (
-      <ConversationExtensionDock
-        items={footerExtensionItems}
-        surface={extensionSurface}
-        placement="footer"
-        cwd={session?.cwd}
-        sessionId={session?.id}
-        modelRef={modelSelection.modelRef}
-        onOpenSettings={(page) => { if (page) onOpenSettings(page); }}
-        onSendPrompt={sendPromptFromExtension}
-        onNotify={notifyExtension}
-      />
-    )}
     {queuedPrompts.length > 0 && <QueuedMessages
       items={queuedPreviews}
       canSteer={turnActive}
@@ -267,17 +259,30 @@ function ComposerDockComponent({
       onReorder={reorderQueued}
     />}
     {isNewConversation && !workspace && <p id="workspace-selection-hint" className="sr-only" role="status">选择工作区后才能发送第一条消息</p>}
+    <ExtensionSummaries {...extensionContext} items={extensionAboveItems} slot="composer.above" />
     <div className="composer-wrap" ref={composerWrapRef}>
       {composerMenu && <ComposerSuggestions
         menu={composerMenu}
         commandOptions={composerCommandOptions}
-        fileOptions={composerFileOptions}
+        mentionOptions={composerMentionOptions}
         loading={composerMenuLoading}
         error={composerMenuError || ''}
         activeIndex={composerMenuIndex}
         workspace={workspace}
         onHover={setComposerMenuIndex}
         onSelect={selectComposerOption}
+        onCategory={kind => {
+          const sigil = kind === 'file' ? '@' : kind === 'agent' ? '#' : '$';
+          const { start, end, query } = composerMenu;
+          setPrompt(prompt.slice(0, start) + sigil + prompt.slice(start + 1));
+          setComposerMenu({ kind, start, end, query });
+          setComposerMenuIndex(0);
+          requestAnimationFrame(() => {
+            composerEditorRef.current?.focus();
+            composerEditorRef.current?.setSelectionRange(end, end);
+          });
+        }}
+        onBack={backToCapabilityCategories}
         onRetry={retryComposerSuggestions}
       />}
       {session?.id && compaction.active && <div className="compaction-banner" role="status"><LoadingIndicator /><span>正在压缩我们的对话内容，以便继续对话…</span></div>}
@@ -296,15 +301,6 @@ function ComposerDockComponent({
           onClick={() => setModelHintOpen(false)}
         ><X aria-hidden="true" /></button>
       </div>}
-      <ExtensionSlot
-        slot="composer.before"
-        cwd={workspace}
-        sessionId={session?.id}
-        modelRef={modelSelection.modelRef}
-        onOpenSettings={(page) => { if (page) onOpenSettings(page); }}
-        onSendPrompt={sendPromptFromExtension}
-        onNotify={notifyExtension}
-      />
       {/* 提示属于触发它的那条会话：切换后不再跟到别的输入框上 */}
       {scopedComposerFeedback && <ComposerFeedback
         message={scopedComposerFeedback.message}
@@ -409,14 +405,17 @@ function ComposerDockComponent({
                 busy: turnActive,
                 menuOpen: Boolean(composerMenu),
                 optionCount: composerOptionsCount,
-                pending: composerMenuLoading || Boolean(composerMenuError),
+                pending: composerMenuLoading || Boolean(composerMenuError || composerMenu?.capabilityType),
               });
               if (action === 'none') return;
               event.preventDefault();
               if (action === 'previous') setComposerMenuIndex(index => (index - 1 + composerOptionsCount) % composerOptionsCount);
               else if (action === 'next') setComposerMenuIndex(index => (index + 1) % composerOptionsCount);
               else if (action === 'select') selectComposerOption(composerMenuIndex);
-              else if (action === 'close') setComposerMenu(null);
+              else if (action === 'close') {
+                if (composerMenu?.capabilityType) backToCapabilityCategories();
+                else setComposerMenu(null);
+              }
               else if (action === 'queue') void send(undefined, 'queue');
               else if (action === 'send' || action === 'steer') void send();
             }}
@@ -437,7 +436,7 @@ function ComposerDockComponent({
                 ? `编辑排队消息 · ${formatShortcut('Mod+Enter')} 放回原位置 · Shift+Enter 换行`
                 : turnActive
                   ? `Enter 补充当前任务 · ${formatShortcut('Mod+Enter')} 排队 · Shift+Enter 换行`
-                  : '输入问题，或使用 / 命令、@ 文件…'}
+                  : '输入问题，或用 @ 引用文件、# 引用智能体、$ 引用能力…'}
           />
         </div>
         <ComposerToolbar
@@ -486,7 +485,7 @@ function ComposerDockComponent({
               compacting={compaction.active}
               disabled={!session?.id || stateLoading}
               onCompact={() => void compactContext()}
-              onOpenSettings={() => onOpenSettings('harness')}
+              onOpenSettings={() => onOpenSettings('harness-compaction')}
             />}
           </>}
           model={<ModelPicker
@@ -505,16 +504,7 @@ function ComposerDockComponent({
         />
       </div>
     </div>
-    <ExtensionSlot
-      slot="status.bar"
-      hostGlobalPanels
-      cwd={workspace}
-      sessionId={session?.id}
-      modelRef={modelSelection.modelRef}
-      onOpenSettings={(page) => { if (page) onOpenSettings(page); }}
-      onSendPrompt={sendPromptFromExtension}
-      onNotify={notifyExtension}
-    />
+    <ExtensionSummaries {...extensionContext} items={extensionBelowItems} slot="composer.below" />
     {isNewConversation && error && <ConversationError className="new-conversation-error" message={error} onDismiss={() => setError(null)} />}
   </div>;
 }

@@ -71,7 +71,7 @@ try {
       modeGet: async () => ({ available: true, mode: 'smart' }),
       composerResources: async () => ({ commands: [], skills: [] }),
       extensionsUi: async () => ({ items: [], errors: [], syncedAt: Date.now(), apiVersion: 1 }),
-      conversationExtensionUiPreferences: async () => ({ version: 1, layout: 'grid', globalOrder: [], sessionOrders: {} }),
+      conversationExtensionUiPreferences: async () => ({ version: 1, globalOrder: [] }),
     }, { get: (target, key) => key in target ? target[key] : String(key).startsWith('on') ? () => () => {} : async () => undefined });
   });
 

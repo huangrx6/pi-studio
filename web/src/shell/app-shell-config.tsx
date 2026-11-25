@@ -1,11 +1,12 @@
 import {
-  ArchiveRestore, BarChart3, Bot, Code2, Cpu, FileCode2, Info, Keyboard,
-  GitBranch, Globe, Layers3, Plug, Settings, ShieldCheck, Wrench, AppWindow,
+  ArchiveRestore, BarChart3, Bot, Code2, Cpu, HardDrive, Info, Keyboard, KeyRound,
+  GitBranch, Globe, Package, Monitor, Settings, ShieldCheck, Wrench, AppWindow, Plug, FileCode2, Layers3,
 } from 'lucide-react';
 import appIcon from '../../../assets/icon.png';
 
 // Keep navigation to the noun labels users need to scan; each page's controls
 // and layout carry the detail rather than repeating it as a sidebar subtitle.
+// MCP / 技能 deep links stay valid as SettingsTab aliases and open the 插件 hub.
 export const settingsPages = [
   // 先外观与输入，再模型与执行，再资源，最后工作区与应用数据。
   { id: 'general', group: '外观与输入', label: '通用', icon: Settings, keywords: ['外观', '主题', '背景', '壁纸', '终端', '托盘', '菜单栏', '字号', '圆角', '强调色'] },
@@ -16,17 +17,55 @@ export const settingsPages = [
   { id: 'permissions', group: '执行与权限', label: '权限策略', icon: ShieldCheck, keywords: ['批准', '规则', '安全'] },
   { id: 'harness', group: '执行与权限', label: 'Harness 配置', icon: Code2 },
   { id: 'subagents', group: '执行与权限', label: '子智能体', icon: Bot },
-  { id: 'mcp', group: '资源与扩展', label: 'MCP 服务器', icon: Plug },
-  { id: 'skills', group: '资源与扩展', label: '技能', icon: FileCode2 },
-  { id: 'extensions', group: '资源与扩展', label: '扩展', icon: Layers3 },
+  { id: 'plugins', group: '资源与扩展', label: '插件', icon: Package, keywords: ['Plugin', 'CLI', '插件包', '市场', '安装'] },
   { id: 'git', group: '工作区', label: 'Git 工作流', icon: GitBranch, keywords: ['Git 与 Worktree', '工作树', 'Git workflow', 'gitworkflow', '差异', '换行', '分支'] },
   { id: 'network', group: '数据与应用', label: '网络代理', icon: Globe, keywords: ['proxy', '代理', '网络', 'VPN', '连接', 'HTTP', 'SOCKS', '超时'] },
   { id: 'browser', group: '数据与应用', label: '浏览器', icon: AppWindow, keywords: ['Browser', 'CDP', 'Chrome', '下载', '历史', '网站权限', 'webview', '内嵌浏览器'] },
+  { id: 'desktop-control', group: '数据与应用', label: '电脑操控', icon: Monitor, keywords: ['Desktop', 'Computer Use', '屏幕', '辅助功能', '窗口', '截图', '桌面', '只读'] },
+  { id: 'secrets', group: '数据与应用', label: '测试凭据', icon: KeyRound, keywords: ['密钥', '令牌', '占位符', 'secret', 'token', '凭据引用'] },
   { id: 'archives', group: '数据与应用', label: '归档会话', icon: ArchiveRestore },
+  { id: 'storage', group: '数据与应用', label: '设备存储', icon: HardDrive, keywords: ['storage', '磁盘', '硬盘', '空间', '占用', '缓存', '附件', '工作树', '数据目录', '数据库', '文件夹'] },
   { id: 'about', group: '数据与应用', label: '关于', icon: Info, keywords: ['版本', '更新', '许可', '诊断'] },
 ] as const;
 
-export type SettingsTab = typeof settingsPages[number]['id'];
+export const pluginSettingsSearchPages = [
+  { id: 'mcp', group: '资源与扩展', label: 'MCP 服务器', icon: Plug, keywords: ['插件', '连接', 'OAuth', '服务器'] },
+  { id: 'skills', group: '资源与扩展', label: '技能', icon: FileCode2, keywords: ['插件', 'skill', '技能源', '技能市场'] },
+  { id: 'extensions', group: '资源与扩展', label: '扩展', icon: Layers3, keywords: ['插件', 'extension', '声明式', '发布者'] },
+] as const;
+
+/** Sidebar page ids. */
+export type SettingsNavTab = typeof settingsPages[number]['id'];
+/**
+ * Openable settings destinations. `mcp` / `skills` remain valid deep-link ids
+ * and resolve into the unified 插件 hub via resolveSettingsDestination.
+ */
+export type SettingsTab = SettingsNavTab | 'mcp' | 'skills' | 'extensions' | 'harness-compaction' | 'subagent-worktrees';
+
+/** Sub-tabs inside 设置 → 插件. */
+export type PluginWorkspaceSection = 'plugins' | 'mcp' | 'skills' | 'extensions';
+
+export type SettingsDestination = {
+  tab: SettingsNavTab;
+  pluginSection?: PluginWorkspaceSection;
+  anchor?: 'harness-compaction' | 'subagent-worktrees';
+};
+
+/** Resolve settings shortcuts to a page and its destination within that page. */
+export function resolveSettingsDestination(tab: SettingsTab): SettingsDestination {
+  if (tab === 'mcp' || tab === 'skills' || tab === 'extensions') {
+    return { tab: 'plugins', pluginSection: tab };
+  }
+  if (tab === 'harness-compaction') return { tab: 'harness', anchor: tab };
+  if (tab === 'subagent-worktrees') return { tab: 'subagents', anchor: tab };
+  // Keep the last remembered hub section when opening 插件 from the sidebar.
+  if (tab === 'plugins') return { tab: 'plugins' };
+  return { tab };
+}
+
+export function isPluginWorkspaceTab(tab: SettingsTab): boolean {
+  return tab === 'plugins' || tab === 'mcp' || tab === 'skills' || tab === 'extensions';
+}
 
 // 新增模型来源时可选的上游 API 协议。
 export const apiTypeOptions = [

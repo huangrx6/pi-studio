@@ -163,11 +163,11 @@ test('absolute file preview is limited to files recorded by that session', async
     exports: module.exports,
     process,
     Buffer,
-    require: name => name === '../core/studio-db.cjs'
-      ? { getStudioDatabase: () => database }
-      : name === './workspace.cjs'
-        ? require('../../electron/main/services/workspace.cjs')
-        : require(name),
+    require(name) {
+      if (name === '../core/studio-db.cjs') return { getStudioDatabase: () => database };
+      if (name.startsWith('./')) return require(path.join('../../electron/main/services', name));
+      return require(name);
+    },
   });
   try {
     const preview = module.exports.readTurnDiffAbsoluteFile({

@@ -69,6 +69,8 @@ test('preferences bag defaults keep L4 off and agent control on', () => {
   assert.equal(preferences.externalChromeEnabled, false);
   assert.equal(preferences.historyAccess, 'ask');
   assert.equal(preferences.showFullUrl, false);
+  assert.equal(preferences.linkOpenInstructAgent, true);
+  assert.equal(preferences.linkOpenBlockExternal, true);
   assert.equal(isBrowserCdpEnabled(), false);
   assert.equal(isBrowserExternalChromeEnabled(), false);
   assert.doesNotThrow(() => assertBrowserAgentControlEnabled());

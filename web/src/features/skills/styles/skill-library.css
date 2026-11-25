@@ -1,0 +1,45 @@
+.skill-library-heading {
+  display: flex;
+  min-height: var(--settings-control-height);
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin-bottom: var(--settings-heading-gap);
+}
+.skill-library-heading h2 {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--settings-section-title-size);
+  font-weight: var(--weight-semibold);
+}
+.skill-library-heading h2 > span {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+  font-variant-numeric: tabular-nums;
+}
+.skill-library-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--settings-field-gap);
+  min-height: var(--settings-control-height);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  font: var(--settings-label-font);
+  white-space: nowrap;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+.skill-library-action > svg { flex: none; width: var(--icon-sm); height: var(--icon-sm); }
+.skill-library-action:hover { background: var(--surface-hover); color: var(--text); }
+.skill-library-action:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 1px; }
+.skill-library-list {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--settings-card-bg);
+  box-shadow: var(--settings-card-shadow);
+}

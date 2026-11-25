@@ -1,7 +1,6 @@
 .notification-center { -webkit-app-region: no-drag; }
 .notification-trigger { position: relative; }
 .notification-trigger.has-unread { color: var(--accent-foreground); }
-.notification-trigger.is-active { background: var(--surface-soft); color: var(--text); }
 .notification-count {
   position: absolute;
   top: -3px;

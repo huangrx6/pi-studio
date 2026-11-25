@@ -1,0 +1,11 @@
+{
+  "shapes": {
+    "baseline":   { "label": "基线", "widths": [98, 88, 100], "split": 0, "align": "start" },
+    "inset":      { "label": "内收", "widths": [100, 60, 80], "split": 0, "align": "end" },
+    "stagger":    { "label": "错层", "widths": [66, 100, 80], "split": 1, "align": "start" },
+    "ascending":  { "label": "递进", "widths": [60, 80, 100], "split": 2, "align": "end" },
+    "descending": { "label": "收束", "widths": [100, 80, 60], "split": 1, "align": "start" },
+    "foundation": { "label": "宽底", "widths": [78, 58, 100], "split": 2, "align": "start" }
+  },
+  "inks": { "teal": "青绿", "ocean": "海蓝", "berry": "藤紫", "amber": "珊瑚" }
+}

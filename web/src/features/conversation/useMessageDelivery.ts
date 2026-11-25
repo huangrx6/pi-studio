@@ -630,14 +630,14 @@ export function useMessageDelivery({
    * Durable applies the context boundary before generating the replacement,
    * so this is a real edit rather than a renderer-only transcript mask.
    */
-  function projectedEditText(message: ChatMessage): string {
-    const text = message.content
-      .map((block) => block.type === 'text' ? block.text : '')
-      .join('\n');
-    return splitMessageText(text)
+  function editTextIdentity(text: string): string {
+    return splitMessageText(normalizeComposerText(text))
       .map((segment) => segment.kind === 'text'
         ? segment.text
-        : segment.reference.kind === 'skill'
+        : segment.reference.kind === 'agent'
+          ? `@[agent:${segment.reference.profileId}]`
+          : segment.reference.capabilityId ? JSON.stringify([segment.reference.kind, segment.reference.capabilityId])
+          : segment.reference.kind === 'skill'
           ? `/skill:${segment.reference.label}`
           : segment.reference.token)
       .join('')
@@ -650,11 +650,11 @@ export function useMessageDelivery({
     text: string,
   ): boolean {
     if (!page) return false;
-    const expected = normalizeComposerText(text).trim();
+    const expected = editTextIdentity(text);
     return page.messages.some((message) => (
       message.role === 'user'
       && Number(message.sourceIndex) > entryId
-      && projectedEditText(message) === expected
+      && editTextIdentity(message.content.map(block => block.type === 'text' ? block.text : '').join('\n')) === expected
     ));
   }
 

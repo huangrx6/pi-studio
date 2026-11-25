@@ -1,8 +1,8 @@
-import { Accordion } from '../../shared/Accordion';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Folder, RotateCw, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Copy, Folder, FolderOpen, RotateCw, X } from 'lucide-react';
 import { LoadingState } from '../../shared/LoadingState';
 import { DetailDialog } from '../../shared/DetailDialog';
+import { SettingsToast } from '../../shared/SettingsToast';
 import { DeferredFilePreview } from '../../shared/DeferredFilePreview';
 import { FileKindIcon } from '../../shared/FileKindIcon';
 import { formatFileSize } from '../../shared/filesize';
@@ -24,6 +24,8 @@ export function SkillDetailDialog({ skill, busy, error, refreshing = false, onRe
 }) {
   const baseDir = skill.baseDir || skill.path.slice(0, skill.path.lastIndexOf('/')) || '/';
   const [state, setState] = useState(emptySkillDetailState);
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<number | null>(null);
   const resource = useRef<ReturnType<typeof createSkillDetailResource> | null>(null);
   useEffect(() => {
     const next = createSkillDetailResource({ baseDir, api: window.piApi, onChange: setState });
@@ -31,6 +33,17 @@ export function SkillDetailDialog({ skill, busy, error, refreshing = false, onRe
     void next.loadDirectory('');
     return () => { next.dispose(); if (resource.current === next) resource.current = null; };
   }, [baseDir]);
+  useEffect(() => () => { if (copyTimer.current !== null) window.clearTimeout(copyTimer.current); }, []);
+  async function copyPath() {
+    try {
+      await navigator.clipboard.writeText(skill.path);
+      setCopied(true);
+      if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
+      copyTimer.current = window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setCopied(false);
+    }
+  }
   const status = installedSkillStatus(skill);
   return <DetailDialog className="skill-detail-dialog" onClose={onClose}>
     <header className="detail-header">
@@ -41,8 +54,21 @@ export function SkillDetailDialog({ skill, busy, error, refreshing = false, onRe
       </div></div>
       <button type="button" className="icon-button" aria-label="关闭技能详情" onClick={onClose}><X /></button>
     </header>
-    <Accordion className="skill-detail-location" summary="文件位置" compact><code>{skill.path}</code></Accordion>
-    {error && <div className="detail-error" role="alert"><p>{error}</p>{onRefresh && <button type="button" className="settings-outline" disabled={refreshing} onClick={onRefresh}>{refreshing ? '正在刷新…' : '刷新技能状态'}</button>}</div>}
+    <div className="skill-detail-location" aria-label="文件位置">
+      <FolderOpen aria-hidden="true" />
+      <code title={skill.path}>{skill.path}</code>
+      <button
+        type="button"
+        className={`skill-detail-copy ${copied ? 'is-copied' : ''}`}
+        aria-label={copied ? '已复制技能路径' : '复制技能路径'}
+        title={copied ? '已复制' : '复制路径'}
+        onClick={() => void copyPath()}
+      >
+        {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+        <span>{copied ? '已复制' : '复制路径'}</span>
+      </button>
+    </div>
+    {error && <SettingsToast tone="error" message={error}>{onRefresh && <button type="button" className="settings-outline" disabled={refreshing} onClick={onRefresh}>{refreshing ? '正在刷新…' : '刷新技能状态'}</button>}</SettingsToast>}
     <div className="skill-detail-body">
       <aside className="skill-file-tree" aria-label="技能目录">
         <div className="skill-tree-toolbar">

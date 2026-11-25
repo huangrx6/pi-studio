@@ -8,7 +8,8 @@ import * as shortcuts from '../../web/src/shared/shortcuts.ts';
 // Drive the real component's effect and handlers. Native focus movement remains
 // a browser QA responsibility; these tests verify it is never prevented.
 function harness() {
-  const slots = [], listeners = new Map(), writes = [];
+  const slots = [], listeners = new Map(), writes = [], toasts = [];
+  const showToast = (...args) => toasts.push(args);
   let cursor = 0, cleanup, effect, deps, tree;
   const jsx = (type, props) => ({ type, props });
   const react = {
@@ -34,6 +35,7 @@ function harness() {
     require(name) {
       if (name === 'react') return react;
       if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
+      if (name.endsWith('/SettingsToast')) return { useSettingsToast: () => showToast };
       if (name.endsWith('shortcuts.ts')) return {
         ...shortcuts,
         comboFromEvent: event => shortcuts.comboFromEvent(event, 'other'),
@@ -57,11 +59,16 @@ function harness() {
   const emit = (type, event = {}) => { for (const fn of [...(listeners.get(type) ?? [])]) fn(event); };
   render();
   return {
-    writes, render, button, emit,
+    writes, toasts, render, button, emit,
     start(label) {
       const target = { contains: node => node === target };
       button(label).props.onClick({ currentTarget: target }); render();
       return target;
+    },
+    reset(label) {
+      const resetButton = all(tree, node => node.type === 'button'
+        && node.props['aria-label'] === `将「${label}」恢复为默认`)[0];
+      resetButton.props.onClick(); render();
     },
     key(key, extra = {}) {
       const event = { key, prevented: false, stopped: false, preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; }, ...extra };
@@ -99,8 +106,8 @@ test('IME events remain native and cannot record or cancel; valid combos suppres
 
 test('conflicting and bare keys preserve bindings; modifiers and repeated keys do not save', () => {
   const h = harness(); h.start();
-  h.key('j', { ctrlKey: true }); assert.match(h.status(), /已被/);
-  h.key('g'); assert.match(h.status(), /有效组合/);
+  h.key('j', { ctrlKey: true }); assert.match(h.toasts.at(-1)[0], /已被/);
+  h.key('g'); assert.deepEqual(h.toasts.at(-1), ['请使用带修饰键的有效组合。', 'error']);
   h.key('Control', { ctrlKey: true });
   h.key('g', { ctrlKey: true, repeat: true });
   assert.equal(h.writes.length, 0); assert.equal(h.button().props['aria-pressed'], true);
@@ -127,4 +134,17 @@ test('two synchronous key events save once before React effect cleanup', () => {
   const event = key => ({ key, ctrlKey: true, preventDefault() {}, stopImmediatePropagation() {} });
   h.emit('keydown', event('g')); h.emit('keydown', event('h'));
   assert.equal(h.writes.length, 1); assert.equal(h.writes[0].palette, 'Mod+G');
+});
+
+test('restoring one default preserves the action that currently owns it', () => {
+  const h = harness();
+  h.start('命令面板'); h.key('g', { ctrlKey: true });
+  h.start('打开设置'); h.key('k', { ctrlKey: true });
+  h.reset('命令面板');
+  assert.equal(h.writes.length, 2);
+  assert.match(h.toasts.at(-1)[0], /已被「打开设置」占用/);
+  h.reset('打开设置');
+  h.reset('命令面板');
+  assert.equal(h.writes.at(-1).palette, 'Mod+K');
+  assert.equal(h.writes.at(-1).settings, 'Mod+,');
 });

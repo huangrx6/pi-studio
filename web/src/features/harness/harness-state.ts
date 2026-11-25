@@ -1,19 +1,30 @@
-import type { HarnessProfile, RuntimePolicy } from '../../types/harness-types';
+import type { HarnessProfile, HarnessSettingsSnapshot, RuntimePolicy } from '../../types/harness-types';
+
+export type CommitHarnessChange = (write: () => Promise<HarnessSettingsSnapshot>, success: string, finish?: () => Promise<void>) => Promise<void>;
 
 export function cloneHarnessProfile(profile: HarnessProfile): HarnessProfile {
-  return { ...profile, sections: { ...profile.sections }, sectionOverrides: { ...profile.sectionOverrides }, toolGuidance: { ...profile.toolGuidance } };
+  return { ...profile, icon: profile.icon && { ...profile.icon }, sections: { ...profile.sections },
+    sectionOverrides: { ...profile.sectionOverrides }, toolGuidance: { ...profile.toolGuidance } };
 }
 export function cloneRuntimePolicy(policy: RuntimePolicy): RuntimePolicy {
   return { ...policy, retry: { ...policy.retry }, compaction: { ...policy.compaction }, longTask: { ...policy.longTask } };
 }
 export type GuidanceRow = { key: number; name: string; guidance: string };
+export function toolGuidanceNameError(name: string, used: ReadonlySet<string>): string | null {
+  if (!name) return '请填写工具名称。';
+  if (!/^[A-Za-z0-9_.:-]{1,120}$/.test(name) || ['__proto__', 'constructor', 'prototype'].includes(name)) {
+    return '请输入有效的工具标识，可使用字母、数字、点、横线、下划线或冒号。';
+  }
+  return used.has(name) ? `工具“${name}”已有说明。` : null;
+}
+
 export function guidanceDraft(rows: GuidanceRow[]): { value: Record<string, string>; error: string | null } {
   const entries: Array<[string, string]> = [];
   const names = new Set<string>();
   for (const row of rows) {
     const name = row.name.trim();
-    if (!name) return { value: Object.fromEntries(entries), error: '请填写每条工具说明的工具名称。' };
-    if (names.has(name)) return { value: Object.fromEntries(entries), error: `工具“${name}”已有说明，请使用不同名称。` };
+    const error = toolGuidanceNameError(name, names);
+    if (error) return { value: Object.fromEntries(entries), error };
     names.add(name); entries.push([name, row.guidance]);
   }
   return { value: Object.fromEntries(entries), error: null };

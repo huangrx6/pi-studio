@@ -33,7 +33,6 @@
   .shell-sidebar,
   .sidebar-top-row,
   .chat-header,
-  .chat-tabs,
   .conversation-trace-page,
   .temporary-chat,
   .temporary-composer-dock,
@@ -41,9 +40,6 @@
   .agent-overview,
   .agent-context-view,
   .agent-context-toolbar,
-  .conversation-extension-scroll,
-  .model-comparison-workspace,
-  .model-comparison
 ) {
   background: var(--transparent);
 }
@@ -51,10 +47,8 @@
 /* 标题与输入栏已经位于主画布上，不能再次叠加同强度的遮罩。 */
 .app .composer-dock { background: var(--transparent); }
 
-/* 壁纸模式下侧栏主操作不再单独出现实色块；侧栏顶行沿用父级外框表面。 */
+/* 壁纸模式下文件工具栏沿用父级表面。 */
 .app.is-wallpaper-inside .file-toolbar { background: var(--transparent); }
-.app.is-wallpaper-inside .nav-row.new-chat { background: var(--transparent); }
-.app.is-wallpaper-inside .nav-row.new-chat:hover { background: var(--conversation-hover-surface); }
 
 /* 会话表面按用途派生，浮动面板继续使用独立的不透明阅读底。 */
 .app {
@@ -71,7 +65,7 @@
   box-shadow: none;
 }
 
-.app :is(.new-chat, .nav-row, .session-row):hover {
+.app :is(.nav-row, .session-row):hover {
   background: var(--conversation-hover-surface);
 }
 

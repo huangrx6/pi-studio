@@ -994,6 +994,9 @@ test('built-in responsibilities use independent runtimes and explicit dependency
   );
   for (const manifest of BUILTIN_MANIFESTS) {
     normalizeManifest(publicBuiltinManifest(manifest), `builtin:${manifest.id}`, 'builtin');
+    for (const tool of manifest.contributes?.tools || []) {
+      assert.match(tool.description, /\p{Script=Han}/u, `${manifest.id}/${tool.name} needs a Chinese catalog description`);
+    }
   }
   const metrics = normalizeManifest(
     publicBuiltinManifest(BUILTIN_MANIFESTS.find((manifest) => manifest.id === 'studio-metrics')),
@@ -1004,8 +1007,8 @@ test('built-in responsibilities use independent runtimes and explicit dependency
   assert.deepEqual(metrics.contributes.dataSources.map((item) => item.id), ['live', 'summary']);
   const metricsPanels = Object.fromEntries(metrics.contributes.panels.map((panel) => [panel.id, panel]));
   assert.equal(metricsPanels['metrics-detail'].content[0].sourceId, 'builtin:studio-metrics/live');
-  // 摘要是一份声明、两个落点：顶栏 chip 常驻，底部那行随回合出现。
-  assert.deepEqual(metricsPanels['metrics-chip'].slots, ['status.chip', 'conversation.footer']);
+  // 一份摘要支持三个位置，由用户选择一个。
+  assert.deepEqual(metricsPanels['metrics-chip'].slots, ['status.chip', 'composer.above', 'composer.below']);
   assert.equal(metricsPanels['metrics-chip'].icon, 'activity');
   assert.equal(metricsPanels['metrics-chip'].color, 'info');
   assert.equal(metricsPanels['metrics-chip'].content[0].sourceId, 'builtin:studio-metrics/summary');

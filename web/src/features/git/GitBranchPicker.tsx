@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, Cloud, FilePenLine, GitBranch, Plus, Search } from 'lucide-react';
+import { Check, ChevronDown, Cloud, FilePenLine, GitBranch, PanelRightOpen, Plus, Search } from 'lucide-react';
 import { PopoverSurface } from '../../shared/PopoverSurface';
 import { isComposingKey, menuFocusIndex } from '../../shared/keyboard-navigation';
 import type { GitAction, GitWorkspaceStatus } from '../../types/git-types';
@@ -7,13 +7,13 @@ import { useGitAction, useGitRead, useGitRevision } from './useGitTools';
 import { useGitRepositories } from './useWorkspaceRepositories';
 import './styles/git-branch.css';
 
-type BranchPickerProps = { status: GitWorkspaceStatus | null; sessionId?: string };
+type BranchPickerProps = { status: GitWorkspaceStatus | null; sessionId?: string; onOpenGit?: () => void };
 export function GitBranchPicker(props: BranchPickerProps) {
   const { selected } = useGitRepositories();
   return selected ? <BranchMenu key={selected.id} {...props} /> : null;
 }
 
-function BranchMenu({ status, sessionId }: BranchPickerProps) {
+function BranchMenu({ status, sessionId, onOpenGit }: BranchPickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const anchor = useRef<HTMLDivElement>(null);
@@ -89,6 +89,9 @@ function BranchMenu({ status, sessionId }: BranchPickerProps) {
       {filter && !data?.branches.some(b => !b.remote && b.name === filter) && <button type="button" className="git-branch-create"
         disabled={!data || mutation.busy || loading} onClick={() => void choose({ kind: 'create', name: filter })}><Plus aria-hidden="true" /><span>创建并切换到 <b>{filter}</b></span></button>}
       {!!status.dirty.total && <p className="git-branch-dirty"><FilePenLine aria-hidden="true" />有未提交的修改，发生覆盖时会停止切换。</p>}
+      {onOpenGit && <button type="button" className="git-branch-open-workbench" onClick={() => { setOpen(false); onOpenGit(); }}>
+        <PanelRightOpen aria-hidden="true" />打开 Git
+      </button>}
       {notice && mutation.error && <p role="alert">{mutation.error}</p>}
     </PopoverSurface>}
   </div>;

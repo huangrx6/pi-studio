@@ -1,11 +1,11 @@
 import { Accordion } from '../../shared/Accordion';
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
-import { LoadingIndicator } from '../../shared/LoadingState';
-import type { McpConnectionTestResult, SettingsSnapshot } from '../../types/global.d';
+import type { SettingsSnapshot } from '../../types/global.d';
 import type { CommittedProjection } from '../../types/mutation-types';
 import { errorText } from '../../shared/error-text';
 import { DetailDialog } from '../../shared/DetailDialog';
+import { SettingsToast, useSettingsToast } from '../../shared/SettingsToast';
 import { mcpConnectionStatus } from './mcp-status';
 import './styles/mcp-detail.css';
 
@@ -14,7 +14,7 @@ type McpServer = {
   description: string; exposure: 'direct' | 'deferred' | 'hidden'; timeoutSeconds: number;
   envKeys: string[]; headerKeys: string[]; oauthConnected: boolean; connected: boolean;
   toolCount: number; error: string; stderr: string;
-  tools: Array<{ name: string; originalName: string; description: string; exposure: 'direct' | 'deferred' | 'hidden' }>;
+  tools: SettingsSnapshot['mcp'][number]['tools'];
 };
 type Props = {
   server: McpServer;
@@ -23,10 +23,10 @@ type Props = {
   /** Read only. Reject on failure; parent must not reopen a closed/replaced detail. */
   onRefresh: () => Promise<void>;
   /** Commit notice only: may arrive after this detail has closed. */
-  onCommitted?: (result: CommittedProjection<SettingsSnapshot>, cwd: string) => void;
+  onCommitted?: (result: CommittedProjection<SettingsSnapshot>, cwd: string, summary: string) => void;
   onRecovered?: (snapshot: SettingsSnapshot, cwd: string) => void;
 };
-type Operation = 'test' | 'authorize' | 'logout' | 'refresh';
+type Operation = 'refresh' | 'method';
 function exposureLabel(exposure: string) {
   return exposure === 'deferred' ? '按需加载' : exposure === 'direct' ? '直接加载' : '仅内部调用';
 }
@@ -37,18 +37,18 @@ export function McpDetailDialog(props: Props) {
 }
 
 function McpDetailScope({ server, workspace, onClose, onRefresh, onCommitted, onRecovered }: Props) {
+  const showToast = useSettingsToast();
+  const status = mcpConnectionStatus(server);
+  const registeredTools = Array.isArray(server.tools) ? server.tools : [];
   const live = useRef(true);
   const locked = useRef(false);
   const recoveryPending = useRef(false);
+  const recoverySummary = useRef('');
   const runtimeRefreshNeeded = useRef(false);
   const recoveredSnapshot = useRef<SettingsSnapshot | null>(null);
   const [operation, setOperation] = useState<Operation | null>(null);
-  const [testResult, setTestResult] = useState<McpConnectionTestResult | null>(null);
-  const [actionError, setActionError] = useState('');
-  const [actionMessage, setActionMessage] = useState('');
   const [refreshError, setRefreshError] = useState('');
-  const [authorized, setAuthorized] = useState<boolean | null>(null);
-  const [toolsOpen, setToolsOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(status.state === 'connected' && registeredTools.length > 0 && registeredTools.length <= 5);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
 
@@ -56,7 +56,6 @@ function McpDetailScope({ server, workspace, onClose, onRefresh, onCommitted, on
     if (!live.current || locked.current || (recoveryPending.current && kind !== 'refresh')) return false;
     locked.current = true;
     setOperation(kind);
-    setActionError('');
     return true;
   };
   const finish = () => {
@@ -65,7 +64,7 @@ function McpDetailScope({ server, workspace, onClose, onRefresh, onCommitted, on
   };
   const close = () => { live.current = false; onClose(); };
 
-  async function refreshDetails() {
+  async function refreshDetails(message = 'MCP 详情已刷新') {
     try {
       if (runtimeRefreshNeeded.current) {
         recoveredSnapshot.current = await window.piApi.refreshMcp(workspace);
@@ -77,7 +76,7 @@ function McpDetailScope({ server, workspace, onClose, onRefresh, onCommitted, on
       if (recoveredSnapshot.current) onRecovered?.(recoveredSnapshot.current, workspace);
       recoveryPending.current = false;
       setRefreshError('');
-      setAuthorized(null);
+      showToast(message);
     } catch (cause) {
       if (live.current) setRefreshError(errorText(cause));
     }
@@ -86,59 +85,38 @@ function McpDetailScope({ server, workspace, onClose, onRefresh, onCommitted, on
     if (!begin('refresh')) return;
     try { await refreshDetails(); } finally { finish(); }
   }
-  async function testConnection() {
-    if (!begin('test')) return;
-    setTestResult(null);
-    setActionMessage('');
-    try {
-      const result = await window.piApi.testSavedMcp(server.name);
-      if (live.current) setTestResult(result);
-    } catch (cause) {
-      if (live.current) setActionError(errorText(cause));
-    } finally { finish(); }
+  async function projectChange(result: CommittedProjection<SettingsSnapshot>, summary: string) {
+    recoveryPending.current = true;
+    recoverySummary.current = summary;
+    runtimeRefreshNeeded.current = result.projection.status === 'error';
+    recoveredSnapshot.current = result.projection.status === 'ready' ? result.projection.value : null;
+    // Report a committed write even if the dialog has closed during the request.
+    try { onCommitted?.(result, workspace, summary); } catch {
+      if (live.current) setRefreshError('页面状态更新未完成，请重试刷新。');
+      return;
+    }
+    if (!live.current) return;
+    if (result.projection.status === 'error') {
+      setRefreshError(result.projection.message);
+      return;
+    }
+    await refreshDetails(summary);
   }
-  async function changeOAuth(kind: 'authorize' | 'logout') {
-    if (!begin(kind)) return;
-    setActionMessage('');
-    setTestResult(null);
+  async function changeMethod(method: string, enabled: boolean) {
+    if (!begin('method')) return;
     try {
-      const result = kind === 'authorize'
-        ? await window.piApi.startMcpOAuth(server.name, workspace)
-        : await window.piApi.logoutMcpOAuth(server.name, workspace);
-      recoveryPending.current = true;
-      runtimeRefreshNeeded.current = result.projection.status === 'error';
-      recoveredSnapshot.current = result.projection.status === 'ready' ? result.projection.value : null;
-      // Reporting a committed credential change must survive closing this dialog.
-      // This write has completed even if the following projection read fails.
-      if (live.current) {
-        setAuthorized(kind === 'authorize');
-        setActionMessage(kind === 'authorize' ? 'OAuth 授权已完成。' : 'OAuth 凭据已清除。');
-      }
-      try { onCommitted?.(result, workspace); } catch {
-        if (live.current) setRefreshError('页面状态更新未完成，请重试刷新。');
-        return;
-      }
-      if (!live.current) return;
-      if (result.projection.status === 'error') {
-        setRefreshError(result.projection.message);
-        return;
-      }
-      await refreshDetails();
+      const result = await window.piApi.setMcpMethodEnabled({ server: server.name, method, enabled, cwd: workspace });
+      await projectChange(result, `已${enabled ? '启用' : '停用'} ${method}`);
     } catch (cause) {
-      if (live.current) setActionError(errorText(cause));
+      if (live.current) showToast(errorText(cause), 'error');
     } finally { finish(); }
   }
 
-  const status = mcpConnectionStatus(server);
   const busy = operation !== null;
   const writeDisabled = busy || Boolean(refreshError);
-  const oauthConnected = authorized ?? server.oauthConnected;
-  const testTools = Array.isArray(testResult?.tools) ? testResult.tools : [];
-  const testResources = Array.isArray(testResult?.resources) ? testResult.resources : [];
-  const tools = testResult?.ok ? testTools : Array.isArray(server.tools) ? server.tools : [];
   const envKeys = Array.isArray(server.envKeys) ? server.envKeys : [];
   const headerKeys = Array.isArray(server.headerKeys) ? server.headerKeys : [];
-  const stderr = testResult?.stderr || server.stderr;
+  const stderr = server.stderr;
 
   return <DetailDialog className="mcp-detail-dialog" onClose={close}>
     <header className="detail-header">
@@ -156,30 +134,10 @@ function McpDetailScope({ server, workspace, onClose, onRefresh, onCommitted, on
     <div className="mcp-detail-body">
       <div className="mcp-detail-target"><span>目标</span><code>{server.target}</code></div>
       {server.description && <p className="mcp-detail-description">{server.description}</p>}
-      <section className="mcp-detail-actions" aria-label="MCP 连接操作">
-        <button type="button" className="settings-outline" disabled={writeDisabled} onClick={() => void testConnection()}>
-          {operation === 'test' && <LoadingIndicator />}{operation === 'test' ? '正在测试…' : '测试连接'}
-        </button>
-        {server.transport === 'http' && (oauthConnected
-          ? <button type="button" className="settings-outline" disabled={writeDisabled} onClick={() => void changeOAuth('logout')}>
-              {operation === 'logout' && <LoadingIndicator />}{operation === 'logout' ? '正在退出…' : '退出 OAuth'}
-            </button>
-          : <button type="button" className="settings-outline" disabled={writeDisabled} onClick={() => void changeOAuth('authorize')}>
-              {operation === 'authorize' && <LoadingIndicator />}{operation === 'authorize' ? '等待浏览器授权…' : 'OAuth 登录'}
-            </button>)}
-      </section>
-      {actionError && <div className="mcp-detail-feedback is-error" role="alert">{actionError}</div>}
-      {actionMessage && <div className="mcp-detail-feedback" role="status">{actionMessage}</div>}
-      {refreshError && <div className="mcp-detail-feedback is-error" role="alert">
-        <span>操作已完成，但详情刷新失败。{refreshError}</span>
+      {refreshError && <SettingsToast tone="error" message={`${recoverySummary.current} 详情刷新失败。${refreshError}`}>
         <button type="button" className="text-button" disabled={busy} onClick={() => void retryRefresh()}>{operation === 'refresh' ? '正在刷新…' : '重试刷新'}</button>
-      </div>}
+      </SettingsToast>}
       {server.error && <p className="mcp-detail-feedback is-error">{server.error}</p>}
-      {testResult && <section className="mcp-detail-test" aria-label="连接测试结果" role={testResult.ok ? 'status' : 'alert'}>
-        <header><strong>{testResult.ok ? '连接成功' : '连接测试未成功'}</strong><small>{testResult.durationMs}ms · {testTools.length} 个工具 · {testResources.length} 个资源</small></header>
-        {testResult.instructions && <p>{testResult.instructions}</p>}
-        <p>Tools {testResult.capabilities?.tools ? '已声明' : '未声明'} · Resources {testResult.capabilities?.resources ? '已声明' : '未声明'}</p>
-      </section>}
       <Accordion className="mcp-detail-section" summary="连接参数">
         <dl className="mcp-detail-facts">
           <div><dt>作用域</dt><dd>全局 · 所有工作区使用同一份连接配置</dd></div>
@@ -187,24 +145,25 @@ function McpDetailScope({ server, workspace, onClose, onRefresh, onCommitted, on
           <div><dt>工具暴露</dt><dd>{server.exposure === 'deferred' ? '按需搜索 · tool_search' : server.exposure === 'direct' ? '直接提供' : '不提供给模型'}</dd></div>
           <div><dt>请求超时</dt><dd>{server.timeoutSeconds || 60} 秒</dd></div>
           <div><dt>凭据名称</dt><dd>{(server.transport === 'stdio' ? envKeys : headerKeys).join('、') || '无'} <span>值始终隐藏</span></dd></div>
-          {server.transport === 'http' && <div><dt>OAuth</dt><dd>{oauthConnected ? '已授权' : '未授权'}</dd></div>}
+          {server.transport === 'http' && <div><dt>OAuth</dt><dd>{server.oauthConnected ? '已授权' : '未授权'}</dd></div>}
         </dl>
       </Accordion>
-      <Accordion className="mcp-detail-section" open={toolsOpen} onToggle={event => setToolsOpen(event.currentTarget.open)} summary="工具" badge={tools.length}>
-
+      <Accordion className="mcp-detail-section" open={toolsOpen} onToggle={event => setToolsOpen(event.currentTarget.open)} summary="工具" badge={registeredTools.length}>
         {toolsOpen && <>
-          <p>按需工具通过 tool_search 在下一轮请求中加载。</p>
-          {tools.length ? <div className="mcp-detail-tools">
-            {tools.map(tool => <div key={tool.name}>
-              <code>{'originalName' in tool ? tool.originalName : tool.name}</code>
-              <small>{exposureLabel(tool.exposure)}</small>
-              {tool.description && <p>{tool.description}</p>}
+          <p>{registeredTools.length ? '方法开关自动保存，从下一次请求起生效。' : '启用服务器并连接后，可在此查看并切换各方法开关。'}</p>
+          {registeredTools.length ? <div className="mcp-detail-tools">
+            {registeredTools.map(tool => <div key={tool.name}>
+              <div className="mcp-method-copy"><code>{tool.originalName}</code>
+                {tool.description && <p>{tool.description}</p>}
+                <small>{exposureLabel(tool.exposure)}</small></div>
+              {'enabled' in tool && <button type="button" role="switch" aria-label={`启用 MCP 方法 ${tool.originalName}`}
+                aria-checked={tool.enabled} className={`switch ${tool.enabled ? 'is-on' : ''}`} disabled={writeDisabled}
+                onClick={() => void changeMethod(tool.originalName, !tool.enabled)}><span /></button>}
             </div>)}
           </div> : <p>当前没有可列出的工具。</p>}
         </>}
       </Accordion>
       {stderr && <Accordion className="mcp-detail-section" open={diagnosticsOpen} onToggle={event => setDiagnosticsOpen(event.currentTarget.open)} summary="诊断信息">
-
         {diagnosticsOpen && <><p>凭据和已保存的 Header 值已脱敏。</p><pre className="mcp-stderr">{stderr}</pre></>}
       </Accordion>}
     </div>

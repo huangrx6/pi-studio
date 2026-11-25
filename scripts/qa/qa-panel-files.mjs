@@ -25,10 +25,13 @@ async function held(method, owner, file = '') {
 }
 async function openSession(owner) { await qa('open', owner); await page.locator('.chat-heading h1').filter({ hasText: `文件会话 ${owner.toUpperCase()}` }).waitFor(); }
 async function tree() {
+  await page.locator('.file-panel').waitFor();
   if (await tab('文件').count()) await tab('文件').click();
-  else if (await page.getByRole('button', { name: '打开工具', exact: true }).count()) {
+  else if (await page.getByRole('listitem', { name: /^工作区文件/ }).count()) {
+    await page.getByRole('listitem', { name: /^工作区文件/ }).click();
+  } else {
     await page.getByRole('button', { name: '打开工具', exact: true }).click(); await page.getByRole('menuitem', { name: '工作区文件', exact: true }).click();
-  } else await page.locator('.panel-start').getByRole('button', { name: '工作区文件', exact: true }).click();
+  }
   await page.locator('.panel-file-browser').waitFor();
 }
 async function openFile(file) { await tree(); await page.locator('.file-row').filter({ has: page.locator('span', { hasText: new RegExp(`^${file.replace('.', '\\.')}$`) }) }).click(); }
@@ -39,9 +42,68 @@ async function capture(name, theme) {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
   await page.screenshot({ path: path.join(output, `${name}.png`), animations: 'disabled' }); result.screenshots.push(name);
 }
+async function checkLiveFilePreview() {
+  await openSession('a');
+  await openFile('live.txt');
+  await expectFile('a', 'live.txt');
+  const liveReads = async () => (await calls('filePreview', 'a', 'live.txt')).length;
+  const scroll = preview().locator('.file-preview-code');
+  const previousScroll = await scroll.evaluate(node => { node.scrollTop = 96; return node.scrollTop; });
+  assert.ok(previousScroll > 0);
+  await qa('change', 'b', 'live.txt', 2);
+  await qa('change', 'a', 'unrelated.txt', 2);
+  assert.equal(await liveReads(), 1, 'same filename in a different workspace and unrelated edits do not reload the file');
+
+  await qa('change', 'a', 'live.txt', 2);
+  await expectFile('a', 'live.txt', 2);
+  assert.equal(await liveReads(), 2);
+  assert.equal(await scroll.evaluate(node => node.scrollTop), previousScroll);
+
+  await qa('hold', 'filePreview', 'a', 'live.txt');
+  await qa('change', 'a', 'live.txt', 3);
+  const older = await held('filePreview', 'a', 'live.txt');
+  await qa('unhold', 'filePreview', 'a', 'live.txt');
+  await qa('change', 'a', 'live.txt', 4);
+  await expectFile('a', 'live.txt', 4);
+  await qa('release', older);
+  await expectFile('a', 'live.txt', 4);
+
+  await tree();
+  await qa('change', 'a', 'live.txt', 5);
+  assert.equal(await liveReads(), 4, 'the background file is not read until its tab is shown');
+  await tab('live.txt').click();
+  await expectFile('a', 'live.txt', 5);
+
+  await page.getByRole('button', { name: '收起右侧面板', exact: true }).click();
+  await page.locator('.file-panel').waitFor({ state: 'detached' });
+  await qa('change', 'a', 'live.txt', 6);
+  assert.equal(await liveReads(), 5, 'a closed workbench does not reread its selected file');
+  await page.getByRole('button', { name: '打开右侧面板', exact: true }).click();
+  await expectFile('a', 'live.txt', 6);
+
+  await preview().getByRole('button', { name: '编辑文件', exact: true }).click();
+  const editor = preview().getByRole('textbox', { name: 'live.txt 源码编辑器' });
+  await editor.fill('未保存的工作台草稿');
+  await qa('change', 'a', 'live.txt', 7);
+  await preview().getByText(/文件已更新，当前草稿已保留/).waitFor();
+  assert.equal(await editor.inputValue(), '未保存的工作台草稿');
+  assert.equal(await preview().getByRole('button', { name: '保存文件', exact: true }).isDisabled(), true);
+  await preview().getByRole('button', { name: '取消编辑', exact: true }).click();
+  await expectFile('a', 'live.txt', 7);
+
+  await qa('fail', 'filePreview', 'a', 'live.txt');
+  await qa('change', 'a', 'live.txt', 8);
+  await preview().getByRole('alert').getByText(/读取最新内容失败/).waitFor();
+  await expectFile('a', 'live.txt', 7);
+  await preview().getByRole('button', { name: '重试读取文件', exact: true }).click();
+  await expectFile('a', 'live.txt', 8);
+  result.checks.push('file events reread only matching open previews, preserve scroll, reject old reads, defer hidden files, and keep local drafts and retry state');
+}
 async function checkPanelCollapseMotion() {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  const actions = '.chat-header :is(.workspace-menu-trigger, .notification-trigger)';
+  // The notification trigger has a stable width. Other toolbar buttons show
+  // their text at a container breakpoint while the panel is collapsing.
+  const actions = '.chat-header .notification-trigger';
   const { open, start, middle, end } = await page.evaluate(async (selector) => {
     const panel = document.querySelector('.file-panel');
     const buttons = [...document.querySelectorAll(selector)];
@@ -70,8 +132,8 @@ async function checkPanelCollapseMotion() {
       .map(transition => transition.finished));
     return [...header.querySelectorAll(selector)].map(button => button.getBoundingClientRect().x);
   }, actions);
-  assert.equal(open.positions.length, 2);
-  assert.equal(closed.length, 2);
+  assert.equal(open.positions.length, 1);
+  assert.equal(closed.length, 1);
   assert.ok(middle.width > 1 && middle.width < open.width - 1, 'sampled the partially collapsed panel');
   const progress = 1 - middle.width / open.width;
   for (const [index, initial] of open.positions.entries()) {
@@ -81,7 +143,7 @@ async function checkPanelCollapseMotion() {
     assert.ok(Math.abs(middle.positions[index] - (initial + (final - initial) * progress)) <= 2, 'header action follows the panel throughout collapse');
     assert.ok(Math.abs(end.positions[index] - final) <= 2, 'showing the opener after collapse cannot displace the header action');
   }
-  result.checks.push('workspace and notification buttons follow the panel at mid-collapse and reach their final positions before it unmounts');
+  result.checks.push('the notification button follows the panel at mid-collapse and reaches its final position before it unmounts');
 }
 async function checkCacheBytes() {
   const mib = 1024 * 1024;
@@ -91,7 +153,7 @@ async function checkCacheBytes() {
   await openFile('budget-large.txt'); await expectFile('a', 'budget-large.txt');
   const complete = 'WORKSPACE A · budget-large.txt · version 1\n\nThis is isolated synthetic file content.\n原始工作区：/qa/synthetic/workspace-a\nEND OF COMPLETE A budget-large.txt';
   assert.equal(await preview().locator('.file-preview-code code').textContent(), complete, 'accepted oversized result displays its complete text, including the end sentinel');
-  assert.equal(await preview().locator('img,video,audio,iframe').count(), 0, 'synthetic retained dataUrl must never invoke a media decoder');
+  assert.equal(await preview().locator('.file-preview-body :is(img,video,audio,iframe)').count(), 0, 'synthetic retained dataUrl must never invoke a media decoder');
   await tab('shared.txt').click(); await expectFile('a', 'shared.txt'); assert.equal((await calls('filePreview', 'a', 'shared.txt')).length, 1);
   await tab('budget-large.txt').click(); await expectFile('a', 'budget-large.txt');
   assert.equal((await calls('filePreview', 'a', 'budget-large.txt')).length, 2, 'oversized result is reread after leaving its tab');
@@ -182,7 +244,7 @@ try {
   await qa('fail', 'filePreview', 'a', 'error.txt'); await openFile('error.txt'); await page.locator('.panel-file-error').filter({ hasText: 'QA A filePreview error.txt 读取失败' }).waitFor();
   await page.getByRole('button', { name: '重试读取文件', exact: true }).click(); await expectFile('a', 'error.txt');
   await tree(); await qa('hold', 'files', 'a', 'folder'); await page.locator('.file-row[title="A-folder"]').click(); const directory = await held('files', 'a', 'folder');
-  await openSession('b'); await page.locator('.file-row[title="B-folder"]').waitFor(); await qa('release', directory); await page.locator('.file-row[title="B-folder"]').waitFor(); assert.equal(await page.locator('.file-row[title="A-nested.txt"]').count(), 0);
+  await openSession('b'); await tree(); await page.locator('.file-row[title="B-folder"]').waitFor(); await qa('release', directory); await page.locator('.file-row[title="B-folder"]').waitFor(); assert.equal(await page.locator('.file-row[title="A-nested.txt"]').count(), 0);
   await qa('unhold', 'files', 'a', 'folder'); await qa('fail', 'files', 'b', ''); await page.getByRole('button', { name: '刷新文件列表', exact: true }).click();
   await page.locator('.panel-file-error').filter({ hasText: 'QA B files / 读取失败' }).waitFor(); await capture('03-directory-error-dark', 'dark');
   await page.getByRole('button', { name: '重试读取目录', exact: true }).click(); await page.locator('.file-row[title="B-folder"]').waitFor(); assert.equal(await page.locator('.panel-file-error').count(), 0);
@@ -196,6 +258,7 @@ try {
   await tab('shared.txt').nth(0).click(); await expectFile('a', 'shared.txt'); assert.equal((await calls('filePreview', 'a', 'shared.txt')).length, 2);
   await capture('04-evicted-owner-dark', 'dark');
   result.checks.push('more than eight previews evict content without losing tabs; evicted A tab rereads A while current session is B');
+  await checkLiveFilePreview();
   }
   await checkPanelCollapseMotion();
   await openSession('a'); assert.equal(await composerValue(composer()), draftA);

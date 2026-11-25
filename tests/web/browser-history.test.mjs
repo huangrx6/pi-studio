@@ -6,7 +6,7 @@ const {
   loadBrowserHistory,
   recordBrowserHistoryVisit,
   saveBrowserHistory,
-} = await import('../../web/src/shell/right-panel/browser/browser-history.ts');
+} = await import('../../web/src/features/browser/browser-history.ts');
 
 function memoryStore(seed = {}) {
   const data = { ...seed };

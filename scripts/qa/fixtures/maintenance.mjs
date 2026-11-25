@@ -8,7 +8,16 @@ export function installMaintenanceFixture() {
   let update = { currentVersion: '2.5.6', currentBuildId: '11111111111111111111111111111111', state: 'idle' };
   const available = { ...update, state: 'available', latestVersion: '2.5.6', latestBuildId: '22222222222222222222222222222222', updateKind: 'same-version', releaseName: '同版本构建更新与完整修复说明', releaseNotes: '修复终端历史恢复。\n完善资源详情的工作区归属与键盘使用。\n保留明确的失败恢复入口。', publishedAt: '2026-10-01T00:00:00Z' };
   const makeMcp = (scope, extra = {}) => ({ name: names[scope], transport: 'http', enabled: true, target: `https://qa.invalid/mcp/${scope}/很长的目标地址用于验证详情断行与作用域归属`, cwd: workspace, description: `内存模拟 ${scope}，不会启动进程或访问 HTTP/OAuth 服务。`, exposure: 'deferred', toolExposure: {}, timeoutSeconds: 60, envKeys: [], headerKeys: ['Authorization', 'X-QA-Key'], oauthConnected: false, connected: false, toolCount: 0, error: '', stderr: '', tools: [], ...extra });
-  const servers = [makeMcp('A'), makeMcp('B', { error: 'QA B 尚未连接：需要检查服务地址。', stderr: 'QA_B_DIAGNOSTIC\nAuthorization: [REDACTED]' }), makeMcp('C', { transport: 'stdio', enabled: false, target: '/qa/很长的本地命令路径用于验证诊断与目录断行/maintenance-server', connected: false, error: '', stderr: 'QA_C_LAST_DIAGNOSTIC', headerKeys: [], envKeys: ['QA_ENV_NAME'] })];
+  const servers = [
+    makeMcp('A'),
+    makeMcp('B', {
+      error: 'QA B 尚未连接：需要检查服务地址。',
+      stderr: 'QA_B_DIAGNOSTIC\nAuthorization: [REDACTED]',
+      toolCount: 1,
+      tools: [{ name: 'B_tool', originalName: 'B_tool', description: 'B 仅属于当前服务器的工具', exposure: 'deferred', enabled: true }],
+    }),
+    makeMcp('C', { transport: 'stdio', enabled: false, target: '/qa/很长的本地命令路径用于验证诊断与目录断行/maintenance-server', connected: false, error: '', stderr: 'QA_C_LAST_DIAGNOSTIC', headerKeys: [], envKeys: ['QA_ENV_NAME'] }),
+  ];
   const settings = async () => ({ ...(await base.settings()), mcp: clone(servers), skills: [], skillErrors: [], extensions: [], extensionErrors: [], runtimeVersions: { durable: '1.5.2', electron: '42.0.1', chromium: '148.0.1', node: '24.5.0', sqlite: '3.53.0', platform: 'darwin', arch: 'arm64' }, databasePath: '/qa/隔离数据/很长的数据库目录用于验证关于页面诊断信息换行/studio.sqlite', skillsPath: '/qa/隔离技能目录/无需读取真实磁盘', extensionsPath: '/qa/隔离扩展目录/无需读取真实磁盘' });
   const key = (method, scope = '') => `${method}:${scope}`;
   async function respond(method, scope, fallback) {
@@ -40,6 +49,25 @@ export function installMaintenanceFixture() {
     checkForUpdates: async options => { calls.push({ method: 'checkOptions', ...options }); return respond('checkForUpdates', '', available); },
     downloadUpdate: async () => respond('downloadUpdate', '', { ...available, state: 'downloading', progress: 0 }),
     installUpdate: async () => respond('installUpdate', '', { started: true }),
+    mcpConfig: async name => {
+      const server = servers.find(item => item.name === name);
+      if (!server) throw new Error(`Unknown MCP server: ${name}`);
+      return {
+        name: server.name,
+        transport: server.transport,
+        command: server.transport === 'stdio' ? server.target : '',
+        args: [],
+        cwd: server.transport === 'stdio' ? server.cwd : '',
+        url: server.transport === 'http' ? server.target : '',
+        description: server.description,
+        envKeys: server.envKeys,
+        headerKeys: server.headerKeys,
+        exposure: server.exposure,
+        timeoutSeconds: server.timeoutSeconds,
+        toolExposure: server.toolExposure || {},
+      };
+    },
+    testMcp: async payload => respond('testMcp', scopeFor(payload.originalName || payload.name), testResult(scopeFor(payload.originalName || payload.name))),
     testSavedMcp: async name => respond('testSavedMcp', scopeFor(name), testResult(scopeFor(name))),
     startMcpOAuth: async (name, cwd) => { const scope = scopeFor(name); calls.push({ method: 'oauthScope', action: 'start', name, cwd }); const value = await respond('startMcpOAuth', scope, null); Object.assign(servers.find(item => item.name === name), { oauthConnected: true, connected: true, error: '' }); return value || { committed: true, projection: { status: 'ready', value: await settings() } }; },
     logoutMcpOAuth: async (name, cwd) => { const scope = scopeFor(name); calls.push({ method: 'oauthScope', action: 'logout', name, cwd }); const value = await respond('logoutMcpOAuth', scope, null); Object.assign(servers.find(item => item.name === name), { oauthConnected: false, connected: false }); return value || { committed: true, projection: { status: 'ready', value: await settings() } }; },

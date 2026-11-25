@@ -22,7 +22,9 @@ function compile(path, stubs) {
     exports: {},
     require(id) {
       if (id.endsWith('.css')) return {};
+      if (id.endsWith('.webp')) return id;
       if (id.endsWith('/Accordion')) return { Accordion };
+      if (id.endsWith('/SettingsSpotlight')) return compile('../shared/SettingsSpotlight.tsx', {});
       if (id in stubs) return stubs[id];
       return require(id);
     },
@@ -47,6 +49,7 @@ test('archive with no sessions hides a useless search and count, leaving one exp
     '../../shared/ActionMenu': { ActionMenu: () => null },
     '../../shared/LoadingState': { LoadingIndicator: () => null },
     '../../shared/SettingsPageHeader': { SettingsPageHeader: Header },
+    '../../shared/SettingsToast': { useSettingsToast: () => () => {} },
     '../../shared/error-text': { errorText: error => String(error) },
     '../../shared/keyboard-navigation': { isComposingKey: () => false },
     './archive-filter': require('../../web/src/features/archives/archive-filter.ts'),
@@ -70,9 +73,19 @@ test('archive with no sessions hides a useless search and count, leaving one exp
 test('installed skills render one empty state and only populated groups', () => {
   const { InstalledSkills } = compile('skills/InstalledSkills.tsx', {
     react: React,
-    'lucide-react': { ChevronRight: () => null, Trash2: () => null },
+    'lucide-react': require('lucide-react'),
+    '../../shared/DetailDialog': { DetailDialog: () => null },
     '../../shared/EmptyStateArt': { EmptyStateArt: () => null },
     '../../shared/StatusGlyph': { StatusGlyph: () => null },
+    '../../shared/plugin-ownership.ts': {
+      isPluginOwnedResource: (skill) => skill?.origin === 'plugin' && Boolean(skill?.ownerPluginId),
+      pluginOwnershipBadge: (skill) => (
+        skill?.origin === 'plugin' && skill?.ownerPluginId
+          ? `插件托管 · ${skill.ownerPluginId}`
+          : ''
+      ),
+      pluginOwnershipLabel: (id) => id || '插件',
+    },
 
     './installed-skill-status': {
       installedSkillStatus: (skill) => ({ label: skill.disableModelInvocation ? '仅显式调用' : '自动发现', canTrust: false }),
@@ -90,19 +103,30 @@ test('installed skills render one empty state and only populated groups', () => 
   assert.doesNotMatch(empty, />0 个</);
   assert.doesNotMatch(empty, /暂无技能/);
   assert.equal((empty.match(/还没有已安装技能/g) || []).length, 1);
-  assert.equal((empty.match(/<summary[^>]*>[\s\S]*?技能目录[\s\S]*?<\/summary>/g) || []).length, 1);
-  assert.doesNotMatch(empty, /项目技能需审查/);
+  assert.match(empty, /<button[^>]*aria-haspopup="dialog"[^>]*>.*?技能目录<\/button>/);
+  assert.doesNotMatch(empty, /\/skills\/user-studio/);
 
-  const userOnly = render([{
+  const studioSkill = {
     name: '用户技能', description: '说明', path: '/skills/user', scope: 'user', origin: 'studio',
     available: true, trusted: true, trustChanged: false, disableModelInvocation: false,
-  }]);
+  };
+  const userOnly = render([studioSkill]);
   assert.match(userOnly, /Studio 应用技能/);
-  assert.match(userOnly, /默认自动发现/);
+  assert.doesNotMatch(userOnly, /默认自动发现/);
   assert.match(userOnly, /data-invocation="auto"/);
   assert.doesNotMatch(userOnly, /class="installed-skill-status">自动发现/);
-  assert.doesNotMatch(userOnly, /<h3>Studio 项目技能<\/h3>/);
+  assert.doesNotMatch(userOnly, /aria-label="Studio 项目技能"/);
   assert.doesNotMatch(userOnly, /项目技能需审查/);
+
+  const sharedSkills = Array.from({ length: 6 }, (_, index) => ({
+    ...studioSkill, origin: 'agents', name: `共享技能 ${index + 1}`, path: `/skills/shared/${index + 1}`,
+  }));
+  const detailsOf = (html, label) => html.match(new RegExp(`aria-label="${label}"><details([^>]*)>`))?.[1];
+  const mixed = render([studioSkill, ...sharedSkills]);
+  assert.match(detailsOf(mixed, 'Studio 应用技能'), /\bopen=""/);
+  assert.doesNotMatch(detailsOf(mixed, '共享技能'), /\bopen=""/);
+  assert.match(detailsOf(render(sharedSkills.slice(0, 5)), '共享技能'), /\bopen=""/);
+  assert.match(mixed, /<summary[^>]*>(?:(?!<\/summary>).)*共享技能(?:(?!<\/summary>).)*6 个/);
 });
 
 test('installed skill descriptions stay compact until the detail view is opened', () => {
@@ -113,12 +137,13 @@ test('installed skill descriptions stay compact until the detail view is opened'
 test('MCP zero state relies on the primary add action without a redundant zero counter', () => {
   const { McpSettings } = compile('mcp/McpSettings.tsx', {
     react: React,
-    'lucide-react': { ChevronRight: () => null, Pencil: () => null, Plus: () => null, Trash2: () => null },
+    'lucide-react': { ChevronRight: () => null, Pencil: () => null, Plug: () => null, Plus: () => null, Trash2: () => null },
     '../../shared/EmptyStateArt': { EmptyStateArt: () => null },
     '../../shared/StatusGlyph': { StatusGlyph: () => null },
 
     '../../shared/InfoHint': { InfoHint: ({ label }) => React.createElement('span', null, label) },
     '../../shared/SettingsPageHeader': { SettingsPageHeader: Header },
+    './mcp-ownership': require('../../web/src/features/mcp/mcp-ownership.ts'),
     './mcp-status': { mcpConnectionStatus: () => ({ label: '未连接', state: 'disabled' }) },
   });
   const html = renderToStaticMarkup(React.createElement(McpSettings, {

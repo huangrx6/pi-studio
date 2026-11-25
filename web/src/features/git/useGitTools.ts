@@ -1,14 +1,21 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { errorText } from '../../shared/error-text';
+import { useSurfaceActive } from '../../shared/surface-visibility';
 import type { GitAction, GitHead, GitReadParams, GitReadResult, GitState } from '../../types/git-types';
 import { useGitRepositories } from './useWorkspaceRepositories';
 
 export const gitChangedEvent = 'pi-studio:git-changed';
 
 export function useGitRevision(pollReady?: RefObject<boolean>) {
+  const active = useSurfaceActive();
+  const wasActive = useRef(active);
   const [revision, setRevision] = useState(0);
   useEffect(() => {
+    const resumed = active && !wasActive.current;
+    wasActive.current = active;
+    if (!active) return;
     const refresh = () => setRevision(n => n + 1);
+    if (resumed) refresh();
     const timer = pollReady ? window.setInterval(() => { if (pollReady.current && !document.hidden) refresh(); }, 10_000) : undefined;
     window.addEventListener(gitChangedEvent, refresh);
     window.addEventListener('focus', refresh);
@@ -17,7 +24,7 @@ export function useGitRevision(pollReady?: RefObject<boolean>) {
       window.removeEventListener('focus', refresh);
       window.clearInterval(timer);
     };
-  }, [pollReady]);
+  }, [active, pollReady]);
   return revision;
 }
 

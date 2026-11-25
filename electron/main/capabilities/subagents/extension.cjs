@@ -6,13 +6,7 @@
  * sibling `transcripts.cjs` module and consume this same protocol.
  */
 
-const { getSubagentConfig } = require('../../core/app-settings.cjs');
 const { getStudioDatabase } = require('../../core/studio-db.cjs');
-const { evaluateSubagentBudget } = require('../../core/subagent-budget.cjs');
-const {
-  THINKING_LEVELS,
-  normalizeConfig: normalizeSubagentDefaults,
-} = require('../../core/subagent-config.cjs');
 const toolSchema = require('../../runtime/tool-schema.cjs');
 const {
   createProtocol,
@@ -29,32 +23,13 @@ const {
 } = require('./worktrees.cjs');
 const { subagentUsage } = require('./usage.cjs');
 const { assignAvatar } = require('./avatars.cjs');
+const { requestedProfile, roleHarness } = require('./profiles.cjs');
+const { roleModelSettings, childToolsFor, childExtensionsFor, childInstructions, runDefaults, assertBudgetAvailable, assertSpawnAvailable } = require('./role-runtime.cjs');
 const { resolveWorkspacePath } = require('../filesystem/index.cjs');
 
 const MAX_SUBAGENT_TEXT_LENGTH = 64_000;
 const MAX_SUBAGENT_INSTRUCTIONS_LENGTH = 32_000;
 const MAX_SUBAGENT_SUPERVISOR_LENGTH = 16_000;
-
-function modelRef(value) {
-  if (typeof value !== 'string') return undefined;
-  const slash = value.indexOf('/');
-  if (slash <= 0 || slash === value.length - 1) return undefined;
-  return { provider: value.slice(0, slash), modelId: value.slice(slash + 1) };
-}
-
-function normalizeSubagentConfig(user, project) {
-  const defaults = normalizeSubagentDefaults({ ...(user || {}), ...(project || {}) }, { strict: false });
-  return {
-    ...defaults,
-    modelRef: modelRef(defaults.defaultModel),
-    thinkingLevel: defaults.defaultThinking || undefined,
-    maxThinking: defaults.maxThinking || undefined,
-  };
-}
-
-function thinkingRank(level) {
-  return THINKING_LEVELS.indexOf(level);
-}
 
 function throwIfAborted(context) {
   const signal = context?.abortSignal;
@@ -64,14 +39,6 @@ function throwIfAborted(context) {
 }
 
 const RESERVED_SUBAGENT_NAMES = new Set(['__proto__', 'prototype', 'constructor']);
-const SUBAGENT_MANAGEMENT_TOOLS = new Set([
-  'subagent',
-  'subagent_stop',
-  'bg_wait',
-  'subagent_supervisor',
-  'contact_supervisor',
-]);
-
 function normalizeSubagentName(value, fallback) {
   const name = typeof value === 'string' ? value.trim() : '';
   if (!name && fallback) return fallback;
@@ -94,12 +61,6 @@ function backgroundOptions() {
     ownership: { kind: 'conversation' },
     background: true,
   };
-}
-
-function activeReporterCount(state) {
-  return Object.values(state.reporters || {})
-    .filter((reporter) => reporter?.active === true)
-    .length;
 }
 
 /**
@@ -135,112 +96,110 @@ async function writeSubagentStatus({
   }, commitContext);
 }
 
-function childToolsFor(agent, defaults, childSupervisorTool) {
-  const allowed = defaults.allowedTools.length > 0
-    ? new Set(defaults.allowedTools)
-    : undefined;
-  const modelTools = [];
-  const enabledTools = [];
-  const enabledNames = new Set();
-  const canExpose = (tool) => (
-    tool?.name
-    && !SUBAGENT_MANAGEMENT_TOOLS.has(tool.name)
-    && (!allowed || allowed.has(tool.name))
-  );
-  const add = (target, names, tool) => {
-    if (!canExpose(tool) || names.has(tool.name)) return;
-    names.add(tool.name);
-    target.push(tool);
+async function finishForeground({ api, context, protocol, parentConversationId, childId, taskText, worktreeId, budgetUsage }) {
+  if (worktreeId) await bindManagedWorktree(worktreeId, childId.id);
+  throwIfAborted(context);
+  await api.details({
+    name: childId.name,
+    conversationId: String(childId.id),
+    ...(worktreeId ? { worktreeId } : {}),
+    budgetUsage,
+  }, context);
+  const conversation = await api.conversation(childId.id, context);
+  if (!conversation) throw new Error('子智能体会话创建失败');
+  const submission = await conversation.submit({
+    type: 'input',
+    content: taskText,
+    requestId: `subagent:${api.taskId}`,
+  }, context);
+  let settled;
+  let text = '';
+  let lastStatus = 'failed';
+  let lastError = '子智能体执行失败';
+  try {
+    settled = await submission.wait(context);
+    if (settled.status === 'done' && settled.type === 'input' && settled.answer !== undefined) {
+      const answer = await api.commit(
+        (tx) => tx.entry(settled.answer),
+        context,
+      );
+      text = protocol.textOfEntry(answer);
+    }
+    lastStatus = context?.abortSignal?.aborted
+      ? 'stopped'
+      : settled.status === 'done'
+        ? 'completed'
+        : settled.reason === 'aborted'
+          ? 'stopped'
+          : 'failed';
+    lastError = lastStatus === 'failed'
+      ? String(settled.reason || settled.status || '子智能体执行失败')
+      : undefined;
+  } catch (error) {
+    lastStatus = context?.abortSignal?.aborted ? 'stopped' : 'failed';
+    lastError = error instanceof Error ? error.message : String(error);
+    throw error;
+  } finally {
+    try {
+      await writeSubagentStatus({
+        api,
+        protocol,
+        parentConversationId,
+        name: childId.name,
+        status: lastStatus,
+        error: lastError,
+        context,
+      });
+    } catch (error) {
+      // The owning Durable task remains the authoritative fallback in
+      // the read-only child projection.
+      console.warn('Unable to persist subagent terminal status:', error);
+    }
+    if (worktreeId) {
+      await completeManagedWorktree(worktreeId, {
+        status: lastStatus === 'failed' ? 'failed' : 'finished',
+        error: lastError || '',
+      }).catch((error) => {
+        console.warn('Unable to settle managed worktree:', error);
+      });
+    }
+  }
+  throwIfAborted(context);
+  return {
+    output: [...(budgetUsage.warning ? [{ type: 'text', text: budgetUsage.warning }] : []), {
+      type: 'text',
+      text: settled.status === 'done'
+        ? text || '子智能体已完成，但没有返回文本。'
+        : `子智能体未能回答：${settled.reason || settled.status}`,
+    }],
+    details: {
+      name: childId.name,
+      conversationId: String(childId.id),
+      submissionId: String(submission.id),
+      status: settled.status,
+      ...(worktreeId ? { worktreeId } : {}),
+      budgetUsage,
+    },
   };
-  const modelNames = new Set();
-  for (const tool of Array.isArray(agent.tools) ? agent.tools : []) {
-    add(enabledTools, enabledNames, tool);
-    add(modelTools, modelNames, tool);
-  }
-  // agent.callable contains tools available to nested/codemode calls even when
-  // the model is not offered them directly. It is an expansion of `tools`, not
-  // a replacement for the model-facing filter.
-  for (const tool of Array.isArray(agent.callable) ? agent.callable : []) {
-    add(enabledTools, enabledNames, tool);
-  }
-  if (defaults.allowedTools.length > 0 && enabledTools.length === 0) {
-    throw new Error(
-      `子智能体的工具白名单与父智能体当前工具没有交集：${defaults.allowedTools.join(', ')}`,
-    );
-  }
-  if (defaults.supervisorEnabled && childSupervisorTool) {
-    const addSupervisorTool = (target, names) => {
-      if (names.has(childSupervisorTool.name)) return;
-      names.add(childSupervisorTool.name);
-      target.push(childSupervisorTool);
-    };
-    addSupervisorTool(enabledTools, enabledNames);
-    addSupervisorTool(modelTools, modelNames);
-  }
-  return { enabledTools, modelTools };
 }
 
-function childInstructions(name, parentConversationId, supervisorEnabled) {
-  return [
-    `You are Studio subagent "${name}" (parent conversation ${parentConversationId}).`,
-    'Work only within the tools and workspace granted to this child conversation.',
-    'Never claim to have created another subagent. Child conversations cannot spawn children.',
-    ...(supervisorEnabled
-      ? ['Use contact_supervisor only when parent approval or missing context blocks safe progress. The request is asynchronous; continue with independent work while awaiting a reply.']
-      : []),
-  ].join('\n');
-}
-
-function settingsWorkspace(agent) {
-  return agent && typeof agent.cwd === 'string' ? agent.cwd : '';
-}
-
-function assertBudgetAvailable(parentConversationId, defaults, state) {
-  const usage = { ...subagentUsage(state), parentConversationId };
-  const budget = evaluateSubagentBudget(defaults, usage);
-  if (budget.budgetAction === 'stop' && budget.exceeded) {
-    throw new Error(
-      `子智能体预算已用尽（${budget.tokens.toLocaleString()} tokens，$${budget.costUsd.toFixed(4)}）；`
-      + '请在设置中提高预算，或调整预算策略为仅提醒',
-    );
-  }
-  return usage;
+async function reportBackground({ api, context, created, worktreeId, budgetUsage }) {
+  if (worktreeId) await bindManagedWorktree(worktreeId, created.conversationId);
+  const details = {
+    name: created.name, conversationId: String(created.conversationId), reporterTaskId: String(created.taskId),
+    ...(worktreeId ? { worktreeId } : {}), budgetUsage,
+  };
+  await api.details(details, context);
+  const text = created.replayed ? created.name + ' 的本次后台请求已提交。'
+    : '已在后台启动 ' + created.name + (worktreeId ? '（隔离工作树）' : '') + '；主智能体可以继续工作，结果会作为 follow-up 回传。';
+  return { output: [{ type: 'text', text: [text, budgetUsage.warning].filter(Boolean).join('\n') }], details };
 }
 
 async function resolveChildSettings(args, api, context, childSupervisorTool, piAi) {
   const agent = await api.agent(context);
-  const defaults = normalizeSubagentConfig(
-    getSubagentConfig('user'),
-    getSubagentConfig('project', agent.cwd || ''),
-  );
-  const requestedModel = args.model ? modelRef(args.model) : defaults.modelRef;
-  if (args.model && !requestedModel) {
-    throw new Error('子智能体模型必须使用 provider/modelId 格式');
-  }
-  const requestedThinking = args.thinkingLevel || defaults.thinkingLevel;
-  if (requestedThinking && !THINKING_LEVELS.includes(requestedThinking)) {
-    throw new Error(`子智能体 thinking 强度无效：${requestedThinking}`);
-  }
-  if (
-    requestedThinking
-    && defaults.maxThinking
-    && thinkingRank(requestedThinking) > thinkingRank(defaults.maxThinking)
-  ) {
-    throw new Error(`子智能体 thinking 强度不能高于 ${defaults.maxThinking}`);
-  }
-  const childModel = requestedModel
-    ? api.models.getModel(requestedModel.provider, requestedModel.modelId)
-    : undefined;
-  if (requestedModel && !childModel) {
-    throw new Error(`子智能体模型不存在或尚未启用：${args.model || defaults.modelRef.provider + '/' + defaults.modelRef.modelId}`);
-  }
-  if (
-    childModel
-    && requestedThinking
-    && !piAi.getSupportedThinkingLevels(childModel).includes(requestedThinking)
-  ) {
-    throw new Error(`模型 ${childModel.provider}/${childModel.id} 不支持 thinking=${requestedThinking}`);
-  }
+  const profile = args.profileId ? requestedProfile(args.profileId) : null;
+  const defaults = runDefaults(agent.cwd, profile);
+  const { requestedModel, requestedThinking } = roleModelSettings(args, profile, defaults, api.models, piAi, agent);
   let childCwd = agent.cwd || '';
   if (args.cwd) {
     if (!agent.cwd) throw new Error('父智能体没有工作区，不能设置子智能体工作目录');
@@ -251,15 +210,19 @@ async function resolveChildSettings(args, api, context, childSupervisorTool, piA
     agent,
     defaults,
     childSupervisorTool,
+    profile,
   );
   return {
     agent,
     defaults,
     requestedModel,
     requestedThinking,
+    modelArguments: { ...(args.model ? { model: args.model } : {}), ...(args.thinkingLevel ? { thinkingLevel: args.thinkingLevel } : {}) },
     childCwd,
     enabledTools,
     modelTools,
+    profile,
+    rolePrompt: profile ? { harness: roleHarness(profile, agent.cwd), skills: profile.skills, workspace: agent.cwd || '' } : null,
   };
 }
 
@@ -278,14 +241,7 @@ async function configureChildConversation({
   childChannelExtension,
 }) {
   const protocol = createProtocol(durable);
-  const childExtensions = (settings.agent.extensions || [])
-    .filter((extension) => (
-      extension !== parentExtension
-      && extension?.name !== parentExtension.name
-    ));
-  if (!childExtensions.some((extension) => extension?.name === childChannelExtension.name)) {
-    childExtensions.push(childChannelExtension);
-  }
+  const childExtensions = childExtensionsFor(settings.agent, settings.profile, childChannelExtension, parentExtension.name);
   await durable.configure(tx, childId, {
     extensions: childExtensions,
     tools: settings.enabledTools,
@@ -295,7 +251,7 @@ async function configureChildConversation({
     ...(settings.childCwd && settings.childCwd !== settings.agent.cwd
       ? { cwd: settings.childCwd }
       : {}),
-    ...(instructions ? { instructions } : {}),
+    instructions: childInstructions(name, parentConversationId, mode === 'background' && settings.defaults.supervisorEnabled, settings.profile?.instructions, instructions),
   });
   const childContext = await tx.doc(protocol.ChildContext, childId);
   childContext.parentConversationId = parentConversationId;
@@ -306,11 +262,17 @@ async function configureChildConversation({
   childContext.isolation = settings.isolation || 'workspace';
   childContext.supervisorEnabled = Boolean(settings.defaults.supervisorEnabled);
   childContext.createdAt = settings.createdAt;
+  if (settings.profile) {
+    childContext.rolePrompt = settings.rolePrompt;
+    childContext.modelArguments = settings.modelArguments;
+    childContext.taskInstruction = instructions;
+  }
   const registry = await tx.doc(protocol.Subagents, parentConversationId);
   registry.agents[name] = {
     name,
     conversationId: childId,
-    avatarId: assignAvatar(registry.agents, childId),
+    avatarId: settings.profile?.avatarId || assignAvatar(registry.agents, childId),
+    ...(settings.profile ? { profileId: settings.profile.id, profileRevision: settings.profile.revision, displayName: settings.profile.name } : {}),
     anchorTaskId: anchorTaskId || 0,
     ownerTaskId: ownerTaskId || 0,
     mode,
@@ -328,8 +290,25 @@ function createSubagentChannelExtension(durable, piAi) {
   const { defineExtension, defineTool } = durable;
   const Type = toolSchema;
   const protocol = createProtocol(durable);
+  // Each request renders several sections. Read its committed child settings once.
+  const promptContexts = new WeakMap();
+  const wrappedSections = ['preamble', 'studio-tools', 'coding-rules', 'repository-docs', 'project-context', 'cwd', 'addendum', 'studio-skills'];
   return defineExtension({
     name: 'studio-subagent-channel',
+    wraps: wrappedSections.map(key => ({
+      section: key,
+      wrap: section => ({
+        ...section,
+        async render(input, context) {
+          if (input.agent.extensions.some(ext => ext.name === 'studio-subagents')) return section.render(input, context);
+          if (!promptContexts.has(input)) {
+            promptContexts.set(input, input.read.snapshot(protocol.ChildContext, input.conversationId, context));
+          }
+          const child = await promptContexts.get(input);
+          return section.render(child?.rolePrompt ? { ...input, rolePrompt: child.rolePrompt } : input, context);
+        },
+      }),
+    })),
     tasks: [protocol.AnswerCapture],
     hooks: [
       durable.hook(durable.GenerationTask, {
@@ -462,6 +441,7 @@ function createSubagentExtension(durable, piAi, chordContext) {
             Type.Literal('status'),
           ])),
           name: Type.Optional(Type.String({ description: 'Stable child name for background operations. Names must start with a letter and use letters, digits, _ or -.' })),
+          profileId: Type.Optional(Type.String({ description: 'The exact Studio role ID supplied by an explicit # mention. Use it for run or spawn to apply the saved role, model and resource selection.' })),
           task: Type.Optional(Type.String({ description: 'The complete task for run or spawn.' })),
           message: Type.Optional(Type.String({ description: 'Message for spawn or send.' })),
           instructions: Type.Optional(Type.String({ description: 'Optional role-specific instructions.' })),
@@ -539,11 +519,15 @@ function createSubagentExtension(durable, piAi, chordContext) {
             if (message.length > MAX_SUBAGENT_TEXT_LENGTH) {
               throw new Error(`子智能体消息不能超过 ${MAX_SUBAGENT_TEXT_LENGTH} 个字符`);
             }
-            const defaults = normalizeSubagentConfig(
-              getSubagentConfig('user'),
-              getSubagentConfig('project', settingsWorkspace(await api.agent(context))),
-            );
-            assertBudgetAvailable(parentConversationId, defaults, state);
+            const sent = (worktreeId, warning) => ({
+              output: [{ type: 'text', text: [`已向 ${name} 发送消息，完成后会自动回传结果。`, warning].filter(Boolean).join('\n') }],
+              details: { name, conversationId: String(agent.conversationId), ...(worktreeId ? { worktreeId } : {}) },
+            });
+            if (registryReporter(state, `tool:${api.taskId}`)) return sent(agent.worktreeId);
+            const profile = agent.profileId ? requestedProfile(agent.profileId) : null;
+            const defaults = runDefaults((await api.agent(context)).cwd, profile);
+            if (!defaults.backgroundEnabled) throw new Error('当前运行设置已关闭后台运行');
+            const budgetUsage = assertBudgetAvailable(parentConversationId, defaults, state, profile);
             let sendWorktreeId = agent.worktreeId || '';
             let recreatedWorktree;
             const existingWorktree = sendWorktreeId
@@ -599,6 +583,7 @@ function createSubagentExtension(durable, piAi, chordContext) {
                   followUp: args.followUp !== false,
                   now,
                   maximum: defaults.maxConcurrent,
+                  refreshProfile: true,
                   worktreeId: sendWorktreeId,
                 });
               }, context);
@@ -611,20 +596,35 @@ function createSubagentExtension(durable, piAi, chordContext) {
             await api.details({
               agents: [{
                 name,
+                budgetUsage,
                 conversationId: String(agent.conversationId),
                 ...(sendWorktreeId ? { worktreeId: sendWorktreeId } : {}),
               }],
             }, context);
-            return {
-              output: [{ type: 'text', text: `已向 ${name} 发送消息；结果完成后会自动回传。` }],
-              details: {
-                name,
-                conversationId: String(agent.conversationId),
-                ...(sendWorktreeId ? { worktreeId: sendWorktreeId } : {}),
-              },
-            };
+            return sent(sendWorktreeId, budgetUsage.warning);
           }
 
+          const registryState = await api.snapshot(protocol.Subagents, parentConversationId, context)
+            || emptyRegistry();
+          // A replay resumes the committed child even when its library role was edited or deleted.
+          const reporter = registryReporter(registryState, `tool:${api.taskId}`);
+          const prior = reporter ? registryAgent(registryState, reporter.name)
+            : Object.values(registryState.agents).find(child => child.ownerTaskId === api.taskId);
+          const taskText = String(args.task || args.message || '').trim();
+          if (!taskText) throw new Error(`${action} 需要 task 或 message`);
+          if (taskText.length > MAX_SUBAGENT_TEXT_LENGTH) {
+            throw new Error(`子智能体任务不能超过 ${MAX_SUBAGENT_TEXT_LENGTH} 个字符`);
+          }
+          if (prior) {
+            const budgetUsage = { ...subagentUsage(registryState), parentConversationId };
+            const worktreeId = prior.worktreeId;
+            if (reporter) {
+              const created = { name: prior.name, conversationId: prior.conversationId, taskId: reporter.taskId, replayed: true };
+              return reportBackground({ api, context, created, worktreeId, budgetUsage });
+            }
+            const childId = { name: prior.name, id: prior.conversationId };
+            return finishForeground({ api, context, protocol, parentConversationId, childId, taskText, worktreeId, budgetUsage });
+          }
           const settingsBase = await resolveChildSettings(
             args,
             api,
@@ -632,12 +632,11 @@ function createSubagentExtension(durable, piAi, chordContext) {
             childSupervisorTool,
             piAi,
           );
-          const registryState = await api.snapshot(protocol.Subagents, parentConversationId, context)
-            || emptyRegistry();
           const budgetUsage = assertBudgetAvailable(
             parentConversationId,
             settingsBase.defaults,
             registryState,
+            settingsBase.profile,
           );
           const explicitBackground = action === 'spawn' || args.mode === 'background';
           const background = explicitBackground
@@ -658,11 +657,6 @@ function createSubagentExtension(durable, piAi, chordContext) {
             : isolateByDefault;
           if (shouldIsolate && args.cwd) {
             throw new Error('隔离工作树不能与 cwd 同时使用；工作树路径已经是完整子工作区');
-          }
-          const taskText = String(args.task || args.message || '').trim();
-          if (!taskText) throw new Error(`${action} 需要 task 或 message`);
-          if (taskText.length > MAX_SUBAGENT_TEXT_LENGTH) {
-            throw new Error(`子智能体任务不能超过 ${MAX_SUBAGENT_TEXT_LENGTH} 个字符`);
           }
           const instructions = String(args.instructions || '').trim();
           if (instructions.length > MAX_SUBAGENT_INSTRUCTIONS_LENGTH) {
@@ -724,9 +718,7 @@ function createSubagentExtension(durable, piAi, chordContext) {
                     replayed: true,
                   };
                 }
-                if (Object.keys(state.agents).length >= settings.defaults.maxSpawns) {
-                  throw new Error(`当前会话最多创建 ${settings.defaults.maxSpawns} 个子智能体`);
-                }
+                assertSpawnAvailable(settings.defaults, state, settings.profile);
                 if (registryAgent(state, requestedName)) {
                   throw new Error(`子智能体名称已存在：${requestedName}；请使用 action=send`);
                 }
@@ -748,14 +740,7 @@ function createSubagentExtension(durable, piAi, chordContext) {
                   ownerTaskId: 0,
                   mode: 'background',
                   settings,
-                  instructions: [
-                    instructions,
-                    childInstructions(
-                      requestedName,
-                      parentConversationId,
-                      settings.defaults.supervisorEnabled,
-                    ),
-                  ].filter(Boolean).join('\n\n'),
+                  instructions,
                   parentExtension,
                   childChannelExtension: channel,
                 });
@@ -785,31 +770,7 @@ function createSubagentExtension(durable, piAi, chordContext) {
               }
               throw error;
             }
-            if (worktreeId) {
-              await bindManagedWorktree(worktreeId, created.conversationId);
-            }
-            await api.details({
-              name: created.name,
-              conversationId: String(created.conversationId),
-              reporterTaskId: String(created.taskId),
-              ...(worktreeId ? { worktreeId } : {}),
-              budgetUsage,
-            }, context);
-            return {
-              output: [{
-                type: 'text',
-                text: created.replayed
-                  ? `${created.name} 的本次后台请求已经在运行。`
-                  : `已在后台启动 ${created.name}${worktreeRecord ? '（隔离工作树）' : ''}；主智能体可以继续工作，结果会作为 follow-up 回传。`,
-              }],
-              details: {
-                name: created.name,
-                conversationId: String(created.conversationId),
-                reporterTaskId: String(created.taskId),
-                ...(worktreeId ? { worktreeId } : {}),
-                budgetUsage,
-              },
-            };
+            return reportBackground({ api, context, created, worktreeId, budgetUsage });
           }
 
           let childId;
@@ -822,14 +783,12 @@ function createSubagentExtension(durable, piAi, chordContext) {
               const state = await tx.doc(protocol.Subagents, parentConversationId);
               const existingRegistryChild = Object.values(state.agents)
                 .find((agent) => agent.ownerTaskId === api.taskId);
-              const name = existingRegistryChild?.name
-                || normalizeSubagentName(args.name, `foreground-${api.taskId}`);
-              if (registryAgent(state, name) && !existingRegistryChild) {
+              if (existingRegistryChild) return { id: existingRegistryChild.conversationId, name: existingRegistryChild.name };
+              const name = normalizeSubagentName(args.name, `foreground-${api.taskId}`);
+              if (registryAgent(state, name)) {
                 throw new Error(`子智能体名称已存在：${name}`);
               }
-              if (!existingRegistryChild && Object.keys(state.agents).length >= settings.defaults.maxSpawns) {
-                throw new Error(`当前会话最多创建 ${settings.defaults.maxSpawns} 个子智能体`);
-              }
+              assertSpawnAvailable(settings.defaults, state, settings.profile);
               await configureChildConversation({
                 tx,
                 durable,
@@ -840,10 +799,7 @@ function createSubagentExtension(durable, piAi, chordContext) {
                 ownerTaskId: api.taskId,
                 mode: 'foreground',
                 settings,
-                instructions: [
-                  instructions,
-                  childInstructions(name, parentConversationId, false),
-                ].filter(Boolean).join('\n\n'),
+                instructions,
                 parentExtension,
                 childChannelExtension: channel,
               });
@@ -855,90 +811,7 @@ function createSubagentExtension(durable, piAi, chordContext) {
             }
             throw error;
           }
-          if (worktreeId) await bindManagedWorktree(worktreeId, childId.id);
-          throwIfAborted(context);
-          await api.details({
-            name: childId.name,
-            conversationId: String(childId.id),
-            ...(worktreeId ? { worktreeId } : {}),
-            budgetUsage,
-          }, context);
-          const conversation = await api.conversation(childId.id, context);
-          if (!conversation) throw new Error('子智能体会话创建失败');
-          const submission = await conversation.submit({
-            type: 'input',
-            content: taskText,
-            requestId: `subagent:${api.taskId}`,
-          }, context);
-          let settled;
-          let text = '';
-          let lastStatus = 'failed';
-          let lastError = '子智能体执行失败';
-          try {
-            settled = await submission.wait(context);
-            if (settled.status === 'done' && settled.type === 'input' && settled.answer !== undefined) {
-              const answer = await api.commit(
-                (tx) => tx.entry(settled.answer),
-                context,
-              );
-              text = protocol.textOfEntry(answer);
-            }
-            lastStatus = context?.abortSignal?.aborted
-              ? 'stopped'
-              : settled.status === 'done'
-                ? 'completed'
-                : settled.reason === 'aborted'
-                  ? 'stopped'
-                  : 'failed';
-            lastError = lastStatus === 'failed'
-              ? String(settled.reason || settled.status || '子智能体执行失败')
-              : undefined;
-          } catch (error) {
-            lastStatus = context?.abortSignal?.aborted ? 'stopped' : 'failed';
-            lastError = error instanceof Error ? error.message : String(error);
-            throw error;
-          } finally {
-            try {
-              await writeSubagentStatus({
-                api,
-                protocol,
-                parentConversationId,
-                name: childId.name,
-                status: lastStatus,
-                error: lastError,
-                context,
-              });
-            } catch (error) {
-              // The owning Durable task remains the authoritative fallback in
-              // the read-only child projection.
-              console.warn('Unable to persist subagent terminal status:', error);
-            }
-            if (worktreeId) {
-              await completeManagedWorktree(worktreeId, {
-                status: lastStatus === 'failed' ? 'failed' : 'finished',
-                error: lastError || '',
-              }).catch((error) => {
-                console.warn('Unable to settle managed worktree:', error);
-              });
-            }
-          }
-          throwIfAborted(context);
-          return {
-            output: [{
-              type: 'text',
-              text: settled.status === 'done'
-                ? text || '子智能体已完成，但没有返回文本。'
-                : `子智能体未能回答：${settled.reason || settled.status}`,
-            }],
-            details: {
-              name: childId.name,
-              conversationId: String(childId.id),
-              submissionId: String(submission.id),
-              status: settled.status,
-              ...(worktreeId ? { worktreeId } : {}),
-              budgetUsage,
-            },
-          };
+          return finishForeground({ api, context, protocol, parentConversationId, childId, taskText, worktreeId, budgetUsage });
         },
       }),
       defineTool({
@@ -1000,13 +873,10 @@ function createSubagentExtension(durable, piAi, chordContext) {
               .sort((left, right) => Number(right.taskId) - Number(left.taskId))[0];
             if (!reporter) throw new Error(`${name} 没有可等待的后台运行`);
           }
-          const defaults = normalizeSubagentConfig(
-            getSubagentConfig('user'),
-            getSubagentConfig('project', settingsWorkspace(await api.agent(context))),
-          );
+          const defaults = runDefaults((await api.agent(context)).cwd);
           const timeoutMs = Math.min(
             600_000,
-            Math.max(1_000, Number(args.timeoutMs) || defaults.waitTimeoutMs),
+            Math.max(1_000, Number(args.timeoutMs) || reporter.waitTimeoutMs || defaults.waitTimeoutMs),
           );
           const timeout = new AbortController();
           const timer = setTimeout(() => timeout.abort(new Error('bg_wait timeout')), timeoutMs);
@@ -1106,13 +976,11 @@ function createSubagentExtension(durable, piAi, chordContext) {
             throw new Error('监督请求对应的子智能体已失效');
           }
           const now = api.now();
-          const defaults = normalizeSubagentConfig(
-            getSubagentConfig('user'),
-            getSubagentConfig('project', settingsWorkspace(await api.agent(context))),
-          );
+          const cwd = (await api.agent(context)).cwd;
+          const defaults = runDefaults(cwd);
           const reporter = await api.commit((tx) => queueSupervisorReply({
             tx, durable, parentConversationId, replyTo, message, now,
-            maximum: defaults.maxConcurrent,
+            maximum: defaults.maxConcurrent, cwd,
           }), context);
           return {
             output: [{

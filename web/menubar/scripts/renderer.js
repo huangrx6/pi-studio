@@ -15,7 +15,7 @@ let currentState = {
   recent: [],
   unreadCount: 0,
   theme: 'system',
-  palette: 'lime',
+  palette: 'ocean',
   radii: DEFAULT_RADII,
 };
 
@@ -46,7 +46,7 @@ function applyAppearance({ theme, palette, radii } = {}) {
     ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
     : theme;
   document.documentElement.dataset.theme = resolved;
-  document.documentElement.dataset.palette = palette || 'lime';
+  document.documentElement.dataset.palette = palette || 'ocean';
   const values = radii && typeof radii === 'object' ? { ...DEFAULT_RADII, ...radii } : DEFAULT_RADII;
   for (const key of ['tag', 'control', 'card', 'panel', 'round']) {
     const value = Number(values[key]);

@@ -31,7 +31,8 @@ async function createTree(root, input) {
   const ref = refs.branches.find(row => !row.remote && row.name === name);
   if (mode === 'existing' && (!ref || ref.worktree)) throw new Error(ref ? '该分支已由另一工作树使用。' : '本地分支已不存在。');
   if (mode === 'new' && ref) throw new Error('同名分支已存在。');
-  if (mode === 'new' && (!refs.head || refs.head !== input.head)) throw new Error('起点提交已变化，请重新打开创建窗口。');
+  const start = input.baseBranch === undefined ? refs.head : refs.branches.find(row => !row.remote && row.name === input.baseBranch)?.head;
+  if (mode === 'new' && (!start || start !== input.head)) throw new Error('起点提交已变化，请刷新分支后确认。');
   if (input.parent && (typeof input.parent !== 'string' || !path.isAbsolute(input.parent))) throw new Error('请选择工作树的目标目录。');
   const parent = await fs.realpath(input.parent || path.dirname(list[0].path));
   if (!(await fs.stat(parent)).isDirectory() || list.some(tree => contains(tree.path, parent))) {
@@ -39,9 +40,9 @@ async function createTree(root, input) {
   }
   const target = path.join(parent, folder);
   if (list.some(row => row.path === target) || await statOrMissing(target)) throw new Error('目标文件夹已存在，请换一个名称。');
-  await checkWorktreeSpace(root, mode === 'new' ? refs.head : 'refs/heads/' + name, path.dirname(target));
+  await checkWorktreeSpace(root, mode === 'new' ? start : 'refs/heads/' + name, path.dirname(target));
   try {
-    await run(root, ['worktree', 'add', ...(mode === 'new' ? ['-b', name] : []), '--', target, mode === 'new' ? refs.head : name]);
+    await run(root, ['worktree', 'add', ...(mode === 'new' ? ['-b', name] : []), '--', target, mode === 'new' ? start : name]);
   } catch (error) {
     // A failing checkout hook can leave a usable registration, or just the new branch.
     if ((await trees(root)).some(tree => tree.path === target)) throw new Error('Git 已登记此工作树，但检出未正常结束。请关闭弹框，在工作树列表中打开并检查。');
@@ -107,7 +108,7 @@ async function reviewRemoval(root, input, assertUnused) {
 async function manageWorktree(cwd, input, { trashItem, assertUnused } = {}) {
   if (input?.kind === 'options') {
     const { head, branch, branches } = await gitRead(cwd, { kind: 'branches' });
-    return { head, branch, branches: branches.filter(ref => !ref.remote).map(ref => ({ name: ref.name, occupied: Boolean(ref.worktree) })) };
+    return { head, branch, branches: branches.filter(ref => !ref.remote).map(ref => ({ name: ref.name, head: ref.head, occupied: Boolean(ref.worktree) })) };
   }
   if (input?.kind === 'open') {
     const { tree, stat } = await treeAt(cwd, input.path);

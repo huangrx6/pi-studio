@@ -138,10 +138,10 @@ html:is([data-platform='win32'], [data-window-fullscreen='true']) :is(.app.has-c
 .brand { position: relative; height: 44px; display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-1); flex: none; }
 .brand-name { font-size: var(--text-lg); font-weight: var(--weight-bold); letter-spacing: -.4px; white-space: nowrap; }
 .brand .collapse { margin-left: auto; }
-.new-chat { height: var(--row-height); display: flex; align-items: center; justify-content: center; gap: var(--space-2); flex: none; margin-top: var(--space-4); border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); box-shadow: var(--shadow-card); font-size: var(--text-base); font-weight: var(--weight-medium); }
-.new-chat:hover { border-color: var(--border-hover); background: var(--surface-hover); color: var(--accent-foreground); }
-.nav { display: flex; flex-direction: column; gap: var(--space-1); margin-top: var(--space-4); }
+.nav { display: flex; flex: none; flex-direction: column; gap: var(--space-1); margin-top: var(--space-3); }
 .nav-row, .settings-nav-row { width: 100%; min-height: var(--row-height); display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-3); border-radius: var(--radius-control); color: var(--muted); text-align: left; font-size: var(--text-base); }
+.nav > .nav-row { min-height: var(--control); gap: var(--space-2); font-weight: var(--weight-medium); }
+.nav > .nav-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-row:hover:not(:disabled), .settings-nav-row:hover { background: var(--surface-hover); color: var(--text); }
 .nav-row small { margin-left: auto; font-size: var(--text-xs); white-space: nowrap; }
 .workspace-head { min-height: 28px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin: var(--space-6) var(--space-2) var(--space-2); color: var(--faint); font-size: var(--text-sm); font-weight: var(--weight-medium); }

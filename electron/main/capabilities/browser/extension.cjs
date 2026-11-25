@@ -25,13 +25,17 @@ const {
   listExternalChromeTargets,
   navigateBrowserTab,
   navigateExternalChrome,
+  browserPreferenceInstructions,
   requestFocusBrowserTab,
   requestOpenBrowserTab,
+  resolveBrowserOpenUrl,
   resolveBrowserTab,
   scrollBrowser,
   selectBrowserRef,
   sendBrowserCdp,
   sendExternalChromeCdp,
+  shouldBlockSystemBrowserOpen,
+  systemBrowserOpenBlockMessage,
   typeBrowserRef,
   waitBrowser,
 } = require('../../services/browser/index.cjs');
@@ -83,15 +87,20 @@ function createBrowserTools(durable) {
 
   const browserOpen = defineTool({
     name: 'browser_open',
-    description: 'Open a URL in the Studio workbench browser (creates or reuses a tab).',
+    description: 'Open a page in the Studio workbench browser (right-side panel). Use for http(s), localhost, and local HTML when Settings → Browser open targets are workbench. Do not use bash open/Playwright/system Chrome for ordinary previews while those targets are workbench.',
     parameters: Type.Object({
-      url: Type.String({ description: 'http(s) URL, local HTML file URL, or about:blank' }),
+      url: Type.String({ description: 'http(s) URL, about:blank, file:// HTML URL, or absolute/relative path to a .html file' }),
       newTab: Type.Optional(Type.Boolean({ description: 'Force a new tab even if URL is already open' })),
     }),
-    async execute(args) {
+    async execute(args, api, context) {
       ensureAgentBrowser();
-      const url = String(args.url || '').trim();
-      if (!url) throw new Error('url 不能为空');
+      let cwd = '';
+      try {
+        cwd = (await api.agent(context)).cwd || '';
+      } catch {
+        cwd = '';
+      }
+      const url = resolveBrowserOpenUrl(args.url, cwd);
       assertSiteActionAllowed(url, 'navigate');
       const tab = await requestOpenBrowserTab(url, { newTab: args.newTab === true });
       return textResult(`已打开：${tab.url || url}`, { tab, tabs: listBrowserTabs() });
@@ -474,6 +483,27 @@ function createBrowserTools(durable) {
       browserEvaluate,
       browserCdp,
       browserExternal,
+    ],
+    sections: [
+      // Controlled by Settings → 浏览器 →「向 Agent 说明打开规则」.
+      durable.section('studio-browser-open', () => {
+        const preferences = getBrowserPreferences();
+        if (preferences.linkOpenInstructAgent === false) return '';
+        return browserPreferenceInstructions(preferences);
+      }),
+    ],
+    hooks: [
+      durable.hook(durable.ToolTask, {
+        async beforeTool(call) {
+          if (call?.name !== 'bash') return;
+          const command = String(call.arguments?.command || '');
+          // Controlled by Settings → 浏览器 →「拦截外部打开」(+ open targets).
+          if (!shouldBlockSystemBrowserOpen(command)) return;
+          return {
+            block: systemBrowserOpenBlockMessage(command),
+          };
+        },
+      }),
     ],
   });
 }

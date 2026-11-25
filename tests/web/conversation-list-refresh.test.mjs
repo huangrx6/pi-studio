@@ -23,6 +23,8 @@ function harness() {
   const h = {
     initialStateSettled: false,
     setInitialStateSettled(value) { h.initialStateSettled = value; },
+    workspacesLoaded: false,
+    setWorkspacesLoaded(value) { h.workspacesLoaded = value; },
     workspace: '/A', workspaceRef: { current: '/A' },
     sessionLoadRef: { current: 0 }, stateRequestRef: { current: 0 },
     modelRevisionRef: { current: new Map() }, modelWritesRef: { current: new Set() },
@@ -35,7 +37,7 @@ function harness() {
     setConversationListRefreshError(value) { h.notice = value; },
     // 兜底计时器在测试里不需要真的触发，给一个不回调的实现即可。
     setTimeout() { return 0; }, clearTimeout() {},
-    window: { piApi: { state() { return new Promise((resolve, reject) => waiting.push({ resolve, reject })); } } },
+    window: { piApi: { state(cwd) { return new Promise((resolve, reject) => waiting.push({ cwd, resolve, reject })); } } },
   };
   vm.runInNewContext(code, h);
   return { h, waiting, installed, data: { workspaces: [{ cwd: '/A', name: 'A', sessions: [] }], model: {} } };
@@ -54,6 +56,7 @@ test('write-invalidated and superseded list reads cannot unlock or install stale
   assert.equal(installed.length, 0); assert.equal(h.conversationListNeedsRefreshRef.current, true);
   waiting[2].resolve(data); await latest;
   assert.equal(h.initialStateSettled, true);
+  assert.equal(h.workspacesLoaded, true);
   assert.equal(installed.length, 1); assert.equal(h.conversationListNeedsRefreshRef.current, false);
   assert.equal(h.notice, false); assert.equal(h.loading, false);
 });
@@ -67,10 +70,29 @@ test('scope changes retain the refresh lock; latest failed reads expose read rec
   const failed = h.read(); waiting[1].reject(new Error('read failed'));
   await assert.rejects(failed, /read failed/);
   assert.equal(h.initialStateSettled, true);
+  assert.equal(h.workspacesLoaded, false);
   assert.equal(h.notice, true); assert.equal(h.conversationListNeedsRefreshRef.current, true);
   assert.equal(h.loading, false);
   const retry = h.read(); waiting[2].resolve(data); await retry;
   assert.equal(installed.length, 1); assert.equal(h.conversationListNeedsRefreshRef.current, false);
+});
+
+test('refresh after deleting the selected workspace uses the new scope before React renders it', async () => {
+  const { h, waiting, installed, data } = harness();
+  h.setWorkspace = (value) => { h.scheduledWorkspace = value; };
+  vm.runInNewContext(changeWorkspaceCode, h);
+  const beforeDelete = h.read();
+  h.changeWorkspace('');
+  const afterDelete = h.read();
+  assert.equal(h.workspace, '/A', 'the workspace render is still pending');
+  assert.equal(h.scheduledWorkspace, '');
+  assert.equal(waiting[1].cwd, '');
+  waiting[1].resolve({ workspaces: [], model: {} }); await afterDelete;
+  waiting[0].resolve(data); await beforeDelete;
+  assert.equal(installed.length, 1);
+  assert.equal(installed[0].length, 0);
+  assert.equal(h.workspacesLoaded, true);
+  assert.equal(h.conversationListNeedsRefreshRef.current, false);
 });
 
 test('workspace navigation invalidates an abandoned list read and releases its controls lock', () => {

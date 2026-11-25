@@ -16,10 +16,10 @@ import './styles/usage-settings.css';
 
 const RANGE_OPTIONS = [90, 180, 365] as const;
 const DAY_LABELS = ['一', '', '三', '', '五', '', '日'];
-const MODEL_RANGES: { id: ModelRange; label: string }[] = [
-  { id: 'all', label: '全部时间' }, { id: 'today', label: '今天' },
-  { id: '7', label: '7 天' }, { id: '30', label: '30 天' },
-  { id: '90', label: '90 天' }, { id: '365', label: '1 年' }, { id: 'custom', label: '自定义' },
+const MODEL_RANGES: { value: ModelRange; label: string }[] = [
+  { value: 'all', label: '全部时间' }, { value: 'today', label: '今天' },
+  { value: '7', label: '7 天' }, { value: '30', label: '30 天' },
+  { value: '90', label: '90 天' }, { value: '365', label: '1 年' }, { value: 'custom', label: '自定义' },
 ];
 const exactNumber = (value: number) => new Intl.NumberFormat('zh-CN').format(value || 0);
 function tokenNumber(value: number): string {
@@ -57,7 +57,7 @@ function UsageHeatmap({ snapshot, modelFilter, onModelFilterChange }: {
   const [hoveredDay, setHoveredDay] = useState<string | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const positionedRange = useRef('');
+  const positioned = useRef({ range: '', width: 0 });
   const selectedModel = snapshot.filterModels.find(item => modelKey(item.providerId, item.modelId) === modelFilter);
   // Removed models with history normally remain in filterModels. A vanished filter
   // must visibly fall back to "all", never keep a selected label over all-model values.
@@ -72,17 +72,22 @@ function UsageHeatmap({ snapshot, modelFilter, onModelFilterChange }: {
   const activeDay = selectedDay && activeDates.includes(selectedDay) ? selectedDay : lastDay;
   useLayoutEffect(() => {
     const rangeKey = `${snapshot.sinceDay}:${lastDay}:${snapshot.days}`;
-    if (positionedRange.current === rangeKey) return;
     const scroller = scrollRef.current;
     const cell = gridRef.current?.querySelector<HTMLButtonElement>(`[data-date="${activeDay}"]`);
     if (!scroller || !cell) return;
-    positionedRange.current = rangeKey;
-    // Reveal the selected day horizontally without moving the settings page.
-    // Same-range refreshes, keyboard selection and hover keep the user's position.
-    const viewport = scroller.getBoundingClientRect();
-    const target = cell.getBoundingClientRect();
-    if (target.right > viewport.right - 3) scroller.scrollLeft += target.right - viewport.right + 3;
-    else if (target.left < viewport.left + 3) scroller.scrollLeft -= viewport.left - target.left + 3;
+    const revealDay = () => {
+      const width = scroller.clientWidth;
+      if (!width || (positioned.current.range === rangeKey && positioned.current.width === width)) return;
+      positioned.current = { range: rangeKey, width };
+      const viewport = scroller.getBoundingClientRect();
+      const target = cell.getBoundingClientRect();
+      if (target.right > viewport.right) scroller.scrollLeft += target.right - viewport.right;
+      else if (target.left < viewport.left) scroller.scrollLeft -= viewport.left - target.left;
+    };
+    revealDay();
+    const observer = new ResizeObserver(revealDay);
+    observer.observe(scroller);
+    return () => observer.disconnect();
   }, [snapshot.sinceDay, snapshot.days, lastDay, activeDay]);
   const detailDay = hoveredDay && activeDates.includes(hoveredDay) ? hoveredDay : activeDay;
   const selected = dailyByDate.get(detailDay);
@@ -95,9 +100,10 @@ function UsageHeatmap({ snapshot, modelFilter, onModelFilterChange }: {
     setHoveredDay(null);
     gridRef.current?.querySelector<HTMLButtonElement>(`[data-date="${next}"]`)?.focus();
   }
-  return <>
-    {snapshot.filterModels.length > 0 && <div className="usage-model-filter">
-      <Select
+  return <section className="usage-heatmap-card" aria-labelledby="usage-daily-title">
+    <header className="usage-section-head">
+      <h3 id="usage-daily-title">每日趋势</h3>
+      {snapshot.filterModels.length > 0 && <Select className="usage-model-filter"
         label="按模型筛选热力图"
         value={effectiveFilter}
         onChange={onModelFilterChange}
@@ -109,28 +115,37 @@ function UsageHeatmap({ snapshot, modelFilter, onModelFilterChange }: {
             description: `${item.providerName}${item.enabled ? '' : ' · 已停用'}`,
           })),
         ]}
-      />
-    </div>}
+      />}
+    </header>
     <div className={`usage-heatmap-layout is-days-${snapshot.days}`}>
-      <div ref={scrollRef} className="usage-heatmap-scroll">
+      <div className="usage-calendar">
         <div className="usage-heatmap-days" aria-hidden="true">{DAY_LABELS.map((label, index) => <span key={index}>{label}</span>)}</div>
-        <div ref={gridRef} className="usage-heatmap-grid" style={{ '--usage-weeks': Math.max(1, Math.ceil(dates.length / 7)) } as CSSProperties} role="group" aria-label={`${filterLabel}，${snapshot.days} 天 Token 使用量；上下键移动一天，左右键移动一周`} onMouseLeave={() => setHoveredDay(null)}>
-          {dates.map(date => {
-            const item = dailyByDate.get(date);
-            const inRange = date >= snapshot.sinceDay;
-            const description = `${dateLabel(date)}，${exactNumber(item?.totalTokens || 0)} tokens，${exactNumber(item?.requests || 0)} 次请求`;
-            return <button type="button" key={date} data-date={date} title={description} aria-label={description} aria-pressed={activeDay === date} tabIndex={activeDay === date ? 0 : -1} disabled={!inRange}
-              className={`usage-heat-cell level-${heatLevel(item?.totalTokens || 0, maximum)} ${inRange ? '' : 'is-outside'} ${activeDay === date ? 'is-selected' : ''}`}
-              onFocus={() => { setSelectedDay(date); setHoveredDay(null); }} onMouseEnter={() => setHoveredDay(date)} onClick={() => setSelectedDay(date)} onKeyDown={event => navigate(event, date)} />;
-          })}
+        <div ref={scrollRef} className="usage-heatmap-scroll">
+          <div ref={gridRef} className="usage-heatmap-grid" style={{ '--usage-weeks': Math.max(1, Math.ceil(dates.length / 7)) } as CSSProperties} role="group" aria-label={`${filterLabel}，${snapshot.days} 天 Token 使用量；上下键移动一天，左右键移动一周`} onMouseLeave={() => setHoveredDay(null)}>
+            {dates.map(date => {
+              const item = dailyByDate.get(date);
+              const inRange = date >= snapshot.sinceDay;
+              const description = `${dateLabel(date)}，${exactNumber(item?.totalTokens || 0)} tokens，${exactNumber(item?.requests || 0)} 次请求`;
+              return <button type="button" key={date} data-date={date} title={description} aria-label={description} aria-pressed={activeDay === date} tabIndex={activeDay === date ? 0 : -1} disabled={!inRange}
+                className={`usage-heat-cell level-${heatLevel(item?.totalTokens || 0, maximum)} ${inRange ? '' : 'is-outside'} ${activeDay === date ? 'is-selected' : ''}`}
+                onFocus={() => { setSelectedDay(date); setHoveredDay(null); }} onMouseEnter={() => setHoveredDay(date)} onClick={() => setSelectedDay(date)} onKeyDown={event => navigate(event, date)} />;
+            })}
+          </div>
         </div>
       </div>
-      <div className="usage-legend"><span>每日最高 {tokenNumber(maximum)}</span><span>少</span><div aria-hidden="true">{[0, 1, 2, 3, 4].map(level => <i className={`level-${level}`} key={level} />)}</div><span>多</span></div>
+      <div className="usage-legend"><span>每日最高 {tokenNumber(maximum)} tokens</span><span className="usage-legend-scale">少{[0, 1, 2, 3, 4].map(level => <i aria-hidden="true" className={`level-${level}`} key={level} />)}多</span></div>
     </div>
     <div className="usage-day-detail" aria-live="polite">
-      {detailDay ? <><span>{dateLabel(detailDay)}</span><strong title={exactNumber(selected?.totalTokens || 0)}>{tokenNumber(selected?.totalTokens || 0)} tokens</strong><span>输入 {tokenNumber(selected?.input || 0)}</span><span>输出 {tokenNumber(selected?.output || 0)}</span><span>缓存 {tokenNumber((selected?.cacheRead || 0) + (selected?.cacheWrite || 0))}</span><span>{exactNumber(selected?.requests || 0)} 次请求</span></> : <span>暂无每日数据</span>}
+      {detailDay ? <>
+        <div><span>{dateLabel(detailDay)}</span><div className="usage-day-parts">
+          <span>输入 {tokenNumber(selected?.input || 0)}</span><span>输出 {tokenNumber(selected?.output || 0)}</span>
+          <span>缓存 {tokenNumber((selected?.cacheRead || 0) + (selected?.cacheWrite || 0))}</span>
+        </div></div>
+        <div className="usage-day-value"><strong title={exactNumber(selected?.totalTokens || 0)}>{tokenNumber(selected?.totalTokens || 0)} tokens</strong>
+          <span>{exactNumber(selected?.requests || 0)} 次请求</span></div>
+      </> : <span>暂无每日数据</span>}
     </div>
-  </>;
+  </section>;
 }
 
 export function UsageSettings({ active, includeRemoved, onIncludeRemovedChange, onOpenExtensions }: {
@@ -180,64 +195,96 @@ export function UsageSettings({ active, includeRemoved, onIncludeRemovedChange, 
   const refreshing = summary.pending || (Boolean(modelWindow) && mixState.pending);
   const empty = Boolean(snapshot && snapshot.allTime.totalTokens === 0 && snapshot.allTime.requests === 0);
   function refresh() { setSummaryRequest(value => value + 1); setMixRequest(value => value + 1); }
-  return <div className="settings-sections usage-settings">
-    <SettingsPageHeader icon={<BarChart3 />} title="Token 使用量" meta={<span>按本地日期统计{snapshot && <span className="usage-updated-at"> · 更新于 {new Date(snapshot.generatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>} <InfoHint label="从 Studio 本地汇总读取各项目的 Token、请求次数与估算成本。" /></span>}
-      actions={<button type="button" className="settings-outline" disabled={refreshing} onClick={refresh}><RefreshCw className={refreshing ? 'spin' : undefined} />刷新</button>} />
-    <div className="usage-project-filter">
-      <Select label="按项目筛选使用量" leadingIcon={<Folder />} value={project} onChange={setProject}
-        menuClassName="usage-project-menu" options={projectOptions} />
-      {projects.some(p => p.removed) && <label className="usage-include-removed" title="已从侧栏移除但仍保留用量记录的项目">
-        <input type="checkbox" checked={includeRemoved} onChange={event => {
-          const checked = event.target.checked;
-          if (!checked && projects.some(p => p.workspace === project && p.removed)) setProject('all');
-          onIncludeRemovedChange(checked);
-        }} />
-        <span>
-          <strong>包括已移除项目</strong>
-          <small>侧栏里已不在，但仍有历史用量</small>
-        </span>
-      </label>}
-    </div>
-    <section className="usage-summary-section" aria-label="Token 使用概览" aria-busy={summary.pending}>
-      <header className="usage-section-head"><h2>近期用量</h2>{!empty && <div className="usage-range-switch" role="group" aria-label="热力图日期范围">{RANGE_OPTIONS.map(option => <button type="button" key={option} aria-pressed={days === option} className={days === option ? 'is-active' : ''} onClick={() => setDays(option)}>{option === 365 ? '1 年' : `${option} 天`}</button>)}</div>}</header>
-      <ResourceStatus label="用量" pending={summary.pending} error={summary.error} hasData={Boolean(snapshot)} onRetry={() => setSummaryRequest(value => value + 1)} />
-      {snapshot && (empty
-        ? <div className="usage-empty-state" role="status">
-            <strong>{snapshot.collection.enabled ? '还没有使用记录' : '用量采集已关闭'}</strong>
-            <span>{snapshot.collection.enabled
-              ? '开始对话后，这里会显示按本地日期汇总的 Token 和请求。'
-              : '历史数据会保留。可在扩展页重新开启内置的 Studio Metrics。'}</span>
-            {!snapshot.collection.enabled && onOpenExtensions && (
-              <button type="button" className="settings-outline" onClick={onOpenExtensions}>前往扩展</button>
-            )}
-          </div>
-        : <>
-            {!snapshot.collection.enabled && (
-              <div className="usage-collection-note" role="status">
-                <span>用量采集已关闭。历史数据会保留；重新开启内置 Studio Metrics 后继续记录。</span>
-                {onOpenExtensions && <button type="button" className="settings-text-button" onClick={onOpenExtensions}>前往扩展</button>}
-              </div>
-            )}
-            <p className="usage-window-label">{snapshot.sinceDay} 至 {dayKey(new Date(snapshot.generatedAt))} · {snapshot.days} 天 · 全部模型</p>
-            <div className="usage-hero">
-              <div className="usage-hero-copy"><h3 title={`${exactNumber(snapshot.range.totalTokens)} tokens`}>{tokenNumber(snapshot.range.totalTokens)} <small>tokens</small></h3><TokenSplit totals={snapshot.range} /><UsageSparkline daily={snapshot.daily} /></div>
-              <dl className="usage-stat-grid"><div className="usage-stat"><dt>请求</dt><dd>{exactNumber(snapshot.range.requests)}</dd></div><div className="usage-stat"><dt>活跃天数</dt><dd>{snapshot.range.activeDays} 天</dd></div><div className="usage-stat"><dt>估算成本 <InfoHint label="按已记录的用量成本汇总，以美元显示；未提供价格的请求可能不计入成本，这不是账单。" /></dt><dd>{costNumber(snapshot.range.cost)}</dd></div></dl>
+  return <div className="settings-preference-page usage-settings">
+    <SettingsPageHeader iconPosition="end" title="Token 使用量" meta="按本地日期汇总各项目的请求、Token 和估算成本。"
+      icon={<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M2 28h28M6 23v-7m7 7V7m7 16V12" /><path d="M27 23V3" stroke="var(--accent)" />
+      </svg>} />
+    <div className="settings-preference-groups">
+      <div className="settings-preference-card usage-project-filter" role="group" aria-label="用量统计范围">
+        <Select label="按项目筛选使用量" leadingIcon={<Folder />} value={project} onChange={setProject}
+          menuClassName="usage-project-menu" options={projectOptions} />
+        {projects.some(p => p.removed) && <label className="usage-include-removed" title="已从侧栏移除但仍保留用量记录的项目">
+          <input type="checkbox" checked={includeRemoved} onChange={event => {
+            const checked = event.target.checked;
+            if (!checked && projects.some(p => p.workspace === project && p.removed)) setProject('all');
+            onIncludeRemovedChange(checked);
+          }} />
+          <span>包括已移除项目</span>
+        </label>}
+        <div className="usage-refresh">
+          {snapshot && <span>更新于 {new Date(snapshot.generatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>}
+          <button type="button" className="settings-outline" disabled={refreshing} onClick={refresh}><RefreshCw aria-hidden="true" className={refreshing ? 'spin' : undefined} />刷新</button>
+        </div>
+      </div>
+      <section className="settings-preference-card usage-summary-section" aria-label="Token 使用概览" aria-busy={summary.pending}>
+        <header className="usage-section-head">
+          <div><h2>近期用量</h2>{snapshot && !empty && <p className="usage-window-label">{snapshot.sinceDay} 至 {dayKey(new Date(snapshot.generatedAt))} · 全部模型</p>}</div>
+          {!empty && <div className="settings-segments usage-range-switch" role="group" aria-label="热力图日期范围">{RANGE_OPTIONS.map(option => <button type="button" key={option} aria-pressed={days === option} onClick={() => setDays(option)}>{option === 365 ? '1 年' : `${option} 天`}</button>)}</div>}
+        </header>
+        <ResourceStatus label="用量" pending={summary.pending} error={summary.error} hasData={Boolean(snapshot)} onRetry={() => setSummaryRequest(value => value + 1)} />
+        {snapshot && (empty
+          ? <div className="usage-empty-state" role="status">
+              <span className="usage-empty-icon" aria-hidden="true"><BarChart3 /></span>
+              <strong>{snapshot.collection.enabled ? '还没有使用记录' : '用量采集已关闭'}</strong>
+              <span>{snapshot.collection.enabled
+                ? '开始对话后，这里会显示按本地日期汇总的 Token 和请求。'
+                : '历史数据会保留。可在扩展页重新开启内置的 Studio Metrics。'}</span>
+              {!snapshot.collection.enabled && onOpenExtensions && (
+                <button type="button" className="settings-outline" onClick={onOpenExtensions}>前往扩展</button>
+              )}
             </div>
-            <p className="usage-cumulative">累计 {tokenNumber(snapshot.allTime.totalTokens)} tokens · {exactNumber(snapshot.allTime.requests)} 次请求 · 估算成本 {costNumber(snapshot.allTime.cost)} · 当前连续 {snapshot.allTime.currentStreak} 天，最长 {snapshot.allTime.longestStreak} 天</p>
-            <div className="usage-heatmap-card"><header className="usage-section-head"><h3>每日趋势</h3><span>模型筛选仅影响下方热力图</span></header><UsageHeatmap snapshot={snapshot} modelFilter={modelFilter} onModelFilterChange={setModelFilter} /></div>
-          </>)}
-    </section>
-    {!empty && <section className="usage-models-card" aria-labelledby="usage-models-title" aria-busy={Boolean(modelWindow) && mixState.pending}>
-      <header className="usage-section-head"><h2 id="usage-models-title">模型分布</h2><div className="usage-range-switch" role="group" aria-label="模型分布时间范围">{MODEL_RANGES.map(option => <button type="button" key={option.id} aria-pressed={modelRange === option.id} className={modelRange === option.id ? 'is-active' : ''} onClick={() => setModelRange(option.id)}>{option.label}</button>)}</div></header>
-      {modelRange === 'custom' && <div className="usage-range-custom"><span>开始</span><DatePicker label="模型分布起始日期" value={customFrom} max={customTo} onChange={setCustomFrom} /><span>结束</span><DatePicker label="模型分布结束日期" value={customTo} min={customFrom} onChange={setCustomTo} /></div>}
-      {!modelWindow ? <p className="usage-read-error" role="alert">请选择有效的起止日期，结束日期不能早于开始日期。</p> : <ResourceStatus label="模型分布" pending={mixState.pending} error={mixState.error} hasData={Boolean(mix)} onRetry={() => setMixRequest(value => value + 1)} />}
-      {mix && <>
-        <div className="usage-models-meta"><span>{mix.window.all ? '全部时间' : `${mix.window.sinceDay} 至 ${mix.window.untilDay || dayKey(new Date(mix.generatedAt))}`}</span><span>{mix.models.length} 个模型 · {tokenNumber(mix.totals.totalTokens)} tokens · {exactNumber(mix.totals.requests)} 次请求</span></div>
-        {mix.models.length ? <div className="usage-model-list">{mix.models.map(model => {
-          const share = shareOf(model.totalTokens, mix.totals.totalTokens);
-          return <article className="usage-model-row" key={modelKey(model.providerId, model.modelId)}><div className="usage-model-main"><div className="usage-model-title"><strong>{model.displayName}</strong><span>{model.providerName} · {model.modelId}</span></div><div className="usage-model-track" aria-hidden="true"><i style={{ width: `${share * 100}%` }} /></div></div><div className="usage-model-numbers"><strong title={`${exactNumber(model.totalTokens)} tokens`}>{tokenNumber(model.totalTokens)} tokens</strong><span>{shareLabel(share)} · {exactNumber(model.requests)} 次请求</span></div></article>;
-        })}</div> : <p className="usage-empty">这个时间范围内没有模型请求。</p>}
-      </>}
-    </section>}
+          : <>
+              {!snapshot.collection.enabled && (
+                <div className="usage-collection-note" role="status">
+                  <span>用量采集已关闭。历史数据会保留；重新开启内置 Studio Metrics 后继续记录。</span>
+                  {onOpenExtensions && <button type="button" className="settings-text-button" onClick={onOpenExtensions}>前往扩展</button>}
+                </div>
+              )}
+              <div className="usage-hero">
+                <dl className="usage-stat-grid">
+                  <div className="usage-stat"><dt>Token 总量</dt><dd title={`${exactNumber(snapshot.range.totalTokens)} tokens`}>{tokenNumber(snapshot.range.totalTokens)}</dd></div>
+                  <div className="usage-stat"><dt>请求</dt><dd>{exactNumber(snapshot.range.requests)}</dd></div>
+                  <div className="usage-stat"><dt>活跃天数</dt><dd>{snapshot.range.activeDays} 天</dd></div>
+                  <div className="usage-stat"><dt>估算成本 <InfoHint label="以美元汇总已记录的请求成本。未提供价格的请求可能不计入。" /></dt><dd>{costNumber(snapshot.range.cost)}</dd></div>
+                </dl>
+                <div className="usage-composition">
+                  <TokenSplit totals={snapshot.range} />
+                  <UsageSparkline daily={snapshot.daily} />
+                </div>
+              </div>
+              <p className="usage-cumulative">
+                <span>累计 {tokenNumber(snapshot.allTime.totalTokens)} tokens</span> · <span>{exactNumber(snapshot.allTime.requests)} 次请求</span> · <span>估算成本 {costNumber(snapshot.allTime.cost)}</span> · <span>当前连续 {snapshot.allTime.currentStreak} 天</span>，<span>最长 {snapshot.allTime.longestStreak} 天</span>
+              </p>
+              <UsageHeatmap snapshot={snapshot} modelFilter={modelFilter} onModelFilterChange={setModelFilter} />
+            </>)}
+      </section>
+      {!empty && <section className="settings-preference-card usage-models-card" aria-labelledby="usage-models-title" aria-busy={Boolean(modelWindow) && mixState.pending}>
+        <header className="usage-section-head">
+          <div><h2 id="usage-models-title">模型分布</h2>
+            {mix && <div className="usage-models-meta">
+              {!mix.window.all && <span>{mix.window.sinceDay} 至 {mix.window.untilDay || dayKey(new Date(mix.generatedAt))}</span>}
+              <span className="usage-model-counts"><span>{mix.models.length} 个模型</span> · <span>{tokenNumber(mix.totals.totalTokens)} tokens</span> · <span>{exactNumber(mix.totals.requests)} 次请求</span></span>
+            </div>}
+          </div>
+          <Select label="模型分布时间范围" value={modelRange} options={MODEL_RANGES} onChange={value => setModelRange(value as ModelRange)} />
+        </header>
+        {modelRange === 'custom' && <div className="usage-range-custom">
+          <div><span>开始日期</span><DatePicker label="模型分布起始日期" value={customFrom} max={customTo} onChange={setCustomFrom} /></div>
+          <div><span>结束日期</span><DatePicker label="模型分布结束日期" value={customTo} min={customFrom} onChange={setCustomTo} /></div>
+        </div>}
+        {!modelWindow ? <p className="usage-read-error" role="alert">请选择有效的起止日期，结束日期不能早于开始日期。</p> : <ResourceStatus label="模型分布" pending={mixState.pending} error={mixState.error} hasData={Boolean(mix)} onRetry={() => setMixRequest(value => value + 1)} />}
+        {mix && <>
+          {mix.models.length ? <div className="usage-model-list">{mix.models.map(model => {
+            const share = shareOf(model.totalTokens, mix.totals.totalTokens);
+            return <article className="usage-model-row" key={modelKey(model.providerId, model.modelId)}>
+              <div className="usage-model-title"><strong>{model.displayName}</strong><span>{model.providerName} · {model.modelId}</span></div>
+              <div className="usage-model-numbers"><strong title={`${exactNumber(model.totalTokens)} tokens`}>{tokenNumber(model.totalTokens)} tokens</strong><span>{shareLabel(share)} · {exactNumber(model.requests)} 次请求</span></div>
+              <div className="usage-model-track" aria-hidden="true"><i style={{ width: `${share * 100}%` }} /></div>
+            </article>;
+          })}</div> : <p className="usage-empty">这个时间范围内没有模型请求。</p>}
+        </>}
+      </section>}
+    </div>
   </div>;
 }

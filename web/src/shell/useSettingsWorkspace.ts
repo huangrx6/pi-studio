@@ -5,6 +5,7 @@ import type { ChatMessage, ComposerAttachment } from '../types/chat-types';
 import type { ConversationPage } from '../types/durable-types';
 import type { ModelSelection, ModelOption } from '../types/model-types';
 import type { TokenField, TokenUnit } from '../shared/token-units';
+import type { ModalDismiss } from '../shared/useModalDialog';
 import type { OutlineData } from '../features/conversation/outline-model';
 import type { ContextPolicy } from '../features/conversation/ContextUsageChip';
 import type { SubagentChild } from '../types/subagent-types';
@@ -22,12 +23,15 @@ import type {
 } from '../features/models/model-settings-types';
 import { emptyCustomModelConfig, emptyMediaModels } from '../features/models/model-settings-types';
 import type { McpInfo, McpTestResult, PiWorkspace, SettingsEditor, SettingsSnapshot, SkillInfo } from './app-types';
-import type { SettingsTab } from './app-shell-config';
+import type { PluginWorkspaceSection, SettingsDestination, SettingsTab } from './app-shell-config';
 import type { useActionConfirmation } from '../shared/ConfirmDialog';
 import type { createSettingsDraftGuard } from '../shared/settings-draft-guard';
-import type { NotificationTone } from './NotificationCenter';
-import type { AppNotificationAction } from './NotificationCenter';
+import { useSettingsToast } from '../shared/SettingsToast';
 import { useAppSettingsController } from './useAppSettings';
+import {
+  loadStoredPluginWorkspaceSection,
+  saveStoredPluginWorkspaceSection,
+} from '../shared/stored-ui-state';
 
 type Setter<T> = Dispatch<SetStateAction<T>>;
 
@@ -72,13 +76,6 @@ type SettingsWorkspaceOptions = {
   composerAttachments: ComposerAttachment[];
   setComposerFeedback: Setter<{ message: string; tone: 'info' | 'warning' } | null>;
   showComposerFeedback: (message: string, tone?: 'info' | 'warning') => void;
-  pushNotification: (
-    message: string,
-    tone?: NotificationTone,
-    title?: string,
-    sessionId?: string,
-    action?: AppNotificationAction,
-  ) => void;
 };
 
 /**
@@ -119,8 +116,8 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
     composerAttachments,
     setComposerFeedback,
     showComposerFeedback,
-    pushNotification,
   } = options;
+  const showToast = useSettingsToast();
 
   const [modelQuery, setModelQuery] = useState('');
   const [modelView, setModelView] = useState<'all' | 'provider'>('all');
@@ -168,6 +165,26 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('general');
+  const [settingsAnchor, setSettingsAnchor] = useState<SettingsDestination['anchor']>();
+  const [pluginSection, setPluginSectionState] = useState<PluginWorkspaceSection>(() => {
+    try {
+      return loadStoredPluginWorkspaceSection();
+    } catch {
+      return 'plugins';
+    }
+  });
+  const setPluginSection = (section: PluginWorkspaceSection | ((current: PluginWorkspaceSection) => PluginWorkspaceSection)) => {
+    setPluginSectionState((current) => {
+      const next = typeof section === 'function' ? section(current) : section;
+      if (next === current) return current;
+      try {
+        saveStoredPluginWorkspaceSection(next);
+      } catch {
+        // Section storage is best-effort; the in-memory section still updates.
+      }
+      return next;
+    });
+  };
   const [settingsData, setSettingsData] = useState<SettingsSnapshot | null>(null);
   const [extensionInstallerOpen, setExtensionInstallerOpen] = useState(false);
   const [extensionInstallPreview, setExtensionInstallPreview] = useState<ExtensionInstallPreview | null>(null);
@@ -227,7 +244,6 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
   const [skillDetail, setSkillDetailState] = useState<SkillInfo | null>(null);
   const skillDetailRef = useRef<SkillInfo | null>(null);
   const skillDetailGenerationRef = useRef(0);
-  const [skillDetailError, setSkillDetailError] = useState<string | null>(null);
   const [mcpDetail, setMcpDetailState] = useState<McpInfo | null>(null);
   const mcpDetailRef = useRef<McpInfo | null>(null);
   const mcpDetailGenerationRef = useRef(0);
@@ -317,6 +333,9 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
     setSettingsOpen,
     settingsTab,
     setSettingsTab,
+    setSettingsAnchor,
+    pluginSection,
+    setPluginSection,
     settingsData,
     setSettingsData,
     setSettingsError,
@@ -406,7 +425,6 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
     skillDetailGenerationRef,
     setSkillDetail,
     closeSkillDetail,
-    setSkillDetailError,
     messages,
     compaction,
     setCompaction,
@@ -417,7 +435,7 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
     composerAttachments,
     setComposerFeedback,
     showComposerFeedback,
-    pushNotification,
+    showToast,
     officialCatalogRequestRef,
     originalMcpArgsRef,
     mcpTestRequestRef,
@@ -427,7 +445,6 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
   function openSkillDetail(skill: SkillInfo) {
     skillDetailGenerationRef.current += 1;
     setSkillDetail(skill);
-    setSkillDetailError(null);
   }
 
   async function deleteSkill(skill: SkillInfo) {
@@ -450,10 +467,6 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
           : current);
         if (ownsDetail()) closeSkillDetail();
       },
-      onError: (message) => {
-        if (ownsDetail()) setSkillDetailError(message);
-        else setSettingsError(message);
-      },
     });
   }
 
@@ -471,7 +484,6 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
       write: (cwd) => window.piApi.setSkillTrusted({ path: skill.path, trusted, cwd }),
       onCommitted: () => {
         if (ownsDetail()) {
-          setSkillDetailError(null);
           setSkillDetail({ ...skill, trusted });
         }
       },
@@ -480,17 +492,12 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
         const updated = snapshot.skills.find((item) => item.path === skill.path);
         if (ownsDetail() && updated) setSkillDetail(updated);
       },
-      onError: (message) => {
-        if (ownsDetail()) setSkillDetailError(message);
-        else setSettingsError(message);
-      },
     });
   }
 
   function closeSkillDetail() {
     skillDetailGenerationRef.current += 1;
     setSkillDetail(null);
-    setSkillDetailError(null);
   }
 
   const editorFingerprint = JSON.stringify(editor?.kind === 'provider' ? providerDraft
@@ -523,13 +530,13 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
     description: item.cwd,
   }));
 
-  function submitEditor() {
+  function submitEditor(dismiss: ModalDismiss) {
     if (!editor || editorLoading || editorSaveRef.current || editorUnavailable) return;
-    if (editorRecoveryRef.current) { void controller.retryEditorRefresh(); return; }
-    if (editor.kind === 'provider') void controller.saveProvider();
-    else if (editor.kind === 'model') void controller.saveCustomModel();
-    else if (editor.kind === 'mcp') void controller.saveMcp();
-    else void controller.importSkillResource(resourceScope);
+    if (editorRecoveryRef.current) { void controller.retryEditorRefresh(dismiss); return; }
+    if (editor.kind === 'provider') void controller.saveProvider(dismiss);
+    else if (editor.kind === 'model') void controller.saveCustomModel(dismiss);
+    else if (editor.kind === 'mcp') void controller.saveMcp(dismiss);
+    else void controller.importSkillResource(resourceScope, dismiss);
   }
 
   const state = {
@@ -537,6 +544,10 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
     setSettingsOpen,
     settingsTab,
     setSettingsTab,
+    settingsAnchor,
+    setSettingsAnchor,
+    pluginSection,
+    setPluginSection,
     settingsData,
     setSettingsData,
     settingsBusy,
@@ -596,11 +607,9 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
     mcpTesting,
     mcpTestResult,
     skillDetail,
-    skillDetailError,
     skillDetailRef,
     skillDetailGenerationRef,
     setSkillDetail,
-    setSkillDetailError,
     closeSkillDetail,
     openSkillDetail,
     deleteSkill,

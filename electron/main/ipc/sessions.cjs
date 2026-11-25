@@ -13,6 +13,7 @@ const {
   composerResources,
   configureConversation,
   conversationAction,
+  conversationAvailable,
   conversationPage,
   conversationSearch,
   conversationSnapshot,
@@ -53,12 +54,6 @@ const {
   getDurableRuntime,
   reconcileRuntimeForWorkspace,
 } = require('../runtime/durable-runtime.cjs');
-const {
-  adoptModelComparisonBranch,
-  discardModelComparisonBranch,
-  modelComparisonSnapshot,
-  startModelComparison,
-} = require('../services/model-comparison.cjs');
 const { publishMenuBarEvent } = require('../services/menu-bar/events.cjs');
 
 // `run_end` is also emitted for a user-requested abort. Keep a short-lived
@@ -99,32 +94,6 @@ function closeAllExtensionDataViews() {
   return closeAllExtensionDataViewServices();
 }
 
-function contentFreeConversationMetricsEvent(event) {
-  if (!event || typeof event !== 'object') return undefined;
-  const conversationId = event.conversationId;
-  if (event.type === 'snapshot') {
-    return {
-      type: event.type,
-      conversationId,
-      payload: {
-        run: Boolean(event.payload?.run),
-        running: Boolean(event.payload?.running),
-      },
-    };
-  }
-  if (event.type === 'usage.updated') {
-    return {
-      type: event.type,
-      conversationId,
-      payload: { usage: event.payload?.usage },
-    };
-  }
-  if (['run.started', 'run.completed', 'run.failed'].includes(event.type)) {
-    return { type: event.type, conversationId };
-  }
-  return undefined;
-}
-
 function notifyConversationList() {
   for (const target of webContents.getAllWebContents()) {
     if (!target.isDestroyed()) target.send('pi:conversation-list-changed');
@@ -140,12 +109,6 @@ function closeConversationResource(id, event) {
 }
 
 function broadcastConversationEvent(event) {
-  const metricsEvent = contentFreeConversationMetricsEvent(event);
-  if (metricsEvent) {
-    void getDurableRuntime()
-      .then((runtime) => runtime.metricsRuntime?.recordConversationEvent(metricsEvent))
-      .catch(() => {});
-  }
   for (const target of webContents.getAllWebContents()) {
     if (!target.isDestroyed()) target.send('pi:conversation-event', event);
   }
@@ -255,8 +218,10 @@ function registerExtensionDataViewIpc(options = {}) {
     if (!provider || typeof provider.read !== 'function') {
       throw new ExtensionDataViewError('DATA_SOURCE_UNAVAILABLE', '实时数据源当前不可用');
     }
+    const panels = row.manifest?.contributes?.panels || [];
+    const taskBoard = panels.some(panel => panel.taskBoard?.sourceId === sourceId);
     let context;
-    if (sessionId) {
+    if (sessionId && !taskBoard) {
       try {
         const conversation = await readConversationSnapshot(sessionId);
         if (conversation?.model) {
@@ -278,6 +243,10 @@ function registerExtensionDataViewIpc(options = {}) {
     if (!context && requestedModelRef) {
       context = { model: { modelRef: requestedModelRef } };
     }
+    const canvas = panels.some(panel => panel.canvas?.sourceId === sourceId);
+    if (canvas && context?.durableSessionId && !conversationAvailable(context.durableSessionId)) {
+      throw new ExtensionDataViewError('DATA_VIEW_CANCELLED', '会话不存在或正在删除');
+    }
 
     return dataViewService().open({
       sourceId,
@@ -286,6 +255,9 @@ function registerExtensionDataViewIpc(options = {}) {
       cwd,
       sessionId,
       context,
+      canvas,
+      taskBoard,
+      taskBoardQuery: payload.taskBoardQuery,
       owner: {
         manifestId: row.manifest.id,
         scope: row.scope,
@@ -300,6 +272,12 @@ function registerExtensionDataViewIpc(options = {}) {
     }
     return dataViewService().close(subscriptionId, event.sender);
   });
+  ipc.handle('pi:extension-canvas-write', (event, payload = {}) => (
+    dataViewService().writeCanvas(payload?.subscriptionId, event.sender, payload)
+  ));
+  ipc.handle('pi:extension-task-board-write', (event, payload = {}) => (
+    dataViewService().writeTaskBoard(payload?.subscriptionId, event.sender, payload?.mutation)
+  ));
 }
 
 function registerConversationIpc() {
@@ -378,24 +356,6 @@ function registerConversationIpc() {
     }
     return result;
   });
-  ipcMain.handle('pi:conversation-compare-start', async (_event, input) => {
-    const result = await startModelComparison(input || {});
-    notifyConversationList();
-    return result;
-  });
-  ipcMain.handle('pi:conversation-compare-snapshot', async (_event, input) => (
-    modelComparisonSnapshot(input || {})
-  ));
-  ipcMain.handle('pi:conversation-compare-adopt', async (_event, input) => {
-    const result = await adoptModelComparisonBranch(input || {});
-    notifyConversationList();
-    return result;
-  });
-  ipcMain.handle('pi:conversation-compare-discard', async (_event, input) => {
-    const result = await discardModelComparisonBranch(input || {});
-    notifyConversationList();
-    return result;
-  });
 
   ipcMain.handle('pi:conversation-configure', async (_event, input) => configureConversation(input || {}));
   ipcMain.handle('pi:conversation-compact', async (_event, { id, instructions } = {}) => {
@@ -447,7 +407,6 @@ function registerConversationIpc() {
 module.exports = {
   closeAllExtensionDataViews,
   closeExtensionDataViews,
-  contentFreeConversationMetricsEvent,
   interruptConversation,
   registerConversationIpc,
   registerExtensionDataViewIpc,

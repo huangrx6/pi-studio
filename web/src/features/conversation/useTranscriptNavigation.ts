@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ChatMessage, RequestTrace, TodoDetails } from '../../types/chat-types';
-import type { AgentView } from '../../shell/app-types';
 import type { OutlineItem } from './outline-model';
 import { NO_ANSWER_TEXT } from './outline-model';
 import { placeRequestTraces } from './request-trace-turns';
@@ -24,7 +23,7 @@ type TranscriptNavigationDependencies = {
   busy: boolean;
   turnActive: boolean;
   error: string | null;
-  agentView: AgentView;
+  visible: boolean;
   filesOpen: boolean;
   hasNewer?: boolean;
   outlineItems: OutlineItem[];
@@ -47,7 +46,7 @@ export function useTranscriptNavigation({
   busy,
   turnActive,
   error,
-  agentView,
+  visible,
   filesOpen,
   hasNewer = false,
   outlineItems,
@@ -515,16 +514,16 @@ export function useTranscriptNavigation({
   useLayoutEffect(() => {
     // 消息提交后先在绘制前贴底；Markdown、图片或折叠区随后长高时，
     // ResizeObserver 会继续补一次，避免输出中途停在半截。
-    if (agentView.kind !== 'conversation' || !followBottomRef.current) return;
+    if (!visible || !followBottomRef.current) return;
     // Coalesce the commit with the ResizeObserver pass.  React can commit a
     // streamed token before markdown has finished settling its final height;
     // pinning synchronously here and once more from the observer causes two
     // competing scroll writes in one frame, which is perceived as jitter.
     scheduleTranscriptPin();
-  }, [messages, busy, agentView.kind]);
+  }, [messages, busy, visible]);
 
   useEffect(() => {
-    if (agentView.kind !== 'conversation' || messages.length === 0) return;
+    if (!visible || messages.length === 0) return;
     const content = chatContentRef.current;
     const viewport = scrollRef.current;
     if (!content || !viewport || typeof ResizeObserver === 'undefined') return;
@@ -579,7 +578,7 @@ export function useTranscriptNavigation({
       observer.disconnect();
       resizeMetricsRef.current = null;
     };
-  }, [agentView.kind, sessionId, messages.length === 0]);
+  }, [visible, sessionId, messages.length === 0]);
 
   useEffect(() => () => {
     if (pageIntentFrameRef.current) cancelAnimationFrame(pageIntentFrameRef.current);

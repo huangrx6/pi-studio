@@ -53,6 +53,8 @@ Runtime directory scanning is intentionally unsupported. Explicit imports make p
 | Tool search | Tool discovery | Tool task | Durable tool search |
 | Filesystem | Read-only tools | Tool task | `electron/main/capabilities/filesystem/` |
 | Permissions | Tool guard | Tool task hook | `electron/main/capabilities/permissions/` |
+| Browser | Workbench browser tools | Tool task | `electron/main/capabilities/browser/` |
+| Desktop control | Read-only macOS observation | Tool task | `electron/main/capabilities/desktop-control/` |
 | Harness | Prompt assembly | Section | `electron/main/capabilities/harness/` |
 | Skills | Progressive disclosure | Section | `electron/main/capabilities/skills/` |
 | Todo | Planning state | Tool task and projection | `electron/main/capabilities/todo/` |

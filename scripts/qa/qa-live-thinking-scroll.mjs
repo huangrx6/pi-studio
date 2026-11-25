@@ -33,14 +33,13 @@ try {
       const { createRoot } = (await import('/@fs/${process.cwd()}/node_modules/.vite/deps/react-dom_client.js')).default;
       const { AssistantTurnView } = await import('/src/features/conversation/AssistantTurn.tsx');
       let update;
-      const line = '推理正文的连续增量，用来把思考框撑满并保持流式更新。';
-      window.tick = count => update(state => ({ ...state, text: state.text + line.repeat(count || 1) }));
+      window.appendThinking = text => update(previous => previous + text);
       function Fixture() {
-        const [state, setState] = React.useState({ text: line });
-        update = setState;
+        const [text, setText] = React.useState('推理正文随后接一个配置示例。');
+        update = setText;
         return React.createElement('main', { style: { maxWidth: 860, margin: '40px auto', padding: '0 24px' } },
           React.createElement(AssistantTurnView, {
-            messages: [{ role: 'assistant', timestamp: 1, streaming: true, content: [{ type: 'thinking', thinking: state.text }] }],
+            messages: [{ role: 'assistant', timestamp: 1, streaming: true, content: [{ type: 'thinking', thinking: text }] }],
             toolResults: new Map(),
             busy: true,
             stepDisplay: 'standard',
@@ -63,16 +62,23 @@ try {
     overscroll: getComputedStyle(node).overscrollBehaviorY,
   }));
 
-  // 撑满思考框，让正文成为可滚动区域。
-  await page.evaluate(() => window.tick(60));
-  await page.waitForFunction(() => {
+  const lines = (start, count) => Array.from({ length: count }, (_, index) => `     - entry-${start + index}\n`).join('');
+  const append = text => page.evaluate(delta => window.appendThinking(delta), text);
+  const renderedLine = line => body.locator('.markdown-code > pre code').filter({ hasText: `entry-${line}` }).waitFor();
+  const waitAtBottom = () => page.waitForFunction(() => {
     const node = document.querySelector('.activity-thinking.is-live .activity-thinking-body');
-    return node && node.scrollHeight > node.clientHeight + 120;
-  });
+    return node && node.scrollHeight - node.clientHeight - node.scrollTop <= 1;
+  }, undefined, { timeout: 2500 });
 
-  await page.evaluate(() => window.tick(1));
+  // The new Markdown is rendered after the thinking prop has committed.
+  await append('\n\n1. 配置示例\n\n   ```yaml\n   entries:\n' + lines(1, 24));
+  await renderedLine(24);
+  await waitAtBottom();
+  await append(lines(25, 12));
+  await renderedLine(36);
+  await waitAtBottom();
   const pinned = await metrics();
-  assert.ok(pinned.distance <= 36, `streaming must pin the newest line: ${JSON.stringify(pinned)}`);
+  assert.ok(pinned.scrollHeight > pinned.clientHeight + 120, 'the code must overflow the capped viewport');
   assert.equal(pinned.overscroll, 'auto', 'the thinking body must let the wheel chain to the transcript');
 
   // 用户上滚：立即释放跟随，后续增量不得把视线拽回底部。
@@ -84,7 +90,8 @@ try {
   const released = await metrics();
   assert.ok(released.scrollTop <= 60, `wheel-up must leave the reader where they scrolled: ${JSON.stringify(released)}`);
 
-  await page.evaluate(() => window.tick(3));
+  await append(lines(37, 12));
+  await renderedLine(48);
   const afterDeltas = await metrics();
   assert.ok(
     afterDeltas.scrollTop <= released.scrollTop + 4,
@@ -96,13 +103,15 @@ try {
     node.scrollTop = node.scrollHeight;
     node.dispatchEvent(new Event('scroll'));
   });
-  await page.evaluate(() => window.tick(2));
+  await append(lines(49, 12));
+  await renderedLine(60);
+  await waitAtBottom();
   const resumed = await metrics();
   assert.ok(resumed.distance <= 36, `returning to the bottom must re-arm following: ${JSON.stringify(resumed)}`);
 
   await page.screenshot({ path: output + 'live-thinking-scroll.png', fullPage: true, animations: 'disabled' });
   assert.deepEqual(errors, []);
-  console.log('PASS: live thinking follows only at the bottom, releases on wheel-up, and re-arms at the bottom.');
+  console.log('PASS: live thinking follows rendered code, releases on wheel-up, and re-arms at the bottom.');
 } finally {
   await browser.close();
 }

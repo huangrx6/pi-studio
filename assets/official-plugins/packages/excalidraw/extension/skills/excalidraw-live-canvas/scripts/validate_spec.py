@@ -1,0 +1,385 @@
+#!/usr/bin/env python3
+"""校验 `*.diagram.json` 的闭合字段、类型、枚举与引用。
+
+输入错误返回结构化诊断，不能因为错误容器或非字符串 ID 抛出 TypeError。
+布局检查在 check_layout.py；坐标、字号和布局参数不属于本规格。
+kind、形状与图型取值从各自实现读取，不维护平行枚举。
+
+用法：
+    python3 validate_spec.py spec.diagram.json
+    python3 validate_spec.py spec.diagram.json --json
+
+退出码：0 = 通过，1 = 有 error，2 = 读不到 / 不是合法 JSON。
+"""
+
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import os
+import sys
+
+# 封闭字段集。加字段要同时改这里和 references/diagram-spec.md —— 这正是设计意图：
+# 让"顺手加一个"变得有摩擦。
+TOP_FIELDS = {"type", "title", "direction", "detail", "groups", "nodes", "edges",
+              "visual", "mood", "style", "cards", "intent"}
+GROUP_FIELDS = {"id", "label", "level", "style", "description"}
+NODE_FIELDS = {"id", "label", "kind", "shape", "emphasis", "icon", "group",
+               "detail", "rank", "pin"}
+EDGE_FIELDS = {"id", "from", "to", "label", "kind"}
+CARD_FIELDS = {"title", "items"}
+DIRECTIONS = {"LR", "TB"}
+DETAIL_LEVELS = {"executive", "standard", "diagnostic"}
+PINS = {"left", "right", "top", "bottom"}
+
+# 刻意的空缺 —— 报错时给专门的说明，而不是只说"未知字段"
+COORD_FIELDS = {"x", "y", "width", "height", "w", "h", "cx", "cy"}
+LAYOUT_FIELDS = {"layout", "nodeSeparation", "rankSeparation", "barycenterRounds",
+                 "margin", "marginx", "marginy", "spacing", "gap"}
+
+DEPRECATION_HINTS = {
+    "x": "坐标是刻意不存在的字段。一旦 schema 里有 x/y，模型就会开始填数字 —— "
+         "而空间计算正是本 skill 要交给脚本的那部分。用 rank / pin 表达方向约束。",
+    "y": "同上。用 rank / pin 表达方向约束，不要给坐标。",
+    "layout": "布局参数只属于脚本，不属于规格。schema 里放着它，模型就会去填它 —— "
+              "这是前作 `draw-excalidraw` 的失败之一。",
+}
+
+
+def _load_sibling(name: str):
+    """动态加载同目录脚本（scripts/ 不是包，同级 import 在静态层面无法解析）。
+
+    必须把模块注册进 sys.modules 之后再 exec：不注册的话，被加载模块里的
+    `@dataclass` 会炸 —— dataclasses._is_type 会去查 sys.modules.get(cls.__module__)
+    并拿到 None，报 "'NoneType' object has no attribute '__dict__'"。
+    """
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), f"{name}.py")
+    spec = importlib.util.spec_from_file_location(f"_diagram_{name}", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"加载不了同目录模块：{path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+authoring = _load_sibling("authoring")
+_palette = _load_sibling("palette")
+KINDS = _palette.KINDS
+
+# 从 `layout.py` **取**，不自己抄一份。抄的那份漂移过：layout 里有过 `component` /
+# `sequence` 两个类型，这个白名单不接受，于是它们永远走不到也没人发现。
+# 必须放在 `_load_sibling` 定义**之后** —— 模块级代码是自顶向下跑的。
+DIAGRAM_TYPES = frozenset(_load_sibling("layout").DIRECTION_FOR_TYPE)
+EDGE_KINDS = _palette.EDGE_KINDS
+SHAPES = _load_sibling("shapes").SHAPES
+palette = _load_sibling("palette")
+EMPHASIS = palette.EMPHASIS
+
+
+class Issues:
+    def __init__(self) -> None:
+        self.items: list[dict] = []
+
+    def error(self, code: str, where: str, message: str) -> None:
+        self.items.append({"level": "error", "code": code, "where": where, "message": message})
+
+    def warn(self, code: str, where: str, message: str) -> None:
+        self.items.append({"level": "warn", "code": code, "where": where, "message": message})
+
+    @property
+    def errors(self) -> list[dict]:
+        return [i for i in self.items if i["level"] == "error"]
+
+
+def _check_fields(obj: dict, allowed: set[str], where: str, issues: Issues) -> None:
+    for key in obj:
+        if key in allowed:
+            continue
+        extra = DEPRECATION_HINTS.get(key)
+        if key in COORD_FIELDS:
+            issues.error("COORD_FIELD", f"{where}.{key}",
+                         extra or "坐标字段不存在是刻意的，用 rank / pin 代替。")
+        elif key in LAYOUT_FIELDS:
+            issues.error("LAYOUT_FIELD", f"{where}.{key}",
+                         extra or "布局参数只属于脚本，不属于规格。")
+        else:
+            issues.error("UNKNOWN_FIELD", f"{where}.{key}",
+                         f"未知字段 {key!r}；允许：{sorted(allowed)}")
+
+
+def _check_style(style, where: str, issues: Issues) -> None:
+    """校验一份样式（顶层 `style` 与区域的 `groups[].style` 共用这一份实现）。
+
+    两处各写一遍的话，早晚会出现"顶层管得住、局部管不住" —— 而局部覆盖是直接落在
+    某一个区域上的，漏了它等于给了个后门。
+    """
+    if style is None:
+        return
+    if not isinstance(style, dict):
+        issues.error("BAD_STYLE", where, "style 必须是对象")
+        return
+    for key, value in style.items():
+        if key not in palette.STYLE_AXES:
+            issues.error("BAD_STYLE_AXIS", f"{where}.{key}",
+                         f"style 没有 {key!r} 这一项，可用 {sorted(palette.STYLE_AXES)}")
+        elif value not in palette.STYLE_AXES[key]:
+            issues.error("BAD_STYLE_VALUE", f"{where}.{key}",
+                         f"{value!r} 不在档位里，可用 {list(palette.STYLE_AXES[key])}")
+
+
+def validate(spec: dict) -> Issues:
+    issues = Issues()
+    if not isinstance(spec, dict):
+        issues.error("NOT_OBJECT", "$", "规格必须是一个 JSON 对象")
+        return issues
+
+    _check_fields(spec, TOP_FIELDS, "$", issues)
+
+    # type
+    dtype = spec.get("type")
+    if dtype is None:
+        issues.error("MISSING_TYPE", "$.type", "缺少必填字段 type")
+    elif not isinstance(dtype, str) or dtype not in DIAGRAM_TYPES:
+        issues.error("BAD_TYPE", "$.type",
+                     f"未知图类型 {dtype!r}；允许：{sorted(DIAGRAM_TYPES)}")
+
+    if "direction" in spec and (not isinstance(spec["direction"], str)
+                                or spec["direction"] not in DIRECTIONS):
+        issues.error("BAD_DIRECTION", "$.direction",
+                     f"direction 只允许 {sorted(DIRECTIONS)}")
+    visual = spec.get("visual")
+    if visual is not None and (not isinstance(visual, str)
+                               or not palette.is_known_direction(visual)):
+        # 同 kind / shape 一条原则：不 fallback。静默换方向会让"风格"这件事
+        # 变成"我明明写了 A 出来的是 B"，而且看图的人不知道为什么。
+        issues.error("UNKNOWN_VISUAL", "$.visual",
+                     f"未知视觉方向 {visual!r}；可用的："
+                     f"{palette.available_directions()}"
+                     f" 或 {palette.AUTO_DIRECTION!r}（按图类型和用户意图自己挑）")
+    if "detail" in spec and (not isinstance(spec["detail"], str)
+                             or spec["detail"] not in DETAIL_LEVELS):
+        issues.error("BAD_DETAIL", "$.detail",
+                     f"detail 只允许 {sorted(DETAIL_LEVELS)}")
+
+    # Intent records semantic decisions, never pixel-level presentation settings.
+    if "intent" in spec:
+        intent = spec["intent"]
+        if not isinstance(intent, dict):
+            issues.error("BAD_INTENT", "$.intent", "intent 必须是对象")
+        else:
+            _check_fields(intent, {"question", "audience", "pattern"}, "$.intent", issues)
+            for key, value in intent.items():
+                if key in {"question", "audience", "pattern"} and (not isinstance(value, str) or not value.strip()):
+                    issues.error("BAD_INTENT_VALUE", f"$.intent.{key}", "必须是非空字符串")
+            for key, choices in (("audience", authoring.AUDIENCES), ("pattern", authoring.PATTERNS)):
+                if key in intent and isinstance(intent[key], str) and intent[key] not in choices:
+                    issues.error("BAD_INTENT_VALUE", f"$.intent.{key}", f"只允许 {sorted(choices)}")
+
+    # style：四组样式轴。未知的轴、未知的取值都报错 —— 与颜色同一条规矩。
+    _check_style(spec.get("style"), "$.style", issues)
+
+    for field in ("title", "mood"):
+        if field in spec and not isinstance(spec[field], str):
+            issues.error("BAD_TEXT", f"$.{field}", f"{field} 必须是字符串")
+
+    nodes = spec.get("nodes")
+    if not isinstance(nodes, list) or not nodes:
+        issues.error("MISSING_NODES", "$.nodes", "nodes 必须是非空数组")
+        nodes = []
+
+    # groups
+    group_ids: set[str] = set()
+    groups = spec.get("groups", [])
+    if not isinstance(groups, list):
+        issues.error("BAD_GROUPS", "$.groups", "groups 必须是数组")
+        groups = []
+    for gi, g in enumerate(groups):
+        where = f"$.groups[{gi}]"
+        if not isinstance(g, dict):
+            issues.error("BAD_GROUP", where, "group 必须是对象")
+            continue
+        _check_fields(g, GROUP_FIELDS, where, issues)
+        gid = g.get("id")
+        if not isinstance(gid, str) or not gid.strip():
+            issues.error("MISSING_GROUP_ID", where, "group id 必须是非空字符串")
+        elif gid in group_ids:
+            issues.error("DUPLICATE_GROUP_ID", where, f"group id 重复：{gid!r}")
+        else:
+            group_ids.add(gid)
+        _check_style(g.get("style"), f"{where}.style", issues)
+        for field in ("label", "description"):
+            if field in g and not isinstance(g[field], str):
+                issues.error("BAD_TEXT", f"{where}.{field}", f"{field} 必须是字符串")
+        if "level" in g and g["level"] not in palette.VISUAL_LEVELS:
+            issues.error("UNKNOWN_GROUP_LEVEL", f"{where}.level",
+                         f"group level 只允许 {sorted(palette.VISUAL_LEVELS)}"
+                         f"（未知值判失败，不 fallback）")
+
+    # 声明了、却一个成员都没有的 group：**报错，不是忽略**。
+    # 否则它在图上既没有区域框也没有标题，而且什么都不报 —— 这种“写了没生效”的
+    # 静默失败最难查（这个字段以前就是完全没人读的）。
+    used = {n["group"] for n in nodes
+            if isinstance(n, dict) and isinstance(n.get("group"), str)}
+    for gid in sorted(group_ids):
+        if gid not in used:
+            issues.error("EMPTY_GROUP", "$.groups",
+                         f"group {gid!r} 没有任何节点指向它，区域会画不出来："
+                         f"在节点的 group 字段里写上这个 id")
+
+    # nodes
+    node_ids: set[str] = set()
+    for ni, n in enumerate(nodes):
+        where = f"$.nodes[{ni}]"
+        if not isinstance(n, dict):
+            issues.error("BAD_NODE", where, "node 必须是对象")
+            continue
+        _check_fields(n, NODE_FIELDS, where, issues)
+
+        nid = n.get("id")
+        if not isinstance(nid, str) or not nid.strip():
+            issues.error("MISSING_NODE_ID", where, "node id 必须是非空字符串")
+        elif nid in node_ids:
+            issues.error("DUPLICATE_NODE_ID", where, f"node id 重复：{nid!r}")
+        else:
+            node_ids.add(nid)
+
+        if not isinstance(n.get("label"), str) or not n["label"].strip():
+            issues.error("MISSING_LABEL", where, f"node {nid!r} 缺少 label")
+        if "detail" in n and not isinstance(n["detail"], str):
+            issues.error("BAD_TEXT", f"{where}.detail", "detail 必须是字符串")
+
+        kind = n.get("kind")
+        if kind is None:
+            issues.error("MISSING_KIND", where, f"node {nid!r} 缺少 kind")
+        elif not isinstance(kind, str) or kind not in KINDS:
+            # 判失败而不是 fallback —— fallback 会让"颜色必须在板内"这条校验自己绕过自己
+            issues.error("UNKNOWN_KIND", f"{where}.kind",
+                         f"未知 kind {kind!r}；允许的取值（色板唯一真相源）：{sorted(KINDS)}")
+
+        shape = n.get("shape")
+        if shape is not None and (not isinstance(shape, str) or shape not in SHAPES):
+            # 同 kind 一条原则：不 fallback。静默换成 rect 会让
+            # “形状必须与语义有关”变成空话 —— 写错的人不知道，看图的人也看不出。
+            issues.error("UNKNOWN_SHAPE", f"{where}.shape",
+                         f"未知 shape {shape!r}；允许的取值：{sorted(SHAPES)}")
+
+        emphasis = n.get("emphasis")
+        if "emphasis" in n and (not isinstance(emphasis, str) or emphasis not in EMPHASIS):
+            # 同 kind / shape 一条原则：不 fallback。
+            issues.error("UNKNOWN_EMPHASIS", f"{where}.emphasis",
+                         f"未知 emphasis {emphasis!r}；允许的取值：{sorted(EMPHASIS)}")
+
+        icon = n.get("icon")
+        if icon is not None and (not isinstance(icon, str) or not icon.strip()):
+            # 只查"是个非空字符串" —— 素材库里有没有这个名字，要到出图时才知道
+            # （那里才有库）。库没给却指定了图标，emit 会明确报错，不静默忽略。
+            issues.error("BAD_ICON", f"{where}.icon",
+                         "icon 必须是素材库里的项名（非空字符串）")
+
+        grp = n.get("group")
+        if grp is not None and (not isinstance(grp, str) or grp not in group_ids):
+            issues.error("UNKNOWN_GROUP", f"{where}.group",
+                         f"node {nid!r} 指向未声明的 group {grp!r}；已声明：{sorted(group_ids)}")
+
+        rank = n.get("rank")
+        if rank is not None and (not isinstance(rank, int) or isinstance(rank, bool) or rank < 0):
+            issues.error("BAD_RANK", f"{where}.rank", "rank 必须是非负整数")
+
+        pin = n.get("pin")
+        if pin is not None and (not isinstance(pin, str) or pin not in PINS):
+            issues.error("BAD_PIN", f"{where}.pin", f"pin 只允许 {sorted(PINS)}")
+
+    # cards：结论卡片 —— 支撑性细节放卡片，不堆进图里。
+    # 与 group 同一条规矩：**写了却没内容就报错**，不让它静默不生效。
+    cards = spec.get("cards", [])
+    if cards is not None and not isinstance(cards, list):
+        issues.error("BAD_CARDS", "$.cards", "cards 必须是数组")
+        cards = []
+    for ci, card in enumerate(cards or []):
+        where = f"$.cards[{ci}]"
+        if not isinstance(card, dict):
+            issues.error("BAD_CARD", where, "card 必须是对象")
+            continue
+        _check_fields(card, CARD_FIELDS, where, issues)
+        if not isinstance(card.get("title"), str) or not card["title"].strip():
+            issues.error("MISSING_CARD_TITLE", where, "card 缺少非空 title")
+        items = card.get("items")
+        if not isinstance(items, list) or not items:
+            issues.error("MISSING_CARD_ITEMS", where,
+                         "card 需要至少一条 item（空卡片在图上什么都不表达）")
+        else:
+            for ii, item in enumerate(items):
+                if not isinstance(item, str) or not item.strip():
+                    issues.error("BAD_CARD_ITEM", f"{where}.items[{ii}]",
+                                 "item 必须是非空字符串")
+
+    # edges
+    edges = spec.get("edges", [])
+    if not isinstance(edges, list):
+        issues.error("BAD_EDGES", "$.edges", "edges 必须是数组")
+        edges = []
+    for ei, e in enumerate(edges):
+        where = f"$.edges[{ei}]"
+        if not isinstance(e, dict):
+            issues.error("BAD_EDGE", where, "edge 必须是对象")
+            continue
+        _check_fields(e, EDGE_FIELDS, where, issues)
+        for end in ("from", "to"):
+            if not isinstance(e.get(end), str) or not e[end].strip():
+                issues.error("MISSING_EDGE_END", where, f"edge {end} 必须是非空字符串")
+            elif e[end] not in node_ids:
+                issues.error("DANGLING_EDGE", f"{where}.{end}",
+                             f"edge 指向不存在的 node {e[end]!r}")
+        if e.get("from") and e.get("from") == e.get("to"):
+            issues.error("SELF_LOOP", where, "edge 的起点和终点是同一个节点")
+        for field in ("id", "label"):
+            if field in e and not isinstance(e[field], str):
+                issues.error("BAD_TEXT", f"{where}.{field}", f"{field} 必须是字符串")
+        ekind = e.get("kind")
+        if ekind is not None and (not isinstance(ekind, str) or ekind not in EDGE_KINDS):
+            issues.error("UNKNOWN_EDGE_KIND", f"{where}.kind",
+                         f"未知边 kind {ekind!r}；允许：{sorted(EDGE_KINDS)}")
+
+    return issues
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="校验 *.diagram.json 规格")
+    ap.add_argument("spec", help="规格文件路径")
+    ap.add_argument("--json", action="store_true", help="输出 JSON")
+    args = ap.parse_args(argv)
+
+    try:
+        with open(args.spec, encoding="utf-8") as fh:
+            spec = json.load(fh)
+    except OSError as exc:
+        print(f"读不到规格文件：{exc}", file=sys.stderr)
+        return 2
+    except json.JSONDecodeError as exc:
+        print(f"不是合法 JSON：{exc}", file=sys.stderr)
+        return 2
+
+    issues = validate(spec)
+
+    if args.json:
+        print(json.dumps({"spec": args.spec, "error_count": len(issues.errors),
+                          "issues": issues.items}, ensure_ascii=False, indent=2))
+        return 1 if issues.errors else 0
+
+    if not issues.items:
+        print("✓ 规格通过")
+        return 0
+
+    for it in issues.items:
+        mark = "✗" if it["level"] == "error" else "·"
+        print(f"  {mark} [{it['code']}] {it['where']}")
+        print(f"      {it['message']}")
+
+    print(f"\n{len(issues.errors)} 个 error，{len(issues.items) - len(issues.errors)} 个 warn")
+    return 1 if issues.errors else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

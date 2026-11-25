@@ -400,7 +400,7 @@ test('a command-only runtime may declare ui.commands without agent permissions',
   assert.deepEqual(normalized.permissions, ['ui.commands']);
 });
 
-test('conversation detail and footer use separate layouts', () => {
+test('workbench and composer summaries use separate layouts', () => {
   const normalized = normalizeManifest(manifest({
     permissions: ['ui.panels'],
     contributes: {
@@ -408,7 +408,7 @@ test('conversation detail and footer use separate layouts', () => {
         {
           id: 'detail',
           title: '详情',
-          slot: 'conversation.detail',
+          slot: 'panel.side',
           content: [{
             kind: 'metricGrid',
             metrics: [{
@@ -422,7 +422,7 @@ test('conversation detail and footer use separate layouts', () => {
         {
           id: 'footer',
           title: '摘要',
-          slot: 'conversation.footer',
+          slot: 'composer.below',
           content: [
             { kind: 'text', text: '额度 11%' },
             { kind: 'badge', label: '正常', tone: 'success' },
@@ -434,7 +434,7 @@ test('conversation detail and footer use separate layouts', () => {
 
   assert.deepEqual(
     normalized.contributes.panels.map((panel) => panel.slot),
-    ['conversation.detail', 'conversation.footer'],
+    ['panel.side', 'composer.below'],
   );
   assert.equal(normalized.contributes.panels[0].content[0].kind, 'metricGrid');
   assert.equal(normalized.contributes.panels[1].content.length, 2);
@@ -458,11 +458,11 @@ test('conversation detail and footer use separate layouts', () => {
         panels: [{
           id: 'footer',
           title: '摘要',
-          slot: 'conversation.footer',
+          slot: 'composer.below',
           content,
         }],
       },
-    }), '/tmp/demo', 'user'), /conversation\.footer 不支持/);
+    }), '/tmp/demo', 'user'), /composer\.below 不支持/);
   }
 
   assert.throws(() => normalizeManifest(manifest({
@@ -471,7 +471,7 @@ test('conversation detail and footer use separate layouts', () => {
       panels: [{
         id: 'footer',
         title: '摘要',
-        slot: 'conversation.footer',
+        slot: 'composer.below',
         content: [
           { kind: 'text', text: '一' },
           { kind: 'text', text: '二' },
@@ -482,6 +482,19 @@ test('conversation detail and footer use separate layouts', () => {
   }), '/tmp/demo', 'user'), /最多声明两个单行摘要/);
 });
 
+test('removed UI slots are rejected for every scope', () => {
+  for (const scope of ['user', 'project', 'builtin']) {
+    for (const slot of ['conversation.detail', 'conversation.footer', 'composer.before', 'status.bar',
+      'workspace.sidebar', 'conversation.header', 'settings.panel']) {
+      assert.throws(() => normalizeManifest(manifest({
+        ...(scope === 'builtin' ? { tier: 'optional' } : {}),
+        permissions: ['ui.panels'],
+        contributes: { panels: [{ id: 'old', title: '旧位置', slot, content: [{ kind: 'text', text: 'x' }] }] },
+      }), '/tmp/demo', scope), error => error.message.includes(`未知 slot：${slot}`));
+    }
+  }
+});
+
 test('status.chip points at its own detail panel and accepts a visibility window', () => {
   const normalized = normalizeManifest(manifest({
     permissions: ['ui.panels'],
@@ -490,7 +503,7 @@ test('status.chip points at its own detail panel and accepts a visibility window
         {
           id: 'detail',
           title: '详情',
-          slot: 'conversation.detail',
+          slot: 'panel.side',
           content: [{ kind: 'text', text: '完整内容' }],
         },
         {
@@ -505,7 +518,7 @@ test('status.chip points at its own detail panel and accepts a visibility window
         {
           id: 'footer',
           title: '底部',
-          slot: 'conversation.footer',
+          slot: 'composer.below',
           visibility: 'while-active',
           content: [{ kind: 'text', text: '生成中' }],
         },
@@ -514,14 +527,16 @@ test('status.chip points at its own detail panel and accepts a visibility window
   }), '/tmp/demo', 'user');
 
   const [detail, chip, footer] = normalized.contributes.panels;
-  assert.equal(detail.slot, 'conversation.detail');
+  assert.equal(detail.slot, 'panel.side');
   assert.equal(chip.slot, 'status.chip');
   assert.equal(chip.details, 'detail');
   assert.equal(chip.icon, 'activity');
   assert.equal(chip.color, 'info');
   assert.throws(() => normalizeManifest(manifest({
     permissions: ['ui.panels'], contributes: { panels: [{
-      id: 'bar', title: '状态', slot: 'status.bar', color: '#ffcc00', content: [],
+      id: 'chip-bad-color', title: '状态', slot: 'status.chip', color: '#ffcc00', details: 'detail', content: [{ kind: 'text', text: 'x' }],
+    }, {
+      id: 'detail', title: '详情', slot: 'panel.side', content: [{ kind: 'text', text: 'd' }],
     }] },
   }), '/tmp/demo', 'user'), /color/);
   assert.equal(chip.visibility, undefined, 'chip defaults to always visible');
@@ -539,7 +554,7 @@ test('status.chip points at its own detail panel and accepts a visibility window
         content: [{ kind: 'text', text: 'x' }],
       }],
     },
-  }), '/tmp/demo', 'user'), /details 必须指向本扩展的 conversation\.detail 面板/);
+  }), '/tmp/demo', 'user'), /details 必须指向本扩展的 panel\.side 面板/);
 
   // chip 只收单行摘要，最多两块
   assert.throws(() => normalizeManifest(manifest({
@@ -570,19 +585,19 @@ test('status.chip points at its own detail panel and accepts a visibility window
     },
   }), '/tmp/demo', 'user'), /status\.chip 最多声明两个单行摘要 block/);
 
-  // visibility 只允许 footer 与 chip
+  // visibility 只适用于摘要
   assert.throws(() => normalizeManifest(manifest({
     permissions: ['ui.panels'],
     contributes: {
       panels: [{
         id: 'detail',
         title: '详情',
-        slot: 'conversation.detail',
+        slot: 'panel.side',
         visibility: 'while-active',
         content: [{ kind: 'text', text: 'x' }],
       }],
     },
-  }), '/tmp/demo', 'user'), /只有 conversation\.footer、status\.chip 与 status\.bar 可以声明 visibility/);
+  }), '/tmp/demo', 'user'), /只有顶栏或输入框摘要可以声明 visibility/);
 
   assert.throws(() => normalizeManifest(manifest({
     permissions: ['ui.panels'],
@@ -590,7 +605,7 @@ test('status.chip points at its own detail panel and accepts a visibility window
       panels: [{
         id: 'footer',
         title: '底部',
-        slot: 'conversation.footer',
+        slot: 'composer.below',
         visibility: 'sometimes',
         content: [{ kind: 'text', text: 'x' }],
       }],
@@ -607,7 +622,7 @@ test('live data sources require ui.data, a runtime entry and same-extension data
       panels: [{
         id: 'metrics',
         title: 'Metrics',
-        slot: 'conversation.footer',
+        slot: 'composer.below',
         content: [{
           kind: 'dataView',
           sourceId: 'user:demo.extension/live',
@@ -633,7 +648,7 @@ test('live data sources require ui.data, a runtime entry and same-extension data
       panels: [{
         id: 'metrics',
         title: 'Metrics',
-        slot: 'conversation.footer',
+        slot: 'composer.below',
         content: [{ kind: 'dataView', sourceId: 'user:demo.extension/live' }],
       }],
     },
@@ -659,7 +674,7 @@ test('live data sources require ui.data, a runtime entry and same-extension data
       panels: [{
         id: 'metrics',
         title: 'Metrics',
-        slot: 'conversation.footer',
+        slot: 'composer.below',
         content: [{ kind: 'dataView', sourceId: 'user:other/live' }],
       }],
     },
@@ -681,6 +696,28 @@ test('project extensions are reported as untrusted by default', (t) => {
   assert.equal(snapshot.manifests.length, 1);
   assert.equal(snapshot.manifests[0].scope, 'project');
   assert.equal(snapshot.manifests[0].trustedDefault, false);
+});
+
+test('an extension with only ui.settings contributes its own settings without a workbench panel', (t) => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-settings-panel-'));
+  const directory = path.join(userRoot, 'extensions', 'settings-only');
+  fs.mkdirSync(directory, { recursive: true });
+  const id = 'user:settings-only';
+  t.after(() => {
+    require('../../electron/main/core/studio-db.cjs').getStudioDatabase().removeExtension(id);
+    fs.rmSync(directory, { recursive: true, force: true });
+    fs.rmSync(workspace, { recursive: true, force: true });
+  });
+  fs.writeFileSync(path.join(directory, 'pi-studio.extension.json'), JSON.stringify(manifest({
+    id: 'settings-only',
+    permissions: ['ui.settings'],
+    contributes: {
+      settings: [{ id: 'preferences', title: '扩展偏好', content: [{ kind: 'text', text: '自定义设置' }] }],
+    },
+  })));
+  syncStudioExtensions(workspace);
+  const items = studioExtensions.extensionUiSnapshot().items.filter(item => item.extensionId === id);
+  assert.deepEqual(items.map(item => [item.id, item.slot]), [[`${id}/preferences`, 'settings.panel']]);
 });
 
 test('project extension trust is invalidated when code changes without a version bump', (t) => {
@@ -1172,7 +1209,7 @@ test('command result panelId is confined to a panel declared by that extension',
     manifest: {
       id: 'demo.extension',
       permissions: ['ui.panels'],
-      contributes: { panels: [{ id: 'main' }] },
+      contributes: { panels: [{ id: 'main', slot: 'panel.side' }] },
     },
   };
   assert.deepEqual(normalizeCommandResult({ panelId: 'user:demo.extension/main' }, row), {
@@ -1181,14 +1218,14 @@ test('command result panelId is confined to a panel declared by that extension',
   });
   assert.throws(
     () => normalizeCommandResult({ panelId: 'user:other/main' }, row),
-    /未在本扩展声明/,
+    /本扩展声明的 panel.side/,
   );
   assert.throws(
     () => normalizeCommandResult({ panelId: 'user:demo.extension/main' }, {
       ...row,
       manifest: { ...row.manifest, permissions: [] },
     }),
-    /未在本扩展声明/,
+    /本扩展声明的 panel.side/,
   );
 });
 
@@ -1204,7 +1241,7 @@ test('command results accept only whitelisted UI actions', () => {
           { id: 'runtime-command', title: 'Runtime' },
           { id: 'static-command', title: 'Static', action: { kind: 'openSettings' } },
         ],
-        panels: [{ id: 'detail', title: 'Detail' }],
+        panels: [{ id: 'detail', title: 'Detail', slot: 'panel.side' }, { id: 'summary', slot: 'composer.above' }],
       },
     },
   };
@@ -1233,6 +1270,10 @@ test('command results accept only whitelisted UI actions', () => {
     ok: true,
     action: { kind: 'openPanel', panelId: 'user:demo.extension/detail' },
   });
+  assert.throws(
+    () => normalizeCommandResult({ action: { kind: 'openPanel', panelId: 'summary' } }, row),
+    /本扩展声明的 panel.side/,
+  );
   assert.deepEqual(normalizeCommandResult({
     action: { kind: 'runCommand', commandId: 'runtime-command' },
   }, row), {
@@ -1252,7 +1293,7 @@ test('command results accept only whitelisted UI actions', () => {
     () => normalizeCommandResult({
       action: { kind: 'openPanel', panelId: 'user:demo.extension/missing' },
     }, row),
-    /未声明的 openPanel/,
+    /openPanel 必须指向本扩展声明的 panel.side/,
   );
 });
 
@@ -1615,7 +1656,7 @@ test('installed quota 0.5.5 exposes the settings switch without activating its a
     runtime: { durableEntry: 'extension.mjs' },
     contributes: {
       dataSources: [{ id: 'live', title: '额度' }],
-      panels: [{ id: 'quota-detail', title: '额度', slot: 'conversation.detail', icon: 'gauge', color: 'accent',
+      panels: [{ id: 'quota-detail', title: '额度', slot: 'panel.side', icon: 'gauge', color: 'accent',
         content: [{ kind: 'dataView', sourceId: id + '/live' }] }],
     },
   })));

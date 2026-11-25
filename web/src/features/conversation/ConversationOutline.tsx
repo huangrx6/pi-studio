@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { readableComposerReferences } from './references';
 import type { OutlineItem } from './outline-model';
 import {
   OUTLINE_ROW_HEIGHT,
@@ -138,11 +139,11 @@ function ConversationOutlineComponent({
       className="outline-preview"
       tabIndex={-1}
       style={{ top: box.top }}
-      aria-label={`跳转到第 ${box.index + 1} 条提问：${hovered.text.slice(0, 100)}`}
+      aria-label={`跳转到第 ${box.index + 1} 条提问：${readableComposerReferences(hovered.text).slice(0, 100)}`}
       onClick={() => onJump(box.index)}
     >
       <span className="outline-preview-role">你 · {hovered.timestamp ? new Date(hovered.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}<span>{box.index + 1} / {items.length}</span></span>
-      <span className="outline-preview-text">{hovered.text}</span>
+      <span className="outline-preview-text">{readableComposerReferences(hovered.text)}</span>
     </button>}
   </nav>;
 }

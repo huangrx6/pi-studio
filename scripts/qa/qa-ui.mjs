@@ -40,6 +40,10 @@ const errors = [];
 // Chromium 内置 PDF 阅读器在 data: 文档里读 localStorage 会抛 SecurityError，
 // 那是浏览器自带页面的日志，与应用无关，单独放行。
 const IGNORED_PAGE_ERRORS = [/SecurityError: Failed to read the 'localStorage' property from 'Window'/];
+async function checkModalBackdrop(dialog) {
+  assert.equal(await dialog.evaluate(node => getComputedStyle(node, '::backdrop').backdropFilter), 'blur(3px)');
+}
+
 page.on('pageerror', (error) => {
   const message = error.stack || error.message;
   if (IGNORED_PAGE_ERRORS.some((pattern) => pattern.test(message))) return;
@@ -92,8 +96,7 @@ await page.addInitScript(() => {
 
   let model = selection(localStorage.getItem('qa-model') || models[2].id);
 
-  // 智能体工具目录刻意让每个 Pi 核心工具带不同文件路径，用来验证 UI 仍会把
-  // 同一个提供者合并成一个 Tab，而不是显示成一长串重复的“Pi 核心”。
+  // 同一能力的工具共享来源，项目扩展拥有自己的分组。
   const coreSource = () => ({
     key: 'durable:coding',
     source: 'durable:coding',
@@ -283,9 +286,7 @@ await page.addInitScript(() => {
   window.__extensionInstallQa = extensionInstallQa;
   const conversationExtensionUi = {
     version: 1,
-    layout: 'grid',
     globalOrder: [],
-    sessionOrders: {},
   };
   window.__conversationExtensionUiQa = conversationExtensionUi;
   const skillQa = {
@@ -335,7 +336,7 @@ await page.addInitScript(() => {
       contributionId: 'status',
       title: '运行状态',
       description: '来自 Workspace Tools 的实时工作区摘要。',
-      slot: 'conversation.detail',
+      slot: 'panel.side',
       size: 'regular',
       priority: 10,
       sourceOrder: 0,
@@ -361,7 +362,7 @@ await page.addInitScript(() => {
       contributionId: 'context',
       title: '会话上下文概览',
       description: '集中显示当前会话的上下文与工具状态。',
-      slot: 'conversation.header',
+      slot: 'composer.above',
       size: 'compact',
       priority: 20,
       sourceOrder: 1,
@@ -380,7 +381,7 @@ await page.addInitScript(() => {
       contributionId: 'status-summary',
       title: '工作区摘要',
       description: '运行状态的单行摘要。',
-      slot: 'conversation.footer',
+      slot: 'composer.below',
       size: 'compact',
       priority: 20,
       sourceOrder: 2,
@@ -396,7 +397,7 @@ await page.addInitScript(() => {
       contributionId: 'summary-panel',
       title: '实时指标',
       description: '当前会话的紧凑指标状态。',
-      slot: 'conversation.footer',
+      slot: 'composer.below',
       size: 'compact',
       priority: 15,
       sourceOrder: 7,
@@ -415,7 +416,7 @@ await page.addInitScript(() => {
       contributionId: 'focus',
       title: '审查焦点',
       description: '把本轮最需要关注的改动集中到一个详情卡片。',
-      slot: 'conversation.detail',
+      slot: 'panel.side',
       size: 'regular',
       priority: 5,
       sourceOrder: 3,
@@ -435,7 +436,7 @@ await page.addInitScript(() => {
       contributionId: 'focus-summary',
       title: '审查摘要',
       description: '审查焦点的单行摘要。',
-      slot: 'conversation.footer',
+      slot: 'composer.below',
       size: 'compact',
       priority: 5,
       sourceOrder: 4,
@@ -1112,8 +1113,6 @@ await page.addInitScript(() => {
   }
 
   let draftSequence = 0;
-  let comparePolls = 0;
-  let compareBranches = [];
   let confirmRequestListener = null;
   const extensionDataViewQa = { opens: 0, failNext: false };
   let extensionDataViewListener = null;
@@ -1225,85 +1224,6 @@ await page.addInitScript(() => {
     },
     conversationConfigure: async ({ id }) => structuredClone(conversationSnapshot(id)),
     conversationInterrupt: async () => ({ ok: true }),
-    conversationCompareStart: async ({ parentId, prompt: comparePrompt, branches }) => {
-      comparePolls = 0;
-      compareBranches = branches.map((branch, index) => ({
-        ...branch,
-        sessionId: `compare-${index + 1}`,
-        worktreeId: `comparison-fixture-${index + 1}`,
-      }));
-      const parent = sessionSummary(parentId);
-      const target = workspaces.find((workspace) => workspace.cwd === parent?.cwd) || workspaces[0];
-      const branchSummaries = compareBranches.map((branch) => {
-        const summary = {
-          id: branch.sessionId,
-          cwd: parent?.cwd || cwd,
-          title: `对比 · ${branch.label}`,
-          kind: 'conversation',
-          goal: '',
-          pinned: false,
-          archived: false,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          messageCount: (parent?.messageCount || 0) + 1,
-        };
-        conversationMessages.set(summary.id, structuredClone(conversationMessages.get(parentId) || []));
-        return summary;
-      });
-      target.sessions.unshift(...branchSummaries.slice().reverse());
-      return {
-        id: 'comparison-fixture',
-        parentId,
-        prompt: comparePrompt,
-        createdAt: Date.now(),
-        branches: structuredClone(compareBranches),
-      };
-    },
-    conversationCompareSnapshot: async ({ branches }) => {
-      comparePolls += 1;
-      const running = comparePolls === 1;
-      return branches.map((branch, index) => ({
-        ...branch,
-        status: running ? 'running' : 'completed',
-        title: `对比 · ${branch.label}`,
-        cwd,
-        running,
-        compacting: false,
-        answer: running ? undefined : {
-          text: index === 0
-            ? '### 修复摘要\n\n- 修正了 **失败路径**\n- 新增回归测试\n\n`src/parser.ts`'
-            : '### 修复摘要\n\n保留 **兼容性**，并补充了关联文件的说明。',
-          streaming: false,
-        },
-        metrics: {
-          requests: 2,
-          tokens: 12_480 + index * 2_100,
-          costUsd: 0.0142 + index * 0.003,
-          tps: 52.4 + index * 4.1,
-          ttftMs: 680 + index * 90,
-          durationMs: 4_200 + index * 500,
-        },
-        worktree: {
-          id: `comparison-fixture-${index + 1}`,
-          status: 'finished',
-          changedFiles: index === 0 ? 1 : 2,
-          files: index === 0
-            ? [{ path: 'src/parser.ts', status: 'modified', added: 12, removed: 4, binary: false }]
-            : [
-                { path: 'src/parser.ts', status: 'modified', added: 18, removed: 7, binary: false },
-                { path: 'tests/parser.test.ts', status: 'modified', added: 24, removed: 2, binary: false },
-              ],
-          sizeBytes: 18_240,
-          error: '',
-          directoryExists: true,
-        },
-      }));
-    },
-    conversationCompareAdopt: async ({ sessionId }) => ({
-      ok: true,
-      sessionId,
-      changedFiles: 1,
-    }),
     conversationAction: async ({ kind, action, id, name, goal, summary }) => {
       if (kind === 'session' && action === 'fork') {
         const source = sessionSummary(id);
@@ -1474,11 +1394,13 @@ await page.addInitScript(() => {
       ],
     }),
     importProviderModels: async ({ providerId, models: discovered }) => {
+      const enabled = new Set(snapshot.enabledModels);
       for (const item of discovered) {
         if (snapshot.customModels.some((model) => model.providerId === providerId && model.modelId === item.id)) continue;
         snapshot.customModels.push({ providerId, modelId: item.id, ...item, origin: 'configured' });
-        snapshot.enabledModels.push(`${providerId}/${item.id}`);
+        enabled.add(`${providerId}/${item.id}`);
       }
+      snapshot.enabledModels = [...enabled];
       const provider = snapshot.providers.find((item) => item.id === providerId);
       if (provider) provider.models += discovered.length;
       return { committed: true, projection: { status: 'ready', value: { settings: cloneSnapshot(), models: { models, current: model.modelRef, enabled: snapshot.enabledModels, selection: model } } } };
@@ -1575,6 +1497,7 @@ await page.addInitScript(() => {
       snapshot.harness = structuredClone(harnessState);
       return structuredClone(harnessState);
     },
+    subagentProfiles: async () => [],
     subagentSettings: async (requestedCwd) => {
       window.__lastSubagentLoadCwd = requestedCwd;
       return structuredClone({ ...subagentState, projectRoot: requestedCwd || subagentState.projectRoot });
@@ -1853,18 +1776,8 @@ await page.addInitScript(() => {
     },
     conversationExtensionUiPreferences: async () => structuredClone(conversationExtensionUi),
     saveConversationExtensionUiPreferences: async (payload) => {
-      if (payload.layout === 'grid' || payload.layout === 'list') {
-        conversationExtensionUi.layout = payload.layout;
-      }
       if (Array.isArray(payload.globalOrder)) {
         conversationExtensionUi.globalOrder = [...payload.globalOrder];
-      }
-      if (payload.sessionId && Object.hasOwn(payload, 'sessionOrder')) {
-        if (payload.sessionOrder === null) {
-          delete conversationExtensionUi.sessionOrders[payload.sessionId];
-        } else {
-          conversationExtensionUi.sessionOrders[payload.sessionId] = [...payload.sessionOrder];
-        }
       }
       return structuredClone(conversationExtensionUi);
     },
@@ -1990,7 +1903,7 @@ async function capture(name) {
   await page.screenshot({ path: `${output}${name}.png`, animations: 'disabled' });
   console.log(`captured ${name}`);
   const overflowing = await page
-    .locator('.main, .composer, .settings-content, .settings-card, .settings-form-grid, .provider-card, .model-popover, .settings-dialog, .dialog-body')
+    .locator('.main, .composer, .settings-content, .settings-card, .settings-form-grid, .model-settings-provider, .model-popover, .settings-dialog, .dialog-body')
     .evaluateAll((elements) => elements
       .filter((element) => element.scrollWidth > element.clientWidth + 2)
       .map((element) => ({
@@ -2257,216 +2170,60 @@ try {
   // 冷启动时工作区是收起的：先展开，再点开第一个会话。
   await page.locator('.workspace-row').first().click();
   await page.locator('.session-row').first().click();
-  await page.locator('.conversation-extension-dock-item .extension-data-view .extension-compact-content').waitFor();
+  const below = page.getByRole('group', { name: '输入框下方扩展状态' });
+  await below.locator('.extension-data-view .extension-compact-content').waitFor();
   await page.evaluate(() => window.__emitExtensionDataView({
     subscriptionId: 'qa-data-view',
-    snapshot: {
-      sourceId: 'builtin:studio-metrics/summary',
-      revision: 2,
-      updatedAt: Date.now(),
-      content: [],
-      error: '实时数据源读取超时',
-    },
+    snapshot: { sourceId: 'builtin:studio-metrics/summary', revision: 2, updatedAt: Date.now(),
+      content: [], error: '实时数据源读取超时' },
   }));
-  await page.locator('.extension-data-error').waitFor();
+  const compactDataError = below.locator('.extension-data-error');
+  await compactDataError.waitFor();
+  assert.match(await compactDataError.innerText(), /数据暂未更新/);
+  assert.equal(await compactDataError.getByRole('button').count(), 0);
+  assert.match(await below.innerText(), /157 tok\/s · TTFT 3\.75 s/);
+  assert.equal(await page.locator('.messages .extension-slot').count(), 0);
+  const above = page.getByRole('group', { name: '输入框上方扩展状态' });
+  assert.match(await above.innerText(), /消息.*工具/s);
+  assert.equal(await below.locator('.extension-summary-item').count(), 3);
+  assert.ok(await below.locator('.extension-summary-item').evaluateAll(items => items.every(item => item.offsetHeight <= 34)));
   await capture('04-conversation');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await capture('04-conversation-dark');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
-  const conversationContentWidth = await page.locator('.chat-scroll > .chat-column').evaluate((column) => (
-    column.getBoundingClientRect().width
-  ));
 
-  // 会话扩展在顶部分页中展开；主对话始终使用正常消息渲染，不混入扩展卡片。
-  assert.equal(await page.locator('.messages .extension-slot').count(), 0);
-  const headerExtensionDock = page.getByRole('navigation', { name: '会话顶部扩展', exact: true });
-  const footerExtensionDock = page.getByRole('navigation', { name: '会话底部扩展', exact: true });
-  assert.equal(await page.locator('.conversation-extension-dock-label').count(), 0);
-  assert.equal(await headerExtensionDock.locator('.conversation-extension-dock-item').count(), 1);
-  assert.equal(await footerExtensionDock.locator('.conversation-extension-dock-item').count(), 3);
-  assert.equal(await footerExtensionDock.locator('button.conversation-extension-dock-item').count(), 0);
-  assert.deepEqual(
-    await footerExtensionDock.locator('.conversation-extension-dock-item').evaluateAll((items) => (
-      items.map((item) => item.tagName)
-    )),
-    ['ARTICLE', 'ARTICLE', 'ARTICLE'],
-  );
-  const footerGeometry = await footerExtensionDock
-    .locator('.conversation-extension-dock-item')
-    .evaluateAll((items) => items.map((item) => ({
-      height: item.getBoundingClientRect().height,
-      clientHeight: item.clientHeight,
-      scrollHeight: item.scrollHeight,
-      overflowY: getComputedStyle(item).overflowY,
-      hasFullLayout: Boolean(item.querySelector(
-        '.extension-metric-grid, .extension-section, .extension-table, .extension-disclosure',
-      )),
-      compactWhiteSpace: getComputedStyle(
-        item.querySelector('.extension-compact-content') || item,
-      ).whiteSpace,
-      hasDataError: Boolean(item.querySelector('.extension-data-error')),
-    })));
-  assert.ok(footerGeometry.every((item) => item.height <= 34));
-  assert.ok(footerGeometry.every((item) => item.scrollHeight <= item.clientHeight + 1));
-  assert.ok(footerGeometry.every((item) => item.overflowY === 'hidden'));
-  assert.ok(footerGeometry.every((item) => item.hasFullLayout === false));
-  assert.ok(footerGeometry.every((item) => item.compactWhiteSpace === 'nowrap'));
-  assert.equal(footerGeometry.filter((item) => item.hasDataError).length, 1);
-  assert.match(await headerExtensionDock.innerText(), /消息/);
-  assert.match(await headerExtensionDock.innerText(), /工具/);
-  assert.match(await footerExtensionDock.innerText(), /main · 2 files changed/);
-  assert.match(await footerExtensionDock.innerText(), /审查 · 2 个关注点/);
-  const compactDataError = footerExtensionDock.locator('.extension-data-error');
-  assert.match(await compactDataError.innerText(), /数据暂未更新[\s\S]*重试/);
-  assert.match(await footerExtensionDock.innerText(), /157 tok\/s · TTFT 3\.75 s/);
-  assert.doesNotMatch(await compactDataError.innerText(), /Error invoking remote method|ExtensionDataViewError|pi:extension-data-view-open/);
-  const opensBeforeRetry = await page.evaluate(() => window.__extensionDataViewQa.opens);
-  await page.evaluate(() => { window.__extensionDataViewQa.failNext = true; });
-  await compactDataError.getByRole('button', { name: '重试连接实时数据' }).click();
-  await page.waitForFunction((previous) => {
-    const notice = document.querySelector('.extension-data-error');
-    return window.__extensionDataViewQa.opens > previous
-      && notice?.textContent?.includes('数据暂未更新');
-  }, opensBeforeRetry);
-  assert.match(await footerExtensionDock.innerText(), /157 tok\/s · TTFT 3\.75 s/);
+  const toolButton = name => page.locator('.chat-header').getByRole('button', { name, exact: true });
+  const extensions = page.getByRole('dialog', { name: '扩展', exact: true });
+  await toolButton('扩展').click();
+  assert.equal(await extensions.getByRole('article').count(), 2);
+  await extensions.getByRole('button', { name: '管理扩展', exact: true }).click();
+  const extensionOrder = page.locator('.extension-display-order');
+  await page.getByRole('button', { name: '对话显示顺序', exact: true }).click();
+  const workspaceOrderRow = extensionOrder.locator('li').filter({ hasText: 'Workspace Tools' });
+  const reviewOrderRow = extensionOrder.locator('li').filter({ hasText: 'Review Tools' });
+  const reviewDirection = await reviewOrderRow.getByRole('button', { name: /^上移/ }).isEnabled() ? /^上移/ : /^下移/;
+  await reviewOrderRow.getByRole('button', { name: reviewDirection }).click();
+  await page.waitForFunction(() => window.__conversationExtensionUiQa.globalOrder.length > 0);
+  await workspaceOrderRow.waitFor();
+  await page.getByRole('button', { name: '关闭对话显示顺序', exact: true }).click();
+  await page.getByRole('button', { name: '返回对话', exact: true }).click();
+  await toolButton('扩展').click();
+  await extensions.getByRole('button', { name: '查看 Workspace Tools 详情', exact: true }).click();
+  const extensionPanel = page.getByRole('tabpanel', { name: 'Workspace Tools', exact: true });
+  assert.match(await extensionPanel.innerText(), /main · 2 files changed/);
+  assert.match(await extensionPanel.innerText(), /42%/);
+  await extensionPanel.getByRole('button', { name: '查看详情', exact: true }).click();
+  await extensionPanel.getByText('工作区运行详情', { exact: true }).waitFor();
+  assert.equal(await page.getByRole('tab', { name: 'Workspace Tools', exact: true }).count(), 1);
+  assert.ok(await page.locator('.composer-editor').isVisible());
+  await capture('04b-extension-workbench');
 
-  const conversationTabs = page.getByRole('tablist', { name: '对话视图' }).getByRole('tab');
-  assert.equal(await conversationTabs.count(), 4);
-  assert.equal(await page.locator('.chat-tab-list .tab > svg').count(), 4);
-  assert.match(await conversationTabs.nth(0).innerText(), /^对话$/);
-  assert.match(await conversationTabs.nth(1).innerText(), /^子智能体\s*2/);
-  assert.match(await conversationTabs.nth(2).innerText(), /^双跑$/);
-  assert.match(await conversationTabs.nth(3).innerText(), /^扩展\s*2/);
-  assert.equal(await page.locator('.chat-tabs-note').count(), 0);
-  const traceButton = page.getByRole('button', { name: '打开会话轨迹' });
-  await traceButton.click();
-  await page.getByRole('dialog', { name: '会话轨迹' }).waitFor();
-  assert.match(await page.getByRole('dialog', { name: '会话轨迹' }).innerText(), /步骤|模型请求|工具执行/);
-  await page.getByRole('button', { name: '关闭会话轨迹' }).click();
-  const extensionTab = page.getByRole('tab', { name: /^扩展/ });
-  assert.equal(await extensionTab.locator('.tab-count').innerText(), '2');
-  await extensionTab.click();
-  await page.locator('.conversation-extension-hub').waitFor();
-  const extensionHeaderStyle = await page.locator('.extension-hub-head').evaluate((header) => {
-    const title = header.querySelector('h2');
-    const style = getComputedStyle(title);
-    return { height: header.getBoundingClientRect().height, fontSize: style.fontSize, lineHeight: style.lineHeight, fontWeight: style.fontWeight };
-  });
-  assert.equal(extensionHeaderStyle.height, 32);
-  const extensionContentWidth = await page.locator('.conversation-extension-scroll > .chat-column').evaluate((column) => (
-    column.getBoundingClientRect().width
-  ));
-  assert.equal(extensionContentWidth, conversationContentWidth);
-  assert.equal(await page.locator('.extension-hub-card').count(), 2);
-  assert.equal(await page.locator('.extension-hub-card .extension-slot-card').count(), 0);
-  assert.equal(await page.locator('.extension-hub-card-rail').count(), 0);
-  assert.equal(await page.locator('.extension-hub-card-drag').count(), 2);
-  assert.deepEqual(
-    await page.locator('.extension-hub-card-title strong').allTextContents(),
-    ['运行状态', '审查焦点'],
-  );
-  assert.equal(await page.locator('.extension-hub-card-description, .extension-hub-card-meta').count(), 0);
-  assert.equal(await page.locator('.extension-hub-card .info-hint').count(), 2);
-  await page.getByRole('button', { name: '紧凑列表', exact: true }).click();
-  assert.match(await page.locator('.extension-hub-items').getAttribute('class'), /\bis-list\b/);
-  await page.getByRole('button', { name: '下移 运行状态', exact: true }).click();
-  await page.waitForFunction(() => (
-    [...document.querySelectorAll('.extension-hub-card-title strong')]
-      .map((element) => element.textContent)
-      .join('|') === '审查焦点|运行状态'
-  ));
-  assert.deepEqual(await page.evaluate(() => structuredClone(window.__conversationExtensionUiQa)), {
-    version: 1,
-    layout: 'list',
-    globalOrder: ['user:review-tools', 'user:workspace-tools'],
-    sessionOrders: {},
-  });
-  const extensionScope = page.getByRole('group', { name: '扩展排序范围' });
-  await extensionScope.getByRole('button', { name: '当前会话', exact: true }).click();
-  assert.equal(
-    await page.locator('.extension-hub-items').getAttribute('data-order-scope'),
-    'session',
-  );
-  await page.getByRole('button', { name: '下移 审查焦点', exact: true }).click();
-  await page.waitForFunction(() => (
-    [...document.querySelectorAll('.extension-hub-card-title strong')]
-      .map((element) => element.textContent)
-      .join('|') === '运行状态|审查焦点'
-  ));
-  assert.deepEqual(
-    await page.evaluate(() => window.__conversationExtensionUiQa.sessionOrders['session-1']),
-    ['user:workspace-tools', 'user:review-tools'],
-  );
-  await page.getByRole('button', { name: '恢复全局', exact: true }).click();
-  await page.waitForFunction(() => (
-    [...document.querySelectorAll('.extension-hub-card-title strong')]
-      .map((element) => element.textContent)
-      .join('|') === '审查焦点|运行状态'
-  ));
-  assert.equal(
-    await page.evaluate(() => Boolean(window.__conversationExtensionUiQa.sessionOrders['session-1'])),
-    false,
-  );
-  assert.equal(
-    await page.locator('.extension-hub-items').getAttribute('data-order-scope'),
-    'global',
-  );
-  await page.getByRole('button', { name: '卡片布局', exact: true }).click();
-  assert.match(await page.locator('.extension-hub-items').getAttribute('class'), /\bis-grid\b/);
-  assert.equal(await page.evaluate(() => window.__conversationExtensionUiQa.layout), 'grid');
-  const extensionCardEdges = await page.locator('.extension-hub-card').first().evaluate((card) => {
-    const title = card.querySelector('.extension-hub-card-title')?.getBoundingClientRect();
-    const content = card.querySelector('.extension-hub-card-content')?.getBoundingClientRect();
-    return title && content
-      ? { titleLeft: title.left, contentLeft: content.left, titleRight: title.right, contentRight: content.right }
-      : null;
-  });
-  assert.ok(extensionCardEdges);
-  assert.ok(Math.abs(extensionCardEdges.titleLeft - extensionCardEdges.contentLeft) <= 1);
-  assert.ok(Math.abs(extensionCardEdges.titleRight - extensionCardEdges.contentRight) <= 1);
-  const extensionActionSize = await page.locator('.extension-hub-card-actions > button').first().evaluate((button) => {
-    const bounds = button.getBoundingClientRect();
-    return { width: bounds.width, height: bounds.height };
-  });
-  assert.deepEqual(extensionActionSize, { width: 16, height: 16 });
-  await capture('04b-extension-hub');
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
-  await capture('04b-extension-hub-dark');
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
-  const statusHubCard = page.locator('.extension-hub-card', { hasText: '运行状态' });
-  assert.match(await statusHubCard.innerText(), /main · 2 files changed/);
-  assert.match(await statusHubCard.innerText(), /42%/);
-  const detailReadability = await statusHubCard.evaluate((card) => {
-    const content = card.querySelector('.extension-hub-card-content');
-    return {
-      overflow: content ? content.scrollWidth - content.clientWidth : Number.POSITIVE_INFINITY,
-      labels: [...card.querySelectorAll('.extension-content dt')]
-        .map((element) => element.textContent?.trim()),
-    };
-  });
-  assert.ok(detailReadability.overflow <= 1);
-  assert.deepEqual(detailReadability.labels, ['分支', '上下文', '速度']);
-  await statusHubCard.getByRole('button', { name: '查看详情', exact: true }).click();
-  const extensionDialog = page.getByRole('dialog', { name: '工作区运行详情' });
-  await extensionDialog.waitFor();
-  assert.match(await extensionDialog.innerText(), /声明式扩展面板/);
-  await capture('04b-extension-tab-panel');
-  await extensionDialog.getByRole('button', { name: '关闭扩展面板', exact: true }).click();
-  await extensionDialog.waitFor({ state: 'detached' });
-  await page.locator('.conversation-extension-hub').waitFor();
-
-  // 子智能体只有一个聚合 Tab；总览可进入只读上下文，并有明确路径回到主智能体。
-  const agentTab = page.getByRole('tab', { name: /^子智能体/ });
-  assert.equal(await agentTab.locator('.tab-count').innerText(), '2');
-  assert.match(await agentTab.locator('.agent-tab-count').getAttribute('class'), /\bis-live\b/);
-  assert.match(await agentTab.locator('.agent-tab-count').getAttribute('aria-label'), /有任务正在运行/);
-  await agentTab.click();
+  async function openAgents() {
+    await toolButton('进展').click();
+    await page.getByRole('button', { name: '查看全部子智能体', exact: true }).click();
+  }
+  await openAgents();
   await page.getByRole('heading', { name: '子智能体', exact: true }).waitFor();
-  const agentHeaderStyle = await page.locator('.agent-overview-head').evaluate((header) => {
-    const style = getComputedStyle(header.querySelector('h2'));
-    return { height: header.getBoundingClientRect().height, fontSize: style.fontSize, lineHeight: style.lineHeight, fontWeight: style.fontWeight };
-  });
-  assert.deepEqual(agentHeaderStyle, extensionHeaderStyle);
   assert.equal(await page.locator('.agent-overview-head > p').count(), 0);
   assert.equal(await page.getByRole('button', { name: '刷新子智能体', exact: true }).count(), 1);
   assert.equal(await page.locator('.agent-list-row').count(), 2);
@@ -2480,13 +2237,13 @@ try {
       overview.querySelector('.agent-list'),
     ].map((element) => element?.getBoundingClientRect().width || 0)
   ));
-  assert.ok(agentOverviewWidths.every((width) => Math.abs(width - conversationContentWidth) <= 1));
+  assert.ok(agentOverviewWidths.every(width => width <= agentOverviewWidths[0] + 1));
   await capture('04c-subagent-overview');
 
   // Empty views use the conversation tabs for navigation, with a compact toolbar.
   await page.locator('.session-row').filter({ hasText: '优化文件预览和设置页面的排版' }).click();
   await page.getByRole('heading', { name: '优化文件预览和设置页面的排版', exact: true }).waitFor();
-  await page.getByRole('tab', { name: /^子智能体/ }).click();
+  await openAgents();
   const emptyAgentOverview = page.locator('.agent-overview');
   await emptyAgentOverview.locator('.agent-overview-empty.is-initial').waitFor();
   const emptyAgentLayout = await emptyAgentOverview.evaluate((overview) => {
@@ -2521,35 +2278,35 @@ try {
   }
   await page.setViewportSize({ width: 1440, height: 920 });
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
-  await page.getByRole('tab', { name: '对话', exact: true }).click();
+  await page.getByRole('button', { name: '收起右侧面板', exact: true }).click();
   await page.locator('.messages').waitFor();
   await page.locator('.session-row').filter({ hasText: '统一工作台的组件与视觉规范' }).click();
   await page.getByRole('heading', { name: '统一工作台的组件与视觉规范', exact: true }).waitFor();
-  await page.getByRole('tab', { name: /^子智能体/ }).click();
+  await openAgents();
   await page.locator('.agent-list-row').first().waitFor();
 
   await page.locator('.agent-list-row.is-running .agent-list-main').click();
   await page.locator('.agent-context-view').waitFor();
   assert.match(await page.locator('.agent-context-view').innerText(), /Durable Runtime 审查/);
   await page.getByText('审查 Durable 请求边界和模型热更新路径。', { exact: true }).waitFor();
-  assert.equal(await page.locator('.composer-dock').isVisible(), false);
-  assert.equal(await page.locator('.agent-overview').count(), 0);
+  assert.equal(await page.locator('.composer-dock').isVisible(), true);
+  assert.equal(await page.locator('.agent-overview').isVisible(), false);
   const agentContextWidths = await page.locator('.agent-context-view').evaluate((context) => (
     [
       context.querySelector('.agent-context-toolbar-inner'),
       context.querySelector('.agent-context-column'),
     ].map((element) => element?.getBoundingClientRect().width || 0)
   ));
-  assert.ok(agentContextWidths.every((width) => Math.abs(width - conversationContentWidth) <= 1));
+  assert.ok(Math.abs(agentContextWidths[0] - agentContextWidths[1]) <= 1);
   await capture('04d-subagent-transcript');
   await page.getByRole('button', { name: '返回主智能体', exact: true }).click();
   await page.locator('.chat-scroll').waitFor();
   await page.locator('.messages').waitFor();
 
-  await page.getByRole('tab', { name: '对话', exact: true }).click();
+  await page.getByRole('button', { name: '收起右侧面板', exact: true }).click();
   await page.locator('.messages').waitFor();
 
-  // 同题双跑从统一动作面板进入，不新增固定侧边栏入口。
+  // 会话动作面板搜索框聚焦样式。
   await page.locator('.composer-more-button').click();
   const actionPalette = page.getByRole('dialog', { name: '会话动作', exact: true });
   await actionPalette.waitFor();
@@ -2587,109 +2344,8 @@ try {
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await capture('04h-action-palette-search-focus-dark');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
-  await actionPalette.getByRole('option', { name: /模型同题双跑/ }).click();
-  const comparison = page.locator('.model-comparison');
-  await comparison.waitFor();
-  assert.equal(await page.locator('.file-panel').count(), 0);
-  assert.equal(await page.locator('.main .model-comparison').count(), 1);
-  const comparisonTab = page.getByRole('tab', { name: /^双跑/ });
-  assert.equal(await comparisonTab.count(), 1);
-  assert.equal(await comparisonTab.getAttribute('aria-selected'), 'true');
-  assert.equal(await page.getByRole('tab', { name: /^子智能体/ }).count(), 1);
-  assert.equal(await comparison.locator('.comparison-head').count(), 0);
-  assert.equal(await comparison.locator('.comparison-intro').count(), 0);
-  const comparisonHelp = comparison.locator('.comparison-start-hint');
-  assert.equal(await comparisonHelp.count(), 1);
-  assert.match(await comparisonHelp.getAttribute('aria-label'), /分别计费/);
-  await comparisonHelp.hover();
-  assert.equal(await comparisonHelp.locator('[role="tooltip"]').evaluate((node) => getComputedStyle(node).visibility), 'visible');
-  const comparisonFormBounds = await comparison.locator('.comparison-form').boundingBox();
-  assert.ok(
-    comparisonFormBounds
-      && Math.abs(comparisonFormBounds.width - conversationContentWidth) <= 1,
-    `comparison setup width ${comparisonFormBounds?.width}px, conversation width ${conversationContentWidth}px`,
-  );
-  await comparison.getByLabel('要对比的问题').fill('比较两个模型对同一代码问题的修复');
-  await capture('04e-model-comparison-setup');
-  await comparison.getByRole('button', { name: '开始双跑', exact: true }).click();
-  await page.waitForFunction(() => (
-    document.querySelectorAll('.comparison-result').length === 2
-    && [...document.querySelectorAll('.comparison-result-status')]
-      .every((node) => node.textContent?.includes('已完成'))
-  ));
-  assert.equal(await comparison.locator('.comparison-answer .markdown h3').count(), 2);
-  assert.match(await comparison.locator('.comparison-answer .markdown').first().innerText(), /失败路径/);
-  assert.doesNotMatch(await comparison.locator('.comparison-answer').first().innerText(), /\*\*/);
-  assert.equal(await page.locator('.comparison-result').count(), 2);
-  assert.equal(await page.locator('.comparison-worktree').count(), 2);
-  const comparisonActionLayout = await comparison.locator('.comparison-result-actions').first().evaluate((element) => (
-    [...element.querySelectorAll('button')].map((button) => {
-      const icon = button.querySelector('svg');
-      const label = button.querySelector('span');
-      const buttonBox = button.getBoundingClientRect();
-      const iconBox = icon?.getBoundingClientRect();
-      const labelBox = label?.getBoundingClientRect();
-      return {
-        height: buttonBox.height,
-        iconWidth: iconBox?.width || 0,
-        iconHeight: iconBox?.height || 0,
-        iconOffset: iconBox ? Math.abs(iconBox.top + iconBox.height / 2 - buttonBox.top - buttonBox.height / 2) : Infinity,
-        labelOffset: labelBox ? Math.abs(labelBox.top + labelBox.height / 2 - buttonBox.top - buttonBox.height / 2) : Infinity,
-      };
-    })
-  ));
-  assert.equal(comparisonActionLayout.length, 2);
-  assert.ok(comparisonActionLayout.every((item) => item.height === 32));
-  assert.ok(comparisonActionLayout.every((item) => item.iconWidth === 14 && item.iconHeight === 14));
-  assert.ok(comparisonActionLayout.every((item) => item.iconOffset <= 1 && item.labelOffset <= 1));
-  const comparisonWidths = await comparison.evaluate((element) => (
-    [
-      element.querySelector('.comparison-results'),
-    ].map((node) => node?.getBoundingClientRect().width || 0)
-  ));
-  assert.ok(comparisonWidths.every((width) => Math.abs(width - conversationContentWidth) <= 1));
-  const comparisonOverflow = await comparison.evaluate((element) => (
-    element.scrollWidth - element.clientWidth
-  ));
-  assert.ok(comparisonOverflow <= 1);
-  assert.ok(await page.locator('.comparison-result').first().evaluate((node) => node.getBoundingClientRect().height < 600));
-  await capture('04e-model-comparison');
-  await exportScreen('comparison');
-  await page.setViewportSize({ width: 980, height: 720 });
-  await capture('04e-model-comparison-compact');
-  assert.equal(await page.locator('.comparison-results').evaluate((node) => getComputedStyle(node).gridTemplateColumns.split(' ').length), 1);
-  await page.setViewportSize({ width: 1440, height: 920 });
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
-  await capture('04f-model-comparison-dark');
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
-
-  // 双跑是会话的稳定一级入口，不依赖命令面板恢复。
-  await page.getByRole('tab', { name: /^子智能体/ }).click();
-  await page.locator('.agent-overview').waitFor();
-  await comparisonTab.click();
-  await comparison.waitFor();
-  await page.waitForFunction(() => (
-    document.querySelectorAll('.comparison-result').length === 2
-    && [...document.querySelectorAll('.comparison-result-status')]
-      .every((node) => node.textContent?.includes('已完成'))
-  ));
-  assert.equal(await comparisonTab.getAttribute('aria-selected'), 'true');
-
-  // 打开分支后，一级双跑入口仍保留；可随时回到本次对比总览和另一个分支。
-  await comparison.getByRole('button', { name: '应用并打开', exact: true }).first().click();
-  await comparison.waitFor({ state: 'detached' });
-  await page.locator('.messages').waitFor();
-  assert.equal(await comparisonTab.count(), 1);
-  assert.equal(await page.getByRole('tab', { name: /^子智能体/ }).locator('.tab-count').count(), 0);
-  assert.match(await page.locator('.chat-heading h1').innerText(), /^对比 ·/);
-  await capture('04i-model-comparison-branch-entry');
-  await comparisonTab.click();
-  await comparison.waitFor();
-  assert.equal(await page.locator('.comparison-result').count(), 2);
-  assert.equal(await comparisonTab.getAttribute('aria-selected'), 'true');
-  await page.getByRole('tab', { name: '对话', exact: true }).click();
-  await comparison.waitFor({ state: 'detached' });
-  await page.locator('.messages').waitFor();
+  await page.keyboard.press('Escape');
+  await actionPalette.waitFor({ state: 'detached' });
 
   // 扩展提示统一收进通知中心，不再浮动遮挡对话内容。
   await page.getByRole('button', { name: '通知', exact: true }).click();
@@ -2755,39 +2411,18 @@ try {
   await page.mouse.up();
   await page.waitForFunction(() => document.querySelector('.panel-tabs')?.dataset.overflowStart === 'true');
   await page.waitForFunction(() => {
-    const tabs = document.querySelector('.panel-tabs');
-    if (!tabs) return false;
-    const tabsLeft = tabs.getBoundingClientRect().left;
-    return [...tabs.querySelectorAll('.panel-tab:not(.is-active)')].some((tab) => {
-      const tabBox = tab.getBoundingClientRect();
-      return Math.min(tabBox.right, tabsLeft + 32) - tabsLeft >= 32;
-    });
+    const viewport = document.querySelector('.panel-tabs')?.getBoundingClientRect();
+    const active = document.querySelector('.panel-tab.is-active')?.getBoundingClientRect();
+    return viewport && active && active.left >= viewport.left - 1 && active.right <= viewport.right + 1;
   });
-  const narrowTabs = await panelTabs.evaluate((tabs) => {
-    const active = tabs.querySelector('.panel-tab.is-active');
-    const tabsBox = tabs.getBoundingClientRect();
-    const activeBox = active?.getBoundingClientRect();
-    const style = getComputedStyle(tabs);
-    return {
-      maskImage: style.maskImage || style.webkitMaskImage,
-      activeVisible: Boolean(activeBox
-        && activeBox.left >= tabsBox.left - 1
-        && activeBox.right <= tabsBox.right + 1),
-      previousVisible: [...tabs.querySelectorAll('.panel-tab:not(.is-active)')].some((tab) => {
-        const tabBox = tab.getBoundingClientRect();
-        return tabBox.left < tabsBox.left && tabBox.right > tabsBox.left + 1;
-      }),
-      previousLabelVisible: [...tabs.querySelectorAll('.panel-tab:not(.is-active) .panel-tab-label')].some((label) => {
-        const labelBox = label.getBoundingClientRect();
-        return labelBox.left < tabsBox.right && labelBox.right > tabsBox.left + 24;
-      }),
-    };
-  });
-  assert.equal(narrowTabs.activeVisible, true);
-  assert.equal(narrowTabs.previousVisible, true);
-  assert.equal(narrowTabs.previousLabelVisible, true);
-  assert.match(narrowTabs.maskImage, /linear-gradient/);
+  assert.match(await panelTabs.evaluate(node => getComputedStyle(node).maskImage), /linear-gradient/);
   await capture('05a-narrow-panel-tabs');
+  const allTabs = page.getByRole('button', { name: /^查看全部 \d+ 个标签页$/ });
+  await allTabs.click();
+  const openTabs = page.getByRole('listbox', { name: '已打开的标签页' });
+  assert.equal(await openTabs.getByRole('option').count(), await panelTabs.getByRole('tab').count());
+  assert.match(await openTabs.locator('[aria-current="page"]').innerText(), /package\.json/);
+  await page.keyboard.press('Escape');
   const narrowResizeBox = await panelResizeHandle.boundingBox();
   assert.ok(narrowResizeBox);
   await page.mouse.move(narrowResizeBox.x + narrowResizeBox.width / 2, narrowResizeBox.y + 40);
@@ -2826,15 +2461,16 @@ try {
   assert.equal(await page.locator('.usage-model-row').count(), 4);
   assert.doesNotMatch(await page.locator('.usage-model-row').first().innerText(), /NaN|undefined/);
   const usageHeatmapRanges = page.getByRole('group', { name: '热力图日期范围', exact: true });
-  const usageModelFilters = page.getByRole('group', { name: '按模型筛选热力图', exact: true });
-  assert.equal(await usageModelFilters.getByRole('button').count(), 5);
-  const retiredUsageFilter = usageModelFilters.getByRole('button', { name: /^Retired Reasoner/ });
+  const usageModelFilter = page.getByRole('button', { name: '按模型筛选热力图', exact: true });
+  await usageModelFilter.click();
+  assert.equal(await page.getByRole('listbox').getByRole('option').count(), 5);
+  const retiredUsageFilter = page.getByRole('option', { name: /^Retired Reasoner/ });
   assert.match(await retiredUsageFilter.innerText(), /已停用/);
   await retiredUsageFilter.click();
   await page.getByRole('group', { name: /Retired Reasoner，365 天 Token 使用量/ }).waitFor();
-  const deepSeekUsageFilter = usageModelFilters.getByRole('button', { name: /^DeepSeek V4\.1 Flash/ });
-  await deepSeekUsageFilter.click();
-  assert.equal(await deepSeekUsageFilter.getAttribute('aria-pressed'), 'true');
+  await usageModelFilter.click();
+  await page.getByRole('option', { name: /^DeepSeek V4\.1 Flash/ }).click();
+  assert.match(await usageModelFilter.innerText(), /DeepSeek V4\.1 Flash/);
   await page.getByRole('group', { name: /DeepSeek V4\.1 Flash，365 天 Token 使用量/ }).waitFor();
   await usageHeatmapRanges.getByRole('button', { name: '90 天', exact: true }).click();
   await page.getByRole('group', { name: /DeepSeek V4\.1 Flash，90 天 Token 使用量/ }).waitFor();
@@ -2862,11 +2498,12 @@ try {
   await capture('06a-usage-model-filter');
 
   // 7.0 模型分布自带时间范围：全部时间 / 今天 / 自定义区间，不影响热力图的天数。
-  const usageMixRanges = page.getByRole('group', { name: '模型分布时间范围', exact: true });
-  assert.equal(await usageMixRanges.getByRole('button').count(), 7);
+  const usageMixRange = page.getByRole('button', { name: '模型分布时间范围', exact: true });
+  await usageMixRange.click();
+  assert.equal(await page.getByRole('listbox').getByRole('option').count(), 7);
   assert.equal(await page.locator('.usage-model-row').count(), 4);
-  assert.match(await page.locator('.usage-models-meta').innerText(), /全部时间/);
-  await usageMixRanges.getByRole('button', { name: '今天', exact: true }).click();
+  assert.match(await usageMixRange.innerText(), /全部时间/);
+  await page.getByRole('option', { name: '今天', exact: true }).click();
   await page.waitForFunction(() => document.querySelectorAll('.usage-model-row').length === 1);
   assert.match(await page.locator('.usage-models-meta').innerText(), /1 个模型/);
   const isoDay = (offset) => {
@@ -2889,7 +2526,8 @@ try {
     await day.click();
     await dialog.waitFor({ state: 'detached' });
   };
-  await usageMixRanges.getByRole('button', { name: '自定义', exact: true }).click();
+  await usageMixRange.click();
+  await page.getByRole('option', { name: '自定义', exact: true }).click();
   await selectDate('模型分布起始日期', isoDay(-20));
   await selectDate('模型分布结束日期', isoDay(0));
   await page.waitForFunction(() => document.querySelectorAll('.usage-model-row').length === 4);
@@ -2903,16 +2541,17 @@ try {
   await capture('06d-usage-date-picker-dark');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   await page.getByRole('dialog', { name: '选择模型分布起始日期' }).getByRole('button', { name: '取消' }).click();
-  await usageMixRanges.getByRole('button', { name: '全部时间', exact: true }).click();
+  await usageMixRange.click();
+  await page.getByRole('option', { name: '全部时间', exact: true }).click();
   await page.waitForFunction(() => document.querySelectorAll('.usage-model-row').length === 4);
   await page.getByRole('group', { name: /DeepSeek V4\.1 Flash，365 天 Token 使用量/ }).waitFor();
 
-  // 7.0 通用设置：四套全局配色使用同一组页面表面与语义状态色；
+  // 7.0 通用设置：全局配色使用同一组页面表面与语义状态色；
   // 切换单选项会同步根节点、色块实际颜色和本地持久化数据。
   await openSettingsSection('通用');
-  const paletteChoices = page.getByRole('radiogroup', { name: '全局配色方案' });
+  const paletteChoices = page.getByRole('radiogroup', { name: '强调色' });
   await paletteChoices.waitFor();
-  assert.equal(await paletteChoices.getByRole('radio').count(), 4);
+  assert.deepEqual(await paletteChoices.getByRole('radio').evaluateAll(radios => radios.map(radio => radio.value)), ['ocean', 'amber', 'berry']);
   await paletteChoices.locator('[data-palette-choice="ocean"]').click();
   await page.waitForFunction(() => document.documentElement.dataset.palette === 'ocean');
   assert.equal(await paletteChoices.getByRole('radio', { name: /^海蓝/ }).isChecked(), true);
@@ -2936,11 +2575,11 @@ try {
   await capture('11b-general-palette-dark');
 
   await page.getByRole('button', { name: '浅色', exact: true }).click();
-  await paletteChoices.locator('[data-palette-choice="lime"]').click();
-  await page.waitForFunction(() => document.documentElement.dataset.theme === 'light' && document.documentElement.dataset.palette === 'lime');
+  await paletteChoices.locator('[data-palette-choice="ocean"]').click();
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'light' && document.documentElement.dataset.palette === 'ocean');
 
-  await openSettingsSection('权限策略');
-  const vault = page.locator('.secret-vault-card');
+  await openSettingsSection('测试凭据');
+  const vault = page.locator('.secret-vault-page');
   await vault.scrollIntoViewIfNeeded();
   await vault.getByLabel('名称', { exact: true }).fill('QA_TEST_TOKEN');
   await vault.getByLabel('值', { exact: true }).fill('qa-fixture-only');
@@ -2967,13 +2606,14 @@ try {
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '未命中时的权限决定');
 
-  // 7.1 智能体工具：同一 Pi 核心来源只出现一个 Tab；卡片开关不误触详情，
-  // 卡片主体打开完整详情，来源切换与搜索都保留正确状态。
+  // 7.1 智能体工具的分组、详情、独立开关与搜索。
   await openSettingsSection('智能体工具');
-  await page.getByRole('tablist', { name: '工具来源' }).waitFor();
-  assert.equal(await page.getByRole('tab').count(), 3);
-  assert.equal(await page.getByRole('tab', { name: /^Pi 核心/ }).count(), 1);
-  assert.equal(await page.locator('.agent-tool-card').count(), 7);
+  const toolGroups = page.locator('.agent-tool-group-trigger');
+  const fileTools = toolGroups.filter({ hasText: '文件与终端' });
+  await fileTools.waitFor();
+  assert.equal(await toolGroups.count(), 3);
+  assert.equal(await fileTools.getAttribute('aria-expanded'), 'true');
+  assert.equal(await page.locator('.agent-tool-row').count(), 7);
   await capture('12a-agent-tools-core');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await capture('12a-dark-agent-tools-core');
@@ -2993,135 +2633,114 @@ try {
   assert.equal(await page.locator('.agent-tool-detail-dialog').count(), 0);
   await page.getByRole('switch', { name: '禁用工具 bash', exact: true }).click();
 
-  await page.getByRole('tab', { name: /^studio-subagents/ }).click();
+  await fileTools.click();
+  await toolGroups.filter({ hasText: 'studio-subagents' }).click();
   await page.getByRole('button', { name: '查看工具 subagent 详情', exact: true }).waitFor();
-  assert.equal(await page.locator('.agent-tool-card').count(), 2);
+  assert.equal(await page.locator('.agent-tool-row').count(), 2);
   await capture('12c-agent-tools-subagents');
 
   await page.getByRole('textbox', { name: '搜索智能体工具', exact: true }).fill('workspace', { timeout: 5000 });
-  await page.getByRole('tab', { name: /^workspace-tools/ }).waitFor();
-  assert.equal(await page.getByRole('tab').count(), 1);
+  await toolGroups.filter({ hasText: 'workspace-tools' }).waitFor();
+  assert.equal(await toolGroups.count(), 1);
   await page.getByRole('button', { name: '清除工具搜索', exact: true }).click();
-  await page.getByRole('tab', { name: /^Pi 核心/ }).press('Home');
-  assert.equal(await page.getByRole('tab', { name: /^Pi 核心/ }).getAttribute('aria-selected'), 'true');
+  assert.equal(await fileTools.getAttribute('aria-expanded'), 'false');
+  assert.equal(await toolGroups.filter({ hasText: 'studio-subagents' }).getAttribute('aria-expanded'), 'true');
   const dialog = page.locator('.settings-dialog');
 
-  // 7.1.1 Harness 配置：Profile 使用横向 tab，编辑器操作位于内容头部，
-  // 旧的纵向选择栏和悬浮 actionbar 不应回归。
+  // 7.1.1 方案卡片进入独立表单，全局策略单独保存。
   await openSettingsSection('Harness 配置');
-  await page.getByRole('heading', { name: /^Harness 配置/ }).waitFor();
-  await page.locator('.settings-content').evaluate((element) => { element.scrollTop = 0; });
-  assert.equal(await page.locator('.harness-workspace, .harness-profile-rail, .harness-actionbar').count(), 0);
-  assert.equal(await page.locator('.harness-editor-head .harness-editor-actions').count(), 1);
-  assert.equal(await page.locator('.harness-section-card').count(), 8);
-  assert.equal(await page.locator('.harness-policy-group').count(), 5);
-  // 上下文压缩以“百分比阈值”为主开关，token 字段收在细节里。
-  const compactionThreshold = page.getByLabel('自动压缩触发阈值（百分比）', { exact: true });
+  const harnessLibrary = page.locator('.harness-settings');
+  const harnessCards = harnessLibrary.locator('.settings-profile-card');
+  await harnessCards.first().waitFor();
+  assert.equal(await harnessCards.count(), 3);
+  assert.equal(await harnessLibrary.getByRole('textbox').count(), 0);
+  await harnessLibrary.getByRole('button', { name: '全局运行策略', exact: true }).click();
+  const policyDialog = page.getByRole('dialog', { name: '全局运行策略', exact: true });
+  assert.equal(await policyDialog.locator('.harness-policy-group').count(), 5);
+  await policyDialog.locator('.harness-policy-group > summary').filter({ hasText: '上下文压缩' }).click();
+  const compactionThreshold = policyDialog.getByLabel('自动压缩触发阈值（百分比）', { exact: true });
   assert.equal(await compactionThreshold.inputValue(), '85');
   await compactionThreshold.fill('70');
-  await page.getByRole('button', { name: '保存策略', exact: true }).click();
-  await page.waitForFunction(() => window.__lastRuntimePolicy?.compaction?.autoCompactPercent === 70);
-  assert.equal(await page.evaluate(() => window.__lastRuntimePolicy.compaction.keepRecentTokens), 20000);
-  assert.equal(
-    await page.locator('.harness-policy-group').first()
-      .evaluate((element) => getComputedStyle(element).backgroundColor),
-    'rgb(250, 250, 250)',
-  );
-  assert.equal(
-    await page.locator('.harness-section-override').first()
-      .evaluate((element) => getComputedStyle(element).backgroundColor),
-    'rgb(250, 250, 250)',
-  );
-  assert.equal(
-    await page.locator('.harness-tool-guidance-row').first()
-      .evaluate((element) => getComputedStyle(element).backgroundColor),
-    'rgb(250, 250, 250)',
-  );
-  await page.locator('.harness-policy-card').scrollIntoViewIfNeeded();
   await capture('12d-harness-policy-light');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await capture('12e-harness-policy-dark');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
-  await page.locator('.settings-content').evaluate((element) => { element.scrollTop = 0; });
-  const harnessTabs = page.locator('.harness-profile-tabs [role="tab"]');
-  assert.equal(await harnessTabs.count(), 3);
-  assert.equal(await harnessTabs.first().getAttribute('aria-selected'), 'true');
-  await harnessTabs.first().press('ArrowRight');
-  await page.waitForFunction(() => document.querySelectorAll('.harness-profile-tabs [role="tab"]')[1]?.getAttribute('aria-selected') === 'true');
-  assert.match(await page.getByLabel('Harness 名称', { exact: true }).inputValue(), /严格审阅/);
-  await page.waitForFunction(() => document.activeElement?.id === 'harness-profile-tab-review-first');
-  await harnessTabs.nth(1).press('Home');
-  await page.waitForFunction(() => document.activeElement?.id === 'harness-profile-tab-studio-coding');
-  assert.match(await page.getByLabel('Harness 名称', { exact: true }).inputValue(), /Studio 编码基线/);
+  await policyDialog.getByRole('button', { name: '保存策略', exact: true }).click();
+  await policyDialog.waitFor({ state: 'detached' });
+  await page.waitForFunction(() => window.__lastRuntimePolicy?.compaction?.autoCompactPercent === 70);
+  assert.equal(await page.evaluate(() => window.__lastRuntimePolicy.compaction.keepRecentTokens), 20000);
+  const harnessDialog = page.getByRole('dialog', { name: '编辑 Harness 配置', exact: true });
+  await harnessCards.nth(1).press('Enter');
+  assert.match(await harnessDialog.getByLabel('方案名称', { exact: true }).inputValue(), /严格审阅/);
+  await harnessDialog.getByRole('button', { name: '取消', exact: true }).click();
+  await harnessDialog.waitFor({ state: 'detached' });
+  await harnessCards.first().press('Enter');
+  assert.match(await harnessDialog.getByLabel('方案名称', { exact: true }).inputValue(), /Studio 编码基线/);
+  assert.equal(await harnessDialog.locator('.harness-section-row').count(), 8);
   const harnessInstructions = page.getByLabel('Harness 附加指令', { exact: true });
+  await page.locator('.harness-extra-instructions > summary').click();
   await harnessInstructions.fill(`${await harnessInstructions.inputValue()}\n最终回复必须列出验证命令。`);
   const saveHarness = page.getByRole('button', { name: '保存配置', exact: true });
   assert.equal(await saveHarness.isEnabled(), true);
-  assert.equal(await page.locator('.harness-editor-head').getByRole('button', { name: '保存配置', exact: true }).count(), 1);
-  await page.locator('.settings-content').evaluate((element) => { element.scrollTop = 0; });
+  assert.equal(await harnessDialog.locator('.dialog-footer').getByRole('button', { name: '保存配置', exact: true }).count(), 1);
+  await harnessDialog.locator('.dialog-body').evaluate(element => { element.scrollTop = 0; });
   await capture('12d-harness-light');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await capture('12e-harness-dark');
-  const harnessActionHeight = await page.locator('.harness-editor-actions .settings-save')
-    .evaluate((element) => element.getBoundingClientRect().height);
-  const harnessScopeHeight = await page.locator('.harness-editor-context .settings-scope-tabs button')
-    .first()
-    .evaluate((element) => element.getBoundingClientRect().height);
-  const harnessContextHeight = await page.locator('.harness-editor-context')
-    .evaluate((element) => element.getBoundingClientRect().height);
-  assert.equal(harnessScopeHeight, harnessActionHeight);
-  assert.ok(harnessContextHeight >= 64);
-  await page.locator('.harness-section-overrides').scrollIntoViewIfNeeded();
+  await page.locator('.harness-section-list').scrollIntoViewIfNeeded();
   await capture('12e-harness-overrides-dark');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   await capture('12d-harness-overrides-light');
-  const overrideGridWidth = await page.locator('.harness-section-overrides')
+  const overrideGridWidth = await page.locator('.harness-section-list')
     .evaluate((element) => element.getBoundingClientRect().width);
-  await page.locator('.harness-section-overrides summary').first().click();
-  const openOverride = page.locator('.harness-section-overrides details').first();
+  await page.locator('.harness-section-toggle').first().click();
+  const openOverride = page.locator('.harness-override-editor:visible').first();
   await openOverride.getByRole('textbox').waitFor();
   assert.ok(await openOverride.evaluate((element) => element.getBoundingClientRect().width)
     >= overrideGridWidth - 8);
   await capture('12d-harness-override-open-light');
-  await openOverride.locator('summary').click();
-  const toolGuidanceLabels = page.locator('.harness-tool-guidance-row label > span');
-  const [toolLabelTop, guidanceLabelTop] = await toolGuidanceLabels.evaluateAll(
-    (labels) => labels.map((label) => label.getBoundingClientRect().top),
-  );
-  const [toolFieldTop, guidanceFieldTop] = await page.locator(
-    '.harness-tool-guidance-row input, .harness-tool-guidance-row textarea',
-  ).evaluateAll((fields) => fields.map((field) => field.getBoundingClientRect().top));
-  assert.equal(toolLabelTop, guidanceLabelTop);
-  assert.equal(toolFieldTop, guidanceFieldTop);
-  await page.getByRole('button', { name: '新建配置', exact: true }).click();
-  assert.equal(await dialog.getAttribute('class'), 'settings-dialog is-backdropless');
-  await dialog.getByRole('button', { name: '取消', exact: true }).click();
-  await dialog.waitFor({ state: 'detached' });
+  await page.locator('.harness-section-toggle').first().click();
+  await page.locator('.harness-guidance > summary').click();
+  await harnessDialog.getByRole('button', { name: '编辑 edit 的工具说明' }).click();
+  const noteEditor = harnessDialog.locator('.harness-note-editor');
+  assert.ok(await noteEditor.evaluate(node => {
+    const toolbar = node.querySelector('.harness-note-toolbar').getBoundingClientRect();
+    const text = node.querySelector('textarea').getBoundingClientRect();
+    return text.top >= toolbar.bottom - 1 && Math.abs(text.width - toolbar.width) <= 1;
+  }), 'the tool guidance text has the full width underneath its toolbar');
   await saveHarness.click();
+  await harnessDialog.waitFor({ state: 'detached' });
   await page.getByRole('status').filter({ hasText: '配置已保存' }).waitFor();
   assert.match(await page.evaluate(() => window.__lastHarnessSave?.customInstructions || ''), /验证命令/);
-  await harnessTabs.first().click();
-  await harnessTabs.nth(1).click();
-  assert.equal(await harnessTabs.nth(1).getAttribute('aria-selected'), 'true');
+  await harnessLibrary.getByRole('button', { name: '新建配置', exact: true }).click();
+  await checkModalBackdrop(dialog);
+  await dialog.getByRole('button', { name: '取消', exact: true }).click();
+  await dialog.waitFor({ state: 'detached' });
+  await harnessCards.nth(1).click();
   const applyHarness = page.locator('.harness-editor-context').getByRole('button', { name: '应用到工作区', exact: true });
   assert.equal(await applyHarness.isEnabled(), true);
   await applyHarness.click();
   await page.getByRole('status').filter({ hasText: '已应用到当前工作区' }).waitFor();
   assert.equal(await page.locator('.harness-editor-context').getByRole('button', { name: '已应用', exact: true }).isDisabled(), true);
+  await harnessDialog.getByRole('button', { name: '取消', exact: true }).click();
+  await harnessDialog.waitFor({ state: 'detached' });
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
 
   // 7.1.2 子智能体：全局默认与指定工作区的覆盖必须明确区分，保存使用所选工作区。
   await openSettingsSection('子智能体');
-  await page.locator('.subagent-status-pill.is-ready').waitFor();
-  assert.equal(await page.locator('.subagent-runtime-status').count(), 0);
-  assert.equal(await page.getByRole('radio', { name: /所有工作区/ }).count(), 1);
-  assert.equal(await page.getByRole('radio', { name: /指定工作区/ }).count(), 1);
-  await page.getByRole('radio', { name: /指定工作区/ }).click();
+  await page.getByRole('button', { name: '共用运行默认值', exact: true }).click();
+  const sharedDefaults = page.getByRole('dialog', { name: '共用运行默认值', exact: true });
+  const scopes = sharedDefaults.getByRole('group', { name: '子智能体配置范围' });
+  await scopes.waitFor();
+  assert.equal(await sharedDefaults.locator('.subagent-runtime-status').count(), 0);
+  assert.equal(await scopes.getByRole('button', { name: '所有工作区' }).getAttribute('aria-pressed'), 'true');
+  await scopes.getByRole('button', { name: '指定工作区' }).click();
   await page.getByLabel('子智能体目标工作区', { exact: true }).waitFor();
   await page.getByLabel('子智能体目标工作区', { exact: true }).click();
   await page.getByRole('option', { name: /design-system/ }).click();
   await page.waitForFunction(() => window.__lastSubagentLoadCwd === '/workspace/design-system');
-  await page.locator('.settings-content').evaluate((element) => { element.scrollTop = 0; });
+  await scopes.waitFor();
+  await sharedDefaults.locator('.dialog-body').evaluate(element => { element.scrollTop = 0; });
   await capture('12f-subagent-settings');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await capture('12g-subagent-settings-dark');
@@ -3129,21 +2748,17 @@ try {
   assert.ok(await page.locator('.subagent-tool-row').count() >= 4);
   await page.locator('.subagent-tool-row').first().click();
   const solidControlForegrounds = await page.evaluate(() => {
-    const toolCheck = document.querySelector('.subagent-tool-row.is-enabled .subagent-tool-check');
-    const toggle = document.querySelector('.subagent-toggle-row input:checked');
-    const probe = document.createElement('button');
-    probe.className = 'settings-save';
-    document.body.append(probe);
-    const saveStyle = getComputedStyle(probe);
+    const toolCheck = document.querySelector('.subagent-tool-row input:checked');
+    const toggle = document.querySelector('.subagent-switch-row .switch.is-on');
+    const saveStyle = getComputedStyle(document.querySelector('.subagent-defaults-dialog .settings-save'));
     const styles = {
       saveColor: saveStyle.color,
       saveBackground: saveStyle.backgroundColor,
-      toolColor: toolCheck ? getComputedStyle(toolCheck).color : '',
+      toolColor: toolCheck ? getComputedStyle(toolCheck, '::after').borderRightColor : '',
       toolBackground: toolCheck ? getComputedStyle(toolCheck).backgroundColor : '',
       toggleBackground: toggle ? getComputedStyle(toggle).backgroundColor : '',
-      toggleThumb: toggle ? getComputedStyle(toggle, '::after').backgroundColor : '',
+      toggleThumb: toggle?.firstElementChild ? getComputedStyle(toggle.firstElementChild).backgroundColor : '',
     };
-    probe.remove();
     return styles;
   });
   assert.equal(solidControlForegrounds.saveColor, 'rgb(255, 255, 255)');
@@ -3151,9 +2766,9 @@ try {
   assert.equal(solidControlForegrounds.toggleThumb, 'rgb(255, 255, 255)');
   assert.equal(solidControlForegrounds.toolBackground, solidControlForegrounds.saveBackground);
   assert.equal(solidControlForegrounds.toggleBackground, solidControlForegrounds.saveBackground);
-  await page.locator('.subagent-savebar').scrollIntoViewIfNeeded();
   await capture('12h-subagent-solid-controls');
-  await page.locator('.subagent-savebar').getByRole('button', { name: '保存配置', exact: true }).click();
+  await sharedDefaults.getByRole('button', { name: '保存配置', exact: true }).click();
+  await sharedDefaults.waitFor({ state: 'detached' });
   await page.waitForFunction(() => Boolean(window.__lastSubagentSave));
   assert.deepEqual(await page.evaluate(() => ({
     cwd: window.__lastSubagentSave.cwd,
@@ -3163,7 +2778,9 @@ try {
   // 7.2 模型配置：来源列表、来源编辑对话框的草稿与保存
   await openSettingsSection('模型配置');
   await page.locator('.settings-content').evaluate((element) => { element.scrollTop = 0; });
-  const providerMarkAlignment = await page.locator('.default-model-panel .provider-code-mark').evaluate((svg) => {
+  const directory = page.locator('.model-provider-directory');
+  const sourceRows = directory.locator('[data-provider-id]');
+  const providerMarkAlignment = await directory.locator('.provider-code-mark').evaluate((svg) => {
     const icon = svg.parentElement;
     const svgBox = svg.getBoundingClientRect();
     const iconBox = icon.getBoundingClientRect();
@@ -3175,35 +2792,19 @@ try {
   assert.ok(providerMarkAlignment.x <= .5, `provider mark x offset: ${providerMarkAlignment.x}px`);
   assert.ok(providerMarkAlignment.y <= .5, `provider mark y offset: ${providerMarkAlignment.y}px`);
   await capture('12a-default-model-icons');
-  const modelFooterLayout = await page.locator('.model-card-footer').first().evaluate((footer) => {
-    const remove = footer.querySelector('.model-card-remove');
-    const footerBox = footer.getBoundingClientRect();
-    const removeBox = remove.getBoundingClientRect();
-    const removeStyle = getComputedStyle(remove);
+  const modelAlignment = await page.locator('.model-settings').evaluate(root => {
+    const bounds = selector => root.querySelector(selector).getBoundingClientRect();
     return {
-      removeInset: footerBox.right - removeBox.right,
-      redundantStatus: footer.querySelector('.resource-status') !== null,
-      removeDisplay: removeStyle.display,
-      removePadding: removeStyle.paddingInlineStart,
-      removeBorder: removeStyle.borderTopWidth,
+      title: bounds('h1').left - bounds('.model-default-card').left,
+      headings: bounds('.model-default-card h2').left - bounds('.model-provider-directory h2').left,
+      actions: bounds('.model-enabled-summary').right - bounds('.model-source-actions').right,
+      cardEdges: bounds('.model-default-card').right - bounds('.model-provider-directory').right,
     };
   });
-  assert.ok(modelFooterLayout.removeInset <= 16);
-  assert.equal(modelFooterLayout.redundantStatus, false);
-  assert.match(modelFooterLayout.removeDisplay, /^(inline-)?flex$/);
-  assert.notEqual(modelFooterLayout.removePadding, '0px');
-  assert.notEqual(modelFooterLayout.removeBorder, '0px');
-  const providerFooterLayout = await page.locator('.provider-card').first().evaluate((card) => {
-    const cardBox = card.getBoundingClientRect();
-    const actionsBox = card.querySelector('.provider-actions').getBoundingClientRect();
-    return {
-      actionsInset: cardBox.right - actionsBox.right,
-      redundantStatus: card.querySelector('.resource-status') !== null,
-    };
-  });
-  assert.equal(providerFooterLayout.redundantStatus, false);
-  assert.ok(providerFooterLayout.actionsInset <= 16);
-  await page.getByRole('button', { name: '管理模型', exact: true }).first().click();
+  for (const [element, offset] of Object.entries(modelAlignment)) {
+    assert.ok(Math.abs(offset) <= 1, `${element} is misaligned by ${offset}px`);
+  }
+  await page.getByRole('button', { name: /个对话模型，/, expanded: false }).first().click();
   await page.locator('.provider-model-row').first().waitFor();
   const nativeCheckbox = await page.locator('.provider-model-check input:checked').first().evaluate((input) => ({
     background: getComputedStyle(input).backgroundColor,
@@ -3225,21 +2826,16 @@ try {
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
 
   // 新增来源对话框：填写后取消，不能留下草稿卡片。
-  await page.locator('.settings-page-header')
-    .getByRole('button', { name: '添加模型来源', exact: true })
+  await directory.getByRole('button', { name: '添加模型来源', exact: true })
     .click();
   await capture('13-add-provider-dialog');
-  assert.equal(await dialog.getAttribute('class'), 'settings-dialog is-backdropless');
-  const providerDialogBackdrop = await dialog.evaluate((element) => {
-    const style = getComputedStyle(element, '::backdrop');
-    return { background: style.backgroundColor, backdrop: style.backdropFilter };
-  });
-  assert.equal(providerDialogBackdrop.background, 'rgba(0, 0, 0, 0)');
-  assert.equal(providerDialogBackdrop.backdrop, 'none');
+  await checkModalBackdrop(dialog);
   assert.equal(await dialog.getByLabel('首个模型 ID', { exact: true }).count(), 0);
   await dialog.getByLabel('来源 ID', { exact: true }).fill('draft-only');
   await dialog.getByRole('button', { name: '取消', exact: true }).click();
-  assert.equal(await page.locator('.provider-card').count(), 3);
+  await page.getByRole('alertdialog', { name: '丢弃未保存的更改？' }).getByRole('button', { name: '丢弃更改' }).click();
+  await dialog.waitFor({ state: 'detached' });
+  assert.equal(await sourceRows.count(), 3);
 
   // 编辑已有来源：地址从 mock 配置回填，API Key 永远不回显（安全要求）；
   // 修改并保存后再次打开，确认新地址已持久化到表单数据源。
@@ -3306,7 +2902,7 @@ try {
   );
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'detached' });
-  assert.equal(await page.locator('.provider-card').first().locator('.provider-model-row').count(), 3);
+  assert.equal(await sourceRows.first().locator('.provider-model-row').count(), 3);
 
   // 7.3.1 第三方模型发现：先预览，再一次性导入缺失模型。
   await page.getByRole('button', { name: '获取模型', exact: true }).first().click();
@@ -3318,18 +2914,19 @@ try {
   await visionDiscovery.check();
   await capture('15b-provider-model-selection');
   await page.getByRole('button', { name: '添加所选 1 个', exact: true }).click();
-  await page.getByText('已添加并启用 1 个模型。', { exact: true }).waitFor();
-  assert.equal(await page.locator('.provider-card').first().locator('.provider-model-row').count(), 4);
+  await sourceRows.first().getByRole('checkbox', { name: '停用模型 Discovered Vision', exact: true }).waitFor();
+  assert.equal(await sourceRows.first().locator('.provider-model-row').count(), 4);
   assert.equal(
     await page.getByRole('checkbox', { name: '停用模型 Discovered Vision', exact: true }).isChecked(),
     true,
   );
+  await sourceRows.first().getByRole('button', { name: '获取模型', exact: true }).click();
   const addedVision = page.getByRole('checkbox', { name: '已添加模型 Discovered Vision', exact: true });
   assert.equal(await addedVision.isChecked(), true);
-  assert.match(await addedVision.locator('..').getAttribute('class'), /\bis-selected\b/);
-  assert.equal(await addedVision.locator('..').getByText('已添加', { exact: true }).count(), 0);
+  assert.match(await addedVision.locator('..').getAttribute('class'), /\bis-added\b/);
+  assert.equal(await addedVision.locator('..').getByText('已添加', { exact: true }).count(), 1);
   assert.equal(
-    await page.locator('.provider-card').first().getByText('自定义', { exact: true }).count(),
+    await sourceRows.first().getByText('自定义', { exact: true }).count(),
     0,
   );
   await capture('15b-provider-model-discovery');
@@ -3339,20 +2936,21 @@ try {
   assert.equal(await fastDiscovery.isChecked(), false);
 
   // 7.3.2 新来源可以先保持空模型目录；用户随后从来源内部添加第一个模型。
-  await page.locator('.settings-page-header')
-    .getByRole('button', { name: '添加模型来源', exact: true })
+  await directory.getByRole('button', { name: '添加模型来源', exact: true })
     .click();
   await dialog.getByLabel('来源 ID', { exact: true }).fill('empty-gateway');
   await dialog.getByLabel('显示名称', { exact: true }).fill('Empty Gateway');
   await dialog.getByLabel('服务地址', { exact: true }).fill('https://empty.example.test/v1');
+  await dialog.locator('summary').filter({ hasText: '高级选项' }).click();
   await dialog.getByLabel('模型列表地址', { exact: true }).fill('https://empty.example.test/v1/models');
   await dialog.getByRole('button', { name: '添加', exact: true }).click();
   await dialog.waitFor({ state: 'detached' });
-  await page.locator('.provider-model-head').getByText('这个来源还没有模型', { exact: true }).waitFor();
-  assert.equal(await page.locator('.provider-model-empty').getByRole('button').count(), 0);
-  assert.equal(await page.locator('.provider-card').count(), 4);
+  const emptyGateway = directory.locator('[data-provider-id="empty-gateway"]');
+  await emptyGateway.getByText('暂无模型，可获取模型或手动添加。', { exact: true }).waitFor();
+  assert.equal(await emptyGateway.locator('.provider-model-row').count(), 0);
+  assert.equal(await sourceRows.count(), 4);
   await capture('15c-empty-provider');
-  const fallbackIconAlignment = await page.locator('.provider-card', { hasText: 'Empty Gateway' }).locator('.provider-icon-letter').evaluate((letter) => {
+  const fallbackIconAlignment = await emptyGateway.locator('.provider-icon-letter').evaluate((letter) => {
     const icon = letter.parentElement;
     const letterBox = letter.getBoundingClientRect();
     const iconBox = icon.getBoundingClientRect();
@@ -3363,21 +2961,26 @@ try {
   });
   assert.ok(fallbackIconAlignment.x <= 1 && fallbackIconAlignment.y <= 1);
 
-  // 来源操作固定在卡片上：启停可逆，删除先确认；详情和模型编辑不承担删除职责。
-  const emptyGatewayCard = page.locator('.provider-card', { hasText: 'Empty Gateway' });
-  await emptyGatewayCard.getByRole('switch', { name: '停用模型来源 Empty Gateway', exact: true }).click();
+  // 行内开关和更多菜单的删除操作都要保留正确的状态与焦点。
+  const more = emptyGateway.getByRole('button', { name: 'Empty Gateway 的更多操作', exact: true });
+  const deleteSource = page.getByRole('menuitem', { name: '删除来源', exact: true });
+  await emptyGateway.getByRole('switch', { name: '停用模型来源 Empty Gateway', exact: true }).click();
   await page.getByRole('switch', { name: '启用模型来源 Empty Gateway', exact: true }).waitFor();
-  assert.match(await emptyGatewayCard.getAttribute('class'), /\bis-disabled\b/);
-  await emptyGatewayCard.getByRole('switch', { name: '启用模型来源 Empty Gateway', exact: true }).click();
+  assert.equal(await emptyGateway.getByRole('switch').getAttribute('aria-checked'), 'false');
+  await emptyGateway.getByRole('switch', { name: '启用模型来源 Empty Gateway', exact: true }).click();
   await page.getByRole('switch', { name: '停用模型来源 Empty Gateway', exact: true }).waitFor();
-  await emptyGatewayCard.getByRole('button', { name: '删除模型来源 Empty Gateway', exact: true }).click();
+  await more.click();
+  await deleteSource.click();
   await page.getByRole('alertdialog', { name: '删除模型来源？' }).waitFor();
-  await page.getByRole('button', { name: '取消', exact: true }).click();
-  assert.equal(await page.locator('.provider-card').count(), 4);
-  await emptyGatewayCard.getByRole('button', { name: '删除模型来源 Empty Gateway', exact: true }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: '取消', exact: true }).click();
+  await page.getByRole('alertdialog').waitFor({ state: 'detached' });
+  assert.equal(await more.evaluate(node => document.activeElement === node), true);
+  assert.equal(await sourceRows.count(), 4);
+  await more.click();
+  await deleteSource.click();
   await page.getByRole('alertdialog', { name: '删除模型来源？' }).getByRole('button', { name: '删除来源', exact: true }).click();
-  await page.locator('.provider-card', { hasText: 'Empty Gateway' }).waitFor({ state: 'detached' });
-  assert.equal(await page.locator('.provider-card').count(), 3);
+  await emptyGateway.waitFor({ state: 'detached' });
+  assert.equal(await sourceRows.count(), 3);
 
   // 7.4 MCP 服务器：切换分页后内容应回到顶部；新增时重名要展示行内错误，
   // 修改名称后可成功创建；编辑已有服务器应保留带空格的启动参数。
@@ -3415,13 +3018,7 @@ try {
   assert.equal(await firstMcpDetail.evaluate((node) => node === document.activeElement), true);
   await page.getByRole('button', { name: '添加 MCP 服务器', exact: true }).click();
   await capture('16-add-mcp-dialog');
-  assert.equal(await dialog.getAttribute('class'), 'settings-dialog is-backdropless');
-  const mcpDialogBackdrop = await dialog.evaluate((element) => {
-    const style = getComputedStyle(element, '::backdrop');
-    return { background: style.backgroundColor, backdrop: style.backdropFilter };
-  });
-  assert.equal(mcpDialogBackdrop.background, 'rgba(0, 0, 0, 0)');
-  assert.equal(mcpDialogBackdrop.backdrop, 'none');
+  await checkModalBackdrop(dialog);
   await dialog.getByLabel('名称', { exact: true }).fill('filesystem');
   await dialog.getByRole('button', { name: '传输方式', exact: true }).click();
   await page.getByRole('option', { name: 'Streamable HTTP', exact: true }).click();
@@ -3471,36 +3068,33 @@ try {
   await page.getByRole('heading', { name: 'Token 使用量', exact: true }).waitFor();
   await page.getByRole('group', { name: '热力图日期范围', exact: true }).getByRole('button', { name: '1 年', exact: true }).click();
   await page.getByRole('group', { name: /365 天 Token 使用量/ }).waitFor();
+  await page.setViewportSize({ width: 720, height: 640 });
   const compactUsageOverflow = await page.locator('.usage-heatmap-scroll').evaluate((element) => ({
     clientWidth: element.clientWidth,
     scrollWidth: element.scrollWidth,
+    pageOverflow: element.closest('.usage-settings').scrollWidth - element.closest('.usage-settings').clientWidth,
   }));
   assert.ok(compactUsageOverflow.scrollWidth > compactUsageOverflow.clientWidth);
+  assert.equal(compactUsageOverflow.pageOverflow, 0);
   await page.locator('.usage-heatmap-card').scrollIntoViewIfNeeded();
   await capture('21a-compact-usage-heatmap');
+  await page.setViewportSize({ width: 980, height: 640 });
 
   // 技能与扩展导入对话框都提供统一的范围选择、错误展示和键盘关闭。
-  await openSettingsSection('技能');
-  assert.equal(await page.locator('.skill-source-head').count(), 4);
-  assert.equal(await page.getByRole('heading', { name: /Studio 应用技能/ }).count(), 1);
-  assert.equal(await page.getByRole('heading', { name: /^共享技能/ }).count(), 1);
-  assert.equal(await page.getByRole('heading', { name: /^项目共享技能/ }).count(), 1);
-  assert.equal(
-    await page.locator('.skill-source-head code').first().innerText(),
+  await openSettingsSection('插件');
+  await page.getByRole('tablist', { name: '插件与资源' }).getByRole('tab', { name: '技能', exact: true }).click();
+  for (const name of ['Studio 应用技能', '共享技能', '项目共享技能']) {
+    assert.equal(await page.getByRole('region', { name, exact: true }).locator('summary').count(), 1);
+  }
+  await page.getByRole('button', { name: '技能目录', exact: true }).click();
+  const directoriesDialog = page.getByRole('dialog', { name: '技能目录', exact: true });
+  assert.deepEqual(await directoriesDialog.locator('dd code').allTextContents(), [
     '/Users/demo/Library/Application Support/pi-studio/skills',
-  );
-  assert.equal(
-    await page.locator('.skill-source-head code').nth(1).innerText(),
     '/Users/demo/.agents/skills',
-  );
-  assert.equal(
-    await page.locator('.skill-source-head code').nth(2).innerText(),
     '/workspace/pi-studio/.pi-studio/skills',
-  );
-  assert.equal(
-    await page.locator('.skill-source-head code').nth(3).innerText(),
     '/workspace/pi-studio/.agents/skills',
-  );
+  ]);
+  await directoriesDialog.getByRole('button', { name: '关闭技能目录' }).click();
   const hub = page.locator('.skill-hub-card');
   const catalog = page.locator('.skill-catalog-dialog');
   // 搜索跨全部技能源；没有命中时给出可清除的空态。
@@ -3629,15 +3223,10 @@ try {
   assert.equal(await page.evaluate(() => window.__qaPreparedSkills.size), 0);
   await catalog.getByRole('button', { name: '关闭技能目录' }).click();
   await page.setViewportSize({ width: 1440, height: 920 });
-  await page.locator('.skill-card', { hasText: 'code-review' }).locator('.skill-card-main').click();
+  await page.getByRole('button', { name: '查看技能 code-review', exact: true }).click();
   const skillDetail = page.locator('.skill-detail-dialog');
   await skillDetail.waitFor();
-  const skillDetailOverlay = await page.locator('.detail-overlay').evaluate((element) => {
-    const style = getComputedStyle(element);
-    return { background: style.backgroundColor, backdrop: style.backdropFilter };
-  });
-  assert.equal(skillDetailOverlay.background, 'rgba(0, 0, 0, 0)');
-  assert.equal(skillDetailOverlay.backdrop, 'none');
+  await checkModalBackdrop(page.locator('.detail-overlay'));
   assert.equal(await skillDetail.getByRole('button', { name: '删除技能', exact: true }).count(), 0);
 
   // 统一预览按格式分流：Markdown 渲染/源码、JSON、CSV、图片和不支持格式
@@ -3706,12 +3295,7 @@ try {
   await page.getByRole('button', { name: '取消', exact: true }).click();
 
   await page.getByRole('button', { name: '添加技能', exact: true }).click();
-  const skillDialogBackdrop = await dialog.evaluate((element) => {
-    const style = getComputedStyle(element, '::backdrop');
-    return { background: style.backgroundColor, backdrop: style.backdropFilter };
-  });
-  assert.equal(skillDialogBackdrop.background, 'rgba(0, 0, 0, 0)');
-  assert.equal(skillDialogBackdrop.backdrop, 'none');
+  await checkModalBackdrop(dialog);
   await dialog.locator('input[type="radio"]').nth(1).check();
   await dialog.getByRole('button', { name: '项目技能工作区', exact: true }).click();
   await page.getByRole('option', { name: /design-system/ }).click();
@@ -3724,69 +3308,41 @@ try {
     cwd: '/workspace/design-system',
   }]);
 
-  await openSettingsSection('扩展');
-  assert.deepEqual(await page.locator('.installed-extension-title strong').allTextContents(), ['workspace-tools', 'Studio 子智能体']);
-  assert.equal(await page.locator('.installed-extension-card').count(), 2);
-  assert.equal(await page.locator('.installed-extension-row').count(), 0);
+  await openSettingsSection('插件');
+  await page.getByRole('tab', { name: '扩展', exact: true }).click();
+  const library = page.locator('.installed-extension-section');
+  const extensionOpener = library.getByRole('button', { name: '打开 workspace-tools 设置', exact: true });
+  await extensionOpener.waitFor();
+  assert.equal(await library.getByRole('switch').count(), 0);
+  assert.equal(await extensionOpener.locator('button').count(), 0);
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await capture('21-compact-extension-dark');
-  const installedCard = page.locator('.installed-extension-card').first();
-  const installedSurface = await installedCard.evaluate((card) => getComputedStyle(card).backgroundColor);
-  await installedCard.hover();
-  await page.waitForTimeout(200);
-  assert.equal(await installedCard.evaluate((card) => getComputedStyle(card).backgroundColor), installedSurface);
-  assert.equal(await installedCard.evaluate((card) => card.classList.contains('settings-resource-card')), true);
-  const installedCardStyle = await installedCard.evaluate((card) => {
-    const icon = card.querySelector('.extension-card-icon');
-    const toggle = card.querySelector('.switch');
-    const thumb = toggle?.querySelector('span');
-    const iconStyle = icon ? getComputedStyle(icon) : null;
-    const toggleBox = toggle?.getBoundingClientRect();
-    const thumbBox = thumb?.getBoundingClientRect();
-    return {
-      iconColor: iconStyle?.color,
-      iconBackground: iconStyle?.backgroundColor,
-      redundantReadyState: card.querySelector('.extension-card-state.is-ready') !== null,
-      toggleWidth: toggleBox?.width,
-      toggleHeight: toggleBox?.height,
-      toggleLeft: toggleBox?.left,
-      toggleRight: toggleBox?.right,
-      thumbLeft: thumbBox?.left,
-      thumbRight: thumbBox?.right,
-    };
-  });
-  assert.equal(installedCardStyle.redundantReadyState, false);
-  assert.equal(installedCardStyle.toggleWidth, 38);
-  assert.equal(installedCardStyle.toggleHeight, 22);
-  assert.ok(installedCardStyle.thumbLeft >= installedCardStyle.toggleLeft);
-  assert.ok(installedCardStyle.thumbRight <= installedCardStyle.toggleRight);
-  const extensionDelete = page.getByRole('button', { name: '卸载 workspace-tools', exact: true });
-  assert.equal(await extensionDelete.count(), 1);
-  await extensionDelete.click();
-  await page.getByRole('alertdialog', { name: '卸载扩展？' }).waitFor();
-  const confirmIconRadius = await page.locator('.confirm-icon').evaluate((icon) => ({
+  await library.getByRole('button', { name: '列表视图', exact: true }).click();
+  await library.locator('[data-view="list"]').waitFor();
+  await library.getByRole('button', { name: '卡片视图', exact: true }).click();
+  await library.locator('[data-view="grid"]').waitFor();
+  await capture('21b-installed-extension-cards-dark');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  await extensionOpener.click();
+  const extensionDetail = page.locator('.extension-detail-dialog');
+  await extensionDetail.getByRole('heading', { name: 'workspace-tools', exact: true }).waitFor();
+  await extensionDetail.locator('details.extension-detail-source > summary').click();
+  await extensionDetail.getByText('智能体工具', { exact: true }).waitFor();
+  await extensionDetail.locator('details.extension-detail-source > summary').click();
+  await extensionDetail.getByRole('switch').waitFor();
+  await checkModalBackdrop(page.locator('.detail-overlay'));
+  await extensionDetail.getByRole('button', { name: '卸载 workspace-tools', exact: true }).click();
+  const uninstallConfirmation = page.getByRole('alertdialog', { name: '卸载扩展？' });
+  await uninstallConfirmation.waitFor();
+  const confirmIconRadius = await uninstallConfirmation.locator('.confirm-icon').evaluate(icon => ({
     actual: getComputedStyle(icon).borderRadius,
     expected: getComputedStyle(document.documentElement).getPropertyValue('--radius-control').trim(),
   }));
   assert.equal(confirmIconRadius.actual, confirmIconRadius.expected);
-  await page.getByRole('button', { name: '取消', exact: true }).click();
-  await page.locator('.installed-extension-card').first().scrollIntoViewIfNeeded();
-  await capture('21b-installed-extension-cards-dark');
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
-  await page.getByRole('button', { name: '查看 workspace-tools 详情', exact: true }).click();
-  const extensionDetail = page.locator('.extension-detail-dialog');
-  await extensionDetail.waitFor();
-  await extensionDetail.getByRole('heading', { name: 'workspace-tools', exact: true }).waitFor();
-  await extensionDetail.getByText('智能体工具', { exact: true }).waitFor();
-  const extensionDetailOverlay = await page.locator('.detail-overlay').evaluate((element) => {
-    const style = getComputedStyle(element);
-    return { background: style.backgroundColor, backdrop: style.backdropFilter };
-  });
-  assert.equal(extensionDetailOverlay.background, 'rgba(0, 0, 0, 0)');
-  assert.equal(extensionDetailOverlay.backdrop, 'none');
-  assert.equal(await extensionDetail.getByRole('button', { name: '卸载', exact: true }).count(), 0);
+  await uninstallConfirmation.getByRole('button', { name: '取消', exact: true }).click();
+  await uninstallConfirmation.waitFor({ state: 'detached' });
   await capture('23-extension-detail');
-  await extensionDetail.getByRole('button', { name: '关闭扩展详情', exact: true }).click();
+  await extensionDetail.getByRole('button', { name: '完成', exact: true }).click();
   await extensionDetail.waitFor({ state: 'detached' });
 
   // StrictMode 会模拟一次挂载与卸载；安装预览令牌不能被这次模拟卸载销毁。
@@ -3794,7 +3350,7 @@ try {
   const officialCard = page.locator('.official-extension-card', { hasText: '额度状态' });
   await officialCard.getByRole('button', { name: '安装', exact: true }).click();
   await dialog.waitFor();
-  assert.equal(await dialog.getAttribute('class'), 'settings-dialog is-backdropless');
+  await checkModalBackdrop(dialog);
   await page.waitForTimeout(50);
   assert.deepEqual(await page.evaluate(() => window.__extensionInstallQa.disposedTokens), []);
   assert.equal(await dialog.locator('.dialog-body').evaluate((element) => element.scrollTop), 0);
@@ -3805,7 +3361,7 @@ try {
 
   await page.getByRole('button', { name: '安装扩展', exact: true }).click();
   await dialog.locator('.extension-scope-cards button').first().waitFor();
-  assert.equal(await dialog.getAttribute('class'), 'settings-dialog is-backdropless');
+  await checkModalBackdrop(dialog);
   assert.equal(await dialog.locator('.extension-scope-cards button').count(), 2);
   assert.equal(await dialog.locator('.extension-scope-cards button').first().getAttribute('aria-pressed'), 'true');
   assert.equal(await dialog.locator('.dialog-body').evaluate((element) => element.scrollTop), 0);
@@ -3937,10 +3493,10 @@ try {
   });
   await page.locator('.bottom-row').click();
   await openSettingsSection('模型配置');
-  const emptyDefaultModel = page.locator('.default-model-empty');
+  const emptyDefaultModel = page.locator('.model-first-run');
   await emptyDefaultModel.waitFor();
-  assert.equal(await page.locator('.default-model-panel .provider-icon').count(), 0);
-  assert.equal(await page.locator('.default-model-panel .pi-select-trigger').count(), 0);
+  assert.equal(await page.locator('.model-settings .provider-icon').count(), 0);
+  assert.equal(await page.locator('.model-settings .pi-select-trigger').count(), 0);
   assert.equal(await emptyDefaultModel.getByRole('button', { name: '添加模型来源', exact: true }).count(), 1);
   await capture('30-models-empty-light');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });

@@ -1,4 +1,4 @@
-/** In-memory archive/model/context data; no real persistence or model calls. */
+/** In-memory archive, desktop settings, model and context data; no real persistence or model calls. */
 export function installSettingsUtilitiesFixture() {
   const base = window.piApi; const clone = value => JSON.parse(JSON.stringify(value));
   const a = '/qa/synthetic/performance'; const b = '/qa/long-project-path/多工作区归档与上下文用量验证';
@@ -7,6 +7,11 @@ export function installSettingsUtilitiesFixture() {
   const model = ref => ({ modelRef: ref, label: ref === 'qa/a' ? 'Context A' : 'Context B', thinkingLevel: 'default', thinkingLevels: ['default'], effectiveThinkingLevel: 'off' });
   const selections = { 'perf-0': model('qa/a'), 'perf-1': model('qa/b') };
   const policies = { 'qa/a': { modelRef: 'qa/a', contextWindow: 100000, autoCompactPercent: 85, compactAtTokens: 85000 }, 'qa/b': { modelRef: 'qa/b', contextWindow: 200000, autoCompactPercent: 85, compactAtTokens: 170000 } };
+  const desktop = {
+    supported: true, enabled: false, allowAnyApp: false, alwaysAllow: [], activity: [],
+    permission: { supported: true, ready: false, screenRecording: 'denied', accessibility: false },
+  };
+  const desktopApp = { id: 'qa.notes', name: '示例笔记', bundleId: 'qa.notes' };
   window.__settingsUtilitiesQa = {
     calls, policies,
     expireTranscriptCache() { const now = Date.now; Date.now = () => now() + 61000; },
@@ -24,6 +29,12 @@ export function installSettingsUtilitiesFixture() {
   }
   const snapshot = async id => ({ ...(await base.conversationSnapshot(id)), model: selections[id] });
   window.piApi = new Proxy({
+    browserPasswords: async () => ({ available: true, passwords: [{ id: 'sample', origin: 'https://example.invalid', username: 'sample' }] }),
+    browserPasswordReveal: () => respond('browserPasswordReveal', { password: { password: 'fixture-value' } }),
+    desktopControlStatus: () => respond('desktopControlStatus', desktop),
+    desktopControlInstalledApps: () => respond('desktopControlInstalledApps', { ok: true, apps: [desktopApp] }),
+    desktopControlAlwaysAllowAdd: async app => { desktop.alwaysAllow = [app]; return { status: clone(desktop) }; },
+    desktopControlAlwaysAllowRemove: async () => { desktop.alwaysAllow = []; return { status: clone(desktop) }; },
     state: async () => { calls.push({ method: 'state' }); const value = clone(await base.state()); value.model = model('qa/a'); value.workspaces[0].sessions = value.workspaces[0].sessions.map(item => ({ ...item, archived: activeArchived[item.id] ?? item.archived })); value.workspaces[0].sessions.push(...clone(archived.filter(item => item.cwd === a))); value.workspaces.push({ cwd: b, name: '发布验证 B', sessions: clone(archived.filter(item => item.cwd === b)) }); return respond('state', value); },
     conversationPage: async input => { const value = await base.conversationPage(input); value.model = selections[input.id]; value.messages.at(-1).usage = { input: 38000, output: 2000 }; calls.push({ method: 'conversationPage', id: input.id }); return respond('conversationPage', value, input.id); },
     conversationSnapshot: snapshot, subscribeConversation: snapshot,

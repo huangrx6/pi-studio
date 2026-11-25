@@ -566,8 +566,63 @@ function discoverSkills(cwd) {
       origin: 'agents',
     },
   ];
+  // Plugin-managed skill directories are registered in SQLite and live under
+  // ~/.pi-studio/plugins/<id>/skills/<name>. Discover each installation root.
+  // Soft-disabled plugins keep files on disk but stay out of the skill catalog.
+  try {
+    const { getStudioDatabase } = require('../../core/studio-db.cjs');
+    const db = getStudioDatabase();
+    const disabledPlugins = new Set(
+      db.listPlugins().filter((plugin) => !plugin.enabled).map((plugin) => plugin.id),
+    );
+    for (const installation of db.listSkillInstallations()) {
+      if (installation.origin !== 'plugin') continue;
+      if (!installation.path) continue;
+      if (installation.ownerPluginId && disabledPlugins.has(installation.ownerPluginId)) continue;
+      roots.push({
+        scope: 'user',
+        root: path.dirname(installation.path),
+        safetyRoot: '',
+        origin: 'plugin',
+        singleDirectory: installation.path,
+        ownerPluginId: installation.ownerPluginId || '',
+        managed: Boolean(installation.managed),
+        userOverride: Boolean(installation.userOverride),
+      });
+    }
+  } catch {
+    // Database may be unavailable during pure unit tests of path helpers.
+  }
   const output = { candidates: [], diagnostics: [] };
+  const seenRoots = new Set();
   for (const source of roots) {
+    if (source.singleDirectory) {
+      const key = path.resolve(source.singleDirectory);
+      if (seenRoots.has(key)) continue;
+      seenRoots.add(key);
+      try {
+        if (fs.existsSync(path.join(source.singleDirectory, SKILL_FILE))) {
+          const skill = skillFromFile(
+            path.join(source.singleDirectory, SKILL_FILE),
+            source.scope,
+            realCwd,
+            source.origin,
+          );
+          if (source.origin === 'plugin') {
+            skill.ownerPluginId = source.ownerPluginId || '';
+            skill.managed = Boolean(source.managed);
+            skill.userOverride = Boolean(source.userOverride);
+          }
+          output.candidates.push(skill);
+        }
+      } catch (error) {
+        output.diagnostics.push({
+          path: source.singleDirectory,
+          message: error?.message || String(error),
+        });
+      }
+      continue;
+    }
     discoverRoot(
       source.root,
       source.scope,
@@ -621,9 +676,15 @@ function discoverSkills(cwd) {
  * Pi puts only routing metadata in the prompt. The body stays on disk and is
  * read by the model through its file tools when the description matches.
  */
-function skillInstructions(cwd, offeredTools) {
+function skillReferenceId(skill) {
+  const source = crypto.createHash('sha256').update(skill.path).digest('hex').slice(0, 24);
+  return `${skill.name}#${source}`;
+}
+
+function skillInstructions(cwd, offeredTools, selected = null) {
+  if (selected?.length === 0) return undefined;
   const visible = discoverSkills(cwd).skills.filter((skill) => (
-    skill.available && !skill.disableModelInvocation
+    skill.available && !skill.disableModelInvocation && (!selected || selected.includes(skillReferenceId(skill)))
   ));
   if (visible.length === 0) return undefined;
   // `undefined` preserves the official default for direct service callers.
@@ -667,22 +728,26 @@ function expandSkillCommand(text, cwd) {
   const args = space === -1 ? '' : source.slice(space + 1).trim();
   const skill = discoverSkills(cwd).skills.find((item) => item.name === name);
   if (!skill) return source;
-  if (!skill.available) throw new Error(`项目技能「${name}」尚未信任或内容已经变化`);
+  const block = readSkillBlock(skill);
+  return args ? `${block}\n\n${args}` : block;
+}
+
+function readSkillBlock(skill) {
+  if (!skill.available) throw new Error(`项目技能「${skill.name}」尚未信任或内容已经变化`);
   const outer = fs.readFileSync(skill.path, 'utf8');
   const body = parseFrontmatter(outer).body.trim();
-  if (!body) throw new Error(`技能「${name}」没有可用正文`);
-  const block = [
+  if (!body) throw new Error(`技能「${skill.name}」没有可用正文`);
+  return [
     `<skill name="${xml(skill.name)}" location="${xml(skill.path)}">`,
     `References are relative to ${skill.baseDir}.`,
     '',
     body,
     '</skill>',
   ].join('\n');
-  return args ? `${block}\n\n${args}` : block;
 }
 
-function composerSkills(cwd) {
-  return discoverSkills(cwd).skills
+function composerSkills(cwd, skills = discoverSkills(cwd).skills) {
+  return skills
     .filter((skill) => skill.available)
     .map((skill) => ({
       name: `skill:${skill.name}`,
@@ -801,6 +866,7 @@ module.exports = {
   directoryFingerprint,
   discoverSkills,
   expandSkillCommand,
+  readSkillBlock,
   importSkill,
   inspectSingleSkillDirectory,
   inspectSkillDirectory,
@@ -812,5 +878,6 @@ module.exports = {
   sharedProjectSkillsDirectory,
   sharedUserSkillsDirectory,
   skillInstructions,
+  skillReferenceId,
   userSkillsDirectory,
 };

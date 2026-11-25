@@ -22,8 +22,9 @@ async function count(method) { return page.evaluate(method => window.__extension
 async function twice(locator) { await locator.evaluate(node => { node.click(); node.click(); }); }
 async function openSettings() {
   if (!(await page.locator('.settings-navigation').isVisible())) await page.locator('.sidebar-bottom button[title="设置"]').click();
-  await page.locator('.settings-navigation').getByRole('button', { name: '扩展', exact: true }).click();
-  await page.locator('.installed-extension-row').first().waitFor();
+  await page.locator('.settings-navigation').getByRole('button', { name: '插件', exact: true }).click();
+  await page.getByRole('tab', { name: '扩展', exact: true }).click();
+  await page.locator('.installed-extension-card').first().waitFor();
 }
 async function fresh() {
   if (page) await page.close();
@@ -36,11 +37,13 @@ async function fresh() {
 async function start(method) {
   const project = method === 'setExtensionTrusted';
   const row = page.getByRole('article', { name: project ? '项目扩展与依赖状态' : /零声明权限的可执行扩展/ });
-  if (method === 'setExtensionEnabled') { await twice(row.getByRole('switch')); return; }
-  if (method === 'removeExtension') await row.getByRole('button', { name: /^卸载 / }).click();
+  await row.getByRole('button', { name: /^打开 .* 设置$/ }).click();
+  const detail = page.locator('.extension-detail-dialog');
+  if (method === 'setExtensionEnabled') { await twice(detail.getByRole('switch')); return; }
+  if (method === 'removeExtension') await detail.getByRole('button', { name: /^卸载 / }).click();
   else {
-    await row.getByRole('button', { name: /^查看 .* 详情$/ }).click();
-    await page.locator('.extension-detail-dialog').getByRole('button', { name: project ? '信任扩展' : '回滚版本', exact: true }).click();
+    if (!project) await detail.locator('details.extension-detail-technical > summary').click();
+    await detail.getByRole('button', { name: project ? '信任扩展' : '回滚版本', exact: true }).click();
   }
   await twice(page.getByRole('alertdialog').or(page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: method === 'removeExtension' ? '卸载扩展？' : project ? '信任扩展？' : '回滚扩展版本？', exact: true }) })).getByRole('button', { name: method === 'removeExtension' ? '卸载扩展' : project ? '信任并启用' : '回滚版本', exact: true }));
 }
@@ -50,7 +53,7 @@ async function capture(name, dark = false) {
   if (dark) await page.setViewportSize({ width: 600, height: 640 });
   await settle();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
-  const rows = await page.locator('.installed-extension-row').evaluateAll(rows => rows.map(row => row.scrollWidth <= row.clientWidth + 1)); assert.ok(rows.every(Boolean));
+  const rows = await page.locator('.installed-extension-card').evaluateAll(rows => rows.map(row => row.scrollWidth <= row.clientWidth + 1)); assert.ok(rows.length && rows.every(Boolean));
   await page.screenshot({ path: path.join(output, `${name}.png`), animations: 'disabled' }); result.screenshots.push(name);
 }
 try {
@@ -59,8 +62,13 @@ try {
     await fresh(); await qa('hold', method); await start(method);
     await page.waitForFunction(method => window.__extensionMutationQa.pending(method) === 1, method);
     assert.equal(await count(method), 1, 'same-tick actions submit one mutation');
-    await qa('release', method); await closeDetail(); await refresh().waitFor();
-    assert.equal(await page.locator('.installed-extension-row').getByRole('switch').first().isDisabled(), true, 'pending receipt prevents a second mutation');
+    await qa('release', method);
+    if (method === 'removeExtension') {
+      await page.locator('.extension-detail-dialog').waitFor({ state: 'detached' });
+      await page.locator('.installed-extension-section article button').first().click();
+    }
+    await refresh().waitFor();
+    assert.equal(await page.locator('.extension-detail-dialog').getByRole('switch').isDisabled(), true, 'pending receipt prevents a second mutation');
     await capture(`${index + 1}-committed-${method}`, index % 2 === 1);
     await qa('hold', 'refreshExtensionMutation'); await qa('fail', 'refreshExtensionMutation'); await twice(refresh());
     await page.waitForFunction(() => window.__extensionMutationQa.pending('refreshExtensionMutation') === 1);
@@ -70,6 +78,7 @@ try {
     await qa('fail', 'settings'); await refresh().click(); await page.getByText(/QA settings 读取失败/).waitFor();
     assert.equal(await count('refreshExtensionMutation'), 2); await refresh().click(); await refresh().waitFor({ state: 'detached' });
     assert.equal(await count('refreshExtensionMutation'), 2, 'ready receipt does not repeat recovery side effects');
+    await closeDetail();
     assert.equal(await count(method), 1); assert.equal(await count('disposeExtensionMutationRecovery'), 1);
     await page.getByRole('button', { name: '返回对话', exact: true }).click(); assert.equal(await composerValue(composer()), draft);
     result.checks.push(`${method}: committed error, synchronous lock, failed recovery then ready, failed current snapshot read retries without mutation/recovery repeat, draft retained`);

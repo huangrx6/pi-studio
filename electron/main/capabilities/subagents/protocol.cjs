@@ -13,7 +13,9 @@ const {
   reactivateManagedWorktree,
 } = require('./worktrees.cjs');
 
-const { assignAvatar } = require('./avatars.cjs');
+const { assignAvatar, legacyIds } = require('./avatars.cjs');
+const { requestedProfile } = require('./profiles.cjs');
+const { runDefaults, assertBudgetAvailable, refreshBackgroundRole } = require('./role-runtime.cjs');
 const contracts = new WeakMap();
 const MAX_REPORTED_ANSWERS = 64;
 const MAX_SUPERVISOR_REQUESTS = 200;
@@ -89,7 +91,7 @@ function createProtocol(durable) {
       const agents = {};
       for (const [name, agent] of Object.entries(value.agents)) {
         // Snapshot-only upgrades can replay before the next write.
-        const avatarId = assignAvatar(agents, agent.conversationId, count => agent.conversationId % count);
+        const avatarId = assignAvatar(agents, agent.conversationId, count => agent.conversationId % count, legacyIds);
         agents[name] = { ...agent, avatarId };
       }
       return { ...value, agents };
@@ -174,6 +176,13 @@ function createProtocol(durable) {
           report = `[subagent ${name} is unavailable] The child conversation no longer exists.`;
         } else {
           try {
+            if (reporter.input.refreshProfileId && !await runtime.memo('role-prepared', context)) {
+              const profile = requestedProfile(reporter.input.refreshProfileId);
+              const parentAgent = await runtime.agent(context);
+              const defaults = runDefaults(parentAgent.cwd, profile);
+              await refreshBackgroundRole(durable, runtime, child, parentAgent, defaults, profile, ChildContext, context);
+              await runtime.memo('role-prepared', true, context);
+            }
             await reactivateManagedWorktree(worktreeId);
             const submission = await child.submit({
               type: 'input',
@@ -367,20 +376,27 @@ async function createReporter({
   followUp,
   now,
   maximum,
+  refreshProfile = false,
   worktreeId = '',
 }) {
   const protocol = createProtocol(durable);
   const registry = await tx.doc(protocol.Subagents, parentConversationId);
   const existing = (Object.hasOwn(registry.reporters, requestKey) ? registry.reporters[requestKey] : undefined);
   if (existing) return existing;
-  if (Object.values(registry.reporters).filter((item) => item?.active === true).length >= maximum) {
-    throw new Error(`后台子智能体已达到并发上限 ${maximum}`);
+  const agent = Object.hasOwn(registry.agents, name) ? registry.agents[name] : undefined;
+  const profile = agent?.profileId ? requestedProfile(agent.profileId) : null;
+  const roleLimit = profile?.runtimeOverrides.maxConcurrent;
+  const active = Object.values(registry.reporters).filter(item => item?.active &&
+    (roleLimit === undefined || registry.agents[item.name]?.profileId === profile.id));
+  if (active.length >= (roleLimit ?? maximum)) {
+    throw new Error(`后台子智能体已达到并发上限 ${roleLimit ?? maximum}`);
   }
   const taskId = await tx.createTask(protocol.Reporter, {
     name,
     conversationId,
     message,
     followUp: Boolean(followUp),
+    ...(refreshProfile && profile ? { refreshProfileId: profile.id } : {}),
     requestKey,
     ...(worktreeId ? { worktreeId } : {}),
   }, { ownership: { kind: 'conversation' }, background: true });
@@ -388,6 +404,7 @@ async function createReporter({
     taskId,
     requestKey,
     name,
+    ...(profile?.runtimeOverrides.waitTimeoutMs !== undefined ? { waitTimeoutMs: profile.runtimeOverrides.waitTimeoutMs } : {}),
     active: true,
     status: 'running',
     createdAt: now,
@@ -395,7 +412,6 @@ async function createReporter({
   };
   registry.reporters[requestKey] = record;
   pruneReporterRegistrations(registry);
-  const agent = (Object.hasOwn(registry.agents, name) ? registry.agents[name] : undefined);
   if (agent) {
     agent.lastReporterTaskId = taskId;
     agent.updatedAt = now;
@@ -404,7 +420,7 @@ async function createReporter({
 }
 
 /** Check and mark the reply in the same commit that creates its reporter. */
-async function queueSupervisorReply({ tx, durable, parentConversationId, replyTo, message, now, maximum, childConversationId }) {
+async function queueSupervisorReply({ tx, durable, parentConversationId, replyTo, message, now, maximum, childConversationId, cwd }) {
   const protocol = createProtocol(durable);
   const registry = await tx.doc(protocol.Subagents, parentConversationId);
   const current = Object.hasOwn(registry.supervisorRequests, replyTo) ? registry.supervisorRequests[replyTo] : undefined;
@@ -417,12 +433,18 @@ async function queueSupervisorReply({ tx, durable, parentConversationId, replyTo
   const requestKey = `supervisor-reply:${replyTo}`;
   // Even if the bounded reporter index has been pruned, never send the same reply twice.
   if (current.status === 'replied') return { taskId: current.reporterTaskId || registry.reporters[requestKey]?.taskId || 0 };
+  if (agent.profileId) {
+    const profile = requestedProfile(agent.profileId);
+    const defaults = runDefaults(cwd, profile);
+    if (!defaults.supervisorEnabled) throw new Error('此角色已关闭联系主智能体');
+    assertBudgetAvailable(parentConversationId, defaults, registry, profile);
+  }
   const reporter = await createReporter({
     tx, durable, parentConversationId, requestKey, name: current.childName,
     conversationId: current.childConversationId,
     message: [`[supervisor reply to ${current.childName}]`, message,
       'Continue the task using this decision. Ask again only if a different decision is required.'].join('\n'),
-    followUp: true, now, maximum,
+    followUp: true, now, maximum, refreshProfile: true,
     worktreeId: agent.worktreeId || '',
   });
   current.status = 'replied';

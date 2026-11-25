@@ -1,6 +1,7 @@
 import { forwardRef, useImperativeHandle, useLayoutEffect, useMemo, useRef } from 'react';
 import type { ClipboardEventHandler, HTMLAttributes, KeyboardEvent } from 'react';
 import { ReferenceChip } from './ReferenceChip';
+import { useSubagentProfiles } from '../subagents/useSubagentProfiles';
 import { splitComposerText } from './references';
 import { editorSelection, readEditorText, setEditorSelection } from './composer-editor-dom';
 
@@ -8,6 +9,7 @@ export type ComposerEditorHandle = {
   focus: (options?: FocusOptions) => void;
   setSelectionRange: (start: number, end: number) => void;
   replaceSelection: (text: string) => void;
+  replaceText: (text: string, caret: number) => void;
   readonly value: string;
   readonly selectionStart: number;
   readonly selectionEnd: number;
@@ -18,6 +20,7 @@ type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange'> & {
   scope: string;
   commandNames: ReadonlySet<string>;
   placeholder: string;
+  readOnly?: boolean;
   onChange: (value: string, cursor: number) => void;
   onPaste?: ClipboardEventHandler<HTMLDivElement>;
 };
@@ -26,7 +29,7 @@ type Snapshot = { value: string; selection: [number, number] };
 /** Native editable text with atomic reference chips, serialized as plain prompt text. */
 export const ComposerEditor = forwardRef<ComposerEditorHandle, Props>(function ComposerEditor({
   value, scope, commandNames, placeholder, onChange, onKeyDown, onPaste,
-  onCompositionStart, onCompositionEnd, onBlur, className = '', ...props
+  onCompositionStart, onCompositionEnd, onBlur, readOnly = false, className = '', ...props
 }, forwardedRef) {
   const root = useRef<HTMLDivElement>(null);
   const template = useRef<HTMLDivElement>(null);
@@ -37,6 +40,9 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, Props>(function C
   const history = useRef<{ undo: Snapshot[]; redo: Snapshot[] }>({ undo: [], redo: [] });
   const beforeInput = useRef<Snapshot | null>(null);
   const segments = useMemo(() => splitComposerText(value, commandNames), [value, commandNames]);
+  const hasRole = segments.some(segment => segment.kind === 'token' && segment.tokenKind === 'agent');
+  const { rows: profiles } = useSubagentProfiles(hasRole);
+  const paintedProfiles = useRef(profiles);
 
   function remember(snapshot: Snapshot) {
     history.current.undo.push(snapshot);
@@ -68,10 +74,11 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, Props>(function C
       }
     }
     const scrollTop = root.current.scrollTop;
-    if (!shapeMatches) {
+    if (!shapeMatches || (hasRole && paintedProfiles.current !== profiles)) {
       root.current.replaceChildren(...Array.from(template.current.childNodes, node => node.cloneNode(true)));
       root.current.scrollTop = scrollTop;
     }
+    paintedProfiles.current = profiles;
     if (selection) {
       setEditorSelection(root.current, ...selection);
       keepCaretVisible(selection);
@@ -121,7 +128,7 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, Props>(function C
     const selection = pendingSelection.current || (focused && root.current ? editorSelection(root.current) : undefined);
     paint(focused ? selection || undefined : undefined);
     pendingSelection.current = null;
-  }, [value, scope, commandNames]);
+  }, [value, scope, commandNames, profiles]);
 
   function commit(next: string, selection: [number, number], snapshot?: Snapshot) {
     if (next !== current.current) {
@@ -136,6 +143,7 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, Props>(function C
   }
 
   function replaceSelection(text: string) {
+    if (readOnly) return;
     const node = root.current;
     if (!node) return;
     const [start, end] = editorSelection(node);
@@ -158,12 +166,18 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, Props>(function C
     focus: options => root.current?.focus(options),
     setSelectionRange: (start, end) => { if (root.current) setEditorSelection(root.current, start, end); },
     replaceSelection,
+    replaceText(text, caret) {
+      const node = root.current;
+      if (!node || readOnly) return;
+      commit(text, [caret, caret], { value: current.current, selection: editorSelection(node) });
+    },
     get value() { return current.current; },
     get selectionStart() { return root.current ? editorSelection(root.current)[0] : 0; },
     get selectionEnd() { return root.current ? editorSelection(root.current)[1] : 0; },
   }));
 
   function handleKey(event: KeyboardEvent<HTMLDivElement>) {
+    if (readOnly) return;
     onKeyDown?.(event);
     if (event.defaultPrevented || composing.current || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
     if ((event.metaKey || event.ctrlKey) && !event.altKey && ['z', 'y'].includes(event.key.toLowerCase())) {
@@ -192,12 +206,17 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, Props>(function C
   return <>
     {/* React owns this inert template; the browser owns the editable DOM, including IME. */}
     <div ref={template} hidden aria-hidden="true">
-      {segments.map((segment, index) => segment.kind === 'text' ? segment.text : <ReferenceChip key={index}
-        reference={segment.reference || { kind: 'skill', token: segment.text, label: segment.text.slice(1) }}
-        command={segment.tokenKind === 'command'} />)}
+      {segments.map((segment, index) => {
+        if (segment.kind === 'text') return segment.text;
+        const ref = segment.reference;
+        const role = ref?.kind === 'agent' ? profiles.find(profile => profile.id === ref.profileId) : undefined;
+        const reference = ref || { kind: 'skill' as const, token: segment.text, label: segment.text.slice(1) };
+        return <ReferenceChip key={index} command={segment.tokenKind === 'command'}
+          reference={role ? { ...reference, label: role.name, avatarId: role.avatarId } : reference} />;
+      })}
       {(!value || value.endsWith('\n')) && <br data-editor-tail="true" />}
     </div>
-    <div {...props} ref={root} role="textbox" aria-multiline="true" contentEditable suppressContentEditableWarning
+    <div {...props} ref={root} role="textbox" aria-multiline="true" aria-readonly={readOnly || undefined} contentEditable={!readOnly} suppressContentEditableWarning
       aria-placeholder={placeholder}
       className={`composer-editor ${className}`} data-placeholder={placeholder} data-empty={!value}
       onKeyDown={handleKey}

@@ -28,8 +28,6 @@ body { background: var(--bg); color: var(--text); }
 .model-popover, .composer-picker, .detail-dialog, .settings-dialog,
 .pi-select-menu, .file-actions-menu { background: var(--surface); }
 .settings-empty, .model-menu-row:hover, .model-option:hover, .pi-select-option:hover, .pi-select-option:focus-visible { background: var(--surface-soft); }
-.new-chat { background: var(--surface); border-color: var(--border); box-shadow: none; }
-.new-chat:hover { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent-foreground); }
 .brand-name { color: var(--brand); }
 .nav-row.is-active > svg, .settings-nav-row.is-active > svg { color: var(--accent); }
 .nav-row:hover:not(:disabled), .settings-nav-row:hover, .workspace-row:hover, .session-row:hover, .bottom-row:hover, .panel-tab:hover {
@@ -80,13 +78,6 @@ body { background: var(--bg); color: var(--text); }
 .outline-preview-role::before { background: var(--accent); }
 .extension-toast.is-warning { border-color: var(--warning-border); background: var(--warning-soft); color: var(--warning); }
 ::selection { background: var(--selection); color: var(--selection-text); }
-.todo-dock { background: var(--surface); border-color: var(--border); box-shadow: none; }
-.todo-dock-head:hover { background: var(--surface-soft); }
-.todo-dock-title { color: var(--accent-foreground); }
-.todo-dock-meter i { background: var(--accent); }
-.todo-row.is-active { background: var(--accent-soft); box-shadow: 0 0 0 1px var(--border); color: var(--text); }
-.todo-row.is-active .todo-row-icon { color: var(--accent); }
-.todo-row.is-complete .todo-row-icon { color: var(--success); }
 .detail-icon, .resource-icon { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-border); }
 .provider-icon { color: var(--muted); background: var(--surface-soft); border-color: var(--border); }
 
@@ -164,6 +155,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 
 /* Shared anchored surfaces: neutral chrome, compact native typography. */
 .popover-surface { border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); color: var(--text); box-shadow: var(--shadow-float); font: var(--text-sm)/var(--leading-normal) var(--font); letter-spacing: normal; }
+.popover-surface[popover] { position: fixed; inset: auto; margin: 0; }
 .popover-heading { display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 10px 12px 8px 16px; }
 .popover-title { flex: 1; min-width: 0; font-size: var(--text-sm); font-weight: var(--weight-semibold); overflow-wrap: anywhere; }
 .popover-close { display: grid; place-items: center; width: 26px; height: 26px; flex: none; padding: 0; color: var(--faint); border-radius: var(--radius-tag); }
@@ -236,6 +228,12 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .confirm-overlay { position: fixed; inset: 0; z-index: 320; display: grid; place-items: center; padding: 24px; background: var(--scrim); }
 .confirm-card { display: flex; width: min(560px, 100%); max-height: min(86vh, 760px); min-width: 0; flex-direction: column; overflow: hidden; padding: 18px; border: 1px solid var(--border-strong); border-radius: var(--radius-card); background: var(--overlay-surface); box-shadow: var(--shadow-dialog); outline: none; }
 .confirm-card.is-action { width: min(430px, 100%); }
+.confirm-card.is-action.is-delete .confirm-icon,
+.confirm-card.is-action.is-discard .confirm-icon,
+.confirm-card.is-action.is-risk .confirm-icon { background: var(--error-soft); color: var(--error); }
+.confirm-card.is-action.is-save .confirm-icon { background: var(--accent-soft); color: var(--accent); }
+.confirm-card.is-action .confirm-text { color: var(--muted); }
+.confirm-card.is-action .confirm-heading h2 { font-size: var(--text-md); }
 .confirm-head { display: flex; min-width: 0; flex: none; align-items: center; gap: 10px; }
 .confirm-icon { display: grid; width: 28px; height: 28px; flex: none; place-items: center; border-radius: var(--radius-control); background: var(--surface-soft); color: var(--muted); }
 .confirm-icon svg { width: var(--icon-md); height: var(--icon-md); }
@@ -253,17 +251,30 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .confirm-token.is-flag { color: var(--syntax-function); }
 .confirm-token.is-path { color: var(--syntax-string); }
 .confirm-token.is-arg { color: var(--text); }
-.confirm-target { display: flex; min-width: 0; align-items: flex-start; gap: 8px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-soft); }
+.confirm-target { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-soft); }
 .confirm-tool { flex: none; padding: 1px 7px; border-radius: var(--radius-tag); background: var(--accent-soft); color: var(--accent-foreground); font: var(--text-xs) var(--mono); text-transform: lowercase; }
 .confirm-target code { min-width: 0; color: var(--text); font: var(--text-sm)/var(--leading-relaxed) var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
 .confirm-check { display: flex; align-items: center; gap: 9px; margin-top: 16px; color: var(--text); font-size: var(--text-sm); cursor: pointer; }
 .confirm-check input { width: 16px; height: 16px; accent-color: var(--accent); }
-.confirm-actions { display: flex; min-width: 0; flex: none; justify-content: flex-end; gap: var(--space-2); margin-top: 18px; }
-.confirm-cancel, .confirm-accept { min-width: 76px; height: 34px; padding: 0 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--text); font-size: var(--text-sm); }
+.confirm-actions { display: flex; min-width: 0; flex: none; justify-content: flex-end; gap: var(--space-2); margin-top: var(--settings-group-gap); }
+.confirm-cancel, .confirm-accept { min-width: 80px; min-height: var(--settings-control-height); height: auto; padding: 0 var(--space-4); border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--text); font: var(--settings-label-font); }
 .confirm-cancel:hover { background: var(--surface-hover); }
 .confirm-accept { border-color: var(--button-bg); background: var(--button-bg); color: var(--on-button); }
 .confirm-accept:hover:not(:disabled) { border-color: var(--button-hover); background: var(--button-hover); }
-.confirm-accept.is-danger { border-color: var(--error); background: var(--error); color: var(--bg); }
+.confirm-accept.is-danger {
+  border-color: var(--error);
+  background: var(--error);
+  color: var(--bg);
+}
+.confirm-accept.is-danger:hover:not(:disabled) {
+  border-color: var(--error-button-hover);
+  background: var(--error-button-hover);
+  color: var(--bg);
+}
+.confirm-accept.is-danger:active:not(:disabled) {
+  border-color: var(--error-button-active);
+  background: var(--error-button-active);
+}
 .confirm-accept:disabled { opacity: .45; cursor: not-allowed; }
 
 .compaction-banner { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; padding: 7px 10px; border: 1px solid var(--accent-border); border-radius: var(--radius-control); background: var(--accent-soft); color: var(--accent-foreground); font-size: var(--text-sm); }
@@ -386,7 +397,6 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .brand .brand-mark { width: 26px; height: 26px; }
 .chat-header { border-bottom: 0; }
 .panel-tabbar { border-bottom: 0; }
-.chat-tabs { height: var(--toolbar-height); min-height: var(--toolbar-height); max-height: var(--toolbar-height); flex: none; border-bottom-color: var(--border); }
 .changes-view { container-type: inline-size; }
 .changes-toolbar { flex: none; }
 @container (max-width: 480px) {

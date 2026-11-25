@@ -1,0 +1,1166 @@
+{
+  "schemaVersion": 1,
+  "algorithm": "sha256",
+  "files": [
+    {
+      "path": "diagram-authoring.mjs",
+      "sha256": "ee5ed47a5c9e04552708b892734746eccb334b6c5392d4e6d178798c58027d03",
+      "size": 7160
+    },
+    {
+      "path": "diagram.mjs",
+      "sha256": "7d231598538cca49d21c18f9ad07161455cf3c9b66bb90281f70220362daeac4",
+      "size": 9001
+    },
+    {
+      "path": "extension.mjs",
+      "sha256": "b215dd2946872926000f9d31bc2e65b1989bc8964991ddfebc3ac0c1ff759aea",
+      "size": 10697
+    },
+    {
+      "path": "pi-studio.extension.json",
+      "sha256": "8f83221b246d9455d73e1f46dc1b00ff28f0ae98b7eb1c87b242e6b1b9000101",
+      "size": 1248
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/manifest.json",
+      "sha256": "25cba318304c47c2cfb4806f4006534f1178b6d6e9415892f6bb2323c49c98f5",
+      "size": 8040
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/README.md",
+      "sha256": "7b361b88db72a25dc8fd866b4ba9df15d50613c0c562670966d2611707b58149",
+      "size": 2402
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/module-dependency/candidate.diagram.json",
+      "sha256": "702b8bd737b4d0e762fd3d325f55cc368dc044a10c00c09814e382e98cd0f132",
+      "size": 548
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/module-dependency/receipt.json",
+      "sha256": "a749d3472ee4d1f8aea4498067d9120881ab0552d5efc9943d42e13a029a45c1",
+      "size": 1328
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/module-dependency/render.excalidraw",
+      "sha256": "b953b55b848c775b0a89d3c2c0fd7ae3fcfc96b499dd98ca91f9cbe1f5b94457",
+      "size": 15694
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/module-dependency/run.json",
+      "sha256": "4dfd9421fc87e0ec149d9213d40046c4c0af306d2770ab10ef0e1c31c397ca40",
+      "size": 441
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/module-dependency/verify.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/order-state/candidate.diagram.json",
+      "sha256": "893c3cb86ccb73419cb7d1e6b641c66bd38d9d3961d300645c7c260eed16b5e6",
+      "size": 842
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/order-state/receipt.json",
+      "sha256": "751da6b52dfc9b80fb12a2071db64ac62e4973874d89482424da57acb14f4f77",
+      "size": 1323
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/order-state/render.excalidraw",
+      "sha256": "2219f8083800fe5553681c609f2c3b466a3d0c6a52cefaff31e490382bc30e96",
+      "size": 22130
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/order-state/run.json",
+      "sha256": "4dfd9421fc87e0ec149d9213d40046c4c0af306d2770ab10ef0e1c31c397ca40",
+      "size": 441
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/order-state/verify.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/release-flow/candidate.diagram.json",
+      "sha256": "7b5b4cc8540f190df6abb1034515e5ea8af1315f9d877c471f1bf2dce3055730",
+      "size": 779
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/release-flow/receipt.json",
+      "sha256": "082ae1b27835d75ee88d533d0e96989718e21c07cd33c60d1792930593793d5c",
+      "size": 1323
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/release-flow/render.excalidraw",
+      "sha256": "4b90bf43cfd8e182f92e823389c2650e1e885bd4ebe29ee0bec21f130e2db8a4",
+      "size": 19727
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/release-flow/run.json",
+      "sha256": "4dfd9421fc87e0ec149d9213d40046c4c0af306d2770ab10ef0e1c31c397ca40",
+      "size": 441
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/release-flow/verify.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/results.jsonl",
+      "sha256": "a6741f0440809e089b6cc8b988527f83bd524ef63e47f1e1ed1bbba0b99bb920",
+      "size": 1779
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/RESULTS.md",
+      "sha256": "fd3963c7313a6720738172f13f054ed4385a60aafc61ed416152149ef77a2956",
+      "size": 2154
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/service-network/candidate.diagram.json",
+      "sha256": "6570829321f3a0704885e29e2e15cf4fdcfaae9a3bdec677a64cb23336185d3f",
+      "size": 958
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/service-network/receipt.json",
+      "sha256": "18599726cabaee988aef56730940cb8eb4d5690064e95e5aaa82f41031bfa7bf",
+      "size": 1326
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/service-network/render.excalidraw",
+      "sha256": "87f9064b89f568ec4741183a28f97251e54e3bb4b3aa87d4c447aac7da8db165",
+      "size": 24624
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/service-network/run.json",
+      "sha256": "4dfd9421fc87e0ec149d9213d40046c4c0af306d2770ab10ef0e1c31c397ca40",
+      "size": 441
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/service-network/verify.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/web-runtime-architecture/candidate.diagram.json",
+      "sha256": "d2dc0a769c92a9b3055ebfd863bb3513159a65297323c1c1fb581dd6ad973d18",
+      "size": 1304
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/web-runtime-architecture/receipt.json",
+      "sha256": "998c1a9a1bdc4fa0345917f4026b752620947d4c2f79de6f7ebf30b13cf0ed37",
+      "size": 1336
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/web-runtime-architecture/render.excalidraw",
+      "sha256": "004f8ca38caefdeaf81177cf40a6d9fda6f18c7737a8a45cf841efc85cadb4bb",
+      "size": 32821
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/web-runtime-architecture/run.json",
+      "sha256": "4dfd9421fc87e0ec149d9213d40046c4c0af306d2770ab10ef0e1c31c397ca40",
+      "size": 441
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/web-runtime-architecture/verify.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/verify.py",
+      "sha256": "73e4eabaf36cbbcba93136294139d771ee00a4951c5d75f2c5e40b12d1ec0e66",
+      "size": 9570
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/dev-tools/check_examples.py",
+      "sha256": "13dc7c0ef9179f761ddc830d53e5175508b5bdb4196a4b9dba9e420582b2d3a8",
+      "size": 4892
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/dev-tools/check_render_regressions.py",
+      "sha256": "0af50ed85a0d981c7472d6d3d668a4706532a1a6e1d1acadccd99a20ff2e1cf1",
+      "size": 3531
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/dev-tools/check_render.py",
+      "sha256": "8b7bc5dd0d9a59577fa0f4a64b4fbfb23b6bef602fa5ee9736c763ca8ed87f3e",
+      "size": 11672
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/dev-tools/export_drawio.py",
+      "sha256": "68751ca1f9019dfd83363bd0c8f2c20159689d30bb4866e6c42de5f211bb1ac1",
+      "size": 20777
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/dev-tools/export_excalidraw.py",
+      "sha256": "da1b4a2e6321745123fd6cfe2237ab76f8108bfb547a20bb0cb41218901a609a",
+      "size": 27230
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/dev-tools/export_mermaid.py",
+      "sha256": "aee106129138671b9ba6f31c1347119d7a92b0237d452c25d49325be8293abe3",
+      "size": 8748
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/dev-tools/preview.py",
+      "sha256": "a069be51bc783eefe8f881e1b484a6862033b469db871d5f9ba1ebcf04f12081",
+      "size": 17620
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/dev-tools/render_probe.js",
+      "sha256": "76f994008fd3c48bc47453e4c989aff5681459af5b008282a461f482f2a8a826",
+      "size": 6918
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/dev-tools/sync_exports.py",
+      "sha256": "395d05af8d94765ad3baa58d96d560dc81f1ee8fc670489db8c12528df806237",
+      "size": 9465
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/evals/evals.json",
+      "sha256": "e100ff1cca8d89a9d9fb57fa170e9f8c2dd579d0d822821bfb7cda2e2e5d9196",
+      "size": 18009
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/evals/triggers.json",
+      "sha256": "8642caf15c77ab35a6cc031ab0aa5e1dcc5b89ae5de961c2a9c0c31164bbc84c",
+      "size": 1989
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/architecture/diagram.drawio",
+      "sha256": "3cbde37a5c37f929c33f3e7d373eafa9d0fe1217cf4c88abd47bdf484c0c28f9",
+      "size": 4769
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/architecture/diagram.excalidraw",
+      "sha256": "2ac9833f2188ba5fa4a4bd83886f7e285b28e5a12ea16cacd3ece79681762acb",
+      "size": 16562
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/architecture/drawio.png",
+      "sha256": "4e064b9e264090b263e5c019ec8bb3717bd2db0516a2bc14df8ce07ef455a864",
+      "size": 92576
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/architecture/excalidraw.png",
+      "sha256": "3cf48d87b0674a0d5436ad9878804337ae93376ced8c03506052d7ec87ba40c4",
+      "size": 95786
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/architecture/generation.json",
+      "sha256": "d3fb1c872933d79bb87fd081f989778600491544801e8a50e7dcb9fbce556ec5",
+      "size": 1104
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/architecture/mermaid.mmd",
+      "sha256": "5e8cdc17b13a8c9e9c7c4be65e2c5a666c02600724e25579acbe9bab3f39b9b6",
+      "size": 1774
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/architecture/mermaid.png",
+      "sha256": "1c5efe4dadca07fbe3bd17da19a853746755a1638b46edbf2d65ce6721519c40",
+      "size": 106018
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/architecture/presentation.json",
+      "sha256": "e4c8aa42939ee0279cd072ff4b126b0fb99bac8551abfee3aac0eedc968c9020",
+      "size": 1295
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/architecture/render-excalidraw.json",
+      "sha256": "8b9a6bcad5e6d9d5f66c0c7ef363ec373676b29e9d1c82739bebea0d6c660b42",
+      "size": 285
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/architecture/render.json",
+      "sha256": "50c5e7ade1a5b3be5b3676dbafc6c7300b5f69f9d747d96db0f6b7bbc89a23f8",
+      "size": 263
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/architecture/semantics.json",
+      "sha256": "c26c0bc807e08f9602b738eb5f2ac1aa5cc3e128de95a49f9e28fc9febfeca31",
+      "size": 64
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/architecture/source.diagram.json",
+      "sha256": "c943278cb2a73234b6d8704c4edf882aaeeac1c89cad4d64e74c4e3143e9729f",
+      "size": 1089
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/brand-contrast.json",
+      "sha256": "4f6746617b13f1ecd639e366ae95ed9f4ed7c27f665ea4588f104c406b21c775",
+      "size": 10372
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/brand-drawio-check.json",
+      "sha256": "9d65eee6bac469f1f458a9beb0c7ec9eef9ecf5217bf3c3172d7637ef9bc0eaf",
+      "size": 1059
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/brand-drawio-export.json",
+      "sha256": "7b04f33629b457ebfe02b04e1954ca47ff98be0355ac97526a6253eb3d6da8c0",
+      "size": 527
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/brand-drawio.png",
+      "sha256": "f803b3f3f4fc147d0cab03f6b79ec0bebc23be120af825dddf6c753ea50f3b4f",
+      "size": 61229
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/brand-drawio.svg",
+      "sha256": "e155d121b76653e6842490bfc72c77a274455b81e90e3444aa6e1b8f939c2a3d",
+      "size": 140115
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/brand-excalidraw-check.json",
+      "sha256": "d013cb26b95744e9aded26d88a6182218ead98426978b7d497bde170590162b2",
+      "size": 1070
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/brand-excalidraw-export.json",
+      "sha256": "ad084f600a45184cf5f61f9a37a415b9065e2a4faaa662e3afb3abe37e81984c",
+      "size": 247
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/brand-excalidraw.png",
+      "sha256": "8707a8b964e1da705e22e499b3647093f4caf639502a882c65a122e0d23ede90",
+      "size": 52474
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/brand-excalidraw.svg",
+      "sha256": "32c5748367bc6e725093edf90df32bf8019c638f8db81dc2c7bb6f5c23a39afa",
+      "size": 19439
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/brand.colors.json",
+      "sha256": "8740ed01f9fed9fa8fc0764988c11daeec358e21e40d5279e677ee920436cfcd",
+      "size": 540
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/brand.drawio",
+      "sha256": "f536605194f345f4109d9f0b41567ab06ea135402041dec06390b58dfa81e9ca",
+      "size": 4685
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/brand.excalidraw",
+      "sha256": "33c3a970ed1b2d9af2fc174c304dcee259da283a1387437da6feeacae3f56ebf",
+      "size": 18470
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/comparison.png",
+      "sha256": "71bdb7a7e928bf1aa9dad4f8a4a07c2b18dd3c9a95d3ad159a595ec161c4b21a",
+      "size": 241181
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark-contrast.json",
+      "sha256": "62c4fd77368540ecf14bfcc8a868da23555122291f40f4c69c708871a8d3511d",
+      "size": 9686
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark-drawio-check.json",
+      "sha256": "53b2195bd22febf69b6422315763116a4ef9606f031c36194c626ea5a76242f8",
+      "size": 1059
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark-drawio-export.json",
+      "sha256": "f178cad726263e4a69340593fde966d96b3fb14ac1d31e79a587470cf9eec4a8",
+      "size": 539
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark-drawio.png",
+      "sha256": "a907febbd8dd8d79f2c0186e9a240631d7355022f97053c9afa91e807d37147e",
+      "size": 60379
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark-drawio.svg",
+      "sha256": "71a713432ef94f4d5cb5d59ef1f4ee03477ca63278d09d7b53e3cb33b5fc7d86",
+      "size": 136417
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark-excalidraw-check.json",
+      "sha256": "c2d4a791086d98dfc512715e9689afeeb3feb4e29b72718739e3744ca9d0efd3",
+      "size": 1070
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark-excalidraw-export.json",
+      "sha256": "1391c21ef733a05e258164e4e4320c61eca91256af3fd5c946442085ce1de248",
+      "size": 348
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark-excalidraw.png",
+      "sha256": "0e563d05c6d0c5f2072bf805ebe73e53ce02928b932528f4b7850947a1f630d5",
+      "size": 52524
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark-excalidraw.svg",
+      "sha256": "8291f3cd7b797913b8a925723b28d7e1186dd70cb17dbf131a3b8fffff6115b2",
+      "size": 19427
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark.colors.json",
+      "sha256": "9fc033a4c494b196c8cbfc2a1ac3d834dc278e5cafdc30b7c9b440e5f4b03b27",
+      "size": 510
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark.drawio",
+      "sha256": "da81ee1e0c57cdf3b941f7b7e7d283cd51105cb45d11f033e818012ac2a821a3",
+      "size": 4685
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark.excalidraw",
+      "sha256": "6bc85c6fd23cb90e344e0f8a2e641686e9b187823d8df81a2abc265b088e6b33",
+      "size": 18470
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/gallery.html",
+      "sha256": "1ba929ce5600dbff9b74c15fce5a5c62fde75763df3d7b9cef0ea4a1ae722d09",
+      "size": 2021
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/README.md",
+      "sha256": "5dd599d61735412f1d62926feeb4f4d8c1358c90547abfed75b6e79f58f0424e",
+      "size": 3196
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/source.diagram.json",
+      "sha256": "4f9a1568017758b03f08972cf2bf4c53a899d91242e342526ca5db8fd3f037eb",
+      "size": 1100
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/website-contrast.json",
+      "sha256": "b0415db6f3aa8d0f76dea1d44c5e5ed3c0bec0b237221df2072ff7a8b6251107",
+      "size": 10779
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/website-drawio-check.json",
+      "sha256": "1d5be9b3019b9b8cadb07db25c7026ffe4c977bd4247b0942f66d4399231e6fc",
+      "size": 1059
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/website-drawio-export.json",
+      "sha256": "82249afe1d7baed0163603158487abd39071328f86a9c73dec4dfe63da767d97",
+      "size": 531
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/website-drawio.png",
+      "sha256": "3b111b10dcdbad52d15d6678c80130065361ef37246bb235a15139f6315ca15d",
+      "size": 57884
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/website-drawio.svg",
+      "sha256": "b9da05fecab12d4ca868086b207b1656655f0644e133d739d6aa2020f0e6a23c",
+      "size": 139792
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/website-excalidraw-check.json",
+      "sha256": "722db2ece904b3dfe7c3808fbf61f2dd27c43e8c62da7d0c24dbb9870a9ee5e9",
+      "size": 1070
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/website-excalidraw-export.json",
+      "sha256": "9261eb16fb62c1e1895eea2a809ba8c3218fe33e76dc6525b3718711a3a51e2e",
+      "size": 340
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/website-excalidraw.png",
+      "sha256": "c52a5468ad0898173af35e2f4edea9e6fc92c6401c4125418e6ddfea59cee1e2",
+      "size": 51740
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/website-excalidraw.svg",
+      "sha256": "3223152a2a127dfb60e8b5f0aa1d2681aec70d51f0737b278fc25fcaf2f3d8d4",
+      "size": 19427
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/website.colors.json",
+      "sha256": "4b6094318557bfc0f946cebc4e0f3b81cd085327f9e0e9558b6ee51d7eef1bfb",
+      "size": 516
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/website.drawio",
+      "sha256": "5c654af09ed86dafa63149922f973db51e5b7d757aecb1541f8c58bd295815b5",
+      "size": 4685
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/colors/website.excalidraw",
+      "sha256": "8c5ad58efc9257f9c763d2ed42940ae3dec3ea9ca896e0dd6b31b08dc0c45622",
+      "size": 18470
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/dependency/diagram.drawio",
+      "sha256": "8cdf9554a9b54013fa628603b6aef5190c07701ea5282944cb11c76a54361763",
+      "size": 4685
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/dependency/diagram.excalidraw",
+      "sha256": "aefa18a41a70923347026b2f2995092bca67448660636e680255d49932d33db0",
+      "size": 17158
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/dependency/drawio.png",
+      "sha256": "b88f163aaaaa2fde1cd68d2a4549857ed4f094ada8eaddcb67361de9d311c19d",
+      "size": 85048
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/dependency/excalidraw.png",
+      "sha256": "af1e613576e83f6b0f62c7b058ec527df4290ba5525ae1c01e01790bfacca433",
+      "size": 93307
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/dependency/generation.json",
+      "sha256": "3bcea6fc503da505686b426c600d89d2c899b28a2ac05eee9f0d7b8ac962e757",
+      "size": 1100
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/dependency/presentation.json",
+      "sha256": "621ee4614ec80a675e5a86ca13dc286dc54f4f9ffc3200a6be31664dddaf95c0",
+      "size": 1290
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/dependency/render-excalidraw.json",
+      "sha256": "17ef80a3a14d2aa5b477a6e24cead9c2e02d3fc527cc37833cc4ac091fbee02d",
+      "size": 283
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/dependency/render.json",
+      "sha256": "396de38a67c227e7d182139335b8db07d99c4e9256cb6e7342ae9b2ac4bf62f9",
+      "size": 261
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/dependency/semantics.json",
+      "sha256": "c26c0bc807e08f9602b738eb5f2ac1aa5cc3e128de95a49f9e28fc9febfeca31",
+      "size": 64
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/dependency/source.diagram.json",
+      "sha256": "de9e08e7877e02568f7190ee0d9b7570f870b96f4fb602f2528f88d174427cba",
+      "size": 1138
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/flow/diagram.drawio",
+      "sha256": "11b8c9f075858c9ff0b87286bb766d6ad3f4a723aaea75717686d24fbcac88be",
+      "size": 4190
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/flow/diagram.excalidraw",
+      "sha256": "f3513551aba3eecdf1dbb771685c18558aeda06ee8e028ac5bd671cb410310c3",
+      "size": 14461
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/flow/drawio.png",
+      "sha256": "939e2dfd5d08fe75d93b3e6feb300434ff7aa445b59bd3ff9f9980a2d811fbf7",
+      "size": 103312
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/flow/excalidraw.png",
+      "sha256": "902517d5eeae1225afc556566761ba5ff95132828349e50f499f4d1f5d28398e",
+      "size": 100572
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/flow/generation.json",
+      "sha256": "2bd1be651d97e6c2a30623255a902a6bdb9ea904c8a1d642385ed3f2be20eee0",
+      "size": 1088
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/flow/presentation.json",
+      "sha256": "e0a0932691193782fdf9deebc008f4008bf00111fc9e0bd45e8236dc9eac884c",
+      "size": 1285
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/flow/render-excalidraw.json",
+      "sha256": "e4bac5b91e5c8a819f5ebdb68544b4c92fbc96e9c74b12679e74f83484844ee8",
+      "size": 277
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/flow/render.json",
+      "sha256": "840cd35b55245596ec157004f4e7b0c91ab302ebbd32df975055e857386b2f4a",
+      "size": 256
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/flow/semantics.json",
+      "sha256": "c26c0bc807e08f9602b738eb5f2ac1aa5cc3e128de95a49f9e28fc9febfeca31",
+      "size": 64
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/flow/source.diagram.json",
+      "sha256": "db63de4ac877e29066953652fbde9b0c16724f8ec718b56bae2b9501487cd75d",
+      "size": 939
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/manifest.json",
+      "sha256": "207bdcf37c874d1ad3fbcd85c8596379b3a34dcda35c85f29fd8400ebdf794ab",
+      "size": 36434
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/mindmap/diagram.drawio",
+      "sha256": "c33e4e44e45abbfcb4315bd873a4aedd6b5515217e24f0c9fd7f58d6756e91a5",
+      "size": 4666
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/mindmap/diagram.excalidraw",
+      "sha256": "9fe5d2036076a365a261aa67b7ecb60b5de7b6eca39f367c0c6eccdd1a6e099d",
+      "size": 14479
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/mindmap/drawio.png",
+      "sha256": "eff4cb43d5a0ec9e7cd5fd13ddd271ba8f589ec6fbf3f88cfec607aceb06ad27",
+      "size": 61760
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/mindmap/excalidraw.png",
+      "sha256": "9d680df54738c43d5770409ccdf57b1e0ac05038c11d934b7aaca0eec47d01ea",
+      "size": 86519
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/mindmap/generation.json",
+      "sha256": "7ea4b74f36ed35d2b65c4b0ef38d4d50fea20a4b93606ea001c7f70ffbc6e6a5",
+      "size": 1094
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/mindmap/presentation.json",
+      "sha256": "6ee7ad4cfcc3d6b2e84917f38d5a72ff2a27b9bddc7a357ea1cec1e21988bab7",
+      "size": 1292
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/mindmap/render-excalidraw.json",
+      "sha256": "0702de46bc55d9b1376ff2456afbfd7207f9ffb73e45a7316d4ac00e21deccf7",
+      "size": 280
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/mindmap/render.json",
+      "sha256": "7f430a120a0e7658edd99db4107c8e2eee42a0fb896bcbb41d815c6b1696ad41",
+      "size": 259
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/mindmap/semantics.json",
+      "sha256": "c26c0bc807e08f9602b738eb5f2ac1aa5cc3e128de95a49f9e28fc9febfeca31",
+      "size": 64
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/mindmap/source.diagram.json",
+      "sha256": "ade768cd61ce9ecd5c8882be7510480bda3d7364d63255be09b1655f6ce762f5",
+      "size": 1045
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/network/diagram.drawio",
+      "sha256": "b3047d8b4c02265c5c9aa2592fe61ebd57064f3bdaa9cfaa4addbcb20ce2995c",
+      "size": 5256
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/network/diagram.excalidraw",
+      "sha256": "fb884f798023c49bfb196c9d2e4bfef4b2111b92b2bcc881908d74ed2e1acb34",
+      "size": 20899
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/network/drawio.png",
+      "sha256": "18cb04c98b1367ba0b0877291dd1fb81436bd2a18f21158c18bd150e212e6957",
+      "size": 78755
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/network/excalidraw.png",
+      "sha256": "295cec48cdba3c99798b1f3f3ff4d408d263d77212d69a390a5232aeec7a9aff",
+      "size": 106541
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/network/generation.json",
+      "sha256": "bf62bd580adba788dcd4330fc4af860269fd98c6272541fbb072e1f85a802294",
+      "size": 1094
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/network/presentation.json",
+      "sha256": "31e7cdeb70fbef5940cef06531c5503ff0b3d7d41b9be58ba22971b01c7f9827",
+      "size": 1289
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/network/render-excalidraw.json",
+      "sha256": "7c39496deb498ca5a0c96d235b1a7a7d683c9760afaa9d3ca7b298b50d4a592c",
+      "size": 280
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/network/render.json",
+      "sha256": "de4e278e18af51a1368e3e164ae9d662d08b073dd7468de84ef8d7bfe9c3aa20",
+      "size": 258
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/network/semantics.json",
+      "sha256": "c26c0bc807e08f9602b738eb5f2ac1aa5cc3e128de95a49f9e28fc9febfeca31",
+      "size": 64
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/network/source.diagram.json",
+      "sha256": "e105ac5d4ba920302e723c556b4b53846e61e0aacc7e7d7b479b356344873772",
+      "size": 1176
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/document-drawio-check.json",
+      "sha256": "d956ddc05e961701b9d05788a410373ed94c19a771d02bb9700290419b151a3f",
+      "size": 1058
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/document-drawio-export.json",
+      "sha256": "3f3bef3a09a3da9faf31a2cae953f0b525d9a4dae61f122ee7ae795a3d1253b5",
+      "size": 545
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/document-drawio.png",
+      "sha256": "11c5a355ae918905d9ea99c44a1f0324365bd2fcceeffe3b0d59903f16966f6a",
+      "size": 63945
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/document-drawio.svg",
+      "sha256": "9948b3e5e1c8f3ca5879852e0d4ee5959d8423e00308cb25d55a3850f2354be4",
+      "size": 173069
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/document-excalidraw-check.json",
+      "sha256": "380d850e34b2c20af767e8eb9a13aeffd7f0a2db573601015f9ecb72d27d22f7",
+      "size": 1057
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/document-excalidraw-export.json",
+      "sha256": "a4eb35e36f1c3b636660d9791acaf28dd5e749fb4e560aecf6d69debc9cb8324",
+      "size": 353
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/document-excalidraw.png",
+      "sha256": "2589262593f856b424bc8aeb42840eb87a7736ba512db24e5742d2bdfbd9abd1",
+      "size": 68907
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/document-excalidraw.svg",
+      "sha256": "234855a015bfd41e1c947c7c807314f58c39db79dff767f5d1af0c22a3d21f44",
+      "size": 14860
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/document.drawio",
+      "sha256": "8a0f7a9e53dc3d7964337a998086a7a855dc68a6edd373c03ab2b13ec3f82e6b",
+      "size": 4828
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/document.excalidraw",
+      "sha256": "3d365ab21cb61afd6da413e26eab95e46aa88816c54f9b6065068e119502b8c3",
+      "size": 18067
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/README.md",
+      "sha256": "8b30031d827fe1729c3ddcf8364eed018d8e1645ccdc904ae400a16a54879f32",
+      "size": 2828
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/render-occlusion-regressions.json",
+      "sha256": "de64e1c5dfc3af7ad7d769c41f65279009aca9e4e869ebff0a454659206af0d4",
+      "size": 1190
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/render-regressions.json",
+      "sha256": "50e6b3462374217519364634d2d50b13392f5e1a1e1f5c319b77fee784981d5e",
+      "size": 6043
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/slide-drawio-check.json",
+      "sha256": "fe1baf631fcf0908886522bcad921c7e7d85b669d496dcded6a9cabfcedf1453",
+      "size": 1061
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/slide-drawio-export.json",
+      "sha256": "4115901d26a24fc0189d8643aff119b87772c88bd8134a5da6728173b90aa24e",
+      "size": 539
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/slide-drawio.png",
+      "sha256": "b62168762c63c27a9f8f6e636d10e9bdc983cb6918378a75f365edd08df53fc8",
+      "size": 95693
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/slide-drawio.svg",
+      "sha256": "1a18fc0b0cde2c410e8e8fe2b7aadd4f18b4a95a7e689a566fd8891c8d4d39b1",
+      "size": 258071
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/slide-excalidraw-check.json",
+      "sha256": "15115dc6f09dd112b20152da55159c4ed9ea5c512d85d0bd1f0034fe39542ce8",
+      "size": 1061
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/slide-excalidraw-export.json",
+      "sha256": "a096a98870196d7ef95ad2918e0fc12823298929a0ebee970fdfad528c5e61ba",
+      "size": 436
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/slide-excalidraw.png",
+      "sha256": "28915164289cdffce1cb2c7dcc0da41122449ec58454a5af804596a857b2c31e",
+      "size": 102283
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/slide-excalidraw.svg",
+      "sha256": "78a4775e5b110980235ad0a59346486627f655260251102584c75fe2053aa5ec",
+      "size": 15435
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/slide.drawio",
+      "sha256": "4346bc9d689877df1de5a298cdf0c2555ad701f6dbc73217b5b1234cd024e906",
+      "size": 4830
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/slide.excalidraw",
+      "sha256": "b748501cce9a06d84bfc27092aae709b61638139385a181c2ad17acd3dbd011a",
+      "size": 18046
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/presentation/source.diagram.json",
+      "sha256": "0d2a6adb808c0754de9646749362db473cd1dbe098c43a13e6414bbca791ba1b",
+      "size": 1135
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/README.md",
+      "sha256": "49e65516214d0edf143d5ed78f70e04fdb841edaeb643184f3a12c0aa39cc826",
+      "size": 6392
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/regions/diagram-drawio-check.json",
+      "sha256": "b3f1607343577589327a40e7fb6adcf8c3d22343b08b4ee99cb964a02134016e",
+      "size": 1058
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/regions/diagram-drawio-export.json",
+      "sha256": "cce369493fc11a428fc9558120a1e806e93501516130268d887d28455d3c7168",
+      "size": 533
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/regions/diagram-drawio.png",
+      "sha256": "601a05281078573d08ae5e957d01534f5abf486f1cc8ee2a4cfb68dee31c0987",
+      "size": 56201
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/regions/diagram-drawio.svg",
+      "sha256": "a836fdc1d2d21e78d7fe04ef8682ee572113122efbdbf66df2c31ed9d8714a0f",
+      "size": 174833
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/regions/diagram-excalidraw-check.json",
+      "sha256": "55bbce34383f972d78108a2bdce01db2211490c27b4524de6ff9e8ab7777001d",
+      "size": 1064
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/regions/diagram-excalidraw-export.json",
+      "sha256": "9b53b88b9c1a5ccd569dcec1e7fc6d3baaa4b9a36c20db52208a7851b98c74cb",
+      "size": 341
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/regions/diagram-excalidraw.png",
+      "sha256": "bf95743c23b98d0411746416c1fe132a767e132c574d1564c06e757a7c7c94cd",
+      "size": 61665
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/regions/diagram-excalidraw.svg",
+      "sha256": "3ab6f92ba31c2c15415044249c4f6c1b2a7754c0d242c015b913e5f686eb14fb",
+      "size": 16007
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/regions/diagram.drawio",
+      "sha256": "719fca6635735bdf9fc86bff9ebf8ab39fedaf81ac9bb89a77314abd3b4e72b5",
+      "size": 5797
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/regions/diagram.excalidraw",
+      "sha256": "1cf586ff9b6c3fcf032b15031e39309ed4d7887019b0ffeccbe0d7866e261d58",
+      "size": 18759
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/regions/project.colors.json",
+      "sha256": "238257dc3897397e8728bfd8a8bc4537e51b6bf7b2b16f8709898f55412b152b",
+      "size": 545
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/regions/README.md",
+      "sha256": "8cb08bc01db038f69e686a3c7ee31fa69b7506007b81a61ea9afdbc86963e32c",
+      "size": 864
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/regions/source.diagram.json",
+      "sha256": "16f7cc0d40a8f8253c4a0a606228cb77c4f28bec8ef2fc72bc5c5d75304682ed",
+      "size": 1068
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/state/diagram.drawio",
+      "sha256": "d239deb96c62336cde81202a7e9ec842093b650b45f0da4ab60d2ef3299b1ae1",
+      "size": 4455
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/state/diagram.excalidraw",
+      "sha256": "59e52e9aebfa9bf509f5ba2fec3b9a96f1e74542568a9b3b63b2b077c9f3b9e1",
+      "size": 16428
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/state/drawio.png",
+      "sha256": "0c519ade3b743a89e91522aafa256e0c22fca418c1d5152e635e842323de4f50",
+      "size": 48588
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/state/excalidraw.png",
+      "sha256": "8edd0ae8f08e2bcca5e8474439f609738adfa2da5188681ef353b8c43612ca89",
+      "size": 52949
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/state/generation.json",
+      "sha256": "1cf69fe826afa636286e229c54342b61d2c7df6facbe37b4c0bb7c32705912db",
+      "size": 1090
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/state/presentation.json",
+      "sha256": "7bdaaf83c6e6e267fd41fa0b89b59a7f3ed87b9d89f27f662c00355c55c3990f",
+      "size": 1284
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/state/render-excalidraw.json",
+      "sha256": "7644d9b8813717edef1bcfc18793311a9ed9aa8c2b875c5c00a3f1c458e1f217",
+      "size": 278
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/state/render.json",
+      "sha256": "dfc0d096ba10aa706be59f5d37db6a6935e164e71547dc64928e7cc859bda1be",
+      "size": 256
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/state/semantics.json",
+      "sha256": "c26c0bc807e08f9602b738eb5f2ac1aa5cc3e128de95a49f9e28fc9febfeca31",
+      "size": 64
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/examples/state/source.diagram.json",
+      "sha256": "64323a03e30f969e1cc4c870410df53a4bea7c697156bacc343ff6c37e1cbcab",
+      "size": 1046
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/LICENSE",
+      "sha256": "eda96b641402fc398cc5d79005948fd0c7fb84a0b379a51b5dc692f7548f37c2",
+      "size": 1082
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/README.md",
+      "sha256": "d8c0dbcdae403c0e26259802a6fa8ee31c666d80cec12bcce8f4b202bd9f21f9",
+      "size": 9467
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/references/color-design.md",
+      "sha256": "353d7c7f51d6a66018fb1dd8ce5f3e37281d80268dbb96740d554e54d32cec27",
+      "size": 8263
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/references/decision-gates.md",
+      "sha256": "cdea6c0cd3092a9b87549f105477513634776872f4ded8d05cf4a3cff12d1386",
+      "size": 7575
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/references/delivery-files.md",
+      "sha256": "3cec6e1ee00c92a84c318e7eb4caa023f19348c617ed6846c900f9264dfd53de",
+      "size": 5529
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/references/diagram-spec.md",
+      "sha256": "18a71622586ff8e5416e86dafa90e3d5d93714d10c1561f7ff37a532de52e7a0",
+      "size": 6777
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/references/drawio-backend.md",
+      "sha256": "7244da3bab57b46cec5deabcef0f145b74745da56cc177ec1a96d94bb9e613f9",
+      "size": 4809
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/references/excalidraw-backend.md",
+      "sha256": "bd37fef93984ef662f005887510c229ffbab78a7f5d29baac99225d3149bc68f",
+      "size": 4045
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/references/icons.md",
+      "sha256": "24fa8f18b150bf4d34ee2d35f9d83d290b46701ac42ae7b7788797eff36de6ec",
+      "size": 2999
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/references/mermaid-backend.md",
+      "sha256": "efef46f82662159f5dac91fc4d8f632c126dbcdbc10aede90ad87b3b6df54d71",
+      "size": 5233
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/references/mixed-direction.md",
+      "sha256": "76a1c3d0055477666fd0bde3c5e0ae25baf8b69f5af15a83e37faedf8456fa43",
+      "size": 2423
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/references/output-presets.md",
+      "sha256": "3e713a174cb1c6935de1ae10c477d3cb74cd80d06f830c056564895135b135c5",
+      "size": 6440
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/references/reading-views.md",
+      "sha256": "b22496d4946566ac2c4451937f0507c2e765dac7621f5a12ecf49ac966041468",
+      "size": 5491
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/references/semantic-patterns.md",
+      "sha256": "8546f2ad807fe30c7436e1b0308b55b6586ef608bab854a5c3f4fe116e3eedc9",
+      "size": 2367
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/references/type-guides.md",
+      "sha256": "18a260ba578e6a4dec7c19e6009eabd8509d6012932bda6bc709187ae57f5927",
+      "size": 4919
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/references/validation.md",
+      "sha256": "d32716f391152fea8ef12ada742476a885202a837c0ebf166518376aca31acb5",
+      "size": 5621
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/references/visual-design.md",
+      "sha256": "d762342b067a70b69fa9ed1a57834c5a1f4dfefd4937d79ef03db11b1cda6287",
+      "size": 3673
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/authoring.py",
+      "sha256": "565e8339080fb0fcdc9c448217664417a90adc5d5ce5e6c14bb07a397a20a72c",
+      "size": 4043
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/check_drawio.py",
+      "sha256": "b5ba045b797665db8192ed02ffeb4ff7033718320d336b46bc7dcfab421c29c7",
+      "size": 8272
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/check_layout.py",
+      "sha256": "772ee69de362a06ed8970d08dbbc3b90e6513b814d659f1d5f19909047ed8325",
+      "size": 56454
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/check_mermaid.py",
+      "sha256": "fe3287949780c8ad612103ffdc173a343d7922ad27b540da5a1517becda0c6e1",
+      "size": 881
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/check_presentation.py",
+      "sha256": "3684644ecc2cd5f7f03e1c45da6a2b84d91b310e69b34644fbf7a969c35eeef6",
+      "size": 8069
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/check_semantics.py",
+      "sha256": "58fc8a7fc32b439c9ac0aa779f747ff7406e75b2ad7f1f9213ef373979c13c25",
+      "size": 5861
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/color_design.py",
+      "sha256": "80d1f0d4058e45362b9ba1790db56a30401e7fd654dded03c502a77d62c2d653",
+      "size": 10848
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/compose_panels.py",
+      "sha256": "2a240bc6dcdef911f21fc73530e39104693dc5487d25187687a798e3091ee473",
+      "size": 12810
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/direction_preview.py",
+      "sha256": "e4e8c398439ef67a0a03182101e8efc60f060e83f0747692b4640e899fae67b2",
+      "size": 10093
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/drawio_xml.py",
+      "sha256": "2e95f1fb11456954cd37c6bd9129c6d77ca3ee7a7b299d84f5c013998587a00c",
+      "size": 2025
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/emit_drawio.py",
+      "sha256": "9ab0e953577729cb8577062114db27fdeb0b7f6a8e4bfd1f917dc6871b4cfd2e",
+      "size": 42282
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/emit_excalidraw.py",
+      "sha256": "4b9b50871b2a98ed6ea76bd49c409f7426d99ef92c53fc8280d9982c7960ee5e",
+      "size": 78103
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/emit_mermaid.py",
+      "sha256": "fe21f4e2fed41e0bba5bf2250fe7c98a5252fa24b97761d9853b1ecd1d4cb164",
+      "size": 9348
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/guide.py",
+      "sha256": "efa9f2bcbf0c5aca4631694237d6d0d2087b67ee394ab9375a690debbccdfb55",
+      "size": 12526
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/icons_fetch.py",
+      "sha256": "7abe17725c6dccf67e9f080fc9aec2082b24b5dd5096d51dee4da11de38f9af3",
+      "size": 16705
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/icons.py",
+      "sha256": "d42208c774446dc73454de0b146e45f234c55767b9f3b949aec15e1029b4bd33",
+      "size": 23981
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/layout.py",
+      "sha256": "3753fbe5f8a5b9fe90d404d7886d50f6fd14b469fcfa0c27eca0c6687a75c3ef",
+      "size": 194036
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/open_excalidraw_com.py",
+      "sha256": "66c0e5a2d7a6ad5eadce10643100a1294d4d47cfd4b583e3ed9db2855db977d9",
+      "size": 6572
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/output_paths.py",
+      "sha256": "a0bc1cdd9894cb45d9c3a67368983a057bf01a85fa3f416d3a07882073e1a7cf",
+      "size": 650
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/palette.py",
+      "sha256": "15018f7b3ec657d5d836dfa5769e8ca7ac777f1609713bcf5f2b0cbb9d8f23a7",
+      "size": 48803
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/presentation.py",
+      "sha256": "b6cdf52c3fea89096f636375bb7f534a0a999c77624fce12b3cd0a8130b8286e",
+      "size": 2668
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/readable_routing.py",
+      "sha256": "60af816f6c4a8e405f4e4a8e5cb56a0a7e04f62686740f2a87255b5e6345499d",
+      "size": 18871
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/scheme_preview.py",
+      "sha256": "0c0652b393e5f27067c52c103da59d87d3bff3affee07e12f9739d61a30265af",
+      "size": 4606
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/shapes.py",
+      "sha256": "5f5a61a857aca9f51bf6f52dc14052ab825ede507beb2475d72e937d66cbec42",
+      "size": 8634
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/sigils.py",
+      "sha256": "832690e8d363c97cbc148bdf7bf24581faa098f5913642773b8c476b052cb117",
+      "size": 7210
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/split_views.py",
+      "sha256": "1176cc1010efa87d9eb85fb031296bbc3c3db7f3e525d69120ce5a3f482d74fe",
+      "size": 8141
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/text_metrics.py",
+      "sha256": "07d1baab776da301b02598b5c2f15985774f13c2be862ae4db8bb3348c2ac4d2",
+      "size": 17662
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/scripts/validate_spec.py",
+      "sha256": "50fbed05aedcd9a336d631ffc49e10eba773c1f5652889b6305babd3ce3e7f8e",
+      "size": 18370
+    },
+    {
+      "path": "skills/excalidraw-live-canvas/SKILL.md",
+      "sha256": "12470a3077909030ff66127bf053619a16da3b284e30d0d8929ff91ac1f8ebbc",
+      "size": 14700
+    }
+  ]
+}

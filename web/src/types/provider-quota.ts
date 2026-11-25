@@ -23,6 +23,7 @@ export type ProviderQuotaConfig = {
 };
 
 export type QuotaMetric = { label: string; value: string | null; summary: boolean; percent?: number; issue?: string };
+export type QuotaPreviewInput = { fields: QuotaField[]; sample: string };
 export type ProviderQuotaSnapshot = {
   status: 'disabled' | 'ready' | 'unmapped' | 'error' | 'stale';
   metrics: QuotaMetric[];

@@ -74,8 +74,7 @@ function assertManagedDirectory(target, label) {
   return fs.realpathSync(target);
 }
 
-function managedAttachmentRoot({ create = false } = {}) {
-  const root = attachmentRoot();
+function managedAttachmentRoot({ create = false, root = attachmentRoot() } = {}) {
   let stat = lstatIfPresent(root);
   if (!stat) {
     if (!create) return undefined;
@@ -217,11 +216,12 @@ function attachmentInfo(name, target, buffer, kind, mime) {
  * 打开系统文件选择框，返回可发送的附件列表。
  * 图片走 base64，其它文件落盘并附带标记。
  */
-async function pickAttachments({ sessionId }) {
+async function pickAttachments({ sessionId }, resolveSessionId) {
   const result = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow() || undefined, {
     properties: ['openFile', 'multiSelections'],
   });
   if (result.canceled) return { attachments: [] };
+  const owner = resolveSessionId ? resolveSessionId() : sessionId;
 
   const attachments = [];
   for (const selected of result.filePaths.slice(0, 8)) {
@@ -234,7 +234,7 @@ async function pickAttachments({ sessionId }) {
         attachments.push({ id: randomUUID(), kind: 'image', name, mime, bytes: stat.size, data: fs.readFileSync(selected).toString('base64') });
       } else {
         const buffer = fs.readFileSync(selected);
-        const target = writeAttachment(sessionId, name, buffer);
+        const target = writeAttachment(owner, name, buffer);
         const info = attachmentInfo(name, target, buffer, 'file', mime);
         attachments.push({ id: randomUUID(), ...info, marker: makeAttachmentMarker(info) });
       }
@@ -300,25 +300,30 @@ async function attachmentContext(paths) {
 }
 
 /** Remove only the session-owned attachment directory below Studio userData. */
-function removeAttachmentDirectory(sessionId) {
+function removeAttachmentDirectory(sessionId, { root: studioRoot, strict = false } = {}) {
   const rawSession = typeof sessionId === 'string' ? sessionId.trim() : '';
-  if (!rawSession || rawSession === 'projects' || !/^[A-Za-z0-9-]{1,80}$/.test(rawSession)) return false;
+  if (!rawSession || ['projects', 'draft'].includes(rawSession) || !/^[A-Za-z0-9-]{1,80}$/.test(rawSession)) return false;
   const safeSession = safeSessionDirectoryName(sessionId);
   let root;
   let target;
   try {
-    root = managedAttachmentRoot();
+    root = managedAttachmentRoot({ root: studioRoot && path.join(studioRoot, 'attachments') });
     if (!root) return false;
     target = path.join(root, safeSession);
     const stat = lstatIfPresent(target);
-    if (!stat || stat.isSymbolicLink() || !stat.isDirectory()) return false;
+    if (!stat) return false;
+    if (!stat.isDirectory()) {
+      if (strict) throw new Error('Studio 会话附件目录需要是普通目录');
+      return false;
+    }
     const canonical = fs.realpathSync(target);
     if (path.dirname(canonical) !== root) return false;
     target = canonical;
-  } catch {
+  } catch (error) {
+    if (strict) throw error;
     return false;
   }
-  fs.rmSync(target, { recursive: true });
+  fs.rmSync(target, { recursive: true, force: true });
   return true;
 }
 

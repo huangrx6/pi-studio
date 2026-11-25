@@ -92,50 +92,42 @@ Pi Studio 的扩展 UI 是 **JSON 数据**，不是网页。扩展声明内容�
 按钮只能使用 `default`、`primary`、`danger` 三种语义 tone。
 同一组 `actions` 最多只能声明一个 `primary`。Studio 会在 manifest 和实时数据进入渲染层之前拒绝多个主操作，避免页面出现竞争性视觉焦点。
 
-## 3. 会话摘要、顶栏入口与完整详情
+## 3. 会话摘要和右侧工作台
 
-`conversation.footer` 只负责一行实时摘要。它最多接受两个 block，并且只允许 `text`、`badge`、`keyValue`、`notice`、`dataView`；完整布局和操作按钮会被 manifest 校验拒绝。Footer 不换行、不纵向滚动，超出宽度时由 Studio 省略。
+`status.chip`、`composer.above`、`composer.below` 使用单行摘要。每项最多允许两个区块，支持 `text`、`badge`、`keyValue`、`notice`、`dataView`。详情、操作和其余区块放在 `panel.side`。
 
-Footer 与顶栏 chip 可以声明 `visibility`：
+「扩展」弹框为每个提供 `panel.side` 的扩展显示一张卡片。卡片展示扩展摘要或面板说明，点击「详情」打开右侧工作台。
 
-- `always`（默认）：一直占位；
-- `while-active`：只在回合进行中渲染，空闲时把高度还给消息区。
+`visibility` 默认为 `always`。声明 `while-active` 时只在当前回合执行中显示摘要，详情始终可以打开。额度状态卡片按当前会话的模型来源读取用户选中的额度字段。内置 Studio 指标卡片在生成时显示实时速率，回合结束后显示最近请求的读数。
 
-### 一份摘要，多个落点
-
-panel 可以只声明 `slot`，也可以声明 `slots` 数组，让同一份内容同时出现在多个位置：
+摘要可用 `slot` 声明一个位置，或用 `slots` 声明用户可选择的位置。会话中最多固定显示在一处，扩展卡片也会展示可见的摘要。
 
 ```json
 {
   "id": "metrics-chip",
   "title": "实时指标",
-  "slots": ["status.chip", "conversation.footer"],
+  "slots": ["status.chip", "composer.above", "composer.below"],
   "icon": "activity",
   "color": "info",
   "size": "compact",
   "details": "metrics-detail",
   "visibility": "while-active",
-  "content": [{ "kind": "dataView", "sourceId": "…/summary" }]
+  "content": [{ "kind": "dataView", "sourceId": "user:example.metrics/summary" }]
 }
 ```
 
-- `slot` 与 `slots` 只能声明一个，`slots` 最多三项、不能重复；
-- `slots` 里包含 `status.chip` 时必须提供 `details`，否则校验失败；
-- `visibility` 只影响 `conversation.footer`、`status.bar` 与 `status.chip` 这三个摘要槽位；顶栏入口通常保持常驻，由扩展自己按内容决定；
-- 只出现在一个位置的扩展，继续用 `slot` 即可，不必把四个位置都声明一遍。
+包含 `status.chip` 时，`details` 必须指向同一扩展声明的 `panel.side` 面板。Studio 默认把此类摘要显示在扩展卡片中，用户可以从该扩展声明的顶栏或输入框位置选择固定展示。官方额度扩展的摘要位置为「扩展菜单」，也可选择「隐藏摘要」。
 
-`status.chip` 显示在会话右上角的「扩展与轨迹」菜单中。状态行显示图标、标题和一行摘要，点击标题可打开 `details` 指向的详情。摘要接受与 footer 相同的 block，最多两个。只有已经创建的会话才会显示这些入口。额度扩展使用当前模型来源的读数，并沿用额度状态项的图标与颜色。
+### 给工作台面板和摘要设置图标与配色
 
-### 给状态项设置图标和颜色
-
-在每个状态 panel 上分别声明可选的 `icon` 和 `color`。同一项使用多个落点时，各处共享外观。扩展包自身的顶层 `icon` 仍然表示包图标。
+提供 `panel.side` 的扩展会在启动台显示一个应用入口，打开该扩展声明的第一个工作台面板。启动台入口、工作台标签和外观预览优先使用所属插件清单 `icon` 指向的包内 PNG，其次使用面板声明的 `icon` 和 `color`。摘要使用其自身的声明。
 
 | 字段 | 可选值 | 缺省行为 |
 | --- | --- | --- |
-| `icon` | `activity`、`gauge`、`timer`、`terminal`、`chart`、`wallet`、`database`、`cloud`、`cpu`、`layers`、`plug`、`zap` | 缺省或未识别时显示波形，旧名 `pulse` 也显示波形 |
+| `icon` | `activity`、`gauge`、`timer`、`terminal`、`chart`、`wallet`、`database`、`cloud`、`cpu`、`layers`、`plug`、`zap` | 工作台面板默认使用插头，摘要默认使用波形 |
 | `color` | `neutral`、`accent`、`info`、`success`、`warning`、`error` | 缺省为 `neutral`，颜色随主题切换 |
 
-用户可以在「设置 → 扩展」的对应状态项打开「图标与配色」，预览并分别覆盖图标和颜色。选择「恢复默认」后，该项重新采用扩展当前声明的外观。显示位置和同一扩展的其他状态项各自保留。
+在「设置 → 插件 → 扩展」中点击卡片或列表项，即可打开扩展设置。「界面显示」按工作台面板和对话摘要列出各项，可分别调整图标与配色，或为摘要选择显示位置。插件图标保留原配色，选用内置图标时可以调整主题配色。「恢复默认」会清除图标和配色覆盖，恢复插件图标或面板声明的外观。
 
 ```json
 [
@@ -154,20 +146,22 @@ panel 可以只声明 `slot`，也可以声明 `slots` 数组，让同一份内�
   {
     "id": "quota-detail",
     "title": "额度状态",
-    "slot": "conversation.detail",
+    "slot": "panel.side",
+    "icon": "gauge",
+    "color": "info",
     "size": "regular",
     "content": [{ "kind": "text", "text": "完整内容" }]
   }
 ]
 ```
 
-`details` 必须指向同一份 manifest 里声明的 `conversation.detail` 面板。上面的额度数字演示声明式布局。实际模型额度在「设置 → 模型配置」中按来源配置。可运行的官方示例会在会话工作区展示当前项目的脚本数量，打开详情可复制脚本命令。[项目脚本速查](../../extensions/pi-project-scripts/README.md)
+`details` 必须指向同一份 manifest 里声明的 `panel.side` 面板。上面的额度数字演示声明式布局。实际模型额度在「设置 → 模型配置」中按来源配置。可运行的官方示例会在会话工作区展示当前项目的脚本数量，打开详情可复制脚本命令。[项目脚本速查](../../extensions/pi-project-scripts/README.md)
 
 ```json
 {
   "id": "quota-summary",
   "title": "额度摘要",
-  "slot": "conversation.footer",
+  "slot": "composer.below",
   "size": "compact",
   "content": [
     {
@@ -178,13 +172,13 @@ panel 可以只声明 `slot`，也可以声明 `slots` 数组，让同一份内�
 }
 ```
 
-完整数据使用独立的 `conversation.detail` 面板。它可以组合指标、表格、图表、状态列表和操作，以便用户看清来源、时间、额度窗口和异常说明。
+完整数据使用独立的 `panel.side` 面板。它可以组合指标、表格、图表、状态列表和操作，以便用户看清来源、时间、额度窗口和异常说明。
 
 ```json
 {
   "id": "quota-detail",
   "title": "额度状态",
-  "slot": "conversation.detail",
+  "slot": "panel.side",
   "size": "regular",
   "content": [
     {
@@ -206,7 +200,7 @@ panel 可以只声明 `slot`，也可以声明 `slots` 数组，让同一份内�
 }
 ```
 
-同一个扩展可以同时声明 summary 与 detail。会话内始终渲染摘要；扩展标签页展示详情。用户排序时两者按扩展 ID 一起移动，扩展内部仍按 manifest 的 `sourceOrder` 保持声明顺序。
+同一扩展的工作台面板共用一个标签。声明多个面板时，可在标签内切换。扩展自己的设置由 `contributes.settings` 声明，使用 `ui.settings` 权限，在该扩展的设置中显示。
 
 ## 4. 组合示例
 
@@ -276,6 +270,20 @@ panel 可以只声明 `slot`，也可以声明 `slots` 数组，让同一份内�
 
 ## 5. 实时数据
 
+### Excalidraw 画布
+
+扩展可在 `panel.side` 声明 `"canvas": { "sourceId": "scene" }`，其中 `scene` 是由同一扩展声明的数据源 ID。画布需要 `ui.panels` 与 `ui.data` 权限，使用 Studio 提供的本地 Excalidraw 编辑器。该面板的 `content` 留空。清单声明 `engines.piStudio: ">=0.0.14"`，激活时检查 `context.canvasVersion === 1`。
+
+数据源通过 `read` 和 `subscribe` 返回 `{ canvas: { scene, revision, drawing, title } }`。场景包含 Excalidraw 的 `elements`、嵌入图片 `files` 与可选的画布背景色。实现 `writeCanvas(context, { revision, scene })` 可保存用户编辑。保存使用当前场景版本检查并返回新快照。画布绘制和保存按 `context.durableSessionId` 归属到对应聊天。绘图工具可调用激活上下文的 `revealPanel(panelId, api.conversationId)` 请求打开当前聊天中的自有面板。
+
+### 全局任务看板
+
+用户级扩展可在 `panel.side` 声明 `"taskBoard": { "sourceId": "board-data" }`。数据源由同一扩展声明，面板需要 `ui.panels` 与 `ui.data` 权限，`content` 留空。Studio 负责渲染和拖拽，扩展通过 `context.taskBoard.version` 检查协议。
+
+`read` 和 `subscribe` 返回 `{ taskBoard: { tasks, total, nextOffset } }`。数据源可使用 `context.taskBoardQuery` 读取日期范围与分页参数。`writeTaskBoard(context, mutation)` 接收创建或更新，更新带任务的 `revision` 以检查冲突，保存后返回任务。看板订阅不带工作区或会话 ID，任务由插件管理。[扩展 SDK 声明](../../sdk/extensions/types/pi-studio-extension-authoring.d.ts)
+
+当激活上下文提供 `canvasPlaybackVersion: 1` 时，可发布 `drawing: true` 的快照，附加 `playback: { startAt, durationMs, firstElement }`。快照的 `scene` 是目标图形。Studio 会保留 `firstElement` 之前的元素，并按顺序播放其余元素。开始时间为 Unix 毫秒，播放时长最多 30 秒。播放完成或取消后，数据源需要发布实际保存的场景和版本。扩展可在保存生成结果前用激活上下文的 `normalizeCanvasScene(scene)` 校验 Studio 支持的画布数据。
+
 静态面板适合说明和检查清单；指标、任务状态等短期数据使用 `dataView`。
 
 ```json
@@ -332,7 +340,7 @@ type ExtensionUiAction =
 
 - `openUrl` 只允许 `http` 和 `https`。
 - `sendPrompt` 只填充或提交输入框。
-- `openPanel` 只能打开当前扩展自己声明、当前仍然可用的完整 panel ID，并要求 `ui.panels` 权限。
+- `openPanel` 只能打开当前扩展自己声明、当前仍然可用的 `panel.side` 面板 ID，并要求 `ui.panels` 权限。
 - `runCommand` 只能调用当前扩展自己声明、由 runtime handler 提供实现的完整 command ID，并要求 `ui.commands` 权限。它不能转去执行另一个带静态 action 的命令，避免声明之间形成递归操作链。
 - command handler 返回的 action、panel ID 和设置页会在执行前再次清洗。
 - renderer 对动态 command 返回的 action 最多跟随 4 层；恶意或错误的循环会被中止并显示统一错误。

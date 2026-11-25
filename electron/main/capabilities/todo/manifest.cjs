@@ -1,3 +1,5 @@
+const { builtinToolContributions } = require('../../core/builtin-tool-contributions.cjs');
+
 module.exports = Object.freeze([
   {
 id: 'studio-todo',
@@ -10,7 +12,7 @@ id: 'studio-todo',
     permissions: ['agent.tools'],
     requires: ['builtin:studio-permissions'],
     contributes: {
-      tools: [{ name: 'todo', description: '创建和维护当前会话的任务计划。' }],
+      tools: builtinToolContributions(['todo']),
     }
   },
 ]);

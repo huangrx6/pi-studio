@@ -194,27 +194,19 @@
    window tabs breathing room above and never spans wider than the content. */
 .agent-context-toolbar { padding: var(--space-4) var(--session-gutter) 0; background: var(--bg); }
 .agent-context-toolbar-inner {
-  display: grid;
-  grid-template-columns: minmax(118px, 1fr) auto minmax(118px, 1fr);
+  display: flex;
   align-items: center;
   gap: var(--space-3);
   width: min(var(--content), calc(100% - var(--dsh-scrollbar-width)));
   min-height: 44px;
   margin-inline: auto;
-  padding: 0 6px;
+  padding: 0 var(--space-2) 0 var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   background: var(--surface);
 }
-.agent-back-main,
-.agent-context-overview { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 7px; border: 0; border-radius: var(--radius-control); background: var(--transparent); color: var(--muted); font-size: var(--text-xs); }
-.agent-back-main { justify-self: end; }
-.agent-context-overview { justify-self: start; }
-.agent-back-main:hover,
-.agent-context-overview:hover { background: var(--surface-soft); color: var(--text); }
-.agent-back-main svg,
-.agent-context-overview svg { width: var(--icon-sm); height: var(--icon-sm); }
-.agent-context-breadcrumb { display: flex; align-items: center; justify-content: center; gap: 5px; min-width: 0; color: var(--faint); font-size: var(--text-xs); }
+.agent-context-actions { display: flex; flex: none; align-items: center; gap: var(--space-1); margin-inline-start: auto; }
+.agent-context-breadcrumb { display: flex; align-items: center; gap: 5px; min-width: 0; color: var(--faint); font-size: var(--text-xs); }
 .agent-context-breadcrumb > svg { width: var(--icon-xs); height: var(--icon-xs); flex: none; }
 .agent-context-breadcrumb span { flex: none; }
 .agent-context-breadcrumb strong { overflow: hidden; color: var(--text); font-weight: var(--weight-medium); text-overflow: ellipsis; white-space: nowrap; }
@@ -343,14 +335,10 @@
   .agent-context-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 900px) {
-  .agent-context-toolbar-inner { grid-template-columns: auto minmax(0, 1fr) auto; }
   .agent-main-card { grid-template-columns: 42px minmax(0, 1fr); }
   .agent-main-meta { grid-column: 2; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 640px) {
-
-  .agent-context-toolbar-inner { grid-template-columns: auto minmax(0, 1fr); }
-  .agent-context-breadcrumb { display: none; }
   .agent-context-head { grid-template-columns: 38px minmax(0, 1fr); }
   .agent-context-state { grid-column: 2; flex-wrap: wrap; }
   .agent-context-meta { grid-template-columns: 1fr; }

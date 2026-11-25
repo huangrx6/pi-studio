@@ -5,6 +5,7 @@ const MODEL_REF = /^[A-Za-z0-9][A-Za-z0-9._-]*\/.+$/;
 const TOOL_NAME = /^[A-Za-z0-9_.:-]{1,120}$/;
 const SUBAGENT_TOOL_NAMES = new Set([
   'subagent',
+  'subagent_stop',
   'bg_wait',
   'subagent_supervisor',
   'contact_supervisor',
@@ -116,4 +117,46 @@ function normalizeConfig(raw, { strict = true } = {}) {
   };
 }
 
-module.exports = { THINKING_LEVELS, SUBAGENT_TOOL_NAMES, normalizeConfig };
+const FILE_READ_TOOLS = ['read', 'ls', 'find', 'grep'];
+const FILE_TOOL_PRESETS = { 'read-only': FILE_READ_TOOLS, 'read-write': [...FILE_READ_TOOLS, 'edit', 'write'] };
+function isFileToolPreset(access) {
+  return typeof access === 'string' && Object.hasOwn(FILE_TOOL_PRESETS, access);
+}
+
+// Sparse role records distinguish inheritance (absent) from false, zero and an empty selection.
+function normalizeRoleOverrides(raw = {}) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('角色运行设置无效');
+  const enums = {
+    defaultThinking: ['', ...THINKING_LEVELS], maxThinking: ['', ...THINKING_LEVELS],
+    defaultMode: ['foreground', 'background'], worktreeIsolation: ['off', 'background', 'always'],
+    budgetAction: ['warn', 'stop'],
+  };
+  const defaults = normalizeConfig({});
+  const result = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!Object.hasOwn(defaults, key) || key === 'defaultProvider' || key === 'defaultModel') throw new Error('未知的角色运行设置');
+    if (key === 'allowedTools') {
+      if (value === 'parent' || isFileToolPreset(value)) result[key] = value;
+      else if (Array.isArray(value) && value.length <= 256 && value.every(name =>
+        typeof name === 'string' && TOOL_NAME.test(name) && !SUBAGENT_TOOL_NAMES.has(name) && !name.startsWith('mcp__'))) {
+        result[key] = [...new Set(value)];
+      } else throw new Error('角色工具选择无效');
+    } else {
+      if (typeof value !== typeof defaults[key] || (Object.hasOwn(enums, key) && !enums[key].includes(value))) {
+        throw new Error('角色运行设置值无效');
+      }
+      result[key] = key === 'worktreeParent' ? value.trim() : value;
+    }
+  }
+  normalizeConfig(result); // Apply the same numeric bounds, path and thinking checks as shared defaults.
+  return result;
+}
+
+function resolveRoleDefaults(user, project, overrides = {}) {
+  const source = { ...user, ...project, ...overrides };
+  if (source.allowedTools === 'parent') source.allowedTools = [];
+  else if (isFileToolPreset(source.allowedTools)) source.allowedTools = FILE_TOOL_PRESETS[source.allowedTools];
+  return normalizeConfig(source, { strict: false });
+}
+
+module.exports = { THINKING_LEVELS, SUBAGENT_TOOL_NAMES, isFileToolPreset, normalizeConfig, normalizeRoleOverrides, resolveRoleDefaults };

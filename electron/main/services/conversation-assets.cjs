@@ -22,7 +22,7 @@ function filename(value) {
   return [...(name || 'file')].reduce((tail, ch) => Buffer.byteLength(tail + ch) <= 180 ? tail + ch : tail, '');
 }
 
-function archiveFolder(root, parts, create = true) {
+function archiveFolder(root, parts, create = true, strict = false) {
   if (create) fs.mkdirSync(root, { recursive: true, mode: 0o700 });
   let current = root;
   for (const part of parts) {
@@ -32,8 +32,9 @@ function archiveFolder(root, parts, create = true) {
       try { fs.mkdirSync(current, { mode: 0o700 }); }
       catch (error) { if (error.code !== 'EEXIST') throw error; }
     }
-    if (!fs.lstatSync(current, { throwIfNoEntry: false })?.isDirectory()) {
-      if (!create) return undefined;
+    const stat = fs.lstatSync(current, { throwIfNoEntry: false });
+    if (!stat?.isDirectory()) {
+      if (!create && (!strict || !stat)) return undefined;
       throw new Error('附件位置不是受管理的普通目录');
     }
   }
@@ -87,10 +88,10 @@ function bindConversationUploads(row, paths, root = studioDataDirectory()) {
   return chatAttachments(paths).map(attachment => archiveUpload(root, row, attachment));
 }
 
-function removeConversationAssets(owner, root = studioDataDirectory()) {
-  const target = archiveFolder(root, sessionParts(owner), false);
+function removeConversationAssets(owner, root = studioDataDirectory(), { strict = false } = {}) {
+  const target = archiveFolder(root, sessionParts(owner), false, strict);
   if (!target) return false;
-  fs.rmSync(target, { recursive: true });
+  fs.rmSync(target, { recursive: true, force: true });
   // Remove only empty Studio-created grouping directories.
   const projects = path.join(root, 'attachments', 'projects');
   for (let parent = path.dirname(target); inside(projects, parent); parent = path.dirname(parent)) {

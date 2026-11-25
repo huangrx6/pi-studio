@@ -1,0 +1,63 @@
+.settings-content .settings-spotlight {
+  --art-size: var(--settings-art-size);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--art-size);
+  align-items: center;
+  column-gap: var(--space-3);
+  padding: var(--settings-panel-padding);
+  padding-inline: var(--settings-row-padding-x);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--settings-art-surface);
+}
+
+.settings-content .settings-spotlight.is-compact { --art-size: var(--settings-art-size-compact); }
+
+.settings-spotlight img {
+  display: block;
+  width: var(--art-size);
+  height: var(--art-size);
+  object-fit: contain;
+}
+
+.settings-spotlight .settings-spotlight-copy {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-1);
+  min-width: 0;
+  text-align: start;
+}
+
+.settings-spotlight .settings-spotlight-copy :is(h2, h3) {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--settings-section-title-size);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+}
+
+.settings-spotlight .settings-spotlight-copy p {
+  max-width: 43ch;
+  margin: 0;
+  color: var(--muted);
+  font: var(--settings-description-font);
+}
+
+.settings-spotlight-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.settings-content .settings-spotlight-actions .settings-add-button:not(:disabled) {
+  border-color: var(--button-bg);
+  color: var(--on-button);
+  background: var(--button-bg);
+}
+
+.settings-content .settings-spotlight-actions .settings-add-button:hover:not(:disabled) {
+  border-color: var(--button-hover);
+  background: var(--button-hover);
+}

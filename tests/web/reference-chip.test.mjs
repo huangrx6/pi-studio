@@ -26,11 +26,27 @@ const theme = {
 };
 const resolver = compile('shared/file-icon.ts', { 'virtual:studio-file-icons': theme });
 const icons = compile('shared/FileKindIcon.tsx', { './file-icon': resolver, 'virtual:studio-file-icons': theme });
-const { ReferenceChip } = compile('features/conversation/ReferenceChip.tsx', { '../../shared/FileKindIcon': icons });
+const { ReferenceChip } = compile('features/conversation/ReferenceChip.tsx', {
+  './styles/reference-chip.css': {},
+  '../../shared/FileKindIcon': icons,
+  '../subagents/SubagentAvatar': { SubagentAvatar: ({ id }) => React.createElement('img', { alt: '', 'data-portrait': id }) },
+});
 const render = reference => renderToStaticMarkup(React.createElement(ReferenceChip, { reference }));
 
-test('composer and message paths produce identical chips with complete transport tokens', () => {
-  for (const token of ['@.qa/', '@src/App.tsx', '@"docs/设计方案 v2.pdf"', '/skill:skill-creator']) {
+test('named role chips display the captured portrait and keep the full ID in the transport token', () => {
+  const token = '@[agent:81a1c938-91b8-4a09-9622-ae1b2ec32ef5|sage-braid|资料研究]';
+  const html = render(splitMessageText(token)[0].reference);
+  assert.ok(html.includes('data-portrait="sage-braid"'));
+  assert.ok(html.includes('data-reference-token="' + token + '"'));
+  assert.match(html, />资料研究<\/span>/u);
+});
+
+test('composer and message references produce identical chips with complete transport tokens', () => {
+  for (const token of [
+    '@.qa/', '@src/App.tsx', '@"docs/设计方案 v2.pdf"', '/skill:skill-creator',
+    '#[agent:81a1c938-91b8-4a09-9622-ae1b2ec32ef5|indigo-bob|代码审阅]',
+    '$[skill:cosmic-split|cosmic-split]', '$[mcp:query-docs|context7%2Fquery-docs]',
+  ]) {
     const editor = splitComposerText(token, new Set())[0].reference;
     const message = splitMessageText(token)[0].reference;
     assert.equal(render(editor), render(message));

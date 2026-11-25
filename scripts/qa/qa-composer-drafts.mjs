@@ -116,15 +116,11 @@ try {
       extensionsUi: async () => ({ items: [], errors: [], syncedAt: Date.now(), apiVersion: 1 }),
       conversationExtensionUiPreferences: async () => ({
         version: 1,
-        layout: 'grid',
         globalOrder: [],
-        sessionOrders: {},
       }),
       saveConversationExtensionUiPreferences: async (value) => ({
         version: 1,
-        layout: value?.layout || 'grid',
         globalOrder: value?.globalOrder || [],
-        sessionOrders: {},
       }),
     }, {
       get: (target, key) => (

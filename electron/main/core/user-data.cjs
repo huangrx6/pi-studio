@@ -9,6 +9,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { PLUGIN_DATA_DIRECTORY, PLUGIN_INSTALL_DIRECTORY } = require('./studio-paths.cjs');
 
 const MARKER_FILE = 'user-data-migration.json';
 const DATABASE_FILE = 'pi-studio.sqlite';
@@ -23,6 +24,9 @@ const STUDIO_DATA_ENTRIES = [
   'extension-publishers.json',
   'extension-state',
   'extensions',
+  'plugin-quarantine',
+  PLUGIN_DATA_DIRECTORY,
+  PLUGIN_INSTALL_DIRECTORY,
   'model-catalogs',
   'pi-studio.sqlite',
   'pi-studio.sqlite-shm',

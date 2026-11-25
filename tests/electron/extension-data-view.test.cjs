@@ -4,16 +4,28 @@ const { EventEmitter } = require('node:events');
 const {
   ExtensionDataViewService,
   closeAllExtensionDataViewServices,
+  closeConversationDataViewServices,
   closeExtensionDataViewServices,
   registerExtensionDataViewService,
 } = require('../../electron/main/services/extension-data-view.cjs');
 const {
   registerExtensionDataViewIpc,
 } = require('../../electron/main/ipc/sessions.cjs');
+const { normalizeCanvasSnapshot } = require('../../electron/main/services/extension-canvas.cjs');
 
 const owner = { manifestId: 'metrics', scope: 'builtin' };
 const normalizeAction = () => undefined;
 const normalizeContentList = (value) => value;
+
+test('canvas playback can only reveal elements of an in-progress scene for a bounded duration', () => {
+  const scene = { elements: [{ id: 'item', type: 'rectangle', x: 0, y: 0, width: 10, height: 10 }] };
+  const playback = { startAt: 1234, durationMs: 800, firstElement: 0 };
+  const snapshot = { scene, revision: 7, drawing: true, playback: { ...playback, markup: '<div />' } };
+  assert.deepEqual(normalizeCanvasSnapshot(snapshot).playback, playback);
+  assert.throws(() => normalizeCanvasSnapshot({ ...snapshot, drawing: false }), /状态无效/);
+  assert.throws(() => normalizeCanvasSnapshot({ ...snapshot, playback: { ...playback, firstElement: 1 } }), /元素范围无效/);
+  assert.throws(() => normalizeCanvasSnapshot({ ...snapshot, playback: { ...playback, durationMs: 30_001 } }), /时长/);
+});
 
 function target(id = 1) {
   return {
@@ -26,6 +38,35 @@ function target(id = 1) {
     events: [],
   };
 }
+
+test('canvas writes are bound to a live renderer subscription and its Durable conversation', async () => {
+  const service = new ExtensionDataViewService({ normalizeContentList });
+  const renderer = target();
+  const state = { revision: 0, scene: { elements: [] } };
+  let written;
+  const opened = await service.open({
+    owner: { manifestId: 'drawing', scope: 'user' },
+    sourceId: 'user:drawing/scene',
+    target: renderer,
+    sessionId: 'public-session',
+    context: { durableSessionId: '7' },
+    canvas: true,
+  }, {
+    read: () => ({ canvas: state }),
+    writeCanvas: (context, input) => {
+      written = [context.sessionId, context.durableSessionId, input.revision];
+      return { ...input, revision: input.revision + 1 };
+    },
+  });
+  assert.equal(opened.snapshot.canvasWritable, true);
+  assert.equal(opened.snapshot.canvas.revision, 0);
+  await assert.rejects(service.writeCanvas(opened.subscriptionId, target(2), state), /无权/);
+  await assert.rejects(service.writeCanvas(opened.subscriptionId, renderer, { ...state, revision: -1 }), /版本无效/);
+  assert.equal((await service.writeCanvas(opened.subscriptionId, renderer, state)).revision, 1);
+  assert.deepEqual(written, ['public-session', '7', 0]);
+  await service.close(opened.subscriptionId, renderer);
+  await assert.rejects(service.writeCanvas(opened.subscriptionId, renderer, state), /无权/);
+});
 
 function ipcRendererTarget(id = 1) {
   return Object.assign(new EventEmitter(), {
@@ -308,6 +349,31 @@ test('registered services close subscriptions for one extension or all extension
     await Promise.all([firstService.closeAll(), secondService.closeAll()]);
     unregisterFirst();
     unregisterSecond();
+  }
+});
+
+test('deleting a conversation cancels queued canvas writes for that conversation alone', async () => {
+  const service = new ExtensionDataViewService({ normalizeContentList });
+  const unregister = registerExtensionDataViewService(service);
+  const renderer = target();
+  const canvas = { revision: 0, scene: { elements: [] } };
+  let writes = 0;
+  const provider = { read: () => ({ canvas }), writeCanvas: () => { writes += 1; return canvas; } };
+  const open = (sessionId, durableSessionId) => service.open({
+    owner, target: renderer, sourceId: 'user:drawing/scene', canvas: true, sessionId, context: { durableSessionId },
+  }, provider);
+  try {
+    const removed = await open('old-public-id', '17');
+    const retained = await open('other-public-id', '18');
+    const writing = service.writeCanvas(removed.subscriptionId, renderer, canvas);
+    await closeConversationDataViewServices([17]);
+    await assert.rejects(writing, /已关闭/);
+    assert.equal(writes, 0);
+    await service.writeCanvas(retained.subscriptionId, renderer, canvas);
+    assert.equal(writes, 1);
+  } finally {
+    await service.closeAll();
+    unregister();
   }
 });
 

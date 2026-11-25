@@ -1,0 +1,29 @@
+.detail-dialog > .detail-header {
+  flex: none;
+  padding: var(--space-4) var(--settings-group-gap);
+}
+
+.detail-dialog .detail-heading { align-items: center; min-height: var(--settings-icon-hit); }
+.detail-dialog .detail-heading h2 {
+  margin: 0;
+  font: var(--weight-semibold) var(--text-lg)/var(--leading-tight) var(--font);
+  overflow-wrap: anywhere;
+}
+.detail-dialog .detail-heading p {
+  margin: var(--space-1) 0 0;
+  font: var(--settings-description-font);
+  overflow-wrap: anywhere;
+}
+.detail-dialog .detail-header > .icon-button { width: var(--settings-icon-hit); height: var(--settings-icon-hit); }
+.detail-dialog > .detail-body { min-height: 0; overscroll-behavior: contain; }
+.detail-dialog > .detail-footer {
+  flex: none;
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--settings-group-gap);
+}
+.detail-dialog > .detail-footer > :is(.settings-outline, .settings-save) {
+  min-height: var(--settings-control-height);
+  height: auto;
+  padding: var(--space-1) var(--space-4);
+  font: var(--settings-label-font);
+}

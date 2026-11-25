@@ -69,6 +69,64 @@ try {
   await sessionRow('精准目标：组件可读性审查').click();
   await page.locator('.assistant-response').filter({ hasText: '审查已完成' }).waitFor();
   assert.equal([...loadedResources].some((file) => file?.startsWith('markdown-highlighter-')), false, 'code-free history does not load the syntax highlighter');
+
+  const mapTrigger = page.getByRole('button', { name: '思维链路（11 步）', exact: true });
+  const map = page.getByRole('dialog', { name: '思维链路', exact: true });
+  const mapCanvas = map.getByRole('region', { name: '思维链路图', exact: true });
+  const selectedStep = map.locator('.thinking-map-node-card[aria-pressed="true"]');
+  async function checkMapFraming(onlySelected = false) {
+    await page.waitForFunction(({ onlySelected }) => {
+      const canvas = document.querySelector('.thinking-map-canvas');
+      if (!canvas) return false;
+      const cards = [...canvas.querySelectorAll(onlySelected ? '.thinking-map-node-card[aria-pressed="true"]' : '.thinking-map-node-card')];
+      const bounds = canvas.getBoundingClientRect();
+      return cards.length === (onlySelected ? 1 : 11) && cards.every(card => {
+        const box = card.getBoundingClientRect();
+        return box.width >= 140 && box.left >= bounds.left + 4 && box.top >= bounds.top + 4
+          && box.right <= bounds.right - 4 && box.bottom <= bounds.bottom - 4;
+      });
+    }, { onlySelected });
+  }
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await mapTrigger.click();
+  await checkMapFraming();
+  assert.match(await selectedStep.getAttribute('aria-label'), /^第 11 步/);
+  assert.ok(await mapCanvas.locator('.thinking-map-node-card').evaluateAll(cards => new Set(cards.map(card => card.getBoundingClientRect().top)).size > 1));
+  await mapCanvas.getByRole('button', { name: /^第 3 步/ }).press('Enter');
+  await map.locator('.thinking-map-detail-pre').filter({ hasText: 'QA_EXPECTED_FAILURE' }).waitFor();
+  await map.getByRole('button', { name: '定位思考', exact: true }).click();
+  await map.locator('.thinking-map-prose strong').filter({ hasText: '完整决策正文' }).waitFor();
+  assert.doesNotMatch(await map.locator('.thinking-map-detail-head').innerText(), /完整决策正文/);
+  await mapCanvas.getByRole('button', { name: '放大', exact: true }).click();
+  await mapCanvas.getByRole('button', { name: '适配画布', exact: true }).click();
+  await checkMapFraming();
+  await page.mouse.move(0, 0);
+  await map.locator('.thinking-map-dialog').screenshot({ path: path.join(output, 'thinking-map-wide.png'), animations: 'disabled' });
+
+  await page.setViewportSize({ width: 620, height: 570 });
+  await map.getByRole('button', { name: '最新一步', exact: true }).click();
+  await checkMapFraming(true);
+  assert.match(await selectedStep.getAttribute('aria-label'), /^第 11 步/);
+  await map.getByRole('button', { name: '定位思考', exact: true }).click();
+  await checkMapFraming(true);
+  assert.match(await selectedStep.getAttribute('aria-label'), /^第 1 步/);
+  assert.ok(await mapCanvas.evaluate(canvas => {
+    const view = canvas.getBoundingClientRect();
+    return [...canvas.querySelectorAll('.thinking-map-node-card')].slice(0, 4).every(card => {
+      const box = card.getBoundingClientRect();
+      return box.left > view.left && box.right < view.right && box.top > view.top && box.bottom < view.bottom;
+    });
+  }), 'the first two rows remain fully visible when returning to the start in a narrow window');
+  await page.mouse.move(0, 0);
+  await map.locator('.thinking-map-dialog').screenshot({ path: path.join(output, 'thinking-map-narrow.png'), animations: 'disabled' });
+  await page.keyboard.press('Escape');
+  await map.waitFor({ state: 'detached' });
+  await focused(mapTrigger);
+  await page.setViewportSize({ width: 1440, height: 920 });
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  result.checks.push('Thinking map fits its wrapped chain, reveals offscreen steps in a narrow window, renders the selected Markdown once and restores focus');
+
   const draft = '筛选和查看记录时，请保留这段草稿。';
   await composer.fill(draft);
   await search.fill('归档专属关键词');

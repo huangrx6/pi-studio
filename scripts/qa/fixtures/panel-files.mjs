@@ -3,11 +3,11 @@ export function installPanelFilesFixture() {
   const base = window.piApi;
   const roots = { a: '/qa/synthetic/workspace-a', b: '/qa/synthetic/workspace-b' };
   const clone = value => JSON.parse(JSON.stringify(value));
-  const calls = [], holds = new Set(), failures = new Set(), pending = new Map(), versions = new Map(), payloadChars = new Map(), listeners = new Set();
+  const calls = [], holds = new Set(), failures = new Set(), pending = new Map(), versions = new Map(), payloadChars = new Map(), listeners = new Set(), fileListeners = new Set();
   const keyOf = (method, cwd, path = '') => JSON.stringify([method, cwd, path]);
   let serial = 0;
   const letter = cwd => cwd === roots.a ? 'A' : 'B';
-  function body(cwd, path) { return `WORKSPACE ${letter(cwd)} · ${path} · version ${versions.get(keyOf('filePreview', cwd, path)) || 1}\n\nThis is isolated synthetic file content.\n原始工作区：${cwd}\n${path === 'shared.txt' ? Array.from({ length: 32 }, (_, index) => `预览滚动检查 ${index + 1}：内容保持在所属工作区。`).join('\n') : ''}`; }
+  function body(cwd, path) { return `WORKSPACE ${letter(cwd)} · ${path} · version ${versions.get(keyOf('filePreview', cwd, path)) || 1}\n\nThis is isolated synthetic file content.\n原始工作区：${cwd}\n${['shared.txt', 'live.txt'].includes(path) ? Array.from({ length: 32 }, (_, index) => `预览滚动检查 ${index + 1}：内容保持在所属工作区。`).join('\n') : ''}`; }
   async function respond(method, cwd, path, value) {
     const key = keyOf(method, cwd, path), id = ++serial;
     calls.push({ id, method, cwd, path, ...(method === 'filePreview' ? { payloadChars: payloadChars.get(key) || 0 } : {}) });
@@ -16,7 +16,7 @@ export function installPanelFilesFixture() {
     if (holds.has(key)) await new Promise((resolve, reject) => pending.set(id, { resolve, reject, key, method, cwd, path }));
     return response;
   }
-  const names = ['budget-large.txt', 'budget-0.txt', 'budget-1.txt', 'budget-2.txt', 'shared.txt', 'late.txt', 'closed.txt', 'reopen.txt', 'error.txt', ...Array.from({ length: 10 }, (_, i) => `cache-${i}.txt`)];
+  const names = ['budget-large.txt', 'budget-0.txt', 'budget-1.txt', 'budget-2.txt', 'shared.txt', 'live.txt', 'late.txt', 'closed.txt', 'reopen.txt', 'error.txt', ...Array.from({ length: 10 }, (_, i) => `cache-${i}.txt`)];
   const snapshot = async id => ({ ...(await base.conversationSnapshot(id)), cwd: roots[id === 'perf-0' ? 'a' : 'b'], title: id === 'perf-0' ? '文件会话 A' : '文件会话 B' });
   window.__panelFilesQa = {
     roots, calls,
@@ -25,6 +25,10 @@ export function installPanelFilesFixture() {
     fail(method, owner, path = '') { failures.add(keyOf(method, roots[owner], path)); },
     payload(owner, path, chars) { payloadChars.set(keyOf('filePreview', roots[owner], path), chars); },
     version(owner, path, value) { versions.set(keyOf('filePreview', roots[owner], path), value); },
+    change(owner, path, value) {
+      this.version(owner, path, value);
+      for (const listen of fileListeners) listen([keyOf('filePreview', roots[owner], path)]);
+    },
     pending() { return [...pending].map(([id, item]) => ({ id, method: item.method, cwd: item.cwd, path: item.path })); },
     release(id, reject = false) { const entry = pending.get(id); if (!entry) throw new Error(`No held request ${id}`); pending.delete(id); if (reject) entry.reject(new Error('QA delayed read failure')); else entry.resolve(); },
     open(owner) { for (const listener of listeners) listener({ id: owner === 'a' ? 'perf-0' : 'perf-1', cwd: roots[owner] }); },
@@ -38,6 +42,7 @@ export function installPanelFilesFixture() {
     conversationPage: async input => ({ ...(await base.conversationPage(input)), ...(await snapshot(input.id)) }),
     conversationSnapshot: snapshot, subscribeConversation: snapshot,
     onOpenSession: listener => { listeners.add(listener); return () => listeners.delete(listener); },
+    onFilesChanged: listener => { fileListeners.add(listener); return () => fileListeners.delete(listener); },
     files: async (cwd, path = '') => respond('files', cwd, path, {
       cwd, path,
       entries: path ? [{ name: `${letter(cwd)}-nested.txt`, path: `${path}/nested.txt`, type: 'file', size: 100 }] : [
@@ -50,7 +55,7 @@ export function installPanelFilesFixture() {
       // Deliberately unused by the text renderer: exercise retained payload size
       // without decoding media or constructing a multi-megabyte text DOM.
       return respond('filePreview', cwd, path, {
-        path, name: path.split('/').at(-1), size: 160, mimeType: 'text/plain', kind: 'text',
+        path, changeKey: keyOf('filePreview', cwd, path), name: path.split('/').at(-1), size: 160, mimeType: 'text/plain', kind: 'text',
         text: chars ? `${body(cwd, path)}END OF COMPLETE ${letter(cwd)} ${path}` : body(cwd, path),
         ...(chars ? { dataUrl: `data:application/octet-stream;base64,${'A'.repeat(chars)}` } : {}),
       });

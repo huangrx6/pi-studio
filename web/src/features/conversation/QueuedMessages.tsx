@@ -13,6 +13,7 @@
  * `piApi.conversationSubmit` 的 `steer` / `followUp` 行为写入 Durable。
  */
 import { useState } from 'react';
+import { readableComposerReferences } from './references';
 import { ArrowUp, ChevronDown, Clock3, GripVertical, Pencil, Trash2 } from 'lucide-react';
 
 /** 排队项用于展示的精简信息（正文 + 附件计数）。 */
@@ -91,7 +92,7 @@ export function QueuedMessages({ items, canSteer = false, sendDisabled = false, 
           >
             <span className="queued-grip" title="拖动调整顺序"><GripVertical /></span>
             <span className="queued-copy">
-              <span className="queued-text">{item.text}</span>
+              <span className="queued-text">{readableComposerReferences(item.text)}</span>
               {item.admissionPending
                 ? <span className="queued-state">正在确认消息是否已发送…</span>
                 : item.error && <span className="queued-error">{item.error}</span>}

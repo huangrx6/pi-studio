@@ -35,6 +35,7 @@ const {
   readAgentToolSelection,
 } = require('../runtime/tool-selection.cjs');
 const { mcpSnapshot } = require('../integrations/mcp/index.cjs');
+const { listInstalledPlugins } = require('./plugin-distribution.cjs');
 const { version: durableVersion } = require('@earendil-works/pi-durable/package.json');
 
 async function settingsSnapshot(cwd = DEFAULT_CWD) {
@@ -53,7 +54,10 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
   const skills = discoverSkills(cwd);
   const agentTools = await agentToolCatalog(false);
   const mcpRuntime = mcpSnapshot();
+  const enabledMcp = new Set(agentTools.tools.filter(tool => tool.enabled).map(tool => tool.name));
   const storagePath = databasePath();
+  const plugins = listInstalledPlugins();
+  const pluginIcons = new Map(plugins.map(plugin => [plugin.id, plugin.iconDataUrl]));
 
   return {
     providers: providers.map((provider) => ({
@@ -95,6 +99,10 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
       timeoutSeconds: server.timeoutSeconds,
       envKeys: server.envKeys,
       headerKeys: server.headerKeys,
+      ownerPluginId: server.ownerPluginId || '',
+      origin: server.origin || 'user',
+      managed: Boolean(server.managed),
+      userOverride: Boolean(server.userOverride),
       oauthConnected: server.transport === 'http'
         && Boolean(oauthStates.get(server.url)?.tokens?.access_token),
       connected: mcpRuntime.servers.find((item) => item.name === server.name)?.connected || false,
@@ -106,14 +114,19 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
         .map((tool) => ({
           name: tool.name,
           originalName: tool.originalName,
+          enabled: enabledMcp.has(tool.name),
           description: tool.description,
           exposure: tool.exposure,
         })),
     })),
+    plugins,
     skills: skills.skills,
     skillErrors: skills.errors,
     skillSources: db.listSkillSources(),
-    extensions: extensionRuntime.extensions,
+    extensions: extensionRuntime.extensions.map(extension => {
+      const iconDataUrl = pluginIcons.get(extension.ownerPluginId);
+      return iconDataUrl ? { ...extension, iconDataUrl } : extension;
+    }),
     officialExtensions: officialExtensionsSnapshot().extensions,
     extensionErrors: extensionRuntime.errors,
     extensionApiVersion: extensionRuntime.apiVersion,

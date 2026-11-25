@@ -28,7 +28,7 @@ const { normalizeProviderQuota, previewQuota } = require('../core/provider-quota
 const { isMediaModel, normalizeMediaModels } = require('../core/media-model-config.cjs');
 const { createProviderQuotaMonitor } = require('../services/provider-quota.cjs');
 const { settingsSnapshot } = require('../services/settings.cjs');
-const { DEFAULT_CWD } = require('../core/state.cjs');
+const { DEFAULT_CWD, getWindow } = require('../core/state.cjs');
 const { fetchProviderModelDiscovery, httpUrl } = require('../model-discovery.cjs');
 const {
   effectiveThinkingLevels,
@@ -98,6 +98,17 @@ function registerModelsIpc() {
     getProvider: id => getStudioDatabase().getProvider(id),
     readKey: resolveProviderApiKey,
   });
+  function invalidateQuota(id) {
+    quotaMonitor.invalidate(id);
+    const window = getWindow();
+    if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return;
+    try {
+      window.webContents.send('pi:provider-quota-invalidated', id);
+    } catch {
+      // The provider change has already committed even if the window closed.
+    }
+  }
+
   ipcMain.handle('pi:provider-quota', (_event, { providerId, refresh } = {}) =>
     quotaMonitor.read(providerIdOf(providerId), refresh === true));
   ipcMain.handle('pi:provider-quota-fields', (_event, input = {}) =>
@@ -226,7 +237,7 @@ function registerModelsIpc() {
         ? '系统安全存储不可用，模型来源与凭据均未更改。'
         : '模型来源保存失败，配置与凭据均未更改。请重试。');
     }
-    quotaMonitor.invalidate(id);
+    invalidateQuota(id);
     return committedModelsProjection(input.cwd);
   });
 
@@ -236,7 +247,7 @@ function registerModelsIpc() {
     if (!db.getProvider(id)) throw new Error('模型来源不存在');
     try { db.transaction(() => db.setProviderEnabled(id, enabled !== false)); }
     catch { throw new Error('模型来源启停失败，配置未更改。请重试。'); }
-    quotaMonitor.invalidate(id);
+    invalidateQuota(id);
     return committedModelsProjection(cwd);
   });
 
@@ -249,7 +260,7 @@ function registerModelsIpc() {
       await withProviderCredentialLock(id, () => {
         db.deleteProvider(id);
         invalidateProviderCredentials(id);
-        quotaMonitor.invalidate(id);
+        invalidateQuota(id);
       });
     } catch { throw new Error('模型来源删除失败，配置与凭据均未更改。请重试。'); }
     return committedModelsProjection(cwd);
@@ -392,7 +403,7 @@ function registerModelsIpc() {
       if (message === '模型来源不存在，凭据未写入。' || message === '模型来源已变化，凭据未写入。') throw new Error(message);
       throw new Error('凭据保存失败，凭据未更改。请重试。');
     }
-    quotaMonitor.invalidate(id);
+    invalidateQuota(id);
     return committedModelsProjection(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
   });
 
@@ -405,7 +416,7 @@ function registerModelsIpc() {
       if (error?.message === '模型来源已变化，凭据未清除。') throw new Error(error.message);
       throw new Error('凭据清除失败，凭据未更改。请重试。');
     }
-    quotaMonitor.invalidate(id);
+    invalidateQuota(id);
     return committedModelsProjection(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
   });
 }

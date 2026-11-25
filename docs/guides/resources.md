@@ -4,7 +4,7 @@
 
 Pi Durable 仍是唯一执行引擎。Studio SQLite 保存 Studio 自己的配置、投影和资源信任记录；Durable 保存会话、任务、文档、事件与运行状态。Studio 不读取或回写 `~/.pi`、Pi CLI 配置或另一套凭据目录。
 
-扩展清单、贡献点、声明式 UI 与发行协议仍以 [扩展规范](../extensions/README.md)、[Extension UI 规范](../extensions/ui.md) 和 [扩展发行规范](../extensions/distribution.md) 为准。本文只统一跨资源语义，避免在多个文档里重复维护一张不一致的 scope 表。
+扩展清单、贡献点、声明式 UI 与发行协议仍以 [扩展规范](../extensions/README.md)、[Extension UI 规范](../extensions/ui.md) 和 [扩展发行规范](../extensions/distribution.md) 为准。插件包装、市场目录与会话界面落点的产品约定见 [插件、原语与界面落点](./plugins.md)。本文只统一跨资源语义，避免在多个文档里重复维护一张不一致的 scope 表。
 
 ## 1. Scope 与通用规则
 
@@ -37,11 +37,12 @@ Studio 的一般原则是显式 scope 与显式优先级。不同资源的冲突
 | Durable 运行策略 | 应用 | SQLite `studio.runtime.policy` | 单一应用级策略，无工作区或会话覆盖 | 下一次执行边界 |
 | 模型、凭据与默认值 | 应用；当前会话另有运行配置 | SQLite `model_providers`、`model_catalog`、`credentials`、`settings` | 默认值只用于新会话；已有会话保留自己的模型与 thinking | 模型运行时重建后，下一次请求 |
 | 工具权限 | user + 精确工作区 + 精确会话 | SQLite `studio.permissions.policy` | 各层显式规则共同参与，固定 `deny > ask > allow`；模式默认值按会话、工作区、用户取最具体一层 | 下一次工具调用 |
-| 智能体工具白名单 | 应用 | SQLite `studio.agent.tools` | 单一白名单；精确名称或 glob 命中已安装工具 | 下一次模型请求 |
-| Skill | user + 精确工作区项目目录 | `<userData>/skills`、`<home>/.agents/skills`、工作区 `.pi-studio/skills`、`.agents/skills`；项目信任在 SQLite | 项目私有、项目通用、用户私有、用户通用；同名先发现者生效 | 下一次提示渲染；显式 `/skill:` 在提交前展开 |
-| MCP server | 应用 | SQLite `mcp_servers` | 每台 server 独立配置；逐工具 exposure 覆盖 server 默认值；仍受 Agent 白名单过滤 | 配置保存后重连；下一次模型请求使用新目录 |
-| 扩展 | builtin + user + 精确工作区 project | SQLite `studio_extensions`；用户与项目受管目录 | 运行时顺序为 `core → system → optional → user → project`；`core` / `optional` 受保护 | 设置操作立即重载；直接文件变化在下一次提交前校验 |
-| 子智能体默认值 | user + 精确工作区 project | SQLite `studio.subagents` | project 已设置字段覆盖 user；仍未设置的字段继承父智能体 | 下一次创建子智能体 |
+| 智能体工具白名单 | 应用 | SQLite `studio.agent.tools` | 精确名称或 glob 选择内置和扩展工具 | 下一次模型请求 |
+| Skill | user + 精确工作区项目目录 | `<userData>/skills`、`<home>/.agents/skills`、工作区 `.pi-studio/skills`、`.agents/skills`；项目信任与 `skill_installations` 归属在 SQLite | 项目私有、项目通用、用户私有、用户通用；同名先发现者生效；Hub 安装可记录插件归属 | 下一次提示渲染；显式 `/skill:` 在提交前展开 |
+| 插件包 Plugin | 应用 | SQLite `studio_plugins`；受管目录 `~/.pi-studio/plugins/<id>/`；市场源在 settings `studio.pluginSources`；官方目录 `assets/official-plugins` | 一次安装可声明 MCP/Skill/CLI/Extension；市场浏览官方/自定义 registry；卸载按归属清理 `managed` 资源（见 [plugins.md](./plugins.md)） | 安装/启停后刷新设置快照；MCP 重连、技能下一次提示渲染 |
+| MCP server | 应用 | SQLite `mcp_servers` | 每台 server 独立配置；逐工具 exposure 覆盖 server 默认值；仍受 Agent 白名单过滤；可带插件归属列 `owner_plugin_id`/`origin`/`managed`/`user_override`（[plugins.md](./plugins.md) §4） | 配置保存后重连；下一次模型请求使用新目录 |
+| 扩展 | builtin + user + 精确工作区 project | SQLite `studio_extensions`；用户与项目受管目录 | 运行时顺序为 `core → system → optional → user → project`；`core` / `optional` 受保护；可记录插件归属（builtin 默认 `origin=builtin`） | 设置操作立即重载；直接文件变化在下一次提交前校验 |
+| 子智能体默认值 | 用户、精确工作区、角色 | SQLite `studio.subagents` 与角色库 | 角色逐项覆盖工作区与用户默认值 | 新任务创建，已有后台角色接收新输入 |
 | 会话模型与 thinking | 会话 | Durable conversation 状态；Studio 只保存会话投影 | 会话选择覆盖新会话默认值；运行中修改排队到下一请求 | 下一次请求 |
 | 界面偏好 | renderer 本地 | `localStorage`；原生主题和菜单栏另有 SQLite 镜像 | 不参与 Agent 决策；本机 renderer 状态优先 | 保存后立即 |
 | 临时聊天 | 运行时内存 | Durable `MemoryStorage` | 不读取项目资源、不创建 Studio 会话投影 | 当前内存会话有效期 |
@@ -206,20 +207,20 @@ session[精确 conversation ID]
 
 ## 7. 智能体工具白名单
 
-智能体工具白名单保存在应用级 SQLite `studio.agent.tools`。Studio 只有一个全局白名单，没有独立的 user、workspace 或 project 白名单。
+「设置 → 智能体工具」管理内置和扩展工具。选择保存在应用级 SQLite `studio.agent.tools`，对所有工作区生效。「插件 → MCP 服务器 → 服务器详情 → 工具」管理该服务器的各个方法。
 
 选择过程是：
 
 1. Durable registry 提供当前实际安装且可用的工具。
-2. 白名单用精确名称或 `*` glob 选择其中可提供给模型的子集。
-3. MCP、扩展启停、项目信任和工作区可见性继续限制 registry 中是否存在该工具。
+2. 内置和扩展工具按白名单中的精确名称或 `*` glob 筛选。MCP 方法使用服务器内的开关，再按 exposure 决定提供方式。
+3. 服务器与扩展的启停、项目信任和工作区可见性决定工具能否进入目录。
 4. 被选中的工具在真正执行前仍须通过第 6 节的权限 hook。
 
 因此“工具在白名单中”不等于“工具获准执行”；“权限规则允许某工具”也不等于该工具已安装或被白名单选中。两者必须同时成立。
 
 白名单最多 256 项，支持精确名称和 glob。保存后会刷新运行选择；当前请求和已经开始调用保持原样，下一模型请求使用新集合。
 
-内置 `todo` 工具按执行轮次维护普通清单。使用 `scope: "goal"` 可为正在执行的目标读写跨轮清单，使用 `scope: "turn"` 可在同一会话中处理独立请求。当前清单显示在右上角的「会话进展」，可以固定到右栏。普通执行结束后，当前清单自动收起。「查看全部」打开本会话任务页，可按清单、目标或状态分组。已结束清单中的未完成项标为「结束时未完成」；暂停或阻塞后仍可恢复的目标保留清单状态。在空闲会话输入 `/todos` 可分页查看历次清单，包括仍可读取的「早期会话任务」。单份清单最多 100 项，历史按清单分页，已开始或未完成的任务保留其记录状态。
+内置 `todo` 工具按执行轮次维护普通清单。使用 `scope: "goal"` 可为正在执行的目标读写跨轮清单，使用 `scope: "turn"` 可在同一会话中处理独立请求。从会话顶栏的「进展」可在右侧工作台查看当前清单。普通执行结束后，当前清单自动收起。「查看全部」打开本会话任务页，可按清单、目标或状态分组。已结束清单中的未完成项标为「结束时未完成」；暂停或阻塞后仍可恢复的目标保留清单状态。在空闲会话输入 `/todos` 可分页查看历次清单，包括仍可读取的「早期会话任务」。单份清单最多 100 项，历史按清单分页，已开始或未完成的任务保留其记录状态。
 
 Durable 的会话文档 `studio.todo` 保存当前归属和连续编号，以 `studio.todo-plan` 文档分别保存每份清单。`createMany` 原子提交，任务编号在会话内单调递增，依赖限定在所属清单内。清空当前清单后仍可在历史中查看原任务。
 
@@ -269,11 +270,11 @@ MCP server 全部是应用级共享连接，保存在 SQLite `mcp_servers`，没
 - `deferred`：模型先看到目录和摘要，通过 `tool_search` 按需加载。
 - `hidden`：不允许模型直接调用，只供其他工具通过 `executeTool()` 使用。
 
-逐工具精确覆盖优先；没有精确项时使用第一个匹配的 glob，最后才使用 server 默认值。所有 MCP 工具仍受应用级智能体工具白名单和权限策略双重过滤。
+暴露方式优先使用精确的逐工具覆盖，其次使用第一个匹配的 glob，最后使用服务器默认值。在服务器详情的「工具」中关闭某个方法会停止向运行时注册该方法。开关自动保存，下次请求生效。旧版智能体工具白名单中对 MCP 的选择和通配规则会继续生效，直到在服务器内为该方法设置开关。已启用的方法执行时仍受权限策略约束。
 
 ### 9.2 存储与安全
 
-- server 定义、启停、exposure、逐工具覆盖、超时、stdio `cwd`、env 和 headers 位于 `mcp_servers`。
+- 服务器定义、启停、exposure、逐方法启停与暴露方式覆盖、超时、stdio `cwd`、env 和 headers 位于 `mcp_servers`。
 - env 与 header 值使用 Electron `safeStorage` envelope 加密；renderer 只得到键名。
 - 配置值中的 `${ENV_NAME}` 会从 Studio 主进程环境解析；Studio 不执行 `!command`。
 - stdio 子进程只继承定位命令和临时目录所需的少量环境变量，不自动继承其他 shell secret。
@@ -342,23 +343,32 @@ core → system → optional → user → project
 
 ## 11. 子智能体
 
-子智能体配置保存在 SQLite `studio.subagents`：
+在「设置 → 子智能体」中新建或编辑角色时，可以从女生、男生、动物三组内置头像中选择，每组 16 张。角色可以单独配置职责、工作指令、模型、MCP 服务、技能和 Harness。
+
+对话输入框里，`@` 查找工作区文件和目录，`#` 引用子智能体，`$` 查找技能和 MCP 方法。引用菜单顶部可以切换类别。同一插件提供的技能和 MCP 方法分别列出，输入插件名可以找到这两类资源。一条消息可以混用多种引用。
+
+发送后，角色由已启用的 `subagent` 工具调用，所选技能的正文加入本轮上下文，MCP 引用指明具体服务和方法。工具调用遵循当前权限策略。旧草稿中的角色引用和原有的 `/skill:名称` 命令仍然可用。
+
+角色库在 Studio 用户范围内共享，存于 SQLite 的 `studio.subagentProfiles.v1`。草稿以固定角色 ID 建立引用。新调用读取最新配置，历史子会话记录启动时的角色名称、头像和配置版本。MCP 服务选择在父会话已获准的方法中取交集，具体方法开关由 MCP 设置管理。技能选择按调用工作区的实际资源和信任状态解析。模型与 Harness 均可继承，显式指定的配置失效时会提示重新选择。
+
+用户与项目的运行默认值保存在 SQLite `studio.subagents`。
 
 ```text
 studio.subagents.user
 studio.subagents.projects[精确 cwd]
 ```
 
-运行时按字段合并：project 已设置的值覆盖 user，未设置的字段继续继承 user；模型和 thinking 两级都没有配置时继承父智能体。
+子智能体页面的「共用运行默认值」配置用户和工作区的共用值。角色编辑器只保存主动覆盖的字段。调用时，每一项依次取角色、当前工作区、用户的值。恢复继承会删除该项覆盖，此后修改共用值也会反映到这个角色。已有角色自动继承新增设置。
 
 主要字段的语义：
 
-- `defaultModel` / `defaultThinking`：新子智能体的默认模型与 thinking。
-- `maxThinking`：限制子智能体请求可使用的 thinking 上限。
-- `allowedTools`：非空时与父智能体当前工具求交集，并排除递归子智能体的管理工具；空列表表示不增加子智能体专属白名单。
-- `backgroundEnabled`、`defaultMode`、`supervisorEnabled`、并发数、派生上限和等待超时：控制子智能体的派生与后台运行行为。
+- **模型与思考强度**可分别继承。角色也可以指定模型、直接跟随父智能体，或单独设置思考强度及其上限。
+- **工具权限**可以继承共用默认值，也可以直接跟随父智能体、选用文件预设，或自选工具。只读文件允许读取、列目录和搜索，读写文件额外允许新建和编辑。两种文件预设都关闭终端和 MCP。自选模式可以逐项勾选本地工具，MCP 另按所选服务提供。工具范围始终与父智能体当前可用的工具取交集。自选留空表示关闭所有本地工具。
+- **后台与调度**可以覆盖运行模式、后台开关、联系主智能体、最大并发、最多创建数和等待时间。自定义并发与创建数按同一主会话内该角色的实例计数。
+- **工作树**可以覆盖隔离模式、存放位置和保留数量。保留上限按整个仓库计数。
+- **运行预算**可以覆盖 token、参考成本和超限处理。自定义预算按同一主会话内该角色的用量累计，填 0 表示该项不限。
 
-子智能体是 task-owned Durable child conversation，不是 Studio 侧边栏中的独立会话。配置只在下一次创建子智能体时读取；修改设置不会重配置已有子智能体。子智能体工具仍经过自身和父会话的权限评估。
+创建任务时解析完整配置。已有后台角色收到下一条消息或监督回复时，重新解析模型、思考强度、工具、MCP、技能和 Harness，并沿用已有会话和工作目录。子智能体的每次工具调用仍遵循自身与父会话的权限策略。
 
 ## 12. 存储边界
 
@@ -426,7 +436,7 @@ Studio 不把内容哈希、路径校验、HTTPS 或静态命令检查描述为�
 | 修改 MCP 配置 | 立即重连；下一次模型请求使用新目录 |
 | 安装、升级、启停、信任或卸载扩展 | 立即重载；下一次模型请求 / UI 读取 |
 | 直接修改项目 Skill 或扩展文件 | 下一次发现或提交前校验，必要时撤销信任 |
-| 修改子智能体配置 | 下一次创建子智能体 |
+| 修改子智能体配置 | 创建新任务时读取，已有后台角色在下一次输入时更新可用资源 |
 | 修改 renderer 偏好 | 立即 |
 
 ## 15. 常见误解

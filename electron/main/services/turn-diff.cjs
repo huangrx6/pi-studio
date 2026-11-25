@@ -20,6 +20,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
 const { readAbsoluteFile } = require('./workspace.cjs');
+const { publishFileChanges } = require('./file-change-events.cjs');
 
 const execFileAsync = promisify(execFile);
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
@@ -100,6 +101,14 @@ function parseStatus(text) {
     map.set(file, code.startsWith('A') ? 'added' : code.startsWith('D') ? 'deleted' : 'modified');
   }
   return map;
+}
+
+function discardTurn(requestId) {
+  const snap = snapshots.get(requestId);
+  if (!snap) return;
+  snapshots.delete(requestId);
+  try { fs.rmSync(snap.dir, { recursive: true, force: true }); }
+  catch (error) { console.warn('[pi-studio] 无法清理回合临时快照', error.code || error.name); }
 }
 
 /**
@@ -257,6 +266,7 @@ async function undoTurnDiff({ sessionId, at }) {
   if (readTurnDiffs(sessionId).some(item => item.at === at && item.snapshot?.after === after)) {
     saveTurnDiff(sessionId, { ...turn, undone: true });
   }
+  publishFileChanges(turn.files.map(file => file.path));
 }
 
 /**
@@ -343,6 +353,7 @@ async function rebuildPatchFromTrees(root, beforeTree, afterTree, relative, stat
 
 module.exports = {
   beginTurn,
+  discardTurn,
   endTurn,
   readTurnDiffs,
   saveTurnDiff,

@@ -1,5 +1,8 @@
 import type { SettingsSnapshot } from './global.d';
 import type { MutationProjection } from './mutation-types';
+import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
+import type { BinaryFiles } from '@excalidraw/excalidraw/types';
+import type { TaskBoardQuery, TaskBoardSnapshot } from './task-board';
 
 export type ExtensionMutationResult = {
   committed: true;
@@ -27,27 +30,14 @@ export type ExtensionHealth =
   | 'blocked'
   | 'missing';
 
-export type ExtensionUiSlot =
-  | 'workspace.sidebar'
-  | 'conversation.detail'
-  | 'conversation.footer'
-  | 'composer.before'
-  | 'settings.panel'
-  | 'panel.side'
-  | 'status.bar'
-  /** 顶栏状态入口：图标 + 可选单行摘要，点击打开本扩展的详情面板。 */
-  | 'status.chip';
-
-export type ConversationExtensionLayout = 'grid' | 'list';
-export type ConversationExtensionOrderScope = 'global' | 'session';
+export type ExtensionSummarySlot = 'status.chip' | 'composer.above' | 'composer.below';
+export type ExtensionPanelSlot = ExtensionSummarySlot | 'panel.side';
+export type ExtensionUiSlot = ExtensionPanelSlot | 'settings.panel';
 
 export interface ConversationExtensionUiPreferences {
   version: 1;
-  layout: ConversationExtensionLayout;
   /** Extension IDs in the user's global order. Empty means declaration order. */
   globalOrder: string[];
-  /** Optional per-conversation overrides keyed by stable conversation ID. */
-  sessionOrders: Record<string, string[]>;
 }
 
 export type ExtensionPermission =
@@ -76,6 +66,7 @@ export type ExtensionSettingsPage =
   | 'permissions'
   | 'models'
   | 'usage'
+  | 'plugins'
   | 'mcp'
   | 'skills'
   | 'extensions'
@@ -282,13 +273,16 @@ export interface ExtensionPanelContribution {
   id: string;
   title: string;
   description: string;
-  slot: ExtensionUiSlot;
-  /** 同一份内容声明的位置；只有一项时等价于 slot。 */
-  slots?: ExtensionUiSlot[];
+  slot: ExtensionPanelSlot;
+  slots?: ExtensionPanelSlot[];
   icon?: string;
   color?: ExtensionIconColor;
   size?: 'compact' | 'regular';
   priority?: number;
+  details?: string;
+  visibility?: 'always' | 'while-active';
+  canvas?: { sourceId: ExtensionContributionId };
+  taskBoard?: { sourceId: ExtensionContributionId };
   content: ExtensionContent[];
 }
 
@@ -352,6 +346,13 @@ export interface ExtensionHostItem {
   contentHash: string;
   installedAt: number;
   updatedAt: number;
+  /** Plugin packaging ownership when this extension was installed via a plugin. */
+  ownerPluginId?: string;
+  /** Validated package image for display in settings. */
+  iconDataUrl?: string;
+  origin?: 'plugin' | 'user' | 'builtin' | string;
+  managed?: boolean;
+  userOverride?: boolean;
   runtimeName: string;
   runtimeNames: string[];
   available: boolean;
@@ -556,12 +557,16 @@ export interface ExtensionUiItem {
   extensionId: string;
   extensionName: string;
   scope: ExtensionScope;
+  ownerPluginId?: string;
+  iconDataUrl?: string;
+  canvas?: { sourceId: ExtensionContributionId };
+  taskBoard?: { sourceId: ExtensionContributionId };
   contributionId: string;
   title: string;
   description: string;
   slot: ExtensionUiSlot;
   /** 同一份内容声明的位置；只有一项时等价于 slot。 */
-  slots: ExtensionUiSlot[];
+  slots?: ExtensionPanelSlot[];
   icon?: string;
   color?: ExtensionIconColor;
   size: 'compact' | 'regular';
@@ -569,7 +574,7 @@ export interface ExtensionUiItem {
   /** Stable declaration order from extension scan and manifest order. */
   sourceOrder: number;
   content: ExtensionContent[];
-  /** chip 专属：点击后打开的 conversation.detail 面板 id。 */
+  /** 点击摘要后打开的同扩展工作台面板 id。 */
   details?: string;
   /** 只在回合进行中出现（默认常驻）。 */
   visibility?: 'always' | 'while-active';
@@ -587,7 +592,25 @@ export interface ExtensionDataViewSnapshot {
   revision: number;
   updatedAt: number;
   content: ExtensionContent[];
+  canvas?: ExtensionCanvasSnapshot;
+  canvasWritable?: boolean;
+  taskBoard?: TaskBoardSnapshot;
+  taskBoardWritable?: boolean;
   error?: string;
+}
+
+export interface ExtensionCanvasScene {
+  elements: readonly ExcalidrawElement[];
+  files?: BinaryFiles;
+  appState?: { viewBackgroundColor: string };
+}
+
+export interface ExtensionCanvasSnapshot {
+  scene: ExtensionCanvasScene;
+  revision: number;
+  drawing: boolean;
+  title: string;
+  playback?: { startAt: number; durationMs: number; firstElement: number };
 }
 
 export interface ExtensionDataViewOpenRequest {
@@ -596,6 +619,7 @@ export interface ExtensionDataViewOpenRequest {
   sessionId?: string;
   /** Current renderer selection. The host re-resolves the durable model when available. */
   modelRef?: string;
+  taskBoardQuery?: TaskBoardQuery;
 }
 
 export interface ExtensionDataViewOpenResult {

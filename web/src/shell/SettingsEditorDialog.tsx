@@ -1,13 +1,15 @@
-import type { ComponentProps, Dispatch, SetStateAction } from 'react';
+import { useEffect, type ComponentProps, type Dispatch, type SetStateAction } from 'react';
 import { Check, Folder, Image as ImageIcon, Sparkles } from 'lucide-react';
 import type { ConcreteThinkingLevel } from '../types/model-types';
 import { concreteThinkingLevels, thinkingLabels } from '../types/model-types';
 import { emptyCustomModelConfig, type MediaModelCandidate } from '../features/models/model-settings-types';
 import { quotaExtensionAvailable } from '../types/provider-quota';
 import { ProviderEditorFields } from '../features/models/ProviderEditorFields';
-import { McpEditorFields } from '../features/mcp/McpEditorFields';
+import { McpEditorFields, type McpEditorOAuth } from '../features/mcp/McpEditorFields';
 import { Select, type SelectOption } from '../shared/Select';
 import { SettingsDialog } from '../shared/SettingsDialog';
+import { useSettingsToast } from '../shared/SettingsToast';
+import type { ModalDismiss } from '../shared/useModalDialog';
 import { InfoHint } from '../shared/InfoHint';
 import {
   tokenInputAsInteger,
@@ -46,15 +48,16 @@ type SettingsEditorDialogProps = {
   mcpTesting: boolean;
   mcpTestResult: McpTestResult | null;
   testCurrentMcp: () => Promise<void>;
+  mcpOAuth?: McpEditorOAuth | null;
   resourceScope: 'user' | 'project';
   setResourceScope: (scope: 'user' | 'project') => void;
   skillWorkspace: string;
   setSkillWorkspace: (workspace: string) => void;
   workspaces: Array<{ cwd: string; name: string }>;
   skillWorkspaceOptions: Array<{ value: string; label: string; description: string }>;
-  onClose: () => void;
+  onClose: (dismiss?: ModalDismiss) => void;
   onRetryLoad: () => void;
-  onSubmit: () => void;
+  onSubmit: (dismiss: ModalDismiss) => void;
 };
 
 export function SettingsEditorDialog({
@@ -81,6 +84,7 @@ export function SettingsEditorDialog({
   mcpTesting,
   mcpTestResult,
   testCurrentMcp,
+  mcpOAuth,
   resourceScope,
   setResourceScope,
   skillWorkspace,
@@ -91,7 +95,14 @@ export function SettingsEditorDialog({
   onRetryLoad,
   onSubmit,
 }: SettingsEditorDialogProps) {
+  const showToast = useSettingsToast();
+  useEffect(() => {
+    if (editorError && !editorUnavailable) showToast(editorError, 'error');
+  }, [editorError, editorUnavailable, showToast]);
+  const isPluginResourceForm = editor.kind === 'mcp' || editor.kind === 'skill';
   return <SettingsDialog
+    wide={editor.kind === 'mcp'}
+    className={isPluginResourceForm ? 'plugin-form-dialog' : ''}
     title={editor.kind === 'provider' ? editor.editId ? '编辑模型来源' : '添加模型来源' : editor.kind === 'model' ? editor.editId ? (customModel.origin === 'builtin' ? '调整内置模型' : '编辑模型') : '添加模型' : editor.kind === 'mcp' ? editor.editId ? '编辑 MCP 服务器' : '添加 MCP 服务器' : '添加技能'}
     action={editorCommitted ? '重试刷新' : editor.editId && editorUnavailable ? '重新读取' : editor.kind === 'skill' ? '选择文件夹并添加' : editor.editId ? '保存更改' : '添加'}
     closeLabel={editorCommitted ? '关闭' : '取消'}
@@ -100,10 +111,13 @@ export function SettingsEditorDialog({
     fieldsDisabled={editorCommitted || Boolean(editor.editId && editorUnavailable)}
     loading={editorLoading}
     unavailable={Boolean(!editor.editId && editorUnavailable)}
-    error={editorError}
+    error={editorUnavailable ? editorError : null}
     onClose={onClose}
-    onSubmit={() => { if (editor.editId && editorUnavailable) onRetryLoad(); else onSubmit(); }}
-    showBackdrop={false}
+    onRequestClose={onClose}
+    onSubmit={dismiss => {
+      if (editor.editId && editorUnavailable) onRetryLoad();
+      else onSubmit(dismiss);
+    }}
   >
     {editor.kind === 'provider' && <ProviderEditorFields
       key={editorRequestId}
@@ -221,30 +235,39 @@ export function SettingsEditorDialog({
       settingsBusy={editorSaving || editorCommitted || editorUnavailable}
       testCurrentMcp={testCurrentMcp}
       testResult={mcpTestResult}
+      oauth={mcpOAuth}
     />}
-    {editor.kind === 'skill' && <div className="resource-import">
-      <div className="field-label-row"><span className="field-label">生效范围</span><InfoHint label="全局技能写入 Studio 应用数据目录；项目技能写入所选工作区的 .pi-studio/skills。待导入目录必须直接包含 SKILL.md。" /></div>
-      <div className="scope-options">
-        <label className={resourceScope === 'user' ? 'is-selected' : ''}>
-          <input type="radio" name="scope" checked={resourceScope === 'user'} onChange={() => setResourceScope('user')} />
-          <div><strong>全局</strong></div>
-        </label>
-        <label className={resourceScope === 'project' ? 'is-selected' : ''}>
-          <input
-            type="radio"
-            name="scope"
-            disabled={workspaces.length === 0}
-            checked={resourceScope === 'project'}
-            onChange={() => {
-              setResourceScope('project');
-              if (!skillWorkspace) setSkillWorkspace(workspaces[0]?.cwd || '');
-            }}
-          />
-          <div><strong>项目</strong></div>
-        </label>
+    {editor.kind === 'skill' && <div className="plugin-flat-form skill-import-form">
+      <div className="skill-import-scope-row">
+        <div className="skill-import-scope-copy">
+          <span className="field-label-row">
+            <span className="skill-import-label">生效范围</span>
+            <InfoHint label="全局技能写入 Studio 应用数据目录；项目技能写入所选工作区的 .pi-studio/skills。待导入目录必须直接包含 SKILL.md。" />
+          </span>
+          <p>{resourceScope === 'user' ? '所有工作区共享，安装后立即可用。' : '仅在所选工作区生效，安装后需信任。'}</p>
+        </div>
+        <div className="settings-segments skill-import-segments" role="radiogroup" aria-label="技能生效范围">
+          <label>
+            <input type="radio" name="scope" checked={resourceScope === 'user'} onChange={() => setResourceScope('user')} />
+            全局
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="scope"
+              disabled={workspaces.length === 0}
+              checked={resourceScope === 'project'}
+              onChange={() => {
+                setResourceScope('project');
+                if (!skillWorkspace) setSkillWorkspace(workspaces[0]?.cwd || '');
+              }}
+            />
+            项目
+          </label>
+        </div>
       </div>
-      {resourceScope === 'project' && <div className="skill-workspace-picker">
-        <label>目标工作区</label>
+      {resourceScope === 'project' && <div className="plugin-flat-section skill-import-workspace">
+        <span className="skill-import-label">目标工作区</span>
         <Select
           label="项目技能工作区"
           value={skillWorkspace}

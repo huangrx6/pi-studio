@@ -250,15 +250,11 @@ export function installMemorySmokeFixture() {
       }),
       conversationExtensionUiPreferences: async () => ({
         version: 1,
-        layout: 'grid',
         globalOrder: [],
-        sessionOrders: {},
       }),
       saveConversationExtensionUiPreferences: async (value) => ({
         version: 1,
-        layout: value?.layout || 'grid',
         globalOrder: value?.globalOrder || [],
-        sessionOrders: value?.sessionOrders || {},
       }),
       conversationSubmit: async () => { calls.submits++; throw new Error('Memory QA never submits model requests'); },
     };

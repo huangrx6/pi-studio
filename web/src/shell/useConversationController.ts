@@ -20,7 +20,6 @@ import type { OutlineData } from '../features/conversation/outline-model';
 import type { PiSessionSummary, PanelFileSource } from './app-types';
 import { useSettingsWorkspace } from './useSettingsWorkspace';
 import { useConversationExtensions } from './useConversationExtensions';
-import { useConversationViewState } from './useConversationViewState';
 import { useSidebarActions } from './useSidebarActions';
 import { useAppCommandPalette } from './useAppCommandPalette';
 import { useSidebarWorkspaceActions } from './useSidebarWorkspaceActions';
@@ -48,7 +47,6 @@ export function useConversationController(foundation: AppFoundation) {
     pushNotification,
     compaction,
     setCompaction,
-    setProgressView,
     queuedPromptsBySession,
     setQueuedPromptsBySession,
     queuedPromptsRef,
@@ -99,8 +97,6 @@ export function useConversationController(foundation: AppFoundation) {
     setContextPolicy,
     requestTraces,
     setRequestTraces,
-    agentView,
-    setAgentView,
     prompt,
     setPrompt,
     composerAttachments,
@@ -111,7 +107,7 @@ export function useConversationController(foundation: AppFoundation) {
     setComposerMenuIndex,
     composerCommands,
     composerCommandOptions,
-    composerFileOptions,
+    composerMentionOptions,
     retryComposerSuggestions,
     composerDraftKeyRef,
     composerDraftsRef,
@@ -187,12 +183,12 @@ export function useConversationController(foundation: AppFoundation) {
     composerAttachments,
     setComposerFeedback,
     showComposerFeedback,
-    pushNotification,
   });
   const {
     settingsOpen,
     setSettingsOpen,
     settingsTab,
+    pluginSection,
     settingsData,
     settingsBusy,
     setMcpRefreshError,
@@ -210,7 +206,6 @@ export function useConversationController(foundation: AppFoundation) {
     extensionDetail,
     setExtensionDetail,
     skillDetail,
-    skillDetailError,
     toggleSkillTrust,
     closeSkillDetail,
     mcpDetail,
@@ -264,7 +259,7 @@ export function useConversationController(foundation: AppFoundation) {
     busy,
     turnActive,
     error,
-    agentView,
+    visible: !settingsOpen && !foundation.panelFullscreen,
     filesOpen,
     outlineItems,
     outlineActive,
@@ -280,61 +275,52 @@ export function useConversationController(foundation: AppFoundation) {
       : 'info';
     pushNotification(notice.message, tone);
   }, [pushNotification]);
-  const {
-    comparisonByParent,
-    setComparisonByParent,
-    comparisonStartPending,
-    comparisonStarting,
-    setComparisonStarting,
-    comparisonPanelContext,
-    setComparisonPanelContext,
-    rememberMainScrollPosition,
-    returnToMainAgent,
-    openModelComparison,
-    openTrace,
-  } = useConversationViewState({
-    scrollRef,
-    session,
-    workspace,
-    agentView,
-    setAgentView,
-    modelSelection,
-    collapsePanelForTrace: filesOpen && foundation.workbench.activePanelTab?.kind !== 'progress',
-    closePanel: foundation.closePanel,
-    openComparisonTab: foundation.workbench.openComparisonTab,
-  });
+  const workbench = foundation.workbench;
+  const focusConversation = useCallback(() => {
+    workbench.setPanelFullscreen(false);
+    if (workbench.panelOverlay) workbench.closePanel();
+    requestAnimationFrame(() => composerEditorRef.current?.focus());
+  }, [workbench.closePanel, workbench.panelOverlay, workbench.setPanelFullscreen, composerEditorRef]);
+  const openTrace = workbench.openTraceTab;
+  const [extensionMenuOpen, setExtensionMenuOpen] = useState(false);
+  const openExtensionMenu = () => {
+    workbench.setPanelFullscreen(false);
+    setExtensionMenuOpen(true);
+  };
   const currentProviderId = modelSelection.modelRef.split('/')[0];
   const source = settingsData?.providers.find(item => item.id === currentProviderId);
-  const quotaProvider = settingsData
+  const quotaSource = settingsData
     ? source?.enabled && source.quotaEnabled ? { id: source.id, name: source.name } : undefined
     : modelSelection.quotaProvider?.id === currentProviderId ? modelSelection.quotaProvider : undefined;
   const conversationExtensions = useConversationExtensions({
-    sourceQuotaEnabled: Boolean(quotaProvider),
-    cwd: session?.cwd,
+    sourceQuotaEnabled: Boolean(quotaSource),
+    cwd: session?.cwd || workspace,
     sessionId: session?.id,
-    agentView,
-    setAgentView,
-    pushNotification,
-    rememberMainScrollPosition,
+    turnActive,
     extensionPlacements: foundation.preferences.extensionPlacements,
   });
-  const {
-    surface: conversationExtensionSurface,
-    preferences: conversationExtensionUiPreferences,
-    orderScope: conversationExtensionOrderScope,
-    setOrderScope: setConversationExtensionOrderScope,
-    items: conversationExtensionItems,
-    detailItems: conversationDetailExtensionItems,
-    footerItems: conversationFooterExtensionItems,
-    chipItems: conversationExtensionChipItems,
-    hubItems: conversationExtensionHubItems,
-    activeItem: activeExtensionItem,
-    hasSessionOrder: hasConversationExtensionSessionOrder,
-    updateUi: updateConversationExtensionUi,
-    openItem: openConversationExtension,
-    openChip: openConversationExtensionChip,
-    openHub: openConversationExtensionHub,
-  } = conversationExtensions;
+  const openExtensionPanel = useCallback(async (panelId: string) => {
+    const item = conversationExtensions.panels.find(panel => panel.id === panelId);
+    if (!item) {
+      pushNotification('这个扩展面板当前不可用。', 'warning');
+      return;
+    }
+    if (settingsOpen) {
+      if (!await settingsWorkspace.controller.closeSettings({ restoreFocus: false })) return;
+      if (sessionRef.current?.id !== session?.id || workspaceRef.current !== workspace) return;
+      setExtensionDetail(null);
+    }
+    workbench.openExtensionTab(item);
+  }, [conversationExtensions.panels, pushNotification, session?.id, sessionRef, setExtensionDetail,
+    settingsOpen, settingsWorkspace.controller, workbench.openExtensionTab, workspace, workspaceRef]);
+
+  useEffect(() => window.piApi.onExtensionPanelRequested?.(({ sessionId, panelId }) => {
+    if (sessionId !== sessionRef.current?.id || sessionId !== session?.id || settingsOpen) return;
+    const panel = conversationExtensions.panels.find(item => item.id === panelId);
+    if (panel) workbench.openExtensionTab(panel);
+  }), [conversationExtensions.panels, session?.id, sessionRef, settingsOpen, workbench.openExtensionTab]);
+
+  useEffect(() => { setExtensionMenuOpen(false); }, [session?.id, workspace, settingsOpen]);
   const [liveDiff, setLiveDiff] = useState<TurnDiff | null>(null);
   const requestRef = useRef<string | null>(null);
   const modelPickerRequestRef = useRef(0);
@@ -380,13 +366,13 @@ export function useConversationController(foundation: AppFoundation) {
   const subagentWorkspace = useSubagentWorkspace({
     session,
     sessionRef,
-    agentView,
-    setAgentView,
+    childKey: workbench.panelTabs.find(tab => tab.kind === 'subagents')?.childKey,
+    visible: !settingsOpen && filesOpen && workbench.activePanelTab?.kind === 'subagents',
+    openSubagentsTab: workbench.openSubagentsTab,
     turnActive,
     actionConfirmation,
     pushNotification,
     loadState,
-    rememberMainScrollPosition,
   });
   const {
     subagentChildren,
@@ -402,6 +388,7 @@ export function useConversationController(foundation: AppFoundation) {
   const {
     canLeaveSettings,
     selectSettingsTab,
+    selectPluginSection,
     closeSettings,
     openSettings,
     loadOfficialExtensions,
@@ -500,11 +487,7 @@ export function useConversationController(foundation: AppFoundation) {
     requestRef,
     modelPickerRequestRef,
     setModelPickerRequest,
-    openTodoHistory: () => {
-      const pinned = foundation.workbench.panelTabsRef.current.some(tab => tab.kind === 'progress');
-      if (pinned) foundation.workbench.openProgressTab();
-      setProgressView({ floating: !pinned, history: true });
-    },
+    openTodoHistory: () => workbench.openProgressTab('history'),
     setSession,
     setMessages,
     setRequestTraces,
@@ -564,7 +547,6 @@ export function useConversationController(foundation: AppFoundation) {
     setMessages,
     setTranscriptTruncated,
     setRequestTraces,
-    setAgentView,
     setSubagentChildren,
     setSubagentBudget,
     setSubagentTranscript,
@@ -616,12 +598,11 @@ export function useConversationController(foundation: AppFoundation) {
     composerDraftKeyRef,
     composerDraftsRef,
     composerMenu,
-    composerFileOptions,
+    composerMentionOptions,
     composerCommandOptions,
     composerCommands,
     composerEditorRef,
     modelPickerRequestRef,
-    conversationExtensionItems,
     conversationNavigationRef,
     setBusy,
     setError,
@@ -642,18 +623,19 @@ export function useConversationController(foundation: AppFoundation) {
     loadState,
     showComposerFeedback,
     pushNotification,
-    openConversationExtension,
+    openExtensionPanel,
   });
   composerCommandHandlersRef.current = {
     findExtensionCommand,
     executeBuiltinCommand,
     executeExtensionCommand,
   };
-  useComposerPersistence({
+  const { persistDeletedComposerSessions } = useComposerPersistence({
     session,
     workspace,
     workspaces,
     stateLoading,
+    workspacesLoaded: foundation.workspacesLoaded,
     prompt,
     composerAttachments,
     composerDraftKeyRef,
@@ -705,12 +687,10 @@ export function useConversationController(foundation: AppFoundation) {
     void conversationNavigationRef.current.open(summary);
   }), [workspaces]);
 
-  useEffect(() => { settingsContentRef.current?.scrollTo({ top: 0 }); }, [settingsTab, settingsOpen]);
-
   useEffect(() => {
-    if (!settingsOpen || settingsTab !== 'extensions') return;
+    if (!settingsOpen || settingsTab !== 'plugins' || pluginSection !== 'extensions') return;
     void loadOfficialExtensions();
-  }, [settingsOpen, settingsTab, workspace]);
+  }, [settingsOpen, settingsTab, pluginSection, workspace]);
 
   useEffect(() => {
     const opener = settingsReturnFocusRef.current;
@@ -723,7 +703,6 @@ export function useConversationController(foundation: AppFoundation) {
   }, [settingsOpen]);
 
   useLayoutEffect(() => {
-    setProgressView({ floating: false, history: false });
     setCompaction({ active: false });
   }, [session?.id]);
 
@@ -774,6 +753,7 @@ export function useConversationController(foundation: AppFoundation) {
     deleteArchivedGroup,
   } = useSidebarActions({
     workspaces,
+    removeWorkspaceFromList: foundation.removeWorkspaceFromList,
     sessionRef,
     sessionLoadRef,
     workspaceRef,
@@ -788,6 +768,7 @@ export function useConversationController(foundation: AppFoundation) {
     clearSessionQueuedPrompts,
     queuedEditContextsRef,
     composerDraftsRef,
+    persistDeletedComposerSessions,
     conversationNavigationRef,
     actionConfirmation,
     pushNotification,
@@ -832,7 +813,7 @@ export function useConversationController(foundation: AppFoundation) {
     sessionLoading,
     messageCount: messages.length,
     subagentCount: subagentChildren.length,
-    extensionCount: conversationDetailExtensionItems.length,
+    extensionCount: conversationExtensions.groups.length,
     prompt,
     conversationNavigationRef,
     setComposerMenu,
@@ -843,10 +824,13 @@ export function useConversationController(foundation: AppFoundation) {
     openBrowserTab: foundation.openBrowserTab,
     openTerminalTab: foundation.openTerminalTab,
     stopGeneration,
-    openModelComparison,
-    returnToMainAgent,
+
+    focusConversation,
     openAgentOverview,
-    openConversationExtensionHub,
+    openExtensions: openExtensionMenu,
+    openProgress: workbench.openProgressTab,
+    openTrace,
+    openGit: workbench.openGitTab,
     openTemporaryChat: foundation.openTemporaryChat,
     openFilesTab: foundation.openFilesTab,
     sendPromptFromExtension,
@@ -899,7 +883,6 @@ export function useConversationController(foundation: AppFoundation) {
     extensionDetail,
     setExtensionDetail,
     skillDetail,
-    skillDetailError,
     toggleSkillTrust,
     closeSkillDetail,
     mcpDetail,
@@ -913,6 +896,7 @@ export function useConversationController(foundation: AppFoundation) {
     mcpDetailGenerationRef,
     canLeaveSettings,
     selectSettingsTab,
+    selectPluginSection,
     closeSettings,
     openSettings,
     loadOfficialExtensions,
@@ -950,34 +934,13 @@ export function useConversationController(foundation: AppFoundation) {
     },
     transcriptTruncated,
     notifyExtension,
-    comparisonByParent,
-    setComparisonByParent,
-    comparisonStartPending,
-    comparisonStarting,
-    setComparisonStarting,
-    comparisonPanelContext,
-    setComparisonPanelContext,
-    rememberMainScrollPosition,
-    returnToMainAgent,
-    openModelComparison,
+    focusConversation,
     openTrace,
-    quotaProvider: quotaProvider && conversationExtensions.quotaMenuItem
-      ? { ...quotaProvider, item: conversationExtensions.quotaMenuItem } : undefined,
-    conversationExtensionSurface,
-    conversationExtensionUiPreferences,
-    conversationExtensionOrderScope,
-    setConversationExtensionOrderScope,
-    conversationExtensionItems,
-    conversationDetailExtensionItems,
-    conversationFooterExtensionItems,
-    conversationExtensionChipItems,
-    conversationExtensionHubItems,
-    activeExtensionItem,
-    hasConversationExtensionSessionOrder,
-    updateConversationExtensionUi,
-    openConversationExtension,
-    openConversationExtensionChip,
-    openConversationExtensionHub,
+    quotaSource,
+    conversationExtensions,
+    extensionMenuOpen,
+    setExtensionMenuOpen,
+    openExtensionPanel,
     liveDiff,
     handleOpenFile,
     handleOpenAttachment,

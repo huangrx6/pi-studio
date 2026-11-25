@@ -8,8 +8,7 @@
 
 .app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
   .attachment-card, .conversation-image-tile, .file-change-summary, .assistant-orb,
-  .activity-tool-code:not(.is-error), .request-inspector pre,
-  .todo-dock-body, .composer-model-hint
+  .activity-tool-code:not(.is-error), .request-inspector pre, .composer-model-hint
 ) {
   background: var(--conversation-reading-surface);
   border-color: var(--border);
@@ -37,7 +36,7 @@
   .message-edit-cancel:not(:disabled),
   .file-change-item.is-openable,
   .file-change-more:not(:disabled), .file-change-undo:not(:disabled),
-  .todo-dock-head, .queued-panel-head, .queued-item,
+  .queued-panel-head, .queued-item,
   .queued-actions button:not(:disabled), .ref-skill-body > summary,
   .composer-model-hint-action, .composer-model-hint-close
 ):hover {
@@ -45,7 +44,7 @@
 }
 
 .app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
-  .todo-row.is-active, .request-inspector-tabs button[aria-pressed="true"]
+  .request-inspector-tabs button[aria-pressed="true"]
 ) {
   background: var(--conversation-selected-surface);
 }

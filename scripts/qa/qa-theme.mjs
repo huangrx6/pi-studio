@@ -426,6 +426,7 @@ try {
   // -------------------------------------------------------------------------
   await openAppearanceSettings();
   const appearanceCallsBeforeFontSize = await page.evaluate(() => window.__appearanceCalls);
+  assert.notEqual(await page.getByRole('region', { name: '对话', exact: true }).locator('details').getAttribute('open'), null);
   // 字号现在是步进器：键盘激活 + 两次到 16px（鼠标按住会重复加速，不适合断言）。
   for (let step = 0; step < 2; step += 1) {
     await page.getByRole('button', { name: '增加字号' }).focus();
@@ -447,11 +448,7 @@ try {
     await setTheme(label, mode);
     assert.equal(await page.evaluate(() => window.__nativeTheme), mode);
     await capture(`${mode}-settings`);
-    await setPalette('海蓝', 'ocean');
-    assert.equal(await page.getByRole('radio', { name: /^海蓝/ }).isChecked(), true);
-    assert.equal(await page.evaluate(() => window.__nativePalette), 'ocean');
-    await capture(`${mode}-palette-ocean`);
-    for (const [name, id] of [['琥珀', 'amber'], ['莓果', 'berry'], ['玉石', 'lime']]) {
+    for (const [name, id] of [['海蓝', 'ocean'], ['珊瑚', 'amber'], ['鸢尾', 'berry']]) {
       await setPalette(name, id);
       const roles = await page.evaluate(() => {
         const token = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -468,11 +465,11 @@ try {
       });
       assert.equal(swatchColors.actual, swatchColors.expected, `${mode}/${id}: swatch represents the selected accent`);
       assert.equal(await page.locator('.general-palette-option input:checked').count(), 1, 'one palette is selected');
-      assert.equal(await page.locator('.general-theme-options button[aria-pressed="true"]').innerText(), label);
+      assert.equal(await page.getByRole('group', { name: '界面模式' }).getByRole('button', { pressed: true }).innerText(), label);
       assert.equal(await page.locator('.general-background-settings').count(), 0, 'unused background adjustments stay hidden');
       await capture(`${mode}-palette-${id}`);
     }
-    await setPalette('玉石', 'lime');
+    await setPalette('海蓝', 'ocean');
 
     // 设置页：模型配置 + 添加来源对话框。
     await page.getByRole('button', { name: '模型配置', exact: true }).click();
@@ -536,8 +533,8 @@ try {
   await page.emulateMedia({ colorScheme: 'light' });
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
 
-  // 手动选深色和琥珀配色后刷新：两者都必须持久化。
-  await setPalette('琥珀', 'amber');
+  // 刷新后应保留手动选择的深色模式和珊瑚强调色。
+  await setPalette('珊瑚', 'amber');
   await setTheme('深色', 'dark');
   await page.reload();
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
@@ -545,7 +542,7 @@ try {
   await page.waitForFunction(() => window.__nativeTheme === 'dark' && window.__nativePalette === 'amber');
   await page.locator('.composer-editor').waitFor();
   await openAppearanceSettings();
-  await setPalette('玉石', 'lime');
+  await setPalette('海蓝', 'ocean');
   await page.locator('.settings-back-button').click();
 
   // 切到 980×640 紧凑视口，先截一张欢迎页。

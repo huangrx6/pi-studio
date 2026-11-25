@@ -16,6 +16,7 @@ export function installSettingsResourcesFixture() {
   let mcp = [makeMcp('已停用服务', { enabled: false }), makeMcp('等待连接服务', {}), makeMcp(longMcp, { error: '无法建立连接：QA 模拟的连接失败原因。请检查连接参数后再由用户明确发起测试。' }), makeMcp('已连接零工具服务', { connected: true, toolCount: 0 })];
   const makeSkill = (name, scope, origin, id, extra) => ({ name, scope, origin, description: '用于核对已安装技能的来源、调用方式与信任状态。', path: `/qa/${scope}/${origin}/${id}/SKILL.md`, baseDir: `/qa/${scope}/${origin}/${id}`, bytes: 1000, version: '1.0.0', promptTokens: 250, resourceCount: 2, totalBytes: 2048, fingerprint: 'qa-hash', trusted: true, trustChanged: false, available: true, disableModelInvocation: false, warnings: [], ...extra });
   let skills = [makeSkill('显式调用技能', 'user', 'studio', 'explicit', { disableModelInvocation: true }), makeSkill('用户共享技能', 'user', 'agents', 'shared', {}), makeSkill(longSkill, 'project', 'studio', 'changed', { trusted: false, trustChanged: true, available: false }), makeSkill('待信任项目共享技能', 'project', 'agents', 'untrusted', { trusted: false, available: false }), makeSkill('可用项目技能', 'project', 'studio', 'trusted', {})];
+  skills.push(...Array.from({ length: 10 }, (_, index) => makeSkill(`共享技能 ${index + 1}`, 'user', 'agents', `shared-${index + 1}`, {})));
   let marketplaceEnabled = false, skillTokenSerial = 0;
   const skillTokens = new Map();
   const marketSource = { id: 'qa-market', name: '隔离本地技能源', type: 'directory', location: '/qa/synthetic/market', enabled: true, itemCount: 1, lastError: '', createdAt: 1, updatedAt: 1 };

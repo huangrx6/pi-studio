@@ -1,15 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  EXTENSION_PLACEMENT_OPTIONS,
   panelContributionId,
   placementOptionsFor,
-  placeablePanels,
-  placementAllowsSlot,
+  configurablePanels,
   placementFor,
 } from '../../web/src/features/extensions/extension-placement.ts';
 import { normalizePreferences } from '../../web/src/shared/preferences.ts';
-import { statusAppearance } from '../../web/src/shared/extension-appearance.ts';
+import { statusAppearance, statusIconDataUrl } from '../../web/src/shared/extension-appearance.ts';
 
 function extension(panels, { id = 'pi-metrics', scope = 'user' } = {}) {
   return {
@@ -21,44 +19,55 @@ function extension(panels, { id = 'pi-metrics', scope = 'user' } = {}) {
   };
 }
 
-test('placement preference only stores non-default values', () => {
+test('placement preferences accept only the current display positions', () => {
   const normalized = normalizePreferences({
     extensionPlacements: {
-      'user:pi-metrics/metrics-chip': 'footer',
+      'user:pi-metrics/metrics-chip': 'below',
+      'user:tools/summary': 'above',
+      'user:quota/summary': 'header',
       'user:other/chip': 'both',
       'user:third/chip': 'nonsense',
-      '': 'chip',
+      '': 'header',
     },
   });
-  assert.deepEqual(normalized.extensionPlacements, { 'user:pi-metrics/metrics-chip': 'footer' });
+  assert.deepEqual(normalized.extensionPlacements, {
+    'user:pi-metrics/metrics-chip': 'below',
+    'user:tools/summary': 'above',
+    'user:quota/summary': 'header',
+  });
   assert.deepEqual(normalizePreferences({}).extensionPlacements, {});
   assert.deepEqual(normalizePreferences({ extensionPlacements: [] }).extensionPlacements, {});
 });
 
 test('contribution id matches the main process format', () => {
   assert.equal(panelContributionId('user', 'pi-metrics', 'metrics-chip'), 'user:pi-metrics/metrics-chip');
-  assert.equal(panelContributionId('project', 'acme/panel', 'chip'), 'project:acme/panel/chip');
+  assert.equal(panelContributionId('project', 'acme', 'chip'), 'project:acme/chip');
 });
 
-test('panels with any chip or footer slot become a placement choice', () => {
-  const both = extension([
-    { id: 'metrics-chip', title: '实时指标', icon: 'activity', color: 'info', slot: 'status.chip', slots: ['status.chip', 'conversation.footer'] },
+test('workbench panels get appearance controls, while summaries also expose positions', () => {
+  const slots = ['status.chip', 'composer.above', 'composer.below'];
+  const item = extension([
+    { id: 'metrics-chip', title: '实时指标', icon: 'activity', color: 'info', slots },
+    { id: 'detail', title: '详情', slot: 'panel.side', icon: 'cloud' },
   ]);
-  assert.deepEqual(placeablePanels(both), [
-    { id: 'user:pi-metrics/metrics-chip', title: '实时指标', icon: 'activity', color: 'info', slots: ['status.chip', 'conversation.footer'] },
+  assert.deepEqual(configurablePanels(item), [
+    { id: 'user:pi-metrics/metrics-chip', title: '实时指标', slot: undefined, icon: 'activity', color: 'info', slots },
+    { id: 'user:pi-metrics/detail', title: '详情', slot: 'panel.side', icon: 'cloud', color: undefined, slots: [] },
   ]);
+});
 
-  // 单落点也给入口：用户至少可以把这一处隐藏。
-  const single = extension([
-    { id: 'quota-chip', slot: 'status.chip', slots: ['status.chip'] },
-    { id: 'settings-panel', slot: 'settings.panel' },
-  ]);
-  assert.deepEqual(placeablePanels(single), [{ id: 'user:pi-metrics/quota-chip', title: 'quota-chip', slots: ['status.chip'] }]);
-
-  const legacy = extension([{ id: 'legacy', slot: 'conversation.footer' }]);
-  assert.deepEqual(placeablePanels(legacy), [{ id: 'user:pi-metrics/legacy', title: 'legacy', slots: ['conversation.footer'] }]);
-  const bar = extension([{ id: 'bar', title: '状态', slot: 'status.bar' }]);
-  assert.deepEqual(placeablePanels(bar), [{ id: 'user:pi-metrics/bar', title: '状态', slots: [] }]);
+test('settings use the plugin image for workbench panels until the user chooses a glyph', () => {
+  const iconDataUrl = 'data:image/png;base64,example';
+  const item = extension([
+    { id: 'board', title: '画布', slot: 'panel.side' },
+    { id: 'summary', title: '摘要', slot: 'status.chip', icon: 'activity' },
+  ], { id: 'studio.excalidraw' });
+  const [board, summary] = configurablePanels({ ...item, iconDataUrl });
+  assert.equal(statusIconDataUrl(board), iconDataUrl);
+  assert.equal(statusIconDataUrl(board, { color: 'accent' }), iconDataUrl);
+  assert.equal(statusIconDataUrl(board, { icon: 'cloud' }), undefined);
+  assert.equal(statusIconDataUrl(summary), undefined);
+  assert.equal(statusIconDataUrl({ ...board, iconDataUrl: 'https://example.test/logo.png' }), undefined);
 });
 
 test('each status field inherits the panel default until overridden for that exact contribution', () => {
@@ -78,35 +87,26 @@ test('each status field inherits the panel default until overridden for that exa
   assert.deepEqual(statusAppearance(panel), { icon: 'gauge', color: 'info' });
   assert.deepEqual(statusAppearance({ id: 'a', icon: 'pulse' }), { icon: 'activity', color: 'neutral' });
   assert.deepEqual(statusAppearance({ id: 'b', icon: 'future-glyph' }), { icon: 'activity', color: 'neutral' });
+  assert.deepEqual(statusAppearance({ id: 'c', slot: 'panel.side' }), { icon: 'plug', color: 'neutral' });
 });
 
-test('each panel only lists the placements it can actually use', () => {
-  const labels = (slots) => placementOptionsFor(slots).map((option) => option.value);
-  assert.deepEqual(labels(['status.chip', 'conversation.footer']), ['both', 'chip', 'footer', 'hidden']);
-  assert.deepEqual(labels(['status.chip']), ['chip', 'hidden']);
-  assert.deepEqual(labels(['conversation.footer']), ['footer', 'hidden']);
+test('the author controls which display positions a user can choose', () => {
+  const values = slots => placementOptionsFor(slots).map(option => option.value);
+  assert.deepEqual(values(['status.chip', 'composer.above', 'composer.below']), ['header', 'above', 'below', 'menu', 'hidden']);
+  assert.deepEqual(values(['status.chip']), ['header', 'menu', 'hidden']);
+  assert.deepEqual(values(['composer.below']), ['below', 'hidden']);
 });
 
-test('placement defaults to both and falls back for unknown values', () => {
-  assert.equal(placementFor(undefined, 'x'), 'both');
-  assert.equal(placementFor({}, 'x'), 'both');
-  assert.equal(placementFor({ x: 'hidden' }, 'x'), 'hidden');
-  assert.equal(placementFor({ x: 'other' }, 'x'), 'both');
-});
-
-test('each placement decides which slots render', () => {
-  assert.equal(placementAllowsSlot('both', 'status.chip'), true);
-  assert.equal(placementAllowsSlot('both', 'conversation.footer'), true);
-  assert.equal(placementAllowsSlot('chip', 'status.chip'), true);
-  assert.equal(placementAllowsSlot('chip', 'conversation.footer'), false);
-  assert.equal(placementAllowsSlot('footer', 'status.chip'), false);
-  assert.equal(placementAllowsSlot('footer', 'conversation.footer'), true);
-  assert.equal(placementAllowsSlot('hidden', 'status.chip'), false);
-  assert.equal(placementAllowsSlot('hidden', 'conversation.footer'), false);
-});
-
-test('the selector offers the four documented choices in order', () => {
-  assert.deepEqual(EXTENSION_PLACEMENT_OPTIONS.map((option) => option.value), ['both', 'chip', 'footer', 'hidden']);
-  assert.deepEqual(EXTENSION_PLACEMENT_OPTIONS.map((option) => option.label), ['两处', '顶栏', '输入框', '隐藏']);
-  for (const option of EXTENSION_PLACEMENT_OPTIONS) assert.ok(option.hint.length > 0);
+test('quota belongs in the extension menu and other status summaries default there', () => {
+  const positions = ['status.chip', 'composer.above', 'composer.below'];
+  assert.deepEqual(placementOptionsFor(['status.chip'], 'user:pi-quota-status').map(option => option.value), ['menu', 'hidden']);
+  assert.equal(placementFor(undefined, 'x', ['status.chip'], 'user:pi-quota-status'), 'menu');
+  assert.equal(placementFor({ x: 'header' }, 'x', ['status.chip'], 'user:pi-quota-status'), 'menu');
+  assert.equal(placementFor({ x: 'hidden' }, 'x', ['status.chip'], 'user:pi-quota-status'), 'hidden');
+  assert.equal(placementFor(undefined, 'x', positions, 'user:example'), 'menu');
+  assert.equal(placementFor(undefined, 'x', ['composer.above'], 'user:example'), 'above');
+  for (const selection of ['header', 'above', 'below', 'menu', 'hidden']) {
+    assert.equal(placementFor({ x: selection }, 'x', positions, 'user:example'), selection);
+  }
+  assert.equal(placementFor({ x: 'above' }, 'x', ['composer.below'], 'user:example'), 'below');
 });

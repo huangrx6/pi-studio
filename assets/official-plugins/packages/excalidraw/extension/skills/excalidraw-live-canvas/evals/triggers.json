@@ -1,0 +1,61 @@
+{
+  "skill_name": "diagram-authoring",
+  "note": "触发评测集：5 条正例覆盖不同说法，5 条反例各指向一个会抢走它的 skill。每条都要 3 次干净会话，所以只保留有判别力的问题；评测方法见 tools/skill-builder/GUIDE.md。",
+  "triggers": [
+    {
+      "id": 1,
+      "query": "帮我画一张微服务架构图：网关、三个服务、一个数据库",
+      "should_trigger": true
+    },
+    {
+      "id": 2,
+      "query": "画一个订单从创建到完成的状态流转图",
+      "should_trigger": true
+    },
+    {
+      "id": 3,
+      "query": "画一张数据从采集到入库的流程图，标出失败分支",
+      "should_trigger": true
+    },
+    {
+      "id": 4,
+      "query": "画一张思维导图，整理这篇文章的要点",
+      "should_trigger": true
+    },
+    {
+      "id": 5,
+      "query": "draw an architecture diagram from this docker-compose.yml",
+      "should_trigger": true
+    },
+    {
+      "id": 6,
+      "query": "把这份季度总结做成一份演示文稿，二十页左右",
+      "should_trigger": false,
+      "note": "→ deck-authoring：演示文稿不是结构图"
+    },
+    {
+      "id": 7,
+      "query": "设计一个登录页的线框图，标出输入框和按钮",
+      "should_trigger": false,
+      "note": "→ UI wireframe，明确不做"
+    },
+    {
+      "id": 8,
+      "query": "给这个迭代做一个甘特图排期，标出关键路径",
+      "should_trigger": false,
+      "note": "→ 甘特图排期不在图型清单。近阈值：补中文说法后 1/3、2/3"
+    },
+    {
+      "id": 9,
+      "query": "给这份白皮书配一张封面插画",
+      "should_trigger": false,
+      "note": "→ 装饰插画，明确不做。近阈值：实测 0/3、3/3 反复"
+    },
+    {
+      "id": 10,
+      "query": "PingCode 里我这个迭代还有哪些没关的缺陷",
+      "should_trigger": false,
+      "note": "→ pingcode：远端工作项查询"
+    }
+  ]
+}

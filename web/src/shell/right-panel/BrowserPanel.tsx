@@ -22,15 +22,20 @@ import {
   Unplug,
   X,
 } from 'lucide-react';
+import { useActionConfirmation } from '../../shared/ConfirmDialog';
 import { errorText } from '../../shared/error-text';
 import { normalizeBrowserTarget } from './browser-target.ts';
 import {
   clearBrowserHistory,
+  clearBrowserProfile,
+  BROWSER_CLEAR_DESCRIPTION,
+  BROWSER_HISTORY_CLEARED,
   loadBrowserHistory,
   recordBrowserHistoryVisit,
   saveBrowserHistory,
   type BrowserHistoryEntry,
-} from './browser/browser-history.ts';
+  type BrowserLibraryView,
+} from '../../features/browser/browser-history.ts';
 import {
   browserTabLabel,
   closeBrowserGuestTab,
@@ -207,6 +212,8 @@ export function BrowserPanel({
   url,
   openNonce = 0,
   commandRequestId = '',
+  libraryRequest,
+  onLibraryOpened,
   onUrlChange,
   onTitleChange,
   onClose,
@@ -216,6 +223,8 @@ export function BrowserPanel({
   openNonce?: number;
   /** Agent open command waiting for guest registration + ack. */
   commandRequestId?: string;
+  libraryRequest?: { id: string; view: BrowserLibraryView };
+  onLibraryOpened?: (id: string) => void;
   onUrlChange?: (url: string) => void;
   onTitleChange?: (title: string) => void;
   onClose?: () => void;
@@ -232,6 +241,19 @@ export function BrowserPanel({
   const [nav, setNav] = useState({ back: false, forward: false });
   const [menu, setMenu] = useState<'history' | 'downloads' | 'more' | null>(null);
   const [history, setHistory] = useState<BrowserHistoryEntry[]>(() => loadBrowserHistory());
+  const historyButtonRef = useRef<HTMLButtonElement>(null);
+  const downloadsButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const reset = () => setHistory([]);
+    window.addEventListener(BROWSER_HISTORY_CLEARED, reset);
+    return () => window.removeEventListener(BROWSER_HISTORY_CLEARED, reset);
+  }, []);
+  useEffect(() => {
+    if (!libraryRequest) return;
+    setMenu(libraryRequest.view);
+    (libraryRequest.view === 'history' ? historyButtonRef : downloadsButtonRef).current?.focus({ preventScroll: true });
+    onLibraryOpened?.(libraryRequest.id);
+  }, [libraryRequest, onLibraryOpened]);
   const [showFullUrl, setShowFullUrl] = useState(false);
   const [addressFocused, setAddressFocused] = useState(false);
   type ExternalSession = { sessionId: string; targetId: string; title: string; url: string; attachedAt?: number };
@@ -268,6 +290,7 @@ export function BrowserPanel({
   const [downloads, setDownloads] = useState<BrowserDownload[]>([]);
   const [actionError, setActionError] = useState('');
   const [clearing, setClearing] = useState(false);
+  const confirmation = useActionConfirmation();
   const [agentPaused, setAgentPaused] = useState(false);
   const [evaluateEnabled, setEvaluateEnabled] = useState(false);
   const [sitePolicies, setSitePolicies] = useState<Array<{
@@ -371,19 +394,20 @@ export function BrowserPanel({
   const navigate = useCallback((id: string, target: string) => {
     const view = viewsRef.current.get(id);
     if (!view) return;
-    if (!/^(https?:\/\/|file:\/\/|about:blank$)/i.test(target)) {
+    const normalized = normalizeBrowserTarget(target) || target;
+    if (!/^(https?:\/\/|file:\/\/|about:blank$)/i.test(normalized)) {
       updateTab(id, { failed: '只支持 http(s) 链接或本地 HTML 文件' });
       return;
     }
-    updateTab(id, { failed: '', loading: true, address: target === 'about:blank' ? '' : target });
+    updateTab(id, { failed: '', loading: true, address: normalized === 'about:blank' ? '' : normalized });
     if (!readyRef.current.has(id)) {
-      view.setAttribute('src', target);
+      view.setAttribute('src', normalized);
       return;
     }
     try {
-      void view.loadURL(target).catch(() => {});
+      void view.loadURL(normalized).catch(() => {});
     } catch {
-      view.setAttribute('src', target);
+      view.setAttribute('src', normalized);
     }
   }, [updateTab]);
 
@@ -569,12 +593,17 @@ export function BrowserPanel({
 
   async function clearProfileData() {
     if (clearing) return;
-    if (!window.confirm('清除内嵌浏览器的 Cookie、缓存和站点数据？下载的文件会保留。')) return;
+    const accepted = await confirmation.confirm({
+      title: '清除浏览数据？',
+      description: BROWSER_CLEAR_DESCRIPTION,
+      confirmLabel: '清除数据',
+      tone: 'danger',
+    });
+    if (!accepted) return;
     setClearing(true);
     setActionError('');
     try {
-      await window.piApi.browserClearData();
-      setHistory(clearBrowserHistory());
+      await clearBrowserProfile();
       setMenu(null);
     } catch (error) {
       setActionError(errorText(error));
@@ -656,6 +685,7 @@ export function BrowserPanel({
   const activeFailed = active?.failed || actionError;
 
   return <div className="browser-panel">
+    {confirmation.dialog}
     <div className="browser-tabstrip" role="tablist" aria-label="浏览器标签">
       <div className="browser-tabstrip-scroll">
         {tabs.map((tab) => {
@@ -728,8 +758,8 @@ export function BrowserPanel({
           title={agentPaused ? '继续 Agent 操作' : '暂停 Agent 操作（接管）'}
           onClick={() => void toggleAgentPause()}
         ><Hand /></button>
-        <button type="button" className={`icon-button ${menu === 'history' ? 'is-active' : ''}`} aria-label="历史记录" title="历史记录" aria-expanded={menu === 'history'} onClick={() => setMenu((current) => current === 'history' ? null : 'history')}><Clock3 /></button>
-        <button type="button" className={`icon-button ${menu === 'downloads' ? 'is-active' : ''}`} aria-label="下载" title="下载" aria-expanded={menu === 'downloads'} onClick={() => setMenu((current) => current === 'downloads' ? null : 'downloads')}><Download /></button>
+        <button ref={historyButtonRef} type="button" className={`icon-button ${menu === 'history' ? 'is-active' : ''}`} aria-label="历史记录" title="历史记录" aria-expanded={menu === 'history'} onClick={() => setMenu((current) => current === 'history' ? null : 'history')}><Clock3 /></button>
+        <button ref={downloadsButtonRef} type="button" className={`icon-button ${menu === 'downloads' ? 'is-active' : ''}`} aria-label="下载" title="下载" aria-expanded={menu === 'downloads'} onClick={() => setMenu((current) => current === 'downloads' ? null : 'downloads')}><Download /></button>
         <button
           type="button"
           className="icon-button"

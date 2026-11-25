@@ -1,12 +1,12 @@
 import { Accordion } from '../../shared/Accordion';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { InfoHint } from '../../shared/InfoHint';
 import { LoadingState } from '../../shared/LoadingState';
 import { Select } from '../../shared/Select';
 import { errorText } from '../../shared/error-text';
-import { QuotaMetricList, quotaSummary } from './ProviderQuotaView';
-import { emptyQuotaField, type ProviderQuotaConfig, type QuotaField, type QuotaFieldSuggestion, type QuotaMetric } from '../../types/provider-quota';
+import { QuotaMappingPreview } from './QuotaMappingPreview';
+import { emptyQuotaField, type ProviderQuotaConfig, type QuotaField, type QuotaFieldSuggestion } from '../../types/provider-quota';
 
 const formats = [
   { value: 'number', label: '数值或余额' }, { value: 'percent', label: '百分比（0–100）' },
@@ -23,7 +23,6 @@ const authOptions = [
   { value: 'query', label: '来源 API Key · 查询参数', description: '仅在接口要求时使用；密钥由主进程添加到请求地址。' },
 ];
 const metadataHeaders = ['anthropic-version', 'anthropic-beta', 'openai-organization', 'openai-project', 'x-goog-user-project', 'new-api-user'];
-const exampleFields: QuotaField[] = [{ ...emptyQuotaField(), label: '本周剩余', path: 'usage.week.remaining', unit: '次' }];
 function originOf(url: string) {
   try { return new URL(url).origin; } catch { return ''; }
 }
@@ -117,12 +116,13 @@ function QuotaMappingFields({ config, providerId, apiKey, onChange }: {
       <InfoHint label="每个余额或周期单独添加一项。返回字段路径支持数组下标，或用 limits[period=week].remaining 匹配周期，多个条件用 & 连接。" /></div>
       <button type="button" className="settings-outline" disabled={inspecting || !providerId.trim() || !config.endpoint.trim()} onClick={inspect}>读取接口字段</button>
     </div>
-    <p className="provider-editor-note">每个余额或周期添加一项，最多选择两项显示在会话摘要。</p>
+    <p className="provider-editor-note">每个余额或周期添加一项，最多选择两项显示在扩展卡片中。</p>
     {inspecting && <LoadingState>正在读取接口字段</LoadingState>}
     {inspectMessage && <small role="status">{inspectMessage}</small>}
     {suggestions.length > 0 && <Select label="选择接口返回字段" placeholder="选择接口返回字段…" value="" options={suggestions.map(item => ({ value: item.path, label: item.path }))}
       disabled={fields.length >= 24 && fields.every(field => field.path)} onChange={selectSuggestion} />}
     <datalist id={fieldListId}>{suggestions.map(item => <option key={item.path} value={item.path} />)}</datalist>
+    <QuotaMappingPreview fields={fields} />
     <div className="quota-mapping-list">
       {fields.map((field, i) => <div key={i} className="quota-mapping" role="group" aria-label={`额度字段 ${i + 1}`}>
         <div className="quota-mapping-fields">
@@ -137,87 +137,10 @@ function QuotaMappingFields({ config, providerId, apiKey, onChange }: {
         </div>
         <div className="quota-field-footer"><label className="quota-summary-option">
           <input type="checkbox" checked={field.summary} disabled={!field.summary && summaryCount >= 2} onChange={e => update(i, { summary: e.target.checked })} />
-          显示在会话摘要（最多两项）
+          显示在扩展卡片中
         </label><button type="button" className="icon-button" title="移除此字段" aria-label={`移除额度字段 ${i + 1}`} disabled={fields.length === 1} onClick={() => onChange(fields.filter((_, n) => n !== i))}><Trash2 /></button></div>
       </div>)}
     </div>
     <button type="button" className="settings-text-button quota-add-field" disabled={fields.length >= 24} onClick={() => onChange([...fields, emptyQuotaField(summaryCount < 2)])}><Plus />添加额度字段</button>
-    <QuotaSample fields={fields} />
   </section>;
-}
-
-const sampleLimit = 65536;
-const initialSample = JSON.stringify({ usage: { week: { remaining: 120 } } }, null, 2);
-
-// Re-indent the original tokens so large integers, duplicate keys and string escapes survive.
-function formatSample(source: string) {
-  try { JSON.parse(source); } catch { return null; }
-  const tokens = source.match(/"(?:\\.|[^"\\])*"|[{}\[\],:]|[^\s{}\[\],:]+/g) ?? [];
-  let formatted = '';
-  let depth = 0;
-  let previous = '';
-  for (const token of tokens) {
-    const closing = token === '}' || token === ']';
-    const afterOpen = previous === '{' || previous === '[';
-    if (closing) depth--;
-    if ((afterOpen && !closing) || (closing && !afterOpen) || previous === ',') {
-      formatted += '\n' + '  '.repeat(depth);
-    } else if (previous === ':') {
-      formatted += ' ';
-    }
-    formatted += token;
-    if (formatted.length > sampleLimit) return null;
-    if (token === '{' || token === '[') depth++;
-    previous = token;
-  }
-  return formatted;
-}
-
-function QuotaSample({ fields }: { fields: QuotaField[] }) {
-  const sampleId = useId();
-  const [open, setOpen] = useState(false);
-  const [sample, setSample] = useState(initialSample);
-  const [result, setResult] = useState<{ metrics?: QuotaMetric[]; error?: string }>();
-  const [pending, setPending] = useState(false);
-  const formatted = useMemo(() => open ? formatSample(sample) : null, [open, sample]);
-  const example = fields.every(field => !field.path.trim() && !field.label.trim());
-  useEffect(() => {
-    if (!open || !sample.trim()) {
-      setResult(undefined);
-      setPending(false);
-      return;
-    }
-    let active = true;
-    setPending(true);
-    const timer = window.setTimeout(() => {
-      void window.piApi.previewQuotaMapping({ fields: example ? exampleFields : fields, sample }).then(
-        metrics => { if (active) setResult({ metrics }); },
-        cause => { if (active) setResult({ error: errorText(cause) }); },
-      ).finally(() => { if (active) setPending(false); });
-    }, 180);
-    return () => { active = false; window.clearTimeout(timer); };
-  }, [open, sample, fields, example]);
-  return <Accordion compact className="quota-sample" onToggle={e => setOpen(e.currentTarget.open)} summary="额度预览">
-    <div className="quota-sample-columns">
-      <div className="quota-sample-source">
-        <div className="quota-sample-toolbar">
-          <label htmlFor={sampleId}>JSON 返回样例</label>
-          <button type="button" className="settings-text-button" aria-label="格式化 JSON" disabled={formatted === null || formatted === sample}
-            onClick={() => { if (formatted !== null) setSample(formatted); }}>格式化</button>
-        </div>
-        <textarea id={sampleId} className="quota-sample-input" rows={Math.max(6, sample.split('\n', 12).length)} wrap="off"
-          maxLength={sampleLimit} spellCheck={false} autoCapitalize="off"
-          value={sample} onChange={e => setSample(e.target.value)} />
-      </div>
-      <section className="quota-preview-list" aria-label="映射预览" aria-live="polite" aria-busy={pending}>
-        <h4 className="quota-sample-toolbar">会话摘要</h4>
-        {result?.metrics ? <>
-          <p className="quota-preview-summary">{quotaSummary(result.metrics)}</p>
-          <h4 className="quota-preview-detail-title">额度详情</h4>
-          <QuotaMetricList metrics={result.metrics} />
-        </> : result?.error ? <p role="alert">{result.error}</p> : <p>{sample.trim() ? '正在预览…' : '输入 JSON 后查看显示效果。'}</p>}
-      </section>
-    </div>
-    {example && <p className="quota-sample-hint">填写显示字段前，以「本周剩余」为例。</p>}
-  </Accordion>;
 }

@@ -1,0 +1,40 @@
+{
+  "format": 1,
+  "id": "studio.excalidraw",
+  "name": "Excalidraw",
+  "version": "1.1.0",
+  "author": "Pi Studio",
+  "publisher": "Pi Studio",
+  "license": "MIT",
+  "engines": { "piStudio": ">=0.0.14" },
+  "description": "在当前会话的侧栏中编辑、绘制和导出图形。",
+  "permissions": ["agent.tools", "ui.panels", "ui.data", "ui.commands"],
+  "runtime": { "durableEntry": "extension.mjs" },
+  "contributes": {
+    "tools": [
+      { "name": "excalidraw_draw", "description": "在当前会话的实时画布上逐步绘制可编辑的节点与连线。" },
+      { "name": "excalidraw_read", "description": "查看当前会话画布的版本、节点及其连线。" }
+    ],
+    "panels": [
+      {
+        "id": "board",
+        "title": "Excalidraw",
+        "slot": "panel.side",
+        "description": "实时画布",
+        "canvas": { "sourceId": "scene" }
+      }
+    ],
+    "commands": [
+      {
+        "id": "excalidraw",
+        "title": "打开 Excalidraw 画布",
+        "description": "查看当前聊天的画布",
+        "placement": "composer",
+        "action": { "kind": "openPanel", "panelId": "board" }
+      }
+    ],
+    "dataSources": [
+      { "id": "scene", "title": "Excalidraw 画布" }
+    ]
+  }
+}

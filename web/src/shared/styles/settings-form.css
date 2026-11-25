@@ -1,6 +1,46 @@
 /* 复杂设置表单的分块层级；具体字段网格由所属功能负责。 */
-.settings-form-sections { display: grid; min-width: 0; gap: var(--space-4); align-items: start; }
-.settings-form-section { min-width: 0; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-card); background: color-mix(in srgb, var(--surface-hover) 20%, var(--surface)); }
-.settings-form-section > h3 { margin: 0 0 var(--space-4); color: var(--text); font-size: var(--text-13); font-weight: var(--weight-semibold); line-height: var(--leading-normal); }
-.settings-form-section > .pi-accordion-trigger { padding: 0; min-height: var(--control); border-radius: var(--radius-sm); }
+.settings-form-sections { display: grid; min-width: 0; gap: var(--settings-group-gap); align-items: start; }
+.settings-form-section { min-width: 0; padding: var(--settings-row-padding-x); border: 1px solid var(--border); border-radius: var(--radius-card); background: color-mix(in srgb, var(--surface-hover) 20%, var(--surface)); }
+.settings-form-section > h3 { margin: 0 0 var(--space-3); color: var(--text); font: var(--weight-semibold) var(--settings-label-size)/var(--leading-normal) var(--font); }
+.settings-form-section > .pi-accordion-trigger { padding: 0; min-height: var(--settings-control-height); border-radius: var(--radius-sm); }
 .settings-form-section > .pi-accordion-trigger .pi-accordion-label { font-weight: var(--weight-semibold); }
+
+.settings-dialog .settings-form-grid {
+  align-items: start;
+  gap: var(--space-4);
+}
+
+/* Support both wrapped labels and a separately associated label with a help button. */
+.settings-dialog .dialog-body :is(.settings-field, .model-token-field, label:has(> :where(input:not([type="checkbox"], [type="radio"], [type="range"]), textarea, .pi-select))) {
+  min-width: 0;
+  gap: var(--settings-field-gap);
+  color: var(--text);
+  font: var(--settings-label-font);
+}
+
+.settings-dialog .dialog-body :is(.settings-field > span:first-child, .settings-field-heading, .model-token-field > label) {
+  color: var(--text);
+  font: var(--settings-label-font);
+}
+
+.settings-dialog .dialog-body :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="hidden"]), select, .pi-select-trigger) {
+  height: var(--settings-control-height);
+  font-size: var(--settings-label-size);
+  font-weight: var(--weight-regular);
+}
+
+.settings-dialog .dialog-body textarea {
+  font-size: var(--settings-label-size);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-body);
+}
+
+.settings-dialog .dialog-body :is(.settings-field, label) > small {
+  color: var(--muted);
+  font: var(--settings-description-font);
+  overflow-wrap: anywhere;
+}
+
+@container settings-form (max-width: 480px) {
+  .settings-dialog .settings-form-grid { grid-template-columns: minmax(0, 1fr); }
+}

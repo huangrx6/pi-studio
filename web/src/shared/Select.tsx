@@ -13,7 +13,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
-import { PopoverSurface } from './PopoverSurface';
+import { PopoverSurface, popoverPortalTarget } from './PopoverSurface';
 import { useSurfaceActive } from './surface-visibility';
 import { isComposingKey, menuFocusIndex } from './keyboard-navigation';
 
@@ -30,6 +30,7 @@ type SelectProps = {
   onChange: (value: string) => void;
   /** 可访问名称（aria-label）；不是可见标题。 */
   label?: string;
+  title?: string;
   /** 无匹配选项时的占位文案。 */
   placeholder?: string;
   /** 禁用整个控件。 */
@@ -61,7 +62,7 @@ const MENU_GAP = 5;
  *
  * 按菜单实际高度选择展开方向，并在弹出方向的可用空间内滚动。
  */
-export function Select({ value, options, onChange, label, placeholder = '请选择', disabled = false, autoFocus = false, className = '', menuClassName = '', leadingIcon }: SelectProps) {
+export function Select({ value, options, onChange, label, title, placeholder = '请选择', disabled = false, autoFocus = false, className = '', menuClassName = '', leadingIcon }: SelectProps) {
   const [open, setOpen] = useState(false);
   const active = useSurfaceActive();
   useEffect(() => { if (!active) setOpen(false); }, [active]);
@@ -70,38 +71,52 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
   const listId = useId();
   const selected = options.find((option) => option.value === value);
 
-  // 先按最终宽度排版，再测量含换行说明的菜单。Portal 使用视口坐标，
-  // 但会话内的菜单应与圆角内容区一起收口。
+  // 顶层菜单使用视口坐标。长表单的可用空间止于正文，留下标题栏和操作栏。
   useLayoutEffect(() => {
     const trigger = triggerRef.current;
     const menu = menuRef.current;
     if (!open || !trigger || !menu) return;
-    const pane = trigger.closest('main');
+    const openingRect = trigger.getBoundingClientRect();
+    const formBody = trigger.closest<HTMLElement>('.settings-dialog .dialog-body');
+    const pane = trigger.closest('dialog') ? null : trigger.closest('main');
+    const dismiss = () => {
+      if (menu.contains(document.activeElement)) trigger.focus({ preventScroll: true });
+      setOpen(false);
+    };
     const update = (): void => {
       const rect = trigger.getBoundingClientRect();
-      const paneRect = pane?.getBoundingClientRect();
-      const topBound = Math.max(0, paneRect?.top ?? 0) + MENU_EDGE_INSET;
-      const bottomBound = Math.min(window.innerHeight, paneRect?.bottom ?? window.innerHeight) - MENU_EDGE_INSET;
-      const roomBelow = Math.max(0, bottomBound - rect.bottom - MENU_GAP);
-      const roomAbove = Math.max(0, rect.top - MENU_GAP - topBound);
+      // 单行短弹框需要借用弹框外的空间，才能完整展示选项。
+      const formRect = formBody && formBody.scrollHeight > formBody.clientHeight ? formBody.getBoundingClientRect() : null;
+      const paneRect = formRect ?? pane?.getBoundingClientRect();
+      const top = Math.max(0, paneRect?.top ?? 0);
+      const bottom = Math.min(window.innerHeight, paneRect?.bottom ?? window.innerHeight);
+      if (rect.bottom <= top || rect.top >= bottom) { dismiss(); return; }
+      const leftBound = Math.max(0, formRect?.left ?? 0) + 8;
+      const rightBound = Math.min(window.innerWidth, formRect?.right ?? window.innerWidth) - 8;
+      const roomBelow = Math.max(0, bottom - MENU_EDGE_INSET - rect.bottom - MENU_GAP);
+      const roomAbove = Math.max(0, rect.top - MENU_GAP - top - MENU_EDGE_INSET);
       const hasDescriptions = options.some(option => option.description);
-      const width = Math.min(window.innerWidth - 16, Math.max(rect.width, hasDescriptions ? 288 : 160));
+      const width = Math.min(rightBound - leftBound, Math.max(rect.width, hasDescriptions ? 288 : 160));
       menu.style.width = `${width}px`;
       menu.style.removeProperty('max-height');
       const box = menu.getBoundingClientRect();
       const showAbove = box.height > roomBelow && roomAbove > roomBelow;
       const room = showAbove ? roomAbove : roomBelow;
       if (box.height > room) menu.style.maxHeight = `${room}px`;
-      menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - box.width - 8))}px`;
+      menu.style.left = `${Math.max(leftBound, Math.min(rect.left, rightBound - box.width))}px`;
       menu.style.top = showAbove ? 'auto' : `${rect.bottom + MENU_GAP}px`;
       menu.style.bottom = showAbove ? `${window.innerHeight - rect.top + MENU_GAP}px` : 'auto';
     };
     const onScroll = (event: Event) => {
-      if (!(event.target instanceof Node && menu.contains(event.target))) update();
+      if (!(event.target instanceof Node && event.target.contains(trigger))) return;
+      // 点击聚焦可能先把按钮滚入视野，随后才派发这次滚动的事件。
+      const rect = trigger.getBoundingClientRect();
+      if (rect.top !== openingRect.top || rect.left !== openingRect.left) dismiss();
     };
     update();
     const observer = new ResizeObserver(update);
     observer.observe(trigger);
+    if (formBody) observer.observe(formBody);
     if (pane) observer.observe(pane);
     window.addEventListener('resize', update);
     window.addEventListener('scroll', onScroll, true);
@@ -155,7 +170,7 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
    * 避免焦点落到已卸载的 portal 节点上。
    */
   function choose(next: SelectOption): void {
-    if (disabled || next.disabled) return;
+    if (disabled || next.disabled || triggerRef.current?.matches(':disabled')) return;
     onChange(next.value);
     setOpen(false);
     triggerRef.current?.focus();
@@ -201,9 +216,7 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
   // 原生 dialog 本身就是顶层容器；自定义 role="dialog" 则挂到它的遮罩父层，
   // 既不会落到底层 z-index，也不会被卡片自身的 overflow 裁剪。
   // open 时 triggerRef 已存在，因此这里读取 ref 是安全的。
-  const nativeDialog = triggerRef.current?.closest('dialog');
-  const modalDialog = triggerRef.current?.closest('[aria-modal="true"]');
-  const portalTarget = nativeDialog ?? modalDialog?.parentElement ?? document.body;
+  const portalTarget = popoverPortalTarget(triggerRef.current);
 
   return (
     <div className={`pi-select ${className}`}>
@@ -214,6 +227,7 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
         disabled={disabled}
         autoFocus={autoFocus}
         aria-label={label}
+        title={title}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
@@ -231,6 +245,7 @@ export function Select({ value, options, onChange, label, placeholder = '请选�
       {open && active && createPortal(
         <PopoverSurface
           ref={menuRef}
+          topLayer={portalTarget.matches('dialog, .settings-overlay')}
           id={listId}
           className={`pi-select-menu ${menuClassName}`}
           role="listbox"

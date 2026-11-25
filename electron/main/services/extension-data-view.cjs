@@ -9,6 +9,13 @@
  */
 
 const crypto = require('node:crypto');
+const { normalizeCanvasScene, normalizeCanvasSnapshot } = require('./extension-canvas.cjs');
+const {
+  taskBoardProtocol,
+  normalizeTaskBoardMutation,
+  normalizeTaskBoardSnapshot,
+  normalizeTaskBoardTask,
+} = require('../core/task-board-contract.cjs');
 
 const MAX_SUBSCRIPTIONS = 64;
 const MAX_PER_RENDERER = 12;
@@ -80,26 +87,36 @@ class ExtensionDataViewService {
     return count;
   }
 
-  snapshot(record, content = record.content, error = undefined) {
+  snapshot(record, value = record.value, error = undefined) {
     return {
       sourceId: record.sourceId,
       revision: record.revision,
       updatedAt: record.updatedAt,
-      content,
+      ...value,
       ...(error ? { error } : {}),
     };
   }
 
   normalize(record, value) {
-    if (!Array.isArray(value)) {
+    if (record.canvas) {
+      return {
+        content: [],
+        canvas: normalizeCanvasSnapshot(value?.canvas),
+        canvasWritable: Boolean(record.context?.durableSessionId) && typeof record.provider.writeCanvas === 'function',
+      };
+    }
+    if (record.taskBoardQuery) {
+      return {
+        content: [],
+        taskBoard: normalizeTaskBoardSnapshot(value?.taskBoard),
+        taskBoardWritable: typeof record.provider.writeTaskBoard === 'function',
+      };
+    }
+    const content = value?.content ?? value ?? [];
+    if (!Array.isArray(content)) {
       throw fail('INVALID_DATA_VIEW', '实时数据源必须返回 ExtensionContent 数组');
     }
-    return this.normalizeContentList(
-      value,
-      record.owner,
-      record.normalizeAction,
-      64,
-    );
+    return { content: this.normalizeContentList(content, record.owner, record.normalizeAction, 64) };
   }
 
   providerContext(record) {
@@ -114,6 +131,7 @@ class ExtensionDataViewService {
       ...(typeof record.context?.sessionTitle === 'string' ? { sessionTitle: record.context.sessionTitle } : {}),
       webContentsId: record.targetId,
       signal: record.abortController.signal,
+      ...(record.taskBoardQuery ? { taskBoardQuery: record.taskBoardQuery } : {}),
       ...(record.context?.model
         ? { model: Object.freeze({ ...record.context.model }) }
         : {}),
@@ -136,8 +154,8 @@ class ExtensionDataViewService {
   deliver(record) {
     if (record.closed) return;
     record.timer = undefined;
-    const snapshot = this.snapshot(record, record.pendingContent, record.pendingError);
-    record.pendingContent = undefined;
+    const snapshot = this.snapshot(record, record.pendingValue, record.pendingError);
+    record.pendingValue = undefined;
     record.pendingError = undefined;
     record.sentRevision = record.revision;
     record.lastSentAt = this.clock();
@@ -147,11 +165,12 @@ class ExtensionDataViewService {
     });
   }
 
-  schedule(record, content, error) {
+  schedule(record, value, error) {
     if (record.closed) return;
     record.revision += 1;
     record.updatedAt = this.clock();
-    record.pendingContent = content;
+    record.pendingValue = value;
+    if (!error) record.value = value;
     record.pendingError = error;
     const elapsed = record.updatedAt - record.lastSentAt;
     if (elapsed >= this.throttleMs) {
@@ -191,16 +210,20 @@ class ExtensionDataViewService {
       extensionId: payload.extensionId || extensionFromContribution(payload.sourceId),
       target: payload.target,
       targetId: payload.target.id,
-      cwd: payload.cwd || '',
-      sessionId: payload.sessionId || '',
-      context: payload.context && typeof payload.context === 'object'
+      cwd: payload.taskBoard ? '' : payload.cwd || '',
+      sessionId: payload.taskBoard ? '' : payload.sessionId || '',
+      context: !payload.taskBoard && payload.context && typeof payload.context === 'object'
         ? payload.context
         : undefined,
       owner: payload.owner,
       normalizeAction: payload.normalizeAction,
       provider,
-      content: [],
-      pendingContent: undefined,
+      canvas: payload.canvas === true,
+      taskBoardQuery: payload.taskBoard
+        ? Object.freeze(taskBoardProtocol.normalizeQuery(payload.taskBoardQuery))
+        : undefined,
+      value: { content: [] },
+      pendingValue: undefined,
       pendingError: undefined,
       revision: 0,
       sentRevision: -1,
@@ -220,7 +243,7 @@ class ExtensionDataViewService {
       if (record.closed) {
         throw fail('DATA_VIEW_CANCELLED', '实时数据视图已关闭');
       }
-      record.content = this.normalize(record, initial?.content ?? initial ?? []);
+      record.value = this.normalize(record, initial);
       record.updatedAt = this.clock();
       record.lastSentAt = record.updatedAt;
       if (typeof provider.subscribe === 'function') {
@@ -228,10 +251,9 @@ class ExtensionDataViewService {
           this.providerContext(record),
           (value) => {
             try {
-              const content = this.normalize(record, value?.content ?? value ?? []);
-              this.schedule(record, content);
+              this.schedule(record, this.normalize(record, value));
             } catch (error) {
-              this.schedule(record, [], error instanceof Error ? error.message : String(error));
+              this.schedule(record, { content: [] }, error instanceof Error ? error.message : String(error));
             }
           },
         ));
@@ -252,7 +274,7 @@ class ExtensionDataViewService {
         subscriptionId: id,
         snapshot: this.snapshot(
           record,
-          record.pendingContent ?? record.content,
+          record.pendingValue ?? record.value,
           record.pendingError,
         ),
       };
@@ -260,6 +282,37 @@ class ExtensionDataViewService {
       await this.close(id, payload.target);
       throw error;
     }
+  }
+
+  async writeCanvas(id, target, payload) {
+    const record = this.subscriptions.get(id);
+    if (!record || record.targetId !== target?.id || !record.canvas || !record.context?.durableSessionId
+      || typeof record.provider.writeCanvas !== 'function') {
+      throw fail('DATA_SOURCE_FORBIDDEN', '当前窗口无权保存这个画布');
+    }
+    const { revision } = payload;
+    if (!Number.isSafeInteger(revision) || revision < 0) {
+      throw fail('INVALID_DATA_VIEW', '画布版本无效');
+    }
+    const scene = normalizeCanvasScene(payload.scene);
+    const saved = await this.awaitProvider(() => {
+      record.abortController.signal.throwIfAborted();
+      return record.provider.writeCanvas(this.providerContext(record), { revision, scene });
+    }, '保存');
+    return normalizeCanvasSnapshot(saved);
+  }
+
+  async writeTaskBoard(id, target, mutation) {
+    const record = this.subscriptions.get(id);
+    if (!record?.taskBoardQuery || record.targetId !== target?.id || typeof record.provider.writeTaskBoard !== 'function') {
+      throw fail('DATA_SOURCE_FORBIDDEN', '当前窗口无权修改这个任务看板');
+    }
+    const normalized = normalizeTaskBoardMutation(mutation);
+    const saved = await this.awaitProvider(() => {
+      record.abortController.signal.throwIfAborted();
+      return record.provider.writeTaskBoard(this.providerContext(record), normalized);
+    }, '保存');
+    return normalizeTaskBoardTask(saved);
   }
 
   async disposeProvider(record, pendingUnsubscribe) {
@@ -340,12 +393,20 @@ async function closeExtensionDataViewServices(extensionId) {
   );
 }
 
+async function closeConversationDataViewServices(ids) {
+  const keys = new Set(ids.map(String));
+  await Promise.all([...registeredServices].map(service => service.closeWhere(record => (
+    keys.has(record.sessionId) || keys.has(String(record.context?.durableSessionId ?? ''))
+  ))));
+}
+
 module.exports = {
   DEFAULT_THROTTLE_MS,
   DEFAULT_PROVIDER_TIMEOUT_MS,
   ExtensionDataViewError,
   ExtensionDataViewService,
   closeAllExtensionDataViewServices,
+  closeConversationDataViewServices,
   closeExtensionDataViewServices,
   createExtensionDataViewService,
   registerExtensionDataViewService,

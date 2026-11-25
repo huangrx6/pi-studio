@@ -228,8 +228,7 @@
             "additionalProperties": false,
             "required": [
               "id",
-              "title",
-              "slot"
+              "title"
             ],
             "properties": {
               "id": {
@@ -246,15 +245,24 @@
               },
               "slot": {
                 "enum": [
-                  "workspace.sidebar",
-                  "conversation.header",
-                  "conversation.detail",
-                  "conversation.footer",
-                  "composer.before",
-                  "settings.panel",
-                  "panel.side",
-                  "status.bar"
+                  "status.chip",
+                  "composer.above",
+                  "composer.below",
+                  "panel.side"
                 ]
+              },
+              "slots": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": {
+                  "enum": [
+                    "status.chip",
+                    "composer.above",
+                    "composer.below"
+                  ]
+                },
+                "uniqueItems": true
               },
               "icon": {
                 "$ref": "#/$defs/icon"
@@ -285,6 +293,84 @@
                 "maxItems": 64,
                 "items": {
                   "$ref": "#/$defs/content"
+                }
+              },
+              "details": {
+                "$ref": "#/$defs/contributionId"
+              },
+              "visibility": {
+                "enum": [
+                  "always",
+                  "while-active"
+                ]
+              },
+              "canvas": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "sourceId"
+                ],
+                "properties": {
+                  "sourceId": {
+                    "$ref": "#/$defs/contributionRef"
+                  }
+                }
+              },
+              "taskBoard": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "sourceId"
+                ],
+                "properties": {
+                  "sourceId": {
+                    "$ref": "#/$defs/contributionRef"
+                  }
+                }
+              }
+            },
+            "oneOf": [
+              {
+                "required": [
+                  "slot"
+                ]
+              },
+              {
+                "required": [
+                  "slots"
+                ]
+              }
+            ],
+            "not": {
+              "required": [
+                "canvas",
+                "taskBoard"
+              ]
+            },
+            "if": {
+              "anyOf": [
+                {
+                  "required": [
+                    "canvas"
+                  ]
+                },
+                {
+                  "required": [
+                    "taskBoard"
+                  ]
+                }
+              ]
+            },
+            "then": {
+              "required": [
+                "slot"
+              ],
+              "properties": {
+                "slot": {
+                  "const": "panel.side"
+                },
+                "content": {
+                  "maxItems": 0
                 }
               }
             }

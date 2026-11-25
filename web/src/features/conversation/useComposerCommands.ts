@@ -12,11 +12,11 @@ import type {
 import type {
   ExtensionCommandResult,
   ExtensionUiAction,
-  ExtensionUiItem,
 } from '../../types/extension-types';
 import type { ModelPickerRequest } from '../models/ModelPicker';
 import type { ComposerMenuState } from './useComposerSuggestions';
-import type { ComposerCommand } from '../../types/chat-types';
+import { composerCapabilityCategories, composerMenuAt } from './composer-menu';
+import type { ComposerCommand, ComposerMentionOption } from '../../types/chat-types';
 import type { ComposerDraft } from './composer-drafts';
 import {
   composerDraftMatches,
@@ -28,6 +28,8 @@ import {
   saveComposerDraft,
 } from './composer-drafts';
 import {
+  formatAgentReference,
+  formatCapabilityReference,
   formatFileReference,
   insertComposerToken,
 } from './references';
@@ -65,12 +67,11 @@ type ComposerCommandsDependencies = {
   composerDraftKeyRef: MutableRefObject<string>;
   composerDraftsRef: MutableRefObject<Map<string, ComposerDraft>>;
   composerMenu: ComposerMenuState | null;
-  composerFileOptions: Array<{ path: string; type: 'file' | 'directory' }>;
+  composerMentionOptions: ComposerMentionOption[];
   composerCommandOptions: ComposerCommand[];
   composerCommands: ComposerCommand[];
   composerEditorRef: MutableRefObject<ComposerEditorHandle | null>;
   modelPickerRequestRef: MutableRefObject<number>;
-  conversationExtensionItems: ExtensionUiItem[];
   conversationNavigationRef: MutableRefObject<{
     open: (item: import('../../shell/app-types').PiSessionSummary) => Promise<boolean>;
     start: (cwd: string) => Promise<void>;
@@ -112,7 +113,7 @@ type ComposerCommandsDependencies = {
     sessionId?: string,
     action?: AppNotificationAction,
   ) => void;
-  openConversationExtension: (itemId: string) => void;
+  openExtensionPanel: (panelId: string) => Promise<void>;
 };
 
 export function useComposerCommands({
@@ -131,11 +132,10 @@ export function useComposerCommands({
   composerDraftKeyRef,
   composerDraftsRef,
   composerMenu,
-  composerFileOptions,
+  composerMentionOptions,
   composerCommandOptions,
   composerEditorRef,
   modelPickerRequestRef,
-  conversationExtensionItems,
   conversationNavigationRef,
   setBusy,
   setError,
@@ -156,27 +156,11 @@ export function useComposerCommands({
   loadState,
   showComposerFeedback,
   pushNotification,
-  openConversationExtension,
+  openExtensionPanel,
 }: ComposerCommandsDependencies) {
   function updateComposerMenu(value: string, caret: number) {
-    const before = value.slice(0, caret);
-    const slash = before.match(/(?:^|\s)\/([^\s]*)$/);
-    if (slash) {
-      const start = caret - slash[1].length - 1;
-      const next = { kind: 'slash' as const, query: slash[1], start, end: caret };
-      setComposerMenu((current) => current?.kind === next.kind && current.query === next.query && current.start === next.start && current.end === next.end ? current : next);
-      setComposerMenuIndex(0);
-      return;
-    }
-    const at = before.match(/(?:^|\s)@([^\s]*)$/);
-    if (at) {
-      const start = caret - at[1].length - 1;
-      const next = { kind: 'file' as const, query: at[1], start, end: caret };
-      setComposerMenu((current) => current?.kind === next.kind && current.query === next.query && current.start === next.start && current.end === next.end ? current : next);
-      setComposerMenuIndex(0);
-      return;
-    }
-    setComposerMenu(null);
+    setComposerMenu(current => composerMenuAt(value, caret, current));
+    setComposerMenuIndex(0);
   }
 
   function requestModelPicker(view: ModelPickerRequest['view']) {
@@ -212,13 +196,7 @@ export function useComposerCommands({
       return;
     }
     if (action.kind === 'openPanel') {
-      if (conversationExtensionItems.some((item) => item.id === action.panelId)) {
-        openConversationExtension(action.panelId);
-      } else {
-        window.dispatchEvent(new CustomEvent('pi-studio:open-extension-panel', {
-          detail: { panelId: action.panelId },
-        }));
-      }
+      await openExtensionPanel(action.panelId);
       return;
     }
     if (action.kind === 'sendPrompt') {
@@ -264,13 +242,8 @@ export function useComposerCommands({
       if (!canApply()) return false;
     }
     if (result.panelId) {
-      if (conversationExtensionItems.some((item) => item.id === result.panelId)) {
-        openConversationExtension(result.panelId);
-      } else {
-        window.dispatchEvent(new CustomEvent('pi-studio:open-extension-panel', {
-          detail: { panelId: result.panelId },
-        }));
-      }
+      await openExtensionPanel(result.panelId);
+      if (!canApply()) return false;
     }
     if (result.message) {
       setError(null);
@@ -505,21 +478,39 @@ export function useComposerCommands({
   function selectComposerOption(index: number) {
     const menu = composerMenu;
     if (!menu) return;
-    const caret = menu.end;
-    if (menu.kind === 'file') {
-      const file = composerFileOptions[index];
-      if (!file) return;
-      const token = formatFileReference(`${file.path}${file.type === 'directory' ? '/' : ''}`);
-      const insertion = insertComposerToken(prompt, menu.start, caret, token);
+    if (menu.kind === 'capability' && !menu.capabilityType) {
+      const category = composerCapabilityCategories[index];
+      if (!category) return;
+      setComposerMenu({ ...menu, capabilityType: category.type });
+      setComposerMenuIndex(0);
+      return;
+    }
+    const { start, end: caret } = menu;
+
+    function insertOption(token: string) {
+      const input = composerEditorRef.current;
+      const insertion = insertComposerToken(input?.value ?? prompt, start, caret, token);
       saveComposerDraft(composerDraftsRef.current, composerDraftKeyRef.current, { ...currentComposerDraft(), text: insertion.text });
-      setPrompt(insertion.text);
+      if (input) {
+        input.focus();
+        input.replaceText(insertion.text, insertion.caret);
+      } else {
+        setPrompt(insertion.text);
+      }
       setComposerMenu(null);
-      requestAnimationFrame(() => { composerEditorRef.current?.focus(); composerEditorRef.current?.setSelectionRange(insertion.caret, insertion.caret); });
+    }
+
+    if (menu.kind !== 'slash') {
+      const mention = composerMentionOptions[index];
+      if (!mention) return;
+      const token = 'path' in mention ? formatFileReference(mention.path + (mention.type === 'directory' ? '/' : ''))
+        : mention.type === 'agent' ? formatAgentReference(mention) : formatCapabilityReference(mention);
+      insertOption(token);
       return;
     }
     const command = composerCommandOptions[index];
     if (!command) return;
-    const standalone = !prompt.slice(0, menu.start).trim() && !prompt.slice(caret).trim() && !composerAttachments.length;
+    const standalone = !prompt.slice(0, start).trim() && !prompt.slice(caret).trim() && !composerAttachments.length;
     if (standalone && !command.argumentHint && (command.source === 'builtin' || (command.source === 'extension' && command.commandId))) {
       const owner = composerDraftKeyRef.current;
       const generation = sessionLoadRef.current;
@@ -537,11 +528,7 @@ export function useComposerCommands({
       }).catch(cause => { if (composerDraftKeyRef.current === owner) setError(errorText(cause)); });
       return;
     }
-    const insertion = insertComposerToken(prompt, menu.start, caret, `/${command.name}`);
-    saveComposerDraft(composerDraftsRef.current, composerDraftKeyRef.current, { ...currentComposerDraft(), text: insertion.text });
-    setPrompt(insertion.text);
-    setComposerMenu(null);
-    requestAnimationFrame(() => { composerEditorRef.current?.focus(); composerEditorRef.current?.setSelectionRange(insertion.caret, insertion.caret); });
+    insertOption(`/${command.name}`);
   }
 
   return {

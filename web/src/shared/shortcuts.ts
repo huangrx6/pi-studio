@@ -23,15 +23,15 @@ export const NAMED_KEYS = new Set([
 /** Actions the shell can dispatch. `default` is the shipped binding. */
 export const SHORTCUT_ACTIONS = [
   { id: 'palette', label: '命令面板', default: 'Mod+K' },
-  { id: 'settings', label: '打开设置', hint: '', default: 'Mod+,' },
-  { id: 'toggleSidebar', label: '折叠 / 展开侧栏', hint: '', default: 'Mod+B' },
-  { id: 'togglePanel', label: '折叠 / 展开右侧面板', hint: '', default: 'Mod+J' },
-  { id: 'newChat', label: '新建会话', hint: '', default: 'Mod+N' },
-  { id: 'openBrowser', label: '在右侧打开浏览器', hint: '', default: 'Mod+Shift+B' },
-  { id: 'openTerminal', label: '在右侧打开终端', hint: '', default: 'Mod+`' },
-  { id: 'prevSession', label: '上一个会话', hint: '', default: 'Mod+Shift+[' },
-  { id: 'nextSession', label: '下一个会话', hint: '', default: 'Mod+Shift+]' },
-  { id: 'stopGeneration', label: '停止当前生成', hint: '', default: 'Mod+.' },
+  { id: 'settings', label: '打开设置', default: 'Mod+,' },
+  { id: 'toggleSidebar', label: '折叠 / 展开侧栏', default: 'Mod+B' },
+  { id: 'togglePanel', label: '折叠 / 展开右侧面板', default: 'Mod+J' },
+  { id: 'newChat', label: '新建会话', default: 'Mod+N' },
+  { id: 'openBrowser', label: '在右侧打开浏览器', default: 'Mod+Shift+B' },
+  { id: 'openTerminal', label: '在右侧打开终端', default: 'Mod+`' },
+  { id: 'prevSession', label: '上一个会话', default: 'Mod+Shift+[' },
+  { id: 'nextSession', label: '下一个会话', default: 'Mod+Shift+]' },
+  { id: 'stopGeneration', label: '停止当前生成', default: 'Mod+.' },
 ];
 
 export const SHORTCUT_IDS = SHORTCUT_ACTIONS.map((action) => action.id);

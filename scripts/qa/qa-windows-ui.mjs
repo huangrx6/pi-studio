@@ -66,9 +66,11 @@ try {
 
     await page.keyboard.press('Control+,');
     const settings = page.getByRole('dialog', { name: '设置', exact: true });
+    assert.notEqual(await settings.getByRole('region', { name: '应用', exact: true }).locator('details').getAttribute('open'), null);
     const tray = settings.getByRole('switch', { name: '隐藏系统托盘图标' });
     await tray.click();
     assert.equal(await settings.getByRole('switch', { name: '显示系统托盘图标' }).getAttribute('aria-checked'), 'false');
+    assert.notEqual(await settings.getByRole('region', { name: '终端', exact: true }).locator('details').getAttribute('open'), null);
     assert.equal(await settings.getByRole('switch', { name: 'Shell 集成' }).count(), 0);
     await settings.getByRole('button', { name: '收起侧边栏' }).click();
     assert.equal(await padding(settings.locator('.settings-header')), '24px');

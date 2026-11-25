@@ -288,6 +288,14 @@ export type ComposerFile = {
   type: 'file' | 'directory';
 };
 
+export type ComposerCapability = {
+  id: string; name: string; description: string; originalDescription?: string; source: string;
+} & ({ type: 'skill' } | { type: 'mcp'; server: string } | { type: 'plugin'; iconDataUrl?: string });
+
+export type ComposerMentionOption = ComposerFile | ComposerCapability | {
+  type: 'agent'; id: string; name: string; avatarId: string; description: string;
+};
+
 /** 一轮对话中单个文件的 Git 变更；patch 为统一 diff 文本。 */
 export type TurnDiffFile = {
   /** 文件绝对路径。 */

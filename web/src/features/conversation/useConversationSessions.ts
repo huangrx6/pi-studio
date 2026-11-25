@@ -17,7 +17,6 @@ import {
   createEmptyModelSelection,
 } from '../../types/model-types';
 import type {
-  AgentView,
   PiSessionSummary,
   PiWorkspace,
 } from '../../shell/app-types';
@@ -88,7 +87,6 @@ type ConversationSessionsDependencies = {
   /** 窗口是否因为跳转被截掉了较新的一段（需要提供「回到最新」入口）。 */
   setTranscriptTruncated: Setter<boolean>;
   setRequestTraces: Setter<RequestTrace[]>;
-  setAgentView: Setter<AgentView>;
   setSubagentChildren: Setter<SubagentChild[]>;
   setSubagentBudget: Setter<SubagentBudgetSnapshot | null>;
   setSubagentTranscript: Setter<SubagentTranscript | null>;
@@ -143,7 +141,6 @@ export function useConversationSessions({
   setMessages,
   setTranscriptTruncated,
   setRequestTraces,
-  setAgentView,
   setSubagentChildren,
   setSubagentBudget,
   setSubagentTranscript,
@@ -188,7 +185,6 @@ export function useConversationSessions({
     setSession(null);
     setMessages([]);
     setRequestTraces([]);
-    setAgentView({ kind: 'conversation' });
     setSubagentChildren([]);
     setSubagentBudget(null);
     setSubagentTranscript(null);
@@ -226,7 +222,6 @@ export function useConversationSessions({
     setSessionLoading(false);
     sessionRef.current = null;
     setSession(null);
-    setAgentView({ kind: 'conversation' });
     setSubagentChildren([]);
     setSubagentBudget(null);
     setSubagentTranscript(null);
@@ -340,7 +335,6 @@ export function useConversationSessions({
       setSubagentTranscript(null);
       setSubagentError(null);
       setSubagentLoading(false);
-      setAgentView({ kind: 'conversation' });
       if (outlineRequest === outlineRequestRef.current) {
         applyOutline(outline ? { items: outline.items, totalMessages: outline.totalMessages } : undefined, detail.messages, detail.messageStart);
       }

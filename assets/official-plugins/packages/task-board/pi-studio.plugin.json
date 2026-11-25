@@ -1,0 +1,12 @@
+{
+  "format": 1,
+  "kind": "plugin",
+  "id": "studio.task-board",
+  "name": "任务看板",
+  "version": "1.0.0",
+  "publisher": "Pi Studio",
+  "description": "在全局看板里记录任务、优先级和计划与实际时间，并让 AI 按状态或日期查询。",
+  "category": "productivity",
+  "icon": "assets/icon.png",
+  "provides": { "extension": { "path": "extension" } }
+}

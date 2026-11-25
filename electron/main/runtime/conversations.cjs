@@ -17,7 +17,6 @@ const { chatAttachments, parseAttachmentMarkers } = require('../core/attachment-
 const { getStudioDatabase } = require('../core/studio-db.cjs');
 const {
   deleteWorkspaceScopedSettings,
-  deletePermissionSessionPolicy,
   getRuntimePolicy,
 } = require('../core/app-settings.cjs');
 const { getStudioModelsRuntime } = require('../core/studio-models.cjs');
@@ -42,25 +41,31 @@ const {
   splitModelRef,
   validateThinkingLevel,
 } = require('../services/models.cjs');
-const { assetOwner, bindConversationUploads, removeConversationAssets } = require('../services/conversation-assets.cjs');
+const { bindConversationUploads } = require('../services/conversation-assets.cjs');
+const { waitForAssetArchive } = require('../services/conversation-asset-archive.cjs');
+const { flushConversationFileCleanup, queueConversationFileCleanup } = require('../services/conversation-file-cleanup.cjs');
+const { closeConversationDataViewServices } = require('../services/extension-data-view.cjs');
 const { fileReferenceContext } = require('../services/workspace.cjs');
 const {
   attachmentContext,
   attachmentSize,
-  removeAttachmentDirectory,
 } = require('../services/attachments.cjs');
 const {
   beginTurn,
+  discardTurn,
   endTurn,
   saveTurnDiff,
 } = require('../services/turn-diff.cjs');
+const { publishFileChanges } = require('../services/file-change-events.cjs');
 const { runtimeSelection } = require('./tool-selection.cjs');
+const { composerCapabilityCatalog, readableCapabilityReferences, resolveCapabilityReferences } = require('./composer-capabilities.cjs');
 const {
   extensionComposerCommands,
   purgeProjectWorkspaceState,
 } = require('../services/studio-extensions.cjs');
 const {
   composerSkills,
+  discoverSkills,
   expandSkillCommand,
 } = require('../capabilities/skills/index.cjs');
 const {
@@ -89,6 +94,8 @@ const {
 } = require('../capabilities/request-trace/index.cjs');
 const {
   discardManagedWorktreesForConversations,
+  resolveProfileMentions,
+  readableRoleMentions,
 } = require('../capabilities/subagents/index.cjs');
 
 /**
@@ -100,6 +107,33 @@ const PATH_OUTPUT_INSTRUCTIONS = [
   'Do not use ~, ./, or a bare relative path in a link; if you cannot confirm the absolute path, say so instead of guessing.',
   'Markdown links to local files are clickable in the app, e.g. [report.xlsx](/Users/me/out/report.xlsx).',
 ].join(' ');
+
+/**
+ * Link-opening policy is also injected as a Durable section from the browser
+ * capability (studio-browser-open). Keep a short configure-time reminder so
+ * every submit still carries the constraint even if sections change later.
+ */
+const BROWSER_WORKBENCH_INSTRUCTIONS = [
+  'Opening links: follow Studio browser settings only (Settings → Browser) for all web and local links.',
+  'Workbench means open inside Studio (browser_open for browsable pages; in-app preview for other local files).',
+  'Do not use bash open/xdg-open/Playwright/system Chrome for ordinary previews when settings put that link class in the workbench.',
+  'To use the system browser or default app, change open-target or external-block settings — chat wording alone does not override them.',
+  'Configured MCP browser tools (for example Chrome DevTools MCP) are separate from bash open and are allowed when those MCP tools are enabled; prefer them or browser_open over launching Chrome via bash.',
+].join(' ');
+
+function studioAgentInstructions() {
+  const parts = [PATH_OUTPUT_INSTRUCTIONS];
+  try {
+    const { getBrowserPreferences } = require('../services/browser/settings.cjs');
+    const preferences = getBrowserPreferences();
+    if (preferences.linkOpenInstructAgent !== false) {
+      parts.push(BROWSER_WORKBENCH_INSTRUCTIONS);
+    }
+  } catch {
+    parts.push(BROWSER_WORKBENCH_INSTRUCTIONS);
+  }
+  return parts.join(' ');
+}
 const DEFAULT_PAGE_SIZE = 80;
 const MAX_PAGE_SIZE = 2_000;
 const ENTRY_SCAN_PAGE_SIZE = 300;
@@ -114,20 +148,24 @@ const watches = new Map();
 const subscribers = new Map();
 const messageCounts = new Map();
 const runningConversations = new Set();
-const runDiffSnapshots = new Map();
 const editRangesCache = new Map();
+const deletingConversations = new Set();
+const conversationMutations = new Map();
+let purgeQueue = Promise.resolve();
 const REQUEST_TRACE_PAGE_LIMIT = 16;
 
 onRequestTrace(async (trace) => {
   const numericConversationId = normalizeId(trace?.conversationId);
   if (!numericConversationId) return;
-  const row = await getConversationRow(String(numericConversationId));
+  const db = getStudioDatabase();
+  if (deletingConversations.has(String(numericConversationId)) || !db.hasDurableConversation(numericConversationId)) return;
+  const row = db.getConversation(String(numericConversationId));
   const key = row ? conversationKey(row) : String(numericConversationId);
   const dto = {
     ...trace,
     conversationId: key,
   };
-  if (!getStudioDatabase().saveRequestTrace(key, dto)) return;
+  if (!db.saveRequestTrace(key, dto)) return;
   const entry = watches.get(key);
   if (!entry) return;
   entry.revision += 1;
@@ -234,7 +272,26 @@ function liveSnapshotDto(conversation, snapshot, extra = {}) {
 
 async function getConversationRow(id) {
   if (typeof id !== 'string' && typeof id !== 'number') return undefined;
-  return getStudioDatabase().getConversation(String(id));
+  const row = getStudioDatabase().getConversation(String(id));
+  return row && !deletingConversations.has(String(row.id)) ? row : undefined;
+}
+
+function conversationAvailable(id) {
+  const row = getStudioDatabase().getConversation(String(id));
+  return Boolean(row && !deletingConversations.has(String(row.id)));
+}
+
+function withConversationMutation(id, operation) {
+  const key = String(id);
+  if (!conversationAvailable(key)) throw new Error('会话不存在或正在删除');
+  const operations = conversationMutations.get(key) || new Set();
+  conversationMutations.set(key, operations);
+  const pending = Promise.resolve().then(operation);
+  operations.add(pending);
+  return pending.finally(() => {
+    operations.delete(pending);
+    if (!operations.size) conversationMutations.delete(key);
+  });
 }
 
 async function getConversationHandle(id, options = {}) {
@@ -243,6 +300,7 @@ async function getConversationHandle(id, options = {}) {
   if (!normalized) return undefined;
   if (row?.workspace) await reconcileRuntimeForWorkspace(row.workspace, options);
   const runtime = await getDurableRuntime();
+  if (!conversationAvailable(row.id)) return undefined;
   return runtime.harness.conversation(normalized, runtime.context);
 }
 
@@ -505,10 +563,10 @@ async function conversationMessageSummary(conversation, options = {}) {
   await scanDisplayMessages(conversation, (message) => {
     totalMessages += 1;
     if (!options.outline || message.role !== 'user' || items.length >= MAX_OUTLINE_ITEMS) return;
-    const text = message.content
+    const text = readableReferences(message.content
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
-      .join(' ')
+      .join(' '))
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, MAX_OUTLINE_TEXT) || '消息';
@@ -533,12 +591,15 @@ async function temporarySnapshot(conversation) {
 
 async function reconcileWatchSnapshot(entry, conversation) {
   if (!entry || !entry.running) return entry?.snapshot;
+  const previous = entry.snapshot;
   const fresh = await temporarySnapshot(conversation);
   if (fresh?.run) return entry.snapshot;
   // The event stream can briefly lag the task projection. Refresh it before
   // closing the live entry; background tasks are still part of this Studio
   // conversation even though they do not keep Durable's parent run busy.
   await refreshRuntimeState();
+  if (entry.snapshot !== previous) return entry.snapshot;
+  applyMetricsView(entry, conversation.id, previous, fresh, durableView.diffLive(previous, fresh));
   entry.snapshot = fresh;
   entry.partial = fresh?.generation?.message;
   entry.running = false;
@@ -574,7 +635,7 @@ async function conversationSnapshot(id) {
     ? await reconcileWatchSnapshot(entry, conversation)
     : await temporarySnapshot(conversation);
   const agent = await conversation.agent((await getDurableRuntime()).context);
-  return liveSnapshotDto(row, snapshot, {
+  const dto = liveSnapshotDto(row, snapshot, {
     durableSessionId: String(row.id),
     model: await sessionModelInfo(agent),
     turnDiffs: getStudioDatabase().readTurnDiffs(key),
@@ -584,6 +645,7 @@ async function conversationSnapshot(id) {
       summary: true,
     }),
   });
+  return conversationAvailable(row.id) ? dto : undefined;
 }
 
 async function conversationPage(id, options = {}) {
@@ -717,7 +779,7 @@ function recordSearchText(parsed) {
   const parts = [];
   const data = parsed && typeof parsed === 'object' ? parsed.data : undefined;
   if (data && typeof data === 'object') {
-    if (typeof data.displayText === 'string') parts.push(data.displayText);
+    if (typeof data.displayText === 'string') parts.push(readableReferences(data.displayText));
     if (typeof data.text === 'string') parts.push(data.text);
   }
   const messages = Array.isArray(parsed?.model) ? parsed.model : Array.isArray(parsed) ? parsed : [];
@@ -943,6 +1005,20 @@ async function prepareLongTaskSubmission({ row, conversation, text }) {
   );
 }
 
+function readableReferences(text) {
+  return readableRoleMentions(readableCapabilityReferences(text));
+}
+
+function submissionReferences(text, cwd, selection) {
+  const roles = resolveProfileMentions(text, selection.tools.some(tool => tool.name === 'subagent'));
+  const capabilities = resolveCapabilityReferences(roles.display, () => composerCapabilityCatalog(cwd, selection));
+  const readable = readableReferences(capabilities.display);
+  return {
+    displayText: capabilities.display, readable,
+    prompt: [expandSkillCommand(readable, cwd), capabilities.context, roles.routing].filter(Boolean).join('\n\n'),
+  };
+}
+
 async function submitConversation(input = {}, options = {}) {
   const row = await getConversationRow(input.id || input.sessionId);
   const conversation = await getConversationHandle(input.id || input.sessionId, {
@@ -950,28 +1026,35 @@ async function submitConversation(input = {}, options = {}) {
   });
   if (!row || !conversation) throw new Error('会话不存在');
   const runtime = await getDurableRuntime();
-  const displayText = String(input.text || '').trim();
-  await guardSensitiveInput({ sessionId: row.publicId, text: displayText });
-  const longTask = await prepareLongTaskSubmission({
-    row,
-    conversation,
-    text: displayText,
-  });
-  const selection = await runtimeSelection({
-    kind: row.kind,
-    longTask: Boolean(longTask?.enabled && longTask?.goal),
-  });
+  const originalText = String(input.text || '').trim();
+  await guardSensitiveInput({ sessionId: row.publicId, text: originalText });
+  return withConversationMutation(row.id, () => admitConversation(row, conversation, runtime, originalText, input, options));
+}
+
+async function admitConversation(row, conversation, runtime, originalText, input, options) {
+  const projectedGoal = Boolean(row.goal);
+  let selection = await runtimeSelection({ kind: row.kind, longTask: projectedGoal });
+  // A revoked reference must not create or resume a goal before admission.
+  let references = submissionReferences(originalText, row.workspace, selection);
+  const longTask = await prepareLongTaskSubmission({ row, conversation, text: references.readable });
+  const activeGoal = Boolean(longTask?.enabled && longTask?.goal);
+  if (row.kind !== 'durable' && activeGoal !== projectedGoal) {
+    selection = await runtimeSelection({ kind: row.kind, longTask: activeGoal });
+    references = submissionReferences(originalText, row.workspace, selection);
+  }
+  const { displayText, readable, prompt } = references;
   await conversation.configure({
     extensions: selection.extensions,
     tools: selection.tools,
     // 提示词只做辅助约束：真正的路径解析在主进程（file-target.cjs），
     // 模型写 `~` 或相对路径也不会打不开文件。
-    instructions: PATH_OUTPUT_INSTRUCTIONS,
+    // 路径写法 + 链接打开策略（网页/本地全部适用；细节见 studio-browser-open section）。
+    instructions: studioAgentInstructions(),
   }, runtime.context);
   const attachments = bindConversationUploads(row, input.attachments);
   const content = await inputContent({
     cwd: row.workspace,
-    text: expandSkillCommand(input.text, row.workspace),
+    text: prompt,
     mentions: input.mentions,
     attachments,
     images: input.images,
@@ -1033,7 +1116,7 @@ async function submitConversation(input = {}, options = {}) {
     (needsInitialTitle || repairingFallbackTitle)
     && Boolean(displayText)
   );
-  const nextTitle = needsInitialTitle ? temporaryTitle(displayText) : row.title;
+  const nextTitle = needsInitialTitle ? temporaryTitle(readable) : row.title;
   try {
     getStudioDatabase().updateConversation(row.id, {
       ...(options.edit ? {} : { title: nextTitle }),
@@ -1052,8 +1135,8 @@ async function submitConversation(input = {}, options = {}) {
       let generated = '';
       try {
         const titleQuestion = repairingFallbackTitle
-          ? (await firstUserQuestion(conversation) || displayText)
-          : displayText;
+          ? readableReferences(await firstUserQuestion(conversation) || displayText)
+          : readable;
         const modelRuntime = await getStudioModelsRuntime();
         generated = await generateConversationTitleAfterIdle({
           conversation,
@@ -1284,10 +1367,10 @@ async function configureConversation({ id, modelRef, thinkingLevel } = {}) {
   const requested = thinkingLevel || current.thinkingLevel || 'default';
   validateThinkingLevel(model, requested, modelRuntime);
   const concrete = concreteThinkingLevel(model, requested, modelRuntime);
-  await conversation.configure({
+  await withConversationMutation(row.id, () => conversation.configure({
     model: { provider: nextRef.provider, modelId: nextRef.modelId },
     thinkingLevel: concrete,
-  }, runtime.context);
+  }, runtime.context));
   return {
     ...await sessionModelInfo({
       model: { provider: nextRef.provider, modelId: nextRef.modelId },
@@ -1297,24 +1380,6 @@ async function configureConversation({ id, modelRef, thinkingLevel } = {}) {
   };
 }
 
-/**
- * Move only the Durable agent cwd. The Studio row keeps its original workspace
- * so isolated comparison branches remain visible under the parent project.
- * This helper is internal to the main process and is not exposed through IPC.
- */
-async function configureConversationAgentCwd(id, cwd) {
-  const row = await getConversationRow(id);
-  const conversation = await getConversationHandle(id);
-  if (!row || !conversation) throw new Error('会话不存在');
-  if (typeof cwd !== 'string' || !path.isAbsolute(cwd)) {
-    throw new Error('托管工作目录无效');
-  }
-  const target = fs.realpathSync(path.resolve(cwd));
-  if (!fs.statSync(target).isDirectory()) throw new Error('托管工作目录无效');
-  const runtime = await getDurableRuntime();
-  await conversation.configure({ cwd: target }, runtime.context);
-  return { ok: true, cwd: target };
-}
 
 async function setLongTaskStatus(row, conversation, status) {
   if (!row) return undefined;
@@ -1646,18 +1711,20 @@ async function forkConversation(id, entryId) {
       )).items[0];
   if (!entry) throw new Error('找不到要分叉的消息');
   const runtime = await getDurableRuntime();
-  const fork = await conversation.fork(entry.id, {
-    ownership: { kind: 'ownerless' },
-  }, runtime.context);
-  const next = getStudioDatabase().insertConversation({
-    id: String(fork.id),
-    workspace: row.workspace,
-    kind: row.kind,
-    title: `${row.title.slice(0, 72)} · 分叉`,
-    titleSource: 'user',
-    goal: row.goal,
+  return withConversationMutation(row.id, async () => {
+    const fork = await conversation.fork(entry.id, {
+      ownership: { kind: 'ownerless' },
+    }, runtime.context);
+    const next = getStudioDatabase().insertConversation({
+      id: String(fork.id),
+      workspace: row.workspace,
+      kind: row.kind,
+      title: `${row.title.slice(0, 72)} · 分叉`,
+      titleSource: 'user',
+      goal: row.goal,
+    });
+    return conversationDto(next);
   });
-  return conversationDto(next);
 }
 
 /**
@@ -1672,7 +1739,7 @@ async function compactConversation(id, instructions) {
   const text = typeof instructions === 'string' && instructions.trim()
     ? instructions.trim().slice(0, 2_000)
     : undefined;
-  const taskId = await conversation.compact(text, runtime.context);
+  const taskId = await withConversationMutation(row.id, () => conversation.compact(text, runtime.context));
   await refreshRuntimeState();
   return { ok: true, taskId: String(taskId) };
 }
@@ -1680,10 +1747,7 @@ async function compactConversation(id, instructions) {
 async function stopConversationWatches(id) {
   const key = String(id);
   subscribers.delete(key);
-  const entry = watches.get(key);
-  if (!entry) return;
-  watches.delete(key);
-  await entry.stream.stop().catch(() => {});
+  await disposeWatch(key);
 }
 
 function taskIsActive(task) {
@@ -1719,46 +1783,62 @@ async function waitForConversationTasksToSettle(conversationIds, taskIds = [], t
  * rows, Studio projections, permissions, caches, watches, and attachments.
  * Global usage analytics and the next-ID allocator are deliberately retained.
  */
-async function purgeConversationData(rootIds, options = {}) {
+function purgeConversationData(rootIds, options = {}) {
+  const next = purgeQueue.then(() => purgeConversationDataUnlocked(rootIds, options));
+  purgeQueue = next.catch(() => {});
+  return next;
+}
+
+async function purgeConversationDataUnlocked(rootIds, options) {
   const db = getStudioDatabase();
   const roots = [...new Set((rootIds || [])
     .map((value) => Number(value))
     .filter((value) => Number.isSafeInteger(value) && value > 0))];
-  if (roots.length === 0) {
-    return {
-      conversationIds: [],
-      taskIds: [],
-      documentIds: [],
-      publicIds: [],
-      workspaces: [],
-      attachmentsRemoved: 0,
-    };
-  }
-  const tree = db.durableConversationTree(roots, {
-    extraTaskIds: options.extraTaskIds,
-  });
-  if (tree.conversationIds.length === 0) {
-    let attachmentsRemoved = 0;
-    for (const root of roots) {
-      const row = db.getConversation(String(root));
-      const key = row?.publicId || String(root);
-      await stopConversationWatches(key);
-      deletePermissionSessionPolicy(key);
-      db.deleteConversation(String(root));
-      try {
-        if (row && removeConversationAssets(row)) attachmentsRemoved += 1;
-        if (removeAttachmentDirectory(key)) attachmentsRemoved += 1;
-      } catch (error) {
-        console.warn('[pi-studio] unable to remove conversation attachments', error);
-      }
+  let tree = db.durableConversationTree(roots, options);
+  if (roots.length === 0) return { ...tree, attachmentsRemoved: 0, pendingFileCleanups: 0 };
+  db.assertNoRetainedConversationForks(tree.conversationIds);
+  const ids = [...new Set([...roots, ...tree.conversationIds])];
+  const keys = [...new Set(ids.flatMap((id) => {
+    const key = String(id);
+    const row = db.getConversation(key);
+    return row?.publicId ? [key, row.publicId] : [key];
+  }))];
+  for (const id of ids) deletingConversations.add(String(id));
+  try {
+    await Promise.allSettled(ids.flatMap(id => [...(conversationMutations.get(String(id)) || [])]));
+    tree = db.durableConversationTree(roots, options);
+    db.assertNoRetainedConversationForks(tree.conversationIds);
+    if (tree.conversationIds.length) await settleConversationTree(tree);
+    const managed = await discardManagedWorktreesForConversations(ids, { force: true });
+    await closeConversationDataViewServices(keys);
+    await Promise.all(keys.map(stopConversationWatches));
+    for (const key of keys) {
+      runningConversations.delete(key);
+      messageCounts.delete(key);
+      editRangesCache.delete(key);
     }
-    const managed = await discardManagedWorktreesForConversations(roots, { force: true });
+
+    const removed = db.deleteConversationTrees(roots, {
+      ...options,
+      queueFileCleanup: (selected, rows, finalTree) => {
+        if (selected.some(id => !deletingConversations.has(String(id)))) {
+          throw new Error('会话的关联任务刚发生变化，请重试删除');
+        }
+        queueConversationFileCleanup(db, selected, rows, finalTree);
+      },
+    });
+    await waitForAssetArchive(db);
     return {
-      ...tree,
-      attachmentsRemoved,
+      ...removed,
+      ...flushConversationFileCleanup(db, [...new Set([...ids, ...removed.conversationIds])]),
       managedWorktreesRemoved: managed.removed,
     };
+  } finally {
+    for (const id of ids) deletingConversations.delete(String(id));
   }
+}
+
+async function settleConversationTree(tree) {
   const runtime = await getDurableRuntime();
   const conversations = (await Promise.all(tree.conversationIds.map(async (id) => (
     runtime.harness.conversation(id, runtime.context)
@@ -1788,47 +1868,8 @@ async function purgeConversationData(rootIds, options = {}) {
     throw new Error(`无法停止关联任务：${first instanceof Error ? first.message : String(first)}`);
   }
   await waitForConversationTasksToSettle(tree.conversationIds, tree.taskIds);
-  const managedWorktrees = await discardManagedWorktreesForConversations(
-    tree.conversationIds,
-    { force: true },
-  );
-
-  const cleanupKeys = [...new Set([
-    ...tree.conversationIds.map(String),
-    ...tree.publicIds.map(String),
-  ])];
-  await Promise.all(cleanupKeys.map((key) => stopConversationWatches(key)));
-  for (const key of cleanupKeys) {
-    runningConversations.delete(key);
-    messageCounts.delete(key);
-    runDiffSnapshots.delete(key);
-    editRangesCache.delete(key);
-    deletePermissionSessionPolicy(key);
-  }
-
   // Read provider identities while their conversation documents still exist.
   for (const conversation of conversations) await releaseProviderSession(runtime, conversation.id);
-  const assetOwners = tree.conversationIds.map(id => assetOwner(db.db, id)).filter(Boolean);
-  const removed = db.deleteConversationTrees(roots, {
-    extraTaskIds: options.extraTaskIds,
-  });
-  let attachmentsRemoved = 0;
-  for (const owner of assetOwners) {
-    try { if (removeConversationAssets(owner)) attachmentsRemoved += 1; }
-    catch (error) { console.warn('[pi-studio] unable to remove conversation assets', error.code || error.name); }
-  }
-  for (const key of cleanupKeys) {
-    try {
-      if (removeAttachmentDirectory(key)) attachmentsRemoved += 1;
-    } catch (error) {
-      console.warn('[pi-studio] unable to remove conversation attachments', error);
-    }
-  }
-  return {
-    ...removed,
-    attachmentsRemoved,
-    managedWorktreesRemoved: managedWorktrees.removed,
-  };
 }
 
 async function conversationAction(input = {}) {
@@ -1841,8 +1882,13 @@ async function conversationAction(input = {}) {
       const sessions = db.listConversations({ includeArchived: true }).filter((row) =>
         row.workspace === input.id && row.archived && ids.has(conversationKey(row)));
       if (sessions.length !== ids.size) throw new Error('归档列表已变化，请刷新后重新选择。');
-      await purgeConversationData(sessions.map((row) => row.id));
-      return { ok: true, deletedSessions: sessions.length };
+      const removed = await purgeConversationData(sessions.map((row) => row.id));
+      return {
+        ok: true,
+        deletedSessions: sessions.length,
+        deletedSessionIds: removed.publicIds,
+        pendingFileCleanups: removed.pendingFileCleanups,
+      };
     }
     else if (input.action === 'remove') {
       const sessions = db.listConversations({ includeArchived: true })
@@ -1858,9 +1904,11 @@ async function conversationAction(input = {}) {
       return {
         ok: true,
         deletedSessions: sessions.length,
+        deletedSessionIds: removed.publicIds,
         deletedArchivedSessions: archivedCount,
         deletedSubagents: Math.max(0, removed.conversationIds.length - sessions.length),
         deletedWorktrees: removed.managedWorktreesRemoved || 0,
+        pendingFileCleanups: removed.pendingFileCleanups,
       };
     }
     else throw new Error('不支持的工作区操作');
@@ -1905,9 +1953,11 @@ async function conversationAction(input = {}) {
     return {
       ok: true,
       deletedSessions: 1,
+      deletedSessionIds: removed.publicIds,
       deletedSubagents: Math.max(0, removed.conversationIds.length - 1),
       attachmentsRemoved: removed.attachmentsRemoved,
       deletedWorktrees: removed.managedWorktreesRemoved || 0,
+      pendingFileCleanups: removed.pendingFileCleanups,
     };
   } else {
     throw new Error('不支持的会话操作');
@@ -1963,6 +2013,7 @@ async function disposeWatch(key) {
   const entry = watches.get(key);
   if (!entry) return;
   watches.delete(key);
+  if (entry.diffKey) discardTurn(entry.diffKey);
   await entry.stream.stop().catch(() => {});
 }
 
@@ -1973,22 +2024,20 @@ async function beginRunDiff(entry, conversation, inputs) {
   const submission = await runtime.harness.submission(firstInput, runtime.context);
   const record = submission ? await submission.status(runtime.context) : undefined;
   const requestId = record?.requestId || String(firstInput);
-    const key = `${conversationKey(conversation)}:${requestId}`;
-  const token = await beginTurn(conversation.workspace, key);
-  if (token) {
-    entry.diffKey = token;
-    runDiffSnapshots.set(conversationKey(conversation), token);
-  }
+  const key = conversationKey(conversation);
+  const token = await beginTurn(conversation.workspace, `${key}:${requestId}`);
+  if (!token) return;
+  if (watches.get(key) === entry) entry.diffKey = token;
+  else discardTurn(token);
 }
 
 async function finishRunDiff(entry, conversation, emit) {
   if (!entry.diffKey) return;
   const token = entry.diffKey;
   entry.diffKey = undefined;
-  runDiffSnapshots.delete(conversationKey(conversation));
   try {
     const diff = await endTurn(token);
-    if (!diff) return;
+    if (!diff || !conversationAvailable(conversation.id)) return;
     // at 必须与本轮最后一条助手消息的 timestamp 一致：渲染层按它匹配历史
     // 轮次。用结束时刻会让已保存的 diff 永远匹配不上，卡片只能退回工具统计。
     const at = Number.isFinite(entry.lastAssistantAt) ? entry.lastAssistantAt : Date.now();
@@ -1998,6 +2047,7 @@ async function finishRunDiff(entry, conversation, emit) {
       at,
     };
     saveTurnDiff(conversationKey(conversation), value);
+    publishFileChanges(value.files.map(file => file.path));
     await emit({
       type: 'turn.diff',
       conversationId: String(conversation.id),
@@ -2006,6 +2056,30 @@ async function finishRunDiff(entry, conversation, emit) {
     });
   } catch (error) {
     console.error('[pi-studio] turn diff failed', error);
+  }
+}
+
+function applyMetricsView(entry, durableId, previous, next, changes) {
+  const metrics = entry.metricsRuntime;
+  if (!metrics) return;
+  const conversationId = String(durableId);
+  const previousRun = previous?.run;
+  const nextRun = next.run;
+  // After-run hooks may empty the inputs while the current run is still
+  // active. A different first input marks a handover to a queued run.
+  const replaced = previousRun && nextRun?.inputs?.length > 0 && previousRun.inputs?.[0] !== nextRun.inputs[0];
+  const usage = changes.find((change) => change.type === 'usage.updated');
+  if (usage && previousRun) metrics.recordConversationEvent({ ...usage, conversationId });
+  if (previousRun && (!nextRun || replaced)) {
+    const failed = changes.some((change) => change.type === 'run.failed');
+    metrics.recordConversationEvent({ type: failed ? 'run.failed' : 'run.completed', conversationId });
+  }
+  if (nextRun && (!previousRun || replaced)) metrics.recordConversationEvent({ type: 'run.started', conversationId });
+  if (usage && !previousRun) metrics.recordConversationEvent({ ...usage, conversationId });
+
+  const message = next.generation?.message;
+  if (message && message !== previous?.generation?.message) {
+    metrics.recordStreamProgress(conversationId, durableView.streamingMetricSample(message));
   }
 }
 
@@ -2052,13 +2126,12 @@ async function applyView(view, entry, conversation, emit) {
 
   const previous = entry.snapshot;
   const next = durableView.liveFromView(view);
-  if (next.generation?.message && next.generation.message !== previous?.generation?.message) {
-    entry.metricsRuntime?.recordStreamProgress(String(conversation.id), durableView.streamingMetricSample(next.generation.message));
-  }
+  const changes = durableView.diffLive(previous, next);
+  applyMetricsView(entry, conversation.id, previous, next, changes);
   entry.snapshot = next;
   if (next.generation?.message) entry.partial = next.generation.message;
 
-  for (const change of durableView.diffLive(previous, next)) {
+  for (const change of changes) {
     if (change.type === 'run.started') {
       entry.running = true;
       entry.runStartedAt ||= Date.now();
@@ -2152,6 +2225,10 @@ async function ensureWatch(id, emit) {
   // 1.5.0：watchEvents() 已移除，实时状态来自会话视图的序列化 watch。
   const watch = await conversation.watch(runtime.context);
   const initialLongTask = await longTaskDto(row);
+  if (!conversationAvailable(row.id)) {
+    await watch.stop().catch(() => {});
+    throw new Error('会话不存在');
+  }
   const snapshot = durableView.liveFromView(watch.value);
   const entry = {
     id: key,
@@ -2175,6 +2252,14 @@ async function ensureWatch(id, emit) {
     runStartedAt: snapshot.run ? Date.now() : undefined,
   };
   watches.set(key, entry);
+  entry.metricsRuntime?.recordConversationEvent({
+    type: 'snapshot',
+    conversationId: String(conversation.id),
+    payload: { run: Boolean(snapshot.run), usage: snapshot.usage },
+  });
+  if (entry.partial) {
+    entry.metricsRuntime?.recordStreamProgress(String(conversation.id), durableView.streamingMetricSample(entry.partial));
+  }
   if (entry.running) {
     runningConversations.add(key);
     await beginRunDiff(entry, conversation, snapshot.run?.inputs);
@@ -2212,6 +2297,8 @@ async function ensureWatch(id, emit) {
     entry,
     watches,
     onUnexpectedEnd: (reason) => {
+      if (entry.diffKey) discardTurn(entry.diffKey);
+      entry.metricsRuntime?.recordConversationEvent({ type: 'stream.closed', conversationId: String(conversation.id) });
       entry.revision += 1;
       void emit({
         type: 'stream.closed',
@@ -2266,6 +2353,9 @@ async function stopConversationWatch(id, owner) {
 }
 
 async function composerResources(input = {}) {
+  const row = input.sessionId ? await getConversationRow(input.sessionId) : undefined;
+  const cwd = row?.workspace || (typeof input.cwd === 'string' ? input.cwd : '');
+  const skills = discoverSkills(cwd).skills;
   const extensionCommands = extensionComposerCommands().map((command) => ({
     name: `${command.extensionId.replace(':', '-')}.${command.name}`,
     description: command.description || command.title,
@@ -2289,9 +2379,11 @@ async function composerResources(input = {}) {
       { name: 'copy', description: '复制最后一条助理回复', source: 'builtin' },
       ...extensionCommands,
     ],
-    skills: typeof input.cwd === 'string' && input.cwd
-      ? composerSkills(input.cwd)
-      : composerSkills(''),
+    skills: composerSkills(cwd, skills),
+    ...(input.includeCapabilities ? {
+      capabilities: composerCapabilityCatalog(cwd, await runtimeSelection({ kind: row?.kind }), { skills, includeIcons: true })
+        .map(row => row.option),
+    } : {}),
   };
 }
 
@@ -2354,7 +2446,6 @@ async function closeConversationWatches() {
   await Promise.all(keys.map((key) => disposeWatch(key)));
   subscribers.clear();
   runningConversations.clear();
-  runDiffSnapshots.clear();
   editRangesCache.clear();
 }
 
@@ -2363,11 +2454,11 @@ module.exports = {
   scanStopReason,
   closeConversationWatches,
   compactConversation,
-  configureConversationAgentCwd,
   composerResources,
   configureConversation,
   conversationMessageSummary,
   conversationAction,
+  conversationAvailable,
   conversationPage,
   conversationRequestTrace,
   conversationSearch,

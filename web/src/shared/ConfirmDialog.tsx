@@ -12,16 +12,15 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, FilePenLine, FileSearch, Globe2, ShieldAlert, Terminal, X } from 'lucide-react';
+import { AlertTriangle, FilePenLine, FileSearch, Globe2, Save, ShieldAlert, Terminal, Trash2, X } from 'lucide-react';
 import type {
   PermissionConfirmRequest,
   PermissionConfirmResponse,
   PermissionRememberScope,
 } from '../types/permission-types';
 import { Select } from './Select';
-import { useModalDialog } from './useModalDialog';
+import { useModalDialog, type ModalDismiss } from './useModalDialog';
 import './styles/confirm-shell.css';
-import '../features/permissions/styles/permission-policy.css';
 
 export type ConfirmRequest = PermissionConfirmRequest;
 export type ConfirmResult = Omit<PermissionConfirmResponse, 'id'>;
@@ -32,6 +31,9 @@ export type ActionConfirmOptions = {
   confirmLabel?: string;
   cancelLabel?: string;
   tone?: 'default' | 'danger';
+  cardClassName?: string;
+  /** Visual intent for the leading icon. Defaults from tone/labels when omitted. */
+  kind?: 'delete' | 'discard' | 'save' | 'risk' | 'default';
 };
 
 type ConfirmKind = 'command' | 'read' | 'file' | 'network' | 'sensitive' | 'tool';
@@ -118,28 +120,29 @@ function ConfirmShell({
   label: string;
   cardClassName?: string;
   role?: 'dialog' | 'alertdialog';
-  children: ReactNode;
+  children: ReactNode | ((dismiss: ModalDismiss) => ReactNode);
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
-  const { dialogRef, onKeyDown } = useModalDialog();
+  const { dialogRef, onKeyDown, dismiss } = useModalDialog();
+  const cancel = () => void dismiss(onCancel);
   useEffect(() => { cardRef.current?.focus({ preventScroll: true }); }, []);
 
   return createPortal(<dialog
     ref={dialogRef}
-    className="confirm-overlay confirm-native-dialog"
+    className="confirm-overlay confirm-native-dialog native-dialog-motion"
     role={role}
     aria-modal="true"
     aria-label={label}
     onKeyDown={onKeyDown}
-    onCancel={(event) => { event.preventDefault(); onCancel(); }}
-    onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}
+    onCancel={(event) => { event.preventDefault(); cancel(); }}
+    onMouseDown={(event) => { if (event.target === event.currentTarget) cancel(); }}
   >
     <div
       className={`confirm-card${cardClassName ? ` ${cardClassName}` : ''}`}
       tabIndex={-1}
       ref={cardRef}
     >
-      {children}
+      {typeof children === 'function' ? children(dismiss) : children}
     </div>
   </dialog>, document.body);
 }
@@ -148,33 +151,54 @@ function ConfirmShell({
  * 通用产品操作确认：删除、撤销信任、丢弃草稿和切换风险模式统一使用同一套
  * 视觉与键盘行为，避免各页面退回浏览器原生 confirm。
  */
+function actionConfirmKind(options: ActionConfirmOptions): NonNullable<ActionConfirmOptions['kind']> {
+  if (options.kind) return options.kind;
+  const label = `${options.title}${options.confirmLabel || ''}`;
+  if (/删除|移除|卸载|清除|清空/.test(label)) return 'delete';
+  if (/丢弃/.test(label)) return 'discard';
+  if (/保存|启用|开启/.test(label) && options.tone !== 'danger') return 'save';
+  if (options.tone === 'danger' || /风险|危险|完全权限|CDP|外接/.test(label)) return 'risk';
+  return 'default';
+}
+
 export function ActionConfirmDialog({
   title,
   description,
   confirmLabel = '继续',
   cancelLabel = '取消',
   tone = 'default',
+  kind,
+  cardClassName = '',
   onCancel,
   onConfirm,
 }: ActionConfirmOptions & { onCancel: () => void; onConfirm: () => void }) {
+  const resolvedKind = actionConfirmKind({ title, confirmLabel, tone, kind });
+  const icon = resolvedKind === 'delete' || resolvedKind === 'discard'
+    ? <Trash2 />
+    : resolvedKind === 'save'
+      ? <Save />
+      : <AlertTriangle />;
+  const iconTone = resolvedKind === 'save' ? 'is-tool' : (tone === 'danger' || resolvedKind !== 'default' ? 'is-danger' : 'is-tool');
   return <ConfirmShell
     label={title}
-    cardClassName="is-action"
+    cardClassName={`is-action is-${resolvedKind} ${cardClassName}`.trim()}
     role={tone === 'danger' ? 'alertdialog' : 'dialog'}
     onCancel={onCancel}
   >
+    {(dismiss) => <>
     <header className="confirm-head">
-      <span className={`confirm-icon ${tone === 'danger' ? 'is-danger' : 'is-tool'}`}><AlertTriangle /></span>
+      <span className={`confirm-icon ${iconTone}`}>{icon}</span>
       <div className="confirm-heading">
         <h2>{title}</h2>
       </div>
-      <button type="button" className="confirm-close" aria-label="关闭确认" onClick={onCancel}><X /></button>
+      <button type="button" className="confirm-close" aria-label="关闭确认" onClick={() => void dismiss(onCancel)}><X /></button>
     </header>
     {description && <div className="confirm-body"><p className="confirm-text">{description}</p></div>}
     <footer className="confirm-actions">
-      <button type="button" className="confirm-cancel" onClick={onCancel}>{cancelLabel}</button>
-      <button type="button" className={`confirm-accept ${tone === 'danger' ? 'is-danger' : ''}`} onClick={onConfirm}>{confirmLabel}</button>
+      <button type="button" className="confirm-cancel" onClick={() => void dismiss(onCancel)} autoFocus={tone === 'danger' || undefined}>{cancelLabel}</button>
+      <button type="button" className={`confirm-accept ${tone === 'danger' ? 'is-danger' : ''}`} onClick={() => void dismiss(onConfirm)} autoFocus={tone !== 'danger' || undefined}>{confirmLabel}</button>
     </footer>
+    </>}
   </ConfirmShell>;
 }
 
@@ -182,7 +206,7 @@ export function ActionConfirmDialog({
  * Promise 化的应用内确认。调用方可以自然使用
  * `if (!(await confirmation.confirm(...))) return;`，并把 `dialog` 渲染在当前页面。
  */
-export function useActionConfirmation() {
+export function useActionConfirmation(cardClassName?: string) {
   const [request, setRequest] = useState<(ActionConfirmOptions & { resolve: (accepted: boolean) => void }) | null>(null);
   const pending = useRef<(ActionConfirmOptions & { resolve: (accepted: boolean) => void }) | null>(null);
 
@@ -212,6 +236,8 @@ export function useActionConfirmation() {
       confirmLabel={request.confirmLabel}
       cancelLabel={request.cancelLabel}
       tone={request.tone}
+      kind={request.kind}
+      cardClassName={request.cardClassName ?? cardClassName}
       onCancel={() => settle(false)}
       onConfirm={() => settle(true)}
     />,

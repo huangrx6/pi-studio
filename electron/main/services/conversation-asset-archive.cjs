@@ -2,6 +2,7 @@
 // The filesystem projection can be interrupted and replayed without changing a conversation.
 const { studioDataDirectory } = require('../core/studio-paths.cjs');
 const { assetOwner, materializeEntry, removeConversationAssets } = require('./conversation-assets.cjs');
+const activeArchives = new WeakMap();
 
 function prepareAssetArchive(studio) {
   studio.transaction(() => {
@@ -53,7 +54,15 @@ function startAssetArchive(studio) {
   let stopped = false;
   let lastWarning = 0;
   function schedule(delay) {
-    if (!stopped) timer = setTimeout(() => { running = drain(); }, delay).unref();
+    if (!stopped) timer = setTimeout(() => {
+      const active = drain();
+      running = active;
+      activeArchives.set(studio, active);
+      const complete = () => {
+        if (activeArchives.get(studio) === active) activeArchives.delete(studio);
+      };
+      void active.then(complete, complete);
+    }, delay).unref();
   }
   async function drain() {
     try {
@@ -77,4 +86,8 @@ function startAssetArchive(studio) {
   return async function stop() { stopped = true; clearTimeout(timer); await running; };
 }
 
-module.exports = { startAssetArchive, prepareAssetArchive, archiveNextEntry };
+function waitForAssetArchive(studio) {
+  return activeArchives.get(studio);
+}
+
+module.exports = { startAssetArchive, prepareAssetArchive, archiveNextEntry, waitForAssetArchive };

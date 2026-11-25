@@ -1,9 +1,8 @@
 import {
-  ChevronsDown, ChevronsUp, FolderOpen, MessageCirclePlus,
+  ChevronsDown, ChevronsUp, FolderOpen, MessageCirclePlus, Package,
   Search, Settings, SquarePen,
 } from 'lucide-react';
 import { memo } from 'react';
-import { ExtensionSlot, type ExtensionNotice } from '../features/extensions/ExtensionSlot';
 import type { SettingsTab } from './app-shell-config';
 import { ShellSidebar } from './ShellLayout';
 import type { PiWorkspace } from './app-types';
@@ -19,9 +18,6 @@ type AppSidebarProps = {
   onOpenSettings: (page?: SettingsTab) => void;
   workspace: string;
   sessionId?: string;
-  modelRef: string;
-  onSendPrompt: (text: string, submit: boolean) => void;
-  onNotify: (notice: ExtensionNotice) => void;
   workspaces: PiWorkspace[];
   allExpanded: boolean;
   onToggleAllExpanded: () => void;
@@ -55,9 +51,6 @@ function AppSidebarView({
   onOpenSettings,
   workspace,
   sessionId,
-  modelRef,
-  onSendPrompt,
-  onNotify,
   workspaces,
   allExpanded,
   onToggleAllExpanded,
@@ -86,19 +79,17 @@ function AppSidebarView({
 }: AppSidebarProps) {
   return (
     <ShellSidebar className="sidebar" onCollapse={onCollapse}>
-      <nav className="nav">
-        <button className="nav-row" title="临时聊天" onClick={onOpenTemporaryChat}><MessageCirclePlus /><span>临时聊天</span></button>
-        <button className="nav-row new-chat" title="新对话" onClick={onStartSession}><SquarePen /><span>新对话</span></button>
+      <nav className="nav" aria-label="快捷入口">
+        <button type="button" className="nav-row new-chat" title="新对话" onClick={onStartSession}>
+          <SquarePen aria-hidden="true" /><span>新对话</span>
+        </button>
+        <button type="button" className="nav-row" title="临时聊天" onClick={onOpenTemporaryChat}>
+          <MessageCirclePlus aria-hidden="true" /><span>临时聊天</span>
+        </button>
+        <button type="button" className="nav-row" title="插件" onClick={() => onOpenSettings('plugins')}>
+          <Package aria-hidden="true" /><span>插件</span>
+        </button>
       </nav>
-      <ExtensionSlot
-        slot="workspace.sidebar"
-        cwd={workspace}
-        sessionId={sessionId}
-        modelRef={modelRef}
-        onOpenSettings={(page) => onOpenSettings(page as SettingsTab)}
-        onSendPrompt={onSendPrompt}
-        onNotify={onNotify}
-      />
       <div className="workspace-head">
         <span>工作区</span>
         <div>

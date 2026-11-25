@@ -283,7 +283,7 @@ async function listSubagentChildren(parentId) {
       owner: { kind: 'task', taskId: agent.anchorTaskId || agent.ownerTaskId || conversationId },
     }, undefined, children.length, runtime, {
       agent: 'subagent',
-      name: agent.name,
+      name: agent.displayName || agent.name,
       avatarId: agent.avatarId,
       status,
       source: agent.mode === 'foreground' ? 'foreground' : 'background',
@@ -421,6 +421,7 @@ async function deleteSubagentChild(parentId, childKeyValue) {
     deletedChildKey: child.key,
     name: child.name || child.agent,
     deletedConversations: removed.conversationIds.length,
+    pendingFileCleanups: removed.pendingFileCleanups,
   };
 }
 
@@ -448,6 +449,7 @@ async function replySubagentSupervisor(parentId, childKeyValue, requestId, messa
     message,
     now: Date.now(),
     maximum,
+    cwd: agent?.cwd,
     childConversationId: conversationId,
   }), runtime.context);
   return {

@@ -1,37 +1,154 @@
-.network-settings { width: 100%; min-width: 0; padding-bottom: var(--space-8); }
-.network-intro { margin: 0 0 var(--space-6); color: var(--muted); font-size: var(--text-sm); line-height: 1.6; }
-.network-settings form { display: grid; gap: var(--space-5); }
-.network-mode-fieldset { margin: 0; padding: 0; min-width: 0; border: 0; }
-.network-mode-fieldset legend { margin-bottom: var(--space-3); font-size: var(--text-base); font-weight: var(--weight-semibold); }
-.network-modes { display: grid; gap: var(--space-2); }
-.network-mode { display: flex; align-items: center; gap: var(--space-3); position: relative; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); cursor: pointer; }
-.network-mode.is-selected { border-color: var(--accent); background: var(--accent-soft); }
-.network-mode input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.network-settings { font: var(--settings-preference-body-font); }
+.network-mode-fieldset, .network-manual { min-width: 0; margin: 0; padding: 0; border: 0; }
+
+/* 3-column interactive mode deck. */
+.network-modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+}
+.network-mode {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--settings-page-bg);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+.network-mode:hover { border-color: var(--border-hover); background: var(--surface-hover); }
+.network-mode.is-selected {
+  border-color: var(--settings-accent-border);
+  background: var(--settings-accent-soft);
+}
 .network-mode:has(input:focus-visible) { outline: 2px solid var(--focus-color); outline-offset: 2px; }
-.network-mode svg { flex: none; width: var(--icon-md); height: var(--icon-md); color: var(--muted); }
-.network-mode.is-selected svg { color: var(--accent-foreground); }
-.network-mode > span { display: grid; gap: var(--space-1); min-width: 0; }
-.network-mode strong { font-size: var(--text-base); font-weight: var(--weight-semibold); }
-.network-mode small { font-size: var(--text-sm); color: var(--muted); line-height: 1.45; }
-.network-mode .network-mode-check { margin-left: auto; }
-.network-mode-fieldset:disabled .network-mode { cursor: wait; }
-.network-card { margin: 0; padding: var(--space-5); min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
-.network-card-heading { display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--space-3); justify-content: space-between; }
-.network-card-heading > div { flex: 1 1 16rem; min-width: 0; }
-.network-card h2 { margin: 0; font-size: var(--text-base); font-weight: var(--weight-semibold); }
-.network-card-heading p, .network-help { margin: var(--space-2) 0 0; font-size: var(--text-sm); line-height: 1.6; color: var(--muted); }
-.network-settings button svg { width: var(--icon-sm); height: var(--icon-sm); }
-.network-route { display: flex; align-items: flex-start; gap: var(--space-2); margin-top: var(--space-4); padding: var(--space-3); border-radius: var(--radius-control); background: var(--surface-soft); font-size: var(--text-sm); overflow-wrap: anywhere; }
-.network-route svg { flex: none; width: var(--icon-md); height: var(--icon-md); }
-.network-manual { display: grid; gap: var(--space-4); }
-.network-manual > button { justify-self: start; }
-.network-field { display: grid; gap: var(--space-2); min-width: 0; font-size: var(--text-base); }
-.network-field small { color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
-.network-field input { box-sizing: border-box; width: 100%; min-width: 0; min-height: var(--control); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--text); font: inherit; }
-.network-field input:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 1px; }
-.network-message { display: grid; gap: var(--space-1); margin: var(--space-3) 0 0; padding: var(--space-3); border-radius: var(--radius-control); background: var(--surface-soft); font-size: var(--text-sm); line-height: 1.5; overflow-wrap: anywhere; }
-.network-message.is-success { color: var(--accent-foreground); }
-.network-message.is-error { color: var(--error); }
-.network-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.network-mode input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.network-mode-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.network-mode-icon {
+  display: grid;
+  place-items: center;
+  width: var(--space-7);
+  height: var(--space-7);
+  flex: none;
+  border-radius: var(--radius-tag);
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  color: var(--muted);
+}
+.network-mode.is-selected .network-mode-icon {
+  border-color: var(--settings-accent-border);
+  color: var(--accent-foreground);
+}
+.network-mode-icon svg { width: var(--icon-sm); height: var(--icon-sm); }
+.network-mode-head strong { font: var(--settings-label-font); color: var(--text); overflow-wrap: anywhere; }
+.network-mode small { color: var(--muted); font: var(--settings-description-font); overflow-wrap: anywhere; }
+.network-mode-fieldset:disabled .network-mode,
+.network-mode-fieldset:disabled .network-mode input { cursor: wait; }
+
+.network-manual {
+  padding-block: var(--space-4);
+  border-top: 1px solid var(--divider);
+}
+.network-manual-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+.network-field { display: grid; gap: var(--settings-field-gap); min-width: 0; }
+.network-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.network-field > span,
+.network-field-head > span { font: var(--settings-label-font); color: var(--text); }
+.network-field small, .network-help { color: var(--muted); font: var(--settings-description-font); }
+.network-field input { width: 100%; min-width: 0; }
+.network-detect-fill {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-tag);
+  background: var(--settings-accent-soft);
+  color: var(--accent-foreground);
+  font: var(--settings-description-font);
+  font-weight: var(--weight-medium);
+}
+.network-detect-fill:hover { background: var(--surface-active); }
+
+.network-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  border-top: 1px solid var(--divider);
+  padding-block: var(--space-3);
+}
 .network-actions .network-help { margin: 0; }
-.network-scope { margin: 0; }
+.network-actions button { flex: none; }
+
+/* 2-column horizontal diagnostic console tiles. */
+.network-diagnostics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+}
+.network-diagnostic-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-control);
+  background: var(--settings-page-bg);
+}
+.network-diagnostic-copy { display: grid; gap: var(--space-1); min-width: 0; width: 100%; }
+.network-diagnostic-copy h3 { margin: 0; font: var(--settings-label-font); color: var(--text); }
+.network-diagnostic-copy p { margin: 0; color: var(--muted); font: var(--settings-description-font); overflow-wrap: anywhere; }
+.network-diagnostic-tile .settings-outline { display: inline-flex; align-items: center; gap: var(--space-2); }
+.network-diagnostic-tile .settings-outline svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; }
+
+.network-route {
+  display: inline-block;
+  margin-top: var(--space-1);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-tag);
+  background: var(--surface);
+  color: var(--text);
+  font: var(--settings-mono-font);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.network-field .network-field-error, .network-field-error { margin: 0; font: var(--settings-description-font); overflow-wrap: anywhere; }
+.network-field-error, .network-load-error p { color: var(--error); }
+.settings-content .network-field [aria-invalid='true'] { border-color: var(--error); }
+
+@container settings-preferences (max-width: 540px) {
+  .network-modes,
+  .network-diagnostics-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -8,6 +8,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { workspaceFile } = require('./workspace.cjs');
+const { fileChangeKey } = require('./file-change-events.cjs');
 const { MAX_ARCHIVE_BYTES, archiveFormats, archivePreview } = require('./archive-preview.cjs');
 
 const MAX_TEXT_BYTES = 1_500_000;
@@ -174,7 +175,7 @@ function readFilePreviewAt(target, requested) {
       if (!bytes) break;
       offset += bytes;
     }
-    return previewFromBytes(display, stat.size, buffer.subarray(0, offset));
+    return { ...previewFromBytes(display, stat.size, buffer.subarray(0, offset)), changeKey: fileChangeKey(target) };
   } finally {
     fs.closeSync(fd);
   }

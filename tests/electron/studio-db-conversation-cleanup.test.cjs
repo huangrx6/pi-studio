@@ -221,6 +221,41 @@ test('parent cleanup removes every descendant while preserving unrelated convers
   }
 });
 
+test('source deletion requires any forks sharing its journal to be included', () => {
+  const { database, directory } = fixture();
+  try {
+    database.db.prepare('UPDATE durable_conversations SET record = ? WHERE id = 20').run(
+      JSON.stringify({ id: 20, parent: { conversationId: 10, at: 1000 } }),
+    );
+    assert.throws(() => database.deleteConversationTrees([10]), /仍有分叉会话/);
+    assert.equal(rowCount(database, 'durable_entries', 'WHERE conversation_id = 10'), 1);
+    assert.ok(database.getConversation('parent-public'));
+    assert.deepEqual(database.deleteConversationTrees([10, 20]).conversationIds, [10, 11, 12, 20]);
+  } finally {
+    database.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('upgrading v26 prunes only diffs without a Studio or Durable owner', t => {
+  const { database, directory } = fixture();
+  let upgraded;
+  t.after(() => {
+    if (database.isOpen()) database.close();
+    upgraded?.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  database.saveTurnDiff('missing-public-id', { at: 10, files: ['orphan'] });
+  database.saveTurnDiff('11', { at: 11, files: ['child agent'] });
+  database.db.exec('DROP TABLE studio_conversation_file_cleanup; PRAGMA user_version = 26');
+  database.close();
+  upgraded = createStudioDatabase(database.filename);
+  assert.ok(fs.existsSync(upgraded.migrationBackupPath));
+  assert.equal(upgraded.readTurnDiffs('missing-public-id').length, 0);
+  assert.equal(upgraded.readTurnDiffs('parent-public').length, 1);
+  assert.equal(upgraded.readTurnDiffs('11').length, 1);
+});
+
 test('edited branches clear request projections without deleting usage history', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-edit-projections-'));
   const database = createStudioDatabase(path.join(directory, 'studio.sqlite'));

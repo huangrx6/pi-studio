@@ -1,22 +1,164 @@
-.mcp-server-list { overflow: hidden; list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
-.mcp-server-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 20px; padding: 16px; border-bottom: 1px solid var(--divider); transition: background var(--transition); }
+.mcp-server-groups { display: grid; gap: var(--settings-group-gap); }
+.mcp-server-group { display: grid; gap: var(--space-2); min-width: 0; }
+.mcp-server-group-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0 2px;
+}
+.mcp-server-group-header h3 {
+  margin: 0;
+  color: var(--text);
+  font: var(--weight-semibold) var(--settings-label-size)/var(--leading-normal) var(--font);
+}
+.mcp-server-group-header span {
+  color: var(--muted);
+  font-size: var(--settings-description-size);
+  font-variant-numeric: tabular-nums;
+}
+.mcp-server-list {
+  overflow: hidden;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--settings-card-bg);
+  box-shadow: var(--settings-card-shadow);
+}
+.mcp-server-row {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  min-height: var(--settings-row-height);
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-4) var(--space-4) var(--space-4) calc(var(--space-4) + 6px);
+  border-bottom: 1px solid var(--divider);
+}
+.mcp-server-row::before {
+  content: '';
+  position: absolute;
+  inset-block: var(--space-3);
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: 0 var(--radius-tag) var(--radius-tag) 0;
+  background: var(--border-hover);
+  opacity: 0.55;
+}
+.mcp-server-row[data-state="connected"]::before { background: var(--success); opacity: 1; }
+.mcp-server-row[data-state="error"]::before { background: var(--error); opacity: 1; }
+.mcp-server-row[data-state="waiting"]::before { background: var(--warning); opacity: 0.9; }
 .mcp-server-row:last-child { border-bottom: 0; }
-.mcp-server-row:hover { background: var(--surface-hover); }
-.mcp-server-copy { min-width: 0; flex: 1 1 280px; display: grid; gap: 7px; }
-.mcp-server-open { display: flex; align-items: baseline; gap: 8px; justify-self: start; max-width: 100%; padding: 0; text-align: left; color: var(--text); }
-.mcp-server-open strong { min-width: 0; overflow-wrap: anywhere; font-size: var(--text-base); font-weight: var(--weight-semibold); }
-.mcp-server-open svg { width: var(--icon-xs); height: var(--icon-xs); flex: none; color: var(--faint); align-self: center; }
-.mcp-server-open:hover svg { color: var(--text); }
-.mcp-server-description { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-relaxed); overflow-wrap: anywhere; }
-.mcp-server-target { display: block; overflow: hidden; color: var(--faint); font: var(--text-xs)/var(--leading-body) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
-.mcp-server-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-body); }
-.mcp-server-row[data-state="error"] .mcp-server-state { color: var(--error); }
-.mcp-server-row[data-state="connected"] .mcp-server-state { color: var(--success); }
+.mcp-server-copy { min-width: 0; flex: 1 1 16rem; display: grid; gap: var(--space-2); }
+.mcp-server-headline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.mcp-server-open {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 100%;
+  padding: 0;
+  text-align: left;
+  color: var(--text);
+}
+.mcp-server-open strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: var(--weight-semibold) var(--text-base)/var(--leading-tight) var(--font);
+}
+.mcp-server-open svg { width: var(--icon-xs); height: var(--icon-xs); flex: none; color: var(--faint); }
+.mcp-protocol-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--space-2);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-tag);
+  background: var(--settings-page-bg);
+  color: var(--muted);
+  font: var(--weight-medium) var(--text-xs)/var(--leading-normal) var(--mono);
+  letter-spacing: 0.04em;
+}
+.mcp-server-origin {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-tag);
+  background: var(--settings-accent-soft);
+  color: var(--accent-foreground);
+  font: var(--weight-medium) var(--text-xs)/var(--leading-normal) var(--font);
+}
+.mcp-server-description {
+  margin: 0;
+  color: var(--muted);
+  font: var(--settings-description-font);
+  overflow-wrap: anywhere;
+}
+.mcp-server-target {
+  display: block;
+  overflow: hidden;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-tag);
+  background: var(--settings-page-bg);
+  color: var(--muted);
+  font: var(--text-xs)/var(--leading-normal) var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mcp-server-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  color: var(--muted);
+  font-size: var(--settings-description-size);
+  line-height: var(--leading-normal);
+}
+.mcp-meta-sep { color: var(--border-hover); }
+.mcp-server-row[data-state="error"] .mcp-server-state { color: var(--error); font-weight: var(--weight-medium); }
+.mcp-server-row[data-state="connected"] .mcp-server-state { color: var(--success); font-weight: var(--weight-medium); }
 .mcp-server-row[data-state="disabled"] .mcp-server-state { color: var(--faint); }
-.mcp-server-actions { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
-.mcp-server-actions .switch { flex: none; }
-.mcp-refresh-glyph { display: inline-block; width: var(--icon-sm); font-size: var(--text-md); line-height: 1; text-align: center; }
-.mcp-server-error { min-width: 0; font-size: var(--text-xs); line-height: var(--leading-body); color: var(--error); }
-.mcp-server-error pre { max-height: 180px; overflow: auto; margin: 8px 0 0; padding: 8px 10px; border-radius: var(--radius-control); background: var(--surface-soft); color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; font: var(--text-xs)/var(--leading-body) var(--mono); }
-.mcp-server-open:focus-visible, .mcp-server-actions button:focus-visible, .mcp-server-error pre:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; border-radius: var(--radius-control); }
-.mcp-settings-empty { margin: 0; padding: 20px 16px; border: 1px dashed var(--border); border-radius: var(--radius-control); background: var(--surface-soft); color: var(--muted); font-size: var(--text-sm); }
+.mcp-server-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  margin-inline-start: auto;
+}
+.mcp-server-actions .switch { flex: none; margin-inline-end: var(--space-2); }
+.mcp-server-actions .icon-button { color: var(--muted); }
+.mcp-server-actions .icon-button:hover:not(:disabled) { color: var(--text); }
+.mcp-server-actions [data-destructive] { color: var(--faint); }
+.mcp-server-actions [data-destructive]:hover:not(:disabled),
+.mcp-server-actions [data-destructive]:focus-visible:not(:disabled) {
+  color: var(--error);
+  background: var(--error-soft);
+}
+.mcp-server-error { min-width: 0; font-size: var(--settings-description-size); line-height: var(--leading-body); color: var(--error); }
+.mcp-server-error pre {
+  max-height: 180px;
+  overflow: auto;
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--settings-page-bg);
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: var(--text-xs)/var(--leading-body) var(--mono);
+}
+.mcp-server-open:focus-visible,
+.mcp-server-actions button:focus-visible,
+.mcp-server-error pre:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
+  border-radius: var(--radius-control);
+}

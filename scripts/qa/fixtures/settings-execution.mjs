@@ -37,10 +37,20 @@ export function installSettingsExecutionFixture() {
     const active = workspaceProfiles[cwd] || globalProfileId;
     return clone({ version: 1, activeProfileId: active, globalProfileId, workspaceProfileId: workspaceProfiles[cwd] || '', sections, profiles, activeProfile: profiles.find((item) => item.id === active), path: '/qa/storage/studio.sqlite', globalInstructionsPath: '/qa/user/AGENTS.md', globalInstructionsStatus: 'missing', runtimePolicy, runtimePolicyDefaults: runtime, runtimePolicyPath: '/qa/storage/studio.sqlite' });
   }
-  const core = { key: 'core', source: 'core', label: '核心工具', kind: 'core', scope: 'builtin', path: '', baseDir: '' };
+  const core = { key: 'durable:coding', source: 'core', label: '核心工具', kind: 'core', scope: 'builtin', path: '', baseDir: '' };
   const extension = { key: 'qa-extension', source: 'npm:qa-release', label: qa.longSource, kind: 'extension', scope: 'workspace', path: '/qa/extensions/release/index.cjs', baseDir: '/qa/extensions/release' };
-  const toolCatalog = { tools: [{ name: 'read', description: '读取文件', exposure: 'direct', source: core }, { name: 'write', description: '写入文件', exposure: 'direct', source: core }, { name: 'mcp__qa__search', description: '搜索发布记录', exposure: 'deferred', source: extension }, { name: 'mcp__qa__inspect', description: '审查发布候选及相关验证记录', exposure: 'deferred', source: extension }], commands: [{ name: 'release-review', description: '只读命令入口，生命周期由扩展控制。', source: extension }], errors: [], warnings: [], storage: '/qa/storage/studio.sqlite', refreshedAt: Date.now() };
-  let toolSelection = { enabled: ['read', 'mcp__qa__*', 'missing_old_tool'], sources: { missing_old_tool: { source: 'npm:uninstalled-release', label: '已卸载的发布扩展', scope: 'user', path: '/qa/removed', baseDir: '/qa/removed' } } };
+  const toolCatalog = {
+    tools: [
+      { name: 'read', description: '读取文件', exposure: 'direct', source: core },
+      { name: 'write', description: '写入文件', exposure: 'direct', source: core },
+      { name: 'release_search', description: 'Search published release records.', exposure: 'deferred', source: extension },
+      { name: 'release_inspect', description: '审查发布候选及相关验证记录', exposure: 'deferred', source: extension },
+      { name: 'mcp__qa__search', description: '服务器方法', source: { ...extension, kind: 'mcp', label: 'MCP · qa' } },
+    ],
+    commands: [{ name: 'release-review', description: '只读命令入口，生命周期由扩展控制。', source: extension }],
+    errors: [{ path: 'mcp:offline', message: '测试 MCP 尚未连接' }], warnings: [], storage: '/qa/storage/studio.sqlite', refreshedAt: Date.now(),
+  };
+  let toolSelection = { enabled: ['read', 'release_*', 'mcp__qa__*', 'missing_old_tool'], sources: { missing_old_tool: { source: 'npm:uninstalled-release', label: '已卸载的发布扩展', scope: 'user', path: '/qa/removed', baseDir: '/qa/removed' } } };
   async function settings(cwd = a) { return { ...(await base.settings()), providers: [], enabledModels: [], extensions: [], extensionErrors: [], skillErrors: [], agentTools: clone(toolSelection), harness: harness(cwd), skillsPath: '/qa/skills', agentsSkillsPath: '/qa/shared', projectSkillsPath: '/qa/project-skills', projectAgentsSkillsPath: '/qa/project-shared' }; }
   window.piApi = new Proxy({
     state: async () => { const result = await base.state(); result.workspaces[0].sessions[1].cwd = b; return { ...result, workspaces: [{ cwd: a, name: '执行设置 A', sessions: [result.workspaces[0].sessions[0]] }, { cwd: b, name: '执行设置 B', sessions: [result.workspaces[0].sessions[1]] }] }; },
@@ -54,7 +64,7 @@ export function installSettingsExecutionFixture() {
     listSecrets: async () => [],
     harnessSettings: async (cwd) => { calls.push({ method: 'harnessSettings', cwd }); return respond('harnessSettings', harness(cwd), cwd); },
     saveHarnessProfile: async (input) => { calls.push({ method: 'saveHarnessProfile', ...clone(input) }); await respond('saveHarnessProfile', {}, input.cwd); const index = profiles.findIndex((item) => item.id === input.profile.id); if (index < 0) profiles.push(clone(input.profile)); else profiles[index] = clone(input.profile); return harness(input.cwd); },
-    selectHarnessProfile: async (input) => { calls.push({ method: 'selectHarnessProfile', ...input }); if (input.scope === 'global') globalProfileId = input.id; else workspaceProfiles[input.cwd] = input.id; return harness(input.cwd); },
+    selectHarnessProfile: async (input) => { calls.push({ method: 'selectHarnessProfile', ...input }); if (input.scope === 'global') globalProfileId = input.id; else if (input.scope === 'inherit') delete workspaceProfiles[input.cwd]; else workspaceProfiles[input.cwd] = input.id; return harness(input.cwd); },
     saveRuntimePolicy: async (input) => { calls.push({ method: 'saveRuntimePolicy', ...clone(input) }); await respond('saveRuntimePolicy', {}, input.cwd); runtimePolicy = clone(input.policy); return harness(input.cwd); },
     resetHarnessProfile: async (input) => { calls.push({ method: 'resetHarnessProfile', ...input }); return harness(input.cwd); },
     agentToolCatalog: async (input) => { calls.push({ method: 'agentToolCatalog', ...input }); return respond('agentToolCatalog', input?.cwd === b ? { ...toolCatalog, tools: [...toolCatalog.tools.filter((item) => item.source.kind === 'core'), { name: 'workspace_b_tool', description: 'B 工作区来源工具', exposure: 'direct', source: { ...extension, label: 'B 工作区专用工具来源' } }] } : toolCatalog, input?.cwd); },

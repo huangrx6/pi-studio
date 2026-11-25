@@ -19,6 +19,16 @@ export function normalizeBrowserTarget(input: string) {
     }
     return '';
   }
+  // Absolute local HTML path → file URL (Agent/report links often omit file://).
+  if ((text.startsWith('/') || /^[A-Za-z]:[\\/]/.test(text)) && /\.html?$/i.test(text.split(/[?#]/)[0] || '')) {
+    const normalized = text.replace(/\\/g, '/');
+    const pathname = normalized.startsWith('/') ? normalized : `/${normalized}`;
+    const encoded = pathname
+      .split('/')
+      .map((part, index) => (index === 0 ? '' : encodeURIComponent(part)))
+      .join('/');
+    return `file://${encoded}`;
+  }
   if (/^[\w-]+(\.[\w-]+)+(:\d+)?([/?#].*)?$/i.test(text) || /^localhost(:\d+)?([/?#].*)?$/i.test(text)) {
     return `https://${text}`;
   }

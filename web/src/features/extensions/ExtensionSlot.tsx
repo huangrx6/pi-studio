@@ -3,11 +3,11 @@ import { ExtensionStatusIcon } from './ExtensionStatusIcon';
 import { ProviderQuotaPanel } from '../models/ProviderQuotaView';
 import { QUOTA_EXTENSION_ID } from '../../types/provider-quota';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSurfaceActive } from '../../shared/surface-visibility';
 import {
   Activity,
   AlertTriangle,
   BarChart3,
-  Check,
   CheckCircle2,
   Circle,
   CircleEllipsis,
@@ -19,28 +19,21 @@ import {
   TrendingDown,
   TrendingUp,
   WifiOff,
-  X,
   XCircle,
 } from 'lucide-react';
 import { LoadingIndicator, LoadingState } from '../../shared/LoadingState';
 import type {
   ExtensionContent,
-  ExtensionDataViewSnapshot,
   ExtensionMetric,
   ExtensionSettingsPage,
   ExtensionStatus,
   ExtensionTone,
   ExtensionUiAction,
-  ExtensionUiItem,
   ExtensionUiSlot,
   ExtensionUiSnapshot,
 } from '../../types/extension-types';
 import { presentExtensionDataViewError } from './extension-data-view-error';
-import {
-  acceptsExtensionDataViewSnapshot,
-  extensionDataViewRequestKey,
-  type OwnedExtensionDataViewSnapshot,
-} from './extension-data-view-state';
+import { extensionDataViewRequestKey } from './extension-data-view-state';
 import {
   activateExtensionSlotAction,
   advanceExtensionSlotOwner,
@@ -49,23 +42,24 @@ import {
   type ExtensionSlotOwner,
 } from './extension-slot-actions';
 import { useExtensionUiSnapshot } from './use-extension-ui';
+import { useExtensionDataView } from './use-extension-data-view';
 
 export type ExtensionNotice = { message: string; tone?: ExtensionTone };
 
 type ExtensionSlotProps = {
   slot: ExtensionUiSlot;
-  /** Exactly one always-mounted slot owns command-menu and global panel dialogs. */
-  hostGlobalPanels?: boolean;
   cwd?: string;
   sessionId?: string;
   modelRef?: string;
   onOpenSettings?: (page?: ExtensionSettingsPage) => void;
+  onOpenPanel?: (panelId: string) => void;
   onSendPrompt?: (text: string, submit: boolean) => void;
   onNotify?: (notice: ExtensionNotice) => void;
   /** Lets a parent coordinate tabs and content with one extension snapshot. */
   snapshot?: ExtensionUiSnapshot;
   selectedItemId?: string;
-  presentation?: 'cards' | 'page' | 'inline' | 'compact';
+  extensionId?: string;
+  presentation?: 'cards' | 'page' | 'compact';
 };
 
 type ContentProps = {
@@ -80,11 +74,6 @@ type ContentProps = {
 };
 
 const MAX_RENDER_DEPTH = 8;
-
-type ExtensionDialogState = {
-  item: ExtensionUiItem;
-  owner: ExtensionSlotOwner;
-};
 
 type ExtensionActiveActionState = {
   buttonId: string;
@@ -204,10 +193,10 @@ function LiveDataErrorNotice({
       <strong>{compact ? (stale ? '数据暂未更新' : '实时数据暂不可用') : presentation.title}</strong>
       {!compact && <small>{presentation.message}</small>}
     </span>
-    <button type="button" aria-label="重试连接实时数据" title="重试连接实时数据" onClick={onRetry}>
+    {!compact && <button type="button" aria-label="重试连接实时数据" title="重试连接实时数据" onClick={onRetry}>
       <RefreshCw aria-hidden="true" />
-      <span>{compact ? '重试' : '重新连接'}</span>
-    </button>
+      <span>重新连接</span>
+    </button>}
   </div>;
 }
 
@@ -236,59 +225,8 @@ function LiveDataViewConnection({
   modelRef,
   compact = false,
 }: LiveDataViewProps) {
-  const [ownedSnapshot, setOwnedSnapshot] = useState<OwnedExtensionDataViewSnapshot | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [retryKey, setRetryKey] = useState(0);
-  const snapshotRef = useRef<OwnedExtensionDataViewSnapshot | null>(null);
-  const hasVisibleData = useRef(false);
-  const snapshot = ownedSnapshot?.snapshot ?? null;
-
-  useEffect(() => {
-    let disposed = false;
-    let subscriptionId = '';
-    setLoading(!hasVisibleData.current);
-    setError('');
-    const accept = (next: ExtensionDataViewSnapshot, sourceSubscriptionId: string) => {
-      if (next.sourceId !== block.sourceId) return;
-      const current = snapshotRef.current;
-      if (!acceptsExtensionDataViewSnapshot(current, sourceSubscriptionId, next)) return;
-      if (!(next.error && current?.snapshot)) {
-        const owned = { subscriptionId: sourceSubscriptionId, snapshot: next };
-        snapshotRef.current = owned;
-        hasVisibleData.current = !next.error && next.content.length > 0;
-        setOwnedSnapshot(owned);
-      }
-      setError(next.error || '');
-      setLoading(false);
-    };
-    const off = window.piApi.onExtensionDataView((event) => {
-      if (!subscriptionId || event.subscriptionId !== subscriptionId) return;
-      accept(event.snapshot, event.subscriptionId);
-    });
-    void window.piApi.openExtensionDataView({
-      sourceId: block.sourceId,
-      cwd,
-      sessionId,
-      modelRef,
-    }).then((opened) => {
-      subscriptionId = opened.subscriptionId;
-      if (disposed) {
-        void window.piApi.closeExtensionDataView(subscriptionId);
-        return;
-      }
-      accept(opened.snapshot, opened.subscriptionId);
-    }).catch((reason) => {
-      if (disposed) return;
-      setError(reason instanceof Error ? reason.message : String(reason));
-      setLoading(false);
-    });
-    return () => {
-      disposed = true;
-      off();
-      if (subscriptionId) void window.piApi.closeExtensionDataView(subscriptionId);
-    };
-  }, [block.sourceId, cwd, modelRef, retryKey, sessionId]);
+  const { owned, error, loading, retry } = useExtensionDataView({ sourceId: block.sourceId, cwd, sessionId, modelRef });
+  const snapshot = owned?.snapshot ?? null;
 
   if (error) {
     const presentation = presentExtensionDataViewError(error);
@@ -296,7 +234,7 @@ function LiveDataViewConnection({
       presentation={presentation}
       compact={compact}
       stale={Boolean(snapshot?.content.length)}
-      onRetry={() => setRetryKey((current) => current + 1)}
+      onRetry={retry}
     />;
     if (snapshot?.content.length) {
       return <div className={`extension-data-view is-stale${compact ? ' is-compact' : ''}`}>
@@ -584,73 +522,51 @@ function ExtensionTabs({ block, busyButton, onAction, depth, cwd, sessionId, mod
 
 export function ExtensionSlot({
   slot,
-  hostGlobalPanels = false,
   cwd,
   sessionId,
   modelRef,
   onOpenSettings,
+  onOpenPanel,
   onSendPrompt,
   onNotify,
   snapshot,
   selectedItemId,
+  extensionId,
   presentation = 'cards',
 }: ExtensionSlotProps) {
+  const surfaceActive = useSurfaceActive();
   const loadedSnapshot = useExtensionUiSnapshot(cwd, !snapshot);
   const surface = snapshot ?? loadedSnapshot;
-  const surfaceRef = useRef(surface);
-  surfaceRef.current = surface;
   const ownerRef = useRef<ExtensionSlotOwner>({ key: '', generation: 0 });
+  const mounted = useRef(false);
   ownerRef.current = advanceExtensionSlotOwner(
     ownerRef.current,
-    extensionSlotOwnerKey(slot, cwd, sessionId, modelRef),
+    JSON.stringify([extensionSlotOwnerKey(slot, cwd, sessionId, modelRef), selectedItemId, extensionId, surfaceActive]),
   );
   const owner = ownerRef.current;
-  const [dialogState, setDialogState] = useState<ExtensionDialogState | null>(null);
   const [activeActionState, setActiveActionState] = useState<ExtensionActiveActionState | null>(null);
   const activeActionLockRef = useRef<ExtensionActiveActionState | null>(null);
   if (activeActionLockRef.current?.owner !== owner) activeActionLockRef.current = null;
-  const dialog = dialogState?.owner === owner ? dialogState.item : null;
   const activeAction = activeActionState?.owner === owner ? activeActionState.buttonId : null;
 
   useEffect(() => {
-    setDialogState((current) => current?.owner === owner ? current : null);
     setActiveActionState((current) => current?.owner === owner ? current : null);
     if (activeActionLockRef.current?.owner !== owner) activeActionLockRef.current = null;
   }, [owner]);
-
   useEffect(() => {
-    if (!dialog) return;
-    const close = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setDialogState(null);
-    };
-    window.addEventListener('keydown', close);
-    return () => window.removeEventListener('keydown', close);
-  }, [dialog]);
-
-  useEffect(() => {
-    if (!hostGlobalPanels) return;
-    const openPanel = (event: Event) => {
-      const panelId = (event as CustomEvent<{ panelId?: unknown }>).detail?.panelId;
-      if (typeof panelId !== 'string' || !panelId) return;
-      const target = surfaceRef.current.items.find((item) => item.id === panelId);
-      if (target) {
-        setDialogState({ item: target, owner: ownerRef.current });
-        return;
-      }
-      onNotify?.({ message: '这个扩展面板当前不可用。', tone: 'warning' });
-    };
-    window.addEventListener('pi-studio:open-extension-panel', openPanel);
-    return () => window.removeEventListener('pi-studio:open-extension-panel', openPanel);
-  }, [hostGlobalPanels, onNotify, owner]);
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   const items = useMemo(
     () => surface.items
-      .filter((item) => (item.slots?.length ? item.slots.includes(slot) : item.slot === slot))
+      .filter(item => item.slot === slot || item.slots?.some(position => position === slot))
       .filter((item) => !selectedItemId || item.id === selectedItemId)
+      .filter((item) => !extensionId || item.extensionId === extensionId)
       .sort((left, right) => (
         right.priority - left.priority || left.sourceOrder - right.sourceOrder
       )),
-    [selectedItemId, slot, surface],
+    [extensionId, selectedItemId, slot, surface],
   );
 
   async function activate(buttonId: string, action: ExtensionUiAction) {
@@ -659,15 +575,11 @@ export function ExtensionSlot({
     const active = { buttonId, owner: actionOwner };
     activeActionLockRef.current = active;
     setActiveActionState(active);
-    const isCurrentOwner = () => ownerRef.current === actionOwner;
+    const isCurrentOwner = () => mounted.current && ownerRef.current === actionOwner;
     const effects: ExtensionSlotActionEffects = {
       runCommand: (commandId) => window.piApi.runExtensionCommand({ commandId, sessionId, cwd }),
       openSettings: (page) => onOpenSettings?.(page),
-      openPanel: (panelId) => {
-        const target = surfaceRef.current.items.find((item) => item.id === panelId);
-        if (target) setDialogState({ item: target, owner: actionOwner });
-        else onNotify?.({ message: '这个扩展面板当前不可用。', tone: 'warning' });
-      },
+      openPanel: (panelId) => onOpenPanel?.(panelId),
       sendPrompt: (text, submit) => onSendPrompt?.(text, submit),
       copyText: (text) => navigator.clipboard.writeText(text),
       openUrl: async (url) => {
@@ -683,7 +595,7 @@ export function ExtensionSlot({
     }
   }
 
-  if (items.length === 0 && !dialog) {
+  if (items.length === 0) {
     if (presentation === 'page') {
       return <div className="extension-page-empty">
         <Plug />
@@ -708,23 +620,15 @@ export function ExtensionSlot({
           onAction={(action) => void activate(`${presentation}:${detailItem.id}`, action)} />
   );
   return <>
-    {presentation === 'page' && items[0] && <section className="extension-page" aria-label={items[0].title}>
+    {presentation === 'page' && <section className="extension-page" aria-label={detailItem.title}>
       <header className="extension-page-head">
-        <span className="extension-page-icon">{detailItem.icon || detailItem.color
-          ? <ExtensionStatusIcon item={detailItem} /> : <Plug />}</span>
-        <span className="extension-page-title">
-          <span className="extension-slot-source">{items[0].scope === 'project' ? '项目扩展' : items[0].scope === 'user' ? '用户扩展' : '内置扩展'}</span>
-          <strong>{items[0].title}</strong>
-          {items[0].description && <small>{items[0].description}</small>}
-        </span>
+        <h2><ExtensionStatusIcon item={detailItem} /><span>{detailItem.title}</span></h2>
+        {detailItem.description && <p>{detailItem.description}</p>}
       </header>
       <div className="extension-page-body">
         {detailContent}
       </div>
     </section>}
-    {presentation === 'inline' && items[0] && <div className="extension-inline-content" aria-label={items[0].title}>
-      {detailContent}
-    </div>}
     {presentation === 'compact' && items[0] && <div className="extension-compact-slot" aria-label={items[0].title}>
       <ContentBlocks
         blocks={items[0].content}
@@ -736,7 +640,7 @@ export function ExtensionSlot({
     {presentation === 'cards' && items.length > 0 && <section className={`extension-slot is-${slot.replaceAll('.', '-')}`} aria-label="扩展内容">
       {items.map((item) => <article className={`extension-slot-card is-${item.size}`} key={item.id}>
         <header className="extension-slot-head">
-          <span className="extension-slot-icon">{slot === 'status.bar' || item.icon || item.color
+          <span className="extension-slot-icon">{item.icon || item.color
             ? <ExtensionStatusIcon item={item} /> : <Plug />}</span>
           <span className="extension-slot-title">
             <strong>{item.title}</strong>
@@ -753,30 +657,5 @@ export function ExtensionSlot({
         />
       </article>)}
     </section>}
-    {dialog && <div className="extension-panel-overlay" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) setDialogState(null);
-    }}>
-      <section className="extension-panel-dialog" role="dialog" aria-modal="true" aria-label={dialog.title}>
-        <header className="extension-panel-dialog-head">
-          <div>
-            <span className="extension-slot-source">{dialog.scope === 'project' ? '项目扩展' : dialog.scope === 'user' ? '用户扩展' : '内置扩展'}</span>
-            <h2>{dialog.title}</h2>
-            {dialog.description && <p>{dialog.description}</p>}
-          </div>
-          <button type="button" className="extension-panel-close" aria-label="关闭扩展面板" onClick={() => setDialogState(null)}><X /></button>
-        </header>
-        <div className="extension-panel-dialog-body">
-          <ContentBlocks
-            blocks={dialog.content}
-            {...contentProps}
-            onAction={(action) => void activate(`dialog:${dialog.id}`, action)}
-          />
-        </div>
-        <footer className="extension-panel-dialog-foot">
-          <span>{dialog.id}</span>
-          <button type="button" onClick={() => setDialogState(null)}><Check />完成</button>
-        </footer>
-      </section>
-    </div>}
   </>;
 }

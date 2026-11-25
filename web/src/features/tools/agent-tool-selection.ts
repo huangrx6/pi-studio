@@ -16,6 +16,11 @@ export function sameToolNames(left: string[], right: string[]): boolean {
   return right.every((name) => left.includes(name));
 }
 
+export function localToolSelection(selection: AgentToolSelection): AgentToolSelection {
+  const enabled = selection.enabled.filter(name => !name.startsWith('mcp__'));
+  return { enabled, sources: Object.fromEntries(Object.entries(selection.sources).filter(([name]) => enabled.includes(name))) };
+}
+
 export function selectionFromSources(enabled: string[], sources: Record<string, AgentToolInfo['source']>, previous: AgentToolSelection): AgentToolSelection {
   return {
     enabled,

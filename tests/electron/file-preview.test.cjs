@@ -7,6 +7,9 @@ const {
   MAX_TEXT_BYTES,
   readFilePreview,
 } = require('../../electron/main/services/file-preview.cjs');
+const { writeFileText } = require('../../electron/main/services/workspace.cjs');
+const { fileChangeKey, publishFileChanges } = require('../../electron/main/services/file-change-events.cjs');
+const { setWindow } = require('../../electron/main/core/state.cjs');
 
 test('file preview returns bounded text and inlines allowlisted images', (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-preview-'));
@@ -18,6 +21,7 @@ test('file preview returns bounded text and inlines allowlisted images', (t) => 
     readFilePreview(directory, 'SKILL.md'),
     {
       path: 'SKILL.md',
+      changeKey: fileChangeKey(fs.realpathSync(path.join(directory, 'SKILL.md'))),
       name: 'SKILL.md',
       size: Buffer.byteLength('# Skill\n\nHello preview.'),
       mimeType: 'text/markdown',
@@ -30,6 +34,33 @@ test('file preview returns bounded text and inlines allowlisted images', (t) => 
   assert.equal(image.kind, 'image');
   assert.equal(image.mimeType, 'image/png');
   assert.match(image.dataUrl, /^data:image\/png;base64,/);
+});
+
+test('saving a preview draft checks the original contents before overwriting a file', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-preview-edit-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const target = path.join(directory, 'notes.txt');
+  fs.writeFileSync(target, 'before');
+  const original = readFilePreview(directory, 'notes.txt').text;
+  fs.writeFileSync(target, 'latest');
+  assert.throws(() => writeFileText(directory, 'notes.txt', 'my draft', original), /文件已更新/);
+  assert.equal(fs.readFileSync(target, 'utf8'), 'latest');
+  assert.equal(writeFileText(directory, 'notes.txt', 'my draft', 'latest').ok, true);
+  assert.equal(fs.readFileSync(target, 'utf8'), 'my draft');
+});
+
+test('file change notifications identify live previews without sending raw paths', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-preview-events-'));
+  t.after(() => { setWindow(undefined); fs.rmSync(directory, { recursive: true, force: true }); });
+  const file = path.join(directory, 'notes.txt');
+  const deleted = path.join(directory, 'removed.txt');
+  fs.writeFileSync(file, 'hello');
+  const events = [];
+  setWindow({ isDestroyed: () => false, webContents: { isDestroyed: () => false, send: (...event) => events.push(event) } });
+  publishFileChanges([file, file], { resolveAliases: true });
+  assert.deepEqual(events, [['pi:files-changed', [readFilePreview(directory, 'notes.txt').changeKey]]]);
+  publishFileChanges([deleted, 'relative.txt', path.join(os.homedir(), '.pi', 'notes.txt'), path.join(directory, 'auth.json')]);
+  assert.deepEqual(events[1], ['pi:files-changed', [fileChangeKey(deleted)]]);
 });
 
 test('file preview clips large text and rejects binary or escaped paths', (t) => {

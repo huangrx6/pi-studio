@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { normalizeProviderQuota, previewQuota, quotaFieldPaths } = require('../../electron/main/core/provider-quota.cjs');
 const { createProviderQuotaMonitor } = require('../../electron/main/services/provider-quota.cjs');
+const { quotaExampleInput } = require('../../web/src/features/models/quota-example.ts');
 
 const field = (label, path, format = 'number', options = {}) => ({ label, path, format, unit: '', translations: '', ...options });
 const config = (fields = [field('余额', 'data.balance', 'number', { unit: '元' })]) =>
@@ -95,6 +96,39 @@ test('a window shared by different allowance types can be addressed by type and 
   for (const items of [limits, [...limits].reverse()]) {
     assert.equal(previewQuota({ fields, sample: JSON.stringify({ limits: items }) })[0].value, '42');
   }
+});
+
+test('quota examples use the JSON preview contract and format every configured metric', () => {
+  const fields = [
+    field('5 小时已用', 'data.limits[unit=3&number=5].percentage', 'percent'),
+    field('本周已用', 'data.limits[unit=6&number=1].percentage', 'percent'),
+    field('本月已用', 'usage.monthly.percent', 'percent'),
+    field('5 小时重置时间', 'usage.rolling.resetsAt', 'time'),
+    field('本周重置时间', 'usage.weekly.resetsAt', 'time'),
+    field('本月重置时间', 'usage.monthly.resetsAt', 'time'),
+    field('次数', 'windows[period=week].remaining', 'number', { unit: '次' }),
+    field('小时用量', 'daily[0].used', 'fraction'),
+    field('状态', 'plan.state', 'enum', { translations: 'active=可用\noff=暂停' }),
+  ];
+  const input = quotaExampleInput(fields);
+  assert.equal(typeof input.sample, 'string');
+  const metrics = previewQuota(input);
+  assert.deepEqual(metrics.map(metric => metric.label), fields.map(item => item.label));
+  assert.deepEqual(metrics.filter(metric => metric.summary).map(metric => metric.label), ['5 小时已用', '本周已用']);
+  assert.ok(metrics.every(metric => metric.value !== null && !metric.issue));
+  for (const i of [0, 1, 2, 7]) {
+    assert.ok(metrics[i].percent > 0 && metrics[i].percent < 100);
+    assert.match(metrics[i].value, /%$/);
+  }
+  for (const i of [3, 4, 5]) assert.match(metrics[i].value, /\d{4}.*\d{2}:\d{2}/);
+  assert.match(metrics[6].value, / 次$/);
+  assert.equal(metrics[8].value, '可用');
+  const sample = JSON.stringify({ data: { limits: [
+    { unit: 6, number: 1, percentage: 73 }, { unit: 3, number: 5, percentage: 9 },
+  ] } });
+  assert.deepEqual(previewQuota({ fields: fields.slice(0, 2), sample }).map(metric => metric.value), ['9%', '73%']);
+  const unrelated = previewQuota({ fields, sample: '{"usage":{"week":{"remaining":120}}}' });
+  assert.ok(unrelated.every(metric => metric.value === null && metric.issue === '未返回此字段'));
 });
 
 test('configurable quota windows, array selectors, units, translations and timestamps project the same way in previews', () => {

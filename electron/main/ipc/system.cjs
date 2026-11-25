@@ -3,13 +3,42 @@
  * 主题切换、启动时一次性拉取（工作区列表 + 当前模型）。
  */
 
-const { ipcMain } = require('electron');
+const { app, clipboard, ipcMain, shell } = require('electron');
+const { studioDataDirectory } = require('../core/studio-paths.cjs');
+const { databasePath, getStudioDatabase } = require('../core/studio-db.cjs');
+const { externalWorktreeStorageRoots } = require('../capabilities/subagents/index.cjs');
+const { createDeviceStorageService, updateCacheDirectory } = require('../services/device-storage.cjs');
 const { listWorkspaces, refreshRuntimeState } = require('../runtime/conversations.cjs');
 const { DEFAULT_CWD, modelInfo } = require('../services/models.cjs');
 const { applyAppearance, windowState } = require('../window.cjs');
 const { chooseBackgroundMedia, removeBackgroundMedia } = require('../services/background.cjs');
 
+async function deviceStorageSources() {
+  const sources = {
+    studio: studioDataDirectory(), database: databasePath(), client: app.getPath('userData'),
+    session: app.getPath('sessionData'), home: app.getPath('home'), appData: app.getPath('appData'),
+    projects: [], worktrees: [],
+  };
+  try {
+    const db = getStudioDatabase();
+    sources.projects = db.listWorkspaces().map(workspace => workspace.cwd);
+    sources.worktrees = externalWorktreeStorageRoots(db);
+  } catch { sources.locationsIncomplete = true; }
+  if (app.isPackaged && !process.env.PI_STUDIO_USER_DATA) {
+    try {
+      sources.updates = await updateCacheDirectory(process.resourcesPath);
+    } catch { sources.locationsIncomplete = true; }
+  }
+  return sources;
+}
+
 function registerSystemIpc(waitForStartup) {
+  const storage = createDeviceStorageService({ shell, clipboard, getSources: deviceStorageSources });
+  ipcMain.handle('pi:device-storage', async () => {
+    try { return await storage.snapshot(); }
+    catch { throw new Error('无法读取存储用量，请刷新重试。'); }
+  });
+  ipcMain.handle('pi:device-storage-location', (_event, id, action) => storage.useLocation(id, action));
   ipcMain.handle('pi:startup-ready', () => waitForStartup());
   // 渲染进程切换外观（设置页），持久化并同步原生窗口与菜单栏。
   ipcMain.handle(

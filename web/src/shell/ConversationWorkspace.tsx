@@ -1,48 +1,14 @@
-import { lazy, memo, Suspense, useEffect, useMemo, type ComponentProps } from 'react';
-import { ChevronLeft } from 'lucide-react';
-import { LoadingState } from '../shared/LoadingState';
+import { memo, useEffect, type ComponentProps } from 'react';
 import { ComposerDock } from '../features/conversation/ComposerDock';
 import { useConversationSearch } from '../features/conversation/useConversationSearch';
 import { ConversationSearchBar } from './ConversationSearchBar';
 import { ConversationTranscriptPane } from './ConversationTranscriptPane';
-import type { useSubagentWorkspace } from '../features/subagents/useSubagentWorkspace';
 import type { useTranscriptNavigation } from '../features/conversation/useTranscriptNavigation';
-import {
-  type OutlineItem,
-} from '../features/conversation/outline-model';
-import {
-  ConversationExtensionDock,
-  ConversationExtensionHub,
-} from '../features/extensions/ConversationExtensionHub';
-import { ExtensionSlot } from '../features/extensions/ExtensionSlot';
+import type { OutlineItem } from '../features/conversation/outline-model';
 import type { Preferences } from '../shared/preferences';
 import type { AppNotification } from './NotificationCenter';
-import type { AgentView } from './app-types';
-import type { ModelSelection } from '../types/model-types';
 import type { TurnDiff, TurnDiffFile } from '../types/chat-types';
-import type {
-  ConversationExtensionLayout,
-  ConversationExtensionOrderScope,
-  ConversationExtensionUiPreferences,
-  ExtensionSettingsPage,
-  ExtensionUiItem,
-} from '../types/extension-types';
 import { ConversationHeader } from './ConversationHeader';
-import { scopedExtensionChips } from '../features/extensions/extension-chip-scope';
-import { ConversationTracePage } from './ConversationTraceMenu';
-import { buildTraceSummary } from '../features/conversation/trace-model';
-
-const GitWorkspacePage = lazy(() => import('../features/git/GitWorkspacePage'));
-const ConversationTasksPage = lazy(() => import('../features/conversation/ConversationTasksPage'));
-
-const SubagentOverview = lazy(async () => {
-  const module = await import('../features/subagents/SubagentViews');
-  return { default: module.SubagentOverview };
-});
-const SubagentTranscriptView = lazy(async () => {
-  const module = await import('../features/subagents/SubagentViews');
-  return { default: module.SubagentTranscriptView };
-});
 
 type SessionView = {
   id: string;
@@ -58,9 +24,7 @@ type ConversationShell = {
   messageCount: number;
   sidebarCollapsed: boolean;
   setSidebarCollapsed: (collapsed: boolean) => void;
-  agentView: AgentView;
   session: SessionView;
-  modelSelection: ModelSelection;
   preferences: Preferences;
   turnActive: boolean;
   /** 提交已写入但本轮还没结束：编辑必须和主进程一样等到空闲。 */
@@ -70,9 +34,7 @@ type ConversationShell = {
   compaction: { active: boolean; reason?: string };
   retryInfo: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
   liveDiff: TurnDiff | null;
-  notificationCount: number;
   notifications: AppNotification[];
-  setNotifications: React.Dispatch<React.SetStateAction<AppNotification[]>>;
   markAllRead: () => void;
   clearNotifications: () => void;
   conversationSubscriptionError: {
@@ -82,42 +44,12 @@ type ConversationShell = {
   } | null;
   retryConversationSubscription: () => void;
   settingsOpen: boolean;
+  visible: boolean;
 };
 
-type HeaderState = {
-  /** 顶栏更新入口；没有可更新目标时为 null。 */
-  update: ComponentProps<typeof ConversationHeader>['update'];
-  quotaProvider?: ComponentProps<typeof ConversationHeader>['quotaProvider'];
-  conversationDetailExtensionCount: number;
-  openNotificationSession: (id: string) => Promise<void>;
-  runNotificationAction: (item: AppNotification) => Promise<void>;
-  panelExpanded: boolean;
-  openPanel: () => void;
-  returnToMainAgent: () => void;
-  gitStatus: ComponentProps<typeof ConversationHeader>['gitStatus'];
-  openGit: (tab: import('../types/git-types').GitTab) => void;
-  progressTrigger: React.ReactNode;
-  openConversationExtensionHub: () => void;
-  openTrace: () => void;
-};
-
-type ExtensionWorkspaceState = {
-  chipItems: Array<{ item: ExtensionUiItem; targetId: string }>;
-  openItem: (id: string) => void;
-  openChip: (chip: { item: ExtensionUiItem; targetId: string }) => void;
-  surface: ComponentProps<typeof ConversationExtensionDock>['surface'];
-  hubItems: ExtensionUiItem[];
-  activeItem: ExtensionUiItem | null;
-  preferences: ConversationExtensionUiPreferences;
-  orderScope: ConversationExtensionOrderScope;
-  setOrderScope: (scope: ConversationExtensionOrderScope) => void;
-  hasSessionOrder: boolean;
-  updateUi: (patch: Parameters<typeof import('../features/conversation/conversation-extension-order').applyConversationExtensionUiPatch>[1]) => Promise<boolean>;
-  openSettings: (page?: ExtensionSettingsPage) => void;
-  sendPrompt: (text: string, submit: boolean) => void;
-  notify: ComponentProps<typeof ExtensionSlot>['onNotify'];
-  openHub: () => void;
-};
+type HeaderState = Omit<ComponentProps<typeof ConversationHeader>,
+  'sidebarCollapsed' | 'onExpandSidebar' | 'isNewConversation' | 'title' | 'notifications'
+  | 'onMarkAllRead' | 'onClearNotifications' | 'sessionId' | 'showTrace'>;
 
 type OutlineState = {
   items: OutlineItem[];
@@ -127,7 +59,6 @@ type OutlineState = {
 };
 
 type ConversationActions = {
-  openGitFile: (root: string, path: string) => void;
   openAttachment: (path: string) => void;
   openFile: (path: string) => void;
   undoTurnDiff: (at: number) => Promise<void>;
@@ -145,8 +76,6 @@ export type ConversationWorkspaceProps = {
     /** 当前窗口是否缺少较新的一段。 */
     transcriptTruncated: boolean;
   };
-  extensions: ExtensionWorkspaceState;
-  subagents: ReturnType<typeof useSubagentWorkspace>;
   outline: OutlineState;
   composer: ComponentProps<typeof ComposerDock>;
 };
@@ -156,8 +85,6 @@ function ConversationWorkspaceComponent({
   header,
   actions,
   transcript,
-  extensions,
-  subagents,
   outline,
   composer,
 }: ConversationWorkspaceProps) {
@@ -167,9 +94,7 @@ function ConversationWorkspaceComponent({
     messageCount,
     sidebarCollapsed,
     setSidebarCollapsed,
-    agentView,
     session,
-    modelSelection,
     preferences,
     turnActive,
     busy,
@@ -179,26 +104,22 @@ function ConversationWorkspaceComponent({
     retryInfo,
     liveDiff,
     notifications,
-    setNotifications,
     markAllRead,
     clearNotifications,
     conversationSubscriptionError,
     retryConversationSubscription,
     settingsOpen,
+    visible,
   } = shell;
   const {
-    toolResultMap,
     transcriptTurns,
     lastAssistantTurnIndex,
-    requestPlacement,
     jumpToMessage,
   } = transcript;
 
   const search = useConversationSearch({ sessionId: session?.id, onJump: jumpToMessage });
   const searchOpen = search.state.open;
-  // 搜索只属于已有会话的正文视图；新会话、扩展中心、子智能体和轨迹页
-  // 都没有可供搜索的当前会话正文，不应显示或响应 ⌘F / Ctrl+F。
-  const searchEnabled = Boolean(session?.id) && agentView.kind === 'conversation';
+  const searchEnabled = visible && Boolean(session?.id);
 
   useEffect(() => {
     if (!searchEnabled && searchOpen) search.close();
@@ -222,23 +143,10 @@ function ConversationWorkspaceComponent({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [search, searchEnabled, searchOpen]);
-  // 轨迹页只在「显示代码工作视图」开启时出现；关闭后回落到对话视图。
-  const traceEnabled = preferences.showCodeView;
-  const showTrace = agentView.kind === 'trace' && traceEnabled;
-  const transcriptVisible = agentView.kind === 'conversation' || (agentView.kind === 'trace' && !traceEnabled);
-  const headerKind = agentView.kind === 'trace' && !traceEnabled ? 'conversation' : agentView.kind;
-  const traceSummary = useMemo(() => buildTraceSummary({
-    turns: transcriptTurns,
-    toolResults: toolResultMap,
-    requestPlacement,
-    turnActive,
-  }), [transcriptTurns, toolResultMap, requestPlacement, turnActive]);
   const lastAssistantTurn = transcriptTurns[lastAssistantTurnIndex];
   const lastAssistantError = lastAssistantTurn?.kind === 'assistant'
     ? lastAssistantTurn.messages.at(-1)?.errorMessage
     : undefined;
-  // chip 属于会话视图：草稿态没有 session，交给纯函数统一裁掉。
-  const scopedChips = scopedExtensionChips(session?.id, extensions.chipItems);
   const showSessionError = Boolean(error)
     && !(Boolean(error) && !turnActive && lastAssistantError === error);
 
@@ -246,38 +154,16 @@ function ConversationWorkspaceComponent({
   return (
     <>
       <ConversationHeader
-        update={header.update}
+        {...header}
         sidebarCollapsed={sidebarCollapsed}
         onExpandSidebar={() => setSidebarCollapsed(false)}
         isNewConversation={isNewConversation}
-        title={agentView.kind === 'agents' && agentView.child
-            ? `${agentView.child.name || agentView.child.agent} · 子智能体`
-            : (session?.title || 'Pi Studio')}
-        gitStatus={header.gitStatus}
-        progressTrigger={header.progressTrigger}
-        agentKind={headerKind}
-        extensionCount={header.conversationDetailExtensionCount}
+        title={session?.title || 'Pi Studio'}
         notifications={notifications}
         onMarkAllRead={markAllRead}
         onClearNotifications={clearNotifications}
-        onOpenNotificationSession={header.openNotificationSession}
-        onRunNotificationAction={header.runNotificationAction}
-        panelExpanded={header.panelExpanded}
-        onOpenPanel={header.openPanel}
-        onReturnToMainAgent={header.returnToMainAgent}
-        onOpenConversationExtensionHub={header.openConversationExtensionHub}
-        quotaProvider={header.quotaProvider}
-        chips={scopedChips}
-        extensionSurface={extensions.surface}
-        cwd={session?.cwd}
         sessionId={session?.id}
-        modelRef={modelSelection.modelRef}
-        onOpenChip={extensions.openChip}
-        onOpenExtensionSettings={extensions.openSettings}
-        onSendPromptFromExtension={extensions.sendPrompt}
-        onNotifyExtension={extensions.notify}
-        onOpenTrace={header.openTrace}
-        showTrace={traceEnabled}
+        showTrace={preferences.showCodeView}
       />
       <main className={`main shell-canvas ${isNewConversation ? 'is-new-conversation' : ''}`} aria-busy={sessionLoading}>
         <div className={`chat-loading-line ${sessionLoading ? 'is-visible' : ''}`} />
@@ -287,7 +173,7 @@ function ConversationWorkspaceComponent({
         onStep={(direction) => { void search.step(direction); }}
         onClose={search.close}
       />}
-      {!isNewConversation && transcriptVisible && <ConversationTranscriptPane
+      {!isNewConversation && <ConversationTranscriptPane
         sessionId={session?.id}
         sessionCwd={session?.cwd}
         messageCount={messageCount}
@@ -309,112 +195,7 @@ function ConversationWorkspaceComponent({
         actions={actions}
       />}
 
-      {!isNewConversation && agentView.kind === 'extensions' && <div className="conversation-extension-scroll">
-        <div className="conversation-extension-column">
-          {extensions.activeItem
-            ? <>
-              <div className="extension-panel-bar">
-                <button type="button" onClick={extensions.openHub}><ChevronLeft />扩展中心</button>
-                <span>{extensions.activeItem.title}</span>
-              </div>
-              <ExtensionSlot
-                slot={extensions.activeItem.slot}
-                presentation="page"
-                snapshot={extensions.surface}
-                selectedItemId={extensions.activeItem.id}
-                cwd={session?.cwd}
-                sessionId={session?.id}
-                modelRef={modelSelection.modelRef}
-                onOpenSettings={extensions.openSettings}
-                onSendPrompt={extensions.sendPrompt}
-                onNotify={extensions.notify}
-              />
-            </>
-            : <ConversationExtensionHub
-              onOpenItem={extensions.openItem}
-              items={extensions.hubItems}
-              surface={extensions.surface}
-              sessionId={session?.id || 'new'}
-              cwd={session?.cwd}
-              modelRef={modelSelection.modelRef}
-              layout={extensions.preferences.layout}
-              orderScope={extensions.orderScope}
-              hasSessionOverride={extensions.hasSessionOrder}
-              onLayoutChange={(layout: ConversationExtensionLayout) => {
-                void extensions.updateUi({ layout });
-              }}
-              onOrderScopeChange={extensions.setOrderScope}
-              onOrderChange={(extensionIds) => {
-                if (extensions.orderScope === 'session' && session?.id) {
-                  void extensions.updateUi({ sessionId: session.id, sessionOrder: extensionIds });
-                } else {
-                  void extensions.updateUi({ globalOrder: extensionIds });
-                }
-              }}
-              onRestoreGlobalOrder={() => {
-                if (!session?.id) return;
-                void (async () => {
-                  const saved = await extensions.updateUi({ sessionId: session.id, sessionOrder: null });
-                  if (saved) extensions.setOrderScope('global');
-                })();
-              }}
-              onOpenSettings={extensions.openSettings}
-              onSendPrompt={extensions.sendPrompt}
-              onNotify={extensions.notify}
-            />}
-        </div>
-      </div>}
-
-      {!isNewConversation && showTrace && <ConversationTracePage key={session?.id} summary={traceSummary} />}
-
-      {session && agentView.kind === 'git' && <Suspense fallback={<LoadingState variant="panel">正在读取 Git…</LoadingState>}>
-        <GitWorkspacePage key={session.id} sessionId={session.id} tab={agentView.tab} onTab={header.openGit} diffPreferences={preferences} openFile={actions.openGitFile} />
-      </Suspense>}
-      {session && agentView.kind === 'tasks' && <Suspense fallback={<LoadingState variant="panel">正在读取任务…</LoadingState>}>
-        <ConversationTasksPage key={session.id} sessionId={session.id} goalUpdatedAt={session.longTask?.updatedAt} />
-      </Suspense>}
-      {agentView.kind === 'agents' && (
-        <div className="agent-workspace">
-          <Suspense fallback={
-            <LoadingState variant="panel">正在加载子智能体…</LoadingState>
-          }>
-            <SubagentOverview
-              hidden={Boolean(agentView.child)}
-              children={subagents.subagentChildren}
-              budget={subagents.subagentBudget}
-              selection={modelSelection}
-              refreshing={subagents.subagentRefreshing}
-              error={subagents.subagentListError}
-              onRefresh={() => void subagents.refreshSubagentChildren(true)}
-              onOpenChild={subagents.openAgentTranscript}
-              onDeleteChild={(child) => void subagents.deleteSubagent(child)}
-              onReplyChild={subagents.replySubagentSupervisor}
-              deletingChildKey={subagents.subagentDeletingKey || undefined}
-              replyingChildKey={subagents.subagentReplyingKey || undefined}
-              onReturnMain={header.returnToMainAgent}
-              mode={subagents.subagentOverviewMode}
-              onModeChange={subagents.setSubagentOverviewMode}
-            />
-            {agentView.child && (
-              <SubagentTranscriptView
-                key={agentView.child.key}
-                child={agentView.child}
-                onRetry={() => { if (agentView.child) subagents.openAgentTranscript(agentView.child); }}
-                transcript={subagents.subagentTranscript}
-                loading={subagents.subagentLoading}
-                error={subagents.subagentError}
-                stepDisplay={preferences.stepDisplay}
-                stepCollapse={preferences.stepCollapse}
-                showCodeView={preferences.showCodeView}
-                onBackMain={header.returnToMainAgent}
-                onOverview={subagents.openAgentOverview}
-                onOpenFile={actions.openFile}
-              />
-            )}
-          </Suspense>
-        </div>
-      )}
-      <ComposerDock {...composer} open={transcriptVisible} />
+      <ComposerDock {...composer} />
       </main>
     </>
   );

@@ -12,8 +12,9 @@ const root = fileURLToPath(new URL('../..', import.meta.url));
 const output = path.join(root, '.qa/maintenance'); await mkdir(output, { recursive: true });
 const result = { startedAt: new Date().toISOString(), scope: 'Built renderer in isolated Chromium with synthetic About/update/MCP DTOs. No real updates, downloads, restarts, network calls, OAuth or MCP connections. IME guards use composing/229 synthetic keys on read-only details; ordinary keyboard actions are real.', assets: (await readFile(path.join(root, 'dist/renderer/index.html'), 'utf8')).match(/assets\/[^"']+\.(?:js|css)/g), checks: [], screenshots: [], geometry: [], pageErrors: [], blockedRequests: [] };
 const server = await serveProductionRenderer(root); let browser, page;
-const update = () => page.locator('.update-dialog');
-const mcp = () => page.locator('.mcp-detail-dialog');
+const update = () => page.locator('dialog:has(> .update-dialog)');
+const mcp = () => page.locator('dialog:has(> .mcp-detail-dialog)');
+const mcpEditor = () => page.getByRole('dialog', { name: '编辑 MCP 服务器', exact: true });
 const composer = () => page.getByRole('textbox', { name: '发送给 Pi 的消息', exact: true });
 async function settle() { await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); }
 async function qa(method, ...args) { await page.evaluate(({ method, args }) => window.__maintenanceQa[method](...args), { method, args }); await settle(); }
@@ -22,9 +23,31 @@ async function count(method, scope) { return page.evaluate(({ method, scope }) =
 async function twice(locator) { await locator.evaluate(node => { node.click(); node.click(); }); }
 async function openMcp(scope) { const name = await page.evaluate(scope => window.__maintenanceQa.names[scope], scope); await page.getByRole('button', { name: `查看 MCP ${name} 详情`, exact: true }).click(); await mcp().waitFor(); }
 async function closeMcp() { await mcp().getByRole('button', { name: '关闭 MCP 详情', exact: true }).click(); await mcp().waitFor({ state: 'detached' }); }
+async function openMcpEdit(scope) { const name = await page.evaluate(scope => window.__maintenanceQa.names[scope], scope); await page.getByRole('button', { name: `编辑 ${name}`, exact: true }).click(); await mcpEditor().waitFor(); await mcpEditor().getByRole('button', { name: '测试连接', exact: true }).waitFor(); }
+async function closeMcpEdit() { await mcpEditor().getByRole('button', { name: '取消', exact: true }).click(); await mcpEditor().waitFor({ state: 'detached' }); }
+async function checkMcpSectionHeaders() {
+  const { x, width } = await mcp().locator('.mcp-detail-target').boundingBox();
+  for (const summary of await mcp().locator('.mcp-detail-section > summary').all()) {
+    const layout = () => summary.evaluate(node => ({
+      left: node.querySelector('.pi-accordion-label').getBoundingClientRect().left,
+      right: node.querySelector('.pi-accordion-chevron').getBoundingClientRect().right,
+      background: getComputedStyle(node).backgroundColor,
+    }));
+    await page.mouse.move(0, 0);
+    const idle = await layout();
+    assert.deepEqual(idle, { left: x, right: x + width, background: 'rgba(0, 0, 0, 0)' });
+    await summary.hover();
+    assert.deepEqual(await layout(), idle, 'MCP section headers keep their edges and surface on hover');
+  }
+  await page.mouse.move(0, 0);
+}
 async function capture(name, theme, viewport, selector) {
   await page.setViewportSize(viewport); await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme); await settle();
-  if (selector === '.mcp-detail-dialog') { await mcp().locator('.mcp-detail-body').evaluate(node => { node.scrollTop = 0; }); await settle(); }
+  if (selector === '.mcp-detail-dialog') {
+    await checkMcpSectionHeaders();
+    await mcp().locator('.mcp-detail-body').evaluate(node => { node.scrollTop = 0; });
+    await settle();
+  }
   const geometry = await page.locator(selector).evaluate(node => { const box = node.getBoundingClientRect(); return { width: box.width, left: box.left, right: box.right, viewport: innerWidth, overflow: node.scrollWidth > node.clientWidth + 1, rootOverflow: document.documentElement.scrollWidth > innerWidth + 1 }; });
   assert.equal(geometry.overflow, false, `${name} horizontal overflow`); assert.equal(geometry.rootOverflow, false); assert.ok(geometry.left >= -1 && geometry.right <= geometry.viewport + 1);
   result.geometry.push({ name, ...geometry }); await page.screenshot({ path: path.join(output, `${name}.png`), animations: 'disabled' }); result.screenshots.push(name);
@@ -61,7 +84,7 @@ try {
   await update().getByRole('button', { name: '下载更新', exact: true }).click(); await update().getByRole('alert').filter({ hasText: '另一项更新操作仍在进行，请稍后重试。' }).waitFor(); assert.equal(await count('downloadUpdate'), 0, 'a different pending action is rejected explicitly rather than silently substituting the older promise');
   await qa('release', 'checkForUpdates'); await update().getByText('发现同版本新构建', { exact: true }).waitFor();
   await qa('emit', { state: 'error', error: 'QA 用于验证迟到失败归属' }); await qa('hold', 'checkForUpdates'); await qa('fail', 'checkForUpdates');
-  await update().getByRole('button', { name: '重新检查', exact: true }).click(); await pending('checkForUpdates'); await qa('emit', available); await qa('release', 'checkForUpdates'); await update().getByText('发现同版本新构建', { exact: true }).waitFor(); assert.equal(await update().getByRole('alert').count(), 0, 'late check rejection cannot replace newer available event');
+  await update().getByRole('button', { name: '重新检查', exact: true }).click(); await pending('checkForUpdates'); await qa('emit', available); await qa('release', 'checkForUpdates'); await update().getByText('发现同版本新构建', { exact: true }).waitFor(); assert.equal(await update().getByRole('alert').filter({ hasText: /QA checkForUpdates.*失败/ }).count(), 0, 'late check rejection cannot replace newer available event');
   result.checks.push('About routes and local paths, same-version complete build IDs, late startup/read and check RPC cannot overwrite newer updater events, failed check retry and synchronous double-action lock');
   await qa('hold', 'downloadUpdate'); const downloadBefore = await count('downloadUpdate'); await twice(update().getByRole('button', { name: '下载更新', exact: true })); await pending('downloadUpdate'); assert.equal(await count('downloadUpdate'), downloadBefore + 1);
   for (const [progress, expected] of [[-20, '0'], [140, '100'], [NaN, null], [Infinity, null], [37, '37']]) {
@@ -79,49 +102,54 @@ try {
   await qa('emit', { state: 'downloaded', progress: 100 }); assert.equal(await update().count(), 0, 'repeated downloaded state for the same target respects the closed dialog');
   result.checks.push('finite download progress clamps, nonfinite progress remains indeterminate, downloaded event survives old download RPC, mock install is deduplicated across dialog remount, failed install retains downloaded retry, repeated downloaded target stays closed');
 
-  await page.setViewportSize({ width: 980, height: 760 }); await page.locator('.settings-navigation').getByRole('button', { name: 'MCP 服务器', exact: true }).click();
+  await page.setViewportSize({ width: 980, height: 760 });
+  await page.locator('.settings-navigation').getByRole('button', { name: '插件', exact: true }).click();
+  await page.getByRole('tablist', { name: '插件与资源' }).getByRole('tab', { name: 'MCP', exact: true }).click();
   for (const rejected of [false, true]) {
-    await qa('hold', 'testSavedMcp', 'A'); if (rejected) await qa('fail', 'testSavedMcp', 'A'); await openMcp('A');
-    const testsBefore = await count('testSavedMcp', 'A'); await twice(mcp().getByRole('button', { name: '测试连接', exact: true })); await pending('testSavedMcp', 'A'); assert.equal(await count('testSavedMcp', 'A'), testsBefore + 1);
-    await closeMcp(); await openMcp('B'); await qa('release', 'testSavedMcp', 'A'); assert.doesNotMatch(await mcp().innerText(), /A_ONLY_TEST_RESULT|A_ONLY_TEST_DIAGNOSTIC|QA testSavedMcp A/); await closeMcp();
+    await qa('hold', 'testMcp', 'A'); if (rejected) await qa('fail', 'testMcp', 'A'); await openMcpEdit('A');
+    const testsBefore = await count('testMcp', 'A'); await twice(mcpEditor().getByRole('button', { name: '测试连接', exact: true })); await pending('testMcp', 'A'); assert.equal(await count('testMcp', 'A'), testsBefore + 1);
+    await closeMcpEdit(); await openMcpEdit('B'); await qa('release', 'testMcp', 'A'); assert.doesNotMatch(await mcpEditor().innerText(), /A_ONLY_TEST_RESULT|A_ONLY_TEST_DIAGNOSTIC|QA testMcp A/); await closeMcpEdit();
   }
-  await qa('hold', 'startMcpOAuth', 'A'); await openMcp('A'); await twice(mcp().getByRole('button', { name: 'OAuth 登录', exact: true })); await pending('startMcpOAuth', 'A'); assert.equal(await count('startMcpOAuth', 'A'), 1);
-  await closeMcp(); await openMcp('B'); const readsBeforeOldWrite = await count('settings'); await qa('release', 'startMcpOAuth', 'A'); assert.equal(await count('settings'), readsBeforeOldWrite, 'disposed A completion cannot invoke a B-bound refresh'); assert.doesNotMatch(await mcp().innerText(), /OAuth 授权完成/); await page.locator('.model-refresh-notice').getByText(/MCP 授权状态已更新/).waitFor();
-  const badTest = await page.evaluate(() => ({ ...window.__maintenanceQa.testResult('B'), ok: false, instructions: 'QA_B_TEST_NOT_OK', stderr: 'QA_B_TEST_FAILURE_DIAGNOSTIC' })); await qa('reply', 'testSavedMcp', badTest, 'B'); await mcp().getByRole('button', { name: '测试连接', exact: true }).click(); await mcp().getByText('连接测试未成功', { exact: true }).waitFor(); assert.equal(await mcp().getByText('连接成功', { exact: true }).count(), 0);
-  await qa('fail', 'settings'); await mcp().getByRole('button', { name: 'OAuth 登录', exact: true }).click(); await mcp().getByRole('button', { name: '重试刷新', exact: true }).waitFor();
-  const oauthWrites = await count('startMcpOAuth', 'B'), failedReads = await count('settings'); assert.equal(oauthWrites, 1); assert.match(await mcp().innerText(), /授权.*完成/);
-  await mcp().getByRole('button', { name: '重试刷新', exact: true }).click(); await mcp().getByRole('button', { name: '退出 OAuth', exact: true }).waitFor(); assert.equal(await count('startMcpOAuth', 'B'), oauthWrites); assert.equal(await count('settings'), failedReads + 1);
-  await qa('fail', 'settings'); await mcp().getByRole('button', { name: '退出 OAuth', exact: true }).click(); await mcp().getByRole('button', { name: '重试刷新', exact: true }).waitFor(); const logoutWrites = await count('logoutMcpOAuth', 'B');
-  await mcp().getByRole('button', { name: '重试刷新', exact: true }).click(); await mcp().getByRole('button', { name: 'OAuth 登录', exact: true }).waitFor(); assert.equal(await count('logoutMcpOAuth', 'B'), logoutWrites);
+  await qa('hold', 'startMcpOAuth', 'A'); await openMcpEdit('A'); await twice(mcpEditor().getByRole('button', { name: 'OAuth 登录', exact: true })); await pending('startMcpOAuth', 'A'); assert.equal(await count('startMcpOAuth', 'A'), 1);
+  await closeMcpEdit(); await openMcpEdit('B'); const readsBeforeOldWrite = await count('settings'); await qa('release', 'startMcpOAuth', 'A'); assert.equal(await count('settings'), readsBeforeOldWrite, 'disposed A completion cannot invoke a B-bound refresh'); assert.doesNotMatch(await mcpEditor().innerText(), /OAuth 授权完成/); await closeMcpEdit(); await page.locator('.settings-toast-stack').getByText(/OAuth 授权已完成/).waitFor(); await openMcpEdit('B');
+  const badTest = await page.evaluate(() => ({ ...window.__maintenanceQa.testResult('B'), ok: false, instructions: 'QA_B_TEST_NOT_OK', stderr: 'QA_B_TEST_FAILURE_DIAGNOSTIC' })); await qa('reply', 'testMcp', badTest, 'B'); await mcpEditor().getByRole('button', { name: '测试连接', exact: true }).click(); await mcpEditor().getByText('连接测试未成功', { exact: true }).waitFor(); assert.equal(await mcpEditor().getByText('连接成功', { exact: true }).count(), 0);
+  await qa('fail', 'settings'); await mcpEditor().getByRole('button', { name: 'OAuth 登录', exact: true }).click(); await mcpEditor().getByRole('button', { name: '重试刷新', exact: true }).waitFor();
+  const oauthWrites = await count('startMcpOAuth', 'B'), failedReads = await count('settings'); assert.equal(oauthWrites, 1); assert.match(await mcpEditor().innerText(), /授权.*完成/);
+  await mcpEditor().getByRole('button', { name: '重试刷新', exact: true }).click(); await mcpEditor().getByRole('button', { name: '退出 OAuth', exact: true }).waitFor(); assert.equal(await count('startMcpOAuth', 'B'), oauthWrites); assert.equal(await count('settings'), failedReads + 1);
+  await qa('fail', 'settings'); await mcpEditor().getByRole('button', { name: '退出 OAuth', exact: true }).click(); await mcpEditor().getByRole('button', { name: '重试刷新', exact: true }).waitFor(); const logoutWrites = await count('logoutMcpOAuth', 'B');
+  await mcpEditor().getByRole('button', { name: '重试刷新', exact: true }).click(); await mcpEditor().getByRole('button', { name: 'OAuth 登录', exact: true }).waitFor(); assert.equal(await count('logoutMcpOAuth', 'B'), logoutWrites);
   result.checks.push('MCP A test success/rejection and OAuth completion after close cannot populate B; same-tick duplicate actions lock; ok:false is failure; OAuth/logout success plus failed projection retries settings only');
   // A committed credential mutation can fail inside its own runtime projection,
-  // before the renderer's detail read. Recovery must never repeat that mutation.
+  // before the renderer's read. Recovery must never repeat that mutation.
   for (const [method, button, completedButton] of [
     ['startMcpOAuth', 'OAuth 登录', '退出 OAuth'],
     ['logoutMcpOAuth', '退出 OAuth', 'OAuth 登录'],
   ]) {
     const writesBefore = await count(method, 'B'), readsBefore = await count('settings');
     await qa('reply', method, { committed: true, projection: { status: 'error', message: 'QA 凭据已更新，但 MCP 运行时刷新未完成。' } }, 'B');
-    await twice(mcp().getByRole('button', { name: button, exact: true }));
-    await mcp().getByText(/QA 凭据已更新，但 MCP 运行时刷新未完成/).waitFor();
+    await twice(mcpEditor().getByRole('button', { name: button, exact: true }));
+    await mcpEditor().getByText(/QA 凭据已更新，但 MCP 运行时刷新未完成/).waitFor();
     assert.equal(await count(method, 'B'), writesBefore + 1);
     assert.equal(await count('settings'), readsBefore, 'internal projection failure waits for explicit recovery');
     await qa('hold', 'refreshMcp'); await qa('fail', 'refreshMcp');
     const refreshBefore = await count('refreshMcp');
-    await twice(mcp().getByRole('button', { name: '重试刷新', exact: true })); await pending('refreshMcp');
+    await twice(mcpEditor().getByRole('button', { name: '重试刷新', exact: true })); await pending('refreshMcp');
     assert.equal(await count('refreshMcp'), refreshBefore + 1);
-    await qa('release', 'refreshMcp'); await mcp().getByText(/QA refreshMcp.*失败/).waitFor();
+    await qa('release', 'refreshMcp'); await mcpEditor().getByText(/QA refreshMcp.*失败/).waitFor();
     assert.equal(await count(method, 'B'), writesBefore + 1);
-    await mcp().getByRole('button', { name: '重试刷新', exact: true }).click();
-    await page.waitForFunction(label => [...document.querySelectorAll('.mcp-detail-dialog button')].some(node => node.textContent.trim() === label && !node.disabled), completedButton);
+    await mcpEditor().getByRole('button', { name: '重试刷新', exact: true }).click();
+    await page.waitForFunction(label => [...document.querySelectorAll('.plugin-form-dialog button, dialog button')].some(node => node.textContent.trim() === label && !node.disabled), completedButton);
     assert.equal(await count('refreshMcp'), refreshBefore + 2);
     assert.equal(await count(method, 'B'), writesBefore + 1, 'read retry never repeats OAuth');
-    assert.equal(await count('settings'), readsBefore + 1, 'recovered runtime then reads fresh detail once');
-    assert.equal(await page.locator('.model-refresh-notice').count(), 0, 'current ready recovery clears the page notice');
+    assert.equal(await count('settings'), readsBefore + 1, 'recovered runtime then reads fresh state once');
+    assert.equal(await page.locator('.settings-toast-stack').getByRole('button', { name: '刷新 MCP 状态', exact: true }).count(), 0, 'current ready recovery clears the page notice');
   }
+  await closeMcpEdit();
   result.checks.push('OAuth and logout internal committed projection failures retain success facts; duplicate recovery clicks share one refreshMcp; failed read retries only refreshMcp then settings and clear current pending state without repeating credentials mutation');
 
-  await mcp().getByRole('button', { name: '测试连接', exact: true }).click(); await mcp().getByText('B_ONLY_TEST_RESULT', { exact: true }).waitFor();
+  await openMcp('B');
+  assert.equal(await mcp().getByRole('button', { name: '测试连接', exact: true }).count(), 0);
+  assert.equal(await mcp().getByRole('button', { name: 'OAuth 登录', exact: true }).count(), 0);
   for (const text of ['连接参数', '诊断信息']) { const summary = mcp().locator('summary').filter({ hasText: text }); assert.equal(await summary.count(), 1, `${text} remains available`); await summary.focus(); await page.keyboard.press('Enter'); assert.notEqual(await summary.locator('..').getAttribute('open'), null); }
   const toolSummary = mcp().locator('summary').filter({ hasText: /^工具/ }); await toolSummary.focus(); await page.keyboard.press('Enter'); await mcp().getByText('B_tool', { exact: true }).waitFor();
   await capture('05-mcp-wide-light', 'light', { width: 1440, height: 900 }, '.mcp-detail-dialog'); await capture('06-mcp-narrow-dark', 'dark', { width: 600, height: 760 }, '.mcp-detail-dialog');

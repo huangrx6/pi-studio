@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { TodoHistoryPlan } from '../../types/chat-types';
 import { matchesTaskFilter, type TaskFilter } from './todo-status';
 
@@ -24,7 +24,7 @@ const batchSize = 12;
 
 // The page is keyed by session. Cache read pages while filtering and follow the cursor
 // even across empty matches, so a filter can find a task in the oldest checklist.
-export function useTaskCatalog(sessionId: string, goalUpdatedAt: number | undefined, filter: TaskFilter, visibleLimit: number) {
+export function useTaskCatalog(sessionId: string, goalUpdatedAt: number | undefined, filter: TaskFilter, query: string, visibleLimit: number) {
   const revision = useTodoHistoryRevision(sessionId);
   const cache = useRef<Catalog>({ plans: [] });
   const [catalog, setCatalog] = useState<Catalog>(cache.current);
@@ -39,18 +39,25 @@ export function useTaskCatalog(sessionId: string, goalUpdatedAt: number | undefi
       setError('');
       setLoading(true);
       let { plans, cursor } = cache.current;
-      let matches = plans.filter(plan => matchesTaskFilter(plan, filter)).length;
+      let matches = plans.filter(plan => matchesTaskFilter(plan, filter, query)).length;
       try {
-        while (cursor !== null && matches < visibleLimit) {
-          const page = await window.piApi.conversationTodoHistory({ id: sessionId, cursor, limit: batchSize });
+        // One extra matching plan makes the next-page control reliable even when
+        // the remaining history contains only deleted tasks or unrelated matches.
+        while (cursor !== null && matches <= visibleLimit) {
+          const page = await window.piApi.conversationTodoHistory({ id: sessionId, cursor, limit: batchSize + 1 });
           if (disposed) return;
           if (cursor !== undefined && page.nextCursor != null && page.nextCursor >= cursor) {
             throw new Error('任务历史翻页失败，请重试');
           }
           plans = plans.concat(page.items);
           cursor = page.nextCursor ?? null;
-          matches += page.items.filter(plan => matchesTaskFilter(plan, filter)).length;
-          cache.current = { plans, cursor };
+          const added = page.items.filter(plan => matchesTaskFilter(plan, filter, query)).length;
+          matches += added;
+          const snapshot = { plans, cursor };
+          cache.current = snapshot;
+          if (added && cursor !== null && matches <= visibleLimit) {
+            setCatalog(previous => previous.plans.length < snapshot.plans.length ? snapshot : previous);
+          }
         }
         setCatalog(cache.current);
       } catch (cause) {
@@ -64,10 +71,11 @@ export function useTaskCatalog(sessionId: string, goalUpdatedAt: number | undefi
     }
     void load();
     return () => { disposed = true; };
-  }, [sessionId, revision, goalUpdatedAt, filter, visibleLimit, attempt]);
+  }, [sessionId, revision, goalUpdatedAt, filter, query, visibleLimit, attempt]);
 
-  const matches = catalog.plans.filter(plan => matchesTaskFilter(plan, filter));
-  return { plans: matches.slice(0, visibleLimit), more: catalog.cursor != null || matches.length > visibleLimit, loading, error, retry };
+  const matches = useMemo(() => catalog.plans.filter(plan => matchesTaskFilter(plan, filter, query)), [catalog.plans, filter, query]);
+  const plans = useMemo(() => matches.slice(0, visibleLimit), [matches, visibleLimit]);
+  return { plans, more: catalog.cursor != null || matches.length > visibleLimit, loading, error, retry };
 }
 
 export const taskPageSize = batchSize;

@@ -84,15 +84,15 @@ function parseChanges(output) {
   return files;
 }
 async function branches(cwd, currentBranch) {
-  const format = '%(refname)%00%(worktreepath)%00%(symref)%00%(upstream:remotename)%00%(upstream:remoteref)';
+  const format = '%(refname)%00%(objectname)%00%(worktreepath)%00%(symref)%00%(upstream:remotename)%00%(upstream:remoteref)';
   const fields = currentBranch ? format + '%00%(upstream:track,nobracket)' : format;
   const refs = currentBranch ? ['refs/heads/' + currentBranch] : ['refs/heads', 'refs/remotes'];
   const rows = lines(await run(cwd, ['for-each-ref', '--sort=refname', '--format=' + fields, ...refs]));
   return rows.flatMap(row => {
-    const [ref, worktree, symbolic, upstreamRemote, upstreamRef, track] = row.split('\0');
+    const [ref, head, worktree, symbolic, upstreamRemote, upstreamRef, track] = row.split('\0');
     if (symbolic) return [];
     const remote = ref.startsWith('refs/remotes/');
-    return [{ name: ref.slice(remote ? 13 : 11), remote, worktree, upstreamRemote, upstreamBranch: upstreamRef.replace(/^refs\/heads\//, ''),
+    return [{ name: ref.slice(remote ? 13 : 11), head, remote, worktree, upstreamRemote, upstreamBranch: upstreamRef.replace(/^refs\/heads\//, ''),
       ahead: Number(/ahead (\d+)/.exec(track)?.[1] || 0), behind: Number(/behind (\d+)/.exec(track)?.[1] || 0), gone: track === 'gone' }];
   });
 }
@@ -333,4 +333,8 @@ async function withRepositoryWrite(cwd, operation, repositoryId) {
 async function gitWrite(cwd, input) {
   await withRepositoryWrite(cwd, root => write(root, input), input?.repository);
 }
-module.exports = { gitRead, gitWrite, withRepositoryWrite, withGitLock, runGitCommand: run, validateBranch };
+async function listGitChanges(root) {
+  return parseChanges(await statusRecords(root));
+}
+
+module.exports = { gitRead, gitWrite, listGitChanges, withRepositoryWrite, withGitLock, runGitCommand: run, validateBranch };

@@ -12,6 +12,8 @@
  * 输入框与消息气泡共用同一套解析，保证两处显示一致。
  */
 
+import type { ComposerCapability } from '../../types/chat-types';
+
 /** Normalize placeholder spaces in drafts saved by the former overlay editor. */
 export const REFERENCE_GAP = '\u2003';
 
@@ -20,7 +22,7 @@ export function normalizeComposerText(text: string): string {
   return text.includes(REFERENCE_GAP) ? text.replaceAll(REFERENCE_GAP, ' ') : text;
 }
 
-export type ReferenceKind = 'skill' | 'file';
+export type ReferenceKind = 'file' | 'agent' | ComposerCapability['type'];
 
 /** 一条可展示的引用（技能或工作区文件）。 */
 export type Reference = {
@@ -29,6 +31,9 @@ export type Reference = {
   token: string;
   /** 徽章上显示的短名称。 */
   label: string;
+  profileId?: string;
+  avatarId?: string;
+  capabilityId?: string;
   /** 技能定义文件或文件路径，作为 title。 */
   location?: string;
   /** 技能正文（仅消息气泡里的展开块有）。 */
@@ -43,14 +48,19 @@ const SKILL_BLOCK = /<skill\s+name="([^"]+)"(?:\s+location="([^"]*)")?\s*>([\s\S
 // 标点一律算分隔符：`@README.md、@package.json` 里中文顿号属于正文，不是路径。
 // 撇号也分开，避免把 `@react's` 整段当成路径。
 const AT_REFERENCE_SOURCE = String.raw`@(?:"(?:\\.|[^"\\])*"|[^\s@'’‘，。、；：！？,;:!?()\[\]{}（）【】「」『』]+)`;
+const AGENT_SOURCE = String.raw`[@#]\[agent:([a-f0-9-]{36})\|([a-z0-9-]+)\|([^\]\r\n|]+)\]`;
+const AGENT_TOKEN = new RegExp('^' + AGENT_SOURCE + '$', 'u');
+const CAPABILITY_SOURCE = String.raw`\$\[(skill|mcp|plugin):([^|\]\s]+)\|([^|\]\s]+)\]`;
+const CAPABILITY_TOKEN = new RegExp('^' + CAPABILITY_SOURCE + '$', 'u');
+const MENTION_SOURCE = `(?:${AGENT_SOURCE}|${CAPABILITY_SOURCE}|${AT_REFERENCE_SOURCE})`;
 // 未展开的行内引用：`/skill:name` 或 `@path`；允许出现在文本中间（前面需是行首或非单词字符）。
 const INLINE_REF = new RegExp(
-  String.raw`(^|[^A-Za-z0-9_])(\/skill:[\w.-]+|${AT_REFERENCE_SOURCE})`,
+  String.raw`(^|[^A-Za-z0-9_])(\/skill:[\w.-]+|${MENTION_SOURCE})`,
   'g',
 );
 // 发送时只提取真实路径并交给主进程读取文件上下文。前导边界与高亮一致：
 // `看 @a、@b` 里的顿号后面同样是引用，而 email 里的 @ 前面是字母，不会被误判。
-const INLINE_MENTION = new RegExp(String.raw`(?:^|[^A-Za-z0-9_])(${AT_REFERENCE_SOURCE})`, 'g');
+const INLINE_MENTION = new RegExp(String.raw`(?:^|[^A-Za-z0-9_])(${MENTION_SOURCE})`, 'g');
 
 // npm 包名片段：小写、数字、点/下划线/连字符；用于识别 `@scope/name` 这类不是文件的写法。
 const NPM_PACKAGE_SEGMENT = /^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/;
@@ -143,7 +153,17 @@ function isAtFileToken(token: string): boolean {
   return isFileReferencePath(source);
 }
 
+function decodeLabel(value: string): string {
+  try { return decodeURIComponent(value); } catch { return value; }
+}
+
 function inlineReference(token: string): Reference {
+  const agent = AGENT_TOKEN.exec(token);
+  if (agent) {
+    return { kind: 'agent', token, profileId: agent[1], avatarId: agent[2], label: decodeLabel(agent[3]) };
+  }
+  const capability = CAPABILITY_TOKEN.exec(token);
+  if (capability) return { kind: capability[1] as ComposerCapability['type'], token, capabilityId: decodeLabel(capability[2]), label: decodeLabel(capability[3]) };
   if (token.startsWith('/skill:')) {
     return { kind: 'skill', token, label: token.slice('/skill:'.length) };
   }
@@ -167,7 +187,7 @@ function pushInline(chunk: string, out: TextSegment[]): void {
     const start = match.index + match[1].length;
     if (start > last) pushText(out, chunk.slice(last, start));
     const token = match[2];
-    if (token.startsWith('/skill:') || isAtFileToken(token)) {
+    if (token.startsWith('/skill:') || AGENT_TOKEN.test(token) || CAPABILITY_TOKEN.test(token) || isAtFileToken(token)) {
       out.push({ kind: 'reference', reference: inlineReference(token) });
     } else {
       // npm 包名等假阳性：保持原文，不当成选中的文件。
@@ -207,28 +227,44 @@ export type ComposerSegment =
   | {
     kind: 'token';
     text: string;
-    tokenKind: 'skill' | 'file' | 'command';
+    tokenKind: ReferenceKind | 'command';
     reference?: Reference;
   };
 
 /** 把工作区路径格式化为输入框可识别、可安全包含空格的 @ 引用。 */
 export function formatFileReference(path: string): string {
-  return /[\s@"]/u.test(path) ? `@${JSON.stringify(path)}` : `@${path}`;
+  return /[\s@#$"]/u.test(path) || !isFileReferencePath(path) ? `@${JSON.stringify(path)}` : `@${path}`;
+}
+
+export function formatAgentReference(profile: { id: string; name: string; avatarId: string }): string {
+  const label = profile.name.replace(/[%[\]|]/gu, encodeURIComponent);
+  return `#[agent:${profile.id}|${profile.avatarId}|${label}]`;
+}
+
+export function formatCapabilityReference(option: ComposerCapability): string {
+  const label = option.type === 'mcp' ? option.server + '/' + option.name : option.name;
+  return `$[${option.type}:${encodeURIComponent(option.id)}|${encodeURIComponent(label)}]`;
+}
+
+export function readableComposerReferences(text: string): string {
+  if (!text.includes('[')) return text;
+  return text.replace(INLINE_REF, (original, boundary: string, token: string) =>
+    AGENT_TOKEN.test(token) || CAPABILITY_TOKEN.test(token) ? boundary + token[0] + inlineReference(token).label : original);
 }
 
 /** 从一段将要发送的文本中提取 @ 文件路径，供主进程注入文件上下文。 */
 export function extractComposerMentions(text: string): string[] {
   return [...text.matchAll(INLINE_MENTION)].flatMap((match) => {
     const token = match[1];
-    if (!isAtFileToken(token)) return [];
+    if (AGENT_TOKEN.test(token) || !isAtFileToken(token)) return [];
     const path = atReferencePath(token);
     return path ? [path] : [];
   });
 }
 
 /**
- * Replace the active `/` or `@` query with a complete reference while keeping
- * it separated from adjacent prose. Raw tokens retain their markers and full paths.
+ * Complete an active query and keep its token separated from adjacent prose.
+ * Reference completions put the caret after the separator, on the same line.
  */
 export function insertComposerToken(
   text: string,
@@ -241,11 +277,14 @@ export function insertComposerToken(
   const before = text.slice(0, safeStart);
   const after = text.slice(safeEnd);
   const leading = safeStart > 0 && !/\s$/u.test(before) ? ' ' : '';
-  const trailing = /^\s/u.test(after) ? '' : ' ';
+  const isReference = !token.startsWith('/');
+  const hasInlineSpace = /^[^\S\r\n\u2028\u2029]/u.test(after);
+  const separated = isReference ? hasInlineSpace : /^\s/u.test(after);
+  const trailing = separated ? '' : ' ';
   const inserted = `${leading}${token}${trailing}`;
   return {
     text: `${before}${inserted}${after}`,
-    caret: safeStart + inserted.length,
+    caret: safeStart + inserted.length + (isReference && hasInlineSpace ? 1 : 0),
   };
 }
 
@@ -258,7 +297,7 @@ export function insertComposerToken(
 export function splitComposerText(text: string, commandNames: ReadonlySet<string>): ComposerSegment[] {
   const segments: ComposerSegment[] = [];
   const pattern = new RegExp(
-    String.raw`(^|[^A-Za-z0-9_])(\/[A-Za-z][\w:.-]*|${AT_REFERENCE_SOURCE})`,
+    String.raw`(^|[^A-Za-z0-9_])(\/[A-Za-z][\w:.-]*|${MENTION_SOURCE})`,
     'g',
   );
   const pushComposerText = (value: string) => {
@@ -273,7 +312,10 @@ export function splitComposerText(text: string, commandNames: ReadonlySet<string
     if (start > last) pushComposerText(text.slice(last, start));
     const token = match[2];
     const name = token.slice(1);
-    if (token.startsWith('@') && isAtFileToken(token)) {
+    if (AGENT_TOKEN.test(token) || CAPABILITY_TOKEN.test(token)) {
+      const reference = inlineReference(token);
+      segments.push({ kind: 'token', text: token, tokenKind: reference.kind, reference });
+    } else if (token.startsWith('@') && isAtFileToken(token)) {
       segments.push({ kind: 'token', text: token, tokenKind: 'file', reference: inlineReference(token) });
     } else if (token.startsWith('@')) {
       pushComposerText(token);

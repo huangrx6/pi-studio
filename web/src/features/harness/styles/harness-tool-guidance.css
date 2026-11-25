@@ -1,0 +1,54 @@
+.harness-guidance-list { display: grid; min-width: 0; gap: var(--space-2); padding-bottom: var(--space-3); }
+.harness-guidance-list code { overflow-wrap: anywhere; font: var(--weight-medium) var(--settings-description-size)/var(--leading-normal) var(--mono); }
+.harness-guidance-list svg { flex: none; width: var(--icon-sm); height: var(--icon-sm); color: var(--muted); }
+.harness-note-summary, .harness-note-tool, .harness-add-guidance {
+  display: flex; align-items: center; gap: var(--space-2); min-width: 0; color: var(--text); font: var(--settings-preference-body-font); text-align: start;
+}
+.harness-note-summary {
+  min-height: var(--settings-row-height); padding: var(--space-1) 0; border-bottom: 1px solid var(--divider);
+}
+.harness-note-summary code { max-width: 45%; }
+.harness-note-summary code, .harness-note-summary > span, .harness-note-tool code {
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.harness-note-summary > span { flex: 1; min-width: 0; color: var(--muted); }
+.harness-note-summary > svg:last-child, .harness-note-tool > svg:last-child { width: var(--icon-xs); height: var(--icon-xs); }
+
+.harness-note-editor, .harness-tool-picker {
+  min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface);
+}
+.harness-note-toolbar {
+  display: flex; align-items: center; gap: var(--space-1); min-height: var(--settings-row-height);
+  padding: var(--space-1) var(--space-2); border-bottom: 1px solid var(--divider);
+}
+.harness-note-tool { margin-inline-end: auto; min-height: var(--settings-control-height); padding-inline: var(--space-1); border-radius: var(--radius-tag); }
+.harness-note-toolbar .icon-button, .harness-tool-search .icon-button { width: var(--icon-button); height: var(--icon-button); }
+.harness-note-remove:hover svg { color: var(--error); }
+.harness-settings .harness-note-editor .harness-note-text {
+  display: block; width: 100%; min-height: calc(var(--space-8) * 2); padding: var(--space-2) var(--space-3);
+  border: 0; border-radius: 0 0 var(--radius-control) var(--radius-control); font: var(--settings-preference-body-font);
+}
+.harness-note-editor:has(.harness-note-text:focus-visible) { border-color: var(--focus-color); }
+.harness-guidance-list .harness-add-guidance {
+  justify-self: start; gap: var(--space-1); min-height: var(--settings-control-height); height: auto;
+  padding: 0 var(--space-1) 0 0; color: var(--muted); font-weight: var(--weight-regular);
+}
+.harness-guidance-list .harness-add-guidance:hover:not(:disabled) { background: transparent; color: var(--text); }
+.harness-add-guidance:hover:not(:disabled) svg { color: var(--accent); }
+
+.harness-tool-picker { padding: var(--space-2); }
+.harness-note-editor > .harness-tool-picker { margin: var(--space-2); }
+.harness-tool-search { position: relative; }
+.harness-tool-search > svg, .harness-tool-search > button { position: absolute; top: 50%; transform: translateY(-50%); }
+.harness-tool-search > svg { inset-inline-start: var(--space-2); pointer-events: none; }
+.harness-tool-search > button { inset-inline-end: var(--space-1); }
+.harness-tool-search input { width: 100%; padding-inline: var(--space-8); font: var(--settings-preference-body-font); }
+.harness-tool-options { display: grid; max-height: calc(var(--settings-control-height) * 5); overflow-y: auto; overscroll-behavior: contain; }
+.harness-tool-options:not(:empty) { margin-top: var(--space-1); }
+.harness-tool-options button {
+  display: flex; align-items: center; gap: var(--space-2); min-width: 0; min-height: var(--settings-control-height);
+  padding: var(--space-1) var(--space-2); border-radius: var(--radius-tag); text-align: start;
+}
+.harness-tool-options [aria-selected="true"] { background: var(--surface-hover); }
+.harness-tool-options button > span { flex: none; color: var(--muted); }
+.harness-tool-picker .harness-picker-hint { margin: var(--space-2); color: var(--muted); }

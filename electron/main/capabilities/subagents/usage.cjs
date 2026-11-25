@@ -1,8 +1,9 @@
 const { getStudioDatabase } = require('../../core/studio-db.cjs');
 
 /** One accounting path for the UI budget and the runtime admission check. */
-function subagentUsage(state, database = getStudioDatabase()) {
+function subagentUsage(state, database = getStudioDatabase(), profileId) {
   const ids = new Set(Object.values(state?.agents || {})
+    .filter(agent => !profileId || agent?.profileId === profileId)
     .map((agent) => Number(agent?.conversationId))
     .filter((id) => Number.isSafeInteger(id) && id > 0));
   const total = { tokens: 0, costUsd: 0, requests: 0 };

@@ -30,8 +30,8 @@ try {
    conversationInterrupt:async id=>{window.__interruptIds.push(id);window.running=false;return {ok:true};},
    onConversationEvent:fn=>{listeners.add(fn);return()=>listeners.delete(fn);},
    modeGet:async()=>({available:true,mode:'smart'}),composerResources:async()=>({commands:[],skills:[]}),extensionsUi:async()=>({items:[],errors:[],syncedAt:Date.now(),apiVersion:1}),
-   conversationExtensionUiPreferences:async()=>({version:1,layout:'grid',globalOrder:[],sessionOrders:{}}),
-   saveConversationExtensionUiPreferences:async payload=>({version:1,layout:payload.layout||'grid',globalOrder:payload.globalOrder||[],sessionOrders:payload.sessionOrder?{demo:payload.sessionOrder}:{}})},
+   conversationExtensionUiPreferences:async()=>({version:1,globalOrder:[]}),
+   saveConversationExtensionUiPreferences:async payload=>({version:1,globalOrder:payload.globalOrder||[]})},
    {get:(target,key)=>key in target?target[key]:String(key).startsWith('on')?()=>()=>{}:async()=>undefined});
  });
  await page.goto('http://127.0.0.1:5180');

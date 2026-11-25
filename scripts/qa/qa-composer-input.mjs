@@ -22,7 +22,7 @@ async function pending(method, size = 1) { await page.waitForFunction(({ method,
 async function count(method) { return page.evaluate(method => window.__composerInputQa.calls.filter(call => call.method === method).length, method); }
 async function open(id) { await qa('open', id); await page.locator('.chat-heading h1').filter({ hasText: id === 'perf-0' ? '性能会话 0000' : '性能会话 0001' }).waitFor(); }
 async function fill(text) { await composer().fill(text); await settle(); }
-async function screenshot(name) { assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'no document overflow'); await page.screenshot({ path: path.join(output, `${name}.png`), animations: 'disabled' }); results.screenshots.push(name); }
+async function screenshot(name, surface = page) { assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'no document overflow'); await surface.screenshot({ path: path.join(output, `${name}.png`), animations: 'disabled' }); results.screenshots.push(name); }
 async function paste(text, files = [], selection) {
   const length = (await composerValue(composer())).length;
   await selectComposerRange(composer(), ...(selection || [length, length]));
@@ -40,7 +40,7 @@ try {
   await page.route('**/*', route => { const url = route.request().url(); if (url.startsWith(`${server.origin}/`) || /^(data|blob):/.test(url)) return route.continue(); results.blockedRequests.push(url); return route.abort(); });
   await page.addInitScript({ content: `(${installPerformanceFixture.toString()})({sessionCount:2,turnCount:4});(${installSettingsExecutionFixture.toString()})();(${installComposerInputFixture.toString()})();` });
   await page.goto(server.origin); await page.locator('.session-row').filter({ hasText: '性能会话 0000' }).click(); await page.locator('.assistant-response').first().waitFor();
-  await checkReferenceEditor(page);
+  await checkReferenceEditor(page, screenshot);
   results.checks.push('typed reference icons, quoted paths, atomic deletion, undo/redo, raw clipboard round trip, HTML paste rejection, native IME, multiline input and long labels');
   await fill('/qa'); await options().first().waitFor();
   assert.equal(await composer().getAttribute('aria-controls'), 'composer-suggestions');
@@ -80,6 +80,54 @@ try {
   await fill(draftB); await open('perf-0'); assert.equal(await composerValue(composer()), '/qa'); await fill('A 的主草稿。');
   results.checks.push('pending/error suggestions cannot submit or expose stale options; session A response ignored in B, explicit retry, query-race file results, spaced-path insertion, empty and loaded menu Escape');
 
+  const beforeCapabilities = await count('composerResources');
+  const categoryList = picker().getByRole('listbox', { name: '引用类别' });
+  const suggestionList = picker().getByRole('listbox', { name: '引用建议' });
+  await page.mouse.move(0, 0);
+  await fill('$');
+  assert.deepEqual(await categoryList.getByRole('option').allTextContents(), ['技能', 'MCP', '插件']);
+  assert.deepEqual(await categoryList.getByRole('option', { selected: true }).allTextContents(), ['技能']);
+  assert.equal(await count('composerResources'), beforeCapabilities);
+  await screenshot('capability-categories', picker());
+  await categoryList.getByRole('option', { name: '技能', exact: true }).hover();
+  await composer().press('ArrowUp');
+  assert.deepEqual(await categoryList.getByRole('option', { selected: true }).allTextContents(), ['插件']);
+  const backgrounds = await categoryList.getByRole('option').evaluateAll(async rows => {
+    await Promise.allSettled(rows.flatMap(row => row.getAnimations()).map(animation => animation.finished));
+    return rows.map(row => getComputedStyle(row).backgroundColor);
+  });
+  assert.equal(backgrounds[0], backgrounds[1]);
+  assert.notEqual(backgrounds[2], backgrounds[0]);
+  await composer().press('Enter');
+  await suggestionList.getByRole('option').filter({ hasText: 'QA Canvas' }).waitFor();
+  assert.equal(await suggestionList.getByRole('option').count(), 1);
+  await screenshot('plugin-suggestions', picker());
+  await composer().press('Escape');
+  await categoryList.getByRole('option', { name: 'MCP', exact: true }).click();
+  await suggestionList.getByRole('option').filter({ hasText: 'qa_method' }).waitFor();
+  await picker().getByRole('button', { name: '返回引用类别' }).click();
+  await categoryList.waitFor();
+  await composer().press('Escape');
+  await picker().waitFor({ state: 'detached' });
+
+  await fill('$unmatched');
+  await categoryList.getByRole('option', { name: '技能', exact: true }).click();
+  await suggestionList.getByText('没有匹配的可用技能', { exact: true }).waitFor();
+  await composer().press('Enter');
+  assert.equal(await composerValue(composer()), '$unmatched');
+  await composer().press('Escape');
+  await composer().press('Escape');
+
+  await fill('$Canvas 后续');
+  await selectComposerRange(composer(), '$Canvas'.length);
+  await composer().dispatchEvent('click');
+  await categoryList.getByRole('option', { name: '插件', exact: true }).click();
+  await suggestionList.getByRole('option').filter({ hasText: 'QA Canvas' }).click();
+  await page.keyboard.insertText('插入');
+  assert.equal(await composerValue(composer()), '$[plugin:qa.canvas|QA%20Canvas] 插入后续');
+  await assertNoSubmissions();
+  results.checks.push('dollar waits for category confirmation, loads only matching suggestions, supports back and Escape, and puts the caret after the reference space');
+
   const pastedA = 'LONG_A_'.repeat(1800); const pastedEdited = 'LONG_EDIT_'.repeat(1400);
   await fill('原文 SELECT 尾部'); await qa('hold', 'saveAttachment', 'perf-0'); await paste(pastedA, [], [3, 9]); await pending('saveAttachment');
   await open('perf-1'); assert.equal(await composerValue(composer()), draftB); await composer().focus();
@@ -117,14 +165,23 @@ try {
   await open('perf-0'); assert.equal(await composerValue(composer()), '/qa-extension');
   results.checks.push('explicit synthetic extension result with promptText/submit cannot overwrite later editing or another conversation, and never invokes model submission');
 
-  const extensionPanel = page.getByRole('dialog', { name: 'QA 范围面板', exact: true });
+  const extensionPanel = page.getByRole('region', { name: 'QA 范围面板', exact: true });
   const extensionCommand = page.getByRole('button', { name: '执行 QA 延迟命令', exact: true });
   const extensionPanelAction = page.getByRole('button', { name: '打开 QA 范围面板', exact: true });
+  async function openExtensionPanel(title = '扩展归属测试') {
+    await page.locator('.chat-header').getByRole('button', { name: '扩展', exact: true }).click();
+    await page.getByRole('dialog', { name: '扩展', exact: true }).getByRole('button', { name: 'QA Extension', exact: true }).click();
+    if (title !== '扩展归属测试') {
+      await page.getByRole('navigation', { name: '扩展面板' }).getByRole('button', { name: title, exact: true }).click();
+    }
+  }
+  await openExtensionPanel();
   await fill('A 扩展面板归属草稿'); await extensionPanelAction.click(); await extensionPanel.waitFor();
   await open('perf-1'); await extensionPanel.waitFor({ state: 'detached' }); assert.equal(await composerValue(composer()), draftB);
   results.checks.push('an extension panel opened in A closes immediately when B becomes the active workspace/session/model scope');
 
   await open('perf-0'); assert.equal(await composerValue(composer()), 'A 扩展面板归属草稿');
+  await openExtensionPanel();
   await qa('hold', 'runExtensionCommand', 'perf-0'); await extensionCommand.click(); await pending('runExtensionCommand'); expectedExtensionCommands++;
   await open('perf-1'); await qa('release', 'runExtensionCommand'); await settle();
   assert.equal(await composerValue(composer()), draftB); assert.equal(await extensionPanel.count(), 0);
@@ -134,6 +191,7 @@ try {
   await open('perf-0'); assert.equal(await composerValue(composer()), 'A 扩展面板归属草稿');
   results.checks.push('a late extension command result cannot replace B draft, open B panel, or publish its message as B feedback');
 
+  await openExtensionPanel();
   await qa('hold', 'runExtensionCommand', 'perf-0'); await extensionCommand.click(); await pending('runExtensionCommand'); expectedExtensionCommands++;
   await open('perf-1'); await qa('reject', 'runExtensionCommand'); await settle();
   assert.equal(await composerValue(composer()), draftB); assert.equal(await extensionPanel.count(), 0);
@@ -143,10 +201,12 @@ try {
   results.checks.push('a late extension command failure is suppressed instead of appearing as an error in B');
 
   await open('perf-0'); await fill('A 当前命令草稿');
+  await openExtensionPanel();
   await qa('hold', 'runExtensionCommand', 'perf-0'); await extensionCommand.click(); await pending('runExtensionCommand'); expectedExtensionCommands++;
   await qa('release', 'runExtensionCommand'); await extensionPanel.waitFor();
-  assert.equal(await composerValue(composer()), 'A 范围结果'); assert.equal(await extensionCommand.isEnabled(), true);
-  await screenshot('05-extension-scope-dark'); await extensionPanel.getByRole('button', { name: '完成', exact: true }).click();
+  assert.equal(await composerValue(composer()), 'A 范围结果');
+  await screenshot('05-extension-scope-dark');
+  await page.getByRole('button', { name: '关闭 QA Extension', exact: true }).click();
   await page.locator('.notification-trigger').click();
   assert.equal(await notificationCenter.getByText('A 范围的延迟结果', { exact: true }).count(), 1);
   await notificationCenter.getByRole('button', { name: '关闭通知', exact: true }).click();
@@ -163,7 +223,10 @@ try {
   assert.equal(await page.getByText('A 实时数据', { exact: true }).count(), 0);
   results.checks.push('a live extension view remounts by workspace/session/model ownership, so an A open cannot flash or publish stale data in B');
 
-  await open('perf-0'); await page.getByText('A 实时数据', { exact: true }).waitFor();
+  await open('perf-0');
+  await openExtensionPanel('实时数据详情');
+  const dataPanel = page.getByRole('region', { name: '实时数据详情', exact: true });
+  await dataPanel.getByText('A 实时数据', { exact: true }).waitFor();
   const perfADataView = await page.evaluate(() => window.__composerInputQa.dataViewSubscription('perf-0'));
   assert(perfADataView);
   await page.evaluate(subscriptionId => window.__composerInputQa.emitDataView(subscriptionId, {
@@ -174,21 +237,22 @@ try {
     sourceId: 'project:qa-extension/live-data', revision: 1, updatedAt: Date.now(), content: [{ kind: 'text', text: '重连后的实时数据' }],
   }));
   await page.getByRole('button', { name: '重试连接实时数据', exact: true }).click();
-  await page.getByText('重连后的实时数据', { exact: true }).waitFor();
-  assert.equal(await page.getByText('A 实时数据', { exact: true }).count(), 0);
+  await dataPanel.getByText('重连后的实时数据', { exact: true }).waitFor();
+  assert.equal(await dataPanel.getByText('A 实时数据', { exact: true }).count(), 0);
+  await page.getByRole('button', { name: '关闭 QA Extension', exact: true }).click();
   results.checks.push('reconnect compares revisions within the new subscription id, so lower-numbered fresh data replaces stale content instead of being ignored');
 
-  const extensionSlotMetrics = await page.locator('.extension-slot.is-composer-before').evaluate(node => ({
+  const extensionSlotMetrics = await page.locator('.extension-summaries.is-composer-above').evaluate(node => ({
     clientHeight: node.clientHeight,
     scrollHeight: node.scrollHeight,
     bottom: node.getBoundingClientRect().bottom,
   }));
   const attachBox = await page.getByRole('button', { name: '添加图片或文件', exact: true }).boundingBox();
-  assert(extensionSlotMetrics.scrollHeight > extensionSlotMetrics.clientHeight, 'dense composer extensions scroll inside their bounded region');
+  assert(extensionSlotMetrics.scrollHeight <= extensionSlotMetrics.clientHeight + 1, 'composer summaries stay one line tall');
   assert(attachBox && attachBox.y + attachBox.height <= 640, 'the core Composer remains inside the 980x640 viewport');
   assert.ok(extensionSlotMetrics.bottom <= 640 + 1);
   await screenshot('06-extension-data-dense-dark');
-  results.checks.push('dense composer.before extensions stay in a bounded internal scroll region, keeping the input and attachment controls visible at 980x640');
+  results.checks.push('composer summaries fit on one line, keeping the input and attachment controls visible at 980x640');
 
   // A pending conversion is not permission to erase edits made after Send.
   while (await page.getByRole('button', { name: /^移除 / }).count()) await page.getByRole('button', { name: /^移除 / }).first().click();
@@ -204,11 +268,10 @@ try {
   await fill('第一条排队消息'); await composer().press('Meta+Enter');
   await page.locator('.queued-panel-head[aria-expanded="false"]').click();
   await page.locator('.queued-item').waitFor(); assert.equal(await composerValue(composer()), '');
-  await page.getByRole('button', { name: '打开会话进展' }).click();
-  await page.getByRole('button', { name: '固定到右栏' }).click();
-  assert.equal(await page.locator('.composer-dock > .queued-panel + .composer-wrap').count(), 1);
+  await page.getByRole('button', { name: '进展', exact: true }).click();
+  assert.equal(await page.locator('.composer-dock > .queued-panel ~ .composer-wrap').count(), 1);
   assert.equal(await page.locator('.file-panel .queued-panel').count(), 0);
-  await page.getByRole('button', { name: '关闭 会话进展' }).click();
+  await page.getByRole('button', { name: '关闭 进展' }).click();
   await fill('第二条排队消息'); await composer().press('Meta+Enter'); await page.waitForFunction(() => document.querySelectorAll('.queued-item').length === 2);
   const queueDraft = '当前草稿不能被排队编辑覆盖'; await fill(queueDraft);
   await page.getByRole('button', { name: '编辑排队消息', exact: true }).first().click();

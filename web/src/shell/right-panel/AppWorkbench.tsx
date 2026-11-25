@@ -7,10 +7,12 @@ import { PanelTabBar } from './PanelTabBar';
 import { splitPanelWidth } from './panel-width.ts';
 import type { PanelTab } from '../app-types';
 import type { RightPanelToolAction } from './RightPanelStart';
+import type { ExtensionPanelPickerProps } from '../../features/extensions/ExtensionPanelPicker';
 
 type AppWorkbenchProps = {
   open: boolean;
   fullscreen: boolean;
+  overlay: boolean;
   split: boolean;
   resizing: boolean;
   panelWidth: number;
@@ -21,22 +23,22 @@ type AppWorkbenchProps = {
   activeTabId: string;
   activeTab?: PanelTab;
   toolActions: RightPanelToolAction[];
+  extensionPicker: ExtensionPanelPickerProps;
   fileTree: ReactNode;
   panelContent: ReactNode;
   persistentPanelContent: ReactNode;
-  extensionDock: ReactNode;
   onClose: () => void;
   onActivate: (tab: PanelTab) => void;
   onCloseTab: (id: string) => void;
   onReorder: (sourceId: string, targetId: string) => void;
   onContextMenu: (id: string, x: number, y: number) => void;
-  onToggleSplit: () => void;
+  onToggleSplit?: () => void;
   onToggleFullscreen: () => void;
   onMakeDragPreview: (event: DragEvent, title: string) => void;
   onClearDragPreview: () => void;
   renamingId: string | null;
   onStartRename: (id: string) => void;
-  onRename: (id: string, title: string) => void;
+  onRename: (id: string, title?: string) => void;
   onResizeStart: (event: PointerEvent<HTMLDivElement>) => void;
   onResizeMove: (event: PointerEvent<HTMLDivElement>) => void;
   onResizeEnd: (event: PointerEvent<HTMLDivElement>) => void;
@@ -47,6 +49,7 @@ type AppWorkbenchProps = {
 export function AppWorkbench({
   open,
   fullscreen,
+  overlay,
   split,
   resizing,
   panelWidth,
@@ -57,10 +60,10 @@ export function AppWorkbench({
   activeTabId,
   activeTab,
   toolActions,
+  extensionPicker,
   fileTree,
   panelContent,
   persistentPanelContent,
-  extensionDock,
   onClose,
   onActivate,
   onCloseTab,
@@ -113,8 +116,8 @@ export function AppWorkbench({
   if (!open) return null;
   return (
     <>
-      {!fullscreen && <button className="file-panel-backdrop" aria-label="关闭右侧面板" tabIndex={-1} onClick={onClose} />}
-      <aside className={`file-panel ${entered ? 'is-open' : ''} ${fullscreen ? 'is-fullscreen' : ''} ${split ? 'is-split' : ''} ${resizing ? 'is-resizing' : ''}`} style={{ '--panel-w': `${layoutPanelWidth}px` } as CSSProperties}>
+      {overlay && !fullscreen && <button className="file-panel-backdrop" aria-label="关闭右侧面板" tabIndex={-1} onClick={onClose} />}
+      <aside className={`file-panel ${entered ? 'is-open' : ''} ${fullscreen ? 'is-fullscreen' : ''} ${overlay && !fullscreen ? 'is-overlay' : ''} ${split ? 'is-split' : ''} ${resizing ? 'is-resizing' : ''}`} style={{ '--panel-w': `${layoutPanelWidth}px` } as CSSProperties}>
         {!fullscreen && <div
           className="panel-resize-handle"
           role="separator"
@@ -139,6 +142,7 @@ export function AppWorkbench({
             split={split}
             resizing={resizing}
             toolActions={toolActions}
+            extensionPicker={extensionPicker}
             onActivate={onActivate}
             onClose={onCloseTab}
             onReorder={onReorder}
@@ -183,7 +187,6 @@ export function AppWorkbench({
               {persistentPanelContent}
             </>}
           </div>
-          <div className="panel-extension-dock">{extensionDock}</div>
         </div>
       </aside>
     </>

@@ -1,6 +1,5 @@
 .message-actions:has(.web-sources-trigger) { opacity: 1; }
 
-.detail-overlay:has(.web-sources-dialog)::backdrop { background: var(--scrim); }
 .detail-dialog.web-sources-dialog { width: min(460px, 100%); max-height: min(580px, 80dvh); }
 .web-sources-header {
   display: flex; flex: none; align-items: center; gap: 12px; padding: 20px;

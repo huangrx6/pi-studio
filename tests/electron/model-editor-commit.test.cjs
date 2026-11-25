@@ -39,6 +39,10 @@ function harness(t) {
   const credentials = coreModule.exports.testCredentialStore(db);
   const fail = stage => { if (control.fail === stage) throw new Error(`${stage}: ${SECRET}`); };
   const handlers = new Map();
+  const notifications = [];
+  const window = { isDestroyed: () => false, webContents: {
+    isDestroyed: () => false, send: (...args) => { notifications.push(args); },
+  } };
   const ipcPath = path.resolve(__dirname, '../../electron/main/ipc/models.cjs'), ipcRequire = Module.createRequire(ipcPath), ipcModule = { exports: {} };
   const dependencies = {
     electron: { ipcMain: { handle: (name, action) => handlers.set(name, action) } },
@@ -52,7 +56,7 @@ function harness(t) {
     },
     '../services/models.cjs': { availableModels: async () => { fail('models'); return { models: db.listModels().map(row => ({ id: `${row.providerId}/${row.modelId}` })) }; } },
     '../services/settings.cjs': { settingsSnapshot: async cwd => { fail('settings'); return { cwd, providers: db.listProviders() }; } },
-    '../core/state.cjs': { DEFAULT_CWD: '/synthetic/default' },
+    '../core/state.cjs': { DEFAULT_CWD: '/synthetic/default', getWindow: () => window },
     '../core/model-metadata.cjs': {},
   };
   vm.runInNewContext(fs.readFileSync(ipcPath, 'utf8'), {
@@ -60,7 +64,7 @@ function harness(t) {
     require: id => Object.hasOwn(dependencies, id) ? dependencies[id] : ipcRequire(id),
   }, { filename: ipcPath });
   ipcModule.exports.registerModelsIpc();
-  return { db, control, credentials, newCredentialStore: () => coreModule.exports.testCredentialStore(db), call: (name, ...args) => handlers.get(name)({}, ...args) };
+  return { db, control, credentials, notifications, newCredentialStore: () => coreModule.exports.testCredentialStore(db), call: (name, ...args) => handlers.get(name)({}, ...args) };
 }
 const provider = extra => ({ providerId: 'gateway', name: 'Gateway', api: 'openai-completions', baseUrl: 'https://fixture.invalid/v1', cwd: '/synthetic/A', ...extra });
 const plain = value => JSON.parse(JSON.stringify(value));
@@ -387,6 +391,24 @@ test('quota rules commit with their source, retain saved mappings while disabled
   await call('pi:remove-provider', { providerId: 'gateway' });
   await call('pi:add-provider', provider());
   assert.equal(db.getProvider('gateway').quota, null);
+});
+
+test('only committed quota changes notify the renderer, even if the model projection fails', async t => {
+  const { call, control, db, notifications } = harness(t);
+  const quota = { enabled: true, endpoint: 'https://fixture.invalid/quota', auth: 'none',
+    fields: [{ label: '本周剩余', path: 'usage.remaining', format: 'number', summary: true }] };
+  await call('pi:add-provider', provider({ quota }));
+  assert.deepEqual(notifications.splice(0), [['pi:provider-quota-invalidated', 'gateway']]);
+
+  await assert.rejects(call('pi:add-provider', provider({ quota: { ...quota, fields: [] } })), /额度字段/);
+  assert.deepEqual(notifications, []);
+
+  control.fail = 'rebuild';
+  const fields = [{ label: '本周已用', path: 'usage.used', format: 'fraction', summary: false }];
+  const result = await call('pi:add-provider', provider({ quota: { ...quota, fields } }));
+  assert.equal(result.projection.status, 'error');
+  assert.equal(db.getProvider('gateway').quota.fields[0].path, 'usage.used');
+  assert.deepEqual(notifications, [['pi:provider-quota-invalidated', 'gateway']]);
 });
 
 test('assigning media capabilities preserves explicit chat enablement and keeps media-only IDs out of bulk chat imports', async t => {

@@ -27,7 +27,7 @@ type WorkspaceProps = {
 };
 export default function GitWorkspacePage(props: WorkspaceProps) {
   const { selected } = useGitRepositories();
-  return <RepositoryPage key={selected?.root || ''} {...props} />;
+  return <RepositoryPage key={JSON.stringify([props.sessionId, selected?.root])} {...props} />;
 }
 function RepositoryPage({ sessionId, tab, onTab, diffPreferences, openFile }: WorkspaceProps) {
   const repositories = useGitRepositories();
@@ -36,8 +36,7 @@ function RepositoryPage({ sessionId, tab, onTab, diffPreferences, openFile }: Wo
   const state = useGitState(sessionId, tab === 'sync' || tab === 'history', revision);
   const mutation = useGitAction(sessionId);
   useEffect(() => { pollReady.current = tab !== 'history' && !state.loading && !mutation.busy; }, [tab, state.loading, mutation.busy]);
-  const view = tab === 'commit' ? 'changes' : tab;
-  const [feedback, setFeedback] = useState<{ view: typeof view; message?: string; detail?: string }>();
+  const [feedback, setFeedback] = useState<{ view: GitTab; message?: string; detail?: string }>();
   useEffect(() => {
     if (feedback?.message) {
       const timer = window.setTimeout(() => setFeedback(undefined), 5000);
@@ -46,14 +45,14 @@ function RepositoryPage({ sessionId, tab, onTab, diffPreferences, openFile }: Wo
   }, [feedback]);
   async function execute(action: GitAction, detail?: string) {
     if (!state.data || state.loading || mutation.busy) return false;
-    setFeedback({ view });
+    setFeedback({ view: tab });
     const ok = await mutation.act(state.data, action);
-    if (ok) setFeedback({ view, message: successes[action.kind], detail });
+    if (ok) setFeedback({ view: tab, message: successes[action.kind], detail });
     return ok;
   }
   const repo = repositories.selected;
-  const error = repositories.error || state.error || (feedback?.view === view && mutation.error);
-  const success = feedback?.view === view && feedback.message;
+  const error = repositories.error || state.error || (feedback?.view === tab && mutation.error);
+  const success = feedback?.view === tab && feedback.message;
   return <section className="git-workspace-page" aria-label="Git 工作台"><div className="git-workspace-column">
     <SessionViewHeader title="版本控制" summary={<span title={repositories.cwd}>{repositories.workspaceName}</span>}>
       <div className="git-page-actions"><GitRepositoryPicker />
@@ -62,7 +61,7 @@ function RepositoryPage({ sessionId, tab, onTab, diffPreferences, openFile }: Wo
       </div>
     </SessionViewHeader>
     <div className="git-view-toolbar"><nav className="git-view-tabs" aria-label="Git 视图">{tabs.map(([key, title, Icon]) =>
-      <button key={key} type="button" aria-current={view === key ? 'page' : undefined} onClick={() => onTab(key)}><Icon />{title}</button>)}</nav>
+      <button key={key} type="button" aria-current={tab === key ? 'page' : undefined} onClick={() => onTab(key)}><Icon />{title}</button>)}</nav>
       <div className="git-operation-note" role="status">{mutation.busy ? <><RefreshCw className="spin" />正在处理…</> : success && <><Check /><span>{success}</span>{feedback?.detail && <span>{feedback.detail}</span>}</>}</div>
     </div>
     {error && <p role="alert" className="git-feedback"><TriangleAlert />{error}</p>}
@@ -71,7 +70,7 @@ function RepositoryPage({ sessionId, tab, onTab, diffPreferences, openFile }: Wo
       : tab === 'history' ? <GitHistory sessionId={sessionId} revision={revision} /> : !state.data ? !state.error && <LoadingState variant="section">正在读取仓库…</LoadingState>
       : tab === 'sync' ? <GitSync sessionId={sessionId} revision={revision} state={state.data} busy={mutation.busy} error={mutation.error}
           disabled={mutation.busy || state.loading} execute={execute} openChanges={() => onTab('changes')} />
-      : <GitChanges key={state.data.branch} state={state.data} sessionId={sessionId} revision={revision} focusCommit={tab === 'commit'} busy={mutation.busy}
+      : <GitChanges key={state.data.branch} state={state.data} sessionId={sessionId} revision={revision} busy={mutation.busy}
           disabled={mutation.busy || state.loading} execute={execute} actionError={mutation.error} openFile={openFile} openHistory={() => onTab('history')} />}</GitDiffDefaults.Provider>
   </div></section>;
 }

@@ -1,11 +1,12 @@
 import { defineConfig } from 'vite';
 import { materialFileTheme } from './scripts/icons/material-file-theme';
+import { excalidrawIntegration } from './scripts/build/excalidraw';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ command }) => ({
   base: './',
   root: 'web',
-  plugins: [react(), materialFileTheme()],
+  plugins: [react(), materialFileTheme(), excalidrawIntegration()],
   html: command === 'serve' ? { cspNonce: 'pi-studio-dev' } : undefined,
   server: { host: '127.0.0.1', port: 5180, strictPort: true },
   // Electron supports ES2022. Older targets corrupt xterm 6's DECRQM handler

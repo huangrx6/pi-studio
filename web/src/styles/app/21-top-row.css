@@ -27,25 +27,11 @@
 .sidebar-top-row > .brand { flex: 1; min-width: 0; height: 100%; border-bottom: 0; }
 .chat-header,
 .panel-tabbar { background: var(--surface-chrome); border-bottom: 0; }
-.chat-tabs,
 .file-toolbar {
   background: color-mix(in srgb, var(--surface-chrome) 88%, transparent);
   border-bottom-color: var(--divider);
 }
 .file-toolbar { border-top-color: var(--transparent); }
-.nav-row.new-chat {
-  height: var(--row-height);
-  min-height: var(--row-height);
-  margin-top: 0;
-  justify-content: flex-start;
-  padding-inline: var(--space-3);
-  border: 0;
-  background: var(--transparent);
-  color: var(--muted);
-  box-shadow: none;
-}
-.nav-row.new-chat > svg { color: var(--muted); }
-.nav-row.new-chat:hover { background: var(--surface-hover); color: var(--text); }
 .sidebar-top-toggle {
   position: static;
   flex: none;
@@ -58,12 +44,3 @@
 /* 收起动画期间侧栏还在变窄，这个按钮会一路左滑；主区右端同时出现「展开侧边栏」，
  * 两个一模一样的图标并排看着很乱。收起一开始就把它淡出。 */
 .is-sidebar-collapsed .sidebar-top-toggle { opacity: 0; pointer-events: none; transition: none; }
-
-/* 「新对话」是创建动作，不承担当前路由状态，和普通导航行共用内容基线。 */
-.new-chat { justify-content: flex-start; padding-inline: 12px; }
-
-/* 主栏：标题文字与标签文字共用同一个左边界。
-   标签行左内边距 16 + 标签自身 8 = 标题的 24。 */
-.chat-tabs { padding-inline: var(--space-4); }
-.chat-tab-list { padding-inline: 0; }
-.chat-tabs .tab { padding-inline: var(--space-2); }

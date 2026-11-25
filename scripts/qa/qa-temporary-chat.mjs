@@ -54,8 +54,8 @@ try {
    sessionSubagents:async()=>[],
    onConversationEvent:fn=>{listeners.add(fn);return()=>listeners.delete(fn);},
    modeGet:async()=>({available:true,mode:'smart'}),composerResources:async()=>({commands:[],skills:[]}),extensionsUi:async()=>({items:[],errors:[],syncedAt:Date.now(),apiVersion:1}),
-   conversationExtensionUiPreferences:async()=>({version:1,layout:'grid',globalOrder:[],sessionOrders:{}}),
-   saveConversationExtensionUiPreferences:async value=>({version:1,layout:value?.layout||'grid',globalOrder:value?.globalOrder||[],sessionOrders:{}})},
+   conversationExtensionUiPreferences:async()=>({version:1,globalOrder:[]}),
+   saveConversationExtensionUiPreferences:async value=>({version:1,globalOrder:value?.globalOrder||[]})},
    {get:(target,key)=>key in target?target[key]:String(key).startsWith('on')?()=>()=>{}:async()=>undefined});
  });
  await page.goto(server.origin);

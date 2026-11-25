@@ -1,21 +1,8 @@
-import type { ModelComparisonStartResult } from '../types/comparison-types';
-import type { ThinkingLevel } from '../types/model-types';
 import type { KeyValueStorage } from './preferences';
 
 const RESERVED_OBJECT_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
-const THINKING_LEVELS = new Set<ThinkingLevel>([
-  'default',
-  'off',
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-]);
 const MAX_WORKSPACES = 512;
 const MAX_SESSIONS_PER_WORKSPACE = 2_000;
-const MAX_MODEL_COMPARISONS = 64;
 const MAX_ID_LENGTH = 256;
 const MAX_PATH_LENGTH = 4_096;
 
@@ -24,7 +11,7 @@ export const STORED_UI_KEYS = {
   workspaceOrder: 'pi-studio:workspace-order',
   sessionOrder: 'pi-studio:session-order',
   activeSession: 'pi-studio:active-session',
-  comparisons: 'pi-studio:model-comparisons',
+  pluginWorkspaceSection: 'pi-studio:plugin-workspace-section',
 } as const;
 
 export type StoredSessionOrder = Record<string, string[]>;
@@ -34,14 +21,14 @@ export type StoredActiveSession = {
   cwd: string;
 } | null;
 
-export type StoredModelComparison = {
-  result: ModelComparisonStartResult;
-  cwd: string;
-  initialModelRef: string;
-  initialThinkingLevel: ThinkingLevel;
-};
+export type StoredPluginWorkspaceSection = 'plugins' | 'mcp' | 'skills' | 'extensions';
 
-export type StoredModelComparisonMap = Record<string, StoredModelComparison>;
+const PLUGIN_WORKSPACE_SECTIONS = new Set<StoredPluginWorkspaceSection>([
+  'plugins',
+  'mcp',
+  'skills',
+  'extensions',
+]);
 
 function browserStorage(): KeyValueStorage | null {
   try {
@@ -121,88 +108,6 @@ export function normalizeStoredActiveSession(value: unknown): StoredActiveSessio
   return id && cwd ? { id, cwd } : null;
 }
 
-function validComparisonBranch(value: unknown): boolean {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const branch = value as Record<string, unknown>;
-  return Boolean(
-    safeId(branch.sessionId)
-    && typeof branch.label === 'string'
-    && typeof branch.modelRef === 'string'
-    && branch.modelRef.trim()
-    && THINKING_LEVELS.has(branch.thinkingLevel as ThinkingLevel)
-    && typeof branch.worktreeId === 'string'
-    && branch.worktreeId.trim(),
-  );
-}
-
-function normalizeComparisonEntry(
-  parentId: string,
-  value: unknown,
-): StoredModelComparison | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
-  const entry = value as Partial<StoredModelComparison>;
-  const result = entry.result;
-  if (
-    !result
-    || typeof result !== 'object'
-    || Array.isArray(result)
-    || safeId(result.id) !== result.id
-    || result.parentId !== parentId
-    || typeof result.prompt !== 'string'
-    || !result.prompt.trim()
-    || !Number.isFinite(result.createdAt)
-    || result.createdAt <= 0
-    || !Array.isArray(result.branches)
-    || result.branches.length !== 2
-    || !result.branches.every(validComparisonBranch)
-  ) return undefined;
-  const cwd = safeWorkspacePath(entry.cwd);
-  const initialModelRef = typeof entry.initialModelRef === 'string'
-    ? entry.initialModelRef.trim()
-    : '';
-  if (
-    !cwd
-    || !initialModelRef
-    || !THINKING_LEVELS.has(entry.initialThinkingLevel as ThinkingLevel)
-  ) return undefined;
-
-  const branches = result.branches.map((branch) => ({
-    sessionId: branch.sessionId,
-    label: branch.label,
-    modelRef: branch.modelRef,
-    thinkingLevel: branch.thinkingLevel,
-    worktreeId: branch.worktreeId,
-  })) as [
-    ModelComparisonStartResult['branches'][0],
-    ModelComparisonStartResult['branches'][1],
-  ];
-  return {
-    result: {
-      id: result.id,
-      parentId,
-      prompt: result.prompt,
-      createdAt: result.createdAt,
-      branches,
-    },
-    cwd,
-    initialModelRef,
-    initialThinkingLevel: entry.initialThinkingLevel as ThinkingLevel,
-  };
-}
-
-export function normalizeStoredModelComparisons(value: unknown): StoredModelComparisonMap {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  const output: StoredModelComparisonMap = {};
-  for (const [rawParentId, candidate] of Object.entries(value)) {
-    if (Object.keys(output).length >= MAX_MODEL_COMPARISONS) break;
-    const parentId = safeId(rawParentId);
-    if (!parentId) continue;
-    const normalized = normalizeComparisonEntry(parentId, candidate);
-    if (normalized) output[parentId] = normalized;
-  }
-  return output;
-}
-
 function readNormalized<T>(
   storage: KeyValueStorage | null,
   key: string,
@@ -277,13 +182,32 @@ export function loadStoredActiveSession(
   );
 }
 
-export function loadStoredModelComparisons(
+export function normalizePluginWorkspaceSection(value: unknown): StoredPluginWorkspaceSection {
+  return PLUGIN_WORKSPACE_SECTIONS.has(value as StoredPluginWorkspaceSection)
+    ? value as StoredPluginWorkspaceSection
+    : 'plugins';
+}
+
+export function loadStoredPluginWorkspaceSection(
   storage: KeyValueStorage | null = browserStorage(),
-): StoredModelComparisonMap {
+): StoredPluginWorkspaceSection {
   return readNormalized(
     storage,
-    STORED_UI_KEYS.comparisons,
-    () => ({}),
-    normalizeStoredModelComparisons,
+    STORED_UI_KEYS.pluginWorkspaceSection,
+    () => 'plugins' as StoredPluginWorkspaceSection,
+    normalizePluginWorkspaceSection,
   );
+}
+
+export function saveStoredPluginWorkspaceSection(
+  section: StoredPluginWorkspaceSection,
+  storage: KeyValueStorage | null = browserStorage(),
+): void {
+  if (!storage) return;
+  const normalized = normalizePluginWorkspaceSection(section);
+  try {
+    storage.setItem(STORED_UI_KEYS.pluginWorkspaceSection, JSON.stringify(normalized));
+  } catch {
+    // The in-memory section remains usable when storage is unavailable.
+  }
 }

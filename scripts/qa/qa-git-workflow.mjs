@@ -67,21 +67,11 @@ try {
   await page.getByLabel('搜索或创建分支').fill('design/tokens');
   await button('创建并切换到 design/tokens').click();
   await button('切换分支，当前 design/tokens').waitFor();
-  await button('打开会话进展').click();
-  async function verifyBranchLayout() {
-    const identity = page.locator('.conversation-progress:visible .progress-git-identity');
-    await identity.getByText('design/tokens', { exact: true }).waitFor();
-    assert.ok(await identity.evaluate(el => {
-      const icon = el.querySelector('svg').getBoundingClientRect();
-      const name = el.querySelector('.progress-git-branch').getBoundingClientRect();
-      const description = el.querySelector('small').getBoundingClientRect();
-      return icon.width <= 16 && icon.right < name.left && Math.abs(icon.top + icon.height / 2 - name.top - name.height / 2) < 1
-        && description.top >= name.bottom && Math.abs(description.left - icon.left) < 1;
-    }), 'branch icon and label share a line, description starts under the icon');
-  }
-  await verifyBranchLayout();
-  await capture('progress');
-  await button('变更').click();
+  await button('切换分支，当前 design/tokens').click();
+  await button('打开 Git').click();
+  await page.locator('.file-panel .git-workspace-page').waitFor();
+  assert.ok(await composer.isVisible());
+  await button('全屏').click();
   const work = page.getByRole('region', { name: '工作区', exact: true });
   const staged = page.getByRole('region', { name: '暂存区', exact: true });
   const preview = page.getByRole('region', { name: '文件差异 palette.css' });
@@ -122,8 +112,7 @@ try {
     await input.fill('');
   }
   await verifyCommitControls();
-  await button('打开会话进展').click();
-  await button('固定到右栏').click();
+  await button('退出全屏').click();
   await page.waitForFunction(() => {
     const files = document.querySelector('.git-groups')?.getBoundingClientRect();
     const diff = document.querySelector('.git-review-preview')?.getBoundingClientRect();
@@ -134,8 +123,7 @@ try {
   await capture('changes-narrow');
   await preview.getByRole('button', { name: '切换为左右对照' }).click();
   await preview.getByText('修改后', { exact: true }).waitFor();
-  await button('取消固定，返回浮层').click();
-  await page.keyboard.press('Escape');
+  await button('全屏').click();
   // Match the reported working-tree size with real untracked files; scroll and open the last one.
   await page.locator('.git-view-tabs').getByRole('button', { name: '提交历史' }).click();
   const bulk = path.join(repo, 'zz-load'), bulkCount = 43321;
@@ -280,7 +268,7 @@ try {
   await sourceEditor.fill('.panel { gap: 15px; }\n');
   await button('保存文件').click();
   await button('编辑文件').waitFor();
-  await button('收起右侧面板').click();
+  await page.getByRole('tab', { name: 'Git', exact: true }).click();
   await button('标记为已解决 spacing.css').click();
   await page.getByText('所有冲突已解决，可以提交合并。').waitFor();
   await page.getByLabel('提交说明').fill('合并间距调整');
@@ -312,15 +300,8 @@ try {
   await aligned('.git-detail-paths', '.git-commit-files .git-file-diff');
   await page.locator('.git-file-diff .diff-code').filter({ hasText: 'teal' }).first().waitFor();
   await capture('detail');
-  await button('返回对话').click();
+  await button('退出全屏').click();
   assert.equal(await composer.innerText(), '保留会话草稿');
-  await button('打开会话进展').click();
-  await button('固定到右栏').click();
-  const pinned = page.locator('.file-panel .conversation-progress');
-  await verifyBranchLayout();
-  await pinned.getByRole('button', { name: '提交', exact: true }).click();
-  assert.equal(await page.getByLabel('提交说明').evaluate(el => el === document.activeElement), true);
-  await page.locator('.git-view-tabs').getByRole('button', { name: '提交历史' }).click();
   await page.locator('.git-history-row').first().waitFor();
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await page.waitForFunction(() => {
@@ -337,20 +318,26 @@ try {
   assert.equal(await gitHeader.locator('svg:not(button svg), img').count(), 0);
   const gitTitle = await typography(gitHeader.getByRole('heading', { name: '版本控制' }));
   const historySubject = await typography(page.locator('.git-history-subject strong').first());
-  const panelTitle = await typography(pinned.locator('.progress-head strong'));
-  const sectionTitle = await typography(pinned.getByRole('heading', { name: '任务列表', exact: true }));
-  for (const [menuItem, title] of [['扩展', '会话扩展'], ['轨迹', '会话轨迹']]) {
-    await button('打开扩展与轨迹').click();
-    await page.getByRole('group', { name: '会话视图' }).getByRole('button', { name: new RegExp('^' + menuItem) }).click();
-    assert.deepEqual(await typography(page.getByRole('heading', { name: title, exact: true })), gitTitle, title);
+  await page.locator('.chat-header').getByRole('button', { name: '轨迹', exact: true }).click();
+  assert.deepEqual(await typography(page.getByRole('heading', { name: '会话轨迹', exact: true })), gitTitle);
+  await page.getByRole('tab', { name: 'Git', exact: true }).click();
+  async function openGitSettings() {
+    await page.locator('.sidebar-bottom button[title="设置"]').click();
+    await page.locator('.settings-navigation').getByRole('button', { name: 'Git 工作流', exact: true }).click();
   }
   git(repo, 'worktree', 'add', '-q', path.join(temporary, '排版预览'), 'design/typography');
   await writeFile(path.join(repo, 'spacing.css'), '.panel { gap: 16px; }\n');
   await writeFile(path.join(repo, 'review.md'), 'review\n');
   git(repo, 'add', 'review.md');
-  await pinned.getByRole('button', { name: 'Git 设置' }).click();
+  await openGitSettings();
   const settings = page.locator('.git-settings');
   await settings.getByText('已暂存 1 · 未暂存 1 · 未跟踪 0').waitFor();
+  const changedFiles = settings.getByRole('button', { name: /^2 个文件有变更/ });
+  await changedFiles.click();
+  const files = settings.getByRole('list', { name: '变更文件' });
+  await files.getByText('review.md', { exact: true }).waitFor();
+  await files.getByText('spacing.css', { exact: true }).waitFor();
+  await changedFiles.click();
   await settings.getByText('origin/design/tokens · 已对齐').waitFor();
   assert.equal(await settings.locator('.git-worktree-row').count(), 2);
   const workspacePicker = settings.getByRole('button', { name: '工作区', exact: true });
@@ -361,6 +348,7 @@ try {
   await workspacePicker.click();
   await page.getByRole('option', { name: /^studio-themes/ }).click();
   await settings.getByText('origin/design/tokens · 已对齐').waitFor();
+  assert.notEqual(await settings.getByRole('region', { name: '差异审阅', exact: true }).locator('details').getAttribute('open'), null);
   await settings.getByRole('button', { name: '左右对照' }).click();
   await settings.getByRole('switch', { name: '长行自动换行' }).click();
   await page.waitForFunction(() => {
@@ -375,31 +363,69 @@ try {
   assert.equal(await settings.evaluate(el => el.scrollWidth > el.clientWidth + 1), false);
   await capture('settings-narrow');
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1280, 860));
-  await page.locator('.settings-navigation').getByRole('button', { name: '返回对话' }).click();
-  await pinned.getByRole('button', { name: '变更', exact: true }).click();
+  await settings.getByRole('button', { name: '打开版本控制' }).click();
   const wrapped = page.locator('.git-file-diff .diff-view.is-wrapped');
   await wrapped.locator('.diff-paired').waitFor();
   await wrapped.getByRole('button', { name: '切换为单列差异' }).click();
   await wrapped.locator('.diff-unified').waitFor();
-  await pinned.getByRole('button', { name: '提交历史', exact: true }).click();
+  await page.locator('.git-view-tabs').getByRole('button', { name: '提交历史', exact: true }).click();
   await page.locator('.git-history-row').first().click();
   await wrapped.locator('.diff-paired').waitFor();
-  await pinned.getByRole('button', { name: 'Git 设置' }).click();
+  await openGitSettings();
   const create = page.getByRole('dialog', { name: '创建工作树', exact: true });
   const remove = page.getByRole('dialog', { name: '移除工作树？' });
+  const settingsToast = page.locator('.settings-toast-stack .settings-toast');
+  const modalToast = create.locator('.settings-toast-layer:popover-open .settings-toast');
+  const createGeometry = () => create.evaluate(dialog => ({
+    height: dialog.getBoundingClientRect().height,
+    scrollHeight: dialog.querySelector('.dialog-body').scrollHeight,
+    scrollTop: dialog.querySelector('.dialog-body').scrollTop,
+  }));
   await settings.getByRole('button', { name: '创建工作树' }).click();
   await create.getByRole('button', { name: '已有分支' }).click();
   await create.getByRole('button', { name: '本地分支' }).click();
   await create.getByRole('option', { name: 'main', exact: true }).click();
-  await create.getByRole('textbox', { name: /^文件夹名称/ }).fill('main-review');
+  const folderName = create.getByRole('textbox', { name: /^文件夹名称/ });
+  await folderName.fill(path.basename(repo));
+  const beforeError = await createGeometry();
+  await folderName.press('Enter');
+  await modalToast.filter({ hasText: '目标文件夹已存在' }).waitFor();
+  assert.equal(await modalToast.getAttribute('role'), 'alert');
+  assert.equal(await modalToast.evaluate(node => getComputedStyle(node.closest('[popover]')).position), 'fixed');
+  assert.deepEqual(await createGeometry(), beforeError, 'failed create toast leaves dialog height and scroll unchanged');
+  await folderName.fill('main-review');
   await capture('worktree-create');
   await create.getByRole('button', { name: '创建工作树', exact: true }).click();
   const existingTree = path.join(temporary, 'main-review');
-  const removeButton = settings.getByRole('button', { name: '移除工作树 ' + existingTree, exact: true });
-  await removeButton.waitFor();
+  const treeMenu = settings.getByRole('button', { name: '更多工作树操作 ' + existingTree, exact: true });
+  const openRemoval = async () => {
+    await treeMenu.click();
+    await page.getByRole('menuitem', { name: '移除工作树', exact: true }).click();
+  };
+  await treeMenu.waitFor();
+  await settingsToast.filter({ hasText: '已创建工作树' }).waitFor();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator.clipboard, 'writeText', { value: async text => { window.qaCopiedWorktree = text; } });
+  });
+  await treeMenu.scrollIntoViewIfNeeded();
+  const worktrees = settings.getByRole('region', { name: '工作树', exact: true });
+  const worktreeGeometry = () => worktrees.evaluate(card => ({
+    height: card.getBoundingClientRect().height,
+    scrollTop: card.closest('.settings-content').scrollTop,
+    scrollHeight: card.closest('.settings-content').scrollHeight,
+  }));
+  const beforeCopy = await worktreeGeometry();
+  await treeMenu.click();
+  await page.getByRole('menuitem', { name: '复制路径', exact: true }).click();
+  await settingsToast.filter({ hasText: '已复制工作树路径' }).waitFor();
+  assert.equal(await page.evaluate(() => window.qaCopiedWorktree), existingTree);
+  assert.deepEqual(await worktreeGeometry(), beforeCopy, 'copy toast leaves worktree height and scroll unchanged');
+  await capture('worktree-copy-toast');
+  await settingsToast.waitFor({ state: 'detached' });
+  assert.deepEqual(await worktreeGeometry(), beforeCopy, 'copy toast dismissal leaves worktree height and scroll unchanged');
   assert.equal(git(existingTree, 'branch', '--show-current'), 'main');
   await writeFile(path.join(existingTree, 'draft.txt'), 'keep this');
-  await removeButton.click();
+  await openRemoval();
   await remove.getByRole('alert').filter({ hasText: '未跟踪 1' }).waitFor();
   await capture('worktree-remove');
   await remove.getByRole('button', { name: '取消' }).click();
@@ -412,25 +438,40 @@ try {
       await process.getBuiltinModule('fs').promises.rename(target, bin);
     };
   }, { source: existingTree, bin });
-  await removeButton.click();
+  await openRemoval();
   await remove.getByRole('button', { name: '移入回收站' }).click();
-  await removeButton.waitFor({ state: 'detached' });
+  await treeMenu.waitFor({ state: 'detached' });
+  await settingsToast.filter({ hasText: '已移除工作树' }).waitFor();
   assert.equal(await readFile(path.join(bin, 'draft.txt'), 'utf8'), 'keep this');
   assert.ok(git(repo, 'rev-parse', '--verify', 'refs/heads/main'));
+  for (const branch of ['spring', 'summer', 'autumn', 'winter']) {
+    git(repo, 'worktree', 'add', '-q', '-b', 'theme/' + branch, path.join(temporary, branch));
+  }
+  await settings.getByRole('button', { name: '刷新 Git 状态' }).click();
+  const treeSearch = settings.getByRole('searchbox', { name: '搜索分支或目录' });
+  await treeSearch.waitFor();
+  assert.equal(await settings.locator('.git-worktree-row').count(), 5);
+  await settings.getByRole('button', { name: '下一页工作树' }).click();
+  assert.equal(await settings.locator('.git-worktree-row').count(), 1);
+  await treeSearch.fill('theme/summer');
+  await settings.locator('.git-worktree-row').getByText('theme/summer', { exact: true }).waitFor();
   await settings.getByRole('button', { name: '创建工作树' }).click();
   await create.getByRole('textbox', { name: /^新分支名称/ }).fill('feature/worktree');
+  await create.getByRole('button', { name: '起点分支' }).click();
+  await page.getByRole('option', { name: /^design\/typography/ }).click();
   await create.getByRole('checkbox', { name: '创建后打开工作区' }).check();
   await create.getByRole('button', { name: '创建工作树', exact: true }).click();
   await settings.waitFor({ state: 'detached' });
   const newTree = path.join(temporary, 'studio-themes-feature-worktree');
   await page.locator('[data-workspace-cwd="' + newTree + '"] .workspace-row.is-active').waitFor();
   assert.equal(git(newTree, 'branch', '--show-current'), 'feature/worktree');
+  assert.equal(git(newTree, 'rev-parse', 'HEAD'), git(repo, 'rev-parse', 'design/typography'));
   assert.deepEqual(errors, []);
   await writeFile(path.join(output, 'results.json'), JSON.stringify({
     branch: 'design/tokens', pushedCommit: hash, pulledCommit: incoming, reviewedFile: 'palette.css', largeWorktree: { files: bulkCount + 2, renderedRows, openMs },
-    typography: { gitTitle, historySubject, panelTitle, sectionTitle },
+    typography: { gitTitle, historySubject },
   }, null, 2));
-  console.log('Git flow verified from branch creation to remote push, commit review, pinned entry and preserved chat draft.');
+  console.log('Git flow verified from branch creation to local remote sync, commit review and preserved chat draft.');
 } catch (error) {
   if (page && !page.isClosed()) console.error(await page.evaluate(() => ({
     text: document.body.innerText.slice(0, 2800),

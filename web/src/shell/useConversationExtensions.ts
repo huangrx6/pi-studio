@@ -1,201 +1,112 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
 import { useExtensionUiSnapshot } from '../features/extensions/use-extension-ui';
-import {
-  DEFAULT_CONVERSATION_EXTENSION_UI_PREFERENCES,
-  applyConversationExtensionUiPatch,
-  hasSessionExtensionOrder,
-  normalizeConversationExtensionUiPreferences,
-  orderConversationExtensionItems,
-} from '../features/conversation/conversation-extension-order';
-import { placementAllowsSlot, placementForItem } from '../features/extensions/extension-placement';
-import type { NotificationTone } from './NotificationCenter';
+import { orderConversationExtensionItems } from '../features/conversation/conversation-extension-order';
+import { isSummarySlot, placementForItem } from '../features/extensions/extension-placement';
 import { QUOTA_EXTENSION_ID } from '../types/provider-quota';
-import type { AgentView } from './app-types';
-import { errorText } from '../shared/error-text';
 import type { ExtensionPlacement } from '../shared/preferences';
-import type {
-  ConversationExtensionOrderScope,
-  ConversationExtensionUiPreferences,
-  ExtensionUiItem,
-} from '../types/extension-types';
+import type { ExtensionUiItem } from '../types/extension-types';
 
-type ConversationExtensionsOptions = {
-  sourceQuotaEnabled: boolean;
-  cwd?: string;
-  sessionId?: string;
-  agentView: AgentView;
-  setAgentView: Dispatch<SetStateAction<AgentView>>;
-  pushNotification: (message: string, tone?: NotificationTone) => void;
-  rememberMainScrollPosition: () => void;
-  /** 设置在设置页的全局落点偏好：panel contribution id → 落点。 */
-  extensionPlacements?: Record<string, ExtensionPlacement>;
+export type WorkbenchExtension = {
+  panels: ExtensionUiItem[];
+  summary?: ExtensionUiItem;
 };
 
 export function useConversationExtensions({
   cwd,
   sessionId,
-  agentView,
-  setAgentView,
-  pushNotification,
-  rememberMainScrollPosition,
-  extensionPlacements,
   sourceQuotaEnabled,
-}: ConversationExtensionsOptions) {
+  turnActive,
+  extensionPlacements,
+}: {
+  cwd?: string;
+  sessionId?: string;
+  sourceQuotaEnabled: boolean;
+  turnActive: boolean;
+  extensionPlacements: Record<string, ExtensionPlacement>;
+}) {
   const discovered = useExtensionUiSnapshot(cwd);
-  const quotaChip = discovered.items.find(item => item.extensionId === QUOTA_EXTENSION_ID && (item.slots ?? [item.slot]).includes('status.chip'));
-  const quotaMenuItem = sourceQuotaEnabled && quotaChip && placementAllowsSlot(placementForItem(extensionPlacements, quotaChip), 'status.chip')
-    ? quotaChip : undefined;
-  const surface = useMemo(() => ({
-    ...discovered,
-    items: discovered.items.filter(item => item.extensionId !== QUOTA_EXTENSION_ID
-      || (sourceQuotaEnabled && item.slot === 'conversation.detail')),
-  }), [discovered, sourceQuotaEnabled]);
-  const [preferences, setPreferences] = useState<ConversationExtensionUiPreferences>(
-    () => ({
-      ...DEFAULT_CONVERSATION_EXTENSION_UI_PREFERENCES,
-      sessionOrders: {},
-    }),
-  );
-  const saveRevision = useRef(0);
-  const [chosenScope, setOrderScope] = useState<ConversationExtensionOrderScope | null>(null);
-  const orderScope = chosenScope ?? (hasSessionExtensionOrder(preferences, sessionId) ? 'session' : 'global');
+  const [order, setOrder] = useState<string[] | null>();
+  const [orderAttempt, setOrderAttempt] = useState(0);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const saveInProgress = useRef(false);
 
   useEffect(() => {
     let disposed = false;
-    const revision = saveRevision.current;
-    if (!window.piApi.conversationExtensionUiPreferences) return;
     void window.piApi.conversationExtensionUiPreferences()
-      .then((saved) => {
-        if (!disposed && revision === saveRevision.current) {
-          setPreferences(normalizeConversationExtensionUiPreferences(saved));
-        }
-      })
-      .catch(() => {
-        // Extension presentation remains usable with declaration order defaults.
-      });
-    return () => {
-      disposed = true;
-    };
-  }, []);
+      .then(saved => { if (!disposed) setOrder(saved.globalOrder); })
+      .catch(() => { if (!disposed) setOrder(null); });
+    return () => { disposed = true; };
+  }, [orderAttempt]);
 
-  useEffect(() => {
-    setOrderScope(null);
-  }, [sessionId]);
+  const orderedItems = useMemo(
+    () => orderConversationExtensionItems(discovered.items, order ?? []),
+    [discovered, order],
+  );
+  const surface = useMemo(() => ({
+    ...discovered,
+    items: orderedItems.filter(item => item.extensionId !== QUOTA_EXTENSION_ID || sourceQuotaEnabled),
+  }), [discovered, orderedItems, sourceQuotaEnabled]);
+  const orderableItems = useMemo(() => {
+    const byExtension = new Map<string, ExtensionUiItem>();
+    for (const item of orderedItems) {
+      if (item.slot !== 'settings.panel' && !byExtension.has(item.extensionId)) byExtension.set(item.extensionId, item);
+    }
+    return [...byExtension.values()];
+  }, [orderedItems]);
 
-  const items = useMemo(
-    () => orderConversationExtensionItems(
-      surface.items.filter((item) => {
-        if (item.slot === 'conversation.detail') return true;
-        // 用户在设置里选的落点优先，缺省按声明的全部位置渲染。
-        const placement = placementForItem(extensionPlacements, item);
-        return (item.slots ?? [item.slot]).some((slot) => (
-          (slot === 'status.chip' || slot === 'conversation.footer')
-          && placementAllowsSlot(placement, slot)
-        ));
-      }),
-      preferences,
-      sessionId,
-    ),
-    [extensionPlacements, preferences, sessionId, surface],
-  );
-  const manifestDetailItems = useMemo(
-    () => surface.items.filter((item) => item.slot === 'conversation.detail'),
-    [surface],
-  );
-  const hubItems = useMemo(
-    () => orderConversationExtensionItems(
-      manifestDetailItems,
-      preferences,
-      orderScope === 'session' ? sessionId : undefined,
-    ),
-    [manifestDetailItems, orderScope, preferences, sessionId],
-  );
-  const detailItems = useMemo(
-    () => items.filter((item) => item.slot === 'conversation.detail'),
-    [items],
-  );
-  const footerItems = useMemo(
-    () => items.filter((item) => (item.slots ?? [item.slot]).includes('conversation.footer')),
-    [items],
-  );
-  // 顶栏 chip：details 指向本扩展的详情面板，点击时直接打开那一页。
-  const chipItems = useMemo(() => items
-    .filter((item) => (item.slots ?? [item.slot]).includes('status.chip'))
-    // 与底部那条同样的兜底：落点设为「输入框」或「隐藏」时，顶栏不能再出现。
-    .filter((item) => placementAllowsSlot(placementForItem(extensionPlacements, item), 'status.chip'))
-    .map((item) => {
-      const target = item.details
-        ? manifestDetailItems.find((detail) => detail.extensionId === item.extensionId && detail.contributionId === item.details)
-        : undefined;
-      return { item, targetId: target?.id };
-    })
-    .filter((chip) => Boolean(chip.targetId))
-    .slice(0, 3), [items, manifestDetailItems, extensionPlacements]);
-  const activeItem = agentView.kind === 'extensions' && agentView.itemId
-    ? detailItems.find((item) => item.id === agentView.itemId) ?? null
-    : null;
+  const panels = surface.items.filter(item => item.slot === 'panel.side');
+  const summaries = sessionId ? surface.items.filter(item =>
+    (item.slots ?? [item.slot]).some(isSummarySlot)
+  ) : [];
+  const placed = summaries.map(item => ({
+    item,
+    placement: placementForItem(extensionPlacements, item),
+    showInline: item.visibility !== 'while-active' || turnActive,
+  }));
+  const grouped = new Map<string, WorkbenchExtension>();
+  for (const panel of panels) {
+    const group = grouped.get(panel.extensionId);
+    if (group) group.panels.push(panel);
+    else grouped.set(panel.extensionId, { panels: [panel] });
+  }
+  for (const { item, placement, showInline } of placed) {
+    if (placement === 'hidden') continue;
+    // The metrics data source also exposes the latest completed request in the picker.
+    if (!showInline && item.extensionId !== 'builtin:studio-metrics') continue;
+    const group = grouped.get(item.extensionId);
+    if (group && !group.summary) group.summary = item;
+  }
+  const groups = [...grouped.values()];
 
-  useEffect(() => {
-    if (agentView.kind !== 'extensions' || !agentView.itemId) return;
-    if (detailItems.some((item) => item.id === agentView.itemId)) return;
-    setAgentView({ kind: 'extensions' });
-  }, [agentView, detailItems, setAgentView]);
-
-  async function updateUi(
-    patch: Parameters<typeof applyConversationExtensionUiPatch>[1],
-  ): Promise<boolean> {
-    const revision = ++saveRevision.current;
-    const previous = preferences;
-    setPreferences((current) => applyConversationExtensionUiPatch(current, patch));
+  async function saveOrder(globalOrder: string[]) {
+    if (saveInProgress.current) return;
+    saveInProgress.current = true;
+    setSavingOrder(true);
     try {
-      const saved = await window.piApi.saveConversationExtensionUiPreferences(patch);
-      if (revision === saveRevision.current) setPreferences(normalizeConversationExtensionUiPreferences(saved));
-      return true;
-    } catch (error) {
-      if (revision === saveRevision.current) {
-        const saved = await window.piApi.conversationExtensionUiPreferences().catch(() => previous);
-        if (revision === saveRevision.current) setPreferences(normalizeConversationExtensionUiPreferences(saved));
-      }
-      pushNotification(`扩展展示设置保存失败：${errorText(error)}`, 'error');
-      return false;
+      const saved = await window.piApi.saveConversationExtensionUiPreferences({ globalOrder });
+      setOrder(saved.globalOrder);
+    } finally {
+      saveInProgress.current = false;
+      setSavingOrder(false);
     }
   }
 
-  function openItem(itemId: string) {
-    if (!detailItems.some((item) => item.id === itemId)) {
-      pushNotification('这个扩展面板当前不可用。', 'warning');
-      return;
-    }
-    rememberMainScrollPosition();
-    setAgentView({ kind: 'extensions', itemId });
-  }
-
-  function openChip(chip: { item: ExtensionUiItem; targetId: string }) {
-    openItem(chip.targetId);
-  }
-
-  function openHub() {
-    rememberMainScrollPosition();
-    setAgentView({ kind: 'extensions' });
-  }
-
+  const inPosition = (placement: ExtensionPlacement) => placed
+    .filter(entry => entry.showInline && entry.placement === placement).map(entry => entry.item);
   return {
     surface,
-    quotaMenuItem,
-    preferences,
-    orderScope,
-    setOrderScope,
-    items: items as ExtensionUiItem[],
-    detailItems: detailItems as ExtensionUiItem[],
-    footerItems: footerItems as ExtensionUiItem[],
-    chipItems: chipItems as Array<{ item: ExtensionUiItem; targetId: string }>,
-    hubItems: hubItems as ExtensionUiItem[],
-    activeItem,
-    hasSessionOrder: hasSessionExtensionOrder(preferences, sessionId),
-    updateUi,
-    openItem,
-    openChip,
-    openHub,
+    panels,
+    groups,
+    headerItems: inPosition('header').slice(0, 2),
+    aboveItems: inPosition('above'),
+    belowItems: inPosition('below'),
+    order,
+    orderableItems,
+    saveOrder,
+    savingOrder,
+    retryOrder: () => {
+      setOrder(undefined);
+      setOrderAttempt(attempt => attempt + 1);
+    },
   };
 }

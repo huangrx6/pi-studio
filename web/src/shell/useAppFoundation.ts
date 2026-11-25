@@ -30,7 +30,6 @@ import {
   createEmptyModelSelection,
 } from '../types/model-types';
 import type { ConversationPage } from '../types/durable-types';
-import type { AgentView } from './app-types';
 import type { OutlineData, OutlineItem } from '../features/conversation/outline-model';
 
 /**
@@ -52,7 +51,6 @@ export function useAppFoundation() {
   const {
     preferences,
     backgroundBusy,
-    backgroundError,
     menuBarPreference,
     menuBarBusy,
     updatePreference,
@@ -60,7 +58,7 @@ export function useAppFoundation() {
     removeBackground,
     changeMenuBarVisibility,
     handleBackgroundUnavailable,
-  } = useAppAppearance(setSettingsError);
+  } = useAppAppearance();
   const {
     snapshot: updateSnapshot,
     dialogOpen: updateDialogOpen,
@@ -86,7 +84,6 @@ export function useAppFoundation() {
   } = useNotifications();
   const [compaction, setCompaction] = useState<{ active: boolean; reason?: string }>({ active: false });
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
-  const [progressView, setProgressView] = useState({ floating: false, history: false });
   const [queuedPromptsBySession, setQueuedPromptsBySession] = useState<Record<string, QueuedPrompt[]>>({});
   const queuedPromptsRef = useRef(queuedPromptsBySession);
   queuedPromptsRef.current = queuedPromptsBySession;
@@ -122,11 +119,13 @@ export function useAppFoundation() {
   const {
     workspaces,
     stateLoading,
+    workspacesLoaded,
     initialStateSettled,
     workspace,
     workspaceRef,
     stateRequestRef,
     changeWorkspace,
+    removeWorkspaceFromList,
     loadState,
     expanded,
     setExpanded,
@@ -168,7 +167,6 @@ export function useAppFoundation() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [contextPolicy, setContextPolicy] = useState<ContextPolicy | null>(null);
   const [requestTraces, setRequestTraces] = useState<RequestTrace[]>([]);
-  const [agentView, setAgentView] = useState<AgentView>({ kind: 'conversation' });
   useEffect(() => {
     sessionRef.current = session;
   }, [session]);
@@ -185,7 +183,7 @@ export function useAppFoundation() {
     setComposerMenuIndex,
     composerCommands,
     composerCommandOptions,
-    composerFileOptions,
+    composerMentionOptions,
     composerMenuLoading,
     composerMenuError,
     retryComposerSuggestions,
@@ -268,7 +266,9 @@ export function useAppFoundation() {
     workspace,
     workspaceRef,
     sessionId: session?.id,
+    sessionCwd: session?.cwd,
     sessionRef,
+    showTrace: preferences.showCodeView,
     sidebarCollapsed,
     setError,
   });
@@ -312,7 +312,6 @@ export function useAppFoundation() {
     setSettingsError,
     preferences,
     backgroundBusy,
-    backgroundError,
     menuBarPreference,
     menuBarBusy,
     updatePreference,
@@ -341,8 +340,6 @@ export function useAppFoundation() {
     setCompaction,
     confirmRequest,
     setConfirmRequest,
-    progressView,
-    setProgressView,
     queuedPromptsBySession,
     setQueuedPromptsBySession,
     queuedPromptsRef,
@@ -377,11 +374,13 @@ export function useAppFoundation() {
     sessionLoadRef,
     workspaces,
     stateLoading,
+    workspacesLoaded,
     initialStateSettled,
     workspace,
     workspaceRef,
     stateRequestRef,
     changeWorkspace,
+    removeWorkspaceFromList,
     loadState,
     expanded,
     setExpanded,
@@ -414,8 +413,6 @@ export function useAppFoundation() {
     setContextPolicy,
     requestTraces,
     setRequestTraces,
-    agentView,
-    setAgentView,
     prompt,
     setPrompt,
     composerAttachments,
@@ -428,7 +425,7 @@ export function useAppFoundation() {
     setComposerMenuIndex,
     composerCommands,
     composerCommandOptions,
-    composerFileOptions,
+    composerMentionOptions,
     composerMenuLoading,
     composerMenuError,
     retryComposerSuggestions,

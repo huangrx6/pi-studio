@@ -157,31 +157,32 @@ function numeric(value) {
   return Number.isFinite(n) ? n : null;
 }
 
-function projectQuota(fields, data, credential = '') {
+function formatQuotaMetric(field, raw, credential = '') {
   // Only configured, formatted scalar metrics cross IPC, never arbitrary text
   // returned by an endpoint (including echoed headers or an error response).
-  return fields.map(field => {
-    const raw = readPath(data, field.path);
-    const metric = { label: field.label, value: null, summary: field.summary };
-    if (raw === undefined) return { ...metric, issue: '未返回此字段' };
-    if (credential && (typeof raw === 'number' || typeof raw === 'string') && String(raw).includes(credential)) return { ...metric, issue: '无法显示此值' };
-    if (field.format === 'enum') {
-      const value = (raw === null || typeof raw !== 'object') && translations(field.translations).get(String(raw));
-      return value ? { ...metric, value } : { ...metric, issue: '缺少对应的值翻译' };
-    }
-    const n = numeric(raw);
-    if (field.format === 'time') {
-      const millis = n !== null ? (Math.abs(n) < 1e11 ? n * 1000 : n)
-        : typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(raw) ? Date.parse(raw) : NaN;
-      const time = new Date(millis);
-      return Number.isFinite(time.getTime()) ? { ...metric, value: dateFormat.format(time) } : { ...metric, issue: '时间格式不匹配' };
-    }
-    if (n === null) return { ...metric, issue: '需要数值' };
-    if (field.format === 'number') return { ...metric, value: [numberFormat.format(n), field.unit].filter(Boolean).join(' ') };
-    const percent = field.format === 'fraction' ? n * 100 : n;
-    if (percent < 0 || percent > 100) return { ...metric, issue: '超出百分比范围' };
-    return { ...metric, value: `${numberFormat.format(percent)}%`, percent };
-  });
+  const metric = { label: field.label, value: null, summary: field.summary };
+  if (raw === undefined) return { ...metric, issue: '未返回此字段' };
+  if (credential && (typeof raw === 'number' || typeof raw === 'string') && String(raw).includes(credential)) return { ...metric, issue: '无法显示此值' };
+  if (field.format === 'enum') {
+    const value = (raw === null || typeof raw !== 'object') && translations(field.translations).get(String(raw));
+    return value ? { ...metric, value } : { ...metric, issue: '缺少对应的值翻译' };
+  }
+  const n = numeric(raw);
+  if (field.format === 'time') {
+    const millis = n !== null ? (Math.abs(n) < 1e11 ? n * 1000 : n)
+      : typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(raw) ? Date.parse(raw) : NaN;
+    const time = new Date(millis);
+    return Number.isFinite(time.getTime()) ? { ...metric, value: dateFormat.format(time) } : { ...metric, issue: '时间格式不匹配' };
+  }
+  if (n === null) return { ...metric, issue: '需要数值' };
+  if (field.format === 'number') return { ...metric, value: [numberFormat.format(n), field.unit].filter(Boolean).join(' ') };
+  const percent = field.format === 'fraction' ? n * 100 : n;
+  if (percent < 0 || percent > 100) return { ...metric, issue: '超出百分比范围' };
+  return { ...metric, value: `${numberFormat.format(percent)}%`, percent };
+}
+
+function projectQuota(fields, data, credential = '') {
+  return fields.map(field => formatQuotaMetric(field, readPath(data, field.path), credential));
 }
 
 function previewQuota({ fields, sample } = {}) {

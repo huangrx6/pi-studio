@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { KeyRound, ShieldCheck, ShieldX } from 'lucide-react';
+import { KeyRound, ShieldCheck, ShieldX, X } from 'lucide-react';
 import type {
   ExtensionPublisherTrustKey,
   ExtensionPublisherTrustSnapshot,
 } from '../../types/extension-types';
+import { useSettingsToast } from '../../shared/SettingsToast';
 import { SettingsDialog } from '../../shared/SettingsDialog';
+import { DetailDialog } from '../../shared/DetailDialog';
 import { SettingsResourceCard } from '../../shared/SettingsResourceCard';
 
 function errorText(error: unknown) {
@@ -18,8 +20,9 @@ function dateText(timestamp: number | undefined) {
 
 export function PublisherTrustSettings() {
   const [snapshot, setSnapshot] = useState<ExtensionPublisherTrustSnapshot | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const showToast = useSettingsToast();
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<{
     publisher: string;
     key: ExtensionPublisherTrustKey;
@@ -32,17 +35,16 @@ export function PublisherTrustSettings() {
         if (active) setSnapshot(value);
       })
       .catch((reason) => {
-        if (active) setError(errorText(reason));
+        if (active) showToast(errorText(reason), 'error');
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [showToast]);
 
   async function revoke() {
     if (!pending) return;
     setBusy(true);
-    setError(null);
     try {
       const next = await window.piApi.revokeExtensionPublisherKey({
         publisher: pending.publisher,
@@ -50,8 +52,9 @@ export function PublisherTrustSettings() {
       });
       setSnapshot(next);
       setPending(null);
+      showToast('发布者公钥已撤销');
     } catch (reason) {
-      setError(errorText(reason));
+      showToast(errorText(reason), 'error');
     } finally {
       setBusy(false);
     }
@@ -61,18 +64,17 @@ export function PublisherTrustSettings() {
   if (!snapshot || publishers.length === 0) return null;
 
   return <>
-    <section className="settings-card publisher-trust-settings">
-      <div className="settings-card-head publisher-trust-head">
-        <div className="publisher-trust-heading-copy">
-          <span><KeyRound /></span>
-          <div>
-            <h2>发布者公钥</h2>
-            <p>Ed25519 公钥用于确认签名者身份。撤销不可恢复；之后使用该指纹的扩展安装会被拒绝。</p>
-          </div>
-        </div>
-        <span className="publisher-trust-count">{publishers.length} 个发布者</span>
-      </div>
-      <div className="publisher-trust-list">
+    <button type="button" className="extension-library-tool" aria-haspopup="dialog"
+      onClick={() => setOpen(true)}><KeyRound aria-hidden="true" />发布者公钥</button>
+    {open && <DetailDialog className="publisher-trust-dialog" onClose={() => setOpen(false)}>{close => <>
+      <header className="detail-header">
+        <div className="detail-heading"><div>
+          <h2>发布者公钥</h2>
+          <p>共 {publishers.length} 个发布者。Ed25519 公钥用于确认签名者身份。</p>
+        </div></div>
+        <button type="button" className="icon-button" aria-label="关闭发布者公钥" onClick={close}><X /></button>
+      </header>
+      <div className="detail-body publisher-trust-list">
         {publishers.map((publisher) => <SettingsResourceCard className="publisher-trust-publisher" key={publisher.publisher}>
           <header>
             <strong>{publisher.publisher}</strong>
@@ -99,8 +101,7 @@ export function PublisherTrustSettings() {
           </div>)}
         </SettingsResourceCard>)}
       </div>
-      {error && <div className="dialog-error" role="alert">{error}</div>}
-    </section>
+    </>}</DetailDialog>}
 
     {pending && <SettingsDialog
       title="撤销发布者公钥？"
@@ -108,8 +109,7 @@ export function PublisherTrustSettings() {
       action="撤销公钥"
       busy={busy}
       loading={false}
-      error={error}
-      showBackdrop={false}
+      error={null}
       onClose={() => {
         if (!busy) setPending(null);
       }}

@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useState } from 'react';
-import { maximumPanelWidth, MIN_PANEL_WIDTH, normalizePanelWidth } from './panel-width.ts';
+import { maximumPanelWidth, MIN_PANEL_WIDTH, normalizePanelWidth, panelUsesOverlay } from './panel-width.ts';
 
 const STORAGE_KEY = 'pi-studio:panel-width';
 
@@ -10,6 +10,7 @@ export function usePanelWidth(sidebarCollapsed: boolean) {
     catch { return normalizePanelWidth(null); }
   });
   const [maximum, setMaximum] = useState(() => maximumPanelWidth(window.innerWidth, 0));
+  const [overlay, setOverlay] = useState(() => panelUsesOverlay(window.innerWidth, 0));
   useLayoutEffect(() => {
     const sidebar = document.querySelector('.sidebar');
     const measure = () => {
@@ -17,6 +18,7 @@ export function usePanelWidth(sidebarCollapsed: boolean) {
       // applies when returning to the conversation after a window resize.
       const sidebarWidth = sidebarCollapsed ? 0 : sidebar ? Number.parseFloat(getComputedStyle(sidebar).width) || 0 : 0;
       setMaximum(maximumPanelWidth(window.innerWidth, sidebarWidth));
+      setOverlay(panelUsesOverlay(window.innerWidth, sidebarWidth));
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -33,5 +35,5 @@ export function usePanelWidth(sidebarCollapsed: boolean) {
     setPreferred(next);
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* The window remains usable if storage is unavailable. */ }
   }, [maximum]);
-  return { panelWidth: Math.min(preferred, maximum), panelMaxWidth: maximum, resizePanel };
+  return { panelWidth: Math.min(preferred, maximum), panelMaxWidth: maximum, panelOverlay: overlay, resizePanel };
 }

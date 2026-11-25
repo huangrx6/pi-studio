@@ -56,7 +56,10 @@ export function createSkillInstallSession(deps: {
         try { deps.onCommitted?.(result, cwd); }
         catch (error) { if (live) publish({ error: `技能已安装，但完成通知未更新。${message(error)}` }); return; }
         if (!live) return;
-        if (result.projection.status === 'error') { publish({ error: result.projection.message }); return; }
+        if (result.projection.status === 'error') {
+          publish({ error: `技能已安装。${result.projection.message}` });
+          return;
+        }
         await finish();
       });
     },

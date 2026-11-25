@@ -12,7 +12,7 @@ import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { LoadingIndicator, LoadingState } from './LoadingState';
 import { InfoHint } from './InfoHint';
-import { useModalDialog } from './useModalDialog';
+import { useModalDialog, type ModalDismiss } from './useModalDialog';
 import './styles/settings-dialog.css';
 import './styles/settings-form.css';
 
@@ -27,11 +27,11 @@ import './styles/settings-form.css';
  * @param error 错误信息；非空时在底部显示 role="alert"
  * @param onClose 关闭回调；Esc、遮罩点击、取消按钮都会走这里
  * @param onSubmit 表单提交回调；已做 busy/loading/unavailable 守卫
- * @param showBackdrop 是否压暗背景。设置页内的查看/编辑弹框应关闭视觉遮罩；
- *   应用级破坏性确认仍保留遮罩，以明确当前操作的模态边界。
  * @param children 表单字段
  */
 export function SettingsDialog({
+  className = '',
+  wide = false,
   title,
   hint,
   description,
@@ -43,14 +43,16 @@ export function SettingsDialog({
   unavailable,
   error,
   onClose,
+  onRequestClose,
   onSubmit,
   children,
   autoFocusFirstField = true,
   scrollResetKey,
   footerHint,
-  showBackdrop = true,
   fieldsDisabled = false,
 }: {
+  className?: string;
+  wide?: boolean;
   title: string;
   hint?: string;
   description?: string;
@@ -62,16 +64,16 @@ export function SettingsDialog({
   unavailable?: boolean;
   error: string | null;
   onClose: () => void;
-  onSubmit: () => void;
+  onRequestClose?: (dismiss: ModalDismiss) => void;
+  onSubmit: (dismiss: ModalDismiss) => void;
   children: ReactNode;
   autoFocusFirstField?: boolean;
   scrollResetKey?: unknown;
-  footerHint?: ReactNode;
-  showBackdrop?: boolean;
+  footerHint?: ReactNode | ((dismiss: ModalDismiss) => ReactNode);
   /** A committed write may need only a projection retry; its inputs are read-only. */
   fieldsDisabled?: boolean;
 }) {
-  const { dialogRef, onKeyDown } = useModalDialog();
+  const { dialogRef, onKeyDown, dismiss } = useModalDialog();
   const bodyRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const descriptionId = useId();
@@ -80,7 +82,7 @@ export function SettingsDialog({
     const dialog = dialogRef.current;
     const body = bodyRef.current;
     const fields = body?.querySelector('fieldset');
-    if (loading || !dialog || !body || !fields) return;
+    if (wide || loading || !dialog || !body || !fields) return;
 
     // A wider layout can remove its own overflow. Keep that width for this step
     // so editing a field never makes the dialog switch back and forth.
@@ -97,33 +99,48 @@ export function SettingsDialog({
       observer.disconnect();
       delete dialog.dataset.formLayout;
     };
-  }, [dialogRef, loading, scrollResetKey]);
+  }, [dialogRef, loading, scrollResetKey, wide]);
 
   // 配置读取完成后回到内容顶部，并按需聚焦第一个可编辑字段。预览类弹框
   // 可以关闭自动聚焦，避免唯一输入控件是末尾的同意复选框时把正文滚到底部。
   useEffect(() => {
     if (loading) return;
     const frame = requestAnimationFrame(() => {
-      if (bodyRef.current) bodyRef.current.scrollTop = 0;
-      if (autoFocusFirstField) {
-        dialogRef.current?.querySelector<HTMLElement>('input:not(:disabled), select:not(:disabled), textarea:not(:disabled)')?.focus();
-      }
+      const body = bodyRef.current;
+      if (!body) return;
+      body.scrollTop = 0;
+      if (!autoFocusFirstField) return;
+      // A disclosure may keep its fields mounted while closed. Start at an
+      // editable control in the visible step, including custom select buttons.
+      const fields = body.querySelectorAll<HTMLElement>('input:not([type="hidden"]), textarea, select, .pi-select-trigger, .pi-date-trigger');
+      const field = [...fields].find(item => !item.matches(':disabled, [readonly]') && item.tabIndex >= 0 &&
+        !item.closest('details:not([open])') && item.checkVisibility({ checkVisibilityCSS: true }) &&
+        item.getBoundingClientRect().bottom <= body.getBoundingClientRect().bottom);
+      // Keep explicit focus set by a field as the step loads.
+      if (body.contains(document.activeElement) && document.activeElement?.checkVisibility({ checkVisibilityCSS: true })) return;
+      field?.focus({ preventScroll: true });
     });
     return () => cancelAnimationFrame(frame);
   }, [autoFocusFirstField, loading, scrollResetKey]);
 
-  return <dialog ref={dialogRef} className={`settings-dialog ${showBackdrop ? '' : 'is-backdropless'}`} aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}
+  function requestClose() {
+    if (busy || dialogRef.current?.hasAttribute('data-modal-closing')) return;
+    if (onRequestClose) onRequestClose(dismiss);
+    else void dismiss(onClose);
+  }
+
+  return <dialog ref={dialogRef} className={`settings-dialog native-dialog-motion ${className}`.trim()} data-size={wide ? 'wide' : undefined} aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}
     // 阻止 Esc 冒泡到全局快捷键，并在统一组件内维持完整的焦点闭环。
     onKeyDown={onKeyDown}
-    onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}
+    onCancel={(event) => { event.preventDefault(); requestClose(); }}
     // 原生 dialog 点击遮罩时 target 是 dialog 本身；再判断坐标是否落在内容矩形外，
     // 防止点在 dialog 的内边距上也被当作“点击外部”。
     onClick={(event) => {
       if (event.target !== event.currentTarget || busy) return;
       const bounds = event.currentTarget.getBoundingClientRect();
-      if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose();
+      if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) requestClose();
     }}>
-    <form onSubmit={(event) => { event.preventDefault(); if (!busy && !loading && !unavailable) onSubmit(); }}>
+    <form onSubmit={(event) => { event.preventDefault(); if (!busy && !loading && !unavailable && !dialogRef.current?.hasAttribute('data-modal-closing')) onSubmit(dismiss); }}>
       <header className="dialog-header">
         <div>
           <div className="dialog-title-row">
@@ -132,7 +149,7 @@ export function SettingsDialog({
           </div>
           {description && <p id={descriptionId}>{description}</p>}
         </div>
-        <button className="icon-button" type="button" disabled={busy} aria-label="关闭弹框" onClick={onClose}><X /></button>
+        <button className="icon-button" type="button" disabled={busy} aria-label="关闭弹框" onClick={requestClose}><X /></button>
       </header>
       <div className="dialog-body" ref={bodyRef}>
         {/* loading 时不渲染 children：部分字段可能依赖异步配置，提前挂载会闪空值。 */}
@@ -140,8 +157,10 @@ export function SettingsDialog({
       </div>
       {error && <div className="dialog-error" role="alert">{error}</div>}
       <footer className="dialog-footer">
-        {footerHint && <div className="dialog-footer-hint" role="status" aria-live="polite">{footerHint}</div>}
-        <button type="button" className="settings-outline" disabled={busy} onClick={onClose}>{closeLabel}</button>
+        {footerHint && (typeof footerHint === 'function'
+          ? <div className="dialog-footer-hint">{footerHint(dismiss)}</div>
+          : <div className="dialog-footer-hint" role="status" aria-live="polite">{footerHint}</div>)}
+        <button type="button" className="settings-outline" disabled={busy} onClick={requestClose}>{closeLabel}</button>
         <button type="submit" className="settings-save" disabled={busy || loading || unavailable}>{busy && <LoadingIndicator />}{busy ? busyAction : action}</button>
       </footer>
     </form>

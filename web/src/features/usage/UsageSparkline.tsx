@@ -5,7 +5,7 @@ function compact(value: number): string {
 }
 
 /**
- * 近 30 天每日 Token 趋势：40px 高、单色、无坐标轴。
+ * 近 30 天每日 Token 的单色趋势线。
  * 细节数值由热力图承担，这里只表达走向；空数据不输出任何图形。
  */
 export function UsageSparkline({ daily }: { daily: UsageAnalyticsSnapshot['daily'] }) {

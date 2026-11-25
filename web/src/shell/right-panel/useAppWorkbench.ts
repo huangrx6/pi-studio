@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TurnDiff, TurnDiffFile } from '../../types/chat-types';
+import type { ExtensionUiItem } from '../../types/extension-types';
+import type { GitTab } from '../../types/git-types';
 import type {
   PanelFile,
   PanelFileSource,
   PanelTab,
 } from '../app-types';
 import { destroyTemporary } from '../../features/conversation/temporary-chat-store';
+import type { BrowserLibraryView } from '../../features/browser/browser-history';
 import { errorText } from '../../shared/error-text';
 import { createPanelFileCache, panelFileKey } from './panel-file-cache';
 import { usePanelWidth } from './usePanelWidth';
@@ -14,7 +17,9 @@ type AppWorkbenchDependencies = {
   workspace: string;
   workspaceRef: { current: string };
   sessionId?: string;
+  sessionCwd?: string;
   sessionRef: { current: { id: string; cwd: string } | null };
+  showTrace: boolean;
   sidebarCollapsed: boolean;
   setError: (message: string | null) => void;
 };
@@ -24,20 +29,40 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     workspace,
     workspaceRef,
     sessionId,
+    sessionCwd,
     sessionRef,
+    showTrace,
     sidebarCollapsed,
     setError,
   } = deps;
 
   const [filesOpen, setFilesOpen] = useState(false);
+  const filesOpenRef = useRef(filesOpen);
+  filesOpenRef.current = filesOpen;
   const [treePath, setTreePath] = useState('');
   const [entries, setEntries] = useState<Array<{ name: string; path: string; type: 'file' | 'directory'; size: number }>>([]);
   const [file, setFile] = useState<PanelFile | null>(null);
   const fileCacheRef = useRef(createPanelFileCache<PanelFile>());
   const fileReadRef = useRef(0);
+  const fileActionsRequestRef = useRef(0);
+  const deferredFileRefreshRef = useRef<string | null>(null);
+  const filesChangedHandlerRef = useRef<(keys: string[]) => void>(() => {});
+  const changesDuringFileReads = useRef(new Set<Set<string>>());
   const [fileError, setFileError] = useState<string | null>(null);
-  const [panelTabs, setPanelTabsState] = useState<PanelTab[]>([]);
+  const [allTabs, setPanelTabsState] = useState<PanelTab[]>([]);
   const panelTabsRef = useRef<PanelTab[]>([]);
+  const cwd = sessionCwd || workspace;
+  const contextKey = sessionId || `workspace:${cwd}`;
+  const lastTabByContext = useRef(new Map<string, string>());
+  const previousContext = useRef(contextKey);
+  const tabIsVisible = useCallback((tab: PanelTab) => {
+    if (tab.kind === 'trace') return showTrace && tab.sessionId === sessionId;
+    if (tab.kind === 'progress' || tab.kind === 'subagents') return tab.sessionId === sessionId;
+    if (tab.kind === 'git') return Boolean(sessionId) && tab.cwd === cwd;
+    if (tab.kind === 'extension') return Boolean(tab.extensionPanel?.global) || (tab.cwd === cwd && tab.sessionId === sessionId);
+    return true;
+  }, [cwd, sessionId, showTrace]);
+  const panelTabs = useMemo(() => allTabs.filter(tabIsVisible), [allTabs, tabIsVisible]);
   const setPanelTabs = (update: PanelTab[] | ((tabs: PanelTab[]) => PanelTab[])) => {
     const next = typeof update === 'function' ? update(panelTabsRef.current) : update;
     panelTabsRef.current = next;
@@ -48,7 +73,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
   const [activePanelTabId, setActivePanelTabIdState] = useState('');
   const activePanelTabIdRef = useRef('');
   const [panelFullscreen, setPanelFullscreen] = useState(false);
-  const { panelWidth, panelMaxWidth, resizePanel } = usePanelWidth(sidebarCollapsed);
+  const { panelWidth, panelMaxWidth, panelOverlay, resizePanel } = usePanelWidth(sidebarCollapsed);
   const [panelResizing, setPanelResizing] = useState(false);
   const panelDrag = useRef<{ x: number; width: number } | null>(null);
   const [panelEntered, setPanelEntered] = useState(false);
@@ -69,11 +94,14 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
   function setActivePanelTabId(id: string) {
     if (activePanelTabIdRef.current !== id) {
       ++fileReadRef.current;
+      ++fileActionsRequestRef.current;
+      deferredFileRefreshRef.current = null;
       setFile(null); setFileBusy(false); setFileError(null);
       setFileMenuOpen(false); setFileApps([]); setFileAppsLoading(false);
     }
     activePanelTabIdRef.current = id;
     setActivePanelTabIdState(id);
+    lastTabByContext.current.set(contextKey, id);
   }
 
   /** 加载目录内容；路径为空表示工作区根目录。 */
@@ -142,12 +170,6 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     if (filesOpen) setPanelEntered(true); else openPanel();
   }
 
-  function openWorkspaceTool(kind: 'comparison' | 'storyboard', title: string) {
-    setPanelTabs(current => current.some(tab => tab.id === kind) ? current : [...current, { id: kind, kind, title }]);
-    setActivePanelTabId(kind);
-    if (filesOpen) setPanelEntered(true); else openPanel();
-  }
-
   function openTerminalTab() {
     const id = `terminal:${crypto.randomUUID()}`;
     setPanelTabs(current => {
@@ -167,12 +189,13 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
    * Open (or reuse) the in-app browser panel. Extra calls open a new guest tab
    * inside the shell instead of stacking another workbench tab.
    */
-  function openBrowserTab(url = '', options: { commandRequestId?: string } = {}) {
+  function openBrowserTab(url = '', options: { commandRequestId?: string; library?: BrowserLibraryView } = {}) {
+    const browserLibrary = options.library ? { id: crypto.randomUUID(), view: options.library } : undefined;
     const existing = panelTabsRef.current.find((tab) => tab.kind === 'browser');
     if (existing) {
       setPanelTabs((current) => current.map((tab) => (
         tab.id === existing.id
-          ? {
+          ? browserLibrary ? { ...tab, browserLibrary } : {
               ...tab,
               url,
               openNonce: (tab.openNonce ?? 0) + 1,
@@ -192,6 +215,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
       url,
       openNonce: 0,
       commandRequestId: options.commandRequestId,
+      browserLibrary,
     }]);
     setActivePanelTabId(id);
     if (filesOpen) setPanelEntered(true); else openPanel();
@@ -206,12 +230,44 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     if (filesOpen) setPanelEntered(true); else openPanel();
   }
 
-  function openProgressTab() {
-    if (!panelTabsRef.current.some(tab => tab.kind === 'progress')) {
-      setPanelTabs(current => [...current, { id: 'progress', kind: 'progress', title: '会话进展' }]);
-    }
-    setActivePanelTabId('progress');
-    if (!panelEntered || panelCloseTimerRef.current !== null) openPanel();
+  function openToolTab(tab: PanelTab) {
+    setPanelTabs(tabs => tabs.some(item => item.id === tab.id)
+      ? tabs.map(item => item.id === tab.id ? { ...item, ...tab, title: item.customTitle ? item.title : tab.title } : item)
+      : [...tabs, tab]);
+    activatePanelTab(tab);
+    if (filesOpen && panelCloseTimerRef.current === null) setPanelEntered(true);
+    else openPanel();
+  }
+
+  function openProgressTab(progressPage?: PanelTab['progressPage']) {
+    if (!sessionId) return;
+    openToolTab({ id: `progress:${sessionId}`, kind: 'progress', title: '进展', sessionId, ...(progressPage && { progressPage }) });
+  }
+
+  function openTraceTab() {
+    if (!sessionId) return;
+    openToolTab({ id: `trace:${sessionId}`, kind: 'trace', title: '轨迹', sessionId });
+  }
+
+  function openSubagentsTab(childKey?: string) {
+    if (!sessionId) return;
+    openToolTab({ id: `subagents:${sessionId}`, kind: 'subagents', title: '子智能体', sessionId, childKey });
+  }
+
+  function openGitTab(gitPage?: GitTab) {
+    if (!cwd || !sessionId) return;
+    openToolTab({ id: `git:${cwd}`, kind: 'git', title: 'Git', cwd, ...(gitPage && { gitPage }) });
+  }
+
+  function openExtensionTab(item: Pick<ExtensionUiItem, 'id' | 'extensionId' | 'extensionName' | 'taskBoard'>) {
+    const global = Boolean(item.taskBoard);
+    openToolTab({
+      id: JSON.stringify(global ? ['extension', item.id] : ['extension', cwd, sessionId ?? null, item.extensionId]),
+      kind: 'extension',
+      title: item.extensionName,
+      ...(!global && { cwd, sessionId }),
+      extensionPanel: { extensionId: item.extensionId, panelId: item.id, global },
+    });
   }
 
   function openServicesTab() {
@@ -308,8 +364,11 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     }
     const key = panelFileKey(identity);
     const cache = fileCacheRef.current;
+    if (deferredFileRefreshRef.current === tab.id) deferredFileRefreshRef.current = null;
     const request = ++fileReadRef.current;
     const token = cache.begin(key);
+    const changes = new Set<string>();
+    changesDuringFileReads.current.add(changes);
     const current = () => request === fileReadRef.current && activePanelTabIdRef.current === tab.id;
     setFileBusy(true); setFileError(null);
     try {
@@ -320,14 +379,23 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
           : source === 'external'
             ? await loadExternalPreview(tab.path, tab.cwd, tab.sessionId)
             : await loadWorkspaceFile(tab.cwd!, tab.path, tab.sessionId);
-      // A closed/reopened tab has a different read token. Never revive its data.
-      if (!panelTabsRef.current.some(item => item.id === tab.id) || !cache.put(key, token, content)) return true;
+      // An update can arrive before the first read reveals the file's identity.
+      if (!cache.current(key, token) || !panelTabsRef.current.some(item => item.id === tab.id)) return true;
+      const changeKey = content.preview?.changeKey ?? content.changeKey;
+      if (changeKey && changes.has(changeKey)) {
+        if (!current()) return true;
+        if (filesOpenRef.current) return loadFileToTab(tab);
+        deferredFileRefreshRef.current = tab.id;
+        return true;
+      }
+      cache.put(key, token, content);
       if (current()) setFile(content);
       return true;
     } catch (error) {
       if (current() && cache.current(key, token)) setFileError(errorText(error));
       return false;
     } finally {
+      changesDuringFileReads.current.delete(changes);
       cache.finish(key, token);
       if (current()) setFileBusy(false);
     }
@@ -376,17 +444,17 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
 
   /** 关闭标签；最后一个标签关闭后直接收起工作台。 */
   function closePanelTab(id: string) {
-    const current = panelTabsRef.current;
+    const current = panelTabsRef.current.filter(tabIsVisible);
     const index = current.findIndex((tab) => tab.id === id);
     if (index < 0) return;
     disposePanelTab(current[index]);
     const next = current.filter((tab) => tab.id !== id);
-    setPanelTabs(next);
+    setPanelTabs(tabs => tabs.filter(tab => tab.id !== id));
     if (next.length === 0) {
       setActivePanelTabId('');
       setFile(null);
       setPanelSplit(false);
-      if (typeof closePanel === 'function') closePanel();
+      closePanel();
       return;
     }
     if (activePanelTabIdRef.current === id) {
@@ -426,17 +494,18 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
   }
 
   function closePanelTabs(id: string, scope: 'left' | 'right' | 'others' | 'all') {
-    const current = panelTabsRef.current;
+    const current = panelTabsRef.current.filter(tabIsVisible);
     const index = current.findIndex(tab => tab.id === id);
     if (index < 0) return;
     const next = current.filter((tab, i) => scope === 'left' ? i >= index : scope === 'right' ? i <= index : scope === 'others' ? tab.id === id : false);
-    for (const tab of current) if (!next.some(item => item.id === tab.id)) disposePanelTab(tab);
-    setPanelTabs(next);
+    const removed = current.filter(tab => !next.some(item => item.id === tab.id));
+    for (const tab of removed) disposePanelTab(tab);
+    setPanelTabs(tabs => tabs.filter(tab => !removed.some(item => item.id === tab.id)));
     if (!next.length) {
       setActivePanelTabId('');
       setFile(null);
       setPanelSplit(false);
-      if (typeof closePanel === 'function') closePanel();
+      closePanel();
     }
     else if (!next.some(tab => tab.id === activePanelTabIdRef.current)) activatePanelTab(next.find(tab => tab.id === id) ?? next[0]);
   }
@@ -464,14 +533,14 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     setFileAppsLoading(true);
     setFileAppsError('');
     const owner = activePanelTabIdRef.current;
-    const revision = fileReadRef.current;
+    const revision = ++fileActionsRequestRef.current;
     try {
       const result = await window.piApi.fileActions(request);
-      if (owner === activePanelTabIdRef.current && revision === fileReadRef.current) setFileApps(result.apps);
+      if (owner === activePanelTabIdRef.current && revision === fileActionsRequestRef.current) setFileApps(result.apps);
     } catch (error) {
-      if (owner === activePanelTabIdRef.current && revision === fileReadRef.current) setFileAppsError(errorText(error));
+      if (owner === activePanelTabIdRef.current && revision === fileActionsRequestRef.current) setFileAppsError(errorText(error));
     } finally {
-      if (owner === activePanelTabIdRef.current && revision === fileReadRef.current) setFileAppsLoading(false);
+      if (owner === activePanelTabIdRef.current && revision === fileActionsRequestRef.current) setFileAppsLoading(false);
     }
   }
 
@@ -491,18 +560,65 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     catch (error) { setError(errorText(error)); }
   }
 
-  async function saveCurrentFileText(text: string) {
+  async function saveCurrentFileText(text: string, expectedText: string) {
     const tab = panelTabsRef.current.find((item) => item.id === activePanelTabIdRef.current);
     if (!tab || tab.kind !== 'file' || (tab.source && tab.source !== 'workspace') || !tab.path || !tab.cwd) {
       throw new Error('只有工作区文本文件可以编辑');
     }
-    await window.piApi.writeFile({ cwd: tab.cwd, path: tab.path, text });
+    await window.piApi.writeFile({ cwd: tab.cwd, path: tab.path, text, expectedText });
     fileCacheRef.current.drop(panelFileKey({ path: tab.path, source: 'workspace', cwd: tab.cwd, sessionId: tab.sessionId }));
-    await loadFileToTab(tab);
+    if (tab.id === activePanelTabIdRef.current) await loadFileToTab(tab);
   }
 
+  filesChangedHandlerRef.current = keys => {
+    const changed = new Set(keys);
+    for (const pending of changesDuringFileReads.current) for (const key of changed) pending.add(key);
+    const cache = fileCacheRef.current;
+    const activeId = activePanelTabIdRef.current;
+    for (const tab of panelTabsRef.current) {
+      if (tab.kind !== 'file' || !tab.path || !tab.source || tab.source === 'attachment') continue;
+      const identity = { path: tab.path, source: tab.source, cwd: tab.cwd, sessionId: tab.sessionId };
+      const key = panelFileKey(identity);
+      const preview = (tab.id === activeId && activeId === activePanelTabId ? file : null) ?? cache.peek(key);
+      const changeKey = preview?.preview?.changeKey ?? preview?.changeKey;
+      if (!changeKey || !changed.has(changeKey)) continue;
+      cache.drop(key);
+      if (tab.id !== activeId) continue;
+      if (filesOpen) void loadFileToTab(tab);
+      else {
+        deferredFileRefreshRef.current = tab.id;
+        ++fileReadRef.current;
+        setFileBusy(false);
+      }
+    }
+  };
+  const hasLiveFileTabs = allTabs.some(tab => tab.kind === 'file' && tab.source !== 'attachment');
+  useLayoutEffect(() => {
+    if (!hasLiveFileTabs) return;
+    return window.piApi.onFilesChanged(keys => filesChangedHandlerRef.current(keys));
+  }, [hasLiveFileTabs]);
+
+  useEffect(() => {
+    if (!filesOpen || deferredFileRefreshRef.current !== activePanelTabIdRef.current) return;
+    const tab = panelTabsRef.current.find(item => item.id === deferredFileRefreshRef.current);
+    if (tab) void loadFileToTab(tab);
+  }, [filesOpen]);
+
   const activePanelTab = panelTabs.find((tab) => tab.id === activePanelTabId) ?? panelTabs[0];
-  const treeVisible = filesOpen && (activePanelTabId === 'files' || panelSplit);
+  const treeVisible = filesOpen && (activePanelTab?.kind === 'files'
+    || panelSplit && ['file', 'diff', 'changes'].includes(activePanelTab?.kind ?? ''));
+
+  useLayoutEffect(() => {
+    const contextChanged = previousContext.current !== contextKey;
+    if (!contextChanged && (panelTabs.some(tab => tab.id === activePanelTabId)
+      || (!activePanelTabId && !panelTabs.length))) return;
+    previousContext.current = contextKey;
+    const remembered = contextChanged ? lastTabByContext.current.get(contextKey) : undefined;
+    const next = panelTabs.find(tab => tab.id === remembered) ?? activePanelTab;
+    if (next) activatePanelTab(next);
+    else setActivePanelTabId('');
+    setTabMenu(null);
+  }, [contextKey, panelTabs, activePanelTab, activePanelTabId]);
 
   useEffect(() => {
     if (treeVisible && workspace) void loadTree('');
@@ -522,6 +638,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
 
   useEffect(() => () => {
     ++fileReadRef.current;
+    ++fileActionsRequestRef.current;
     ++treeRequestRef.current;
     fileCacheRef.current.clear();
     if (panelCloseTimerRef.current !== null) window.clearTimeout(panelCloseTimerRef.current);
@@ -554,6 +671,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     setPanelFullscreen,
     panelWidth,
     panelMaxWidth,
+    panelOverlay,
     resizePanel,
     panelResizing,
     setPanelResizing,
@@ -586,13 +704,15 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     openPanel,
     closePanel,
     openTemporaryChat,
-    openComparisonTab: () => openWorkspaceTool('comparison', '双跑'),
-    openStoryboardTab: () => openWorkspaceTool('storyboard', '视频分镜'),
     openTerminalTab,
     openBrowserTab,
     openFilesTab,
     openServicesTab,
     openProgressTab,
+    openTraceTab,
+    openSubagentsTab,
+    openGitTab,
+    openExtensionTab,
     loadWorkspacePreview,
     loadFileToTab,
     activatePanelTab,

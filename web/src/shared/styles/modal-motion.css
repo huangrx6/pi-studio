@@ -1,0 +1,67 @@
+dialog:modal::backdrop {
+  background: var(--scrim);
+  backdrop-filter: blur(3px);
+}
+
+.native-dialog-motion[open]:not([data-modal-closing]).settings-dialog,
+.native-dialog-motion[open]:not([data-modal-closing]) > :is(.detail-dialog, .confirm-card) {
+  animation: modal-enter var(--settings-dialog-enter) var(--settings-motion-out) both;
+}
+
+.native-dialog-motion[open][data-modal-closing].settings-dialog,
+.native-dialog-motion[open][data-modal-closing] > :is(.detail-dialog, .confirm-card) {
+  animation: modal-exit var(--settings-dialog-exit) var(--settings-motion-in) both;
+}
+
+.native-dialog-motion[open]:not([data-modal-closing])::backdrop {
+  animation: modal-enter-backdrop var(--settings-dialog-enter) var(--settings-motion-out) both;
+}
+
+.native-dialog-motion[open][data-modal-closing]::backdrop {
+  animation: modal-exit-backdrop var(--settings-dialog-exit) var(--settings-motion-in) both;
+}
+
+.native-dialog-motion[data-modal-closing] :is(button, input, select, textarea, a, summary) { pointer-events: none; }
+
+@keyframes modal-enter {
+  from { opacity: 0; transform: translateY(6px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes modal-exit {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(4px) scale(.99); }
+}
+
+@keyframes modal-enter-backdrop { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-exit-backdrop { from { opacity: 1; } to { opacity: 0; } }
+
+.settings-overlay .pi-select-menu,
+.native-dialog-motion .pi-select-menu,
+.action-menu {
+  animation: settings-popover-enter var(--transition-fast) both;
+  transform-origin: center top;
+}
+
+@keyframes settings-popover-enter {
+  from { opacity: 0; translate: 0 -3px; }
+  to { opacity: 1; translate: none; }
+}
+
+@supports (interpolate-size: allow-keywords) {
+  @media (prefers-reduced-motion: no-preference) {
+    :is(.settings-overlay, .native-dialog-motion) .pi-accordion { interpolate-size: allow-keywords; }
+    :is(.settings-overlay, .native-dialog-motion) .pi-accordion::details-content {
+      block-size: 0;
+      overflow: clip;
+      transition: block-size var(--settings-page-enter) var(--settings-motion-out),
+        content-visibility var(--settings-page-enter) allow-discrete;
+    }
+    :is(.settings-overlay, .native-dialog-motion) .pi-accordion[open]::details-content { block-size: auto; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .native-dialog-motion, .native-dialog-motion > *, .native-dialog-motion::backdrop { animation: none !important; }
+  .action-menu, .pi-select-menu { animation: none !important; }
+}

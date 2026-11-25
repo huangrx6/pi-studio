@@ -4,13 +4,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createStudioDatabase } from '../../electron/main/core/studio-db.cjs';
-import { configureTestModel, launchTestDesktop, selectTestSession } from './fixtures/isolated-desktop.mjs';
+import { configureTestModel, launchTestDesktop, preferenceLayout, selectTestSession } from './fixtures/isolated-desktop.mjs';
 
 const temporary = await realpath(await mkdtemp(path.join(os.tmpdir(), 'pi-usage-projects-')));
 const profile = path.join(temporary, 'profile');
 const active = path.join(temporary, '编辑器');
 const removed = path.join(temporary, '配色实验');
 const output = fileURLToPath(new URL('../../.qa/usage-projects/', import.meta.url));
+
 let app;
 try {
   await Promise.all([active, removed, profile, output].map(dir => mkdir(dir, { recursive: true })));
@@ -31,8 +32,13 @@ try {
   } finally { db.close(); }
   await page.evaluate(id => window.piApi.conversationAction({ action: 'remove', kind: 'workspace', id }), removed);
   await selectTestSession(page, active, activeId);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.locator('.sidebar-bottom button[title="设置"]').click();
   const nav = page.locator('.settings-navigation');
+  await nav.getByRole('button', { name: '通用', exact: true }).click();
+  const generalLayout = await preferenceLayout(page.locator('.general-settings-page'), {
+    section: '.preference-group-head h2', control: '.general-radius-options', description: '.general-setting-description', value: '.preference-current-value',
+  });
   await nav.getByRole('button', { name: '使用量', exact: true }).click();
   const filter = page.getByRole('button', { name: '按项目筛选使用量' });
   const include = page.getByRole('checkbox', { name: '包括已移除项目' });
@@ -47,6 +53,12 @@ try {
     assert.ok((await page.locator('.usage-day-detail').innerText()).includes(tokens + ' tokens'));
   };
   await verify('$4.00', '3,900', 3);
+  const usageLayout = await preferenceLayout(page.locator('.usage-settings'), {
+    section: '.usage-section-head h2', control: '.usage-range-switch', description: '.usage-window-label', value: '.usage-model-numbers strong',
+  });
+  assert.deepEqual(usageLayout, generalLayout, 'usage and general share type, card spacing and both alignment edges');
+  const filterEdges = await page.locator('.usage-section-head > .pi-select').evaluateAll(selects => selects.map(select => select.getBoundingClientRect().right));
+  assert.deepEqual(filterEdges, [generalLayout.innerRight, generalLayout.innerRight]);
   await select('编辑器');
   await verify('$1.25', '1,200', 1);
   await select('未归属用量');

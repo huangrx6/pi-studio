@@ -71,8 +71,10 @@ function CommitDetail({ sessionId, hash, revision, back }: { sessionId: string; 
   useEffect(() => { backButton.current?.focus(); }, []);
   return <section className="git-commit-detail" aria-label="提交详情">
     <div className="git-detail-navigation">
-      <button ref={backButton} type="button" className="git-back" onClick={back}><ArrowLeft />提交历史</button>
       <span className="git-commit-id"><GitCommitHorizontal aria-hidden="true" /><code className="git-full-hash" title={hash}>{hash}</code></span>
+      <button ref={backButton} type="button" className="icon-button" aria-label="返回提交历史" title="返回提交历史" onClick={back}>
+        <ArrowLeft aria-hidden="true" />
+      </button>
     </div>
     {!data && error && <p className="git-history-feedback" role="alert">{error}</p>}
     {!data && !error && <LoadingState variant="section">正在读取提交…</LoadingState>}

@@ -62,9 +62,9 @@ function registerFilesIpc() {
     assertMainWindow(event);
     return readFileText(cwd, requested);
   });
-  ipcMain.handle('pi:file-write', async (event, { cwd, path: requested, text } = {}) => {
+  ipcMain.handle('pi:file-write', async (event, { cwd, path: requested, text, expectedText } = {}) => {
     assertMainWindow(event);
-    return writeFileText(cwd, requested, text);
+    return writeFileText(cwd, requested, text, expectedText);
   });
   // Structured preview for the shared renderer component. The service bounds
   // text/media payloads and never inlines arbitrary binary formats.

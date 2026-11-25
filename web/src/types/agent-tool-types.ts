@@ -1,4 +1,4 @@
-export type AgentToolSourceKind = 'core' | 'package' | 'git' | 'local' | 'inline' | 'extension';
+export type AgentToolSourceKind = 'core' | 'package' | 'git' | 'local' | 'inline' | 'extension' | 'mcp';
 
 export interface AgentToolSource {
   key: string;
@@ -20,6 +20,8 @@ export interface AgentToolSourceSnapshot {
 
 export interface AgentToolInfo {
   name: string;
+  /** MCP methods report their effective server-owned selection. */
+  enabled?: boolean;
   description: string;
   exposure: string;
   source: AgentToolSource;

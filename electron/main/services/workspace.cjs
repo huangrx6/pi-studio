@@ -7,6 +7,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { fileChangeKey } = require('./file-change-events.cjs');
 
 /** 文件搜索 / 目录列举时跳过的目录。 */
 const SEARCH_IGNORED_DIRS = new Set([
@@ -123,13 +124,18 @@ function readFileText(cwd, requested) {
 }
 
 /** 写回工作区内的文本文件，路径与读取使用同一越界校验。 */
-function writeFileText(cwd, requested, text) {
+function writeFileText(cwd, requested, text, expectedText) {
   if (typeof text !== 'string') throw new Error('文件内容无效');
+  if (typeof expectedText !== 'string') throw new Error('文件原始内容无效');
   const target = resolveInWorkspace(cwd, requested);
   const stat = fs.statSync(target);
   if (!stat.isFile()) throw new Error('不是文件');
   const buffer = Buffer.from(text, 'utf8');
   if (buffer.includes(0)) throw new Error('不允许写入二进制内容');
+  const expected = Buffer.from(expectedText, 'utf8');
+  if (stat.size !== expected.length || !fs.readFileSync(target).equals(expected)) {
+    throw new Error('文件已更新，草稿已保留');
+  }
   fs.writeFileSync(target, buffer);
   return { ok: true, path: requested, size: buffer.byteLength };
 }
@@ -141,7 +147,7 @@ function writeFileText(cwd, requested, text) {
 function readAbsoluteFile(requested) {
   if (typeof requested !== 'string' || !path.isAbsolute(requested)) throw new Error('需要绝对路径');
   const target = fs.realpathSync(requested);
-  return readFilePath(requested, target);
+  return { ...readFilePath(requested, target), changeKey: fileChangeKey(target) };
 }
 
 /**

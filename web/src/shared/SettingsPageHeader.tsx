@@ -4,24 +4,25 @@ import './styles/settings-page-header.css';
 /** A page title on the settings surface, separate from its editable cards. */
 export function SettingsPageHeader({
   icon,
+  iconPosition = 'start',
   title,
   meta,
   actions,
   className = '',
 }: {
-  /** Accepted by existing callers; page identity is carried by the title and navigation. */
   icon?: ReactNode;
+  iconPosition?: 'start' | 'end';
   title: string;
   meta?: ReactNode;
   actions?: ReactNode;
   className?: string;
 }) {
-  return <header className={`settings-page-header ${className}`.trim()}>
+  return <header className={`settings-page-header${iconPosition === 'end' ? ' has-trailing-icon' : ''} ${className}`.trim()}>
     <div className="settings-page-header-copy">
+      {icon && <span className="settings-page-header-icon" aria-hidden="true">{icon}</span>}
       <div className="settings-page-header-title">
-        {icon && <span className="settings-page-header-icon" aria-hidden="true">{icon}</span>}
         <h1>{title}</h1>
-        {meta && <span className="settings-page-header-meta">{meta}</span>}
+        {meta && <div className="settings-page-header-meta">{meta}</div>}
       </div>
     </div>
     {actions && <div className="settings-page-header-actions">{actions}</div>}

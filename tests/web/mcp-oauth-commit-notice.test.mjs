@@ -48,16 +48,19 @@ function harness() {
 }
 const committed = projection => ({ committed: true, projection });
 
-test('an OAuth commit after changing workspace or closing detail retains a recovery notice without applying old data', () => {
-  for (const projection of [{ status: 'ready', value: { mcp: ['old A'] } }, { status: 'error', message: 'refresh failed' }]) {
+test('OAuth and method commits after leaving the detail retain their own notices without applying old data', () => {
+  for (const [summary, projection] of [
+    ['MCP 授权状态已更新', { status: 'ready', value: { mcp: ['old A'] } }],
+    ['已停用 search', { status: 'error', message: 'refresh failed' }],
+  ]) {
     const { h, errors, summaries } = harness();
     h.workspaceRef.current = '/B'; h.mcpDetailGenerationRef.current = 4;
-    h.committed(committed(projection), '/A');
+    h.committed(committed(projection), '/A', summary);
     assert.equal(h.resourcePendingRef.current.mcp, true);
     assert.equal(h.mcpOAuthRecoveryRef.current.cwd, '/A');
     assert.equal(h.mcpOAuthRecoveryRef.current.request, 6);
     assert.equal(h.mcpOAuthRecoveryRef.current.generation, 3);
-    assert.deepEqual(summaries, ['MCP 授权状态已更新']);
+    assert.deepEqual(summaries, [summary]);
     assert.deepEqual(errors, ['请刷新当前 MCP 状态。']);
   }
 });

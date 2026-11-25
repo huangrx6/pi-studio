@@ -407,13 +407,19 @@ export function SubagentTranscriptView({
   return <div className="agent-context-view">
     <div className="agent-context-toolbar">
       <div className="agent-context-toolbar-inner">
-        <button ref={back} type="button" className="agent-context-overview" onClick={onOverview}><ArrowLeft />返回列表</button>
         <nav className="agent-context-breadcrumb" aria-label="Agent 上下文路径">
           <span>子智能体</span>
           <ChevronRight />
           <strong>{child.name || child.agent} · {child.index + 1}</strong>
         </nav>
-        <button type="button" className="agent-back-main" onClick={onBackMain}><MessageSquare />返回主智能体</button>
+        <div className="agent-context-actions">
+          <button ref={back} type="button" className="icon-button" aria-label="返回列表" title="返回列表" onClick={onOverview}>
+            <ArrowLeft aria-hidden="true" />
+          </button>
+          <button type="button" className="icon-button" aria-label="返回主智能体" title="返回主智能体" onClick={onBackMain}>
+            <MessageSquare aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </div>
 

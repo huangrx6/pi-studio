@@ -38,7 +38,40 @@ export function installSessionViewsFixture() {
   qa.failHistory = false;
   api.conversationTodoHistory = async ({ id, cursor, limit }) => {
     if (qa.failHistory) throw new Error('暂时无法读取清单');
-    if (new URLSearchParams(location.search).has('empty')) return { items: [], nextCursor: null };
+    const params = new URLSearchParams(location.search);
+    if (params.has('empty')) return { items: [], nextCursor: null };
+    if (params.has('completed-tasks')) {
+      const lists = [
+        ['接入 PDF、图片与音视频预览', '接入 PDF、图片与音视频预览', '迁移 PDF 原文预览并验证页码与引用框', '接入 PPTX 和 XLSX 并保留跳转位置', '移除旧引擎并完成回归'],
+        ['确定接入范围与文件路由', '确定接入范围与文件路由', '安装预览依赖并同步 Worker 资源', '实现可复用的源文件组件', '接入文件路由并保留回退入口', '补充测试并完成构建验证', '验收真实文件与更新文档'],
+        ['清理转发层与旧导出', '清理转发层与旧导出', '拆分知识库工具函数', '拆分大组件', '验证交付清单'],
+      ];
+      const items = lists.map(([title, ...subjects], index) => ({ title, planId: lists.length - index, scope: 'turn',
+        lifecycle: 'ended', tasks: subjects.map((subject, i) => ({ id: i + 1, subject, status: 'completed' })) }));
+      return { items, nextCursor: null };
+    }
+    if (params.has('many-tasks')) {
+      const first = cursor ?? 36;
+      const end = Math.max(0, first - limit);
+      const titles = ['发布前的交互检查', '接入 PDF 原文预览', '整理文件路由'];
+      const subjects = ['核对任务清单的交互', '验证阻塞依赖的展示', '检查键盘焦点顺序', '同步预览资源',
+        '复核页码与引用框', '核对窗口缩放后的间距', '验证归档记录', '更新交付清单'];
+      const items = Array.from({ length: first - end }, (_, i) => {
+        const planId = first - i;
+        return { planId, scope: 'turn', lifecycle: planId === 36 ? 'open' : 'ended', title: titles[36 - planId] ?? '历史检查 ' + planId,
+          tasks: Array.from({ length: 100 }, (_, j) => {
+            const n = j + 1;
+            const subject = planId === 1 && n === 100 ? '旧清单中的 ArchiveNeedle'
+              : planId >= 25 && n === 100 ? '核对首批目录'
+              : planId === 36 && n === 9 ? '核对路径 ' + 'preview/'.repeat(25) + 'index.ts'
+              : subjects[j] ?? '检查记录 ' + n;
+            if (planId === 36 && n <= 3) return { id: n, subject, status: n === 1 ? 'in_progress' : 'pending',
+              ...(n === 2 ? { blockedBy: [1] } : {}) };
+            return { id: n, subject, status: 'completed', ...(n === 7 ? { archivedAt: now } : {}) };
+          }) };
+      });
+      return { items, nextCursor: end || null };
+    }
     const count = id === 'perf-0' ? 15 : 1;
     const first = cursor ?? count;
     const end = Math.max(0, first - limit);
@@ -123,21 +156,19 @@ export function installSessionViewsFixture() {
     ], tools: [{ name: 'read', description: '读取指定文件。', parameters: { type: 'object' } }] };
   };
   const items = [
-    ['monitor', '运行监测', 'builtin', 'usage', '会话用量', '查看本轮的请求数和已记录用量。', '模型请求', '18 次'],
-    ['monitor', '运行监测', 'builtin', 'latency', '请求耗时', '查看最近一次模型响应的计时。', '首个响应', '1.42 秒'],
-    ['workspace', '工作区工具', 'project', 'changes', '变更摘要', '检查当前工作树中有改动的文件。', '变更文件', '3 个'],
+    ['builtin:monitor', '运行监测', 'builtin', 'usage', '会话用量', '查看本轮的请求数和已记录用量。', '模型请求', '18 次'],
+    ['builtin:monitor', '运行监测', 'builtin', 'latency', '请求耗时', '查看最近一次模型响应的计时。', '首个响应', '1.42 秒'],
+    ['project:workspace', '工作区工具', 'project', 'changes', '变更摘要', '检查当前工作树中有改动的文件。', '变更文件', '3 个'],
   ].map(([extensionId, extensionName, scope, contributionId, title, description, label, value], sourceOrder) => ({
     id: `${extensionId}/${contributionId}`, extensionId, extensionName, scope, contributionId, title, description, sourceOrder,
-    slot: 'conversation.detail', slots: ['conversation.detail'], size: 'regular', priority: 0, content: [{ kind: 'keyValue', items: [{ label, value }] }],
+    slot: 'panel.side', slots: ['panel.side'], size: 'regular', priority: 0, content: [{ kind: 'keyValue', items: [{ label, value }] }],
   }));
   api.extensionsUi = async () => ({ items, errors: [], syncedAt: now, apiVersion: 1 });
-  qa.order = { version: 1, layout: 'grid', globalOrder: [], sessionOrders: {} };
+  qa.order = { version: 1, globalOrder: [] };
   api.conversationExtensionUiPreferences = async () => structuredClone(qa.order);
-  api.saveConversationExtensionUiPreferences = async patch => {
-    if (patch.layout) qa.order.layout = patch.layout;
-    if (patch.globalOrder) qa.order.globalOrder = patch.globalOrder;
-    if (patch.sessionId && patch.sessionOrder) qa.order.sessionOrders[patch.sessionId] = patch.sessionOrder;
-    if (patch.sessionOrder === null) delete qa.order.sessionOrders[patch.sessionId];
+  api.saveConversationExtensionUiPreferences = async ({ globalOrder }) => {
+    if (qa.failOrderSave) throw new Error('暂时无法保存扩展顺序');
+    qa.order.globalOrder = globalOrder;
     const saved = structuredClone(qa.order);
     if (qa.holdNextWrite) {
       qa.holdNextWrite = false;

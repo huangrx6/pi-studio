@@ -1,0 +1,191 @@
+.desktop-control-settings { font: var(--settings-preference-body-font); }
+
+/* 2-column macOS permission readiness tiles. */
+.desktop-permission-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+}
+.desktop-permission-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-control);
+  background: var(--settings-page-bg);
+}
+.desktop-permission-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
+}
+.desktop-permission-mark {
+  display: grid;
+  place-items: center;
+  width: var(--space-7);
+  height: var(--space-7);
+  flex: none;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-tag);
+  background: var(--surface);
+  color: var(--muted);
+}
+.desktop-permission-mark svg { width: var(--icon-sm); height: var(--icon-sm); }
+.desktop-permission-head h3 { margin: 0; font: var(--settings-label-font); color: var(--text); }
+.desktop-permission-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-inline-start: auto;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-round);
+  background: var(--surface);
+  color: var(--muted);
+  font: var(--settings-description-font);
+  white-space: nowrap;
+}
+.desktop-permission-pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.desktop-permission-pill[data-tone="ready"] {
+  border-color: color-mix(in srgb, var(--success) 28%, transparent);
+  background: var(--success-soft);
+  color: var(--success);
+}
+.desktop-permission-pill[data-tone="pending"] {
+  border-color: var(--warning-border);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.desktop-permission-tile p {
+  margin: 0;
+  flex: 1;
+  color: var(--muted);
+  font: var(--settings-description-font);
+  overflow-wrap: anywhere;
+}
+.desktop-permission-tile .settings-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+.desktop-permission-tile .settings-outline svg { width: var(--icon-sm); height: var(--icon-sm); }
+
+.desktop-control-row, .desktop-control-app {
+  padding-block: var(--space-2);
+  border-top: 1px solid var(--divider);
+}
+.desktop-control-empty { color: var(--muted); font: var(--settings-description-font); margin: 0; padding-block: var(--space-2); }
+.desktop-load-error { color: var(--error); font: var(--settings-description-font); overflow-wrap: anywhere; }
+
+/* 2-column app allowlist cards. */
+.desktop-control-app-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
+}
+.desktop-control-app-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-control);
+  background: var(--settings-page-bg);
+}
+.desktop-app-remove { flex: none; color: var(--faint); }
+.desktop-app-remove:hover:not(:disabled),
+.desktop-app-remove:focus-visible:not(:disabled) {
+  color: var(--error);
+  background: var(--error-soft);
+}
+
+.desktop-control-app {
+  display: flex; align-items: center; gap: var(--settings-row-gap); min-width: 0; min-height: var(--settings-row-height);
+}
+.desktop-control-app > button { flex: none; }
+.desktop-control-app > svg { flex: none; width: var(--icon-sm); height: var(--icon-sm); color: var(--muted); }
+.desktop-control-app .icon-button svg,
+.desktop-control-app-card .icon-button svg { width: var(--icon-sm); height: var(--icon-sm); }
+
+.desktop-control-app-icon,
+.desktop-control-app-fallback {
+  width: var(--space-8);
+  height: var(--space-8);
+  border-radius: var(--radius-control);
+  flex: none;
+  object-fit: contain;
+  background: var(--surface);
+}
+.desktop-control-app-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: var(--settings-label-font);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.desktop-control-app-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: grid;
+  gap: 2px;
+}
+.desktop-control-app-copy strong {
+  font: var(--settings-label-font);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.desktop-control-app-copy span {
+  font: var(--settings-description-font);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-control-picker {
+  display: grid;
+  gap: var(--space-2);
+  border-top: 1px solid var(--divider);
+  padding-block: var(--space-3);
+}
+.desktop-control-search { min-width: 0; width: 100%; }
+.desktop-control-picker-list {
+  max-height: 16rem;
+  overflow: auto;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-control);
+  background: var(--settings-page-bg);
+}
+.desktop-control-picker-list .desktop-control-app:first-child { border-top: 0; }
+.desktop-control-picker-list button { width: 100%; padding-inline: var(--space-3); text-align: start; color: var(--text); }
+.desktop-control-picker-list button:is(:hover, :focus-visible) { background: var(--surface-hover); }
+.desktop-control-picker-list button:focus-visible { outline-offset: -2px; }
+
+.desktop-control-badge {
+  flex: none;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-tag);
+  font: var(--settings-description-font);
+  white-space: nowrap;
+}
+.desktop-control-badge.is-ok { background: var(--success-soft); color: var(--success); }
+.desktop-control-badge.is-warn { background: var(--error-soft); color: var(--error); }
+
+@container settings-preferences (max-width: 520px) {
+  .desktop-permission-grid,
+  .desktop-control-app-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

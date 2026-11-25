@@ -1,18 +1,36 @@
 .settings-dialog[data-form-layout="wide"] { width: 880px; }
-.settings-dialog .dialog-body { container: settings-form / inline-size; }
-
-@container settings-form (max-width: 480px) {
-  .settings-dialog .settings-form-grid { grid-template-columns: minmax(0, 1fr); }
+.settings-dialog[data-size="wide"] { width: 800px; }
+.settings-dialog .dialog-body {
+  container: settings-form / inline-size;
+  padding: var(--space-1) var(--settings-group-gap) var(--settings-group-gap);
+  overscroll-behavior: contain;
+  scroll-padding-block: var(--space-3);
 }
 
-/* Keep long names and recovery guidance readable without squeezing actions. */
+.settings-dialog .dialog-header { padding: var(--space-4) var(--settings-group-gap); }
 .settings-dialog .dialog-header > div { min-width: 0; }
-.settings-dialog .dialog-title-row { min-width: 0; align-items: baseline; }
-.settings-dialog .dialog-title-row h2 { min-width: 0; overflow-wrap: anywhere; line-height: var(--leading-normal); }
-.settings-dialog .dialog-header > .icon-button { flex: none; }
-.settings-dialog .dialog-footer { flex-wrap: wrap; }
-.settings-dialog .dialog-footer > button { flex-shrink: 0; }
-.settings-dialog .dialog-footer-hint { flex: 1 1 200px; overflow-wrap: anywhere; }
+.settings-dialog .dialog-title-row { min-width: 0; min-height: var(--settings-control-height); align-items: center; }
+.settings-dialog .dialog-header h2 {
+  min-width: 0; margin: 0; overflow-wrap: anywhere;
+  font: var(--weight-semibold) var(--text-lg)/var(--leading-tight) var(--font);
+}
+.settings-dialog .dialog-header p { margin: var(--space-1) 0 0; font: var(--settings-description-font); }
+.settings-dialog .dialog-header > .icon-button {
+  flex: none; width: var(--settings-icon-hit); height: var(--settings-icon-hit); margin: 0;
+}
+.settings-dialog .dialog-footer { flex-wrap: wrap; padding: var(--space-3) var(--settings-group-gap); }
+.settings-dialog .dialog-footer > button {
+  flex-shrink: 0; min-height: var(--settings-control-height); height: auto;
+  padding: var(--space-1) var(--space-4); font: var(--settings-label-font);
+}
+.settings-dialog .dialog-footer-hint { flex: 1 1 200px; font: var(--settings-description-font); overflow-wrap: anywhere; }
+.settings-dialog .dialog-error {
+  margin-inline: var(--settings-group-gap);
+  max-height: 20dvh;
+  overflow: auto;
+  overscroll-behavior: contain;
+  font: var(--settings-description-font);
+}
 .settings-dialog .dialog-body textarea:disabled {
   background: var(--surface-soft);
   color: var(--muted);

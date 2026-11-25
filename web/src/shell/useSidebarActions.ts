@@ -1,5 +1,6 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { ActionConfirmOptions } from '../shared/ConfirmDialog';
+import { useSettingsToast } from '../shared/SettingsToast';
 import type { AppNotificationAction, NotificationTone } from './NotificationCenter';
 import type { SidebarAction } from './SidebarActions';
 import type { PiSessionSummary, PiWorkspace } from './app-types';
@@ -26,6 +27,7 @@ type SessionSummary = {
 
 type SidebarActionsDependencies = {
   workspaces: PiWorkspace[];
+  removeWorkspaceFromList: (cwd: string) => void;
   sessionRef: MutableRefObject<SessionSummary>;
   sessionLoadRef: MutableRefObject<number>;
   workspaceRef: MutableRefObject<string>;
@@ -45,6 +47,7 @@ type SidebarActionsDependencies = {
   clearSessionQueuedPrompts: (sessionId: string) => void;
   queuedEditContextsRef: MutableRefObject<Record<string, QueuedEditContext>>;
   composerDraftsRef: MutableRefObject<Map<string, ComposerDraft>>;
+  persistDeletedComposerSessions: (ids: string[]) => Promise<void>;
   conversationNavigationRef: MutableRefObject<{
     open: (item: PiSessionSummary) => Promise<boolean>;
     start: (cwd: string) => Promise<void>;
@@ -61,6 +64,7 @@ type SidebarActionsDependencies = {
 
 export function useSidebarActions({
   workspaces,
+  removeWorkspaceFromList,
   sessionRef,
   sessionLoadRef,
   workspaceRef,
@@ -75,10 +79,12 @@ export function useSidebarActions({
   clearSessionQueuedPrompts,
   queuedEditContextsRef,
   composerDraftsRef,
+  persistDeletedComposerSessions,
   conversationNavigationRef,
   actionConfirmation,
   pushNotification,
 }: SidebarActionsDependencies) {
+  const showToast = useSettingsToast();
   async function refreshConversationList() {
     if (conversationListRetryRef.current) return;
     conversationListRetryRef.current = true;
@@ -104,51 +110,47 @@ export function useSidebarActions({
       const result = await window.piApi.conversationAction({ kind, id, action, name, ...(options.sessionIds && { sessionIds: options.sessionIds }) });
       conversationListNeedsRefreshRef.current = true;
       ++stateRequestRef.current;
+      const removingWorkspace = kind === 'workspace' && action === 'remove';
+      const removedWorkspace = removingWorkspace ? workspaces.find((item) => item.cwd === id) : undefined;
+      const deletedIds = action === 'remove' || action === 'remove-archived'
+        ? ('deletedSessionIds' in result && result.deletedSessionIds) || (
+          removingWorkspace ? (removedWorkspace?.sessions ?? []).map(item => item.id)
+            : action === 'remove-archived' ? options.sessionIds ?? [] : [id]
+        )
+        : [];
+      if (removingWorkspace) removeWorkspaceFromList(id);
+      if (kind === 'session' && action === 'archive') {
+        clearSessionQueuedPrompts(id);
+        delete queuedEditContextsRef.current[id];
+      }
+      for (const deletedId of deletedIds) {
+        clearSessionQueuedPrompts(deletedId);
+        delete queuedEditContextsRef.current[deletedId];
+      }
       try {
-        if (kind === 'session' && (action === 'archive' || action === 'remove')) {
-          clearSessionQueuedPrompts(id);
-          delete queuedEditContextsRef.current[id];
-        }
-        if (kind === 'workspace' && action === 'remove') {
-          const removedWorkspace = workspaces.find((item) => item.cwd === id);
-          for (const item of removedWorkspace?.sessions ?? []) {
-            clearSessionQueuedPrompts(item.id);
-            delete queuedEditContextsRef.current[item.id];
-          }
-        }
-        if (action === 'remove-archived') {
-          for (const sessionId of options.sessionIds ?? []) {
-            clearSessionQueuedPrompts(sessionId);
-            delete queuedEditContextsRef.current[sessionId];
-            clearComposerDraft(composerDraftsRef.current, composerDraftKeyForSession(sessionId));
-          }
-        }
         const current = sessionRef.current;
         if (action === 'remove-archived' && current && options.sessionIds?.includes(current.id) && generation === sessionLoadRef.current) {
           await conversationNavigationRef.current.start(current.cwd);
         }
-        if (generation === sessionLoadRef.current && kind === 'workspace' && action === 'remove' && workspaceRef.current === id) await conversationNavigationRef.current.start('');
+        if (generation === sessionLoadRef.current && removingWorkspace && workspaceRef.current === id) await conversationNavigationRef.current.start('');
         if (!options.preserveCurrentView && generation === sessionLoadRef.current && kind === 'session' && action === 'archive' && current?.id === id && !targetSummary?.archived) await conversationNavigationRef.current.start(current.cwd);
         if (generation === sessionLoadRef.current && kind === 'session' && action === 'remove' && current?.id === id) await conversationNavigationRef.current.start(current.cwd);
-        if (kind === 'session' && action === 'remove') {
-          clearComposerDraft(composerDraftsRef.current, composerDraftKeyForSession(id));
-        }
-        if (kind === 'workspace' && action === 'remove') {
-          const removedWorkspace = workspaces.find((item) => item.cwd === id);
-          for (const item of removedWorkspace?.sessions ?? []) {
-            clearComposerDraft(composerDraftsRef.current, composerDraftKeyForSession(item.id));
-          }
-          clearComposerDraft(composerDraftsRef.current, composerDraftKeyForNew(id));
-        }
         if (kind === 'session' && action === 'rename' && current?.id === id) {
           setSession(value => value ? { ...value, title: name!.trim() } : value);
         }
       } catch {
         pushNotification('操作已完成，但当前视图未能切换。请从会话列表选择会话。', 'warning', '会话视图待更新');
       }
+      for (const deletedId of deletedIds) {
+        clearComposerDraft(composerDraftsRef.current, composerDraftKeyForSession(deletedId));
+      }
+      if (removingWorkspace) clearComposerDraft(composerDraftsRef.current, composerDraftKeyForNew(id));
+      if (deletedIds.length || removingWorkspace) await persistDeletedComposerSessions(deletedIds);
       try { await loadStateRef.current(); }
       catch { setConversationListRefreshError(true); }
-      if (kind === 'session'
+      if ('pendingFileCleanups' in result && result.pendingFileCleanups) {
+        pushNotification('会话已删除。部分本地文件会在下次启动时重试清理。', 'warning', '会话文件待清理');
+      } else if (kind === 'session'
         && action === 'archive'
         && options.notify !== false
         && targetSummary
@@ -167,7 +169,7 @@ export function useSidebarActions({
             hideSessionLink: true,
           },
         );
-      } else if (kind === 'workspace' && action === 'remove') {
+      } else if (removingWorkspace) {
         const sessions = 'deletedSessions' in result ? Number(result.deletedSessions) || 0 : 0;
         const subagents = 'deletedSubagents' in result ? Number(result.deletedSubagents) || 0 : 0;
         pushNotification(
@@ -177,11 +179,9 @@ export function useSidebarActions({
         );
       } else if (kind === 'session' && action === 'remove') {
         const subagents = 'deletedSubagents' in result ? Number(result.deletedSubagents) || 0 : 0;
-        pushNotification(
-          `会话数据已清理${subagents ? `，同时删除了 ${subagents} 个关联子智能体` : ''}。`,
-          'success',
-          '会话已永久删除',
-        );
+        const message = `会话数据已清理${subagents ? `，同时删除了 ${subagents} 个关联子智能体` : ''}。`;
+        if (options.notify === false) showToast(message);
+        else pushNotification(message, 'success', '会话已永久删除');
       }
       if (action === 'fork' && 'id' in result && result.id) {
         if (generation !== sessionLoadRef.current) {
@@ -202,29 +202,29 @@ export function useSidebarActions({
 
   async function restoreArchivedConversation(item: ConversationSummary) {
     await sidebarAction('session', item.id, 'archive', undefined, { preserveCurrentView: true });
-    pushNotification(`「${item.title}」已恢复到对应工作区。`, 'success', '会话已恢复');
+    showToast(`「${item.title}」已恢复到对应工作区。`);
   }
 
   async function permanentlyDeleteArchivedConversation(item: ConversationSummary) {
     const accepted = await actionConfirmation.confirm({
       title: '永久删除这个归档会话？',
-      description: `「${item.title}」及其全部消息、任务、附件、关联子智能体和 Studio 设置都会被删除，无法恢复。`,
+      description: `「${item.title}」及其消息、任务、附件、画布、关联子智能体和会话设置都会被删除，无法恢复。`,
       confirmLabel: '永久删除',
       tone: 'danger',
     });
-    if (accepted) await sidebarAction('session', item.id, 'remove');
+    if (accepted) await sidebarAction('session', item.id, 'remove', undefined, { notify: false });
   }
 
   async function deleteArchivedGroup(cwd: string, label: string, sessionIds: string[]) {
     const accepted = await actionConfirmation.confirm({
       title: `永久删除这 ${sessionIds.length} 个归档会话？`,
-      description: `将删除「${label}」中选定的 ${sessionIds.length} 个归档会话及其消息、任务、附件和关联子智能体。此操作无法撤销。`,
+      description: `将删除「${label}」中选定的 ${sessionIds.length} 个归档会话及其消息、任务、附件、画布和关联子智能体。此操作无法撤销。`,
       confirmLabel: '永久删除',
       tone: 'danger',
     });
     if (!accepted) return;
     await sidebarAction('workspace', cwd, 'remove-archived', undefined, { sessionIds });
-    pushNotification(`「${label}」中的 ${sessionIds.length} 个归档会话已删除。`, 'success');
+    showToast(`「${label}」中的 ${sessionIds.length} 个归档会话已删除。`);
   }
 
   return {

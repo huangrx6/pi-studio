@@ -1,4 +1,5 @@
 .user-text-disclosure { min-width: 0; white-space: normal; }
+.message-edit .composer-editor { min-height: 84px; max-height: 320px; width: 100%; overflow-y: auto; outline: 0; }
 .user-text-viewport { overflow: hidden; }
 .user-text-disclosure.is-collapsed .user-text-viewport {
   max-height: 5lh;

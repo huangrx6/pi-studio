@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
 import type { MenuBarPreference } from './app-types';
 import { errorText } from '../shared/error-text';
+import { useSettingsToast } from '../shared/SettingsToast';
 import {
   RADIUS_PRESETS,
   loadPreferences,
@@ -12,12 +12,11 @@ import {
 } from '../shared/preferences';
 import { nativeAppearanceChange } from '../shared/appearance-sync';
 
-type Setter<T> = Dispatch<SetStateAction<T>>;
-
-export function useAppAppearance(setSettingsError: Setter<string | null>) {
+export function useAppAppearance() {
+  const showToast = useSettingsToast();
   const [preferences, setPreferences] = useState<Preferences>(() => loadPreferences());
+  const preferenceNotice = useRef<string>();
   const [backgroundBusy, setBackgroundBusy] = useState(false);
-  const [backgroundError, setBackgroundError] = useState<string | null>(null);
   const [menuBarPreference, setMenuBarPreference] = useState<MenuBarPreference>({
     available: false,
     enabled: true,
@@ -27,7 +26,10 @@ export function useAppAppearance(setSettingsError: Setter<string | null>) {
   const nativeAppearanceKeyRef = useRef('');
 
   useEffect(() => {
-    savePreferences(preferences);
+    const notice = preferenceNotice.current;
+    preferenceNotice.current = undefined;
+    const saved = savePreferences(preferences);
+    if (notice) showToast(saved ? notice : '无法保存偏好，本次修改仅在当前窗口生效。', saved ? 'success' : 'error');
     setActivePreferences(preferences);
     const root = document.documentElement;
     root.dataset.theme = resolveTheme(preferences.theme);
@@ -39,11 +41,12 @@ export function useAppAppearance(setSettingsError: Setter<string | null>) {
         preferences.theme,
         preferences.palette,
         preferences.radiusStyle,
-      ).catch(() => {
+      ).catch((error) => {
         // A later preference edit may retry the native projection. Renderer
         // appearance remains available in the meantime.
         if (nativeAppearanceKeyRef.current === nativeAppearance.key) {
           nativeAppearanceKeyRef.current = '';
+          if (notice && saved) showToast(`偏好已保存，窗口外观同步失败。${errorText(error)}`, 'error');
         }
       });
     }
@@ -59,7 +62,7 @@ export function useAppAppearance(setSettingsError: Setter<string | null>) {
     const onChange = () => { root.dataset.theme = media.matches ? 'dark' : 'light'; };
     media.addEventListener('change', onChange);
     return () => media.removeEventListener('change', onChange);
-  }, [preferences]);
+  }, [preferences, showToast]);
 
   useEffect(() => {
     let active = true;
@@ -70,19 +73,22 @@ export function useAppAppearance(setSettingsError: Setter<string | null>) {
   }, []);
 
   function updatePreference<K extends keyof Preferences>(key: K, value: Preferences[K]) {
-    setPreferences((current) => ({ ...current, [key]: value }));
+    if (Object.is(preferences[key], value)) return;
+    if (document.querySelector('.settings-overlay')) {
+      preferenceNotice.current = key === 'backgroundMedia' && value === null ? '背景已移除' : '已保存';
+    }
+    setPreferences((current) => Object.is(current[key], value) ? current : { ...current, [key]: value });
   }
 
   async function chooseBackground() {
     setBackgroundBusy(true);
-    setBackgroundError(null);
     try {
       const media = await window.piApi.chooseBackgroundMedia({
         replaceUrl: preferences.backgroundMedia?.url,
       });
       if (media) updatePreference('backgroundMedia', media);
     } catch (error) {
-      setBackgroundError(errorText(error));
+      showToast(errorText(error), 'error');
     } finally {
       setBackgroundBusy(false);
     }
@@ -92,14 +98,13 @@ export function useAppAppearance(setSettingsError: Setter<string | null>) {
     const media = preferences.backgroundMedia;
     if (!media) return;
     setBackgroundBusy(true);
-    setBackgroundError(null);
     try {
       await window.piApi.removeBackgroundMedia(media.url);
       // Only clear the preference after the app-owned file is gone, so a failed
       // delete leaves the preview and settings in a recoverable state.
       updatePreference('backgroundMedia', null);
     } catch (error) {
-      setBackgroundError(errorText(error));
+      showToast(errorText(error), 'error');
     } finally {
       setBackgroundBusy(false);
     }
@@ -113,9 +118,10 @@ export function useAppAppearance(setSettingsError: Setter<string | null>) {
     try {
       const next = await window.piApi.setMenuBarVisible(enabled);
       if (next) setMenuBarPreference(next);
+      showToast('菜单栏设置已保存');
     } catch (error) {
       setMenuBarPreference(previous);
-      setSettingsError(errorText(error));
+      showToast(errorText(error), 'error');
     } finally {
       setMenuBarBusy(false);
     }
@@ -127,14 +133,13 @@ export function useAppAppearance(setSettingsError: Setter<string | null>) {
         ? { ...current, backgroundMedia: null }
         : current
     ));
-    setBackgroundError('背景文件已不可用，请重新选择。');
+    showToast('背景文件已不可用，请重新选择。', 'error');
     void window.piApi.removeBackgroundMedia(url).catch(() => {});
   }
 
   return {
     preferences,
     backgroundBusy,
-    backgroundError,
     menuBarPreference,
     menuBarBusy,
     updatePreference,

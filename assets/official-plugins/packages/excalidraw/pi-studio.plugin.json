@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "kind": "plugin",
+  "id": "studio.excalidraw",
+  "name": "Excalidraw",
+  "version": "1.1.0",
+  "publisher": "Pi Studio",
+  "description": "在聊天旁边实时绘制图形，继续手动编辑，并保存为可编辑的 Excalidraw 文件。",
+  "category": "productivity",
+  "homepage": "https://excalidraw.com/",
+  "icon": "assets/icon.png",
+  "provides": {
+    "extension": { "path": "extension" },
+    "skills": [{ "path": "extension/skills/excalidraw-live-canvas" }]
+  }
+}

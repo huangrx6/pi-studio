@@ -14,7 +14,7 @@ const output = path.join(root, '.qa/settings-completion'); await mkdir(output, {
 const result = { checks: [], screenshots: [], pageErrors: [], blockedRequests: [], assets: (await readFile(path.join(root, 'dist/renderer/index.html'), 'utf8')).match(/assets\/[^"']+\.(?:js|css)/g) };
 const server = await serveProductionRenderer(root); let browser; let page;
 const nav = () => page.locator('.settings-navigation'); const content = () => page.locator('.settings-content');
-const sub = () => page.locator('.subagent-settings'); const usage = () => page.locator('.usage-settings');
+const sub = () => page.getByRole('dialog', { name: '共用运行默认值', exact: true }); const usage = () => page.locator('.usage-settings');
 const subagentAdvanced = () => sub().locator('.subagent-advanced');
 const numeric = (name) => sub().getByRole('spinbutton', { name: new RegExp(`^${name}`) });
 async function settle() { await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))); }
@@ -26,15 +26,26 @@ async function calls(method, expected) { await page.waitForFunction(({ method, e
 async function select(label, option, scope = content()) { await scope.getByRole('button', { name: label, exact: true }).click(); await page.getByRole('option').filter({ has: page.locator('.pi-select-option-label', { hasText: new RegExp(`^${option}$`) }) }).click(); await settle(); }
 async function showSubagentAdvanced() {
   await subagentAdvanced().waitFor();
-  if (!await subagentAdvanced().getAttribute('open')) await subagentAdvanced().locator('summary').click();
-  await subagentAdvanced().locator('.subagent-field-grid').waitFor();
+  if (!await subagentAdvanced().evaluate(details => details.open)) await subagentAdvanced().locator('summary').click();
+  await numeric('最大并发').waitFor();
   await settle();
 }
 function dialog(title) { return page.getByRole('dialog', { name: title, exact: true }).or(page.getByRole('alertdialog', { name: title, exact: true })); }
 async function confirm(title, action = '取消') { const modal = dialog(title); await modal.waitFor(); await modal.getByRole('button', { name: action, exact: true }).click(); await modal.waitFor({ state: 'detached' }); await settle(); }
-async function openSettings(route) { if (!await nav().count()) await page.locator('.sidebar-bottom button[title="设置"]').click(); await nav().getByRole('button', { name: route, exact: true }).click(); }
+async function closeDefaults() {
+  if (!await sub().isVisible()) return;
+  await sub().getByRole('button', { name: '关闭', exact: true }).click();
+  await sub().waitFor({ state: 'detached' });
+}
+async function openSettings(route) {
+  if (route === '子智能体' && await sub().isVisible()) return;
+  await closeDefaults();
+  if (!await nav().count()) await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await nav().getByRole('button', { name: route, exact: true }).click();
+  if (route === '子智能体') await content().getByRole('button', { name: '共用运行默认值', exact: true }).click();
+}
 async function openSession(id) { await command('open', id); await page.locator('.chat-heading h1').filter({ hasText: id === 'perf-0' ? '性能会话 0000' : '性能会话 0001' }).waitFor(); }
-async function theme(value, route) { await nav().getByRole('button', { name: '通用', exact: true }).click(); await content().getByRole('button', { name: value, exact: true }).click(); await nav().getByRole('button', { name: route, exact: true }).click(); }
+async function theme(value, route) { await openSettings('通用'); await content().getByRole('button', { name: value, exact: true }).click(); await openSettings(route); }
 async function capture(name) { await settle(); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${name} horizontal overflow`); await page.screenshot({ path: path.join(output, `${name}.png`), animations: 'disabled' }); result.screenshots.push(name); }
 try {
   browser = await chromium.launch({ executablePath: process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
@@ -49,6 +60,16 @@ try {
   await subagentAdvanced().waitFor();
   assert.equal(await numeric('最大并发').isVisible(), false, 'advanced runtime limits stay collapsed by default');
   assert.match(await subagentAdvanced().locator('summary').innerText(), /4 并发[\s\S]*工作树上限 8[\s\S]*预算不限/);
+  const viewport = page.viewportSize();
+  await page.setViewportSize({ width: 480, height: 640 });
+  const narrowModelGrid = sub().getByRole('region', { name: '模型与思考' }).locator('.subagent-model-grid');
+  assert.equal(await narrowModelGrid.evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length), 1);
+  await sub().getByRole('searchbox', { name: '搜索工具' }).scrollIntoViewIfNeeded();
+  const body = sub().locator('.dialog-body');
+  assert.ok(await body.evaluate(node => node.scrollTop > 0 && node.scrollWidth <= node.clientWidth + 1));
+  await sub().getByRole('button', { name: '关闭', exact: true }).click({ trial: true });
+  assert.ok(await body.evaluate(node => node.getBoundingClientRect().bottom <= node.closest('form').querySelector('footer').getBoundingClientRect().top + 1));
+  await page.setViewportSize(viewport);
   await showSubagentAdvanced();
   await numeric('最大并发').waitFor();
   assert.equal(await numeric('最大并发').inputValue(), '4');
@@ -58,7 +79,11 @@ try {
   assert.match(await sub().locator('.subagent-tool-summary').innerText(), /沿用父智能体当前工具/);
   await numeric('Token 预算').fill('123000'); await numeric('参考成本预算').fill('1.25');
   await select('子智能体预算超限策略', '阻止新任务', sub());
-  await select('子智能体默认模型', 'QA 推理模型 A', sub()); await select('子智能体默认 thinking', '高', sub());
+  await select('子智能体默认模型', 'QA 推理模型 A', sub()); await select('子智能体默认思考强度', '高', sub());
+  const filter = sub().getByRole('searchbox', { name: '搜索工具' });
+  await filter.fill('read'); await filter.press('Enter');
+  assert.equal(await count('saveSubagentSettings'), 0, 'filtering tools never submits a pending configuration');
+  await filter.fill('');
   const scope = () => sub().getByRole('group', { name: '子智能体配置范围', exact: true });
   const projectScope = () => scope().getByRole('button', { name: '指定工作区', exact: true });
   const userScope = () => scope().getByRole('button', { name: '所有工作区', exact: true });
@@ -69,6 +94,8 @@ try {
   await sub().getByRole('button', { name: '保存配置', exact: true }).click(); await calls('saveSubagentSettings', 2);
   const saved = await page.evaluate(() => window.__settingsCompletionQa.calls.filter((item) => item.method === 'saveSubagentSettings').at(-1));
   assert.equal(saved.scope, 'user'); assert.equal(saved.settings.budgetTokens, 123000); assert.equal(saved.settings.budgetCostUsd, 1.25); assert.equal(saved.settings.budgetAction, 'stop'); assert.equal(saved.settings.defaultModel, 'qa/model-a'); assert.equal(saved.settings.defaultThinking, 'high');
+  await sub().waitFor({ state: 'detached' });
+  await openSettings('子智能体'); await showSubagentAdvanced();
   const readTool = sub().locator('.subagent-tool-row').filter({ has: page.locator('strong', { hasText: /^read$/ }) }).getByRole('checkbox');
   await readTool.focus(); await readTool.press('Space'); assert.equal(await readTool.isChecked(), false);
   await sub().getByRole('checkbox', { name: '允许工具 write', exact: true }).uncheck();
@@ -105,10 +132,12 @@ try {
 
   const leaveTitle = '丢弃未保存的设置更改？';
   await numeric('最大并发').fill('8');
-  await nav().getByRole('button', { name: '子智能体', exact: true }).click();
-  assert.equal(await dialog(leaveTitle).count(), 0, 'same-page navigation preserves draft without confirmation');
-  await nav().getByRole('button', { name: '使用量', exact: true }).click(); await confirm(leaveTitle, '继续编辑');
+  await page.keyboard.press('Escape'); await confirm('放弃未保存更改？');
   assert.equal(await numeric('最大并发').inputValue(), '8');
+  await sub().getByRole('button', { name: '关闭', exact: true }).click(); await confirm('放弃未保存更改？', '放弃更改');
+  await sub().waitFor({ state: 'detached' });
+  await openSettings('子智能体'); await showSubagentAdvanced(); assert.equal(await numeric('最大并发').inputValue(), '4');
+  await numeric('最大并发').fill('8');
   await command('openMain'); await confirm(leaveTitle, '继续编辑'); assert.equal(await numeric('最大并发').inputValue(), '8');
   await command('open', 'perf-1'); await dialog(leaveTitle).waitFor();
   await command('openMain'); await confirm(leaveTitle, '丢弃并离开');
@@ -116,7 +145,7 @@ try {
   await command('openSettings'); await nav().waitFor(); await openSettings('子智能体');
   await showSubagentAdvanced();
   assert.equal(await numeric('最大并发').inputValue(), '4', 'discarded global draft does not persist');
-  await nav().getByRole('button', { name: '使用量', exact: true }).click(); assert.equal(await dialog(leaveTitle).count(), 0);
+  await openSettings('使用量'); assert.equal(await dialog(leaveTitle).count(), 0);
   await openSession('perf-0'); await openSettings('子智能体');
   await showSubagentAdvanced();
   await numeric('最大并发').fill('9'); await hold('saveSubagentSettings', '/qa/synthetic/performance');
@@ -126,17 +155,48 @@ try {
   assert.equal(await numeric('最大并发').isDisabled(), true, 'canceling leave retains submitted pending draft and write lock');
   await command('openMain'); await confirm(leaveTitle, '丢弃并离开'); await nav().waitFor({ state: 'detached' });
   await openSession('perf-1'); await openSettings('子智能体');
-  await page.getByText('正在读取子智能体运行配置…', { exact: true }).waitFor();
+  await sub().getByText('正在读取配置…', { exact: true }).waitFor();
   await command('release', 'saveSubagentSettings');
   await showSubagentAdvanced();
   await page.waitForFunction(() => [...document.querySelectorAll('.subagent-field input')].some((input) => input.value === '9'));
   await projectScope().click(); assert.equal(await numeric('最大并发').inputValue(), '7', 'global settled write does not overwrite B project override');
-  result.checks.push('shared leave guard same-page/no-dirty bypass, cancel keeps draft, native main/session/settings ingress, first pending navigation target wins, pending save leave requires explicit confirmation and remount waits for real global write');
+  result.checks.push('modal Escape, discard/cancel and clean close, native main/session/settings ingress, first pending navigation target wins, pending save leave requires explicit confirmation and remount waits for real global write');
   await openSession('perf-0'); await hold('subagentSettings', '/qa/synthetic/performance'); await openSettings('子智能体'); await pending('subagentSettings');
   await openSession('perf-1'); await openSettings('子智能体'); await showSubagentAdvanced(); await numeric('最大并发').waitFor(); await command('release', 'subagentSettings');
   await projectScope().click(); assert.equal(await numeric('最大并发').inputValue(), '7');
   result.checks.push('late A subagent read cannot replace B scope/config');
-  await openSettings('权限策略');
+  await openSettings('测试凭据');
+  const vault = content().getByRole('region', { name: '已保存的凭据', exact: true });
+  const copyReference = (name) => vault.getByRole('button', { name: `复制凭据引用 ${name}`, exact: true });
+  const copyToast = page.locator('.settings-toast-stack .settings-toast');
+  const geometry = () => vault.evaluate((card) => {
+    const viewport = card.closest('.settings-content');
+    return { height: card.getBoundingClientRect().height, scrollTop: viewport.scrollTop, scrollHeight: viewport.scrollHeight };
+  });
+  await copyReference('QA_COPY_20').waitFor();
+  await content().evaluate((viewport) => { viewport.scrollTop = viewport.scrollHeight; });
+  await settle();
+  const beforeCopy = await geometry();
+  assert.ok(beforeCopy.scrollTop > 0, 'the fixture scrolls with twenty credentials');
+  await hold('clipboardWrite', '{{secret:QA_COPY_19}}');
+  await copyReference('QA_COPY_19').click();
+  await pending('clipboardWrite');
+  await copyReference('QA_COPY_20').click();
+  await copyToast.filter({ hasText: '已复制 QA_COPY_20 的引用。' }).waitFor();
+  await command('release', 'clipboardWrite');
+  assert.match(await copyToast.innerText(), /QA_COPY_20/);
+  assert.deepEqual(await page.evaluate(() => window.__settingsCompletionQa.clipboardWrites), ['{{secret:QA_COPY_19}}', '{{secret:QA_COPY_20}}']);
+  assert.deepEqual(await geometry(), beforeCopy);
+  await capture('secret-reference-copy');
+  await command('fail', 'clipboardWrite');
+  await copyReference('QA_COPY_20').press('Enter');
+  await copyToast.filter({ hasText: 'QA clipboardWrite synthetic failure' }).waitFor();
+  assert.equal(await copyToast.getAttribute('role'), 'alert');
+  assert.deepEqual(await geometry(), beforeCopy);
+  await copyToast.waitFor({ state: 'detached' });
+  assert.deepEqual(await geometry(), beforeCopy);
+  result.checks.push('copying references from a long credential list keeps card geometry and scroll stable across success, failure, and toast dismissal');
+
   const secretForm = page.locator('.secret-vault-form');
   await secretForm.getByPlaceholder('TEST_TOKEN', { exact: true }).fill('QA_NOT_A_REAL_CREDENTIAL');
   await secretForm.getByPlaceholder('输入凭据值', { exact: true }).fill('synthetic-not-a-secret-value');
@@ -173,9 +233,12 @@ try {
   assert.notEqual(await page.evaluate(() => document.activeElement?.getAttribute('data-date')), day);
   assert.equal(await usage().locator('.usage-heat-cell[tabindex="0"]').count(), 1);
   await page.keyboard.press('End'); assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-date')), day);
-  const mixRange = usage().getByRole('group', { name: '模型分布时间范围', exact: true });
-  await mixRange.getByRole('button', { name: '7 天', exact: true }).click(); await settle();
-  await command('fail', 'usageModels'); await mixRange.getByRole('button', { name: '30 天', exact: true }).click();
+  const chooseMixRange = async name => {
+    await usage().getByRole('button', { name: '模型分布时间范围', exact: true }).click();
+    await page.getByRole('option', { name, exact: true }).click();
+  };
+  await chooseMixRange('7 天'); await settle();
+  await command('fail', 'usageModels'); await chooseMixRange('30 天');
   await usage().getByRole('alert').filter({ hasText: 'QA usageModels' }).waitFor(); assert.equal(await usage().locator('.usage-model-list').count(), 0, 'failed new model range cannot masquerade as previous results');
   assert((await usage().locator('.usage-token-bar').count()) > 0, 'model-mix failure does not hide independent summary');
   result.checks.push('accurate token proportions, model filter exact daily value, single-tab-stop heatmap keyboard, new range failure does not relabel old data');
@@ -195,11 +258,11 @@ try {
   assert.equal(await usage().locator('.usage-hero').count(), 0, 'failed new summary range hides stale values');
   assert.equal(await usage().locator('.usage-model-list').count(), 1, 'summary failure leaves independent mix available');
   await usage().getByRole('button', { name: '重试用量', exact: true }).click(); await usage().locator('.usage-hero').waitFor();
-  await hold('usageModels', 7); await mixRange.getByRole('button', { name: '7 天', exact: true }).click(); await pending('usageModels');
-  await mixRange.getByRole('button', { name: '90 天', exact: true }).click(); await usage().locator('.usage-model-list').waitFor();
+  await hold('usageModels', 7); await chooseMixRange('7 天'); await pending('usageModels');
+  await chooseMixRange('90 天'); await usage().locator('.usage-model-list').waitFor();
   const freshMixMeta = await usage().locator('.usage-models-meta').innerText(); await command('release', 'usageModels');
   assert.equal(await usage().locator('.usage-models-meta').innerText(), freshMixMeta, 'late seven-day result cannot overwrite ninety-day mix');
-  await mixRange.getByRole('button', { name: '自定义', exact: true }).click();
+  await chooseMixRange('自定义');
   const fromDate = usage().getByRole('button', { name: /^模型分布起始日期/ }); await fromDate.click();
   await page.getByRole('dialog', { name: '选择模型分布起始日期', exact: true }).getByRole('button', { name: '今天', exact: true }).click(); await settle();
   const singleDay = await page.evaluate(() => window.__settingsCompletionQa.calls.filter((item) => item.method === 'usageModels').at(-1));

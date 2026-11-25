@@ -14,7 +14,7 @@
  */
 
 /* The single source of color for Pi Studio.
- * Page backgrounds stay neutral. Lime is an accent, never a page wash.
+ * The active accent is shared by controls in both themes.
  * Components consume semantic tokens; do not introduce local color literals.
  */
 /* 亮色主题块：先声明 color-scheme 让表单控件和滚动条使用亮色外观，再定义原始
@@ -28,15 +28,14 @@
   组件通过语义令牌使用，避免各自增加深浅色号。
    */
 
-  /* 全局配色预设的原始锚点。当前方案消费对应变量；设置页也会用这些锚点
-  绘制四张卡片预览，避免预览色与真实主题各维护一份。
-  */
-
-  --scheme-lime: #327f68;
+  /* 设置页的强调色色点与当前主题共用这些颜色。 */
   --scheme-ocean: #3b6ed3;
-  --scheme-amber: #a16517;
-  --scheme-berry: #b94c7e;
-  --theme-accent: var(--scheme-lime);
+  --scheme-amber: #cb493f;
+  --scheme-berry: #7c53dd;
+  --theme-accent: var(--scheme-ocean);
+
+  /* 存储分类和 Harness 图标使用的独立色。 */
+  --scheme-lime: #00818a;
 
   /* Available to the launch document before the renderer reads its theme. */
   --launch-ground: light-dark(#f6f7f4, #101715);
@@ -109,6 +108,8 @@
   --error: #b12f36;
   --error-soft: #fff1f2;
   --error-border: #edc2c5;
+  --error-button-hover: #92272d;
+  --error-button-active: #7c2126;
   --warning: #815c13;
   --warning-soft: #fff8e8;
   --warning-border: #e9d4a5;
@@ -158,12 +159,8 @@
   --terminal-ansi-bright-magenta: #7b61a0;
   --terminal-ansi-bright-cyan: #3d8487;
   --terminal-ansi-bright-white: #f5f5f5;
-  /* 设置页设计规范（黑白灰）：只在这套设置面里生效的 15 个令牌，浅色一套、
-  深色一套一一对应。设置页把通用语义角色映射到这些值，工作区其余部分继续
-  使用上面的强调色与语义色，避免把整个应用改成单色。
-   */
-
-  --settings-page-bg: var(--surface-canvas);
+  /* 设置画布与卡片分层，强调色用于操作、焦点和选中态。 */
+  --settings-page-bg: #f8f8f9;
   --settings-nav-bg: var(--surface-chrome);
   --settings-card-bg: var(--surface-raised);
   --settings-border: var(--border);
@@ -181,8 +178,6 @@
   --settings-thumb-shadow: 0 1px 2px rgb(0 0 0 / 20%);
   --settings-switch-off: #d9d9d9;
   --settings-switch-thumb: #ffffff;
-  --settings-accent: #0a0a0a;
-  --settings-on-accent: #ffffff;
   --settings-chart-idle: #e3e3e3;
   /* 热力图需要两档中间灰，规范只定义了当前柱与非当前柱两种。 */
   --settings-chart-soft: #dcdcdc;
@@ -240,6 +235,8 @@
   --error: #ff989e;
   --error-soft: #301d20;
   --error-border: #6b383f;
+  --error-button-hover: #ffaeb3;
+  --error-button-active: #ffc4c8;
   --warning: #e7c273;
   --warning-soft: #2b2519;
   --warning-border: #615033;
@@ -277,17 +274,15 @@
   --shadow-shell: 0 20px 60px rgb(0 0 0 / 45%);
   /* 深色底上同一个占比太淡，选区需要更多强调色才看得见。 */
   --selection: color-mix(in srgb, var(--theme-accent) 44%, var(--surface));
-  /* 设置页设计规范（黑白灰）的深色一套：页面纯黑，靠微小明度差分层。 */
-
   --settings-page-bg: var(--surface-canvas);
   --settings-nav-bg: var(--surface-chrome);
-  --settings-card-bg: var(--surface-raised);
+  --settings-card-bg: #202021;
   --settings-border: var(--border);
   --settings-divider: var(--divider);
   --settings-text: var(--text-1);
   --settings-title: var(--text-1);
   --settings-muted: var(--text-2);
-  --settings-control-bg: var(--surface-floating);
+  --settings-control-bg: #252526;
   --settings-hover-bg: var(--surface-hover);
   --settings-selected-bg: var(--accent-tint);
   --settings-selected-shadow: none;
@@ -295,8 +290,6 @@
   --settings-thumb-shadow: none;
   --settings-switch-off: #3a3a3a;
   --settings-switch-thumb: #d4d4d4;
-  --settings-accent: #ffffff;
-  --settings-on-accent: #000000;
   /* 深色热力图需要与纯黑页面底拉开足够明度差，避免低/中使用量整块消失。 */
   --settings-chart-idle: #3a3a3a;
   --settings-chart-soft: #686868;
@@ -307,7 +300,6 @@
 success/warning/error 等语义状态保持不变，避免配色切换改变状态含义。
 */
 
-:root[data-palette="ocean"] { --theme-accent: var(--scheme-ocean); }
 :root[data-palette="amber"] { --theme-accent: var(--scheme-amber); }
 :root[data-palette="berry"] { --theme-accent: var(--scheme-berry); }
 
@@ -345,7 +337,11 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --button-hover: var(--theme-accent);
   --focus-color: var(--theme-accent);
   --focus-halo: var(--theme-accent);
-  --settings-focus-halo: color-mix(in srgb, var(--settings-muted) 35%, transparent);
+  --settings-focus-halo: color-mix(in srgb, var(--theme-accent) 40%, transparent);
+  --settings-accent-border: color-mix(in srgb, var(--theme-accent) 42%, var(--settings-border));
+  --settings-accent-soft: color-mix(in srgb, var(--theme-accent) 11%, var(--settings-card-bg));
+  --settings-range-track: color-mix(in srgb, var(--settings-muted) 80%, var(--settings-card-bg));
+  --settings-art-surface: color-mix(in srgb, var(--theme-accent) 5%, var(--settings-card-bg));
   /* 选区跟随当前 palette 的强调色混合。纯 selected-bg 灰在深色底上几乎看不出，
   选中文字很难辨认；浅色 30%、深色 44% 让两种底都明显可见。 */
   --selection: color-mix(in srgb, var(--theme-accent) 30%, var(--surface));
@@ -438,6 +434,16 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --trace-model-soft: #a184c422;
   --trace-tool: #d9902d;
   --trace-tool-soft: #d9902d22;
+}
+
+/* Keep both window samples readable regardless of the theme of their parent page. */
+.theme-sample-stage {
+  --sample-paper: light-dark(#ffffff, #23272c);
+  --sample-rail: light-dark(#edeff0, #353a41);
+  --sample-edge: light-dark(#b7c1c1, #596168);
+  --sample-line: light-dark(#a9b1b4, #788189);
+  --sample-ground: light-dark(#e9eeed, #323a40);
+  --sample-shade: light-dark(rgb(40 64 58 / 13%), rgb(0 0 0 / 24%));
 }
 
 /* ---- 终端配色主题 ---------------------------------------------------------

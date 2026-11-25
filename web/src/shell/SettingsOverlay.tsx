@@ -1,7 +1,8 @@
-import { lazy, useEffect, useRef, type ComponentProps, type ReactNode, type RefObject } from 'react';
-import { BookOpen, ChevronLeft, FileCode2, Layers3, Plus, RotateCw } from 'lucide-react';
+import { lazy, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode, type RefObject } from 'react';
+import { BookOpen, ChevronLeft, Plus, RotateCw } from 'lucide-react';
 import { LoadingState } from '../shared/LoadingState';
 import type { DiscoveredModel } from '../features/models/model-settings-types';
+import type { BrowserLibraryView } from '../features/browser/browser-history';
 import type { ModelOption, ModelSelection } from '../types/model-types';
 import type { SettingsDraftGuard } from '../shared/settings-draft-guard';
 import type { PermissionMode } from './app-shell-config';
@@ -9,22 +10,21 @@ import type {
   SettingsSnapshot,
   PiWorkspace,
 } from './app-types';
-import type { SettingsTab } from './app-shell-config';
+import type { PluginWorkspaceSection, SettingsTab } from './app-shell-config';
+import { isPluginWorkspaceTab } from './app-shell-config';
 import type { SettingsWorkspace } from './useSettingsWorkspace';
 import { SettingsDraftContext } from '../shared/SettingsDraftGuard';
 import { DeferredSettingsBoundary } from '../shared/DeferredSettingsBoundary';
-import { SettingsPageHeader } from '../shared/SettingsPageHeader';
-import { InfoHint } from '../shared/InfoHint';
+import { SettingsToast, useSettingsToast } from '../shared/SettingsToast';
 import { errorText } from '../shared/error-text';
-import { ExtensionSlot } from '../features/extensions/ExtensionSlot';
-import { ConversationListNotice } from './ConversationListNotice';
 import { quotaExtensionAvailable } from '../types/provider-quota';
 import { SettingsEditorDialog } from './SettingsEditorDialog';
+import type { ModalDismiss } from '../shared/useModalDialog';
 import { SettingsNavigation } from './SettingsNavigation';
 import { ShellHeader, ShellLayout } from './ShellLayout';
-import { SettingsSavedFlash } from './SettingsSavedFlash';
 import { isComposingKey } from '../shared/keyboard-navigation';
-import { apiTypeOptions, settingsPages } from './app-shell-config';
+import { apiTypeOptions, pluginSettingsSearchPages, settingsPages } from './app-shell-config';
+import { PluginWorkspaceAction, PluginWorkspaceHeader } from '../features/plugins/PluginWorkspaceHeader';
 
 const AgentToolsSettings = lazy(async () => {
   const module = await import('../features/tools/AgentToolsSettings');
@@ -37,6 +37,10 @@ const HarnessSettings = lazy(async () => {
 const PermissionPolicySettings = lazy(async () => {
   const module = await import('../features/permissions/PermissionPolicySettings');
   return { default: module.PermissionPolicySettings };
+});
+const SecretVaultSettings = lazy(async () => {
+  const module = await import('../features/permissions/SecretVaultSettings');
+  return { default: module.SecretVaultSettings };
 });
 const SkillHub = lazy(async () => {
   const module = await import('../features/skills/SkillHub');
@@ -54,6 +58,10 @@ const ArchivedConversationsSettings = lazy(async () => {
   const module = await import('../features/archives/ArchivedConversationsSettings');
   return { default: module.ArchivedConversationsSettings };
 });
+const DeviceStorageSettings = lazy(async () => {
+  const module = await import('../features/storage/DeviceStorageSettings');
+  return { default: module.DeviceStorageSettings };
+});
 const ShortcutSettings = lazy(async () => {
   const module = await import('./ShortcutSettings');
   return { default: module.ShortcutSettings };
@@ -66,6 +74,10 @@ const McpSettings = lazy(async () => {
   const module = await import('../features/mcp/McpSettings');
   return { default: module.McpSettings };
 }) as typeof import('../features/mcp/McpSettings').McpSettings;
+const PluginSettings = lazy(async () => {
+  const module = await import('../features/plugins/PluginSettings');
+  return { default: module.PluginSettings };
+}) as typeof import('../features/plugins/PluginSettings').PluginSettings;
 const InstalledSkills = lazy(async () => {
   const module = await import('../features/skills/InstalledSkills');
   return { default: module.InstalledSkills };
@@ -101,6 +113,11 @@ const BrowserSettings = lazy(async () => {
   return { default: module.BrowserSettings };
 });
 
+const DesktopControlSettings = lazy(async () => {
+  const module = await import('../features/desktop-control/DesktopControlSettings');
+  return { default: module.DesktopControlSettings };
+});
+
 type WorkspaceNotices = {
   conversationListRefreshError: boolean;
   stateLoading: boolean;
@@ -112,6 +129,9 @@ export type SettingsOverlayProps = {
   workspace: string;
   workspaces: PiWorkspace[];
   onOpenWorktree: (path: string) => Promise<void>;
+  onOpenGitChanges: () => void;
+  onChooseWorkspace: () => void;
+  onOpenBrowser: (view?: BrowserLibraryView) => void;
   workspaceRef: RefObject<string>;
   sessionId?: string;
   activeWorkspaceName?: string;
@@ -121,6 +141,7 @@ export type SettingsOverlayProps = {
   settingsError: string | null;
   draftGuard: SettingsDraftGuard;
   workspaceNotices: WorkspaceNotices;
+  extensionOrder: ComponentProps<typeof InstalledExtensionsSection>['displayOrder'];
   appearance: ComponentProps<typeof GeneralSettings>;
   permission: {
     cwd: string;
@@ -128,14 +149,6 @@ export type SettingsOverlayProps = {
     onPolicyChanged: (state: { available: boolean; mode: PermissionMode }) => void;
   };
   archives: ComponentProps<typeof ArchivedConversationsSettings>;
-  skillActions: {
-    notify: (message: string, tone?: 'success' | 'error' | 'info') => void;
-  };
-  extensionContext: {
-    sendPrompt: ComponentProps<typeof ExtensionSlot>['onSendPrompt'];
-    notify: NonNullable<ComponentProps<typeof ExtensionSlot>['onNotify']>;
-    modelRef: string;
-  };
   about: ComponentProps<typeof AboutSettings>;
 };
 
@@ -148,6 +161,9 @@ export function SettingsOverlay({
   workspace,
   workspaces,
   onOpenWorktree,
+  onOpenGitChanges,
+  onChooseWorkspace,
+  onOpenBrowser,
   workspaceRef,
   sessionId,
   activeWorkspaceName,
@@ -157,17 +173,20 @@ export function SettingsOverlay({
   settingsError,
   draftGuard,
   workspaceNotices,
+  extensionOrder,
   appearance,
   permission,
   archives,
-  skillActions,
-  extensionContext,
   about,
 }: SettingsOverlayProps) {
+  const showToast = useSettingsToast();
   const { state, controller, submitEditor } = settings;
   const {
     settingsOpen: open,
     settingsTab: tab,
+    settingsAnchor,
+    setSettingsAnchor,
+    pluginSection,
     settingsData: data,
     settingsContentRef: contentRef,
     settingsBusy,
@@ -277,7 +296,7 @@ export function SettingsOverlay({
     openSkillDetail,
     toggleSkillTrust,
     deleteSkill,
-    notify: skillActions.notify,
+    notify: showToast,
   };
   const extensions = {
     officialExtensions,
@@ -287,15 +306,14 @@ export function SettingsOverlay({
     setExtensionDetail,
     setExtensionInstallerOpen,
     setExtensionInstallPreview,
-    sendPrompt: extensionContext.sendPrompt,
-    notify: extensionContext.notify,
-    sessionId,
-    modelRef: extensionContext.modelRef,
   };
   const error = settingsError;
   const updateData = (update: (current: SettingsSnapshot) => SettingsSnapshot) => {
     setSettingsData((current) => current ? update(current) : current);
   };
+  const editingMcpServer = editorValue?.kind === 'mcp' && editorValue.editId
+    ? data?.mcp.find(server => server.name === editorValue.editId)
+    : undefined;
   const editor = {
     editor: editorValue,
     editorError,
@@ -324,13 +342,28 @@ export function SettingsOverlay({
     mcpTesting,
     mcpTestResult,
     testCurrentMcp: controller.testCurrentMcp,
+    mcpOAuth: editingMcpServer ? {
+      serverName: editingMcpServer.name,
+      connected: editingMcpServer.oauthConnected,
+      workspace,
+      onCommitted: (_result: unknown, _cwd: string, summary: string) => {
+        controller.reportMcpOAuthCommitted(summary);
+      },
+      onRecovered: (snapshot: SettingsSnapshot) => {
+        controller.acceptMcpResources(snapshot);
+      },
+      onRefresh: async () => {
+        const applied = await controller.refreshMcpEditorOAuth(workspace, editorRequestId);
+        if (!applied) throw new Error('页面状态已变化，请重试刷新。');
+      },
+    } : null,
     resourceScope,
     setResourceScope,
     skillWorkspace,
     setSkillWorkspace,
     workspaces,
     skillWorkspaceOptions: state.skillWorkspaceOptions,
-    onClose: () => void controller.closeEditor(),
+    onClose: (dismiss?: ModalDismiss) => void controller.closeEditor(dismiss),
     onRetryLoad: () => {
       if (editorValue?.editId) void controller.openEditor(editorValue.kind, editorValue.editId, editorValue.providerId, true);
     },
@@ -350,14 +383,52 @@ export function SettingsOverlay({
   }, [controller, open]);
 
   const expandRef = useRef<HTMLButtonElement>(null);
+  const pluginTabsId = useId();
+  const [pluginToolbar, setPluginToolbar] = useState<HTMLDivElement | null>(null);
+  const onPluginHub = isPluginWorkspaceTab(tab);
+  const hubSection = onPluginHub ? (pluginSection || 'plugins') : 'plugins';
+  const clearSettingsAnchor = useCallback(() => setSettingsAnchor(undefined), [setSettingsAnchor]);
   useEffect(() => {
     if (open && sidebar.collapsed) expandRef.current?.focus({ preventScroll: true });
   }, [open, sidebar.collapsed]);
+  useLayoutEffect(() => {
+    if (open && contentRef.current) contentRef.current.scrollTop = 0;
+  }, [open, tab, hubSection, contentRef]);
 
   if (!open) return null;
   const resourceBusy = notices.settingsBusy || notices.resourceWriteBusy;
   const close = () => { void controller.closeSettings(); };
   const select = (id: string) => { void controller.selectSettingsTab(id as SettingsTab); };
+  const selectPluginSection = (section: PluginWorkspaceSection) => {
+    void controller.selectPluginSection(section);
+  };
+  const boundaryKey = onPluginHub ? 'plugins' : tab;
+  let pluginActions: ReactNode;
+  if (hubSection === 'mcp' && data?.mcp.length) {
+    const refreshBusy = notices.mcpRefreshBusy;
+    pluginActions = <>
+      <PluginWorkspaceAction label={refreshBusy ? '正在刷新…' : '刷新状态'} ariaLabel="刷新 MCP 服务器状态"
+        icon={<RotateCw className={refreshBusy ? 'spin' : undefined} aria-hidden="true" />}
+        disabled={resourceBusy || refreshBusy || mcp.recoveryPending} onClick={() => void controller.refreshSavedMcpConfiguration()} />
+      <PluginWorkspaceAction label="添加服务器" ariaLabel="添加 MCP 服务器" icon={<Plus aria-hidden="true" />}
+        primary disabled={resourceBusy || refreshBusy} onClick={() => void controller.openEditor('mcp')} />
+    </>;
+  } else if (hubSection === 'skills') {
+    pluginActions = <PluginWorkspaceAction label="添加技能" icon={<Plus aria-hidden="true" />} primary
+      onClick={() => void controller.openEditor('skill')} />;
+  } else if (hubSection === 'extensions') {
+    pluginActions = <>
+      <PluginWorkspaceAction label="开发与发布" icon={<BookOpen aria-hidden="true" />}
+        onClick={() => void window.piApi.openExternal('https://github.com/huangrx6/pi-studio/blob/main/docs/extensions/distribution.md')} />
+      <PluginWorkspaceAction label="重新加载" icon={<RotateCw className={notices.extensionRefreshBusy ? 'spin' : undefined} aria-hidden="true" />}
+        disabled={resourceBusy || notices.extensionRefreshBusy} onClick={() => void controller.reloadExtensions()} />
+      <PluginWorkspaceAction label="安装扩展" icon={<Plus aria-hidden="true" />} primary
+        disabled={resourceBusy || notices.extensionRefreshBusy || Boolean(notices.extensionRefreshError)} onClick={() => {
+          extensions.setExtensionInstallPreview(null);
+          extensions.setExtensionInstallerOpen(true);
+        }} />
+    </>;
+  }
 
   return (
     <SettingsDraftContext.Provider value={draftGuard}>
@@ -365,11 +436,14 @@ export function SettingsOverlay({
         <ShellLayout
           sidebar={<SettingsNavigation
             pages={settingsPages}
+            searchPages={pluginSettingsSearchPages}
             activeId={tab}
+            searchActiveId={onPluginHub ? hubSection : tab}
+            searchShortcut={appearance.preferences.shortcuts.palette}
             onSelect={select}
             onBack={close}
             collapsed={sidebar.collapsed}
-            onCollapse={() => sidebar.setCollapsed(true)}
+            onCollapsedChange={sidebar.setCollapsed}
           />}
           resizeHandle={sidebar.resizeHandle}
         >
@@ -383,59 +457,64 @@ export function SettingsOverlay({
           </ShellHeader>
         <main className="shell-canvas settings-content" ref={contentRef as RefObject<HTMLElement>}>
           <DeferredSettingsBoundary
-            key={tab}
+            key={boundaryKey}
             isGeneral={tab === 'general'}
             onBack={close}
             onOpenGeneral={() => select('general')}
           >
             <div className="settings-page-frame">
             {notices.conversationListRefreshError && (
-              <ConversationListNotice
-                busy={notices.stateLoading}
-                onRefresh={notices.onRefreshConversations}
-              />
+              <SettingsToast message="操作已完成，但会话列表刷新失败。" tone="error">
+                <button type="button" className="settings-outline" disabled={notices.stateLoading} onClick={notices.onRefreshConversations}>
+                  {notices.stateLoading ? '正在刷新…' : '刷新会话列表'}
+                </button>
+              </SettingsToast>
             )}
             {error && <div className="settings-error" role="alert">{error}</div>}
-            {tab === 'models' && notices.modelRefreshError && !editor.editor && (
-              <div className="model-refresh-notice" role="alert">
-                <span>{notices.modelRefreshSummary}，刷新尚未完成。{notices.modelRefreshError}</span>
+            {tab === 'models' && notices.modelRefreshError && (
+              <SettingsToast tone="error" message={`${notices.modelRefreshSummary}，刷新尚未完成。${notices.modelRefreshError}`}>
                 <button type="button" className="settings-outline" disabled={notices.modelRefreshBusy} onClick={() => void controller.refreshSavedModelConfiguration()}>
                   {notices.modelRefreshBusy ? '正在刷新…' : '刷新模型配置'}
                 </button>
-              </div>
+              </SettingsToast>
             )}
-            {tab === 'mcp' && notices.mcpRefreshError && !editor.editor && (
-              <div className="model-refresh-notice" role="alert">
-                <span>{notices.mcpRefreshSummary}，刷新尚未完成。{notices.mcpRefreshError}</span>
+            {onPluginHub && hubSection === 'mcp' && notices.mcpRefreshError && (
+              <SettingsToast tone="error" message={`${notices.mcpRefreshSummary}，刷新尚未完成。${notices.mcpRefreshError}`}>
                 <button type="button" className="settings-outline" disabled={notices.mcpRefreshBusy || notices.resourceWriteBusy} onClick={() => void controller.refreshSavedMcpConfiguration()}>
                   {notices.mcpRefreshBusy ? '正在刷新…' : '刷新 MCP 状态'}
                 </button>
-              </div>
+              </SettingsToast>
             )}
-            {tab === 'extensions' && notices.extensionRefreshError && (
-              <div className="model-refresh-notice" role="alert">
-                <span>{notices.extensionRefreshError}</span>
+            {onPluginHub && hubSection === 'extensions' && notices.extensionRefreshError && (
+              <SettingsToast tone="error" message={notices.extensionRefreshError}>
                 <button type="button" className="settings-outline" disabled={notices.extensionRefreshBusy || notices.resourceWriteBusy} onClick={() => void controller.refreshSavedExtensionConfiguration()}>
                   {notices.extensionRefreshBusy ? '正在刷新…' : '刷新扩展状态'}
                 </button>
-              </div>
+              </SettingsToast>
             )}
-            {tab === 'skills' && notices.skillRefreshError && !editor.editor && (
-              <div className="model-refresh-notice" role="alert">
-                <span>{notices.skillRefreshSummary}，刷新尚未完成。{notices.skillRefreshError}</span>
+            {onPluginHub && hubSection === 'skills' && notices.skillRefreshError && (
+              <SettingsToast tone="error" message={`${notices.skillRefreshSummary}，刷新尚未完成。${notices.skillRefreshError}`}>
                 <button type="button" className="settings-outline" disabled={notices.skillRefreshBusy || notices.resourceWriteBusy} onClick={() => void controller.refreshSavedSkillConfiguration()}>
                   {notices.skillRefreshBusy ? '正在刷新…' : '刷新技能状态'}
                 </button>
-              </div>
+              </SettingsToast>
             )}
-            {!data && !error && tab !== 'general' && tab !== 'network' && tab !== 'browser' && tab !== 'git' && tab !== 'usage' && tab !== 'archives' && tab !== 'permissions' && tab !== 'subagents' && (
+            {!data && !error && tab !== 'general' && tab !== 'network' && tab !== 'browser' && tab !== 'desktop-control' && tab !== 'git' && tab !== 'usage' && tab !== 'archives' && tab !== 'storage' && tab !== 'permissions' && tab !== 'secrets' && tab !== 'subagents' && (
               <LoadingState variant="section">正在加载设置…</LoadingState>
             )}
             {tab === 'shortcuts' && <ShortcutSettings preferences={appearance.preferences} onChange={appearance.onChange} />}
-            {tab === 'general' && <GeneralSettings {...appearance} />}
+            {tab === 'general' && <GeneralSettings {...appearance} onOpenBrowserSettings={() => select('browser')} />}
             {tab === 'network' && <NetworkSettings />}
-            {tab === 'browser' && <BrowserSettings />}
-            {tab === 'git' && <GitSettings cwd={workspace} workspaces={workspaces} preferences={appearance.preferences} onChange={appearance.onChange} onOpenWorktree={onOpenWorktree} />}
+            {tab === 'browser' && <BrowserSettings onOpenBrowser={(view) => {
+              void controller.closeSettings({ restoreFocus: false }).then(closed => { if (closed) onOpenBrowser(view); });
+            }} />}
+            {tab === 'desktop-control' && <DesktopControlSettings />}
+            {tab === 'secrets' && <SecretVaultSettings />}
+            {tab === 'git' && <GitSettings cwd={workspace} workspaces={workspaces} preferences={appearance.preferences}
+              onChange={appearance.onChange} onOpenWorktree={onOpenWorktree} onChooseWorkspace={onChooseWorkspace}
+              onOpenChanges={sessionId ? () => {
+                void controller.closeSettings({ restoreFocus: false }).then(closed => { if (closed) onOpenGitChanges(); });
+              } : undefined} />}
             {tab === 'permissions' && (
               <PermissionPolicySettings
                 cwd={permission.cwd}
@@ -444,32 +523,39 @@ export function SettingsOverlay({
               />
             )}
             {tab === 'archives' && <ArchivedConversationsSettings {...archives} />}
+            {tab === 'storage' && <DeviceStorageSettings onOpenArchives={() => select('archives')} onOpenWorktrees={() => select('subagent-worktrees')} />}
             {data && tab === 'tools' && (
               <AgentToolsSettings
                 cwd={skills.workspace}
                 initialSelection={data.agentTools}
+                onOpenMcp={() => selectPluginSection('mcp')}
                 onSaved={(snapshot) => updateData((current) => ({ ...current, agentTools: snapshot.agentTools }))}
               />
             )}
             {data && tab === 'harness' && (
               <HarnessSettings
+                key={skills.workspace}
                 cwd={skills.workspace}
                 initial={data.harness}
-                enabledTools={data.agentTools.enabled}
+                enabledTools={[...data.agentTools.enabled.filter(name => !name.startsWith('mcp__')),
+                  ...(data.mcp || []).flatMap(server => server.tools?.filter(tool => tool.enabled).map(tool => tool.name) || [])]}
                 onUpdated={(harness) => updateData((current) => ({ ...current, harness }))}
+                onCompactionRevealed={settingsAnchor === 'harness-compaction' ? clearSettingsAnchor : undefined}
               />
             )}
             {tab === 'subagents' && <SubagentSettings
               cwd={skills.workspace}
               workspaces={skills.workspaces}
+              models={models.models}
               enabledAgentTools={data?.agentTools.enabled}
               onOpenAgentTools={() => select('tools')}
+              onWorktreesRevealed={settingsAnchor === 'subagent-worktrees' ? clearSettingsAnchor : undefined}
             />}
             {tab === 'usage' && <UsageSettings
               active={open}
               includeRemoved={appearance.preferences.usageIncludeRemovedProjects}
               onIncludeRemovedChange={value => appearance.onChange('usageIncludeRemovedProjects', value)}
-              onOpenExtensions={() => select('extensions')}
+              onOpenExtensions={() => selectPluginSection('extensions')}
             />}
             {data && tab === 'models' && <ModelSettings
               providers={data.providers}
@@ -513,116 +599,105 @@ export function SettingsOverlay({
                 onImportModels: (id, items: DiscoveredModel[]) => void controller.importProviderModels(id, items),
               }}
             />}
-            {data && tab === 'mcp' && <McpSettings
-              servers={data.mcp}
-              busy={resourceBusy}
-              recoveryPending={mcp.recoveryPending}
-              refreshBusy={notices.mcpRefreshBusy}
-              onAdd={() => void controller.openEditor('mcp')}
-              onRefresh={() => void controller.refreshSavedMcpConfiguration()}
-              onOpen={mcp.openDetail}
-              onEdit={(name) => void controller.openEditor('mcp', name)}
-              onToggle={(name, enabled) => void controller.toggleMcp(name, enabled)}
-              onDelete={(name) => void controller.deleteMcp(name)}
-            />}
-            {data && tab === 'skills' && (
-              <div className="settings-sections">
-                <SettingsPageHeader
-                  icon={<FileCode2 />}
-                  title="技能"
-                  meta={<InfoHint label="项目技能默认不加载；目录内容变化后需要重新信任，配置会在下一次请求前生效。" />}
-                  actions={<button type="button" className="settings-add-button" aria-label="添加技能" onClick={() => void controller.openEditor('skill')}><Plus />添加技能</button>}
-                />
-                <SkillHub
-                  workspace={skills.workspace}
-                  workspaces={skills.workspaces}
-                  userSkillsPath={data.skillsPath}
-                  sharedSkillsPath={data.agentsSkillsPath}
-                  onCommitted={(result, cwd) => {
+            {data && onPluginHub && (
+              <div className="settings-preference-page plugin-workspace" data-section={hubSection}>
+                <PluginWorkspaceHeader id={pluginTabsId} section={hubSection} actions={pluginActions}
+                  actionsRef={hubSection === 'plugins' ? setPluginToolbar : undefined} onChange={selectPluginSection} />
+                <div className="plugin-workspace-panel" key={hubSection} role="tabpanel" tabIndex={0}
+                  id={`${pluginTabsId}-panel`} aria-labelledby={`${pluginTabsId}-${hubSection}`}>
+                {hubSection === 'plugins' && <PluginSettings
+                  toolbar={pluginToolbar}
+                  plugins={data.plugins || []}
+                  busy={resourceBusy}
+                  cwd={workspace}
+                  onChanged={(settings, message) => {
                     controller.invalidateResourceReads();
-                    controller.reportSkillRefresh(cwd, `技能「${result.installed.name}」已安装`, result.projection.status === 'error' ? result.projection.message : '请刷新当前技能状态。');
+                    controller.acceptRuntimeSnapshot(settings, message);
                   }}
-                  onInstalled={async (result, cwd) => {
-                    if (skills.workspace !== skills.workspaceRef.current) return;
-                    if (result.projection.status !== 'ready') throw new Error(result.projection.message);
-                    const revision = skills.skillRefreshRequestRef.current;
-                    try {
-                      const snapshot = cwd === skills.workspace ? result.projection.value : await window.piApi.settings(skills.workspace);
-                      if (skills.workspace !== skills.workspaceRef.current || revision !== skills.skillRefreshRequestRef.current) return;
-                      skills.acceptSkillResources(snapshot, cwd);
-                      skills.notify(`技能「${result.installed.name}」已安装`, 'success');
-                    } catch (error) {
-                      if (skills.workspace === skills.workspaceRef.current && revision === skills.skillRefreshRequestRef.current) skills.reportSkillRefresh(cwd, `技能「${result.installed.name}」已安装`, errorText(error));
-                      throw error;
-                    }
-                  }}
-                  onNotify={(message, tone = 'info') => skills.notify(message, tone)}
-                />
-                <InstalledSkills
-                  skills={data.skills}
-                  errors={data.skillErrors}
-                  paths={{ userStudio: data.skillsPath, userAgents: data.agentsSkillsPath, projectStudio: data.projectSkillsPath, projectAgents: data.projectAgentsSkillsPath }}
-                  workspaceName={skills.activeWorkspaceName}
-                  busy={resourceBusy || skills.recoveryPending}
-                  onOpen={skills.openSkillDetail}
-                  onTrust={(skill) => skills.toggleSkillTrust(skill, true)}
-                  onDelete={(skill) => skills.deleteSkill(skill)}
-                />
-              </div>
-            )}
-            {data && tab === 'extensions' && (
-              <div className="settings-sections extensions-settings">
-                <SettingsPageHeader
-                  icon={<Layers3 />}
-                  title="扩展"
-                  meta={<InfoHint label="全局扩展安装后默认信任；项目扩展必须手动信任后才能加载可执行代码。启停和信任从下一次请求开始生效。" />}
-                  actions={<>
-                    <button type="button" className="settings-outline" onClick={() => void window.piApi.openExternal('https://github.com/huangrx6/pi-studio/blob/main/docs/extensions/distribution.md')}><BookOpen />开发与发布</button>
-                    <button type="button" className="settings-outline" disabled={resourceBusy || notices.extensionRefreshBusy} onClick={() => void controller.reloadExtensions()}><RotateCw className={notices.extensionRefreshBusy ? 'spin' : ''} />重新加载</button>
-                    <button type="button" className="settings-add-button" aria-label="安装扩展" disabled={resourceBusy || notices.extensionRefreshBusy || Boolean(notices.extensionRefreshError)} onClick={() => {
-                      extensions.setExtensionInstallPreview(null);
-                      extensions.setExtensionInstallerOpen(true);
-                    }}><Plus />安装扩展</button>
-                  </>}
-                />
-                <PublisherTrustSettings />
-                <InstalledExtensionsSection
-                  items={data.extensions}
-                  busy={resourceBusy || notices.extensionRefreshBusy || Boolean(notices.extensionRefreshError)}
-                  placements={appearance.preferences.extensionPlacements}
-                  onAppearanceChange={(id, override) => {
-                    const next = { ...appearance.preferences.extensionAppearances };
-                    if (override) next[id] = override;
-                    else delete next[id];
-                    appearance.onChange('extensionAppearances', next);
-                  }}
-                  onPlacementChange={(contributionId, placement) => appearance.onChange('extensionPlacements', {
-                    ...appearance.preferences.extensionPlacements,
-                    [contributionId]: placement,
-                  })}
-                  onOpenDetail={extensions.setExtensionDetail}
-                  onToggle={(extension, enabled) => void controller.toggleExtension(extension, enabled)}
-                  onDelete={(id, name) => void controller.deleteExtension(id, name)}
-                />
-                {data.extensionErrors.length > 0 && <div className="settings-error-list">
-                  {data.extensionErrors.map((item) => <div key={`${item.path}:${item.message}`}><code>{item.path}</code><span>{item.message}</span></div>)}
-                </div>}
-                <ExtensionSlot
-                  slot="settings.panel"
-                  cwd={skills.workspace}
-                  sessionId={extensions.sessionId}
-                  modelRef={extensions.modelRef}
-                  onOpenSettings={(page) => { if (page) void controller.openSettings(page as SettingsTab); }}
-                  onSendPrompt={extensions.sendPrompt}
-                  onNotify={extensions.notify}
-                />
+                  onOpenResource={selectPluginSection}
+                />}
+                {hubSection === 'mcp' && <McpSettings
+                  servers={data.mcp}
+                  busy={resourceBusy}
+                  recoveryPending={mcp.recoveryPending}
+                  refreshBusy={notices.mcpRefreshBusy}
+                  onAdd={() => void controller.openEditor('mcp')}
+                  onOpen={mcp.openDetail}
+                  onEdit={(name) => void controller.openEditor('mcp', name)}
+                  onToggle={(name, enabled) => void controller.toggleMcp(name, enabled)}
+                  onDelete={(name) => void controller.deleteMcp(name)}
+                  onBrowsePlugins={() => selectPluginSection('plugins')}
+                />}
+                {hubSection === 'skills' && (
+                  <div className="settings-sections">
+                    <InstalledSkills
+                      skills={data.skills}
+                      errors={data.skillErrors}
+                      paths={{ userStudio: data.skillsPath, userAgents: data.agentsSkillsPath, projectStudio: data.projectSkillsPath, projectAgents: data.projectAgentsSkillsPath }}
+                      workspaceName={skills.activeWorkspaceName}
+                      busy={resourceBusy || skills.recoveryPending}
+                      onOpen={skills.openSkillDetail}
+                      onTrust={(skill) => skills.toggleSkillTrust(skill, true)}
+                      onDelete={(skill) => skills.deleteSkill(skill)}
+                    />
+                    <SkillHub
+                      workspace={skills.workspace}
+                      workspaces={skills.workspaces}
+                      userSkillsPath={data.skillsPath}
+                      sharedSkillsPath={data.agentsSkillsPath}
+                      onCommitted={(result, cwd) => {
+                        controller.invalidateResourceReads();
+                        controller.reportSkillRefresh(cwd, `技能「${result.installed.name}」已安装`, result.projection.status === 'error' ? result.projection.message : '请刷新当前技能状态。');
+                      }}
+                      onInstalled={async (result, cwd) => {
+                        if (skills.workspace !== skills.workspaceRef.current) return;
+                        if (result.projection.status !== 'ready') throw new Error(result.projection.message);
+                        const revision = skills.skillRefreshRequestRef.current;
+                        try {
+                          const snapshot = cwd === skills.workspace ? result.projection.value : await window.piApi.settings(skills.workspace);
+                          if (skills.workspace !== skills.workspaceRef.current || revision !== skills.skillRefreshRequestRef.current) return;
+                          skills.acceptSkillResources(snapshot, cwd);
+                          skills.notify(`技能「${result.installed.name}」已安装`, 'success');
+                        } catch (error) {
+                          if (skills.workspace === skills.workspaceRef.current && revision === skills.skillRefreshRequestRef.current) skills.reportSkillRefresh(cwd, `技能「${result.installed.name}」已安装`, errorText(error));
+                          throw error;
+                        }
+                      }}
+                      onNotify={(message, tone = 'info') => skills.notify(message, tone)}
+                    />
+                    <p className="plugin-workspace-crosslink">
+                      也可从
+                      <button type="button" onClick={() => selectPluginSection('plugins')}>插件目录</button>
+                      安装包含技能的插件包。
+                    </p>
+                  </div>
+                )}
+                {hubSection === 'extensions' && (
+                  <div className="settings-sections extensions-settings">
+                    <InstalledExtensionsSection
+                      items={data.extensions}
+                      displayOrder={extensionOrder}
+                      publisherSettings={<PublisherTrustSettings />}
+                      onOpenDetail={extensions.setExtensionDetail}
+                    />
+                    {data.extensionErrors.length > 0 && <div className="settings-error-list">
+                      {data.extensionErrors.map((item) => <div key={`${item.path}:${item.message}`}><code>{item.path}</code><span>{item.message}</span></div>)}
+                    </div>}
+                    <p className="plugin-workspace-crosslink">
+                      插件附带的扩展请在
+                      <button type="button" onClick={() => selectPluginSection('plugins')}>插件</button>
+                      页统一安装或卸载。
+                    </p>
+                  </div>
+                )}
+                </div>
               </div>
             )}
             {data && tab === 'about' && <AboutSettings {...about} />}
             </div>
           </DeferredSettingsBoundary>
         </main>
-          <SettingsSavedFlash signal={appearance.preferences} />
+          <div className="settings-toast-stack" />
         </ShellLayout>
         {editor.editor && <SettingsEditorDialog {...editor} editor={editor.editor} />}
       </div>

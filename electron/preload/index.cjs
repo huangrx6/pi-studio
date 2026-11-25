@@ -39,35 +39,6 @@ contextBridge.exposeInMainWorld('piApi', {
     pendingNavigation = undefined;
     deliver?.();
   },
-  storyboardList: workspace => ipcRenderer.invoke('pi:storyboard-list', workspace),
-  storyboardCreate: (workspace, example) => ipcRenderer.invoke('pi:storyboard-create', workspace, example),
-  storyboardRenderBegin: (workspace, id, plan, revision) => ipcRenderer.invoke('pi:storyboard-render-begin', workspace, id, plan, revision),
-  storyboardRenderRead: (workspace, id, token, asset, start, size) => ipcRenderer.invoke('pi:storyboard-render-read', workspace, id, token, asset, start, size),
-  storyboardRenderWrite: (workspace, id, token, position, data) => ipcRenderer.invoke('pi:storyboard-render-write', workspace, id, token, position, data),
-  storyboardRenderFinish: (workspace, id, token) => ipcRenderer.invoke('pi:storyboard-render-finish', workspace, id, token),
-  storyboardRenderDiscard: (workspace, id, token) => ipcRenderer.invoke('pi:storyboard-render-discard', workspace, id, token),
-  storyboardRenderSave: (workspace, id, token) => ipcRenderer.invoke('pi:storyboard-render-save', workspace, id, token),
-  storyboardRead: (workspace, id) => ipcRenderer.invoke('pi:storyboard-read', workspace, id),
-  storyboardGenerateDraft: (workspace, id, input) => ipcRenderer.invoke('pi:storyboard-generate-draft', workspace, id, input),
-  storyboardApplyDraft: (workspace, id, token) => ipcRenderer.invoke('pi:storyboard-apply-draft', workspace, id, token),
-  storyboardDiscardDraft: (workspace, id, token) => ipcRenderer.invoke('pi:storyboard-discard-draft', workspace, id, token),
-  storyboardMediaModels: () => ipcRenderer.invoke('pi:storyboard-media-models'),
-  storyboardMediaPreferences: (workspace, id, patch) => ipcRenderer.invoke('pi:storyboard-media-preferences', workspace, id, patch),
-  storyboardGenerateMedia: (workspace, id, input) => ipcRenderer.invoke('pi:storyboard-generate-media', workspace, id, input),
-  storyboardApplyMedia: (workspace, id, input) => ipcRenderer.invoke('pi:storyboard-apply-media', workspace, id, input),
-  storyboardEditBrief: (workspace, id, patch) => ipcRenderer.invoke('pi:storyboard-edit-brief', workspace, id, patch),
-  storyboardAdvance: (workspace, id, input) => ipcRenderer.invoke('pi:storyboard-advance', workspace, id, input),
-  storyboardProduce: (workspace, id, input) => ipcRenderer.invoke('pi:storyboard-produce', workspace, id, input),
-  storyboardEditShot: (workspace, id, shotId, patch) => ipcRenderer.invoke('pi:storyboard-edit-shot', workspace, id, shotId, patch),
-  storyboardPreview: (workspace, id, assetId) => ipcRenderer.invoke('pi:storyboard-preview', workspace, id, assetId),
-  storyboardRelink: (workspace, id, assetId) => ipcRenderer.invoke('pi:storyboard-relink', workspace, id, assetId),
-  storyboardPick: (workspace, id) => ipcRenderer.invoke('pi:storyboard-pick', workspace, id),
-  storyboardDrop: (workspace, id, files) => {
-    const paths = files.map(file => webUtils.getPathForFile(file));
-    if (paths.some(path => !path)) return Promise.reject(new Error('请从本机选择素材文件'));
-    return ipcRenderer.invoke('pi:storyboard-drop', workspace, id, paths);
-  },
-  storyboardRemoveFile: (workspace, id, assetId) => ipcRenderer.invoke('pi:storyboard-remove-file', workspace, id, assetId),
   temporaryModel: (payload) => ipcRenderer.invoke('pi:temporary-model', payload),
   temporaryPrompt: (payload) => ipcRenderer.invoke('pi:temporary-prompt', payload),
   temporaryStop: (id) => ipcRenderer.invoke('pi:temporary-stop', id),
@@ -77,6 +48,8 @@ contextBridge.exposeInMainWorld('piApi', {
     ipcRenderer.invoke('pi:set-appearance', theme, palette, radiusStyle)
   ),
   windowState: () => ipcRenderer.invoke('pi:window-state'),
+  deviceStorage: () => ipcRenderer.invoke('pi:device-storage'),
+  deviceStorageLocation: (id, action) => ipcRenderer.invoke('pi:device-storage-location', id, action),
   onWindowState: (listener) => {
     const handler = (_event, state) => listener(state);
     ipcRenderer.on('pi:window-state', handler);
@@ -101,6 +74,7 @@ contextBridge.exposeInMainWorld('piApi', {
   state: (cwd) => ipcRenderer.invoke('pi:state', cwd),
   gitRepositories: (cwd) => ipcRenderer.invoke('pi:git-repositories', cwd),
   gitWorkspaceStatus: (cwd, repository) => ipcRenderer.invoke('pi:git-workspace-status', cwd, repository),
+  gitWorkspaceChanges: (cwd, repository) => ipcRenderer.invoke('pi:git-workspace-changes', cwd, repository),
   gitWorktree: (cwd, input) => ipcRenderer.invoke('pi:git-worktree', cwd, input),
   gitRead: (id, input) => ipcRenderer.invoke('pi:git-read', id, input),
   gitWrite: (id, input) => ipcRenderer.invoke('pi:git-write', id, input),
@@ -115,10 +89,6 @@ contextBridge.exposeInMainWorld('piApi', {
   conversationSnapshot: (id) => ipcRenderer.invoke('pi:conversation-snapshot', id),
   conversationSubmit: (payload) => ipcRenderer.invoke('pi:conversation-submit', payload),
   conversationEdit: (payload) => ipcRenderer.invoke('pi:conversation-edit', payload),
-  conversationCompareStart: (payload) => ipcRenderer.invoke('pi:conversation-compare-start', payload),
-  conversationCompareSnapshot: (payload) => ipcRenderer.invoke('pi:conversation-compare-snapshot', payload),
-  conversationCompareAdopt: (payload) => ipcRenderer.invoke('pi:conversation-compare-adopt', payload),
-  conversationCompareDiscard: (payload) => ipcRenderer.invoke('pi:conversation-compare-discard', payload),
   conversationConfigure: (payload) => ipcRenderer.invoke('pi:conversation-configure', payload),
   conversationInterrupt: (id) => ipcRenderer.invoke('pi:conversation-interrupt', { id }),
   conversationCompact: (payload) => ipcRenderer.invoke('pi:conversation-compact', payload),
@@ -134,6 +104,11 @@ contextBridge.exposeInMainWorld('piApi', {
   file: (cwd, path) => ipcRenderer.invoke('pi:file', { cwd, path }),
   writeFile: (payload) => ipcRenderer.invoke('pi:file-write', payload),
   filePreview: (cwd, path) => ipcRenderer.invoke('pi:file-preview', { cwd, path }),
+  onFilesChanged: (listener) => {
+    const handler = (_event, keys) => listener(keys);
+    ipcRenderer.on('pi:files-changed', handler);
+    return () => ipcRenderer.removeListener('pi:files-changed', handler);
+  },
   undoTurnDiff: (payload) => ipcRenderer.invoke('pi:undo-turn-diff', payload),
   turnDiffFile: (payload) => ipcRenderer.invoke('pi:turn-diff-file', payload),
   turnFilePreview: (payload) => ipcRenderer.invoke('pi:turn-file-preview', payload),
@@ -192,6 +167,16 @@ contextBridge.exposeInMainWorld('piApi', {
     ipcRenderer.on('pi:browser-command', handler);
     return () => ipcRenderer.removeListener('pi:browser-command', handler);
   },
+  desktopControlStatus: () => ipcRenderer.invoke('pi:desktop-control-status'),
+  desktopControlPreferences: () => ipcRenderer.invoke('pi:desktop-control-preferences'),
+  desktopControlSetPreferences: (payload) => ipcRenderer.invoke('pi:desktop-control-set-preferences', payload),
+  desktopControlPermissions: () => ipcRenderer.invoke('pi:desktop-control-permissions'),
+  desktopControlOpenPermissionSettings: (payload) => ipcRenderer.invoke('pi:desktop-control-open-permission-settings', payload),
+  desktopControlInstalledApps: () => ipcRenderer.invoke('pi:desktop-control-installed-apps'),
+  desktopControlAlwaysAllowAdd: (payload) => ipcRenderer.invoke('pi:desktop-control-always-allow-add', payload),
+  desktopControlAlwaysAllowRemove: (payload) => ipcRenderer.invoke('pi:desktop-control-always-allow-remove', payload),
+  desktopControlActivity: (payload) => ipcRenderer.invoke('pi:desktop-control-activity', payload),
+  desktopControlActivityClear: () => ipcRenderer.invoke('pi:desktop-control-activity-clear'),
   terminalCreate: (payload) => ipcRenderer.invoke('pi:terminal-create', payload),
   // Fire-and-forget: waiting for an invoke ack on every keystroke is a major
   // source of interactive terminal lag in Electron.
@@ -225,6 +210,11 @@ contextBridge.exposeInMainWorld('piApi', {
   discoverProviderModels: (providerId) => ipcRenderer.invoke('pi:discover-provider-models', { providerId }),
   importProviderModels: (payload) => ipcRenderer.invoke('pi:import-provider-models', payload),
   providerQuota: (providerId, refresh = false) => ipcRenderer.invoke('pi:provider-quota', { providerId, refresh }),
+  onProviderQuotaInvalidated: (listener) => {
+    const handler = (_event, providerId) => listener(providerId);
+    ipcRenderer.on('pi:provider-quota-invalidated', handler);
+    return () => ipcRenderer.removeListener('pi:provider-quota-invalidated', handler);
+  },
   providerQuotaFields: input => ipcRenderer.invoke('pi:provider-quota-fields', input),
   previewQuotaMapping: (input) => ipcRenderer.invoke('pi:preview-quota-mapping', input),
   providerConfig: (providerId) => ipcRenderer.invoke('pi:provider-config', providerId),
@@ -250,6 +240,10 @@ contextBridge.exposeInMainWorld('piApi', {
   deleteHarnessProfile: (payload) => ipcRenderer.invoke('pi:delete-harness-profile', payload),
   saveRuntimePolicy: (payload) => ipcRenderer.invoke('pi:save-runtime-policy', payload),
   subagentSettings: (cwd) => ipcRenderer.invoke('pi:subagent-settings', cwd),
+  subagentProfiles: () => ipcRenderer.invoke('pi:subagent-profiles'),
+  subagentProfileResources: (cwd) => ipcRenderer.invoke('pi:subagent-profile-resources', cwd),
+  saveSubagentProfile: (profile) => ipcRenderer.invoke('pi:save-subagent-profile', profile),
+  removeSubagentProfile: (payload) => ipcRenderer.invoke('pi:remove-subagent-profile', payload),
   subagentBudget: (payload) => ipcRenderer.invoke('pi:subagent-budget', payload),
   saveSubagentSettings: (payload) => ipcRenderer.invoke('pi:save-subagent-settings', payload),
   managedWorktrees: (payload) => ipcRenderer.invoke('pi:managed-worktrees', payload),
@@ -260,6 +254,7 @@ contextBridge.exposeInMainWorld('piApi', {
   revealManagedWorktree: (id) => ipcRenderer.invoke('pi:reveal-managed-worktree', id),
   setKey: (payload) => ipcRenderer.invoke('pi:set-key', payload),
   setMcpEnabled: (payload) => ipcRenderer.invoke('pi:set-mcp-enabled', payload),
+  setMcpMethodEnabled: (payload) => ipcRenderer.invoke('pi:set-mcp-method-enabled', payload),
   setProviderEnabled: (payload) => ipcRenderer.invoke('pi:set-provider-enabled', payload),
   removeProvider: (payload) => ipcRenderer.invoke('pi:remove-provider', payload),
   refreshModels: (cwd) => ipcRenderer.invoke('pi:models-refresh', cwd),
@@ -278,6 +273,21 @@ contextBridge.exposeInMainWorld('piApi', {
   installPreparedSkill: (payload) => ipcRenderer.invoke('pi:install-prepared-skill', payload),
   disposePreparedSkill: (token) => ipcRenderer.invoke('pi:dispose-prepared-skill', token),
   addExtension: (payload) => ipcRenderer.invoke('pi:add-extension', payload),
+  pickPluginSource: (kind) => ipcRenderer.invoke('pi:pick-plugin-source', { kind }),
+  preparePluginInstall: (payload) => ipcRenderer.invoke('pi:plugin-prepare', payload),
+  installPlugin: (payload) => ipcRenderer.invoke('pi:plugin-install', payload),
+  disposePluginInstall: (token) => ipcRenderer.invoke('pi:plugin-dispose', { token }),
+  uninstallPlugin: (payload) => ipcRenderer.invoke('pi:plugin-uninstall', payload),
+  setPluginEnabled: (payload) => ipcRenderer.invoke('pi:plugin-set-enabled', payload),
+  listPlugins: () => ipcRenderer.invoke('pi:plugins-list'),
+  pluginMarket: (payload) => ipcRenderer.invoke('pi:plugin-market', payload || {}),
+  pluginSources: () => ipcRenderer.invoke('pi:plugin-sources'),
+  addPluginSource: (payload) => ipcRenderer.invoke('pi:plugin-source-add', payload),
+  setPluginSourceEnabled: (payload) => ipcRenderer.invoke('pi:plugin-source-set-enabled', payload),
+  removePluginSource: (id) => ipcRenderer.invoke('pi:plugin-source-remove', id),
+  prepareMarketPlugin: (payload) => ipcRenderer.invoke('pi:plugin-market-prepare', payload),
+  pickPluginRegistryFile: () => ipcRenderer.invoke('pi:pick-plugin-registry-file'),
+  pickPluginSourceDirectory: () => ipcRenderer.invoke('pi:pick-plugin-source-directory'),
   pickExtensionSource: (kind) => ipcRenderer.invoke('pi:pick-extension-source', { kind }),
   prepareExtensionInstall: (payload) => ipcRenderer.invoke('pi:extension-prepare', payload),
   checkExtensionUpdates: (payload) => ipcRenderer.invoke('pi:extensions-check-updates', payload),
@@ -306,6 +316,13 @@ contextBridge.exposeInMainWorld('piApi', {
   extensionsUi: (cwd) => ipcRenderer.invoke('pi:extensions-ui', cwd),
   openExtensionDataView: (payload) => ipcRenderer.invoke('pi:extension-data-view-open', payload),
   closeExtensionDataView: (subscriptionId) => ipcRenderer.invoke('pi:extension-data-view-close', subscriptionId),
+  writeExtensionCanvas: (payload) => ipcRenderer.invoke('pi:extension-canvas-write', payload),
+  writeExtensionTaskBoard: (payload) => ipcRenderer.invoke('pi:extension-task-board-write', payload),
+  onExtensionPanelRequested: (listener) => {
+    const handler = (_event, payload) => listener(payload);
+    ipcRenderer.on('pi:extension-panel-requested', handler);
+    return () => ipcRenderer.removeListener('pi:extension-panel-requested', handler);
+  },
   onExtensionDataView: (listener) => {
     const handler = (_event, payload) => listener(payload);
     ipcRenderer.on('pi:extension-data-view', handler);

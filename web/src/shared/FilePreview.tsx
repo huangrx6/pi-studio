@@ -44,7 +44,8 @@ export type FilePreviewProps = {
   emptyDescription?: string;
   onOpenExternal?: (file: FilePreviewResult) => void;
   editable?: boolean;
-  onSave?: (text: string) => Promise<void>;
+  onSave?: (text: string, expectedText: string) => Promise<void>;
+  refreshError?: { message: string; onRetry: () => void };
   /** 调用方自带的工具栏动作（例如工作台的“文件操作”菜单）。 */
   actions?: ReactNode;
 };
@@ -237,19 +238,20 @@ function PreviewBody({
  * every supported format.
  */
 export function FilePreview({
-  file,
+  file: latestFile,
   loading = false,
   emptyTitle = '选择一个文件',
   emptyDescription = '',
   onOpenExternal,
   editable = false,
   onSave,
+  refreshError,
   actions,
 }: FilePreviewProps) {
   const [mode, setMode] = useState<PreviewMode>('preview');
   const [copied, setCopied] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(file?.text || '');
+  const [editBase, setEditBase] = useState<FilePreviewResult | null>(null);
+  const [draft, setDraft] = useState(latestFile?.text || '');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showLineNumbers, setShowLineNumbers] = useState(false);
@@ -257,11 +259,19 @@ export function FilePreview({
   const [findQuery, setFindQuery] = useState('');
   const [findIndex, setFindIndex] = useState(0);
   const paneRef = useRef<HTMLDivElement>(null);
+  const file = editBase ?? latestFile;
+  const editing = Boolean(editBase);
+  const changedOnDisk = editBase && latestFile && (
+    latestFile.kind !== editBase.kind
+    || latestFile.truncated !== editBase.truncated
+    || latestFile.changeKey !== editBase.changeKey
+    || latestFile.text !== editBase.text
+  );
 
   useEffect(() => {
     setMode('preview');
     setCopied(false);
-    setEditing(false);
+    setEditBase(null);
     setDraft(file?.text || '');
     setSaveError(null);
     setFindOpen(false);
@@ -318,12 +328,12 @@ export function FilePreview({
   }
 
   async function saveDraft() {
-    if (!onSave || saving) return;
+    if (!onSave || !editBase || saving || loading || changedOnDisk || refreshError) return;
     setSaving(true);
     setSaveError(null);
     try {
-      await onSave(draft);
-      setEditing(false);
+      await onSave(draft, editBase.text || '');
+      setEditBase(null);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -371,10 +381,15 @@ export function FilePreview({
           ><Code2 /></button>
         </div>}
         {file && mode === 'source' && file.kind !== 'binary' && format !== 'pdf' && format !== 'unsupported' && <button type="button" className={`icon-button ${showLineNumbers ? 'is-active' : ''}`} aria-label={showLineNumbers ? '隐藏行号' : '显示行号'} aria-pressed={showLineNumbers} title={showLineNumbers ? '隐藏行号' : '显示行号'} onClick={() => setShowLineNumbers((value) => !value)}><ListOrdered /></button>}
-        {file && editable && !editing && <button type="button" className="icon-button" aria-label="编辑文件" title="编辑文件" onClick={() => { setMode('source'); setEditing(true); setSaveError(null); }}><Pencil /></button>}
-        {file && editable && editing && <>
-          <button type="button" className="icon-button" aria-label="保存文件" title="保存文件" disabled={saving} onClick={() => void saveDraft()}>{saving ? <LoadingIndicator /> : <Save />}</button>
-          <button type="button" className="icon-button" aria-label="取消编辑" title="取消编辑" disabled={saving} onClick={() => { setDraft(file.text || ''); setEditing(false); setSaveError(null); }}><X /></button>
+        {file && editable && !editing && <button type="button" className="icon-button" aria-label="编辑文件" title="编辑文件" disabled={loading || Boolean(refreshError)} onClick={() => {
+          setMode('source');
+          setEditBase(file);
+          setDraft(file.text || '');
+          setSaveError(null);
+        }}><Pencil /></button>}
+        {editing && <>
+          <button type="button" className="icon-button" aria-label="保存文件" title="保存文件" disabled={saving || loading || Boolean(changedOnDisk || refreshError)} onClick={() => void saveDraft()}>{saving ? <LoadingIndicator /> : <Save />}</button>
+          <button type="button" className="icon-button" aria-label="取消编辑" title="取消编辑" disabled={saving} onClick={() => { setEditBase(null); setSaveError(null); }}><X /></button>
         </>}
         {actions}
         {copyable && <button type="button" className="icon-button" aria-label={copied ? '已复制文件内容' : '复制文件内容'} title="复制内容" onClick={() => void copySource()}>
@@ -386,6 +401,13 @@ export function FilePreview({
       </div>
     </header>
     {file?.truncated && <div className="file-preview-banner"><AlertTriangle />文件较大，仅显示开头 1.5 MB。复制内容也只包含预览部分。</div>}
+    {refreshError && <div className="file-preview-banner file-preview-refresh-error" role="alert">
+      <AlertTriangle aria-hidden="true" /><span>读取最新内容失败。{refreshError.message}</span>
+      <button type="button" className="text-button" onClick={refreshError.onRetry}>重试读取文件</button>
+    </div>}
+    {changedOnDisk && !saving && <div className="file-preview-banner" role="status">
+      <AlertTriangle aria-hidden="true" />文件已更新，当前草稿已保留。取消编辑后可查看最新内容。
+    </div>}
     <section className="file-preview-body" aria-label={file ? `${file.name} 文件预览` : '文件预览'}>
       {findOpen && <div className="conversation-search file-preview-find" role="search">
         <Search aria-hidden="true" />

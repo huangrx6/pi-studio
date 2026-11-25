@@ -1,7 +1,6 @@
-import type { AgentView } from './app-types';
 import { memo } from 'react';
 import {
-  ArrowLeft, ArrowUp, Download, PanelRightOpen,
+  Activity, ArrowUp, Download, ListChecks, PanelRightOpen,
 } from 'lucide-react';
 import { GitBranchPicker } from '../features/git/GitBranchPicker';
 import { GitRepositoryPicker } from '../features/git/GitRepositoryPicker';
@@ -10,11 +9,7 @@ import {
   NotificationCenter,
   type AppNotification,
 } from './NotificationCenter';
-import type { ExtensionChipEntry, ExtensionChips } from '../features/extensions/ExtensionChips';
-import type { StatusPanel } from '../shared/extension-appearance';
-import { ConversationWorkspaceMenu } from './ConversationWorkspaceMenu';
 import { ShellHeader } from './ShellLayout';
-import type { ExtensionSettingsPage, ExtensionUiSnapshot } from '../types/extension-types';
 import type { GitWorkspaceStatus } from '../types/git-types';
 
 /** 顶栏的更新入口：有可更新时替代侧栏品牌旁的旧徽标。 */
@@ -33,9 +28,6 @@ type ConversationHeaderProps = {
   isNewConversation: boolean;
   title: string;
   gitStatus: GitWorkspaceStatus | null;
-  agentKind: AgentView['kind'];
-  progressTrigger: React.ReactNode;
-  extensionCount: number;
   notifications: AppNotification[];
   onMarkAllRead: () => void;
   onClearNotifications: () => void;
@@ -43,20 +35,13 @@ type ConversationHeaderProps = {
   onRunNotificationAction: (item: AppNotification) => Promise<void>;
   panelExpanded: boolean;
   onOpenPanel: () => void;
-  onReturnToMainAgent: () => void;
-  onOpenConversationExtensionHub: () => void;
-  /** 扩展声明的顶栏 chip（status.chip），点击打开各自的详情面板。 */
-  chips: ExtensionChipEntry[];
-  extensionSurface: ExtensionUiSnapshot;
-  cwd?: string;
-  sessionId?: string;
-  modelRef?: string;
-  quotaProvider?: { id: string; name: string; item: StatusPanel };
-  onOpenChip: (chip: ExtensionChipEntry) => void;
-  onOpenExtensionSettings?: (page?: ExtensionSettingsPage) => void;
-  onSendPromptFromExtension?: (text: string, submit: boolean) => void;
-  onNotifyExtension?: React.ComponentProps<typeof ExtensionChips>['onNotify'];
+  onOpenGit: () => void;
+  onOpenProgress: () => void;
   onOpenTrace: () => void;
+  activeTool?: 'progress' | 'trace';
+  sessionId?: string;
+  status?: React.ReactNode;
+  extensionMenu?: React.ReactNode;
   /** 轨迹入口遵循「显示代码工作视图」偏好。 */
   showTrace: boolean;
 };
@@ -67,9 +52,6 @@ function ConversationHeaderComponent({
   isNewConversation,
   title,
   gitStatus,
-  agentKind,
-  progressTrigger,
-  extensionCount,
   notifications,
   onMarkAllRead,
   onClearNotifications,
@@ -77,49 +59,32 @@ function ConversationHeaderComponent({
   onRunNotificationAction,
   panelExpanded,
   onOpenPanel,
-  onReturnToMainAgent,
-  onOpenConversationExtensionHub,
-  chips,
-  extensionSurface,
-  cwd,
-  sessionId,
-  modelRef,
-  quotaProvider,
-  onOpenChip,
-  onOpenExtensionSettings,
-  onSendPromptFromExtension,
-  onNotifyExtension,
+  onOpenGit,
+  onOpenProgress,
   onOpenTrace,
+  activeTool,
+  sessionId,
+  status,
+  extensionMenu,
   showTrace,
   update,
 }: ConversationHeaderProps) {
   return (
       <ShellHeader className="chat-header" onExpandSidebar={sidebarCollapsed ? onExpandSidebar : undefined}>
         {!isNewConversation && <div className="chat-heading">
-          <h1>{title}</h1>
+          <h1 title={title}>{title}</h1>
           <GitRepositoryPicker label="顶栏项目仓库" />
-          <GitBranchPicker key={sessionId} status={gitStatus} sessionId={sessionId} />
+          <GitBranchPicker key={sessionId} status={gitStatus} sessionId={sessionId} onOpenGit={onOpenGit} />
         </div>}
+        {status && <div className="chat-header-status">{status}</div>}
         <div className="chat-actions">
-          {!isNewConversation && agentKind !== 'conversation' && <button type="button" className="icon-button"
-            aria-label="返回对话" title="返回对话" onClick={onReturnToMainAgent}><ArrowLeft /></button>}
-          {!isNewConversation && progressTrigger}
-          {!isNewConversation && <ConversationWorkspaceMenu key={sessionId}
-            agentKind={agentKind}
-            extensionCount={extensionCount}
-            chips={chips}
-            extensionSurface={extensionSurface}
-            cwd={cwd}
-            sessionId={sessionId}
-            modelRef={modelRef}
-            quotaProvider={quotaProvider}
-            onOpenConversationExtensionHub={onOpenConversationExtensionHub}
-            onOpenTrace={showTrace ? onOpenTrace : undefined}
-            onOpenChip={onOpenChip}
-            onOpenExtensionSettings={onOpenExtensionSettings}
-            onSendPromptFromExtension={onSendPromptFromExtension}
-            onNotifyExtension={onNotifyExtension}
-          />}
+          {!isNewConversation && <>
+            <button type="button" className={`icon-button${activeTool === 'progress' ? ' is-active' : ''}`} aria-pressed={activeTool === 'progress'}
+              aria-label="进展" title="进展" onClick={() => onOpenProgress()}><ListChecks aria-hidden="true" /></button>
+            {showTrace && <button type="button" className={`icon-button${activeTool === 'trace' ? ' is-active' : ''}`} aria-pressed={activeTool === 'trace'}
+              aria-label="轨迹" title="轨迹" onClick={onOpenTrace}><Activity aria-hidden="true" /></button>}
+          </>}
+          {extensionMenu}
           {update && <button
             type="button"
             className={`icon-button update-entry is-${update.state}`}

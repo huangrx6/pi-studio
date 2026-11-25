@@ -24,11 +24,12 @@ const notesCompiled = ts.transpileModule(notesSource, {
 const notesContext = { exports: {}, require };
 vm.runInNewContext(notesCompiled, notesContext);
 
-function component(react = React) {
+function component(react = React, showToast = () => {}) {
   const context = { exports: {}, require(id) {
     if (id.endsWith('.css')) return {};
     if (id === 'react') return react;
-    if (id.endsWith('/DetailDialog')) return { DetailDialog: ({ children }) => React.createElement('section', null, children) };
+    if (id.endsWith('/DetailDialog')) return { DetailDialog: ({ children, onClose }) => React.createElement('section', null, children(onClose)) };
+    if (id.endsWith('/SettingsToast')) return { useSettingsToast: () => showToast };
     if (id.endsWith('/error-text')) return { errorText };
     if (id === './update-presentation') return { normalizeUpdateProgress, resolveUpdateFlowPhase };
     if (id === './update-notes') return notesContext.exports;
@@ -45,8 +46,8 @@ function deferred() { let resolve, reject; const promise = new Promise((a, b) =>
 const tick = async () => { await Promise.resolve(); await Promise.resolve(); };
 
 function harness(snapshot, callbacks = {}) {
-  let cursor = 0, tree, setup, cleanup, initialized = false, writes = 0;
-  const slots = [];
+  let cursor = 0, tree, cleanups, initialized = false, writes = 0;
+  const slots = [], effects = [], toasts = [];
   const Component = component({
     useState(initial) {
       const index = cursor++;
@@ -55,20 +56,22 @@ function harness(snapshot, callbacks = {}) {
     },
     useRef(initial) { const index = cursor++; return slots[index] ??= { current: initial }; },
     useMemo(factory) { return factory(); },
-    useEffect(effect) { if (!initialized) setup = effect; },
-  });
+    useEffect(effect) { if (!initialized) effects.push(effect); },
+  }, (...args) => toasts.push(args));
   const props = { ...idleCallbacks, ...callbacks, snapshot: { ...base, ...snapshot } };
   function refresh() {
-    cursor = 0; tree = Component(props);
-    if (!initialized) { initialized = true; cleanup = setup(); }
+    cursor = 0;
+    const dialog = Component(props);
+    tree = dialog.props.children(props.onClose);
+    if (!initialized) { initialized = true; cleanups = effects.map(setup => setup()).filter(Boolean); }
   }
   refresh();
   return {
-    refresh,
+    refresh, toasts,
     button(text) { return nodes(tree).find(node => node.type === 'button' && node.props.children === text); },
     alerts() { return nodes(tree).filter(node => node.props?.role === 'alert').map(node => node.props.children); },
-    strictReplay() { cleanup(); cleanup = setup(); },
-    unmount() { cleanup(); },
+    strictReplay() { cleanups.forEach(cleanup => cleanup()); cleanups = effects.map(setup => setup()).filter(Boolean); },
+    unmount() { cleanups.forEach(cleanup => cleanup()); },
     writeCount() { return writes; },
   };
 }
@@ -122,9 +125,9 @@ test('all actions use a synchronous lock, expose rejected callbacks, and allow e
     button.props.onClick(); button.props.onClick();
     assert.equal(calls, 1);
     pending.reject(new Error('操作被拒绝')); await tick(); h.refresh();
-    assert.deepEqual(h.alerts(), ['操作被拒绝']);
+    assert.deepEqual(h.toasts, [['操作被拒绝', 'error']]);
     h.button(label).props.onClick(); await tick(); h.refresh();
-    assert.equal(calls, 2); assert.deepEqual(h.alerts(), []);
+    assert.equal(calls, 2); assert.equal(h.toasts.length, 1); assert.deepEqual(h.alerts(), []);
   }
 });
 
@@ -133,17 +136,17 @@ test('StrictMode setup-cleanup-setup restores lifecycle tracking; unmounted call
   const h = harness({ state: 'available' }, { onDownload: () => pending.promise });
   h.strictReplay(); h.button('下载更新').props.onClick();
   pending.reject(new Error('StrictMode error')); await tick(); h.refresh();
-  assert.deepEqual(h.alerts(), ['StrictMode error']);
+  assert.deepEqual(h.toasts, [['StrictMode error', 'error']]);
   const later = deferred(); const detached = harness({}, { onCheck: () => later.promise });
   detached.button('检查更新').props.onClick(); detached.unmount();
   const count = detached.writeCount(); later.reject(new Error('late')); await tick();
-  assert.equal(detached.writeCount(), count);
+  assert.equal(detached.writeCount(), count); assert.deepEqual(detached.toasts, []);
 });
 
-test('synchronous callback exceptions become a local visible error', async () => {
+test('synchronous callback exceptions become a toast', async () => {
   const h = harness({}, { onCheck() { throw new Error('sync failure'); } });
   h.button('检查更新').props.onClick(); await tick(); h.refresh();
-  assert.deepEqual(h.alerts(), ['sync failure']);
+  assert.deepEqual(h.toasts, [['sync failure', 'error']]);
 });
 
 test('three-step update flow advances through download, verify and install', () => {

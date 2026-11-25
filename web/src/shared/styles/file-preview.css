@@ -125,6 +125,8 @@
   width: var(--icon-sm); height: var(--icon-sm);
   flex: none;
 }
+.file-preview-refresh-error > span { flex: 1; overflow-wrap: anywhere; }
+.file-preview-refresh-error > button { flex: none; }
 
 .file-preview-body {
   position: relative;

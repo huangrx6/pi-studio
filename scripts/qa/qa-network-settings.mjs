@@ -37,7 +37,7 @@ const proxyUrl = `http://127.0.0.1:${proxy.address().port}`;
 let app, page;
 async function capture(name) {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
-  assert.deepEqual(await page.locator('.network-settings, .network-card').evaluateAll(nodes => nodes.filter(node => node.scrollWidth > node.clientWidth + 2).map(node => node.className)), []);
+  assert.deepEqual(await page.locator('.network-settings, .network-settings .settings-preference-card').evaluateAll(nodes => nodes.filter(node => node.scrollWidth > node.clientWidth + 2).map(node => node.className)), []);
   await page.screenshot({ path: path.join(output, `${name}.png`) });
 }
 async function openNetwork() {
@@ -67,7 +67,9 @@ try {
   const address = page.getByRole('textbox', { name: '代理地址', exact: true });
   await address.fill('http://user:secret@localhost:7897');
   await page.getByRole('button', { name: '保存设置', exact: true }).click();
-  await page.getByRole('alert').filter({ hasText: '用户名或密码' }).waitFor();
+  await page.locator('.network-field').getByRole('alert').filter({ hasText: '用户名或密码' }).waitFor();
+  await address.and(page.locator(':focus')).waitFor();
+  assert.equal(await address.getAttribute('aria-invalid'), 'true');
   assert.equal((await page.evaluate(() => window.piApi.networkSettings())).mode, 'system');
   await address.fill(proxyUrl);
   await page.getByRole('button', { name: '保存设置', exact: true }).click();

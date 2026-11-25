@@ -1,4 +1,92 @@
 /* Retain the existing confirmation surface while native dialog owns modality. */
 dialog.confirm-native-dialog { width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; border: 0; color: var(--text); }
 dialog.confirm-native-dialog:not([open]) { display: none; }
-dialog.confirm-native-dialog::backdrop { background: transparent; }
+dialog.confirm-native-dialog.native-dialog-motion { background: transparent; }
+dialog.confirm-native-dialog .confirm-card { padding: var(--settings-group-gap); border-radius: var(--radius-panel); }
+.confirm-native-dialog .confirm-head { gap: var(--space-3); }
+.confirm-native-dialog .confirm-card .confirm-heading h2 {
+  font: var(--weight-semibold) var(--text-lg)/var(--leading-tight) var(--font);
+  overflow-wrap: anywhere;
+}
+.confirm-native-dialog .confirm-close { width: var(--settings-icon-hit); height: var(--settings-icon-hit); }
+.confirm-native-dialog .confirm-body { margin-top: var(--space-3); }
+.confirm-native-dialog .confirm-text { font: var(--settings-preference-body-font); }
+.confirm-native-dialog .confirm-actions { flex-wrap: wrap; margin-top: var(--settings-group-gap); }
+.confirm-native-dialog .confirm-actions > button {
+  min-height: var(--settings-control-height);
+  height: auto;
+  padding: var(--space-1) var(--space-4);
+  font: var(--settings-label-font);
+}
+
+.confirm-explanation,
+.confirm-risk {
+  margin: var(--space-3) 0 0;
+  font: var(--settings-description-font);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.confirm-explanation {
+  color: var(--muted);
+}
+
+.confirm-risk {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--warning);
+}
+
+.confirm-risk > span {
+  min-width: 0;
+}
+
+.confirm-risk svg {
+  width: var(--icon-sm); height: var(--icon-sm);
+  flex: none;
+}
+
+.confirm-remember {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(168px, 210px);
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--divider);
+  color: var(--muted);
+  font: var(--settings-description-font);
+}
+
+.confirm-remember > span {
+  min-width: 0;
+  line-height: var(--leading-normal);
+  overflow-wrap: anywhere;
+}
+
+.confirm-remember-select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.confirm-remember-select .pi-select-trigger {
+  min-width: 0;
+  max-width: 100%;
+  height: var(--settings-control-height);
+  padding-inline: 10px 8px;
+  font: var(--settings-preference-body-font);
+}
+
+.app.has-custom-background .confirm-remember .pi-select-trigger {
+  border-color: var(--background-border-strong);
+  background: var(--background-control-surface);
+}
+
+@media (max-width: 640px) {
+  .confirm-remember { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+  .confirm-remember-select { width: 100%; }
+}

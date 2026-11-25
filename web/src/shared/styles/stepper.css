@@ -1,9 +1,9 @@
-/* 设置页数字步进器：共用输入框描边、加减按钮 36 宽、数值区最小 64。
+/* 设置页数字步进器：共用输入框高度和描边，数值区最小 64。
  * 只消费语义令牌，设置面里会映射成同一套黑白灰。 */
 
 .settings-stepper {
   display: inline-flex;
-  height: 36px;
+  height: var(--settings-control-height);
   align-items: stretch;
   overflow: hidden;
   border: var(--field-border-width) solid var(--border);
@@ -13,7 +13,7 @@
 
 .settings-stepper-step {
   display: grid;
-  width: 36px;
+  width: var(--settings-control-height);
   place-items: center;
   padding: 0;
   border: 0;
@@ -42,8 +42,7 @@
   border: 0;
   background: var(--transparent);
   color: var(--text);
-  font-size: var(--text-base);
-  font-weight: var(--weight-medium);
+  font: var(--settings-preference-body-font);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
@@ -72,4 +71,9 @@
 
 .settings-stepper.is-disabled {
   border-color: var(--divider);
+}
+
+.settings-stepper > button:focus-visible {
+  outline: 1px solid var(--focus-color);
+  outline-offset: -2px;
 }

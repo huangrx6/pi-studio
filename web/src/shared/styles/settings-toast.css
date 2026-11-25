@@ -1,0 +1,128 @@
+.settings-toast-stack,
+.settings-toast-layer {
+  inset-inline: var(--space-4);
+  inset-block-end: var(--space-5);
+  container: settings-toast-host / inline-size;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.settings-toast-stack {
+  position: absolute;
+  z-index: 40;
+}
+
+.settings-toast-layer {
+  position: fixed;
+  inset-block-start: auto;
+  z-index: 80;
+  margin: 0;
+  padding: 0;
+  width: auto;
+  max-width: none;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+}
+
+.settings-toast-layer[popover]:not(:popover-open) { display: none; }
+
+.settings-toast {
+  --toast-icon: var(--info);
+  --toast-icon-bg: var(--info-soft);
+  display: grid;
+  grid-template-columns: var(--icon-button) minmax(0, 1fr);
+  inline-size: fit-content;
+  max-inline-size: min(100%, 420px);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4) var(--space-2) var(--space-2);
+  border: 1px solid var(--settings-border);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--settings-control-bg) 94%, transparent);
+  backdrop-filter: blur(var(--space-3));
+  box-shadow: var(--shadow-float);
+  color: var(--settings-text);
+  font: var(--weight-medium) var(--settings-description-size)/var(--leading-normal) var(--font);
+  animation: settings-toast-in var(--settings-page-enter) var(--settings-motion-out) both;
+}
+
+.settings-toast.is-success {
+  --toast-icon: var(--success);
+  --toast-icon-bg: var(--success-soft);
+}
+
+.settings-toast.is-error {
+  --toast-icon: var(--error);
+  --toast-icon-bg: var(--error-soft);
+}
+
+.settings-toast-icon {
+  display: grid;
+  inline-size: var(--icon-button);
+  block-size: var(--icon-button);
+  place-items: center;
+  border-radius: var(--radius-control);
+  background: var(--toast-icon-bg);
+  color: var(--toast-icon);
+}
+
+.settings-toast-icon svg {
+  inline-size: var(--icon-md);
+  block-size: var(--icon-md);
+}
+
+.settings-toast-message {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.settings-toast:has(> .settings-toast-action) {
+  grid-template-columns: var(--icon-button) minmax(0, 1fr) auto;
+  padding-inline-end: var(--space-2);
+}
+
+.settings-toast .settings-toast-action > button {
+  block-size: auto;
+  min-block-size: var(--icon-button);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: var(--settings-accent-soft);
+  color: var(--settings-text);
+  font: inherit;
+  font-size: var(--settings-label-size);
+  white-space: normal;
+  pointer-events: auto;
+}
+
+.settings-toast .settings-toast-action > button:hover:not(:disabled) {
+  border-color: var(--settings-accent-border);
+}
+
+.settings-toast .settings-toast-action > button:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 1px;
+}
+
+@container settings-toast-host (max-width: 22rem) {
+  .settings-toast:has(> .settings-toast-action) {
+    grid-template-columns: var(--icon-button) minmax(0, 1fr);
+    row-gap: var(--space-1);
+  }
+
+  .settings-toast-action {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+@keyframes settings-toast-in {
+  from { opacity: 0; transform: translateY(var(--space-1)); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) { .settings-toast { animation: none; } }
