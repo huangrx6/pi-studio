@@ -14,12 +14,12 @@
     },
     {
       "path": "extension.mjs",
-      "sha256": "a32150894b6748820d9f771b59dfa232b4fbc32449b49cc3dda25ceb8f680b1c",
-      "size": 24554
+      "sha256": "83350ce873247c0e78175deb6865c2cd052f2e169eb0fe143ae37e9505577205",
+      "size": 24605
     },
     {
       "path": "pi-studio.extension.json",
-      "sha256": "7eeb38551524501c93079444b00712bd66a3e7de1aca8077f226137b4bec1913",
+      "sha256": "682e1103d912fc48817a88082e24f7514ced801defb6c1a6d2658f7648786219",
       "size": 1453
     },
     {

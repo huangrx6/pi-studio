@@ -3,7 +3,7 @@
   "kind": "plugin",
   "id": "studio.excalidraw",
   "name": "Excalidraw",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "publisher": "Pi Studio",
   "description": "完全独立的实时画布插件：在聊天旁边实时绘制图形、继续手动编辑并导出为可编辑的 Excalidraw 文件。",
   "category": "productivity",

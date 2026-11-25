@@ -317,11 +317,11 @@ function openBoards(directory) {
         cleanup();
         reject(signal.reason || new Error('Aborted'));
       };
+      // Drawing awaits this timeout even when the view never subscribes.
       const timer = setTimeout(() => {
         cleanup();
         resolve(false);
       }, timeoutMs);
-      timer.unref?.();
       function cleanup() {
         clearTimeout(timer);
         listeners.off('newListener', onNew);

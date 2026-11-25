@@ -29,10 +29,10 @@
       },
       "versions": [
         {
-          "version": "2.0.0",
+          "version": "2.0.1",
           "packagePath": "packages/excalidraw",
-          "sha256": "e3e5da48d7474768807994659bdbd6c0495fa1a4bf94d7e534aea64215891ff4",
-          "publishedAt": "2026-11-25T00:00:00.000Z"
+          "sha256": "4cd3363cb7b30c70d073ba11889c7b8736d5f55ada8927d75105fd8e2f279411",
+          "publishedAt": "2026-11-26T00:00:00.000Z"
         }
       ]
     },
